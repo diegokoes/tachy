@@ -37,6 +37,7 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
       status: t.status != null ? String(t.status) : undefined,
       groupKey: t.group_id != null ? String(t.group_id) : undefined,
       requester: t.requester_id != null ? String(t.requester_id) : undefined,
+      requesterEmail: t.requester?.email,    // only present when fetched with ?include=requester
       raw: t,
       sourceCreatedAt: t.created_at,
       sourceUpdatedAt: t.updated_at,
@@ -49,7 +50,11 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
     capabilities: { postNote: true, incrementalSync: true },
 
     async fetchItem(externalId: string): Promise<RawWorkItem> {
-      const t = await get(`/tickets/${externalId}`);
+      // include=requester costs 1 extra API credit but embeds the requester's
+      // email inline (no second round-trip) for customer auto-matching by
+      // domain. Skipped in listItems' bulk metadata sync to avoid doubling
+      // the credit cost of every ticket in a sync run.
+      const t = await get(`/tickets/${externalId}?include=requester`);
       const convos = await get(`/tickets/${externalId}/conversations`);
       const description: RawMessage = {
         externalId: `desc-${t.id}`,
