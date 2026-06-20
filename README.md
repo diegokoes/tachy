@@ -1,13 +1,18 @@
 # tachy
 
 A self-hosted, source-agnostic knowledge engine for engineering work items.
-It ingests support tickets / issues from pluggable **sources** (Freshdesk first;
-GitHub and others by design), lets Claude (driven from the terminal via Claude
-Code) turn them into structured, queryable "lessons learned", and retrieves
-relevant prior cases when a new item comes in.
+It ingests support tickets / issues from pluggable **sources** (Freshdesk,
+GitHub... with more to come), lets an LLM agent turn them into structured,
+queryable "lessons learned", and retrieves relevant prior cases when a new
+item comes in.
 
-Claude is the reasoning layer. This service only persists and retrieves; it
-never calls an LLM. Each item is read and structured **once**, then reused.
+The LLM agent is the reasoning layer. This service only persists and
+retrieves; it never calls an LLM itself. Each item is read and structured
+**once**, then reused.
+
+The server speaks plain MCP, so any MCP-compatible client works (Codex CLI,
+other agents). This README assumes Claude Code as the client; nothing here
+is Claude-specific.
 
 ## Architecture
 
@@ -20,7 +25,7 @@ PowerShell -> Claude Code --(MCP stdio)--> tachy MCP server -> core -> Postgres
 - `packages/core`: DB, the `WorkItemSource` interface, services (source-agnostic)
 - `packages/sources/freshdesk`: Freshdesk adapter
 - `packages/sources/github`: GitHub Issues adapter
-- `packages/mcp`: MCP server for Claude Code (the primary surface)
+- `packages/mcp`: MCP server for Claude Code or any MCP client (the primary surface)
 - `packages/api`: Hono REST API (cron, teammates, future UI)
 - `packages/cli`: `sync` command
 - `db/schema.sql`: canonical Postgres schema
@@ -54,7 +59,8 @@ seed block for your other groups.
 
 ## Use it from Claude Code (PowerShell)
 
-`.mcp.json` already registers the server. From the project folder:
+`.mcp.json` already registers the server (Claude Code's own config format;
+other MCP clients register it differently). From the project folder:
 
 ```powershell
 claude
@@ -125,17 +131,10 @@ Stores/refreshes raw work items only. It never creates knowledge entries
 
 ## Sources
 
-Two adapters ship today:
-
-- **Freshdesk**: `external_id` is the ticket number; `group_id` maps to a
-  product. Supports private-note write-back.
-- **GitHub** (issues): `external_id` is `owner/repo#123`; `owner/repo` maps to
-  a product. Set the repos to sync in the connection's `config.repos`
-  (`["owner/repo", ...]`) or pass `--group=owner/repo`. PRs are skipped. GitHub
-  has no private notes, so `post_private_note` is intentionally refused.
-
-Tokens follow one pattern: `FRESHDESK_TOKEN_<SLUG>` / `GITHUB_TOKEN_<SLUG>`,
-falling back to `FRESHDESK_TOKEN` / `GITHUB_TOKEN`.
+| | `external_id` | Routing | Write-back | Token env var |
+| --- | --- | --- | --- | --- |
+| Freshdesk | ticket number | `group_id` maps to a product | private notes | `FRESHDESK_TOKEN_<SLUG>`, falling back to `FRESHDESK_TOKEN` |
+| GitHub (issues) | `owner/repo#123` | `owner/repo` maps to a product, via `config.repos` or `--group`; PRs are skipped | not supported (GitHub comments are public, so `post_private_note` is refused) | `GITHUB_TOKEN_<SLUG>`, falling back to `GITHUB_TOKEN` |
 
 ### Adding another source
 
@@ -155,16 +154,16 @@ Customer and version are properties of the *ticket*, not the *lesson*:
   `set_work_item_customer`; corrections are never overwritten by a later
   re-sync. `customers` starts empty: add real ones with `add_customer`.
 - `work_items.observed_version` is set manually with `set_observed_version`
-  when a ticket actually mentions a version. It's never inferred.
+  when a ticket states a version. It's never inferred.
 - `knowledge_entries.resolution_pattern` is a **controlled vocabulary**, not
   free text: it's a foreign key into `resolution_patterns`, which starts
   **empty**. Claude must call `list_resolution_patterns` and pick an existing
   slug (or leave it unset); `add_resolution_pattern` is a separate, deliberate
   action, not something invented per-ticket. This is what makes cross-team
-  pattern queries actually group correctly.
+  pattern queries group correctly.
 - `knowledge_entries.signals` (error codes, config filenames, component
   names) are promoted into a real, indexed field instead of being buried in
-  `structured`, so they're actually searchable.
+  `structured`, so they're searchable.
 - **Components** (`list_components` / `add_component`) are a hierarchical,
   per-product architecture glossary (e.g. `business-object` with nested pools
   `configuration`, `id-issuer`, ...), fed conversationally with no ticket
