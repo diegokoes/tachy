@@ -7,7 +7,8 @@ export { sql };
 export async function resetData() {
   await sql`
     truncate work_item_messages, work_items, knowledge_feedback,
-             knowledge_entries, analysis_runs, team_members, users
+             knowledge_entries, analysis_runs, team_members, users,
+             customers, resolution_patterns, components
     restart identity cascade
   `;
 }
