@@ -1,9 +1,15 @@
 export { sql } from "./db";
-export { env, freshdeskToken } from "./env";
+export { env, freshdeskToken, githubToken, sourceToken } from "./env";
 export * from "./source";
 export { registerSource, resolveSource } from "./registry";
 export type { ResolvedSource } from "./registry";
 export { ingestWorkItem } from "./services/ingest";
 export type { IngestedItem } from "./services/ingest";
-export { saveKnowledgeEntry, searchKnowledge } from "./services/knowledge";
+export { saveKnowledgeEntry, searchKnowledge, backfillEmbeddings } from "./services/knowledge";
 export type { KnowledgeInput, SearchOptions } from "./services/knowledge";
+export { upsertUser, resolveCurrentUserId } from "./services/users";
+export { addFeedback, listFeedback } from "./services/feedback";
+export type { FeedbackInput } from "./services/feedback";
+export { recordRun } from "./services/runs";
+export type { RunInput } from "./services/runs";
+export { embedPassage, embedQuery, toVectorLiteral, EMBEDDING_DIM } from "./embeddings";

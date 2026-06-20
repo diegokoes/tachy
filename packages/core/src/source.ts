@@ -45,4 +45,8 @@ export interface WorkItemSource {
   postNote?(externalId: string, body: string, opts?: { private?: boolean }): Promise<void>;
 }
 
-export type SourceFactory = (cfg: { baseUrl: string; slug: string }) => WorkItemSource;
+export type SourceFactory = (cfg: {
+  baseUrl: string;
+  slug: string;
+  config: Record<string, unknown>;   // non-secret connection config (e.g. github repos)
+}) => WorkItemSource;
