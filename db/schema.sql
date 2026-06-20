@@ -1,6 +1,5 @@
 -- ============================================================================
--- casebook — knowledge engine for engineering work items
--- Migration 0001: initial schema
+-- tachy — knowledge engine for engineering work items
 --
 -- Design goals:
 --   * SOURCE-AGNOSTIC: no "tickets" table. work_items are fed by pluggable
@@ -198,7 +197,6 @@ create index knowledge_symptoms_idx    on knowledge_entries using gin (symptoms)
 create index knowledge_tsv_idx         on knowledge_entries using gin (search_tsv);
 create index knowledge_trgm_idx        on knowledge_entries using gin (search_text gin_trgm_ops);
 
--- bump updated_at on change
 create or replace function set_updated_at() returns trigger as $$
 begin
     new.updated_at = now();
@@ -212,7 +210,7 @@ create trigger knowledge_entries_updated_at
 
 -- ---------------------------------------------------------------------------
 -- Feedback: human corrections / ratings on a knowledge entry.
--- This is the only place "feedback to improve" is captured.
+-- Schema only — not yet wired up to any MCP tool, REST endpoint, or CLI.
 -- ---------------------------------------------------------------------------
 
 create table knowledge_feedback (
@@ -230,7 +228,7 @@ create index knowledge_feedback_entry_idx on knowledge_feedback(knowledge_entry_
 
 -- ---------------------------------------------------------------------------
 -- Analysis runs: optional audit + token accounting (controlled cost).
--- Claude Code reports tokens here when it ingests or consults.
+-- Schema only — nothing currently inserts into this table.
 -- ---------------------------------------------------------------------------
 
 create table analysis_runs (

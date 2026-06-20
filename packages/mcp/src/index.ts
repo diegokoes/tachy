@@ -3,21 +3,23 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import {
   registerSource, resolveSource, ingestWorkItem, saveKnowledgeEntry, searchKnowledge,
-} from "@casebook/core";
-import { createFreshdeskSource } from "@casebook/source-freshdesk";
+} from "@tachy/core";
+import { createFreshdeskSource } from "@tachy/source-freshdesk";
 
 registerSource("freshdesk", createFreshdeskSource);
 
-const server = new McpServer({ name: "casebook", version: "0.1.0" });
+const server = new McpServer({ name: "tachy", version: "0.1.0" });
 
 function out(obj: unknown) {
   return { content: [{ type: "text" as const, text: typeof obj === "string" ? obj : JSON.stringify(obj, null, 2) }] };
 }
 
-server.tool(
+server.registerTool(
   "fetch_work_item",
-  "Fetch a work item (ticket/issue) from a source, store it, and return its normalized metadata + cleaned messages for analysis.",
-  { source: z.string(), external_id: z.string() },
+  {
+    description: "Fetch a work item (ticket/issue) from a source, store it, and return its normalized metadata + cleaned messages for analysis.",
+    inputSchema: { source: z.string(), external_id: z.string() },
+  },
   async ({ source, external_id }) => {
     const { conn, source: src } = await resolveSource(source);
     const raw = await src.fetchItem(external_id);
@@ -26,20 +28,24 @@ server.tool(
   },
 );
 
-server.tool(
+server.registerTool(
   "search_knowledge",
-  "Search prior APPROVED knowledge entries by keyword / symptom / error code. Use for consult mode.",
-  { query: z.string(), product_id: z.string().optional(), team_id: z.string().optional(), limit: z.number().optional() },
+  {
+    description: "Search prior APPROVED knowledge entries by keyword / symptom / error code. Use for consult mode.",
+    inputSchema: { query: z.string(), product_id: z.string().optional(), team_id: z.string().optional(), limit: z.number().optional() },
+  },
   async ({ query, product_id, team_id, limit }) => {
     const rows = await searchKnowledge(query, { productId: product_id, teamId: team_id, limit });
     return out(rows);
   },
 );
 
-server.tool(
+server.registerTool(
   "get_context",
-  "Fetch a new work item AND auto-search the archive for similar prior cases. One-shot consult helper.",
-  { source: z.string(), external_id: z.string(), limit: z.number().optional() },
+  {
+    description: "Fetch a new work item AND auto-search the archive for similar prior cases. One-shot consult helper.",
+    inputSchema: { source: z.string(), external_id: z.string(), limit: z.number().optional() },
+  },
   async ({ source, external_id, limit }) => {
     const { conn, source: src } = await resolveSource(source);
     const raw = await src.fetchItem(external_id);
@@ -51,22 +57,24 @@ server.tool(
   },
 );
 
-server.tool(
+server.registerTool(
   "save_knowledge_entry",
-  "Persist an APPROVED structured knowledge entry. Call ONLY after the user reviewed and approved the summary.",
   {
-    work_item_id: z.string().optional(),
-    product_id: z.string().optional(),
-    team_id: z.string().optional(),
-    status: z.string().optional(),
-    issue_summary: z.string().optional(),
-    symptoms: z.array(z.string()).optional(),
-    root_cause: z.string().optional(),
-    resolution: z.string().optional(),
-    resolution_pattern: z.string().optional(),
-    product_area: z.string().optional(),
-    confidence: z.string().optional(),
-    structured: z.record(z.any()).optional(),
+    description: "Persist an APPROVED structured knowledge entry. Call ONLY after the user reviewed and approved the summary.",
+    inputSchema: {
+      work_item_id: z.string().optional(),
+      product_id: z.string().optional(),
+      team_id: z.string().optional(),
+      status: z.string().optional(),
+      issue_summary: z.string().optional(),
+      symptoms: z.array(z.string()).optional(),
+      root_cause: z.string().optional(),
+      resolution: z.string().optional(),
+      resolution_pattern: z.string().optional(),
+      product_area: z.string().optional(),
+      confidence: z.string().optional(),
+      structured: z.record(z.any()).optional(),
+    },
   },
   async (a) => {
     const row = await saveKnowledgeEntry({
@@ -79,10 +87,12 @@ server.tool(
   },
 );
 
-server.tool(
+server.registerTool(
   "post_private_note",
-  "Write a private note back to the source work item (e.g. a Freshdesk private note) with the learned analysis.",
-  { source: z.string(), external_id: z.string(), body: z.string() },
+  {
+    description: "Write a private note back to the source work item (e.g. a Freshdesk private note) with the learned analysis.",
+    inputSchema: { source: z.string(), external_id: z.string(), body: z.string() },
+  },
   async ({ source, external_id, body }) => {
     const { source: src } = await resolveSource(source);
     if (!src.postNote) throw new Error(`Source '${source}' does not support notes`);

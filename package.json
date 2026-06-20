@@ -1,10 +1,10 @@
 {
-  "name": "casebook",
+  "name": "tachy",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Self-hosted knowledge engine for engineering work items. Pluggable sources (Freshdesk, GitHub, ...), Claude-Code-driven ingest/consult loop.",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "workspaces": [
     "packages/core",
     "packages/sources/freshdesk",

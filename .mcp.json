@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "casebook": {
+    "tachy": {
       "command": "npx",
       "args": ["-y", "tsx", "packages/mcp/src/index.ts"]
     }

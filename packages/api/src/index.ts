@@ -2,9 +2,9 @@ import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import {
   registerSource, resolveSource, ingestWorkItem, saveKnowledgeEntry, searchKnowledge, env,
-} from "@casebook/core";
-import type { KnowledgeInput } from "@casebook/core";
-import { createFreshdeskSource } from "@casebook/source-freshdesk";
+} from "@tachy/core";
+import type { KnowledgeInput } from "@tachy/core";
+import { createFreshdeskSource } from "@tachy/source-freshdesk";
 
 registerSource("freshdesk", createFreshdeskSource);
 
@@ -12,7 +12,6 @@ const app = new Hono();
 
 app.get("/health", (c) => c.json({ ok: true }));
 
-// Fetch + store a work item, return normalized form.
 app.post("/work-items/:source/:id/fetch", async (c) => {
   const { source, id } = c.req.param();
   const { conn, source: src } = await resolveSource(source);
@@ -21,7 +20,7 @@ app.post("/work-items/:source/:id/fetch", async (c) => {
   return c.json({ work_item_id: item.id, item: raw });
 });
 
-// Consult: ranked prior approved entries.  /knowledge/search?q=...&limit=...
+// Ranked prior approved entries only — drafts/rejected never surface here.
 app.get("/knowledge/search", async (c) => {
   const q = c.req.query("q") ?? "";
   const limit = c.req.query("limit") ? Number(c.req.query("limit")) : undefined;
@@ -40,7 +39,6 @@ app.post("/knowledge", async (c) => {
   return c.json(row);
 });
 
-// Write-back private note.
 app.post("/work-items/:source/:id/notes", async (c) => {
   const { source, id } = c.req.param();
   const { body } = (await c.req.json()) as { body: string };
@@ -51,4 +49,4 @@ app.post("/work-items/:source/:id/notes", async (c) => {
 });
 
 serve({ fetch: app.fetch, port: env.port });
-console.log(`casebook api listening on :${env.port}`);
+console.log(`tachy api listening on :${env.port}`);

@@ -1,5 +1,5 @@
 {
-  "name": "@casebook/core",
+  "name": "@tachy/core",
   "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",

@@ -1,5 +1,5 @@
-import { registerSource, resolveSource, ingestWorkItem } from "@casebook/core";
-import { createFreshdeskSource } from "@casebook/source-freshdesk";
+import { registerSource, resolveSource, ingestWorkItem } from "@tachy/core";
+import { createFreshdeskSource } from "@tachy/source-freshdesk";
 
 registerSource("freshdesk", createFreshdeskSource);
 

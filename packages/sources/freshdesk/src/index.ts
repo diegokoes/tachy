@@ -1,7 +1,7 @@
-import { freshdeskToken } from "@casebook/core";
+import { freshdeskToken } from "@tachy/core";
 import type {
   WorkItemSource, RawWorkItem, RawMessage, ListOptions, SourceFactory,
-} from "@casebook/core";
+} from "@tachy/core";
 
 /** Freshdesk adapter. Uses *_text fields, so no HTML stripping is needed. */
 export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {

@@ -1,7 +1,7 @@
 import "dotenv/config";
 
 export const env = {
-  databaseUrl: process.env.DATABASE_URL ?? "postgres://casebook:casebook@localhost:5432/casebook",
+  databaseUrl: process.env.DATABASE_URL ?? "postgres://tachy:tachy@localhost:5432/tachy",
   port: Number(process.env.PORT ?? 8787),
 };
 
