@@ -8,6 +8,7 @@
   "workspaces": [
     "packages/core",
     "packages/sources/freshdesk",
+    "packages/sources/github",
     "packages/mcp",
     "packages/api",
     "packages/cli"
@@ -16,11 +17,14 @@
     "mcp": "tsx packages/mcp/src/index.ts",
     "api": "tsx packages/api/src/index.ts",
     "sync": "tsx packages/cli/src/index.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
+    "@testcontainers/postgresql": "^12.0.3",
     "@types/node": "^22.10.2",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.9"
   }
 }
