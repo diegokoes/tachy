@@ -1,4 +1,4 @@
-// The one seam that makes casebook source-agnostic. Implement this per tracker
+// The one seam that makes tachy source-agnostic. Implement this per tracker
 // (freshdesk, github, ...) and register it. No schema or core changes needed.
 
 export interface RawMessage {

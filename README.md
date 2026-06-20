@@ -1,4 +1,4 @@
-# casebook
+# tachy
 
 A self-hosted, source-agnostic knowledge engine for engineering work items.
 It ingests support tickets / issues from pluggable **sources** (Freshdesk first;
@@ -12,7 +12,7 @@ never calls an LLM. Each item is read and structured **once**, then reused.
 ## Architecture
 
 ```
-PowerShell -> Claude Code --(MCP stdio)--> casebook MCP server -> core -> Postgres
+PowerShell -> Claude Code --(MCP stdio)--> tachy MCP server -> core -> Postgres
                                                             \-> sources/* -> Freshdesk / GitHub / ...
               teammates / cron / CI --(HTTP)--> Hono REST API -> core ----^
 ```
@@ -35,8 +35,8 @@ PowerShell -> Claude Code --(MCP stdio)--> casebook MCP server -> core -> Postgr
 npm install
 
 # Create the database and apply the schema:
-createdb casebook
-psql "postgres://localhost:5432/casebook" -f db/schema.sql
+createdb tachy
+psql "postgres://localhost:5432/tachy" -f db/schema.sql
 
 cp .env.example .env          # then fill in DATABASE_URL and your Freshdesk token
 ```
@@ -111,4 +111,6 @@ in the DB.
 
 ## License
 
-MIT.
+AGPL-3.0-or-later. If you run a modified version of tachy as a network
+service, you must make the modified source available to its users (see
+`LICENSE`).
