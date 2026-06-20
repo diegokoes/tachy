@@ -1,10 +1,13 @@
 import { sql, toDate } from "../db";
 import type { RawWorkItem } from "../source";
+import { resolveCustomerByEmail } from "./customers";
 
 export interface IngestedItem {
   id: string;
   productId: string | null;
   teamId: string | null;
+  customerId: string | null;
+  observedVersion: string | null;
 }
 
 /** Upsert a work item + its messages. Resolves product/team from the source group mapping. */
@@ -24,14 +27,19 @@ export async function ingestWorkItem(connId: string, raw: RawWorkItem): Promise<
     }
   }
 
+  const customerId = await resolveCustomerByEmail(raw.requesterEmail);
+
+  // customer_id is intentionally absent from the ON CONFLICT SET clause: it's
+  // resolved (best-effort) on first insert only. A later manual correction
+  // (or even just the original auto-match) is never clobbered by a re-sync.
   const [item] = await sql`
     insert into work_items
       (source_connection_id, external_id, external_url, kind, title, status,
-       external_group_key, product_id, team_id, requester, raw,
+       external_group_key, product_id, team_id, customer_id, requester, raw,
        source_created_at, source_updated_at)
     values
       (${connId}, ${raw.externalId}, ${raw.externalUrl ?? null}, ${raw.kind}, ${raw.title ?? null},
-       ${raw.status ?? null}, ${raw.groupKey ?? null}, ${productId}, ${teamId}, ${raw.requester ?? null},
+       ${raw.status ?? null}, ${raw.groupKey ?? null}, ${productId}, ${teamId}, ${customerId}, ${raw.requester ?? null},
        ${sql.json((raw.raw ?? {}) as any)}, ${toDate(raw.sourceCreatedAt)}, ${toDate(raw.sourceUpdatedAt)})
     on conflict (source_connection_id, external_id) do update set
       title = excluded.title,
@@ -40,7 +48,7 @@ export async function ingestWorkItem(connId: string, raw: RawWorkItem): Promise<
       source_updated_at = excluded.source_updated_at,
       product_id = excluded.product_id,
       team_id = excluded.team_id
-    returning id, product_id, team_id
+    returning id, product_id, team_id, customer_id, observed_version
   `;
 
   for (const m of raw.messages) {
@@ -54,5 +62,8 @@ export async function ingestWorkItem(connId: string, raw: RawWorkItem): Promise<
     `;
   }
 
-  return { id: item.id, productId: item.product_id, teamId: item.team_id };
+  return {
+    id: item.id, productId: item.product_id, teamId: item.team_id,
+    customerId: item.customer_id, observedVersion: item.observed_version,
+  };
 }

@@ -13,3 +13,12 @@ export type { FeedbackInput } from "./services/feedback";
 export { recordRun } from "./services/runs";
 export type { RunInput } from "./services/runs";
 export { embedPassage, embedQuery, toVectorLiteral, EMBEDDING_DIM } from "./embeddings";
+export {
+  listCustomers, addCustomer, resolveCustomerByEmail, getCustomerIdBySlug,
+  setWorkItemCustomer, setObservedVersion, getCustomerName,
+} from "./services/customers";
+export type { CustomerInput } from "./services/customers";
+export { listResolutionPatterns, addResolutionPattern } from "./services/resolution-patterns";
+export { listComponents, addComponent } from "./services/components";
+export type { AddComponentInput } from "./services/components";
+export { getProductIdBySlug } from "./services/products";
