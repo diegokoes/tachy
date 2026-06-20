@@ -1,9 +1,9 @@
-# tachý
+# tachy
 
 A self-hosted, source-agnostic knowledge engine for engineering work items.
 It ingests support tickets / issues from pluggable **sources** (Freshdesk first;
-GitHub and others by design), lets Claude — driven from the terminal via Claude
-Code — turn them into structured, queryable "lessons learned", and retrieves
+GitHub and others by design), lets Claude (driven from the terminal via Claude
+Code) turn them into structured, queryable "lessons learned", and retrieves
 relevant prior cases when a new item comes in.
 
 Claude is the reasoning layer. This service only persists and retrieves; it
@@ -17,13 +17,13 @@ PowerShell -> Claude Code --(MCP stdio)--> tachy MCP server -> core -> Postgres
               teammates / cron / CI --(HTTP)--> Hono REST API -> core ----^
 ```
 
-- `packages/core` — DB, the `WorkItemSource` interface, services (source-agnostic)
-- `packages/sources/freshdesk` — Freshdesk adapter
-- `packages/sources/github` — GitHub Issues adapter
-- `packages/mcp` — MCP server for Claude Code (the primary surface)
-- `packages/api` — Hono REST API (cron, teammates, future UI)
-- `packages/cli` — `sync` command
-- `db/schema.sql` — canonical Postgres schema
+- `packages/core`: DB, the `WorkItemSource` interface, services (source-agnostic)
+- `packages/sources/freshdesk`: Freshdesk adapter
+- `packages/sources/github`: GitHub Issues adapter
+- `packages/mcp`: MCP server for Claude Code (the primary surface)
+- `packages/api`: Hono REST API (cron, teammates, future UI)
+- `packages/cli`: `sync` command
+- `db/schema.sql`: canonical Postgres schema
 
 ## Prerequisites
 
@@ -86,13 +86,13 @@ Core loop: `fetch_work_item`, `search_knowledge`, `get_context`,
 `record_analysis_run`.
 
 `search_knowledge` and `get_context` are hybrid: keyword (FTS + trigram) blended
-with semantic similarity over a local embedding, so paraphrases surface even with
-no shared keywords. `save_knowledge_entry` stamps `created_by` from
-`TACHY_USER_EMAIL`, embeds the entry on save, and is **customer-blind**: identity
-never enters the searchable text or the embedding (see "Customers and
-versions" below).
+with semantic similarity over a local embedding, so paraphrases surface even
+with no shared keywords. `save_knowledge_entry` stamps `created_by` from
+`TACHY_USER_EMAIL`, embeds the entry on save, and is **customer-blind**:
+identity never enters the searchable text or the embedding (see "Customers
+and versions" below).
 
-Curated vocabulary (so Claude never invents categories from a ticket alone):
+Curated vocabulary, so Claude never invents categories from a ticket alone:
 `list_resolution_patterns` / `add_resolution_pattern`,
 `list_components` / `add_component`, `list_customers` / `add_customer`.
 Correction: `set_work_item_customer`, `set_observed_version`.
@@ -120,17 +120,17 @@ Set `TACHY_API_TOKEN` to require a bearer token on every route except `/health`
 npm run sync sync osapiens-freshdesk --since=2026-06-01T00:00:00Z --group=48000641379
 ```
 
-Stores/refreshes raw work items only — it never creates knowledge entries
+Stores/refreshes raw work items only. It never creates knowledge entries
 (those always require your approval). Schedule it with Windows Task Scheduler.
 
 ## Sources
 
 Two adapters ship today:
 
-- **Freshdesk** — `external_id` is the ticket number; `group_id` maps to a
+- **Freshdesk**: `external_id` is the ticket number; `group_id` maps to a
   product. Supports private-note write-back.
-- **GitHub** (issues) — `external_id` is `owner/repo#123`; `owner/repo` maps to a
-  product. Set the repos to sync in the connection's `config.repos`
+- **GitHub** (issues): `external_id` is `owner/repo#123`; `owner/repo` maps to
+  a product. Set the repos to sync in the connection's `config.repos`
   (`["owner/repo", ...]`) or pass `--group=owner/repo`. PRs are skipped. GitHub
   has no private notes, so `post_private_note` is intentionally refused.
 
@@ -144,7 +144,7 @@ the entrypoints, and add a `source_connections` row. No schema change.
 
 ## Customers, versions, and controlled vocabulary
 
-`knowledge_entries` is customer-blind by design — identity never enters search
+`knowledge_entries` is customer-blind by design. Identity never enters search
 or the embedding, so retrieval matches on the fault, not on who reported it.
 Customer and version are properties of the *ticket*, not the *lesson*:
 
@@ -153,21 +153,25 @@ Customer and version are properties of the *ticket*, not the *lesson*:
   for the same account, e.g. an alias list of `davidoff.com` + `arvato.com` on
   one `customers` row). Wrong or missing matches are corrected with
   `set_work_item_customer`; corrections are never overwritten by a later
-  re-sync. `customers` starts empty — add real ones with `add_customer`.
+  re-sync. `customers` starts empty: add real ones with `add_customer`.
 - `work_items.observed_version` is set manually with `set_observed_version`
-  when a ticket actually mentions a version — never inferred.
+  when a ticket actually mentions a version. It's never inferred.
 - `knowledge_entries.resolution_pattern` is a **controlled vocabulary**, not
-  free text — it's a foreign key into `resolution_patterns`, which starts
+  free text: it's a foreign key into `resolution_patterns`, which starts
   **empty**. Claude must call `list_resolution_patterns` and pick an existing
   slug (or leave it unset); `add_resolution_pattern` is a separate, deliberate
   action, not something invented per-ticket. This is what makes cross-team
   pattern queries actually group correctly.
+- `knowledge_entries.signals` (error codes, config filenames, component
+  names) are promoted into a real, indexed field instead of being buried in
+  `structured`, so they're actually searchable.
 - **Components** (`list_components` / `add_component`) are a hierarchical,
   per-product architecture glossary (e.g. `business-object` with nested pools
-  `configuration`, `id-issuer`, ...) — fed conversationally, with no ticket
-  required. Two valid ways to populate it: you describe the app directly (call
-  immediately), or a ticket mentions something unrecognized (Claude proposes,
-  you confirm, then it's added) — never silently invented from a ticket.
+  `configuration`, `id-issuer`, ...), fed conversationally with no ticket
+  required. Two valid ways to populate it: you describe the app directly
+  (call immediately), or a ticket mentions something unrecognized (Claude
+  proposes, you confirm, then it's added). Never silently invented from a
+  ticket.
 
 `fetch_work_item` / `get_context` return the resolved `customer_id`,
 `customer_name`, and `observed_version` alongside the ticket, so Claude can
@@ -178,7 +182,7 @@ index.
 ## Semantic search
 
 Embeddings are produced by a local model (all-MiniLM-L6-v2, 384-dim, via
-`fastembed`) — nothing is sent to an external API. The model (~90MB) is
+`fastembed`). Nothing is sent to an external API. The model (~90MB) is
 downloaded on first use into `.fastembed-cache/`. Fresh databases get the
 `vector` column from `schema.sql`; to upgrade an existing database run
 `db/0002_pgvector.sql` (and `db/0003_customer_signals_patterns_components.sql`
@@ -197,8 +201,8 @@ npm run sync restore --file=backups/tachy-….dump   # pg_restore (overwrites!)
 ```
 
 Both need the PostgreSQL client tools (`pg_dump` / `pg_restore`) on `PATH`.
-`backups/` is git-ignored — dumps contain real ticket data, so keep them off any
-shared/synced folder. Schedule `backup` with Windows Task Scheduler.
+`backups/` is git-ignored. Dumps contain real ticket data, so keep them off
+any shared/synced folder. Schedule `backup` with Windows Task Scheduler.
 
 ## Privacy
 
