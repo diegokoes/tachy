@@ -14,7 +14,7 @@ export interface ResolvedSource {
 
 export async function resolveSource(slug: string): Promise<ResolvedSource> {
   const [conn] = await sql`
-    select id, source_type, base_url, slug
+    select id, source_type, base_url, slug, config
     from source_connections where slug = ${slug}
   `;
   if (!conn) throw new Error(`Unknown source connection: ${slug}`);
@@ -22,6 +22,6 @@ export async function resolveSource(slug: string): Promise<ResolvedSource> {
   if (!factory) throw new Error(`No adapter registered for source type: ${conn.source_type}`);
   return {
     conn: { id: conn.id, slug: conn.slug, sourceType: conn.source_type, baseUrl: conn.base_url },
-    source: factory({ baseUrl: conn.base_url ?? "", slug: conn.slug }),
+    source: factory({ baseUrl: conn.base_url ?? "", slug: conn.slug, config: conn.config ?? {} }),
   };
 }

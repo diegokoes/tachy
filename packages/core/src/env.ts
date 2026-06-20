@@ -3,12 +3,23 @@ import "dotenv/config";
 export const env = {
   databaseUrl: process.env.DATABASE_URL ?? "postgres://tachy:tachy@localhost:5432/tachy",
   port: Number(process.env.PORT ?? 8787),
+  userEmail: process.env.TACHY_USER_EMAIL,           // who knowledge entries are attributed to
+  apiToken: process.env.TACHY_API_TOKEN,             // shared bearer token for the REST API
 };
 
-/** Resolve a source token from env by connection slug, e.g. osapiens-freshdesk -> FRESHDESK_TOKEN_OSAPIENS_FRESHDESK. */
-export function freshdeskToken(slug: string): string {
-  const key = `FRESHDESK_TOKEN_${slug.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`;
-  const token = process.env[key] ?? process.env.FRESHDESK_TOKEN;
-  if (!token) throw new Error(`Missing Freshdesk token. Set ${key} (or FRESHDESK_TOKEN) in your env.`);
+/**
+ * Resolve a source token from env by provider + connection slug, e.g.
+ * (FRESHDESK, osapiens-freshdesk) -> FRESHDESK_TOKEN_OSAPIENS_FRESHDESK,
+ * falling back to the bare FRESHDESK_TOKEN.
+ */
+export function sourceToken(provider: string, slug: string): string {
+  const norm = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+  const perSlug = `${norm(provider)}_TOKEN_${norm(slug)}`;
+  const bare = `${norm(provider)}_TOKEN`;
+  const token = process.env[perSlug] ?? process.env[bare];
+  if (!token) throw new Error(`Missing ${provider} token. Set ${perSlug} (or ${bare}) in your env.`);
   return token;
 }
+
+export const freshdeskToken = (slug: string) => sourceToken("FRESHDESK", slug);
+export const githubToken = (slug: string) => sourceToken("GITHUB", slug);

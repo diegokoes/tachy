@@ -22,7 +22,14 @@
 
 create extension if not exists pgcrypto;   -- gen_random_uuid() (built-in on PG13+, harmless here)
 create extension if not exists pg_trgm;    -- trigram fuzzy / error-code matching
--- create extension if not exists vector;  -- enable when you turn on semantic search (phase 2)
+create extension if not exists vector;     -- pgvector: 384-dim semantic search
+
+-- array_to_string is only STABLE, which generated columns reject. This wrapper
+-- is genuinely immutable for our fixed (text[], single space) usage, so the
+-- search_text / search_tsv generated columns below can call it.
+create or replace function tachy_join(arr text[]) returns text
+    language sql immutable parallel safe
+    as $$ select array_to_string(arr, ' ') $$;
 
 -- ---------------------------------------------------------------------------
 -- Org hierarchy
@@ -160,7 +167,7 @@ create table knowledge_entries (
     confidence          text,                          -- 'low' | 'medium' | 'high'
     structured          jsonb not null default '{}'::jsonb,  -- full JSON blob; future fields land here, no migration
 
-    -- embedding        vector(384),                    -- phase 2: enable `vector` extension, then add column
+    embedding           vector(384),                    -- local all-MiniLM-L6-v2; null until embedded
 
     -- Denormalized text for trigram (fuzzy / error codes). Generated columns
     -- cannot reference each other, so the concat is repeated in search_tsv.
@@ -170,7 +177,7 @@ create table knowledge_entries (
         coalesce(resolution,'')   || ' ' ||
         coalesce(resolution_pattern,'') || ' ' ||
         coalesce(product_area,'') || ' ' ||
-        array_to_string(symptoms, ' ')
+        tachy_join(symptoms)
     ) stored,
 
     search_tsv tsvector generated always as (
@@ -180,7 +187,7 @@ create table knowledge_entries (
             coalesce(resolution,'')   || ' ' ||
             coalesce(resolution_pattern,'') || ' ' ||
             coalesce(product_area,'') || ' ' ||
-            array_to_string(symptoms, ' ')
+            tachy_join(symptoms)
         )
     ) stored,
 
@@ -196,6 +203,7 @@ create index knowledge_pattern_idx     on knowledge_entries(resolution_pattern);
 create index knowledge_symptoms_idx    on knowledge_entries using gin (symptoms);
 create index knowledge_tsv_idx         on knowledge_entries using gin (search_tsv);
 create index knowledge_trgm_idx        on knowledge_entries using gin (search_text gin_trgm_ops);
+create index knowledge_embedding_idx   on knowledge_entries using hnsw (embedding vector_cosine_ops);
 
 create or replace function set_updated_at() returns trigger as $$
 begin
@@ -281,3 +289,15 @@ join products p on p.slug = 'tpd'
 join teams t on t.id = p.team_id and t.slug = 'track-and-trace'
 where sc.slug = 'osapiens-freshdesk'
 on conflict (source_connection_id, external_group_key) do nothing;
+
+-- Example GitHub source (token resolved from GITHUB_TOKEN_OSAPIENS_GH / GITHUB_TOKEN).
+-- config.repos lists the repos to sync; each 'owner/repo' maps to a product below.
+-- insert into source_connections (source_type, slug, base_url, config) values
+--     ('github', 'osapiens-gh', 'https://api.github.com', '{"repos":["osapiens/ftrace"]}'::jsonb)
+-- on conflict (slug) do nothing;
+--
+-- insert into source_product_map (source_connection_id, external_group_key, product_id)
+-- select sc.id, 'osapiens/ftrace', p.id
+-- from source_connections sc join products p on p.slug = 'ftrace'
+-- where sc.slug = 'osapiens-gh'
+-- on conflict (source_connection_id, external_group_key) do nothing;
