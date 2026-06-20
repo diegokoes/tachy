@@ -18,7 +18,8 @@ export interface RawWorkItem {
   title?: string;
   status?: string;             // native status (raw); mapping is account-specific
   groupKey?: string;           // freshdesk group_id, or 'owner/repo'
-  requester?: string;
+  requester?: string;          // opaque source-native id (e.g. Freshdesk requester_id), not necessarily an email
+  requesterEmail?: string;     // for customer auto-matching by domain; not all sources can provide this
   raw: unknown;                // full original payload (traceability)
   sourceCreatedAt?: string;
   sourceUpdatedAt?: string;
