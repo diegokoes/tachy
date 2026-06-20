@@ -4,8 +4,11 @@ import { serve } from "@hono/node-server";
 import {
   registerSource, resolveSource, ingestWorkItem, saveKnowledgeEntry, searchKnowledge,
   addFeedback, listFeedback, recordRun, env,
+  listResolutionPatterns, addResolutionPattern,
+  listComponents, addComponent, getProductIdBySlug,
+  listCustomers, addCustomer, getCustomerIdBySlug, setWorkItemCustomer, setObservedVersion, getCustomerName,
 } from "@tachy/core";
-import type { KnowledgeInput, FeedbackInput, RunInput } from "@tachy/core";
+import type { KnowledgeInput, FeedbackInput, RunInput, AddComponentInput, CustomerInput } from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 
@@ -29,7 +32,25 @@ app.post("/work-items/:source/:id/fetch", async (c) => {
   const raw = await src.fetchItem(id);
   const item = await ingestWorkItem(conn.id, raw);
   await recordRun({ workItemId: item.id, mode: "ingest" });
-  return c.json({ work_item_id: item.id, item: raw });
+  const customerName = await getCustomerName(item.customerId);
+  return c.json({
+    work_item_id: item.id, product_id: item.productId, team_id: item.teamId,
+    customer_id: item.customerId, customer_name: customerName, observed_version: item.observedVersion,
+    item: raw,
+  });
+});
+
+app.patch("/work-items/:id/customer", async (c) => {
+  const { customer_slug } = (await c.req.json()) as { customer_slug: string | null };
+  const customerId = customer_slug ? await getCustomerIdBySlug(customer_slug) : null;
+  await setWorkItemCustomer(c.req.param("id"), customerId);
+  return c.json({ updated: true, customer_id: customerId });
+});
+
+app.patch("/work-items/:id/observed-version", async (c) => {
+  const { version } = (await c.req.json()) as { version: string | null };
+  await setObservedVersion(c.req.param("id"), version);
+  return c.json({ updated: true, observed_version: version });
 });
 
 // Ranked prior approved entries only — drafts/rejected never surface here.
@@ -64,6 +85,30 @@ app.post("/analysis-runs", async (c) => {
   const body = (await c.req.json()) as RunInput;
   const row = await recordRun(body);
   return c.json(row);
+});
+
+app.get("/resolution-patterns", async (c) => c.json(await listResolutionPatterns()));
+
+app.post("/resolution-patterns", async (c) => {
+  const { slug, description } = (await c.req.json()) as { slug: string; description: string };
+  return c.json(await addResolutionPattern(slug, description));
+});
+
+app.get("/products/:slug/components", async (c) => {
+  return c.json(await listComponents(await getProductIdBySlug(c.req.param("slug"))));
+});
+
+app.post("/products/:slug/components", async (c) => {
+  const body = (await c.req.json()) as Omit<AddComponentInput, "productId">;
+  const row = await addComponent({ ...body, productId: await getProductIdBySlug(c.req.param("slug")) });
+  return c.json(row);
+});
+
+app.get("/customers", async (c) => c.json(await listCustomers()));
+
+app.post("/customers", async (c) => {
+  const body = (await c.req.json()) as CustomerInput;
+  return c.json(await addCustomer(body));
 });
 
 app.post("/work-items/:source/:id/notes", async (c) => {
