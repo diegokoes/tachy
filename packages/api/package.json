@@ -1,0 +1,12 @@
+{
+  "name": "@casebook/api",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@casebook/core": "*",
+    "@casebook/source-freshdesk": "*",
+    "hono": "^4.6.14",
+    "@hono/node-server": "^1.13.7"
+  }
+}

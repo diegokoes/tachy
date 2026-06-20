@@ -1,0 +1,26 @@
+{
+  "name": "casebook",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted knowledge engine for engineering work items. Pluggable sources (Freshdesk, GitHub, ...), Claude-Code-driven ingest/consult loop.",
+  "license": "MIT",
+  "workspaces": [
+    "packages/core",
+    "packages/sources/freshdesk",
+    "packages/mcp",
+    "packages/api",
+    "packages/cli"
+  ],
+  "scripts": {
+    "mcp": "tsx packages/mcp/src/index.ts",
+    "api": "tsx packages/api/src/index.ts",
+    "sync": "tsx packages/cli/src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

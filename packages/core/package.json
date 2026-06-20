@@ -1,0 +1,11 @@
+{
+  "name": "@casebook/core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "postgres": "^3.4.5"
+  }
+}
