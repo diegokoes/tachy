@@ -19,6 +19,7 @@ PowerShell -> Claude Code --(MCP stdio)--> tachy MCP server -> core -> Postgres
 
 - `packages/core` — DB, the `WorkItemSource` interface, services (source-agnostic)
 - `packages/sources/freshdesk` — Freshdesk adapter
+- `packages/sources/github` — GitHub Issues adapter
 - `packages/mcp` — MCP server for Claude Code (the primary surface)
 - `packages/api` — Hono REST API (cron, teammates, future UI)
 - `packages/cli` — `sync` command
@@ -27,7 +28,10 @@ PowerShell -> Claude Code --(MCP stdio)--> tachy MCP server -> core -> Postgres
 ## Prerequisites
 
 - Node 20+
-- PostgreSQL 14+ (extensions `pg_trgm` and `pgcrypto`; `schema.sql` creates them)
+- PostgreSQL 14+ with the `vector` (pgvector), `pg_trgm`, and `pgcrypto`
+  extensions available; `schema.sql` creates them. The easiest way to get
+  pgvector locally is the `pgvector/pgvector` Docker image, or
+  `apt install postgresql-16-pgvector`.
 
 ## Setup
 
@@ -78,7 +82,12 @@ post that analysis as a private note on 61010
 ### MCP tools
 
 `fetch_work_item`, `search_knowledge`, `get_context`, `save_knowledge_entry`,
-`post_private_note`.
+`post_private_note`, `add_knowledge_feedback`, `record_analysis_run`.
+
+`search_knowledge` and `get_context` are hybrid: keyword (FTS + trigram) blended
+with semantic similarity over a local embedding, so paraphrases surface even with
+no shared keywords. `save_knowledge_entry` stamps `created_by` from
+`TACHY_USER_EMAIL` and embeds the entry on save.
 
 ## REST API (optional)
 
@@ -87,7 +96,12 @@ npm run api          # http://localhost:8787
 ```
 
 `GET /health`, `POST /work-items/:source/:id/fetch`, `GET /knowledge/search?q=`,
-`POST /knowledge`, `POST /work-items/:source/:id/notes`.
+`POST /knowledge`, `GET /knowledge/:id/feedback`, `POST /knowledge/:id/feedback`,
+`POST /analysis-runs`, `POST /work-items/:source/:id/notes`.
+
+Set `TACHY_API_TOKEN` to require a bearer token on every route except `/health`
+(`Authorization: Bearer <token>`). If it is unset, the server binds to
+`127.0.0.1` only and warns. The MCP server (stdio) is unaffected.
 
 ## Incremental sync (optional)
 
@@ -98,10 +112,47 @@ npm run sync sync osapiens-freshdesk --since=2026-06-01T00:00:00Z --group=480006
 Stores/refreshes raw work items only — it never creates knowledge entries
 (those always require your approval). Schedule it with Windows Task Scheduler.
 
-## Adding a source
+## Sources
+
+Two adapters ship today:
+
+- **Freshdesk** — `external_id` is the ticket number; `group_id` maps to a
+  product. Supports private-note write-back.
+- **GitHub** (issues) — `external_id` is `owner/repo#123`; `owner/repo` maps to a
+  product. Set the repos to sync in the connection's `config.repos`
+  (`["owner/repo", ...]`) or pass `--group=owner/repo`. PRs are skipped. GitHub
+  has no private notes, so `post_private_note` is intentionally refused.
+
+Tokens follow one pattern: `FRESHDESK_TOKEN_<SLUG>` / `GITHUB_TOKEN_<SLUG>`,
+falling back to `FRESHDESK_TOKEN` / `GITHUB_TOKEN`.
+
+### Adding another source
 
 Implement `WorkItemSource` (see `packages/core/src/source.ts`), register it in
 the entrypoints, and add a `source_connections` row. No schema change.
+
+## Semantic search
+
+Embeddings are produced by a local model (all-MiniLM-L6-v2, 384-dim, via
+`fastembed`) — nothing is sent to an external API. The model (~90MB) is
+downloaded on first use into `.fastembed-cache/`. Fresh databases get the
+`vector` column from `schema.sql`; to upgrade an existing database run
+`db/0002_pgvector.sql` then backfill embeddings for prior entries:
+
+```bash
+npm run sync embed-backfill
+```
+
+## Backups
+
+```bash
+npm run sync backup                 # pg_dump -Fc into ./backups/
+npm run sync restore --file=backups/tachy-….dump   # pg_restore (overwrites!)
+```
+
+Both need the PostgreSQL client tools (`pg_dump` / `pg_restore`) on `PATH`.
+`backups/` is git-ignored — dumps contain real ticket data, so keep them off any
+shared/synced folder. Schedule `backup` with Windows Task Scheduler.
 
 ## Privacy
 
