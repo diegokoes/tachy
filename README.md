@@ -1,4 +1,4 @@
-# tachy
+# tachý
 
 A self-hosted, source-agnostic knowledge engine for engineering work items.
 It ingests support tickets / issues from pluggable **sources** (Freshdesk,
