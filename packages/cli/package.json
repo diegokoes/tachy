@@ -1,0 +1,10 @@
+{
+  "name": "@casebook/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@casebook/core": "*",
+    "@casebook/source-freshdesk": "*"
+  }
+}

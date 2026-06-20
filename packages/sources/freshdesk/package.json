@@ -1,0 +1,10 @@
+{
+  "name": "@casebook/source-freshdesk",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@casebook/core": "*"
+  }
+}
