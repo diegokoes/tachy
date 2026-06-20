@@ -4,6 +4,9 @@ import { z } from "zod";
 import {
   registerSource, resolveSource, ingestWorkItem, saveKnowledgeEntry, searchKnowledge,
   resolveCurrentUserId, addFeedback, recordRun,
+  listResolutionPatterns, addResolutionPattern,
+  listComponents, addComponent, getProductIdBySlug,
+  listCustomers, addCustomer, getCustomerIdBySlug, setWorkItemCustomer, setObservedVersion, getCustomerName,
 } from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
@@ -28,7 +31,12 @@ server.registerTool(
     const raw = await src.fetchItem(external_id);
     const item = await ingestWorkItem(conn.id, raw);
     await recordRun({ workItemId: item.id, userId: await resolveCurrentUserId(), mode: "ingest" });
-    return out({ work_item_id: item.id, product_id: item.productId, team_id: item.teamId, item: raw });
+    const customerName = await getCustomerName(item.customerId);
+    return out({
+      work_item_id: item.id, product_id: item.productId, team_id: item.teamId,
+      customer_id: item.customerId, customer_name: customerName, observed_version: item.observedVersion,
+      item: raw,
+    });
   },
 );
 
@@ -58,14 +66,18 @@ server.registerTool(
     const firstIncoming = raw.messages.find((m) => m.direction === "incoming")?.bodyText ?? "";
     const query = [raw.title, firstIncoming].filter(Boolean).join(" ");
     const similar = await searchKnowledge(query, { limit });
-    return out({ work_item: raw, similar });
+    const customerName = await getCustomerName(item.customerId);
+    return out({
+      work_item: raw, similar,
+      customer_id: item.customerId, customer_name: customerName, observed_version: item.observedVersion,
+    });
   },
 );
 
 server.registerTool(
   "save_knowledge_entry",
   {
-    description: "Persist an APPROVED structured knowledge entry. Call ONLY after the user reviewed and approved the summary.",
+    description: "Persist an APPROVED structured knowledge entry. Call ONLY after the user reviewed and approved the summary. resolution_pattern must be an existing slug from list_resolution_patterns (or omitted) — it is not free text.",
     inputSchema: {
       work_item_id: z.string().optional(),
       product_id: z.string().optional(),
@@ -73,6 +85,7 @@ server.registerTool(
       status: z.string().optional(),
       issue_summary: z.string().optional(),
       symptoms: z.array(z.string()).optional(),
+      signals: z.array(z.string()).optional(),
       root_cause: z.string().optional(),
       resolution: z.string().optional(),
       resolution_pattern: z.string().optional(),
@@ -85,7 +98,7 @@ server.registerTool(
     const row = await saveKnowledgeEntry({
       workItemId: a.work_item_id, productId: a.product_id, teamId: a.team_id,
       createdById: await resolveCurrentUserId(),
-      status: a.status ?? "approved", issueSummary: a.issue_summary, symptoms: a.symptoms,
+      status: a.status ?? "approved", issueSummary: a.issue_summary, symptoms: a.symptoms, signals: a.signals,
       rootCause: a.root_cause, resolution: a.resolution, resolutionPattern: a.resolution_pattern,
       productArea: a.product_area, confidence: a.confidence, structured: a.structured,
     });
@@ -147,6 +160,94 @@ server.registerTool(
       model: a.model, inputTokens: a.input_tokens, outputTokens: a.output_tokens, meta: a.meta,
     });
     return out({ recorded: true, id: row.id });
+  },
+);
+
+server.registerTool(
+  "list_resolution_patterns",
+  {
+    description: "List the controlled vocabulary of resolution patterns. ALWAYS call this before choosing resolution_pattern for save_knowledge_entry — pick an existing slug, or leave it unset, rather than inventing one.",
+    inputSchema: {},
+  },
+  async () => out(await listResolutionPatterns()),
+);
+
+server.registerTool(
+  "add_resolution_pattern",
+  {
+    description: "Add a new resolution_pattern slug to the controlled vocabulary. Call ONLY when the user explicitly asks to add a new pattern — never invent one just to tag a ticket; leave resolution_pattern unset instead.",
+    inputSchema: { slug: z.string(), description: z.string() },
+  },
+  async ({ slug, description }) => out(await addResolutionPattern(slug, description)),
+);
+
+server.registerTool(
+  "list_components",
+  {
+    description: "List the architecture glossary (components, hierarchical) for a product. Call this before reasoning about a ticket, so unfamiliar service/component names get checked against the real architecture instead of guessed at.",
+    inputSchema: { product_slug: z.string() },
+  },
+  async ({ product_slug }) => out(await listComponents(await getProductIdBySlug(product_slug))),
+);
+
+server.registerTool(
+  "add_component",
+  {
+    description: "Add (or update) a fact in the architecture glossary, e.g. a service, module, or config pool. Two valid call patterns: (1) the user is directly describing the app's architecture — call immediately; (2) a ticket mentions something not yet in the list — ASK the user first, call only after they confirm. Never silently invent components from a ticket.",
+    inputSchema: {
+      product_slug: z.string(), slug: z.string(), name: z.string(),
+      parent_slug: z.string().optional(), description: z.string().optional(),
+    },
+  },
+  async (a) => out(await addComponent({
+    productId: await getProductIdBySlug(a.product_slug), slug: a.slug, name: a.name,
+    parentSlug: a.parent_slug, description: a.description,
+  })),
+);
+
+server.registerTool(
+  "list_customers",
+  {
+    description: "List known customers, including aliases (other names / email domains resolving to the same account, e.g. a distributor). Use to check before correcting a work item's customer.",
+    inputSchema: {},
+  },
+  async () => out(await listCustomers()),
+);
+
+server.registerTool(
+  "add_customer",
+  {
+    description: "Add (or extend) a customer, including aliases for distributors/resellers that front for the same account. Call when the user describes a customer or asks to add one — not inferred silently from a ticket.",
+    inputSchema: {
+      name: z.string(), slug: z.string(),
+      aliases: z.array(z.string()).optional(), notes: z.string().optional(),
+    },
+  },
+  async (a) => out(await addCustomer(a)),
+);
+
+server.registerTool(
+  "set_work_item_customer",
+  {
+    description: "Correct (or clear) the customer auto-matched to a work item. Use when the auto-match is wrong or missing, e.g. a ticket routed through a distributor.",
+    inputSchema: { work_item_id: z.string(), customer_slug: z.string().nullable() },
+  },
+  async ({ work_item_id, customer_slug }) => {
+    const customerId = customer_slug ? await getCustomerIdBySlug(customer_slug) : null;
+    await setWorkItemCustomer(work_item_id, customerId);
+    return out({ updated: true, work_item_id, customer_id: customerId });
+  },
+);
+
+server.registerTool(
+  "set_observed_version",
+  {
+    description: "Record (or clear) the product version observed/mentioned on a specific ticket. Only set this when a version is actually known from the ticket — leave unset otherwise.",
+    inputSchema: { work_item_id: z.string(), version: z.string().nullable() },
+  },
+  async ({ work_item_id, version }) => {
+    await setObservedVersion(work_item_id, version);
+    return out({ updated: true, work_item_id, observed_version: version });
   },
 );
 
