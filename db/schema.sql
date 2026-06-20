@@ -98,6 +98,25 @@ create table source_product_map (
 );
 
 -- ---------------------------------------------------------------------------
+-- Customers: who a work item is for. Mainly relevant to ticket-based sources
+-- (Freshdesk); left null for sources with no customer concept (GitHub).
+-- Distributors/resellers often front for the same underlying account
+-- (e.g. Arvato fronting for Davidoff) — aliases lets one row absorb all the
+-- names/email domains that should resolve to the same customer.
+-- ---------------------------------------------------------------------------
+
+create table customers (
+    id          uuid primary key default gen_random_uuid(),
+    name        text not null,                        -- canonical display name, e.g. 'Davidoff'
+    slug        text not null unique,
+    aliases     text[] not null default '{}',         -- other names / email domains resolving here
+    notes       text,                                 -- freeform: factory variants, deployment quirks
+    created_at  timestamptz not null default now()
+);
+
+create index customers_aliases_idx on customers using gin (aliases);
+
+-- ---------------------------------------------------------------------------
 -- Work items: the generic unit (a Freshdesk ticket OR a GitHub issue OR ...)
 -- ---------------------------------------------------------------------------
 
@@ -112,6 +131,8 @@ create table work_items (
     external_group_key    text,                       -- raw group_id / repo, for mapping + audit
     product_id            uuid references products(id) on delete set null,  -- resolved at ingest
     team_id               uuid references teams(id) on delete set null,     -- denormalized for fast scoping
+    customer_id           uuid references customers(id) on delete set null, -- resolved at ingest, correctable
+    observed_version      text,                       -- version mentioned/known for THIS ticket, if any (raw, unvalidated)
     requester             text,
     raw                   jsonb,                      -- full original metadata payload (traceability)
     source_created_at     timestamptz,
@@ -122,6 +143,7 @@ create table work_items (
 
 create index work_items_product_idx     on work_items(product_id);
 create index work_items_team_idx        on work_items(team_id);
+create index work_items_customer_idx    on work_items(customer_id);
 create index work_items_updated_idx     on work_items(source_connection_id, source_updated_at);
 create index work_items_group_key_idx   on work_items(source_connection_id, external_group_key);
 
@@ -145,9 +167,25 @@ create table work_item_messages (
 create index work_item_messages_item_idx on work_item_messages(work_item_id, created_at);
 
 -- ---------------------------------------------------------------------------
+-- Resolution patterns: controlled vocabulary for knowledge_entries.resolution_pattern.
+-- Seeded empty on purpose — add rows deliberately (same motion as adding a
+-- team/product) as real, distinct patterns emerge. Free phrasing here would
+-- defeat the whole point of the index below: cross-team grouping needs an
+-- exact, curated vocabulary, not prose that varies ticket to ticket.
+-- ---------------------------------------------------------------------------
+
+create table resolution_patterns (
+    slug         text primary key,                    -- 'config-mismatch', 'version-incompatibility', ...
+    description  text not null,
+    created_at   timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------------
 -- Knowledge entries: the learned, structured, queryable artifact.
 -- This is what "consult mode" searches. One per analyzed work item
 -- (or manual). Nothing here counts as knowledge until status = 'approved'.
+-- Customer-blind by design: identity/version context lives on work_items,
+-- never here, so retrieval matches on the fault, not on who reported it.
 -- ---------------------------------------------------------------------------
 
 create table knowledge_entries (
@@ -156,28 +194,35 @@ create table knowledge_entries (
     product_id          uuid references products(id) on delete set null,
     team_id             uuid references teams(id) on delete set null,
     created_by          uuid references users(id) on delete set null,
-    status              text not null default 'draft',  -- 'draft' | 'approved' | 'rejected' | 'archived'
+    status              text not null default 'draft'
+                            check (status in ('draft','approved','rejected','archived')),
 
     issue_summary       text,
     symptoms            text[] not null default '{}',
     root_cause          text,
     resolution          text,
-    resolution_pattern  text,                          -- normalized-ish tag (indexed for cross-team queries)
+    resolution_pattern  text references resolution_patterns(slug),  -- nullable; curated vocabulary only
+    signals             text[] not null default '{}',  -- error codes, config filenames, component names: the
+                                                          -- most distinctive search terms, promoted out of `structured`
     product_area        text,
-    confidence          text,                          -- 'low' | 'medium' | 'high'
+    confidence          text check (confidence is null or confidence in ('low','medium','high')),
     structured          jsonb not null default '{}'::jsonb,  -- full JSON blob; future fields land here, no migration
 
     embedding           vector(384),                    -- local all-MiniLM-L6-v2; null until embedded
 
     -- Denormalized text for trigram (fuzzy / error codes). Generated columns
     -- cannot reference each other, so the concat is repeated in search_tsv.
+    -- Can only see this row's own columns (no joins), so resolution_pattern
+    -- contributes its slug here, not resolution_patterns.description — the
+    -- richer description is only used in the application-level embedding text.
     search_text text generated always as (
         coalesce(issue_summary,'') || ' ' ||
         coalesce(root_cause,'')   || ' ' ||
         coalesce(resolution,'')   || ' ' ||
         coalesce(resolution_pattern,'') || ' ' ||
         coalesce(product_area,'') || ' ' ||
-        tachy_join(symptoms)
+        tachy_join(symptoms) || ' ' ||
+        tachy_join(signals)
     ) stored,
 
     search_tsv tsvector generated always as (
@@ -187,7 +232,8 @@ create table knowledge_entries (
             coalesce(resolution,'')   || ' ' ||
             coalesce(resolution_pattern,'') || ' ' ||
             coalesce(product_area,'') || ' ' ||
-            tachy_join(symptoms)
+            tachy_join(symptoms) || ' ' ||
+            tachy_join(signals)
         )
     ) stored,
 
@@ -201,6 +247,7 @@ create index knowledge_product_idx     on knowledge_entries(product_id);
 create index knowledge_team_idx        on knowledge_entries(team_id);
 create index knowledge_pattern_idx     on knowledge_entries(resolution_pattern);
 create index knowledge_symptoms_idx    on knowledge_entries using gin (symptoms);
+create index knowledge_signals_idx     on knowledge_entries using gin (signals);
 create index knowledge_tsv_idx         on knowledge_entries using gin (search_tsv);
 create index knowledge_trgm_idx        on knowledge_entries using gin (search_text gin_trgm_ops);
 create index knowledge_embedding_idx   on knowledge_entries using hnsw (embedding vector_cosine_ops);
@@ -252,6 +299,32 @@ create table analysis_runs (
 );
 
 create index analysis_runs_item_idx on analysis_runs(work_item_id);
+
+-- ---------------------------------------------------------------------------
+-- Components: an architecture glossary, not tied to any work_item or ticket.
+-- Static facts about what a product is made of (services, modules, config
+-- pools), fed conversationally — either directly described by a human, or
+-- proposed by Claude when a ticket mentions something unfamiliar and then
+-- confirmed by a human before being added (same human-gated motion as
+-- resolution_patterns). knowledge_entries is shaped around issue -> root
+-- cause -> resolution; this table exists because architecture facts don't
+-- fit that shape and don't belong there. Hierarchical so e.g. business-object
+-- can have pools (configuration, id-issuer, ...) nested under it.
+-- ---------------------------------------------------------------------------
+
+create table components (
+    id          uuid primary key default gen_random_uuid(),
+    product_id  uuid not null references products(id) on delete cascade,
+    parent_id   uuid references components(id) on delete cascade,
+    slug        text not null,                        -- 'line-controller', 'business-object-id-issuer'
+    name        text not null,                         -- 'Line Controller', 'Business Object / ID Issuer'
+    description text,
+    created_at  timestamptz not null default now(),
+    unique (product_id, slug)
+);
+
+create index components_product_idx on components(product_id);
+create index components_parent_idx  on components(parent_id);
 
 -- ============================================================================
 -- SEED (edit/remove freely — this just reflects the org you described).
