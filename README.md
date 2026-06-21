@@ -21,7 +21,7 @@ codebase or product is put together, with no ticket involved at all.
 It pulls tickets/issues from pluggable **sources** (Freshdesk, GitHub, more can
 be added). That pulling can be manual, or scheduled through an optional REST
 API/CLI instead of running it by hand every time.
-s
+
 tachý itself never calls an LLM. It only stores and retrieves; the agent
 (Claude Code, Codex CLI, or any [MCP][mcp] client) is the reasoning layer.
 
@@ -96,11 +96,9 @@ one adapter, with no schema or core changes.
 
 ### Quick start with Docker
 
-No Node, no local Postgres install. Just Docker.
-
 ```bash
-cp .env.example .env          # fill in TACHY_API_TOKEN and your Freshdesk/GitHub token
-docker compose up -d          # starts postgres (schema applied on first init) + the API
+cp .env.example .env
+docker compose up -d
 curl localhost:8787/health
 ```
 
