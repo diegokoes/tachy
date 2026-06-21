@@ -1,41 +1,15 @@
---
--- Design goals:
---   * SOURCE-AGNOSTIC: no "tickets" table. work_items are fed by pluggable
---     sources (freshdesk, github, ...). Adding a source = new rows in
---     source_connections + a new adapter in code. No schema change.
---   * MULTI-TEAM / MULTI-PRODUCT: teams -> products (ftrace, tpd under
---     Track&Trace; csdr, eudr, pcf, medical-devices under BPT). A source's
---     native grouping (Freshdesk group_id, GitHub repo) maps to a product.
---   * MULTI-USER: engineers are first-class; entries track author + approval.
---   * HUMAN-IN-THE-LOOP: knowledge_entries have a status gate (draft ->
---     approved) so nothing is "learned" until you give the OK.
---   * RETRIEVAL: FTS + trigram now; a pgvector column is reserved for later.
---
--- Secrets (API tokens) NEVER live in this DB. source_connections holds only
--- non-secret config; the actual token is resolved from env by the adapter,
--- keyed on source_connections.slug.
---
--- Target: PostgreSQL 14+.
--- ============================================================================
+create extension if not exists pgcrypto;
+create extension if not exists pg_trgm;
+create extension if not exists vector;
 
-create extension if not exists pgcrypto;   -- gen_random_uuid() (built-in on PG13+, harmless here)
-create extension if not exists pg_trgm;    -- trigram fuzzy / error-code matching
-create extension if not exists vector;     -- pgvector: 384-dim semantic search
-
--- array_to_string is only STABLE, which generated columns reject. This wrapper
--- is genuinely immutable for our fixed (text[], single space) usage, so the
--- search_text / search_tsv generated columns below can call it.
+-- array_to_string is STABLE; this immutable wrapper lets generated columns call it.
 create or replace function tachy_join(arr text[]) returns text
     language sql immutable parallel safe
     as $$ select array_to_string(arr, ' ') $$;
 
--- ---------------------------------------------------------------------------
--- Org hierarchy
--- ---------------------------------------------------------------------------
-
 create table teams (
     id          uuid primary key default gen_random_uuid(),
-    slug        text not null unique,                 -- 'track-and-trace', 'bpt'
+    slug        text not null unique,
     name        text not null,
     created_at  timestamptz not null default now()
 );
@@ -43,17 +17,13 @@ create table teams (
 create table products (
     id          uuid primary key default gen_random_uuid(),
     team_id     uuid not null references teams(id) on delete cascade,
-    slug        text not null,                        -- 'tpd', 'ftrace', 'eudr'
+    slug        text not null,
     name        text not null,
     created_at  timestamptz not null default now(),
     unique (team_id, slug)
 );
 
 create index products_team_idx on products(team_id);
-
--- ---------------------------------------------------------------------------
--- Users (engineers) + team membership
--- ---------------------------------------------------------------------------
 
 create table users (
     id            uuid primary key default gen_random_uuid(),
@@ -65,28 +35,20 @@ create table users (
 create table team_members (
     team_id   uuid not null references teams(id) on delete cascade,
     user_id   uuid not null references users(id) on delete cascade,
-    role      text not null default 'member',         -- 'member' | 'lead' | 'admin'
+    role      text not null default 'member',
     primary key (team_id, user_id)
 );
 
--- ---------------------------------------------------------------------------
--- Sources: where work items come from.
--- A source_connection is one configured instance of a source_type
--- (e.g. your Freshdesk tenant, or a specific GitHub org/repo).
--- ---------------------------------------------------------------------------
-
+-- Maps a source-native grouping (Freshdesk group_id, GitHub owner/repo) to an internal product.
 create table source_connections (
     id            uuid primary key default gen_random_uuid(),
-    source_type   text not null,                      -- 'freshdesk' | 'github' | ...
-    slug          text not null unique,               -- 'acme-freshdesk' (token resolved from env by this slug)
-    base_url      text,                               -- 'https://acme-desk.freshdesk.com'
-    config        jsonb not null default '{}'::jsonb, -- non-secret config only
+    source_type   text not null,
+    slug          text not null unique,
+    base_url      text,
+    config        jsonb not null default '{}'::jsonb,
     created_at    timestamptz not null default now()
 );
 
--- Resolve a source-native grouping to an internal product.
--- Freshdesk: external_group_key = group_id (as text).
--- GitHub:    external_group_key = 'owner/repo' or a label.
 create table source_product_map (
     id                    uuid primary key default gen_random_uuid(),
     source_connection_id  uuid not null references source_connections(id) on delete cascade,
@@ -95,46 +57,34 @@ create table source_product_map (
     unique (source_connection_id, external_group_key)
 );
 
--- ---------------------------------------------------------------------------
--- Customers: who a work item is for. Mainly relevant to ticket-based sources
--- (Freshdesk); left null for sources with no customer concept (GitHub).
--- Distributors/resellers often front for the same underlying account
--- (e.g. Arvato fronting for Davidoff) — aliases lets one row absorb all the
--- names/email domains that should resolve to the same customer.
--- ---------------------------------------------------------------------------
-
 create table customers (
     id          uuid primary key default gen_random_uuid(),
-    name        text not null,                        -- canonical display name, e.g. 'Davidoff'
+    name        text not null,
     slug        text not null unique,
-    aliases     text[] not null default '{}',         -- other names / email domains resolving here
-    notes       text,                                 -- freeform: factory variants, deployment quirks
+    aliases     text[] not null default '{}',
+    notes       text,
     created_at  timestamptz not null default now()
 );
 
 create index customers_aliases_idx on customers using gin (aliases);
 
--- ---------------------------------------------------------------------------
--- Work items: the generic unit (a Freshdesk ticket OR a GitHub issue OR ...)
--- ---------------------------------------------------------------------------
-
 create table work_items (
     id                    uuid primary key default gen_random_uuid(),
     source_connection_id  uuid not null references source_connections(id) on delete cascade,
-    external_id           text not null,              -- '58925', or gh issue number
+    external_id           text not null,
     external_url          text,
-    kind                  text,                       -- 'ticket' | 'issue'
+    kind                  text,
     title                 text,
-    status                text,                       -- native status string (raw)
-    external_group_key    text,                       -- raw group_id / repo, for mapping + audit
-    product_id            uuid references products(id) on delete set null,  -- resolved at ingest
-    team_id               uuid references teams(id) on delete set null,     -- denormalized for fast scoping
-    customer_id           uuid references customers(id) on delete set null, -- resolved at ingest, correctable
-    observed_version      text,                       -- version mentioned/known for THIS ticket, if any (raw, unvalidated)
+    status                text,
+    external_group_key    text,
+    product_id            uuid references products(id) on delete set null,
+    team_id               uuid references teams(id) on delete set null,
+    customer_id           uuid references customers(id) on delete set null,  -- resolved at ingest, correctable
+    observed_version      text,
     requester             text,
-    raw                   jsonb,                      -- full original metadata payload (traceability)
+    raw                   jsonb,
     source_created_at     timestamptz,
-    source_updated_at     timestamptz,                -- drives incremental sync
+    source_updated_at     timestamptz,  -- drives incremental sync
     ingested_at           timestamptz not null default now(),
     unique (source_connection_id, external_id)
 );
@@ -145,47 +95,32 @@ create index work_items_customer_idx    on work_items(customer_id);
 create index work_items_updated_idx     on work_items(source_connection_id, source_updated_at);
 create index work_items_group_key_idx   on work_items(source_connection_id, external_group_key);
 
--- ---------------------------------------------------------------------------
--- Work item messages: conversation / comment history (public + private)
--- ---------------------------------------------------------------------------
-
 create table work_item_messages (
     id              uuid primary key default gen_random_uuid(),
     work_item_id    uuid not null references work_items(id) on delete cascade,
     external_id     text,
     author          text,
-    visibility      text,                             -- 'public' | 'private' | 'internal'
-    direction       text,                             -- 'incoming' | 'outgoing'
+    visibility      text,
+    direction       text,
     body_text       text,
     attachments     jsonb not null default '[]'::jsonb,
-    created_at      timestamptz,                      -- source-side timestamp
+    created_at      timestamptz,
     unique (work_item_id, external_id)
 );
 
 create index work_item_messages_item_idx on work_item_messages(work_item_id, created_at);
 
--- ---------------------------------------------------------------------------
--- Resolution patterns: controlled vocabulary for knowledge_entries.resolution_pattern.
--- Seeded empty on purpose — add rows deliberately (same motion as adding a
--- team/product) as real, distinct patterns emerge. Free phrasing here would
--- defeat the whole point of the index below: cross-team grouping needs an
--- exact, curated vocabulary, not prose that varies ticket to ticket.
--- ---------------------------------------------------------------------------
-
+-- Controlled vocabulary for knowledge_entries.resolution_pattern. Starts empty;
+-- add slugs deliberately as real, distinct patterns emerge.
 create table resolution_patterns (
-    slug         text primary key,                    -- 'config-mismatch', 'version-incompatibility', ...
+    slug         text primary key,
     description  text not null,
     created_at   timestamptz not null default now()
 );
 
--- ---------------------------------------------------------------------------
--- Knowledge entries: the learned, structured, queryable artifact.
--- This is what "consult mode" searches. One per analyzed work item
--- (or manual). Nothing here counts as knowledge until status = 'approved'.
--- Customer-blind by design: identity/version context lives on work_items,
--- never here, so retrieval matches on the fault, not on who reported it.
--- ---------------------------------------------------------------------------
-
+-- The learned, structured artifact that consult mode searches.
+-- Customer-blind by design: identity lives on work_items, never here.
+-- Nothing counts as knowledge until status = 'approved'.
 create table knowledge_entries (
     id                  uuid primary key default gen_random_uuid(),
     work_item_id        uuid references work_items(id) on delete set null,
@@ -199,20 +134,14 @@ create table knowledge_entries (
     symptoms            text[] not null default '{}',
     root_cause          text,
     resolution          text,
-    resolution_pattern  text references resolution_patterns(slug),  -- nullable; curated vocabulary only
-    signals             text[] not null default '{}',  -- error codes, config filenames, component names: the
-                                                          -- most distinctive search terms, promoted out of `structured`
+    resolution_pattern  text references resolution_patterns(slug),
+    signals             text[] not null default '{}',
     product_area        text,
     confidence          text check (confidence is null or confidence in ('low','medium','high')),
-    structured          jsonb not null default '{}'::jsonb,  -- full JSON blob; future fields land here, no migration
+    structured          jsonb not null default '{}'::jsonb,
 
-    embedding           vector(384),                    -- local all-MiniLM-L6-v2; null until embedded
+    embedding           vector(384),  -- null until backfilled
 
-    -- Denormalized text for trigram (fuzzy / error codes). Generated columns
-    -- cannot reference each other, so the concat is repeated in search_tsv.
-    -- Can only see this row's own columns (no joins), so resolution_pattern
-    -- contributes its slug here, not resolution_patterns.description — the
-    -- richer description is only used in the application-level embedding text.
     search_text text generated always as (
         coalesce(issue_summary,'') || ' ' ||
         coalesce(root_cause,'')   || ' ' ||
@@ -261,34 +190,24 @@ create trigger knowledge_entries_updated_at
     before update on knowledge_entries
     for each row execute function set_updated_at();
 
--- ---------------------------------------------------------------------------
--- Feedback: human corrections / ratings on a knowledge entry.
--- Schema only — not yet wired up to any MCP tool, REST endpoint, or CLI.
--- ---------------------------------------------------------------------------
-
 create table knowledge_feedback (
     id                   uuid primary key default gen_random_uuid(),
     knowledge_entry_id   uuid not null references knowledge_entries(id) on delete cascade,
     user_id              uuid references users(id) on delete set null,
-    kind                 text not null default 'note',   -- 'correction' | 'rating' | 'note'
-    rating               integer,                        -- optional 1..5
+    kind                 text not null default 'note',  -- 'correction' | 'rating' | 'note'
+    rating               integer,
     comment              text,
-    patch                jsonb,                          -- proposed field changes
+    patch                jsonb,
     created_at           timestamptz not null default now()
 );
 
 create index knowledge_feedback_entry_idx on knowledge_feedback(knowledge_entry_id);
 
--- ---------------------------------------------------------------------------
--- Analysis runs: optional audit + token accounting (controlled cost).
--- Schema only — nothing currently inserts into this table.
--- ---------------------------------------------------------------------------
-
 create table analysis_runs (
     id              uuid primary key default gen_random_uuid(),
     work_item_id    uuid references work_items(id) on delete set null,
     user_id         uuid references users(id) on delete set null,
-    mode            text not null,                  -- 'ingest' | 'consult' | 'sync'
+    mode            text not null,  -- 'ingest' | 'consult' | 'sync'
     model           text,
     input_tokens    integer,
     output_tokens   integer,
@@ -298,24 +217,15 @@ create table analysis_runs (
 
 create index analysis_runs_item_idx on analysis_runs(work_item_id);
 
--- ---------------------------------------------------------------------------
--- Components: an architecture glossary, not tied to any work_item or ticket.
--- Static facts about what a product is made of (services, modules, config
--- pools), fed conversationally — either directly described by a human, or
--- proposed by Claude when a ticket mentions something unfamiliar and then
--- confirmed by a human before being added (same human-gated motion as
--- resolution_patterns). knowledge_entries is shaped around issue -> root
--- cause -> resolution; this table exists because architecture facts don't
--- fit that shape and don't belong there. Hierarchical so e.g. business-object
--- can have pools (configuration, id-issuer, ...) nested under it.
--- ---------------------------------------------------------------------------
-
+-- Hierarchical architecture glossary per product (services, modules, config pools).
+-- Separate from knowledge_entries because architecture facts don't fit the
+-- issue -> root_cause -> resolution shape.
 create table components (
     id          uuid primary key default gen_random_uuid(),
     product_id  uuid not null references products(id) on delete cascade,
     parent_id   uuid references components(id) on delete cascade,
-    slug        text not null,                        -- 'line-controller', 'business-object-id-issuer'
-    name        text not null,                         -- 'Line Controller', 'Business Object / ID Issuer'
+    slug        text not null,
+    name        text not null,
     description text,
     created_at  timestamptz not null default now(),
     unique (product_id, slug)
