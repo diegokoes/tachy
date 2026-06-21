@@ -25,4 +25,8 @@ jobs:
 
       # Tests start their own Postgres via Testcontainers; the GitHub-hosted
       # ubuntu runner has Docker preinstalled, so no service container needed.
+      # Ryuk (Testcontainers' cleanup sidecar) frequently can't start under
+      # GH Actions' default networking -- disabling it is the standard fix.
       - run: npm test
+        env:
+          TESTCONTAINERS_RYUK_DISABLED: "true"

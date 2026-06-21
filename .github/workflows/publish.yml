@@ -22,7 +22,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test   # Testcontainers uses the runner's preinstalled Docker
+      # Ryuk (Testcontainers' cleanup sidecar) frequently can't start under
+      # GH Actions' default networking -- disabling it is the standard fix.
+      - run: npm test
+        env:
+          TESTCONTAINERS_RYUK_DISABLED: "true"
 
   publish:
     needs: test
