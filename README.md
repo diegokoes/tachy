@@ -7,7 +7,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg" alt="License: AGPL-3.0-or-later"></a>
   <a href="https://0ver.org"><img src="https://img.shields.io/badge/0ver-0.1.0-blue.svg" alt="ZeroVer 0.1.0"></a>
-  <img src="https://img.shields.io/badge/node-20%2B-brightgreen.svg" alt="Node 20+">
+  <img src="https://img.shields.io/badge/node-22%2B-brightgreen.svg" alt="Node 22+">
   <img src="https://img.shields.io/badge/postgres-14%2B-blue.svg" alt="Postgres 14+">
   <img src="https://img.shields.io/badge/protocol-MCP-orange.svg" alt="MCP">
 </p>
@@ -115,7 +115,9 @@ run `docker compose build` yourself.
 
 ### Manual install
 
-Requires **Node 20+** and **PostgreSQL 14+** with the `vector` (pgvector),
+Requires **Node 22+** (the test suite's `testcontainers` dependency needs a
+webidl API only present from Node 22 on; the app itself runs fine on 20, but
+22+ keeps one number to remember) and **PostgreSQL 14+** with the `vector` (pgvector),
 `pg_trgm`, and `pgcrypto` extensions available (`schema.sql` creates them). The
 easiest way to get pgvector locally is the `pgvector/pgvector` Docker image, or
 `apt install postgresql-16-pgvector`. On a plain Debian/Ubuntu apt repo (rather

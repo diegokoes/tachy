@@ -16,17 +16,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # 22, not 20: testcontainers' undici dependency calls a webidl API
+      # (markAsUncloneable) that doesn't exist before Node 22.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      # Ryuk (Testcontainers' cleanup sidecar) frequently can't start under
-      # GH Actions' default networking -- disabling it is the standard fix.
-      - run: npm test
-        env:
-          TESTCONTAINERS_RYUK_DISABLED: "true"
+      - run: npm test   # Testcontainers uses the runner's preinstalled Docker
 
   publish:
     needs: test
