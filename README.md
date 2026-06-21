@@ -133,10 +133,11 @@ psql "postgres://localhost:5432/tachy" -f db/schema.sql
 cp .env.example .env          # then fill in DATABASE_URL and your token(s)
 ```
 
-`schema.sql` seeds the teams/products you use (Track & Trace -> tpd, ftrace;
-BPT -> csdr, eudr, pcf, medical-devices), an example `acme-freshdesk` source,
-and an example group mapping (Freshdesk group `48000641379` -> tpd). Adjust the
-seed block for your own Freshdesk tenant and groups.
+`schema.sql` ships a small block of example seed data at the bottom: a couple
+of teams and products, an example `acme-freshdesk` source, and an example
+Freshdesk-group-to-product mapping, just to show the shape of it. Replace all
+of it with your own teams, products, and Freshdesk groups before relying on
+this for real.
 
 > Freshdesk numeric `status` (e.g. 6) is account-specific and stored raw.
 
