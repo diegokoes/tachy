@@ -1,0 +1,7 @@
+node_modules
+.git
+.fastembed-cache
+backups
+*.log
+test
+.env
