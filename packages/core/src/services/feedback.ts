@@ -4,12 +4,11 @@ export interface FeedbackInput {
   knowledgeEntryId: string;
   userId?: string | null;
   kind?: string;                   // 'correction' | 'rating' | 'note' (default 'note')
-  rating?: number | null;          // optional 1..5
+  rating?: number | null;
   comment?: string | null;
-  patch?: Record<string, unknown> | null;  // proposed field changes
+  patch?: Record<string, unknown> | null;
 }
 
-/** Record human feedback (correction / rating / note) on a knowledge entry. */
 export async function addFeedback(i: FeedbackInput) {
   const [row] = await sql`
     insert into knowledge_feedback

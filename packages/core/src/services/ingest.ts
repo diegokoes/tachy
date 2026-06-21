@@ -10,7 +10,6 @@ export interface IngestedItem {
   observedVersion: string | null;
 }
 
-/** Upsert a work item + its messages. Resolves product/team from the source group mapping. */
 export async function ingestWorkItem(connId: string, raw: RawWorkItem): Promise<IngestedItem> {
   let productId: string | null = null;
   let teamId: string | null = null;
@@ -29,9 +28,7 @@ export async function ingestWorkItem(connId: string, raw: RawWorkItem): Promise<
 
   const customerId = await resolveCustomerByEmail(raw.requesterEmail);
 
-  // customer_id is intentionally absent from the ON CONFLICT SET clause: it's
-  // resolved (best-effort) on first insert only. A later manual correction
-  // (or even just the original auto-match) is never clobbered by a re-sync.
+  // customer_id omitted from ON CONFLICT SET — resolved on first insert only, never overwritten by re-sync.
   const [item] = await sql`
     insert into work_items
       (source_connection_id, external_id, external_url, kind, title, status,

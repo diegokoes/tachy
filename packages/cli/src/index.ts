@@ -35,8 +35,6 @@ async function embedBackfill() {
   console.log(`embedded ${n} entr${n === 1 ? "y" : "ies"}`);
 }
 
-// Run a Postgres binary against DATABASE_URL, with a friendly message if it is
-// not installed. pg_dump/pg_restore accept the connection URI directly.
 function runPg(bin: string, args: string[]) {
   const res = spawnSync(bin, args, { stdio: "inherit" });
   if (res.error && (res.error as NodeJS.ErrnoException).code === "ENOENT") {

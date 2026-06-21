@@ -1,5 +1,4 @@
-// The one seam that makes tachy source-agnostic. Implement this per tracker
-// (freshdesk, github, ...) and register it. No schema or core changes needed.
+// Implement per source (freshdesk, github, …) and register it; no schema changes needed.
 
 export interface RawMessage {
   externalId?: string;
@@ -8,7 +7,7 @@ export interface RawMessage {
   direction: "incoming" | "outgoing";
   bodyText: string;            // adapter delivers plain text (HTML already stripped)
   attachments?: unknown[];
-  createdAt?: string;          // ISO
+  createdAt?: string;
 }
 
 export interface RawWorkItem {
@@ -16,11 +15,11 @@ export interface RawWorkItem {
   externalUrl?: string;
   kind: "ticket" | "issue";
   title?: string;
-  status?: string;             // native status (raw); mapping is account-specific
+  status?: string;             // raw; account-specific mapping
   groupKey?: string;           // freshdesk group_id, or 'owner/repo'
-  requester?: string;          // opaque source-native id (e.g. Freshdesk requester_id), not necessarily an email
-  requesterEmail?: string;     // for customer auto-matching by domain; not all sources can provide this
-  raw: unknown;                // full original payload (traceability)
+  requester?: string;          // source-native id, not necessarily an email
+  requesterEmail?: string;     // for customer auto-matching by email domain
+  raw: unknown;                // full source payload
   sourceCreatedAt?: string;
   sourceUpdatedAt?: string;
   messages: RawMessage[];      // empty on list/sync; populated by fetchItem
@@ -34,7 +33,7 @@ export interface SourceCapabilities {
 export interface ListOptions {
   groupKey?: string;
   status?: string;
-  updatedSince?: string;       // ISO watermark
+  updatedSince?: string;
   cursor?: string;
 }
 
@@ -49,5 +48,5 @@ export interface WorkItemSource {
 export type SourceFactory = (cfg: {
   baseUrl: string;
   slug: string;
-  config: Record<string, unknown>;   // non-secret connection config (e.g. github repos)
+  config: Record<string, unknown>;   // non-secret (e.g. github repos list)
 }) => WorkItemSource;

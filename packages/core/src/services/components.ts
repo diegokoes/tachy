@@ -1,6 +1,5 @@
 import { sql } from "../db";
 
-/** The full component tree for a product, for Claude to check before reasoning about a ticket. */
 export async function listComponents(productId: string) {
   return sql`
     select id, parent_id, slug, name, description
@@ -17,11 +16,6 @@ export interface AddComponentInput {
   description?: string;
 }
 
-/**
- * Add (or update) an architecture fact. Two valid callers: a human directly
- * describing the app (call immediately), or a ticket mentioning something
- * unrecognized (propose to the user first; call only after they confirm).
- */
 export async function addComponent(i: AddComponentInput) {
   let parentId: string | null = null;
   if (i.parentSlug) {
