@@ -11,9 +11,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # 22, not 20: testcontainers' undici dependency calls a webidl API
+      # (markAsUncloneable) that doesn't exist before Node 22.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci
@@ -25,8 +27,4 @@ jobs:
 
       # Tests start their own Postgres via Testcontainers; the GitHub-hosted
       # ubuntu runner has Docker preinstalled, so no service container needed.
-      # Ryuk (Testcontainers' cleanup sidecar) frequently can't start under
-      # GH Actions' default networking -- disabling it is the standard fix.
       - run: npm test
-        env:
-          TESTCONTAINERS_RYUK_DISABLED: "true"
