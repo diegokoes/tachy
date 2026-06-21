@@ -1,7 +1,7 @@
 <h1 align="center">tachý</h1>
 
 <p align="center">
-  <em>A self-hosted, source-agnostic knowledge engine for engineering work items.</em>
+  <em>A self-hosted, source-agnostic knowledge engine for work items.</em>
 </p>
 
 <p align="center">
@@ -12,16 +12,19 @@
   <img src="https://img.shields.io/badge/protocol-MCP-orange.svg" alt="MCP">
 </p>
 
-tachý ingests support tickets and issues from pluggable **sources** (Freshdesk,
-GitHub, with more by design), lets an LLM agent turn them into structured,
-queryable "lessons learned", and retrieves relevant prior cases when a new item
-comes in.
+tachý keeps a searchable record of issues and support tickets you've already
+dealt with, and the lessons learned from solving them, so you're not solving
+the same problem from scratch every time. It pulls tickets/issues from
+pluggable **sources** (Freshdesk, GitHub, more can be added), an LLM agent
+turns a resolved one into a short structured note, and the next time something
+similar comes up tachý surfaces that note instead.
 
-The LLM agent is the reasoning layer. **This service never calls an LLM
-itself**, it only persists and retrieves. Each item is read and structured
-*once*, then reused forever. The server speaks plain [MCP][mcp], so any
-MCP-compatible client works (Claude Code, Codex CLI, other agents). This README
-assumes Claude Code as the client; nothing here is Claude-specific.
+Two cases this is built for: a support team that keeps seeing the same kinds
+of tickets, and an open source project where someone new wants to see how a
+past issue actually got fixed before opening a PR.
+
+tachý itself never calls an LLM. It only stores and retrieves; the agent
+(Claude Code, Codex CLI, or any [MCP][mcp] client) is the reasoning layer.
 
 <details>
 <summary>Table of Contents</summary>
