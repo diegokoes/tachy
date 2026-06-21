@@ -1,53 +1,135 @@
-# tachý
+<h1 align="center">tachý</h1>
 
-A self-hosted, source-agnostic knowledge engine for engineering work items.
-It ingests support tickets / issues from pluggable **sources** (Freshdesk,
-GitHub... with more to come), lets an LLM agent turn them into structured,
-queryable "lessons learned", and retrieves relevant prior cases when a new
-item comes in.
+<p align="center">
+  <em>A self-hosted, source-agnostic knowledge engine for engineering work items.</em>
+</p>
 
-The LLM agent is the reasoning layer. This service only persists and
-retrieves; it never calls an LLM itself. Each item is read and structured
-**once**, then reused.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg" alt="License: AGPL-3.0-or-later"></a>
+  <a href="https://0ver.org"><img src="https://img.shields.io/badge/0ver-0.1.0-blue.svg" alt="ZeroVer 0.1.0"></a>
+  <img src="https://img.shields.io/badge/node-20%2B-brightgreen.svg" alt="Node 20+">
+  <img src="https://img.shields.io/badge/postgres-14%2B-blue.svg" alt="Postgres 14+">
+  <img src="https://img.shields.io/badge/protocol-MCP-orange.svg" alt="MCP">
+</p>
 
-The server speaks plain MCP, so any MCP-compatible client works (Codex CLI,
-other agents). This README assumes Claude Code as the client; nothing here
-is Claude-specific.
+tachý ingests support tickets and issues from pluggable **sources** (Freshdesk,
+GitHub, with more by design), lets an LLM agent turn them into structured,
+queryable "lessons learned", and retrieves relevant prior cases when a new item
+comes in.
 
-## Architecture
+The LLM agent is the reasoning layer. **This service never calls an LLM
+itself**, it only persists and retrieves. Each item is read and structured
+*once*, then reused forever. The server speaks plain [MCP][mcp], so any
+MCP-compatible client works (Claude Code, Codex CLI, other agents). This README
+assumes Claude Code as the client; nothing here is Claude-specific.
+
+<details>
+<summary>Table of Contents</summary>
+
+- [How it works](#how-it-works)
+  - [Architecture](#architecture)
+  - [Packages](#packages)
+- [Getting started](#getting-started)
+  - [Quick start with Docker](#quick-start-with-docker)
+  - [Manual install](#manual-install)
+- [Usage](#usage)
+  - [From an MCP client (Claude Code)](#from-an-mcp-client-claude-code)
+  - [MCP tools](#mcp-tools)
+  - [REST API](#rest-api)
+  - [CLI](#cli)
+- [Concepts](#concepts)
+  - [Sources](#sources)
+  - [Customers, versions, and controlled vocabulary](#customers-versions-and-controlled-vocabulary)
+  - [Semantic search](#semantic-search)
+- [Operations](#operations)
+  - [Backups](#backups)
+  - [Publishing images](#publishing-images)
+- [Configuration](#configuration)
+- [Privacy and security](#privacy-and-security)
+- [Versioning](#versioning)
+- [License](#license)
+
+</details>
+
+## How it works
+
+A ticket comes in. The agent reads it, works out what's going on, and (once you
+approve) writes a structured lesson into tachý. The next time a *similar* ticket
+appears, the agent asks tachý "have we seen anything like this?" and gets the
+relevant past lessons back. Two loops, nothing more:
+
+- **Ingest**: analyze a work item, then save an approved lesson. Nothing becomes
+  knowledge until a human approves it.
+- **Consult**: given a new work item, surface relevant past lessons.
+
+### Architecture
 
 ```
-PowerShell -> Claude Code --(MCP stdio)--> tachy MCP server -> core -> Postgres
-                                                            \-> sources/* -> Freshdesk / GitHub / ...
-              teammates / cron / CI --(HTTP)--> Hono REST API -> core ----^
+   MCP client (Claude Code, Codex CLI, ...) --(MCP stdio)--> tachý MCP server ─┐
+                                                                               │
+   teammates / cron / CI --------------------(HTTP)--------> Hono REST API ────┼─> core ─> Postgres
+                                                                               │            │
+                                                          packages/sources/* <─┘            │
+                                                          (Freshdesk, GitHub) ──────────────┘
 ```
 
-- `packages/core`: DB, the `WorkItemSource` interface, services (source-agnostic)
-- `packages/sources/freshdesk`: Freshdesk adapter
-- `packages/sources/github`: GitHub Issues adapter
-- `packages/mcp`: MCP server for Claude Code or any MCP client (the primary surface)
-- `packages/api`: Hono REST API (cron, teammates, future UI)
-- `packages/cli`: `sync` command
-- `db/schema.sql`: canonical Postgres schema
+`core` is source-agnostic and holds all the logic. `mcp`, `api`, and `cli` are
+thin entrypoints that wire `core` to a way of calling it. `sources/*` are
+pluggable adapters behind a single interface, so adding a source means writing
+one adapter, with no schema or core changes.
 
-## Prerequisites
+### Packages
 
-- Node 20+
-- PostgreSQL 14+ with the `vector` (pgvector), `pg_trgm`, and `pgcrypto`
-  extensions available; `schema.sql` creates them. The easiest way to get
-  pgvector locally is the `pgvector/pgvector` Docker image, or
-  `apt install postgresql-16-pgvector`.
+| Package | Role |
+| --- | --- |
+| `packages/core` | DB access, services, the `WorkItemSource` interface, local embeddings. Source-agnostic. |
+| `packages/sources/freshdesk` | Freshdesk adapter (supports private-note write-back). |
+| `packages/sources/github` | GitHub Issues adapter (read-only). |
+| `packages/mcp` | MCP server. The primary surface. |
+| `packages/api` | Hono REST API for non-MCP callers (cron, teammates, future UI). |
+| `packages/cli` | Operational commands: `sync`, `embed-backfill`, `backup`, `restore`. |
+| `db/schema.sql` | Canonical Postgres schema, with seed data. |
 
-## Setup
+## Getting started
+
+### Quick start with Docker
+
+No Node, no local Postgres install. Just Docker.
+
+```bash
+cp .env.example .env          # fill in TACHY_API_TOKEN and your Freshdesk/GitHub token
+docker compose up -d          # starts postgres (schema applied on first init) + the API
+curl localhost:8787/health
+```
+
+`docker-compose.yml` builds Postgres from `db/Dockerfile` (`pgvector/pgvector:pg16`
+plus `postgresql-contrib-16`; the bare upstream image is missing `pg_trgm`/
+`pgcrypto`, which `schema.sql` needs) and pulls the app image from
+`diegokoes/tachy` unless you set `TACHY_IMAGE` or run `docker compose build`
+yourself.
+
+> [!IMPORTANT]
+> Set `TACHY_API_TOKEN` in `.env` before bringing the stack up. With no token,
+> the API binds to `127.0.0.1` *inside the container*, which means the published
+> port is unreachable from the host at all. There is no native-process loopback
+> to fall back to like there is on bare metal.
+
+### Manual install
+
+Requires **Node 20+** and **PostgreSQL 14+** with the `vector` (pgvector),
+`pg_trgm`, and `pgcrypto` extensions available (`schema.sql` creates them). The
+easiest way to get pgvector locally is the `pgvector/pgvector` Docker image, or
+`apt install postgresql-16-pgvector`. On a plain Debian/Ubuntu apt repo (rather
+than apt.postgresql.org) `pg_trgm`/`pgcrypto` may live in a separate
+`postgresql-contrib` package; add it if `create extension` fails.
 
 ```bash
 npm install
 
-# Create the database and apply the schema:
 createdb tachy
 psql "postgres://localhost:5432/tachy" -f db/schema.sql
 
-cp .env.example .env          # then fill in DATABASE_URL and your Freshdesk token
+cp .env.example .env          # then fill in DATABASE_URL and your token(s)
 ```
 
 `schema.sql` seeds the teams/products you use (Track & Trace -> tpd, ftrace;
@@ -57,37 +139,56 @@ seed block for your other groups.
 
 > Freshdesk numeric `status` (e.g. 6) is account-specific and stored raw.
 
-## Use it from Claude Code (PowerShell)
+## Usage
 
-`.mcp.json` already registers the server (Claude Code's own config format;
-other MCP clients register it differently). From the project folder:
+### From an MCP client (Claude Code)
 
-```powershell
-claude
-```
-
-Then, in the session:
+`.mcp.json` already registers the server (Claude Code's config format; other MCP
+clients register it differently). From the project folder, start your client
+(e.g. `claude`) and talk to it in plain language:
 
 ```
 analyze ticket 58925 from osapiens-freshdesk
 ```
 
-Claude will call `fetch_work_item`, clean + summarize, show you the summary,
-and only call `save_knowledge_entry` after you approve. To consult:
+The agent calls `fetch_work_item`, cleans and summarizes, shows you the summary,
+and only calls `save_knowledge_entry` after you approve. To consult:
 
 ```
 what do we know that's relevant to ticket 61010?
 ```
 
-Claude calls `get_context` (fetch + archive search) and answers. Optionally:
+The agent calls `get_context` (fetch + search) and answers. Optionally:
 
 ```
 post that analysis as a private note on 61010
 ```
 
+To run the MCP server in Docker (no local Node at all), point your MCP config at
+`docker run` instead of `tsx`:
+
+```json
+{
+  "mcpServers": {
+    "tachy": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "--env-file", ".env",
+                "-e", "DATABASE_URL=postgres://tachy:tachy@postgres:5432/tachy",
+                "--network", "tachy", "diegokoes/tachy", "npm", "run", "mcp"]
+    }
+  }
+}
+```
+
+MCP just needs stdin/stdout kept open (`-i`); `--network tachy` lets this
+short-lived container reach the `postgres` service from `docker-compose.yml` by
+name, which is why `DATABASE_URL` is overridden here: `.env`'s default points
+at `localhost`, which inside this container would mean itself, not Postgres.
+Adjust the user/password if you changed `POSTGRES_USER`/`POSTGRES_PASSWORD`.
+
 ### MCP tools
 
-Core loop: `fetch_work_item`, `search_knowledge`, `get_context`,
+**Core loop:** `fetch_work_item`, `search_knowledge`, `get_context`,
 `save_knowledge_entry`, `post_private_note`, `add_knowledge_feedback`,
 `record_analysis_run`.
 
@@ -95,15 +196,16 @@ Core loop: `fetch_work_item`, `search_knowledge`, `get_context`,
 with semantic similarity over a local embedding, so paraphrases surface even
 with no shared keywords. `save_knowledge_entry` stamps `created_by` from
 `TACHY_USER_EMAIL`, embeds the entry on save, and is **customer-blind**:
-identity never enters the searchable text or the embedding (see "Customers
-and versions" below).
+identity never enters the searchable text or the embedding.
 
-Curated vocabulary, so Claude never invents categories from a ticket alone:
-`list_resolution_patterns` / `add_resolution_pattern`,
-`list_components` / `add_component`, `list_customers` / `add_customer`.
-Correction: `set_work_item_customer`, `set_observed_version`.
+**Curated vocabulary** (so the agent never invents categories from a ticket
+alone): `list_resolution_patterns` / `add_resolution_pattern`,
+`list_components` / `add_component`, `list_customers` / `add_customer`, plus the
+corrections `set_work_item_customer` and `set_observed_version`.
 
-## REST API (optional)
+### REST API
+
+Optional, for cron jobs, teammates, or a future UI.
 
 ```bash
 npm run api          # http://localhost:8787
@@ -117,34 +219,45 @@ npm run api          # http://localhost:8787
 `GET|POST /customers`.
 
 Set `TACHY_API_TOKEN` to require a bearer token on every route except `/health`
-(`Authorization: Bearer <token>`). If it is unset, the server binds to
-`127.0.0.1` only and warns. The MCP server (stdio) is unaffected.
+(`Authorization: Bearer <token>`). If unset, the server binds to `127.0.0.1`
+only and warns. The MCP server (stdio) is unaffected.
 
-## Incremental sync (optional)
+### CLI
 
 ```bash
 npm run sync sync osapiens-freshdesk --since=2026-06-01T00:00:00Z --group=48000641379
+npm run sync embed-backfill     # embed entries that don't have a vector yet
+npm run sync backup             # pg_dump -Fc into ./backups/
+npm run sync restore --file=backups/tachy-….dump   # pg_restore (overwrites!)
 ```
 
-Stores/refreshes raw work items only. It never creates knowledge entries
-(those always require your approval). Schedule it with Windows Task Scheduler.
+`sync` only stores/refreshes raw work items; it never creates knowledge entries
+(those always require your approval). With Docker, use the `cli` service, which
+isn't started by `up`:
 
-## Sources
+```bash
+docker compose run --rm cli npm run sync osapiens-freshdesk
+docker compose run --rm cli npm run sync backup     # lands in ./backups on the host
+```
+
+## Concepts
+
+### Sources
+
+A source is anything that produces work items, behind a single interface
+(`WorkItemSource` in `packages/core/src/source.ts`). To add one, implement the
+interface, register it in the entrypoints, and insert a `source_connections`
+row. No schema change.
 
 | | `external_id` | Routing | Write-back | Token env var |
 | --- | --- | --- | --- | --- |
 | Freshdesk | ticket number | `group_id` maps to a product | private notes | `FRESHDESK_TOKEN_<SLUG>`, falling back to `FRESHDESK_TOKEN` |
 | GitHub (issues) | `owner/repo#123` | `owner/repo` maps to a product, via `config.repos` or `--group`; PRs are skipped | not supported (GitHub comments are public, so `post_private_note` is refused) | `GITHUB_TOKEN_<SLUG>`, falling back to `GITHUB_TOKEN` |
 
-### Adding another source
+### Customers, versions, and controlled vocabulary
 
-Implement `WorkItemSource` (see `packages/core/src/source.ts`), register it in
-the entrypoints, and add a `source_connections` row. No schema change.
-
-## Customers, versions, and controlled vocabulary
-
-`knowledge_entries` is customer-blind by design. Identity never enters search
-or the embedding, so retrieval matches on the fault, not on who reported it.
+`knowledge_entries` is customer-blind by design. Identity never enters search or
+the embedding, so retrieval matches on the fault, not on who reported it.
 Customer and version are properties of the *ticket*, not the *lesson*:
 
 - `work_items.customer_id` is auto-matched at ingest by the requester's email
@@ -157,60 +270,114 @@ Customer and version are properties of the *ticket*, not the *lesson*:
   when a ticket states a version. It's never inferred.
 - `knowledge_entries.resolution_pattern` is a **controlled vocabulary**, not
   free text: it's a foreign key into `resolution_patterns`, which starts
-  **empty**. Claude must call `list_resolution_patterns` and pick an existing
+  **empty**. The agent must call `list_resolution_patterns` and pick an existing
   slug (or leave it unset); `add_resolution_pattern` is a separate, deliberate
   action, not something invented per-ticket. This is what makes cross-team
   pattern queries group correctly.
-- `knowledge_entries.signals` (error codes, config filenames, component
-  names) are promoted into a real, indexed field instead of being buried in
+- `knowledge_entries.signals` (error codes, config filenames, component names)
+  are promoted into a real, indexed field instead of being buried in
   `structured`, so they're searchable.
 - **Components** (`list_components` / `add_component`) are a hierarchical,
   per-product architecture glossary (e.g. `business-object` with nested pools
   `configuration`, `id-issuer`, ...), fed conversationally with no ticket
-  required. Two valid ways to populate it: you describe the app directly
-  (call immediately), or a ticket mentions something unrecognized (Claude
+  required. Two valid ways to populate it: you describe the app directly (call
+  immediately), or a ticket mentions something unrecognized (the agent
   proposes, you confirm, then it's added). Never silently invented from a
   ticket.
 
 `fetch_work_item` / `get_context` return the resolved `customer_id`,
-`customer_name`, and `observed_version` alongside the ticket, so Claude can
+`customer_name`, and `observed_version` alongside the ticket, so the agent can
 reason about staleness/relevance narratively ("this customer is on v1.4, the
 matched lesson was fixed in v1.6...") without any of it touching the search
 index.
 
-## Semantic search
+### Semantic search
 
 Embeddings are produced by a local model (all-MiniLM-L6-v2, 384-dim, via
 `fastembed`). Nothing is sent to an external API. The model (~90MB) is
-downloaded on first use into `.fastembed-cache/`. Fresh databases get the
-`vector` column from `schema.sql`; to upgrade an existing database run
-`db/0002_pgvector.sql` (and `db/0003_customer_signals_patterns_components.sql`
-if upgrading from before customers/signals/resolution_patterns/components)
-then backfill embeddings for prior entries:
+downloaded on first use into `.fastembed-cache/` (the Docker image bakes it in
+at build time). Fresh databases get the `vector` column from `schema.sql`; to
+upgrade an existing database run `db/0002_pgvector.sql` (and
+`db/0003_customer_signals_patterns_components.sql` if upgrading from before
+customers/signals/resolution_patterns/components), then backfill prior entries:
 
 ```bash
 npm run sync embed-backfill
 ```
 
-## Backups
+## Operations
+
+### Backups
 
 ```bash
 npm run sync backup                 # pg_dump -Fc into ./backups/
 npm run sync restore --file=backups/tachy-….dump   # pg_restore (overwrites!)
 ```
 
-Both need the PostgreSQL client tools (`pg_dump` / `pg_restore`) on `PATH`.
-`backups/` is git-ignored. Dumps contain real ticket data, so keep them off
-any shared/synced folder. Schedule `backup` with Windows Task Scheduler.
+Both need the PostgreSQL client tools (`pg_dump` / `pg_restore`) on `PATH` (the
+Docker image bundles a matching v16 client). `backups/` is git-ignored. Dumps
+contain real ticket data, so keep them off any shared/synced folder. Schedule
+`backup` with cron or Windows Task Scheduler.
 
-## Privacy
+### Publishing images
 
-Never commit real ticket data, tokens, customer names, or internal URLs.
-`.env` is git-ignored; tokens are resolved from env by source slug, never stored
-in the DB.
+The image is published to two registries:
+
+- **Docker Hub** (`diegokoes/tachy`), usually by hand:
+
+  ```bash
+  docker build -t diegokoes/tachy:latest .
+  echo "$DOCKERHUB_TOKEN" | docker login -u diegokoes --password-stdin
+  docker push diegokoes/tachy:latest
+  ```
+
+  The included `Jenkinsfile` automates the same thing (test, build, push
+  `:latest` and `:<version>` from `package.json`) using a Jenkins
+  username/password credential with ID `dockerhub-credentials`.
+
+- **GitHub Container Registry** (`ghcr.io/<owner>/tachy`), automatically:
+  `.github/workflows/publish.yml` tests, builds, and pushes on every `v*` tag
+  (or a manual run). It uses the built-in `GITHUB_TOKEN`, so there's no secret
+  to manage. See [Versioning](#versioning) for the tag flow.
+
+No local registry or deploy stage: end users run the image on their own
+machines.
+
+## Configuration
+
+Copy `.env.example` to `.env`. Secrets only ever come from the environment,
+never from the database.
+
+| Variable | Used by | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | all | Postgres connection string. |
+| `PORT` | api | HTTP API port (default 8787). |
+| `TACHY_USER_EMAIL` | core | Attributed as the author (`created_by`) of saved lessons. Optional. |
+| `TACHY_API_TOKEN` | api | Bearer token for the REST API. Unset = localhost-only. |
+| `FRESHDESK_TOKEN[_SLUG]` | freshdesk | Freshdesk API token (per-source or shared). |
+| `GITHUB_TOKEN[_SLUG]` | github | GitHub PAT (per-source or shared). |
+| `FASTEMBED_CACHE` | core | Where the embedding model is cached. Optional. |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | compose | Configure the bundled Postgres container. Keep consistent with `DATABASE_URL`. |
+| `TACHY_IMAGE` | compose | Override the app image (default `diegokoes/tachy:latest`). |
+
+## Privacy and security
+
+Never commit real ticket data, tokens, customer names, or internal URLs. `.env`
+is git-ignored; tokens are resolved from the environment by source slug, never
+stored in the DB. `knowledge_entries` is customer-blind: customer identity is
+kept on `work_items` and never enters the search index or embeddings.
+
+## Versioning
+
+tachý follows [ZeroVer][zerover]: the major version is, and shall forever remain,
+`0`. Breaking changes can land in any release. Pin an exact version if you depend
+on it. Docker images are tagged `:latest` and `:<version>` (e.g. `:0.1.0`); a
+release is a git tag matching the `package.json` version.
 
 ## License
 
-AGPL-3.0-or-later. If you run a modified version of tachy as a network
-service, you must make the modified source available to its users (see
-`LICENSE`).
+[AGPL-3.0-or-later](LICENSE). If you run a modified version of tachý as a network
+service, you must make the modified source available to its users.
+
+[mcp]: https://modelcontextprotocol.io
+[zerover]: https://0ver.org
