@@ -134,9 +134,9 @@ cp .env.example .env          # then fill in DATABASE_URL and your token(s)
 ```
 
 `schema.sql` seeds the teams/products you use (Trellis -> tqx, fqlink;
-BQV -> cqx, evx, pqf, lab-devices), the `orvenna-freshdesk` source, and
-an example group mapping (Freshdesk group `70000000013` -> tqx). Adjust the
-seed block for your other groups.
+BQV -> cqx, evx, pqf, lab-devices), an example `acme-freshdesk` source,
+and an example group mapping (Freshdesk group `70000000013` -> tqx). Adjust the
+seed block for your own Freshdesk tenant and groups.
 
 > Freshdesk numeric `status` (e.g. 6) is account-specific and stored raw.
 
@@ -149,7 +149,7 @@ clients register it differently). From the project folder, start your client
 (e.g. `claude`) and talk to it in plain language:
 
 ```
-analyze ticket 40123 from orvenna-freshdesk
+analyze ticket 40123 from acme-freshdesk
 ```
 
 The agent calls `fetch_work_item`, cleans and summarizes, shows you the summary,
@@ -226,7 +226,7 @@ only and warns. The MCP server (stdio) is unaffected.
 ### CLI
 
 ```bash
-npm run sync sync orvenna-freshdesk --since=2026-06-01T00:00:00Z --group=70000000013
+npm run sync sync acme-freshdesk --since=2026-06-01T00:00:00Z --group=70000000013
 npm run sync embed-backfill     # embed entries that don't have a vector yet
 npm run sync backup             # pg_dump -Fc into ./backups/
 npm run sync restore --file=backups/tachy-….dump   # pg_restore (overwrites!)
@@ -237,7 +237,7 @@ npm run sync restore --file=backups/tachy-….dump   # pg_restore (overwrites!)
 isn't started by `up`:
 
 ```bash
-docker compose run --rm cli npm run sync orvenna-freshdesk
+docker compose run --rm cli npm run sync acme-freshdesk
 docker compose run --rm cli npm run sync backup     # lands in ./backups on the host
 ```
 
@@ -370,9 +370,9 @@ kept on `work_items` and never enters the search index or embeddings.
 
 ## Versioning
 
-tachý follows [ZeroVer][zerover]: the major version is, and shall forever remain,
+tachý follows [ZeroVer][zerover] just because I find it funny: the major version is, and shall forever remain,
 `0`. Breaking changes can land in any release. Pin an exact version if you depend
-on it. Docker images are tagged `:latest` and `:<version>` (e.g. `:0.1.0`); a
+on it. Docker images are tagged `:latest` and `:<version>` (`:0.1.0`); a
 release is a git tag matching the `package.json` version.
 
 ## License
