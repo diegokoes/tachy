@@ -146,9 +146,15 @@ cp .env.example .env          # then fill in DATABASE_URL and your token(s)
 
 ### From an MCP client (Claude Code)
 
-`.mcp.json` already registers the server (Claude Code's config format; other MCP
-clients register it differently). From the project folder, start your client
-(e.g. `claude`) and talk to it in plain language:
+`.mcp.json` already registers the server for Claude Code, and `.vscode/mcp.json`
+does the same for VS Code Copilot. Both auto-discover from the project folder,
+so no setup is needed for either. Other MCP clients (Codex CLI, etc.) register
+servers in their own global config; the command to point them at is the same
+one in those two files: `npx tsx packages/mcp/src/index.ts` from this folder
+(or the Dockerized form a few sections up).
+
+From the project folder, start your client (e.g. `claude`) and talk to it in
+plain language:
 
 ```
 analyze ticket 58925 from acme-freshdesk
