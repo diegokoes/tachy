@@ -72,14 +72,14 @@ create table team_members (
 -- ---------------------------------------------------------------------------
 -- Sources: where work items come from.
 -- A source_connection is one configured instance of a source_type
--- (e.g. the orvenna Freshdesk tenant, or a specific GitHub org/repo).
+-- (e.g. your Freshdesk tenant, or a specific GitHub org/repo).
 -- ---------------------------------------------------------------------------
 
 create table source_connections (
     id            uuid primary key default gen_random_uuid(),
     source_type   text not null,                      -- 'freshdesk' | 'github' | ...
-    slug          text not null unique,               -- 'orvenna-freshdesk' (token resolved from env by this slug)
-    base_url      text,                               -- 'https://orvenna-desk.freshdesk.com'
+    slug          text not null unique,               -- 'acme-freshdesk' (token resolved from env by this slug)
+    base_url      text,                               -- 'https://acme-desk.freshdesk.com'
     config        jsonb not null default '{}'::jsonb, -- non-secret config only
     created_at    timestamptz not null default now()
 );
@@ -323,52 +323,3 @@ create table components (
 
 create index components_product_idx on components(product_id);
 create index components_parent_idx  on components(parent_id);
-
--- ============================================================================
--- SEED (edit/remove freely — this just reflects the org you described).
--- Idempotent via ON CONFLICT so re-running schema.sql is safe.
--- ============================================================================
-
-insert into teams (slug, name) values
-    ('trellis', 'Trellis'),
-    ('bqv',             'BQV')
-on conflict (slug) do nothing;
-
-insert into products (team_id, slug, name)
-select t.id, p.slug, p.name
-from (values
-    ('trellis', 'tqx',             'TQX'),
-    ('trellis', 'fqlink',          'FQLink'),
-    ('bqv',             'cqx',            'CQX'),
-    ('bqv',             'evx',            'EVX'),
-    ('bqv',             'pqf',             'PQF'),
-    ('bqv',             'lab-devices', 'Lab Devices')
-) as p(team_slug, slug, name)
-join teams t on t.slug = p.team_slug
-on conflict (team_id, slug) do nothing;
-
-insert into source_connections (source_type, slug, base_url) values
-    ('freshdesk', 'orvenna-freshdesk', 'https://orvenna-desk.freshdesk.com')
-on conflict (slug) do nothing;
-
--- Example mapping: Freshdesk group_id 70000000013 -> TQX (from ticket 40123).
--- Verify the group_id->product mapping for your other groups and add rows.
-insert into source_product_map (source_connection_id, external_group_key, product_id)
-select sc.id, '70000000013', p.id
-from source_connections sc
-join products p on p.slug = 'tqx'
-join teams t on t.id = p.team_id and t.slug = 'trellis'
-where sc.slug = 'orvenna-freshdesk'
-on conflict (source_connection_id, external_group_key) do nothing;
-
--- Example GitHub source (token resolved from GITHUB_TOKEN_ORVENNA_GH / GITHUB_TOKEN).
--- config.repos lists the repos to sync; each 'owner/repo' maps to a product below.
--- insert into source_connections (source_type, slug, base_url, config) values
---     ('github', 'orvenna-gh', 'https://api.github.com', '{"repos":["orvenna/fqlink"]}'::jsonb)
--- on conflict (slug) do nothing;
---
--- insert into source_product_map (source_connection_id, external_group_key, product_id)
--- select sc.id, 'orvenna/fqlink', p.id
--- from source_connections sc join products p on p.slug = 'fqlink'
--- where sc.slug = 'orvenna-gh'
--- on conflict (source_connection_id, external_group_key) do nothing;
