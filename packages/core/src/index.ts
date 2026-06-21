@@ -5,8 +5,11 @@ export { registerSource, resolveSource } from "./registry";
 export type { ResolvedSource } from "./registry";
 export { ingestWorkItem } from "./services/ingest";
 export type { IngestedItem } from "./services/ingest";
-export { saveKnowledgeEntry, searchKnowledge, backfillEmbeddings } from "./services/knowledge";
-export type { KnowledgeInput, SearchOptions } from "./services/knowledge";
+export {
+  saveKnowledgeEntry, searchKnowledge, backfillEmbeddings,
+  getKnowledgeEntry, listKnowledgeEntries, updateKnowledgeEntry,
+} from "./services/knowledge";
+export type { KnowledgeInput, KnowledgeUpdateInput, SearchOptions } from "./services/knowledge";
 export { upsertUser, resolveCurrentUserId } from "./services/users";
 export { addFeedback, listFeedback } from "./services/feedback";
 export type { FeedbackInput } from "./services/feedback";
@@ -21,4 +24,9 @@ export type { CustomerInput } from "./services/customers";
 export { listResolutionPatterns, addResolutionPattern } from "./services/resolution-patterns";
 export { listComponents, addComponent } from "./services/components";
 export type { AddComponentInput } from "./services/components";
-export { getProductIdBySlug } from "./services/products";
+export { getProductIdBySlug, listTeams, addTeam, listProducts, addProduct } from "./services/products";
+export {
+  listSourceConnections, addSourceConnection,
+  listSourceProductMaps, addSourceProductMap,
+} from "./services/sources";
+export type { SourceConnectionInput, SourceProductMapInput } from "./services/sources";
