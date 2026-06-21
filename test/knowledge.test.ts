@@ -2,7 +2,6 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { saveKnowledgeEntry, searchKnowledge } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "./helpers";
 
-// One pg pool is shared across every describe in this file, so close it once.
 afterAll(() => sql.end());
 
 describe("searchKnowledge", () => {

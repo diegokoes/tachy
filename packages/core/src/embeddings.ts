@@ -1,13 +1,11 @@
 import { FlagEmbedding, EmbeddingModel } from "fastembed";
 
-// all-MiniLM-L6-v2 -> 384 dims, matching the knowledge_entries.embedding column.
-// Runs locally (ONNX) so embedding never leaves the machine and costs nothing.
+// all-MiniLM-L6-v2, 384-dim, local ONNX — no external API call.
 export const EMBEDDING_DIM = 384;
 
 let modelPromise: Promise<FlagEmbedding> | undefined;
 
-// Lazy so importing core (MCP/API startup) doesn't load the ~90MB model; it is
-// only fetched/initialised the first time an embedding is actually requested.
+// Lazy init — the ~90MB model loads only on first use, not at import time.
 function model(): Promise<FlagEmbedding> {
   modelPromise ??= FlagEmbedding.init({
     model: EmbeddingModel.AllMiniLML6V2,

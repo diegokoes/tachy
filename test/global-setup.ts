@@ -8,11 +8,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const schemaPath = join(here, "..", "db", "schema.sql");
 const fixturesPath = join(here, "fixtures.sql");
 
-// Starts one ephemeral Postgres for the whole test run and applies the schema.
-// Uses the pgvector image so Phase 3's `vector` extension is available too; it
-// is based on the official postgres image, so pg_trgm + pgcrypto are present.
-// DATABASE_URL is set here, before vitest forks its (single) worker, so the
-// core `sql` client picks it up when it is first imported.
+// Starts one ephemeral Postgres container for the test run; applies schema + fixtures.
+// Uses the pgvector image so pg_trgm, pgcrypto, and vector extensions are all present.
+// DATABASE_URL is written here before vitest forks workers so the sql client picks it up.
 export default async function setup() {
   const container = await new PostgreSqlContainer("pgvector/pgvector:pg16").start();
   const url = container.getConnectionUri();

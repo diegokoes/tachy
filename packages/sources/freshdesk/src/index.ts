@@ -50,10 +50,8 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
     capabilities: { postNote: true, incrementalSync: true },
 
     async fetchItem(externalId: string): Promise<RawWorkItem> {
-      // include=requester costs 1 extra API credit but embeds the requester's
-      // email inline (no second round-trip) for customer auto-matching by
-      // domain. Skipped in listItems' bulk metadata sync to avoid doubling
-      // the credit cost of every ticket in a sync run.
+      // include=requester costs 1 API credit but gives the requester email inline for customer
+      // auto-matching. Skipped in listItems to avoid doubling the cost of sync runs.
       const t = await get(`/tickets/${externalId}?include=requester`);
       const convos = await get(`/tickets/${externalId}/conversations`);
       const description: RawMessage = {

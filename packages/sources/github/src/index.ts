@@ -3,8 +3,7 @@ import type {
   WorkItemSource, RawWorkItem, RawMessage, ListOptions, SourceFactory,
 } from "@tachy/core";
 
-// externalId is "owner/repo#123" so a single connection can span repos that map
-// to different products (groupKey = "owner/repo" -> source_product_map).
+// externalId format: "owner/repo#123"; groupKey = "owner/repo" maps via source_product_map.
 function parseRef(externalId: string): { repo: string; number: string } {
   const [repo, number] = externalId.split("#");
   if (!repo || !number) throw new Error(`Invalid GitHub ref '${externalId}', expected 'owner/repo#123'`);
@@ -12,9 +11,7 @@ function parseRef(externalId: string): { repo: string; number: string } {
 }
 
 /**
- * GitHub Issues adapter (PAT auth). Repos to sync come from the connection's
- * config.repos (["owner/repo", ...]); base_url defaults to the public API and
- * can be set to a GitHub Enterprise API URL. Pull requests are skipped.
+ * GitHub Issues adapter (PAT auth). config.repos lists repos to sync; base_url can be a GitHub Enterprise API URL.
  */
 export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
   const token = githubToken(cfg.slug);
@@ -40,8 +37,8 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
       externalUrl: issue.html_url,
       kind: "issue",
       title: issue.title,
-      status: issue.state,                         // 'open' | 'closed'
-      groupKey: repo,                              // -> source_product_map ('owner/repo')
+      status: issue.state,  // 'open' | 'closed'
+      groupKey: repo,
       requester: issue.user?.login,
       raw: issue,
       sourceCreatedAt: issue.created_at,

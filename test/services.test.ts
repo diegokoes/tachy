@@ -4,7 +4,6 @@ import {
 } from "@tachy/core";
 import { resetData, sql } from "./helpers";
 
-// One pg pool is shared across every describe in this file, so close it once.
 afterAll(() => sql.end());
 
 describe("users", () => {
