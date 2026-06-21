@@ -102,11 +102,10 @@ docker compose up -d          # starts postgres (schema applied on first init) +
 curl localhost:8787/health
 ```
 
-`docker-compose.yml` builds Postgres from `db/Dockerfile` (`pgvector/pgvector:pg16`
-plus `postgresql-contrib-16`; the bare upstream image is missing `pg_trgm`/
-`pgcrypto`, which `schema.sql` needs) and pulls the app image from
-`diegokoes/tachy` unless you set `TACHY_IMAGE` or run `docker compose build`
-yourself.
+`docker-compose.yml` uses the `pgvector/pgvector:pg16` image for Postgres
+directly (it already has `pg_trgm`/`pgcrypto`, no `postgresql-contrib` needed)
+and pulls the app image from `diegokoes/tachy` unless you set `TACHY_IMAGE` or
+run `docker compose build` yourself.
 
 > [!IMPORTANT]
 > Set `TACHY_API_TOKEN` in `.env` before bringing the stack up. With no token,
