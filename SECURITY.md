@@ -2,8 +2,7 @@
 
 ## Supported versions
 
-tachý is pre-1.0 and follows [ZeroVer](https://0ver.org): only the latest
-commit on `main` is supported. There are no maintained release branches.
+only the latest commit on `main` is supported. There are no maintained release branches.
 
 ## Reporting a vulnerability
 
