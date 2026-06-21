@@ -1,0 +1,68 @@
+networks:
+  default:
+    name: tachy
+
+services:
+  postgres:
+    # db/Dockerfile layers postgresql-contrib-16 onto pgvector/pgvector:pg16 --
+    # the bare upstream image is missing pg_trgm/pgcrypto, which schema.sql
+    # needs. Built locally; not published anywhere, it's a one-line image.
+    build: ./db
+    container_name: tachy-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tachy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tachy}
+      POSTGRES_DB: ${POSTGRES_DB:-tachy}
+    ports:
+      - "5432:5432"
+    volumes:
+      - tachy-postgres-data:/var/lib/postgresql/data
+      # schema.sql alone is enough on a fresh volume (it already includes
+      # everything the numbered db/0*.sql files add); those are upgrade-only
+      # migrations for pre-existing databases, not first-init scripts. Postgres
+      # runs initdb.d scripts alphabetically, and "0002_..." sorts before
+      # "schema.sql", so mounting the whole db/ dir here would run the
+      # migrations against a database that doesn't exist yet.
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tachy} -d ${POSTGRES_DB:-tachy}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ${TACHY_IMAGE:-diegokoes/tachy:latest}
+    build: .
+    container_name: tachy-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-tachy}:${POSTGRES_PASSWORD:-tachy}@postgres:5432/${POSTGRES_DB:-tachy}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8787:8787"
+    volumes:
+      - ./backups:/app/backups
+
+  # Not started by `up`. Run ad hoc, e.g.:
+  #   docker compose run --rm cli npm run sync osapiens-freshdesk
+  #   docker compose run --rm cli npm run sync backup
+  #   docker compose run --rm cli npm run sync embed-backfill
+  cli:
+    image: ${TACHY_IMAGE:-diegokoes/tachy:latest}
+    build: .
+    profiles: ["tools"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-tachy}:${POSTGRES_PASSWORD:-tachy}@postgres:5432/${POSTGRES_DB:-tachy}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backups:/app/backups
+
+volumes:
+  tachy-postgres-data:
