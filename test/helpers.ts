@@ -2,8 +2,8 @@ import { sql } from "@tachy/core";
 
 export { sql };
 
-// Wipe the mutable tables between tests while keeping the org/source seed
-// (teams, products, source_connections, source_product_map) from schema.sql.
+// Wipe the mutable tables between tests while keeping the org/source fixture
+// (teams, products, source_connections, source_product_map) from fixtures.sql.
 export async function resetData() {
   await sql`
     truncate work_item_messages, work_items, knowledge_feedback,
@@ -13,9 +13,9 @@ export async function resetData() {
   `;
 }
 
-// The osapiens-freshdesk connection seeded by schema.sql.
+// The test-freshdesk connection seeded by test/fixtures.sql.
 export async function seededFreshdeskConnId(): Promise<string> {
-  const [row] = await sql`select id from source_connections where slug = 'osapiens-freshdesk'`;
+  const [row] = await sql`select id from source_connections where slug = 'test-freshdesk'`;
   return row.id as string;
 }
 

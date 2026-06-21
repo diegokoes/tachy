@@ -133,12 +133,6 @@ psql "postgres://localhost:5432/tachy" -f db/schema.sql
 cp .env.example .env          # then fill in DATABASE_URL and your token(s)
 ```
 
-`schema.sql` ships a small block of example seed data at the bottom: a couple
-of teams and products, an example `acme-freshdesk` source, and an example
-Freshdesk-group-to-product mapping, just to show the shape of it. Replace all
-of it with your own teams, products, and Freshdesk groups before relying on
-this for real.
-
 > Freshdesk numeric `status` (e.g. 6) is account-specific and stored raw.
 
 ## Usage

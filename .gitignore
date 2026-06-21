@@ -6,3 +6,4 @@ dist/
 .fastembed-cache/
 local_cache/
 backups/
+db/seed.local.sql

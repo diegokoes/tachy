@@ -72,14 +72,14 @@ create table team_members (
 -- ---------------------------------------------------------------------------
 -- Sources: where work items come from.
 -- A source_connection is one configured instance of a source_type
--- (e.g. the osapiens Freshdesk tenant, or a specific GitHub org/repo).
+-- (e.g. your Freshdesk tenant, or a specific GitHub org/repo).
 -- ---------------------------------------------------------------------------
 
 create table source_connections (
     id            uuid primary key default gen_random_uuid(),
     source_type   text not null,                      -- 'freshdesk' | 'github' | ...
-    slug          text not null unique,               -- 'osapiens-freshdesk' (token resolved from env by this slug)
-    base_url      text,                               -- 'https://osapiens-desk.freshdesk.com'
+    slug          text not null unique,               -- 'acme-freshdesk' (token resolved from env by this slug)
+    base_url      text,                               -- 'https://acme-desk.freshdesk.com'
     config        jsonb not null default '{}'::jsonb, -- non-secret config only
     created_at    timestamptz not null default now()
 );
@@ -323,52 +323,3 @@ create table components (
 
 create index components_product_idx on components(product_id);
 create index components_parent_idx  on components(parent_id);
-
--- ============================================================================
--- SEED (edit/remove freely — this just reflects the org you described).
--- Idempotent via ON CONFLICT so re-running schema.sql is safe.
--- ============================================================================
-
-insert into teams (slug, name) values
-    ('track-and-trace', 'Track & Trace'),
-    ('bpt',             'BPT')
-on conflict (slug) do nothing;
-
-insert into products (team_id, slug, name)
-select t.id, p.slug, p.name
-from (values
-    ('track-and-trace', 'tpd',             'TPD'),
-    ('track-and-trace', 'ftrace',          'FTrace'),
-    ('bpt',             'csdr',            'CSDR'),
-    ('bpt',             'eudr',            'EUDR'),
-    ('bpt',             'pcf',             'PCF'),
-    ('bpt',             'medical-devices', 'Medical Devices')
-) as p(team_slug, slug, name)
-join teams t on t.slug = p.team_slug
-on conflict (team_id, slug) do nothing;
-
-insert into source_connections (source_type, slug, base_url) values
-    ('freshdesk', 'osapiens-freshdesk', 'https://osapiens-desk.freshdesk.com')
-on conflict (slug) do nothing;
-
--- Example mapping: Freshdesk group_id 48000641379 -> TPD (from ticket 58925).
--- Verify the group_id->product mapping for your other groups and add rows.
-insert into source_product_map (source_connection_id, external_group_key, product_id)
-select sc.id, '48000641379', p.id
-from source_connections sc
-join products p on p.slug = 'tpd'
-join teams t on t.id = p.team_id and t.slug = 'track-and-trace'
-where sc.slug = 'osapiens-freshdesk'
-on conflict (source_connection_id, external_group_key) do nothing;
-
--- Example GitHub source (token resolved from GITHUB_TOKEN_OSAPIENS_GH / GITHUB_TOKEN).
--- config.repos lists the repos to sync; each 'owner/repo' maps to a product below.
--- insert into source_connections (source_type, slug, base_url, config) values
---     ('github', 'osapiens-gh', 'https://api.github.com', '{"repos":["osapiens/ftrace"]}'::jsonb)
--- on conflict (slug) do nothing;
---
--- insert into source_product_map (source_connection_id, external_group_key, product_id)
--- select sc.id, 'osapiens/ftrace', p.id
--- from source_connections sc join products p on p.slug = 'ftrace'
--- where sc.slug = 'osapiens-gh'
--- on conflict (source_connection_id, external_group_key) do nothing;

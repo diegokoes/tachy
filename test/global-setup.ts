@@ -6,6 +6,7 @@ import postgres from "postgres";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const schemaPath = join(here, "..", "db", "schema.sql");
+const fixturesPath = join(here, "fixtures.sql");
 
 // Starts one ephemeral Postgres for the whole test run and applies the schema.
 // Uses the pgvector image so Phase 3's `vector` extension is available too; it
@@ -19,6 +20,9 @@ export default async function setup() {
 
   const sql = postgres(url, { onnotice: () => {} });
   await sql.unsafe(readFileSync(schemaPath, "utf8"));
+  // schema.sql itself ships with no seed data; tests need deterministic
+  // teams/products/a source connection, so apply this fixture on top.
+  await sql.unsafe(readFileSync(fixturesPath, "utf8"));
   await sql.end();
 
   return async () => {
