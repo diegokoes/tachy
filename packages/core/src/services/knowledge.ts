@@ -5,25 +5,33 @@ export interface KnowledgeInput {
   workItemId?: string | null;
   productId?: string | null;
   teamId?: string | null;
-  createdById?: string | null;     // resolved user id (TACHY_USER_EMAIL); null = anonymous
-  status?: string;                 // defaults to 'approved' (called after human OK)
+  createdById?: string | null;
+  status?: string;
   issueSummary?: string;
   symptoms?: string[];
-  signals?: string[];              // error codes, config filenames, component names — the distinctive search terms
+  signals?: string[];
   rootCause?: string;
   resolution?: string;
-  resolutionPattern?: string;      // must be a slug already in resolution_patterns; null if nothing fits
+  resolutionPattern?: string;
   productArea?: string;
-  confidence?: string;             // normalized to lowercase on write
+  confidence?: string;
   structured?: Record<string, unknown>;
 }
 
-/**
- * Validate resolutionPattern against the controlled vocabulary and return its
- * description (needed for embedding text — see buildEmbedText). Throws a
- * clear error rather than letting an unknown slug surface as a raw FK
- * violation, so the caller knows to consult list_resolution_patterns first.
- */
+export interface KnowledgeUpdateInput {
+  status?: string;
+  issueSummary?: string | null;
+  rootCause?: string | null;
+  resolution?: string | null;
+  resolutionPattern?: string | null;
+  symptoms?: string[];
+  signals?: string[];
+  productArea?: string | null;
+  confidence?: string | null;
+  structured?: Record<string, unknown>;
+  expectedVersion?: number;
+}
+
 async function resolvePatternDescription(slug: string | undefined): Promise<string> {
   if (!slug) return "";
   const [pattern] = await sql`select description from resolution_patterns where slug = ${slug}`;
@@ -35,12 +43,8 @@ async function resolvePatternDescription(slug: string | undefined): Promise<stri
   return pattern.description as string;
 }
 
-// Curated embedding input (per review): issue_summary + symptoms + root_cause
-// + the resolution pattern's human-readable description (only available here,
-// via a join — the generated search_text/search_tsv columns can't join) +
-// signals. Deliberately excludes product_area and any long prose
-// (conversation_summary, technical_analysis): all-MiniLM-L6-v2 truncates at
-// ~256 word-pieces, so the vector should stay focused on the fault and fix.
+// Embeds: issue_summary, symptoms, root_cause, pattern description (richer than slug), signals.
+// Excludes product_area — all-MiniLM-L6-v2 truncates at ~256 tokens, keep it fault-focused.
 function buildEmbedText(i: { issueSummary?: string; symptoms?: string[]; rootCause?: string; signals?: string[] }, patternDescription: string): string {
   return [
     i.issueSummary, (i.symptoms ?? []).join(" "), i.rootCause, patternDescription, (i.signals ?? []).join(" "),
@@ -73,19 +77,14 @@ export interface SearchOptions {
   limit?: number;
 }
 
-/**
- * Hybrid search over approved entries: keyword relevance (FTS + trigram) blended
- * with semantic similarity (cosine over the local embedding). Ranking all
- * approved rows lets paraphrases with no shared keywords still surface; the
- * cosine term is 0 for rows that have not been embedded yet.
- */
+// Hybrid search: FTS + trigram + semantic cosine, blended into a single score.
 export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
   const limit = opts.limit ?? 8;
   if (!query.trim()) return [];
   const qvec = toVectorLiteral(await embedQuery(query));
   const rows = await sql`
     select id, work_item_id, status, issue_summary, root_cause, resolution,
-           resolution_pattern, product_area, confidence, symptoms, signals,
+           resolution_pattern, product_area, confidence, symptoms, signals, version,
            ts_rank(search_tsv, plainto_tsquery('simple', ${query})) as fts_rank,
            similarity(search_text, ${query}) as trgm_sim,
            coalesce(1 - (embedding <=> ${qvec}::vector), 0) as cos_sim,
@@ -100,6 +99,95 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
     limit ${limit}
   `;
   return rows;
+}
+
+export async function getKnowledgeEntry(id: string) {
+  const [row] = await sql`
+    select id, work_item_id, product_id, team_id, status, issue_summary,
+           symptoms, signals, root_cause, resolution, resolution_pattern,
+           product_area, confidence, structured, version, created_at, updated_at
+    from knowledge_entries where id = ${id}
+  `;
+  if (!row) throw new Error(`Knowledge entry '${id}' not found`);
+  return row;
+}
+
+export async function listKnowledgeEntries(opts: { status?: string; productId?: string; teamId?: string; limit?: number } = {}) {
+  const limit = opts.limit ?? 50;
+  return sql`
+    select id, work_item_id, product_id, team_id, status, issue_summary,
+           root_cause, resolution, resolution_pattern, product_area, confidence,
+           symptoms, signals, version, created_at, updated_at
+    from knowledge_entries
+    where 1=1
+      ${opts.status    ? sql`and status     = ${opts.status}`    : sql``}
+      ${opts.productId ? sql`and product_id = ${opts.productId}` : sql``}
+      ${opts.teamId    ? sql`and team_id    = ${opts.teamId}`    : sql``}
+    order by updated_at desc
+    limit ${limit}
+  `;
+}
+
+export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInput) {
+  const [current] = await sql`
+    select status, issue_summary, root_cause, resolution, resolution_pattern,
+           symptoms, signals, product_area, confidence, structured, version
+    from knowledge_entries where id = ${id}
+  `;
+  if (!current) throw new Error(`Knowledge entry '${id}' not found`);
+
+  if (patch.expectedVersion != null && current.version !== patch.expectedVersion) {
+    throw new Error(`Version conflict: expected ${patch.expectedVersion}, found ${current.version}`);
+  }
+
+  const merged = {
+    status:            patch.status                  ?? current.status,
+    issueSummary:      'issueSummary'      in patch ? patch.issueSummary      : current.issue_summary,
+    rootCause:         'rootCause'         in patch ? patch.rootCause         : current.root_cause,
+    resolution:        'resolution'        in patch ? patch.resolution        : current.resolution,
+    resolutionPattern: 'resolutionPattern' in patch ? patch.resolutionPattern : current.resolution_pattern,
+    symptoms:          patch.symptoms                ?? current.symptoms,
+    signals:           patch.signals                 ?? current.signals,
+    productArea:       'productArea'       in patch ? patch.productArea       : current.product_area,
+    confidence:        'confidence'        in patch ? (patch.confidence?.toLowerCase() ?? null) : current.confidence,
+    structured:        patch.structured              ?? current.structured,
+  };
+
+  const contentChanged =
+    merged.issueSummary      !== current.issue_summary      ||
+    merged.rootCause         !== current.root_cause         ||
+    merged.resolutionPattern !== current.resolution_pattern ||
+    (merged.symptoms ?? []).join('\0') !== (current.symptoms ?? []).join('\0') ||
+    (merged.signals  ?? []).join('\0') !== (current.signals  ?? []).join('\0');
+
+  let vec: string | null = null;
+  if (contentChanged) {
+    const patternDescription = await resolvePatternDescription(merged.resolutionPattern ?? undefined);
+    const text = buildEmbedText(
+      { issueSummary: merged.issueSummary ?? undefined, symptoms: merged.symptoms, rootCause: merged.rootCause ?? undefined, signals: merged.signals },
+      patternDescription,
+    );
+    vec = text ? toVectorLiteral(await embedPassage(text)) : null;
+  }
+
+  const [row] = await sql`
+    update knowledge_entries set
+      status             = ${merged.status},
+      issue_summary      = ${merged.issueSummary ?? null},
+      root_cause         = ${merged.rootCause ?? null},
+      resolution         = ${merged.resolution ?? null},
+      resolution_pattern = ${merged.resolutionPattern ?? null},
+      symptoms           = ${merged.symptoms ?? []},
+      signals            = ${merged.signals ?? []},
+      product_area       = ${merged.productArea ?? null},
+      confidence         = ${merged.confidence ?? null},
+      structured         = ${sql.json((merged.structured ?? {}) as any)},
+      version            = version + 1
+      ${contentChanged ? (vec ? sql`, embedding = ${vec}::vector` : sql`, embedding = null`) : sql``}
+    where id = ${id}
+    returning id, status, version
+  `;
+  return row;
 }
 
 /** Compute and store embeddings for entries that don't have one yet. Returns the count embedded. */
