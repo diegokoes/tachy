@@ -1,5 +1,3 @@
--- ============================================================================
--- tachy — knowledge engine for engineering work items
 --
 -- Design goals:
 --   * SOURCE-AGNOSTIC: no "tickets" table. work_items are fed by pluggable
