@@ -7,8 +7,7 @@ anyway, in case someone does.
 ## Reporting a bug or suggesting something
 
 Open a [GitHub issue](https://github.com/diegokoes/tachy/issues). Include what
-you ran, what you expected, and what actually happened. No template, no triage
-process: it's just me reading it.
+you ran, what you expected, and what actually happened.
 
 ## Pull requests
 
@@ -28,11 +27,7 @@ tool reading these yet, but a readable `git log` is its own reward.
 
 ## A note on AI-assisted contributions
 
-tachý's own code is largely written with Claude Code, so this isn't a "please
-don't," it's a "please say so." If you used an AI tool for a meaningful part of
-a contribution, mention it in the PR description. The bar isn't "did you use
-autocomplete," it's "can you explain what this code does and why it's
-correct." If you can't, I probably can't review it either.
+If you used an AI tool for a meaningful part of a contribution, mention it in the PR description. The bar isn't "did you use autocomplete," it's "can you explain what this code does and why it's correct." If you can't, I probably can't review it either.
 
 ## Security
 
