@@ -4,10 +4,10 @@ networks:
 
 services:
   postgres:
-    # db/Dockerfile layers postgresql-contrib-16 onto pgvector/pgvector:pg16 --
-    # the bare upstream image is missing pg_trgm/pgcrypto, which schema.sql
-    # needs. Built locally; not published anywhere, it's a one-line image.
-    build: ./db
+    # pg_trgm/pgcrypto/vector are all already present in this image -- no
+    # postgresql-contrib needed (verified directly; see test/global-setup.ts,
+    # which relies on the same fact for the test suite's Testcontainers DB).
+    image: pgvector/pgvector:pg16
     container_name: tachy-postgres
     restart: unless-stopped
     environment:
