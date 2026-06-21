@@ -96,7 +96,14 @@ one adapter, with no schema or core changes.
 
 ### Quick start with Docker
 
+The app itself runs from the published image, no local Node needed, but you
+still need `docker-compose.yml` and `db/schema.sql` from this repo (Postgres
+mounts that file to initialize itself), so clone it first:
+
 ```bash
+git clone https://github.com/diegokoes/tachy.git
+cd tachy
+
 cp .env.example .env
 docker compose up -d
 curl localhost:8787/health
