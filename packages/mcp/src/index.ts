@@ -3,11 +3,15 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import {
   registerSource, resolveSource, ingestWorkItem, saveKnowledgeEntry, searchKnowledge,
+  updateKnowledgeEntry,
   resolveCurrentUserId, addFeedback, recordRun,
   listResolutionPatterns, addResolutionPattern,
   listComponents, addComponent, getProductIdBySlug,
   listCustomers, addCustomer, getCustomerIdBySlug, setWorkItemCustomer, setObservedVersion, getCustomerName,
+  listTeams, addTeam, listProducts, addProduct,
+  listSourceConnections, addSourceConnection, listSourceProductMaps, addSourceProductMap,
 } from "@tachy/core";
+import type { KnowledgeUpdateInput } from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 
@@ -249,6 +253,124 @@ server.registerTool(
     await setObservedVersion(work_item_id, version);
     return out({ updated: true, work_item_id, observed_version: version });
   },
+);
+
+server.registerTool(
+  "update_knowledge_entry",
+  {
+    description: "Update fields on an existing knowledge entry, or change its status (e.g. 'archived' to retire a stale lesson). Pass only the fields you want to change; omitted fields are left as-is. Nullable fields (issue_summary, root_cause, etc.) accept null to clear them. The search results include 'version' — pass it as expected_version to guard against concurrent edits.",
+    inputSchema: {
+      id: z.string(),
+      status: z.enum(["draft", "approved", "rejected", "archived"]).optional(),
+      issue_summary: z.string().nullable().optional(),
+      root_cause: z.string().nullable().optional(),
+      resolution: z.string().nullable().optional(),
+      resolution_pattern: z.string().nullable().optional(),
+      symptoms: z.array(z.string()).optional(),
+      signals: z.array(z.string()).optional(),
+      product_area: z.string().nullable().optional(),
+      confidence: z.enum(["low", "medium", "high"]).nullable().optional(),
+      structured: z.record(z.any()).optional(),
+      expected_version: z.number().int().optional(),
+    },
+  },
+  async (a) => {
+    const patch: KnowledgeUpdateInput = {};
+    if (a.status            !== undefined) patch.status            = a.status;
+    if (a.issue_summary     !== undefined) patch.issueSummary      = a.issue_summary;
+    if (a.root_cause        !== undefined) patch.rootCause         = a.root_cause;
+    if (a.resolution        !== undefined) patch.resolution        = a.resolution;
+    if (a.resolution_pattern !== undefined) patch.resolutionPattern = a.resolution_pattern;
+    if (a.symptoms          !== undefined) patch.symptoms          = a.symptoms;
+    if (a.signals           !== undefined) patch.signals           = a.signals;
+    if (a.product_area      !== undefined) patch.productArea       = a.product_area;
+    if (a.confidence        !== undefined) patch.confidence        = a.confidence;
+    if (a.structured        !== undefined) patch.structured        = a.structured;
+    if (a.expected_version  !== undefined) patch.expectedVersion   = a.expected_version;
+    const row = await updateKnowledgeEntry(a.id, patch);
+    return out({ updated: true, id: row.id, status: row.status, version: row.version });
+  },
+);
+
+server.registerTool(
+  "list_teams",
+  {
+    description: "List all teams. Call this to discover team slugs before calling add_product, list_products, or search_knowledge with a team filter.",
+    inputSchema: {},
+  },
+  async () => out(await listTeams()),
+);
+
+server.registerTool(
+  "add_team",
+  {
+    description: "Add (or rename) a team. The slug is a short kebab-case identifier used by all other tools.",
+    inputSchema: { slug: z.string(), name: z.string() },
+  },
+  async ({ slug, name }) => out(await addTeam(slug, name)),
+);
+
+server.registerTool(
+  "list_products",
+  {
+    description: "List all products, optionally filtered by team slug. Call this to discover product slugs before calling list_components, search_knowledge with a product filter, or add_source_product_map.",
+    inputSchema: { team_slug: z.string().optional() },
+  },
+  async ({ team_slug }) => out(await listProducts(team_slug)),
+);
+
+server.registerTool(
+  "add_product",
+  {
+    description: "Add (or rename) a product under a team. The slug is used by components, knowledge search, and source mappings.",
+    inputSchema: { team_slug: z.string(), slug: z.string(), name: z.string() },
+  },
+  async ({ team_slug, slug, name }) => out(await addProduct(team_slug, slug, name)),
+);
+
+server.registerTool(
+  "list_source_connections",
+  {
+    description: "List all configured source connections (Freshdesk tenants, GitHub orgs, etc.).",
+    inputSchema: {},
+  },
+  async () => out(await listSourceConnections()),
+);
+
+server.registerTool(
+  "add_source_connection",
+  {
+    description: "Register a new source connection. source_type is 'freshdesk' or 'github'. slug is a short unique identifier (e.g. 'my-freshdesk') — it also determines the env var for the API token: FRESHDESK_TOKEN_<SLUG_UPPERCASED> or GITHUB_TOKEN_<SLUG_UPPERCASED> (non-alphanumerics become underscores). For Freshdesk: set base_url to your tenant root URL (e.g. https://your-domain.freshdesk.com). For GitHub: omit base_url and set config to {\"repos\":[\"owner/repo\"]}. The token is never stored in the DB; remind the user to set the env var before syncing.",
+    inputSchema: {
+      source_type: z.enum(["freshdesk", "github"]),
+      slug: z.string(),
+      base_url: z.string().optional(),
+      config: z.record(z.any()).optional(),
+    },
+  },
+  async (a) => out(await addSourceConnection({ sourceType: a.source_type, slug: a.slug, baseUrl: a.base_url, config: a.config })),
+);
+
+server.registerTool(
+  "list_source_product_maps",
+  {
+    description: "List group→product mappings for one or all source connections. For Freshdesk the external_group_key is the numeric group_id (as text); for GitHub it is 'owner/repo'.",
+    inputSchema: { source_slug: z.string().optional() },
+  },
+  async ({ source_slug }) => out(await listSourceProductMaps(source_slug)),
+);
+
+server.registerTool(
+  "add_source_product_map",
+  {
+    description: "Map a source-native grouping to an internal product. For Freshdesk: external_group_key is the group_id (find it in Freshdesk Admin > Groups, or from a fetched ticket's raw payload). For GitHub: external_group_key is 'owner/repo'. Call list_source_connections and list_products first to get the right slugs.",
+    inputSchema: {
+      source_slug: z.string(),
+      external_group_key: z.string(),
+      product_slug: z.string(),
+    },
+  },
+  async (a) => out(await addSourceProductMap({ sourceSlug: a.source_slug, externalGroupKey: a.external_group_key, productSlug: a.product_slug })),
 );
 
 const transport = new StdioServerTransport();
