@@ -21,11 +21,7 @@ codebase or product is put together, with no ticket involved at all.
 It pulls tickets/issues from pluggable **sources** (Freshdesk, GitHub, more can
 be added). That pulling can be manual, or scheduled through an optional REST
 API/CLI instead of running it by hand every time.
-
-Two cases this is built for: a support team that keeps seeing the same kinds
-of tickets, and an open source project where someone new wants to see how a
-past issue actually got fixed before opening a PR.
-
+s
 tachý itself never calls an LLM. It only stores and retrieves; the agent
 (Claude Code, Codex CLI, or any [MCP][mcp] client) is the reasoning layer.
 
