@@ -12,12 +12,15 @@
   <img src="https://img.shields.io/badge/protocol-MCP-orange.svg" alt="MCP">
 </p>
 
-tachý keeps a searchable record of issues and support tickets you've already
-dealt with, and the lessons learned from solving them, so you're not solving
-the same problem from scratch every time. It pulls tickets/issues from
-pluggable **sources** (Freshdesk, GitHub, more can be added), an LLM agent
-turns a resolved one into a short structured note, and the next time something
-similar comes up tachý surfaces that note instead.
+tachý keeps an archive of lessons learned from past issues and tickets, and
+you consult it. Ask for help on a new ticket and it searches that archive
+first. When you solve something, archive a note about it, either tied to that
+ticket or on its own. You can also just feed it context directly, like how a
+codebase or product is put together, with no ticket involved at all.
+
+It pulls tickets/issues from pluggable **sources** (Freshdesk, GitHub, more can
+be added). That pulling can be manual, or scheduled through an optional REST
+API/CLI instead of running it by hand every time.
 
 Two cases this is built for: a support team that keeps seeing the same kinds
 of tickets, and an open source project where someone new wants to see how a
