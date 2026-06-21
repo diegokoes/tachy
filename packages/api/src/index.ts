@@ -3,12 +3,15 @@ import { bearerAuth } from "hono/bearer-auth";
 import { serve } from "@hono/node-server";
 import {
   registerSource, resolveSource, ingestWorkItem, saveKnowledgeEntry, searchKnowledge,
+  updateKnowledgeEntry, getKnowledgeEntry, listKnowledgeEntries,
   addFeedback, listFeedback, recordRun, env,
   listResolutionPatterns, addResolutionPattern,
   listComponents, addComponent, getProductIdBySlug,
   listCustomers, addCustomer, getCustomerIdBySlug, setWorkItemCustomer, setObservedVersion, getCustomerName,
+  listTeams, addTeam, listProducts, addProduct,
+  listSourceConnections, addSourceConnection, listSourceProductMaps, addSourceProductMap,
 } from "@tachy/core";
-import type { KnowledgeInput, FeedbackInput, RunInput, AddComponentInput, CustomerInput } from "@tachy/core";
+import type { KnowledgeInput, KnowledgeUpdateInput, FeedbackInput, RunInput, AddComponentInput, CustomerInput, SourceConnectionInput } from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 
@@ -19,8 +22,7 @@ const app = new Hono();
 
 app.get("/health", (c) => c.json({ ok: true }));
 
-// Shared-bearer-token auth on everything except /health. With no token set the
-// server also binds to localhost only (see serve() below) and warns loudly.
+// Bearer-token guard on all routes except /health. Without a token the server binds to localhost only.
 if (env.apiToken) {
   const guard = bearerAuth({ token: env.apiToken });
   app.use("*", (c, next) => (c.req.path === "/health" ? next() : guard(c, next)));
@@ -53,7 +55,6 @@ app.patch("/work-items/:id/observed-version", async (c) => {
   return c.json({ updated: true, observed_version: version });
 });
 
-// Ranked prior approved entries only — drafts/rejected never surface here.
 app.get("/knowledge/search", async (c) => {
   const q = c.req.query("q") ?? "";
   const limit = c.req.query("limit") ? Number(c.req.query("limit")) : undefined;
@@ -65,9 +66,30 @@ app.get("/knowledge/search", async (c) => {
   return c.json(rows);
 });
 
+app.get("/knowledge/:id", async (c) => {
+  return c.json(await getKnowledgeEntry(c.req.param("id")));
+});
+
+app.get("/knowledge", async (c) => {
+  const limit = c.req.query("limit") ? Number(c.req.query("limit")) : undefined;
+  const rows = await listKnowledgeEntries({
+    status:    c.req.query("status"),
+    productId: c.req.query("product_id"),
+    teamId:    c.req.query("team_id"),
+    limit,
+  });
+  return c.json(rows);
+});
+
 app.post("/knowledge", async (c) => {
   const body = (await c.req.json()) as KnowledgeInput;
   const row = await saveKnowledgeEntry(body);
+  return c.json(row);
+});
+
+app.patch("/knowledge/:id", async (c) => {
+  const body = (await c.req.json()) as KnowledgeUpdateInput;
+  const row = await updateKnowledgeEntry(c.req.param("id"), body);
   return c.json(row);
 });
 
@@ -118,6 +140,36 @@ app.post("/work-items/:source/:id/notes", async (c) => {
   if (!src.postNote) return c.json({ error: "notes unsupported for this source" }, 400);
   await src.postNote(id, body, { private: true });
   return c.json({ posted: true });
+});
+
+app.get("/teams", async (c) => c.json(await listTeams()));
+
+app.post("/teams", async (c) => {
+  const { slug, name } = (await c.req.json()) as { slug: string; name: string };
+  return c.json(await addTeam(slug, name));
+});
+
+app.get("/products", async (c) => c.json(await listProducts(c.req.query("team_slug"))));
+
+app.post("/products", async (c) => {
+  const { team_slug, slug, name } = (await c.req.json()) as { team_slug: string; slug: string; name: string };
+  return c.json(await addProduct(team_slug, slug, name));
+});
+
+app.get("/source-connections", async (c) => c.json(await listSourceConnections()));
+
+app.post("/source-connections", async (c) => {
+  const body = (await c.req.json()) as SourceConnectionInput;
+  return c.json(await addSourceConnection(body));
+});
+
+app.get("/source-connections/:slug/product-map", async (c) => {
+  return c.json(await listSourceProductMaps(c.req.param("slug")));
+});
+
+app.post("/source-connections/:slug/product-map", async (c) => {
+  const { external_group_key, product_slug } = (await c.req.json()) as { external_group_key: string; product_slug: string };
+  return c.json(await addSourceProductMap({ sourceSlug: c.req.param("slug"), externalGroupKey: external_group_key, productSlug: product_slug }));
 });
 
 if (!env.apiToken) {
