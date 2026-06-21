@@ -48,7 +48,7 @@ services:
       - ./backups:/app/backups
 
   # Not started by `up`. Run ad hoc, e.g.:
-  #   docker compose run --rm cli npm run sync osapiens-freshdesk
+  #   docker compose run --rm cli npm run sync <source-slug>
   #   docker compose run --rm cli npm run sync backup
   #   docker compose run --rm cli npm run sync embed-backfill
   cli:
