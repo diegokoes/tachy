@@ -84,7 +84,7 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
   const qvec = toVectorLiteral(await embedQuery(query));
   const rows = await sql`
     select id, work_item_id, status, issue_summary, root_cause, resolution,
-           resolution_pattern, product_area, confidence, symptoms, signals, version,
+           resolution_pattern, product_area, confidence, symptoms, signals, structured, version,
            ts_rank(search_tsv, plainto_tsquery('simple', ${query})) as fts_rank,
            similarity(search_text, ${query}) as trgm_sim,
            coalesce(1 - (embedding <=> ${qvec}::vector), 0) as cos_sim,
