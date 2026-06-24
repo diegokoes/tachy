@@ -16,15 +16,20 @@ export type { FeedbackInput } from "./services/feedback";
 export { recordRun } from "./services/runs";
 export type { RunInput } from "./services/runs";
 export { embedPassage, embedQuery, toVectorLiteral, EMBEDDING_DIM } from "./embeddings";
+export { chunkText } from "./chunk";
+export {
+  saveReferenceDoc, getReferenceDoc, listReferenceDocs, updateReferenceDoc, searchReferenceDocs,
+} from "./services/reference";
+export type { ReferenceDocInput, ReferenceDocUpdate, ReferenceSearchOptions } from "./services/reference";
 export {
   listCustomers, addCustomer, resolveCustomerByEmail, getCustomerIdBySlug,
   setWorkItemCustomer, setObservedVersion, getCustomerName,
 } from "./services/customers";
 export type { CustomerInput } from "./services/customers";
 export { listResolutionPatterns, addResolutionPattern } from "./services/resolution-patterns";
-export { listComponents, addComponent } from "./services/components";
+export { listComponents, addComponent, resolveComponentTags } from "./services/components";
 export type { AddComponentInput } from "./services/components";
-export { getProductIdBySlug, listTeams, addTeam, listProducts, addProduct } from "./services/products";
+export { getProductIdBySlug, getTeamIdBySlug, listTeams, addTeam, listProducts, addProduct, listLabels, addLabel } from "./services/products";
 export {
   listSourceConnections, addSourceConnection,
   listSourceProductMaps, addSourceProductMap,

@@ -2,7 +2,7 @@ create extension if not exists pgcrypto;
 create extension if not exists pg_trgm;
 create extension if not exists vector;
 
--- array_to_string is STABLE; this immutable wrapper lets generated columns call it.
+-- immutable wrapper around array_to_string (STABLE) so generated columns can call it
 create or replace function tachy_join(arr text[]) returns text
     language sql immutable parallel safe
     as $$ select array_to_string(arr, ' ') $$;
@@ -19,11 +19,13 @@ create table products (
     team_id     uuid not null references teams(id) on delete cascade,
     slug        text not null,
     name        text not null,
+    aliases     text[] not null default '{}',
     created_at  timestamptz not null default now(),
     unique (team_id, slug)
 );
 
-create index products_team_idx on products(team_id);
+create index products_team_idx    on products(team_id);
+create index products_aliases_idx on products using gin (aliases);
 
 create table users (
     id            uuid primary key default gen_random_uuid(),
@@ -39,7 +41,6 @@ create table team_members (
     primary key (team_id, user_id)
 );
 
--- Maps a source-native grouping (Freshdesk group_id, GitHub owner/repo) to an internal product.
 create table source_connections (
     id            uuid primary key default gen_random_uuid(),
     source_type   text not null,
@@ -79,12 +80,12 @@ create table work_items (
     external_group_key    text,
     product_id            uuid references products(id) on delete set null,
     team_id               uuid references teams(id) on delete set null,
-    customer_id           uuid references customers(id) on delete set null,  -- resolved at ingest, correctable
+    customer_id           uuid references customers(id) on delete set null,
     observed_version      text,
     requester             text,
     raw                   jsonb,
     source_created_at     timestamptz,
-    source_updated_at     timestamptz,  -- drives incremental sync
+    source_updated_at     timestamptz,
     ingested_at           timestamptz not null default now(),
     unique (source_connection_id, external_id)
 );
@@ -110,17 +111,12 @@ create table work_item_messages (
 
 create index work_item_messages_item_idx on work_item_messages(work_item_id, created_at);
 
--- Controlled vocabulary for knowledge_entries.resolution_pattern. Starts empty;
--- add slugs deliberately as real, distinct patterns emerge.
 create table resolution_patterns (
     slug         text primary key,
     description  text not null,
     created_at   timestamptz not null default now()
 );
 
--- The learned, structured artifact that consult mode searches.
--- Customer-blind by design: identity lives on work_items, never here.
--- Nothing counts as knowledge until status = 'approved'.
 create table knowledge_entries (
     id                  uuid primary key default gen_random_uuid(),
     work_item_id        uuid references work_items(id) on delete set null,
@@ -136,11 +132,12 @@ create table knowledge_entries (
     resolution          text,
     resolution_pattern  text references resolution_patterns(slug),
     signals             text[] not null default '{}',
+    tags                text[] not null default '{}',
     product_area        text,
     confidence          text check (confidence is null or confidence in ('low','medium','high')),
     structured          jsonb not null default '{}'::jsonb,
 
-    embedding           vector(384),  -- null until backfilled
+    embedding           vector(384),
 
     search_text text generated always as (
         coalesce(issue_summary,'') || ' ' ||
@@ -149,7 +146,8 @@ create table knowledge_entries (
         coalesce(resolution_pattern,'') || ' ' ||
         coalesce(product_area,'') || ' ' ||
         tachy_join(symptoms) || ' ' ||
-        tachy_join(signals)
+        tachy_join(signals)  || ' ' ||
+        tachy_join(tags)
     ) stored,
 
     search_tsv tsvector generated always as (
@@ -160,7 +158,8 @@ create table knowledge_entries (
             coalesce(resolution_pattern,'') || ' ' ||
             coalesce(product_area,'') || ' ' ||
             tachy_join(symptoms) || ' ' ||
-            tachy_join(signals)
+            tachy_join(signals)  || ' ' ||
+            tachy_join(tags)
         )
     ) stored,
 
@@ -175,6 +174,7 @@ create index knowledge_team_idx        on knowledge_entries(team_id);
 create index knowledge_pattern_idx     on knowledge_entries(resolution_pattern);
 create index knowledge_symptoms_idx    on knowledge_entries using gin (symptoms);
 create index knowledge_signals_idx     on knowledge_entries using gin (signals);
+create index knowledge_tags_idx        on knowledge_entries using gin (tags);
 create index knowledge_tsv_idx         on knowledge_entries using gin (search_tsv);
 create index knowledge_trgm_idx        on knowledge_entries using gin (search_text gin_trgm_ops);
 create index knowledge_embedding_idx   on knowledge_entries using hnsw (embedding vector_cosine_ops);
@@ -194,7 +194,7 @@ create table knowledge_feedback (
     id                   uuid primary key default gen_random_uuid(),
     knowledge_entry_id   uuid not null references knowledge_entries(id) on delete cascade,
     user_id              uuid references users(id) on delete set null,
-    kind                 text not null default 'note',  -- 'correction' | 'rating' | 'note'
+    kind                 text not null default 'note',
     rating               integer,
     comment              text,
     patch                jsonb,
@@ -207,7 +207,7 @@ create table analysis_runs (
     id              uuid primary key default gen_random_uuid(),
     work_item_id    uuid references work_items(id) on delete set null,
     user_id         uuid references users(id) on delete set null,
-    mode            text not null,  -- 'ingest' | 'consult' | 'sync'
+    mode            text not null,
     model           text,
     input_tokens    integer,
     output_tokens   integer,
@@ -217,9 +217,6 @@ create table analysis_runs (
 
 create index analysis_runs_item_idx on analysis_runs(work_item_id);
 
--- Hierarchical architecture glossary per product (services, modules, config pools).
--- Separate from knowledge_entries because architecture facts don't fit the
--- issue -> root_cause -> resolution shape.
 create table components (
     id          uuid primary key default gen_random_uuid(),
     product_id  uuid not null references products(id) on delete cascade,
@@ -227,9 +224,70 @@ create table components (
     slug        text not null,
     name        text not null,
     description text,
+    aliases     text[] not null default '{}',
     created_at  timestamptz not null default now(),
     unique (product_id, slug)
 );
 
 create index components_product_idx on components(product_id);
 create index components_parent_idx  on components(parent_id);
+create index components_aliases_idx on components using gin (aliases);
+
+create table labels (
+    id          uuid primary key default gen_random_uuid(),
+    product_id  uuid not null references products(id) on delete cascade,
+    slug        text not null,
+    description text,
+    created_at  timestamptz not null default now(),
+    unique (product_id, slug)
+);
+
+create index labels_product_idx on labels(product_id);
+
+create table reference_docs (
+    id          uuid primary key default gen_random_uuid(),
+    product_id  uuid references products(id) on delete set null,
+    team_id     uuid references teams(id) on delete set null,
+    created_by  uuid references users(id) on delete set null,
+    source      text,
+    title       text not null,
+    body        text not null,
+    tags        text[] not null default '{}',
+    structured  jsonb not null default '{}'::jsonb,
+    status      text not null default 'approved'
+                    check (status in ('draft','approved','archived')),
+
+    search_text text generated always as (
+        coalesce(title,'') || ' ' || coalesce(body,'') || ' ' || tachy_join(tags)
+    ) stored,
+    search_tsv tsvector generated always as (
+        to_tsvector('simple', coalesce(title,'') || ' ' || coalesce(body,'') || ' ' || tachy_join(tags))
+    ) stored,
+
+    version     integer not null default 1,
+    created_at  timestamptz not null default now(),
+    updated_at  timestamptz not null default now()
+);
+
+create index reference_docs_product_idx on reference_docs(product_id);
+create index reference_docs_team_idx    on reference_docs(team_id);
+create index reference_docs_status_idx  on reference_docs(status);
+create index reference_docs_tags_idx    on reference_docs using gin (tags);
+create index reference_docs_tsv_idx     on reference_docs using gin (search_tsv);
+create index reference_docs_trgm_idx    on reference_docs using gin (search_text gin_trgm_ops);
+
+create trigger reference_docs_updated_at
+    before update on reference_docs
+    for each row execute function set_updated_at();
+
+create table reference_doc_chunks (
+    id          uuid primary key default gen_random_uuid(),
+    doc_id      uuid not null references reference_docs(id) on delete cascade,
+    ordinal     integer not null,
+    chunk_text  text not null,
+    embedding   vector(384),
+    unique (doc_id, ordinal)
+);
+
+create index reference_doc_chunks_doc_idx       on reference_doc_chunks(doc_id);
+create index reference_doc_chunks_embedding_idx on reference_doc_chunks using hnsw (embedding vector_cosine_ops);
