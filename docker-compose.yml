@@ -18,12 +18,6 @@ services:
       - "5433:5432"
     volumes:
       - tachy-postgres-data:/var/lib/postgresql/data
-      # schema.sql alone is enough on a fresh volume (it already includes
-      # everything the numbered db/0*.sql files add); those are upgrade-only
-      # migrations for pre-existing databases, not first-init scripts. Postgres
-      # runs initdb.d scripts alphabetically, and "0002_..." sorts before
-      # "schema.sql", so mounting the whole db/ dir here would run the
-      # migrations against a database that doesn't exist yet.
       - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tachy} -d ${POSTGRES_DB:-tachy}"]
