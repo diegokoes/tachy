@@ -10,21 +10,32 @@ knowledge entries. The service persists and retrieves; you reason and structure.
 | Tool | Purpose |
 |------|---------|
 | `fetch_work_item` | Fetch + store a raw ticket/issue; returns full conversation + auto-resolved customer |
-| `get_context` | Fetch a ticket AND auto-search the archive for similar past cases (one-shot consult) |
-| `search_knowledge` | Search prior approved knowledge entries by keyword / symptom / error code |
+| `get_context` | Fetch a ticket AND auto-search the archive for similar knowledge entries + reference docs (one-shot consult) |
+| `search_knowledge` | Search prior approved knowledge entries by keyword / symptom / error code; filter by product_slug / team_slug / tags / component |
 | `save_knowledge_entry` | Persist a structured knowledge entry — ONLY after user approval |
 | `update_knowledge_entry` | Patch fields or change status on an existing entry (optimistic locking via `version`) |
+| `get_knowledge_entry` / `list_knowledge_entries` | Fetch one entry (with its `version`) / list & filter entries for review and curation |
 | `post_private_note` | Write a private note back to the source (Freshdesk only) |
 | `add_knowledge_feedback` | Record corrections/ratings on existing entries |
 | `record_analysis_run` | Report token usage for audit |
+
+### Project context (freeform, not from a ticket)
+
+| Tool | Purpose |
+|------|---------|
+| `ingest_context` | Load freeform context from pasted text / local file paths / URLs — READ ONLY, returns cleaned text for you to structure |
+| `save_reference_doc` | Persist an APPROVED freeform doc (chunked + embedded) — for project context that isn't issue→root_cause→resolution shaped |
+| `search_reference` | Semantic search over approved reference docs; returns the best-matching snippet per doc |
+| `list_reference_docs` / `get_reference_doc` / `update_reference_doc` | Browse / fetch full body / edit (or archive) reference docs |
 
 ### Reference data (call BEFORE analyzing)
 | Tool | Purpose |
 |------|---------|
 | `list_resolution_patterns` | Get the controlled vocabulary of resolution pattern slugs |
 | `add_resolution_pattern` | Add a new pattern — ONLY when user explicitly requests it |
-| `list_components` | Get the architecture glossary for a product |
-| `add_component` | Register a new component — ASK user first if discovered from a ticket |
+| `list_components` | Get the architecture glossary for a product (each has a slug + optional aliases) |
+| `add_component` | Register a new component (with aliases for naming variants) — ASK user first if discovered from a ticket |
+| `list_labels` / `add_label` | Optional, per-product advisory tag vocabulary; reuse these slugs when tagging (tags themselves stay free-form) |
 | `list_customers` | List known customers with aliases |
 | `add_customer` | Register a new customer — ASK user first |
 | `set_work_item_customer` | Correct the auto-matched customer on a work item |
@@ -41,6 +52,12 @@ knowledge entries. The service persists and retrieves; you reason and structure.
 ---
 
 ## Modes
+
+### Source slug vs. source type
+
+The `source` parameter in `fetch_work_item`, `get_context`, and `post_private_note` must be the **source slug** (e.g. `"osapiens-freshdesk"`), NOT the source type (e.g. `"freshdesk"`). Always call `list_source_connections` first to obtain the correct slug before calling any of those tools.
+
+---
 
 ### First-run bootstrap (empty system)
 
@@ -66,10 +83,10 @@ You only need to do this once. On subsequent tickets, the source connection will
 ### Consult mode ("what do we know about ticket X?")
 
 1. Call `get_context` to fetch the ticket AND search similar past cases
-2. Results include `structured` context from past entries (environment, investigation steps, etc.)
-3. Synthesize advice from the similar entries + the new ticket's context
+2. Results include `similar` (past knowledge entries, with their `structured` context — environment, investigation steps, etc.) AND `reference` (matching project reference docs)
+3. Synthesize advice from the similar entries + reference docs + the new ticket's context
 4. Present actionable guidance to the user
-5. Optionally call `post_private_note` if the user asks
+5. Optionally call `post_private_note` if the user asks (Freshdesk only; the result echoes the exact posted body for confirmation). For GitHub, never post — just present the information.
 
 ### Manual knowledge (no ticket)
 
@@ -77,6 +94,23 @@ You only need to do this once. On subsequent tickets, the source connection will
 2. Structure the user's input into the Knowledge Entry Schema
 3. Present for approval
 4. Call `save_knowledge_entry` (leave `work_item_id` null)
+
+### Context dump mode ("here's a bunch of project info / these files / this wiki")
+
+For freeform project context (docs, runbooks, architecture notes, config explainers)
+that isn't a single ticket:
+
+1. Call `ingest_context` with `text`, `paths`, and/or `urls` — it ONLY reads and
+   returns cleaned text; it never saves.
+2. Read it and **classify/route each part** to the right home:
+   - a durable incident lesson (issue → root_cause → resolution) → `save_knowledge_entry`
+   - an architecture fact (a service/module/config pool) → `add_component` (ASK first, per the component rules)
+   - everything else (docs, runbooks, design/process notes) → `save_reference_doc`
+3. Suggest `tags` (call `list_labels` first to reuse the product's vocabulary) and
+   the right `product_slug` / `team_slug`.
+4. Present the proposed entries/docs for review — do NOT save anything until approved.
+5. After approval, call the matching save tools. Reference docs are chunked and
+   embedded, so they surface in `search_reference` and `get_context`.
 
 ---
 
@@ -97,6 +131,7 @@ contract between you and the database.
 | `resolution_pattern` | string (slug) | If applicable | Must be a slug from `list_resolution_patterns`. NEVER invent one — call `list_resolution_patterns` first. If none fits, leave unset (don't call `add_resolution_pattern` without user permission). |
 | `product_area` | string | YES | Slash-separated path: "TPD / Printing / Domino Integration". |
 | `confidence` | `"low"` \| `"medium"` \| `"high"` | YES | How confident you are in the root cause + resolution. Must be lowercase. |
+| `tags` | string[] | Optional | Free-form labels for filtering/search (e.g. `["lc","printing"]`). Reuse existing slugs — call `list_labels` first; use a component's slug as a tag to make it findable by component. |
 
 ### The `structured` field (JSONB — stored and returned in search results, but NOT indexed)
 
@@ -152,8 +187,12 @@ Customer and version are tracked on the **work item**, not the knowledge entry:
 4. **`symptoms` are observable facts** — not interpretations. "Error 023 in logs" yes. "Possible template issue" no.
 5. **Customer is on the work item, not the knowledge entry** — use `set_work_item_customer`, not a field in `save_knowledge_entry`.
 6. **Always ask before saving** — never call `save_knowledge_entry` without explicit user approval. When saving after approval, pass `status: "approved"` directly so the entry is immediately searchable.
-7. **Don't invent information** — if root cause is unknown, say so. Set `confidence` to `"low"`.
-8. **`structured` fields are flexible** — include only what's relevant. Don't force empty objects.
-9. **Call `list_components` before analyzing** — verify that component names you encounter actually exist in the glossary. If a ticket mentions an unknown component, ASK the user before calling `add_component`.
-10. **`confidence` must be lowercase** — the DB has a CHECK constraint: `"low"`, `"medium"`, `"high"`.
-11. **Use `update_knowledge_entry` to fix existing entries** — pass `expected_version` from the search result to guard against conflicts.
+7. **Never post public replies** — `post_private_note` is the only tool allowed for writing back to a ticket. tachy is a knowledge engine; it does not send customer-facing messages. Draft text for the user to copy manually if they ask for a reply.
+8. **Don't invent information** — if root cause is unknown, say so. Set `confidence` to `"low"`.
+9. **`structured` fields are flexible** — include only what's relevant. Don't force empty objects.
+10. **Call `list_components` before analyzing** — verify that component names you encounter actually exist in the glossary. If a ticket mentions an unknown component, ASK the user before calling `add_component`.
+11. **`confidence` must be lowercase** — the DB has a CHECK constraint: `"low"`, `"medium"`, `"high"`.
+12. **Use `update_knowledge_entry` to fix existing entries** — pass `expected_version` from the search result to guard against conflicts.
+13. **Tags are free-form but reuse them** — before tagging, call `list_labels` and prefer an existing tag/component slug over inventing a near-duplicate. Filter searches with `tags` or `component`.
+14. **Handle naming variants with aliases, not duplicates** — if `lc`, `LC`, and `line controller` mean one thing, register one component/product with the others as `aliases`; don't create separate entries. Product/team filters accept a slug OR any alias.
+15. **Reference docs vs knowledge entries** — issue→root_cause→resolution lessons are knowledge entries; freeform project context (docs, runbooks, architecture) is a reference doc (`save_reference_doc`). Don't force freeform context into the issue schema.

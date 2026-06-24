@@ -305,10 +305,8 @@ index.
 Embeddings are produced by a local model (all-MiniLM-L6-v2, 384-dim, via
 `fastembed`). Nothing is sent to an external API. The model (~90MB) is
 downloaded on first use into `.fastembed-cache/` (the Docker image bakes it in
-at build time). Fresh databases get the `vector` column from `schema.sql`; to
-upgrade an existing database run `db/0002_pgvector.sql` (and
-`db/0003_customer_signals_patterns_components.sql` if upgrading from before
-customers/signals/resolution_patterns/components), then backfill prior entries:
+at build time). The `vector` column comes from `schema.sql`. Entries with a null
+embedding (e.g. created before the model was available) can be backfilled:
 
 ```bash
 npm run sync embed-backfill
