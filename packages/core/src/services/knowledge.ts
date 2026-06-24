@@ -15,6 +15,7 @@ export interface KnowledgeInput {
   resolutionPattern?: string;
   productArea?: string;
   confidence?: string;
+  tags?: string[];
   structured?: Record<string, unknown>;
 }
 
@@ -28,6 +29,7 @@ export interface KnowledgeUpdateInput {
   signals?: string[];
   productArea?: string | null;
   confidence?: string | null;
+  tags?: string[];
   structured?: Record<string, unknown>;
   expectedVersion?: number;
 }
@@ -52,6 +54,18 @@ function buildEmbedText(i: { issueSummary?: string; symptoms?: string[]; rootCau
 }
 
 export async function saveKnowledgeEntry(i: KnowledgeInput) {
+  // When tied to a work item, inherit its product/team unless explicitly given —
+  // the agent already established those at fetch time, no need to repeat them.
+  let productId = i.productId ?? null;
+  let teamId = i.teamId ?? null;
+  if (i.workItemId && (productId == null || teamId == null)) {
+    const [wi] = await sql`select product_id, team_id from work_items where id = ${i.workItemId}`;
+    if (wi) {
+      productId ??= wi.product_id ?? null;
+      teamId ??= wi.team_id ?? null;
+    }
+  }
+
   const confidence = i.confidence ? i.confidence.toLowerCase() : null;
   const patternDescription = await resolvePatternDescription(i.resolutionPattern);
   const text = buildEmbedText(i, patternDescription);
@@ -59,11 +73,11 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
 
   const [row] = await sql`
     insert into knowledge_entries
-      (work_item_id, product_id, team_id, created_by, status, issue_summary, symptoms, signals,
+      (work_item_id, product_id, team_id, created_by, status, issue_summary, symptoms, signals, tags,
        root_cause, resolution, resolution_pattern, product_area, confidence, structured, embedding)
     values
-      (${i.workItemId ?? null}, ${i.productId ?? null}, ${i.teamId ?? null}, ${i.createdById ?? null},
-       ${i.status ?? "approved"}, ${i.issueSummary ?? null}, ${i.symptoms ?? []}, ${i.signals ?? []},
+      (${i.workItemId ?? null}, ${productId}, ${teamId}, ${i.createdById ?? null},
+       ${i.status ?? "approved"}, ${i.issueSummary ?? null}, ${i.symptoms ?? []}, ${i.signals ?? []}, ${i.tags ?? []},
        ${i.rootCause ?? null}, ${i.resolution ?? null}, ${i.resolutionPattern ?? null}, ${i.productArea ?? null},
        ${confidence}, ${sql.json((i.structured ?? {}) as any)}, ${embedding}::vector)
     returning id, status
@@ -74,27 +88,34 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
 export interface SearchOptions {
   productId?: string;
   teamId?: string;
+  tags?: string[];   // array-overlap filter; entries must carry at least one of these tags
   limit?: number;
 }
 
-// Hybrid search: FTS + trigram + semantic cosine, blended into a single score.
+// Hybrid search: semantic cosine (primary) blended with FTS + trigram. Each
+// signal is bounded to 0..1 and weighted so an unbounded ts_rank can't dominate;
+// a small floor drops near-zero noise so weak matches don't dilute the result.
 export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
   const limit = opts.limit ?? 8;
   if (!query.trim()) return [];
   const qvec = toVectorLiteral(await embedQuery(query));
   const rows = await sql`
-    select id, work_item_id, status, issue_summary, root_cause, resolution,
-           resolution_pattern, product_area, confidence, symptoms, signals, structured, version,
-           ts_rank(search_tsv, plainto_tsquery('simple', ${query})) as fts_rank,
-           similarity(search_text, ${query}) as trgm_sim,
-           coalesce(1 - (embedding <=> ${qvec}::vector), 0) as cos_sim,
-           ts_rank(search_tsv, plainto_tsquery('simple', ${query}))
-             + similarity(search_text, ${query})
-             + coalesce(1 - (embedding <=> ${qvec}::vector), 0) as score
-    from knowledge_entries
-    where status = 'approved'
-      ${opts.productId ? sql`and product_id = ${opts.productId}` : sql``}
-      ${opts.teamId ? sql`and team_id = ${opts.teamId}` : sql``}
+    select * from (
+      select id, work_item_id, status, issue_summary, root_cause, resolution,
+             resolution_pattern, product_area, confidence, symptoms, signals, tags, structured, version,
+             least(ts_rank(search_tsv, plainto_tsquery('simple', ${query})), 1.0) as fts_rank,
+             similarity(search_text, ${query}) as trgm_sim,
+             greatest(coalesce(1 - (embedding <=> ${qvec}::vector), 0), 0) as cos_sim,
+             1.0 * greatest(coalesce(1 - (embedding <=> ${qvec}::vector), 0), 0)
+               + 0.5 * least(ts_rank(search_tsv, plainto_tsquery('simple', ${query})), 1.0)
+               + 0.3 * similarity(search_text, ${query}) as score
+      from knowledge_entries
+      where status = 'approved'
+        ${opts.productId ? sql`and product_id = ${opts.productId}` : sql``}
+        ${opts.teamId ? sql`and team_id = ${opts.teamId}` : sql``}
+        ${opts.tags && opts.tags.length ? sql`and tags && ${opts.tags}` : sql``}
+    ) ranked
+    where score > 0.02
     order by score desc
     limit ${limit}
   `;
@@ -104,7 +125,7 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
 export async function getKnowledgeEntry(id: string) {
   const [row] = await sql`
     select id, work_item_id, product_id, team_id, status, issue_summary,
-           symptoms, signals, root_cause, resolution, resolution_pattern,
+           symptoms, signals, tags, root_cause, resolution, resolution_pattern,
            product_area, confidence, structured, version, created_at, updated_at
     from knowledge_entries where id = ${id}
   `;
@@ -112,17 +133,18 @@ export async function getKnowledgeEntry(id: string) {
   return row;
 }
 
-export async function listKnowledgeEntries(opts: { status?: string; productId?: string; teamId?: string; limit?: number } = {}) {
+export async function listKnowledgeEntries(opts: { status?: string; productId?: string; teamId?: string; tags?: string[]; limit?: number } = {}) {
   const limit = opts.limit ?? 50;
   return sql`
     select id, work_item_id, product_id, team_id, status, issue_summary,
            root_cause, resolution, resolution_pattern, product_area, confidence,
-           symptoms, signals, version, created_at, updated_at
+           symptoms, signals, tags, version, created_at, updated_at
     from knowledge_entries
     where 1=1
       ${opts.status    ? sql`and status     = ${opts.status}`    : sql``}
       ${opts.productId ? sql`and product_id = ${opts.productId}` : sql``}
       ${opts.teamId    ? sql`and team_id    = ${opts.teamId}`    : sql``}
+      ${opts.tags && opts.tags.length ? sql`and tags && ${opts.tags}` : sql``}
     order by updated_at desc
     limit ${limit}
   `;
@@ -131,7 +153,7 @@ export async function listKnowledgeEntries(opts: { status?: string; productId?: 
 export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInput) {
   const [current] = await sql`
     select status, issue_summary, root_cause, resolution, resolution_pattern,
-           symptoms, signals, product_area, confidence, structured, version
+           symptoms, signals, tags, product_area, confidence, structured, version
     from knowledge_entries where id = ${id}
   `;
   if (!current) throw new Error(`Knowledge entry '${id}' not found`);
@@ -148,6 +170,7 @@ export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInp
     resolutionPattern: 'resolutionPattern' in patch ? patch.resolutionPattern : current.resolution_pattern,
     symptoms:          patch.symptoms                ?? current.symptoms,
     signals:           patch.signals                 ?? current.signals,
+    tags:              patch.tags                    ?? current.tags,
     productArea:       'productArea'       in patch ? patch.productArea       : current.product_area,
     confidence:        'confidence'        in patch ? (patch.confidence?.toLowerCase() ?? null) : current.confidence,
     structured:        patch.structured              ?? current.structured,
@@ -179,6 +202,7 @@ export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInp
       resolution_pattern = ${merged.resolutionPattern ?? null},
       symptoms           = ${merged.symptoms ?? []},
       signals            = ${merged.signals ?? []},
+      tags               = ${merged.tags ?? []},
       product_area       = ${merged.productArea ?? null},
       confidence         = ${merged.confidence ?? null},
       structured         = ${sql.json((merged.structured ?? {}) as any)},

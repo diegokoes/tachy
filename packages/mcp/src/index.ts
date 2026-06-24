@@ -6,12 +6,15 @@ import {
   updateKnowledgeEntry,
   resolveCurrentUserId, addFeedback, recordRun,
   listResolutionPatterns, addResolutionPattern,
-  listComponents, addComponent, getProductIdBySlug,
+  listComponents, addComponent, resolveComponentTags, getProductIdBySlug,
   listCustomers, addCustomer, getCustomerIdBySlug, setWorkItemCustomer, setObservedVersion, getCustomerName,
-  listTeams, addTeam, listProducts, addProduct,
+  listTeams, addTeam, listProducts, addProduct, listLabels, addLabel, getTeamIdBySlug,
+  getKnowledgeEntry, listKnowledgeEntries,
+  saveReferenceDoc, getReferenceDoc, listReferenceDocs, updateReferenceDoc, searchReferenceDocs,
   listSourceConnections, addSourceConnection, listSourceProductMaps, addSourceProductMap,
 } from "@tachy/core";
-import type { KnowledgeUpdateInput } from "@tachy/core";
+import type { KnowledgeUpdateInput, ReferenceDocUpdate } from "@tachy/core";
+import { readFile } from "node:fs/promises";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 
@@ -22,6 +25,35 @@ const server = new McpServer({ name: "tachy", version: "0.1.0" });
 
 function out(obj: unknown) {
   return { content: [{ type: "text" as const, text: typeof obj === "string" ? obj : JSON.stringify(obj, null, 2) }] };
+}
+
+// Crude HTML → text for fetched URLs; good enough to hand the LLM readable context.
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+// Read-only: gather freeform context from pasted text, local files, and URLs.
+async function loadContextSources(input: { text?: string; paths?: string[]; urls?: string[] }) {
+  const sources: { source: string; text: string }[] = [];
+  if (input.text?.trim()) sources.push({ source: "inline", text: input.text });
+  for (const p of input.paths ?? []) {
+    sources.push({ source: p, text: await readFile(p, "utf8") });
+  }
+  for (const u of input.urls ?? []) {
+    const res = await fetch(u);
+    if (!res.ok) throw new Error(`Failed to fetch ${u}: HTTP ${res.status}`);
+    const raw = await res.text();
+    const ct = res.headers.get("content-type") ?? "";
+    sources.push({ source: u, text: ct.includes("html") ? stripHtml(raw) : raw });
+  }
+  return sources;
 }
 
 server.registerTool(
@@ -47,11 +79,25 @@ server.registerTool(
 server.registerTool(
   "search_knowledge",
   {
-    description: "Search prior APPROVED knowledge entries by keyword / symptom / error code. Use for consult mode.",
-    inputSchema: { query: z.string(), product_id: z.string().optional(), team_id: z.string().optional(), limit: z.number().optional() },
+    description: "Search prior APPROVED knowledge entries by keyword / symptom / error code. Use for consult mode. Filter with product_slug / team_slug (slugs or aliases — not UUIDs), tags (entry must carry at least one), and/or component (resolved to the component's slug + aliases and matched against entry tags).",
+    inputSchema: {
+      query: z.string(),
+      product_slug: z.string().optional(),
+      team_slug: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      component: z.string().optional(),
+      limit: z.number().optional(),
+    },
+    annotations: { readOnlyHint: true },
   },
-  async ({ query, product_id, team_id, limit }) => {
-    const rows = await searchKnowledge(query, { productId: product_id, teamId: team_id, limit });
+  async ({ query, product_slug, team_slug, tags, component, limit }) => {
+    const productId = product_slug ? await getProductIdBySlug(product_slug) : undefined;
+    const teamId = team_slug ? await getTeamIdBySlug(team_slug) : undefined;
+    const tagFilter = [...(tags ?? [])];
+    if (component && productId) tagFilter.push(...(await resolveComponentTags(productId, component)));
+    const rows = await searchKnowledge(query, {
+      productId, teamId, tags: tagFilter.length ? tagFilter : undefined, limit,
+    });
     return out(rows);
   },
 );
@@ -69,10 +115,14 @@ server.registerTool(
     await recordRun({ workItemId: item.id, userId: await resolveCurrentUserId(), mode: "consult" });
     const firstIncoming = raw.messages.find((m) => m.direction === "incoming")?.bodyText ?? "";
     const query = [raw.title, firstIncoming].filter(Boolean).join(" ");
-    const similar = await searchKnowledge(query, { limit });
+    const productId = item.productId ?? undefined;
+    const [similar, reference] = await Promise.all([
+      searchKnowledge(query, { productId, limit }),
+      searchReferenceDocs(query, { productId, limit }),
+    ]);
     const customerName = await getCustomerName(item.customerId);
     return out({
-      work_item: raw, similar,
+      work_item: raw, similar, reference,
       customer_id: item.customerId, customer_name: customerName, observed_version: item.observedVersion,
     });
   },
@@ -95,6 +145,7 @@ server.registerTool(
       resolution_pattern: z.string().optional(),
       product_area: z.string().optional(),
       confidence: z.string().optional(),
+      tags: z.array(z.string()).optional(),
       structured: z.record(z.any()).optional(),
     },
   },
@@ -104,7 +155,7 @@ server.registerTool(
       createdById: await resolveCurrentUserId(),
       status: a.status ?? "approved", issueSummary: a.issue_summary, symptoms: a.symptoms, signals: a.signals,
       rootCause: a.root_cause, resolution: a.resolution, resolutionPattern: a.resolution_pattern,
-      productArea: a.product_area, confidence: a.confidence, structured: a.structured,
+      productArea: a.product_area, confidence: a.confidence, tags: a.tags, structured: a.structured,
     });
     return out({ saved: true, id: row.id, status: row.status });
   },
@@ -120,7 +171,7 @@ server.registerTool(
     const { source: src } = await resolveSource(source);
     if (!src.postNote) throw new Error(`Source '${source}' does not support notes`);
     await src.postNote(external_id, body, { private: true });
-    return out({ posted: true });
+    return out({ posted: true, private: true, external_id, body });
   },
 );
 
@@ -172,6 +223,7 @@ server.registerTool(
   {
     description: "List the controlled vocabulary of resolution patterns. ALWAYS call this before choosing resolution_pattern for save_knowledge_entry — pick an existing slug, or leave it unset, rather than inventing one.",
     inputSchema: {},
+    annotations: { readOnlyHint: true },
   },
   async () => out(await listResolutionPatterns()),
 );
@@ -190,6 +242,7 @@ server.registerTool(
   {
     description: "List the architecture glossary (components, hierarchical) for a product. Call this before reasoning about a ticket, so unfamiliar service/component names get checked against the real architecture instead of guessed at.",
     inputSchema: { product_slug: z.string() },
+    annotations: { readOnlyHint: true },
   },
   async ({ product_slug }) => out(await listComponents(await getProductIdBySlug(product_slug))),
 );
@@ -197,15 +250,16 @@ server.registerTool(
 server.registerTool(
   "add_component",
   {
-    description: "Add (or update) a fact in the architecture glossary, e.g. a service, module, or config pool. Two valid call patterns: (1) the user is directly describing the app's architecture — call immediately; (2) a ticket mentions something not yet in the list — ASK the user first, call only after they confirm. Never silently invent components from a ticket.",
+    description: "Add (or update) a fact in the architecture glossary, e.g. a service, module, or config pool. Two valid call patterns: (1) the user is directly describing the app's architecture — call immediately; (2) a ticket mentions something not yet in the list — ASK the user first, call only after they confirm. Never silently invent components from a ticket. Use aliases for alternate names (e.g. slug 'line-controller' with aliases ['lc','LC']) so naming variants resolve to one component.",
     inputSchema: {
       product_slug: z.string(), slug: z.string(), name: z.string(),
       parent_slug: z.string().optional(), description: z.string().optional(),
+      aliases: z.array(z.string()).optional(),
     },
   },
   async (a) => out(await addComponent({
     productId: await getProductIdBySlug(a.product_slug), slug: a.slug, name: a.name,
-    parentSlug: a.parent_slug, description: a.description,
+    parentSlug: a.parent_slug, description: a.description, aliases: a.aliases,
   })),
 );
 
@@ -214,6 +268,7 @@ server.registerTool(
   {
     description: "List known customers, including aliases (other names / email domains resolving to the same account, e.g. a distributor). Use to check before correcting a work item's customer.",
     inputSchema: {},
+    annotations: { readOnlyHint: true },
   },
   async () => out(await listCustomers()),
 );
@@ -268,6 +323,7 @@ server.registerTool(
       resolution_pattern: z.string().nullable().optional(),
       symptoms: z.array(z.string()).optional(),
       signals: z.array(z.string()).optional(),
+      tags: z.array(z.string()).optional(),
       product_area: z.string().nullable().optional(),
       confidence: z.enum(["low", "medium", "high"]).nullable().optional(),
       structured: z.record(z.any()).optional(),
@@ -283,6 +339,7 @@ server.registerTool(
     if (a.resolution_pattern !== undefined) patch.resolutionPattern = a.resolution_pattern;
     if (a.symptoms          !== undefined) patch.symptoms          = a.symptoms;
     if (a.signals           !== undefined) patch.signals           = a.signals;
+    if (a.tags              !== undefined) patch.tags              = a.tags;
     if (a.product_area      !== undefined) patch.productArea       = a.product_area;
     if (a.confidence        !== undefined) patch.confidence        = a.confidence;
     if (a.structured        !== undefined) patch.structured        = a.structured;
@@ -293,10 +350,178 @@ server.registerTool(
 );
 
 server.registerTool(
+  "get_knowledge_entry",
+  {
+    description: "Fetch a single knowledge entry by id, including its current version and full structured field. Use before update_knowledge_entry / add_knowledge_feedback when you have an id but not the latest version.",
+    inputSchema: { id: z.string() },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ id }) => out(await getKnowledgeEntry(id)),
+);
+
+server.registerTool(
+  "list_knowledge_entries",
+  {
+    description: "List knowledge entries (newest first), optionally filtered by status (e.g. 'draft' to find pending entries), product_slug / team_slug (slug or alias), or tags. Useful for review and curation — not semantic search; use search_knowledge for consult.",
+    inputSchema: {
+      status: z.enum(["draft", "approved", "rejected", "archived"]).optional(),
+      product_slug: z.string().optional(),
+      team_slug: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      limit: z.number().optional(),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ status, product_slug, team_slug, tags, limit }) => {
+    const rows = await listKnowledgeEntries({
+      status,
+      productId: product_slug ? await getProductIdBySlug(product_slug) : undefined,
+      teamId: team_slug ? await getTeamIdBySlug(team_slug) : undefined,
+      tags: tags && tags.length ? tags : undefined,
+      limit,
+    });
+    return out(rows);
+  },
+);
+
+server.registerTool(
+  "ingest_context",
+  {
+    description: "Load freeform project context from pasted text, local file paths, and/or URLs, and return the cleaned raw text for you to structure. This tool ONLY reads — it never saves. After loading, classify the content and route each part: durable incident lessons → save_knowledge_entry; architecture facts → add_component (ASK the user first); everything else (docs, runbooks, design notes, config explainers) → save_reference_doc. Always present a summary and get explicit user approval before any save.",
+    inputSchema: {
+      product_slug: z.string().optional(),
+      team_slug: z.string().optional(),
+      text: z.string().optional(),
+      paths: z.array(z.string()).optional(),
+      urls: z.array(z.string()).optional(),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ product_slug, team_slug, text, paths, urls }) => {
+    const sources = await loadContextSources({ text, paths, urls });
+    if (!sources.length) throw new Error("Provide at least one of: text, paths, urls");
+    return out({
+      product_slug: product_slug ?? null,
+      team_slug: team_slug ?? null,
+      sources: sources.map((s) => ({ source: s.source, chars: s.text.length, text: s.text })),
+      next: "Summarize, then propose knowledge_entries / reference_docs / components. Save only after the user approves.",
+    });
+  },
+);
+
+server.registerTool(
+  "save_reference_doc",
+  {
+    description: "Persist an APPROVED reference doc — freeform project context (docs, runbooks, architecture notes) that doesn't fit the issue→root_cause→resolution shape of a knowledge entry. The body is chunked and embedded so it surfaces in consult-mode search. Call ONLY after the user approved the content.",
+    inputSchema: {
+      title: z.string(),
+      body: z.string(),
+      product_slug: z.string().optional(),
+      team_slug: z.string().optional(),
+      source: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      status: z.enum(["draft", "approved", "archived"]).optional(),
+      structured: z.record(z.any()).optional(),
+    },
+  },
+  async (a) => {
+    const row = await saveReferenceDoc({
+      title: a.title, body: a.body,
+      productId: a.product_slug ? await getProductIdBySlug(a.product_slug) : undefined,
+      teamId: a.team_slug ? await getTeamIdBySlug(a.team_slug) : undefined,
+      createdById: await resolveCurrentUserId(),
+      source: a.source, tags: a.tags, status: a.status ?? "approved", structured: a.structured,
+    });
+    return out({ saved: true, id: row.id, status: row.status, chunks: row.chunks });
+  },
+);
+
+server.registerTool(
+  "search_reference",
+  {
+    description: "Semantic search over approved reference docs (project context). Returns the best-matching snippet per doc. Filter by product_slug / team_slug (slug or alias) and tags.",
+    inputSchema: {
+      query: z.string(),
+      product_slug: z.string().optional(),
+      team_slug: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      limit: z.number().optional(),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ query, product_slug, team_slug, tags, limit }) => out(await searchReferenceDocs(query, {
+    productId: product_slug ? await getProductIdBySlug(product_slug) : undefined,
+    teamId: team_slug ? await getTeamIdBySlug(team_slug) : undefined,
+    tags: tags && tags.length ? tags : undefined, limit,
+  })),
+);
+
+server.registerTool(
+  "list_reference_docs",
+  {
+    description: "List reference docs (newest first), optionally filtered by status, product_slug / team_slug, or tags. Bodies are omitted; use get_reference_doc for the full text.",
+    inputSchema: {
+      status: z.enum(["draft", "approved", "archived"]).optional(),
+      product_slug: z.string().optional(),
+      team_slug: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      limit: z.number().optional(),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ status, product_slug, team_slug, tags, limit }) => out(await listReferenceDocs({
+    status,
+    productId: product_slug ? await getProductIdBySlug(product_slug) : undefined,
+    teamId: team_slug ? await getTeamIdBySlug(team_slug) : undefined,
+    tags: tags && tags.length ? tags : undefined, limit,
+  })),
+);
+
+server.registerTool(
+  "get_reference_doc",
+  {
+    description: "Fetch a single reference doc by id, including its full body and current version.",
+    inputSchema: { id: z.string() },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ id }) => out(await getReferenceDoc(id)),
+);
+
+server.registerTool(
+  "update_reference_doc",
+  {
+    description: "Update a reference doc, or change its status ('archived' to retire). Pass only the fields you want to change. If the body changes it is re-chunked and re-embedded. Pass expected_version (from list/get) to guard against concurrent edits.",
+    inputSchema: {
+      id: z.string(),
+      title: z.string().optional(),
+      body: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      status: z.enum(["draft", "approved", "archived"]).optional(),
+      source: z.string().nullable().optional(),
+      structured: z.record(z.any()).optional(),
+      expected_version: z.number().int().optional(),
+    },
+  },
+  async (a) => {
+    const patch: ReferenceDocUpdate = {};
+    if (a.title           !== undefined) patch.title           = a.title;
+    if (a.body            !== undefined) patch.body            = a.body;
+    if (a.tags            !== undefined) patch.tags            = a.tags;
+    if (a.status          !== undefined) patch.status          = a.status;
+    if (a.source          !== undefined) patch.source          = a.source;
+    if (a.structured      !== undefined) patch.structured      = a.structured;
+    if (a.expected_version !== undefined) patch.expectedVersion = a.expected_version;
+    const row = await updateReferenceDoc(a.id, patch);
+    return out({ updated: true, id: row.id, status: row.status, version: row.version });
+  },
+);
+
+server.registerTool(
   "list_teams",
   {
     description: "List all teams. Call this to discover team slugs before calling add_product, list_products, or search_knowledge with a team filter.",
     inputSchema: {},
+    annotations: { readOnlyHint: true },
   },
   async () => out(await listTeams()),
 );
@@ -315,6 +540,7 @@ server.registerTool(
   {
     description: "List all products, optionally filtered by team slug. Call this to discover product slugs before calling list_components, search_knowledge with a product filter, or add_source_product_map.",
     inputSchema: { team_slug: z.string().optional() },
+    annotations: { readOnlyHint: true },
   },
   async ({ team_slug }) => out(await listProducts(team_slug)),
 );
@@ -322,10 +548,29 @@ server.registerTool(
 server.registerTool(
   "add_product",
   {
-    description: "Add (or rename) a product under a team. The slug is used by components, knowledge search, and source mappings.",
-    inputSchema: { team_slug: z.string(), slug: z.string(), name: z.string() },
+    description: "Add (or rename) a product under a team. The slug is used by components, knowledge search, and source mappings. Use aliases for alternate names (e.g. slug 'tpd' with aliases ['Tobacco Product Directive']) so they all resolve to this product.",
+    inputSchema: { team_slug: z.string(), slug: z.string(), name: z.string(), aliases: z.array(z.string()).optional() },
   },
-  async ({ team_slug, slug, name }) => out(await addProduct(team_slug, slug, name)),
+  async ({ team_slug, slug, name, aliases }) => out(await addProduct(team_slug, slug, name, aliases)),
+);
+
+server.registerTool(
+  "list_labels",
+  {
+    description: "List the optional, per-product advisory tag vocabulary. Call this before tagging a knowledge entry so you reuse existing tag slugs (e.g. 'lc', 'mas', 'printing') instead of inventing near-duplicates. An empty list is normal — tags are free-form, this is just a curated suggestion list.",
+    inputSchema: { product_slug: z.string() },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ product_slug }) => out(await listLabels(await getProductIdBySlug(product_slug))),
+);
+
+server.registerTool(
+  "add_label",
+  {
+    description: "Add a tag slug to a product's advisory label vocabulary. Call when the user wants to curate the team's taxonomy — not inferred silently. Tags on knowledge entries remain free-form; this only records a preferred vocabulary.",
+    inputSchema: { product_slug: z.string(), slug: z.string(), description: z.string().optional() },
+  },
+  async ({ product_slug, slug, description }) => out(await addLabel(await getProductIdBySlug(product_slug), slug, description)),
 );
 
 server.registerTool(
@@ -333,6 +578,7 @@ server.registerTool(
   {
     description: "List all configured source connections (Freshdesk tenants, GitHub orgs, etc.).",
     inputSchema: {},
+    annotations: { readOnlyHint: true },
   },
   async () => out(await listSourceConnections()),
 );
@@ -356,6 +602,7 @@ server.registerTool(
   {
     description: "List group→product mappings for one or all source connections. For Freshdesk the external_group_key is the numeric group_id (as text); for GitHub it is 'owner/repo'.",
     inputSchema: { source_slug: z.string().optional() },
+    annotations: { readOnlyHint: true },
   },
   async ({ source_slug }) => out(await listSourceProductMaps(source_slug)),
 );
