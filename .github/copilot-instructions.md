@@ -42,15 +42,32 @@ knowledge entries. The service persists and retrieves; you reason and structure.
 
 ## Modes
 
+### Source slug vs. source type
+
+The `source` parameter in `fetch_work_item`, `get_context`, and `post_private_note` must be the **source slug** (e.g. `"osapiens-freshdesk"`), NOT the source type (e.g. `"freshdesk"`). Always call `list_source_connections` first to obtain the correct slug before calling any of those tools.
+
+---
+
+### First-run bootstrap (empty system)
+
+Before ingesting the first ticket, check if the system is bootstrapped:
+1. Call `list_teams` — if empty, call `add_team` with the team name/slug
+2. Call `list_products` — if empty, call `add_product` under the team
+3. Call `list_source_connections` — if empty, call `add_source_connection` with type + base URL; remind the user to set the `FRESHDESK_TOKEN_<SLUG_UPPERCASED>` env var
+4. Call `add_source_product_map` to map the Freshdesk group_id to the product (the group_id appears in the fetched ticket's `groupKey` field)
+
+You only need to do this once. On subsequent tickets, the source connection will be found automatically.
+
 ### Ingest mode ("analyze ticket X")
 
-1. Call `list_resolution_patterns` and `list_components` (for the relevant product) to load context
+1. Call `list_resolution_patterns` and `list_components` (for the relevant product) to load context. An empty list `[]` from either is normal on a fresh system — do not block; proceed without a pattern or component glossary.
 2. Call `fetch_work_item` to get the raw ticket + conversation
 3. Read all messages chronologically
 4. Produce a structured summary following the **Knowledge Entry Schema** below
-5. Present it to the user for review — do NOT call `save_knowledge_entry` until approved
-6. Optionally call `set_work_item_customer` or `set_observed_version` if detected
-7. After approval, call `save_knowledge_entry` with the structured data
+5. If `customer_id` is null on the fetched work item and the customer is identifiable from the ticket (email domain, company name), call `add_customer` (if not already in `list_customers`) and then `set_work_item_customer` — include this in the review step rather than asking separately when the customer is unambiguous
+6. If a product version is mentioned, call `set_observed_version`
+7. Present the full entry to the user for review — do NOT call `save_knowledge_entry` until approved
+8. After approval, call `save_knowledge_entry` with `status: "approved"` to skip the draft state
 
 ### Consult mode ("what do we know about ticket X?")
 
@@ -137,10 +154,11 @@ Customer and version are tracked on the **work item**, not the knowledge entry:
 
 1. **`signals` is for searchable identifiers** — error codes, log messages, HTTP status codes. If someone searches "023" or "TOO_MANY_STRINGS" in the future, it must match via trigram.
 2. **`resolution_pattern` is a controlled vocabulary** — never free text. Call `list_resolution_patterns` first. If none fits, omit it entirely. Only call `add_resolution_pattern` if the user explicitly asks to create a new one.
-3. **Links must be full URLs** — never "Azure work item 50912", always `https://dev.azure.com/org/project/_workitems/edit/50912`.
+3. **Links must be full URLs** — never "Azure work item 50912", always `https://dev.azure.com/org/project/_workitems/edit/50912`. If you have only a work item number (e.g., from `cf_devops_work_item`) and cannot construct the full URL, store the number as a `signal` (e.g., `"DevOps#158327"`) instead of guessing a URL.
 4. **`symptoms` are observable facts** — not interpretations. "Error 023 in logs" yes. "Possible template issue" no.
 5. **Customer is on the work item, not the knowledge entry** — use `set_work_item_customer`, not a field in `save_knowledge_entry`.
-6. **Always ask before saving** — never call `save_knowledge_entry` without explicit user approval.
+6. **Always ask before saving** — never call `save_knowledge_entry` without explicit user approval. When saving after approval, pass `status: "approved"` directly so the entry is immediately searchable.
+12. **Never post public replies** — `post_private_note` is the only tool allowed for writing back to a ticket. tachy is a knowledge engine; it does not send customer-facing messages. Draft text for the user to copy manually if they ask for a reply.
 7. **Don't invent information** — if root cause is unknown, say so. Set `confidence` to `"low"`.
 8. **`structured` fields are flexible** — include only what's relevant. Don't force empty objects.
 9. **Call `list_components` before analyzing** — verify that component names you encounter actually exist in the glossary. If a ticket mentions an unknown component, ASK the user before calling `add_component`.

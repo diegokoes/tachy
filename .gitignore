@@ -2,6 +2,7 @@ node_modules/
 dist/
 *.log
 .env
+.vscode/mcp.json
 .DS_Store
 .fastembed-cache/
 local_cache/

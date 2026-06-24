@@ -15,7 +15,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tachy}
       POSTGRES_DB: ${POSTGRES_DB:-tachy}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - tachy-postgres-data:/var/lib/postgresql/data
       # schema.sql alone is enough on a fresh volume (it already includes
