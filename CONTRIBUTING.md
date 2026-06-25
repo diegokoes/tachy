@@ -27,7 +27,7 @@ tool reading these yet, but a readable `git log` is its own reward.
 
 ## A note on AI-assisted contributions
 
-If you used an AI tool for a meaningful part of a contribution, mention it in the PR description. The bar isn't "did you use autocomplete," it's "can you explain what this code does and why it's correct." If you can't, I probably can't review it either.
+If you used an AI tool for a meaningful part of a contribution, mention it in the PR description. The bar iscan you explain what this code does and why it's correct.If you can't, I probably can't review it either.
 
 ## Security
 

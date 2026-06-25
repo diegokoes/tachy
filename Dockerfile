@@ -32,7 +32,7 @@ COPY . .
 ENV FASTEMBED_CACHE=/app/.fastembed-cache
 RUN npx tsx scripts/warmup-embeddings.ts
 
-EXPOSE 8787
+EXPOSE 8787 
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD node -e "fetch('http://localhost:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
