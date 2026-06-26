@@ -1,4 +1,5 @@
 import { sql } from "../db";
+import { badInput } from "../errors";
 
 // Resolve by exact slug OR a case-insensitive alias match, so naming variants
 // ('tpd' / 'Tobacco Product Directive') all reach the same product.
@@ -9,7 +10,7 @@ export async function getProductIdBySlug(slug: string): Promise<string> {
        or exists (select 1 from unnest(aliases) a where lower(a) = lower(${slug}))
     limit 1
   `;
-  if (!row) throw new Error(`Unknown product '${slug}'. Call list_products or add_product first.`);
+  if (!row) throw badInput(`Unknown product '${slug}'. Call list_products or add_product first.`);
   return row.id as string;
 }
 
@@ -19,7 +20,7 @@ export async function listTeams() {
 
 export async function getTeamIdBySlug(slug: string): Promise<string> {
   const [row] = await sql`select id from teams where slug = ${slug}`;
-  if (!row) throw new Error(`Unknown team '${slug}'. Call list_teams or add_team first.`);
+  if (!row) throw badInput(`Unknown team '${slug}'. Call list_teams or add_team first.`);
   return row.id as string;
 }
 
@@ -43,7 +44,7 @@ export async function listProducts(teamSlug?: string) {
 
 export async function addProduct(teamSlug: string, slug: string, name: string, aliases?: string[]) {
   const [team] = await sql`select id from teams where slug = ${teamSlug}`;
-  if (!team) throw new Error(`Unknown team '${teamSlug}'. Call list_teams or add_team first.`);
+  if (!team) throw badInput(`Unknown team '${teamSlug}'. Call list_teams or add_team first.`);
   const [row] = await sql`
     insert into products (team_id, slug, name, aliases) values (${team.id}, ${slug}, ${name}, ${aliases ?? []})
     on conflict (team_id, slug) do update set name = excluded.name, aliases = excluded.aliases

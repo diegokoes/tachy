@@ -1,11 +1,28 @@
 import "dotenv/config";
+import { z } from "zod";
 
-export const env = {
+// Validate config at import so a misconfig fails fast with a clear message, instead
+// of surfacing as a cryptic Postgres/HTTP error deep in a request later.
+const envSchema = z.object({
+  databaseUrl: z.string().url("DATABASE_URL must be a valid postgres:// URL"),
+  port: z.coerce.number().int().positive("PORT must be a positive integer"),
+  userEmail: z.string().email().optional(),
+  apiToken: z.string().min(1).optional(),
+});
+
+const parsed = envSchema.safeParse({
   databaseUrl: process.env.DATABASE_URL ?? "postgres://tachy:tachy@localhost:5432/tachy",
-  port: Number(process.env.PORT ?? 8787),
-  userEmail: process.env.TACHY_USER_EMAIL,
-  apiToken: process.env.TACHY_API_TOKEN,
-};
+  port: process.env.PORT ?? 8787,
+  userEmail: process.env.TACHY_USER_EMAIL || undefined,
+  apiToken: process.env.TACHY_API_TOKEN || undefined,
+});
+
+if (!parsed.success) {
+  const issues = parsed.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n");
+  throw new Error(`Invalid environment configuration:\n${issues}`);
+}
+
+export const env = parsed.data;
 
 /**
  * Resolve a source token from env by provider + connection slug, e.g.

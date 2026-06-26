@@ -1,5 +1,13 @@
 export { sql } from "./db";
 export { env, freshdeskToken, githubToken, sourceToken } from "./env";
+export { AppError, notFound, conflict, badInput } from "./errors";
+export type { AppErrorCode } from "./errors";
+export { log } from "./log";
+export {
+  structuredSchema, cloudSchema, resolutionClaritySchema, learningValueSchema,
+  CLOUDS, RESOLUTION_CLARITIES, LEARNING_VALUES,
+} from "./structured";
+export type { Structured } from "./structured";
 export * from "./source";
 export { registerSource, resolveSource } from "./registry";
 export type { ResolvedSource } from "./registry";
