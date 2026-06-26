@@ -1,6 +1,6 @@
-import { sql, toDate } from "../db";
-import type { RawWorkItem } from "../source";
-import { resolveCustomerByEmail } from "./customers";
+import { sql, toDate } from "../platform/db";
+import type { RawWorkItem } from "../sources/source";
+import { resolveCustomerByEmail } from "../catalog/customers";
 
 export interface IngestedItem {
   id: string;

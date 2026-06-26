@@ -1,7 +1,7 @@
-import { sql } from "../db";
-import { embedPassage, embedQuery, toVectorLiteral } from "../embeddings";
-import { notFound, conflict, badInput } from "../errors";
-import { parseStructured } from "../structured";
+import { sql } from "../platform/db";
+import { embedPassage, embedQuery, toVectorLiteral } from "../search/embeddings";
+import { notFound, conflict, badInput } from "../platform/errors";
+import { parseStructured } from "./structured";
 
 // Low-cardinality, filterable facets promoted out of `structured` into real columns.
 export interface KnowledgeFacets {
