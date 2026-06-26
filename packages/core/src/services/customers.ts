@@ -1,4 +1,5 @@
 import { sql } from "../db";
+import { badInput } from "../errors";
 
 export interface CustomerInput {
   name: string;
@@ -38,7 +39,7 @@ export async function resolveCustomerByEmail(email: string | undefined): Promise
 
 export async function getCustomerIdBySlug(slug: string): Promise<string> {
   const [row] = await sql`select id from customers where slug = ${slug}`;
-  if (!row) throw new Error(`Unknown customer '${slug}'. Call list_customers, or add_customer first.`);
+  if (!row) throw badInput(`Unknown customer '${slug}'. Call list_customers, or add_customer first.`);
   return row.id as string;
 }
 

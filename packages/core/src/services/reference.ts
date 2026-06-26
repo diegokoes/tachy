@@ -1,6 +1,8 @@
 import { sql } from "../db";
 import { chunkText } from "../chunk";
 import { embedPassage, embedQuery, toVectorLiteral } from "../embeddings";
+import { notFound, conflict } from "../errors";
+import { parseStructured } from "../structured";
 
 export interface ReferenceDocInput {
   productId?: string | null;
@@ -39,12 +41,13 @@ async function embedChunks(docId: string, body: string): Promise<number> {
 }
 
 export async function saveReferenceDoc(i: ReferenceDocInput) {
+  const structured = parseStructured(i.structured);
   const [doc] = await sql`
     insert into reference_docs
       (product_id, team_id, created_by, source, title, body, tags, status, structured)
     values
       (${i.productId ?? null}, ${i.teamId ?? null}, ${i.createdById ?? null}, ${i.source ?? null},
-       ${i.title}, ${i.body}, ${i.tags ?? []}, ${i.status ?? "approved"}, ${sql.json((i.structured ?? {}) as any)})
+       ${i.title}, ${i.body}, ${i.tags ?? []}, ${i.status ?? "approved"}, ${sql.json(structured as any)})
     returning id, status, version
   `;
   const chunks = await embedChunks(doc.id, i.body);
@@ -57,7 +60,7 @@ export async function getReferenceDoc(id: string) {
            version, created_at, updated_at
     from reference_docs where id = ${id}
   `;
-  if (!row) throw new Error(`Reference doc '${id}' not found`);
+  if (!row) throw notFound(`Reference doc '${id}' not found`);
   return row;
 }
 
@@ -81,9 +84,9 @@ export async function updateReferenceDoc(id: string, patch: ReferenceDocUpdate) 
     select title, body, tags, status, source, structured, version
     from reference_docs where id = ${id}
   `;
-  if (!current) throw new Error(`Reference doc '${id}' not found`);
+  if (!current) throw notFound(`Reference doc '${id}' not found`);
   if (patch.expectedVersion != null && current.version !== patch.expectedVersion) {
-    throw new Error(`Version conflict: expected ${patch.expectedVersion}, found ${current.version}`);
+    throw conflict(`Version conflict: expected ${patch.expectedVersion}, found ${current.version}`);
   }
 
   const merged = {
@@ -92,7 +95,7 @@ export async function updateReferenceDoc(id: string, patch: ReferenceDocUpdate) 
     tags:       patch.tags   ?? current.tags,
     status:     patch.status ?? current.status,
     source:     'source' in patch ? patch.source : current.source,
-    structured: patch.structured ?? current.structured,
+    structured: 'structured' in patch ? parseStructured(patch.structured) : current.structured,
   };
   const bodyChanged = merged.body !== current.body;
 
