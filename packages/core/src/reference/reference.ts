@@ -1,8 +1,8 @@
-import { sql } from "../db";
-import { chunkText } from "../chunk";
-import { embedPassage, embedQuery, toVectorLiteral } from "../embeddings";
-import { notFound, conflict } from "../errors";
-import { parseStructured } from "../structured";
+import { sql } from "../platform/db";
+import { chunkText } from "../search/chunk";
+import { embedPassage, embedQuery, toVectorLiteral } from "../search/embeddings";
+import { notFound, conflict } from "../platform/errors";
+import { parseStructured } from "../knowledge/structured";
 
 export interface ReferenceDocInput {
   productId?: string | null;

@@ -1,5 +1,5 @@
-import { sql } from "../db";
-import { badInput } from "../errors";
+import { sql } from "../platform/db";
+import { badInput } from "../platform/errors";
 
 export interface SourceConnectionInput {
   sourceType: string;

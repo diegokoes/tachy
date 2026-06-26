@@ -1,5 +1,5 @@
-import { sql } from "../db";
-import { badInput } from "../errors";
+import { sql } from "../platform/db";
+import { badInput } from "../platform/errors";
 
 // Resolve by exact slug OR a case-insensitive alias match, so naming variants
 // ('tpd' / 'Tobacco Product Directive') all reach the same product.

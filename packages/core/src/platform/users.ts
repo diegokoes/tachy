@@ -1,5 +1,5 @@
-import { sql } from "../db";
-import { env } from "../env";
+import { sql } from "./db";
+import { env } from "./env";
 
 export async function upsertUser(email: string, displayName?: string): Promise<string> {
   const [row] = await sql`

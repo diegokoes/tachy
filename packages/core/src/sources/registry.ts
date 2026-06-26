@@ -1,5 +1,5 @@
-import { sql } from "./db";
-import { badInput } from "./errors";
+import { sql } from "../platform/db";
+import { badInput } from "../platform/errors";
 import type { SourceFactory, WorkItemSource } from "./source";
 
 const factories = new Map<string, SourceFactory>();

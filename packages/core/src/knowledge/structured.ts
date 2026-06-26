@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { badInput } from "./errors";
+import { badInput } from "../platform/errors";
 
 // Documents + validates the `structured` JSONB on knowledge entries. Everything is
 // optional and the object is passthrough: this is a contract, not a straitjacket —
