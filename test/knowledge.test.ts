@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { saveKnowledgeEntry, searchKnowledge } from "@tachy/core";
+import { saveKnowledgeEntry, searchKnowledge, updateKnowledgeEntry, getKnowledgeEntry } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "./helpers";
 
 afterAll(() => sql.end());
@@ -91,5 +91,57 @@ describe("knowledge_entries constraints", () => {
     await expect(
       sql`insert into knowledge_entries (issue_summary, status) values ('x', 'not-a-status')`,
     ).rejects.toThrow();
+  });
+});
+
+describe("promoted facets (cloud / quality)", () => {
+  beforeEach(resetData);
+
+  it("stores and filters approved entries by cloud", async () => {
+    await saveKnowledgeEntry({ status: "approved", issueSummary: "prod outage in pipeline", cloud: "prod", learningValue: "high" });
+    await saveKnowledgeEntry({ status: "approved", issueSummary: "qa pipeline flake", cloud: "qa" });
+
+    const prod = await searchKnowledge("pipeline", { cloud: "prod" });
+    expect(prod.length).toBe(1);
+    expect(prod[0].cloud).toBe("prod");
+    expect(prod[0].learning_value).toBe("high");
+  });
+
+  it("round-trips facets and lets update clear them with null", async () => {
+    const row = await saveKnowledgeEntry({ issueSummary: "x", cloud: "on-prem", hiddenFix: true, resolutionClarity: "clear" });
+    let stored = await getKnowledgeEntry(row.id);
+    expect(stored.cloud).toBe("on-prem");
+    expect(stored.hidden_fix).toBe(true);
+
+    await updateKnowledgeEntry(row.id, { cloud: null });
+    stored = await getKnowledgeEntry(row.id);
+    expect(stored.cloud).toBeNull();
+    expect(stored.hidden_fix).toBe(true); // untouched fields preserved
+  });
+
+  it("rejects an invalid cloud value at the DB level", async () => {
+    await expect(
+      sql`insert into knowledge_entries (issue_summary, cloud) values ('x', 'mars')`,
+    ).rejects.toThrow();
+  });
+});
+
+describe("structured validation", () => {
+  beforeEach(resetData);
+
+  it("rejects a malformed structured field with a bad_input error", async () => {
+    await expect(
+      saveKnowledgeEntry({ issueSummary: "x", structured: { investigation_steps: "not-an-array" } }),
+    ).rejects.toThrow(/Invalid structured field/i);
+  });
+
+  it("keeps unknown structured keys (passthrough)", async () => {
+    const row = await saveKnowledgeEntry({
+      issueSummary: "x",
+      structured: { conversation_summary: "summary", custom_field: { nested: true } },
+    });
+    const stored = await getKnowledgeEntry(row.id);
+    expect(stored.structured.conversation_summary).toBe("summary");
+    expect(stored.structured.custom_field).toEqual({ nested: true });
   });
 });
