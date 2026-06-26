@@ -1,6 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import type { ZodRawShape } from "zod";
 import {
   registerSource, resolveSource, ingestWorkItem, saveKnowledgeEntry, searchKnowledge,
   updateKnowledgeEntry,
@@ -12,9 +14,11 @@ import {
   getKnowledgeEntry, listKnowledgeEntries,
   saveReferenceDoc, getReferenceDoc, listReferenceDocs, updateReferenceDoc, searchReferenceDocs,
   listSourceConnections, addSourceConnection, listSourceProductMaps, addSourceProductMap,
+  AppError, log, cloudSchema, resolutionClaritySchema, learningValueSchema, badInput,
 } from "@tachy/core";
 import type { KnowledgeUpdateInput, ReferenceDocUpdate } from "@tachy/core";
 import { readFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 
@@ -25,6 +29,45 @@ const server = new McpServer({ name: "tachy", version: "0.1.0" });
 
 function out(obj: unknown) {
   return { content: [{ type: "text" as const, text: typeof obj === "string" ? obj : JSON.stringify(obj, null, 2) }] };
+}
+
+type ToolConfig<I extends ZodRawShape> = {
+  description?: string;
+  inputSchema?: I;
+  annotations?: Record<string, unknown>;
+};
+
+// Run a tool handler with timing, STDERR logging (one JSON line — stdout is the
+// protocol stream), and conversion of any thrown error into a clean tool error
+// (isError) instead of leaking a raw rejection. Exported so the envelope is
+// directly testable without a live transport.
+export async function runTool(
+  name: string,
+  cb: (args: unknown, extra: unknown) => unknown,
+  args: unknown,
+  extra: unknown,
+) {
+  const started = Date.now();
+  try {
+    const res = await cb(args, extra);
+    log("info", "mcp_tool", { tool: name, ok: true, ms: Date.now() - started });
+    return res;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    log("error", "mcp_tool", {
+      tool: name, ok: false, ms: Date.now() - started,
+      ...(err instanceof AppError ? { code: err.code } : {}), error: message,
+    });
+    return { content: [{ type: "text" as const, text: message }], isError: true };
+  }
+}
+
+// Wrapper around server.registerTool that routes every call through runTool.
+// Generic over the zod input shape so handlers keep full type inference.
+function tool<I extends ZodRawShape>(name: string, config: ToolConfig<I>, cb: ToolCallback<I>): void {
+  const wrapped = ((args: unknown, extra: unknown) =>
+    runTool(name, cb as (a: unknown, e: unknown) => unknown, args, extra)) as ToolCallback<I>;
+  server.registerTool(name, config as never, wrapped);
 }
 
 // Crude HTML → text for fetched URLs; good enough to hand the LLM readable context.
@@ -56,7 +99,7 @@ async function loadContextSources(input: { text?: string; paths?: string[]; urls
   return sources;
 }
 
-server.registerTool(
+tool(
   "fetch_work_item",
   {
     description: "Fetch a work item (ticket/issue) from a source, store it, and return its normalized metadata + cleaned messages for analysis.",
@@ -76,7 +119,7 @@ server.registerTool(
   },
 );
 
-server.registerTool(
+tool(
   "search_knowledge",
   {
     description: "Search prior APPROVED knowledge entries by keyword / symptom / error code. Use for consult mode. Filter with product_slug / team_slug (slugs or aliases — not UUIDs), tags (entry must carry at least one), and/or component (resolved to the component's slug + aliases and matched against entry tags).",
@@ -102,7 +145,7 @@ server.registerTool(
   },
 );
 
-server.registerTool(
+tool(
   "get_context",
   {
     description: "Fetch a new work item AND auto-search the archive for similar prior cases. One-shot consult helper.",
@@ -128,7 +171,7 @@ server.registerTool(
   },
 );
 
-server.registerTool(
+tool(
   "save_knowledge_entry",
   {
     description: "Persist an APPROVED structured knowledge entry. Call ONLY after the user reviewed and approved the summary. resolution_pattern must be an existing slug from list_resolution_patterns (or omitted) — it is not free text.",
@@ -146,6 +189,10 @@ server.registerTool(
       product_area: z.string().optional(),
       confidence: z.string().optional(),
       tags: z.array(z.string()).optional(),
+      cloud: cloudSchema.optional(),
+      resolution_clarity: resolutionClaritySchema.optional(),
+      learning_value: learningValueSchema.optional(),
+      hidden_fix: z.boolean().optional(),
       structured: z.record(z.any()).optional(),
     },
   },
@@ -155,13 +202,15 @@ server.registerTool(
       createdById: await resolveCurrentUserId(),
       status: a.status ?? "approved", issueSummary: a.issue_summary, symptoms: a.symptoms, signals: a.signals,
       rootCause: a.root_cause, resolution: a.resolution, resolutionPattern: a.resolution_pattern,
-      productArea: a.product_area, confidence: a.confidence, tags: a.tags, structured: a.structured,
+      productArea: a.product_area, confidence: a.confidence, tags: a.tags,
+      cloud: a.cloud, resolutionClarity: a.resolution_clarity, learningValue: a.learning_value, hiddenFix: a.hidden_fix,
+      structured: a.structured,
     });
     return out({ saved: true, id: row.id, status: row.status });
   },
 );
 
-server.registerTool(
+tool(
   "post_private_note",
   {
     description: "Write a private note back to the source work item (e.g. a Freshdesk private note) with the learned analysis.",
@@ -169,13 +218,13 @@ server.registerTool(
   },
   async ({ source, external_id, body }) => {
     const { source: src } = await resolveSource(source);
-    if (!src.postNote) throw new Error(`Source '${source}' does not support notes`);
+    if (!src.postNote) throw badInput(`Source '${source}' does not support notes`);
     await src.postNote(external_id, body, { private: true });
     return out({ posted: true, private: true, external_id, body });
   },
 );
 
-server.registerTool(
+tool(
   "add_knowledge_feedback",
   {
     description: "Record human feedback (a correction, rating, or note) on an existing knowledge entry, so it can be improved over time.",
@@ -196,7 +245,7 @@ server.registerTool(
   },
 );
 
-server.registerTool(
+tool(
   "record_analysis_run",
   {
     description: "Report token usage for an ingest/consult analysis run, for audit and cost accounting. Pass the input/output tokens you used.",
@@ -218,7 +267,7 @@ server.registerTool(
   },
 );
 
-server.registerTool(
+tool(
   "list_resolution_patterns",
   {
     description: "List the controlled vocabulary of resolution patterns. ALWAYS call this before choosing resolution_pattern for save_knowledge_entry — pick an existing slug, or leave it unset, rather than inventing one.",
@@ -228,7 +277,7 @@ server.registerTool(
   async () => out(await listResolutionPatterns()),
 );
 
-server.registerTool(
+tool(
   "add_resolution_pattern",
   {
     description: "Add a new resolution_pattern slug to the controlled vocabulary. Call ONLY when the user explicitly asks to add a new pattern — never invent one just to tag a ticket; leave resolution_pattern unset instead.",
@@ -237,7 +286,7 @@ server.registerTool(
   async ({ slug, description }) => out(await addResolutionPattern(slug, description)),
 );
 
-server.registerTool(
+tool(
   "list_components",
   {
     description: "List the architecture glossary (components, hierarchical) for a product. Call this before reasoning about a ticket, so unfamiliar service/component names get checked against the real architecture instead of guessed at.",
@@ -247,7 +296,7 @@ server.registerTool(
   async ({ product_slug }) => out(await listComponents(await getProductIdBySlug(product_slug))),
 );
 
-server.registerTool(
+tool(
   "add_component",
   {
     description: "Add (or update) a fact in the architecture glossary, e.g. a service, module, or config pool. Two valid call patterns: (1) the user is directly describing the app's architecture — call immediately; (2) a ticket mentions something not yet in the list — ASK the user first, call only after they confirm. Never silently invent components from a ticket. Use aliases for alternate names (e.g. slug 'line-controller' with aliases ['lc','LC']) so naming variants resolve to one component.",
@@ -263,7 +312,7 @@ server.registerTool(
   })),
 );
 
-server.registerTool(
+tool(
   "list_customers",
   {
     description: "List known customers, including aliases (other names / email domains resolving to the same account, e.g. a distributor). Use to check before correcting a work item's customer.",
@@ -273,7 +322,7 @@ server.registerTool(
   async () => out(await listCustomers()),
 );
 
-server.registerTool(
+tool(
   "add_customer",
   {
     description: "Add (or extend) a customer, including aliases for distributors/resellers that front for the same account. Call when the user describes a customer or asks to add one — not inferred silently from a ticket.",
@@ -285,7 +334,7 @@ server.registerTool(
   async (a) => out(await addCustomer(a)),
 );
 
-server.registerTool(
+tool(
   "set_work_item_customer",
   {
     description: "Correct (or clear) the customer auto-matched to a work item. Use when the auto-match is wrong or missing, e.g. a ticket routed through a distributor.",
@@ -298,7 +347,7 @@ server.registerTool(
   },
 );
 
-server.registerTool(
+tool(
   "set_observed_version",
   {
     description: "Record (or clear) the product version observed/mentioned on a specific ticket. Only set this when a version is actually known from the ticket — leave unset otherwise.",
@@ -310,7 +359,7 @@ server.registerTool(
   },
 );
 
-server.registerTool(
+tool(
   "update_knowledge_entry",
   {
     description: "Update fields on an existing knowledge entry, or change its status (e.g. 'archived' to retire a stale lesson). Pass only the fields you want to change; omitted fields are left as-is. Nullable fields (issue_summary, root_cause, etc.) accept null to clear them. The search results include 'version' — pass it as expected_version to guard against concurrent edits.",
@@ -326,6 +375,10 @@ server.registerTool(
       tags: z.array(z.string()).optional(),
       product_area: z.string().nullable().optional(),
       confidence: z.enum(["low", "medium", "high"]).nullable().optional(),
+      cloud: cloudSchema.nullable().optional(),
+      resolution_clarity: resolutionClaritySchema.nullable().optional(),
+      learning_value: learningValueSchema.nullable().optional(),
+      hidden_fix: z.boolean().nullable().optional(),
       structured: z.record(z.any()).optional(),
       expected_version: z.number().int().optional(),
     },
@@ -342,6 +395,10 @@ server.registerTool(
     if (a.tags              !== undefined) patch.tags              = a.tags;
     if (a.product_area      !== undefined) patch.productArea       = a.product_area;
     if (a.confidence        !== undefined) patch.confidence        = a.confidence;
+    if (a.cloud             !== undefined) patch.cloud             = a.cloud;
+    if (a.resolution_clarity !== undefined) patch.resolutionClarity = a.resolution_clarity;
+    if (a.learning_value    !== undefined) patch.learningValue     = a.learning_value;
+    if (a.hidden_fix        !== undefined) patch.hiddenFix         = a.hidden_fix;
     if (a.structured        !== undefined) patch.structured        = a.structured;
     if (a.expected_version  !== undefined) patch.expectedVersion   = a.expected_version;
     const row = await updateKnowledgeEntry(a.id, patch);
@@ -349,7 +406,7 @@ server.registerTool(
   },
 );
 
-server.registerTool(
+tool(
   "get_knowledge_entry",
   {
     description: "Fetch a single knowledge entry by id, including its current version and full structured field. Use before update_knowledge_entry / add_knowledge_feedback when you have an id but not the latest version.",
@@ -359,7 +416,7 @@ server.registerTool(
   async ({ id }) => out(await getKnowledgeEntry(id)),
 );
 
-server.registerTool(
+tool(
   "list_knowledge_entries",
   {
     description: "List knowledge entries (newest first), optionally filtered by status (e.g. 'draft' to find pending entries), product_slug / team_slug (slug or alias), or tags. Useful for review and curation — not semantic search; use search_knowledge for consult.",
@@ -384,7 +441,7 @@ server.registerTool(
   },
 );
 
-server.registerTool(
+tool(
   "ingest_context",
   {
     description: "Load freeform project context from pasted text, local file paths, and/or URLs, and return the cleaned raw text for you to structure. This tool ONLY reads — it never saves. After loading, classify the content and route each part: durable incident lessons → save_knowledge_entry; architecture facts → add_component (ASK the user first); everything else (docs, runbooks, design notes, config explainers) → save_reference_doc. Always present a summary and get explicit user approval before any save.",
@@ -399,7 +456,7 @@ server.registerTool(
   },
   async ({ product_slug, team_slug, text, paths, urls }) => {
     const sources = await loadContextSources({ text, paths, urls });
-    if (!sources.length) throw new Error("Provide at least one of: text, paths, urls");
+    if (!sources.length) throw badInput("Provide at least one of: text, paths, urls");
     return out({
       product_slug: product_slug ?? null,
       team_slug: team_slug ?? null,
@@ -409,7 +466,7 @@ server.registerTool(
   },
 );
 
-server.registerTool(
+tool(
   "save_reference_doc",
   {
     description: "Persist an APPROVED reference doc — freeform project context (docs, runbooks, architecture notes) that doesn't fit the issue→root_cause→resolution shape of a knowledge entry. The body is chunked and embedded so it surfaces in consult-mode search. Call ONLY after the user approved the content.",
@@ -436,7 +493,7 @@ server.registerTool(
   },
 );
 
-server.registerTool(
+tool(
   "search_reference",
   {
     description: "Semantic search over approved reference docs (project context). Returns the best-matching snippet per doc. Filter by product_slug / team_slug (slug or alias) and tags.",
@@ -456,7 +513,7 @@ server.registerTool(
   })),
 );
 
-server.registerTool(
+tool(
   "list_reference_docs",
   {
     description: "List reference docs (newest first), optionally filtered by status, product_slug / team_slug, or tags. Bodies are omitted; use get_reference_doc for the full text.",
@@ -477,7 +534,7 @@ server.registerTool(
   })),
 );
 
-server.registerTool(
+tool(
   "get_reference_doc",
   {
     description: "Fetch a single reference doc by id, including its full body and current version.",
@@ -487,7 +544,7 @@ server.registerTool(
   async ({ id }) => out(await getReferenceDoc(id)),
 );
 
-server.registerTool(
+tool(
   "update_reference_doc",
   {
     description: "Update a reference doc, or change its status ('archived' to retire). Pass only the fields you want to change. If the body changes it is re-chunked and re-embedded. Pass expected_version (from list/get) to guard against concurrent edits.",
@@ -516,7 +573,7 @@ server.registerTool(
   },
 );
 
-server.registerTool(
+tool(
   "list_teams",
   {
     description: "List all teams. Call this to discover team slugs before calling add_product, list_products, or search_knowledge with a team filter.",
@@ -526,7 +583,7 @@ server.registerTool(
   async () => out(await listTeams()),
 );
 
-server.registerTool(
+tool(
   "add_team",
   {
     description: "Add (or rename) a team. The slug is a short kebab-case identifier used by all other tools.",
@@ -535,7 +592,7 @@ server.registerTool(
   async ({ slug, name }) => out(await addTeam(slug, name)),
 );
 
-server.registerTool(
+tool(
   "list_products",
   {
     description: "List all products, optionally filtered by team slug. Call this to discover product slugs before calling list_components, search_knowledge with a product filter, or add_source_product_map.",
@@ -545,7 +602,7 @@ server.registerTool(
   async ({ team_slug }) => out(await listProducts(team_slug)),
 );
 
-server.registerTool(
+tool(
   "add_product",
   {
     description: "Add (or rename) a product under a team. The slug is used by components, knowledge search, and source mappings. Use aliases for alternate names (e.g. slug 'tpd' with aliases ['Tobacco Product Directive']) so they all resolve to this product.",
@@ -554,7 +611,7 @@ server.registerTool(
   async ({ team_slug, slug, name, aliases }) => out(await addProduct(team_slug, slug, name, aliases)),
 );
 
-server.registerTool(
+tool(
   "list_labels",
   {
     description: "List the optional, per-product advisory tag vocabulary. Call this before tagging a knowledge entry so you reuse existing tag slugs (e.g. 'lc', 'mas', 'printing') instead of inventing near-duplicates. An empty list is normal — tags are free-form, this is just a curated suggestion list.",
@@ -564,7 +621,7 @@ server.registerTool(
   async ({ product_slug }) => out(await listLabels(await getProductIdBySlug(product_slug))),
 );
 
-server.registerTool(
+tool(
   "add_label",
   {
     description: "Add a tag slug to a product's advisory label vocabulary. Call when the user wants to curate the team's taxonomy — not inferred silently. Tags on knowledge entries remain free-form; this only records a preferred vocabulary.",
@@ -573,7 +630,7 @@ server.registerTool(
   async ({ product_slug, slug, description }) => out(await addLabel(await getProductIdBySlug(product_slug), slug, description)),
 );
 
-server.registerTool(
+tool(
   "list_source_connections",
   {
     description: "List all configured source connections (Freshdesk tenants, GitHub orgs, etc.).",
@@ -583,7 +640,7 @@ server.registerTool(
   async () => out(await listSourceConnections()),
 );
 
-server.registerTool(
+tool(
   "add_source_connection",
   {
     description: "Register a new source connection. source_type is 'freshdesk' or 'github'. slug is a short unique identifier (e.g. 'my-freshdesk') — it also determines the env var for the API token: FRESHDESK_TOKEN_<SLUG_UPPERCASED> or GITHUB_TOKEN_<SLUG_UPPERCASED> (non-alphanumerics become underscores). For Freshdesk: set base_url to your tenant root URL (e.g. https://your-domain.freshdesk.com). For GitHub: omit base_url and set config to {\"repos\":[\"owner/repo\"]}. The token is never stored in the DB; remind the user to set the env var before syncing.",
@@ -597,7 +654,7 @@ server.registerTool(
   async (a) => out(await addSourceConnection({ sourceType: a.source_type, slug: a.slug, baseUrl: a.base_url, config: a.config })),
 );
 
-server.registerTool(
+tool(
   "list_source_product_maps",
   {
     description: "List group→product mappings for one or all source connections. For Freshdesk the external_group_key is the numeric group_id (as text); for GitHub it is 'owner/repo'.",
@@ -607,7 +664,7 @@ server.registerTool(
   async ({ source_slug }) => out(await listSourceProductMaps(source_slug)),
 );
 
-server.registerTool(
+tool(
   "add_source_product_map",
   {
     description: "Map a source-native grouping to an internal product. For Freshdesk: external_group_key is the group_id (find it in Freshdesk Admin > Groups, or from a fetched ticket's raw payload). For GitHub: external_group_key is 'owner/repo'. Call list_source_connections and list_products first to get the right slugs.",
@@ -620,5 +677,12 @@ server.registerTool(
   async (a) => out(await addSourceProductMap({ sourceSlug: a.source_slug, externalGroupKey: a.external_group_key, productSlug: a.product_slug })),
 );
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+export { server };
+
+// Only attach the stdio transport when run as the entrypoint, so importing this
+// module in tests doesn't hijack stdin/stdout.
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
