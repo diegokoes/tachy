@@ -1,7 +1,17 @@
-import { sql } from "../db";
-import { embedPassage, embedQuery, toVectorLiteral } from "../embeddings";
+import { sql } from "../platform/db";
+import { embedPassage, embedQuery, toVectorLiteral } from "../search/embeddings";
+import { notFound, conflict, badInput } from "../platform/errors";
+import { parseStructured } from "./structured";
 
-export interface KnowledgeInput {
+// Low-cardinality, filterable facets promoted out of `structured` into real columns.
+export interface KnowledgeFacets {
+  cloud?: string | null;
+  resolutionClarity?: string | null;
+  learningValue?: string | null;
+  hiddenFix?: boolean | null;
+}
+
+export interface KnowledgeInput extends KnowledgeFacets {
   workItemId?: string | null;
   productId?: string | null;
   teamId?: string | null;
@@ -19,7 +29,7 @@ export interface KnowledgeInput {
   structured?: Record<string, unknown>;
 }
 
-export interface KnowledgeUpdateInput {
+export interface KnowledgeUpdateInput extends KnowledgeFacets {
   status?: string;
   issueSummary?: string | null;
   rootCause?: string | null;
@@ -38,7 +48,7 @@ async function resolvePatternDescription(slug: string | undefined): Promise<stri
   if (!slug) return "";
   const [pattern] = await sql`select description from resolution_patterns where slug = ${slug}`;
   if (!pattern) {
-    throw new Error(
+    throw badInput(
       `Unknown resolution_pattern '${slug}'. Call list_resolution_patterns to see existing ones, or add_resolution_pattern first.`,
     );
   }
@@ -67,6 +77,7 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
   }
 
   const confidence = i.confidence ? i.confidence.toLowerCase() : null;
+  const structured = parseStructured(i.structured);
   const patternDescription = await resolvePatternDescription(i.resolutionPattern);
   const text = buildEmbedText(i, patternDescription);
   const embedding = text ? toVectorLiteral(await embedPassage(text)) : null;
@@ -74,12 +85,14 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
   const [row] = await sql`
     insert into knowledge_entries
       (work_item_id, product_id, team_id, created_by, status, issue_summary, symptoms, signals, tags,
-       root_cause, resolution, resolution_pattern, product_area, confidence, structured, embedding)
+       root_cause, resolution, resolution_pattern, product_area, confidence,
+       cloud, resolution_clarity, learning_value, hidden_fix, structured, embedding)
     values
       (${i.workItemId ?? null}, ${productId}, ${teamId}, ${i.createdById ?? null},
        ${i.status ?? "approved"}, ${i.issueSummary ?? null}, ${i.symptoms ?? []}, ${i.signals ?? []}, ${i.tags ?? []},
        ${i.rootCause ?? null}, ${i.resolution ?? null}, ${i.resolutionPattern ?? null}, ${i.productArea ?? null},
-       ${confidence}, ${sql.json((i.structured ?? {}) as any)}, ${embedding}::vector)
+       ${confidence}, ${i.cloud ?? null}, ${i.resolutionClarity ?? null}, ${i.learningValue ?? null}, ${i.hiddenFix ?? null},
+       ${sql.json(structured as any)}, ${embedding}::vector)
     returning id, status
   `;
   return row;
@@ -89,6 +102,9 @@ export interface SearchOptions {
   productId?: string;
   teamId?: string;
   tags?: string[];   // array-overlap filter; entries must carry at least one of these tags
+  cloud?: string;
+  learningValue?: string;
+  resolutionClarity?: string;
   limit?: number;
 }
 
@@ -102,7 +118,8 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
   const rows = await sql`
     select * from (
       select id, work_item_id, status, issue_summary, root_cause, resolution,
-             resolution_pattern, product_area, confidence, symptoms, signals, tags, structured, version,
+             resolution_pattern, product_area, confidence, cloud, resolution_clarity, learning_value, hidden_fix,
+             symptoms, signals, tags, structured, version,
              least(ts_rank(search_tsv, plainto_tsquery('simple', ${query})), 1.0) as fts_rank,
              similarity(search_text, ${query}) as trgm_sim,
              greatest(coalesce(1 - (embedding <=> ${qvec}::vector), 0), 0) as cos_sim,
@@ -114,6 +131,9 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
         ${opts.productId ? sql`and product_id = ${opts.productId}` : sql``}
         ${opts.teamId ? sql`and team_id = ${opts.teamId}` : sql``}
         ${opts.tags && opts.tags.length ? sql`and tags && ${opts.tags}` : sql``}
+        ${opts.cloud ? sql`and cloud = ${opts.cloud}` : sql``}
+        ${opts.learningValue ? sql`and learning_value = ${opts.learningValue}` : sql``}
+        ${opts.resolutionClarity ? sql`and resolution_clarity = ${opts.resolutionClarity}` : sql``}
     ) ranked
     where score > 0.02
     order by score desc
@@ -126,18 +146,22 @@ export async function getKnowledgeEntry(id: string) {
   const [row] = await sql`
     select id, work_item_id, product_id, team_id, status, issue_summary,
            symptoms, signals, tags, root_cause, resolution, resolution_pattern,
-           product_area, confidence, structured, version, created_at, updated_at
+           product_area, confidence, cloud, resolution_clarity, learning_value, hidden_fix,
+           structured, version, created_at, updated_at
     from knowledge_entries where id = ${id}
   `;
-  if (!row) throw new Error(`Knowledge entry '${id}' not found`);
+  if (!row) throw notFound(`Knowledge entry '${id}' not found`);
   return row;
 }
 
-export async function listKnowledgeEntries(opts: { status?: string; productId?: string; teamId?: string; tags?: string[]; limit?: number } = {}) {
+export async function listKnowledgeEntries(
+  opts: { status?: string; productId?: string; teamId?: string; tags?: string[]; cloud?: string; learningValue?: string; resolutionClarity?: string; limit?: number } = {},
+) {
   const limit = opts.limit ?? 50;
   return sql`
     select id, work_item_id, product_id, team_id, status, issue_summary,
            root_cause, resolution, resolution_pattern, product_area, confidence,
+           cloud, resolution_clarity, learning_value, hidden_fix,
            symptoms, signals, tags, version, created_at, updated_at
     from knowledge_entries
     where 1=1
@@ -145,6 +169,9 @@ export async function listKnowledgeEntries(opts: { status?: string; productId?: 
       ${opts.productId ? sql`and product_id = ${opts.productId}` : sql``}
       ${opts.teamId    ? sql`and team_id    = ${opts.teamId}`    : sql``}
       ${opts.tags && opts.tags.length ? sql`and tags && ${opts.tags}` : sql``}
+      ${opts.cloud ? sql`and cloud = ${opts.cloud}` : sql``}
+      ${opts.learningValue ? sql`and learning_value = ${opts.learningValue}` : sql``}
+      ${opts.resolutionClarity ? sql`and resolution_clarity = ${opts.resolutionClarity}` : sql``}
     order by updated_at desc
     limit ${limit}
   `;
@@ -153,13 +180,14 @@ export async function listKnowledgeEntries(opts: { status?: string; productId?: 
 export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInput) {
   const [current] = await sql`
     select status, issue_summary, root_cause, resolution, resolution_pattern,
-           symptoms, signals, tags, product_area, confidence, structured, version
+           symptoms, signals, tags, product_area, confidence,
+           cloud, resolution_clarity, learning_value, hidden_fix, structured, version
     from knowledge_entries where id = ${id}
   `;
-  if (!current) throw new Error(`Knowledge entry '${id}' not found`);
+  if (!current) throw notFound(`Knowledge entry '${id}' not found`);
 
   if (patch.expectedVersion != null && current.version !== patch.expectedVersion) {
-    throw new Error(`Version conflict: expected ${patch.expectedVersion}, found ${current.version}`);
+    throw conflict(`Version conflict: expected ${patch.expectedVersion}, found ${current.version}`);
   }
 
   const merged = {
@@ -173,7 +201,11 @@ export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInp
     tags:              patch.tags                    ?? current.tags,
     productArea:       'productArea'       in patch ? patch.productArea       : current.product_area,
     confidence:        'confidence'        in patch ? (patch.confidence?.toLowerCase() ?? null) : current.confidence,
-    structured:        patch.structured              ?? current.structured,
+    cloud:             'cloud'             in patch ? patch.cloud             : current.cloud,
+    resolutionClarity: 'resolutionClarity' in patch ? patch.resolutionClarity : current.resolution_clarity,
+    learningValue:     'learningValue'     in patch ? patch.learningValue     : current.learning_value,
+    hiddenFix:         'hiddenFix'         in patch ? patch.hiddenFix         : current.hidden_fix,
+    structured:        'structured'        in patch ? parseStructured(patch.structured) : current.structured,
   };
 
   const contentChanged =
@@ -205,6 +237,10 @@ export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInp
       tags               = ${merged.tags ?? []},
       product_area       = ${merged.productArea ?? null},
       confidence         = ${merged.confidence ?? null},
+      cloud              = ${merged.cloud ?? null},
+      resolution_clarity = ${merged.resolutionClarity ?? null},
+      learning_value     = ${merged.learningValue ?? null},
+      hidden_fix         = ${merged.hiddenFix ?? null},
       structured         = ${sql.json((merged.structured ?? {}) as any)},
       version            = version + 1
       ${contentChanged ? (vec ? sql`, embedding = ${vec}::vector` : sql`, embedding = null`) : sql``}

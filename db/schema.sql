@@ -135,6 +135,13 @@ create table knowledge_entries (
     tags                text[] not null default '{}',
     product_area        text,
     confidence          text check (confidence is null or confidence in ('low','medium','high')),
+
+    -- low-cardinality, filterable facets promoted out of `structured` so they're
+    -- indexable/queryable (e.g. "all prod issues", "high learning-value entries").
+    cloud               text check (cloud is null or cloud in ('prod','qa','private-cloud','on-prem')),
+    resolution_clarity  text check (resolution_clarity is null or resolution_clarity in ('clear','partial','unclear')),
+    learning_value      text check (learning_value is null or learning_value in ('high','medium','low')),
+    hidden_fix          boolean,
     structured          jsonb not null default '{}'::jsonb,
 
     embedding           vector(384),
@@ -172,6 +179,7 @@ create index knowledge_status_idx      on knowledge_entries(status);
 create index knowledge_product_idx     on knowledge_entries(product_id);
 create index knowledge_team_idx        on knowledge_entries(team_id);
 create index knowledge_pattern_idx     on knowledge_entries(resolution_pattern);
+create index knowledge_cloud_idx       on knowledge_entries(cloud);
 create index knowledge_symptoms_idx    on knowledge_entries using gin (symptoms);
 create index knowledge_signals_idx     on knowledge_entries using gin (signals);
 create index knowledge_tags_idx        on knowledge_entries using gin (tags);
