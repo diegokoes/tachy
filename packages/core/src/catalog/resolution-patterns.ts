@@ -1,4 +1,4 @@
-import { sql } from "../db";
+import { sql } from "../platform/db";
 
 /** The full controlled vocabulary, for Claude to pick from before tagging an entry. */
 export async function listResolutionPatterns() {

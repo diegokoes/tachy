@@ -1,4 +1,5 @@
-import { sql } from "./db";
+import { sql } from "../platform/db";
+import { badInput } from "../platform/errors";
 import type { SourceFactory, WorkItemSource } from "./source";
 
 const factories = new Map<string, SourceFactory>();
@@ -17,9 +18,9 @@ export async function resolveSource(slug: string): Promise<ResolvedSource> {
     select id, source_type, base_url, slug, config
     from source_connections where slug = ${slug}
   `;
-  if (!conn) throw new Error(`Unknown source connection: ${slug}`);
+  if (!conn) throw badInput(`Unknown source connection: ${slug}`);
   const factory = factories.get(conn.source_type);
-  if (!factory) throw new Error(`No adapter registered for source type: ${conn.source_type}`);
+  if (!factory) throw badInput(`No adapter registered for source type: ${conn.source_type}`);
   return {
     conn: { id: conn.id, slug: conn.slug, sourceType: conn.source_type, baseUrl: conn.base_url },
     source: factory({ baseUrl: conn.base_url ?? "", slug: conn.slug, config: conn.config ?? {} }),

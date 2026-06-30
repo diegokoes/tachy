@@ -1,4 +1,4 @@
-import { sql } from "../db";
+import { sql } from "../platform/db";
 
 export interface RunInput {
   workItemId?: string | null;

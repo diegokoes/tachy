@@ -1,4 +1,5 @@
-import { sql } from "../db";
+import { sql } from "../platform/db";
+import { badInput } from "../platform/errors";
 
 export async function listComponents(productId: string) {
   return sql`
@@ -21,7 +22,7 @@ export async function addComponent(i: AddComponentInput) {
   let parentId: string | null = null;
   if (i.parentSlug) {
     const [parent] = await sql`select id from components where product_id = ${i.productId} and slug = ${i.parentSlug}`;
-    if (!parent) throw new Error(`Unknown parent component '${i.parentSlug}' for this product`);
+    if (!parent) throw badInput(`Unknown parent component '${i.parentSlug}' for this product`);
     parentId = parent.id;
   }
   const [row] = await sql`

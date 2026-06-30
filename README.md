@@ -84,7 +84,7 @@ one adapter, with no schema or core changes.
 
 | Package | Role |
 | --- | --- |
-| `packages/core` | DB access, services, the `WorkItemSource` interface, local embeddings. Source-agnostic. |
+| `packages/core` | All logic, organized by domain: `knowledge`, `reference`, `work-items`, `catalog`, `sources`, `search`, `platform`. Source-agnostic. |
 | `packages/sources/freshdesk` | Freshdesk adapter (supports private-note write-back). |
 | `packages/sources/github` | GitHub Issues adapter (read-only). |
 | `packages/mcp` | MCP server. The primary surface. |
@@ -109,10 +109,9 @@ docker compose up -d
 curl localhost:8787/health
 ```
 
-`docker-compose.yml` uses the `pgvector/pgvector:pg16` image for Postgres
-directly (it already has `pg_trgm`/`pgcrypto`, no `postgresql-contrib` needed)
-and pulls the app image from `diegokoes/tachy` unless you set `TACHY_IMAGE` or
-run `docker compose build` yourself.
+Compose runs Postgres from `pgvector/pgvector:pg16` (extensions already included)
+and pulls the app image from `diegokoes/tachy` — override with `TACHY_IMAGE`, or
+`docker compose build` your own.
 
 > [!IMPORTANT]
 > Set `TACHY_API_TOKEN` in `.env` before bringing the stack up. With no token,
@@ -122,14 +121,10 @@ run `docker compose build` yourself.
 
 ### Manual install
 
-Requires **Node 22+** (the test suite's `testcontainers` dependency needs a
-webidl API only present from Node 22 on; the app itself runs fine on 20, but
-22+ keeps one number to remember) and **PostgreSQL 14+** with the `vector` (pgvector),
-`pg_trgm`, and `pgcrypto` extensions available (`schema.sql` creates them). The
-easiest way to get pgvector locally is the `pgvector/pgvector` Docker image, or
-`apt install postgresql-16-pgvector`. On a plain Debian/Ubuntu apt repo (rather
-than apt.postgresql.org) `pg_trgm`/`pgcrypto` may live in a separate
-`postgresql-contrib` package; add it if `create extension` fails.
+Requires **Node 22+** (for the test suite) and **PostgreSQL 14+** with the
+`vector` (pgvector), `pg_trgm`, and `pgcrypto` extensions (`schema.sql` creates
+them). Easiest pgvector locally is the `pgvector/pgvector` Docker image or
+`apt install postgresql-16-pgvector`.
 
 ```bash
 npm install
@@ -146,12 +141,10 @@ cp .env.example .env          # then fill in DATABASE_URL and your token(s)
 
 ### From an MCP client (Claude Code)
 
-`.mcp.json` already registers the server for Claude Code, and `.vscode/mcp.json`
-does the same for VS Code Copilot. Both auto-discover from the project folder,
-so no setup is needed for either. Other MCP clients (Codex CLI, etc.) register
-servers in their own global config; the command to point them at is the same
-one in those two files: `npx tsx packages/mcp/src/index.ts` from this folder
-(or the Dockerized form a few sections up).
+`.mcp.json` (Claude Code) and `.vscode/mcp.json` (VS Code Copilot) auto-register
+the server from the project folder — no setup. Other clients (Codex CLI, etc.)
+use their own config; point them at `npx tsx packages/mcp/src/index.ts` from this
+folder (or the Docker form below).
 
 From the project folder, start your client (e.g. `claude`) and talk to it in
 plain language:
@@ -173,8 +166,7 @@ The agent calls `get_context` (fetch + search) and answers. Optionally:
 post that analysis as a private note on 61010
 ```
 
-To run the MCP server in Docker (no local Node at all), point your MCP config at
-`docker run` instead of `tsx`:
+To run the MCP server in Docker instead, point your MCP config at `docker run`:
 
 ```json
 {
@@ -189,11 +181,9 @@ To run the MCP server in Docker (no local Node at all), point your MCP config at
 }
 ```
 
-MCP just needs stdin/stdout kept open (`-i`); `--network tachy` lets this
-short-lived container reach the `postgres` service from `docker-compose.yml` by
-name, which is why `DATABASE_URL` is overridden here: `.env`'s default points
-at `localhost`, which inside this container would mean itself, not Postgres.
-Adjust the user/password if you changed `POSTGRES_USER`/`POSTGRES_PASSWORD`.
+`-i` keeps stdin/stdout open; `--network tachy` reaches the compose `postgres`
+service by name (hence the `DATABASE_URL` override — `.env`'s `localhost` would
+mean the container itself).
 
 ### MCP tools
 
@@ -227,6 +217,9 @@ npm run api          # http://localhost:8787
 `GET|POST /resolution-patterns`, `GET|POST /products/:slug/components`,
 `GET|POST /customers`.
 
+Request bodies are validated (zod); bad input, missing resources, and version
+conflicts return `400` / `404` / `409` rather than a generic `500`.
+
 Set `TACHY_API_TOKEN` to require a bearer token on every route except `/health`
 (`Authorization: Bearer <token>`). If unset, the server binds to `127.0.0.1`
 only and warns. The MCP server (stdio) is unaffected.
@@ -254,8 +247,8 @@ docker compose run --rm cli npm run sync backup     # lands in ./backups on the 
 ### Sources
 
 A source is anything that produces work items, behind a single interface
-(`WorkItemSource` in `packages/core/src/source.ts`). To add one, implement the
-interface, register it in the entrypoints, and insert a `source_connections`
+(`WorkItemSource` in `packages/core/src/sources/source.ts`). To add one, implement
+the interface, register it in the entrypoints, and insert a `source_connections`
 row. No schema change.
 
 | | `external_id` | Routing | Write-back | Token env var |
@@ -270,47 +263,39 @@ the embedding, so retrieval matches on the fault, not on who reported it.
 Customer and version are properties of the *ticket*, not the *lesson*:
 
 - `work_items.customer_id` is auto-matched at ingest by the requester's email
-  domain against `customers.aliases` (handles distributors/resellers fronting
-  for the same account, e.g. an alias list of `davidoff.com` + `arvato.com` on
-  one `customers` row). Wrong or missing matches are corrected with
-  `set_work_item_customer`; corrections are never overwritten by a later
-  re-sync. `customers` starts empty: add real ones with `add_customer`.
-- `work_items.observed_version` is set manually with `set_observed_version`
-  when a ticket states a version. It's never inferred.
-- `knowledge_entries.resolution_pattern` is a **controlled vocabulary**, not
-  free text: it's a foreign key into `resolution_patterns`, which starts
-  **empty**. The agent must call `list_resolution_patterns` and pick an existing
-  slug (or leave it unset); `add_resolution_pattern` is a separate, deliberate
-  action, not something invented per-ticket. This is what makes cross-team
-  pattern queries group correctly.
+  domain against `customers.aliases` (so distributors/resellers fronting for one
+  account map together). Fix a wrong/missing match with `set_work_item_customer`;
+  corrections survive re-sync. `customers` starts empty (`add_customer`).
+- `work_items.observed_version` is set manually with `set_observed_version` when
+  a ticket states one. Never inferred.
+- `knowledge_entries.resolution_pattern` is a **controlled vocabulary** (a FK
+  into `resolution_patterns`, which starts empty), not free text: the agent picks
+  an existing slug or leaves it unset; `add_resolution_pattern` is a deliberate,
+  separate action. This is what makes cross-team pattern queries group correctly.
 - `knowledge_entries.signals` (error codes, config filenames, component names)
   are promoted into a real, indexed field instead of being buried in
   `structured`, so they're searchable.
+- The facets `cloud`, `resolution_clarity`, `learning_value`, and `hidden_fix`
+  are likewise real, indexed columns (same rationale: promote what you filter
+  on), so e.g. "all `prod` issues" or "high `learning_value` lessons to review"
+  are queries. Everything else stays in the free-form `structured` JSONB, which
+  is validated on save but never filtered.
 - **Components** (`list_components` / `add_component`) are a hierarchical,
-  per-product architecture glossary (e.g. `business-object` with nested pools
-  `configuration`, `id-issuer`, ...), fed conversationally with no ticket
-  required. Two valid ways to populate it: you describe the app directly (call
-  immediately), or a ticket mentions something unrecognized (the agent
-  proposes, you confirm, then it's added). Never silently invented from a
-  ticket.
+  per-product architecture glossary, fed conversationally — either you describe
+  the app directly, or the agent proposes one from a ticket and you confirm.
+  Never silently invented.
 
 `fetch_work_item` / `get_context` return the resolved `customer_id`,
 `customer_name`, and `observed_version` alongside the ticket, so the agent can
-reason about staleness/relevance narratively ("this customer is on v1.4, the
-matched lesson was fixed in v1.6...") without any of it touching the search
-index.
+reason about staleness narratively ("this customer is on v1.4, the lesson was
+fixed in v1.6...") without any of it touching the search index.
 
 ### Semantic search
 
-Embeddings are produced by a local model (all-MiniLM-L6-v2, 384-dim, via
-`fastembed`). Nothing is sent to an external API. The model (~90MB) is
-downloaded on first use into `.fastembed-cache/` (the Docker image bakes it in
-at build time). The `vector` column comes from `schema.sql`. Entries with a null
-embedding (e.g. created before the model was available) can be backfilled:
-
-```bash
-npm run sync embed-backfill
-```
+Embeddings come from a local model (all-MiniLM-L6-v2, 384-dim, via `fastembed`) —
+nothing leaves the machine. The ~90MB model downloads on first use into
+`.fastembed-cache/` (baked into the Docker image). Backfill null embeddings (e.g.
+entries created before the model was available) with `npm run sync embed-backfill`.
 
 ## Operations
 
@@ -328,9 +313,10 @@ contain real ticket data, so keep them off any shared/synced folder. Schedule
 
 ### Publishing images
 
-The image is published to two registries:
+Published to two registries:
 
-- **Docker Hub** (`diegokoes/tachy`), usually by hand:
+- **Docker Hub** (`diegokoes/tachy`), by hand (the included `Jenkinsfile`
+  automates the same — test, build, push `:latest` + `:<version>`):
 
   ```bash
   docker build -t diegokoes/tachy:latest .
@@ -338,17 +324,11 @@ The image is published to two registries:
   docker push diegokoes/tachy:latest
   ```
 
-  The included `Jenkinsfile` automates the same thing (test, build, push
-  `:latest` and `:<version>` from `package.json`) using a Jenkins
-  username/password credential with ID `dockerhub-credentials`.
+- **GHCR** (`ghcr.io/<owner>/tachy`), automatically via
+  `.github/workflows/publish.yml` on every `v*` tag (built-in `GITHUB_TOKEN`, no
+  secret to manage). See [Versioning](#versioning) for the tag flow.
 
-- **GitHub Container Registry** (`ghcr.io/<owner>/tachy`), automatically:
-  `.github/workflows/publish.yml` tests, builds, and pushes on every `v*` tag
-  (or a manual run). It uses the built-in `GITHUB_TOKEN`, so there's no secret
-  to manage. See [Versioning](#versioning) for the tag flow.
-
-No local registry or deploy stage: end users run the image on their own
-machines.
+End users run the image on their own machines — no deploy stage.
 
 ## Configuration
 

@@ -131,20 +131,27 @@ contract between you and the database.
 | `resolution_pattern` | string (slug) | If applicable | Must be a slug from `list_resolution_patterns`. NEVER invent one — call `list_resolution_patterns` first. If none fits, leave unset (don't call `add_resolution_pattern` without user permission). |
 | `product_area` | string | YES | Slash-separated path: "TPD / Printing / Domino Integration". |
 | `confidence` | `"low"` \| `"medium"` \| `"high"` | YES | How confident you are in the root cause + resolution. Must be lowercase. |
+| `cloud` | `"prod"` \| `"qa"` \| `"private-cloud"` \| `"on-prem"` | Optional | Environment the issue was observed in. A real, indexed column (filter with `cloud=` on search/list). Lowercase. |
+| `resolution_clarity` | `"clear"` \| `"partial"` \| `"unclear"` | Optional | How firmly the resolution is established. Lowercase. |
+| `learning_value` | `"high"` \| `"medium"` \| `"low"` | Optional | Curation signal — how reusable this lesson is. Lowercase. |
+| `hidden_fix` | boolean | Optional | True if the real fix wasn't obvious from the ticket surface. |
 | `tags` | string[] | Optional | Free-form labels for filtering/search (e.g. `["lc","printing"]`). Reuse existing slugs — call `list_labels` first; use a component's slug as a tag to make it findable by component. |
 
 ### The `structured` field (JSONB — stored and returned in search results, but NOT indexed)
 
-Everything else goes here. Search results now include this field, so the LLM
-has access to it during consult mode. Include what's relevant:
+Everything else goes here — the narrative/display fields that are stored and
+returned wholesale but never filtered on. Search results include this field, so
+the LLM has access to it during consult mode. Include what's relevant. (The
+filterable facets `cloud`, `resolution_clarity`, `learning_value`, `hidden_fix`
+are now **top-level fields**, not nested here — see the table above. It is
+validated on save against a known shape, but extra keys are kept.)
 
 ```json
 {
   "environment": {
     "machine": "...",
     "line": "...",
-    "component": "...",
-    "cloud": "prod | qa | private-cloud | on-prem"
+    "component": "..."
   },
   "key_signals": {
     "error_description": "Human-readable description of the error",
@@ -162,12 +169,7 @@ has access to it during consult mode. Include what's relevant:
   "related_links": [
     "https://dev.azure.com/org/project/_workitems/edit/50912",
     "https://docs.example.com/guide"
-  ],
-  "quality_assessment": {
-    "resolution_clarity": "CLEAR | PARTIAL | UNCLEAR",
-    "learning_value": "HIGH | MEDIUM | LOW",
-    "hidden_fix": false
-  }
+  ]
 }
 ```
 
