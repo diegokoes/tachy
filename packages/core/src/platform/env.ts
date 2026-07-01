@@ -1,20 +1,66 @@
 import "dotenv/config";
 import { z } from "zod";
 
+// OIDC (Microsoft Entra, etc.) is considered configured only when all three core
+// fields are present. Interactive SSO for the web UI turns on when this exists;
+// automation always uses the bearer token independently.
+const oidcRaw =
+  process.env.OIDC_ISSUER && process.env.OIDC_CLIENT_ID && process.env.OIDC_CLIENT_SECRET
+    ? {
+        issuer: process.env.OIDC_ISSUER,
+        clientId: process.env.OIDC_CLIENT_ID,
+        clientSecret: process.env.OIDC_CLIENT_SECRET,
+        redirectUri: process.env.OIDC_REDIRECT_URI || undefined,
+        scopes: process.env.OIDC_SCOPES || "openid profile email offline_access",
+      }
+    : undefined;
+
+const apiTokenRaw = process.env.TACHY_API_TOKEN || undefined;
+// Session-cookie signing secret (also accepted under the middleware's own var name).
+const sessionSecretRaw = process.env.TACHY_SESSION_SECRET || process.env.OIDC_AUTH_SECRET || undefined;
+
 // Validate config at import so a misconfig fails fast with a clear message, instead
 // of surfacing as a cryptic Postgres/HTTP error deep in a request later.
-const envSchema = z.object({
-  databaseUrl: z.string().url("DATABASE_URL must be a valid postgres:// URL"),
-  port: z.coerce.number().int().positive("PORT must be a positive integer"),
-  userEmail: z.string().email().optional(),
-  apiToken: z.string().min(1).optional(),
-});
+const envSchema = z
+  .object({
+    databaseUrl: z.string().url("DATABASE_URL must be a valid postgres:// URL"),
+    port: z.coerce.number().int().positive("PORT must be a positive integer"),
+    userEmail: z.string().email().optional(),
+    apiToken: z.string().min(1).optional(),
+    // "sso": interactive Entra login for users (+ token still works for automation).
+    // "token": shared bearer only. "open": no auth, binds to localhost (laptop dev).
+    authMode: z.enum(["sso", "token", "open"]),
+    sessionSecret: z
+      .string()
+      .min(32, "TACHY_SESSION_SECRET (or OIDC_AUTH_SECRET) must be at least 32 characters")
+      .optional(),
+    oidc: z
+      .object({
+        issuer: z.string().url("OIDC_ISSUER must be a valid URL"),
+        clientId: z.string().min(1),
+        clientSecret: z.string().min(1),
+        redirectUri: z.string().optional(),
+        scopes: z.string().optional(),
+      })
+      .optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.authMode === "sso" && !v.oidc)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["oidc"], message: "authMode 'sso' requires OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET" });
+    if (v.oidc && !v.sessionSecret)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sessionSecret"], message: "OIDC is configured but TACHY_SESSION_SECRET (>=32 chars) is not set" });
+  });
 
 const parsed = envSchema.safeParse({
   databaseUrl: process.env.DATABASE_URL ?? "postgres://tachy:tachy@localhost:5432/tachy",
   port: process.env.PORT ?? 8787,
   userEmail: process.env.TACHY_USER_EMAIL || undefined,
-  apiToken: process.env.TACHY_API_TOKEN || undefined,
+  apiToken: apiTokenRaw,
+  authMode:
+    (process.env.TACHY_AUTH_MODE as "sso" | "token" | "open" | undefined) ??
+    (oidcRaw ? "sso" : apiTokenRaw ? "token" : "open"),
+  sessionSecret: sessionSecretRaw,
+  oidc: oidcRaw,
 });
 
 if (!parsed.success) {
