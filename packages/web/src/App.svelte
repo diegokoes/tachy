@@ -1,8 +1,18 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import KnowledgeView from "./lib/KnowledgeView.svelte";
+  import ReferenceView from "./lib/ReferenceView.svelte";
+  import AdminView from "./lib/AdminView.svelte";
 
-  // Shell: confirms the SPA is served, the API is reachable, and surfaces SSO
-  // sign-in/out. Phase 3 fills in the Knowledge / Reference views; Phase 5 the Chat.
+  type View = "chat" | "knowledge" | "reference" | "admin";
+  const nav: { key: View; label: string }[] = [
+    { key: "chat", label: "Chat" },
+    { key: "knowledge", label: "Knowledge" },
+    { key: "reference", label: "Reference" },
+    { key: "admin", label: "Admin" },
+  ];
+
+  let view = $state<View>("knowledge");
   let health = $state<"checking" | "ok" | "down">("checking");
   let me = $state<{ email?: string; name?: string } | null>(null);
   let authMode = $state<"sso" | "token" | "open">("open");
@@ -11,8 +21,7 @@
 
   onMount(async () => {
     try {
-      const res = await fetch("/health");
-      health = res.ok ? "ok" : "down";
+      health = (await fetch("/health")).ok ? "ok" : "down";
     } catch {
       health = "down";
     }
@@ -32,66 +41,66 @@
   });
 </script>
 
-<header>
-  <h1>tachy</h1>
-  <div class="status">
-    <span class="dot {health}"></span>
-    api {health}
-    {#if authMode === "sso"}
-      {#if me?.email}
-        <span class="user">· {me.name ?? me.email}</span>
-        <a href="/auth/logout">Sign out</a>
-      {:else}
-        <a href={loginHref()}>Sign in</a>
-      {/if}
-    {/if}
-  </div>
-</header>
+<div class="app">
+  <aside>
+    <div class="brand">tachy</div>
+    <nav>
+      {#each nav as n}
+        <button class:active={view === n.key} onclick={() => (view = n.key)}>{n.label}</button>
+      {/each}
+    </nav>
+  </aside>
 
-<main>
-  <p class="muted">Knowledge engine. Panels land in the next phases.</p>
-</main>
+  <div class="main">
+    <header>
+      <div class="status">
+        <span class="dot {health}"></span> api {health}
+      </div>
+      <div class="auth">
+        {#if authMode === "sso"}
+          {#if me?.email}
+            <span class="user">{me.name ?? me.email}</span>
+            <a href="/auth/logout">Sign out</a>
+          {:else}
+            <a href={loginHref()}>Sign in</a>
+          {/if}
+        {/if}
+      </div>
+    </header>
+
+    <main>
+      {#if view === "knowledge"}
+        <KnowledgeView />
+      {:else if view === "reference"}
+        <ReferenceView />
+      {:else if view === "admin"}
+        <AdminView />
+      {:else}
+        <div class="placeholder">
+          <h2>Chat</h2>
+          <p class="muted">The AI assistant (upload docs to save as knowledge, consult on a ticket) lands in the next phase.</p>
+        </div>
+      {/if}
+    </main>
+  </div>
+</div>
 
 <style>
-  header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.75rem 1.25rem;
-    border-bottom: 1px solid var(--border);
-    background: var(--panel);
-  }
-  h1 {
-    margin: 0;
-    font-size: 1.1rem;
-    letter-spacing: 0.02em;
-  }
-  .status {
-    font-size: 0.85rem;
-    color: var(--muted);
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-  .user {
-    color: var(--text);
-  }
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--muted);
-  }
-  .dot.ok {
-    background: #3fb950;
-  }
-  .dot.down {
-    background: #f85149;
-  }
-  main {
-    padding: 1.25rem;
-  }
-  .muted {
-    color: var(--muted);
-  }
+  .app { display: grid; grid-template-columns: 200px 1fr; height: 100vh; }
+  aside { background: var(--panel); border-right: 1px solid var(--border); padding: 1rem 0.75rem; display: flex; flex-direction: column; gap: 1rem; }
+  .brand { font-weight: 600; letter-spacing: 0.04em; padding: 0 0.25rem; }
+  nav { display: flex; flex-direction: column; gap: 0.25rem; }
+  nav button { text-align: left; border-color: transparent; background: transparent; }
+  nav button.active { background: var(--accent-dim); color: var(--text); }
+  .main { display: flex; flex-direction: column; min-width: 0; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 1.25rem; border-bottom: 1px solid var(--border); }
+  .status { font-size: 0.82rem; color: var(--muted); display: flex; align-items: center; gap: 0.4rem; }
+  .auth { font-size: 0.85rem; display: flex; gap: 0.6rem; align-items: center; }
+  .user { color: var(--text); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: #3fb950; }
+  .dot.down { background: #f85149; }
+  main { padding: 1.25rem; overflow: auto; }
+  .placeholder h2 { margin-top: 0; }
+  .muted { color: var(--muted); }
 </style>
