@@ -46,9 +46,9 @@ const envSchema = z
   })
   .superRefine((v, ctx) => {
     if (v.authMode === "sso" && !v.oidc)
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["oidc"], message: "authMode 'sso' requires OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET" });
+      ctx.addIssue({ code: "custom", path: ["oidc"], message: "authMode 'sso' requires OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET" });
     if (v.oidc && !v.sessionSecret)
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sessionSecret"], message: "OIDC is configured but TACHY_SESSION_SECRET (>=32 chars) is not set" });
+      ctx.addIssue({ code: "custom", path: ["sessionSecret"], message: "OIDC is configured but TACHY_SESSION_SECRET (>=32 chars) is not set" });
   });
 
 const parsed = envSchema.safeParse({

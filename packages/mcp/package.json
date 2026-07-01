@@ -6,7 +6,7 @@
   "dependencies": {
     "@tachy/core": "*",
     "@tachy/source-freshdesk": "*",
-    "@modelcontextprotocol/sdk": "^1.13.0",
-    "zod": "^3.24.1"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.0.0"
   }
 }
