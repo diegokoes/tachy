@@ -11,12 +11,15 @@
     "packages/sources/github",
     "packages/mcp",
     "packages/api",
-    "packages/cli"
+    "packages/cli",
+    "packages/web"
   ],
   "scripts": {
     "mcp": "tsx packages/mcp/src/index.ts",
     "api": "tsx packages/api/src/index.ts",
     "sync": "tsx packages/cli/src/index.ts",
+    "web:dev": "npm run dev --workspace @tachy/web",
+    "web:build": "npm run build --workspace @tachy/web",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },

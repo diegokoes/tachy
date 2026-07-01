@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { bearerAuth } from "hono/bearer-auth";
 import { logger } from "hono/logger";
 import { HTTPException } from "hono/http-exception";
+import { serveStatic } from "@hono/node-server/serve-static";
 import { z } from "zod";
 import { sql, AppError, registerSource } from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
@@ -9,15 +10,30 @@ import { createGithubSource } from "@tachy/source-github";
 import { knowledge, analysisRuns } from "./routes/knowledge";
 import { workItems } from "./routes/work-items";
 import { admin } from "./routes/admin";
+import { reference } from "./routes/reference";
 
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
 
 const STATUS_BY_CODE = { not_found: 404, conflict: 409, bad_input: 400 } as const;
 
-// Build the API. Pure (no listen) so tests can drive it with app.request(). The
+// The REST surface, mounted under /api so the SPA and API share one origin.
+// Exported as a chained sub-app so `typeof apiRoutes` carries route types for an
+// RPC client.
+function apiRoutes() {
+  return new Hono()
+    .route("/work-items", workItems)
+    .route("/knowledge", knowledge)
+    .route("/analysis-runs", analysisRuns)
+    .route("/reference", reference)
+    .route("/", admin);
+}
+
+// Build the app. Pure (no listen) so tests can drive it with app.request(). The
 // bearer token is passed in rather than read from env, so auth is testable too.
-export function createApp(opts: { apiToken?: string } = {}) {
+// `webRoot` (optional) points at the built SPA (packages/web/dist); when set, the
+// app serves static assets + an index.html SPA fallback for non-API routes.
+export function createApp(opts: { apiToken?: string; webRoot?: string } = {}) {
   const base = new Hono();
   base.use("*", logger());
 
@@ -30,17 +46,27 @@ export function createApp(opts: { apiToken?: string } = {}) {
     }
   });
 
-  // Bearer-token guard on everything except /health.
+  // Auth guards the data plane (/api/*) only — the SPA shell and static assets
+  // stay public so the app can load and present a login. Browsers can't attach a
+  // bearer to asset requests, so scoping the guard to /api is required for a web UI.
   if (opts.apiToken) {
     const guard = bearerAuth({ token: opts.apiToken });
-    base.use("*", (c, next) => (c.req.path === "/health" ? next() : guard(c, next)));
+    base.use("/api/*", guard);
   }
 
-  const app = base
-    .route("/work-items", workItems)
-    .route("/knowledge", knowledge)
-    .route("/analysis-runs", analysisRuns)
-    .route("/", admin);
+  const app = base.route("/api", apiRoutes());
+
+  // Static SPA hosting. Assets first; anything else falls back to index.html so
+  // client-side routes deep-link correctly. Placed after /api so it never shadows
+  // the data routes.
+  if (opts.webRoot) {
+    const root = opts.webRoot;
+    app.use("/assets/*", serveStatic({ root }));
+    const indexHandler = serveStatic({ path: "index.html", root });
+    // SPA fallback for client-side routes. /api/* is excluded so an unknown data
+    // route still returns a JSON 404 (via notFound) instead of the HTML shell.
+    app.get("*", (c, next) => (c.req.path.startsWith("/api/") ? next() : indexHandler(c, next)));
+  }
 
   app.notFound((c) => c.json({ error: "not found" }, 404));
 
