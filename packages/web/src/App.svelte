@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import ChatView from "./lib/ChatView.svelte";
   import KnowledgeView from "./lib/KnowledgeView.svelte";
   import ReferenceView from "./lib/ReferenceView.svelte";
   import AdminView from "./lib/AdminView.svelte";
@@ -76,10 +77,7 @@
       {:else if view === "admin"}
         <AdminView />
       {:else}
-        <div class="placeholder">
-          <h2>Chat</h2>
-          <p class="muted">The AI assistant (upload docs to save as knowledge, consult on a ticket) lands in the next phase.</p>
-        </div>
+        <ChatView />
       {/if}
     </main>
   </div>
@@ -101,6 +99,4 @@
   .dot.ok { background: #3fb950; }
   .dot.down { background: #f85149; }
   main { padding: 1.25rem; overflow: auto; }
-  .placeholder h2 { margin-top: 0; }
-  .muted { color: var(--muted); }
 </style>
