@@ -37,7 +37,9 @@ tachý itself never calls an LLM. It only stores and retrieves; the agent
 - [Usage](#usage)
   - [From an MCP client (Claude Code)](#from-an-mcp-client-claude-code)
   - [MCP tools](#mcp-tools)
+  - [Web UI and agent](#web-ui-and-agent)
   - [REST API](#rest-api)
+  - [Authentication](#authentication)
   - [CLI](#cli)
 - [Concepts](#concepts)
   - [Sources](#sources)
@@ -87,8 +89,10 @@ one adapter, with no schema or core changes.
 | `packages/core` | All logic, organized by domain: `knowledge`, `reference`, `work-items`, `catalog`, `sources`, `search`, `platform`. Source-agnostic. |
 | `packages/sources/freshdesk` | Freshdesk adapter (supports private-note write-back). |
 | `packages/sources/github` | GitHub Issues adapter (read-only). |
-| `packages/mcp` | MCP server. The primary surface. |
-| `packages/api` | Hono REST API for non-MCP callers (cron, teammates, future UI). |
+| `packages/mcp` | MCP server. The primary surface for local agents (Claude Code, Copilot). |
+| `packages/agent` | Server-side reasoning: drives the Claude Agent SDK against the MCP server so the deployed app can reason (structure docs, consult tickets) without a local agent. |
+| `packages/api` | Hono REST API + SSE agent endpoints; also serves the web UI. |
+| `packages/web` | Svelte SPA: search/curate knowledge and a Chat that talks to the agent. |
 | `packages/cli` | Operational commands: `sync`, `embed-backfill`, `backup`, `restore`. |
 | `db/schema.sql` | Canonical Postgres schema, with seed data. |
 
@@ -202,27 +206,52 @@ alone): `list_resolution_patterns` / `add_resolution_pattern`,
 `list_components` / `add_component`, `list_customers` / `add_customer`, plus the
 corrections `set_work_item_customer` and `set_observed_version`.
 
-### REST API
-
-Optional, for cron jobs, teammates, or a future UI.
+### Web UI and agent
 
 ```bash
-npm run api          # http://localhost:8787
+npm run web:build    # build the SPA into packages/web/dist
+npm run api          # serves the SPA + API at http://localhost:8787
+# for frontend dev with hot reload: npm run web:dev  (proxies /api to :8787)
 ```
 
-`GET /health`, `POST /work-items/:source/:id/fetch`, `GET /knowledge/search?q=`,
-`POST /knowledge`, `GET /knowledge/:id/feedback`, `POST /knowledge/:id/feedback`,
-`POST /analysis-runs`, `POST /work-items/:source/:id/notes`,
-`PATCH /work-items/:id/customer`, `PATCH /work-items/:id/observed-version`,
-`GET|POST /resolution-patterns`, `GET|POST /products/:slug/components`,
-`GET|POST /customers`.
+The Svelte SPA (`packages/web`) is served by the same Hono process — one origin,
+no CORS. It has three read/curate views (Knowledge search/browse/detail with
+feedback, Reference docs, read-only Admin) plus a **Chat** that drives the
+server-side agent.
+
+The agent (`packages/agent`) is the deployed app's reasoning layer — it runs the
+Claude Agent SDK against the existing tachy MCP server, with `CLAUDE.md` as its
+system prompt. It authenticates with `ANTHROPIC_API_KEY`, or the Claude Code
+login on the server if that's unset. **Security is enforced by a hard tool
+allowlist**: the agent gets *only* the tachy MCP tools — every built-in
+file/bash/web tool is disabled, so it can't touch the filesystem or shell and
+never prompts to "edit a file." Read/consult tools auto-run; write tools
+(`save_*`, `update_*`, `add_*`, `post_private_note`) are held for a human
+approval in the Chat UI before they execute.
+
+### REST API
+
+All data routes are under `/api` (the SPA and API share one origin):
+`GET /health`, `GET /auth/config`, `POST /api/work-items/:source/:id/fetch`,
+`GET /api/knowledge/search?q=`, `GET|POST /api/knowledge`,
+`GET|PATCH /api/knowledge/:id`, `GET|POST /api/knowledge/:id/feedback`,
+`GET /api/reference`, `GET /api/reference/search`, `GET /api/reference/:id`,
+`POST /api/agent/chat` (SSE), `POST /api/agent/approve`, `POST /api/agent/uploads`,
+`GET|POST /api/resolution-patterns`, `GET|POST /api/products/:slug/components`,
+`GET|POST /api/customers`, `GET|POST /api/teams`, `GET|POST /api/products`.
 
 Request bodies are validated (zod); bad input, missing resources, and version
 conflicts return `400` / `404` / `409` rather than a generic `500`.
 
-Set `TACHY_API_TOKEN` to require a bearer token on every route except `/health`
-(`Authorization: Bearer <token>`). If unset, the server binds to `127.0.0.1`
-only and warns. The MCP server (stdio) is unaffected.
+### Authentication
+
+Admin-configurable, no passwords stored:
+
+- **`open`** (default when nothing is set) — no auth, binds to `127.0.0.1` only. Laptop dev.
+- **`token`** — set `TACHY_API_TOKEN`; a shared bearer guards `/api/*` (automation and the UI).
+- **`sso`** — set `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` (+ `TACHY_SESSION_SECRET`) for Microsoft Entra (or any OIDC provider) single sign-on. Interactive users get a session cookie; the bearer token still works for automation.
+
+`/health` and the SPA shell stay public; `/api/*` requires a valid session **or** the bearer. See `.env.example` for the full variable set.
 
 ### CLI
 
@@ -339,8 +368,15 @@ never from the database.
 | --- | --- | --- |
 | `DATABASE_URL` | all | Postgres connection string. |
 | `PORT` | api | HTTP API port (default 8787). |
-| `TACHY_USER_EMAIL` | core | Attributed as the author (`created_by`) of saved lessons. Optional. |
-| `TACHY_API_TOKEN` | api | Bearer token for the REST API. Unset = localhost-only. |
+| `TACHY_USER_EMAIL` | core | Attributed as the author (`created_by`) of saved lessons. Optional (SSO users are attributed from their login). |
+| `TACHY_API_TOKEN` | api | Bearer token for the REST API / automation. Unset (and no OIDC) = localhost-only. |
+| `TACHY_AUTH_MODE` | api | `sso` \| `token` \| `open`. Optional — auto-derived from what's set. |
+| `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | api | Microsoft Entra (or any OIDC) SSO. Enables interactive login. |
+| `OIDC_REDIRECT_URI` / `OIDC_SCOPES` | api | OIDC redirect (register in Entra) and scopes. Optional. |
+| `TACHY_SESSION_SECRET` | api | Session-cookie signing secret (≥32 chars). Required with OIDC. |
+| `ANTHROPIC_API_KEY` | agent | Auth for the server-side agent. If unset, the server's Claude Code login is used. |
+| `TACHY_AGENT_MODEL` | agent | Agent model (default `claude-opus-4-8`). |
+| `TACHY_UPLOAD_DIR` | api | Where Chat uploads are staged for the agent. Optional (OS tmp). |
 | `FRESHDESK_TOKEN[_SLUG]` | freshdesk | Freshdesk API token (per-source or shared). |
 | `GITHUB_TOKEN[_SLUG]` | github | GitHub PAT (per-source or shared). |
 | `FASTEMBED_CACHE` | core | Where the embedding model is cached. Optional. |

@@ -1,4 +1,4 @@
-FROM node:20-slim
+FROM node:22-slim
 
 # postgresql-client-16: needed by `npm run sync backup`/`restore`
 # (pg_dump/pg_restore). Debian bookworm's own repo only has client v15, and
@@ -21,11 +21,16 @@ COPY packages/core/package.json packages/core/package.json
 COPY packages/sources/freshdesk/package.json packages/sources/freshdesk/package.json
 COPY packages/sources/github/package.json packages/sources/github/package.json
 COPY packages/mcp/package.json packages/mcp/package.json
+COPY packages/agent/package.json packages/agent/package.json
 COPY packages/api/package.json packages/api/package.json
 COPY packages/cli/package.json packages/cli/package.json
+COPY packages/web/package.json packages/web/package.json
 RUN npm ci
 
 COPY . .
+
+# Build the Svelte SPA to packages/web/dist so the API serves it (single origin).
+RUN npm run web:build
 
 # Pre-download the fastembed model at build time so a freshly pulled container
 # doesn't need network access (or a multi-second stall) on its first embed.
