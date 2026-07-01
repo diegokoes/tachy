@@ -26,7 +26,7 @@ const knowledgeInputSchema = z.object({
   resolutionClarity: resolutionClaritySchema.optional(),
   learningValue: learningValueSchema.optional(),
   hiddenFix: z.boolean().optional(),
-  structured: z.record(z.any()).optional(),
+  structured: z.record(z.string(), z.any()).optional(),
 });
 
 const knowledgeUpdateSchema = z.object({
@@ -44,7 +44,7 @@ const knowledgeUpdateSchema = z.object({
   resolutionClarity: resolutionClaritySchema.nullable().optional(),
   learningValue: learningValueSchema.nullable().optional(),
   hiddenFix: z.boolean().nullable().optional(),
-  structured: z.record(z.any()).optional(),
+  structured: z.record(z.string(), z.any()).optional(),
   expectedVersion: z.number().int().optional(),
 });
 
@@ -52,7 +52,7 @@ const feedbackSchema = z.object({
   kind: z.enum(["correction", "rating", "note"]).optional(),
   rating: z.number().int().min(1).max(5).optional(),
   comment: z.string().optional(),
-  patch: z.record(z.any()).optional(),
+  patch: z.record(z.string(), z.any()).optional(),
 });
 
 const csv = (v: string | undefined) => v?.split(",").map((t) => t.trim()).filter(Boolean);
@@ -105,7 +105,7 @@ const runSchema = z.object({
   model: z.string().optional(),
   inputTokens: z.number().int().optional(),
   outputTokens: z.number().int().optional(),
-  meta: z.record(z.any()).optional(),
+  meta: z.record(z.string(), z.any()).optional(),
 });
 
 export const analysisRuns = new Hono().post("/", zValidator("json", runSchema), async (c) => {

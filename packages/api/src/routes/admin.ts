@@ -20,7 +20,7 @@ const customerSchema = z.object({
 const teamSchema = z.object({ slug: z.string(), name: z.string() });
 const productSchema = z.object({ team_slug: z.string(), slug: z.string(), name: z.string(), aliases: z.array(z.string()).optional() });
 const sourceConnSchema = z.object({
-  sourceType: z.string(), slug: z.string(), baseUrl: z.string().optional(), config: z.record(z.any()).optional(),
+  sourceType: z.string(), slug: z.string(), baseUrl: z.string().optional(), config: z.record(z.string(), z.any()).optional(),
 });
 const productMapSchema = z.object({ external_group_key: z.string(), product_slug: z.string() });
 
