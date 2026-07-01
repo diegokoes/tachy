@@ -10,6 +10,7 @@
     "packages/sources/freshdesk",
     "packages/sources/github",
     "packages/mcp",
+    "packages/agent",
     "packages/api",
     "packages/cli",
     "packages/web"

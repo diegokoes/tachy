@@ -10,6 +10,7 @@ import { knowledge, analysisRuns } from "./routes/knowledge";
 import { workItems } from "./routes/work-items";
 import { admin } from "./routes/admin";
 import { reference } from "./routes/reference";
+import { agent } from "./routes/agent";
 import { installAuth, type OidcConfig } from "./auth";
 
 registerSource("freshdesk", createFreshdeskSource);
@@ -26,6 +27,7 @@ function apiRoutes() {
     .route("/knowledge", knowledge)
     .route("/analysis-runs", analysisRuns)
     .route("/reference", reference)
+    .route("/agent", agent)
     .route("/", admin);
 }
 

@@ -12,6 +12,7 @@
     "types": ["node"],
     "paths": {
       "@tachy/core": ["./packages/core/src/index.ts"],
+      "@tachy/agent": ["./packages/agent/src/index.ts"],
       "@tachy/source-freshdesk": ["./packages/sources/freshdesk/src/index.ts"],
       "@tachy/source-github": ["./packages/sources/github/src/index.ts"]
     }
