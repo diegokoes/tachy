@@ -124,6 +124,16 @@ describe("API auth", () => {
     const ok = await secured.request("/api/customers", { headers: { Authorization: "Bearer s3cret" } });
     expect(ok.status).toBe(200);
   });
+
+  it("rejects a wrong token", async () => {
+    const res = await secured.request("/api/customers", { headers: { Authorization: "Bearer nope" } });
+    expect(res.status).toBe(401);
+  });
+
+  it("does not expose SSO routes when OIDC is unconfigured", async () => {
+    // No webRoot, no oidc: /auth/me is an unknown route → JSON 404.
+    expect((await app.request("/auth/me")).status).toBe(404);
+  });
 });
 
 describe("SPA hosting", () => {

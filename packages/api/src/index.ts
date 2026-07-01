@@ -11,12 +11,23 @@ export type { AppType } from "./app";
 const webRoot = process.env.TACHY_WEB_ROOT ?? "packages/web/dist";
 const serveWeb = existsSync(webRoot);
 
-const app = createApp({ apiToken: env.apiToken, webRoot: serveWeb ? webRoot : undefined });
+const oidc = env.oidc && env.sessionSecret ? { ...env.oidc, sessionSecret: env.sessionSecret } : undefined;
 
-if (!env.apiToken) {
+const app = createApp({
+  apiToken: env.apiToken,
+  webRoot: serveWeb ? webRoot : undefined,
+  oidc,
+});
+
+// Bind to all interfaces when any auth is configured (SSO or token); otherwise
+// (open mode) stay on loopback so an unauthenticated instance isn't exposed.
+const authConfigured = Boolean(env.apiToken || oidc);
+if (!authConfigured) {
   console.warn(
-    "WARNING: TACHY_API_TOKEN is not set. Binding to 127.0.0.1 only; set a token to accept remote requests.",
+    "WARNING: no auth configured (authMode=open). Binding to 127.0.0.1 only; set TACHY_API_TOKEN or OIDC_* to accept remote requests.",
   );
 }
-serve({ fetch: app.fetch, port: env.port, hostname: env.apiToken ? undefined : "127.0.0.1" });
-console.log(`tachy api listening on :${env.port}${serveWeb ? ` (serving SPA from ${webRoot})` : ""}`);
+serve({ fetch: app.fetch, port: env.port, hostname: authConfigured ? undefined : "127.0.0.1" });
+console.log(
+  `tachy api listening on :${env.port} [auth=${env.authMode}]${serveWeb ? ` (serving SPA from ${webRoot})` : ""}`,
+);

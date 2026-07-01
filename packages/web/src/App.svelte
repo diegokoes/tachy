@@ -1,10 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
-  // Minimal Phase-1 shell: confirms the SPA is served and the API is reachable.
-  // Phase 3 fills in the Knowledge / Reference views; Phase 5 adds the Chat panel.
+  // Shell: confirms the SPA is served, the API is reachable, and surfaces SSO
+  // sign-in/out. Phase 3 fills in the Knowledge / Reference views; Phase 5 the Chat.
   let health = $state<"checking" | "ok" | "down">("checking");
   let me = $state<{ email?: string; name?: string } | null>(null);
+  let authMode = $state<"sso" | "token" | "open">("open");
+
+  const loginHref = () => `/auth/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
 
   onMount(async () => {
     try {
@@ -14,10 +17,17 @@
       health = "down";
     }
     try {
-      const res = await fetch("/auth/me");
-      if (res.ok) me = await res.json();
+      authMode = (await (await fetch("/auth/config")).json()).authMode;
     } catch {
-      /* auth not configured yet */
+      /* default open */
+    }
+    if (authMode === "sso") {
+      try {
+        const res = await fetch("/auth/me");
+        if (res.ok) me = await res.json();
+      } catch {
+        /* not signed in */
+      }
     }
   });
 </script>
@@ -27,7 +37,14 @@
   <div class="status">
     <span class="dot {health}"></span>
     api {health}
-    {#if me?.email}<span class="user">· {me.name ?? me.email}</span>{/if}
+    {#if authMode === "sso"}
+      {#if me?.email}
+        <span class="user">· {me.name ?? me.email}</span>
+        <a href="/auth/logout">Sign out</a>
+      {:else}
+        <a href={loginHref()}>Sign in</a>
+      {/if}
+    {/if}
   </div>
 </header>
 

@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { bearerAuth } from "hono/bearer-auth";
 import { logger } from "hono/logger";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -11,6 +10,7 @@ import { knowledge, analysisRuns } from "./routes/knowledge";
 import { workItems } from "./routes/work-items";
 import { admin } from "./routes/admin";
 import { reference } from "./routes/reference";
+import { installAuth, type OidcConfig } from "./auth";
 
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
@@ -29,11 +29,11 @@ function apiRoutes() {
     .route("/", admin);
 }
 
-// Build the app. Pure (no listen) so tests can drive it with app.request(). The
-// bearer token is passed in rather than read from env, so auth is testable too.
-// `webRoot` (optional) points at the built SPA (packages/web/dist); when set, the
-// app serves static assets + an index.html SPA fallback for non-API routes.
-export function createApp(opts: { apiToken?: string; webRoot?: string } = {}) {
+// Build the app. Pure (no listen) so tests can drive it with app.request(). Auth
+// config is passed in rather than read from env, so it's testable. `webRoot`
+// (optional) points at the built SPA (packages/web/dist); when set, the app serves
+// static assets + an index.html SPA fallback for non-API routes.
+export function createApp(opts: { apiToken?: string; webRoot?: string; oidc?: OidcConfig } = {}) {
   const base = new Hono();
   base.use("*", logger());
 
@@ -46,13 +46,15 @@ export function createApp(opts: { apiToken?: string; webRoot?: string } = {}) {
     }
   });
 
-  // Auth guards the data plane (/api/*) only — the SPA shell and static assets
-  // stay public so the app can load and present a login. Browsers can't attach a
-  // bearer to asset requests, so scoping the guard to /api is required for a web UI.
-  if (opts.apiToken) {
-    const guard = bearerAuth({ token: opts.apiToken });
-    base.use("/api/*", guard);
-  }
+  // Public: lets the SPA decide whether to show a Sign-in button. No secrets.
+  const authMode = opts.oidc ? "sso" : opts.apiToken ? "token" : "open";
+  base.get("/auth/config", (c) => c.json({ authMode }));
+
+  // Composite auth (SSO session OR bearer token) guards the data plane (/api/*)
+  // only — the SPA shell and static assets stay public so the app can load and
+  // present a login. Browsers can't attach a bearer to asset requests, so scoping
+  // the guard to /api is required for a web UI. Also mounts the /auth/* SSO routes.
+  installAuth(base, { apiToken: opts.apiToken, oidc: opts.oidc });
 
   const app = base.route("/api", apiRoutes());
 
