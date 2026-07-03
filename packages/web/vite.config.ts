@@ -1,9 +1,14 @@
 import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 
-// The SPA is built to dist/ and served by the Hono API in production (one origin).
-// In dev, Vite runs on :5173 and proxies /api and /auth to the API on :8787, so
-// the browser sees a single origin here too (no CORS).
+
+// DEV:
+//   npm run api      (API on :8787)
+//   npm run web:dev  (Vite on :5173))
+//
+// PROD:
+//   npm run web:build  (builds packages/web/dist)
+//   npm run api         (API on :8787, serves dist/ directly)
 export default defineConfig({
   plugins: [svelte()],
   build: { outDir: "dist", emptyOutDir: true },
