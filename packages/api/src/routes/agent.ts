@@ -16,7 +16,16 @@ import { sessionEmail } from "../auth";
 const turns = new Map<string, AgentTurn>();
 
 const uploadDir = process.env.TACHY_UPLOAD_DIR || join(tmpdir(), "tachy-uploads");
-const model = process.env.TACHY_AGENT_MODEL || "claude-opus-4-8";
+
+// Company AI-usage policy (Cost & Fair Usage doc): default to Sonnet, run at
+// medium effort, and optionally restrict which models may be used. All optional
+// and overridable via env — omitting them keeps prior single-model behavior.
+const model = process.env.TACHY_AGENT_MODEL || "claude-sonnet-5";
+const allowedModels = (process.env.TACHY_ALLOWED_MODELS ?? "")
+  .split(",").map((s) => s.trim()).filter(Boolean);
+const effort = (["low", "medium", "high", "xhigh", "max"].includes(process.env.TACHY_AGENT_EFFORT ?? "")
+  ? process.env.TACHY_AGENT_EFFORT
+  : "medium") as AgentConfig["effort"];
 
 let systemPromptCache: string | undefined;
 async function systemPrompt(): Promise<string> {
@@ -40,7 +49,10 @@ function mcpConfig(userEmail: string | undefined): Omit<AgentConfig, "systemProm
     ? process.env.TACHY_MCP_ARGS.split(" ")
     : ["--import", "tsx", "packages/mcp/src/index.ts"];
 
-  return { mcpCommand: command, mcpArgs: args, mcpEnv, cwd: process.cwd(), model };
+  return {
+    mcpCommand: command, mcpArgs: args, mcpEnv, cwd: process.cwd(),
+    model, effort, ...(allowedModels.length ? { allowedModels } : {}),
+  };
 }
 
 const chatSchema = z.object({

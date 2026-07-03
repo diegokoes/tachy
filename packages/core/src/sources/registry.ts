@@ -9,7 +9,13 @@ export function registerSource(type: string, factory: SourceFactory): void {
 }
 
 export interface ResolvedSource {
-  conn: { id: string; slug: string; sourceType: string; baseUrl: string | null };
+  conn: {
+    id: string;
+    slug: string;
+    sourceType: string;
+    baseUrl: string | null;
+    config: Record<string, unknown>;
+  };
   source: WorkItemSource;
 }
 
@@ -22,7 +28,10 @@ export async function resolveSource(slug: string): Promise<ResolvedSource> {
   const factory = factories.get(conn.source_type);
   if (!factory) throw badInput(`No adapter registered for source type: ${conn.source_type}`);
   return {
-    conn: { id: conn.id, slug: conn.slug, sourceType: conn.source_type, baseUrl: conn.base_url },
+    conn: {
+      id: conn.id, slug: conn.slug, sourceType: conn.source_type,
+      baseUrl: conn.base_url, config: conn.config ?? {},
+    },
     source: factory({ baseUrl: conn.base_url ?? "", slug: conn.slug, config: conn.config ?? {} }),
   };
 }

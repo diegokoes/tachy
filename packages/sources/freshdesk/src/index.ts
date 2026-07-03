@@ -1,7 +1,52 @@
-import { freshdeskToken } from "@tachy/core";
+import { freshdeskToken, scrubText, TokenMap } from "@tachy/core";
 import type {
   WorkItemSource, RawWorkItem, RawMessage, ListOptions, SourceFactory,
 } from "@tachy/core";
+
+// PII scrub of the raw Freshdesk ticket payload for redaction mode. Deep-copies,
+// never mutates the input. Field list mirrors the Freshdesk Tickets API: emails,
+// requester name/phone/social handles, and free text (subject/description/custom
+// fields) all carry customer PII.
+function redactFreshdeskRaw(raw: unknown, map: TokenMap, customerSlug: string | null): unknown {
+  if (raw == null || typeof raw !== "object") return {};
+  const t = structuredClone(raw) as Record<string, any>;
+  const name = customerSlug || "[CUSTOMER]";
+  const email = (v: unknown) => (typeof v === "string" && v ? map.token("EMAIL", v) : v);
+  const emailList = (v: unknown) =>
+    Array.isArray(v) ? v.map((e) => (typeof e === "string" ? map.token("EMAIL", e) : e)) : v;
+
+  if (t.email != null) t.email = email(t.email);
+  if (t.phone != null) t.phone = map.token("PHONE", String(t.phone));
+  if (t.name != null) t.name = name;
+  for (const k of ["cc_emails", "fwd_emails", "reply_cc_emails", "to_emails"]) {
+    if (t[k] != null) t[k] = emailList(t[k]);
+  }
+  if (t.twitter_id != null) t.twitter_id = map.token("HANDLE", String(t.twitter_id));
+  if (t.facebook_id != null) t.facebook_id = map.token("HANDLE", String(t.facebook_id));
+
+  if (t.requester && typeof t.requester === "object") {
+    const r = t.requester as Record<string, any>;
+    if (r.email != null) r.email = email(r.email);
+    if (r.mobile != null) r.mobile = map.token("PHONE", String(r.mobile));
+    if (r.phone != null) r.phone = map.token("PHONE", String(r.phone));
+    if (r.name != null) r.name = name;
+  }
+  if (t.company && typeof t.company === "object") {
+    const c = t.company as Record<string, any>;
+    if (c.name != null) c.name = name; // company == customer; keep as the slug
+  }
+
+  if (typeof t.subject === "string") t.subject = scrubText(t.subject, map);
+  if (typeof t.description === "string") t.description = scrubText(t.description, map);
+  if (typeof t.description_text === "string") t.description_text = scrubText(t.description_text, map);
+  if (t.custom_fields && typeof t.custom_fields === "object") {
+    const cf = t.custom_fields as Record<string, any>;
+    for (const k of Object.keys(cf)) {
+      if (typeof cf[k] === "string") cf[k] = scrubText(cf[k], map); // keep keys, scrub values
+    }
+  }
+  return t;
+}
 
 /** Freshdesk adapter. Uses *_text fields, so no HTML stripping is needed. */
 export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
@@ -48,6 +93,7 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
   return {
     type: "freshdesk",
     capabilities: { postNote: true, incrementalSync: true },
+    redactRaw: redactFreshdeskRaw,
 
     async fetchItem(externalId: string): Promise<RawWorkItem> {
       // include=requester costs 1 API credit but gives the requester email inline for customer

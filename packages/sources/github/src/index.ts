@@ -1,7 +1,31 @@
-import { githubToken } from "@tachy/core";
+import { githubToken, scrubText, TokenMap } from "@tachy/core";
 import type {
   WorkItemSource, RawWorkItem, RawMessage, ListOptions, SourceFactory,
 } from "@tachy/core";
+
+// PII scrub of the raw GitHub issue payload for redaction mode. Deep-copies,
+// never mutates the input. GitHub's surface is small: user handles/emails on the
+// actor objects, plus free text in title/body.
+function scrubActor(u: unknown, map: TokenMap, name: string): void {
+  if (!u || typeof u !== "object") return;
+  const a = u as Record<string, any>;
+  if (a.login != null) a.login = map.token("USER", String(a.login));
+  if (a.email != null && typeof a.email === "string") a.email = map.token("EMAIL", a.email);
+  if (a.name != null) a.name = name;
+}
+
+function redactGithubRaw(raw: unknown, map: TokenMap, customerSlug: string | null): unknown {
+  if (raw == null || typeof raw !== "object") return {};
+  const issue = structuredClone(raw) as Record<string, any>;
+  const name = customerSlug || "[CUSTOMER]";
+  scrubActor(issue.user, map, name);
+  scrubActor(issue.closed_by, map, name);
+  scrubActor(issue.assignee, map, name);
+  if (Array.isArray(issue.assignees)) for (const a of issue.assignees) scrubActor(a, map, name);
+  if (typeof issue.title === "string") issue.title = scrubText(issue.title, map);
+  if (typeof issue.body === "string") issue.body = scrubText(issue.body, map);
+  return issue;
+}
 
 // externalId format: "owner/repo#123"; groupKey = "owner/repo" maps via source_product_map.
 function parseRef(externalId: string): { repo: string; number: string } {
@@ -83,6 +107,7 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
   return {
     type: "github",
     capabilities: { postNote: false, incrementalSync: true },
+    redactRaw: redactGithubRaw,
 
     async fetchItem(externalId: string): Promise<RawWorkItem> {
       const { repo, number } = parseRef(externalId);

@@ -9,7 +9,8 @@ import {
   resolveCurrentUserId, addFeedback, recordRun,
   listResolutionPatterns, addResolutionPattern,
   listComponents, addComponent, resolveComponentTags, getProductIdBySlug,
-  listCustomers, addCustomer, getCustomerIdBySlug, setWorkItemCustomer, setObservedVersion, getCustomerName,
+  listCustomers, addCustomer, getCustomerIdBySlug, setWorkItemCustomer, setObservedVersion, getCustomerName, getCustomerSlug,
+  resolveRedactionPolicy, redactForLlm,
   listTeams, addTeam, listProducts, addProduct, listLabels, addLabel, getTeamIdBySlug,
   getKnowledgeEntry, listKnowledgeEntries,
   saveReferenceDoc, getReferenceDoc, listReferenceDocs, updateReferenceDoc, searchReferenceDocs,
@@ -111,10 +112,14 @@ tool(
     const item = await ingestWorkItem(conn.id, raw);
     await recordRun({ workItemId: item.id, userId: await resolveCurrentUserId(), mode: "ingest" });
     const customerName = await getCustomerName(item.customerId);
+    // Redact PII from the LLM-facing copy only, AFTER storage + customer matching.
+    const forLlm = resolveRedactionPolicy(conn.config).enabled
+      ? redactForLlm(raw, src.redactRaw, await getCustomerSlug(item.customerId))
+      : raw;
     return out({
       work_item_id: item.id, product_id: item.productId, team_id: item.teamId,
       customer_id: item.customerId, customer_name: customerName, observed_version: item.observedVersion,
-      item: raw,
+      item: forLlm,
     });
   },
 );
@@ -156,6 +161,7 @@ tool(
     const raw = await src.fetchItem(external_id);
     const item = await ingestWorkItem(conn.id, raw);
     await recordRun({ workItemId: item.id, userId: await resolveCurrentUserId(), mode: "consult" });
+    // Build the archive-search query from the un-redacted item (stays server-side).
     const firstIncoming = raw.messages.find((m) => m.direction === "incoming")?.bodyText ?? "";
     const query = [raw.title, firstIncoming].filter(Boolean).join(" ");
     const productId = item.productId ?? undefined;
@@ -164,8 +170,12 @@ tool(
       searchReferenceDocs(query, { productId, limit }),
     ]);
     const customerName = await getCustomerName(item.customerId);
+    // Redact PII from the LLM-facing work item only.
+    const forLlm = resolveRedactionPolicy(conn.config).enabled
+      ? redactForLlm(raw, src.redactRaw, await getCustomerSlug(item.customerId))
+      : raw;
     return out({
-      work_item: raw, similar, reference,
+      work_item: forLlm, similar, reference,
       customer_id: item.customerId, customer_name: customerName, observed_version: item.observedVersion,
     });
   },

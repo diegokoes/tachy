@@ -32,13 +32,13 @@ export type { ReferenceDocInput, ReferenceDocUpdate, ReferenceSearchOptions } fr
 // work-items
 export { ingestWorkItem } from "./work-items";
 export type { IngestedItem } from "./work-items";
-export { recordRun } from "./work-items";
+export { recordRun, estimateCostUsd } from "./work-items";
 export type { RunInput } from "./work-items";
 
 // catalog
 export {
   listCustomers, addCustomer, resolveCustomerByEmail, getCustomerIdBySlug,
-  setWorkItemCustomer, setObservedVersion, getCustomerName,
+  setWorkItemCustomer, setObservedVersion, getCustomerName, getCustomerSlug,
 } from "./catalog";
 export type { CustomerInput } from "./catalog";
 export { listResolutionPatterns, addResolutionPattern } from "./catalog";
@@ -60,3 +60,9 @@ export type { SourceConnectionInput, SourceProductMapInput } from "./sources";
 // search
 export { embedPassage, embedQuery, toVectorLiteral, EMBEDDING_DIM } from "./search";
 export { chunkText } from "./search";
+
+// compliance (PII redaction at the LLM boundary)
+export {
+  TokenMap, scrubText, redactNormalized, redactForLlm, resolveRedactionPolicy,
+} from "./compliance";
+export type { RedactOptions, RedactionPolicy } from "./compliance";

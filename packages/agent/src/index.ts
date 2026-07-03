@@ -1,4 +1,4 @@
-import { query, type Options, type PermissionResult } from "@anthropic-ai/claude-agent-sdk";
+import { query, type Options, type PermissionResult, type EffortLevel } from "@anthropic-ai/claude-agent-sdk";
 import { AsyncQueue } from "./queue";
 import { classify, qualify, READ_TOOLS, DISALLOWED_BUILTINS, MCP_SERVER } from "./tools";
 
@@ -14,8 +14,23 @@ export interface AgentConfig {
   cwd: string;
   /** Model id; defaults to the SDK/Claude Code default when omitted. */
   model?: string;
+  /**
+   * Company AI-usage policy: if non-empty, `model` must be one of these ids;
+   * a disallowed/unset model is clamped to the first entry. Empty/undefined =
+   * no restriction.
+   */
+  allowedModels?: string[];
+  /** Reasoning effort for the turn (Cost-doc default is 'medium'). */
+  effort?: EffortLevel;
   /** Appended to the claude_code system preset — pass CLAUDE.md here. */
   systemPromptAppend: string;
+}
+
+/** Enforce the allowed-models policy: clamp a disallowed/unset model to the first allowed one. */
+export function effectiveModel(cfg: Pick<AgentConfig, "model" | "allowedModels">): string | undefined {
+  const { model, allowedModels } = cfg;
+  if (!allowedModels || allowedModels.length === 0) return model;
+  return model && allowedModels.includes(model) ? model : allowedModels[0];
 }
 
 export type AgentEvent =
@@ -86,7 +101,8 @@ export class AgentTurn {
 
   private async pump(prompt: string, cfg: AgentConfig, opts: { resume?: string }): Promise<void> {
     const options: Options = {
-      model: cfg.model,
+      model: effectiveModel(cfg),
+      ...(cfg.effort ? { effort: cfg.effort } : {}),
       cwd: cfg.cwd,
       systemPrompt: { type: "preset", preset: "claude_code", append: cfg.systemPromptAppend },
       settingSources: [], // ignore local ~/.claude config → deterministic server behavior

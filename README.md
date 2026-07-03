@@ -25,12 +25,15 @@ API/CLI instead of running it by hand every time.
 tachý itself never calls an LLM. It only stores and retrieves; the agent
 (Claude Code, Codex CLI, or any [MCP][mcp] client) is the reasoning layer.
 
+> **Looking for internals?** Architecture, data-model rationale, the source
+> interface, search internals, the agent, and the compliance/redaction design
+> live in the [technical documentation](../../wiki).
+
 <details>
 <summary>Table of Contents</summary>
 
+- [Features](#features)
 - [How it works](#how-it-works)
-  - [Architecture](#architecture)
-  - [Packages](#packages)
 - [Getting started](#getting-started)
   - [Quick start with Docker](#quick-start-with-docker)
   - [Manual install](#manual-install)
@@ -41,60 +44,50 @@ tachý itself never calls an LLM. It only stores and retrieves; the agent
   - [REST API](#rest-api)
   - [Authentication](#authentication)
   - [CLI](#cli)
-- [Concepts](#concepts)
-  - [Sources](#sources)
-  - [Customers, versions, and controlled vocabulary](#customers-versions-and-controlled-vocabulary)
-  - [Semantic search](#semantic-search)
+- [Configuration](#configuration)
 - [Operations](#operations)
   - [Backups](#backups)
   - [Publishing images](#publishing-images)
-- [Configuration](#configuration)
 - [Privacy and security](#privacy-and-security)
 - [Versioning](#versioning)
 - [License](#license)
 
 </details>
 
+## Features
+
+- **Knowledge archive** of approved lessons from tickets/issues, searched
+  automatically when a similar work item comes in. Nothing becomes knowledge
+  until a human approves it.
+- **Freeform context**, too — feed in a codebase or product overview with no
+  ticket involved.
+- **Pluggable sources** (Freshdesk, GitHub Issues; more can be added behind one
+  interface), pulled **manually or on a schedule**.
+- **MCP server** for local agents — Claude Code, VS Code Copilot, Codex CLI, or
+  any MCP client.
+- **Web UI** to search and curate knowledge, plus a **Chat** backed by a
+  server-side agent, with human approval before anything is written.
+- **Hybrid search** (keyword + semantic) with **fully local embeddings** —
+  nothing leaves the machine.
+- **Customer-blind index** — retrieval matches on the fault, not on who reported
+  it.
+- **Optional PII redaction** — per connection, scrub customer personal data
+  before any model sees it (off by default).
+- **Flexible auth** — open (localhost), shared token, or OIDC/Entra SSO.
+- **Backups** via `pg_dump` / `pg_restore`, and published Docker images.
+
 ## How it works
 
 A ticket comes in. The agent reads it, works out what's going on, and (once you
 approve) writes a structured lesson into tachý. The next time a *similar* ticket
 appears, the agent asks tachý "have we seen anything like this?" and gets the
-relevant past lessons back. Two loops, nothing more:
+relevant past lessons back. Two loops:
 
-- **Ingest**: analyze a work item, then save an approved lesson. Nothing becomes
-  knowledge until a human approves it.
+- **Ingest**: analyze a work item, then save an approved lesson.
 - **Consult**: given a new work item, surface relevant past lessons.
 
-### Architecture
-
-```
-   MCP client (Claude Code, Codex CLI, ...) --(MCP stdio)--> tachý MCP server ─┐
-                                                                               │
-   teammates / cron / CI --------------------(HTTP)--------> Hono REST API ────┼─> core ─> Postgres
-                                                                               │            │
-                                                          packages/sources/* <─┘            │
-                                                          (Freshdesk, GitHub) ──────────────┘
-```
-
-`core` is source-agnostic and holds all the logic. `mcp`, `api`, and `cli` are
-thin entrypoints that wire `core` to a way of calling it. `sources/*` are
-pluggable adapters behind a single interface, so adding a source means writing
-one adapter, with no schema or core changes.
-
-### Packages
-
-| Package | Role |
-| --- | --- |
-| `packages/core` | All logic, organized by domain: `knowledge`, `reference`, `work-items`, `catalog`, `sources`, `search`, `platform`. Source-agnostic. |
-| `packages/sources/freshdesk` | Freshdesk adapter (supports private-note write-back). |
-| `packages/sources/github` | GitHub Issues adapter (read-only). |
-| `packages/mcp` | MCP server. The primary surface for local agents (Claude Code, Copilot). |
-| `packages/agent` | Server-side reasoning: drives the Claude Agent SDK against the MCP server so the deployed app can reason (structure docs, consult tickets) without a local agent. |
-| `packages/api` | Hono REST API + SSE agent endpoints; also serves the web UI. |
-| `packages/web` | Svelte SPA: search/curate knowledge and a Chat that talks to the agent. |
-| `packages/cli` | Operational commands: `sync`, `embed-backfill`, `backup`, `restore`. |
-| `db/schema.sql` | Canonical Postgres schema, with seed data. |
+For the architecture, packages, and data-model design, see the
+[technical documentation](../../wiki).
 
 ## Getting started
 
@@ -138,8 +131,6 @@ psql "postgres://localhost:5432/tachy" -f db/schema.sql
 
 cp .env.example .env          # then fill in DATABASE_URL and your token(s)
 ```
-
-> Freshdesk numeric `status` (e.g. 6) is account-specific and stored raw.
 
 ## Usage
 
@@ -195,16 +186,13 @@ mean the container itself).
 `save_knowledge_entry`, `post_private_note`, `add_knowledge_feedback`,
 `record_analysis_run`.
 
-`search_knowledge` and `get_context` are hybrid: keyword (FTS + trigram) blended
-with semantic similarity over a local embedding, so paraphrases surface even
-with no shared keywords. `save_knowledge_entry` stamps `created_by` from
-`TACHY_USER_EMAIL`, embeds the entry on save, and is **customer-blind**:
-identity never enters the searchable text or the embedding.
-
 **Curated vocabulary** (so the agent never invents categories from a ticket
 alone): `list_resolution_patterns` / `add_resolution_pattern`,
 `list_components` / `add_component`, `list_customers` / `add_customer`, plus the
 corrections `set_work_item_customer` and `set_observed_version`.
+
+Search is hybrid (keyword + semantic) and the knowledge index is customer-blind —
+see the [technical documentation](../../wiki) for how that works.
 
 ### Web UI and agent
 
@@ -219,15 +207,10 @@ no CORS. It has three read/curate views (Knowledge search/browse/detail with
 feedback, Reference docs, read-only Admin) plus a **Chat** that drives the
 server-side agent.
 
-The agent (`packages/agent`) is the deployed app's reasoning layer — it runs the
-Claude Agent SDK against the existing tachy MCP server, with `CLAUDE.md` as its
-system prompt. It authenticates with `ANTHROPIC_API_KEY`, or the Claude Code
-login on the server if that's unset. **Security is enforced by a hard tool
-allowlist**: the agent gets *only* the tachy MCP tools — every built-in
-file/bash/web tool is disabled, so it can't touch the filesystem or shell and
-never prompts to "edit a file." Read/consult tools auto-run; write tools
-(`save_*`, `update_*`, `add_*`, `post_private_note`) are held for a human
-approval in the Chat UI before they execute.
+The agent authenticates with `ANTHROPIC_API_KEY` (or the server's Claude Code
+login if unset) and is restricted to the tachý MCP tools only — it can't touch
+the filesystem or shell. Read/consult tools auto-run; write tools are held for a
+human approval in the Chat UI before they execute.
 
 ### REST API
 
@@ -271,60 +254,36 @@ docker compose run --rm cli npm run sync acme-freshdesk
 docker compose run --rm cli npm run sync backup     # lands in ./backups on the host
 ```
 
-## Concepts
+## Configuration
 
-### Sources
+Copy `.env.example` to `.env`. Secrets only ever come from the environment,
+never from the database.
 
-A source is anything that produces work items, behind a single interface
-(`WorkItemSource` in `packages/core/src/sources/source.ts`). To add one, implement
-the interface, register it in the entrypoints, and insert a `source_connections`
-row. No schema change.
+| Variable | Used by | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | all | Postgres connection string. |
+| `PORT` | api | HTTP API port (default 8787). |
+| `TACHY_USER_EMAIL` | core | Attributed as the author (`created_by`) of saved lessons. Optional (SSO users are attributed from their login). |
+| `TACHY_API_TOKEN` | api | Bearer token for the REST API / automation. Unset (and no OIDC) = localhost-only. |
+| `TACHY_AUTH_MODE` | api | `sso` \| `token` \| `open`. Optional — auto-derived from what's set. |
+| `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | api | Microsoft Entra (or any OIDC) SSO. Enables interactive login. |
+| `OIDC_REDIRECT_URI` / `OIDC_SCOPES` | api | OIDC redirect (register in Entra) and scopes. Optional. |
+| `TACHY_SESSION_SECRET` | api | Session-cookie signing secret (≥32 chars). Required with OIDC. |
+| `ANTHROPIC_API_KEY` | agent | Auth for the server-side agent. If unset, the server's Claude Code login is used. |
+| `TACHY_AGENT_MODEL` | agent | Agent model (default `claude-sonnet-5`). |
+| `TACHY_AGENT_EFFORT` | agent | Reasoning effort: `low` \| `medium` \| `high` \| `xhigh` \| `max` (default `medium`). |
+| `TACHY_ALLOWED_MODELS` | agent | Optional comma-separated allowlist; a disallowed/unset model is clamped to the first entry. Empty = no restriction. |
+| `TACHY_UPLOAD_DIR` | api | Where Chat uploads are staged for the agent. Optional (OS tmp). |
+| `FRESHDESK_TOKEN[_SLUG]` | freshdesk | Freshdesk API token (per-source or shared). |
+| `GITHUB_TOKEN[_SLUG]` | github | GitHub PAT (per-source or shared). |
+| `FASTEMBED_CACHE` | core | Where the embedding model is cached. Optional. |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | compose | Configure the bundled Postgres container. Keep consistent with `DATABASE_URL`. |
+| `TACHY_IMAGE` | compose | Override the app image (default `diegokoes/tachy:latest`). |
 
-| | `external_id` | Routing | Write-back | Token env var |
-| --- | --- | --- | --- | --- |
-| Freshdesk | ticket number | `group_id` maps to a product | private notes | `FRESHDESK_TOKEN_<SLUG>`, falling back to `FRESHDESK_TOKEN` |
-| GitHub (issues) | `owner/repo#123` | `owner/repo` maps to a product, via `config.repos` or `--group`; PRs are skipped | not supported (GitHub comments are public, so `post_private_note` is refused) | `GITHUB_TOKEN_<SLUG>`, falling back to `GITHUB_TOKEN` |
-
-### Customers, versions, and controlled vocabulary
-
-`knowledge_entries` is customer-blind by design. Identity never enters search or
-the embedding, so retrieval matches on the fault, not on who reported it.
-Customer and version are properties of the *ticket*, not the *lesson*:
-
-- `work_items.customer_id` is auto-matched at ingest by the requester's email
-  domain against `customers.aliases` (so distributors/resellers fronting for one
-  account map together). Fix a wrong/missing match with `set_work_item_customer`;
-  corrections survive re-sync. `customers` starts empty (`add_customer`).
-- `work_items.observed_version` is set manually with `set_observed_version` when
-  a ticket states one. Never inferred.
-- `knowledge_entries.resolution_pattern` is a **controlled vocabulary** (a FK
-  into `resolution_patterns`, which starts empty), not free text: the agent picks
-  an existing slug or leaves it unset; `add_resolution_pattern` is a deliberate,
-  separate action. This is what makes cross-team pattern queries group correctly.
-- `knowledge_entries.signals` (error codes, config filenames, component names)
-  are promoted into a real, indexed field instead of being buried in
-  `structured`, so they're searchable.
-- The facets `cloud`, `resolution_clarity`, `learning_value`, and `hidden_fix`
-  are likewise real, indexed columns (same rationale: promote what you filter
-  on), so e.g. "all `prod` issues" or "high `learning_value` lessons to review"
-  are queries. Everything else stays in the free-form `structured` JSONB, which
-  is validated on save but never filtered.
-- **Components** (`list_components` / `add_component`) are a hierarchical,
-  per-product architecture glossary, fed conversationally — either you describe
-  the app directly, or the agent proposes one from a ticket and you confirm.
-  Never silently invented.
-
-`fetch_work_item` / `get_context` return the resolved `customer_id`,
-`customer_name`, and `observed_version` alongside the ticket, so the agent can
-reason about staleness narratively ("this customer is on v1.4, the lesson was
-fixed in v1.6...") without any of it touching the search index.
-
-### Semantic search
-
-Embeddings come from a local model (all-MiniLM-L6-v2, 384-dim, via `fastembed`) —
-nothing leaves the machine. The ~90MB model downloads on first use into
-`.fastembed-cache/` (baked into the Docker image). Backfill null embeddings (e.g.
-entries created before the model was available) with `npm run sync embed-backfill`.
+**Per-connection PII redaction** is enabled on the source connection itself, not
+via an env var — set `config` to `{"redaction": {"enabled": true}}` on the
+`source_connections` row. Off by default. See the
+[technical documentation](../../wiki) for what gets scrubbed.
 
 ## Operations
 
@@ -359,36 +318,14 @@ Published to two registries:
 
 End users run the image on their own machines — no deploy stage.
 
-## Configuration
-
-Copy `.env.example` to `.env`. Secrets only ever come from the environment,
-never from the database.
-
-| Variable | Used by | Purpose |
-| --- | --- | --- |
-| `DATABASE_URL` | all | Postgres connection string. |
-| `PORT` | api | HTTP API port (default 8787). |
-| `TACHY_USER_EMAIL` | core | Attributed as the author (`created_by`) of saved lessons. Optional (SSO users are attributed from their login). |
-| `TACHY_API_TOKEN` | api | Bearer token for the REST API / automation. Unset (and no OIDC) = localhost-only. |
-| `TACHY_AUTH_MODE` | api | `sso` \| `token` \| `open`. Optional — auto-derived from what's set. |
-| `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | api | Microsoft Entra (or any OIDC) SSO. Enables interactive login. |
-| `OIDC_REDIRECT_URI` / `OIDC_SCOPES` | api | OIDC redirect (register in Entra) and scopes. Optional. |
-| `TACHY_SESSION_SECRET` | api | Session-cookie signing secret (≥32 chars). Required with OIDC. |
-| `ANTHROPIC_API_KEY` | agent | Auth for the server-side agent. If unset, the server's Claude Code login is used. |
-| `TACHY_AGENT_MODEL` | agent | Agent model (default `claude-opus-4-8`). |
-| `TACHY_UPLOAD_DIR` | api | Where Chat uploads are staged for the agent. Optional (OS tmp). |
-| `FRESHDESK_TOKEN[_SLUG]` | freshdesk | Freshdesk API token (per-source or shared). |
-| `GITHUB_TOKEN[_SLUG]` | github | GitHub PAT (per-source or shared). |
-| `FASTEMBED_CACHE` | core | Where the embedding model is cached. Optional. |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | compose | Configure the bundled Postgres container. Keep consistent with `DATABASE_URL`. |
-| `TACHY_IMAGE` | compose | Override the app image (default `diegokoes/tachy:latest`). |
-
 ## Privacy and security
 
 Never commit real ticket data, tokens, customer names, or internal URLs. `.env`
 is git-ignored; tokens are resolved from the environment by source slug, never
-stored in the DB. `knowledge_entries` is customer-blind: customer identity is
-kept on `work_items` and never enters the search index or embeddings.
+stored in the DB. The knowledge index is customer-blind, the server-side agent is
+locked to the tachý tools only, and customer PII can optionally be redacted before
+it reaches any model. Full details are in the
+[technical documentation](../../wiki).
 
 ## Versioning
 
