@@ -56,3 +56,9 @@ export async function getCustomerName(customerId: string | null): Promise<string
   const [row] = await sql`select name from customers where id = ${customerId}`;
   return row?.name ?? null;
 }
+
+export async function getCustomerSlug(customerId: string | null): Promise<string | null> {
+  if (!customerId) return null;
+  const [row] = await sql`select slug from customers where id = ${customerId}`;
+  return row?.slug ?? null;
+}
