@@ -163,7 +163,10 @@ create table knowledge_entries (
 
     -- low-cardinality, filterable facets promoted out of `structured` so they're
     -- indexable/queryable (e.g. "all prod issues", "high learning-value entries").
-    cloud               text check (cloud is null or cloud in ('prod','qa','private-cloud','on-prem')),
+    -- cloud = observed environment. Deliberately no CHECK: the vocabulary is
+    -- deployment-specific (prod/qa vs dev/demo/preprod…). The app layer enforces
+    -- a lowercase-slug shape and surfaces existing values for reuse.
+    cloud               text,
     resolution_clarity  text check (resolution_clarity is null or resolution_clarity in ('clear','partial','unclear')),
     learning_value      text check (learning_value is null or learning_value in ('high','medium','low')),
     hidden_fix          boolean,
