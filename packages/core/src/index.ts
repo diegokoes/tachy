@@ -63,6 +63,7 @@ export { chunkText } from "./search";
 
 // compliance (PII redaction at the LLM boundary)
 export {
-  TokenMap, scrubText, redactNormalized, redactForLlm, resolveRedactionPolicy,
+  TokenMap, scrubText, scrubKnownNames, scrubDeep, redactNormalized, redactForLlm,
+  resolveRedactionPolicy, globalRedactionEnabled,
 } from "./compliance";
 export type { RedactOptions, RedactionPolicy } from "./compliance";
