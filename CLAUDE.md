@@ -33,6 +33,7 @@ knowledge entries. The service persists and retrieves; you reason and structure.
 |------|---------|
 | `list_resolution_patterns` | Get the controlled vocabulary of resolution pattern slugs |
 | `add_resolution_pattern` | Add a new pattern — ONLY when user explicitly requests it |
+| `list_environments` | Get the environment (`cloud`) slugs already in use, with counts — reuse before inventing a new one |
 | `list_components` | Get the architecture glossary for a product (each has a slug + optional aliases) |
 | `add_component` | Register a new component (with aliases for naming variants) — ASK user first if discovered from a ticket |
 | `list_labels` / `add_label` | Optional, per-product advisory tag vocabulary; reuse these slugs when tagging (tags themselves stay free-form) |
@@ -144,7 +145,7 @@ contract between you and the database.
 | `resolution_pattern` | string (slug) | If applicable | Must be a slug from `list_resolution_patterns`. NEVER invent one — call `list_resolution_patterns` first. If none fits, leave unset (don't call `add_resolution_pattern` without user permission). |
 | `component` | string (slug) | YES for ticket-derived entries | Must be an existing slug/alias from `list_components`. If the ticket's area is missing from the glossary, include an `add_component` proposal in the review step (one approval covers component + entry), then call `add_component` before saving. `product_area` is derived automatically from the component hierarchy — never pass it. Unknown values are rejected with nearest-match suggestions. |
 | `confidence` | `"low"` \| `"medium"` \| `"high"` | YES | How confident you are in the root cause + resolution. Must be lowercase. |
-| `cloud` | `"prod"` \| `"qa"` \| `"private-cloud"` \| `"on-prem"` | Optional | Environment the issue was observed in. A real, indexed column (filter with `cloud=` on search/list). Lowercase. |
+| `cloud` | string (slug) | Optional | Environment the issue was observed in (e.g. `prod`, `qa`, `dev`, `demo`). The vocabulary is deployment-specific — call `list_environments` and REUSE an existing slug when one fits; only introduce a new one for a genuinely new environment. Lowercase slug. A real, indexed column (filter with `cloud=` on search/list). |
 | `resolution_clarity` | `"clear"` \| `"partial"` \| `"unclear"` | Optional | How firmly the resolution is established. Lowercase. |
 | `learning_value` | `"high"` \| `"medium"` \| `"low"` | Optional | Curation signal — how reusable this lesson is. Lowercase. |
 | `hidden_fix` | boolean | Optional | True if the real fix wasn't obvious from the ticket surface. |
