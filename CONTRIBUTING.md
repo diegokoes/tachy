@@ -17,6 +17,15 @@ you ran, what you expected, and what actually happened.
 - tachý is AGPL-3.0-or-later; your contribution will be licensed the same way
   once merged.
 
+## Database schema changes
+
+`db/schema.sql` is canonical for fresh installs (Docker initdb applies it only to
+an empty data dir). Existing deployments upgrade via `db/migrations/*.sql`
+(applied by `npm run sync migrate`). Every schema change therefore lands in **both**
+places: update `schema.sql` AND add an idempotent migration. The test setup applies
+schema + all migrations on every run, and `test/schema-drift.test.ts` checks the
+CHECK constraints against the core enums — so drift fails CI.
+
 ## Commit messages
 
 This repo follows [Conventional Commits](https://www.conventionalcommits.org/):

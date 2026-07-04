@@ -1,10 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
 import {
   registerSource, resolveSource, ingestWorkItem, recordRun, resolveCurrentUserId,
-  backfillEmbeddings, env,
+  backfillEmbeddings, env, sql,
 } from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
@@ -33,6 +34,21 @@ async function sync(sourceSlug: string, opts: { since?: string; group?: string }
 async function embedBackfill() {
   const n = await backfillEmbeddings();
   console.log(`embedded ${n} entr${n === 1 ? "y" : "ies"}`);
+}
+
+// Docker's initdb only applies db/schema.sql to EMPTY data dirs; existing
+// deployments upgrade with this. Migrations are idempotent, so re-running is safe.
+async function migrate(opts: { dir?: string }) {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const dir = opts.dir ?? join(here, "..", "..", "..", "db", "migrations");
+  if (!existsSync(dir)) throw new Error(`no migrations directory at ${dir}`);
+  const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
+  for (const f of files) {
+    const content = readFileSync(join(dir, f), "utf8");
+    await sql.begin((tx) => tx.unsafe(content)); // one transaction per file
+    console.log(`applied ${f}`);
+  }
+  if (files.length === 0) console.log("no migrations found");
 }
 
 function runPg(bin: string, args: string[]) {
@@ -68,6 +84,7 @@ async function restore(opts: { file?: string; yes?: boolean }) {
 const USAGE = `usage:
   sync <source-slug> [--since=ISO] [--group=KEY]   pull & store work items
   embed-backfill                                   embed entries missing a vector
+  migrate [--dir=PATH]                             apply db/migrations/*.sql (idempotent)
   backup [--out=DIR]                               pg_dump -Fc to DIR (default ./backups)
   restore --file=PATH [--yes]                      pg_restore (overwrites the DB)`;
 
@@ -87,6 +104,7 @@ async function main() {
       return sync(positional[0], { since: args.since, group: args.group });
     }
     case "embed-backfill": return embedBackfill();
+    case "migrate": return migrate({ dir: args.dir });
     case "backup": return backup({ out: args.out });
     case "restore": return restore({ file: args.file, yes: !!args.yes });
     default:

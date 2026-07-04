@@ -117,6 +117,23 @@ create table resolution_patterns (
     created_at   timestamptz not null default now()
 );
 
+-- Defined before knowledge_entries so entries can FK-reference their component.
+create table components (
+    id          uuid primary key default gen_random_uuid(),
+    product_id  uuid not null references products(id) on delete cascade,
+    parent_id   uuid references components(id) on delete cascade,
+    slug        text not null,
+    name        text not null,
+    description text,
+    aliases     text[] not null default '{}',
+    created_at  timestamptz not null default now(),
+    unique (product_id, slug)
+);
+
+create index components_product_idx on components(product_id);
+create index components_parent_idx  on components(parent_id);
+create index components_aliases_idx on components using gin (aliases);
+
 create table knowledge_entries (
     id                  uuid primary key default gen_random_uuid(),
     work_item_id        uuid references work_items(id) on delete set null,
@@ -124,7 +141,11 @@ create table knowledge_entries (
     team_id             uuid references teams(id) on delete set null,
     created_by          uuid references users(id) on delete set null,
     status              text not null default 'draft'
-                            check (status in ('draft','approved','rejected','archived')),
+                            check (status in ('draft','approved','rejected','archived','deprecated')),
+    -- 'deprecated' = outdated but still surfaced in search (flagged, optionally
+    -- superseded); 'archived' = fully hidden from search.
+    superseded_by       uuid references knowledge_entries(id) on delete set null,
+    constraint knowledge_entries_no_self_supersede check (superseded_by is null or superseded_by <> id),
 
     issue_summary       text,
     symptoms            text[] not null default '{}',
@@ -133,6 +154,10 @@ create table knowledge_entries (
     resolution_pattern  text references resolution_patterns(slug),
     signals             text[] not null default '{}',
     tags                text[] not null default '{}',
+    -- component is the validated taxonomy anchor; product_area is DERIVED from the
+    -- component hierarchy at write time (kept as a column so the generated search
+    -- columns below can reference it — they can't join other tables).
+    component_id        uuid references components(id) on delete set null,
     product_area        text,
     confidence          text check (confidence is null or confidence in ('low','medium','high')),
 
@@ -180,6 +205,7 @@ create index knowledge_product_idx     on knowledge_entries(product_id);
 create index knowledge_team_idx        on knowledge_entries(team_id);
 create index knowledge_pattern_idx     on knowledge_entries(resolution_pattern);
 create index knowledge_cloud_idx       on knowledge_entries(cloud);
+create index knowledge_component_idx   on knowledge_entries(component_id);
 create index knowledge_symptoms_idx    on knowledge_entries using gin (symptoms);
 create index knowledge_signals_idx     on knowledge_entries using gin (signals);
 create index knowledge_tags_idx        on knowledge_entries using gin (tags);
@@ -202,7 +228,8 @@ create table knowledge_feedback (
     id                   uuid primary key default gen_random_uuid(),
     knowledge_entry_id   uuid not null references knowledge_entries(id) on delete cascade,
     user_id              uuid references users(id) on delete set null,
-    kind                 text not null default 'note',
+    kind                 text not null default 'note'
+                             check (kind in ('correction','rating','note','deprecation')),
     rating               integer,
     comment              text,
     patch                jsonb,
@@ -215,7 +242,7 @@ create table analysis_runs (
     id              uuid primary key default gen_random_uuid(),
     work_item_id    uuid references work_items(id) on delete set null,
     user_id         uuid references users(id) on delete set null,
-    mode            text not null,
+    mode            text not null check (mode in ('ingest','consult','sync')),
     model           text,
     input_tokens    integer,
     output_tokens   integer,
@@ -224,22 +251,6 @@ create table analysis_runs (
 );
 
 create index analysis_runs_item_idx on analysis_runs(work_item_id);
-
-create table components (
-    id          uuid primary key default gen_random_uuid(),
-    product_id  uuid not null references products(id) on delete cascade,
-    parent_id   uuid references components(id) on delete cascade,
-    slug        text not null,
-    name        text not null,
-    description text,
-    aliases     text[] not null default '{}',
-    created_at  timestamptz not null default now(),
-    unique (product_id, slug)
-);
-
-create index components_product_idx on components(product_id);
-create index components_parent_idx  on components(parent_id);
-create index components_aliases_idx on components using gin (aliases);
 
 create table labels (
     id          uuid primary key default gen_random_uuid(),

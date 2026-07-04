@@ -2,6 +2,7 @@ import { sql } from "../platform/db";
 import { embedPassage, embedQuery, toVectorLiteral } from "../search/embeddings";
 import { notFound, conflict, badInput } from "../platform/errors";
 import { parseStructured } from "./structured";
+import { resolveComponentStrict } from "../catalog/components";
 
 // Low-cardinality, filterable facets promoted out of `structured` into real columns.
 export interface KnowledgeFacets {
@@ -23,7 +24,7 @@ export interface KnowledgeInput extends KnowledgeFacets {
   rootCause?: string;
   resolution?: string;
   resolutionPattern?: string;
-  productArea?: string;
+  component?: string;  // slug or alias from the product's component glossary; product_area is derived from it
   confidence?: string;
   tags?: string[];
   structured?: Record<string, unknown>;
@@ -37,7 +38,8 @@ export interface KnowledgeUpdateInput extends KnowledgeFacets {
   resolutionPattern?: string | null;
   symptoms?: string[];
   signals?: string[];
-  productArea?: string | null;
+  component?: string | null;    // null clears the component AND the derived product_area
+  supersededBy?: string | null; // link to the newer entry that replaces this one
   confidence?: string | null;
   tags?: string[];
   structured?: Record<string, unknown>;
@@ -76,6 +78,17 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
     }
   }
 
+  // product_area is never accepted from the caller — it's derived from the
+  // component hierarchy, so the taxonomy can't drift entry by entry.
+  let componentId: string | null = null;
+  let productArea: string | null = null;
+  if (i.component) {
+    if (!productId) throw badInput("component requires a product (pass product_slug or a work item mapped to one)");
+    const resolved = await resolveComponentStrict(productId, i.component);
+    componentId = resolved.id;
+    productArea = resolved.path;
+  }
+
   const confidence = i.confidence ? i.confidence.toLowerCase() : null;
   const structured = parseStructured(i.structured);
   const patternDescription = await resolvePatternDescription(i.resolutionPattern);
@@ -85,12 +98,12 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
   const [row] = await sql`
     insert into knowledge_entries
       (work_item_id, product_id, team_id, created_by, status, issue_summary, symptoms, signals, tags,
-       root_cause, resolution, resolution_pattern, product_area, confidence,
+       root_cause, resolution, resolution_pattern, component_id, product_area, confidence,
        cloud, resolution_clarity, learning_value, hidden_fix, structured, embedding)
     values
       (${i.workItemId ?? null}, ${productId}, ${teamId}, ${i.createdById ?? null},
        ${i.status ?? "approved"}, ${i.issueSummary ?? null}, ${i.symptoms ?? []}, ${i.signals ?? []}, ${i.tags ?? []},
-       ${i.rootCause ?? null}, ${i.resolution ?? null}, ${i.resolutionPattern ?? null}, ${i.productArea ?? null},
+       ${i.rootCause ?? null}, ${i.resolution ?? null}, ${i.resolutionPattern ?? null}, ${componentId}, ${productArea},
        ${confidence}, ${i.cloud ?? null}, ${i.resolutionClarity ?? null}, ${i.learningValue ?? null}, ${i.hiddenFix ?? null},
        ${sql.json(structured as any)}, ${embedding}::vector)
     returning id, status
@@ -102,6 +115,8 @@ export interface SearchOptions {
   productId?: string;
   teamId?: string;
   tags?: string[];   // array-overlap filter; entries must carry at least one of these tags
+  componentId?: string;      // matches the FK link…
+  componentTags?: string[];  // …OR legacy entries that only carry the component as a tag
   cloud?: string;
   learningValue?: string;
   resolutionClarity?: string;
@@ -117,8 +132,8 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
   const qvec = toVectorLiteral(await embedQuery(query));
   const rows = await sql`
     select * from (
-      select id, work_item_id, status, issue_summary, root_cause, resolution,
-             resolution_pattern, product_area, confidence, cloud, resolution_clarity, learning_value, hidden_fix,
+      select id, work_item_id, status, superseded_by, issue_summary, root_cause, resolution,
+             resolution_pattern, component_id, product_area, confidence, cloud, resolution_clarity, learning_value, hidden_fix,
              symptoms, signals, tags, structured, version,
              least(ts_rank(search_tsv, plainto_tsquery('simple', ${query})), 1.0) as fts_rank,
              similarity(search_text, ${query}) as trgm_sim,
@@ -127,10 +142,13 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
                + 0.5 * least(ts_rank(search_tsv, plainto_tsquery('simple', ${query})), 1.0)
                + 0.3 * similarity(search_text, ${query}) as score
       from knowledge_entries
-      where status = 'approved'
+      -- deprecated entries surface on purpose: a flagged stale lesson beats the
+      -- LLM re-deriving it from scratch. Consumers must warn on status='deprecated'.
+      where status in ('approved', 'deprecated')
         ${opts.productId ? sql`and product_id = ${opts.productId}` : sql``}
         ${opts.teamId ? sql`and team_id = ${opts.teamId}` : sql``}
         ${opts.tags && opts.tags.length ? sql`and tags && ${opts.tags}` : sql``}
+        ${opts.componentId ? sql`and (component_id = ${opts.componentId} or tags && ${opts.componentTags ?? []})` : sql``}
         ${opts.cloud ? sql`and cloud = ${opts.cloud}` : sql``}
         ${opts.learningValue ? sql`and learning_value = ${opts.learningValue}` : sql``}
         ${opts.resolutionClarity ? sql`and resolution_clarity = ${opts.resolutionClarity}` : sql``}
@@ -144,9 +162,9 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
 
 export async function getKnowledgeEntry(id: string) {
   const [row] = await sql`
-    select id, work_item_id, product_id, team_id, status, issue_summary,
+    select id, work_item_id, product_id, team_id, status, superseded_by, issue_summary,
            symptoms, signals, tags, root_cause, resolution, resolution_pattern,
-           product_area, confidence, cloud, resolution_clarity, learning_value, hidden_fix,
+           component_id, product_area, confidence, cloud, resolution_clarity, learning_value, hidden_fix,
            structured, version, created_at, updated_at
     from knowledge_entries where id = ${id}
   `;
@@ -159,8 +177,8 @@ export async function listKnowledgeEntries(
 ) {
   const limit = opts.limit ?? 50;
   return sql`
-    select id, work_item_id, product_id, team_id, status, issue_summary,
-           root_cause, resolution, resolution_pattern, product_area, confidence,
+    select id, work_item_id, product_id, team_id, status, superseded_by, issue_summary,
+           root_cause, resolution, resolution_pattern, component_id, product_area, confidence,
            cloud, resolution_clarity, learning_value, hidden_fix,
            symptoms, signals, tags, version, created_at, updated_at
     from knowledge_entries
@@ -179,8 +197,8 @@ export async function listKnowledgeEntries(
 
 export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInput) {
   const [current] = await sql`
-    select status, issue_summary, root_cause, resolution, resolution_pattern,
-           symptoms, signals, tags, product_area, confidence,
+    select product_id, status, superseded_by, issue_summary, root_cause, resolution, resolution_pattern,
+           symptoms, signals, tags, component_id, product_area, confidence,
            cloud, resolution_clarity, learning_value, hidden_fix, structured, version
     from knowledge_entries where id = ${id}
   `;
@@ -188,6 +206,32 @@ export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInp
 
   if (patch.expectedVersion != null && current.version !== patch.expectedVersion) {
     throw conflict(`Version conflict: expected ${patch.expectedVersion}, found ${current.version}`);
+  }
+
+  // component: null clears both the FK and the derived product_area; a slug
+  // re-resolves strictly against the entry's product.
+  let componentId: string | null = current.component_id;
+  let productArea: string | null = current.product_area;
+  if ('component' in patch) {
+    if (patch.component == null) {
+      componentId = null;
+      productArea = null;
+    } else {
+      if (!current.product_id) throw badInput("component requires the entry to belong to a product");
+      const resolved = await resolveComponentStrict(current.product_id, patch.component);
+      componentId = resolved.id;
+      productArea = resolved.path;
+    }
+  }
+
+  let supersededBy: string | null = current.superseded_by;
+  if ('supersededBy' in patch) {
+    supersededBy = patch.supersededBy ?? null;
+    if (supersededBy != null) {
+      if (supersededBy === id) throw badInput("an entry cannot supersede itself");
+      const [target] = await sql`select id from knowledge_entries where id = ${supersededBy}`;
+      if (!target) throw badInput(`superseded_by target '${supersededBy}' not found`);
+    }
   }
 
   const merged = {
@@ -199,7 +243,6 @@ export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInp
     symptoms:          patch.symptoms                ?? current.symptoms,
     signals:           patch.signals                 ?? current.signals,
     tags:              patch.tags                    ?? current.tags,
-    productArea:       'productArea'       in patch ? patch.productArea       : current.product_area,
     confidence:        'confidence'        in patch ? (patch.confidence?.toLowerCase() ?? null) : current.confidence,
     cloud:             'cloud'             in patch ? patch.cloud             : current.cloud,
     resolutionClarity: 'resolutionClarity' in patch ? patch.resolutionClarity : current.resolution_clarity,
@@ -235,7 +278,9 @@ export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInp
       symptoms           = ${merged.symptoms ?? []},
       signals            = ${merged.signals ?? []},
       tags               = ${merged.tags ?? []},
-      product_area       = ${merged.productArea ?? null},
+      component_id       = ${componentId},
+      product_area       = ${productArea},
+      superseded_by      = ${supersededBy},
       confidence         = ${merged.confidence ?? null},
       cloud              = ${merged.cloud ?? null},
       resolution_clarity = ${merged.resolutionClarity ?? null},

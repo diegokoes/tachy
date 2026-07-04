@@ -1,11 +1,13 @@
 export interface KnowledgeRow {
   id: string;
   work_item_id: string | null;
-  status: string;
+  status: string; // 'draft' | 'approved' | 'rejected' | 'archived' | 'deprecated'
+  superseded_by?: string | null;
   issue_summary: string | null;
   root_cause: string | null;
   resolution: string | null;
   resolution_pattern: string | null;
+  component_id?: string | null;
   product_area: string | null;
   confidence: string | null;
   cloud: string | null;
@@ -35,6 +37,9 @@ export interface Feedback {
 export interface ReferenceRow {
   id: string;
   title: string;
+  product_id?: string | null;
+  team_id?: string | null;
+  source?: string | null;
   tags: string[] | null;
   status: string;
   version: number;

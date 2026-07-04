@@ -5,6 +5,7 @@ import {
   saveKnowledgeEntry, searchKnowledge, updateKnowledgeEntry, getKnowledgeEntry, listKnowledgeEntries,
   addFeedback, listFeedback, recordRun,
   cloudSchema, resolutionClaritySchema, learningValueSchema,
+  knowledgeStatusSchema, confidenceSchema, feedbackKindSchema, runModeSchema,
 } from "@tachy/core";
 import type { RunInput } from "@tachy/core";
 
@@ -12,15 +13,15 @@ const knowledgeInputSchema = z.object({
   workItemId: z.string().optional(),
   productId: z.string().optional(),
   teamId: z.string().optional(),
-  status: z.string().optional(),
+  status: knowledgeStatusSchema.optional(),
   issueSummary: z.string().optional(),
   symptoms: z.array(z.string()).optional(),
   signals: z.array(z.string()).optional(),
   rootCause: z.string().optional(),
   resolution: z.string().optional(),
   resolutionPattern: z.string().optional(),
-  productArea: z.string().optional(),
-  confidence: z.string().optional(),
+  component: z.string().optional(),
+  confidence: confidenceSchema.optional(),
   tags: z.array(z.string()).optional(),
   cloud: cloudSchema.optional(),
   resolutionClarity: resolutionClaritySchema.optional(),
@@ -30,7 +31,7 @@ const knowledgeInputSchema = z.object({
 });
 
 const knowledgeUpdateSchema = z.object({
-  status: z.string().optional(),
+  status: knowledgeStatusSchema.optional(),
   issueSummary: z.string().nullable().optional(),
   rootCause: z.string().nullable().optional(),
   resolution: z.string().nullable().optional(),
@@ -38,8 +39,9 @@ const knowledgeUpdateSchema = z.object({
   symptoms: z.array(z.string()).optional(),
   signals: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
-  productArea: z.string().nullable().optional(),
-  confidence: z.string().nullable().optional(),
+  component: z.string().nullable().optional(),
+  supersededBy: z.string().nullable().optional(),
+  confidence: confidenceSchema.nullable().optional(),
   cloud: cloudSchema.nullable().optional(),
   resolutionClarity: resolutionClaritySchema.nullable().optional(),
   learningValue: learningValueSchema.nullable().optional(),
@@ -49,7 +51,7 @@ const knowledgeUpdateSchema = z.object({
 });
 
 const feedbackSchema = z.object({
-  kind: z.enum(["correction", "rating", "note"]).optional(),
+  kind: feedbackKindSchema.optional(),
   rating: z.number().int().min(1).max(5).optional(),
   comment: z.string().optional(),
   patch: z.record(z.string(), z.any()).optional(),
@@ -100,7 +102,7 @@ export const knowledge = new Hono()
   });
 
 const runSchema = z.object({
-  mode: z.string(),
+  mode: runModeSchema,
   workItemId: z.string().optional(),
   model: z.string().optional(),
   inputTokens: z.number().int().optional(),

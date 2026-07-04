@@ -20,6 +20,8 @@ export type { FeedbackInput } from "./knowledge";
 export {
   structuredSchema, cloudSchema, resolutionClaritySchema, learningValueSchema,
   CLOUDS, RESOLUTION_CLARITIES, LEARNING_VALUES,
+  knowledgeStatusSchema, referenceStatusSchema, confidenceSchema, feedbackKindSchema, runModeSchema,
+  KNOWLEDGE_STATUSES, REFERENCE_STATUSES, CONFIDENCES, FEEDBACK_KINDS, RUN_MODES,
 } from "./knowledge";
 export type { Structured } from "./knowledge";
 
@@ -42,8 +44,10 @@ export {
 } from "./catalog";
 export type { CustomerInput } from "./catalog";
 export { listResolutionPatterns, addResolutionPattern } from "./catalog";
-export { listComponents, addComponent, resolveComponentTags } from "./catalog";
-export type { AddComponentInput } from "./catalog";
+export {
+  listComponents, addComponent, resolveComponentTags, resolveComponentStrict, getComponentPath,
+} from "./catalog";
+export type { AddComponentInput, ResolvedComponent } from "./catalog";
 export {
   getProductIdBySlug, getTeamIdBySlug, listTeams, addTeam, listProducts, addProduct, listLabels, addLabel,
 } from "./catalog";
