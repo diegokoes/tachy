@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   saveKnowledgeEntry, searchKnowledge, updateKnowledgeEntry, getKnowledgeEntry, listKnowledgeEntries,
-  addFeedback, listFeedback, recordRun,
+  listEnvironments, addFeedback, listFeedback, recordRun,
   cloudSchema, resolutionClaritySchema, learningValueSchema,
   knowledgeStatusSchema, confidenceSchema, feedbackKindSchema, runModeSchema,
 } from "@tachy/core";
@@ -74,6 +74,9 @@ export const knowledge = new Hono()
     });
     return c.json(rows);
   })
+  // Distinct observed environments with usage counts — feeds the UI filter
+  // dropdown. Registered before "/:id" so it isn't captured as an id.
+  .get("/environments", async (c) => c.json(await listEnvironments()))
   .get("/:id/feedback", async (c) => c.json(await listFeedback(c.req.param("id"))))
   .post("/:id/feedback", zValidator("json", feedbackSchema), async (c) => {
     const body = c.req.valid("json");

@@ -52,23 +52,17 @@ export function createApp(opts: { apiToken?: string; webRoot?: string; oidc?: Oi
   const authMode = opts.oidc ? "sso" : opts.apiToken ? "token" : "open";
   base.get("/auth/config", (c) => c.json({ authMode }));
 
-  // Composite auth (SSO session OR bearer token) guards the data plane (/api/*)
-  // only — the SPA shell and static assets stay public so the app can load and
-  // present a login. Browsers can't attach a bearer to asset requests, so scoping
-  // the guard to /api is required for a web UI. Also mounts the /auth/* SSO routes.
+  // Auth (SSO session OR bearer) guards /api/* only: browsers can't attach a
+  // bearer to asset requests, so the SPA shell must stay public. Also mounts /auth/*.
   installAuth(base, { apiToken: opts.apiToken, oidc: opts.oidc });
 
   const app = base.route("/api", apiRoutes());
 
-  // Static SPA hosting. Assets first; anything else falls back to index.html so
-  // client-side routes deep-link correctly. Placed after /api so it never shadows
-  // the data routes.
   if (opts.webRoot) {
     const root = opts.webRoot;
     app.use("/assets/*", serveStatic({ root }));
     const indexHandler = serveStatic({ path: "index.html", root });
-    // SPA fallback for client-side routes. /api/* is excluded so an unknown data
-    // route still returns a JSON 404 (via notFound) instead of the HTML shell.
+    // SPA fallback; /api/* excluded so unknown data routes return JSON 404, not HTML.
     app.get("*", (c, next) => (c.req.path.startsWith("/api/") ? next() : indexHandler(c, next)));
   }
 

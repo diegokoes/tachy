@@ -5,8 +5,9 @@ import {
   listResolutionPatterns, addResolutionPattern,
   listComponents, addComponent, getProductIdBySlug,
   listCustomers, addCustomer,
-  listTeams, addTeam, listProducts, addProduct,
+  listTeams, addTeam, listProducts, addProduct, listLabels, addLabel,
   listSourceConnections, addSourceConnection, listSourceProductMaps, addSourceProductMap,
+  env, globalRedactionEnabled,
 } from "@tachy/core";
 
 const patternSchema = z.object({ slug: z.string(), description: z.string() });
@@ -23,10 +24,29 @@ const sourceConnSchema = z.object({
   sourceType: z.string(), slug: z.string(), baseUrl: z.string().optional(), config: z.record(z.string(), z.any()).optional(),
 });
 const productMapSchema = z.object({ external_group_key: z.string(), product_slug: z.string() });
+const labelSchema = z.object({ slug: z.string(), description: z.string().optional() });
 
 // Org-structure + controlled-vocabulary endpoints. Mounted at "/" so each path is
 // stated in full here. Chained for RPC type export.
 export const admin = new Hono()
+  // Effective deployment settings, read-only. These live in the environment
+  // (secrets, auth, cost policy — deployment concerns, not runtime data), so the
+  // UI only surfaces them for visibility. Never expose secret VALUES here.
+  .get("/system", (c) =>
+    c.json({
+      auth_mode: env.authMode,
+      port: env.port,
+      redaction_global: globalRedactionEnabled(),
+      user_email: env.userEmail ?? null,
+      oidc_configured: Boolean(env.oidc),
+      api_token_set: Boolean(env.apiToken),
+      agent_model: process.env.TACHY_AGENT_MODEL || null,
+      agent_effort: process.env.TACHY_AGENT_EFFORT || null,
+      allowed_models: process.env.TACHY_ALLOWED_MODELS || null,
+      upload_dir: process.env.TACHY_UPLOAD_DIR || null,
+      anthropic_api_key_set: Boolean(process.env.ANTHROPIC_API_KEY),
+    }),
+  )
   .get("/resolution-patterns", async (c) => c.json(await listResolutionPatterns()))
   .post("/resolution-patterns", zValidator("json", patternSchema), async (c) => {
     const { slug, description } = c.req.valid("json");
@@ -39,6 +59,14 @@ export const admin = new Hono()
     const body = c.req.valid("json");
     return c.json(await addComponent({ ...body, productId: await getProductIdBySlug(c.req.param("slug")) }));
   })
+  .get("/products/:slug/labels", async (c) => {
+    return c.json(await listLabels(await getProductIdBySlug(c.req.param("slug"))));
+  })
+  .post("/products/:slug/labels", zValidator("json", labelSchema), async (c) => {
+    const { slug, description } = c.req.valid("json");
+    return c.json(await addLabel(await getProductIdBySlug(c.req.param("slug")), slug, description));
+  })
+  .get("/source-product-maps", async (c) => c.json(await listSourceProductMaps()))
   .get("/customers", async (c) => c.json(await listCustomers()))
   .post("/customers", zValidator("json", customerSchema), async (c) => c.json(await addCustomer(c.req.valid("json"))))
   .get("/teams", async (c) => c.json(await listTeams()))
