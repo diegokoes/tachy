@@ -1,20 +1,11 @@
-// PII redaction applied at the MCP tool boundary — BEFORE any LLM sees the data.
-// Provider-agnostic: protects Claude and any other model equally. The app still
-// persists full data; only the copy handed to the model is scrubbed.
-//
-// Two layers cooperate:
-//   - redactNormalized(): the source-agnostic RawWorkItem fields every adapter
-//     produces identically (requester*, title, messages[].author/bodyText).
-//   - a per-source redactRaw() hook (implemented in each source package) scrubs
-//     the source-specific `raw` payload, keyed by the same TokenMap.
+// PII redaction at the LLM boundary: the DB keeps full data, only the copy
+// handed to the model is scrubbed. redactNormalized() covers the source-agnostic
+// RawWorkItem fields; each source's redactRaw() hook covers its `raw` payload,
+// sharing one TokenMap.
 
 import type { RawWorkItem } from "../sources/source";
 
-/**
- * Assigns stable, per-work-item tokens so the same value always maps to the same
- * token within one item (e.g. two mentions of one email both read `[EMAIL_1]`).
- * Referential context survives redaction; identities do not leak.
- */
+/** Stable per-item tokens: the same value always maps to the same `[KIND_n]`. */
 export class TokenMap {
   private counts = new Map<string, number>();
   private seen = new Map<string, string>();
@@ -33,18 +24,13 @@ export class TokenMap {
 
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 
-// Phone matching is intentionally conservative to avoid mangling dates/IDs/error
-// codes: it requires a leading '+', parenthesised area code, or three
-// separator-delimited digit groups — none of which match ISO dates like
-// 2015-08-24 or status codes like "HTTP 503".
+// Deliberately conservative (needs '+', (area), or 3 separated digit groups) so
+// ISO dates, IDs, and "HTTP 503" survive.
 const PHONE_RE =
   /(?:\+\d[\d\s().-]{6,}\d)|(?:\(\d{2,4}\)[\s.-]?\d{3,4}[\s.-]?\d{3,4})|(?:\b\d{3}[\s.-]\d{3,4}[\s.-]\d{3,4}\b)/g;
 
-// Credentials/secrets — company policy forbids sending any kind of credential to
-// an LLM, and tickets routinely quote configs and logs that contain them.
 const PEM_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
-// key=value / key: value assignments — the key survives (it's the searchable
-// signal), only the value is tokenized.
+// The key survives (it's the searchable signal); only the value is tokenized.
 const CREDENTIAL_ASSIGN_RE =
   /\b(password|passwd|pwd|secret|token|api[_-]?key|apikey|authorization)\b(\s*[:=]\s*)("[^"\n]+"|'[^'\n]+'|[^\s,;'"]+)/gi;
 const BEARER_RE = /\b(Bearer\s+)([A-Za-z0-9._~+/=-]{8,})/g;
@@ -57,8 +43,7 @@ const KNOWN_KEY_RES = [
   /\bAIza[0-9A-Za-z_-]{35}\b/g,
   /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/g,
 ];
-// Candidate card numbers are only tokenized when they pass Luhn, so long IDs,
-// timestamps, and DevOps work-item numbers survive.
+// Only tokenized when Luhn passes, so long IDs and timestamps survive.
 const CARD_RE = /\b\d(?:[ -]?\d){12,18}\b/g;
 
 function luhnValid(candidate: string): boolean {
@@ -96,10 +81,9 @@ export function scrubText(text: string | undefined, map: TokenMap): string {
 }
 
 /**
- * Tokenize known person names (requester, message authors) wherever they appear
- * in free text. Uses the same USER token kind (and the TokenMap's lowercased
- * key), so "John Smith" in a body gets the same token as the author field.
- * Best-effort by design: only names the item itself declares are matched.
+ * Tokenize known person names wherever they appear in free text — same USER
+ * kind as the author fields, so mentions map to the same token. Best-effort:
+ * only names the item itself declares are matched.
  */
 export function scrubKnownNames(text: string | undefined, names: (string | undefined | null)[], map: TokenMap): string {
   if (!text) return text ?? "";
@@ -114,9 +98,8 @@ export function scrubKnownNames(text: string | undefined, names: (string | undef
 }
 
 /**
- * Deep-scrub every string value in a JSON-ish structure (search results,
- * retrieved knowledge/reference content). Non-string leaves — including Date
- * objects from DB rows — pass through untouched; input is never mutated.
+ * Scrub every string in a JSON-ish structure without mutating it. Non-plain
+ * objects (e.g. Date from DB rows) pass through untouched.
  */
 export function scrubDeep<T>(value: T, map: TokenMap): T {
   if (typeof value === "string") return scrubText(value, map) as unknown as T;
@@ -136,17 +119,14 @@ export interface RedactOptions {
 }
 
 /**
- * Deep copy of a RawWorkItem with the source-agnostic normalized fields scrubbed.
- * Never mutates the input — the same object is what the app persists.
- * The `raw` payload is left untouched here; the caller replaces it with the
- * source-specific redaction (see redactForLlm).
+ * Copy of a RawWorkItem with the normalized fields scrubbed; never mutates the
+ * input (the original is what gets persisted). `raw` is the caller's job.
  */
 export function redactNormalized(item: RawWorkItem, opts: RedactOptions): RawWorkItem {
   const { customerSlug, map } = opts;
   const customerToken = customerSlug || "[CUSTOMER]";
-  // Names the item itself declares (requester, authors) get scrubbed from free
-  // text too — "Hi, this is John Smith" must not survive when John Smith is the
-  // requester. Pattern-based scrubText can't catch names; this closes that gap.
+  // "Hi, this is John Smith" must not survive when John Smith is the requester —
+  // pattern-based scrubText can't catch names, so declared names are scrubbed too.
   const knownNames = [item.requester, ...item.messages.map((m) => m.author)];
   const scrub = (text: string | undefined) => scrubKnownNames(scrubText(text, map), knownNames, map);
   return {
@@ -163,10 +143,8 @@ export function redactNormalized(item: RawWorkItem, opts: RedactOptions): RawWor
 }
 
 /**
- * Full redaction for handing to the model: normalized fields + the source's own
- * `raw` scrub, sharing one TokenMap so tokens are consistent across both layers.
- * If the source provides no redactRaw hook, the raw payload is dropped entirely
- * (safer than leaking an un-scrubbed source-specific blob).
+ * Full redaction for the model: normalized fields + the source's `raw` scrub on
+ * one shared TokenMap. No redactRaw hook → raw is dropped, not leaked.
  */
 export function redactForLlm(
   item: RawWorkItem,
@@ -183,10 +161,9 @@ export interface RedactionPolicy {
 }
 
 /**
- * Deployment-wide switch: TACHY_REDACT=true forces redaction on for every
- * connection and is the sole policy source for connection-less surfaces
- * (ingest_context, search results). Read at call time — deliberately NOT part of
- * the parsed-once env object — so tests and long-lived processes can toggle it.
+ * TACHY_REDACT forces redaction on everywhere and is the only policy source for
+ * connection-less surfaces. Read at call time (not via the parsed-once env
+ * object) so tests and long-lived processes can toggle it.
  */
 export function globalRedactionEnabled(): boolean {
   const v = process.env.TACHY_REDACT;
