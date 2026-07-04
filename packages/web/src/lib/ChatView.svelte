@@ -1,5 +1,6 @@
 <script lang="ts">
   import { chatStream, approve, uploadDoc } from "./agent";
+  import TypeLine from "./TypeLine.svelte";
 
   type Entry =
     | { kind: "user"; text: string }
@@ -90,7 +91,7 @@
       {#if e.kind === "user"}
         <div class="bubble user">{e.text}</div>
       {:else if e.kind === "assistant"}
-        <div class="bubble assistant">{e.text}</div>
+        <div class="bubble assistant">{e.text}{#if busy && i === entries.length - 1}<span class="caret" aria-hidden="true"></span>{/if}</div>
       {:else if e.kind === "tool"}
         <div class="tool">⚙ {e.tool}</div>
       {:else if e.kind === "error"}
@@ -110,11 +111,12 @@
         </div>
       {/if}
     {/each}
-    {#if busy}<div class="tool">…thinking</div>{/if}
+    {#if busy && entries[entries.length - 1]?.kind !== "assistant"}
+      <div class="bubble assistant waiting"><span class="caret" aria-hidden="true"></span></div>
+    {/if}
     {#if entries.length === 0}
       <div class="hint">
-        <p>Ask about a ticket, or attach a document to save as knowledge.</p>
-        <p class="muted">e.g. "Consult Freshdesk ticket 50912" · "Structure this doc into a knowledge entry"</p>
+        <TypeLine text="Ask about a ticket, or attach a document to save as knowledge." />
       </div>
     {/if}
   </div>
@@ -145,7 +147,25 @@
 </div>
 
 <style>
-  .chat { display: flex; flex-direction: column; height: calc(100vh - 120px); }
+  .chat { display: flex; flex-direction: column; height: 100%; }
+
+  /* Retro terminal caret: solid block, hard on/off blink — no glow, no fade. */
+  .caret {
+    display: inline-block;
+    width: 0.55em;
+    height: 1.05em;
+    margin-left: 0.15em;
+    vertical-align: text-bottom;
+    background: var(--text);
+    animation: caret-blink 1.06s steps(2, jump-none) infinite;
+  }
+
+  .waiting { min-height: 1.4em; }
+
+  @keyframes caret-blink {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
   .transcript { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 0.6rem; padding-right: 0.5rem; }
   .bubble { max-width: 80%; padding: 0.6rem 0.8rem; border-radius: 10px; white-space: pre-wrap; line-height: 1.5; }
   .bubble.user { align-self: flex-end; background: var(--accent-dim); }
