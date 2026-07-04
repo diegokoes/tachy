@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   KNOWLEDGE_STATUSES, REFERENCE_STATUSES, CONFIDENCES, FEEDBACK_KINDS, RUN_MODES,
-  CLOUDS, RESOLUTION_CLARITIES, LEARNING_VALUES,
+  RESOLUTION_CLARITIES, LEARNING_VALUES,
 } from "@tachy/core";
 
 // Guards the hand-maintained contract between the core enums (the single source
@@ -34,7 +34,6 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
   it.each([
     ["knowledge_entries", "status", KNOWLEDGE_STATUSES],
     ["knowledge_entries", "confidence", CONFIDENCES],
-    ["knowledge_entries", "cloud", CLOUDS],
     ["knowledge_entries", "resolution_clarity", RESOLUTION_CLARITIES],
     ["knowledge_entries", "learning_value", LEARNING_VALUES],
     ["knowledge_feedback", "kind", FEEDBACK_KINDS],
@@ -49,5 +48,12 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     expect(block).toContain("component_id");
     expect(block).toContain("superseded_by");
     expect(block).toContain("knowledge_entries_no_self_supersede");
+  });
+
+  // cloud is intentionally NOT enum-checked anymore (migration 002): the
+  // environment vocabulary is deployment-specific and validated as a slug
+  // in the app layer only.
+  it("knowledge_entries.cloud has no CHECK constraint", () => {
+    expect(() => checkValues("knowledge_entries", "cloud")).toThrow(/no CHECK/);
   });
 });

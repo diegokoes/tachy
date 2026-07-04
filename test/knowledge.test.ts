@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { saveKnowledgeEntry, searchKnowledge, updateKnowledgeEntry, getKnowledgeEntry, addFeedback } from "@tachy/core";
+import { saveKnowledgeEntry, searchKnowledge, updateKnowledgeEntry, getKnowledgeEntry, addFeedback, listEnvironments } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "./helpers";
 
 afterAll(() => sql.end());
@@ -119,10 +119,19 @@ describe("promoted facets (cloud / quality)", () => {
     expect(stored.hidden_fix).toBe(true); // untouched fields preserved
   });
 
-  it("rejects an invalid cloud value at the DB level", async () => {
-    await expect(
-      sql`insert into knowledge_entries (issue_summary, cloud) values ('x', 'mars')`,
-    ).rejects.toThrow();
+  // cloud is deliberately unconstrained in the DB (migration 002) — the
+  // vocabulary is deployment-specific and discoverable via listEnvironments.
+  it("accepts deployment-specific environments and lists them with counts", async () => {
+    await saveKnowledgeEntry({ status: "approved", issueSummary: "a", cloud: "demo/preprod" });
+    await saveKnowledgeEntry({ status: "approved", issueSummary: "b", cloud: "demo/preprod" });
+    await saveKnowledgeEntry({ status: "approved", issueSummary: "c", cloud: "dev" });
+    await saveKnowledgeEntry({ status: "archived", issueSummary: "d", cloud: "gone" }); // hidden statuses don't count
+
+    const envs = await listEnvironments();
+    expect(envs).toEqual([
+      { cloud: "demo/preprod", count: 2 },
+      { cloud: "dev", count: 1 },
+    ]);
   });
 });
 

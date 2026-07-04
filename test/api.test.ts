@@ -70,7 +70,8 @@ describe("API error paths", () => {
   beforeEach(resetData);
 
   it("rejects a schema violation with 400", async () => {
-    const res = await app.request("/api/knowledge", json({ issueSummary: "x", cloud: "mars" }));
+    // cloud is free-form vocabulary now, but still shape-checked as a lowercase slug
+    const res = await app.request("/api/knowledge", json({ issueSummary: "x", cloud: "Not A Slug" }));
     expect(res.status).toBe(400);
   });
 
