@@ -17,9 +17,7 @@ const turns = new Map<string, AgentTurn>();
 
 const uploadDir = process.env.TACHY_UPLOAD_DIR || join(tmpdir(), "tachy-uploads");
 
-// Company AI-usage policy (Cost & Fair Usage doc): default to Sonnet, run at
-// medium effort, and optionally restrict which models may be used. All optional
-// and overridable via env — omitting them keeps prior single-model behavior.
+// Cost policy: default Sonnet at medium effort, optional model allowlist — all env-overridable.
 const model = process.env.TACHY_AGENT_MODEL || "claude-sonnet-5";
 const allowedModels = (process.env.TACHY_ALLOWED_MODELS ?? "")
   .split(",").map((s) => s.trim()).filter(Boolean);
@@ -36,9 +34,8 @@ async function systemPrompt(): Promise<string> {
   return systemPromptCache;
 }
 
-// Launch config for the tachy MCP subprocess. Reuses the existing MCP server
-// unchanged (node --import tsx packages/mcp/src/index.ts by default), passing
-// through the DB + source tokens and the logged-in user's email for attribution.
+// Launch config for the tachy MCP subprocess: inherits env (DB, source tokens)
+// plus the logged-in user's email for attribution.
 function mcpConfig(userEmail: string | undefined): Omit<AgentConfig, "systemPromptAppend"> {
   const mcpEnv: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (typeof v === "string") mcpEnv[k] = v;

@@ -26,9 +26,8 @@ function tokenMatches(header: string | undefined, token: string): boolean {
   return got.length === want.length && timingSafeEqual(got, want);
 }
 
-// Resolve the interactive user's email for the current request, if any (SSO session).
-// Returns undefined for token/automation or unauthenticated requests. Callers use it
-// to attribute actions (e.g. the agent passes it to the MCP server as TACHY_USER_EMAIL).
+// Email of the SSO session user, if any; undefined for token/unauthenticated.
+// Used for attribution (e.g. passed to the MCP server as TACHY_USER_EMAIL).
 export async function sessionEmail(c: Parameters<typeof getAuth>[0]): Promise<string | undefined> {
   try {
     const auth = await getAuth(c);
@@ -38,13 +37,9 @@ export async function sessionEmail(c: Parameters<typeof getAuth>[0]): Promise<st
   }
 }
 
-// Install the composite auth layer on the base app:
-//  - When OIDC is configured: interactive SSO login (/auth/*) with a session cookie.
-//  - The /api/* guard accepts EITHER a valid session (interactive) OR the bearer
-//    token (automation). Neither → 401 (the SPA turns that into an /auth/login bounce).
-//  - When neither is configured (open mode), no guard is installed.
-// Must be called before the /api routes and static handler are mounted so the
-// middleware wraps them.
+// Composite auth: /api/* accepts a session (SSO) OR the bearer token; neither
+// configured = open mode with no guard. Must be installed before the /api routes
+// are mounted so the middleware wraps them.
 export function installAuth(base: Hono, opts: { apiToken?: string; oidc?: OidcConfig }): void {
   const { apiToken, oidc } = opts;
 
@@ -61,12 +56,8 @@ export function installAuth(base: Hono, opts: { apiToken?: string; oidc?: OidcCo
       }),
     );
 
-    // Interactive login: unauthenticated hits redirect to the IdP; on return the
-    // session is set and we bounce to the requested app route.
     base.get("/auth/login", oidcAuthMiddleware(), (c) => c.redirect(c.req.query("redirect") || "/"));
-
-    // The IdP redirects here; oidcAuthMiddleware processes the code exchange and
-    // sets the session cookie, then redirects to the pre-login URL.
+    // IdP redirect target; the middleware does the code exchange + session cookie.
     base.get("/auth/callback", oidcAuthMiddleware(), (c) => c.redirect("/"));
 
     base.get("/auth/logout", async (c) => {
