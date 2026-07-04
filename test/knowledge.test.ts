@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { saveKnowledgeEntry, searchKnowledge, updateKnowledgeEntry, getKnowledgeEntry } from "@tachy/core";
+import { saveKnowledgeEntry, searchKnowledge, updateKnowledgeEntry, getKnowledgeEntry, addFeedback } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "./helpers";
 
 afterAll(() => sql.end());
@@ -122,6 +122,56 @@ describe("promoted facets (cloud / quality)", () => {
   it("rejects an invalid cloud value at the DB level", async () => {
     await expect(
       sql`insert into knowledge_entries (issue_summary, cloud) values ('x', 'mars')`,
+    ).rejects.toThrow();
+  });
+});
+
+describe("deprecation lifecycle", () => {
+  beforeEach(resetData);
+
+  it("deprecated entries surface in search flagged, archived ones do not", async () => {
+    const old = await saveKnowledgeEntry({ status: "approved", issueSummary: "scanner offline after firmware update" });
+    const fresh = await saveKnowledgeEntry({ status: "approved", issueSummary: "scanner offline: reflash with tool v2" });
+    await saveKnowledgeEntry({ status: "archived", issueSummary: "scanner offline lesson that must stay hidden" });
+    await updateKnowledgeEntry(old.id, { status: "deprecated", supersededBy: fresh.id });
+
+    const rows = await searchKnowledge("scanner offline");
+    const deprecated = rows.find((r) => r.id === old.id);
+    expect(deprecated).toBeDefined();
+    expect(deprecated!.status).toBe("deprecated");
+    expect(deprecated!.superseded_by).toBe(fresh.id);
+    expect(rows.some((r) => r.issue_summary.includes("hidden"))).toBe(false);
+  });
+
+  it("validates the supersede link: unknown target and self-reference are rejected", async () => {
+    const row = await saveKnowledgeEntry({ status: "approved", issueSummary: "x" });
+    await expect(
+      updateKnowledgeEntry(row.id, { supersededBy: "00000000-0000-0000-0000-000000000000" }),
+    ).rejects.toThrow(/not found/);
+    await expect(updateKnowledgeEntry(row.id, { supersededBy: row.id })).rejects.toThrow(/supersede itself/);
+    // The DB CHECK backs the app guard up.
+    await expect(
+      sql`update knowledge_entries set superseded_by = id where id = ${row.id}`,
+    ).rejects.toThrow();
+  });
+
+  it("clears the supersede link with null and allows re-approving", async () => {
+    const old = await saveKnowledgeEntry({ status: "approved", issueSummary: "old lesson" });
+    const fresh = await saveKnowledgeEntry({ status: "approved", issueSummary: "new lesson" });
+    await updateKnowledgeEntry(old.id, { status: "deprecated", supersededBy: fresh.id });
+
+    await updateKnowledgeEntry(old.id, { status: "approved", supersededBy: null });
+    const stored = await getKnowledgeEntry(old.id);
+    expect(stored.status).toBe("approved");
+    expect(stored.superseded_by).toBeNull();
+  });
+
+  it("accepts feedback kind 'deprecation' and rejects unknown kinds at the DB level", async () => {
+    const row = await saveKnowledgeEntry({ status: "approved", issueSummary: "x" });
+    const fb = await addFeedback({ knowledgeEntryId: row.id, kind: "deprecation", comment: "fixed since v2.3" });
+    expect(fb.kind).toBe("deprecation");
+    await expect(
+      sql`insert into knowledge_feedback (knowledge_entry_id, kind) values (${row.id}, 'bogus')`,
     ).rejects.toThrow();
   });
 });

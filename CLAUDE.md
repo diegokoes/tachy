@@ -11,9 +11,9 @@ knowledge entries. The service persists and retrieves; you reason and structure.
 |------|---------|
 | `fetch_work_item` | Fetch + store a raw ticket/issue; returns full conversation + auto-resolved customer |
 | `get_context` | Fetch a ticket AND auto-search the archive for similar knowledge entries + reference docs (one-shot consult) |
-| `search_knowledge` | Search prior approved knowledge entries by keyword / symptom / error code; filter by product_slug / team_slug / tags / component |
+| `search_knowledge` | Search prior knowledge entries by keyword / symptom / error code; filter by product_slug / team_slug / tags / component. Results can include `deprecated` entries — flag those as outdated |
 | `save_knowledge_entry` | Persist a structured knowledge entry — ONLY after user approval |
-| `update_knowledge_entry` | Patch fields or change status on an existing entry (optimistic locking via `version`) |
+| `update_knowledge_entry` | Patch fields or change status on an existing entry (optimistic locking via `version`); `status: "deprecated"` + `superseded_by` marks outdated knowledge |
 | `get_knowledge_entry` / `list_knowledge_entries` | Fetch one entry (with its `version`) / list & filter entries for review and curation |
 | `post_private_note` | Write a private note back to the source (Freshdesk only) |
 | `add_knowledge_feedback` | Record corrections/ratings on existing entries |
@@ -74,19 +74,30 @@ You only need to do this once. On subsequent tickets, the source connection will
 1. Call `list_resolution_patterns` and `list_components` (for the relevant product) to load context. An empty list `[]` from either is normal on a fresh system — do not block; proceed without a pattern or component glossary.
 2. Call `fetch_work_item` to get the raw ticket + conversation
 3. Read all messages chronologically
-4. Produce a structured summary following the **Knowledge Entry Schema** below
-5. If `customer_id` is null on the fetched work item and the customer is identifiable from the ticket (email domain, company name), call `add_customer` (if not already in `list_customers`) and then `set_work_item_customer` — include this in the review step rather than asking separately when the customer is unambiguous
-6. If a product version is mentioned, call `set_observed_version`
-7. Present the full entry to the user for review — do NOT call `save_knowledge_entry` until approved
-8. After approval, call `save_knowledge_entry` with `status: "approved"` to skip the draft state
+4. Produce a structured summary following the **Knowledge Entry Schema** below, mapping the ticket's area to an existing `component` slug/alias where possible
+5. If the ticket's area is NOT in the component glossary, include a proposed `add_component` (slug, name, parent, aliases) in the review step — the existing glossary informs the mapping but is not the only source of truth; new areas grow it with user approval, never silently
+6. If `customer_id` is null on the fetched work item and the customer is identifiable from the ticket (email domain, company name), call `add_customer` (if not already in `list_customers`) and then `set_work_item_customer` — include this in the review step rather than asking separately when the customer is unambiguous
+7. If a product version is mentioned, call `set_observed_version`
+8. Present the full entry (plus any proposed component/customer additions) to the user for review — one approval covers everything; do NOT save until approved
+9. After approval, call `add_component` first if one was proposed, then `save_knowledge_entry` with `status: "approved"` to skip the draft state
 
 ### Consult mode ("what do we know about ticket X?")
 
 1. Call `get_context` to fetch the ticket AND search similar past cases
 2. Results include `similar` (past knowledge entries, with their `structured` context — environment, investigation steps, etc.) AND `reference` (matching project reference docs)
-3. Synthesize advice from the similar entries + reference docs + the new ticket's context
-4. Present actionable guidance to the user
-5. Optionally call `post_private_note` if the user asks (Freshdesk only; the result echoes the exact posted body for confirmation). For GitHub, never post — just present the information.
+3. Check each similar entry's `status`: entries with `status: "deprecated"` are OUTDATED — never present them as current advice. Say explicitly that the lesson is marked outdated, and if `superseded_by` is set, fetch and prefer that entry instead
+4. Synthesize advice from the similar entries + reference docs + the new ticket's context
+5. Present actionable guidance to the user
+6. Optionally call `post_private_note` if the user asks (Freshdesk only; the result echoes the exact posted body for confirmation). For GitHub, never post — just present the information.
+
+### Curation: outdated knowledge ("entry X is outdated / no longer applies")
+
+Never delete — issues resurface, and a flagged stale lesson beats a rediscovered one.
+
+1. Confirm with the user which entry is meant (`search_knowledge` / `list_knowledge_entries` / `get_knowledge_entry` to get the id + `version`)
+2. Record WHY via `add_knowledge_feedback` with `kind: "deprecation"` and a comment
+3. Call `update_knowledge_entry` with `status: "deprecated"` (+ `superseded_by: <id>` when a newer entry replaces it, and `expected_version` from step 1)
+4. Deprecated entries stay searchable but flagged; use `status: "archived"` only when the user wants an entry gone from search entirely. Re-approve (`status: "approved"`) if a deprecated lesson becomes valid again.
 
 ### Manual knowledge (no ticket)
 
@@ -101,14 +112,16 @@ For freeform project context (docs, runbooks, architecture notes, config explain
 that isn't a single ticket:
 
 1. Call `ingest_context` with `text`, `paths`, and/or `urls` — it ONLY reads and
-   returns cleaned text; it never saves.
+   returns cleaned text; it never saves. If the result carries a `redaction` note,
+   placeholders like `[EMAIL_1]` / `[SECRET_1]` / `[USER_1]` are intentional —
+   treat them as opaque and never guess the original values.
 2. Read it and **classify/route each part** to the right home:
    - a durable incident lesson (issue → root_cause → resolution) → `save_knowledge_entry`
-   - an architecture fact (a service/module/config pool) → `add_component` (ASK first, per the component rules)
+   - an architecture fact (a service/module/config pool) → `add_component` (ASK first, per the component rules) — this is the preferred way to SEED the component glossary from docs, so later ticket analysis can map areas consistently
    - everything else (docs, runbooks, design/process notes) → `save_reference_doc`
 3. Suggest `tags` (call `list_labels` first to reuse the product's vocabulary) and
    the right `product_slug` / `team_slug`.
-4. Present the proposed entries/docs for review — do NOT save anything until approved.
+4. Present the proposed entries/docs/components for review — do NOT save anything until approved.
 5. After approval, call the matching save tools. Reference docs are chunked and
    embedded, so they surface in `search_reference` and `get_context`.
 
@@ -129,7 +142,7 @@ contract between you and the database.
 | `root_cause` | string | YES (if known) | The underlying technical cause. Be precise. |
 | `resolution` | string | YES (if resolved) | What was done or should be done to fix it. |
 | `resolution_pattern` | string (slug) | If applicable | Must be a slug from `list_resolution_patterns`. NEVER invent one — call `list_resolution_patterns` first. If none fits, leave unset (don't call `add_resolution_pattern` without user permission). |
-| `product_area` | string | YES | Slash-separated path: "TPD / Printing / Domino Integration". |
+| `component` | string (slug) | YES for ticket-derived entries | Must be an existing slug/alias from `list_components`. If the ticket's area is missing from the glossary, include an `add_component` proposal in the review step (one approval covers component + entry), then call `add_component` before saving. `product_area` is derived automatically from the component hierarchy — never pass it. Unknown values are rejected with nearest-match suggestions. |
 | `confidence` | `"low"` \| `"medium"` \| `"high"` | YES | How confident you are in the root cause + resolution. Must be lowercase. |
 | `cloud` | `"prod"` \| `"qa"` \| `"private-cloud"` \| `"on-prem"` | Optional | Environment the issue was observed in. A real, indexed column (filter with `cloud=` on search/list). Lowercase. |
 | `resolution_clarity` | `"clear"` \| `"partial"` \| `"unclear"` | Optional | How firmly the resolution is established. Lowercase. |
@@ -192,9 +205,11 @@ Customer and version are tracked on the **work item**, not the knowledge entry:
 7. **Never post public replies** — `post_private_note` is the only tool allowed for writing back to a ticket. tachy is a knowledge engine; it does not send customer-facing messages. Draft text for the user to copy manually if they ask for a reply.
 8. **Don't invent information** — if root cause is unknown, say so. Set `confidence` to `"low"`.
 9. **`structured` fields are flexible** — include only what's relevant. Don't force empty objects.
-10. **Call `list_components` before analyzing** — verify that component names you encounter actually exist in the glossary. If a ticket mentions an unknown component, ASK the user before calling `add_component`.
+10. **Call `list_components` before analyzing** — the entry's `component` field must resolve to a glossary slug/alias (save rejects unknown values with nearest-match suggestions). If a ticket mentions an unknown component, ASK the user (propose `add_component` in the review step) before calling `add_component`. The glossary informs the mapping but isn't frozen — new areas are added through that proposal flow, never silently.
 11. **`confidence` must be lowercase** — the DB has a CHECK constraint: `"low"`, `"medium"`, `"high"`.
 12. **Use `update_knowledge_entry` to fix existing entries** — pass `expected_version` from the search result to guard against conflicts.
 13. **Tags are free-form but reuse them** — before tagging, call `list_labels` and prefer an existing tag/component slug over inventing a near-duplicate. Filter searches with `tags` or `component`.
 14. **Handle naming variants with aliases, not duplicates** — if `lc`, `LC`, and `line controller` mean one thing, register one component/product with the others as `aliases`; don't create separate entries. Product/team filters accept a slug OR any alias.
 15. **Reference docs vs knowledge entries** — issue→root_cause→resolution lessons are knowledge entries; freeform project context (docs, runbooks, architecture) is a reference doc (`save_reference_doc`). Don't force freeform context into the issue schema.
+16. **Deprecated ≠ gone** — search results may include `status: "deprecated"` entries. Always flag them as outdated (and point to `superseded_by` when set); never present them as current advice. Deprecate via `update_knowledge_entry`, only after user confirmation.
+17. **Never write secrets or personal data into saved entries** — no credentials, tokens, emails, phone numbers, or card numbers in any field of a knowledge entry or reference doc. Redaction placeholders (`[EMAIL_n]`, `[SECRET_n]`, `[USER_n]`, `[CARD_n]`) are intentional: keep them verbatim, never reconstruct the originals.

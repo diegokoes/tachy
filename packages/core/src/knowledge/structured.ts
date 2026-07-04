@@ -61,3 +61,17 @@ export const LEARNING_VALUES = ["high", "medium", "low"] as const;
 export const cloudSchema = z.enum(CLOUDS);
 export const resolutionClaritySchema = z.enum(RESOLUTION_CLARITIES);
 export const learningValueSchema = z.enum(LEARNING_VALUES);
+
+// Single source of truth for every CHECK-constrained column. db/schema.sql must
+// stay in lockstep — test/schema-drift.test.ts asserts the two never diverge.
+export const KNOWLEDGE_STATUSES = ["draft", "approved", "rejected", "archived", "deprecated"] as const;
+export const REFERENCE_STATUSES = ["draft", "approved", "archived"] as const;
+export const CONFIDENCES = ["low", "medium", "high"] as const;
+export const FEEDBACK_KINDS = ["correction", "rating", "note", "deprecation"] as const;
+export const RUN_MODES = ["ingest", "consult", "sync"] as const;
+
+export const knowledgeStatusSchema = z.enum(KNOWLEDGE_STATUSES);
+export const referenceStatusSchema = z.enum(REFERENCE_STATUSES);
+export const confidenceSchema = z.enum(CONFIDENCES);
+export const feedbackKindSchema = z.enum(FEEDBACK_KINDS);
+export const runModeSchema = z.enum(RUN_MODES);

@@ -1,0 +1,53 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { describe, expect, it } from "vitest";
+import {
+  KNOWLEDGE_STATUSES, REFERENCE_STATUSES, CONFIDENCES, FEEDBACK_KINDS, RUN_MODES,
+  CLOUDS, RESOLUTION_CLARITIES, LEARNING_VALUES,
+} from "@tachy/core";
+
+// Guards the hand-maintained contract between the core enums (the single source
+// of truth for MCP/API zod schemas) and the CHECK constraints in db/schema.sql.
+// Pure file parse — no database needed.
+
+const here = dirname(fileURLToPath(import.meta.url));
+const schema = readFileSync(join(here, "..", "db", "schema.sql"), "utf8");
+
+function tableBlock(table: string): string {
+  const m = schema.match(new RegExp(`create table ${table} \\(([\\s\\S]*?)\\n\\);`));
+  if (!m) throw new Error(`table ${table} not found in schema.sql`);
+  return m[1];
+}
+
+// Extracts the value set of `check (<col> in ('a','b'))` (optionally with a
+// leading `<col> is null or`) for a column inside a table block.
+function checkValues(table: string, col: string): string[] {
+  const block = tableBlock(table);
+  const re = new RegExp(`check \\((?:${col} is null or )?${col} in \\(([^)]*)\\)\\)`);
+  const m = block.match(re);
+  if (!m) throw new Error(`no CHECK for ${table}.${col} in schema.sql`);
+  return m[1].split(",").map((s) => s.trim().replace(/^'|'$/g, ""));
+}
+
+describe("core enums match db/schema.sql CHECK constraints", () => {
+  it.each([
+    ["knowledge_entries", "status", KNOWLEDGE_STATUSES],
+    ["knowledge_entries", "confidence", CONFIDENCES],
+    ["knowledge_entries", "cloud", CLOUDS],
+    ["knowledge_entries", "resolution_clarity", RESOLUTION_CLARITIES],
+    ["knowledge_entries", "learning_value", LEARNING_VALUES],
+    ["knowledge_feedback", "kind", FEEDBACK_KINDS],
+    ["analysis_runs", "mode", RUN_MODES],
+    ["reference_docs", "status", REFERENCE_STATUSES],
+  ] as const)("%s.%s", (table, col, values) => {
+    expect(checkValues(table, col).sort()).toEqual([...values].sort());
+  });
+
+  it("knowledge_entries carries the taxonomy/lifecycle columns", () => {
+    const block = tableBlock("knowledge_entries");
+    expect(block).toContain("component_id");
+    expect(block).toContain("superseded_by");
+    expect(block).toContain("knowledge_entries_no_self_supersede");
+  });
+});

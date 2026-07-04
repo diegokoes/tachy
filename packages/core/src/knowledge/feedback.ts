@@ -3,7 +3,7 @@ import { sql } from "../platform/db";
 export interface FeedbackInput {
   knowledgeEntryId: string;
   userId?: string | null;
-  kind?: string;                   // 'correction' | 'rating' | 'note' (default 'note')
+  kind?: string;                   // FEEDBACK_KINDS: 'correction' | 'rating' | 'note' | 'deprecation' (default 'note'; DB CHECK enforces)
   rating?: number | null;
   comment?: string | null;
   patch?: Record<string, unknown> | null;

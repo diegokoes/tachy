@@ -8,14 +8,15 @@ import {
   updateKnowledgeEntry,
   resolveCurrentUserId, addFeedback, recordRun,
   listResolutionPatterns, addResolutionPattern,
-  listComponents, addComponent, resolveComponentTags, getProductIdBySlug,
+  listComponents, addComponent, resolveComponentTags, resolveComponentStrict, getProductIdBySlug,
   listCustomers, addCustomer, getCustomerIdBySlug, setWorkItemCustomer, setObservedVersion, getCustomerName, getCustomerSlug,
-  resolveRedactionPolicy, redactForLlm,
+  resolveRedactionPolicy, redactForLlm, globalRedactionEnabled, scrubDeep, scrubText, TokenMap,
   listTeams, addTeam, listProducts, addProduct, listLabels, addLabel, getTeamIdBySlug,
   getKnowledgeEntry, listKnowledgeEntries,
   saveReferenceDoc, getReferenceDoc, listReferenceDocs, updateReferenceDoc, searchReferenceDocs,
   listSourceConnections, addSourceConnection, listSourceProductMaps, addSourceProductMap,
   AppError, log, cloudSchema, resolutionClaritySchema, learningValueSchema, badInput,
+  knowledgeStatusSchema, referenceStatusSchema, confidenceSchema, feedbackKindSchema, runModeSchema,
 } from "@tachy/core";
 import type { KnowledgeUpdateInput, ReferenceDocUpdate } from "@tachy/core";
 import { readFile } from "node:fs/promises";
@@ -30,6 +31,13 @@ const server = new McpServer({ name: "tachy", version: "0.1.0" });
 
 function out(obj: unknown) {
   return { content: [{ type: "text" as const, text: typeof obj === "string" ? obj : JSON.stringify(obj, null, 2) }] };
+}
+
+// Retrieved archive content (knowledge entries, reference docs) can carry PII
+// saved before redaction was enabled; these tools have no source connection, so
+// the deployment-wide TACHY_REDACT flag is their only policy source.
+function outScrubbed(obj: unknown) {
+  return out(globalRedactionEnabled() ? scrubDeep(obj, new TokenMap()) : obj);
 }
 
 type ToolConfig<I extends ZodRawShape> = {
@@ -127,7 +135,7 @@ tool(
 tool(
   "search_knowledge",
   {
-    description: "Search prior APPROVED knowledge entries by keyword / symptom / error code. Use for consult mode. Filter with product_slug / team_slug (slugs or aliases — not UUIDs), tags (entry must carry at least one), and/or component (resolved to the component's slug + aliases and matched against entry tags).",
+    description: "Search prior knowledge entries by keyword / symptom / error code. Use for consult mode. Results may include status 'deprecated' entries (possibly with superseded_by pointing at their replacement) — warn that those are outdated, never present them as current advice. Filter with product_slug / team_slug (slugs or aliases — not UUIDs), tags (entry must carry at least one), and/or component (matches the entry's linked component or its slug/aliases in tags).",
     inputSchema: {
       query: z.string(),
       product_slug: z.string().optional(),
@@ -142,11 +150,24 @@ tool(
     const productId = product_slug ? await getProductIdBySlug(product_slug) : undefined;
     const teamId = team_slug ? await getTeamIdBySlug(team_slug) : undefined;
     const tagFilter = [...(tags ?? [])];
-    if (component && productId) tagFilter.push(...(await resolveComponentTags(productId, component)));
+    // A registered component filters by FK link OR its slug/aliases as tags
+    // (legacy entries); an unregistered value degrades to a plain tag filter.
+    let componentId: string | undefined;
+    let componentTags: string[] | undefined;
+    if (component && productId) {
+      componentTags = await resolveComponentTags(productId, component);
+      try {
+        componentId = (await resolveComponentStrict(productId, component)).id;
+      } catch {
+        tagFilter.push(...componentTags);
+        componentTags = undefined;
+      }
+    }
     const rows = await searchKnowledge(query, {
-      productId, teamId, tags: tagFilter.length ? tagFilter : undefined, limit,
+      productId, teamId, tags: tagFilter.length ? tagFilter : undefined,
+      componentId, componentTags, limit,
     });
-    return out(rows);
+    return outScrubbed(rows);
   },
 );
 
@@ -170,12 +191,17 @@ tool(
       searchReferenceDocs(query, { productId, limit }),
     ]);
     const customerName = await getCustomerName(item.customerId);
-    // Redact PII from the LLM-facing work item only.
-    const forLlm = resolveRedactionPolicy(conn.config).enabled
+    // Redact the LLM-facing work item AND the retrieved archive content — prior
+    // entries/docs may carry PII saved before redaction was enabled.
+    const redact = resolveRedactionPolicy(conn.config).enabled;
+    const forLlm = redact
       ? redactForLlm(raw, src.redactRaw, await getCustomerSlug(item.customerId))
       : raw;
+    const retrievalMap = new TokenMap();
     return out({
-      work_item: forLlm, similar, reference,
+      work_item: forLlm,
+      similar: redact ? scrubDeep(similar, retrievalMap) : similar,
+      reference: redact ? scrubDeep(reference, retrievalMap) : reference,
       customer_id: item.customerId, customer_name: customerName, observed_version: item.observedVersion,
     });
   },
@@ -184,20 +210,20 @@ tool(
 tool(
   "save_knowledge_entry",
   {
-    description: "Persist an APPROVED structured knowledge entry. Call ONLY after the user reviewed and approved the summary. resolution_pattern must be an existing slug from list_resolution_patterns (or omitted) — it is not free text.",
+    description: "Persist an APPROVED structured knowledge entry. Call ONLY after the user reviewed and approved the summary. resolution_pattern must be an existing slug from list_resolution_patterns (or omitted) — it is not free text. component must be an existing slug/alias from list_components; if the ticket's area is missing from the glossary, propose add_component in the same review step and call it after user approval, then save. product_area is derived automatically from the component hierarchy — it is not an input.",
     inputSchema: {
       work_item_id: z.string().optional(),
       product_id: z.string().optional(),
       team_id: z.string().optional(),
-      status: z.string().optional(),
+      status: knowledgeStatusSchema.optional(),
       issue_summary: z.string().optional(),
       symptoms: z.array(z.string()).optional(),
       signals: z.array(z.string()).optional(),
       root_cause: z.string().optional(),
       resolution: z.string().optional(),
       resolution_pattern: z.string().optional(),
-      product_area: z.string().optional(),
-      confidence: z.string().optional(),
+      component: z.string().optional(),
+      confidence: confidenceSchema.optional(),
       tags: z.array(z.string()).optional(),
       cloud: cloudSchema.optional(),
       resolution_clarity: resolutionClaritySchema.optional(),
@@ -212,7 +238,7 @@ tool(
       createdById: await resolveCurrentUserId(),
       status: a.status ?? "approved", issueSummary: a.issue_summary, symptoms: a.symptoms, signals: a.signals,
       rootCause: a.root_cause, resolution: a.resolution, resolutionPattern: a.resolution_pattern,
-      productArea: a.product_area, confidence: a.confidence, tags: a.tags,
+      component: a.component, confidence: a.confidence, tags: a.tags,
       cloud: a.cloud, resolutionClarity: a.resolution_clarity, learningValue: a.learning_value, hiddenFix: a.hidden_fix,
       structured: a.structured,
     });
@@ -237,10 +263,10 @@ tool(
 tool(
   "add_knowledge_feedback",
   {
-    description: "Record human feedback (a correction, rating, or note) on an existing knowledge entry, so it can be improved over time.",
+    description: "Record human feedback (a correction, rating, or note) on an existing knowledge entry, so it can be improved over time. kind 'deprecation' records WHY an entry is outdated — the actual retirement is a separate update_knowledge_entry call with status 'deprecated' after user confirmation.",
     inputSchema: {
       knowledge_entry_id: z.string(),
-      kind: z.enum(["correction", "rating", "note"]).optional(),
+      kind: feedbackKindSchema.optional(),
       rating: z.number().int().min(1).max(5).optional(),
       comment: z.string().optional(),
       patch: z.record(z.string(), z.any()).optional(),
@@ -260,7 +286,7 @@ tool(
   {
     description: "Report token usage for an ingest/consult analysis run, for audit and cost accounting. Pass the input/output tokens you used.",
     inputSchema: {
-      mode: z.enum(["ingest", "consult", "sync"]),
+      mode: runModeSchema,
       work_item_id: z.string().optional(),
       model: z.string().optional(),
       input_tokens: z.number().int().optional(),
@@ -372,10 +398,10 @@ tool(
 tool(
   "update_knowledge_entry",
   {
-    description: "Update fields on an existing knowledge entry, or change its status (e.g. 'archived' to retire a stale lesson). Pass only the fields you want to change; omitted fields are left as-is. Nullable fields (issue_summary, root_cause, etc.) accept null to clear them. The search results include 'version' — pass it as expected_version to guard against concurrent edits.",
+    description: "Update fields on an existing knowledge entry, or change its status. Mark outdated knowledge with status 'deprecated' (it stays searchable but flagged; set superseded_by when a newer entry replaces it) — reserve 'archived' for entries that should vanish from search entirely. Pass only the fields you want to change; omitted fields are left as-is. Nullable fields (issue_summary, root_cause, etc.) accept null to clear them. component takes a slug/alias from list_components (product_area is re-derived from it; null clears both). The search results include 'version' — pass it as expected_version to guard against concurrent edits.",
     inputSchema: {
       id: z.string(),
-      status: z.enum(["draft", "approved", "rejected", "archived"]).optional(),
+      status: knowledgeStatusSchema.optional(),
       issue_summary: z.string().nullable().optional(),
       root_cause: z.string().nullable().optional(),
       resolution: z.string().nullable().optional(),
@@ -383,8 +409,9 @@ tool(
       symptoms: z.array(z.string()).optional(),
       signals: z.array(z.string()).optional(),
       tags: z.array(z.string()).optional(),
-      product_area: z.string().nullable().optional(),
-      confidence: z.enum(["low", "medium", "high"]).nullable().optional(),
+      component: z.string().nullable().optional(),
+      superseded_by: z.string().nullable().optional(),
+      confidence: confidenceSchema.nullable().optional(),
       cloud: cloudSchema.nullable().optional(),
       resolution_clarity: resolutionClaritySchema.nullable().optional(),
       learning_value: learningValueSchema.nullable().optional(),
@@ -403,7 +430,8 @@ tool(
     if (a.symptoms          !== undefined) patch.symptoms          = a.symptoms;
     if (a.signals           !== undefined) patch.signals           = a.signals;
     if (a.tags              !== undefined) patch.tags              = a.tags;
-    if (a.product_area      !== undefined) patch.productArea       = a.product_area;
+    if (a.component         !== undefined) patch.component         = a.component;
+    if (a.superseded_by     !== undefined) patch.supersededBy      = a.superseded_by;
     if (a.confidence        !== undefined) patch.confidence        = a.confidence;
     if (a.cloud             !== undefined) patch.cloud             = a.cloud;
     if (a.resolution_clarity !== undefined) patch.resolutionClarity = a.resolution_clarity;
@@ -423,15 +451,15 @@ tool(
     inputSchema: { id: z.string() },
     annotations: { readOnlyHint: true },
   },
-  async ({ id }) => out(await getKnowledgeEntry(id)),
+  async ({ id }) => outScrubbed(await getKnowledgeEntry(id)),
 );
 
 tool(
   "list_knowledge_entries",
   {
-    description: "List knowledge entries (newest first), optionally filtered by status (e.g. 'draft' to find pending entries), product_slug / team_slug (slug or alias), or tags. Useful for review and curation — not semantic search; use search_knowledge for consult.",
+    description: "List knowledge entries (newest first), optionally filtered by status (e.g. 'draft' to find pending entries, 'deprecated' to review outdated ones), product_slug / team_slug (slug or alias), or tags. Useful for review and curation — not semantic search; use search_knowledge for consult.",
     inputSchema: {
-      status: z.enum(["draft", "approved", "rejected", "archived"]).optional(),
+      status: knowledgeStatusSchema.optional(),
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
       tags: z.array(z.string()).optional(),
@@ -447,7 +475,7 @@ tool(
       tags: tags && tags.length ? tags : undefined,
       limit,
     });
-    return out(rows);
+    return outScrubbed(rows);
   },
 );
 
@@ -467,10 +495,18 @@ tool(
   async ({ product_slug, team_slug, text, paths, urls }) => {
     const sources = await loadContextSources({ text, paths, urls });
     if (!sources.length) throw badInput("Provide at least one of: text, paths, urls");
+    // No source connection here, so the deployment-wide flag decides. Pattern
+    // scrub only — freeform context declares no requester/author names to match.
+    const redact = globalRedactionEnabled();
+    const map = new TokenMap();
     return out({
       product_slug: product_slug ?? null,
       team_slug: team_slug ?? null,
-      sources: sources.map((s) => ({ source: s.source, chars: s.text.length, text: s.text })),
+      sources: sources.map((s) => ({
+        source: s.source, chars: s.text.length,
+        text: redact ? scrubText(s.text, map) : s.text,
+      })),
+      ...(redact ? { redaction: "Placeholders like [EMAIL_1]/[SECRET_1] are intentional redactions — treat them as opaque, never guess the originals." } : {}),
       next: "Summarize, then propose knowledge_entries / reference_docs / components. Save only after the user approves.",
     });
   },
@@ -487,7 +523,7 @@ tool(
       team_slug: z.string().optional(),
       source: z.string().optional(),
       tags: z.array(z.string()).optional(),
-      status: z.enum(["draft", "approved", "archived"]).optional(),
+      status: referenceStatusSchema.optional(),
       structured: z.record(z.string(), z.any()).optional(),
     },
   },
@@ -516,7 +552,7 @@ tool(
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ query, product_slug, team_slug, tags, limit }) => out(await searchReferenceDocs(query, {
+  async ({ query, product_slug, team_slug, tags, limit }) => outScrubbed(await searchReferenceDocs(query, {
     productId: product_slug ? await getProductIdBySlug(product_slug) : undefined,
     teamId: team_slug ? await getTeamIdBySlug(team_slug) : undefined,
     tags: tags && tags.length ? tags : undefined, limit,
@@ -528,7 +564,7 @@ tool(
   {
     description: "List reference docs (newest first), optionally filtered by status, product_slug / team_slug, or tags. Bodies are omitted; use get_reference_doc for the full text.",
     inputSchema: {
-      status: z.enum(["draft", "approved", "archived"]).optional(),
+      status: referenceStatusSchema.optional(),
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
       tags: z.array(z.string()).optional(),
@@ -536,7 +572,7 @@ tool(
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ status, product_slug, team_slug, tags, limit }) => out(await listReferenceDocs({
+  async ({ status, product_slug, team_slug, tags, limit }) => outScrubbed(await listReferenceDocs({
     status,
     productId: product_slug ? await getProductIdBySlug(product_slug) : undefined,
     teamId: team_slug ? await getTeamIdBySlug(team_slug) : undefined,
@@ -551,7 +587,7 @@ tool(
     inputSchema: { id: z.string() },
     annotations: { readOnlyHint: true },
   },
-  async ({ id }) => out(await getReferenceDoc(id)),
+  async ({ id }) => outScrubbed(await getReferenceDoc(id)),
 );
 
 tool(
@@ -563,7 +599,7 @@ tool(
       title: z.string().optional(),
       body: z.string().optional(),
       tags: z.array(z.string()).optional(),
-      status: z.enum(["draft", "approved", "archived"]).optional(),
+      status: referenceStatusSchema.optional(),
       source: z.string().nullable().optional(),
       structured: z.record(z.string(), z.any()).optional(),
       expected_version: z.number().int().optional(),
