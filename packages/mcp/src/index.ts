@@ -12,7 +12,7 @@ import {
   listCustomers, addCustomer, getCustomerIdBySlug, setWorkItemCustomer, setObservedVersion, getCustomerName, getCustomerSlug,
   resolveRedactionPolicy, redactForLlm, globalRedactionEnabled, scrubDeep, scrubText, TokenMap,
   listTeams, addTeam, listProducts, addProduct, listLabels, addLabel, getTeamIdBySlug,
-  getKnowledgeEntry, listKnowledgeEntries,
+  getKnowledgeEntry, listKnowledgeEntries, listEnvironments,
   saveReferenceDoc, getReferenceDoc, listReferenceDocs, updateReferenceDoc, searchReferenceDocs,
   listSourceConnections, addSourceConnection, listSourceProductMaps, addSourceProductMap,
   AppError, log, cloudSchema, resolutionClaritySchema, learningValueSchema, badInput,
@@ -225,7 +225,7 @@ tool(
       component: z.string().optional(),
       confidence: confidenceSchema.optional(),
       tags: z.array(z.string()).optional(),
-      cloud: cloudSchema.optional(),
+      cloud: cloudSchema.optional().describe("Environment the issue was observed in — lowercase slug (e.g. prod, qa, dev). Call list_environments first and reuse an existing value when one fits."),
       resolution_clarity: resolutionClaritySchema.optional(),
       learning_value: learningValueSchema.optional(),
       hidden_fix: z.boolean().optional(),
@@ -311,6 +311,16 @@ tool(
     annotations: { readOnlyHint: true },
   },
   async () => out(await listResolutionPatterns()),
+);
+
+tool(
+  "list_environments",
+  {
+    description: "List the environments ('cloud' values) already used by knowledge entries in this deployment, with usage counts. The vocabulary is deployment-specific (e.g. prod/qa vs dev/demo/preprod) — call this before setting `cloud` on a save/update and reuse an existing slug when one fits, rather than inventing a near-duplicate.",
+    inputSchema: {},
+    annotations: { readOnlyHint: true },
+  },
+  async () => out(await listEnvironments()),
 );
 
 tool(
@@ -412,7 +422,7 @@ tool(
       component: z.string().nullable().optional(),
       superseded_by: z.string().nullable().optional(),
       confidence: confidenceSchema.nullable().optional(),
-      cloud: cloudSchema.nullable().optional(),
+      cloud: cloudSchema.nullable().optional().describe("Environment slug — reuse an existing value from list_environments when one fits; null clears it."),
       resolution_clarity: resolutionClaritySchema.nullable().optional(),
       learning_value: learningValueSchema.nullable().optional(),
       hidden_fix: z.boolean().nullable().optional(),
