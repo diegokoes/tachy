@@ -5,7 +5,8 @@ process.env.FRESHDESK_TOKEN = "test-token";
 process.env.GITHUB_TOKEN = "test-token";
 
 import {
-  TokenMap, scrubText, redactNormalized, redactForLlm, resolveRedactionPolicy,
+  TokenMap, scrubText, scrubKnownNames, scrubDeep, redactNormalized, redactForLlm,
+  resolveRedactionPolicy, globalRedactionEnabled,
   estimateCostUsd, type RawWorkItem,
 } from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
@@ -22,6 +23,72 @@ describe("scrubText", () => {
     const map = new TokenMap();
     const out = scrubText("created 2015-08-24, error HTTP 503 seen on 2026-01-02", map);
     expect(out).toBe("created 2015-08-24, error HTTP 503 seen on 2026-01-02");
+  });
+
+  it("tokenizes credential assignments but keeps the key as a searchable signal", () => {
+    const map = new TokenMap();
+    const out = scrubText('set password=hunter2 and api_key: "abc-123" in the config', map);
+    expect(out).toBe("set password=[SECRET_1] and api_key: [SECRET_2] in the config");
+  });
+
+  it("tokenizes bearer tokens, known key shapes, and JWTs", () => {
+    const map = new TokenMap();
+    expect(scrubText("Authorization: Bearer abcDEF123456xyz", map)).toMatch(/Bearer \[SECRET_\d+\]/);
+    expect(scrubText("aws AKIAIOSFODNN7EXAMPLE leaked", map)).toBe("aws [SECRET_2] leaked");
+    expect(scrubText("pat ghp_abcdefghijklmnopqrstuvwxyz012345 in logs", map)).toMatch(/pat \[SECRET_\d+\] in logs/);
+    expect(scrubText("key sk-abc123def456ghi789jkl012 set", map)).toMatch(/key \[SECRET_\d+\] set/);
+    expect(
+      scrubText("jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.dQw4w9WgXcQ", map),
+    ).toMatch(/jwt \[SECRET_\d+\]/);
+  });
+
+  it("tokenizes PEM private key blocks", () => {
+    const map = new TokenMap();
+    const pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIEow...\n-----END RSA PRIVATE KEY-----";
+    expect(scrubText(`attached: ${pem} done`, map)).toBe("attached: [SECRET_1] done");
+  });
+
+  it("tokenizes Luhn-valid card numbers but keeps long non-card IDs", () => {
+    const map = new TokenMap();
+    expect(scrubText("card 4111 1111 1111 1111 charged", map)).toBe("card [CARD_1] charged");
+    // Same digits with the checksum broken → not a card, stays put.
+    expect(scrubText("ref 4111 1111 1111 1112 in DevOps", map)).toBe("ref 4111 1111 1111 1112 in DevOps");
+  });
+});
+
+describe("scrubKnownNames", () => {
+  it("tokenizes declared names case-insensitively at word boundaries only", () => {
+    const map = new TokenMap();
+    const out = scrubKnownNames("Hi, this is jane doe. The Announcement is by Ann.", ["Jane Doe", "Ann"], map);
+    expect(out).toBe("Hi, this is [USER_1]. The Announcement is by [USER_2].");
+  });
+
+  it("skips empty and too-short names", () => {
+    const map = new TokenMap();
+    expect(scrubKnownNames("42 is the answer by Al", ["42", "Al", null, undefined], map))
+      .toBe("42 is the answer by Al");
+  });
+});
+
+describe("scrubDeep", () => {
+  it("scrubs nested strings, preserves structure, and passes Dates through", () => {
+    const map = new TokenMap();
+    const created = new Date("2026-01-01T00:00:00Z");
+    const row = {
+      issue_summary: "mail ops@acme.com",
+      signals: ["token=abc123secret", "HTTP 503"],
+      version: 3,
+      created_at: created,
+      structured: { conversation_summary: "call from ops@acme.com" },
+    };
+    const out = scrubDeep(row, map);
+    expect(out.issue_summary).toBe("mail [EMAIL_1]");
+    expect(out.signals[0]).toBe("token=[SECRET_1]");
+    expect(out.signals[1]).toBe("HTTP 503");
+    expect(out.version).toBe(3);
+    expect(out.created_at).toBe(created);
+    expect(out.structured.conversation_summary).toBe("call from [EMAIL_1]");
+    expect(row.issue_summary).toBe("mail ops@acme.com"); // input untouched
   });
 });
 
@@ -130,6 +197,36 @@ describe("resolveRedactionPolicy", () => {
     expect(resolveRedactionPolicy({}).enabled).toBe(false);
     expect(resolveRedactionPolicy({ redaction: { enabled: false } }).enabled).toBe(false);
     expect(resolveRedactionPolicy({ redaction: { enabled: true } }).enabled).toBe(true);
+  });
+
+  it("TACHY_REDACT=true forces redaction on for every connection (read at call time)", () => {
+    expect(globalRedactionEnabled()).toBe(false);
+    process.env.TACHY_REDACT = "true";
+    try {
+      expect(globalRedactionEnabled()).toBe(true);
+      expect(resolveRedactionPolicy(undefined).enabled).toBe(true);
+      expect(resolveRedactionPolicy({ redaction: { enabled: false } }).enabled).toBe(true);
+    } finally {
+      delete process.env.TACHY_REDACT;
+    }
+    expect(resolveRedactionPolicy(undefined).enabled).toBe(false);
+  });
+});
+
+describe("redactNormalized name scrubbing", () => {
+  it("scrubs the requester's and authors' names from free text", () => {
+    const item: RawWorkItem = {
+      externalId: "1", kind: "ticket", title: "Jane Doe cannot log in",
+      requester: "Jane Doe", requesterEmail: "jane@acme.com", raw: {},
+      messages: [
+        { visibility: "public", direction: "incoming", bodyText: "Hi, this is Jane Doe from Acme", author: "Jane Doe" },
+      ],
+    };
+    const r = redactNormalized(item, { customerSlug: "acme-corp", map: new TokenMap() });
+    expect(r.title).not.toMatch(/Jane/);
+    expect(r.messages[0].bodyText).not.toMatch(/Jane/);
+    // Body mention and the author field resolve to the SAME token.
+    expect(r.messages[0].bodyText).toContain(r.messages[0].author);
   });
 });
 
