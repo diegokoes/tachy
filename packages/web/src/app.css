@@ -1,12 +1,34 @@
+/* Theme + typography foundation. Fluid root font: ~15px on laptops, growing to
+   18px on large desktops; user-adjustable via --font-scale (Theme view). */
 :root {
+  font-size: calc(clamp(14.5px, 0.35vw + 12.5px, 18px) * var(--font-scale, 1));
+  font-family: ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, monospace;
+
   --bg: #080808;
   --panel: rgba(8, 8, 8, 0.82);
-  --border: rgba(255, 255, 255, 0.08);
+  --panel-solid: #101010;
+  --border: rgba(255, 255, 255, 0.09);
   --text: #e2e2e2;
-  --muted: #606060;
+  --muted: #6d6d6d;
   --accent: #6ea8fe;
-  --accent-dim: rgba(110, 168, 254, 0.12);
-  font-family: monospace;
+  --accent-dim: color-mix(in srgb, var(--accent) 14%, transparent);
+  --pattern-ink: rgba(255, 255, 255, 0.16);
+  --ok: #3fb950;
+  --warn: #d29922;
+  --danger: #f85149;
+}
+
+:root[data-theme="light"] {
+  --bg: #f2efe7;
+  --panel: rgba(252, 251, 247, 0.88);
+  --panel-solid: #faf8f2;
+  --border: rgba(30, 28, 20, 0.14);
+  --text: #21201c;
+  --muted: #857f72;
+  --pattern-ink: rgba(30, 28, 20, 0.22);
+  --ok: #1a7f37;
+  --warn: #9a6700;
+  --danger: #cf222e;
 }
 
 * { box-sizing: border-box; }
@@ -15,6 +37,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
+  line-height: 1.5;
 }
 
 a { color: var(--accent); text-decoration: none; }
@@ -27,16 +50,28 @@ button {
   background: transparent;
   color: var(--text);
   border-radius: 3px;
-  padding: 0.35rem 0.7rem;
+  padding: 0.4rem 0.8rem;
 }
 
 button:hover { border-color: var(--accent); color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: default; }
 
 input, textarea, select {
   font: inherit;
-  background: rgba(8, 8, 8, 0.7);
+  background: var(--panel);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 3px;
-  padding: 0.35rem 0.6rem;
+  padding: 0.4rem 0.65rem;
+  /* Terminal caret everywhere: accent-colored; block shape where supported. */
+  caret-color: var(--accent);
+  caret-shape: block;
+}
+
+/* Focus ring drawn INSIDE the box (border + inset shadow) — outlines render
+   outside and get clipped when a control touches the scroll container's edge. */
+input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
