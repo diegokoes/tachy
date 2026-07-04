@@ -53,12 +53,17 @@ export function parseStructured(value: unknown): Structured {
   return res.data;
 }
 
-// The four promoted facets, shared by knowledge save/update across MCP + API.
-export const CLOUDS = ["prod", "qa", "private-cloud", "on-prem"] as const;
+// The promoted facets, shared by knowledge save/update across MCP + API.
+// `cloud` (environment) is deliberately NOT an enum: the vocabulary is
+// deployment-specific (prod/qa vs dev/demo/preprod vs git branches…), so it is
+// only shape-checked as a lowercase slug. Reuse existing values — they are
+// discoverable via listEnvironments().
 export const RESOLUTION_CLARITIES = ["clear", "partial", "unclear"] as const;
 export const LEARNING_VALUES = ["high", "medium", "low"] as const;
 
-export const cloudSchema = z.enum(CLOUDS);
+export const cloudSchema = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9._/-]*$/, "environment must be a lowercase slug (e.g. prod, qa, demo/preprod)");
 export const resolutionClaritySchema = z.enum(RESOLUTION_CLARITIES);
 export const learningValueSchema = z.enum(LEARNING_VALUES);
 

@@ -195,6 +195,21 @@ export async function listKnowledgeEntries(
   `;
 }
 
+// The observed environment ("cloud") vocabulary is whatever this deployment
+// actually uses — distinct stored values, most common first. Feeds the UI
+// filter dropdown and the list_environments MCP tool so new entries reuse
+// existing slugs instead of inventing near-duplicates.
+export async function listEnvironments(): Promise<{ cloud: string; count: number }[]> {
+  const rows = await sql`
+    select cloud, count(*)::int as count
+    from knowledge_entries
+    where cloud is not null and status not in ('rejected', 'archived')
+    group by cloud
+    order by count desc, cloud
+  `;
+  return rows as unknown as { cloud: string; count: number }[];
+}
+
 export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInput) {
   const [current] = await sql`
     select product_id, status, superseded_by, issue_summary, root_cause, resolution, resolution_pattern,

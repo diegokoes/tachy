@@ -12,14 +12,14 @@ export { upsertUser, resolveCurrentUserId } from "./platform";
 // knowledge
 export {
   saveKnowledgeEntry, searchKnowledge, backfillEmbeddings,
-  getKnowledgeEntry, listKnowledgeEntries, updateKnowledgeEntry,
+  getKnowledgeEntry, listKnowledgeEntries, updateKnowledgeEntry, listEnvironments,
 } from "./knowledge";
 export type { KnowledgeInput, KnowledgeUpdateInput, SearchOptions } from "./knowledge";
 export { addFeedback, listFeedback } from "./knowledge";
 export type { FeedbackInput } from "./knowledge";
 export {
   structuredSchema, cloudSchema, resolutionClaritySchema, learningValueSchema,
-  CLOUDS, RESOLUTION_CLARITIES, LEARNING_VALUES,
+  RESOLUTION_CLARITIES, LEARNING_VALUES,
   knowledgeStatusSchema, referenceStatusSchema, confidenceSchema, feedbackKindSchema, runModeSchema,
   KNOWLEDGE_STATUSES, REFERENCE_STATUSES, CONFIDENCES, FEEDBACK_KINDS, RUN_MODES,
 } from "./knowledge";
