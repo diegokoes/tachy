@@ -59,6 +59,13 @@ tachý itself never calls an LLM. It only stores and retrieves; the agent
 - **Knowledge archive** of approved lessons from tickets/issues, searched
   automatically when a similar work item comes in. Nothing becomes knowledge
   until a human approves it.
+- **Knowledge lifecycle** — mark a lesson as outdated (`deprecated`) instead of
+  deleting it: it stays searchable but clearly flagged, optionally pointing at
+  the entry that supersedes it. Issues resurface; lessons shouldn't vanish.
+- **Consistent taxonomy** — entries are anchored to a per-product component
+  glossary (with aliases and hierarchy), so the agent can't invent competing
+  names for the same area of the app. New areas are proposed to you, never
+  created silently.
 - **Freeform context**, too — feed in a codebase or product overview with no
   ticket involved.
 - **Pluggable sources** (Freshdesk, GitHub Issues; more can be added behind one
@@ -71,8 +78,9 @@ tachý itself never calls an LLM. It only stores and retrieves; the agent
   nothing leaves the machine.
 - **Customer-blind index** — retrieval matches on the fault, not on who reported
   it.
-- **Optional PII redaction** — per connection, scrub customer personal data
-  before any model sees it (off by default).
+- **Optional PII/secret redaction** — scrub customer personal data, credentials,
+  and card numbers before any model sees it. Per connection, or forced on for
+  the whole deployment with one env var (off by default).
 - **Flexible auth** — open (localhost), shared token, or OIDC/Entra SSO.
 - **Backups** via `pg_dump` / `pg_restore`, and published Docker images.
 
@@ -186,10 +194,15 @@ mean the container itself).
 `save_knowledge_entry`, `post_private_note`, `add_knowledge_feedback`,
 `record_analysis_run`.
 
+**Curation:** `update_knowledge_entry` patches entries and drives the lifecycle —
+deprecate an outdated lesson (optionally linking its replacement) or archive it
+out of search entirely.
+
 **Curated vocabulary** (so the agent never invents categories from a ticket
 alone): `list_resolution_patterns` / `add_resolution_pattern`,
-`list_components` / `add_component`, `list_customers` / `add_customer`, plus the
-corrections `set_work_item_customer` and `set_observed_version`.
+`list_components` / `add_component` (components also anchor each entry's product
+area), `list_customers` / `add_customer`, plus the corrections
+`set_work_item_customer` and `set_observed_version`.
 
 Search is hybrid (keyword + semantic) and the knowledge index is customer-blind —
 see the [technical documentation](../../wiki) for how that works.
@@ -241,9 +254,15 @@ Admin-configurable, no passwords stored:
 ```bash
 npm run sync sync acme-freshdesk --since=2026-06-01T00:00:00Z --group=48000641379
 npm run sync embed-backfill     # embed entries that don't have a vector yet
+npm run sync migrate            # apply db/migrations/*.sql (idempotent, safe to re-run)
 npm run sync backup             # pg_dump -Fc into ./backups/
 npm run sync restore --file=backups/tachy-….dump   # pg_restore (overwrites!)
 ```
+
+`migrate` upgrades an **existing** database to the current schema. Fresh installs
+don't need it: Docker's initdb applies `db/schema.sql` (which is always the full,
+current schema) — but only on an empty data dir, so upgrades of a running
+deployment go through `migrate`.
 
 `sync` only stores/refreshes raw work items; it never creates knowledge entries
 (those always require your approval). With Docker, use the `cli` service, which
@@ -279,11 +298,15 @@ never from the database.
 | `FASTEMBED_CACHE` | core | Where the embedding model is cached. Optional. |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | compose | Configure the bundled Postgres container. Keep consistent with `DATABASE_URL`. |
 | `TACHY_IMAGE` | compose | Override the app image (default `diegokoes/tachy:latest`). |
+| `TACHY_REDACT` | core | `true` forces PII/secret redaction on for **every** connection and for connection-less tools (`ingest_context`, retrieved search results). The deployment-wide compliance switch. |
 
-**Per-connection PII redaction** is enabled on the source connection itself, not
-via an env var — set `config` to `{"redaction": {"enabled": true}}` on the
-`source_connections` row. Off by default. See the
-[technical documentation](../../wiki) for what gets scrubbed.
+**PII/secret redaction** is off by default and enabled per source connection
+(`config` = `{"redaction": {"enabled": true}}` on the `source_connections` row),
+or for the whole deployment with `TACHY_REDACT=true` — use the latter when
+company policy forbids sending customer personal data or credentials to any
+LLM. Only the LLM-facing copies are scrubbed; the database keeps full data on
+your own infrastructure. See the [technical documentation](../../wiki) for
+exactly what gets scrubbed.
 
 ## Operations
 
