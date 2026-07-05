@@ -1,7 +1,7 @@
 // Single-origin fetch helper. The SPA is served by the same Hono process that
 // serves /api, so all calls are relative — no base URL, no CORS. Session auth
 // rides on the cookie automatically (credentials: "same-origin" is the default).
-// A 401 means the session/token is missing; callers redirect to /auth/login.
+import { onUnauthorized } from "./session.svelte";
 
 export class ApiError extends Error {
   constructor(
@@ -19,8 +19,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
   });
   if (res.status === 401) {
-    // Interactive user with no session — bounce to SSO login.
-    window.location.href = `/auth/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;
+    // No session — the store shows the login screen (or bounces to SSO).
+    onUnauthorized();
     throw new ApiError(401, "unauthorized");
   }
   const text = await res.text();
@@ -35,4 +35,6 @@ export const api = {
     request<T>(path, { method: "POST", body: JSON.stringify(data) }),
   patch: <T>(path: string, data: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(data) }),
+  put: <T>(path: string, data: unknown) =>
+    request<T>(path, { method: "PUT", body: JSON.stringify(data) }),
 };

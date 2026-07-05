@@ -1,5 +1,6 @@
 // SSE over fetch (EventSource can't POST a JSON body). Streams the agent turn
 // events emitted by POST /api/agent/chat.
+import { onUnauthorized } from "./session.svelte";
 
 export interface ChatBody {
   message: string;
@@ -20,7 +21,7 @@ export async function* chatStream(body: ChatBody, signal?: AbortSignal): AsyncGe
     signal,
   });
   if (res.status === 401) {
-    window.location.href = `/auth/login?redirect=${encodeURIComponent(location.pathname)}`;
+    onUnauthorized();
     return;
   }
   if (!res.ok || !res.body) throw new Error(`agent chat failed: ${res.status}`);
