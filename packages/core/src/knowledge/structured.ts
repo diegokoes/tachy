@@ -53,11 +53,9 @@ export function parseStructured(value: unknown): Structured {
   return res.data;
 }
 
-// The promoted facets, shared by knowledge save/update across MCP + API.
-// `cloud` (environment) is deliberately NOT an enum: the vocabulary is
-// deployment-specific (prod/qa vs dev/demo/preprod vs git branches…), so it is
-// only shape-checked as a lowercase slug. Reuse existing values — they are
-// discoverable via listEnvironments().
+// Promoted facets, shared by knowledge save/update across MCP + API. `cloud` is
+// deliberately NOT an enum — the vocabulary is deployment-specific; it's only
+// shape-checked as a slug, with existing values discoverable via listEnvironments().
 export const RESOLUTION_CLARITIES = ["clear", "partial", "unclear"] as const;
 export const LEARNING_VALUES = ["high", "medium", "low"] as const;
 

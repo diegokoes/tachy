@@ -195,10 +195,8 @@ export async function listKnowledgeEntries(
   `;
 }
 
-// The observed environment ("cloud") vocabulary is whatever this deployment
-// actually uses — distinct stored values, most common first. Feeds the UI
-// filter dropdown and the list_environments MCP tool so new entries reuse
-// existing slugs instead of inventing near-duplicates.
+// Distinct stored cloud values, most common first — the deployment's live
+// environment vocabulary, so new entries reuse slugs instead of inventing them.
 export async function listEnvironments(): Promise<{ cloud: string; count: number }[]> {
   const rows = await sql`
     select cloud, count(*)::int as count
