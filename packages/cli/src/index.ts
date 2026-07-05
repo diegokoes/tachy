@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
 import {
   registerSource, resolveSource, ingestWorkItem, recordRun, resolveCurrentUserId,
-  backfillEmbeddings, env, sql,
+  backfillEmbeddings, env, sql, loadSettingsIntoEnv,
 } from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
@@ -101,6 +101,8 @@ async function main() {
   switch (cmd) {
     case "sync": {
       if (!positional[0]) throw new Error("sync needs a <source-slug>");
+      // sync runs the source redaction hooks; honor the DB-backed switch too.
+      try { await loadSettingsIntoEnv(); } catch { /* settings table may not exist yet */ }
       return sync(positional[0], { since: args.since, group: args.group });
     }
     case "embed-backfill": return embedBackfill();
