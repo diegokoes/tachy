@@ -7,8 +7,9 @@ import {
   listCustomers, addCustomer,
   listTeams, addTeam, listProducts, addProduct, listLabels, addLabel,
   listSourceConnections, addSourceConnection, listSourceProductMaps, addSourceProductMap,
-  env, globalRedactionEnabled,
+  env, effectiveSettings, setSetting,
 } from "@tachy/core";
+import { requireAdmin } from "../auth";
 
 const patternSchema = z.object({ slug: z.string(), description: z.string() });
 const componentSchema = z.object({
@@ -29,24 +30,32 @@ const labelSchema = z.object({ slug: z.string(), description: z.string().optiona
 // Org-structure + controlled-vocabulary endpoints. Mounted at "/" so each path is
 // stated in full here. Chained for RPC type export.
 export const admin = new Hono()
-  // Effective deployment settings, read-only. These live in the environment
-  // (secrets, auth, cost policy — deployment concerns, not runtime data), so the
-  // UI only surfaces them for visibility. Never expose secret VALUES here.
-  .get("/system", (c) =>
+  // Reads are open to any authenticated user; mutations need the admin role.
+  .use("*", async (c, next) => (c.req.method === "GET" ? next() : requireAdmin(c, next)))
+
+  // Runtime settings (DB-backed, env as fallback) + read-only env facts.
+  // Never expose secret VALUES here — only whether they are set.
+  .get("/system", async (c) =>
     c.json({
-      auth_mode: env.authMode,
-      port: env.port,
-      redaction_global: globalRedactionEnabled(),
-      user_email: env.userEmail ?? null,
-      oidc_configured: Boolean(env.oidc),
-      api_token_set: Boolean(env.apiToken),
-      agent_model: process.env.TACHY_AGENT_MODEL || null,
-      agent_effort: process.env.TACHY_AGENT_EFFORT || null,
-      allowed_models: process.env.TACHY_ALLOWED_MODELS || null,
-      upload_dir: process.env.TACHY_UPLOAD_DIR || null,
-      anthropic_api_key_set: Boolean(process.env.ANTHROPIC_API_KEY),
+      settings: await effectiveSettings(),
+      env: {
+        auth_mode: env.authMode,
+        port: env.port,
+        user_email: env.userEmail ?? null,
+        oidc_configured: Boolean(env.oidc),
+        api_token_set: Boolean(env.apiToken),
+        session_secret_set: Boolean(env.sessionSecret),
+        anthropic_api_key_set: Boolean(process.env.ANTHROPIC_API_KEY),
+        upload_dir: process.env.TACHY_UPLOAD_DIR || null,
+      },
     }),
   )
+
+  .put("/settings/:key", async (c) => {
+    const { value } = await c.req.json<{ value: unknown }>();
+    await setSetting(c.req.param("key"), value);
+    return c.json({ settings: await effectiveSettings() });
+  })
   .get("/resolution-patterns", async (c) => c.json(await listResolutionPatterns()))
   .post("/resolution-patterns", zValidator("json", patternSchema), async (c) => {
     const { slug, description } = c.req.valid("json");
