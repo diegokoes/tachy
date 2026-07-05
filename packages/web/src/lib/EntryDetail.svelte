@@ -52,7 +52,7 @@
   {#if entry}
     {#if entry.status === "deprecated"}
       <div class="deprecated-banner">
-        ⚠ This lesson is marked <strong>outdated</strong> — don't apply it as current advice.
+        ⚠ This lesson is marked <strong>outdated</strong> - don't apply it as current advice.
         {#if entry.superseded_by && onOpen}
           <button class="jump" onclick={() => onOpen(entry!.superseded_by!)}>view replacement →</button>
         {/if}

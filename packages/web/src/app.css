@@ -1,6 +1,9 @@
 /* Theme + typography foundation. Fluid root font: ~15px on laptops, growing to
    18px on large desktops; user-adjustable via --font-scale (Theme view). */
 :root {
+  /* Without this the browser paints form controls and any remaining native
+     scrollbars in light mode — white bars on the dark UI. */
+  color-scheme: dark;
   font-size: calc(clamp(14.5px, 0.35vw + 12.5px, 18px) * var(--font-scale, 1));
   font-family: ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, monospace;
 
@@ -19,6 +22,7 @@
 }
 
 :root[data-theme="light"] {
+  color-scheme: light;
   --bg: #f2efe7;
   --panel: rgba(252, 251, 247, 0.88);
   --panel-solid: #faf8f2;
@@ -38,6 +42,12 @@ body {
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
+}
+
+/* Native scrollbars that remain (main column, textareas, tables): thin + themed. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 50%, transparent) transparent;
 }
 
 a { color: var(--accent); text-decoration: none; }
