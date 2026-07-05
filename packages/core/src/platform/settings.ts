@@ -1,0 +1,99 @@
+import { z } from "zod";
+import { sql } from "./db";
+import { badInput } from "./errors";
+
+// DB-backed, NON-SECRET runtime settings. Env vars remain as fallback defaults
+// so pre-wizard deployments behave exactly as before; a DB value wins once set.
+// Secrets (tokens, keys) never live here — environment only.
+
+export const AGENT_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+
+const SETTING_SCHEMAS = {
+  redaction_global: z.boolean(),
+  agent_model: z.string().min(1),
+  agent_effort: z.enum(AGENT_EFFORTS),
+  allowed_models: z.array(z.string().min(1)),
+  org_name: z.string().min(1),
+} as const;
+
+export type SettingKey = keyof typeof SETTING_SCHEMAS;
+export const SETTING_KEYS = Object.keys(SETTING_SCHEMAS) as SettingKey[];
+
+export type SettingsMap = {
+  [K in SettingKey]?: z.infer<(typeof SETTING_SCHEMAS)[K]>;
+};
+
+let cache: SettingsMap | undefined;
+
+export async function getSettings(): Promise<SettingsMap> {
+  if (cache) return cache;
+  const rows = await sql`select key, value from settings`;
+  const out: SettingsMap = {};
+  for (const row of rows) {
+    const key = row.key as string;
+    if (key in SETTING_SCHEMAS) {
+      const parsed = SETTING_SCHEMAS[key as SettingKey].safeParse(row.value);
+      if (parsed.success) (out as Record<string, unknown>)[key] = parsed.data;
+    }
+  }
+  cache = out;
+  return out;
+}
+
+export async function setSetting(key: string, value: unknown): Promise<void> {
+  if (!(key in SETTING_SCHEMAS)) throw badInput(`unknown setting '${key}' (known: ${SETTING_KEYS.join(", ")})`);
+  const parsed = SETTING_SCHEMAS[key as SettingKey].safeParse(value);
+  if (!parsed.success) throw badInput(`invalid value for '${key}': ${parsed.error.issues.map((i) => i.message).join("; ")}`);
+  await sql`
+    insert into settings (key, value) values (${key}, ${sql.json(parsed.data as never)})
+    on conflict (key) do update set value = excluded.value, updated_at = now()
+  `;
+  cache = undefined;
+}
+
+export type SettingSource = "db" | "env" | "default";
+
+export interface EffectiveSettings {
+  redaction_global: { value: boolean; source: SettingSource };
+  agent_model: { value: string; source: SettingSource };
+  agent_effort: { value: (typeof AGENT_EFFORTS)[number]; source: SettingSource };
+  allowed_models: { value: string[]; source: SettingSource };
+  org_name: { value: string | null; source: SettingSource };
+}
+
+// Precedence: DB setting > env var > built-in default.
+export async function effectiveSettings(): Promise<EffectiveSettings> {
+  const db = await getSettings();
+  const pick = <T>(dbVal: T | undefined, envVal: T | undefined, dflt: T): { value: T; source: SettingSource } =>
+    dbVal !== undefined ? { value: dbVal, source: "db" }
+    : envVal !== undefined ? { value: envVal, source: "env" }
+    : { value: dflt, source: "default" };
+
+  const envEffort = AGENT_EFFORTS.includes(process.env.TACHY_AGENT_EFFORT as never)
+    ? (process.env.TACHY_AGENT_EFFORT as (typeof AGENT_EFFORTS)[number])
+    : undefined;
+  const envModels = process.env.TACHY_ALLOWED_MODELS
+    ? process.env.TACHY_ALLOWED_MODELS.split(",").map((s) => s.trim()).filter(Boolean)
+    : undefined;
+
+  return {
+    redaction_global: pick(db.redaction_global, process.env.TACHY_REDACT === "true" ? true : undefined, false),
+    agent_model: pick(db.agent_model, process.env.TACHY_AGENT_MODEL || undefined, "claude-sonnet-5"),
+    agent_effort: pick(db.agent_effort, envEffort, "medium"),
+    allowed_models: pick(db.allowed_models, envModels, []),
+    org_name: pick<string | null>(db.org_name, undefined, null),
+  };
+}
+
+// The redaction check (globalRedactionEnabled) reads process.env synchronously —
+// including inside the standalone MCP process — so DB-backed settings are
+// materialized into env once at boot. Call before serving.
+export async function loadSettingsIntoEnv(): Promise<void> {
+  const eff = await effectiveSettings();
+  if (eff.redaction_global.value) process.env.TACHY_REDACT = "true";
+}
+
+// test hook
+export function clearSettingsCache(): void {
+  cache = undefined;
+}

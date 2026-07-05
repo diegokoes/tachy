@@ -8,6 +8,17 @@ export { AppError, notFound, conflict, badInput } from "./platform";
 export type { AppErrorCode } from "./platform";
 export { log } from "./platform";
 export { upsertUser, resolveCurrentUserId } from "./platform";
+export {
+  USER_ROLES, countAdmins, listUsers, createUser, getUserByEmail,
+  setUserRole, setUserPassword, setUserDisabled, listTeamMembers, setTeamMember,
+} from "./platform";
+export type { UserRole, UserRow, TeamMemberRow } from "./platform";
+export { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from "./platform";
+export {
+  AGENT_EFFORTS, SETTING_KEYS, getSettings, setSetting, effectiveSettings,
+  loadSettingsIntoEnv, clearSettingsCache,
+} from "./platform";
+export type { SettingKey, SettingsMap, EffectiveSettings, SettingSource } from "./platform";
 
 // knowledge
 export {
