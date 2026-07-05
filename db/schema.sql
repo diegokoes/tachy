@@ -31,7 +31,21 @@ create table users (
     id            uuid primary key default gen_random_uuid(),
     email         text not null unique,
     display_name  text,
+    -- Global role: admins manage users, org structure and settings.
+    role          text not null default 'member' check (role in ('admin','member')),
+    -- Scrypt hash for password login; null = SSO-only or attribution-only user.
+    password_hash text,
+    disabled      boolean not null default false,
     created_at    timestamptz not null default now()
+);
+
+-- Non-secret runtime settings (redaction, agent cost policy, org name),
+-- managed by the setup wizard / Admin > System. Secrets stay in the
+-- environment, never here.
+create table settings (
+    key         text primary key,
+    value       jsonb not null,
+    updated_at  timestamptz not null default now()
 );
 
 create table team_members (
