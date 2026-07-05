@@ -105,7 +105,7 @@ Never delete — issues resurface, and a flagged stale lesson beats a rediscover
 1. Call `list_resolution_patterns` to load the vocabulary
 2. Structure the user's input into the Knowledge Entry Schema
 3. Present for approval
-4. Call `save_knowledge_entry` (leave `work_item_id` null)
+4. Call `save_knowledge_entry` (leave `work_item_id` null). Scope it with `product_slug` — required when setting `component`, since component slugs resolve within a product. Never pass UUIDs; slugs resolve server-side.
 
 ### Context dump mode ("here's a bunch of project info / these files / this wiki")
 
