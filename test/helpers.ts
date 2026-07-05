@@ -9,7 +9,7 @@ export async function resetData() {
     truncate work_item_messages, work_items, knowledge_feedback,
              knowledge_entries, analysis_runs, team_members, users,
              customers, resolution_patterns, components, labels,
-             reference_docs, reference_doc_chunks
+             reference_docs, reference_doc_chunks, settings
     restart identity cascade
   `;
 }

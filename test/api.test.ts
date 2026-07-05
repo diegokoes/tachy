@@ -132,8 +132,12 @@ describe("API auth", () => {
   });
 
   it("does not expose SSO routes when OIDC is unconfigured", async () => {
-    // No webRoot, no oidc: /auth/me is an unknown route → JSON 404.
-    expect((await app.request("/auth/me")).status).toBe(404);
+    // /auth/login is OIDC-only; /auth/me now serves every auth flavor and
+    // reports the open-mode identity when nothing is configured.
+    expect((await app.request("/auth/login")).status).toBe(404);
+    const me = await app.request("/auth/me");
+    expect(me.status).toBe(200);
+    expect(await me.json()).toMatchObject({ role: "admin", via: "open" });
   });
 });
 
