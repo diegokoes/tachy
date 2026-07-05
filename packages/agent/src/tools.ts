@@ -17,6 +17,7 @@ export const READ_TOOLS = [
   "get_reference_doc",
   "ingest_context",
   "list_resolution_patterns",
+  "list_environments",
   "list_components",
   "list_customers",
   "list_teams",

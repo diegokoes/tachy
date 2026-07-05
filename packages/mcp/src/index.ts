@@ -10,7 +10,7 @@ import {
   listResolutionPatterns, addResolutionPattern,
   listComponents, addComponent, resolveComponentTags, resolveComponentStrict, getProductIdBySlug,
   listCustomers, addCustomer, getCustomerIdBySlug, setWorkItemCustomer, setObservedVersion, getCustomerName, getCustomerSlug,
-  resolveRedactionPolicy, redactForLlm, globalRedactionEnabled, scrubDeep, scrubText, TokenMap,
+  resolveRedactionPolicy, redactForLlm, globalRedactionEnabled, scrubDeep, scrubText, TokenMap, loadSettingsIntoEnv,
   listTeams, addTeam, listProducts, addProduct, listLabels, addLabel, getTeamIdBySlug,
   getKnowledgeEntry, listKnowledgeEntries, listEnvironments,
   saveReferenceDoc, getReferenceDoc, listReferenceDocs, updateReferenceDoc, searchReferenceDocs,
@@ -210,11 +210,13 @@ tool(
 tool(
   "save_knowledge_entry",
   {
-    description: "Persist an APPROVED structured knowledge entry. Call ONLY after the user reviewed and approved the summary. resolution_pattern must be an existing slug from list_resolution_patterns (or omitted) — it is not free text. component must be an existing slug/alias from list_components; if the ticket's area is missing from the glossary, propose add_component in the same review step and call it after user approval, then save. product_area is derived automatically from the component hierarchy — it is not an input.",
+    description: "Persist an APPROVED structured knowledge entry. Call ONLY after the user reviewed and approved the summary. resolution_pattern must be an existing slug from list_resolution_patterns (or omitted) — it is not free text. component must be an existing slug/alias from list_components; if the ticket's area is missing from the glossary, propose add_component in the same review step and call it after user approval, then save. product_area is derived automatically from the component hierarchy — it is not an input. For manual entries (no work_item_id) that set component, pass product_slug — component slugs resolve within a product.",
     inputSchema: {
       work_item_id: z.string().optional(),
-      product_id: z.string().optional(),
-      team_id: z.string().optional(),
+      product_slug: z.string().optional().describe("Product slug or alias — the normal way to scope an entry. Required for manual entries that set component."),
+      team_slug: z.string().optional().describe("Team slug or alias."),
+      product_id: z.string().optional().describe("Product UUID — only if you already hold one (e.g. from fetch_work_item); otherwise use product_slug."),
+      team_id: z.string().optional().describe("Team UUID — otherwise use team_slug."),
       status: knowledgeStatusSchema.optional(),
       issue_summary: z.string().optional(),
       symptoms: z.array(z.string()).optional(),
@@ -234,7 +236,9 @@ tool(
   },
   async (a) => {
     const row = await saveKnowledgeEntry({
-      workItemId: a.work_item_id, productId: a.product_id, teamId: a.team_id,
+      workItemId: a.work_item_id,
+      productId: a.product_id ?? (a.product_slug ? await getProductIdBySlug(a.product_slug) : undefined),
+      teamId: a.team_id ?? (a.team_slug ? await getTeamIdBySlug(a.team_slug) : undefined),
       createdById: await resolveCurrentUserId(),
       status: a.status ?? "approved", issueSummary: a.issue_summary, symptoms: a.symptoms, signals: a.signals,
       rootCause: a.root_cause, resolution: a.resolution, resolutionPattern: a.resolution_pattern,
@@ -739,6 +743,14 @@ export { server };
 // module in tests doesn't hijack stdin/stdout.
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
+  // DB-backed settings (e.g. the redaction switch) are materialized into env
+  // once at boot — the redaction check reads process.env synchronously.
+  // Best-effort: the settings table may not exist on not-yet-migrated DBs.
+  try {
+    await loadSettingsIntoEnv();
+  } catch {
+    /* keep env-only behavior */
+  }
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
