@@ -7,7 +7,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { env } from "@tachy/core";
+import { env, effectiveSettings, type EffectiveSettings } from "@tachy/core";
 import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
 import { sessionEmail } from "../auth";
 
@@ -17,38 +17,50 @@ const turns = new Map<string, AgentTurn>();
 
 const uploadDir = process.env.TACHY_UPLOAD_DIR || join(tmpdir(), "tachy-uploads");
 
-// Cost policy: default Sonnet at medium effort, optional model allowlist — all env-overridable.
-const model = process.env.TACHY_AGENT_MODEL || "claude-sonnet-5";
-const allowedModels = (process.env.TACHY_ALLOWED_MODELS ?? "")
-  .split(",").map((s) => s.trim()).filter(Boolean);
-const effort = (["low", "medium", "high", "xhigh", "max"].includes(process.env.TACHY_AGENT_EFFORT ?? "")
-  ? process.env.TACHY_AGENT_EFFORT
-  : "medium") as AgentConfig["effort"];
+// The web chat gates every write tool behind an interactive review box (editable
+// JSON + Approve/Deny), so the base rules' "ask before saving" would make the
+// user approve twice. This note overrides that for this UI only.
+const UI_APPROVAL_NOTE = `
+
+## Web chat approval UI (overrides "ask before saving" above)
+
+In this chat, every write tool call (save_knowledge_entry, update_knowledge_entry, save_reference_doc, add_component, post_private_note, …) is intercepted by a review box: the user sees your exact tool input as editable JSON and must Approve or Deny before it runs. That review box IS the user approval the rules require.
+
+- Summarize the proposed entry briefly, then CALL the tool right away — do not ask "shall I save?" in prose first.
+- The user can edit the JSON in the box before approving; the tool runs with their edited input.
+- A denied call is the user declining, not an error — ask what they want changed instead of retrying.`;
 
 let systemPromptCache: string | undefined;
 async function systemPrompt(): Promise<string> {
   if (systemPromptCache === undefined) {
     const path = join(process.cwd(), "CLAUDE.md");
-    systemPromptCache = existsSync(path) ? await readFile(path, "utf8") : "";
+    const base = existsSync(path) ? await readFile(path, "utf8") : "";
+    systemPromptCache = base + UI_APPROVAL_NOTE;
   }
   return systemPromptCache;
 }
 
 // Launch config for the tachy MCP subprocess: inherits env (DB, source tokens)
-// plus the logged-in user's email for attribution.
-function mcpConfig(userEmail: string | undefined): Omit<AgentConfig, "systemPromptAppend"> {
+// plus the logged-in user's email for attribution. Cost policy and the redaction
+// switch come from effectiveSettings() per turn (DB wins over env), and are
+// materialized into the subprocess env — it only sees a snapshot at spawn.
+function mcpConfig(userEmail: string | undefined, settings: EffectiveSettings): Omit<AgentConfig, "systemPromptAppend"> {
   const mcpEnv: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (typeof v === "string") mcpEnv[k] = v;
   if (userEmail) mcpEnv.TACHY_USER_EMAIL = userEmail;
+  if (settings.redaction_global.value) mcpEnv.TACHY_REDACT = "true";
 
   const command = process.env.TACHY_MCP_COMMAND || process.execPath;
   const args = process.env.TACHY_MCP_ARGS
     ? process.env.TACHY_MCP_ARGS.split(" ")
     : ["--import", "tsx", "packages/mcp/src/index.ts"];
 
+  const allowedModels = settings.allowed_models.value;
   return {
     mcpCommand: command, mcpArgs: args, mcpEnv, cwd: process.cwd(),
-    model, effort, ...(allowedModels.length ? { allowedModels } : {}),
+    model: settings.agent_model.value,
+    effort: settings.agent_effort.value as AgentConfig["effort"],
+    ...(allowedModels.length ? { allowedModels } : {}),
   };
 }
 
@@ -79,7 +91,10 @@ export const agent = new Hono()
         )}.\n\n${message}`
       : message;
 
-    const cfg: AgentConfig = { ...mcpConfig(userEmail), systemPromptAppend: await systemPrompt() };
+    const cfg: AgentConfig = {
+      ...mcpConfig(userEmail, await effectiveSettings()),
+      systemPromptAppend: await systemPrompt(),
+    };
     const turnId = randomUUID();
     const turn = startTurn(prompt, cfg, sessionId ? { resume: sessionId } : {});
     turns.set(turnId, turn);

@@ -11,7 +11,9 @@ import { workItems } from "./routes/work-items";
 import { admin } from "./routes/admin";
 import { reference } from "./routes/reference";
 import { agent } from "./routes/agent";
-import { installAuth, type OidcConfig } from "./auth";
+import { setup } from "./routes/setup";
+import { users } from "./routes/users";
+import { installAuth, isBootstrapped, type OidcConfig } from "./auth";
 
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
@@ -28,6 +30,7 @@ function apiRoutes() {
     .route("/analysis-runs", analysisRuns)
     .route("/reference", reference)
     .route("/agent", agent)
+    .route("/users", users)
     .route("/", admin);
 }
 
@@ -35,7 +38,7 @@ function apiRoutes() {
 // config is passed in rather than read from env, so it's testable. `webRoot`
 // (optional) points at the built SPA (packages/web/dist); when set, the app serves
 // static assets + an index.html SPA fallback for non-API routes.
-export function createApp(opts: { apiToken?: string; webRoot?: string; oidc?: OidcConfig } = {}) {
+export function createApp(opts: { apiToken?: string; webRoot?: string; oidc?: OidcConfig; passwordAuth?: boolean } = {}) {
   const base = new Hono();
   base.use("*", logger());
 
@@ -48,13 +51,24 @@ export function createApp(opts: { apiToken?: string; webRoot?: string; oidc?: Oi
     }
   });
 
-  // Public: lets the SPA decide whether to show a Sign-in button. No secrets.
+  // Public: lets the SPA decide between wizard / login form / SSO button. No secrets.
   const authMode = opts.oidc ? "sso" : opts.apiToken ? "token" : "open";
-  base.get("/auth/config", (c) => c.json({ authMode }));
+  base.get("/auth/config", async (c) =>
+    c.json({
+      authMode,
+      sso: Boolean(opts.oidc),
+      passwordLogin: Boolean(opts.passwordAuth) && (await isBootstrapped()),
+    }),
+  );
 
-  // Auth (SSO session OR bearer) guards /api/* only: browsers can't attach a
-  // bearer to asset requests, so the SPA shell must stay public. Also mounts /auth/*.
-  installAuth(base, { apiToken: opts.apiToken, oidc: opts.oidc });
+  // First-run bootstrap: mounted BEFORE the auth gate so a fresh install can be
+  // set up from the browser. The POST self-disables once an admin exists.
+  base.route("/api/setup", setup);
+
+  // Auth (bearer OR password session OR SSO session) guards /api/* only: browsers
+  // can't attach a bearer to asset requests, so the SPA shell must stay public.
+  // Also mounts /auth/*.
+  installAuth(base, { apiToken: opts.apiToken, oidc: opts.oidc, passwordAuth: opts.passwordAuth });
 
   const app = base.route("/api", apiRoutes());
 

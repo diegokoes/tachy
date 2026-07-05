@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { serve } from "@hono/node-server";
 import { env } from "@tachy/core";
 import { createApp } from "./app";
+import { isBootstrapped } from "./auth";
 
 export { createApp } from "./app";
 export type { AppType } from "./app";
@@ -17,14 +18,16 @@ const app = createApp({
   apiToken: env.apiToken,
   webRoot: serveWeb ? webRoot : undefined,
   oidc,
+  passwordAuth: true,
 });
 
-// Bind to all interfaces when any auth is configured (SSO or token); otherwise
-// (open mode) stay on loopback so an unauthenticated instance isn't exposed.
-const authConfigured = Boolean(env.apiToken || oidc);
+// Bind to all interfaces when some auth stands guard: token, SSO, or password
+// login (the instance is bootstrapped). Otherwise stay on loopback so an
+// unauthenticated instance isn't exposed — run the setup wizard locally first.
+const authConfigured = Boolean(env.apiToken || oidc) || (await isBootstrapped());
 if (!authConfigured) {
   console.warn(
-    "WARNING: no auth configured (authMode=open). Binding to 127.0.0.1 only; set TACHY_API_TOKEN or OIDC_* to accept remote requests.",
+    "WARNING: no auth configured yet. Binding to 127.0.0.1 only; open the web UI to run the setup wizard (or set TACHY_API_TOKEN / OIDC_*), then restart to accept remote requests.",
   );
 }
 serve({ fetch: app.fetch, port: env.port, hostname: authConfigured ? undefined : "127.0.0.1" });
