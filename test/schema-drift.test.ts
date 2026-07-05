@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   KNOWLEDGE_STATUSES, REFERENCE_STATUSES, CONFIDENCES, FEEDBACK_KINDS, RUN_MODES,
-  RESOLUTION_CLARITIES, LEARNING_VALUES,
+  RESOLUTION_CLARITIES, LEARNING_VALUES, USER_ROLES,
 } from "@tachy/core";
 
 // Guards the hand-maintained contract between the core enums (the single source
@@ -39,6 +39,7 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     ["knowledge_feedback", "kind", FEEDBACK_KINDS],
     ["analysis_runs", "mode", RUN_MODES],
     ["reference_docs", "status", REFERENCE_STATUSES],
+    ["users", "role", USER_ROLES],
   ] as const)("%s.%s", (table, col, values) => {
     expect(checkValues(table, col).sort()).toEqual([...values].sort());
   });
