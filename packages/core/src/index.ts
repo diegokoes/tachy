@@ -4,21 +4,27 @@
 // platform
 export { sql } from "./platform";
 export { env, freshdeskToken, githubToken, sourceToken } from "./platform";
-export { AppError, notFound, conflict, badInput } from "./platform";
+export { AppError, notFound, conflict, badInput, forbidden } from "./platform";
 export type { AppErrorCode } from "./platform";
+export {
+  isGlobalAdmin, teamAdminTeams, isAnyTeamAdmin, canEditScope, canManageTeam,
+  canManageTeamBySlug, assertCanEditScope, assertCanManageTeamBySlug,
+  assertAnyTeamAdmin, assertGlobalAdmin, clearPermissionCache,
+} from "./platform";
+export type { EntryScope } from "./platform";
 export { log } from "./platform";
 export { upsertUser, resolveCurrentUserId } from "./platform";
 export {
-  USER_ROLES, countAdmins, listUsers, createUser, getUserByEmail,
+  USER_ROLES, TEAM_ROLES, countAdmins, listUsers, createUser, getUserByEmail,
   setUserRole, setUserPassword, setUserDisabled, listTeamMembers, setTeamMember,
 } from "./platform";
-export type { UserRole, UserRow, TeamMemberRow } from "./platform";
+export type { UserRole, TeamRole, UserRow, TeamMemberRow } from "./platform";
 export { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from "./platform";
 export {
-  AGENT_EFFORTS, SETTING_KEYS, getSettings, setSetting, effectiveSettings,
+  AGENT_EFFORTS, DEPLOYMENT_PROFILES, SETTING_KEYS, getSettings, setSetting, effectiveSettings,
   loadSettingsIntoEnv, clearSettingsCache,
 } from "./platform";
-export type { SettingKey, SettingsMap, EffectiveSettings, SettingSource } from "./platform";
+export type { SettingKey, SettingsMap, EffectiveSettings, SettingSource, DeploymentProfile } from "./platform";
 
 // knowledge
 export {
@@ -50,17 +56,20 @@ export type { RunInput } from "./work-items";
 
 // catalog
 export {
-  listCustomers, addCustomer, resolveCustomerByEmail, getCustomerIdBySlug,
+  listCustomers, addCustomer, updateCustomer, deleteCustomer, resolveCustomerByEmail, getCustomerIdBySlug,
   setWorkItemCustomer, setObservedVersion, getCustomerName, getCustomerSlug,
 } from "./catalog";
 export type { CustomerInput } from "./catalog";
-export { listResolutionPatterns, addResolutionPattern } from "./catalog";
+export { listResolutionPatterns, addResolutionPattern, deleteResolutionPattern } from "./catalog";
 export {
-  listComponents, addComponent, resolveComponentTags, resolveComponentStrict, getComponentPath,
+  listComponents, addComponent, updateComponent, deleteComponent,
+  resolveComponentTags, resolveComponentStrict, resolveComponentFilter, getComponentPath,
 } from "./catalog";
 export type { AddComponentInput, ResolvedComponent } from "./catalog";
 export {
-  getProductIdBySlug, getTeamIdBySlug, listTeams, addTeam, listProducts, addProduct, listLabels, addLabel,
+  getProductIdBySlug, getTeamIdBySlug, listTeams, addTeam, deleteTeam,
+  listProducts, addProduct, updateProduct, deleteProduct,
+  listLabels, addLabel, updateLabel, deleteLabel,
 } from "./catalog";
 
 // sources
@@ -69,6 +78,7 @@ export { registerSource, resolveSource } from "./sources";
 export type { ResolvedSource } from "./sources";
 export {
   listSourceConnections, addSourceConnection, listSourceProductMaps, addSourceProductMap,
+  deleteSourceProductMap,
 } from "./sources";
 export type { SourceConnectionInput, SourceProductMapInput } from "./sources";
 

@@ -6,6 +6,10 @@ import { hashPassword } from "./passwords";
 export const USER_ROLES = ["admin", "member"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
+// Per-team role: 'admin' = team mini-admin (delegated curation for that team).
+export const TEAM_ROLES = ["admin", "member"] as const;
+export type TeamRole = (typeof TEAM_ROLES)[number];
+
 export interface UserRow {
   id: string;
   email: string;
@@ -111,7 +115,7 @@ export interface TeamMemberRow {
   user_id: string;
   email: string;
   display_name: string | null;
-  team_role: string;
+  team_role: TeamRole;
 }
 
 export async function listTeamMembers(teamSlug: string): Promise<TeamMemberRow[]> {
@@ -127,7 +131,7 @@ export async function listTeamMembers(teamSlug: string): Promise<TeamMemberRow[]
 }
 
 // role = null removes the membership; otherwise upserts it.
-export async function setTeamMember(teamSlug: string, email: string, role: string | null): Promise<void> {
+export async function setTeamMember(teamSlug: string, email: string, role: TeamRole | null): Promise<void> {
   const [team] = await sql`select id from teams where slug = ${teamSlug}`;
   if (!team) throw notFound(`team '${teamSlug}' not found`);
   const user = await getUserByEmail(email);

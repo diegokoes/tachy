@@ -51,7 +51,9 @@ create table settings (
 create table team_members (
     team_id   uuid not null references teams(id) on delete cascade,
     user_id   uuid not null references users(id) on delete cascade,
-    role      text not null default 'member',
+    -- 'admin' = team mini-admin: curates this team's knowledge/docs/taxonomy
+    -- and membership without org-wide admin rights.
+    role      text not null default 'member' check (role in ('admin','member')),
     primary key (team_id, user_id)
 );
 
@@ -184,6 +186,10 @@ create table knowledge_entries (
     resolution_clarity  text check (resolution_clarity is null or resolution_clarity in ('clear','partial','unclear')),
     learning_value      text check (learning_value is null or learning_value in ('high','medium','low')),
     hidden_fix          boolean,
+    -- Optional, free-form (like cloud). affected_version seeds from the work
+    -- item's observed_version at save time; fixed_version is set on resolution.
+    affected_version    text,
+    fixed_version       text,
     structured          jsonb not null default '{}'::jsonb,
 
     embedding           vector(384),

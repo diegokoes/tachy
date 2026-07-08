@@ -1,4 +1,5 @@
 import { sql } from "../platform/db";
+import { conflict, notFound } from "../platform/errors";
 
 /** The full controlled vocabulary, for Claude to pick from before tagging an entry. */
 export async function listResolutionPatterns() {
@@ -14,4 +15,16 @@ export async function addResolutionPattern(slug: string, description: string) {
     returning slug, description
   `;
   return row;
+}
+
+// knowledge_entries.resolution_pattern FKs this slug (no cascade), so a raw
+// delete would hard-fail  pre-check and surface a human message instead.
+export async function deleteResolutionPattern(slug: string) {
+  const [exists] = await sql`select slug from resolution_patterns where slug = ${slug}`;
+  if (!exists) throw notFound(`Resolution pattern '${slug}' not found`);
+  const [ref] = await sql`select count(*)::int as n from knowledge_entries where resolution_pattern = ${slug}`;
+  if (ref.n > 0)
+    throw conflict(`pattern '${slug}' is used by ${ref.n} knowledge entr(y/ies) - re-tag them first`);
+  await sql`delete from resolution_patterns where slug = ${slug}`;
+  return { deleted: true, slug };
 }
