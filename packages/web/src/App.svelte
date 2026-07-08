@@ -7,7 +7,7 @@
   import IntroSplash from "./lib/IntroSplash.svelte";
   import SetupWizard from "./lib/SetupWizard.svelte";
   import LoginView from "./lib/LoginView.svelte";
-  import { session, initSession, logout, isCurator } from "./lib/session.svelte";
+  import { session, initSession, isCurator } from "./lib/session.svelte";
   import { gsap, reducedMotion } from "./lib/gsap";
 
   type View = "chat" | "knowledge" | "reference" | "admin" | "theme";
@@ -298,9 +298,6 @@
         <button class:active={view === n.key} onclick={() => (view = n.key)}>{n.label}</button>
       {/each}
     </nav>
-    {#if session.me && session.me.via !== "open"}
-      <button class="signout" title={session.me.email ?? undefined} onclick={logout}>sign out</button>
-    {/if}
   </aside>
 
   <div class="main">
@@ -446,14 +443,23 @@
     top: 50%;
     transform: translateY(-50%);
     z-index: 10;
-    background: var(--panel);
+    /* Solid (not translucent) so the nav reads cleanly over the pattern. */
+    background: var(--aside-bg);
+    /* Raised-panel look with the depth thrown to the bottom-right: a thick
+       edge there (light rim on dark, dark rim on light) plus a groove just
+       inside it. Top/left stay a faint hairline; the left is the screen edge. */
     border: 1px solid var(--border);
     border-left: none;
-    border-radius: 0 8px 8px 0;
-    padding: 0.5rem 0.5rem 0.5rem 0.4rem;
+    border-right: 6px solid var(--aside-edge-hi);
+    border-bottom: 6px solid var(--aside-edge-hi);
+    border-radius: 0 7px 7px 0;
+    padding: 0.6rem 0.85rem 0.7rem 0.55rem;
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
+    box-shadow:
+      inset -3px -3px 0 var(--aside-edge-lo),
+      7px 8px 18px -6px var(--aside-drop);
   }
 
   nav { display: flex; flex-direction: column; gap: 0.15rem; }
@@ -479,17 +485,6 @@
     border-color: var(--accent);
     color: var(--accent);
   }
-
-  .signout {
-    margin-top: 0.4rem;
-    border-color: transparent;
-    background: transparent;
-    color: var(--muted);
-    font-size: 0.78rem;
-    padding: 0.25rem 0.8rem;
-    text-align: left;
-  }
-  .signout:hover { color: var(--danger); border-color: transparent; }
 
   /* Content column centered on the viewport; symmetric padding clears the
      floating nav on the left and mirrors it on the right on wide screens. */

@@ -11,6 +11,12 @@
   --panel: rgba(8, 8, 8, 0.82);
   --panel-solid: #101010;
   --border: rgba(255, 255, 255, 0.09);
+  /* Left nav: a touch lighter than --bg so it separates from the backdrop,
+     plus a hi/lo edge pair + drop for the text-mode 3D bevel. */
+  --aside-bg: #1c1c1c;
+  --aside-edge-hi: rgba(255, 255, 255, 0.22); /* the thick bottom-right rim */
+  --aside-edge-lo: rgba(0, 0, 0, 0.55);       /* groove just inside the rim */
+  --aside-drop: rgba(0, 0, 0, 0.9);
   --text: #e2e2e2;
   --muted: #6d6d6d;
   --accent: #6ea8fe;
@@ -27,6 +33,11 @@
   --panel: rgba(252, 251, 247, 0.88);
   --panel-solid: #faf8f2;
   --border: rgba(30, 28, 20, 0.14);
+  /* Light bg lets the bottom-right rim be a conventional dark edge + shadow. */
+  --aside-bg: var(--panel-solid);
+  --aside-edge-hi: rgba(30, 28, 20, 0.3);   /* the thick bottom-right rim */
+  --aside-edge-lo: rgba(255, 255, 255, 0.8); /* groove just inside the rim */
+  --aside-drop: rgba(30, 28, 20, 0.26);
   --text: #21201c;
   --muted: #857f72;
   --pattern-ink: rgba(30, 28, 20, 0.22);
