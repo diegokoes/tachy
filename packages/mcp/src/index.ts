@@ -6,9 +6,10 @@ import type { ZodRawShape } from "zod";
 import {
   registerSource, resolveSource, ingestWorkItem, saveKnowledgeEntry, searchKnowledge,
   updateKnowledgeEntry,
-  resolveCurrentUserId, addFeedback, recordRun,
+  resolveCurrentUserId, addFeedback, recordRun, sql, countAdmins, forbidden,
+  canManageTeam, assertCanEditScope, assertAnyTeamAdmin, assertGlobalAdmin,
   listResolutionPatterns, addResolutionPattern,
-  listComponents, addComponent, resolveComponentTags, resolveComponentStrict, getProductIdBySlug,
+  listComponents, addComponent, resolveComponentFilter, getProductIdBySlug,
   listCustomers, addCustomer, getCustomerIdBySlug, setWorkItemCustomer, setObservedVersion, getCustomerName, getCustomerSlug,
   resolveRedactionPolicy, redactForLlm, globalRedactionEnabled, scrubDeep, scrubText, TokenMap, loadSettingsIntoEnv,
   listTeams, addTeam, listProducts, addProduct, listLabels, addLabel, getTeamIdBySlug,
@@ -18,7 +19,7 @@ import {
   AppError, log, cloudSchema, resolutionClaritySchema, learningValueSchema, badInput,
   knowledgeStatusSchema, referenceStatusSchema, confidenceSchema, feedbackKindSchema, runModeSchema,
 } from "@tachy/core";
-import type { KnowledgeUpdateInput, ReferenceDocUpdate } from "@tachy/core";
+import type { EntryScope, KnowledgeUpdateInput, ReferenceDocUpdate } from "@tachy/core";
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
@@ -77,6 +78,70 @@ function tool<I extends ZodRawShape>(name: string, config: ToolConfig<I>, cb: To
   const wrapped = ((args: unknown, extra: unknown) =>
     runTool(name, cb as (a: unknown, e: unknown) => unknown, args, extra)) as ToolCallback<I>;
   server.registerTool(name, config as never, wrapped);
+}
+
+// ── Write authorization ──────────────────────────────────────────────────────
+// The same team-scoped permission model the HTTP API enforces, applied to the
+// write tools. Two deliberate open paths: TACHY_USER_EMAIL unset = a trusted
+// local stdio caller (CLI/dev  the web agent always injects the session
+// email), and a not-yet-bootstrapped instance (no admin exists). A positive
+// bootstrap check is cached for the process lifetime, like the API does.
+let enforcementCache = false;
+async function enforcementActive(): Promise<boolean> {
+  if (enforcementCache) return true;
+  enforcementCache = (await countAdmins()) > 0;
+  return enforcementCache;
+}
+
+// The user id writes must be authorized against, or null when unenforced.
+async function gateUserId(): Promise<string | null> {
+  const userId = await resolveCurrentUserId();
+  if (!userId) return null;
+  return (await enforcementActive()) ? userId : null;
+}
+
+async function requireCanEdit(scope: EntryScope): Promise<void> {
+  const userId = await gateUserId();
+  if (userId) await assertCanEditScope(userId, scope);
+}
+
+async function requireCanManageTeam(teamId: string | null | undefined): Promise<void> {
+  const userId = await gateUserId();
+  if (!userId) return;
+  if (!teamId || !(await canManageTeam(userId, teamId)))
+    throw forbidden("you don't have admin rights for this team");
+}
+
+async function requireAnyTeamAdmin(): Promise<void> {
+  const userId = await gateUserId();
+  if (userId) await assertAnyTeamAdmin(userId);
+}
+
+async function requireGlobalAdmin(): Promise<void> {
+  const userId = await gateUserId();
+  if (userId) await assertGlobalAdmin(userId);
+}
+
+// Scope of the target row, for authorizing updates.
+async function knowledgeEntryScope(id: string): Promise<EntryScope> {
+  const [row] = await sql`select product_id, team_id from knowledge_entries where id = ${id}`;
+  return row ? { productId: row.product_id, teamId: row.team_id } : {};
+}
+
+async function referenceDocScope(id: string): Promise<EntryScope> {
+  const [row] = await sql`select product_id, team_id from reference_docs where id = ${id}`;
+  return row ? { productId: row.product_id, teamId: row.team_id } : {};
+}
+
+// Scope a new entry/doc will land in; a work-item-only save inherits the
+// item's product/team (mirrors saveKnowledgeEntry).
+async function newEntryScope(i: { productId?: string | null; teamId?: string | null; workItemId?: string | null }): Promise<EntryScope> {
+  if (i.productId || i.teamId) return { productId: i.productId, teamId: i.teamId };
+  if (i.workItemId) {
+    const [wi] = await sql`select product_id, team_id from work_items where id = ${i.workItemId}`;
+    if (wi) return { productId: wi.product_id, teamId: wi.team_id };
+  }
+  return {};
 }
 
 // Crude HTML → text for fetched URLs; good enough to hand the LLM readable context.
@@ -142,30 +207,28 @@ tool(
       team_slug: z.string().optional(),
       tags: z.array(z.string()).optional(),
       component: z.string().optional(),
+      affected_version: z.string().optional(),
+      fixed_version: z.string().optional(),
       limit: z.number().optional(),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ query, product_slug, team_slug, tags, component, limit }) => {
+  async ({ query, product_slug, team_slug, tags, component, affected_version, fixed_version, limit }) => {
     const productId = product_slug ? await getProductIdBySlug(product_slug) : undefined;
     const teamId = team_slug ? await getTeamIdBySlug(team_slug) : undefined;
     const tagFilter = [...(tags ?? [])];
-    // A registered component filters by FK link OR its slug/aliases as tags
-    // (legacy entries); an unregistered value degrades to a plain tag filter.
     let componentId: string | undefined;
     let componentTags: string[] | undefined;
     if (component && productId) {
-      componentTags = await resolveComponentTags(productId, component);
-      try {
-        componentId = (await resolveComponentStrict(productId, component)).id;
-      } catch {
-        tagFilter.push(...componentTags);
-        componentTags = undefined;
-      }
+      const f = await resolveComponentFilter(productId, component);
+      componentId = f.componentId;
+      componentTags = f.componentTags;
+      if (f.extraTags) tagFilter.push(...f.extraTags);
     }
     const rows = await searchKnowledge(query, {
       productId, teamId, tags: tagFilter.length ? tagFilter : undefined,
-      componentId, componentTags, limit,
+      componentId, componentTags,
+      affectedVersion: affected_version, fixedVersion: fixed_version, limit,
     });
     return outScrubbed(rows);
   },
@@ -231,19 +294,25 @@ tool(
       resolution_clarity: resolutionClaritySchema.optional(),
       learning_value: learningValueSchema.optional(),
       hidden_fix: z.boolean().optional(),
+      affected_version: z.string().optional().describe("Product version the issue was observed in. When omitted, seeds automatically from the work item's observed_version."),
+      fixed_version: z.string().optional().describe("Product version the fix landed in  only when actually known."),
       structured: z.record(z.string(), z.any()).optional(),
     },
   },
   async (a) => {
+    const productId = a.product_id ?? (a.product_slug ? await getProductIdBySlug(a.product_slug) : undefined);
+    const teamId = a.team_id ?? (a.team_slug ? await getTeamIdBySlug(a.team_slug) : undefined);
+    await requireCanEdit(await newEntryScope({ productId, teamId, workItemId: a.work_item_id }));
     const row = await saveKnowledgeEntry({
       workItemId: a.work_item_id,
-      productId: a.product_id ?? (a.product_slug ? await getProductIdBySlug(a.product_slug) : undefined),
-      teamId: a.team_id ?? (a.team_slug ? await getTeamIdBySlug(a.team_slug) : undefined),
+      productId,
+      teamId,
       createdById: await resolveCurrentUserId(),
       status: a.status ?? "approved", issueSummary: a.issue_summary, symptoms: a.symptoms, signals: a.signals,
       rootCause: a.root_cause, resolution: a.resolution, resolutionPattern: a.resolution_pattern,
       component: a.component, confidence: a.confidence, tags: a.tags,
       cloud: a.cloud, resolutionClarity: a.resolution_clarity, learningValue: a.learning_value, hiddenFix: a.hidden_fix,
+      affectedVersion: a.affected_version, fixedVersion: a.fixed_version,
       structured: a.structured,
     });
     return out({ saved: true, id: row.id, status: row.status });
@@ -333,7 +402,10 @@ tool(
     description: "Add a new resolution_pattern slug to the controlled vocabulary. Call ONLY when the user explicitly asks to add a new pattern — never invent one just to tag a ticket; leave resolution_pattern unset instead.",
     inputSchema: { slug: z.string(), description: z.string() },
   },
-  async ({ slug, description }) => out(await addResolutionPattern(slug, description)),
+  async ({ slug, description }) => {
+    await requireAnyTeamAdmin();
+    return out(await addResolutionPattern(slug, description));
+  },
 );
 
 tool(
@@ -356,10 +428,14 @@ tool(
       aliases: z.array(z.string()).optional(),
     },
   },
-  async (a) => out(await addComponent({
-    productId: await getProductIdBySlug(a.product_slug), slug: a.slug, name: a.name,
-    parentSlug: a.parent_slug, description: a.description, aliases: a.aliases,
-  })),
+  async (a) => {
+    const productId = await getProductIdBySlug(a.product_slug);
+    await requireCanEdit({ productId });
+    return out(await addComponent({
+      productId, slug: a.slug, name: a.name,
+      parentSlug: a.parent_slug, description: a.description, aliases: a.aliases,
+    }));
+  },
 );
 
 tool(
@@ -381,7 +457,10 @@ tool(
       aliases: z.array(z.string()).optional(), notes: z.string().optional(),
     },
   },
-  async (a) => out(await addCustomer(a)),
+  async (a) => {
+    await requireAnyTeamAdmin();
+    return out(await addCustomer(a));
+  },
 );
 
 tool(
@@ -430,11 +509,14 @@ tool(
       resolution_clarity: resolutionClaritySchema.nullable().optional(),
       learning_value: learningValueSchema.nullable().optional(),
       hidden_fix: z.boolean().nullable().optional(),
+      affected_version: z.string().nullable().optional().describe("Product version the issue was observed in; null clears it."),
+      fixed_version: z.string().nullable().optional().describe("Product version the fix landed in; null clears it."),
       structured: z.record(z.string(), z.any()).optional(),
       expected_version: z.number().int().optional(),
     },
   },
   async (a) => {
+    await requireCanEdit(await knowledgeEntryScope(a.id));
     const patch: KnowledgeUpdateInput = {};
     if (a.status            !== undefined) patch.status            = a.status;
     if (a.issue_summary     !== undefined) patch.issueSummary      = a.issue_summary;
@@ -451,6 +533,8 @@ tool(
     if (a.resolution_clarity !== undefined) patch.resolutionClarity = a.resolution_clarity;
     if (a.learning_value    !== undefined) patch.learningValue     = a.learning_value;
     if (a.hidden_fix        !== undefined) patch.hiddenFix         = a.hidden_fix;
+    if (a.affected_version  !== undefined) patch.affectedVersion   = a.affected_version;
+    if (a.fixed_version     !== undefined) patch.fixedVersion      = a.fixed_version;
     if (a.structured        !== undefined) patch.structured        = a.structured;
     if (a.expected_version  !== undefined) patch.expectedVersion   = a.expected_version;
     const row = await updateKnowledgeEntry(a.id, patch);
@@ -477,16 +561,32 @@ tool(
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
       tags: z.array(z.string()).optional(),
+      component: z.string().optional().describe("Component slug/alias  matches the entry's linked component or its slug/aliases in tags. Needs product_slug."),
+      affected_version: z.string().optional(),
+      fixed_version: z.string().optional(),
       limit: z.number().optional(),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ status, product_slug, team_slug, tags, limit }) => {
+  async ({ status, product_slug, team_slug, tags, component, affected_version, fixed_version, limit }) => {
+    const productId = product_slug ? await getProductIdBySlug(product_slug) : undefined;
+    const tagFilter = [...(tags ?? [])];
+    let componentId: string | undefined;
+    let componentTags: string[] | undefined;
+    if (component && productId) {
+      const f = await resolveComponentFilter(productId, component);
+      componentId = f.componentId;
+      componentTags = f.componentTags;
+      if (f.extraTags) tagFilter.push(...f.extraTags);
+    }
     const rows = await listKnowledgeEntries({
       status,
-      productId: product_slug ? await getProductIdBySlug(product_slug) : undefined,
+      productId,
       teamId: team_slug ? await getTeamIdBySlug(team_slug) : undefined,
-      tags: tags && tags.length ? tags : undefined,
+      tags: tagFilter.length ? tagFilter : undefined,
+      componentId, componentTags,
+      affectedVersion: affected_version,
+      fixedVersion: fixed_version,
       limit,
     });
     return outScrubbed(rows);
@@ -542,10 +642,13 @@ tool(
     },
   },
   async (a) => {
+    const productId = a.product_slug ? await getProductIdBySlug(a.product_slug) : undefined;
+    const teamId = a.team_slug ? await getTeamIdBySlug(a.team_slug) : undefined;
+    await requireCanEdit({ productId, teamId });
     const row = await saveReferenceDoc({
       title: a.title, body: a.body,
-      productId: a.product_slug ? await getProductIdBySlug(a.product_slug) : undefined,
-      teamId: a.team_slug ? await getTeamIdBySlug(a.team_slug) : undefined,
+      productId,
+      teamId,
       createdById: await resolveCurrentUserId(),
       source: a.source, tags: a.tags, status: a.status ?? "approved", structured: a.structured,
     });
@@ -620,6 +723,7 @@ tool(
     },
   },
   async (a) => {
+    await requireCanEdit(await referenceDocScope(a.id));
     const patch: ReferenceDocUpdate = {};
     if (a.title           !== undefined) patch.title           = a.title;
     if (a.body            !== undefined) patch.body            = a.body;
@@ -649,7 +753,10 @@ tool(
     description: "Add (or rename) a team. The slug is a short kebab-case identifier used by all other tools.",
     inputSchema: { slug: z.string(), name: z.string() },
   },
-  async ({ slug, name }) => out(await addTeam(slug, name)),
+  async ({ slug, name }) => {
+    await requireGlobalAdmin();
+    return out(await addTeam(slug, name));
+  },
 );
 
 tool(
@@ -668,7 +775,10 @@ tool(
     description: "Add (or rename) a product under a team. The slug is used by components, knowledge search, and source mappings. Use aliases for alternate names (e.g. slug 'tpd' with aliases ['Tobacco Product Directive']) so they all resolve to this product.",
     inputSchema: { team_slug: z.string(), slug: z.string(), name: z.string(), aliases: z.array(z.string()).optional() },
   },
-  async ({ team_slug, slug, name, aliases }) => out(await addProduct(team_slug, slug, name, aliases)),
+  async ({ team_slug, slug, name, aliases }) => {
+    await requireCanManageTeam(await getTeamIdBySlug(team_slug));
+    return out(await addProduct(team_slug, slug, name, aliases));
+  },
 );
 
 tool(
@@ -687,7 +797,11 @@ tool(
     description: "Add a tag slug to a product's advisory label vocabulary. Call when the user wants to curate the team's taxonomy — not inferred silently. Tags on knowledge entries remain free-form; this only records a preferred vocabulary.",
     inputSchema: { product_slug: z.string(), slug: z.string(), description: z.string().optional() },
   },
-  async ({ product_slug, slug, description }) => out(await addLabel(await getProductIdBySlug(product_slug), slug, description)),
+  async ({ product_slug, slug, description }) => {
+    const productId = await getProductIdBySlug(product_slug);
+    await requireCanEdit({ productId });
+    return out(await addLabel(productId, slug, description));
+  },
 );
 
 tool(
@@ -711,7 +825,10 @@ tool(
       config: z.record(z.string(), z.any()).optional(),
     },
   },
-  async (a) => out(await addSourceConnection({ sourceType: a.source_type, slug: a.slug, baseUrl: a.base_url, config: a.config })),
+  async (a) => {
+    await requireGlobalAdmin();
+    return out(await addSourceConnection({ sourceType: a.source_type, slug: a.slug, baseUrl: a.base_url, config: a.config }));
+  },
 );
 
 tool(
@@ -734,7 +851,10 @@ tool(
       product_slug: z.string(),
     },
   },
-  async (a) => out(await addSourceProductMap({ sourceSlug: a.source_slug, externalGroupKey: a.external_group_key, productSlug: a.product_slug })),
+  async (a) => {
+    await requireGlobalAdmin();
+    return out(await addSourceProductMap({ sourceSlug: a.source_slug, externalGroupKey: a.external_group_key, productSlug: a.product_slug }));
+  },
 );
 
 export { server };
