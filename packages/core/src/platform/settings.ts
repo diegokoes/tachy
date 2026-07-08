@@ -8,12 +8,19 @@ import { badInput } from "./errors";
 
 export const AGENT_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 
+// Display-only audience switch: relabels the web UI (product→repository,
+// team→organization, hides customers) — slugs, columns, and the MCP contract
+// never change with it.
+export const DEPLOYMENT_PROFILES = ["support", "engineering"] as const;
+export type DeploymentProfile = (typeof DEPLOYMENT_PROFILES)[number];
+
 const SETTING_SCHEMAS = {
   redaction_global: z.boolean(),
   agent_model: z.string().min(1),
   agent_effort: z.enum(AGENT_EFFORTS),
   allowed_models: z.array(z.string().min(1)),
   org_name: z.string().min(1),
+  deployment_profile: z.enum(DEPLOYMENT_PROFILES),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;
@@ -59,6 +66,7 @@ export interface EffectiveSettings {
   agent_effort: { value: (typeof AGENT_EFFORTS)[number]; source: SettingSource };
   allowed_models: { value: string[]; source: SettingSource };
   org_name: { value: string | null; source: SettingSource };
+  deployment_profile: { value: DeploymentProfile; source: SettingSource };
 }
 
 // Precedence: DB setting > env var > built-in default.
@@ -82,6 +90,7 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
     agent_effort: pick(db.agent_effort, envEffort, "medium"),
     allowed_models: pick(db.allowed_models, envModels, []),
     org_name: pick<string | null>(db.org_name, undefined, null),
+    deployment_profile: pick<DeploymentProfile>(db.deployment_profile, undefined, "support"),
   };
 }
 

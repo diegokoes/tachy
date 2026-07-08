@@ -10,6 +10,10 @@ export interface KnowledgeFacets {
   resolutionClarity?: string | null;
   learningValue?: string | null;
   hiddenFix?: boolean | null;
+  // Optional, free-form (like cloud). affectedVersion seeds from the work
+  // item's observed_version when omitted; fixedVersion is set on resolution.
+  affectedVersion?: string | null;
+  fixedVersion?: string | null;
 }
 
 export interface KnowledgeInput extends KnowledgeFacets {
@@ -66,15 +70,18 @@ function buildEmbedText(i: { issueSummary?: string; symptoms?: string[]; rootCau
 }
 
 export async function saveKnowledgeEntry(i: KnowledgeInput) {
-  // When tied to a work item, inherit its product/team unless explicitly given —
-  // the agent already established those at fetch time, no need to repeat them.
+  // When tied to a work item, inherit its product/team (and observed version →
+  // affected_version) unless explicitly given — the agent already established
+  // those at fetch time, no need to repeat them.
   let productId = i.productId ?? null;
   let teamId = i.teamId ?? null;
-  if (i.workItemId && (productId == null || teamId == null)) {
-    const [wi] = await sql`select product_id, team_id from work_items where id = ${i.workItemId}`;
+  let affectedVersion = i.affectedVersion ?? null;
+  if (i.workItemId && (productId == null || teamId == null || affectedVersion == null)) {
+    const [wi] = await sql`select product_id, team_id, observed_version from work_items where id = ${i.workItemId}`;
     if (wi) {
       productId ??= wi.product_id ?? null;
       teamId ??= wi.team_id ?? null;
+      affectedVersion ??= wi.observed_version ?? null;
     }
   }
 
@@ -99,12 +106,14 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
     insert into knowledge_entries
       (work_item_id, product_id, team_id, created_by, status, issue_summary, symptoms, signals, tags,
        root_cause, resolution, resolution_pattern, component_id, product_area, confidence,
-       cloud, resolution_clarity, learning_value, hidden_fix, structured, embedding)
+       cloud, resolution_clarity, learning_value, hidden_fix, affected_version, fixed_version,
+       structured, embedding)
     values
       (${i.workItemId ?? null}, ${productId}, ${teamId}, ${i.createdById ?? null},
        ${i.status ?? "approved"}, ${i.issueSummary ?? null}, ${i.symptoms ?? []}, ${i.signals ?? []}, ${i.tags ?? []},
        ${i.rootCause ?? null}, ${i.resolution ?? null}, ${i.resolutionPattern ?? null}, ${componentId}, ${productArea},
        ${confidence}, ${i.cloud ?? null}, ${i.resolutionClarity ?? null}, ${i.learningValue ?? null}, ${i.hiddenFix ?? null},
+       ${affectedVersion}, ${i.fixedVersion ?? null},
        ${sql.json(structured as any)}, ${embedding}::vector)
     returning id, status
   `;
@@ -120,6 +129,8 @@ export interface SearchOptions {
   cloud?: string;
   learningValue?: string;
   resolutionClarity?: string;
+  affectedVersion?: string;
+  fixedVersion?: string;
   limit?: number;
 }
 
@@ -134,6 +145,7 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
     select * from (
       select id, work_item_id, status, superseded_by, issue_summary, root_cause, resolution,
              resolution_pattern, component_id, product_area, confidence, cloud, resolution_clarity, learning_value, hidden_fix,
+             affected_version, fixed_version,
              symptoms, signals, tags, structured, version,
              least(ts_rank(search_tsv, plainto_tsquery('simple', ${query})), 1.0) as fts_rank,
              similarity(search_text, ${query}) as trgm_sim,
@@ -152,6 +164,8 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
         ${opts.cloud ? sql`and cloud = ${opts.cloud}` : sql``}
         ${opts.learningValue ? sql`and learning_value = ${opts.learningValue}` : sql``}
         ${opts.resolutionClarity ? sql`and resolution_clarity = ${opts.resolutionClarity}` : sql``}
+        ${opts.affectedVersion ? sql`and affected_version = ${opts.affectedVersion}` : sql``}
+        ${opts.fixedVersion ? sql`and fixed_version = ${opts.fixedVersion}` : sql``}
     ) ranked
     where score > 0.02
     order by score desc
@@ -165,6 +179,7 @@ export async function getKnowledgeEntry(id: string) {
     select id, work_item_id, product_id, team_id, status, superseded_by, issue_summary,
            symptoms, signals, tags, root_cause, resolution, resolution_pattern,
            component_id, product_area, confidence, cloud, resolution_clarity, learning_value, hidden_fix,
+           affected_version, fixed_version,
            structured, version, created_at, updated_at
     from knowledge_entries where id = ${id}
   `;
@@ -173,13 +188,18 @@ export async function getKnowledgeEntry(id: string) {
 }
 
 export async function listKnowledgeEntries(
-  opts: { status?: string; productId?: string; teamId?: string; tags?: string[]; cloud?: string; learningValue?: string; resolutionClarity?: string; limit?: number } = {},
+  opts: {
+    status?: string; productId?: string; teamId?: string; tags?: string[];
+    componentId?: string; componentTags?: string[];
+    cloud?: string; learningValue?: string; resolutionClarity?: string;
+    affectedVersion?: string; fixedVersion?: string; limit?: number;
+  } = {},
 ) {
   const limit = opts.limit ?? 50;
   return sql`
     select id, work_item_id, product_id, team_id, status, superseded_by, issue_summary,
            root_cause, resolution, resolution_pattern, component_id, product_area, confidence,
-           cloud, resolution_clarity, learning_value, hidden_fix,
+           cloud, resolution_clarity, learning_value, hidden_fix, affected_version, fixed_version,
            symptoms, signals, tags, version, created_at, updated_at
     from knowledge_entries
     where 1=1
@@ -187,9 +207,12 @@ export async function listKnowledgeEntries(
       ${opts.productId ? sql`and product_id = ${opts.productId}` : sql``}
       ${opts.teamId    ? sql`and team_id    = ${opts.teamId}`    : sql``}
       ${opts.tags && opts.tags.length ? sql`and tags && ${opts.tags}` : sql``}
+      ${opts.componentId ? sql`and (component_id = ${opts.componentId} or tags && ${opts.componentTags ?? []})` : sql``}
       ${opts.cloud ? sql`and cloud = ${opts.cloud}` : sql``}
       ${opts.learningValue ? sql`and learning_value = ${opts.learningValue}` : sql``}
       ${opts.resolutionClarity ? sql`and resolution_clarity = ${opts.resolutionClarity}` : sql``}
+      ${opts.affectedVersion ? sql`and affected_version = ${opts.affectedVersion}` : sql``}
+      ${opts.fixedVersion ? sql`and fixed_version = ${opts.fixedVersion}` : sql``}
     order by updated_at desc
     limit ${limit}
   `;
@@ -212,7 +235,8 @@ export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInp
   const [current] = await sql`
     select product_id, status, superseded_by, issue_summary, root_cause, resolution, resolution_pattern,
            symptoms, signals, tags, component_id, product_area, confidence,
-           cloud, resolution_clarity, learning_value, hidden_fix, structured, version
+           cloud, resolution_clarity, learning_value, hidden_fix, affected_version, fixed_version,
+           structured, version
     from knowledge_entries where id = ${id}
   `;
   if (!current) throw notFound(`Knowledge entry '${id}' not found`);
@@ -261,6 +285,8 @@ export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInp
     resolutionClarity: 'resolutionClarity' in patch ? patch.resolutionClarity : current.resolution_clarity,
     learningValue:     'learningValue'     in patch ? patch.learningValue     : current.learning_value,
     hiddenFix:         'hiddenFix'         in patch ? patch.hiddenFix         : current.hidden_fix,
+    affectedVersion:   'affectedVersion'   in patch ? patch.affectedVersion   : current.affected_version,
+    fixedVersion:      'fixedVersion'      in patch ? patch.fixedVersion      : current.fixed_version,
     structured:        'structured'        in patch ? parseStructured(patch.structured) : current.structured,
   };
 
@@ -299,6 +325,8 @@ export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInp
       resolution_clarity = ${merged.resolutionClarity ?? null},
       learning_value     = ${merged.learningValue ?? null},
       hidden_fix         = ${merged.hiddenFix ?? null},
+      affected_version   = ${merged.affectedVersion ?? null},
+      fixed_version      = ${merged.fixedVersion ?? null},
       structured         = ${sql.json((merged.structured ?? {}) as any)},
       version            = version + 1
       ${contentChanged ? (vec ? sql`, embedding = ${vec}::vector` : sql`, embedding = null`) : sql``}

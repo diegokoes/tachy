@@ -1,5 +1,5 @@
 import { sql } from "../platform/db";
-import { badInput } from "../platform/errors";
+import { badInput, notFound } from "../platform/errors";
 
 export interface SourceConnectionInput {
   sourceType: string;
@@ -41,6 +41,12 @@ export async function listSourceProductMaps(sourceSlug?: string) {
     ${sourceSlug ? sql`where sc.slug = ${sourceSlug}` : sql``}
     order by sc.slug, spm.external_group_key
   `;
+}
+
+export async function deleteSourceProductMap(id: string) {
+  const [row] = await sql`delete from source_product_map where id = ${id} returning id`;
+  if (!row) throw notFound(`Source product map '${id}' not found`);
+  return { deleted: true, id };
 }
 
 export async function addSourceProductMap(i: SourceProductMapInput) {
