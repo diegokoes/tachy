@@ -2,14 +2,17 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
-  listResolutionPatterns, addResolutionPattern,
-  listComponents, addComponent, getProductIdBySlug,
-  listCustomers, addCustomer,
-  listTeams, addTeam, listProducts, addProduct, listLabels, addLabel,
+  listResolutionPatterns, addResolutionPattern, deleteResolutionPattern,
+  listComponents, addComponent, updateComponent, deleteComponent, getProductIdBySlug,
+  listCustomers, addCustomer, updateCustomer, deleteCustomer,
+  listTeams, addTeam, deleteTeam, listProducts, addProduct, updateProduct, deleteProduct,
+  listLabels, addLabel, updateLabel, deleteLabel,
   listSourceConnections, addSourceConnection, listSourceProductMaps, addSourceProductMap,
+  deleteSourceProductMap,
   env, effectiveSettings, setSetting,
 } from "@tachy/core";
 import { requireAdmin } from "../auth";
+import { assertAnyTeamAdminApi, assertScopeEditor, assertTeamAdmin } from "../authz";
 
 const patternSchema = z.object({ slug: z.string(), description: z.string() });
 const componentSchema = z.object({
@@ -27,11 +30,26 @@ const sourceConnSchema = z.object({
 const productMapSchema = z.object({ external_group_key: z.string(), product_slug: z.string() });
 const labelSchema = z.object({ slug: z.string(), description: z.string().optional() });
 
+// PATCH bodies: slugs are immutable stable references, so they never appear here.
+const customerPatchSchema = z.object({
+  name: z.string().optional(), aliases: z.array(z.string()).optional(), notes: z.string().nullable().optional(),
+});
+const componentPatchSchema = z.object({
+  name: z.string().optional(), parentSlug: z.string().nullable().optional(),
+  description: z.string().nullable().optional(), aliases: z.array(z.string()).optional(),
+});
+const teamPatchSchema = z.object({ name: z.string() });
+const productPatchSchema = z.object({ name: z.string().optional(), aliases: z.array(z.string()).optional() });
+const labelPatchSchema = z.object({ description: z.string().nullable() });
+const patternPatchSchema = z.object({ description: z.string() });
+
 // Org-structure + controlled-vocabulary endpoints. Mounted at "/" so each path is
 // stated in full here. Chained for RPC type export.
+// Reads are open to any authenticated user. Mutations are tiered: org-wide ones
+// (teams, sources, settings) need the global admin role; product/team-scoped
+// ones also accept a team mini-admin of the relevant team; org-global vocab
+// (customers, patterns) accepts any team mini-admin.
 export const admin = new Hono()
-  // Reads are open to any authenticated user; mutations need the admin role.
-  .use("*", async (c, next) => (c.req.method === "GET" ? next() : requireAdmin(c, next)))
 
   // Runtime settings (DB-backed, env as fallback) + read-only env facts.
   // Never expose secret VALUES here — only whether they are set.
@@ -51,51 +69,117 @@ export const admin = new Hono()
     }),
   )
 
-  .put("/settings/:key", async (c) => {
+  .put("/settings/:key", requireAdmin, async (c) => {
     const { value } = await c.req.json<{ value: unknown }>();
-    await setSetting(c.req.param("key"), value);
+    // non-null: the route pattern guarantees :key; the middleware arg above
+    // widens Hono's path inference to string | undefined
+    await setSetting(c.req.param("key")!, value);
     return c.json({ settings: await effectiveSettings() });
   })
   .get("/resolution-patterns", async (c) => c.json(await listResolutionPatterns()))
   .post("/resolution-patterns", zValidator("json", patternSchema), async (c) => {
+    await assertAnyTeamAdminApi(c);
     const { slug, description } = c.req.valid("json");
     return c.json(await addResolutionPattern(slug, description));
+  })
+  .patch("/resolution-patterns/:slug", zValidator("json", patternPatchSchema), async (c) => {
+    await assertAnyTeamAdminApi(c);
+    return c.json(await addResolutionPattern(c.req.param("slug"), c.req.valid("json").description));
+  })
+  .delete("/resolution-patterns/:slug", async (c) => {
+    await assertAnyTeamAdminApi(c);
+    return c.json(await deleteResolutionPattern(c.req.param("slug")));
   })
   .get("/products/:slug/components", async (c) => {
     return c.json(await listComponents(await getProductIdBySlug(c.req.param("slug"))));
   })
   .post("/products/:slug/components", zValidator("json", componentSchema), async (c) => {
     const body = c.req.valid("json");
-    return c.json(await addComponent({ ...body, productId: await getProductIdBySlug(c.req.param("slug")) }));
+    const productId = await getProductIdBySlug(c.req.param("slug"));
+    await assertScopeEditor(c, { productId });
+    return c.json(await addComponent({ ...body, productId }));
+  })
+  .patch("/products/:slug/components/:componentSlug", zValidator("json", componentPatchSchema), async (c) => {
+    const productId = await getProductIdBySlug(c.req.param("slug"));
+    await assertScopeEditor(c, { productId });
+    return c.json(await updateComponent(productId, c.req.param("componentSlug"), c.req.valid("json")));
+  })
+  .delete("/products/:slug/components/:componentSlug", async (c) => {
+    const productId = await getProductIdBySlug(c.req.param("slug"));
+    await assertScopeEditor(c, { productId });
+    return c.json(await deleteComponent(productId, c.req.param("componentSlug")));
   })
   .get("/products/:slug/labels", async (c) => {
     return c.json(await listLabels(await getProductIdBySlug(c.req.param("slug"))));
   })
   .post("/products/:slug/labels", zValidator("json", labelSchema), async (c) => {
     const { slug, description } = c.req.valid("json");
-    return c.json(await addLabel(await getProductIdBySlug(c.req.param("slug")), slug, description));
+    const productId = await getProductIdBySlug(c.req.param("slug"));
+    await assertScopeEditor(c, { productId });
+    return c.json(await addLabel(productId, slug, description));
+  })
+  .patch("/products/:slug/labels/:labelSlug", zValidator("json", labelPatchSchema), async (c) => {
+    const productId = await getProductIdBySlug(c.req.param("slug"));
+    await assertScopeEditor(c, { productId });
+    return c.json(await updateLabel(productId, c.req.param("labelSlug"), c.req.valid("json").description));
+  })
+  .delete("/products/:slug/labels/:labelSlug", async (c) => {
+    const productId = await getProductIdBySlug(c.req.param("slug"));
+    await assertScopeEditor(c, { productId });
+    return c.json(await deleteLabel(productId, c.req.param("labelSlug")));
   })
   .get("/source-product-maps", async (c) => c.json(await listSourceProductMaps()))
   .get("/customers", async (c) => c.json(await listCustomers()))
-  .post("/customers", zValidator("json", customerSchema), async (c) => c.json(await addCustomer(c.req.valid("json"))))
+  .post("/customers", zValidator("json", customerSchema), async (c) => {
+    await assertAnyTeamAdminApi(c);
+    return c.json(await addCustomer(c.req.valid("json")));
+  })
+  .patch("/customers/:slug", zValidator("json", customerPatchSchema), async (c) => {
+    await assertAnyTeamAdminApi(c);
+    return c.json(await updateCustomer(c.req.param("slug"), c.req.valid("json")));
+  })
+  .delete("/customers/:slug", async (c) => {
+    await assertAnyTeamAdminApi(c);
+    return c.json(await deleteCustomer(c.req.param("slug")));
+  })
   .get("/teams", async (c) => c.json(await listTeams()))
-  .post("/teams", zValidator("json", teamSchema), async (c) => {
+  .post("/teams", requireAdmin, zValidator("json", teamSchema), async (c) => {
     const { slug, name } = c.req.valid("json");
     return c.json(await addTeam(slug, name));
+  })
+  .patch("/teams/:slug", requireAdmin, zValidator("json", teamPatchSchema), async (c) => {
+    return c.json(await addTeam(c.req.param("slug")!, c.req.valid("json").name));
+  })
+  .delete("/teams/:slug", requireAdmin, async (c) => {
+    return c.json(await deleteTeam(c.req.param("slug")!));
   })
   .get("/products", async (c) => c.json(await listProducts(c.req.query("team_slug"))))
   .post("/products", zValidator("json", productSchema), async (c) => {
     const { team_slug, slug, name, aliases } = c.req.valid("json");
+    await assertTeamAdmin(c, team_slug);
     return c.json(await addProduct(team_slug, slug, name, aliases));
   })
+  .patch("/products/:slug", zValidator("json", productPatchSchema), async (c) => {
+    const productId = await getProductIdBySlug(c.req.param("slug"));
+    await assertScopeEditor(c, { productId });
+    return c.json(await updateProduct(productId, c.req.valid("json")));
+  })
+  .delete("/products/:slug", async (c) => {
+    const productId = await getProductIdBySlug(c.req.param("slug"));
+    await assertScopeEditor(c, { productId });
+    return c.json(await deleteProduct(productId));
+  })
+  .delete("/source-product-maps/:id", requireAdmin, async (c) => {
+    return c.json(await deleteSourceProductMap(c.req.param("id")!));
+  })
   .get("/source-connections", async (c) => c.json(await listSourceConnections()))
-  .post("/source-connections", zValidator("json", sourceConnSchema), async (c) => {
+  .post("/source-connections", requireAdmin, zValidator("json", sourceConnSchema), async (c) => {
     return c.json(await addSourceConnection(c.req.valid("json")));
   })
   .get("/source-connections/:slug/product-map", async (c) => {
     return c.json(await listSourceProductMaps(c.req.param("slug")));
   })
-  .post("/source-connections/:slug/product-map", zValidator("json", productMapSchema), async (c) => {
+  .post("/source-connections/:slug/product-map", requireAdmin, zValidator("json", productMapSchema), async (c) => {
     const { external_group_key, product_slug } = c.req.valid("json");
     return c.json(await addSourceProductMap({
       sourceSlug: c.req.param("slug"), externalGroupKey: external_group_key, productSlug: product_slug,

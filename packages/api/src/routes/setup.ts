@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   sql, hashPassword, countAdmins, setSetting, addTeam, addProduct,
-  AGENT_EFFORTS, MIN_PASSWORD_LENGTH, conflict,
+  AGENT_EFFORTS, DEPLOYMENT_PROFILES, MIN_PASSWORD_LENGTH, conflict,
 } from "@tachy/core";
 import { setSessionCookie, markBootstrapped } from "../auth";
 
@@ -15,13 +15,15 @@ const setupSchema = z.object({
   display_name: z.string().optional(),
   org_name: z.string().optional(),
   team: slugName.optional(),
-  product: slugName.optional(), // requires team
+  product: slugName.optional(), // requires team (kept for older clients)
+  products: z.array(slugName).optional(), // requires team; the wizard's multi-product form
   settings: z
     .object({
       redaction_global: z.boolean().optional(),
       agent_model: z.string().min(1).optional(),
       agent_effort: z.enum(AGENT_EFFORTS).optional(),
       allowed_models: z.array(z.string().min(1)).optional(),
+      deployment_profile: z.enum(DEPLOYMENT_PROFILES).optional(),
     })
     .optional(),
 });
@@ -57,6 +59,7 @@ export const setup = new Hono()
     if (body.team) {
       await addTeam(body.team.slug, body.team.name);
       if (body.product) await addProduct(body.team.slug, body.product.slug, body.product.name);
+      for (const p of body.products ?? []) await addProduct(body.team.slug, p.slug, p.name);
     }
 
     await setSessionCookie(c, body.email);
