@@ -1,6 +1,8 @@
 export interface KnowledgeRow {
   id: string;
   work_item_id: string | null;
+  product_id?: string | null;
+  team_id?: string | null;
   status: string; // 'draft' | 'approved' | 'rejected' | 'archived' | 'deprecated'
   superseded_by?: string | null;
   issue_summary: string | null;
@@ -14,6 +16,8 @@ export interface KnowledgeRow {
   resolution_clarity: string | null;
   learning_value: string | null;
   hidden_fix: boolean | null;
+  affected_version?: string | null;
+  fixed_version?: string | null;
   symptoms: string[] | null;
   signals: string[] | null;
   tags: string[] | null;

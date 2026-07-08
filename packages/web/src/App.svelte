@@ -3,11 +3,11 @@
   import ChatView from "./lib/ChatView.svelte";
   import KnowledgeView from "./lib/KnowledgeView.svelte";
   import ReferenceView from "./lib/ReferenceView.svelte";
-  import AdminView from "./lib/AdminView.svelte";
+  import AdminView from "./lib/admin/AdminView.svelte";
   import IntroSplash from "./lib/IntroSplash.svelte";
   import SetupWizard from "./lib/SetupWizard.svelte";
   import LoginView from "./lib/LoginView.svelte";
-  import { session, initSession, logout } from "./lib/session.svelte";
+  import { session, initSession, logout, isCurator } from "./lib/session.svelte";
   import { gsap, reducedMotion } from "./lib/gsap";
 
   type View = "chat" | "knowledge" | "reference" | "admin" | "theme";
@@ -18,8 +18,9 @@
     { key: "admin", label: "Admin" },
     { key: "theme", label: "Theme" },
   ];
-  // Members don't get the Admin view (the API enforces this server-side too).
-  const nav = $derived(session.me?.role === "member" ? NAV_ALL.filter((n) => n.key !== "admin") : NAV_ALL);
+  // Plain members don't get the Admin view; global admins and team mini-admins
+  // do, scoped inside (the API enforces this server-side too).
+  const nav = $derived(!isCurator() && session.me ? NAV_ALL.filter((n) => n.key !== "admin") : NAV_ALL);
 
   // Wizard shows on un-bootstrapped instances unless deliberately skipped
   // (open-mode localhost dev keeps working without setup).
@@ -499,18 +500,25 @@
     padding: 0 clamp(100px, 7vw, 160px);
   }
 
+  /* The frame ALWAYS reserves the border chrome (margin + padding), whether a
+     border is active or not, so toggling borders never shifts the content.
+     The panel background keeps the ascii pattern from bleeding through. */
   .frame {
     flex: 1;
     max-width: 1280px;
     min-width: 0;
     position: relative;
     display: flex;
+    margin: 0.75rem 0;
+    padding: 1.4rem 1.6rem;
+    background: var(--panel);
+    border-radius: 6px;
   }
 
   main {
     flex: 1;
     min-width: 0;
-    padding: clamp(1.25rem, 3vh, 2.5rem) 0;
+    padding: 0.75rem 0;
     overflow: auto;
     display: flex;
     flex-direction: column;
@@ -518,14 +526,9 @@
   }
 
   /* Frame edges: overflow-clipped character repeats, no measurement needed.
-     Side columns run full height; top/bottom rows fill between them.
-     Padding keeps main's scrollport (and its scrollbar) INSIDE the edges, so
-     scrolled content never slides under them; margin clears the window edge. */
-  .frame.framed {
-    margin: 0.75rem 0;
-    padding: 1.4rem 1.6rem;
-  }
-  .frame.framed main { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+     Side columns run full height; top/bottom rows fill between them. The
+     frame's padding keeps main's scrollport (and its scrollbar) INSIDE the
+     edges, so scrolled content never slides under them. */
   .edge {
     position: absolute;
     margin: 0;
