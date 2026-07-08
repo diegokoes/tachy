@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { api } from "../api";
   import { isCurator } from "../session.svelte";
+  import DeleteButton from "./DeleteButton.svelte";
   import { TIP, csv, aliasText, errText, type Customer } from "./shared";
 
   let customers = $state<Customer[]>([]);
@@ -14,7 +15,6 @@
 
   let editing = $state<string | null>(null);
   let edit = $state({ name: "", aliases: "", notes: "" });
-  let confirmDel = $state<string | null>(null);
 
   async function load() {
     loading = true;
@@ -63,11 +63,6 @@
   }
 
   async function del(slug: string) {
-    if (confirmDel !== slug) {
-      confirmDel = slug;
-      return;
-    }
-    confirmDel = null;
     error = null;
     try {
       await api.delete(`/customers/${slug}`);
@@ -98,15 +93,15 @@
           <td><input class="row-edit" bind:value={edit.aliases} placeholder="aliases (csv)" /></td>
           <td><input class="row-edit" bind:value={edit.notes} placeholder="notes" /></td>
           <td>
-            <button class="mini" onclick={() => save(r.slug)} disabled={saving || !edit.name.trim()}>save</button>
-            <button class="mini" onclick={() => (editing = null)}>cancel</button>
+            <button class="icon-btn ok" title="save" aria-label="save" onclick={() => save(r.slug)} disabled={saving || !edit.name.trim()}>✓</button>
+            <button class="icon-btn" title="cancel" aria-label="cancel" onclick={() => (editing = null)}>↺</button>
           </td>
         {:else}
           <td>{r.name}</td><td class="muted">{aliasText(r.aliases)}</td><td class="muted">{r.notes ?? ""}</td>
           {#if isCurator()}
             <td>
-              <button class="mini" onclick={() => { editing = r.slug; edit = { name: r.name, aliases: aliasText(r.aliases), notes: r.notes ?? "" }; }}>edit</button>
-              <button class="mini danger-btn" onclick={() => del(r.slug)}>{confirmDel === r.slug ? "confirm?" : "del"}</button>
+              <button class="icon-btn" title="edit" aria-label="edit" onclick={() => { editing = r.slug; edit = { name: r.name, aliases: aliasText(r.aliases), notes: r.notes ?? "" }; }}>✎</button>
+              <DeleteButton onConfirm={() => del(r.slug)} />
             </td>
           {/if}
         {/if}
@@ -128,8 +123,8 @@
         <input placeholder="name" bind:value={form.name} required />
         <input placeholder="aliases (comma-separated)" bind:value={form.aliases} />
         <input placeholder="notes" bind:value={form.notes} />
-        <button type="submit" disabled={saving}>{saving ? "saving…" : "Save"}</button>
-        <button type="button" onclick={() => (showForm = false)}>Cancel</button>
+        <button class="icon-btn ok" type="submit" title="save" aria-label="save" disabled={saving}>{saving ? "…" : "✓"}</button>
+        <button class="icon-btn" type="button" title="cancel" aria-label="cancel" onclick={() => (showForm = false)}>↺</button>
       </form>
     {/if}
   </div>
