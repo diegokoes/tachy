@@ -147,8 +147,8 @@
       <label>role
         <AsciiSelect bind:value={form.role} options={["member", "admin"]} />
       </label>
-      <button type="submit" disabled={saving}>{saving ? "saving…" : "Save"}</button>
-      <button type="button" onclick={() => (showForm = false)}>Cancel</button>
+      <button class="icon-btn ok" type="submit" title="save" aria-label="save" disabled={saving}>{saving ? "…" : "✓"}</button>
+      <button class="icon-btn" type="button" title="cancel" aria-label="cancel" onclick={() => (showForm = false)}>↺</button>
     </form>
     <p class="muted hint">No password = SSO-only (or attribution-only) user; a password can be set later.</p>
   {/if}

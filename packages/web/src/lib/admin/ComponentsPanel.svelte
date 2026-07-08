@@ -4,6 +4,8 @@
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
   import AsciiSelect from "../AsciiSelect.svelte";
+  import RenameSlugModal from "./RenameSlugModal.svelte";
+  import DeleteButton from "./DeleteButton.svelte";
   import { TIP, csv, aliasText, errText, type Component, type Product } from "./shared";
 
   let products = $state<Product[]>([]);
@@ -17,8 +19,9 @@
   let form = $state({ slug: "", name: "", parent: "", description: "", aliases: "" });
 
   let editing = $state<string | null>(null); // component slug
-  let edit = $state({ name: "", parent: "", description: "", aliases: "" });
-  let confirmDel = $state<string | null>(null);
+  let edit = $state({ slug: "", name: "", parent: "", description: "", aliases: "" });
+
+  let rename = $state<null | { from: string; to: string }>(null);
 
   const parentSlugOf = (c: Component) => components.find((p) => p.id === c.parent_id)?.slug ?? "";
   const canEdit = $derived(canCurateScope({
@@ -69,16 +72,26 @@
     }
   }
 
-  async function save(slug: string) {
+  function editPatch() {
+    return {
+      name: edit.name.trim(),
+      parentSlug: edit.parent || null,
+      description: edit.description.trim() || null,
+      aliases: csv(edit.aliases),
+    };
+  }
+
+  async function save(r: Component) {
+    const to = edit.slug.trim();
+    // Slug rename rewrites the slug wherever it tagged entries/docs — confirm first.
+    if (to && to !== r.slug) {
+      rename = { from: r.slug, to };
+      return;
+    }
     saving = true;
     error = null;
     try {
-      await api.patch(`/products/${productSlug}/components/${slug}`, {
-        name: edit.name.trim(),
-        parentSlug: edit.parent || null,
-        description: edit.description.trim() || null,
-        aliases: csv(edit.aliases),
-      });
+      await api.patch(`/products/${productSlug}/components/${r.slug}`, editPatch());
       editing = null;
       await load();
     } catch (err) {
@@ -88,12 +101,21 @@
     }
   }
 
+  // After the slug rename, apply the other field edits at the new slug.
+  async function afterRename() {
+    if (!rename) return;
+    await api.patch(`/products/${productSlug}/components/${rename.to}`, editPatch());
+    rename = null;
+    editing = null;
+    await load();
+  }
+
+  const onEditKey = (r: Component) => (e: KeyboardEvent) => {
+    if (e.key === "Enter" && edit.slug.trim() && edit.name.trim()) save(r);
+    else if (e.key === "Escape") editing = null;
+  };
+
   async function del(slug: string) {
-    if (confirmDel !== slug) {
-      confirmDel = slug;
-      return;
-    }
-    confirmDel = null;
     error = null;
     try {
       await api.delete(`/products/${productSlug}/components/${slug}`);
@@ -132,31 +154,32 @@
   <tbody>
     {#each components as r (r.slug)}
       <tr>
-        <td>{r.slug}</td>
         {#if editing === r.slug}
-          <td><input class="row-edit" bind:value={edit.name} /></td>
+          <td><input class="row-input" bind:value={edit.slug} title="component slug" aria-label="slug" onkeydown={onEditKey(r)} /></td>
+          <td><input class="row-input" bind:value={edit.name} aria-label="name" onkeydown={onEditKey(r)} /></td>
           <td>
             <select bind:value={edit.parent}>
               <option value="">(none)</option>
               {#each components.filter((c) => c.slug !== r.slug) as p}<option value={p.slug}>{p.slug}</option>{/each}
             </select>
           </td>
-          <td><input class="row-edit" bind:value={edit.aliases} placeholder="aliases (csv)" /></td>
-          <td><input class="row-edit" bind:value={edit.description} placeholder="description" /></td>
-          <td>
-            <button class="mini" onclick={() => save(r.slug)} disabled={saving || !edit.name.trim()}>save</button>
-            <button class="mini" onclick={() => (editing = null)}>cancel</button>
+          <td><input class="row-input" bind:value={edit.aliases} placeholder="aliases (csv)" aria-label="aliases" onkeydown={onEditKey(r)} /></td>
+          <td><input class="row-input" bind:value={edit.description} placeholder="description" aria-label="description" onkeydown={onEditKey(r)} /></td>
+          <td class="actions">
+            <button class="icon-btn ok" title="save" aria-label="save" onclick={() => save(r)} disabled={saving || !edit.name.trim() || !edit.slug.trim()}>✓</button>
+            <button class="icon-btn" title="cancel" aria-label="cancel" onclick={() => (editing = null)}>↺</button>
           </td>
         {:else}
+          <td>{r.slug}</td>
           <td>{r.name}</td><td class="muted">{parentSlugOf(r)}</td>
           <td class="muted">{aliasText(r.aliases)}</td><td class="muted">{r.description ?? ""}</td>
           {#if canEdit}
-            <td>
-              <button class="mini" onclick={() => {
+            <td class="actions">
+              <button class="icon-btn" title="edit" aria-label="edit" onclick={() => {
                 editing = r.slug;
-                edit = { name: r.name, parent: parentSlugOf(r), description: r.description ?? "", aliases: aliasText(r.aliases) };
-              }}>edit</button>
-              <button class="mini danger-btn" onclick={() => del(r.slug)}>{confirmDel === r.slug ? "confirm?" : "del"}</button>
+                edit = { slug: r.slug, name: r.name, parent: parentSlugOf(r), description: r.description ?? "", aliases: aliasText(r.aliases) };
+              }}>✎</button>
+              <DeleteButton onConfirm={() => del(r.slug)} />
             </td>
           {/if}
         {/if}
@@ -167,6 +190,21 @@
     {/if}
   </tbody>
 </table>
+
+{#if rename}
+  <RenameSlugModal title="rename component slug"
+    resource={`/products/${productSlug}/components/${rename.from}`} to={rename.to}
+    onRenamed={afterRename} onCancel={() => (rename = null)} onError={(m) => (error = m)}
+    message={renameMessage} />
+{/if}
+
+{#snippet renameMessage(impact: { entries: number; docs?: number })}
+  <p>Rename&nbsp; <b>{rename?.from}</b> &nbsp;-&gt;&nbsp; <b>{rename?.to}</b></p>
+  <p class="muted">
+    Entries link by id (unaffected), but the slug tags {impact.entries} {impact.entries === 1 ? "entry" : "entries"}{impact.docs ? ` and ${impact.docs} reference doc${impact.docs === 1 ? "" : "s"}` : ""} — those
+    tags will be rewritten.
+  </p>
+{/snippet}
 
 {#if canEdit && productSlug}
   <div class="add-area">
@@ -184,8 +222,8 @@
         </label>
         <input placeholder="aliases (comma-separated)" bind:value={form.aliases} />
         <input placeholder="description" bind:value={form.description} />
-        <button type="submit" disabled={saving}>{saving ? "saving…" : "Save"}</button>
-        <button type="button" onclick={() => (showForm = false)}>Cancel</button>
+        <button class="icon-btn ok" type="submit" title="save" aria-label="save" disabled={saving}>{saving ? "…" : "✓"}</button>
+        <button class="icon-btn" type="button" title="cancel" aria-label="cancel" onclick={() => (showForm = false)}>↺</button>
       </form>
       <p class="muted hint">Slugs are what entries anchor to - pick stable, lowercase names; use aliases for naming variants (lc, LC, line controller).</p>
     {/if}

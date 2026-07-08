@@ -3,6 +3,7 @@
   import { api } from "../api";
   import { session } from "../session.svelte";
   import { t } from "../terms";
+  import DeleteButton from "./DeleteButton.svelte";
   import { TIP, errText, type Team, type Product } from "./shared";
 
   const isAdmin = $derived(session.me?.role === "admin" || !session.me);
@@ -19,9 +20,8 @@
 
   let editing = $state<string | null>(null); // team slug being renamed
   let editName = $state("");
-  let confirmDel = $state<string | null>(null);
 
-  const productsOf = (teamSlug: string) => products.filter((p) => p.team_slug === teamSlug).map((p) => p.name);
+  const productsOf = (teamSlug: string) => products.filter((p) => p.team_slug === teamSlug).map((p) => p.slug);
 
   async function load() {
     loading = true;
@@ -51,11 +51,23 @@
     }
   }
 
+  // The edit field holds "name | slug"; the slug part is optional.
+  function parseNameSlug(v: string): { name: string; slug: string } {
+    const i = v.indexOf("|");
+    return i === -1
+      ? { name: v.trim(), slug: "" }
+      : { name: v.slice(0, i).trim(), slug: v.slice(i + 1).trim() };
+  }
+
   async function rename(teamSlug: string) {
+    const { name, slug } = parseNameSlug(editName);
+    if (!name) return;
     saving = true;
     error = null;
     try {
-      await api.patch(`/teams/${teamSlug}`, { name: editName.trim() });
+      const patch: { name: string; slug?: string } = { name };
+      if (slug && slug !== teamSlug) patch.slug = slug;
+      await api.patch(`/teams/${teamSlug}`, patch);
       editing = null;
       await load();
     } catch (err) {
@@ -66,11 +78,6 @@
   }
 
   async function del(teamSlug: string) {
-    if (confirmDel !== teamSlug) {
-      confirmDel = teamSlug;
-      return;
-    }
-    confirmDel = null;
     error = null;
     try {
       await api.delete(`/teams/${teamSlug}`);
@@ -97,23 +104,21 @@
       <tr>
         <td>
           {#if editing === r.slug}
-            <span class="row-edit">
-              <input bind:value={editName} />
-              <button class="mini" onclick={() => rename(r.slug)} disabled={saving || !editName.trim()}>save</button>
-              <button class="mini" onclick={() => (editing = null)}>cancel</button>
-            </span>
+            <input class="row-input" bind:value={editName} title="format: name | slug" aria-label="{t('team')} name and slug"
+              onkeydown={(e) => { if (e.key === "Enter" && editName.trim()) rename(r.slug); else if (e.key === "Escape") editing = null; }} />
           {:else}
             {r.name} <span class="muted">({r.slug})</span>
           {/if}
         </td>
         <td class="muted">[ {productsOf(r.slug).join(", ") || `no ${t("products")} yet`} ]</td>
         {#if isAdmin}
-          <td>
-            {#if editing !== r.slug}
-              <button class="mini" onclick={() => { editing = r.slug; editName = r.name; }}>edit</button>
-              <button class="mini danger-btn" onclick={() => del(r.slug)}>
-                {confirmDel === r.slug ? "confirm?" : "del"}
-              </button>
+          <td class="actions">
+            {#if editing === r.slug}
+              <button class="icon-btn ok" title="save" aria-label="save" onclick={() => rename(r.slug)} disabled={saving || !editName.trim()}>✓</button>
+              <button class="icon-btn" title="cancel" aria-label="cancel" onclick={() => (editing = null)}>↺</button>
+            {:else}
+              <button class="icon-btn" title="edit" aria-label="edit" onclick={() => { editing = r.slug; editName = `${r.name} | ${r.slug}`; }}>✎</button>
+              <DeleteButton onConfirm={() => del(r.slug)} />
             {/if}
           </td>
         {/if}
@@ -131,8 +136,8 @@
       <form class="add-form" onsubmit={add}>
         <input placeholder="slug" bind:value={slug} required title={TIP.slug} />
         <input placeholder="name" bind:value={name} required />
-        <button type="submit" disabled={saving}>{saving ? "saving…" : "Save"}</button>
-        <button type="button" onclick={() => (showForm = false)}>Cancel</button>
+        <button class="icon-btn ok" type="submit" title="save" aria-label="save" disabled={saving}>{saving ? "…" : "✓"}</button>
+        <button class="icon-btn" type="button" title="cancel" aria-label="cancel" onclick={() => (showForm = false)}>↺</button>
       </form>
     {/if}
   </div>

@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../api";
+  import DeleteButton from "./DeleteButton.svelte";
   import { TIP, errText, type Connection, type ProductMap } from "./shared";
 
   let connections = $state<Connection[]>([]);
   let productMaps = $state<ProductMap[]>([]);
   let loading = $state(false);
   let error = $state<string | null>(null);
-  let confirmDel = $state<string | null>(null); // map id
 
   const redactionOn = (c: Connection) =>
     ((c.config as { redaction?: { enabled?: boolean } } | null)?.redaction?.enabled) === true;
@@ -26,11 +26,6 @@
   }
 
   async function delMap(id: string) {
-    if (confirmDel !== id) {
-      confirmDel = id;
-      return;
-    }
-    confirmDel = null;
     error = null;
     try {
       await api.delete(`/source-product-maps/${id}`);
@@ -67,7 +62,7 @@
     {#each productMaps as r (r.id)}
       <tr>
         <td>{r.source_slug}</td><td>{r.external_group_key}</td><td>{r.product_name} ({r.product_slug})</td>
-        <td><button class="mini danger-btn" onclick={() => delMap(r.id)}>{confirmDel === r.id ? "confirm?" : "del"}</button></td>
+        <td><DeleteButton onConfirm={() => delMap(r.id)} /></td>
       </tr>
     {/each}
     {#if !loading && productMaps.length === 0}<tr><td colspan="4" class="muted">No mappings yet.</td></tr>{/if}
