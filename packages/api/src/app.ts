@@ -3,7 +3,7 @@ import { logger } from "hono/logger";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { z } from "zod";
-import { sql, AppError, registerSource } from "@tachy/core";
+import { sql, AppError, registerSource, effectiveSettings } from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 import { knowledge, analysisRuns } from "./routes/knowledge";
@@ -18,7 +18,7 @@ import { installAuth, isBootstrapped, type OidcConfig } from "./auth";
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
 
-const STATUS_BY_CODE = { not_found: 404, conflict: 409, bad_input: 400 } as const;
+const STATUS_BY_CODE = { not_found: 404, conflict: 409, bad_input: 400, forbidden: 403 } as const;
 
 // The REST surface, mounted under /api so the SPA and API share one origin.
 // Exported as a chained sub-app so `typeof apiRoutes` carries route types for an
@@ -53,13 +53,22 @@ export function createApp(opts: { apiToken?: string; webRoot?: string; oidc?: Oi
 
   // Public: lets the SPA decide between wizard / login form / SSO button. No secrets.
   const authMode = opts.oidc ? "sso" : opts.apiToken ? "token" : "open";
-  base.get("/auth/config", async (c) =>
-    c.json({
+  base.get("/auth/config", async (c) => {
+    // Terminology must be right on the login screen too, so the (non-secret)
+    // deployment profile ships with the public config. Pre-schema DBs → default.
+    let profile = "support";
+    try {
+      profile = (await effectiveSettings()).deployment_profile.value;
+    } catch {
+      /* keep default */
+    }
+    return c.json({
       authMode,
       sso: Boolean(opts.oidc),
       passwordLogin: Boolean(opts.passwordAuth) && (await isBootstrapped()),
-    }),
-  );
+      profile,
+    });
+  });
 
   // First-run bootstrap: mounted BEFORE the auth gate so a fresh install can be
   // set up from the browser. The POST self-disables once an admin exists.

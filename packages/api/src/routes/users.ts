@@ -3,9 +3,10 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   listUsers, createUser, setUserRole, setUserPassword, setUserDisabled,
-  listTeamMembers, setTeamMember, USER_ROLES, MIN_PASSWORD_LENGTH,
+  listTeamMembers, setTeamMember, USER_ROLES, TEAM_ROLES, MIN_PASSWORD_LENGTH,
 } from "@tachy/core";
 import { requireAdmin } from "../auth";
+import { assertAnyTeamAdminApi, assertTeamAdmin } from "../authz";
 
 const createSchema = z.object({
   email: z.string().email(),
@@ -22,17 +23,19 @@ const patchSchema = z.object({
 
 const memberSchema = z.object({
   email: z.string().email(),
-  // null removes the membership
-  role: z.string().min(1).nullable(),
+  // null removes the membership; 'admin' = team mini-admin
+  role: z.enum(TEAM_ROLES).nullable(),
 });
 
-// User management — everything here is admin-only (emails, roles, passwords).
+// User management. Global user CRUD stays admin-only; the user list and team
+// membership are also open to team mini-admins so they can manage their teams.
 export const users = new Hono()
-  .use("*", requireAdmin)
+  .get("/", async (c) => {
+    await assertAnyTeamAdminApi(c);
+    return c.json(await listUsers());
+  })
 
-  .get("/", async (c) => c.json(await listUsers()))
-
-  .post("/", zValidator("json", createSchema), async (c) => {
+  .post("/", requireAdmin, zValidator("json", createSchema), async (c) => {
     const body = c.req.valid("json");
     return c.json(await createUser({
       email: body.email,
@@ -42,7 +45,7 @@ export const users = new Hono()
     }));
   })
 
-  .patch("/:id", zValidator("json", patchSchema), async (c) => {
+  .patch("/:id", requireAdmin, zValidator("json", patchSchema), async (c) => {
     const id = c.req.param("id");
     const body = c.req.valid("json");
     if (body.role !== undefined) await setUserRole(id, body.role);
@@ -51,9 +54,13 @@ export const users = new Hono()
     return c.json({ ok: true });
   })
 
-  .get("/team-members/:teamSlug", async (c) => c.json(await listTeamMembers(c.req.param("teamSlug"))))
+  .get("/team-members/:teamSlug", async (c) => {
+    await assertTeamAdmin(c, c.req.param("teamSlug"));
+    return c.json(await listTeamMembers(c.req.param("teamSlug")));
+  })
 
   .put("/team-members/:teamSlug", zValidator("json", memberSchema), async (c) => {
+    await assertTeamAdmin(c, c.req.param("teamSlug"));
     const { email, role } = c.req.valid("json");
     await setTeamMember(c.req.param("teamSlug"), email, role);
     return c.json({ ok: true });

@@ -10,7 +10,7 @@ import {
   getAuth,
   revokeSession,
 } from "@hono/oidc-auth";
-import { upsertUser, getUserByEmail, countAdmins, verifyPassword, env, type UserRole } from "@tachy/core";
+import { upsertUser, getUserByEmail, countAdmins, verifyPassword, teamAdminTeams, env, type UserRole } from "@tachy/core";
 
 export interface OidcConfig {
   issuer: string;
@@ -212,9 +212,18 @@ export function installAuth(
     const identity = await resolveIdentity(c, opts);
     if (!identity || identity.via === "token") return c.json({ error: "unauthenticated" }, 401);
     if (identity.via === "open")
-      return c.json({ email: env.userEmail ?? null, name: null, role: "admin", via: "open" });
+      return c.json({ email: env.userEmail ?? null, name: null, role: "admin", via: "open", team_admin: [] });
     if (identity.via === "sso" && identity.email) await upsertUser(identity.email, identity.name);
-    return c.json({ email: identity.email, name: identity.name ?? null, role: identity.role, via: identity.via });
+    // Teams the caller mini-admins  drives the web's curation affordances.
+    let teamAdmin: { team_id: string; team_slug: string }[] = [];
+    if (identity.email) {
+      const user = await getUserByEmail(identity.email);
+      if (user) teamAdmin = await teamAdminTeams(user.id);
+    }
+    return c.json({
+      email: identity.email, name: identity.name ?? null, role: identity.role, via: identity.via,
+      team_admin: teamAdmin,
+    });
   });
 
   base.use("/api/*", async (c, next) => {
