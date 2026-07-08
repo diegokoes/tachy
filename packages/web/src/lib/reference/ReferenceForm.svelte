@@ -1,7 +1,7 @@
 <script lang="ts">
   // Shared create/edit form for reference docs. The body is chunked + embedded
   // server-side on save; product scope is set at creation and fixed afterwards.
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { api } from "../api";
   import { canCurateScope } from "../session.svelte";
   import type { ReferenceRow, NamedRow } from "../types";
@@ -24,11 +24,15 @@
     onCancel: () => void;
   } = $props();
 
-  let title = $state(initial.title ?? "");
-  let body = $state(initial.body ?? "");
-  let tags = $state((initial.tags ?? []).join(", "));
-  let status = $state(initial.status ?? "approved");
-  let source = $state(initial.source ?? "");
+  // One-time snapshot of the seed prop (the form is remounted per doc); untrack
+  // documents the intent and silences the reactive-read warning on $state(...).
+  const seed = untrack(() => initial);
+
+  let title = $state(seed.title ?? "");
+  let body = $state(seed.body ?? "");
+  let tags = $state((seed.tags ?? []).join(", "));
+  let status = $state(seed.status ?? "approved");
+  let source = $state(seed.source ?? "");
   let productSlug = $state("");
   let products = $state<NamedRow[]>([]);
 
