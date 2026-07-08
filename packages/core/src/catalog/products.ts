@@ -33,6 +33,28 @@ export async function addTeam(slug: string, name: string) {
   return row;
 }
 
+// Rename a team's display name and/or its slug. Teams are referenced by uuid id,
+// so a slug rename is a single-row update with no cascade; the slug just has to
+// stay unique (a collision surfaces as a clean conflict).
+export async function updateTeam(currentSlug: string, patch: { name?: string; slug?: string }) {
+  const [current] = await sql`select id, slug, name from teams where slug = ${currentSlug}`;
+  if (!current) throw notFound(`Team '${currentSlug}' not found`);
+  try {
+    const [row] = await sql`
+      update teams set
+        name = ${patch.name ?? current.name},
+        slug = ${patch.slug ?? current.slug}
+      where id = ${current.id}
+      returning id, slug, name
+    `;
+    return row;
+  } catch (e) {
+    if ((e as { code?: string }).code === "23505")
+      throw conflict(`slug '${patch.slug}' is already taken by another team`);
+    throw e;
+  }
+}
+
 // Deleting a team would cascade its products (and their components/labels), so
 // refuse while products exist  the products carry the actual knowledge scope.
 export async function deleteTeam(slug: string) {
@@ -65,18 +87,26 @@ export async function addProduct(teamSlug: string, slug: string, name: string, a
   return row;
 }
 
-// Partial edit; the slug is the stable reference and stays immutable.
-export async function updateProduct(productId: string, patch: { name?: string; aliases?: string[] }) {
-  const [current] = await sql`select id, name, aliases from products where id = ${productId}`;
+// Partial edit. Products are referenced by uuid id, so renaming the slug is a
+// single-row update with no cascade; it only has to stay unique within the team.
+export async function updateProduct(productId: string, patch: { name?: string; aliases?: string[]; slug?: string }) {
+  const [current] = await sql`select id, name, aliases, slug from products where id = ${productId}`;
   if (!current) throw notFound(`Product '${productId}' not found`);
-  const [row] = await sql`
-    update products set
-      name    = ${patch.name ?? current.name},
-      aliases = ${patch.aliases ?? current.aliases}
-    where id = ${productId}
-    returning id, slug, name, aliases
-  `;
-  return row;
+  try {
+    const [row] = await sql`
+      update products set
+        name    = ${patch.name ?? current.name},
+        aliases = ${patch.aliases ?? current.aliases},
+        slug    = ${patch.slug ?? current.slug}
+      where id = ${productId}
+      returning id, slug, name, aliases
+    `;
+    return row;
+  } catch (e) {
+    if ((e as { code?: string }).code === "23505")
+      throw conflict(`slug '${patch.slug}' is already used by another product in this team`);
+    throw e;
+  }
 }
 
 // Entries/work items/docs only set-null their product on delete, and
@@ -124,6 +154,34 @@ export async function updateLabel(productId: string, slug: string, description: 
   `;
   if (!row) throw notFound(`Label '${slug}' not found for this product`);
   return row;
+}
+
+// Label slugs are used as findability tags on entries/docs — count those, since
+// a slug rename rewrites them.
+export async function labelRenameImpact(productId: string, slug: string): Promise<{ entries: number; docs: number }> {
+  const [current] = await sql`select id from labels where product_id = ${productId} and slug = ${slug}`;
+  if (!current) throw notFound(`Label '${slug}' not found for this product`);
+  const [e] = await sql`select count(*)::int as n from knowledge_entries where product_id = ${productId} and ${slug} = any(tags)`;
+  const [d] = await sql`select count(*)::int as n from reference_docs where product_id = ${productId} and ${slug} = any(tags)`;
+  return { entries: e.n, docs: d.n };
+}
+
+// Rename a label slug and rewrite it wherever it tagged this product's
+// entries/docs, in a transaction.
+export async function renameLabel(productId: string, oldSlug: string, newSlug: string) {
+  if (oldSlug === newSlug) return { renamed: false, from: oldSlug, to: newSlug, entries: 0, docs: 0 };
+  const [current] = await sql`select id from labels where product_id = ${productId} and slug = ${oldSlug}`;
+  if (!current) throw notFound(`Label '${oldSlug}' not found for this product`);
+  const [taken] = await sql`select id from labels where product_id = ${productId} and slug = ${newSlug}`;
+  if (taken) throw conflict(`label '${newSlug}' already exists for this product`);
+  return sql.begin(async (tx) => {
+    const e = await tx`update knowledge_entries set tags = array_replace(tags, ${oldSlug}, ${newSlug})
+      where product_id = ${productId} and ${oldSlug} = any(tags)`;
+    const d = await tx`update reference_docs set tags = array_replace(tags, ${oldSlug}, ${newSlug})
+      where product_id = ${productId} and ${oldSlug} = any(tags)`;
+    await tx`update labels set slug = ${newSlug} where id = ${current.id}`;
+    return { renamed: true, from: oldSlug, to: newSlug, entries: e.count, docs: d.count };
+  });
 }
 
 // Labels are advisory vocabulary only (tags on entries stay free-form), so
