@@ -79,6 +79,36 @@ export async function updateComponent(
 
 // Child components would cascade away and linked entries would silently lose
 // their component (FK is on delete set null), so refuse while referenced.
+// A component's entries link by uuid component_id (rename-safe), but the slug is
+// also used as a findability tag on entries/docs. Count those — they're what a
+// slug rename will rewrite.
+export async function componentRenameImpact(productId: string, slug: string): Promise<{ entries: number; docs: number }> {
+  const [current] = await sql`select id from components where product_id = ${productId} and slug = ${slug}`;
+  if (!current) throw notFound(`Component '${slug}' not found for this product`);
+  const [e] = await sql`select count(*)::int as n from knowledge_entries where product_id = ${productId} and ${slug} = any(tags)`;
+  const [d] = await sql`select count(*)::int as n from reference_docs where product_id = ${productId} and ${slug} = any(tags)`;
+  return { entries: e.n, docs: d.n };
+}
+
+// Rename a component slug and rewrite the slug wherever it was used as a tag on
+// this product's entries/docs. component_id links are uuid and unaffected. Done
+// in a transaction so a partial rewrite can't happen.
+export async function renameComponent(productId: string, oldSlug: string, newSlug: string) {
+  if (oldSlug === newSlug) return { renamed: false, from: oldSlug, to: newSlug, entries: 0, docs: 0 };
+  const [current] = await sql`select id from components where product_id = ${productId} and slug = ${oldSlug}`;
+  if (!current) throw notFound(`Component '${oldSlug}' not found for this product`);
+  const [taken] = await sql`select id from components where product_id = ${productId} and slug = ${newSlug}`;
+  if (taken) throw conflict(`component '${newSlug}' already exists for this product`);
+  return sql.begin(async (tx) => {
+    const e = await tx`update knowledge_entries set tags = array_replace(tags, ${oldSlug}, ${newSlug})
+      where product_id = ${productId} and ${oldSlug} = any(tags)`;
+    const d = await tx`update reference_docs set tags = array_replace(tags, ${oldSlug}, ${newSlug})
+      where product_id = ${productId} and ${oldSlug} = any(tags)`;
+    await tx`update components set slug = ${newSlug} where id = ${current.id}`;
+    return { renamed: true, from: oldSlug, to: newSlug, entries: e.count, docs: d.count };
+  });
+}
+
 export async function deleteComponent(productId: string, slug: string) {
   const [current] = await sql`select id from components where product_id = ${productId} and slug = ${slug}`;
   if (!current) throw notFound(`Component '${slug}' not found for this product`);

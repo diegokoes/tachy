@@ -3,10 +3,12 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   listResolutionPatterns, addResolutionPattern, deleteResolutionPattern,
+  resolutionPatternRenameImpact, renameResolutionPattern,
   listComponents, addComponent, updateComponent, deleteComponent, getProductIdBySlug,
+  componentRenameImpact, renameComponent,
   listCustomers, addCustomer, updateCustomer, deleteCustomer,
-  listTeams, addTeam, deleteTeam, listProducts, addProduct, updateProduct, deleteProduct,
-  listLabels, addLabel, updateLabel, deleteLabel,
+  listTeams, addTeam, updateTeam, deleteTeam, listProducts, addProduct, updateProduct, deleteProduct,
+  listLabels, addLabel, updateLabel, deleteLabel, labelRenameImpact, renameLabel,
   listSourceConnections, addSourceConnection, listSourceProductMaps, addSourceProductMap,
   deleteSourceProductMap,
   env, effectiveSettings, setSetting,
@@ -30,7 +32,14 @@ const sourceConnSchema = z.object({
 const productMapSchema = z.object({ external_group_key: z.string(), product_slug: z.string() });
 const labelSchema = z.object({ slug: z.string(), description: z.string().optional() });
 
-// PATCH bodies: slugs are immutable stable references, so they never appear here.
+// Lowercase machine slug (letters, digits, . _ / -). Teams/products are keyed by
+// uuid, so their slug is a renameable label; taxonomy slugs stay immutable.
+const slugField = z.string().regex(/^[a-z0-9][a-z0-9._/-]*$/, "slug must be lowercase (letters, digits, . _ / -)");
+// Renaming a taxonomy slug (pattern/component/label) cascades to referencing
+// entries/docs; the client shows an impact count first, then posts { to }.
+const renameSchema = z.object({ to: slugField });
+// PATCH bodies: taxonomy slugs (patterns/components/labels/customers) are
+// immutable references, so they never appear here; team/product slugs may.
 const customerPatchSchema = z.object({
   name: z.string().optional(), aliases: z.array(z.string()).optional(), notes: z.string().nullable().optional(),
 });
@@ -38,8 +47,8 @@ const componentPatchSchema = z.object({
   name: z.string().optional(), parentSlug: z.string().nullable().optional(),
   description: z.string().nullable().optional(), aliases: z.array(z.string()).optional(),
 });
-const teamPatchSchema = z.object({ name: z.string() });
-const productPatchSchema = z.object({ name: z.string().optional(), aliases: z.array(z.string()).optional() });
+const teamPatchSchema = z.object({ name: z.string().optional(), slug: slugField.optional() });
+const productPatchSchema = z.object({ name: z.string().optional(), aliases: z.array(z.string()).optional(), slug: slugField.optional() });
 const labelPatchSchema = z.object({ description: z.string().nullable() });
 const patternPatchSchema = z.object({ description: z.string() });
 
@@ -90,6 +99,14 @@ export const admin = new Hono()
     await assertAnyTeamAdminApi(c);
     return c.json(await deleteResolutionPattern(c.req.param("slug")));
   })
+  .get("/resolution-patterns/:slug/rename-impact", async (c) => {
+    await assertAnyTeamAdminApi(c);
+    return c.json(await resolutionPatternRenameImpact(c.req.param("slug")));
+  })
+  .post("/resolution-patterns/:slug/rename", zValidator("json", renameSchema), async (c) => {
+    await assertAnyTeamAdminApi(c);
+    return c.json(await renameResolutionPattern(c.req.param("slug"), c.req.valid("json").to));
+  })
   .get("/products/:slug/components", async (c) => {
     return c.json(await listComponents(await getProductIdBySlug(c.req.param("slug"))));
   })
@@ -109,6 +126,16 @@ export const admin = new Hono()
     await assertScopeEditor(c, { productId });
     return c.json(await deleteComponent(productId, c.req.param("componentSlug")));
   })
+  .get("/products/:slug/components/:componentSlug/rename-impact", async (c) => {
+    const productId = await getProductIdBySlug(c.req.param("slug"));
+    await assertScopeEditor(c, { productId });
+    return c.json(await componentRenameImpact(productId, c.req.param("componentSlug")));
+  })
+  .post("/products/:slug/components/:componentSlug/rename", zValidator("json", renameSchema), async (c) => {
+    const productId = await getProductIdBySlug(c.req.param("slug"));
+    await assertScopeEditor(c, { productId });
+    return c.json(await renameComponent(productId, c.req.param("componentSlug"), c.req.valid("json").to));
+  })
   .get("/products/:slug/labels", async (c) => {
     return c.json(await listLabels(await getProductIdBySlug(c.req.param("slug"))));
   })
@@ -127,6 +154,16 @@ export const admin = new Hono()
     const productId = await getProductIdBySlug(c.req.param("slug"));
     await assertScopeEditor(c, { productId });
     return c.json(await deleteLabel(productId, c.req.param("labelSlug")));
+  })
+  .get("/products/:slug/labels/:labelSlug/rename-impact", async (c) => {
+    const productId = await getProductIdBySlug(c.req.param("slug"));
+    await assertScopeEditor(c, { productId });
+    return c.json(await labelRenameImpact(productId, c.req.param("labelSlug")));
+  })
+  .post("/products/:slug/labels/:labelSlug/rename", zValidator("json", renameSchema), async (c) => {
+    const productId = await getProductIdBySlug(c.req.param("slug"));
+    await assertScopeEditor(c, { productId });
+    return c.json(await renameLabel(productId, c.req.param("labelSlug"), c.req.valid("json").to));
   })
   .get("/source-product-maps", async (c) => c.json(await listSourceProductMaps()))
   .get("/customers", async (c) => c.json(await listCustomers()))
@@ -148,7 +185,7 @@ export const admin = new Hono()
     return c.json(await addTeam(slug, name));
   })
   .patch("/teams/:slug", requireAdmin, zValidator("json", teamPatchSchema), async (c) => {
-    return c.json(await addTeam(c.req.param("slug")!, c.req.valid("json").name));
+    return c.json(await updateTeam(c.req.param("slug")!, c.req.valid("json")));
   })
   .delete("/teams/:slug", requireAdmin, async (c) => {
     return c.json(await deleteTeam(c.req.param("slug")!));

@@ -167,7 +167,8 @@ create table knowledge_entries (
     symptoms            text[] not null default '{}',
     root_cause          text,
     resolution          text,
-    resolution_pattern  text references resolution_patterns(slug),
+    -- on update cascade so renaming a pattern slug rewrites referencing entries.
+    resolution_pattern  text references resolution_patterns(slug) on update cascade,
     signals             text[] not null default '{}',
     tags                text[] not null default '{}',
     -- component is the validated taxonomy anchor; product_area is DERIVED from the

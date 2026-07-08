@@ -60,16 +60,20 @@ export {
   setWorkItemCustomer, setObservedVersion, getCustomerName, getCustomerSlug,
 } from "./catalog";
 export type { CustomerInput } from "./catalog";
-export { listResolutionPatterns, addResolutionPattern, deleteResolutionPattern } from "./catalog";
+export {
+  listResolutionPatterns, addResolutionPattern, deleteResolutionPattern,
+  resolutionPatternRenameImpact, renameResolutionPattern,
+} from "./catalog";
 export {
   listComponents, addComponent, updateComponent, deleteComponent,
+  componentRenameImpact, renameComponent,
   resolveComponentTags, resolveComponentStrict, resolveComponentFilter, getComponentPath,
 } from "./catalog";
 export type { AddComponentInput, ResolvedComponent } from "./catalog";
 export {
-  getProductIdBySlug, getTeamIdBySlug, listTeams, addTeam, deleteTeam,
+  getProductIdBySlug, getTeamIdBySlug, listTeams, addTeam, updateTeam, deleteTeam,
   listProducts, addProduct, updateProduct, deleteProduct,
-  listLabels, addLabel, updateLabel, deleteLabel,
+  listLabels, addLabel, updateLabel, deleteLabel, labelRenameImpact, renameLabel,
 } from "./catalog";
 
 // sources

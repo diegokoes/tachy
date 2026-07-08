@@ -1,5 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { saveKnowledgeEntry, listResolutionPatterns, addResolutionPattern } from "@tachy/core";
+import {
+  saveKnowledgeEntry, listResolutionPatterns, addResolutionPattern,
+  renameResolutionPattern, resolutionPatternRenameImpact,
+} from "@tachy/core";
 import { resetData, sql } from "./helpers";
 
 describe("resolution_patterns", () => {
@@ -29,5 +32,27 @@ describe("resolution_patterns", () => {
     const row = await saveKnowledgeEntry({ issueSummary: "x" });
     const [stored] = await sql`select resolution_pattern from knowledge_entries where id = ${row.id}`;
     expect(stored.resolution_pattern).toBeNull();
+  });
+
+  it("renaming a pattern slug cascades to referencing entries and reports the count", async () => {
+    await addResolutionPattern("config-mismatch", "desc");
+    const a = await saveKnowledgeEntry({ issueSummary: "a", resolutionPattern: "config-mismatch", status: "approved" });
+    const b = await saveKnowledgeEntry({ issueSummary: "b", resolutionPattern: "config-mismatch", status: "approved" });
+
+    expect(await resolutionPatternRenameImpact("config-mismatch")).toEqual({ entries: 2 });
+
+    const res = await renameResolutionPattern("config-mismatch", "config-drift");
+    expect(res).toMatchObject({ renamed: true, from: "config-mismatch", to: "config-drift", entries: 2 });
+
+    // the old slug is gone, the new one exists, and both entries followed it
+    expect((await listResolutionPatterns()).map((p) => p.slug)).toEqual(["config-drift"]);
+    const rows = await sql`select resolution_pattern from knowledge_entries where id in ${sql([a.id, b.id])}`;
+    expect(rows.every((r) => r.resolution_pattern === "config-drift")).toBe(true);
+  });
+
+  it("refuses to rename onto an existing pattern slug", async () => {
+    await addResolutionPattern("one", "d");
+    await addResolutionPattern("two", "d");
+    await expect(renameResolutionPattern("one", "two")).rejects.toThrow(/already exists/);
   });
 });
