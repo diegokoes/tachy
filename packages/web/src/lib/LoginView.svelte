@@ -75,7 +75,6 @@
     font-size: 2rem;
     letter-spacing: 0.04em;
   }
-  .sub { margin: -0.6rem 0 0.4rem; font-size: 0.85rem; }
   form { display: flex; flex-direction: column; gap: 0.8rem; }
   label { display: flex; flex-direction: column; gap: 0.3rem; }
   label span { font-size: 0.8rem; color: var(--muted); }

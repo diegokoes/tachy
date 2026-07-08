@@ -2,7 +2,7 @@
   // Shared create/edit form for knowledge entries. Field names map 1:1 onto the
   // API's camelCase schema; in edit mode emptied text fields become null so the
   // PATCH clears them (the API treats omitted and null differently).
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { api } from "../api";
   import { canCurateScope } from "../session.svelte";
   import type { KnowledgeRow, NamedRow } from "../types";
@@ -28,27 +28,33 @@
   const csvJoin = (v: string[] | null | undefined) => (v ?? []).join(", ");
   const csvSplit = (v: string) => v.split(",").map((t) => t.trim()).filter(Boolean);
 
-  let issueSummary = $state(initial.issue_summary ?? "");
-  let rootCause = $state(initial.root_cause ?? "");
-  let resolution = $state(initial.resolution ?? "");
-  let symptoms = $state(csvJoin(initial.symptoms));
-  let signals = $state(csvJoin(initial.signals));
-  let tags = $state(csvJoin(initial.tags));
-  let confidence = $state(initial.confidence ?? "");
-  let cloud = $state(initial.cloud ?? "");
-  let resolutionClarity = $state(initial.resolution_clarity ?? "");
-  let learningValue = $state(initial.learning_value ?? "");
-  let hiddenFix = $state(Boolean(initial.hidden_fix));
-  let resolutionPattern = $state(initial.resolution_pattern ?? "");
-  let affectedVersion = $state(initial.affected_version ?? "");
-  let fixedVersion = $state(initial.fixed_version ?? "");
-  let status = $state(initial.status ?? "approved");
+  // Seed the editable fields from `initial` once. The form is remounted per
+  // entry (it only lives inside {#if editing}/create), so a one-time snapshot is
+  // correct; untrack makes that intent explicit and silences the reactive-read
+  // warning that firing on `$state(initial.x)` would otherwise raise.
+  const seed = untrack(() => initial);
+
+  let issueSummary = $state(seed.issue_summary ?? "");
+  let rootCause = $state(seed.root_cause ?? "");
+  let resolution = $state(seed.resolution ?? "");
+  let symptoms = $state(csvJoin(seed.symptoms));
+  let signals = $state(csvJoin(seed.signals));
+  let tags = $state(csvJoin(seed.tags));
+  let confidence = $state(seed.confidence ?? "");
+  let cloud = $state(seed.cloud ?? "");
+  let resolutionClarity = $state(seed.resolution_clarity ?? "");
+  let learningValue = $state(seed.learning_value ?? "");
+  let hiddenFix = $state(Boolean(seed.hidden_fix));
+  let resolutionPattern = $state(seed.resolution_pattern ?? "");
+  let affectedVersion = $state(seed.affected_version ?? "");
+  let fixedVersion = $state(seed.fixed_version ?? "");
+  let status = $state(seed.status ?? "approved");
   let component = $state(""); // slug; resolved from initial.component_id once components load
 
   let showStructured = $state(false);
   let structuredText = $state(
-    initial.structured && Object.keys(initial.structured).length
-      ? JSON.stringify(initial.structured, null, 2)
+    seed.structured && Object.keys(seed.structured).length
+      ? JSON.stringify(seed.structured, null, 2)
       : "",
   );
   let structuredError = $state<string | null>(null);

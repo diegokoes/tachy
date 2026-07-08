@@ -164,5 +164,4 @@
   }
   .badge.src-db { border-color: var(--accent); color: var(--accent); }
   .badge.src-env { border-color: var(--warn); color: var(--warn); }
-  code { font-size: 0.85em; }
 </style>
