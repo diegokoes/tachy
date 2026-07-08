@@ -32,7 +32,8 @@ describe("first-run setup wizard", () => {
       org_name: "osapiens",
       team: { slug: "hw", name: "Hardware" },
       product: { slug: "lc", name: "Line Controller" },
-      settings: { redaction_global: true, agent_effort: "high" },
+      products: [{ slug: "mas", name: "MAS" }, { slug: "printer", name: "Printer" }],
+      settings: { redaction_global: true, agent_effort: "high", deployment_profile: "engineering" },
     }));
     expect(res.status).toBe(200);
     expect(res.headers.get("set-cookie")).toContain("tachy_session=");
@@ -49,12 +50,20 @@ describe("first-run setup wizard", () => {
       org_name: "osapiens",
       redaction_global: true,
       agent_effort: "high",
+      deployment_profile: "engineering",
     });
 
     const [team] = await sql`select id from teams where slug = 'hw'`;
     expect(team).toBeTruthy();
-    const [product] = await sql`select id from products where slug = 'lc'`;
-    expect(product).toBeTruthy();
+    const products = await sql`
+      select p.slug from products p join teams t on t.id = p.team_id
+      where t.slug = 'hw' order by p.slug
+    `;
+    expect(products.map((p) => p.slug)).toEqual(["lc", "mas", "printer"]);
+
+    // the public config carries the profile so the SPA can relabel pre-login
+    const cfg = await (await app.request("/auth/config")).json();
+    expect(cfg.profile).toBe("engineering");
   });
 
   it("locks /api against anonymous requests after bootstrap", async () => {

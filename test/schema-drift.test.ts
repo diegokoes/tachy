@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   KNOWLEDGE_STATUSES, REFERENCE_STATUSES, CONFIDENCES, FEEDBACK_KINDS, RUN_MODES,
-  RESOLUTION_CLARITIES, LEARNING_VALUES, USER_ROLES,
+  RESOLUTION_CLARITIES, LEARNING_VALUES, USER_ROLES, TEAM_ROLES,
 } from "@tachy/core";
 
 // Guards the hand-maintained contract between the core enums (the single source
@@ -40,6 +40,7 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     ["analysis_runs", "mode", RUN_MODES],
     ["reference_docs", "status", REFERENCE_STATUSES],
     ["users", "role", USER_ROLES],
+    ["team_members", "role", TEAM_ROLES],
   ] as const)("%s.%s", (table, col, values) => {
     expect(checkValues(table, col).sort()).toEqual([...values].sort());
   });
@@ -49,6 +50,8 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     expect(block).toContain("component_id");
     expect(block).toContain("superseded_by");
     expect(block).toContain("knowledge_entries_no_self_supersede");
+    expect(block).toContain("affected_version");
+    expect(block).toContain("fixed_version");
   });
 
   // cloud is intentionally NOT enum-checked anymore (migration 002): the

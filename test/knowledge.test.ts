@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { saveKnowledgeEntry, searchKnowledge, updateKnowledgeEntry, getKnowledgeEntry, addFeedback, listEnvironments } from "@tachy/core";
+import { saveKnowledgeEntry, searchKnowledge, updateKnowledgeEntry, getKnowledgeEntry, listKnowledgeEntries, addFeedback, listEnvironments } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "./helpers";
 
 afterAll(() => sql.end());
@@ -117,6 +117,31 @@ describe("promoted facets (cloud / quality)", () => {
     stored = await getKnowledgeEntry(row.id);
     expect(stored.cloud).toBeNull();
     expect(stored.hidden_fix).toBe(true); // untouched fields preserved
+  });
+
+  it("round-trips affected/fixed version, seeds from the work item, and filters on them", async () => {
+    // manual entry: explicit values round-trip and null clears
+    const row = await saveKnowledgeEntry({ status: "approved", issueSummary: "broken in 2.3", affectedVersion: "2.3.0", fixedVersion: "2.4.0" });
+    let stored = await getKnowledgeEntry(row.id);
+    expect(stored.affected_version).toBe("2.3.0");
+    expect(stored.fixed_version).toBe("2.4.0");
+    await updateKnowledgeEntry(row.id, { fixedVersion: null });
+    stored = await getKnowledgeEntry(row.id);
+    expect(stored.fixed_version).toBeNull();
+    expect(stored.affected_version).toBe("2.3.0"); // untouched fields preserved
+
+    // ticket-derived entry: affected_version seeds from observed_version
+    const [conn] = await sql`select id from source_connections where slug = 'test-freshdesk'`;
+    const [wi] = await sql`
+      insert into work_items (source_connection_id, external_id, title, observed_version)
+      values (${conn.id}, 'v-1', 'versioned ticket', '1.9.2') returning id
+    `;
+    const seeded = await saveKnowledgeEntry({ workItemId: wi.id as string, issueSummary: "seeded" });
+    expect((await getKnowledgeEntry(seeded.id)).affected_version).toBe("1.9.2");
+
+    // list filter narrows by version
+    const hits = await listKnowledgeEntries({ affectedVersion: "2.3.0" });
+    expect(hits.map((h) => h.id)).toEqual([row.id]);
   });
 
   // cloud is deliberately unconstrained in the DB (migration 002) — the

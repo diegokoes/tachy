@@ -2,6 +2,9 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   addProduct, getProductIdBySlug, addComponent, resolveComponentTags, resolveComponentStrict,
   listLabels, addLabel, saveKnowledgeEntry, searchKnowledge, updateKnowledgeEntry, getKnowledgeEntry,
+  updateComponent, deleteComponent, updateProduct, deleteProduct, addTeam, deleteTeam,
+  updateLabel, deleteLabel, addResolutionPattern, deleteResolutionPattern,
+  updateCustomer, deleteCustomer, addCustomer,
 } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "./helpers";
 
@@ -127,5 +130,71 @@ describe("component-anchored knowledge entries", () => {
     await saveKnowledgeEntry({ status: "approved", productId: tpd, issueSummary: "intermittent timeout", component: "lc" });
     const rows = await searchKnowledge("Line Controller");
     expect(rows[0].issue_summary).toBe("intermittent timeout");
+  });
+});
+
+describe("taxonomy edit/delete with reference guards", () => {
+  beforeEach(resetData);
+
+  it("updates a component in place and refuses to delete it while referenced", async () => {
+    const tpd = await tpdProductId();
+    await addComponent({ productId: tpd, slug: "lc", name: "LC" });
+    await addComponent({ productId: tpd, slug: "printer", name: "Printer", parentSlug: "lc" });
+
+    const updated = await updateComponent(tpd, "lc", { name: "Line Controller", aliases: ["LC"] });
+    expect(updated.name).toBe("Line Controller");
+
+    // guarded by child component
+    await expect(deleteComponent(tpd, "lc")).rejects.toMatchObject({ code: "conflict" });
+    await deleteComponent(tpd, "printer");
+
+    // guarded by a linked entry
+    await saveKnowledgeEntry({ productId: tpd, issueSummary: "x", component: "lc" });
+    await expect(deleteComponent(tpd, "lc")).rejects.toThrow(/knowledge entr/);
+  });
+
+  it("customer edit/delete: partial update, delete guarded by work items", async () => {
+    await addCustomer({ name: "ACME", slug: "acme", aliases: ["acme.com"] });
+    const updated = await updateCustomer("acme", { notes: "flagship" });
+    expect(updated.notes).toBe("flagship");
+    expect(updated.name).toBe("ACME"); // untouched fields preserved
+
+    const [conn] = await sql`select id from source_connections where slug = 'test-freshdesk'`;
+    const [cust] = await sql`select id from customers where slug = 'acme'`;
+    await sql`
+      insert into work_items (source_connection_id, external_id, title, customer_id)
+      values (${conn.id}, 'c-1', 't', ${cust.id})
+    `;
+    await expect(deleteCustomer("acme")).rejects.toMatchObject({ code: "conflict" });
+    await sql`update work_items set customer_id = null where external_id = 'c-1'`;
+    await deleteCustomer("acme");
+  });
+
+  it("team/product deletes are guarded; empty ones go away", async () => {
+    await addTeam("temp", "Temp Team");
+    const prod = await addProduct("temp", "widget", "Widget");
+    await expect(deleteTeam("temp")).rejects.toMatchObject({ code: "conflict" });
+
+    await saveKnowledgeEntry({ productId: prod.id as string, issueSummary: "y" });
+    await expect(deleteProduct(prod.id as string)).rejects.toThrow(/knowledge entr/);
+    await sql`delete from knowledge_entries where product_id = ${prod.id}`;
+
+    const renamed = await updateProduct(prod.id as string, { name: "Widget 2" });
+    expect(renamed.name).toBe("Widget 2");
+    await deleteProduct(prod.id as string);
+    await deleteTeam("temp");
+  });
+
+  it("labels and resolution patterns: update, guarded pattern delete", async () => {
+    const tpd = await tpdProductId();
+    await addLabel(tpd, "printing", "print issues");
+    expect((await updateLabel(tpd, "printing", null)).description).toBeNull();
+    await deleteLabel(tpd, "printing");
+
+    await addResolutionPattern("config-fix", "fix the config");
+    await saveKnowledgeEntry({ issueSummary: "z", resolutionPattern: "config-fix" });
+    await expect(deleteResolutionPattern("config-fix")).rejects.toMatchObject({ code: "conflict" });
+    await sql`update knowledge_entries set resolution_pattern = null`;
+    await deleteResolutionPattern("config-fix");
   });
 });
