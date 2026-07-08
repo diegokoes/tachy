@@ -1,8 +1,11 @@
 <script lang="ts">
-  import { api } from "./api";
-  import type { ReferenceRow } from "./types";
+  import { api, ApiError } from "./api";
+  import type { ReferenceRow, NamedRow } from "./types";
   import Facets from "./Facets.svelte";
-  import LoadingSwarm from "./LoadingSwarm.svelte";
+  import AsciiSpinner from "./AsciiSpinner.svelte";
+  import AsciiSelect from "./AsciiSelect.svelte";
+  import ReferenceForm from "./reference/ReferenceForm.svelte";
+  import { isCurator, canCurateScope } from "./session.svelte";
 
   let q = $state("");
   let status = $state("");
@@ -12,7 +15,25 @@
   let error = $state<string | null>(null);
   let mode = $state<"search" | "browse">("browse");
 
+  // curation state
+  let creating = $state(false);
+  let editing = $state(false);
+  let mutating = $state(false);
+  let mutateError = $state<string | null>(null);
+  let conflict = $state(false);
+  let productTeamSlug = $state<string | null>(null);
+
+  const canEdit = $derived(
+    !!selected && canCurateScope({ team_id: selected.team_id, team_slug: productTeamSlug }),
+  );
+
+  // Spinner stays up at least this long so fast queries don't blink it.
+  const MIN_SPIN_MS = 450;
+  let seq = 0;
+
   async function run() {
+    const mySeq = ++seq;
+    const started = Date.now();
     loading = true;
     error = null;
     try {
@@ -21,45 +42,144 @@
       if (q.trim()) p.set("q", q.trim());
       if (status && mode === "browse") p.set("status", status);
       const path = mode === "search" ? `/reference/search?${p}` : `/reference?${p}`;
-      rows = await api.get<ReferenceRow[]>(path);
+      const result = await api.get<ReferenceRow[]>(path);
+      if (mySeq !== seq) return; // superseded by a newer query
+      rows = result;
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      if (mySeq === seq) error = e instanceof Error ? e.message : String(e);
     } finally {
-      loading = false;
+      const left = MIN_SPIN_MS - (Date.now() - started);
+      if (left > 0) await new Promise((r) => setTimeout(r, left));
+      if (mySeq === seq) loading = false;
     }
   }
 
   async function open(id: string) {
     error = null;
+    editing = false;
+    mutateError = null;
+    conflict = false;
+    productTeamSlug = null;
     try {
       selected = await api.get<ReferenceRow>(`/reference/${id}`);
+      if (isCurator() && selected.product_id && !selected.team_id) {
+        const products = await api.get<NamedRow[]>("/products");
+        productTeamSlug = (products.find((p) => p.id === selected!.product_id)?.team_slug as string) ?? null;
+      }
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
   }
 
+  async function patch(body: Record<string, unknown>) {
+    if (!selected) return;
+    mutating = true;
+    mutateError = null;
+    conflict = false;
+    try {
+      await api.patch(`/reference/${selected.id}`, { ...body, expectedVersion: selected.version });
+      editing = false;
+      await open(selected.id);
+      run();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        conflict = true;
+        mutateError = "someone else edited this doc in the meantime - reload to get the latest version";
+      } else {
+        mutateError = e instanceof Error ? e.message : String(e);
+      }
+    } finally {
+      mutating = false;
+    }
+  }
+
+  let createSaving = $state(false);
+  let createError = $state<string | null>(null);
+  async function createDoc(payload: Record<string, unknown>) {
+    createSaving = true;
+    createError = null;
+    try {
+      const created = await api.post<{ id: string }>("/reference", payload);
+      creating = false;
+      await open(created.id);
+      run();
+    } catch (e) {
+      createError = e instanceof Error ? e.message : String(e);
+    } finally {
+      createSaving = false;
+    }
+  }
+
   const fmtDate = (d?: string) => (d ? new Date(d).toISOString().slice(0, 10) : "");
 
-  // Live search, debounced; Enter skips the debounce.
+  // Live search, debounced; Enter skips the debounce. The very first run (on
+  // mount) fires immediately  the spinner is already up, don't sit on it.
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let ranOnce = false;
   $effect(() => {
     void q; void status;
     clearTimeout(timer);
-    timer = setTimeout(run, 250);
+    timer = setTimeout(run, ranOnce ? 250 : 0);
+    ranOnce = true;
     return () => clearTimeout(timer);
   });
 </script>
 
 {#if selected}
   <button class="close" onclick={() => (selected = null)}>← back</button>
-  <h2>{selected.title}</h2>
-  <div class="doc-meta">
-    {#if selected.status !== "approved"}<span class="badge {selected.status}">{selected.status}</span>{/if}
-    {#if selected.source}<span class="muted">source: {selected.source}</span>{/if}
-    {#if selected.updated_at}<span class="muted">updated {fmtDate(selected.updated_at)}</span>{/if}
-  </div>
-  <Facets label="Tags" items={selected.tags} />
-  <pre class="body">{selected.body ?? "(no body)"}</pre>
+  {#if editing}
+    <h2>edit doc</h2>
+    {#if conflict}
+      <p class="error">{mutateError} <button class="mini" onclick={() => open(selected!.id)}>reload</button></p>
+    {/if}
+    <ReferenceForm
+      mode="edit"
+      initial={selected}
+      saving={mutating}
+      error={conflict ? null : mutateError}
+      onSubmit={patch}
+      onCancel={() => { editing = false; mutateError = null; }}
+    />
+  {:else}
+    <h2>{selected.title}</h2>
+    <div class="doc-meta">
+      {#if selected.status !== "approved"}<span class="badge {selected.status}">{selected.status}</span>{/if}
+      {#if selected.source}<span class="muted">source: {selected.source}</span>{/if}
+      {#if selected.updated_at}<span class="muted">updated {fmtDate(selected.updated_at)}</span>{/if}
+    </div>
+    {#if canEdit}
+      <div class="curation">
+        <button class="mini" onclick={() => { editing = true; mutateError = null; }}>edit</button>
+        {#if selected.status === "draft"}
+          <button class="mini" onclick={() => patch({ status: "approved" })} disabled={mutating}>approve</button>
+        {/if}
+        {#if selected.status === "approved"}
+          <button class="mini" onclick={() => patch({ status: "draft" })} disabled={mutating}>back to draft</button>
+        {/if}
+        {#if selected.status !== "archived"}
+          <button class="mini warn-btn" onclick={() => patch({ status: "archived" })} disabled={mutating}>archive</button>
+        {:else}
+          <button class="mini" onclick={() => patch({ status: "draft" })} disabled={mutating}>restore as draft</button>
+        {/if}
+      </div>
+      {#if mutateError}
+        <p class="error">{mutateError} {#if conflict}<button class="mini" onclick={() => open(selected!.id)}>reload</button>{/if}</p>
+      {/if}
+    {/if}
+    <Facets label="Tags" items={selected.tags} />
+    <pre class="body">{selected.body ?? "(no body)"}</pre>
+  {/if}
+{:else if creating}
+  <button class="close" onclick={() => (creating = false)}>← back</button>
+  <h2>new reference doc</h2>
+  <p class="intro muted">Freeform project context (runbook, architecture note, process doc). Approved docs are chunked, embedded, and surface in the agent's consult search.</p>
+  <ReferenceForm
+    mode="create"
+    saving={createSaving}
+    error={createError}
+    onSubmit={createDoc}
+    onCancel={() => (creating = false)}
+  />
 {:else}
   <p class="intro muted">
     Freeform project context the agent can consult: runbooks, architecture notes,
@@ -75,16 +195,15 @@
       onkeydown={(e) => { if (e.key === "Enter") { clearTimeout(timer); run(); } }}
     />
     {#if !q.trim()}
-      <select bind:value={status} title="Doc status">
-        <option value="">any status</option>
-        <option value="draft">draft</option>
-        <option value="approved">approved</option>
-        <option value="archived">archived</option>
-      </select>
+      <AsciiSelect bind:value={status} title="Doc status"
+        options={[{ value: "", label: "any status" }, "draft", "approved", "archived"]} />
+    {/if}
+    {#if isCurator()}
+      <button class="new" onclick={() => (creating = true)}>+ new doc</button>
     {/if}
   </div>
   {#if error}<p class="error">{error}</p>{/if}
-  {#if loading}<LoadingSwarm label="searching the docs" />{/if}
+  {#if loading}<AsciiSpinner label="searching the docs" />{/if}
   <ul class="results">
     {#each rows as r (r.id)}
       <li>
@@ -114,6 +233,7 @@
             Feed project context through the <strong>Chat</strong> tab - paste a wiki page,
             attach a file, or point the agent at a URL ("here's our deployment runbook…").
             It proposes structured docs for your approval and saves them here.
+            {#if isCurator()}Or write one by hand with <strong>+ new doc</strong>.{/if}
           </p>
         {/if}
       </li>
@@ -123,8 +243,9 @@
 
 <style>
   .intro { margin: 0 0 0.9rem; font-size: 0.88rem; line-height: 1.55; max-width: 60rem; }
-  .controls { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+  .controls { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; align-items: center; }
   .search { flex: 1; min-width: 16rem; }
+  .new { border-color: var(--accent); color: var(--accent); }
   .results { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4rem; }
   .row { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 0.25rem; padding: 0.65rem 0.8rem; background: var(--panel); }
   .title { font-weight: 500; }
@@ -144,6 +265,9 @@
   .badge.draft { border-color: var(--accent); color: var(--accent); }
   .badge.archived { opacity: 0.8; }
   .doc-meta { display: flex; gap: 0.75rem; align-items: baseline; margin-bottom: 0.4rem; font-size: 0.82rem; }
+  .curation { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+  .mini { font-size: 0.78rem; padding: 0.15rem 0.5rem; }
+  .warn-btn { border-color: var(--warn); color: var(--warn); }
   .body { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem; white-space: pre-wrap; line-height: 1.55; overflow-x: auto; }
   .close { margin-bottom: 0.5rem; }
   h2 { font-size: 1.2rem; margin: 0.25rem 0 0.4rem; }

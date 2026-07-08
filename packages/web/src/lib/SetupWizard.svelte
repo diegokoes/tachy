@@ -3,31 +3,47 @@
   // settings that used to be env flags. Secrets (DB URL, tokens, OIDC) stay in
   // .env — the final step says so. Skipping keeps the instance in open mode.
   import TypeLine from "./TypeLine.svelte";
+  import AsciiSelect from "./AsciiSelect.svelte";
   import { initSession } from "./session.svelte";
 
   let { onDone, onSkip }: { onDone: () => void; onSkip: () => void } = $props();
 
-  const STEPS = ["welcome", "admin", "workspace", "compliance", "agent", "review"] as const;
+  const STEPS = ["welcome", "usage", "admin", "workspace", "compliance", "agent", "review"] as const;
   let step = $state(0);
   let error = $state<string | null>(null);
   let busy = $state(false);
 
   // step state
+  let profile = $state<"support" | "engineering">("support");
   let email = $state("");
   let displayName = $state("");
   let password = $state("");
   let password2 = $state("");
   let orgName = $state("");
   let teamName = $state("");
-  let productName = $state("");
+  let products = $state<{ name: string }[]>([{ name: "" }]);
   let redaction = $state(false);
   let agentModel = $state("claude-sonnet-5");
   let agentEffort = $state("medium");
   let allowedModels = $state("");
 
+  // The session config isn't live pre-bootstrap, so the wizard carries its own
+  // terminology map (same values as lib/terms.ts).
+  const WIZ_TERMS = {
+    support: { team: "team", product: "product", products: "products" },
+    engineering: { team: "organization", product: "repository", products: "repositories" },
+  } as const;
+  const wt = $derived(WIZ_TERMS[profile]);
+
   const slugify = (s: string) =>
     s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
+  const namedProducts = $derived(products.filter((p) => p.name.trim()));
+
+  // Per-field inline validation (shown under the inputs, not one terse string).
+  const emailBad = $derived(email.length > 0 && !/\S+@\S+\.\S+/.test(email));
+  const passwordBad = $derived(password.length > 0 && password.length < 10);
+  const matchBad = $derived(password2.length > 0 && password !== password2);
   const adminValid = $derived(
     /\S+@\S+\.\S+/.test(email) && password.length >= 10 && password === password2,
   );
@@ -35,11 +51,7 @@
   function next() {
     error = null;
     if (STEPS[step] === "admin" && !adminValid) {
-      error = password !== password2
-        ? "passwords do not match"
-        : password.length < 10
-          ? "password must be at least 10 characters"
-          : "enter a valid email";
+      error = "fix the highlighted fields to continue";
       return;
     }
     step = Math.min(step + 1, STEPS.length - 1);
@@ -56,6 +68,7 @@
         ...(displayName.trim() ? { display_name: displayName.trim() } : {}),
         ...(orgName.trim() ? { org_name: orgName.trim() } : {}),
         settings: {
+          deployment_profile: profile,
           redaction_global: redaction,
           agent_model: agentModel.trim() || "claude-sonnet-5",
           agent_effort: agentEffort,
@@ -66,7 +79,8 @@
       };
       if (teamName.trim()) {
         body.team = { slug: slugify(teamName), name: teamName.trim() };
-        if (productName.trim()) body.product = { slug: slugify(productName), name: productName.trim() };
+        if (namedProducts.length)
+          body.products = namedProducts.map((p) => ({ slug: slugify(p.name), name: p.name.trim() }));
       }
       const res = await fetch("/api/setup", {
         method: "POST",
@@ -101,26 +115,69 @@
         </div>
       </div>
 
+    {:else if STEPS[step] === "usage"}
+      <div class="body">
+        <h3>How will you use tachy?</h3>
+        <p class="muted">Display terminology only - the data model and the agent are identical either way. Changeable later in Admin › System.</p>
+        <div class="cards">
+          <button class="card" class:selected={profile === "support"} onclick={() => (profile = "support")}>
+            <span class="card-title">{profile === "support" ? "›" : " "} Support / business</span>
+            <span class="card-desc">Tickets, customers, products. Knowledge from a helpdesk (Freshdesk…).</span>
+          </button>
+          <button class="card" class:selected={profile === "engineering"} onclick={() => (profile = "engineering")}>
+            <span class="card-title">{profile === "engineering" ? "›" : " "} Engineering / repositories</span>
+            <span class="card-desc">Issues from your repos. GitHub-first; no customer dimension.</span>
+          </button>
+        </div>
+        <p class="hint">
+          {#if profile === "engineering"}
+            products → <code>repositories</code> · teams → <code>organizations</code> · customer facets hidden
+          {:else}
+            standard vocabulary: products, teams, customers, environments
+          {/if}
+        </p>
+      </div>
+
     {:else if STEPS[step] === "admin"}
       <div class="body">
         <h3>Admin account</h3>
         <p class="muted">Signs in with email + password. More users (and roles) can be added later in Admin.</p>
-        <label><span>email</span><input type="email" bind:value={email} autocomplete="username" /></label>
+        <label><span>email</span><input type="email" bind:value={email} autocomplete="username" />
+          {#if emailBad}<span class="field-error">not a valid email address</span>{/if}
+        </label>
         <label><span>display name (optional)</span><input bind:value={displayName} /></label>
-        <label><span>password (min 10 chars)</span><input type="password" bind:value={password} autocomplete="new-password" /></label>
-        <label><span>repeat password</span><input type="password" bind:value={password2} autocomplete="new-password" /></label>
+        <label><span>password (min 10 chars)</span><input type="password" bind:value={password} autocomplete="new-password" />
+          {#if passwordBad}<span class="field-error">too short - at least 10 characters</span>{/if}
+        </label>
+        <label><span>repeat password</span><input type="password" bind:value={password2} autocomplete="new-password" />
+          {#if matchBad}<span class="field-error">passwords do not match</span>{/if}
+        </label>
       </div>
 
     {:else if STEPS[step] === "workspace"}
       <div class="body">
         <h3>Workspace</h3>
-        <p class="muted">All optional: teams and products can also be added later (or by the agent, with approval).</p>
+        <p class="muted">All optional: {wt.team}s and {wt.products} can also be added later (or by the agent, with approval).</p>
         <label><span>organization name</span><input bind:value={orgName} placeholder="e.g. osapiens" /></label>
-        <label><span>first team</span><input bind:value={teamName} placeholder="e.g. Hardware Integrations" /></label>
-        <label><span>first product {teamName.trim() ? "" : "(needs a team)"}</span>
-          <input bind:value={productName} disabled={!teamName.trim()} placeholder="e.g. Line Controller" />
-        </label>
-        {#if teamName.trim()}<p class="hint">slug: <code>{slugify(teamName)}</code>{#if productName.trim()} / <code>{slugify(productName)}</code>{/if}</p>{/if}
+        <label><span>first {wt.team}</span><input bind:value={teamName} placeholder={profile === "engineering" ? "e.g. my-github-org" : "e.g. Hardware Integrations"} /></label>
+        {#each products as p, i (i)}
+          <label>
+            <span>{i === 0 ? `first ${wt.product} ${teamName.trim() ? "" : `(needs a ${wt.team})`}` : `${wt.product} ${i + 1}`}</span>
+            <span class="prod-row">
+              <input bind:value={p.name} disabled={!teamName.trim()}
+                placeholder={profile === "engineering" ? "e.g. owner/repo-name" : "e.g. Line Controller"} />
+              {#if products.length > 1}
+                <button class="ghost mini" type="button" onclick={() => (products = products.filter((_, j) => j !== i))}>✕</button>
+              {/if}
+            </span>
+          </label>
+        {/each}
+        {#if teamName.trim() && products[products.length - 1].name.trim()}
+          <button class="ghost add-more" type="button" onclick={() => (products = [...products, { name: "" }])}>+ add another {wt.product}</button>
+        {/if}
+        {#if teamName.trim()}
+          <p class="hint">slug: <code>{slugify(teamName)}</code>{#each namedProducts as p} / <code>{slugify(p.name)}</code>{/each}</p>
+        {/if}
       </div>
 
     {:else if STEPS[step] === "compliance"}
@@ -144,9 +201,7 @@
         <p class="muted">Which Claude model the built-in chat agent uses, and how hard it thinks. Editable later in Admin › System.</p>
         <label><span>model</span><input bind:value={agentModel} /></label>
         <label><span>effort</span>
-          <select bind:value={agentEffort}>
-            {#each ["low", "medium", "high", "xhigh", "max"] as e}<option value={e}>{e}</option>{/each}
-          </select>
+          <AsciiSelect bind:value={agentEffort} options={["low", "medium", "high", "xhigh", "max"]} />
         </label>
         <label><span>allowed models (comma-separated, empty = unrestricted)</span>
           <input bind:value={allowedModels} placeholder="claude-sonnet-5, claude-haiku-4-5" />
@@ -158,9 +213,15 @@
         <h3>Review</h3>
         <table class="review">
           <tbody>
+            <tr class="section"><td colspan="2">account</td></tr>
             <tr><td>admin</td><td>{email}{displayName.trim() ? ` (${displayName})` : ""}</td></tr>
+            <tr class="section"><td colspan="2">usage</td></tr>
+            <tr><td>profile</td><td>{profile === "engineering" ? "engineering / repositories" : "support / business"}</td></tr>
+            <tr class="section"><td colspan="2">workspace</td></tr>
             <tr><td>organization</td><td>{orgName.trim() || "-"}</td></tr>
-            <tr><td>team / product</td><td>{teamName.trim() ? slugify(teamName) : "-"}{productName.trim() ? ` / ${slugify(productName)}` : ""}</td></tr>
+            <tr><td>{wt.team}</td><td>{teamName.trim() ? slugify(teamName) : "-"}</td></tr>
+            <tr><td>{wt.products}</td><td>{namedProducts.length ? namedProducts.map((p) => slugify(p.name)).join(", ") : "-"}</td></tr>
+            <tr class="section"><td colspan="2">policies</td></tr>
             <tr><td>redaction</td><td>{redaction ? "ON - scrub PII/secrets before the LLM" : "off"}</td></tr>
             <tr><td>agent</td><td>{agentModel} · {agentEffort}{allowedModels.trim() ? ` · allowlist: ${allowedModels}` : ""}</td></tr>
           </tbody>
@@ -217,13 +278,43 @@
   label.check { flex-direction: row; align-items: center; gap: 0.6rem; }
   label.check span { font-size: 0.9rem; color: var(--text); }
   .check input { accent-color: var(--accent); width: 1.05rem; height: 1.05rem; }
+  .field-error { color: var(--danger); font-size: 0.78rem; }
+  .cards { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+  .card {
+    flex: 1;
+    min-width: 14rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    text-align: left;
+    padding: 0.75rem 0.9rem;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .card.selected { border-color: var(--accent); background: var(--accent-dim); }
+  .card-title { color: var(--text); font-weight: 500; }
+  .card.selected .card-title { color: var(--accent); }
+  .card-desc { font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
+  .prod-row { display: flex; gap: 0.4rem; align-items: center; }
+  .prod-row input { flex: 1; }
+  .mini { font-size: 0.75rem; padding: 0.15rem 0.45rem; }
+  .add-more { align-self: flex-start; font-size: 0.82rem; }
   .actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
-  .actions .ghost { border-color: transparent; color: var(--muted); }
-  .actions .ghost:hover { color: var(--text); }
+  .actions .ghost, .ghost { border-color: transparent; color: var(--muted); }
+  .actions .ghost:hover, .ghost:hover { color: var(--text); }
   .primary { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
   .review { border-collapse: collapse; }
   .review td { border: 1px solid var(--border); padding: 0.35rem 0.7rem; font-size: 0.9rem; }
   .review td:first-child { color: var(--muted); }
+  .review tr.section td {
+    border: none;
+    padding-top: 0.6rem;
+    color: var(--accent);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
   .hint { margin: 0; font-size: 0.8rem; color: var(--muted); }
   .error { color: var(--danger); margin: 0; font-size: 0.88rem; }
   .muted { color: var(--muted); font-size: 0.9rem; margin: 0; }

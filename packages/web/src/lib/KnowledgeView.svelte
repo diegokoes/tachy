@@ -1,19 +1,31 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "./api";
-  import type { KnowledgeRow } from "./types";
+  import type { KnowledgeRow, NamedRow } from "./types";
   import EntryDetail from "./EntryDetail.svelte";
-  import LoadingSwarm from "./LoadingSwarm.svelte";
+  import EntryForm from "./knowledge/EntryForm.svelte";
+  import AsciiSpinner from "./AsciiSpinner.svelte";
+  import AsciiSelect from "./AsciiSelect.svelte";
+  import { isCurator } from "./session.svelte";
+  import { t } from "./terms";
 
   let q = $state("");
   let cloud = $state("");
   let status = $state("");
   let learningValue = $state("");
+  let productId = $state("");
+  let component = $state("");
+  let version = $state("");
   let environments = $state<{ cloud: string; count: number }[]>([]);
+  let products = $state<NamedRow[]>([]);
+  let components = $state<NamedRow[]>([]);
   let rows = $state<KnowledgeRow[]>([]);
   let loading = $state(false);
   let error = $state<string | null>(null);
   let selected = $state<string | null>(null);
+  let creating = $state(false);
+  let createSaving = $state(false);
+  let createError = $state<string | null>(null);
   let mode = $state<"search" | "browse">("browse");
 
   const STATUSES = ["draft", "approved", "deprecated", "archived", "rejected"];
@@ -23,12 +35,21 @@
     if (q.trim()) p.set("q", q.trim());
     if (cloud) p.set("cloud", cloud);
     if (learningValue) p.set("learning_value", learningValue);
+    if (productId) p.set("product_id", productId);
+    if (productId && component) p.set("component", component);
+    if (version.trim()) p.set("affected_version", version.trim());
     // /search has a fixed approved+deprecated scope; status only applies to list.
     if (status && !q.trim()) p.set("status", status);
     return p.toString();
   }
 
+  // Spinner stays up at least this long so fast queries don't blink it.
+  const MIN_SPIN_MS = 450;
+  let seq = 0;
+
   async function run() {
+    const mySeq = ++seq;
+    const started = Date.now();
     loading = true;
     error = null;
     try {
@@ -37,11 +58,14 @@
       const path = mode === "search" ? `/knowledge/search?${qs()}` : `/knowledge?${qs()}`;
       let result = await api.get<KnowledgeRow[]>(path);
       if (mode === "search" && status) result = result.filter((r) => r.status === status);
+      if (mySeq !== seq) return; // superseded by a newer query
       rows = result;
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      if (mySeq === seq) error = e instanceof Error ? e.message : String(e);
     } finally {
-      loading = false;
+      const left = MIN_SPIN_MS - (Date.now() - started);
+      if (left > 0) await new Promise((r) => setTimeout(r, left));
+      if (mySeq === seq) loading = false;
     }
   }
 
@@ -53,20 +77,74 @@
     }
   }
 
-  onMount(loadEnvironments);
+  async function loadProducts() {
+    try {
+      products = await api.get<NamedRow[]>("/products");
+    } catch {
+      products = [];
+    }
+  }
 
-  // Live search, debounced; Enter skips the debounce.
+  // the component filter is scoped to the chosen product (slugs resolve per product)
+  async function onProductChange(id: string) {
+    component = "";
+    components = [];
+    const slug = products.find((p) => p.id === id)?.slug;
+    if (!slug) return;
+    try {
+      components = await api.get<NamedRow[]>(`/products/${slug}/components`);
+    } catch {
+      components = [];
+    }
+  }
+
+  async function createEntry(payload: Record<string, unknown>) {
+    createSaving = true;
+    createError = null;
+    try {
+      const created = await api.post<{ id: string }>("/knowledge", payload);
+      creating = false;
+      selected = created.id;
+    } catch (e) {
+      createError = e instanceof Error ? e.message : String(e);
+    } finally {
+      createSaving = false;
+    }
+  }
+
+  onMount(() => {
+    loadEnvironments();
+    loadProducts();
+  });
+
+  // Live search, debounced; Enter skips the debounce. The very first run (on
+  // mount) fires immediately  the spinner is already up, don't sit on it.
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let ranOnce = false;
   $effect(() => {
-    void q; void cloud; void status; void learningValue;
+    void q; void cloud; void status; void learningValue; void productId; void component; void version;
     clearTimeout(timer);
-    timer = setTimeout(run, 250);
+    timer = setTimeout(run, ranOnce ? 250 : 0);
+    ranOnce = true;
     return () => clearTimeout(timer);
   });
 </script>
 
 {#if selected}
   <EntryDetail id={selected} onClose={() => { selected = null; loadEnvironments(); }} onOpen={(id) => (selected = id)} />
+{:else if creating}
+  <div class="create">
+    <button class="close" onclick={() => (creating = false)}>← back</button>
+    <h2>new knowledge entry</h2>
+    <p class="muted">Manual knowledge (no ticket). Scope it with a {t("product")} so component and search filters work.</p>
+    <EntryForm
+      mode="create"
+      saving={createSaving}
+      error={createError}
+      onSubmit={createEntry}
+      onCancel={() => (creating = false)}
+    />
+  </div>
 {:else}
   <div class="controls">
     <input
@@ -75,26 +153,26 @@
       bind:value={q}
       onkeydown={(e) => { if (e.key === "Enter") { clearTimeout(timer); run(); } }}
     />
-    <select bind:value={cloud} title="Environment observed in">
-      <option value="">any environment</option>
-      {#each environments as env}
-        <option value={env.cloud}>{env.cloud} ({env.count})</option>
-      {/each}
-    </select>
-    <select bind:value={status} title="Entry status">
-      <option value="">any status</option>
-      {#each STATUSES as s}<option value={s}>{s}</option>{/each}
-    </select>
-    <select bind:value={learningValue} title="Learning value">
-      <option value="">any value</option>
-      <option value="high">high</option>
-      <option value="medium">medium</option>
-      <option value="low">low</option>
-    </select>
+    <AsciiSelect bind:value={productId} title={t("product")}
+      options={[{ value: "", label: `any ${t("product")}` }, ...products.map((p) => ({ value: p.id as string, label: p.name as string }))]}
+      onchange={(v) => onProductChange(String(v))} />
+    <AsciiSelect bind:value={component} title={`Component (within the chosen ${t("product")})`}
+      disabled={!productId || components.length === 0}
+      options={[{ value: "", label: "any component" }, ...components.map((c) => c.slug as string)]} />
+    <AsciiSelect bind:value={cloud} title={`${t("cloud")} observed in`}
+      options={[{ value: "", label: `any ${t("cloud")}` }, ...environments.map((e) => ({ value: e.cloud, label: `${e.cloud} (${e.count})` }))]} />
+    <AsciiSelect bind:value={status} title="Entry status"
+      options={[{ value: "", label: "any status" }, ...STATUSES]} />
+    <AsciiSelect bind:value={learningValue} title="Learning value"
+      options={[{ value: "", label: "any value" }, "high", "medium", "low"]} />
+    <input class="version" placeholder="affected version" bind:value={version} title="Exact affected-version match" />
+    {#if isCurator()}
+      <button class="new" onclick={() => (creating = true)}>+ new entry</button>
+    {/if}
   </div>
 
   {#if error}<p class="error">{error}</p>{/if}
-  {#if loading}<LoadingSwarm label={mode === "search" ? "searching the archive" : "loading entries"} />{/if}
+  {#if loading}<AsciiSpinner label={mode === "search" ? "searching the archive" : "loading entries"} />{/if}
 
   <p class="muted count">{rows.length} {mode === "search" ? "matches" : "entries"}</p>
   <ul class="results">
@@ -110,6 +188,7 @@
           <span class="meta">
             {#if r.product_area}{r.product_area} · {/if}
             {#if r.cloud}{r.cloud} · {/if}
+            {#if r.affected_version}v{r.affected_version} · {/if}
             {#if r.confidence}{r.confidence}{/if}
             {#if r.score != null}<span class="score"> · {r.score.toFixed(2)}</span>{/if}
             {#if r.tags?.length}
@@ -135,8 +214,12 @@
 {/if}
 
 <style>
-  .controls { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+  .controls { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; align-items: center; }
   .search { flex: 1; min-width: 16rem; }
+  .version { max-width: 9rem; }
+  .new { border-color: var(--accent); color: var(--accent); }
+  .create h2 { margin: 0.5rem 0 0.25rem; font-size: 1.15rem; }
+  .close { margin-bottom: 0.5rem; }
   .count { margin: 0.25rem 0; font-size: 0.82rem; }
   .results { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4rem; }
   .row { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 0.25rem; padding: 0.65rem 0.8rem; background: var(--panel); }
