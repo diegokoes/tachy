@@ -1,10 +1,16 @@
 <script lang="ts">
-  // Boot ident: accent ring + typed "tachy", then the ring blows past the
-  // viewport to reveal the app. Click skips it.
+  // Boot ident: a spiral galaxy of small characters spins and drains into the
+  // five letter slots of "tachý" — most chars shrink to dust and evaporate on
+  // arrival, while one copy plucked from mid-spiral elastically pops into
+  // place to spell the word. The rotation completes just before the word
+  // becomes legible, so it settles upright. Click/Escape skips.
   import { onMount } from "svelte";
   import { gsap, SplitText } from "./gsap";
 
   let { onDone }: { onDone: () => void } = $props();
+
+  // Stacked word copies forming the spiral; one mid-spiral copy becomes the logo.
+  const COPIES = 120;
 
   let root = $state<HTMLDivElement>();
   let tl: gsap.core.Timeline | undefined;
@@ -15,27 +21,62 @@
 
   onMount(() => {
     const q = gsap.utils.selector(root!);
-    const word = new SplitText(q(".word"), { type: "chars" });
+    const split = new SplitText(q(".line"), { type: "chars" });
+    const chars = split.chars;
+    const N = chars.length;
+    const perWord = N / COPIES;
+    const charW = chars[0].getBoundingClientRect().width;
+    const maxR = Math.min(window.innerWidth, window.innerHeight) * 0.34;
+    // Transforms are relative to each char's inline slot; subtracting the slot
+    // offset places chars in screen space around the word's center.
+    const slot = (i: number) => ((i % perWord) - (perWord - 1) / 2) * charW;
+
+    // The copy that survives to spell the word — mid-spiral, so its letters
+    // visibly fly out of the formation into place.
+    const s0 = Math.floor(COPIES / 2) * perWord;
+    const survivors = chars.slice(s0, s0 + perWord);
+    const extras = chars.slice(0, s0).concat(chars.slice(s0 + perWord));
+
+    // Spiral galaxy: radius grows with index, 5rad angle steps scatter the arms.
+    gsap.set(chars, {
+      x: (i: number) => (20 + (maxR - 20) * (i / N)) * Math.cos(i * 5) - slot(i),
+      y: (i: number) => (20 + (maxR - 20) * (i / N)) * Math.sin(i * 5),
+      scale: (i: number) => 0.2 + (i / N) * 0.25,
+    });
+    gsap.set(survivors, { zIndex: 2 });
 
     tl = gsap.timeline({ onComplete: onDone });
-    tl.from(q(".glow"), { opacity: 0, filter: "blur(0px)", duration: 0.55, ease: "power3.inOut" })
-      .set(q(".logo"), { opacity: 1 })
-      .from(word.chars, {
-        opacity: 0, scale: 1.4, filter: "blur(0.3em)",
-        duration: 0.2, stagger: 0.045, ease: "back",
-      })
-      .from(q(".ring"), { opacity: 0, scale: 0.75, duration: 0.4, ease: "power3.out" }, "-=100%")
-      .from(q(".ring-inner"), { scale: 0.75, duration: 0.4, ease: "power3.out" }, "-=100%")
-      .to(q(".logo"), { scale: 1.08, duration: 1.1 }, "-=20%")
-      .to([q(".ring"), q(".ring-inner")], { scale: 1.08, duration: 1.1, ease: "power3.out" }, "<")
-      .to(q(".ring"), { scale: 9, duration: 1.0, ease: "power4.in" }, "-=50%")
-      .to(q(".ring-inner"), { scale: 9, duration: 0.5, ease: "power4.in" }, "-=60%")
-      .to(q(".logo"), { opacity: 0, scale: 1.15, duration: 0.25 }, "-=50%")
-      .to(root!, { opacity: 0, duration: 0.3 }, "-=20%");
+    tl.to(q(".word"), { opacity: 1, duration: 0.45, ease: "power2.out" })
+      // one revolution, finishing before the word is legible so it lands upright
+      .to(q(".word"), { rotation: 360, duration: 3.2, ease: "power1.inOut" }, 0.15)
+      // x/y 0 is each char's letter slot: the whole spiral streams into the
+      // word, but extras shrink to dust and evaporate as they arrive — they
+      // feed the letters without ever stacking into a bold blob
+      .to(
+        extras,
+        {
+          x: 0,
+          y: 0,
+          scale: 0.12,
+          opacity: 0,
+          duration: 1.6,
+          ease: "power1.in",
+          stagger: 0.002,
+        },
+        0.7,
+      )
+      // the surviving copy pops to full size in the emptying slots
+      .to(
+        survivors,
+        { x: 0, y: 0, scale: 1, ease: "elastic.out(1, 0.55)", duration: 2.4, stagger: 0.05 },
+        2.2,
+      )
+      .to(q(".footer"), { opacity: 1, duration: 0.5 }, 4.3)
+      .to(root!, { opacity: 0, duration: 0.5 }, "+=0.7");
 
     return () => {
       tl?.kill();
-      word.revert();
+      split.revert();
     };
   });
 </script>
@@ -48,15 +89,12 @@
   role="presentation"
   aria-hidden="true"
 >
-  <div class="glow top"></div>
-  <div class="glow bottom"></div>
-  <div class="logo">
-    <div class="ring centered"></div>
-    <div class="ring-inner centered"></div>
-    <div class="text">
-      <div class="word">tachy</div>
-    </div>
+  <div class="word">
+    {#each { length: COPIES } as _}
+      <div class="line">tachý</div>
+    {/each}
   </div>
+  <div class="footer">knowledge archive and engine</div>
 </div>
 
 <style>
@@ -66,63 +104,35 @@
     z-index: 100;
     background: var(--bg);
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 2.25rem;
     overflow: hidden;
     cursor: pointer;
     user-select: none;
   }
 
-  .centered {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-  }
-
-  /* Soft monochrome accent washes instead of the neon gradient bars. */
-  .glow {
-    position: absolute;
-    left: -5%;
-    width: 110%;
-    height: 90px;
-    filter: blur(3em);
-    background: linear-gradient(
-      to right,
-      color-mix(in srgb, var(--accent) 28%, transparent) 0% 15%,
-      transparent 15% 45%,
-      color-mix(in srgb, var(--accent) 18%, transparent) 45% 75%,
-      transparent 75%
-    );
-  }
-  .glow.top { top: -50px; }
-  .glow.bottom { bottom: -50px; }
-
-  .logo { position: relative; opacity: 0; }
-
-  .ring {
-    background: var(--accent);
-    border-radius: 1.4em;
-    width: 150%;
-    height: 175%;
-    z-index: 1;
-  }
-
-  .ring-inner {
-    background: var(--bg);
-    border-radius: 1.2em;
-    width: calc(150% - 0.4em);
-    height: calc(175% - 0.4em);
-    z-index: 2;
-  }
-
-  .text { position: relative; z-index: 3; text-align: center; }
-
   .word {
+    display: grid;
+    place-items: center;
+    opacity: 0;
     color: var(--accent);
-    font-size: clamp(4rem, 10vw, 7rem);
+    font-size: clamp(2.25rem, 5vw, 3.25rem);
     line-height: 1.05;
-    letter-spacing: 0.02em;
+    font-kerning: none;
   }
 
+  /* All copies stack in one grid cell; transforms fan the chars out from it. */
+  .line {
+    grid-area: 1 / 1;
+    white-space: nowrap;
+  }
+
+  .footer {
+    opacity: 0;
+    color: var(--muted);
+    font-size: 0.95rem;
+    letter-spacing: 0.18em;
+  }
 </style>
