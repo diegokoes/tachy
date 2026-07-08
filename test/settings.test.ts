@@ -33,6 +33,13 @@ describe("settings store", () => {
     await expect(setSetting("nope", 1)).rejects.toThrow(AppError);
     await expect(setSetting("agent_effort", "turbo")).rejects.toThrow(AppError);
     await expect(setSetting("allowed_models", "not-an-array")).rejects.toThrow(AppError);
+    await expect(setSetting("deployment_profile", "gaming")).rejects.toThrow(AppError);
+  });
+
+  it("deployment_profile roundtrips and defaults to support", async () => {
+    expect((await effectiveSettings()).deployment_profile).toEqual({ value: "support", source: "default" });
+    await setSetting("deployment_profile", "engineering");
+    expect((await effectiveSettings()).deployment_profile).toEqual({ value: "engineering", source: "db" });
   });
 
   it("precedence: db > env > default", async () => {
