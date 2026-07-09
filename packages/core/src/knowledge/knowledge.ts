@@ -1,17 +1,19 @@
 import { sql } from "../platform/db";
-import { embedPassage, embedQuery, toVectorLiteral } from "../search/embeddings";
+import {
+  embedPassage,
+  embedQuery,
+  toVectorLiteral,
+} from "../search/embeddings";
 import { notFound, conflict, badInput } from "../platform/errors";
 import { parseStructured } from "./structured";
 import { resolveComponentStrict } from "../catalog/components";
-
 
 export interface KnowledgeFacets {
   cloud?: string | null;
   resolutionClarity?: string | null;
   learningValue?: string | null;
   hiddenFix?: boolean | null;
-  
-  
+
   affectedVersion?: string | null;
   fixedVersion?: string | null;
 }
@@ -28,7 +30,7 @@ export interface KnowledgeInput extends KnowledgeFacets {
   rootCause?: string;
   resolution?: string;
   resolutionPattern?: string;
-  component?: string;  
+  component?: string;
   confidence?: string;
   tags?: string[];
   structured?: Record<string, unknown>;
@@ -42,17 +44,20 @@ export interface KnowledgeUpdateInput extends KnowledgeFacets {
   resolutionPattern?: string | null;
   symptoms?: string[];
   signals?: string[];
-  component?: string | null;    
-  supersededBy?: string | null; 
+  component?: string | null;
+  supersededBy?: string | null;
   confidence?: string | null;
   tags?: string[];
   structured?: Record<string, unknown>;
   expectedVersion?: number;
 }
 
-async function resolvePatternDescription(slug: string | undefined): Promise<string> {
+async function resolvePatternDescription(
+  slug: string | undefined,
+): Promise<string> {
   if (!slug) return "";
-  const [pattern] = await sql`select description from resolution_patterns where slug = ${slug}`;
+  const [pattern] =
+    await sql`select description from resolution_patterns where slug = ${slug}`;
   if (!pattern) {
     throw badInput(
       `Unknown resolution_pattern '${slug}'. Call list_resolution_patterns to see existing ones, or add_resolution_pattern first.`,
@@ -61,23 +66,37 @@ async function resolvePatternDescription(slug: string | undefined): Promise<stri
   return pattern.description as string;
 }
 
-
-
-function buildEmbedText(i: { issueSummary?: string; symptoms?: string[]; rootCause?: string; signals?: string[] }, patternDescription: string): string {
+function buildEmbedText(
+  i: {
+    issueSummary?: string;
+    symptoms?: string[];
+    rootCause?: string;
+    signals?: string[];
+  },
+  patternDescription: string,
+): string {
   return [
-    i.issueSummary, (i.symptoms ?? []).join(" "), i.rootCause, patternDescription, (i.signals ?? []).join(" "),
-  ].filter(Boolean).join(" ").trim();
+    i.issueSummary,
+    (i.symptoms ?? []).join(" "),
+    i.rootCause,
+    patternDescription,
+    (i.signals ?? []).join(" "),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
 }
 
 export async function saveKnowledgeEntry(i: KnowledgeInput) {
-  
-  
-  
   let productId = i.productId ?? null;
   let teamId = i.teamId ?? null;
   let affectedVersion = i.affectedVersion ?? null;
-  if (i.workItemId && (productId == null || teamId == null || affectedVersion == null)) {
-    const [wi] = await sql`select product_id, team_id, observed_version from work_items where id = ${i.workItemId}`;
+  if (
+    i.workItemId &&
+    (productId == null || teamId == null || affectedVersion == null)
+  ) {
+    const [wi] =
+      await sql`select product_id, team_id, observed_version from work_items where id = ${i.workItemId}`;
     if (wi) {
       productId ??= wi.product_id ?? null;
       teamId ??= wi.team_id ?? null;
@@ -85,12 +104,13 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
     }
   }
 
-  
-  
   let componentId: string | null = null;
   let productArea: string | null = null;
   if (i.component) {
-    if (!productId) throw badInput("component requires a product (pass product_slug or a work item mapped to one)");
+    if (!productId)
+      throw badInput(
+        "component requires a product (pass product_slug or a work item mapped to one)",
+      );
     const resolved = await resolveComponentStrict(productId, i.component);
     componentId = resolved.id;
     productArea = resolved.path;
@@ -98,7 +118,9 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
 
   const confidence = i.confidence ? i.confidence.toLowerCase() : null;
   const structured = parseStructured(i.structured);
-  const patternDescription = await resolvePatternDescription(i.resolutionPattern);
+  const patternDescription = await resolvePatternDescription(
+    i.resolutionPattern,
+  );
   const text = buildEmbedText(i, patternDescription);
   const embedding = text ? toVectorLiteral(await embedPassage(text)) : null;
 
@@ -123,9 +145,9 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
 export interface SearchOptions {
   productId?: string;
   teamId?: string;
-  tags?: string[];   
-  componentId?: string;      
-  componentTags?: string[];  
+  tags?: string[];
+  componentId?: string;
+  componentTags?: string[];
   cloud?: string;
   learningValue?: string;
   resolutionClarity?: string;
@@ -133,9 +155,6 @@ export interface SearchOptions {
   fixedVersion?: string;
   limit?: number;
 }
-
-
-
 
 export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
   const limit = opts.limit ?? 8;
@@ -189,10 +208,18 @@ export async function getKnowledgeEntry(id: string) {
 
 export async function listKnowledgeEntries(
   opts: {
-    status?: string; productId?: string; teamId?: string; tags?: string[];
-    componentId?: string; componentTags?: string[];
-    cloud?: string; learningValue?: string; resolutionClarity?: string;
-    affectedVersion?: string; fixedVersion?: string; limit?: number;
+    status?: string;
+    productId?: string;
+    teamId?: string;
+    tags?: string[];
+    componentId?: string;
+    componentTags?: string[];
+    cloud?: string;
+    learningValue?: string;
+    resolutionClarity?: string;
+    affectedVersion?: string;
+    fixedVersion?: string;
+    limit?: number;
   } = {},
 ) {
   const limit = opts.limit ?? 50;
@@ -203,9 +230,9 @@ export async function listKnowledgeEntries(
            symptoms, signals, tags, version, created_at, updated_at
     from knowledge_entries
     where 1=1
-      ${opts.status    ? sql`and status     = ${opts.status}`    : sql``}
+      ${opts.status ? sql`and status     = ${opts.status}` : sql``}
       ${opts.productId ? sql`and product_id = ${opts.productId}` : sql``}
-      ${opts.teamId    ? sql`and team_id    = ${opts.teamId}`    : sql``}
+      ${opts.teamId ? sql`and team_id    = ${opts.teamId}` : sql``}
       ${opts.tags && opts.tags.length ? sql`and tags && ${opts.tags}` : sql``}
       ${opts.componentId ? sql`and (component_id = ${opts.componentId} or tags && ${opts.componentTags ?? []})` : sql``}
       ${opts.cloud ? sql`and cloud = ${opts.cloud}` : sql``}
@@ -218,9 +245,9 @@ export async function listKnowledgeEntries(
   `;
 }
 
-
-
-export async function listEnvironments(): Promise<{ cloud: string; count: number }[]> {
+export async function listEnvironments(): Promise<
+  { cloud: string; count: number }[]
+> {
   const rows = await sql`
     select cloud, count(*)::int as count
     from knowledge_entries
@@ -231,7 +258,10 @@ export async function listEnvironments(): Promise<{ cloud: string; count: number
   return rows as unknown as { cloud: string; count: number }[];
 }
 
-export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInput) {
+export async function updateKnowledgeEntry(
+  id: string,
+  patch: KnowledgeUpdateInput,
+) {
   const [current] = await sql`
     select product_id, status, superseded_by, issue_summary, root_cause, resolution, resolution_pattern,
            symptoms, signals, tags, component_id, product_area, confidence,
@@ -241,67 +271,103 @@ export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInp
   `;
   if (!current) throw notFound(`Knowledge entry '${id}' not found`);
 
-  if (patch.expectedVersion != null && current.version !== patch.expectedVersion) {
-    throw conflict(`Version conflict: expected ${patch.expectedVersion}, found ${current.version}`);
+  if (
+    patch.expectedVersion != null &&
+    current.version !== patch.expectedVersion
+  ) {
+    throw conflict(
+      `Version conflict: expected ${patch.expectedVersion}, found ${current.version}`,
+    );
   }
 
-  
-  
   let componentId: string | null = current.component_id;
   let productArea: string | null = current.product_area;
-  if ('component' in patch) {
+  if ("component" in patch) {
     if (patch.component == null) {
       componentId = null;
       productArea = null;
     } else {
-      if (!current.product_id) throw badInput("component requires the entry to belong to a product");
-      const resolved = await resolveComponentStrict(current.product_id, patch.component);
+      if (!current.product_id)
+        throw badInput("component requires the entry to belong to a product");
+      const resolved = await resolveComponentStrict(
+        current.product_id,
+        patch.component,
+      );
       componentId = resolved.id;
       productArea = resolved.path;
     }
   }
 
   let supersededBy: string | null = current.superseded_by;
-  if ('supersededBy' in patch) {
+  if ("supersededBy" in patch) {
     supersededBy = patch.supersededBy ?? null;
     if (supersededBy != null) {
-      if (supersededBy === id) throw badInput("an entry cannot supersede itself");
-      const [target] = await sql`select id from knowledge_entries where id = ${supersededBy}`;
-      if (!target) throw badInput(`superseded_by target '${supersededBy}' not found`);
+      if (supersededBy === id)
+        throw badInput("an entry cannot supersede itself");
+      const [target] =
+        await sql`select id from knowledge_entries where id = ${supersededBy}`;
+      if (!target)
+        throw badInput(`superseded_by target '${supersededBy}' not found`);
     }
   }
 
   const merged = {
-    status:            patch.status                  ?? current.status,
-    issueSummary:      'issueSummary'      in patch ? patch.issueSummary      : current.issue_summary,
-    rootCause:         'rootCause'         in patch ? patch.rootCause         : current.root_cause,
-    resolution:        'resolution'        in patch ? patch.resolution        : current.resolution,
-    resolutionPattern: 'resolutionPattern' in patch ? patch.resolutionPattern : current.resolution_pattern,
-    symptoms:          patch.symptoms                ?? current.symptoms,
-    signals:           patch.signals                 ?? current.signals,
-    tags:              patch.tags                    ?? current.tags,
-    confidence:        'confidence'        in patch ? (patch.confidence?.toLowerCase() ?? null) : current.confidence,
-    cloud:             'cloud'             in patch ? patch.cloud             : current.cloud,
-    resolutionClarity: 'resolutionClarity' in patch ? patch.resolutionClarity : current.resolution_clarity,
-    learningValue:     'learningValue'     in patch ? patch.learningValue     : current.learning_value,
-    hiddenFix:         'hiddenFix'         in patch ? patch.hiddenFix         : current.hidden_fix,
-    affectedVersion:   'affectedVersion'   in patch ? patch.affectedVersion   : current.affected_version,
-    fixedVersion:      'fixedVersion'      in patch ? patch.fixedVersion      : current.fixed_version,
-    structured:        'structured'        in patch ? parseStructured(patch.structured) : current.structured,
+    status: patch.status ?? current.status,
+    issueSummary:
+      "issueSummary" in patch ? patch.issueSummary : current.issue_summary,
+    rootCause: "rootCause" in patch ? patch.rootCause : current.root_cause,
+    resolution: "resolution" in patch ? patch.resolution : current.resolution,
+    resolutionPattern:
+      "resolutionPattern" in patch
+        ? patch.resolutionPattern
+        : current.resolution_pattern,
+    symptoms: patch.symptoms ?? current.symptoms,
+    signals: patch.signals ?? current.signals,
+    tags: patch.tags ?? current.tags,
+    confidence:
+      "confidence" in patch
+        ? (patch.confidence?.toLowerCase() ?? null)
+        : current.confidence,
+    cloud: "cloud" in patch ? patch.cloud : current.cloud,
+    resolutionClarity:
+      "resolutionClarity" in patch
+        ? patch.resolutionClarity
+        : current.resolution_clarity,
+    learningValue:
+      "learningValue" in patch ? patch.learningValue : current.learning_value,
+    hiddenFix: "hiddenFix" in patch ? patch.hiddenFix : current.hidden_fix,
+    affectedVersion:
+      "affectedVersion" in patch
+        ? patch.affectedVersion
+        : current.affected_version,
+    fixedVersion:
+      "fixedVersion" in patch ? patch.fixedVersion : current.fixed_version,
+    structured:
+      "structured" in patch
+        ? parseStructured(patch.structured)
+        : current.structured,
   };
 
   const contentChanged =
-    merged.issueSummary      !== current.issue_summary      ||
-    merged.rootCause         !== current.root_cause         ||
+    merged.issueSummary !== current.issue_summary ||
+    merged.rootCause !== current.root_cause ||
     merged.resolutionPattern !== current.resolution_pattern ||
-    (merged.symptoms ?? []).join('\0') !== (current.symptoms ?? []).join('\0') ||
-    (merged.signals  ?? []).join('\0') !== (current.signals  ?? []).join('\0');
+    (merged.symptoms ?? []).join("\0") !==
+      (current.symptoms ?? []).join("\0") ||
+    (merged.signals ?? []).join("\0") !== (current.signals ?? []).join("\0");
 
   let vec: string | null = null;
   if (contentChanged) {
-    const patternDescription = await resolvePatternDescription(merged.resolutionPattern ?? undefined);
+    const patternDescription = await resolvePatternDescription(
+      merged.resolutionPattern ?? undefined,
+    );
     const text = buildEmbedText(
-      { issueSummary: merged.issueSummary ?? undefined, symptoms: merged.symptoms, rootCause: merged.rootCause ?? undefined, signals: merged.signals },
+      {
+        issueSummary: merged.issueSummary ?? undefined,
+        symptoms: merged.symptoms,
+        rootCause: merged.rootCause ?? undefined,
+        signals: merged.signals,
+      },
       patternDescription,
     );
     vec = text ? toVectorLiteral(await embedPassage(text)) : null;
@@ -344,9 +410,16 @@ export async function backfillEmbeddings(): Promise<number> {
   `;
   let n = 0;
   for (const r of rows) {
-    const patternDescription = await resolvePatternDescription(r.resolution_pattern ?? undefined);
+    const patternDescription = await resolvePatternDescription(
+      r.resolution_pattern ?? undefined,
+    );
     const text = buildEmbedText(
-      { issueSummary: r.issue_summary, rootCause: r.root_cause, symptoms: r.symptoms, signals: r.signals },
+      {
+        issueSummary: r.issue_summary,
+        rootCause: r.root_cause,
+        symptoms: r.symptoms,
+        signals: r.signals,
+      },
       patternDescription,
     );
     if (!text) continue;

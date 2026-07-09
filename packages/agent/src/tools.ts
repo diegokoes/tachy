@@ -1,10 +1,4 @@
-
-
-
-
-
 export const MCP_SERVER = "tachy";
-
 
 export const READ_TOOLS = [
   "search_knowledge",
@@ -27,7 +21,6 @@ export const READ_TOOLS = [
   "list_source_product_maps",
 ] as const;
 
-
 export const WRITE_TOOLS = [
   "save_knowledge_entry",
   "update_knowledge_entry",
@@ -47,8 +40,6 @@ export const WRITE_TOOLS = [
   "post_private_note",
   "record_analysis_run",
 ] as const;
-
-
 
 export const DISALLOWED_BUILTINS = [
   "Bash",
@@ -75,13 +66,12 @@ const WRITE = new Set<string>(WRITE_TOOLS);
 
 export type ToolClass = "read" | "write" | "denied";
 
-
 export function classify(toolName: string): { cls: ToolClass; base: string } {
   const prefix = `mcp__${MCP_SERVER}__`;
   if (!toolName.startsWith(prefix)) return { cls: "denied", base: toolName };
   const base = toolName.slice(prefix.length);
   if (READ.has(base)) return { cls: "read", base };
   if (WRITE.has(base)) return { cls: "write", base };
-  
+
   return { cls: "write", base };
 }

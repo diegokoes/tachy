@@ -1,19 +1,26 @@
 import { freshdeskToken, scrubText, TokenMap } from "@tachy/core";
 import type {
-  WorkItemSource, RawWorkItem, RawMessage, ListOptions, SourceFactory,
+  WorkItemSource,
+  RawWorkItem,
+  RawMessage,
+  ListOptions,
+  SourceFactory,
 } from "@tachy/core";
 
-
-
-
-
-function redactFreshdeskRaw(raw: unknown, map: TokenMap, customerSlug: string | null): unknown {
+function redactFreshdeskRaw(
+  raw: unknown,
+  map: TokenMap,
+  customerSlug: string | null,
+): unknown {
   if (raw == null || typeof raw !== "object") return {};
   const t = structuredClone(raw) as Record<string, any>;
   const name = customerSlug || "[CUSTOMER]";
-  const email = (v: unknown) => (typeof v === "string" && v ? map.token("EMAIL", v) : v);
+  const email = (v: unknown) =>
+    typeof v === "string" && v ? map.token("EMAIL", v) : v;
   const emailList = (v: unknown) =>
-    Array.isArray(v) ? v.map((e) => (typeof e === "string" ? map.token("EMAIL", e) : e)) : v;
+    Array.isArray(v)
+      ? v.map((e) => (typeof e === "string" ? map.token("EMAIL", e) : e))
+      : v;
 
   if (t.email != null) t.email = email(t.email);
   if (t.phone != null) t.phone = map.token("PHONE", String(t.phone));
@@ -21,8 +28,10 @@ function redactFreshdeskRaw(raw: unknown, map: TokenMap, customerSlug: string | 
   for (const k of ["cc_emails", "fwd_emails", "reply_cc_emails", "to_emails"]) {
     if (t[k] != null) t[k] = emailList(t[k]);
   }
-  if (t.twitter_id != null) t.twitter_id = map.token("HANDLE", String(t.twitter_id));
-  if (t.facebook_id != null) t.facebook_id = map.token("HANDLE", String(t.facebook_id));
+  if (t.twitter_id != null)
+    t.twitter_id = map.token("HANDLE", String(t.twitter_id));
+  if (t.facebook_id != null)
+    t.facebook_id = map.token("HANDLE", String(t.facebook_id));
 
   if (t.requester && typeof t.requester === "object") {
     const r = t.requester as Record<string, any>;
@@ -33,16 +42,18 @@ function redactFreshdeskRaw(raw: unknown, map: TokenMap, customerSlug: string | 
   }
   if (t.company && typeof t.company === "object") {
     const c = t.company as Record<string, any>;
-    if (c.name != null) c.name = name; 
+    if (c.name != null) c.name = name;
   }
 
   if (typeof t.subject === "string") t.subject = scrubText(t.subject, map);
-  if (typeof t.description === "string") t.description = scrubText(t.description, map);
-  if (typeof t.description_text === "string") t.description_text = scrubText(t.description_text, map);
+  if (typeof t.description === "string")
+    t.description = scrubText(t.description, map);
+  if (typeof t.description_text === "string")
+    t.description_text = scrubText(t.description_text, map);
   if (t.custom_fields && typeof t.custom_fields === "object") {
     const cf = t.custom_fields as Record<string, any>;
     for (const k of Object.keys(cf)) {
-      if (typeof cf[k] === "string") cf[k] = scrubText(cf[k], map); 
+      if (typeof cf[k] === "string") cf[k] = scrubText(cf[k], map);
     }
   }
   return t;
@@ -57,7 +68,10 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
 
   async function get(path: string): Promise<any> {
     const res = await fetch(api + path, { headers: { Authorization: auth } });
-    if (!res.ok) throw new Error(`Freshdesk GET ${path} -> ${res.status} ${await res.text()}`);
+    if (!res.ok)
+      throw new Error(
+        `Freshdesk GET ${path} -> ${res.status} ${await res.text()}`,
+      );
     return res.json();
   }
 
@@ -82,7 +96,7 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
       status: t.status != null ? String(t.status) : undefined,
       groupKey: t.group_id != null ? String(t.group_id) : undefined,
       requester: t.requester_id != null ? String(t.requester_id) : undefined,
-      requesterEmail: t.requester?.email,    
+      requesterEmail: t.requester?.email,
       raw: t,
       sourceCreatedAt: t.created_at,
       sourceUpdatedAt: t.updated_at,
@@ -96,8 +110,6 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
     redactRaw: redactFreshdeskRaw,
 
     async fetchItem(externalId: string): Promise<RawWorkItem> {
-      
-      
       const t = await get(`/tickets/${externalId}?include=requester`);
       const convos = await get(`/tickets/${externalId}/conversations`);
       const description: RawMessage = {
@@ -109,8 +121,10 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
         attachments: t.attachments ?? [],
         createdAt: t.created_at,
       };
-      const messages = [description, ...(Array.isArray(convos) ? convos.map(mapConversation) : [])]
-        .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
+      const messages = [
+        description,
+        ...(Array.isArray(convos) ? convos.map(mapConversation) : []),
+      ].sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
       return metadataToItem(t, messages);
     },
 
@@ -125,9 +139,10 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
 
       const list = await get(`/tickets?${params.toString()}`);
       const raw = Array.isArray(list) ? list : [];
-      let items = raw.map((t: any) => metadataToItem(t, [])); 
-      if (opts.groupKey) items = items.filter((i) => i.groupKey === opts.groupKey);
-      
+      let items = raw.map((t: any) => metadataToItem(t, []));
+      if (opts.groupKey)
+        items = items.filter((i) => i.groupKey === opts.groupKey);
+
       const nextCursor = raw.length < 100 ? undefined : String(page + 1);
       return { items, nextCursor };
     },
@@ -138,7 +153,10 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
         headers: { Authorization: auth, "Content-Type": "application/json" },
         body: JSON.stringify({ body, private: o?.private ?? true }),
       });
-      if (!res.ok) throw new Error(`Freshdesk note POST -> ${res.status} ${await res.text()}`);
+      if (!res.ok)
+        throw new Error(
+          `Freshdesk note POST -> ${res.status} ${await res.text()}`,
+        );
     },
   };
 };

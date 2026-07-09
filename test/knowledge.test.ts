@@ -1,5 +1,13 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { saveKnowledgeEntry, searchKnowledge, updateKnowledgeEntry, getKnowledgeEntry, listKnowledgeEntries, addFeedback, listEnvironments } from "@tachy/core";
+import {
+  saveKnowledgeEntry,
+  searchKnowledge,
+  updateKnowledgeEntry,
+  getKnowledgeEntry,
+  listKnowledgeEntries,
+  addFeedback,
+  listEnvironments,
+} from "@tachy/core";
 import { resetData, sql, tpdProductId } from "./helpers";
 
 afterAll(() => sql.end());
@@ -34,7 +42,8 @@ describe("searchKnowledge", () => {
   it("finds a semantic match even with no shared keywords", async () => {
     await saveKnowledgeEntry({
       status: "approved",
-      issueSummary: "Handheld barcode reader will not connect after a software upgrade",
+      issueSummary:
+        "Handheld barcode reader will not connect after a software upgrade",
       resolution: "reinstall the device driver",
     });
     await saveKnowledgeEntry({
@@ -43,15 +52,21 @@ describe("searchKnowledge", () => {
       resolution: "clear the export cache",
     });
 
-    
     const rows = await searchKnowledge("scanner offline");
     expect(rows[0].issue_summary).toMatch(/barcode reader/i);
   });
 
   it("scopes by product_id", async () => {
     const tpd = await tpdProductId();
-    await saveKnowledgeEntry({ status: "approved", productId: tpd, issueSummary: "tpd tracking gap" });
-    await saveKnowledgeEntry({ status: "approved", issueSummary: "tracking gap elsewhere" });
+    await saveKnowledgeEntry({
+      status: "approved",
+      productId: tpd,
+      issueSummary: "tpd tracking gap",
+    });
+    await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "tracking gap elsewhere",
+    });
 
     const scoped = await searchKnowledge("tracking gap", { productId: tpd });
     expect(scoped.length).toBe(1);
@@ -64,7 +79,10 @@ describe("searchKnowledge", () => {
       issueSummary: "Label printing fails during rework",
       signals: ["023", "TOO_MANY_STRINGS", "application-provisioning.yml"],
     });
-    await saveKnowledgeEntry({ status: "approved", issueSummary: "Unrelated invoice export bug" });
+    await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "Unrelated invoice export bug",
+    });
 
     const rows = await searchKnowledge("TOO_MANY_STRINGS");
     expect(rows[0].issue_summary).toMatch(/Label printing/i);
@@ -76,8 +94,12 @@ describe("knowledge_entries constraints", () => {
   beforeEach(resetData);
 
   it("normalizes confidence case so filtering by lowercase always works", async () => {
-    const row = await saveKnowledgeEntry({ issueSummary: "x", confidence: "HIGH" });
-    const [stored] = await sql`select confidence from knowledge_entries where id = ${row.id}`;
+    const row = await saveKnowledgeEntry({
+      issueSummary: "x",
+      confidence: "HIGH",
+    });
+    const [stored] =
+      await sql`select confidence from knowledge_entries where id = ${row.id}`;
     expect(stored.confidence).toBe("high");
   });
 
@@ -98,8 +120,17 @@ describe("promoted facets (cloud / quality)", () => {
   beforeEach(resetData);
 
   it("stores and filters approved entries by cloud", async () => {
-    await saveKnowledgeEntry({ status: "approved", issueSummary: "prod outage in pipeline", cloud: "prod", learningValue: "high" });
-    await saveKnowledgeEntry({ status: "approved", issueSummary: "qa pipeline flake", cloud: "qa" });
+    await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "prod outage in pipeline",
+      cloud: "prod",
+      learningValue: "high",
+    });
+    await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "qa pipeline flake",
+      cloud: "qa",
+    });
 
     const prod = await searchKnowledge("pipeline", { cloud: "prod" });
     expect(prod.length).toBe(1);
@@ -108,7 +139,12 @@ describe("promoted facets (cloud / quality)", () => {
   });
 
   it("round-trips facets and lets update clear them with null", async () => {
-    const row = await saveKnowledgeEntry({ issueSummary: "x", cloud: "on-prem", hiddenFix: true, resolutionClarity: "clear" });
+    const row = await saveKnowledgeEntry({
+      issueSummary: "x",
+      cloud: "on-prem",
+      hiddenFix: true,
+      resolutionClarity: "clear",
+    });
     let stored = await getKnowledgeEntry(row.id);
     expect(stored.cloud).toBe("on-prem");
     expect(stored.hidden_fix).toBe(true);
@@ -116,41 +152,61 @@ describe("promoted facets (cloud / quality)", () => {
     await updateKnowledgeEntry(row.id, { cloud: null });
     stored = await getKnowledgeEntry(row.id);
     expect(stored.cloud).toBeNull();
-    expect(stored.hidden_fix).toBe(true); 
+    expect(stored.hidden_fix).toBe(true);
   });
 
   it("round-trips affected/fixed version, seeds from the work item, and filters on them", async () => {
-    
-    const row = await saveKnowledgeEntry({ status: "approved", issueSummary: "broken in 2.3", affectedVersion: "2.3.0", fixedVersion: "2.4.0" });
+    const row = await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "broken in 2.3",
+      affectedVersion: "2.3.0",
+      fixedVersion: "2.4.0",
+    });
     let stored = await getKnowledgeEntry(row.id);
     expect(stored.affected_version).toBe("2.3.0");
     expect(stored.fixed_version).toBe("2.4.0");
     await updateKnowledgeEntry(row.id, { fixedVersion: null });
     stored = await getKnowledgeEntry(row.id);
     expect(stored.fixed_version).toBeNull();
-    expect(stored.affected_version).toBe("2.3.0"); 
+    expect(stored.affected_version).toBe("2.3.0");
 
-    
-    const [conn] = await sql`select id from source_connections where slug = 'test-freshdesk'`;
+    const [conn] =
+      await sql`select id from source_connections where slug = 'test-freshdesk'`;
     const [wi] = await sql`
       insert into work_items (source_connection_id, external_id, title, observed_version)
       values (${conn.id}, 'v-1', 'versioned ticket', '1.9.2') returning id
     `;
-    const seeded = await saveKnowledgeEntry({ workItemId: wi.id as string, issueSummary: "seeded" });
+    const seeded = await saveKnowledgeEntry({
+      workItemId: wi.id as string,
+      issueSummary: "seeded",
+    });
     expect((await getKnowledgeEntry(seeded.id)).affected_version).toBe("1.9.2");
 
-    
     const hits = await listKnowledgeEntries({ affectedVersion: "2.3.0" });
     expect(hits.map((h) => h.id)).toEqual([row.id]);
   });
 
-  
-  
   it("accepts deployment-specific environments and lists them with counts", async () => {
-    await saveKnowledgeEntry({ status: "approved", issueSummary: "a", cloud: "demo/preprod" });
-    await saveKnowledgeEntry({ status: "approved", issueSummary: "b", cloud: "demo/preprod" });
-    await saveKnowledgeEntry({ status: "approved", issueSummary: "c", cloud: "dev" });
-    await saveKnowledgeEntry({ status: "archived", issueSummary: "d", cloud: "gone" }); 
+    await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "a",
+      cloud: "demo/preprod",
+    });
+    await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "b",
+      cloud: "demo/preprod",
+    });
+    await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "c",
+      cloud: "dev",
+    });
+    await saveKnowledgeEntry({
+      status: "archived",
+      issueSummary: "d",
+      cloud: "gone",
+    });
 
     const envs = await listEnvironments();
     expect(envs).toEqual([
@@ -164,10 +220,22 @@ describe("deprecation lifecycle", () => {
   beforeEach(resetData);
 
   it("deprecated entries surface in search flagged, archived ones do not", async () => {
-    const old = await saveKnowledgeEntry({ status: "approved", issueSummary: "scanner offline after firmware update" });
-    const fresh = await saveKnowledgeEntry({ status: "approved", issueSummary: "scanner offline: reflash with tool v2" });
-    await saveKnowledgeEntry({ status: "archived", issueSummary: "scanner offline lesson that must stay hidden" });
-    await updateKnowledgeEntry(old.id, { status: "deprecated", supersededBy: fresh.id });
+    const old = await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "scanner offline after firmware update",
+    });
+    const fresh = await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "scanner offline: reflash with tool v2",
+    });
+    await saveKnowledgeEntry({
+      status: "archived",
+      issueSummary: "scanner offline lesson that must stay hidden",
+    });
+    await updateKnowledgeEntry(old.id, {
+      status: "deprecated",
+      supersededBy: fresh.id,
+    });
 
     const rows = await searchKnowledge("scanner offline");
     const deprecated = rows.find((r) => r.id === old.id);
@@ -178,31 +246,57 @@ describe("deprecation lifecycle", () => {
   });
 
   it("validates the supersede link: unknown target and self-reference are rejected", async () => {
-    const row = await saveKnowledgeEntry({ status: "approved", issueSummary: "x" });
+    const row = await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "x",
+    });
     await expect(
-      updateKnowledgeEntry(row.id, { supersededBy: "00000000-0000-0000-0000-000000000000" }),
+      updateKnowledgeEntry(row.id, {
+        supersededBy: "00000000-0000-0000-0000-000000000000",
+      }),
     ).rejects.toThrow(/not found/);
-    await expect(updateKnowledgeEntry(row.id, { supersededBy: row.id })).rejects.toThrow(/supersede itself/);
-    
+    await expect(
+      updateKnowledgeEntry(row.id, { supersededBy: row.id }),
+    ).rejects.toThrow(/supersede itself/);
+
     await expect(
       sql`update knowledge_entries set superseded_by = id where id = ${row.id}`,
     ).rejects.toThrow();
   });
 
   it("clears the supersede link with null and allows re-approving", async () => {
-    const old = await saveKnowledgeEntry({ status: "approved", issueSummary: "old lesson" });
-    const fresh = await saveKnowledgeEntry({ status: "approved", issueSummary: "new lesson" });
-    await updateKnowledgeEntry(old.id, { status: "deprecated", supersededBy: fresh.id });
+    const old = await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "old lesson",
+    });
+    const fresh = await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "new lesson",
+    });
+    await updateKnowledgeEntry(old.id, {
+      status: "deprecated",
+      supersededBy: fresh.id,
+    });
 
-    await updateKnowledgeEntry(old.id, { status: "approved", supersededBy: null });
+    await updateKnowledgeEntry(old.id, {
+      status: "approved",
+      supersededBy: null,
+    });
     const stored = await getKnowledgeEntry(old.id);
     expect(stored.status).toBe("approved");
     expect(stored.superseded_by).toBeNull();
   });
 
   it("accepts feedback kind 'deprecation' and rejects unknown kinds at the DB level", async () => {
-    const row = await saveKnowledgeEntry({ status: "approved", issueSummary: "x" });
-    const fb = await addFeedback({ knowledgeEntryId: row.id, kind: "deprecation", comment: "fixed since v2.3" });
+    const row = await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "x",
+    });
+    const fb = await addFeedback({
+      knowledgeEntryId: row.id,
+      kind: "deprecation",
+      comment: "fixed since v2.3",
+    });
     expect(fb.kind).toBe("deprecation");
     await expect(
       sql`insert into knowledge_feedback (knowledge_entry_id, kind) values (${row.id}, 'bogus')`,
@@ -215,14 +309,20 @@ describe("structured validation", () => {
 
   it("rejects a malformed structured field with a bad_input error", async () => {
     await expect(
-      saveKnowledgeEntry({ issueSummary: "x", structured: { investigation_steps: "not-an-array" } }),
+      saveKnowledgeEntry({
+        issueSummary: "x",
+        structured: { investigation_steps: "not-an-array" },
+      }),
     ).rejects.toThrow(/Invalid structured field/i);
   });
 
   it("keeps unknown structured keys (passthrough)", async () => {
     const row = await saveKnowledgeEntry({
       issueSummary: "x",
-      structured: { conversation_summary: "summary", custom_field: { nested: true } },
+      structured: {
+        conversation_summary: "summary",
+        custom_field: { nested: true },
+      },
     });
     const stored = await getKnowledgeEntry(row.id);
     expect(stored.structured.conversation_summary).toBe("summary");

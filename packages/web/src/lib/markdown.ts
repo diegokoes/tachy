@@ -1,11 +1,10 @@
-
-
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 
 marked.setOptions({ gfm: true, breaks: true });
 
 export function renderMarkdown(src: string): string {
-  
-  return DOMPurify.sanitize(marked.parse(src, { async: false }), { FORBID_TAGS: ["img"] });
+  return DOMPurify.sanitize(marked.parse(src, { async: false }), {
+    FORBID_TAGS: ["img"],
+  });
 }

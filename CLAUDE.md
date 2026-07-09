@@ -7,47 +7,50 @@ knowledge entries. The service persists and retrieves; you reason and structure.
 ## Available MCP tools
 
 ### Core workflow
-| Tool | Purpose |
-|------|---------|
-| `fetch_work_item` | Fetch + store a raw ticket/issue; returns full conversation + auto-resolved customer |
-| `get_context` | Fetch a ticket AND auto-search the archive for similar knowledge entries + reference docs (one-shot consult) |
-| `search_knowledge` | Search prior knowledge entries by keyword / symptom / error code; filter by product_slug / team_slug / tags / component. Results can include `deprecated` entries — flag those as outdated |
-| `save_knowledge_entry` | Persist a structured knowledge entry — ONLY after user approval |
-| `update_knowledge_entry` | Patch fields or change status on an existing entry (optimistic locking via `version`); `status: "deprecated"` + `superseded_by` marks outdated knowledge |
-| `get_knowledge_entry` / `list_knowledge_entries` | Fetch one entry (with its `version`) / list & filter entries for review and curation |
-| `post_private_note` | Write a private note back to the source (Freshdesk only) |
-| `add_knowledge_feedback` | Record corrections/ratings on existing entries |
-| `record_analysis_run` | Report token usage for audit |
+
+| Tool                                             | Purpose                                                                                                                                                                                    |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `fetch_work_item`                                | Fetch + store a raw ticket/issue; returns full conversation + auto-resolved customer                                                                                                       |
+| `get_context`                                    | Fetch a ticket AND auto-search the archive for similar knowledge entries + reference docs (one-shot consult)                                                                               |
+| `search_knowledge`                               | Search prior knowledge entries by keyword / symptom / error code; filter by product_slug / team_slug / tags / component. Results can include `deprecated` entries — flag those as outdated |
+| `save_knowledge_entry`                           | Persist a structured knowledge entry — ONLY after user approval                                                                                                                            |
+| `update_knowledge_entry`                         | Patch fields or change status on an existing entry (optimistic locking via `version`); `status: "deprecated"` + `superseded_by` marks outdated knowledge                                   |
+| `get_knowledge_entry` / `list_knowledge_entries` | Fetch one entry (with its `version`) / list & filter entries for review and curation                                                                                                       |
+| `post_private_note`                              | Write a private note back to the source (Freshdesk only)                                                                                                                                   |
+| `add_knowledge_feedback`                         | Record corrections/ratings on existing entries                                                                                                                                             |
+| `record_analysis_run`                            | Report token usage for audit                                                                                                                                                               |
 
 ### Project context (freeform, not from a ticket)
 
-| Tool | Purpose |
-|------|---------|
-| `ingest_context` | Load freeform context from pasted text / local file paths / URLs — READ ONLY, returns cleaned text for you to structure |
-| `save_reference_doc` | Persist an APPROVED freeform doc (chunked + embedded) — for project context that isn't issue→root_cause→resolution shaped |
-| `search_reference` | Semantic search over approved reference docs; returns the best-matching snippet per doc |
-| `list_reference_docs` / `get_reference_doc` / `update_reference_doc` | Browse / fetch full body / edit (or archive) reference docs |
+| Tool                                                                 | Purpose                                                                                                                   |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `ingest_context`                                                     | Load freeform context from pasted text / local file paths / URLs — READ ONLY, returns cleaned text for you to structure   |
+| `save_reference_doc`                                                 | Persist an APPROVED freeform doc (chunked + embedded) — for project context that isn't issue→root_cause→resolution shaped |
+| `search_reference`                                                   | Semantic search over approved reference docs; returns the best-matching snippet per doc                                   |
+| `list_reference_docs` / `get_reference_doc` / `update_reference_doc` | Browse / fetch full body / edit (or archive) reference docs                                                               |
 
 ### Reference data (call BEFORE analyzing)
-| Tool | Purpose |
-|------|---------|
-| `list_resolution_patterns` | Get the controlled vocabulary of resolution pattern slugs |
-| `add_resolution_pattern` | Add a new pattern — ONLY when user explicitly requests it |
-| `list_environments` | Get the environment (`cloud`) slugs already in use, with counts — reuse before inventing a new one |
-| `list_components` | Get the architecture glossary for a product (each has a slug + optional aliases) |
-| `add_component` | Register a new component (with aliases for naming variants) — ASK user first if discovered from a ticket |
+
+| Tool                        | Purpose                                                                                                        |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `list_resolution_patterns`  | Get the controlled vocabulary of resolution pattern slugs                                                      |
+| `add_resolution_pattern`    | Add a new pattern — ONLY when user explicitly requests it                                                      |
+| `list_environments`         | Get the environment (`cloud`) slugs already in use, with counts — reuse before inventing a new one             |
+| `list_components`           | Get the architecture glossary for a product (each has a slug + optional aliases)                               |
+| `add_component`             | Register a new component (with aliases for naming variants) — ASK user first if discovered from a ticket       |
 | `list_labels` / `add_label` | Optional, per-product advisory tag vocabulary; reuse these slugs when tagging (tags themselves stay free-form) |
-| `list_customers` | List known customers with aliases |
-| `add_customer` | Register a new customer — ASK user first |
-| `set_work_item_customer` | Correct the auto-matched customer on a work item |
-| `set_observed_version` | Record which product version the ticket reports on |
+| `list_customers`            | List known customers with aliases                                                                              |
+| `add_customer`              | Register a new customer — ASK user first                                                                       |
+| `set_work_item_customer`    | Correct the auto-matched customer on a work item                                                               |
+| `set_observed_version`      | Record which product version the ticket reports on                                                             |
 
 ### Admin / org structure
-| Tool | Purpose |
-|------|---------|
-| `list_teams` / `add_team` | Manage teams |
-| `list_products` / `add_product` | Manage products under teams |
-| `list_source_connections` / `add_source_connection` | Manage source integrations |
+
+| Tool                                                  | Purpose                       |
+| ----------------------------------------------------- | ----------------------------- |
+| `list_teams` / `add_team`                             | Manage teams                  |
+| `list_products` / `add_product`                       | Manage products under teams   |
+| `list_source_connections` / `add_source_connection`   | Manage source integrations    |
 | `list_source_product_maps` / `add_source_product_map` | Map source groups to products |
 
 ---
@@ -63,6 +66,7 @@ The `source` parameter in `fetch_work_item`, `get_context`, and `post_private_no
 ### First-run bootstrap (empty system)
 
 Before ingesting the first ticket, check if the system is bootstrapped:
+
 1. Call `list_teams` — if empty, call `add_team` with the team name/slug
 2. Call `list_products` — if empty, call `add_product` under the team
 3. Call `list_source_connections` — if empty, call `add_source_connection` with type + base URL; remind the user to set the `FRESHDESK_TOKEN_<SLUG_UPPERCASED>` env var
@@ -135,21 +139,21 @@ contract between you and the database.
 
 ### Top-level fields (dedicated DB columns — searchable via FTS, trigram, and vector)
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `issue_summary` | string | YES | One-paragraph summary of the problem. Include error codes and key symptoms inline. |
-| `symptoms` | string[] | YES | Observable behaviors reported or found. Short phrases, not sentences. |
-| `signals` | string[] | YES (if any) | Error codes, log patterns, status codes, HTTP errors — anything a future search might match on. Raw identifiers: `["023 TOO_MANY_STRINGS", "ECONNREFUSED", "HTTP 503"]`. |
-| `root_cause` | string | YES (if known) | The underlying technical cause. Be precise. |
-| `resolution` | string | YES (if resolved) | What was done or should be done to fix it. |
-| `resolution_pattern` | string (slug) | If applicable | Must be a slug from `list_resolution_patterns`. NEVER invent one — call `list_resolution_patterns` first. If none fits, leave unset (don't call `add_resolution_pattern` without user permission). |
-| `component` | string (slug) | YES for ticket-derived entries | Must be an existing slug/alias from `list_components`. If the ticket's area is missing from the glossary, include an `add_component` proposal in the review step (one approval covers component + entry), then call `add_component` before saving. `product_area` is derived automatically from the component hierarchy — never pass it. Unknown values are rejected with nearest-match suggestions. |
-| `confidence` | `"low"` \| `"medium"` \| `"high"` | YES | How confident you are in the root cause + resolution. Must be lowercase. |
-| `cloud` | string (slug) | Optional | Environment the issue was observed in (e.g. `prod`, `qa`, `dev`, `demo`). The vocabulary is deployment-specific — call `list_environments` and REUSE an existing slug when one fits; only introduce a new one for a genuinely new environment. Lowercase slug. A real, indexed column (filter with `cloud=` on search/list). |
-| `resolution_clarity` | `"clear"` \| `"partial"` \| `"unclear"` | Optional | How firmly the resolution is established. Lowercase. |
-| `learning_value` | `"high"` \| `"medium"` \| `"low"` | Optional | Curation signal — how reusable this lesson is. Lowercase. |
-| `hidden_fix` | boolean | Optional | True if the real fix wasn't obvious from the ticket surface. |
-| `tags` | string[] | Optional | Free-form labels for filtering/search (e.g. `["lc","printing"]`). Reuse existing slugs — call `list_labels` first; use a component's slug as a tag to make it findable by component. |
+| Field                | Type                                    | Required                       | Description                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------- | --------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `issue_summary`      | string                                  | YES                            | One-paragraph summary of the problem. Include error codes and key symptoms inline.                                                                                                                                                                                                                                                                                                                   |
+| `symptoms`           | string[]                                | YES                            | Observable behaviors reported or found. Short phrases, not sentences.                                                                                                                                                                                                                                                                                                                                |
+| `signals`            | string[]                                | YES (if any)                   | Error codes, log patterns, status codes, HTTP errors — anything a future search might match on. Raw identifiers: `["023 TOO_MANY_STRINGS", "ECONNREFUSED", "HTTP 503"]`.                                                                                                                                                                                                                             |
+| `root_cause`         | string                                  | YES (if known)                 | The underlying technical cause. Be precise.                                                                                                                                                                                                                                                                                                                                                          |
+| `resolution`         | string                                  | YES (if resolved)              | What was done or should be done to fix it.                                                                                                                                                                                                                                                                                                                                                           |
+| `resolution_pattern` | string (slug)                           | If applicable                  | Must be a slug from `list_resolution_patterns`. NEVER invent one — call `list_resolution_patterns` first. If none fits, leave unset (don't call `add_resolution_pattern` without user permission).                                                                                                                                                                                                   |
+| `component`          | string (slug)                           | YES for ticket-derived entries | Must be an existing slug/alias from `list_components`. If the ticket's area is missing from the glossary, include an `add_component` proposal in the review step (one approval covers component + entry), then call `add_component` before saving. `product_area` is derived automatically from the component hierarchy — never pass it. Unknown values are rejected with nearest-match suggestions. |
+| `confidence`         | `"low"` \| `"medium"` \| `"high"`       | YES                            | How confident you are in the root cause + resolution. Must be lowercase.                                                                                                                                                                                                                                                                                                                             |
+| `cloud`              | string (slug)                           | Optional                       | Environment the issue was observed in (e.g. `prod`, `qa`, `dev`, `demo`). The vocabulary is deployment-specific — call `list_environments` and REUSE an existing slug when one fits; only introduce a new one for a genuinely new environment. Lowercase slug. A real, indexed column (filter with `cloud=` on search/list).                                                                         |
+| `resolution_clarity` | `"clear"` \| `"partial"` \| `"unclear"` | Optional                       | How firmly the resolution is established. Lowercase.                                                                                                                                                                                                                                                                                                                                                 |
+| `learning_value`     | `"high"` \| `"medium"` \| `"low"`       | Optional                       | Curation signal — how reusable this lesson is. Lowercase.                                                                                                                                                                                                                                                                                                                                            |
+| `hidden_fix`         | boolean                                 | Optional                       | True if the real fix wasn't obvious from the ticket surface.                                                                                                                                                                                                                                                                                                                                         |
+| `tags`               | string[]                                | Optional                       | Free-form labels for filtering/search (e.g. `["lc","printing"]`). Reuse existing slugs — call `list_labels` first; use a component's slug as a tag to make it findable by component.                                                                                                                                                                                                                 |
 
 ### The `structured` field (JSONB — stored and returned in search results, but NOT indexed)
 
@@ -190,6 +194,7 @@ validated on save against a known shape, but extra keys are kept.)
 ### Customer & version (separate from knowledge entry)
 
 Customer and version are tracked on the **work item**, not the knowledge entry:
+
 - After `fetch_work_item`, check if `customer_name` is correct. If not, call `set_work_item_customer` with the right slug (from `list_customers`).
 - If the ticket mentions a specific product version, call `set_observed_version`.
 

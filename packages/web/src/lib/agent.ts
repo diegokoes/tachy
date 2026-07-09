@@ -1,5 +1,3 @@
-
-
 import { onUnauthorized } from "./session.svelte";
 
 export interface ChatBody {
@@ -13,7 +11,10 @@ export interface SseFrame {
   data: Record<string, unknown>;
 }
 
-export async function* chatStream(body: ChatBody, signal?: AbortSignal): AsyncGenerator<SseFrame> {
+export async function* chatStream(
+  body: ChatBody,
+  signal?: AbortSignal,
+): AsyncGenerator<SseFrame> {
   const res = await fetch("/api/agent/chat", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -43,7 +44,8 @@ export async function* chatStream(body: ChatBody, signal?: AbortSignal): AsyncGe
         if (line.startsWith("event:")) event = line.slice(6).trim();
         else if (line.startsWith("data:")) data += line.slice(5).trim();
       }
-      if (data) yield { event, data: JSON.parse(data) as Record<string, unknown> };
+      if (data)
+        yield { event, data: JSON.parse(data) as Record<string, unknown> };
     }
   }
 }
@@ -61,7 +63,9 @@ export async function approve(
   });
 }
 
-export async function uploadDoc(file: File): Promise<{ path: string; filename: string }> {
+export async function uploadDoc(
+  file: File,
+): Promise<{ path: string; filename: string }> {
   const fd = new FormData();
   fd.append("file", file);
   const res = await fetch("/api/agent/uploads", { method: "POST", body: fd });

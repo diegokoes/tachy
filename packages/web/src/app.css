@@ -5,7 +5,8 @@
      scrollbars in light mode — white bars on the dark UI. */
   color-scheme: dark;
   font-size: calc(clamp(14.5px, 0.35vw + 12.5px, 18px) * var(--font-scale, 1));
-  font-family: ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, monospace;
+  font-family:
+    ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, monospace;
 
   --bg: #080808;
   --panel: rgba(8, 8, 8, 0.82);
@@ -15,7 +16,7 @@
      plus a hi/lo edge pair + drop for the text-mode 3D bevel. */
   --aside-bg: #1c1c1c;
   --aside-edge-hi: rgba(255, 255, 255, 0.22); /* the thick bottom-right rim */
-  --aside-edge-lo: rgba(0, 0, 0, 0.55);       /* groove just inside the rim */
+  --aside-edge-lo: rgba(0, 0, 0, 0.55); /* groove just inside the rim */
   --aside-drop: rgba(0, 0, 0, 0.9);
   --text: #e2e2e2;
   --muted: #6d6d6d;
@@ -35,7 +36,7 @@
   --border: rgba(30, 28, 20, 0.14);
   /* Light bg lets the bottom-right rim be a conventional dark edge + shadow. */
   --aside-bg: var(--panel-solid);
-  --aside-edge-hi: rgba(30, 28, 20, 0.3);   /* the thick bottom-right rim */
+  --aside-edge-hi: rgba(30, 28, 20, 0.3); /* the thick bottom-right rim */
   --aside-edge-lo: rgba(255, 255, 255, 0.8); /* groove just inside the rim */
   --aside-drop: rgba(30, 28, 20, 0.26);
   --text: #21201c;
@@ -46,7 +47,9 @@
   --danger: #cf222e;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
 body {
   margin: 0;
@@ -61,8 +64,13 @@ body {
   scrollbar-color: color-mix(in srgb, var(--muted) 50%, transparent) transparent;
 }
 
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
 
 button {
   font: inherit;
@@ -74,10 +82,18 @@ button {
   padding: 0.4rem 0.8rem;
 }
 
-button:hover { border-color: var(--accent); color: var(--accent); }
-button:disabled { opacity: 0.5; cursor: default; }
+button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 
-input, textarea, select {
+input,
+textarea,
+select {
   font: inherit;
   background: var(--panel);
   color: var(--text);
@@ -91,7 +107,10 @@ input, textarea, select {
 
 /* Focus ring drawn INSIDE the box (border + inset shadow) — outlines render
    outside and get clipped when a control touches the scroll container's edge. */
-input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible {
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible {
   outline: none;
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);

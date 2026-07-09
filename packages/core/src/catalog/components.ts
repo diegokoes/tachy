@@ -21,8 +21,12 @@ export interface AddComponentInput {
 export async function addComponent(i: AddComponentInput) {
   let parentId: string | null = null;
   if (i.parentSlug) {
-    const [parent] = await sql`select id from components where product_id = ${i.productId} and slug = ${i.parentSlug}`;
-    if (!parent) throw badInput(`Unknown parent component '${i.parentSlug}' for this product`);
+    const [parent] =
+      await sql`select id from components where product_id = ${i.productId} and slug = ${i.parentSlug}`;
+    if (!parent)
+      throw badInput(
+        `Unknown parent component '${i.parentSlug}' for this product`,
+      );
     parentId = parent.id;
   }
   const [row] = await sql`
@@ -38,29 +42,36 @@ export async function addComponent(i: AddComponentInput) {
   return row;
 }
 
-
-
-
-
 export async function updateComponent(
   productId: string,
   slug: string,
-  patch: { name?: string; parentSlug?: string | null; description?: string | null; aliases?: string[] },
+  patch: {
+    name?: string;
+    parentSlug?: string | null;
+    description?: string | null;
+    aliases?: string[];
+  },
 ) {
   const [current] = await sql`
     select id, name, parent_id, description, aliases from components
     where product_id = ${productId} and slug = ${slug}
   `;
-  if (!current) throw notFound(`Component '${slug}' not found for this product`);
+  if (!current)
+    throw notFound(`Component '${slug}' not found for this product`);
 
   let parentId: string | null = current.parent_id;
-  if ('parentSlug' in patch) {
+  if ("parentSlug" in patch) {
     if (patch.parentSlug == null) {
       parentId = null;
     } else {
-      if (patch.parentSlug === slug) throw badInput("a component cannot be its own parent");
-      const [parent] = await sql`select id from components where product_id = ${productId} and slug = ${patch.parentSlug}`;
-      if (!parent) throw badInput(`Unknown parent component '${patch.parentSlug}' for this product`);
+      if (patch.parentSlug === slug)
+        throw badInput("a component cannot be its own parent");
+      const [parent] =
+        await sql`select id from components where product_id = ${productId} and slug = ${patch.parentSlug}`;
+      if (!parent)
+        throw badInput(
+          `Unknown parent component '${patch.parentSlug}' for this product`,
+        );
       parentId = parent.id;
     }
   }
@@ -69,7 +80,7 @@ export async function updateComponent(
     update components set
       name        = ${patch.name ?? current.name},
       parent_id   = ${parentId},
-      description = ${'description' in patch ? patch.description : current.description},
+      description = ${"description" in patch ? patch.description : current.description},
       aliases     = ${patch.aliases ?? current.aliases}
     where id = ${current.id}
     returning id, slug, name, parent_id, description, aliases
@@ -77,47 +88,71 @@ export async function updateComponent(
   return row;
 }
 
-
-
-
-
-
-export async function componentRenameImpact(productId: string, slug: string): Promise<{ entries: number; docs: number }> {
-  const [current] = await sql`select id from components where product_id = ${productId} and slug = ${slug}`;
-  if (!current) throw notFound(`Component '${slug}' not found for this product`);
-  const [e] = await sql`select count(*)::int as n from knowledge_entries where product_id = ${productId} and ${slug} = any(tags)`;
-  const [d] = await sql`select count(*)::int as n from reference_docs where product_id = ${productId} and ${slug} = any(tags)`;
+export async function componentRenameImpact(
+  productId: string,
+  slug: string,
+): Promise<{ entries: number; docs: number }> {
+  const [current] =
+    await sql`select id from components where product_id = ${productId} and slug = ${slug}`;
+  if (!current)
+    throw notFound(`Component '${slug}' not found for this product`);
+  const [e] =
+    await sql`select count(*)::int as n from knowledge_entries where product_id = ${productId} and ${slug} = any(tags)`;
+  const [d] =
+    await sql`select count(*)::int as n from reference_docs where product_id = ${productId} and ${slug} = any(tags)`;
   return { entries: e.n, docs: d.n };
 }
 
-
-
-
-export async function renameComponent(productId: string, oldSlug: string, newSlug: string) {
-  if (oldSlug === newSlug) return { renamed: false, from: oldSlug, to: newSlug, entries: 0, docs: 0 };
-  const [current] = await sql`select id from components where product_id = ${productId} and slug = ${oldSlug}`;
-  if (!current) throw notFound(`Component '${oldSlug}' not found for this product`);
-  const [taken] = await sql`select id from components where product_id = ${productId} and slug = ${newSlug}`;
-  if (taken) throw conflict(`component '${newSlug}' already exists for this product`);
+export async function renameComponent(
+  productId: string,
+  oldSlug: string,
+  newSlug: string,
+) {
+  if (oldSlug === newSlug)
+    return { renamed: false, from: oldSlug, to: newSlug, entries: 0, docs: 0 };
+  const [current] =
+    await sql`select id from components where product_id = ${productId} and slug = ${oldSlug}`;
+  if (!current)
+    throw notFound(`Component '${oldSlug}' not found for this product`);
+  const [taken] =
+    await sql`select id from components where product_id = ${productId} and slug = ${newSlug}`;
+  if (taken)
+    throw conflict(`component '${newSlug}' already exists for this product`);
   return sql.begin(async (tx) => {
-    const e = await tx`update knowledge_entries set tags = array_replace(tags, ${oldSlug}, ${newSlug})
+    const e =
+      await tx`update knowledge_entries set tags = array_replace(tags, ${oldSlug}, ${newSlug})
       where product_id = ${productId} and ${oldSlug} = any(tags)`;
-    const d = await tx`update reference_docs set tags = array_replace(tags, ${oldSlug}, ${newSlug})
+    const d =
+      await tx`update reference_docs set tags = array_replace(tags, ${oldSlug}, ${newSlug})
       where product_id = ${productId} and ${oldSlug} = any(tags)`;
     await tx`update components set slug = ${newSlug} where id = ${current.id}`;
-    return { renamed: true, from: oldSlug, to: newSlug, entries: e.count, docs: d.count };
+    return {
+      renamed: true,
+      from: oldSlug,
+      to: newSlug,
+      entries: e.count,
+      docs: d.count,
+    };
   });
 }
 
 export async function deleteComponent(productId: string, slug: string) {
-  const [current] = await sql`select id from components where product_id = ${productId} and slug = ${slug}`;
-  if (!current) throw notFound(`Component '${slug}' not found for this product`);
-  const [children] = await sql`select count(*)::int as n from components where parent_id = ${current.id}`;
+  const [current] =
+    await sql`select id from components where product_id = ${productId} and slug = ${slug}`;
+  if (!current)
+    throw notFound(`Component '${slug}' not found for this product`);
+  const [children] =
+    await sql`select count(*)::int as n from components where parent_id = ${current.id}`;
   if (children.n > 0)
-    throw conflict(`component '${slug}' has ${children.n} child component(s) - re-parent or delete them first`);
-  const [entries] = await sql`select count(*)::int as n from knowledge_entries where component_id = ${current.id}`;
+    throw conflict(
+      `component '${slug}' has ${children.n} child component(s) - re-parent or delete them first`,
+    );
+  const [entries] =
+    await sql`select count(*)::int as n from knowledge_entries where component_id = ${current.id}`;
   if (entries.n > 0)
-    throw conflict(`component '${slug}' is linked from ${entries.n} knowledge entr(y/ies) - re-map them first`);
+    throw conflict(
+      `component '${slug}' is linked from ${entries.n} knowledge entr(y/ies) - re-map them first`,
+    );
   await sql`delete from components where id = ${current.id}`;
   return { deleted: true, slug };
 }
@@ -125,13 +160,13 @@ export async function deleteComponent(productId: string, slug: string) {
 export interface ResolvedComponent {
   id: string;
   slug: string;
-  path: string; 
+  path: string;
 }
 
-
-
-
-export async function resolveComponentStrict(productId: string, slugOrAlias: string): Promise<ResolvedComponent> {
+export async function resolveComponentStrict(
+  productId: string,
+  slugOrAlias: string,
+): Promise<ResolvedComponent> {
   const [row] = await sql`
     select id, slug from components
     where product_id = ${productId}
@@ -139,7 +174,11 @@ export async function resolveComponentStrict(productId: string, slugOrAlias: str
     limit 1
   `;
   if (row) {
-    return { id: row.id as string, slug: row.slug as string, path: await getComponentPath(row.id as string) };
+    return {
+      id: row.id as string,
+      slug: row.slug as string,
+      path: await getComponentPath(row.id as string),
+    };
   }
 
   const nearest = await sql`
@@ -160,7 +199,6 @@ export async function resolveComponentStrict(productId: string, slugOrAlias: str
   );
 }
 
-
 export async function getComponentPath(componentId: string): Promise<string> {
   const [row] = await sql`
     with recursive chain as (
@@ -178,11 +216,10 @@ export async function getComponentPath(componentId: string): Promise<string> {
   return row.path as string;
 }
 
-
-
-
-
-export async function resolveComponentTags(productId: string, slugOrAlias: string): Promise<string[]> {
+export async function resolveComponentTags(
+  productId: string,
+  slugOrAlias: string,
+): Promise<string[]> {
   const [row] = await sql`
     select slug, aliases from components
     where product_id = ${productId}
@@ -193,16 +230,18 @@ export async function resolveComponentTags(productId: string, slugOrAlias: strin
   return [row.slug as string, ...((row.aliases as string[]) ?? [])];
 }
 
-
-
-
 export async function resolveComponentFilter(
   productId: string,
   slugOrAlias: string,
-): Promise<{ componentId?: string; componentTags?: string[]; extraTags?: string[] }> {
+): Promise<{
+  componentId?: string;
+  componentTags?: string[];
+  extraTags?: string[];
+}> {
   const tags = await resolveComponentTags(productId, slugOrAlias);
   try {
-    const componentId = (await resolveComponentStrict(productId, slugOrAlias)).id;
+    const componentId = (await resolveComponentStrict(productId, slugOrAlias))
+      .id;
     return { componentId, componentTags: tags };
   } catch {
     return { extraTags: tags };

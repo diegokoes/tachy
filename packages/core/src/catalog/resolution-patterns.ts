@@ -17,36 +17,45 @@ export async function addResolutionPattern(slug: string, description: string) {
   return row;
 }
 
-
-
-export async function resolutionPatternRenameImpact(slug: string): Promise<{ entries: number }> {
-  const [exists] = await sql`select slug from resolution_patterns where slug = ${slug}`;
+export async function resolutionPatternRenameImpact(
+  slug: string,
+): Promise<{ entries: number }> {
+  const [exists] =
+    await sql`select slug from resolution_patterns where slug = ${slug}`;
   if (!exists) throw notFound(`Resolution pattern '${slug}' not found`);
-  const [ref] = await sql`select count(*)::int as n from knowledge_entries where resolution_pattern = ${slug}`;
+  const [ref] =
+    await sql`select count(*)::int as n from knowledge_entries where resolution_pattern = ${slug}`;
   return { entries: ref.n };
 }
 
-
-
-export async function renameResolutionPattern(oldSlug: string, newSlug: string) {
-  if (oldSlug === newSlug) return { renamed: false, from: oldSlug, to: newSlug, entries: 0 };
-  const [exists] = await sql`select slug from resolution_patterns where slug = ${oldSlug}`;
+export async function renameResolutionPattern(
+  oldSlug: string,
+  newSlug: string,
+) {
+  if (oldSlug === newSlug)
+    return { renamed: false, from: oldSlug, to: newSlug, entries: 0 };
+  const [exists] =
+    await sql`select slug from resolution_patterns where slug = ${oldSlug}`;
   if (!exists) throw notFound(`Resolution pattern '${oldSlug}' not found`);
-  const [taken] = await sql`select slug from resolution_patterns where slug = ${newSlug}`;
+  const [taken] =
+    await sql`select slug from resolution_patterns where slug = ${newSlug}`;
   if (taken) throw conflict(`resolution pattern '${newSlug}' already exists`);
-  const [ref] = await sql`select count(*)::int as n from knowledge_entries where resolution_pattern = ${oldSlug}`;
+  const [ref] =
+    await sql`select count(*)::int as n from knowledge_entries where resolution_pattern = ${oldSlug}`;
   await sql`update resolution_patterns set slug = ${newSlug} where slug = ${oldSlug}`;
   return { renamed: true, from: oldSlug, to: newSlug, entries: ref.n };
 }
 
-
-
 export async function deleteResolutionPattern(slug: string) {
-  const [exists] = await sql`select slug from resolution_patterns where slug = ${slug}`;
+  const [exists] =
+    await sql`select slug from resolution_patterns where slug = ${slug}`;
   if (!exists) throw notFound(`Resolution pattern '${slug}' not found`);
-  const [ref] = await sql`select count(*)::int as n from knowledge_entries where resolution_pattern = ${slug}`;
+  const [ref] =
+    await sql`select count(*)::int as n from knowledge_entries where resolution_pattern = ${slug}`;
   if (ref.n > 0)
-    throw conflict(`pattern '${slug}' is used by ${ref.n} knowledge entr(y/ies) - re-tag them first`);
+    throw conflict(
+      `pattern '${slug}' is used by ${ref.n} knowledge entr(y/ies) - re-tag them first`,
+    );
   await sql`delete from resolution_patterns where slug = ${slug}`;
   return { deleted: true, slug };
 }

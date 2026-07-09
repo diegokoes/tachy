@@ -18,7 +18,12 @@ import { installAuth, isBootstrapped, type OidcConfig } from "./auth";
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
 
-const STATUS_BY_CODE = { not_found: 404, conflict: 409, bad_input: 400, forbidden: 403 } as const;
+const STATUS_BY_CODE = {
+  not_found: 404,
+  conflict: 409,
+  bad_input: 400,
+  forbidden: 403,
+} as const;
 
 function apiRoutes() {
   return new Hono()
@@ -31,7 +36,14 @@ function apiRoutes() {
     .route("/", admin);
 }
 
-export function createApp(opts: { apiToken?: string; webRoot?: string; oidc?: OidcConfig; passwordAuth?: boolean } = {}) {
+export function createApp(
+  opts: {
+    apiToken?: string;
+    webRoot?: string;
+    oidc?: OidcConfig;
+    passwordAuth?: boolean;
+  } = {},
+) {
   const base = new Hono();
   base.use("*", logger());
 
@@ -46,12 +58,10 @@ export function createApp(opts: { apiToken?: string; webRoot?: string; oidc?: Oi
 
   const authMode = opts.oidc ? "sso" : opts.apiToken ? "token" : "open";
   base.get("/auth/config", async (c) => {
- 
     let profile = "support";
     try {
       profile = (await effectiveSettings()).deployment_profile.value;
-    } catch {
-    }
+    } catch {}
     return c.json({
       authMode,
       sso: Boolean(opts.oidc),
@@ -60,10 +70,13 @@ export function createApp(opts: { apiToken?: string; webRoot?: string; oidc?: Oi
     });
   });
 
-  
   base.route("/api/setup", setup);
 
-  installAuth(base, { apiToken: opts.apiToken, oidc: opts.oidc, passwordAuth: opts.passwordAuth });
+  installAuth(base, {
+    apiToken: opts.apiToken,
+    oidc: opts.oidc,
+    passwordAuth: opts.passwordAuth,
+  });
 
   const app = base.route("/api", apiRoutes());
 
@@ -71,17 +84,21 @@ export function createApp(opts: { apiToken?: string; webRoot?: string; oidc?: Oi
     const root = opts.webRoot;
     app.use("/assets/*", serveStatic({ root }));
     const indexHandler = serveStatic({ path: "index.html", root });
-    app.get("*", (c, next) => (c.req.path.startsWith("/api/") ? next() : indexHandler(c, next)));
+    app.get("*", (c, next) =>
+      c.req.path.startsWith("/api/") ? next() : indexHandler(c, next),
+    );
   }
 
   app.notFound((c) => c.json({ error: "not found" }, 404));
 
- 
   app.onError((err, c) => {
-    if (err instanceof AppError) return c.json({ error: err.message }, STATUS_BY_CODE[err.code]);
-    if (err instanceof HTTPException) return err.getResponse(); 
-    if (err instanceof z.ZodError) return c.json({ error: "validation failed", issues: err.issues }, 400);
-    if (err instanceof SyntaxError) return c.json({ error: "invalid JSON body" }, 400);
+    if (err instanceof AppError)
+      return c.json({ error: err.message }, STATUS_BY_CODE[err.code]);
+    if (err instanceof HTTPException) return err.getResponse();
+    if (err instanceof z.ZodError)
+      return c.json({ error: "validation failed", issues: err.issues }, 400);
+    if (err instanceof SyntaxError)
+      return c.json({ error: "invalid JSON body" }, 400);
     console.error(err instanceof Error ? err.message : String(err));
     return c.json({ error: "internal error" }, 500);
   });

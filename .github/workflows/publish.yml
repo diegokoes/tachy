@@ -24,14 +24,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test   # Testcontainers uses the runner's preinstalled Docker
+      - run: npm test # Testcontainers uses the runner's preinstalled Docker
 
   publish:
     needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write   # lets the built-in GITHUB_TOKEN push to ghcr.io
+      packages: write # lets the built-in GITHUB_TOKEN push to ghcr.io
     steps:
       - uses: actions/checkout@v4
 

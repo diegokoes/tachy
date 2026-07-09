@@ -1,7 +1,6 @@
 import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 
-
 // DEV:
 //   npm run api      (API on :8787)
 //   npm run web:dev  (Vite on :5173))

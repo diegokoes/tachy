@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { classify, qualify, READ_TOOLS, WRITE_TOOLS } from "../packages/agent/src/index";
+import {
+  classify,
+  qualify,
+  READ_TOOLS,
+  WRITE_TOOLS,
+} from "../packages/agent/src/index";
 import { AsyncQueue } from "../packages/agent/src/queue";
 
 describe("agent tool allowlist (security boundary)", () => {

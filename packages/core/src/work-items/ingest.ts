@@ -10,7 +10,10 @@ export interface IngestedItem {
   observedVersion: string | null;
 }
 
-export async function ingestWorkItem(connId: string, raw: RawWorkItem): Promise<IngestedItem> {
+export async function ingestWorkItem(
+  connId: string,
+  raw: RawWorkItem,
+): Promise<IngestedItem> {
   let productId: string | null = null;
   let teamId: string | null = null;
 
@@ -21,14 +24,14 @@ export async function ingestWorkItem(connId: string, raw: RawWorkItem): Promise<
     `;
     if (map) {
       productId = map.product_id;
-      const [prod] = await sql`select team_id from products where id = ${productId}`;
+      const [prod] =
+        await sql`select team_id from products where id = ${productId}`;
       teamId = prod?.team_id ?? null;
     }
   }
 
   const customerId = await resolveCustomerByEmail(raw.requesterEmail);
 
-  
   const [item] = await sql`
     insert into work_items
       (source_connection_id, external_id, external_url, kind, title, status,
@@ -60,7 +63,10 @@ export async function ingestWorkItem(connId: string, raw: RawWorkItem): Promise<
   }
 
   return {
-    id: item.id, productId: item.product_id, teamId: item.team_id,
-    customerId: item.customer_id, observedVersion: item.observed_version,
+    id: item.id,
+    productId: item.product_id,
+    teamId: item.team_id,
+    customerId: item.customer_id,
+    observedVersion: item.observed_version,
   };
 }

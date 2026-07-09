@@ -11,14 +11,10 @@ import { env, effectiveSettings, type EffectiveSettings } from "@tachy/core";
 import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
 import { sessionEmail } from "../auth";
 
-
-
 const turns = new Map<string, AgentTurn>();
 
-const uploadDir = process.env.TACHY_UPLOAD_DIR || join(tmpdir(), "tachy-uploads");
-
-
-
+const uploadDir =
+  process.env.TACHY_UPLOAD_DIR || join(tmpdir(), "tachy-uploads");
 
 const UI_APPROVAL_NOTE = `
 
@@ -40,13 +36,13 @@ async function systemPrompt(): Promise<string> {
   return systemPromptCache;
 }
 
-
-
-
-
-function mcpConfig(userEmail: string | undefined, settings: EffectiveSettings): Omit<AgentConfig, "systemPromptAppend"> {
+function mcpConfig(
+  userEmail: string | undefined,
+  settings: EffectiveSettings,
+): Omit<AgentConfig, "systemPromptAppend"> {
   const mcpEnv: Record<string, string> = {};
-  for (const [k, v] of Object.entries(process.env)) if (typeof v === "string") mcpEnv[k] = v;
+  for (const [k, v] of Object.entries(process.env))
+    if (typeof v === "string") mcpEnv[k] = v;
   if (userEmail) mcpEnv.TACHY_USER_EMAIL = userEmail;
   if (settings.redaction_global.value) mcpEnv.TACHY_REDACT = "true";
 
@@ -57,7 +53,10 @@ function mcpConfig(userEmail: string | undefined, settings: EffectiveSettings): 
 
   const allowedModels = settings.allowed_models.value;
   return {
-    mcpCommand: command, mcpArgs: args, mcpEnv, cwd: process.cwd(),
+    mcpCommand: command,
+    mcpArgs: args,
+    mcpEnv,
+    cwd: process.cwd(),
     model: settings.agent_model.value,
     effort: settings.agent_effort.value as AgentConfig["effort"],
     ...(allowedModels.length ? { allowedModels } : {}),
@@ -79,8 +78,7 @@ const approveSchema = z.object({
 });
 
 export const agent = new Hono()
-  
-  
+
   .post("/chat", zValidator("json", chatSchema), async (c) => {
     const { message, sessionId, uploadPaths } = c.req.valid("json");
     const userEmail = (await sessionEmail(c)) ?? env.userEmail;
@@ -100,7 +98,10 @@ export const agent = new Hono()
     turns.set(turnId, turn);
 
     return streamSSE(c, async (stream) => {
-      await stream.writeSSE({ event: "start", data: JSON.stringify({ turnId }) });
+      await stream.writeSSE({
+        event: "start",
+        data: JSON.stringify({ turnId }),
+      });
       try {
         for await (const ev of turn.events()) {
           await stream.writeSSE({ event: ev.type, data: JSON.stringify(ev) });
@@ -111,7 +112,6 @@ export const agent = new Hono()
     });
   })
 
-  
   .post("/approve", zValidator("json", approveSchema), (c) => {
     const { turnId, id, approve, message, updatedInput } = c.req.valid("json");
     const turn = turns.get(turnId);
@@ -120,11 +120,11 @@ export const agent = new Hono()
     return c.json({ ok: true });
   })
 
-  
   .post("/uploads", async (c) => {
     const body = await c.req.parseBody();
     const file = body.file;
-    if (!(file instanceof File)) return c.json({ error: "expected a 'file' field" }, 400);
+    if (!(file instanceof File))
+      return c.json({ error: "expected a 'file' field" }, 400);
     await mkdir(uploadDir, { recursive: true });
     const safe = `${randomUUID()}-${basename(file.name || "upload")}`;
     const path = join(uploadDir, safe);

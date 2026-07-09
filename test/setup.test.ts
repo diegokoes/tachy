@@ -19,29 +19,39 @@ describe("first-run setup wizard", () => {
     const status = await app.request("/api/setup/status");
     expect(await status.json()).toEqual({ bootstrapped: false });
 
-    
     const teams = await app.request("/api/teams");
     expect(teams.status).toBe(200);
   });
 
   it("bootstraps admin + settings + workspace in one POST", async () => {
-    const res = await app.request("/api/setup", json({
-      email: "founder@example.com",
-      password: "a-long-password",
-      display_name: "Founder",
-      org_name: "osapiens",
-      team: { slug: "hw", name: "Hardware" },
-      product: { slug: "lc", name: "Line Controller" },
-      products: [{ slug: "mas", name: "MAS" }, { slug: "printer", name: "Printer" }],
-      settings: { redaction_global: true, agent_effort: "high", deployment_profile: "engineering" },
-    }));
+    const res = await app.request(
+      "/api/setup",
+      json({
+        email: "founder@example.com",
+        password: "a-long-password",
+        display_name: "Founder",
+        org_name: "osapiens",
+        team: { slug: "hw", name: "Hardware" },
+        product: { slug: "lc", name: "Line Controller" },
+        products: [
+          { slug: "mas", name: "MAS" },
+          { slug: "printer", name: "Printer" },
+        ],
+        settings: {
+          redaction_global: true,
+          agent_effort: "high",
+          deployment_profile: "engineering",
+        },
+      }),
+    );
     expect(res.status).toBe(200);
     expect(res.headers.get("set-cookie")).toContain("tachy_session=");
 
     const status = await app.request("/api/setup/status");
     expect(await status.json()).toEqual({ bootstrapped: true });
 
-    const [admin] = await sql`select role, password_hash from users where email = 'founder@example.com'`;
+    const [admin] =
+      await sql`select role, password_hash from users where email = 'founder@example.com'`;
     expect(admin.role).toBe("admin");
     expect(admin.password_hash).toMatch(/^scrypt\$/);
 
@@ -61,7 +71,6 @@ describe("first-run setup wizard", () => {
     `;
     expect(products.map((p) => p.slug)).toEqual(["lc", "mas", "printer"]);
 
-    
     const cfg = await (await app.request("/auth/config")).json();
     expect(cfg.profile).toBe("engineering");
   });
@@ -72,15 +81,21 @@ describe("first-run setup wizard", () => {
   });
 
   it("refuses a second bootstrap", async () => {
-    const res = await app.request("/api/setup", json({
-      email: "intruder@example.com",
-      password: "another-long-pass",
-    }));
+    const res = await app.request(
+      "/api/setup",
+      json({
+        email: "intruder@example.com",
+        password: "another-long-pass",
+      }),
+    );
     expect(res.status).toBe(409);
   });
 
   it("rejects a too-short password", async () => {
-    const res = await app.request("/api/setup", json({ email: "x@example.com", password: "short" }));
+    const res = await app.request(
+      "/api/setup",
+      json({ email: "x@example.com", password: "short" }),
+    );
     expect(res.status).toBe(400);
   });
 });

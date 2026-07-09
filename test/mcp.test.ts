@@ -5,7 +5,10 @@ import { resetData, sql } from "./helpers";
 
 afterAll(() => sql.end());
 
-type ToolResult = { content: { type: string; text: string }[]; isError?: boolean };
+type ToolResult = {
+  content: { type: string; text: string }[];
+  isError?: boolean;
+};
 
 describe("runTool envelope", () => {
   beforeEach(resetData);
@@ -18,7 +21,14 @@ describe("runTool envelope", () => {
   });
 
   it("turns a thrown AppError into a clean tool error", async () => {
-    const res = (await runTool("boom", async () => { throw badInput("bad thing"); }, {}, {})) as ToolResult;
+    const res = (await runTool(
+      "boom",
+      async () => {
+        throw badInput("bad thing");
+      },
+      {},
+      {},
+    )) as ToolResult;
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toBe("bad thing");
   });
@@ -26,7 +36,11 @@ describe("runTool envelope", () => {
   it("surfaces a real core failure (unknown resolution_pattern) as a tool error, not a rejection", async () => {
     const res = (await runTool(
       "save_knowledge_entry",
-      async () => saveKnowledgeEntry({ issueSummary: "x", resolutionPattern: "does-not-exist" }),
+      async () =>
+        saveKnowledgeEntry({
+          issueSummary: "x",
+          resolutionPattern: "does-not-exist",
+        }),
       {},
       {},
     )) as ToolResult;
