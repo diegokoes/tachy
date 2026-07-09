@@ -5,7 +5,7 @@ import { resetData, sql } from "./helpers";
 
 afterAll(() => sql.end());
 
-// passwordAuth on = the production configuration (index.ts always passes it).
+
 const app = createApp({ passwordAuth: true });
 const json = (body: unknown) => ({
   method: "POST",

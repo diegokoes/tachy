@@ -9,7 +9,7 @@ function rawItem(over: Partial<RawWorkItem> = {}): RawWorkItem {
     kind: "ticket",
     title: "Scanner offline",
     status: "2",
-    groupKey: "48000641379", // seeded -> tpd
+    groupKey: "48000641379", 
     raw: { id: 58925 },
     messages: [],
     ...over,

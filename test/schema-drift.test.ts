@@ -7,9 +7,9 @@ import {
   RESOLUTION_CLARITIES, LEARNING_VALUES, USER_ROLES, TEAM_ROLES,
 } from "@tachy/core";
 
-// Guards the hand-maintained contract between the core enums (the single source
-// of truth for MCP/API zod schemas) and the CHECK constraints in db/schema.sql.
-// Pure file parse — no database needed.
+
+
+
 
 const here = dirname(fileURLToPath(import.meta.url));
 const schema = readFileSync(join(here, "..", "db", "schema.sql"), "utf8");
@@ -20,8 +20,8 @@ function tableBlock(table: string): string {
   return m[1];
 }
 
-// Extracts the value set of `check (<col> in ('a','b'))` (optionally with a
-// leading `<col> is null or`) for a column inside a table block.
+
+
 function checkValues(table: string, col: string): string[] {
   const block = tableBlock(table);
   const re = new RegExp(`check \\((?:${col} is null or )?${col} in \\(([^)]*)\\)\\)`);
@@ -54,9 +54,9 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     expect(block).toContain("fixed_version");
   });
 
-  // cloud is intentionally NOT enum-checked anymore (migration 002): the
-  // environment vocabulary is deployment-specific and validated as a slug
-  // in the app layer only.
+  
+  
+  
   it("knowledge_entries.cloud has no CHECK constraint", () => {
     expect(() => checkValues("knowledge_entries", "cloud")).toThrow(/no CHECK/);
   });

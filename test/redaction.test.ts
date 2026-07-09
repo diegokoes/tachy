@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-// Set before importing source factories — they read the token at construction.
+
 process.env.FRESHDESK_TOKEN = "test-token";
 process.env.GITHUB_TOKEN = "test-token";
 
@@ -51,7 +51,7 @@ describe("scrubText", () => {
   it("tokenizes Luhn-valid card numbers but keeps long non-card IDs", () => {
     const map = new TokenMap();
     expect(scrubText("card 4111 1111 1111 1111 charged", map)).toBe("card [CARD_1] charged");
-    // Same digits with the checksum broken → not a card, stays put.
+    
     expect(scrubText("ref 4111 1111 1111 1112 in DevOps", map)).toBe("ref 4111 1111 1111 1112 in DevOps");
   });
 });
@@ -88,7 +88,7 @@ describe("scrubDeep", () => {
     expect(out.version).toBe(3);
     expect(out.created_at).toBe(created);
     expect(out.structured.conversation_summary).toBe("call from [EMAIL_1]");
-    expect(row.issue_summary).toBe("mail ops@acme.com"); // input untouched
+    expect(row.issue_summary).toBe("mail ops@acme.com"); 
   });
 });
 
@@ -115,12 +115,12 @@ describe("redactNormalized", () => {
     const snapshot = structuredClone(base);
     const r = redactNormalized(base, { customerSlug: null, map: new TokenMap() });
     expect(r.requester).toBe("[CUSTOMER]");
-    expect(base).toEqual(snapshot); // input untouched
+    expect(base).toEqual(snapshot); 
   });
 });
 
 describe("freshdesk redactRaw", () => {
-  const redact = createFreshdeskSource({ baseUrl: "https://x.freshdesk.com", slug: "fd", config: {} }).redactRaw!;
+  const redact = createFreshdeskSource({ baseUrl: "https:
 
   it("scrubs the ticket payload but keeps custom-field keys and unrelated data", () => {
     const raw = {
@@ -144,10 +144,10 @@ describe("freshdesk redactRaw", () => {
     expect(out.description_text).toBe("reach me at [EMAIL_1]");
     expect(out.requester.name).toBe("acme-corp");
     expect(out.requester.email).toMatch(/^\[EMAIL_\d+\]$/);
-    expect(out.custom_fields.cf_devops_work_item).toBe("DevOps#158327");     // no PII → untouched
-    expect(out.custom_fields.cf_note).toMatch(/^ping \[EMAIL_\d+\]$/);        // PII scrubbed, key kept
-    expect(out.status).toBe(2);                                          // unrelated field intact
-    expect(raw).toEqual(snapshot);                                      // input untouched
+    expect(out.custom_fields.cf_devops_work_item).toBe("DevOps#158327");     
+    expect(out.custom_fields.cf_note).toMatch(/^ping \[EMAIL_\d+\]$/);        
+    expect(out.status).toBe(2);                                          
+    expect(raw).toEqual(snapshot);                                      
   });
 });
 
@@ -168,7 +168,7 @@ describe("github redactRaw", () => {
 
 describe("redactForLlm", () => {
   it("redacts normalized fields and the source raw with one consistent token map", () => {
-    const redactRaw = createFreshdeskSource({ baseUrl: "https://x.freshdesk.com", slug: "fd", config: {} }).redactRaw!;
+    const redactRaw = createFreshdeskSource({ baseUrl: "https:
     const item: RawWorkItem = {
       externalId: "20", kind: "ticket", title: "login help",
       requester: "42", requesterEmail: "jane@acme.com",
@@ -225,7 +225,7 @@ describe("redactNormalized name scrubbing", () => {
     const r = redactNormalized(item, { customerSlug: "acme-corp", map: new TokenMap() });
     expect(r.title).not.toMatch(/Jane/);
     expect(r.messages[0].bodyText).not.toMatch(/Jane/);
-    // Body mention and the author field resolve to the SAME token.
+    
     expect(r.messages[0].bodyText).toContain(r.messages[0].author);
   });
 });

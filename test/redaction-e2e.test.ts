@@ -12,15 +12,15 @@ import { resetData, sql } from "./helpers";
 
 registerSource("freshdesk", createFreshdeskSource);
 
-// A Freshdesk-shaped item carrying PII in the requester email, the raw payload,
-// and a message body (signature).
+
+
 function piiItem(): RawWorkItem {
   return {
     externalId: "58925",
     kind: "ticket",
     title: "Scanner offline — from jane@davidoff.com",
     status: "2",
-    groupKey: "48000641379", // seeded -> tpd
+    groupKey: "48000641379", 
     requester: "42",
     requesterEmail: "jane@davidoff.com",
     raw: { id: 58925, email: "jane@davidoff.com", name: "Jane Doe", description_text: "call +1 555 123 4567" },
@@ -45,10 +45,10 @@ describe("redaction end-to-end via resolveSource", () => {
     expect(resolveRedactionPolicy(conn.config).enabled).toBe(true);
 
     const raw = piiItem();
-    const item = await ingestWorkItem(conn.id, raw); // full-data write happens first
-    expect(item.customerId).not.toBeNull();          // matching still works on the real email
+    const item = await ingestWorkItem(conn.id, raw); 
+    expect(item.customerId).not.toBeNull();          
 
-    // Same logic the MCP handler runs for the model-facing copy.
+    
     const forLlm = redactForLlm(raw, source.redactRaw, "davidoff");
     expect(forLlm.requesterEmail).toBeUndefined();
     expect(forLlm.requester).toBe("davidoff");
@@ -58,7 +58,7 @@ describe("redaction end-to-end via resolveSource", () => {
     expect((forLlm.raw as any).description_text).toMatch(/\[PHONE_\d+\]/);
     expect(forLlm.messages[0].bodyText).toMatch(/^reply to \[EMAIL_\d+\]$/);
 
-    // The stored rows still hold the real, un-redacted data.
+    
     const [wi] = await sql`select raw, requester from work_items where id = ${item.id}`;
     expect(wi.raw.email).toBe("jane@davidoff.com");
     expect(wi.requester).toBe("42");

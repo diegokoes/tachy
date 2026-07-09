@@ -9,9 +9,9 @@ afterAll(() => sql.end());
 const here = dirname(fileURLToPath(import.meta.url));
 const dir = join(here, "..", "db", "migrations");
 
-// global-setup already applied schema.sql + every migration once; re-applying
-// here proves each migration is idempotent (the upgrade contract for existing
-// deployments, where `tachy migrate` may run repeatedly).
+
+
+
 describe("db migrations", () => {
   it("re-apply cleanly against an already-migrated database", async () => {
     const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
@@ -20,7 +20,7 @@ describe("db migrations", () => {
       const content = readFileSync(join(dir, f), "utf8");
       await sql.begin((tx) => tx.unsafe(content));
     }
-    // Spot-check the migrated shape: new columns + widened status CHECK.
+    
     const cols = await sql`
       select column_name from information_schema.columns
       where table_name = 'knowledge_entries' and column_name in ('component_id', 'superseded_by')

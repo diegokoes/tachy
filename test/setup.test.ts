@@ -19,7 +19,7 @@ describe("first-run setup wizard", () => {
     const status = await app.request("/api/setup/status");
     expect(await status.json()).toEqual({ bootstrapped: false });
 
-    // open fallback: nothing configured and no admin yet
+    
     const teams = await app.request("/api/teams");
     expect(teams.status).toBe(200);
   });
@@ -61,7 +61,7 @@ describe("first-run setup wizard", () => {
     `;
     expect(products.map((p) => p.slug)).toEqual(["lc", "mas", "printer"]);
 
-    // the public config carries the profile so the SPA can relabel pre-login
+    
     const cfg = await (await app.request("/auth/config")).json();
     expect(cfg.profile).toBe("engineering");
   });

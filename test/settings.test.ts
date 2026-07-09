@@ -10,7 +10,7 @@ afterAll(() => sql.end());
 describe("settings store", () => {
   beforeAll(async () => {
     await resetData();
-    // the precedence assertions need a clean slate regardless of the dev shell
+    
     delete process.env.TACHY_AGENT_MODEL;
     delete process.env.TACHY_AGENT_EFFORT;
     delete process.env.TACHY_ALLOWED_MODELS;
@@ -46,17 +46,17 @@ describe("settings store", () => {
     await sql`delete from settings`;
     clearSettingsCache();
 
-    // default
+    
     let eff = await effectiveSettings();
     expect(eff.agent_model).toEqual({ value: "claude-sonnet-5", source: "default" });
 
-    // env fallback
+    
     process.env.TACHY_AGENT_MODEL = "claude-haiku-4-5";
     clearSettingsCache();
     eff = await effectiveSettings();
     expect(eff.agent_model).toEqual({ value: "claude-haiku-4-5", source: "env" });
 
-    // db wins
+    
     await setSetting("agent_model", "claude-opus-4-8");
     eff = await effectiveSettings();
     expect(eff.agent_model).toEqual({ value: "claude-opus-4-8", source: "db" });
@@ -106,7 +106,7 @@ describe("settings API gating", () => {
     const sys = await app.request("/api/system", { headers: { cookie: adminCookie } });
     const body = await sys.json();
     expect(body.settings.agent_effort).toEqual({ value: "xhigh", source: "db" });
-    expect(body.env).not.toHaveProperty("api_token"); // no secret values, only *_set booleans
+    expect(body.env).not.toHaveProperty("api_token"); 
     expect(body.env.api_token_set).toBe(false);
   });
 

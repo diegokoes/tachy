@@ -25,7 +25,7 @@ describe("taxonomy", () => {
     await addComponent({ productId: tpd, slug: "line-controller", name: "Line Controller", aliases: ["lc", "LC"] });
     const fromAlias = await resolveComponentTags(tpd, "lc");
     expect(fromAlias).toContain("line-controller");
-    // Unknown input falls back to itself so it still works as a plain tag.
+    
     expect(await resolveComponentTags(tpd, "mystery")).toEqual(["mystery"]);
   });
 
@@ -94,7 +94,7 @@ describe("component-anchored knowledge entries", () => {
       saveKnowledgeEntry({ productId: tpd, issueSummary: "x", component: "made-up" }),
     ).rejects.toThrow(/Unknown component/);
     await expect(
-      saveKnowledgeEntry({ issueSummary: "x", component: "lc" }), // no product to resolve against
+      saveKnowledgeEntry({ issueSummary: "x", component: "lc" }), 
     ).rejects.toThrow(/requires a product/);
   });
 
@@ -144,11 +144,11 @@ describe("taxonomy edit/delete with reference guards", () => {
     const updated = await updateComponent(tpd, "lc", { name: "Line Controller", aliases: ["LC"] });
     expect(updated.name).toBe("Line Controller");
 
-    // guarded by child component
+    
     await expect(deleteComponent(tpd, "lc")).rejects.toMatchObject({ code: "conflict" });
     await deleteComponent(tpd, "printer");
 
-    // guarded by a linked entry
+    
     await saveKnowledgeEntry({ productId: tpd, issueSummary: "x", component: "lc" });
     await expect(deleteComponent(tpd, "lc")).rejects.toThrow(/knowledge entr/);
   });
@@ -157,7 +157,7 @@ describe("taxonomy edit/delete with reference guards", () => {
     await addCustomer({ name: "ACME", slug: "acme", aliases: ["acme.com"] });
     const updated = await updateCustomer("acme", { notes: "flagship" });
     expect(updated.notes).toBe("flagship");
-    expect(updated.name).toBe("ACME"); // untouched fields preserved
+    expect(updated.name).toBe("ACME"); 
 
     const [conn] = await sql`select id from source_connections where slug = 'test-freshdesk'`;
     const [cust] = await sql`select id from customers where slug = 'acme'`;

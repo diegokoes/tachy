@@ -9,8 +9,8 @@ import { resetData, sql, tpdProductId } from "./helpers";
 
 afterAll(() => sql.end());
 
-// The delegation model: global admin > team mini-admin (team_members.role='admin',
-// scoped to that team) > member. Shared by the HTTP API and the MCP server.
+
+
 describe("core permissions", () => {
   let globalAdmin: string;
   let teamAdmin: string;
@@ -92,10 +92,10 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
   const app = createApp({ passwordAuth: true });
   const cookieOf = (res: Response) => res.headers.get("set-cookie")?.split(";")[0] ?? "";
   let adminCookie: string;
-  let leadCookie: string; // team mini-admin of test-team
-  let devCookie: string; // plain member
-  let ownEntryId: string; // entry in test-team (via product tpd)
-  let otherEntryId: string; // entry in other-team
+  let leadCookie: string; 
+  let devCookie: string; 
+  let ownEntryId: string; 
+  let otherEntryId: string; 
 
   const login = async (email: string, password: string) => {
     const res = await app.request("/auth/password/login", {
@@ -236,7 +236,7 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     });
     expect(outComp.status).toBe(200);
 
-    // filter by alias resolves to the registered component
+    
     const res = await app.request(`/api/knowledge?product_id=${productId}&component=lc`, {
       headers: { cookie: devCookie },
     });
@@ -269,7 +269,7 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     expect((await approved.json()).status).toBe("approved");
 
     const stale = await req(leadCookie, `/reference/${doc.id}`, "PATCH", {
-      status: "archived", expectedVersion: doc.version, // one behind
+      status: "archived", expectedVersion: doc.version, 
     });
     expect(stale.status).toBe(409);
 
