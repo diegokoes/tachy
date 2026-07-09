@@ -34,9 +34,9 @@ function out(obj: unknown) {
   return { content: [{ type: "text" as const, text: typeof obj === "string" ? obj : JSON.stringify(obj, null, 2) }] };
 }
 
-// Retrieved archive content (knowledge entries, reference docs) can carry PII
-// saved before redaction was enabled; these tools have no source connection, so
-// the deployment-wide TACHY_REDACT flag is their only policy source.
+
+
+
 function outScrubbed(obj: unknown) {
   return out(globalRedactionEnabled() ? scrubDeep(obj, new TokenMap()) : obj);
 }
@@ -47,10 +47,10 @@ type ToolConfig<I extends ZodRawShape> = {
   annotations?: Record<string, unknown>;
 };
 
-// Run a tool handler with timing, STDERR logging (one JSON line — stdout is the
-// protocol stream), and conversion of any thrown error into a clean tool error
-// (isError) instead of leaking a raw rejection. Exported so the envelope is
-// directly testable without a live transport.
+
+
+
+
 export async function runTool(
   name: string,
   cb: (args: unknown, extra: unknown) => unknown,
@@ -72,20 +72,20 @@ export async function runTool(
   }
 }
 
-// Wrapper around server.registerTool that routes every call through runTool.
-// Generic over the zod input shape so handlers keep full type inference.
+
+
 function tool<I extends ZodRawShape>(name: string, config: ToolConfig<I>, cb: ToolCallback<I>): void {
   const wrapped = ((args: unknown, extra: unknown) =>
     runTool(name, cb as (a: unknown, e: unknown) => unknown, args, extra)) as ToolCallback<I>;
   server.registerTool(name, config as never, wrapped);
 }
 
-// ── Write authorization ──────────────────────────────────────────────────────
-// The same team-scoped permission model the HTTP API enforces, applied to the
-// write tools. Two deliberate open paths: TACHY_USER_EMAIL unset = a trusted
-// local stdio caller (CLI/dev  the web agent always injects the session
-// email), and a not-yet-bootstrapped instance (no admin exists). A positive
-// bootstrap check is cached for the process lifetime, like the API does.
+
+
+
+
+
+
 let enforcementCache = false;
 async function enforcementActive(): Promise<boolean> {
   if (enforcementCache) return true;
@@ -93,7 +93,7 @@ async function enforcementActive(): Promise<boolean> {
   return enforcementCache;
 }
 
-// The user id writes must be authorized against, or null when unenforced.
+
 async function gateUserId(): Promise<string | null> {
   const userId = await resolveCurrentUserId();
   if (!userId) return null;
@@ -122,7 +122,7 @@ async function requireGlobalAdmin(): Promise<void> {
   if (userId) await assertGlobalAdmin(userId);
 }
 
-// Scope of the target row, for authorizing updates.
+
 async function knowledgeEntryScope(id: string): Promise<EntryScope> {
   const [row] = await sql`select product_id, team_id from knowledge_entries where id = ${id}`;
   return row ? { productId: row.product_id, teamId: row.team_id } : {};
@@ -133,8 +133,8 @@ async function referenceDocScope(id: string): Promise<EntryScope> {
   return row ? { productId: row.product_id, teamId: row.team_id } : {};
 }
 
-// Scope a new entry/doc will land in; a work-item-only save inherits the
-// item's product/team (mirrors saveKnowledgeEntry).
+
+
 async function newEntryScope(i: { productId?: string | null; teamId?: string | null; workItemId?: string | null }): Promise<EntryScope> {
   if (i.productId || i.teamId) return { productId: i.productId, teamId: i.teamId };
   if (i.workItemId) {
@@ -144,7 +144,7 @@ async function newEntryScope(i: { productId?: string | null; teamId?: string | n
   return {};
 }
 
-// Crude HTML → text for fetched URLs; good enough to hand the LLM readable context.
+
 function stripHtml(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -156,7 +156,7 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-// Read-only: gather freeform context from pasted text, local files, and URLs.
+
 async function loadContextSources(input: { text?: string; paths?: string[]; urls?: string[] }) {
   const sources: { source: string; text: string }[] = [];
   if (input.text?.trim()) sources.push({ source: "inline", text: input.text });
@@ -185,7 +185,7 @@ tool(
     const item = await ingestWorkItem(conn.id, raw);
     await recordRun({ workItemId: item.id, userId: await resolveCurrentUserId(), mode: "ingest" });
     const customerName = await getCustomerName(item.customerId);
-    // Redact PII from the LLM-facing copy only, AFTER storage + customer matching.
+    
     const forLlm = resolveRedactionPolicy(conn.config).enabled
       ? redactForLlm(raw, src.redactRaw, await getCustomerSlug(item.customerId))
       : raw;
@@ -245,7 +245,7 @@ tool(
     const raw = await src.fetchItem(external_id);
     const item = await ingestWorkItem(conn.id, raw);
     await recordRun({ workItemId: item.id, userId: await resolveCurrentUserId(), mode: "consult" });
-    // Build the archive-search query from the un-redacted item (stays server-side).
+    
     const firstIncoming = raw.messages.find((m) => m.direction === "incoming")?.bodyText ?? "";
     const query = [raw.title, firstIncoming].filter(Boolean).join(" ");
     const productId = item.productId ?? undefined;
@@ -254,8 +254,8 @@ tool(
       searchReferenceDocs(query, { productId, limit }),
     ]);
     const customerName = await getCustomerName(item.customerId);
-    // Redact the LLM-facing work item AND the retrieved archive content — prior
-    // entries/docs may carry PII saved before redaction was enabled.
+    
+    
     const redact = resolveRedactionPolicy(conn.config).enabled;
     const forLlm = redact
       ? redactForLlm(raw, src.redactRaw, await getCustomerSlug(item.customerId))
@@ -609,8 +609,8 @@ tool(
   async ({ product_slug, team_slug, text, paths, urls }) => {
     const sources = await loadContextSources({ text, paths, urls });
     if (!sources.length) throw badInput("Provide at least one of: text, paths, urls");
-    // No source connection here, so the deployment-wide flag decides. Pattern
-    // scrub only — freeform context declares no requester/author names to match.
+    
+    
     const redact = globalRedactionEnabled();
     const map = new TokenMap();
     return out({
@@ -817,7 +817,7 @@ tool(
 tool(
   "add_source_connection",
   {
-    description: "Register a new source connection. source_type is 'freshdesk' or 'github'. slug is a short unique identifier (e.g. 'my-freshdesk') — it also determines the env var for the API token: FRESHDESK_TOKEN_<SLUG_UPPERCASED> or GITHUB_TOKEN_<SLUG_UPPERCASED> (non-alphanumerics become underscores). For Freshdesk: set base_url to your tenant root URL (e.g. https://your-domain.freshdesk.com). For GitHub: omit base_url and set config to {\"repos\":[\"owner/repo\"]}. The token is never stored in the DB; remind the user to set the env var before syncing.",
+    description: "Register a new source connection. source_type is 'freshdesk' or 'github'. slug is a short unique identifier (e.g. 'my-freshdesk') — it also determines the env var for the API token: FRESHDESK_TOKEN_<SLUG_UPPERCASED> or GITHUB_TOKEN_<SLUG_UPPERCASED> (non-alphanumerics become underscores). For Freshdesk: set base_url to your tenant root URL (e.g. https:
     inputSchema: {
       source_type: z.enum(["freshdesk", "github"]),
       slug: z.string(),
@@ -859,13 +859,13 @@ tool(
 
 export { server };
 
-// Only attach the stdio transport when run as the entrypoint, so importing this
-// module in tests doesn't hijack stdin/stdout.
+
+
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
-  // DB-backed settings (e.g. the redaction switch) are materialized into env
-  // once at boot — the redaction check reads process.env synchronously.
-  // Best-effort: the settings table may not exist on not-yet-migrated DBs.
+  
+  
+  
   try {
     await loadSettingsIntoEnv();
   } catch {

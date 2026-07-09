@@ -1,6 +1,6 @@
-// Minimal single-consumer async queue: producers push, one consumer iterates.
-// Used to fan agent events (text, tool activity, approval requests) from the SDK
-// control loop + canUseTool callback into one ordered stream the API route drains.
+
+
+
 export class AsyncQueue<T> {
   private items: T[] = [];
   private resolvers: ((r: IteratorResult<T>) => void)[] = [];
