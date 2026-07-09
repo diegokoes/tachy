@@ -3,7 +3,7 @@ export interface KnowledgeRow {
   work_item_id: string | null;
   product_id?: string | null;
   team_id?: string | null;
-  status: string; // 'draft' | 'approved' | 'rejected' | 'archived' | 'deprecated'
+  status: string; 
   superseded_by?: string | null;
   issue_summary: string | null;
   root_cause: string | null;

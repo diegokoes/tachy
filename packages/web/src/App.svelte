@@ -18,12 +18,12 @@
     { key: "admin", label: "Admin" },
     { key: "theme", label: "Theme" },
   ];
-  // Plain members don't get the Admin view; global admins and team mini-admins
-  // do, scoped inside (the API enforces this server-side too).
+  
+  
   const nav = $derived(!isCurator() && session.me ? NAV_ALL.filter((n) => n.key !== "admin") : NAV_ALL);
 
-  // Wizard shows on un-bootstrapped instances unless deliberately skipped
-  // (open-mode localhost dev keeps working without setup).
+  
+  
   let wizardSkipped = $state(localStorage.getItem("tachy-skip-wizard") === "1");
   const showWizard = $derived(session.bootstrapped === false && !wizardSkipped);
   const showLogin = $derived(
@@ -41,11 +41,11 @@
   const ACCENT_DEFAULTS: Record<Theme, string> = { dark: "#6ea8fe", light: "#31589e" };
 
   let view = $state<View>("knowledge");
-  // Boot ident on every full page load; skipped for reduced-motion users.
+  
   let splash = $state(!reducedMotion());
   let navEl = $state<HTMLElement>();
-  // Entries start CSS-hidden (no first-paint flash) and wipe in one after
-  // another, top to bottom; the class comes off once the tween owns the styles.
+  
+  
   let navRevealed = $state(false);
 
   function revealNav() {
@@ -69,22 +69,22 @@
     );
   }
 
-  // The app shell mounts late (after session load / wizard / login), so the
-  // nav reveal fires when its element first exists, not on splash completion.
+  
+  
   $effect(() => {
     if (navEl && !splash && !navRevealed) revealNav();
   });
   let theme = $state<Theme>("dark");
-  let patternIdx = $state(0); // -1 = plain background
+  let patternIdx = $state(0); 
   let patternAlpha = $state(0.35);
   let accentColor = $state(ACCENT_DEFAULTS.dark);
   let accentCustomized = $state(false);
   let fontScale = $state(1);
   let border = $state<BorderKey>("none");
 
-  // ASCII frame around the content column. Left/right columns run full height;
-  // top/bottom rows fill between them (all four are overflow-clipped repeats,
-  // so no size measurement is needed).
+  
+  
+  
   type BorderKey = "none" | "tilde" | "blocks" | "hash";
   const BORDERS: Record<Exclude<BorderKey, "none">, { top: string; bottom: string; left: string; right: string }> = {
     tilde: { top: "~", bottom: "~", left: "~", right: "~" },
@@ -106,7 +106,7 @@
     localStorage.setItem("tachy-border", k);
   }
 
-  // Accent is restricted to the ANSI 16 palette (VS Code terminal values).
+  
   const ANSI16: { name: string; hex: string }[] = [
     { name: "black", hex: "#000000" },
     { name: "red", hex: "#cd3131" },
@@ -128,28 +128,28 @@
 
   const PATTERN_LABELS = ["brackets", "rope", "slashes", "bricks", "stars"];
 
-  // Preview from the first content-bearing lines, windowed to where the
-  // content starts (sparse patterns like the starfield begin with blanks).
+  
+  
   function patternPreview(idx: number): string {
     const lines = PATTERNS[idx].split("\n").filter((l) => l.trim() !== "").slice(0, 5);
     const start = Math.min(...lines.map((l) => l.search(/\S/)).filter((n) => n >= 0));
     return lines.map((l) => l.slice(start, start + 26)).join("\n");
   }
 
-  // ── ASCII background generation ─────────────────────────────────────────
-  // Each row is a single repeating unit. makeBg tiles it to fill large screens.
+  
+  
   function makeBg(rows: string[], vRep = 60): string {
     const wide = rows.map(u => u.repeat(Math.ceil(650 / u.length) + 2));
     return (wide.join("\n") + "\n").repeat(vRep);
   }
 
-  const P0 = makeBg([" |___  |", "    _|_|", "_  | |__", "_|_|    "]); // brackets
-  const P1 = makeBg(["  |  ", "`.__.' _.'", ',-"  ,-""-', "  |  "]); // rope
-  const P2 = makeBg(["   /   __/  ", "__   \\__/  \\", "  \\__/  \\   ", "__/     /   "]); // slashes
-  const P3 = makeBg(["__|__|   ", " __|__|  ", "|   __|__", "|__|   __"]); // bricks
+  const P0 = makeBg([" |___  |", "    _|_|", "_  | |__", "_|_|    "]); 
+  const P1 = makeBg(["  |  ", "`.__.' _.'", ',-"  ,-""-', "  |  "]); 
+  const P2 = makeBg(["   /   __/  ", "__   \\__/  \\", "  \\__/  \\   ", "__/     /   "]); 
+  const P3 = makeBg(["__|__|   ", " __|__|  ", "|   __|__", "|__|   __"]); 
 
-  // Starfield — one hand-drawn tile. Lines are padded to a common width so all
-  // rows repeat with the same period and multi-line glyphs stay aligned.
+  
+  
   const STAR_LINES = [
     "                        .",
     "  .     '                           '                   **",
@@ -238,7 +238,7 @@
     theme = t;
     document.documentElement.dataset.theme = t;
     localStorage.setItem("tachy-theme", t);
-    // A non-customized accent follows the theme so contrast stays sane.
+    
     if (!accentCustomized) applyAccent(ACCENT_DEFAULTS[t]);
   }
 
@@ -415,7 +415,7 @@
 {/if}
 
 <style>
-  /* Fixed ASCII texture layer — behind everything */
+  
   .ascii-bg {
     position: fixed;
     inset: 0;
@@ -430,7 +430,7 @@
     user-select: none;
   }
 
-  /* Main layout — above the texture */
+  
   .app {
     height: 100vh;
     position: relative;
@@ -443,11 +443,9 @@
     top: 50%;
     transform: translateY(-50%);
     z-index: 10;
-    /* Solid (not translucent) so the nav reads cleanly over the pattern. */
+    
     background: var(--aside-bg);
-    /* Raised-panel look with the depth thrown to the bottom-right: a thick
-       edge there (light rim on dark, dark rim on light) plus a groove just
-       inside it. Top/left stay a faint hairline; the left is the screen edge. */
+
     border: 1px solid var(--border);
     border-left: none;
     border-right: 6px solid var(--aside-edge-hi);
@@ -542,7 +540,7 @@
   .edge.top { top: 0; }
   .edge.bottom { bottom: 0; }
 
-  /* Non-chat views: children just stack; keep them from stretching oddly. */
+  
   main > :global(*) { flex-shrink: 0; }
   main > :global(.chat) { flex: 1 1 auto; min-height: 0; }
 
@@ -650,7 +648,7 @@
 
   .slider-row input[type="range"] { accent-color: var(--accent); width: 200px; }
 
-  /* 5 lines × 11px fit the 56px preview card exactly. */
+  
   .border-preview { font-size: 10px; line-height: 1.1; }
 
   .ansi-grid {

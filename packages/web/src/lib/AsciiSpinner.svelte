@@ -1,15 +1,15 @@
 <script lang="ts">
-  // Reusable loading spinner, centered on the screen: a CP437 double-line box
-  // with a ░▒▓█ comet sweeping through it and a classic |/-\ glyph by the
-  // label. Colors are DOS ANSI16 only (bright variants in dark mode, base
-  // variants in light where brights wash out). Shows immediately  the views
-  // enforce a minimum loading window instead, so it never blinks.
+  
+  
+  
+  
+  
   import { onMount } from "svelte";
   import { reducedMotion } from "./gsap";
 
   let { label = "loading" }: { label?: string } = $props();
 
-  const W = 16; // bar cells inside the box
+  const W = 16; 
   const EDGE = "═".repeat(W + 2);
 
   let tick = $state(0);
@@ -17,7 +17,7 @@
   let reduced = $state(false);
 
   const bar = $derived.by(() => {
-    const p = tick % (W + 5); // comet fully exits right before wrapping
+    const p = tick % (W + 5); 
     let s = "";
     for (let i = 0; i < W; i++) {
       const d = p - i;
@@ -28,7 +28,7 @@
 
   onMount(() => {
     reduced = reducedMotion();
-    visible = true; // still fades in via the CSS transition
+    visible = true; 
     const iv = reduced ? undefined : setInterval(() => tick++, 90);
     return () => {
       if (iv !== undefined) clearInterval(iv);

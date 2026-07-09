@@ -16,11 +16,11 @@
   let showForm = $state(false);
   let form = $state({ team_slug: "", slug: "", name: "", aliases: "" });
 
-  let editing = $state<string | null>(null); // product slug
+  let editing = $state<string | null>(null); 
   let editName = $state("");
   let editAliases = $state("");
 
-  // mini-admins only create/edit within their teams; the server enforces too
+  
   const myTeams = $derived(teams.filter((tm) => canCurateScope({ team_slug: tm.slug })));
   const canEditRow = (p: Product) => canCurateScope({ team_slug: p.team_slug });
 
@@ -55,7 +55,7 @@
     }
   }
 
-  // The name field holds "name | slug"; the slug part is optional.
+  
   function parseNameSlug(v: string): { name: string; slug: string } {
     const i = v.indexOf("|");
     return i === -1

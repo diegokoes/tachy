@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Small reusable chip row for arrays like tags / symptoms / signals.
+  
   let { label, items }: { label: string; items: string[] | null | undefined } = $props();
 </script>
 

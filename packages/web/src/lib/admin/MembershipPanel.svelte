@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Team membership editor - also the mini-admin grants UI: setting someone's
-  // team role to "admin" delegates curation of that team to them.
+  
+  
   import { onMount } from "svelte";
   import { api } from "../api";
   import { session, canCurateScope } from "../session.svelte";
@@ -21,7 +21,7 @@
   let addRole = $state("member");
   let addFilter = $state("");
 
-  // mini-admins manage only their own teams; global admins see all
+  
   const myTeams = $derived(
     session.me?.role === "admin" || !session.me
       ? teams
@@ -68,7 +68,7 @@
       await loadMembers();
     } catch (e) {
       error = errText(e);
-      await loadMembers(); // revert optimistic select state
+      await loadMembers(); 
     }
   }
 

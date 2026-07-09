@@ -1,7 +1,7 @@
 <script lang="ts">
-  // Admin shell: group nav (Org | Taxonomy | People | System) + section subtabs.
-  // Each panel is self-contained (own data + state); the shell only decides
-  // which sections the caller may see and hosts the shared table styling.
+  
+  
+  
   import { session } from "../session.svelte";
   import { t, showCustomer } from "../terms";
   import TeamsPanel from "./TeamsPanel.svelte";
@@ -99,7 +99,7 @@
   .grp-label {
     font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.09em;
     color: var(--muted); padding: 0.22rem 0.75rem;
-    border: 1px solid var(--border); border-radius: 3px; white-space: nowrap;
+    white-space: nowrap;
   }
   /* Box-drawing stem from the root down to the sections' shelf. */
   .stem {

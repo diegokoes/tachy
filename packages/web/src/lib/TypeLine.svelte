@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Types a line of text character by character while a solid block handle
-  // sweeps across (stepped, terminal-style), then stays behind it blinking.
+  
+  
   import { onMount } from "svelte";
   import { gsap, SplitText, reducedMotion } from "./gsap";
 

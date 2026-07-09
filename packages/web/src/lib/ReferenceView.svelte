@@ -15,7 +15,7 @@
   let error = $state<string | null>(null);
   let mode = $state<"search" | "browse">("browse");
 
-  // curation state
+  
   let creating = $state(false);
   let editing = $state(false);
   let mutating = $state(false);
@@ -27,7 +27,7 @@
     !!selected && canCurateScope({ team_id: selected.team_id, team_slug: productTeamSlug }),
   );
 
-  // Spinner stays up at least this long so fast queries don't blink it.
+  
   const MIN_SPIN_MS = 450;
   let seq = 0;
 
@@ -43,7 +43,7 @@
       if (status && mode === "browse") p.set("status", status);
       const path = mode === "search" ? `/reference/search?${p}` : `/reference?${p}`;
       const result = await api.get<ReferenceRow[]>(path);
-      if (mySeq !== seq) return; // superseded by a newer query
+      if (mySeq !== seq) return; 
       rows = result;
     } catch (e) {
       if (mySeq === seq) error = e instanceof Error ? e.message : String(e);
@@ -112,8 +112,8 @@
 
   const fmtDate = (d?: string) => (d ? new Date(d).toISOString().slice(0, 10) : "");
 
-  // Live search, debounced; Enter skips the debounce. The very first run (on
-  // mount) fires immediately  the spinner is already up, don't sit on it.
+  
+  
   let timer: ReturnType<typeof setTimeout> | undefined;
   let ranOnce = false;
   $effect(() => {

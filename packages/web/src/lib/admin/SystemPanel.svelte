@@ -8,7 +8,7 @@
   let system = $state<SystemInfo | null>(null);
   let loading = $state(false);
   let error = $state<string | null>(null);
-  // Editable drafts for the text settings; applied per-row on demand.
+  
   let draft = $state<Record<string, string>>({});
 
   function syncDraft() {
@@ -39,7 +39,7 @@
       const res = await api.put<{ settings: SystemInfo["settings"] }>(`/settings/${key}`, { value });
       if (system) system = { ...system, settings: res.settings };
       syncDraft();
-      // the deployment profile drives terminology app-wide - refresh the session config
+      
       if (key === "deployment_profile") await initSession();
     } catch (e) {
       error = errText(e);

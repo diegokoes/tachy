@@ -1,7 +1,7 @@
 <script lang="ts">
-  // First-run wizard: creates the admin account and the DB-backed runtime
-  // settings that used to be env flags. Secrets (DB URL, tokens, OIDC) stay in
-  // .env — the final step says so. Skipping keeps the instance in open mode.
+  
+  
+  
   import TypeLine from "./TypeLine.svelte";
   import AsciiSelect from "./AsciiSelect.svelte";
   import { initSession } from "./session.svelte";
@@ -13,7 +13,7 @@
   let error = $state<string | null>(null);
   let busy = $state(false);
 
-  // step state
+  
   let profile = $state<"support" | "engineering">("support");
   let email = $state("");
   let displayName = $state("");
@@ -27,8 +27,8 @@
   let agentEffort = $state("medium");
   let allowedModels = $state("");
 
-  // The session config isn't live pre-bootstrap, so the wizard carries its own
-  // terminology map (same values as lib/terms.ts).
+  
+  
   const WIZ_TERMS = {
     support: { team: "team", product: "product", products: "products" },
     engineering: { team: "organization", product: "repository", products: "repositories" },
@@ -40,7 +40,7 @@
 
   const namedProducts = $derived(products.filter((p) => p.name.trim()));
 
-  // Per-field inline validation (shown under the inputs, not one terse string).
+  
   const emailBad = $derived(email.length > 0 && !/\S+@\S+\.\S+/.test(email));
   const passwordBad = $derived(password.length > 0 && password.length < 10);
   const matchBad = $derived(password2.length > 0 && password !== password2);

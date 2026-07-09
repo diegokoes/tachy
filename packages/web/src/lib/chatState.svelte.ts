@@ -1,6 +1,6 @@
-// Chat state lives at module level so the conversation survives ChatView
-// being unmounted on view switches — and a stream in flight keeps appending
-// here while another view is showing. Cleared only on full page reload.
+
+
+
 
 export type Entry =
   | { kind: "user"; text: string }

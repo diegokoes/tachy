@@ -38,12 +38,12 @@
     if (productId) p.set("product_id", productId);
     if (productId && component) p.set("component", component);
     if (version.trim()) p.set("affected_version", version.trim());
-    // /search has a fixed approved+deprecated scope; status only applies to list.
+    
     if (status && !q.trim()) p.set("status", status);
     return p.toString();
   }
 
-  // Spinner stays up at least this long so fast queries don't blink it.
+  
   const MIN_SPIN_MS = 450;
   let seq = 0;
 
@@ -53,12 +53,12 @@
     loading = true;
     error = null;
     try {
-      // /search needs a query; empty query → browse the latest via list.
+      
       mode = q.trim() ? "search" : "browse";
       const path = mode === "search" ? `/knowledge/search?${qs()}` : `/knowledge?${qs()}`;
       let result = await api.get<KnowledgeRow[]>(path);
       if (mode === "search" && status) result = result.filter((r) => r.status === status);
-      if (mySeq !== seq) return; // superseded by a newer query
+      if (mySeq !== seq) return; 
       rows = result;
     } catch (e) {
       if (mySeq === seq) error = e instanceof Error ? e.message : String(e);
@@ -85,7 +85,7 @@
     }
   }
 
-  // the component filter is scoped to the chosen product (slugs resolve per product)
+  
   async function onProductChange(id: string) {
     component = "";
     components = [];
@@ -117,8 +117,8 @@
     loadProducts();
   });
 
-  // Live search, debounced; Enter skips the debounce. The very first run (on
-  // mount) fires immediately  the spinner is already up, don't sit on it.
+  
+  
   let timer: ReturnType<typeof setTimeout> | undefined;
   let ranOnce = false;
   $effect(() => {

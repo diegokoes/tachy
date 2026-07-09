@@ -17,14 +17,14 @@
   let comment = $state("");
   let saving = $state(false);
 
-  // curation state
+  
   let editing = $state(false);
   let mutating = $state(false);
   let mutateError = $state<string | null>(null);
   let conflict = $state(false);
   let productTeamSlug = $state<string | null>(null);
 
-  // deprecate mini-form
+  
   let deprecating = $state(false);
   let deprecateReason = $state("");
   let supersedeQuery = $state("");
@@ -41,8 +41,8 @@
     try {
       entry = await api.get<KnowledgeRow>(`/knowledge/${id}`);
       feedback = await api.get<Feedback[]>(`/knowledge/${id}/feedback`);
-      // resolve the owning team for scope-aware controls (product-scoped entries
-      // carry no team_id of their own)
+      
+      
       if (isCurator() && entry.product_id && !entry.team_id) {
         const products = await api.get<NamedRow[]>("/products");
         productTeamSlug = (products.find((p) => p.id === entry!.product_id)?.team_slug as string) ?? null;

@@ -1,13 +1,13 @@
 <script lang="ts">
-  // Terminal-style scrollbar: ▲/▼ caps, ░ track, segmented █ thumb in accent.
-  // The target keeps native scrolling (wheel/keys) with its real bar hidden;
-  // this mirrors it and supports click-to-jump, drag, and paging via the arrows.
+  
+  
+  
   let { target, controls }: { target: HTMLElement | undefined; controls?: string } = $props();
 
-  const ROW = 16; // px per character cell (font is 12px in a 16px line → visible gaps)
+  const ROW = 16; 
 
   let bar = $state<HTMLDivElement>();
-  let rows = $state(0); // track rows, excluding the two arrow caps
+  let rows = $state(0); 
   let thumbStart = $state(0);
   let thumbLen = $state(1);
   let visible = $state(false);
@@ -57,7 +57,7 @@
     el.addEventListener("scroll", update);
     const ro = new ResizeObserver(update);
     ro.observe(el);
-    // Streamed replies grow scrollHeight without scroll events.
+    
     const mo = new MutationObserver(update);
     mo.observe(el, { childList: true, subtree: true, characterData: true });
     return () => {

@@ -18,7 +18,7 @@
   let editSlug = $state("");
   let editDescription = $state("");
 
-  // Pending slug rename awaiting confirmation; RenameSlugModal fetches the impact.
+  
   let rename = $state<null | { from: string; to: string; description: string }>(null);
 
   async function load() {
@@ -52,7 +52,7 @@
   async function save(r: Pattern) {
     const description = editDescription.trim();
     const to = editSlug.trim();
-    // A slug change cascades to referencing entries — hand off to the confirm modal.
+    
     if (to && to !== r.slug) {
       rename = { from: r.slug, to, description };
       return;
@@ -70,7 +70,7 @@
     }
   }
 
-  // Applied after the slug rename succeeds: keep the (possibly edited) description.
+  
   async function afterRename() {
     if (!rename) return;
     if (rename.description) await api.patch(`/resolution-patterns/${rename.to}`, { description: rename.description });
@@ -90,7 +90,7 @@
       await api.delete(`/resolution-patterns/${slug}`);
       await load();
     } catch (err) {
-      error = errText(err); // "used by N entries" 409 shows verbatim
+      error = errText(err); 
     }
   }
 

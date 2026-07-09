@@ -1,6 +1,6 @@
 <script lang="ts">
-  // Search loading state: "tachy" chars spiral in, snap to a grid, scatter, loop.
-  // Fades in after a short delay so fast queries never flash it.
+  
+  
   import { onMount } from "svelte";
   import { gsap, SplitText, reducedMotion } from "./gsap";
 
@@ -25,7 +25,7 @@
 
     const tl = gsap.timeline({ repeat: -1 });
     tl.set(chars, { opacity: 0, x: 0, y: 0, scale: 1, rotate: 0 });
-    // 1 — spiral in
+    
     tl.to(chars, {
       opacity: 1,
       x: (i) => (i * 1.6 + 14) * Math.cos(i * 5),
@@ -35,7 +35,7 @@
       duration: 1.6,
       stagger: 0.004,
     });
-    // 2 — snap into a grid
+    
     tl.to(chars, {
       x: (i) => (i % cols) * cell - (cols * cell) / 2 + cell / 2,
       y: (i) => Math.floor(i / cols) * cell - cell,
@@ -44,7 +44,7 @@
       duration: 1.1,
       stagger: -0.006,
     }, "-=0.3");
-    // 3 — scatter and go around again
+    
     tl.to(chars, {
       opacity: 0,
       x: (i) => gsap.utils.random(-90, 90, 5),

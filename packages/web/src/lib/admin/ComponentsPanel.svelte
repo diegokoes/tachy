@@ -18,7 +18,7 @@
   let showForm = $state(false);
   let form = $state({ slug: "", name: "", parent: "", description: "", aliases: "" });
 
-  let editing = $state<string | null>(null); // component slug
+  let editing = $state<string | null>(null); 
   let edit = $state({ slug: "", name: "", parent: "", description: "", aliases: "" });
 
   let rename = $state<null | { from: string; to: string }>(null);
@@ -83,7 +83,7 @@
 
   async function save(r: Component) {
     const to = edit.slug.trim();
-    // Slug rename rewrites the slug wherever it tagged entries/docs — confirm first.
+    
     if (to && to !== r.slug) {
       rename = { from: r.slug, to };
       return;
@@ -101,7 +101,7 @@
     }
   }
 
-  // After the slug rename, apply the other field edits at the new slug.
+  
   async function afterRename() {
     if (!rename) return;
     await api.patch(`/products/${productSlug}/components/${rename.to}`, editPatch());
@@ -121,7 +121,7 @@
       await api.delete(`/products/${productSlug}/components/${slug}`);
       await load();
     } catch (err) {
-      error = errText(err); // guarded 409 shows verbatim
+      error = errText(err); 
     }
   }
 
