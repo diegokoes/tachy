@@ -1,11 +1,11 @@
-// The security boundary. The agent is granted ONLY these tachy MCP tools; every
-// built-in Claude Code tool (file/bash/web) is disabled. Reads auto-run; writes
-// require explicit human approval (canUseTool → frontend). Anything not listed is
-// denied by canUseTool regardless of what the model attempts.
+
+
+
+
 
 export const MCP_SERVER = "tachy";
 
-// Auto-run: read/consult/search. No side effects.
+
 export const READ_TOOLS = [
   "search_knowledge",
   "get_context",
@@ -27,7 +27,7 @@ export const READ_TOOLS = [
   "list_source_product_maps",
 ] as const;
 
-// Require human approval before running (persist or write-back).
+
 export const WRITE_TOOLS = [
   "save_knowledge_entry",
   "update_knowledge_entry",
@@ -48,8 +48,8 @@ export const WRITE_TOOLS = [
   "record_analysis_run",
 ] as const;
 
-// Built-in Claude Code tools we explicitly refuse — belt-and-suspenders alongside
-// canUseTool's default-deny, so the model isn't even offered file/shell/web access.
+
+
 export const DISALLOWED_BUILTINS = [
   "Bash",
   "BashOutput",
@@ -75,13 +75,13 @@ const WRITE = new Set<string>(WRITE_TOOLS);
 
 export type ToolClass = "read" | "write" | "denied";
 
-// Classify a fully-qualified tool name from a tool call.
+
 export function classify(toolName: string): { cls: ToolClass; base: string } {
   const prefix = `mcp__${MCP_SERVER}__`;
   if (!toolName.startsWith(prefix)) return { cls: "denied", base: toolName };
   const base = toolName.slice(prefix.length);
   if (READ.has(base)) return { cls: "read", base };
   if (WRITE.has(base)) return { cls: "write", base };
-  // Unknown tachy tool → treat as a write (approval-gated), never silently run.
+  
   return { cls: "write", base };
 }
