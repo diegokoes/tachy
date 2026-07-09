@@ -8,3 +8,6 @@ dist/
 local_cache/
 backups/
 db/seed.local.sql
+elaborate-a-plan-the-jazzy-wozniak.md
+.gitignore
+tachy_plan.md
