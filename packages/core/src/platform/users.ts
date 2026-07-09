@@ -6,7 +6,6 @@ import { hashPassword } from "./passwords";
 export const USER_ROLES = ["admin", "member"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
-
 export const TEAM_ROLES = ["admin", "member"] as const;
 export type TeamRole = (typeof TEAM_ROLES)[number];
 
@@ -20,7 +19,10 @@ export interface UserRow {
   created_at: string;
 }
 
-export async function upsertUser(email: string, displayName?: string): Promise<string> {
+export async function upsertUser(
+  email: string,
+  displayName?: string,
+): Promise<string> {
   const [row] = await sql`
     insert into users (email, display_name)
     values (${email}, ${displayName ?? null})
@@ -33,7 +35,6 @@ export async function upsertUser(email: string, displayName?: string): Promise<s
 
 let cachedUserId: string | null | undefined;
 
-
 export async function resolveCurrentUserId(): Promise<string | null> {
   if (cachedUserId !== undefined) return cachedUserId;
   cachedUserId = env.userEmail ? await upsertUser(env.userEmail) : null;
@@ -41,7 +42,8 @@ export async function resolveCurrentUserId(): Promise<string | null> {
 }
 
 export async function countAdmins(): Promise<number> {
-  const [row] = await sql`select count(*)::int as n from users where role = 'admin' and not disabled`;
+  const [row] =
+    await sql`select count(*)::int as n from users where role = 'admin' and not disabled`;
   return row.n as number;
 }
 
@@ -67,14 +69,21 @@ export async function createUser(input: {
     on conflict (email) do nothing
     returning id, email, display_name, role, disabled, (password_hash is not null) as has_password, created_at
   `;
-  if (rows.length === 0) throw badInput(`a user with email '${input.email}' already exists`);
+  if (rows.length === 0)
+    throw badInput(`a user with email '${input.email}' already exists`);
   return rows[0] as unknown as UserRow;
 }
 
-
-export async function getUserByEmail(email: string): Promise<
-  { id: string; email: string; display_name: string | null; role: UserRole; disabled: boolean; password_hash: string | null } | null
-> {
+export async function getUserByEmail(
+  email: string,
+): Promise<{
+  id: string;
+  email: string;
+  display_name: string | null;
+  role: UserRole;
+  disabled: boolean;
+  password_hash: string | null;
+} | null> {
   const [row] = await sql`
     select id, email, display_name, role, disabled, password_hash
     from users where email = ${email}
@@ -82,7 +91,9 @@ export async function getUserByEmail(email: string): Promise<
   return (row as never) ?? null;
 }
 
-async function requireUser(id: string): Promise<{ role: UserRole; disabled: boolean }> {
+async function requireUser(
+  id: string,
+): Promise<{ role: UserRole; disabled: boolean }> {
   const [row] = await sql`select role, disabled from users where id = ${id}`;
   if (!row) throw notFound(`user ${id} not found`);
   return row as never;
@@ -90,26 +101,40 @@ async function requireUser(id: string): Promise<{ role: UserRole; disabled: bool
 
 export async function setUserRole(id: string, role: UserRole): Promise<void> {
   const current = await requireUser(id);
-  
-  if (role !== "admin" && current.role === "admin" && !current.disabled && (await countAdmins()) <= 1)
+
+  if (
+    role !== "admin" &&
+    current.role === "admin" &&
+    !current.disabled &&
+    (await countAdmins()) <= 1
+  )
     throw badInput("cannot demote the last admin");
   await sql`update users set role = ${role} where id = ${id}`;
 }
 
-export async function setUserPassword(id: string, password: string): Promise<void> {
+export async function setUserPassword(
+  id: string,
+  password: string,
+): Promise<void> {
   await requireUser(id);
   const hash = await hashPassword(password);
   await sql`update users set password_hash = ${hash} where id = ${id}`;
 }
 
-export async function setUserDisabled(id: string, disabled: boolean): Promise<void> {
+export async function setUserDisabled(
+  id: string,
+  disabled: boolean,
+): Promise<void> {
   const current = await requireUser(id);
-  if (disabled && current.role === "admin" && !current.disabled && (await countAdmins()) <= 1)
+  if (
+    disabled &&
+    current.role === "admin" &&
+    !current.disabled &&
+    (await countAdmins()) <= 1
+  )
     throw badInput("cannot disable the last admin");
   await sql`update users set disabled = ${disabled} where id = ${id}`;
 }
-
-
 
 export interface TeamMemberRow {
   user_id: string;
@@ -118,7 +143,9 @@ export interface TeamMemberRow {
   team_role: TeamRole;
 }
 
-export async function listTeamMembers(teamSlug: string): Promise<TeamMemberRow[]> {
+export async function listTeamMembers(
+  teamSlug: string,
+): Promise<TeamMemberRow[]> {
   const rows = await sql`
     select u.id as user_id, u.email, u.display_name, tm.role as team_role
     from team_members tm
@@ -130,8 +157,11 @@ export async function listTeamMembers(teamSlug: string): Promise<TeamMemberRow[]
   return rows as unknown as TeamMemberRow[];
 }
 
-
-export async function setTeamMember(teamSlug: string, email: string, role: TeamRole | null): Promise<void> {
+export async function setTeamMember(
+  teamSlug: string,
+  email: string,
+  role: TeamRole | null,
+): Promise<void> {
   const [team] = await sql`select id from teams where slug = ${teamSlug}`;
   if (!team) throw notFound(`team '${teamSlug}' not found`);
   const user = await getUserByEmail(email);

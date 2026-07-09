@@ -1,17 +1,14 @@
 import type { Context } from "hono";
 import {
-  getUserByEmail, env, forbidden,
-  assertCanEditScope, assertCanManageTeamBySlug, assertAnyTeamAdmin,
+  getUserByEmail,
+  env,
+  forbidden,
+  assertCanEditScope,
+  assertCanManageTeamBySlug,
+  assertAnyTeamAdmin,
   type EntryScope,
 } from "@tachy/core";
 import { getIdentity } from "./auth";
-
-
-
-
-
-
-
 
 export async function callerUserId(c: Context): Promise<string | null> {
   const email = getIdentity(c)?.email ?? env.userEmail;
@@ -29,12 +26,18 @@ async function memberUserId(c: Context): Promise<string> {
   return id;
 }
 
-export async function assertScopeEditor(c: Context, scope: EntryScope): Promise<void> {
+export async function assertScopeEditor(
+  c: Context,
+  scope: EntryScope,
+): Promise<void> {
   if (isAdminIdentity(c)) return;
   await assertCanEditScope(await memberUserId(c), scope);
 }
 
-export async function assertTeamAdmin(c: Context, teamSlug: string): Promise<void> {
+export async function assertTeamAdmin(
+  c: Context,
+  teamSlug: string,
+): Promise<void> {
   if (isAdminIdentity(c)) return;
   await assertCanManageTeamBySlug(await memberUserId(c), teamSlug);
 }

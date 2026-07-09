@@ -1,11 +1,6 @@
 import { z } from "zod";
 import { badInput } from "../platform/errors";
 
-
-
-
-
-
 export const structuredSchema = z
   .object({
     environment: z
@@ -41,36 +36,45 @@ export const structuredSchema = z
 
 export type Structured = z.infer<typeof structuredSchema>;
 
-
-
 export function parseStructured(value: unknown): Structured {
   if (value == null) return {};
   const res = structuredSchema.safeParse(value);
   if (!res.success) {
-    const issues = res.error.issues.map((i) => `${i.path.join(".") || "structured"}: ${i.message}`).join("; ");
+    const issues = res.error.issues
+      .map((i) => `${i.path.join(".") || "structured"}: ${i.message}`)
+      .join("; ");
     throw badInput(`Invalid structured field: ${issues}`);
   }
   return res.data;
 }
-
-
-
 
 export const RESOLUTION_CLARITIES = ["clear", "partial", "unclear"] as const;
 export const LEARNING_VALUES = ["high", "medium", "low"] as const;
 
 export const cloudSchema = z
   .string()
-  .regex(/^[a-z0-9][a-z0-9._/-]*$/, "environment must be a lowercase slug (e.g. prod, qa, demo/preprod)");
+  .regex(
+    /^[a-z0-9][a-z0-9._/-]*$/,
+    "environment must be a lowercase slug (e.g. prod, qa, demo/preprod)",
+  );
 export const resolutionClaritySchema = z.enum(RESOLUTION_CLARITIES);
 export const learningValueSchema = z.enum(LEARNING_VALUES);
 
-
-
-export const KNOWLEDGE_STATUSES = ["draft", "approved", "rejected", "archived", "deprecated"] as const;
+export const KNOWLEDGE_STATUSES = [
+  "draft",
+  "approved",
+  "rejected",
+  "archived",
+  "deprecated",
+] as const;
 export const REFERENCE_STATUSES = ["draft", "approved", "archived"] as const;
 export const CONFIDENCES = ["low", "medium", "high"] as const;
-export const FEEDBACK_KINDS = ["correction", "rating", "note", "deprecation"] as const;
+export const FEEDBACK_KINDS = [
+  "correction",
+  "rating",
+  "note",
+  "deprecation",
+] as const;
 export const RUN_MODES = ["ingest", "consult", "sync"] as const;
 
 export const knowledgeStatusSchema = z.enum(KNOWLEDGE_STATUSES);

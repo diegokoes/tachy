@@ -86,7 +86,7 @@ Claude Agent SDK.
 ## How it works
 
 A ticket comes in. The agent reads it, works out what is going on, and once you
-approve, writes a structured lesson into tachý. Next time a *similar* ticket
+approve, writes a structured lesson into tachý. Next time a _similar_ ticket
 appears, the agent asks tachý "have we seen anything like this?" and gets the
 relevant past lessons back. Two loops around work items, plus a third way in
 that skips the ticket entirely:
@@ -179,9 +179,21 @@ To run the MCP server in Docker instead, point your MCP config at `docker run`:
   "mcpServers": {
     "tachy": {
       "command": "docker",
-      "args": ["run", "-i", "--rm", "--env-file", ".env",
-                "-e", "DATABASE_URL=postgres://tachy:tachy@postgres:5432/tachy",
-                "--network", "tachy", "diegokoes/tachy", "npm", "run", "mcp"]
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--env-file",
+        ".env",
+        "-e",
+        "DATABASE_URL=postgres://tachy:tachy@postgres:5432/tachy",
+        "--network",
+        "tachy",
+        "diegokoes/tachy",
+        "npm",
+        "run",
+        "mcp"
+      ]
     }
   }
 }
@@ -311,30 +323,30 @@ docker compose run --rm cli npm run sync backup     # lands in ./backups on the 
 Copy `.env.example` to `.env`. Secrets only ever come from the environment, never
 from the database. Non-secret **runtime settings** (PII redaction, agent
 model/effort/allowlist, org name) live in the database: set them in the setup
-wizard or **Admin › System**. The matching env vars below act as *fallback
-defaults* until a DB value is set (the System tab shows which source wins).
+wizard or **Admin › System**. The matching env vars below act as _fallback
+defaults_ until a DB value is set (the System tab shows which source wins).
 
-| Variable | Used by | Purpose |
-| --- | --- | --- |
-| `DATABASE_URL` | all | Postgres connection string. |
-| `PORT` | api | HTTP API port (default 8787). |
-| `TACHY_USER_EMAIL` | core | Attribution for the standalone MCP server (`created_by`). Optional; web/SSO users are attributed from their login. |
-| `TACHY_API_TOKEN` | api | Bearer token for the REST API and automation. |
-| `TACHY_AUTH_MODE` | api | `sso` \| `token` \| `open`. Optional; auto-derived from what is set. |
-| `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | api | Microsoft Entra (or any OIDC) SSO. Enables interactive login. |
-| `OIDC_REDIRECT_URI` / `OIDC_SCOPES` | api | OIDC redirect (register in Entra) and scopes. Optional. |
-| `TACHY_SESSION_SECRET` | api | Session-cookie signing secret (32+ chars). Signs SSO and password-login sessions; unset means an ephemeral secret (sessions reset on restart). |
-| `ANTHROPIC_API_KEY` | agent | Auth for the server-side agent. If unset, the server's Claude Code login is used. |
-| `TACHY_REDACT` | core | *Fallback default* for the DB setting `redaction_global`. `true` forces PII and secret redaction on for **every** connection and for connection-less tools (`ingest_context`, retrieved search results). The deployment-wide compliance switch. |
-| `TACHY_AGENT_MODEL` | agent | *Fallback default* for `agent_model` (default `claude-sonnet-5`). |
-| `TACHY_AGENT_EFFORT` | agent | *Fallback default* for `agent_effort`: `low` \| `medium` \| `high` \| `xhigh` \| `max` (default `medium`). |
-| `TACHY_ALLOWED_MODELS` | agent | *Fallback default* for `allowed_models` (comma-separated; empty means no restriction). |
-| `TACHY_UPLOAD_DIR` | api | Where Chat uploads are staged for the agent. Optional (OS tmp). |
-| `FRESHDESK_TOKEN[_SLUG]` | freshdesk | Freshdesk API token (per-source or shared). |
-| `GITHUB_TOKEN[_SLUG]` | github | GitHub PAT (per-source or shared). |
-| `FASTEMBED_CACHE` | core | Where the embedding model is cached. Optional. |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | compose | Configure the bundled Postgres container. Keep consistent with `DATABASE_URL`. |
-| `TACHY_IMAGE` | compose | Override the app image (default `diegokoes/tachy:latest`). |
+| Variable                                                | Used by   | Purpose                                                                                                                                                                                                                                         |
+| ------------------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                          | all       | Postgres connection string.                                                                                                                                                                                                                     |
+| `PORT`                                                  | api       | HTTP API port (default 8787).                                                                                                                                                                                                                   |
+| `TACHY_USER_EMAIL`                                      | core      | Attribution for the standalone MCP server (`created_by`). Optional; web/SSO users are attributed from their login.                                                                                                                              |
+| `TACHY_API_TOKEN`                                       | api       | Bearer token for the REST API and automation.                                                                                                                                                                                                   |
+| `TACHY_AUTH_MODE`                                       | api       | `sso` \| `token` \| `open`. Optional; auto-derived from what is set.                                                                                                                                                                            |
+| `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | api       | Microsoft Entra (or any OIDC) SSO. Enables interactive login.                                                                                                                                                                                   |
+| `OIDC_REDIRECT_URI` / `OIDC_SCOPES`                     | api       | OIDC redirect (register in Entra) and scopes. Optional.                                                                                                                                                                                         |
+| `TACHY_SESSION_SECRET`                                  | api       | Session-cookie signing secret (32+ chars). Signs SSO and password-login sessions; unset means an ephemeral secret (sessions reset on restart).                                                                                                  |
+| `ANTHROPIC_API_KEY`                                     | agent     | Auth for the server-side agent. If unset, the server's Claude Code login is used.                                                                                                                                                               |
+| `TACHY_REDACT`                                          | core      | _Fallback default_ for the DB setting `redaction_global`. `true` forces PII and secret redaction on for **every** connection and for connection-less tools (`ingest_context`, retrieved search results). The deployment-wide compliance switch. |
+| `TACHY_AGENT_MODEL`                                     | agent     | _Fallback default_ for `agent_model` (default `claude-sonnet-5`).                                                                                                                                                                               |
+| `TACHY_AGENT_EFFORT`                                    | agent     | _Fallback default_ for `agent_effort`: `low` \| `medium` \| `high` \| `xhigh` \| `max` (default `medium`).                                                                                                                                      |
+| `TACHY_ALLOWED_MODELS`                                  | agent     | _Fallback default_ for `allowed_models` (comma-separated; empty means no restriction).                                                                                                                                                          |
+| `TACHY_UPLOAD_DIR`                                      | api       | Where Chat uploads are staged for the agent. Optional (OS tmp).                                                                                                                                                                                 |
+| `FRESHDESK_TOKEN[_SLUG]`                                | freshdesk | Freshdesk API token (per-source or shared).                                                                                                                                                                                                     |
+| `GITHUB_TOKEN[_SLUG]`                                   | github    | GitHub PAT (per-source or shared).                                                                                                                                                                                                              |
+| `FASTEMBED_CACHE`                                       | core      | Where the embedding model is cached. Optional.                                                                                                                                                                                                  |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`   | compose   | Configure the bundled Postgres container. Keep consistent with `DATABASE_URL`.                                                                                                                                                                  |
+| `TACHY_IMAGE`                                           | compose   | Override the app image (default `diegokoes/tachy:latest`).                                                                                                                                                                                      |
 
 **PII and secret redaction** is off by default and enabled per source connection
 (`config` = `{"redaction": {"enabled": true}}` on the `source_connections` row),

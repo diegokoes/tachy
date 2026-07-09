@@ -1,12 +1,14 @@
-
-
-
-
 export type Entry =
   | { kind: "user"; text: string }
   | { kind: "assistant"; text: string }
   | { kind: "tool"; tool: string }
-  | { kind: "approval"; id: string; tool: string; editable: string; status: "pending" | "approved" | "denied" }
+  | {
+      kind: "approval";
+      id: string;
+      tool: string;
+      editable: string;
+      status: "pending" | "approved" | "denied";
+    }
   | { kind: "error"; text: string };
 
 export const chat = $state({

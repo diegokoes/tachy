@@ -3,15 +3,12 @@ import { sql } from "../platform/db";
 export interface RunInput {
   workItemId?: string | null;
   userId?: string | null;
-  mode: string;                    
+  mode: string;
   model?: string | null;
   inputTokens?: number | null;
   outputTokens?: number | null;
   meta?: Record<string, unknown>;
 }
-
-
-
 
 const PRICING: Record<string, { in: number; out: number }> = {
   haiku: { in: 1, out: 5 },
@@ -35,7 +32,10 @@ export function estimateCostUsd(
 /** Record an analysis run for audit + token accounting. */
 export async function recordRun(i: RunInput) {
   const cost = estimateCostUsd(i.model, i.inputTokens, i.outputTokens);
-  const meta = cost != null ? { ...(i.meta ?? {}), estimated_cost_usd: cost } : (i.meta ?? {});
+  const meta =
+    cost != null
+      ? { ...(i.meta ?? {}), estimated_cost_usd: cost }
+      : (i.meta ?? {});
   const [row] = await sql`
     insert into analysis_runs
       (work_item_id, user_id, mode, model, input_tokens, output_tokens, meta)

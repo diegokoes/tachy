@@ -1,6 +1,3 @@
-
-
-
 import { onUnauthorized } from "./session.svelte";
 
 export class ApiError extends Error {
@@ -19,13 +16,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
   });
   if (res.status === 401) {
-    
     onUnauthorized();
     throw new ApiError(401, "unauthorized");
   }
   const text = await res.text();
   const body = text ? JSON.parse(text) : undefined;
-  if (!res.ok) throw new ApiError(res.status, body?.error ?? res.statusText, body);
+  if (!res.ok)
+    throw new ApiError(res.status, body?.error ?? res.statusText, body);
   return body as T;
 }
 

@@ -2,8 +2,12 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
-  listReferenceDocs, getReferenceDoc, searchReferenceDocs,
-  saveReferenceDoc, updateReferenceDoc, referenceStatusSchema,
+  listReferenceDocs,
+  getReferenceDoc,
+  searchReferenceDocs,
+  saveReferenceDoc,
+  updateReferenceDoc,
+  referenceStatusSchema,
 } from "@tachy/core";
 import { assertScopeEditor, callerUserId } from "../authz";
 
@@ -28,10 +32,11 @@ const referenceUpdateSchema = z.object({
   expectedVersion: z.number().int().optional(),
 });
 
-const csv = (v: string | undefined) => v?.split(",").map((t) => t.trim()).filter(Boolean);
-
-
-
+const csv = (v: string | undefined) =>
+  v
+    ?.split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
 
 export const reference = new Hono()
   .get("/search", async (c) => {
@@ -47,8 +52,11 @@ export const reference = new Hono()
   .get("/:id", async (c) => c.json(await getReferenceDoc(c.req.param("id"))))
   .patch("/:id", zValidator("json", referenceUpdateSchema), async (c) => {
     const id = c.req.param("id");
-    const doc = await getReferenceDoc(id); 
-    await assertScopeEditor(c, { productId: doc.product_id, teamId: doc.team_id });
+    const doc = await getReferenceDoc(id);
+    await assertScopeEditor(c, {
+      productId: doc.product_id,
+      teamId: doc.team_id,
+    });
     return c.json(await updateReferenceDoc(id, c.req.valid("json")));
   })
   .get("/", async (c) => {
@@ -64,6 +72,11 @@ export const reference = new Hono()
   })
   .post("/", zValidator("json", referenceInputSchema), async (c) => {
     const body = c.req.valid("json");
-    await assertScopeEditor(c, { productId: body.productId, teamId: body.teamId });
-    return c.json(await saveReferenceDoc({ ...body, createdById: await callerUserId(c) }));
+    await assertScopeEditor(c, {
+      productId: body.productId,
+      teamId: body.teamId,
+    });
+    return c.json(
+      await saveReferenceDoc({ ...body, createdById: await callerUserId(c) }),
+    );
   });

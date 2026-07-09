@@ -3,28 +3,33 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  KNOWLEDGE_STATUSES, REFERENCE_STATUSES, CONFIDENCES, FEEDBACK_KINDS, RUN_MODES,
-  RESOLUTION_CLARITIES, LEARNING_VALUES, USER_ROLES, TEAM_ROLES,
+  KNOWLEDGE_STATUSES,
+  REFERENCE_STATUSES,
+  CONFIDENCES,
+  FEEDBACK_KINDS,
+  RUN_MODES,
+  RESOLUTION_CLARITIES,
+  LEARNING_VALUES,
+  USER_ROLES,
+  TEAM_ROLES,
 } from "@tachy/core";
-
-
-
-
 
 const here = dirname(fileURLToPath(import.meta.url));
 const schema = readFileSync(join(here, "..", "db", "schema.sql"), "utf8");
 
 function tableBlock(table: string): string {
-  const m = schema.match(new RegExp(`create table ${table} \\(([\\s\\S]*?)\\n\\);`));
+  const m = schema.match(
+    new RegExp(`create table ${table} \\(([\\s\\S]*?)\\n\\);`),
+  );
   if (!m) throw new Error(`table ${table} not found in schema.sql`);
   return m[1];
 }
 
-
-
 function checkValues(table: string, col: string): string[] {
   const block = tableBlock(table);
-  const re = new RegExp(`check \\((?:${col} is null or )?${col} in \\(([^)]*)\\)\\)`);
+  const re = new RegExp(
+    `check \\((?:${col} is null or )?${col} in \\(([^)]*)\\)\\)`,
+  );
   const m = block.match(re);
   if (!m) throw new Error(`no CHECK for ${table}.${col} in schema.sql`);
   return m[1].split(",").map((s) => s.trim().replace(/^'|'$/g, ""));
@@ -54,9 +59,6 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     expect(block).toContain("fixed_version");
   });
 
-  
-  
-  
   it("knowledge_entries.cloud has no CHECK constraint", () => {
     expect(() => checkValues("knowledge_entries", "cloud")).toThrow(/no CHECK/);
   });

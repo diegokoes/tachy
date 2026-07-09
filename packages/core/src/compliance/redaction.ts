@@ -1,8 +1,3 @@
-
-
-
-
-
 import type { RawWorkItem } from "../sources/source";
 
 /** Stable per-item tokens: the same value always maps to the same `[KIND_n]`. */
@@ -24,12 +19,11 @@ export class TokenMap {
 
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 
-
-
 const PHONE_RE =
   /(?:\+\d[\d\s().-]{6,}\d)|(?:\(\d{2,4}\)[\s.-]?\d{3,4}[\s.-]?\d{3,4})|(?:\b\d{3}[\s.-]\d{3,4}[\s.-]\d{3,4}\b)/g;
 
-const PEM_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
+const PEM_RE =
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
 
 const CREDENTIAL_ASSIGN_RE =
   /\b(password|passwd|pwd|secret|token|api[_-]?key|apikey|authorization)\b(\s*[:=]\s*)("[^"\n]+"|'[^'\n]+'|[^\s,;'"]+)/gi;
@@ -67,13 +61,18 @@ function luhnValid(candidate: string): boolean {
 export function scrubText(text: string | undefined, map: TokenMap): string {
   if (!text) return text ?? "";
   let out = text.replace(PEM_RE, (m) => map.token("SECRET", m));
-  
-  
-  
-  out = out.replace(BEARER_RE, (_m, prefix, token) => `${prefix}${map.token("SECRET", token)}`);
+
+  out = out.replace(
+    BEARER_RE,
+    (_m, prefix, token) => `${prefix}${map.token("SECRET", token)}`,
+  );
   out = out.replace(CREDENTIAL_ASSIGN_RE, (m, key, sep, value) =>
-    value.startsWith("[") || /^bearer$/i.test(value) ? m : `${key}${sep}${map.token("SECRET", value)}`);
-  for (const re of KNOWN_KEY_RES) out = out.replace(re, (m) => map.token("SECRET", m));
+    value.startsWith("[") || /^bearer$/i.test(value)
+      ? m
+      : `${key}${sep}${map.token("SECRET", value)}`,
+  );
+  for (const re of KNOWN_KEY_RES)
+    out = out.replace(re, (m) => map.token("SECRET", m));
   out = out.replace(CARD_RE, (m) => (luhnValid(m) ? map.token("CARD", m) : m));
   out = out.replace(EMAIL_RE, (m) => map.token("EMAIL", m));
   out = out.replace(PHONE_RE, (m) => map.token("PHONE", m));
@@ -85,14 +84,20 @@ export function scrubText(text: string | undefined, map: TokenMap): string {
  * kind as the author fields, so mentions map to the same token. Best-effort:
  * only names the item itself declares are matched.
  */
-export function scrubKnownNames(text: string | undefined, names: (string | undefined | null)[], map: TokenMap): string {
+export function scrubKnownNames(
+  text: string | undefined,
+  names: (string | undefined | null)[],
+  map: TokenMap,
+): string {
   if (!text) return text ?? "";
   let out = text;
   for (const name of names) {
     const n = name?.trim();
     if (!n || n.length < 3) continue;
     const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    out = out.replace(new RegExp(`\\b${escaped}\\b`, "gi"), () => map.token("USER", n));
+    out = out.replace(new RegExp(`\\b${escaped}\\b`, "gi"), () =>
+      map.token("USER", n),
+    );
   }
   return out;
 }
@@ -103,10 +108,16 @@ export function scrubKnownNames(text: string | undefined, names: (string | undef
  */
 export function scrubDeep<T>(value: T, map: TokenMap): T {
   if (typeof value === "string") return scrubText(value, map) as unknown as T;
-  if (Array.isArray(value)) return value.map((v) => scrubDeep(v, map)) as unknown as T;
-  if (value !== null && typeof value === "object" && value.constructor === Object) {
+  if (Array.isArray(value))
+    return value.map((v) => scrubDeep(v, map)) as unknown as T;
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    value.constructor === Object
+  ) {
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = scrubDeep(v, map);
+    for (const [k, v] of Object.entries(value as Record<string, unknown>))
+      out[k] = scrubDeep(v, map);
     return out as T;
   }
   return value;
@@ -122,13 +133,16 @@ export interface RedactOptions {
  * Copy of a RawWorkItem with the normalized fields scrubbed; never mutates the
  * input (the original is what gets persisted). `raw` is the caller's job.
  */
-export function redactNormalized(item: RawWorkItem, opts: RedactOptions): RawWorkItem {
+export function redactNormalized(
+  item: RawWorkItem,
+  opts: RedactOptions,
+): RawWorkItem {
   const { customerSlug, map } = opts;
   const customerToken = customerSlug || "[CUSTOMER]";
-  
-  
+
   const knownNames = [item.requester, ...item.messages.map((m) => m.author)];
-  const scrub = (text: string | undefined) => scrubKnownNames(scrubText(text, map), knownNames, map);
+  const scrub = (text: string | undefined) =>
+    scrubKnownNames(scrubText(text, map), knownNames, map);
   return {
     ...item,
     title: item.title ? scrub(item.title) : item.title,
@@ -148,12 +162,17 @@ export function redactNormalized(item: RawWorkItem, opts: RedactOptions): RawWor
  */
 export function redactForLlm(
   item: RawWorkItem,
-  redactRaw: ((raw: unknown, map: TokenMap, customerSlug: string | null) => unknown) | undefined,
+  redactRaw:
+    | ((raw: unknown, map: TokenMap, customerSlug: string | null) => unknown)
+    | undefined,
   customerSlug: string | null,
 ): RawWorkItem {
   const map = new TokenMap();
   const normalized = redactNormalized(item, { customerSlug, map });
-  return { ...normalized, raw: redactRaw ? redactRaw(item.raw, map, customerSlug) : {} };
+  return {
+    ...normalized,
+    raw: redactRaw ? redactRaw(item.raw, map, customerSlug) : {},
+  };
 }
 
 export interface RedactionPolicy {

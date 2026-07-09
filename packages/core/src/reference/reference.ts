@@ -1,6 +1,10 @@
 import { sql } from "../platform/db";
 import { chunkText } from "../search/chunk";
-import { embedPassage, embedQuery, toVectorLiteral } from "../search/embeddings";
+import {
+  embedPassage,
+  embedQuery,
+  toVectorLiteral,
+} from "../search/embeddings";
 import { notFound, conflict } from "../platform/errors";
 import { parseStructured } from "../knowledge/structured";
 
@@ -51,7 +55,12 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
     returning id, status, version
   `;
   const chunks = await embedChunks(doc.id, i.body);
-  return { id: doc.id as string, status: doc.status as string, version: doc.version as number, chunks };
+  return {
+    id: doc.id as string,
+    status: doc.status as string,
+    version: doc.version as number,
+    chunks,
+  };
 }
 
 export async function getReferenceDoc(id: string) {
@@ -64,38 +73,57 @@ export async function getReferenceDoc(id: string) {
   return row;
 }
 
-export async function listReferenceDocs(opts: { status?: string; productId?: string; teamId?: string; tags?: string[]; limit?: number } = {}) {
+export async function listReferenceDocs(
+  opts: {
+    status?: string;
+    productId?: string;
+    teamId?: string;
+    tags?: string[];
+    limit?: number;
+  } = {},
+) {
   const limit = opts.limit ?? 50;
   return sql`
     select id, product_id, team_id, source, title, tags, status, version, created_at, updated_at
     from reference_docs
     where 1=1
-      ${opts.status    ? sql`and status     = ${opts.status}`    : sql``}
+      ${opts.status ? sql`and status     = ${opts.status}` : sql``}
       ${opts.productId ? sql`and product_id = ${opts.productId}` : sql``}
-      ${opts.teamId    ? sql`and team_id    = ${opts.teamId}`    : sql``}
+      ${opts.teamId ? sql`and team_id    = ${opts.teamId}` : sql``}
       ${opts.tags && opts.tags.length ? sql`and tags && ${opts.tags}` : sql``}
     order by updated_at desc
     limit ${limit}
   `;
 }
 
-export async function updateReferenceDoc(id: string, patch: ReferenceDocUpdate) {
+export async function updateReferenceDoc(
+  id: string,
+  patch: ReferenceDocUpdate,
+) {
   const [current] = await sql`
     select title, body, tags, status, source, structured, version
     from reference_docs where id = ${id}
   `;
   if (!current) throw notFound(`Reference doc '${id}' not found`);
-  if (patch.expectedVersion != null && current.version !== patch.expectedVersion) {
-    throw conflict(`Version conflict: expected ${patch.expectedVersion}, found ${current.version}`);
+  if (
+    patch.expectedVersion != null &&
+    current.version !== patch.expectedVersion
+  ) {
+    throw conflict(
+      `Version conflict: expected ${patch.expectedVersion}, found ${current.version}`,
+    );
   }
 
   const merged = {
-    title:      patch.title  ?? current.title,
-    body:       'body'   in patch ? (patch.body ?? "")   : current.body,
-    tags:       patch.tags   ?? current.tags,
-    status:     patch.status ?? current.status,
-    source:     'source' in patch ? patch.source : current.source,
-    structured: 'structured' in patch ? parseStructured(patch.structured) : current.structured,
+    title: patch.title ?? current.title,
+    body: "body" in patch ? (patch.body ?? "") : current.body,
+    tags: patch.tags ?? current.tags,
+    status: patch.status ?? current.status,
+    source: "source" in patch ? patch.source : current.source,
+    structured:
+      "structured" in patch
+        ? parseStructured(patch.structured)
+        : current.structured,
   };
   const bodyChanged = merged.body !== current.body;
 
@@ -126,9 +154,10 @@ export interface ReferenceSearchOptions {
   limit?: number;
 }
 
-
-
-export async function searchReferenceDocs(query: string, opts: ReferenceSearchOptions = {}) {
+export async function searchReferenceDocs(
+  query: string,
+  opts: ReferenceSearchOptions = {},
+) {
   const limit = opts.limit ?? 6;
   if (!query.trim()) return [];
   const qvec = toVectorLiteral(await embedQuery(query));

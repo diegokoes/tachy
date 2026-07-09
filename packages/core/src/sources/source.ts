@@ -1,5 +1,3 @@
-
-
 import type { TokenMap } from "../compliance/redaction";
 
 export interface RawMessage {
@@ -7,7 +5,7 @@ export interface RawMessage {
   author?: string;
   visibility: "public" | "private" | "internal";
   direction: "incoming" | "outgoing";
-  bodyText: string;            
+  bodyText: string;
   attachments?: unknown[];
   createdAt?: string;
 }
@@ -17,14 +15,14 @@ export interface RawWorkItem {
   externalUrl?: string;
   kind: "ticket" | "issue";
   title?: string;
-  status?: string;             
-  groupKey?: string;           
-  requester?: string;          
-  requesterEmail?: string;     
-  raw: unknown;                
+  status?: string;
+  groupKey?: string;
+  requester?: string;
+  requesterEmail?: string;
+  raw: unknown;
   sourceCreatedAt?: string;
   sourceUpdatedAt?: string;
-  messages: RawMessage[];      
+  messages: RawMessage[];
 }
 
 export interface SourceCapabilities {
@@ -43,8 +41,14 @@ export interface WorkItemSource {
   readonly type: string;
   readonly capabilities: SourceCapabilities;
   fetchItem(externalId: string): Promise<RawWorkItem>;
-  listItems(opts: ListOptions): Promise<{ items: RawWorkItem[]; nextCursor?: string }>;
-  postNote?(externalId: string, body: string, opts?: { private?: boolean }): Promise<void>;
+  listItems(
+    opts: ListOptions,
+  ): Promise<{ items: RawWorkItem[]; nextCursor?: string }>;
+  postNote?(
+    externalId: string,
+    body: string,
+    opts?: { private?: boolean },
+  ): Promise<void>;
   /**
    * Optional PII scrub of the source-specific `raw` payload for redaction mode.
    * Only the adapter knows its payload's field shape. Must return a deep copy and
@@ -58,5 +62,5 @@ export interface WorkItemSource {
 export type SourceFactory = (cfg: {
   baseUrl: string;
   slug: string;
-  config: Record<string, unknown>;   
+  config: Record<string, unknown>;
 }) => WorkItemSource;

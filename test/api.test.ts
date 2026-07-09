@@ -23,13 +23,16 @@ describe("API knowledge round-trip", () => {
   beforeEach(resetData);
 
   it("creates an entry, fetches it, and finds it via search", async () => {
-    const created = await app.request("/api/knowledge", json({
-      status: "approved",
-      issueSummary: "Printer queue stalls after reboot",
-      symptoms: ["queue stalled"],
-      cloud: "prod",
-      learningValue: "high",
-    }));
+    const created = await app.request(
+      "/api/knowledge",
+      json({
+        status: "approved",
+        issueSummary: "Printer queue stalls after reboot",
+        symptoms: ["queue stalled"],
+        cloud: "prod",
+        learningValue: "high",
+      }),
+    );
     expect(created.status).toBe(200);
     const { id } = await created.json();
     expect(id).toBeTruthy();
@@ -38,16 +41,24 @@ describe("API knowledge round-trip", () => {
     expect(got.status).toBe(200);
     expect((await got.json()).issue_summary).toMatch(/Printer queue/);
 
-    const search = await app.request("/api/knowledge/search?q=printer%20queue%20stalls&cloud=prod");
+    const search = await app.request(
+      "/api/knowledge/search?q=printer%20queue%20stalls&cloud=prod",
+    );
     const rows = await search.json();
     expect(rows.some((r: { id: string }) => r.id === id)).toBe(true);
   });
 
   it("records and lists feedback", async () => {
-    const created = await app.request("/api/knowledge", json({ status: "approved", issueSummary: "x" }));
+    const created = await app.request(
+      "/api/knowledge",
+      json({ status: "approved", issueSummary: "x" }),
+    );
     const { id } = await created.json();
 
-    const fb = await app.request(`/api/knowledge/${id}/feedback`, json({ kind: "rating", rating: 5, comment: "useful" }));
+    const fb = await app.request(
+      `/api/knowledge/${id}/feedback`,
+      json({ kind: "rating", rating: 5, comment: "useful" }),
+    );
     expect(fb.status).toBe(200);
 
     const list = await app.request(`/api/knowledge/${id}/feedback`);
@@ -59,10 +70,15 @@ describe("API taxonomy", () => {
   beforeEach(resetData);
 
   it("adds and lists a resolution pattern", async () => {
-    const added = await app.request("/api/resolution-patterns", json({ slug: "rollback", description: "roll back a release" }));
+    const added = await app.request(
+      "/api/resolution-patterns",
+      json({ slug: "rollback", description: "roll back a release" }),
+    );
     expect(added.status).toBe(200);
     const list = await app.request("/api/resolution-patterns");
-    expect((await list.json()).some((p: { slug: string }) => p.slug === "rollback")).toBe(true);
+    expect(
+      (await list.json()).some((p: { slug: string }) => p.slug === "rollback"),
+    ).toBe(true);
   });
 });
 
@@ -70,8 +86,10 @@ describe("API error paths", () => {
   beforeEach(resetData);
 
   it("rejects a schema violation with 400", async () => {
-    
-    const res = await app.request("/api/knowledge", json({ issueSummary: "x", cloud: "Not A Slug" }));
+    const res = await app.request(
+      "/api/knowledge",
+      json({ issueSummary: "x", cloud: "Not A Slug" }),
+    );
     expect(res.status).toBe(400);
   });
 
@@ -85,17 +103,25 @@ describe("API error paths", () => {
   });
 
   it("returns 404 for an unknown knowledge id", async () => {
-    const res = await app.request("/api/knowledge/00000000-0000-0000-0000-000000000000");
+    const res = await app.request(
+      "/api/knowledge/00000000-0000-0000-0000-000000000000",
+    );
     expect(res.status).toBe(404);
   });
 
   it("returns 400 for an unknown referenced slug (bad_input)", async () => {
-    const res = await app.request("/api/products", json({ team_slug: "nope-team", slug: "p", name: "P" }));
+    const res = await app.request(
+      "/api/products",
+      json({ team_slug: "nope-team", slug: "p", name: "P" }),
+    );
     expect(res.status).toBe(400);
   });
 
   it("returns 409 on a stale optimistic-lock version", async () => {
-    const created = await app.request("/api/knowledge", json({ status: "approved", issueSummary: "v" }));
+    const created = await app.request(
+      "/api/knowledge",
+      json({ status: "approved", issueSummary: "v" }),
+    );
     const { id } = await created.json();
     const res = await app.request(`/api/knowledge/${id}`, {
       method: "PATCH",
@@ -122,18 +148,20 @@ describe("API auth", () => {
   it("leaves /health open but requires the token elsewhere", async () => {
     expect((await secured.request("/health")).status).toBe(200);
     expect((await secured.request("/api/customers")).status).toBe(401);
-    const ok = await secured.request("/api/customers", { headers: { Authorization: "Bearer s3cret" } });
+    const ok = await secured.request("/api/customers", {
+      headers: { Authorization: "Bearer s3cret" },
+    });
     expect(ok.status).toBe(200);
   });
 
   it("rejects a wrong token", async () => {
-    const res = await secured.request("/api/customers", { headers: { Authorization: "Bearer nope" } });
+    const res = await secured.request("/api/customers", {
+      headers: { Authorization: "Bearer nope" },
+    });
     expect(res.status).toBe(401);
   });
 
   it("does not expose SSO routes when OIDC is unconfigured", async () => {
-    
-    
     expect((await app.request("/auth/login")).status).toBe(404);
     const me = await app.request("/auth/me");
     expect(me.status).toBe(200);

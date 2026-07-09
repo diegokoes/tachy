@@ -10,7 +10,15 @@ import {
   getAuth,
   revokeSession,
 } from "@hono/oidc-auth";
-import { upsertUser, getUserByEmail, countAdmins, verifyPassword, teamAdminTeams, env, type UserRole } from "@tachy/core";
+import {
+  upsertUser,
+  getUserByEmail,
+  countAdmins,
+  verifyPassword,
+  teamAdminTeams,
+  env,
+  type UserRole,
+} from "@tachy/core";
 
 export interface OidcConfig {
   issuer: string;
@@ -28,19 +36,23 @@ export interface Identity {
   via: "token" | "password" | "sso" | "open";
 }
 
-
 export const sessionSecret: string =
   env.sessionSecret ??
   (() => {
     const s = randomBytes(32).toString("hex");
-    console.warn("TACHY_SESSION_SECRET is not set — using an ephemeral secret; sessions reset on restart");
+    console.warn(
+      "TACHY_SESSION_SECRET is not set — using an ephemeral secret; sessions reset on restart",
+    );
     return s;
   })();
 
 const COOKIE = "tachy_session";
 const SESSION_SECONDS = 7 * 24 * 3600;
 
-export async function setSessionCookie(c: Context, email: string): Promise<void> {
+export async function setSessionCookie(
+  c: Context,
+  email: string,
+): Promise<void> {
   const value = `${Date.now() + SESSION_SECONDS * 1000}|${email}`;
   await setSignedCookie(c, COOKIE, value, sessionSecret, {
     httpOnly: true,
@@ -67,7 +79,6 @@ function tokenMatches(header: string | undefined, token: string): boolean {
   return got.length === want.length && timingSafeEqual(got, want);
 }
 
-
 export async function sessionEmail(c: Context): Promise<string | undefined> {
   const fromCookie = await cookieEmail(c);
   if (fromCookie) return fromCookie;
@@ -79,7 +90,6 @@ export async function sessionEmail(c: Context): Promise<string | undefined> {
   }
 }
 
-
 let bootstrappedCache = false;
 export async function isBootstrapped(): Promise<boolean> {
   if (bootstrappedCache) return true;
@@ -90,7 +100,6 @@ export function markBootstrapped(): void {
   bootstrappedCache = true;
 }
 
-
 const failures = new Map<string, { count: number; resetAt: number }>();
 function throttled(email: string): boolean {
   const f = failures.get(email);
@@ -98,23 +107,31 @@ function throttled(email: string): boolean {
 }
 function recordFailure(email: string): void {
   const f = failures.get(email);
-  if (!f || f.resetAt < Date.now()) failures.set(email, { count: 1, resetAt: Date.now() + 60_000 });
+  if (!f || f.resetAt < Date.now())
+    failures.set(email, { count: 1, resetAt: Date.now() + 60_000 });
   else f.count++;
 }
-
 
 async function resolveIdentity(
   c: Context,
   opts: { apiToken?: string; oidc?: OidcConfig; passwordAuth?: boolean },
 ): Promise<Identity | null> {
-  if (opts.apiToken && tokenMatches(c.req.header("Authorization"), opts.apiToken))
+  if (
+    opts.apiToken &&
+    tokenMatches(c.req.header("Authorization"), opts.apiToken)
+  )
     return { role: "admin", via: "token" };
 
   const email = await cookieEmail(c);
   if (email) {
     const user = await getUserByEmail(email);
     if (user && !user.disabled)
-      return { email: user.email, name: user.display_name ?? undefined, role: user.role, via: "password" };
+      return {
+        email: user.email,
+        name: user.display_name ?? undefined,
+        role: user.role,
+        via: "password",
+      };
   }
 
   if (opts.oidc) {
@@ -123,14 +140,19 @@ async function resolveIdentity(
       if (auth?.email) {
         const user = await getUserByEmail(auth.email);
         if (user?.disabled) return null;
-        return { email: auth.email, name: (auth.name as string | undefined) ?? undefined, role: user?.role ?? "member", via: "sso" };
+        return {
+          email: auth.email,
+          name: (auth.name as string | undefined) ?? undefined,
+          role: user?.role ?? "member",
+          via: "sso",
+        };
       }
-    } catch {
-    }
+    } catch {}
   }
 
   const passwordGate = opts.passwordAuth && (await isBootstrapped());
-  if (!opts.apiToken && !opts.oidc && !passwordGate) return { role: "admin", via: "open" };
+  if (!opts.apiToken && !opts.oidc && !passwordGate)
+    return { role: "admin", via: "open" };
   return null;
 }
 
@@ -140,7 +162,6 @@ export function getIdentity(c: Context): Identity | undefined {
   return c.get(IDENTITY_KEY as never) as Identity | undefined;
 }
 
-
 export async function requireAdmin(c: Context, next: Next): Promise<void> {
   const identity = getIdentity(c);
   if (identity && identity.role !== "admin")
@@ -148,7 +169,10 @@ export async function requireAdmin(c: Context, next: Next): Promise<void> {
   await next();
 }
 
-const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
+const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
 
 export function installAuth(
   base: Hono,
@@ -169,23 +193,37 @@ export function installAuth(
       }),
     );
 
-    base.get("/auth/login", oidcAuthMiddleware(), (c) => c.redirect(c.req.query("redirect") || "/"));
+    base.get("/auth/login", oidcAuthMiddleware(), (c) =>
+      c.redirect(c.req.query("redirect") || "/"),
+    );
     base.get("/auth/callback", oidcAuthMiddleware(), (c) => c.redirect("/"));
   }
 
   if (passwordAuth) {
-    base.post("/auth/password/login", zValidator("json", loginSchema), async (c) => {
-      const { email, password } = c.req.valid("json");
-      if (throttled(email)) return c.json({ error: "too many attempts — wait a minute" }, 429);
-      const user = await getUserByEmail(email);
-      const ok = user && !user.disabled && (await verifyPassword(password, user.password_hash));
-      if (!ok) {
-        recordFailure(email);
-        return c.json({ error: "invalid email or password" }, 401);
-      }
-      await setSessionCookie(c, user.email);
-      return c.json({ email: user.email, name: user.display_name, role: user.role });
-    });
+    base.post(
+      "/auth/password/login",
+      zValidator("json", loginSchema),
+      async (c) => {
+        const { email, password } = c.req.valid("json");
+        if (throttled(email))
+          return c.json({ error: "too many attempts — wait a minute" }, 429);
+        const user = await getUserByEmail(email);
+        const ok =
+          user &&
+          !user.disabled &&
+          (await verifyPassword(password, user.password_hash));
+        if (!ok) {
+          recordFailure(email);
+          return c.json({ error: "invalid email or password" }, 401);
+        }
+        await setSessionCookie(c, user.email);
+        return c.json({
+          email: user.email,
+          name: user.display_name,
+          role: user.role,
+        });
+      },
+    );
   }
 
   base.get("/auth/logout", async (c) => {
@@ -196,18 +234,29 @@ export function installAuth(
 
   base.get("/auth/me", async (c) => {
     const identity = await resolveIdentity(c, opts);
-    if (!identity || identity.via === "token") return c.json({ error: "unauthenticated" }, 401);
+    if (!identity || identity.via === "token")
+      return c.json({ error: "unauthenticated" }, 401);
     if (identity.via === "open")
-      return c.json({ email: env.userEmail ?? null, name: null, role: "admin", via: "open", team_admin: [] });
-    if (identity.via === "sso" && identity.email) await upsertUser(identity.email, identity.name);
-    
+      return c.json({
+        email: env.userEmail ?? null,
+        name: null,
+        role: "admin",
+        via: "open",
+        team_admin: [],
+      });
+    if (identity.via === "sso" && identity.email)
+      await upsertUser(identity.email, identity.name);
+
     let teamAdmin: { team_id: string; team_slug: string }[] = [];
     if (identity.email) {
       const user = await getUserByEmail(identity.email);
       if (user) teamAdmin = await teamAdminTeams(user.id);
     }
     return c.json({
-      email: identity.email, name: identity.name ?? null, role: identity.role, via: identity.via,
+      email: identity.email,
+      name: identity.name ?? null,
+      role: identity.role,
+      via: identity.via,
       team_admin: teamAdmin,
     });
   });

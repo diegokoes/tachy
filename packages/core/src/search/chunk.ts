@@ -1,8 +1,3 @@
-
-
-
-
-
 export interface ChunkOptions {
   maxChars?: number;
   overlap?: number;
@@ -27,7 +22,10 @@ export function chunkText(text: string, opts: ChunkOptions = {}): string[] {
   if (!clean) return [];
   if (clean.length <= maxChars) return [clean];
 
-  const paras = clean.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const paras = clean
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
   const packed: string[] = [];
   let cur = "";
   for (const p of paras) {
@@ -41,6 +39,7 @@ export function chunkText(text: string, opts: ChunkOptions = {}): string[] {
   }
   if (cur.trim()) packed.push(cur);
 
-  
-  return packed.flatMap((c) => (c.length <= maxChars * 1.5 ? [c] : hardSplit(c, maxChars, overlap)));
+  return packed.flatMap((c) =>
+    c.length <= maxChars * 1.5 ? [c] : hardSplit(c, maxChars, overlap),
+  );
 }

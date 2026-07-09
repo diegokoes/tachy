@@ -1,10 +1,8 @@
 import { FlagEmbedding, EmbeddingModel } from "fastembed";
 
-
 export const EMBEDDING_DIM = 384;
 
 let modelPromise: Promise<FlagEmbedding> | undefined;
-
 
 function model(): Promise<FlagEmbedding> {
   modelPromise ??= FlagEmbedding.init({
@@ -15,7 +13,6 @@ function model(): Promise<FlagEmbedding> {
 }
 
 const toArray = (v: Float32Array | number[]): number[] => Array.from(v);
-
 
 export const toVectorLiteral = (v: number[]): string => `[${v.join(",")}]`;
 

@@ -2,14 +2,7 @@ import { z } from "zod";
 import { sql } from "./db";
 import { badInput } from "./errors";
 
-
-
-
-
 export const AGENT_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
-
-
-
 
 export const DEPLOYMENT_PROFILES = ["support", "engineering"] as const;
 export type DeploymentProfile = (typeof DEPLOYMENT_PROFILES)[number];
@@ -48,9 +41,15 @@ export async function getSettings(): Promise<SettingsMap> {
 }
 
 export async function setSetting(key: string, value: unknown): Promise<void> {
-  if (!(key in SETTING_SCHEMAS)) throw badInput(`unknown setting '${key}' (known: ${SETTING_KEYS.join(", ")})`);
+  if (!(key in SETTING_SCHEMAS))
+    throw badInput(
+      `unknown setting '${key}' (known: ${SETTING_KEYS.join(", ")})`,
+    );
   const parsed = SETTING_SCHEMAS[key as SettingKey].safeParse(value);
-  if (!parsed.success) throw badInput(`invalid value for '${key}': ${parsed.error.issues.map((i) => i.message).join("; ")}`);
+  if (!parsed.success)
+    throw badInput(
+      `invalid value for '${key}': ${parsed.error.issues.map((i) => i.message).join("; ")}`,
+    );
   await sql`
     insert into settings (key, value) values (${key}, ${sql.json(parsed.data as never)})
     on conflict (key) do update set value = excluded.value, updated_at = now()
@@ -63,45 +62,65 @@ export type SettingSource = "db" | "env" | "default";
 export interface EffectiveSettings {
   redaction_global: { value: boolean; source: SettingSource };
   agent_model: { value: string; source: SettingSource };
-  agent_effort: { value: (typeof AGENT_EFFORTS)[number]; source: SettingSource };
+  agent_effort: {
+    value: (typeof AGENT_EFFORTS)[number];
+    source: SettingSource;
+  };
   allowed_models: { value: string[]; source: SettingSource };
   org_name: { value: string | null; source: SettingSource };
   deployment_profile: { value: DeploymentProfile; source: SettingSource };
 }
 
-
 export async function effectiveSettings(): Promise<EffectiveSettings> {
   const db = await getSettings();
-  const pick = <T>(dbVal: T | undefined, envVal: T | undefined, dflt: T): { value: T; source: SettingSource } =>
-    dbVal !== undefined ? { value: dbVal, source: "db" }
-    : envVal !== undefined ? { value: envVal, source: "env" }
-    : { value: dflt, source: "default" };
+  const pick = <T>(
+    dbVal: T | undefined,
+    envVal: T | undefined,
+    dflt: T,
+  ): { value: T; source: SettingSource } =>
+    dbVal !== undefined
+      ? { value: dbVal, source: "db" }
+      : envVal !== undefined
+        ? { value: envVal, source: "env" }
+        : { value: dflt, source: "default" };
 
-  const envEffort = AGENT_EFFORTS.includes(process.env.TACHY_AGENT_EFFORT as never)
+  const envEffort = AGENT_EFFORTS.includes(
+    process.env.TACHY_AGENT_EFFORT as never,
+  )
     ? (process.env.TACHY_AGENT_EFFORT as (typeof AGENT_EFFORTS)[number])
     : undefined;
   const envModels = process.env.TACHY_ALLOWED_MODELS
-    ? process.env.TACHY_ALLOWED_MODELS.split(",").map((s) => s.trim()).filter(Boolean)
+    ? process.env.TACHY_ALLOWED_MODELS.split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
     : undefined;
 
   return {
-    redaction_global: pick(db.redaction_global, process.env.TACHY_REDACT === "true" ? true : undefined, false),
-    agent_model: pick(db.agent_model, process.env.TACHY_AGENT_MODEL || undefined, "claude-sonnet-5"),
+    redaction_global: pick(
+      db.redaction_global,
+      process.env.TACHY_REDACT === "true" ? true : undefined,
+      false,
+    ),
+    agent_model: pick(
+      db.agent_model,
+      process.env.TACHY_AGENT_MODEL || undefined,
+      "claude-sonnet-5",
+    ),
     agent_effort: pick(db.agent_effort, envEffort, "medium"),
     allowed_models: pick(db.allowed_models, envModels, []),
     org_name: pick<string | null>(db.org_name, undefined, null),
-    deployment_profile: pick<DeploymentProfile>(db.deployment_profile, undefined, "support"),
+    deployment_profile: pick<DeploymentProfile>(
+      db.deployment_profile,
+      undefined,
+      "support",
+    ),
   };
 }
-
-
-
 
 export async function loadSettingsIntoEnv(): Promise<void> {
   const eff = await effectiveSettings();
   if (eff.redaction_global.value) process.env.TACHY_REDACT = "true";
 }
-
 
 export function clearSettingsCache(): void {
   cache = undefined;

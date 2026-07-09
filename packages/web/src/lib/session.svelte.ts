@@ -1,13 +1,9 @@
-
-
-
-
 export interface Me {
   email: string | null;
   name: string | null;
   role: "admin" | "member";
   via: "password" | "sso" | "open";
-  
+
   team_admin?: { team_id: string; team_slug: string }[];
 }
 
@@ -15,7 +11,7 @@ export interface AuthConfig {
   authMode: string;
   sso: boolean;
   passwordLogin: boolean;
-  
+
   profile?: "support" | "engineering";
 }
 
@@ -35,7 +31,9 @@ export async function initSession(): Promise<void> {
       fetch("/auth/me"),
     ]);
     session.config = cfgRes.ok ? await cfgRes.json() : null;
-    session.bootstrapped = statusRes.ok ? (await statusRes.json()).bootstrapped : null;
+    session.bootstrapped = statusRes.ok
+      ? (await statusRes.json()).bootstrapped
+      : null;
     session.me = meRes.ok ? await meRes.json() : null;
   } catch {
     session.config = null;
@@ -44,28 +42,25 @@ export async function initSession(): Promise<void> {
   }
 }
 
-
-
 export function isCurator(): boolean {
   const me = session.me;
   return !!me && (me.role === "admin" || (me.team_admin?.length ?? 0) > 0);
 }
 
-
-
-
-
-export function canCurateScope(scope: { team_id?: string | null; team_slug?: string | null }): boolean {
+export function canCurateScope(scope: {
+  team_id?: string | null;
+  team_slug?: string | null;
+}): boolean {
   const me = session.me;
   if (!me) return false;
   if (me.role === "admin") return true;
   const teams = me.team_admin ?? [];
-  if (scope.team_id && teams.some((t) => t.team_id === scope.team_id)) return true;
-  if (scope.team_slug && teams.some((t) => t.team_slug === scope.team_slug)) return true;
+  if (scope.team_id && teams.some((t) => t.team_id === scope.team_id))
+    return true;
+  if (scope.team_slug && teams.some((t) => t.team_slug === scope.team_slug))
+    return true;
   return !scope.team_id && !scope.team_slug && teams.length > 0;
 }
-
-
 
 export function onUnauthorized(): void {
   if (session.config?.sso && !session.config.passwordLogin) {
@@ -83,7 +78,12 @@ export async function login(email: string, password: string): Promise<void> {
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error ?? `login failed (${res.status})`);
-  session.me = { email: body.email, name: body.name ?? null, role: body.role, via: "password" };
+  session.me = {
+    email: body.email,
+    name: body.name ?? null,
+    role: body.role,
+    via: "password",
+  };
   if (session.config) session.config.passwordLogin = true;
 }
 

@@ -44,16 +44,25 @@ export async function listSourceProductMaps(sourceSlug?: string) {
 }
 
 export async function deleteSourceProductMap(id: string) {
-  const [row] = await sql`delete from source_product_map where id = ${id} returning id`;
+  const [row] =
+    await sql`delete from source_product_map where id = ${id} returning id`;
   if (!row) throw notFound(`Source product map '${id}' not found`);
   return { deleted: true, id };
 }
 
 export async function addSourceProductMap(i: SourceProductMapInput) {
-  const [conn] = await sql`select id from source_connections where slug = ${i.sourceSlug}`;
-  if (!conn) throw badInput(`Unknown source connection '${i.sourceSlug}'. Call list_source_connections first.`);
-  const [product] = await sql`select id from products where slug = ${i.productSlug}`;
-  if (!product) throw badInput(`Unknown product '${i.productSlug}'. Call list_products or add_product first.`);
+  const [conn] =
+    await sql`select id from source_connections where slug = ${i.sourceSlug}`;
+  if (!conn)
+    throw badInput(
+      `Unknown source connection '${i.sourceSlug}'. Call list_source_connections first.`,
+    );
+  const [product] =
+    await sql`select id from products where slug = ${i.productSlug}`;
+  if (!product)
+    throw badInput(
+      `Unknown product '${i.productSlug}'. Call list_products or add_product first.`,
+    );
   const [row] = await sql`
     insert into source_product_map (source_connection_id, external_group_key, product_id)
     values (${conn.id}, ${i.externalGroupKey}, ${product.id})

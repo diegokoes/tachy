@@ -2,8 +2,6 @@ import { sql } from "@tachy/core";
 
 export { sql };
 
-
-
 export async function resetData() {
   await sql`
     truncate work_item_messages, work_items, knowledge_feedback,
@@ -14,9 +12,9 @@ export async function resetData() {
   `;
 }
 
-
 export async function seededFreshdeskConnId(): Promise<string> {
-  const [row] = await sql`select id from source_connections where slug = 'test-freshdesk'`;
+  const [row] =
+    await sql`select id from source_connections where slug = 'test-freshdesk'`;
   return row.id as string;
 }
 

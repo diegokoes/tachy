@@ -3,7 +3,7 @@ import { sql } from "../platform/db";
 export interface FeedbackInput {
   knowledgeEntryId: string;
   userId?: string | null;
-  kind?: string;                   
+  kind?: string;
   rating?: number | null;
   comment?: string | null;
   patch?: Record<string, unknown> | null;
