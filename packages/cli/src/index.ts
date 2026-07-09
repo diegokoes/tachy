@@ -36,8 +36,8 @@ async function embedBackfill() {
   console.log(`embedded ${n} entr${n === 1 ? "y" : "ies"}`);
 }
 
-// Docker's initdb only applies db/schema.sql to EMPTY data dirs; existing
-// deployments upgrade with this. Migrations are idempotent, so re-running is safe.
+
+
 async function migrate(opts: { dir?: string }) {
   const here = dirname(fileURLToPath(import.meta.url));
   const dir = opts.dir ?? join(here, "..", "..", "..", "db", "migrations");
@@ -45,7 +45,7 @@ async function migrate(opts: { dir?: string }) {
   const files = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
   for (const f of files) {
     const content = readFileSync(join(dir, f), "utf8");
-    await sql.begin((tx) => tx.unsafe(content)); // one transaction per file
+    await sql.begin((tx) => tx.unsafe(content)); 
     console.log(`applied ${f}`);
   }
   if (files.length === 0) console.log("no migrations found");
@@ -101,7 +101,7 @@ async function main() {
   switch (cmd) {
     case "sync": {
       if (!positional[0]) throw new Error("sync needs a <source-slug>");
-      // sync runs the source redaction hooks; honor the DB-backed switch too.
+      
       try { await loadSettingsIntoEnv(); } catch { /* settings table may not exist yet */ }
       return sync(positional[0], { since: args.since, group: args.group });
     }

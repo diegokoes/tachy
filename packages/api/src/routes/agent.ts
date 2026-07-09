@@ -11,15 +11,15 @@ import { env, effectiveSettings, type EffectiveSettings } from "@tachy/core";
 import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
 import { sessionEmail } from "../auth";
 
-// Active turns, keyed by turnId, so the separate /approve request can reach the
-// turn that raised the approval. Entries are removed when the turn ends.
+
+
 const turns = new Map<string, AgentTurn>();
 
 const uploadDir = process.env.TACHY_UPLOAD_DIR || join(tmpdir(), "tachy-uploads");
 
-// The web chat gates every write tool behind an interactive review box (editable
-// JSON + Approve/Deny), so the base rules' "ask before saving" would make the
-// user approve twice. This note overrides that for this UI only.
+
+
+
 const UI_APPROVAL_NOTE = `
 
 ## Web chat approval UI (overrides "ask before saving" above)
@@ -40,10 +40,10 @@ async function systemPrompt(): Promise<string> {
   return systemPromptCache;
 }
 
-// Launch config for the tachy MCP subprocess: inherits env (DB, source tokens)
-// plus the logged-in user's email for attribution. Cost policy and the redaction
-// switch come from effectiveSettings() per turn (DB wins over env), and are
-// materialized into the subprocess env — it only sees a snapshot at spawn.
+
+
+
+
 function mcpConfig(userEmail: string | undefined, settings: EffectiveSettings): Omit<AgentConfig, "systemPromptAppend"> {
   const mcpEnv: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (typeof v === "string") mcpEnv[k] = v;
@@ -79,8 +79,8 @@ const approveSchema = z.object({
 });
 
 export const agent = new Hono()
-  // Streamed agent turn. Emits SSE events: start, text, tool_use, approval_request,
-  // approval_resolved, result, error. The client relays approvals via /agent/approve.
+  
+  
   .post("/chat", zValidator("json", chatSchema), async (c) => {
     const { message, sessionId, uploadPaths } = c.req.valid("json");
     const userEmail = (await sessionEmail(c)) ?? env.userEmail;
@@ -111,7 +111,7 @@ export const agent = new Hono()
     });
   })
 
-  // Resolve a pending write approval from the UI.
+  
   .post("/approve", zValidator("json", approveSchema), (c) => {
     const { turnId, id, approve, message, updatedInput } = c.req.valid("json");
     const turn = turns.get(turnId);
@@ -120,7 +120,7 @@ export const agent = new Hono()
     return c.json({ ok: true });
   })
 
-  // Accept a document upload; returns a server path to hand to the agent for ingest.
+  
   .post("/uploads", async (c) => {
     const body = await c.req.parseBody();
     const file = body.file;

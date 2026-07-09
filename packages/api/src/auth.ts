@@ -28,9 +28,7 @@ export interface Identity {
   via: "token" | "password" | "sso" | "open";
 }
 
-// Signs the password-login session cookie. Falls back to a per-process random
-// secret (sessions won't survive a restart) so password login still works when
-// TACHY_SESSION_SECRET is unset — with a loud warning.
+
 export const sessionSecret: string =
   env.sessionSecret ??
   (() => {
@@ -62,7 +60,6 @@ async function cookieEmail(c: Context): Promise<string | undefined> {
   return value.slice(sep + 1) || undefined;
 }
 
-// Timing-safe bearer comparison for the automation token.
 function tokenMatches(header: string | undefined, token: string): boolean {
   if (!header?.startsWith("Bearer ")) return false;
   const got = Buffer.from(header.slice(7));
@@ -70,8 +67,7 @@ function tokenMatches(header: string | undefined, token: string): boolean {
   return got.length === want.length && timingSafeEqual(got, want);
 }
 
-// Email of the session user (password cookie first, then SSO), if any;
-// undefined for token/unauthenticated. Used for attribution.
+
 export async function sessionEmail(c: Context): Promise<string | undefined> {
   const fromCookie = await cookieEmail(c);
   if (fromCookie) return fromCookie;
@@ -83,9 +79,7 @@ export async function sessionEmail(c: Context): Promise<string | undefined> {
   }
 }
 
-// "Bootstrapped" = at least one active admin exists. Once true it can never
-// revert (demoting/disabling the last admin is rejected in core), so a
-// positive result is cached for the process lifetime.
+
 let bootstrappedCache = false;
 export async function isBootstrapped(): Promise<boolean> {
   if (bootstrappedCache) return true;
@@ -96,7 +90,7 @@ export function markBootstrapped(): void {
   bootstrappedCache = true;
 }
 
-// Naive in-memory throttle for password attempts: 5 failures/minute per email.
+
 const failures = new Map<string, { count: number; resetAt: number }>();
 function throttled(email: string): boolean {
   const f = failures.get(email);
@@ -108,9 +102,7 @@ function recordFailure(email: string): void {
   else f.count++;
 }
 
-// Resolve who is calling. Order: bearer token (automation, full access) →
-// password cookie → SSO session → open fallback when nothing is configured
-// (or the instance isn't bootstrapped yet). Returns null = unauthorized.
+
 async function resolveIdentity(
   c: Context,
   opts: { apiToken?: string; oidc?: OidcConfig; passwordAuth?: boolean },
@@ -134,7 +126,6 @@ async function resolveIdentity(
         return { email: auth.email, name: (auth.name as string | undefined) ?? undefined, role: user?.role ?? "member", via: "sso" };
       }
     } catch {
-      /* no oidc session */
     }
   }
 
@@ -149,8 +140,7 @@ export function getIdentity(c: Context): Identity | undefined {
   return c.get(IDENTITY_KEY as never) as Identity | undefined;
 }
 
-// Admin gate for mutations. Open mode (no auth installed) has no identity and
-// is treated as admin — single-user localhost development.
+
 export async function requireAdmin(c: Context, next: Next): Promise<void> {
   const identity = getIdentity(c);
   if (identity && identity.role !== "admin")
@@ -160,9 +150,6 @@ export async function requireAdmin(c: Context, next: Next): Promise<void> {
 
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
 
-// Composite auth for /api/*: bearer token OR password session OR SSO session.
-// Nothing configured and not bootstrapped = open mode with no guard. Must be
-// installed before the /api routes are mounted so the middleware wraps them.
 export function installAuth(
   base: Hono,
   opts: { apiToken?: string; oidc?: OidcConfig; passwordAuth?: boolean },
@@ -183,7 +170,6 @@ export function installAuth(
     );
 
     base.get("/auth/login", oidcAuthMiddleware(), (c) => c.redirect(c.req.query("redirect") || "/"));
-    // IdP redirect target; the middleware does the code exchange + session cookie.
     base.get("/auth/callback", oidcAuthMiddleware(), (c) => c.redirect("/"));
   }
 
@@ -214,7 +200,7 @@ export function installAuth(
     if (identity.via === "open")
       return c.json({ email: env.userEmail ?? null, name: null, role: "admin", via: "open", team_admin: [] });
     if (identity.via === "sso" && identity.email) await upsertUser(identity.email, identity.name);
-    // Teams the caller mini-admins  drives the web's curation affordances.
+    
     let teamAdmin: { team_id: string; team_slug: string }[] = [];
     if (identity.email) {
       const user = await getUserByEmail(identity.email);

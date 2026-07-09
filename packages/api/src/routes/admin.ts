@@ -32,14 +32,14 @@ const sourceConnSchema = z.object({
 const productMapSchema = z.object({ external_group_key: z.string(), product_slug: z.string() });
 const labelSchema = z.object({ slug: z.string(), description: z.string().optional() });
 
-// Lowercase machine slug (letters, digits, . _ / -). Teams/products are keyed by
-// uuid, so their slug is a renameable label; taxonomy slugs stay immutable.
+
+
 const slugField = z.string().regex(/^[a-z0-9][a-z0-9._/-]*$/, "slug must be lowercase (letters, digits, . _ / -)");
-// Renaming a taxonomy slug (pattern/component/label) cascades to referencing
-// entries/docs; the client shows an impact count first, then posts { to }.
+
+
 const renameSchema = z.object({ to: slugField });
-// PATCH bodies: taxonomy slugs (patterns/components/labels/customers) are
-// immutable references, so they never appear here; team/product slugs may.
+
+
 const customerPatchSchema = z.object({
   name: z.string().optional(), aliases: z.array(z.string()).optional(), notes: z.string().nullable().optional(),
 });
@@ -52,16 +52,16 @@ const productPatchSchema = z.object({ name: z.string().optional(), aliases: z.ar
 const labelPatchSchema = z.object({ description: z.string().nullable() });
 const patternPatchSchema = z.object({ description: z.string() });
 
-// Org-structure + controlled-vocabulary endpoints. Mounted at "/" so each path is
-// stated in full here. Chained for RPC type export.
-// Reads are open to any authenticated user. Mutations are tiered: org-wide ones
-// (teams, sources, settings) need the global admin role; product/team-scoped
-// ones also accept a team mini-admin of the relevant team; org-global vocab
-// (customers, patterns) accepts any team mini-admin.
+
+
+
+
+
+
 export const admin = new Hono()
 
-  // Runtime settings (DB-backed, env as fallback) + read-only env facts.
-  // Never expose secret VALUES here — only whether they are set.
+  
+  
   .get("/system", async (c) =>
     c.json({
       settings: await effectiveSettings(),
@@ -80,8 +80,8 @@ export const admin = new Hono()
 
   .put("/settings/:key", requireAdmin, async (c) => {
     const { value } = await c.req.json<{ value: unknown }>();
-    // non-null: the route pattern guarantees :key; the middleware arg above
-    // widens Hono's path inference to string | undefined
+    
+    
     await setSetting(c.req.param("key")!, value);
     return c.json({ settings: await effectiveSettings() });
   })
