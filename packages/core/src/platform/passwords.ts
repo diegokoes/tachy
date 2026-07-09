@@ -4,8 +4,8 @@ import { badInput } from "./errors";
 
 const scrypt = promisify(scryptCb) as (password: string, salt: Buffer, keylen: number, opts: { N: number; r: number; p: number; maxmem: number }) => Promise<Buffer>;
 
-// Self-describing format so parameters can be raised later without breaking
-// existing hashes: scrypt$N$r$p$saltB64$hashB64
+
+
 const N = 16384;
 const R = 8;
 const P = 1;

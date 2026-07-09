@@ -2,15 +2,15 @@ import { z } from "zod";
 import { sql } from "./db";
 import { badInput } from "./errors";
 
-// DB-backed, NON-SECRET runtime settings. Env vars remain as fallback defaults
-// so pre-wizard deployments behave exactly as before; a DB value wins once set.
-// Secrets (tokens, keys) never live here — environment only.
+
+
+
 
 export const AGENT_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 
-// Display-only audience switch: relabels the web UI (product→repository,
-// team→organization, hides customers) — slugs, columns, and the MCP contract
-// never change with it.
+
+
+
 export const DEPLOYMENT_PROFILES = ["support", "engineering"] as const;
 export type DeploymentProfile = (typeof DEPLOYMENT_PROFILES)[number];
 
@@ -69,7 +69,7 @@ export interface EffectiveSettings {
   deployment_profile: { value: DeploymentProfile; source: SettingSource };
 }
 
-// Precedence: DB setting > env var > built-in default.
+
 export async function effectiveSettings(): Promise<EffectiveSettings> {
   const db = await getSettings();
   const pick = <T>(dbVal: T | undefined, envVal: T | undefined, dflt: T): { value: T; source: SettingSource } =>
@@ -94,15 +94,15 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
   };
 }
 
-// The redaction check (globalRedactionEnabled) reads process.env synchronously —
-// including inside the standalone MCP process — so DB-backed settings are
-// materialized into env once at boot. Call before serving.
+
+
+
 export async function loadSettingsIntoEnv(): Promise<void> {
   const eff = await effectiveSettings();
   if (eff.redaction_global.value) process.env.TACHY_REDACT = "true";
 }
 
-// test hook
+
 export function clearSettingsCache(): void {
   cache = undefined;
 }

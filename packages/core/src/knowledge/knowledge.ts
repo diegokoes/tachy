@@ -4,14 +4,14 @@ import { notFound, conflict, badInput } from "../platform/errors";
 import { parseStructured } from "./structured";
 import { resolveComponentStrict } from "../catalog/components";
 
-// Low-cardinality, filterable facets promoted out of `structured` into real columns.
+
 export interface KnowledgeFacets {
   cloud?: string | null;
   resolutionClarity?: string | null;
   learningValue?: string | null;
   hiddenFix?: boolean | null;
-  // Optional, free-form (like cloud). affectedVersion seeds from the work
-  // item's observed_version when omitted; fixedVersion is set on resolution.
+  
+  
   affectedVersion?: string | null;
   fixedVersion?: string | null;
 }
@@ -28,7 +28,7 @@ export interface KnowledgeInput extends KnowledgeFacets {
   rootCause?: string;
   resolution?: string;
   resolutionPattern?: string;
-  component?: string;  // slug or alias from the product's component glossary; product_area is derived from it
+  component?: string;  
   confidence?: string;
   tags?: string[];
   structured?: Record<string, unknown>;
@@ -42,8 +42,8 @@ export interface KnowledgeUpdateInput extends KnowledgeFacets {
   resolutionPattern?: string | null;
   symptoms?: string[];
   signals?: string[];
-  component?: string | null;    // null clears the component AND the derived product_area
-  supersededBy?: string | null; // link to the newer entry that replaces this one
+  component?: string | null;    
+  supersededBy?: string | null; 
   confidence?: string | null;
   tags?: string[];
   structured?: Record<string, unknown>;
@@ -61,8 +61,8 @@ async function resolvePatternDescription(slug: string | undefined): Promise<stri
   return pattern.description as string;
 }
 
-// Embeds: issue_summary, symptoms, root_cause, pattern description (richer than slug), signals.
-// Excludes product_area — all-MiniLM-L6-v2 truncates at ~256 tokens, keep it fault-focused.
+
+
 function buildEmbedText(i: { issueSummary?: string; symptoms?: string[]; rootCause?: string; signals?: string[] }, patternDescription: string): string {
   return [
     i.issueSummary, (i.symptoms ?? []).join(" "), i.rootCause, patternDescription, (i.signals ?? []).join(" "),
@@ -70,9 +70,9 @@ function buildEmbedText(i: { issueSummary?: string; symptoms?: string[]; rootCau
 }
 
 export async function saveKnowledgeEntry(i: KnowledgeInput) {
-  // When tied to a work item, inherit its product/team (and observed version →
-  // affected_version) unless explicitly given — the agent already established
-  // those at fetch time, no need to repeat them.
+  
+  
+  
   let productId = i.productId ?? null;
   let teamId = i.teamId ?? null;
   let affectedVersion = i.affectedVersion ?? null;
@@ -85,8 +85,8 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
     }
   }
 
-  // product_area is never accepted from the caller — it's derived from the
-  // component hierarchy, so the taxonomy can't drift entry by entry.
+  
+  
   let componentId: string | null = null;
   let productArea: string | null = null;
   if (i.component) {
@@ -123,9 +123,9 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
 export interface SearchOptions {
   productId?: string;
   teamId?: string;
-  tags?: string[];   // array-overlap filter; entries must carry at least one of these tags
-  componentId?: string;      // matches the FK link…
-  componentTags?: string[];  // …OR legacy entries that only carry the component as a tag
+  tags?: string[];   
+  componentId?: string;      
+  componentTags?: string[];  
   cloud?: string;
   learningValue?: string;
   resolutionClarity?: string;
@@ -134,9 +134,9 @@ export interface SearchOptions {
   limit?: number;
 }
 
-// Hybrid search: semantic cosine (primary) blended with FTS + trigram. Each
-// signal is bounded to 0..1 and weighted so an unbounded ts_rank can't dominate;
-// a small floor drops near-zero noise so weak matches don't dilute the result.
+
+
+
 export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
   const limit = opts.limit ?? 8;
   if (!query.trim()) return [];
@@ -218,8 +218,8 @@ export async function listKnowledgeEntries(
   `;
 }
 
-// Distinct stored cloud values, most common first — the deployment's live
-// environment vocabulary, so new entries reuse slugs instead of inventing them.
+
+
 export async function listEnvironments(): Promise<{ cloud: string; count: number }[]> {
   const rows = await sql`
     select cloud, count(*)::int as count
@@ -245,8 +245,8 @@ export async function updateKnowledgeEntry(id: string, patch: KnowledgeUpdateInp
     throw conflict(`Version conflict: expected ${patch.expectedVersion}, found ${current.version}`);
   }
 
-  // component: null clears both the FK and the derived product_area; a slug
-  // re-resolves strictly against the entry's product.
+  
+  
   let componentId: string | null = current.component_id;
   let productArea: string | null = current.product_area;
   if ('component' in patch) {

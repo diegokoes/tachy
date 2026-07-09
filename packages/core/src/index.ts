@@ -1,7 +1,7 @@
-// Public API of @tachy/core, aggregated from the domain modules under src/*.
-// The surface is curated here (named re-exports), so internal helpers stay internal.
 
-// platform
+
+
+
 export { sql } from "./platform";
 export { env, freshdeskToken, githubToken, sourceToken } from "./platform";
 export { AppError, notFound, conflict, badInput, forbidden } from "./platform";
@@ -26,7 +26,7 @@ export {
 } from "./platform";
 export type { SettingKey, SettingsMap, EffectiveSettings, SettingSource, DeploymentProfile } from "./platform";
 
-// knowledge
+
 export {
   saveKnowledgeEntry, searchKnowledge, backfillEmbeddings,
   getKnowledgeEntry, listKnowledgeEntries, updateKnowledgeEntry, listEnvironments,
@@ -42,19 +42,19 @@ export {
 } from "./knowledge";
 export type { Structured } from "./knowledge";
 
-// reference
+
 export {
   saveReferenceDoc, getReferenceDoc, listReferenceDocs, updateReferenceDoc, searchReferenceDocs,
 } from "./reference";
 export type { ReferenceDocInput, ReferenceDocUpdate, ReferenceSearchOptions } from "./reference";
 
-// work-items
+
 export { ingestWorkItem } from "./work-items";
 export type { IngestedItem } from "./work-items";
 export { recordRun, estimateCostUsd } from "./work-items";
 export type { RunInput } from "./work-items";
 
-// catalog
+
 export {
   listCustomers, addCustomer, updateCustomer, deleteCustomer, resolveCustomerByEmail, getCustomerIdBySlug,
   setWorkItemCustomer, setObservedVersion, getCustomerName, getCustomerSlug,
@@ -76,7 +76,7 @@ export {
   listLabels, addLabel, updateLabel, deleteLabel, labelRenameImpact, renameLabel,
 } from "./catalog";
 
-// sources
+
 export * from "./sources/source";
 export { registerSource, resolveSource } from "./sources";
 export type { ResolvedSource } from "./sources";
@@ -86,11 +86,11 @@ export {
 } from "./sources";
 export type { SourceConnectionInput, SourceProductMapInput } from "./sources";
 
-// search
+
 export { embedPassage, embedQuery, toVectorLiteral, EMBEDDING_DIM } from "./search";
 export { chunkText } from "./search";
 
-// compliance (PII redaction at the LLM boundary)
+
 export {
   TokenMap, scrubText, scrubKnownNames, scrubDeep, redactNormalized, redactForLlm,
   resolveRedactionPolicy, globalRedactionEnabled,

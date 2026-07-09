@@ -126,8 +126,8 @@ export interface ReferenceSearchOptions {
   limit?: number;
 }
 
-// Rank approved docs by their best-matching chunk (cosine) blended with doc-level
-// FTS + trigram. Returns the closest chunk as `snippet` rather than the full body.
+
+
 export async function searchReferenceDocs(query: string, opts: ReferenceSearchOptions = {}) {
   const limit = opts.limit ?? 6;
   if (!query.trim()) return [];
