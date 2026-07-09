@@ -3,9 +3,9 @@ import type {
   WorkItemSource, RawWorkItem, RawMessage, ListOptions, SourceFactory,
 } from "@tachy/core";
 
-// PII scrub of the raw GitHub issue payload for redaction mode. Deep-copies,
-// never mutates the input. GitHub's surface is small: user handles/emails on the
-// actor objects, plus free text in title/body.
+
+
+
 function scrubActor(u: unknown, map: TokenMap, name: string): void {
   if (!u || typeof u !== "object") return;
   const a = u as Record<string, any>;
@@ -27,7 +27,7 @@ function redactGithubRaw(raw: unknown, map: TokenMap, customerSlug: string | nul
   return issue;
 }
 
-// externalId format: "owner/repo#123"; groupKey = "owner/repo" maps via source_product_map.
+
 function parseRef(externalId: string): { repo: string; number: string } {
   const [repo, number] = externalId.split("#");
   if (!repo || !number) throw new Error(`Invalid GitHub ref '${externalId}', expected 'owner/repo#123'`);
@@ -61,7 +61,7 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
       externalUrl: issue.html_url,
       kind: "issue",
       title: issue.title,
-      status: issue.state,  // 'open' | 'closed'
+      status: issue.state,  
       groupKey: repo,
       requester: issue.user?.login,
       raw: issue,
@@ -96,8 +96,8 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
       const batch = await get(`/repos/${repo}/issues?${params.toString()}`);
       const arr = Array.isArray(batch) ? batch : [];
       for (const issue of arr) {
-        if (issue.pull_request) continue;          // issues endpoint also returns PRs
-        items.push(issueToItem(repo, issue, []));  // metadata only on sync
+        if (issue.pull_request) continue;          
+        items.push(issueToItem(repo, issue, []));  
       }
       if (arr.length < 100) break;
     }
@@ -127,7 +127,7 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
     },
 
     async listItems(opts: ListOptions) {
-      // groupKey ('owner/repo') narrows to one repo; otherwise sync all configured repos.
+      
       const repos = opts.groupKey ? [opts.groupKey] : configuredRepos;
       if (repos.length === 0) {
         throw new Error("GitHub sync needs a repo: pass --group=owner/repo or set config.repos on the connection");
