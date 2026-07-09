@@ -1,7 +1,7 @@
-// PII redaction at the LLM boundary: the DB keeps full data, only the copy
-// handed to the model is scrubbed. redactNormalized() covers the source-agnostic
-// RawWorkItem fields; each source's redactRaw() hook covers its `raw` payload,
-// sharing one TokenMap.
+
+
+
+
 
 import type { RawWorkItem } from "../sources/source";
 
@@ -24,17 +24,17 @@ export class TokenMap {
 
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 
-// Deliberately conservative (needs '+', (area), or 3 separated digit groups) so
-// ISO dates, IDs, and "HTTP 503" survive.
+
+
 const PHONE_RE =
   /(?:\+\d[\d\s().-]{6,}\d)|(?:\(\d{2,4}\)[\s.-]?\d{3,4}[\s.-]?\d{3,4})|(?:\b\d{3}[\s.-]\d{3,4}[\s.-]\d{3,4}\b)/g;
 
 const PEM_RE = /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
-// The key survives (it's the searchable signal); only the value is tokenized.
+
 const CREDENTIAL_ASSIGN_RE =
   /\b(password|passwd|pwd|secret|token|api[_-]?key|apikey|authorization)\b(\s*[:=]\s*)("[^"\n]+"|'[^'\n]+'|[^\s,;'"]+)/gi;
 const BEARER_RE = /\b(Bearer\s+)([A-Za-z0-9._~+/=-]{8,})/g;
-// Well-known key shapes: AWS, GitHub, OpenAI-style, Slack, Google, JWT.
+
 const KNOWN_KEY_RES = [
   /\bAKIA[0-9A-Z]{16}\b/g,
   /\bgh[oprsu]_[A-Za-z0-9]{20,}\b/g,
@@ -43,7 +43,7 @@ const KNOWN_KEY_RES = [
   /\bAIza[0-9A-Za-z_-]{35}\b/g,
   /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/g,
 ];
-// Only tokenized when Luhn passes, so long IDs and timestamps survive.
+
 const CARD_RE = /\b\d(?:[ -]?\d){12,18}\b/g;
 
 function luhnValid(candidate: string): boolean {
@@ -67,9 +67,9 @@ function luhnValid(candidate: string): boolean {
 export function scrubText(text: string | undefined, map: TokenMap): string {
   if (!text) return text ?? "";
   let out = text.replace(PEM_RE, (m) => map.token("SECRET", m));
-  // Bearer runs BEFORE the assignment rule so "Authorization: Bearer xyz" scrubs
-  // the actual token; the assignment rule then skips the leftover "Bearer" word
-  // and any placeholder already emitted.
+  
+  
+  
   out = out.replace(BEARER_RE, (_m, prefix, token) => `${prefix}${map.token("SECRET", token)}`);
   out = out.replace(CREDENTIAL_ASSIGN_RE, (m, key, sep, value) =>
     value.startsWith("[") || /^bearer$/i.test(value) ? m : `${key}${sep}${map.token("SECRET", value)}`);
@@ -125,8 +125,8 @@ export interface RedactOptions {
 export function redactNormalized(item: RawWorkItem, opts: RedactOptions): RawWorkItem {
   const { customerSlug, map } = opts;
   const customerToken = customerSlug || "[CUSTOMER]";
-  // "Hi, this is John Smith" must not survive when John Smith is the requester —
-  // pattern-based scrubText can't catch names, so declared names are scrubbed too.
+  
+  
   const knownNames = [item.requester, ...item.messages.map((m) => m.author)];
   const scrub = (text: string | undefined) => scrubKnownNames(scrubText(text, map), knownNames, map);
   return {

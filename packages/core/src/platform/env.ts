@@ -1,9 +1,9 @@
 import "dotenv/config";
 import { z } from "zod";
 
-// OIDC (Microsoft Entra, etc.) is considered configured only when all three core
-// fields are present. Interactive SSO for the web UI turns on when this exists;
-// automation always uses the bearer token independently.
+
+
+
 const oidcRaw =
   process.env.OIDC_ISSUER && process.env.OIDC_CLIENT_ID && process.env.OIDC_CLIENT_SECRET
     ? {
@@ -16,19 +16,19 @@ const oidcRaw =
     : undefined;
 
 const apiTokenRaw = process.env.TACHY_API_TOKEN || undefined;
-// Session-cookie signing secret (also accepted under the middleware's own var name).
+
 const sessionSecretRaw = process.env.TACHY_SESSION_SECRET || process.env.OIDC_AUTH_SECRET || undefined;
 
-// Validate config at import so a misconfig fails fast with a clear message, instead
-// of surfacing as a cryptic Postgres/HTTP error deep in a request later.
+
+
 const envSchema = z
   .object({
     databaseUrl: z.string().url("DATABASE_URL must be a valid postgres:// URL"),
     port: z.coerce.number().int().positive("PORT must be a positive integer"),
     userEmail: z.string().email().optional(),
     apiToken: z.string().min(1).optional(),
-    // "sso": interactive Entra login for users (+ token still works for automation).
-    // "token": shared bearer only. "open": no auth, binds to localhost (laptop dev).
+    
+    
     authMode: z.enum(["sso", "token", "open"]),
     sessionSecret: z
       .string()
@@ -52,7 +52,7 @@ const envSchema = z
   });
 
 const parsed = envSchema.safeParse({
-  databaseUrl: process.env.DATABASE_URL ?? "postgres://tachy:tachy@localhost:5432/tachy",
+  databaseUrl: process.env.DATABASE_URL ?? "postgres://localhost:5432/tachy",
   port: process.env.PORT ?? 8787,
   userEmail: process.env.TACHY_USER_EMAIL || undefined,
   apiToken: apiTokenRaw,

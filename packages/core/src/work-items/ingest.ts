@@ -28,7 +28,7 @@ export async function ingestWorkItem(connId: string, raw: RawWorkItem): Promise<
 
   const customerId = await resolveCustomerByEmail(raw.requesterEmail);
 
-  // customer_id omitted from ON CONFLICT SET — resolved on first insert only, never overwritten by re-sync.
+  
   const [item] = await sql`
     insert into work_items
       (source_connection_id, external_id, external_url, kind, title, status,

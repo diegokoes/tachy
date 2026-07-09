@@ -1,5 +1,5 @@
-// A small typed error so callers (API onError, MCP handlers) can map failures to
-// the right status/shape by `code` instead of regex-matching the message string.
+
+
 export type AppErrorCode = "not_found" | "conflict" | "bad_input" | "forbidden";
 
 export class AppError extends Error {

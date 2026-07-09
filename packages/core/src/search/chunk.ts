@@ -1,7 +1,7 @@
-// Split a long document into overlapping windows small enough to embed well.
-// all-MiniLM-L6-v2 truncates at ~256 tokens (~1000 chars), so we target ~800
-// chars and prefer paragraph boundaries, with a little overlap so a fact split
-// across a boundary still appears whole in at least one chunk.
+
+
+
+
 
 export interface ChunkOptions {
   maxChars?: number;
@@ -41,6 +41,6 @@ export function chunkText(text: string, opts: ChunkOptions = {}): string[] {
   }
   if (cur.trim()) packed.push(cur);
 
-  // A single oversized paragraph won't have been broken up above — hard-split it.
+  
   return packed.flatMap((c) => (c.length <= maxChars * 1.5 ? [c] : hardSplit(c, maxChars, overlap)));
 }

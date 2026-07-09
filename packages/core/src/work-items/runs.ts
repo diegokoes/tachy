@@ -3,16 +3,16 @@ import { sql } from "../platform/db";
 export interface RunInput {
   workItemId?: string | null;
   userId?: string | null;
-  mode: string;                    // 'ingest' | 'consult' | 'sync'
+  mode: string;                    
   model?: string | null;
   inputTokens?: number | null;
   outputTokens?: number | null;
   meta?: Record<string, unknown>;
 }
 
-// USD per 1M tokens, from the company AI Cost & Fair Usage guideline / Anthropic
-// pricing, matched by model-id tier substring. Used to surface an estimated cost
-// on each recorded run (audit only; no enforcement).
+
+
+
 const PRICING: Record<string, { in: number; out: number }> = {
   haiku: { in: 1, out: 5 },
   sonnet: { in: 3, out: 15 },

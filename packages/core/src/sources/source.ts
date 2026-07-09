@@ -1,4 +1,4 @@
-// Implement per source (freshdesk, github, …) and register it; no schema changes needed.
+
 
 import type { TokenMap } from "../compliance/redaction";
 
@@ -7,7 +7,7 @@ export interface RawMessage {
   author?: string;
   visibility: "public" | "private" | "internal";
   direction: "incoming" | "outgoing";
-  bodyText: string;            // adapter delivers plain text (HTML already stripped)
+  bodyText: string;            
   attachments?: unknown[];
   createdAt?: string;
 }
@@ -17,14 +17,14 @@ export interface RawWorkItem {
   externalUrl?: string;
   kind: "ticket" | "issue";
   title?: string;
-  status?: string;             // raw; account-specific mapping
-  groupKey?: string;           // freshdesk group_id, or 'owner/repo'
-  requester?: string;          // source-native id, not necessarily an email
-  requesterEmail?: string;     // for customer auto-matching by email domain
-  raw: unknown;                // full source payload
+  status?: string;             
+  groupKey?: string;           
+  requester?: string;          
+  requesterEmail?: string;     
+  raw: unknown;                
   sourceCreatedAt?: string;
   sourceUpdatedAt?: string;
-  messages: RawMessage[];      // empty on list/sync; populated by fetchItem
+  messages: RawMessage[];      
 }
 
 export interface SourceCapabilities {
@@ -58,5 +58,5 @@ export interface WorkItemSource {
 export type SourceFactory = (cfg: {
   baseUrl: string;
   slug: string;
-  config: Record<string, unknown>;   // non-secret (e.g. github repos list)
+  config: Record<string, unknown>;   
 }) => WorkItemSource;

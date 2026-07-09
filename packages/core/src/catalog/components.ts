@@ -38,10 +38,10 @@ export async function addComponent(i: AddComponentInput) {
   return row;
 }
 
-// Partial edit; the slug is the stable taxonomy reference and stays immutable.
-// parentSlug: null detaches from the parent, a slug re-parents (cycles rejected
-// by re-parenting onto a descendant being impossible to express here  the
-// parent must already exist and differ from the component itself).
+
+
+
+
 export async function updateComponent(
   productId: string,
   slug: string,
@@ -77,11 +77,11 @@ export async function updateComponent(
   return row;
 }
 
-// Child components would cascade away and linked entries would silently lose
-// their component (FK is on delete set null), so refuse while referenced.
-// A component's entries link by uuid component_id (rename-safe), but the slug is
-// also used as a findability tag on entries/docs. Count those — they're what a
-// slug rename will rewrite.
+
+
+
+
+
 export async function componentRenameImpact(productId: string, slug: string): Promise<{ entries: number; docs: number }> {
   const [current] = await sql`select id from components where product_id = ${productId} and slug = ${slug}`;
   if (!current) throw notFound(`Component '${slug}' not found for this product`);
@@ -90,9 +90,9 @@ export async function componentRenameImpact(productId: string, slug: string): Pr
   return { entries: e.n, docs: d.n };
 }
 
-// Rename a component slug and rewrite the slug wherever it was used as a tag on
-// this product's entries/docs. component_id links are uuid and unaffected. Done
-// in a transaction so a partial rewrite can't happen.
+
+
+
 export async function renameComponent(productId: string, oldSlug: string, newSlug: string) {
   if (oldSlug === newSlug) return { renamed: false, from: oldSlug, to: newSlug, entries: 0, docs: 0 };
   const [current] = await sql`select id from components where product_id = ${productId} and slug = ${oldSlug}`;
@@ -125,12 +125,12 @@ export async function deleteComponent(productId: string, slug: string) {
 export interface ResolvedComponent {
   id: string;
   slug: string;
-  path: string; // "Product / Ancestor / … / Component", derived from the hierarchy
+  path: string; 
 }
 
-// Strict resolution for the SAVE path: unlike resolveComponentTags there is no
-// silent fallback — an unknown value is rejected with nearest-match suggestions,
-// so a typo can't silently become a new taxonomy value.
+
+
+
 export async function resolveComponentStrict(productId: string, slugOrAlias: string): Promise<ResolvedComponent> {
   const [row] = await sql`
     select id, slug from components
@@ -160,7 +160,7 @@ export async function resolveComponentStrict(productId: string, slugOrAlias: str
   );
 }
 
-// Recompute the display path for an already-linked component (update path).
+
 export async function getComponentPath(componentId: string): Promise<string> {
   const [row] = await sql`
     with recursive chain as (
@@ -178,10 +178,10 @@ export async function getComponentPath(componentId: string): Promise<string> {
   return row.path as string;
 }
 
-// Expand a component slug/alias into the set of tag values that should match it,
-// so "filter by line controller" catches entries tagged 'lc', 'LC', etc. Falls
-// back to the raw input when no component is registered, so it still works as a
-// plain tag filter.
+
+
+
+
 export async function resolveComponentTags(productId: string, slugOrAlias: string): Promise<string[]> {
   const [row] = await sql`
     select slug, aliases from components
@@ -193,9 +193,9 @@ export async function resolveComponentTags(productId: string, slugOrAlias: strin
   return [row.slug as string, ...((row.aliases as string[]) ?? [])];
 }
 
-// The FILTER path (search/list): a registered component filters by FK link OR
-// its slug/aliases as tags (legacy entries); an unregistered value degrades to
-// a plain tag filter. Shared by the MCP search tool and the HTTP routes.
+
+
+
 export async function resolveComponentFilter(
   productId: string,
   slugOrAlias: string,

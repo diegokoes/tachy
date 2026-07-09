@@ -1,8 +1,8 @@
 import { sql } from "../platform/db";
 import { badInput, conflict, notFound } from "../platform/errors";
 
-// Resolve by exact slug OR a case-insensitive alias match, so naming variants
-// ('tpd' / 'Tobacco Product Directive') all reach the same product.
+
+
 export async function getProductIdBySlug(slug: string): Promise<string> {
   const [row] = await sql`
     select id from products
@@ -33,9 +33,9 @@ export async function addTeam(slug: string, name: string) {
   return row;
 }
 
-// Rename a team's display name and/or its slug. Teams are referenced by uuid id,
-// so a slug rename is a single-row update with no cascade; the slug just has to
-// stay unique (a collision surfaces as a clean conflict).
+
+
+
 export async function updateTeam(currentSlug: string, patch: { name?: string; slug?: string }) {
   const [current] = await sql`select id, slug, name from teams where slug = ${currentSlug}`;
   if (!current) throw notFound(`Team '${currentSlug}' not found`);
@@ -55,8 +55,8 @@ export async function updateTeam(currentSlug: string, patch: { name?: string; sl
   }
 }
 
-// Deleting a team would cascade its products (and their components/labels), so
-// refuse while products exist  the products carry the actual knowledge scope.
+
+
 export async function deleteTeam(slug: string) {
   const [team] = await sql`select id from teams where slug = ${slug}`;
   if (!team) throw notFound(`Team '${slug}' not found`);
@@ -87,8 +87,8 @@ export async function addProduct(teamSlug: string, slug: string, name: string, a
   return row;
 }
 
-// Partial edit. Products are referenced by uuid id, so renaming the slug is a
-// single-row update with no cascade; it only has to stay unique within the team.
+
+
 export async function updateProduct(productId: string, patch: { name?: string; aliases?: string[]; slug?: string }) {
   const [current] = await sql`select id, name, aliases, slug from products where id = ${productId}`;
   if (!current) throw notFound(`Product '${productId}' not found`);
@@ -109,8 +109,8 @@ export async function updateProduct(productId: string, patch: { name?: string; a
   }
 }
 
-// Entries/work items/docs only set-null their product on delete, and
-// components/labels would cascade away  refuse while anything references it.
+
+
 export async function deleteProduct(productId: string) {
   const [current] = await sql`select id, slug from products where id = ${productId}`;
   if (!current) throw notFound(`Product '${productId}' not found`);
@@ -131,8 +131,8 @@ export async function deleteProduct(productId: string) {
   return { deleted: true, slug: current.slug };
 }
 
-// Optional per-product advisory tag vocabulary. NOT enforced against
-// knowledge_entries.tags — it's a curated suggestion list a team can maintain.
+
+
 export async function listLabels(productId: string) {
   return sql`select id, slug, description from labels where product_id = ${productId} order by slug`;
 }
@@ -156,8 +156,8 @@ export async function updateLabel(productId: string, slug: string, description: 
   return row;
 }
 
-// Label slugs are used as findability tags on entries/docs — count those, since
-// a slug rename rewrites them.
+
+
 export async function labelRenameImpact(productId: string, slug: string): Promise<{ entries: number; docs: number }> {
   const [current] = await sql`select id from labels where product_id = ${productId} and slug = ${slug}`;
   if (!current) throw notFound(`Label '${slug}' not found for this product`);
@@ -166,8 +166,8 @@ export async function labelRenameImpact(productId: string, slug: string): Promis
   return { entries: e.n, docs: d.n };
 }
 
-// Rename a label slug and rewrite it wherever it tagged this product's
-// entries/docs, in a transaction.
+
+
 export async function renameLabel(productId: string, oldSlug: string, newSlug: string) {
   if (oldSlug === newSlug) return { renamed: false, from: oldSlug, to: newSlug, entries: 0, docs: 0 };
   const [current] = await sql`select id from labels where product_id = ${productId} and slug = ${oldSlug}`;
@@ -184,8 +184,8 @@ export async function renameLabel(productId: string, oldSlug: string, newSlug: s
   });
 }
 
-// Labels are advisory vocabulary only (tags on entries stay free-form), so
-// deleting one needs no reference guard.
+
+
 export async function deleteLabel(productId: string, slug: string) {
   const [row] = await sql`
     delete from labels where product_id = ${productId} and slug = ${slug} returning slug

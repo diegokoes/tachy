@@ -1,10 +1,10 @@
 import { sql } from "./db";
 import { forbidden } from "./errors";
 
-// Delegated authorization, shared by the HTTP API and the MCP server so the two
-// adapters can never drift: a global admin can do everything; a team mini-admin
-// (team_members.role = 'admin') curates knowledge/docs/taxonomy/membership for
-// their teams only.
+
+
+
+
 
 export interface EntryScope {
   productId?: string | null;
@@ -13,13 +13,13 @@ export interface EntryScope {
 
 interface PermissionContext {
   isGlobalAdmin: boolean;
-  // team_id -> team_slug for every team the user is a mini-admin of
+  
   teamAdmin: Map<string, string>;
 }
 
-// The MCP server is spawned per agent turn and the API resolves permissions on
-// every guarded write, so cache the per-user context briefly instead of
-// re-querying per tool call.
+
+
+
 const CACHE_TTL_MS = 60_000;
 const cache = new Map<string, { ctx: PermissionContext; expires: number }>();
 
@@ -61,9 +61,9 @@ export async function isAnyTeamAdmin(userId: string): Promise<boolean> {
   return ctx.isGlobalAdmin || ctx.teamAdmin.size > 0;
 }
 
-// True when the user may curate content in the given scope: global admin, team
-// mini-admin of scope.teamId, or of the team owning scope.productId. A scope
-// with neither id set is org-global -> global admin only.
+
+
+
 export async function canEditScope(userId: string, scope: EntryScope): Promise<boolean> {
   const ctx = await contextFor(userId);
   if (ctx.isGlobalAdmin) return true;
@@ -86,8 +86,8 @@ export async function canManageTeamBySlug(userId: string, teamSlug: string): Pro
   return ctx.isGlobalAdmin || [...ctx.teamAdmin.values()].includes(teamSlug);
 }
 
-// assert* variants throw the shared `forbidden` error so both adapters surface
-// identical messages (HTTP 403 / MCP tool error).
+
+
 
 export async function assertCanEditScope(userId: string, scope: EntryScope): Promise<void> {
   if (!(await canEditScope(userId, scope)))

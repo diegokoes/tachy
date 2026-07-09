@@ -6,7 +6,7 @@ import { hashPassword } from "./passwords";
 export const USER_ROLES = ["admin", "member"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
-// Per-team role: 'admin' = team mini-admin (delegated curation for that team).
+
 export const TEAM_ROLES = ["admin", "member"] as const;
 export type TeamRole = (typeof TEAM_ROLES)[number];
 
@@ -33,7 +33,7 @@ export async function upsertUser(email: string, displayName?: string): Promise<s
 
 let cachedUserId: string | null | undefined;
 
-// Resolves from TACHY_USER_EMAIL, upserting on first use and caching. Returns null if unconfigured.
+
 export async function resolveCurrentUserId(): Promise<string | null> {
   if (cachedUserId !== undefined) return cachedUserId;
   cachedUserId = env.userEmail ? await upsertUser(env.userEmail) : null;
@@ -71,7 +71,7 @@ export async function createUser(input: {
   return rows[0] as unknown as UserRow;
 }
 
-// Login-relevant fields; only for the auth layer, never serialized to clients.
+
 export async function getUserByEmail(email: string): Promise<
   { id: string; email: string; display_name: string | null; role: UserRole; disabled: boolean; password_hash: string | null } | null
 > {
@@ -90,7 +90,7 @@ async function requireUser(id: string): Promise<{ role: UserRole; disabled: bool
 
 export async function setUserRole(id: string, role: UserRole): Promise<void> {
   const current = await requireUser(id);
-  // Never demote the last active admin — that would lock everyone out.
+  
   if (role !== "admin" && current.role === "admin" && !current.disabled && (await countAdmins()) <= 1)
     throw badInput("cannot demote the last admin");
   await sql`update users set role = ${role} where id = ${id}`;
@@ -109,7 +109,7 @@ export async function setUserDisabled(id: string, disabled: boolean): Promise<vo
   await sql`update users set disabled = ${disabled} where id = ${id}`;
 }
 
-// ── Team membership (users ↔ teams) ─────────────────────────────────────────
+
 
 export interface TeamMemberRow {
   user_id: string;
@@ -130,7 +130,7 @@ export async function listTeamMembers(teamSlug: string): Promise<TeamMemberRow[]
   return rows as unknown as TeamMemberRow[];
 }
 
-// role = null removes the membership; otherwise upserts it.
+
 export async function setTeamMember(teamSlug: string, email: string, role: TeamRole | null): Promise<void> {
   const [team] = await sql`select id from teams where slug = ${teamSlug}`;
   if (!team) throw notFound(`team '${teamSlug}' not found`);

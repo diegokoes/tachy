@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { badInput } from "../platform/errors";
 
-// Documents + validates the `structured` JSONB on knowledge entries. Everything is
-// optional and the object is passthrough: this is a contract, not a straitjacket —
-// extra keys are kept, but the documented narrative fields get a known shape so the
-// data stays consistent across entries. The low-cardinality, filterable facets
-// (cloud / quality) live as real columns now, NOT in here.
+
+
+
+
+
 export const structuredSchema = z
   .object({
     environment: z
@@ -41,8 +41,8 @@ export const structuredSchema = z
 
 export type Structured = z.infer<typeof structuredSchema>;
 
-// Validate (and normalize) a `structured` blob, turning a schema failure into a
-// clean bad_input AppError so it maps to 400 / a tool error consistently.
+
+
 export function parseStructured(value: unknown): Structured {
   if (value == null) return {};
   const res = structuredSchema.safeParse(value);
@@ -53,9 +53,9 @@ export function parseStructured(value: unknown): Structured {
   return res.data;
 }
 
-// Promoted facets, shared by knowledge save/update across MCP + API. `cloud` is
-// deliberately NOT an enum — the vocabulary is deployment-specific; it's only
-// shape-checked as a slug, with existing values discoverable via listEnvironments().
+
+
+
 export const RESOLUTION_CLARITIES = ["clear", "partial", "unclear"] as const;
 export const LEARNING_VALUES = ["high", "medium", "low"] as const;
 
@@ -65,8 +65,8 @@ export const cloudSchema = z
 export const resolutionClaritySchema = z.enum(RESOLUTION_CLARITIES);
 export const learningValueSchema = z.enum(LEARNING_VALUES);
 
-// Single source of truth for every CHECK-constrained column. db/schema.sql must
-// stay in lockstep — test/schema-drift.test.ts asserts the two never diverge.
+
+
 export const KNOWLEDGE_STATUSES = ["draft", "approved", "rejected", "archived", "deprecated"] as const;
 export const REFERENCE_STATUSES = ["draft", "approved", "archived"] as const;
 export const CONFIDENCES = ["low", "medium", "high"] as const;

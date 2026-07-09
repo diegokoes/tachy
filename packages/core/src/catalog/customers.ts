@@ -4,7 +4,7 @@ import { badInput, conflict, notFound } from "../platform/errors";
 export interface CustomerInput {
   name: string;
   slug: string;
-  aliases?: string[];    // other names / email domains that resolve to this customer
+  aliases?: string[];    
   notes?: string;
 }
 
@@ -25,7 +25,7 @@ export async function addCustomer(i: CustomerInput) {
   return row;
 }
 
-// Partial edit; the slug is the stable reference and stays immutable.
+
 export async function updateCustomer(slug: string, patch: { name?: string; aliases?: string[]; notes?: string | null }) {
   const [current] = await sql`select id, name, aliases, notes from customers where slug = ${slug}`;
   if (!current) throw notFound(`Customer '${slug}' not found`);
@@ -40,8 +40,8 @@ export async function updateCustomer(slug: string, patch: { name?: string; alias
   return row;
 }
 
-// Deleting a referenced customer would silently orphan its work items (the FK
-// is on delete set null), so refuse with a count instead.
+
+
 export async function deleteCustomer(slug: string) {
   const [current] = await sql`select id from customers where slug = ${slug}`;
   if (!current) throw notFound(`Customer '${slug}' not found`);
