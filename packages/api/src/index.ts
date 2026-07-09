@@ -7,8 +7,8 @@ import { isBootstrapped } from "./auth";
 export { createApp } from "./app";
 export type { AppType } from "./app";
 
-// Serve the built SPA if it exists (production / after `npm run web:build`). In
-// pure frontend-dev, Vite serves the SPA and proxies here, so dist may be absent.
+
+
 const webRoot = process.env.TACHY_WEB_ROOT ?? "packages/web/dist";
 const serveWeb = existsSync(webRoot);
 
@@ -21,9 +21,9 @@ const app = createApp({
   passwordAuth: true,
 });
 
-// Bind to all interfaces when some auth stands guard: token, SSO, or password
-// login (the instance is bootstrapped). Otherwise stay on loopback so an
-// unauthenticated instance isn't exposed — run the setup wizard locally first.
+
+
+
 const authConfigured = Boolean(env.apiToken || oidc) || (await isBootstrapped());
 if (!authConfigured) {
   console.warn(

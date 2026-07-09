@@ -15,8 +15,8 @@ const setupSchema = z.object({
   display_name: z.string().optional(),
   org_name: z.string().optional(),
   team: slugName.optional(),
-  product: slugName.optional(), // requires team (kept for older clients)
-  products: z.array(slugName).optional(), // requires team; the wizard's multi-product form
+  product: slugName.optional(), 
+  products: z.array(slugName).optional(), 
   settings: z
     .object({
       redaction_global: z.boolean().optional(),
@@ -28,8 +28,8 @@ const setupSchema = z.object({
     .optional(),
 });
 
-// First-run bootstrap. Mounted BEFORE the auth gate (public): the status probe
-// drives the SPA wizard, and the POST is only usable while no admin exists.
+
+
 export const setup = new Hono()
   .get("/status", async (c) => c.json({ bootstrapped: (await countAdmins()) > 0 }))
 
@@ -37,7 +37,7 @@ export const setup = new Hono()
     const body = c.req.valid("json");
     const hash = await hashPassword(body.password);
 
-    // Exclusive lock so two concurrent first-run POSTs can't both become admin.
+    
     await sql.begin(async (tx) => {
       await tx`lock table users in exclusive mode`;
       const [row] = await tx`select count(*)::int as n from users where role = 'admin' and not disabled`;

@@ -6,12 +6,12 @@ import {
 } from "@tachy/core";
 import { getIdentity } from "./auth";
 
-// Scoped authorization helpers for route handlers (not middleware  the scope
-// usually depends on the fetched row or the request body). Each assert* lets
-// global admins straight through: that covers real admins, the bearer token
-// (via "token") and open mode (via "open"), so unconfigured instances keep
-// working unchanged. Everyone else must resolve to a user row and pass the
-// shared core permission check.
+
+
+
+
+
+
 
 export async function callerUserId(c: Context): Promise<string | null> {
   const email = getIdentity(c)?.email ?? env.userEmail;

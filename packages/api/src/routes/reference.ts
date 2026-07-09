@@ -30,9 +30,9 @@ const referenceUpdateSchema = z.object({
 
 const csv = (v: string | undefined) => v?.split(",").map((t) => t.trim()).filter(Boolean);
 
-// Reference docs (freeform project context): browse/fetch/semantic-search for
-// everyone, create/edit/status for curators (global admin or team mini-admin
-// of the doc's scope). Chunking + embedding happen inside the core save/update.
+
+
+
 export const reference = new Hono()
   .get("/search", async (c) => {
     const tags = csv(c.req.query("tags"));
@@ -47,7 +47,7 @@ export const reference = new Hono()
   .get("/:id", async (c) => c.json(await getReferenceDoc(c.req.param("id"))))
   .patch("/:id", zValidator("json", referenceUpdateSchema), async (c) => {
     const id = c.req.param("id");
-    const doc = await getReferenceDoc(id); // 404s before the permission check
+    const doc = await getReferenceDoc(id); 
     await assertScopeEditor(c, { productId: doc.product_id, teamId: doc.team_id });
     return c.json(await updateReferenceDoc(id, c.req.valid("json")));
   })

@@ -64,8 +64,8 @@ const feedbackSchema = z.object({
 
 const csv = (v: string | undefined) => v?.split(",").map((t) => t.trim()).filter(Boolean);
 
-// component=<slug-or-alias> narrows to a component within ?product_id (FK link
-// or legacy tag match); without product_id it is ignored, mirroring MCP.
+
+
 async function componentFilter(c: { req: { query(k: string): string | undefined } }, tags: string[] | undefined) {
   const component = c.req.query("component");
   const productId = c.req.query("product_id");
@@ -79,8 +79,8 @@ async function componentFilter(c: { req: { query(k: string): string | undefined 
   };
 }
 
-// Scope of a new entry for authorization: explicit product/team ids win; a
-// work-item-only save inherits the item's scope (mirrors saveKnowledgeEntry).
+
+
 async function newEntryScope(body: { workItemId?: string; productId?: string; teamId?: string }): Promise<EntryScope> {
   if (body.productId || body.teamId) return { productId: body.productId, teamId: body.teamId };
   if (body.workItemId) {
@@ -90,7 +90,7 @@ async function newEntryScope(body: { workItemId?: string; productId?: string; te
   return {};
 }
 
-// Chained so `typeof knowledge` carries the route types for an RPC client.
+
 export const knowledge = new Hono()
   .get("/search", async (c) => {
     const rows = await searchKnowledge(c.req.query("q") ?? "", {
@@ -106,8 +106,8 @@ export const knowledge = new Hono()
     });
     return c.json(rows);
   })
-  // Distinct observed environments with usage counts — feeds the UI filter
-  // dropdown. Registered before "/:id" so it isn't captured as an id.
+  
+  
   .get("/environments", async (c) => c.json(await listEnvironments()))
   .get("/:id/feedback", async (c) => c.json(await listFeedback(c.req.param("id"))))
   .post("/:id/feedback", zValidator("json", feedbackSchema), async (c) => {

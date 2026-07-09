@@ -23,12 +23,12 @@ const patchSchema = z.object({
 
 const memberSchema = z.object({
   email: z.string().email(),
-  // null removes the membership; 'admin' = team mini-admin
+  
   role: z.enum(TEAM_ROLES).nullable(),
 });
 
-// User management. Global user CRUD stays admin-only; the user list and team
-// membership are also open to team mini-admins so they can manage their teams.
+
+
 export const users = new Hono()
   .get("/", async (c) => {
     await assertAnyTeamAdminApi(c);
