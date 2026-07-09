@@ -1,10 +1,4 @@
 <script lang="ts">
-  // A native <select> replacement with a DOS/ANSI16 look. The browser's own
-  // <select> popup is OS-drawn and unstyleable, so we render our own listbox:
-  // a blocky panel with a full-width inverse-video selection bar (the classic
-  // DOS text-mode highlight) and a ▼ marker on the trigger. Keyboard + click
-  // behaviour mirrors a real select. Drop-in for `bind:value`; pass `onchange`
-  // for the controlled (value + handler) call sites.
   type Val = string | number;
   type Opt = { value: Val; label: string; disabled?: boolean };
   type OptIn = Opt | string | number;
@@ -25,7 +19,6 @@
     "aria-label"?: string;
   } = $props();
 
-  // Normalise "low" / 3 shorthand into full {value,label} rows.
   const opts = $derived(
     options.map((o) =>
       typeof o === "object" ? o : { value: o, label: String(o) },
@@ -33,8 +26,8 @@
   );
 
   let open = $state(false);
-  let active = $state(0); // highlighted row while the panel is open
-  let dropUp = $state(false); // flip above the trigger when there's no room below
+  let active = $state(0); 
+  let dropUp = $state(false); 
   let root: HTMLDivElement;
   let listEl: HTMLDivElement | undefined = $state();
 
@@ -46,8 +39,6 @@
   function openPanel() {
     if (disabled) return;
     active = selectedIndex >= 0 ? selectedIndex : 0;
-    // The panel lives in-flow (a scroll container may clip it), so open
-    // upward when the trigger sits low and there's more room above.
     const r = root?.getBoundingClientRect();
     const below = r ? window.innerHeight - r.bottom : Infinity;
     const est = Math.min(opts.length * 32 + 8, 240);
@@ -104,12 +95,10 @@
     }
   }
 
-  // Close when focus/clicks leave the widget.
   function onWindowPointer(e: PointerEvent) {
     if (open && root && !root.contains(e.target as Node)) close();
   }
 
-  // Keep the highlighted row in view while arrowing through a long list.
   $effect(() => {
     if (!open || !listEl) return;
     const el = listEl.children[active] as HTMLElement | undefined;
@@ -158,8 +147,6 @@
 </div>
 
 <style>
-  /* Sits where the old <select> did: stretches in column labels, stays
-     content-sized in flex rows  same as a native control. */
   .asel { position: relative; display: inline-flex; max-width: 100%; }
 
   .trigger {
@@ -194,12 +181,10 @@
   }
   .open .arrow { transform: rotate(180deg); }
 
-  /* The DOS list box: solid ground, hard 1px accent frame, blocky corners. */
   .panel {
     position: absolute;
     top: calc(100% + 2px);
     left: 0;
-    /* opened downward by default; .up flips it above the trigger */
   }
   .up .panel {
     top: auto;
@@ -232,7 +217,6 @@
   .opt.selected { color: var(--accent); }
   .opt.disabled { opacity: 0.4; cursor: default; }
 
-  /* Classic text-mode selection bar: full-width inverse video. */
   .opt.active {
     background: var(--accent);
     color: var(--bg);

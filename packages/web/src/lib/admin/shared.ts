@@ -1,5 +1,5 @@
-// Shared row types + copy for the admin panels. Each panel owns its own
-// loading/error/saving state; only the vocabulary lives here.
+
+
 
 export type Team = { id: string; slug: string; name: string };
 export type Product = { id: string; slug: string; name: string; aliases: string[] | null; team_slug: string; team_name: string };

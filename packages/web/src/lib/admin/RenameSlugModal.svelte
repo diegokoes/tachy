@@ -1,8 +1,8 @@
 <script lang="ts">
-  // The shared slug-rename flow: fetch the cascade impact for `resource`, show it
-  // in the retro AsciiModal, and POST the rename on confirm. Panels supply only
-  // the resource path, the target slug, a message snippet (fed the impact counts),
-  // and an onRenamed hook for any follow-up field patch + reload.
+  
+  
+  
+  
   import { onMount, type Snippet } from "svelte";
   import { api } from "../api";
   import AsciiModal from "../AsciiModal.svelte";
@@ -20,9 +20,9 @@
     message,
   }: {
     title?: string;
-    resource: string; // base path including the current slug, e.g. "/products/tpd/labels/lc"
+    resource: string; 
     to: string;
-    onRenamed: () => void | Promise<void>; // follow-up patch + reload + close
+    onRenamed: () => void | Promise<void>; 
     onCancel: () => void;
     onError: (msg: string) => void;
     message: Snippet<[RenameImpact]>;
@@ -47,7 +47,7 @@
       await onRenamed();
     } catch (e) {
       onError(errText(e));
-      busy = false; // leave the modal open so the user can retry or cancel
+      busy = false; 
     }
   }
 </script>

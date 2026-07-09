@@ -1,8 +1,8 @@
 <script lang="ts">
-  // The shared two-click delete affordance: first click arms (the square fills
-  // red), second click confirms and calls onConfirm. Arming is owned here, so
-  // panels only supply the actual delete action. Disarms on mouse-leave/blur so
-  // a half-armed button never stays hot, and only one is ever armed at a time.
+  
+  
+  
+  
   let {
     onConfirm,
     title = "delete",

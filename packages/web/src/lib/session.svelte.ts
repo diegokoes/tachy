@@ -1,13 +1,13 @@
-// Auth/session state for the SPA: who is logged in, what login methods the
-// server offers, and whether the instance has been set up at all. /auth/* and
-// /api/setup/status live outside /api, so raw fetch (no api.ts) on purpose.
+
+
+
 
 export interface Me {
   email: string | null;
   name: string | null;
   role: "admin" | "member";
   via: "password" | "sso" | "open";
-  // teams this user mini-admins (delegated curation); empty for plain members
+  
   team_admin?: { team_id: string; team_slug: string }[];
 }
 
@@ -15,7 +15,7 @@ export interface AuthConfig {
   authMode: string;
   sso: boolean;
   passwordLogin: boolean;
-  // deployment profile (terminology switch); "support" when the server predates it
+  
   profile?: "support" | "engineering";
 }
 
@@ -44,17 +44,17 @@ export async function initSession(): Promise<void> {
   }
 }
 
-// True when the user can curate anywhere at all (drives showing the controls;
-// the server enforces the exact scope on every write).
+
+
 export function isCurator(): boolean {
   const me = session.me;
   return !!me && (me.role === "admin" || (me.team_admin?.length ?? 0) > 0);
 }
 
-// Client-side approximation of core's canEditScope, for showing/hiding curation
-// affordances. Pass whichever of the entry's team_id / owning team_slug is
-// known; when neither resolves, any team-admin sees the control and the server
-// makes the final call.
+
+
+
+
 export function canCurateScope(scope: { team_id?: string | null; team_slug?: string | null }): boolean {
   const me = session.me;
   if (!me) return false;
@@ -65,8 +65,8 @@ export function canCurateScope(scope: { team_id?: string | null; team_slug?: str
   return !scope.team_id && !scope.team_slug && teams.length > 0;
 }
 
-// Called by the api clients on a 401. With password login available the in-app
-// login screen takes over; a pure-SSO deployment bounces to the IdP instead.
+
+
 export function onUnauthorized(): void {
   if (session.config?.sso && !session.config.passwordLogin) {
     window.location.href = `/auth/login?redirect=${encodeURIComponent(location.pathname + location.search)}`;

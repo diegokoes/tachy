@@ -1,5 +1,5 @@
-// SSE over fetch (EventSource can't POST a JSON body). Streams the agent turn
-// events emitted by POST /api/agent/chat.
+
+
 import { onUnauthorized } from "./session.svelte";
 
 export interface ChatBody {

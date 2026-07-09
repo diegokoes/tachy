@@ -9,8 +9,8 @@
 
   const short = (tool: string) => tool.replace(/^mcp__tachy__/, "");
 
-  // Stick-to-bottom: sending always snaps; streamed growth snaps only while
-  // the user hasn't scrolled up to read something.
+  
+  
   let transcriptEl = $state<HTMLDivElement>();
   let pinned = true;
 
@@ -26,13 +26,13 @@
     if (el && pinned) el.scrollTop = el.scrollHeight;
   }
 
-  // On (re)mount with a preserved transcript, start at the bottom.
+  
   $effect(() => {
     if (transcriptEl) snap(true);
   });
 
-  // Drop & shatter for a denied proposal: chars rain off, then the block
-  // collapses. Runs when the denied <pre> replaces the textarea.
+  
+  
   function shatter(node: HTMLElement) {
     if (reducedMotion()) return;
     const split = new SplitText(node, { type: "chars", reduceWhiteSpace: false });
@@ -103,8 +103,8 @@
     }
   }
 
-  // The approval JSON is collapsed in the transcript; this holds the entry
-  // whose payload is open in the fullscreen editor modal (null = closed).
+  
+  
   let jsonModal = $state<Extract<Entry, { kind: "approval" }> | null>(null);
 
   const peek = (json: string) => json.replace(/\s+/g, " ").slice(0, 140);
@@ -121,7 +121,7 @@
       }
     }
     await approve(chat.turnId, entry.id, ok, updated);
-    // status flips via the approval_resolved event
+    
   }
 
   async function addFiles(files: FileList | null | undefined) {
@@ -139,7 +139,7 @@
     (e.target as HTMLInputElement).value = "";
   }
 
-  // Drag & drop attachments; enter/leave counting survives child re-entries.
+  
   let dragDepth = $state(0);
 
   function onDrop(e: DragEvent) {
@@ -148,9 +148,9 @@
     addFiles(e.dataTransfer?.files);
   }
 
-  // Clear is two-stage: first click glitches the transcript and arms the red
-  // SURE? button; the second click shatters everything and wipes the state.
-  // Arming times out back to normal.
+  
+  
+  
   let clearArmed = $state(false);
   let disarmTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -203,7 +203,7 @@
       ease: "power1.in",
       stagger: { amount: 0.5 },
     });
-    // Whatever SplitText can't split (textareas, buttons) drops with its block.
+    
     tl.to(nodes, { y: 40, opacity: 0, duration: 0.35, ease: "power1.in" }, 0.25);
   }
 

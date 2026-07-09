@@ -17,7 +17,7 @@
   let showForm = $state(false);
   let form = $state({ email: "", name: "", password: "", role: "member" });
 
-  let pwFor = $state<string | null>(null); // user id with the set-password input open
+  let pwFor = $state<string | null>(null); 
   let pwValue = $state("");
 
   const filtered = $derived(
@@ -69,7 +69,7 @@
       users = await api.get("/users");
     } catch (e) {
       error = errText(e);
-      users = await api.get("/users"); // revert optimistic select/checkbox state
+      users = await api.get("/users"); 
     }
   }
 

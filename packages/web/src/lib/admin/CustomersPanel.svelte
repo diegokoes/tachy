@@ -68,7 +68,7 @@
       await api.delete(`/customers/${slug}`);
       await load();
     } catch (err) {
-      error = errText(err); // "referenced by N work items" 409 shows verbatim
+      error = errText(err); 
     }
   }
 

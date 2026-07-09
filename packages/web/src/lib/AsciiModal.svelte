@@ -1,7 +1,7 @@
 <script lang="ts">
-  // Retro-terminal confirm dialog: a double-ruled ASCII box that powers on like
-  // an old CRT (a bright line that expands, then the text reveals). Enter
-  // confirms, Esc / backdrop cancels.
+  
+  
+  
   import { onMount, type Snippet } from "svelte";
   import { gsap, reducedMotion } from "./gsap";
 
@@ -29,7 +29,7 @@
     if (!box || reducedMotion()) return;
     const reveal = box.querySelectorAll<HTMLElement>(".am-reveal");
     gsap.timeline()
-      // CRT power-on: collapse to a scanline, then snap open.
+      
       .from(box, { scaleY: 0.012, duration: 0.16, ease: "power3.out" })
       .from(box, { filter: "brightness(2.4)", duration: 0.25, ease: "power2.out" }, "<")
       .from(reveal, { autoAlpha: 0, y: 3, duration: 0.18, stagger: 0.04 }, ">-0.03");

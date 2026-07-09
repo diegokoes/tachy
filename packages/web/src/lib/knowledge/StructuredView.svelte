@@ -1,7 +1,7 @@
 <script lang="ts">
-  // Renders the known structuredSchema sections as readable blocks instead of a
-  // raw JSON dump. Unknown extra keys (the schema is passthrough) fall back to
-  // JSON, and a [raw] toggle shows the whole blob for debugging.
+  
+  
+  
   let { structured }: { structured: Record<string, unknown> } = $props();
 
   let showRaw = $state(false);
@@ -29,7 +29,7 @@
     Object.fromEntries(Object.entries(structured).filter(([k]) => !KNOWN.includes(k))),
   );
 
-  // "what_happened" → "what happened" for the label column
+  
   const labelize = (k: string) => k.replaceAll("_", " ");
 </script>
 

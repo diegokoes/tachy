@@ -1,6 +1,6 @@
-// Deployment-profile terminology: display strings only. Slugs, API fields, and
-// the MCP contract are identical under both profiles — an engineering instance
-// just reads "repository" where a support instance reads "product".
+
+
+
 import { session } from "./session.svelte";
 
 export type Profile = "support" | "engineering";
@@ -34,8 +34,8 @@ export function t(key: TermKey): string {
   return MAP[profile()][key];
 }
 
-// Which optional facets each profile surfaces. Engineering hides the customer
-// dimension — repos rarely have one; the data stays intact if it exists.
+
+
 const PROFILE_FACETS: Record<Profile, { customer: boolean }> = {
   support: { customer: true },
   engineering: { customer: false },

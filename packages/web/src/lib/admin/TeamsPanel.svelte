@@ -18,7 +18,7 @@
   let slug = $state("");
   let name = $state("");
 
-  let editing = $state<string | null>(null); // team slug being renamed
+  let editing = $state<string | null>(null); 
   let editName = $state("");
 
   const productsOf = (teamSlug: string) => products.filter((p) => p.team_slug === teamSlug).map((p) => p.slug);
@@ -51,7 +51,7 @@
     }
   }
 
-  // The edit field holds "name | slug"; the slug part is optional.
+  
   function parseNameSlug(v: string): { name: string; slug: string } {
     const i = v.indexOf("|");
     return i === -1
@@ -83,7 +83,7 @@
       await api.delete(`/teams/${teamSlug}`);
       await load();
     } catch (err) {
-      error = errText(err); // guarded 409s surface verbatim
+      error = errText(err); 
     }
   }
 
