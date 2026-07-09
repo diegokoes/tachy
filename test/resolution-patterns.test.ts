@@ -44,7 +44,7 @@ describe("resolution_patterns", () => {
     const res = await renameResolutionPattern("config-mismatch", "config-drift");
     expect(res).toMatchObject({ renamed: true, from: "config-mismatch", to: "config-drift", entries: 2 });
 
-    // the old slug is gone, the new one exists, and both entries followed it
+    
     expect((await listResolutionPatterns()).map((p) => p.slug)).toEqual(["config-drift"]);
     const rows = await sql`select resolution_pattern from knowledge_entries where id in ${sql([a.id, b.id])}`;
     expect(rows.every((r) => r.resolution_pattern === "config-drift")).toBe(true);

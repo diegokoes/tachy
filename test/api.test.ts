@@ -70,7 +70,7 @@ describe("API error paths", () => {
   beforeEach(resetData);
 
   it("rejects a schema violation with 400", async () => {
-    // cloud is free-form vocabulary now, but still shape-checked as a lowercase slug
+    
     const res = await app.request("/api/knowledge", json({ issueSummary: "x", cloud: "Not A Slug" }));
     expect(res.status).toBe(400);
   });
@@ -132,8 +132,8 @@ describe("API auth", () => {
   });
 
   it("does not expose SSO routes when OIDC is unconfigured", async () => {
-    // /auth/login is OIDC-only; /auth/me now serves every auth flavor and
-    // reports the open-mode identity when nothing is configured.
+    
+    
     expect((await app.request("/auth/login")).status).toBe(404);
     const me = await app.request("/auth/me");
     expect(me.status).toBe(200);

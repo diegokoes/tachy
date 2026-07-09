@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { resetData, sql } from "./helpers";
 
-// Backup/restore shell out to the Postgres client tools; only run the round-trip
-// where they're installed (CI installs postgresql-client; skipped otherwise).
+
+
 const hasPgTools = spawnSync("pg_dump", ["--version"]).status === 0;
 const url = () => process.env.DATABASE_URL!;
 

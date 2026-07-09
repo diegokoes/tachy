@@ -62,7 +62,7 @@ describe("components", () => {
     const [t] = await sql`select tags from knowledge_entries where id = ${tagged.id}`;
     expect(t.tags).toEqual(["line-controller", "printing"]);
     const [u] = await sql`select tags from knowledge_entries where id = ${untagged.id}`;
-    expect(u.tags).toEqual(["printing"]); // untouched
+    expect(u.tags).toEqual(["printing"]); 
   });
 
   it("refuses to rename onto an existing component slug in the same product", async () => {

@@ -9,9 +9,9 @@ const schemaPath = join(here, "..", "db", "schema.sql");
 const migrationsDir = join(here, "..", "db", "migrations");
 const fixturesPath = join(here, "fixtures.sql");
 
-// Starts one ephemeral Postgres container for the test run; applies schema + fixtures.
-// Uses the pgvector image so pg_trgm, pgcrypto, and vector extensions are all present.
-// DATABASE_URL is written here before vitest forks workers so the sql client picks it up.
+
+
+
 export default async function setup() {
   const container = await new PostgreSqlContainer("pgvector/pgvector:pg16").start();
   const url = container.getConnectionUri();
@@ -19,14 +19,14 @@ export default async function setup() {
 
   const sql = postgres(url, { onnotice: () => {} });
   await sql.unsafe(readFileSync(schemaPath, "utf8"));
-  // Migrations must be idempotent no-ops on a fresh schema (schema.sql is canonical);
-  // applying them here proves that on every test run.
+  
+  
   for (const f of readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")).sort()) {
     const content = readFileSync(join(migrationsDir, f), "utf8");
     await sql.begin((tx) => tx.unsafe(content));
   }
-  // schema.sql itself ships with no seed data; tests need deterministic
-  // teams/products/a source connection, so apply this fixture on top.
+  
+  
   await sql.unsafe(readFileSync(fixturesPath, "utf8"));
   await sql.end();
 
