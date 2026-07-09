@@ -3,10 +3,10 @@ import type {
   WorkItemSource, RawWorkItem, RawMessage, ListOptions, SourceFactory,
 } from "@tachy/core";
 
-// PII scrub of the raw Freshdesk ticket payload for redaction mode. Deep-copies,
-// never mutates the input. Field list mirrors the Freshdesk Tickets API: emails,
-// requester name/phone/social handles, and free text (subject/description/custom
-// fields) all carry customer PII.
+
+
+
+
 function redactFreshdeskRaw(raw: unknown, map: TokenMap, customerSlug: string | null): unknown {
   if (raw == null || typeof raw !== "object") return {};
   const t = structuredClone(raw) as Record<string, any>;
@@ -33,7 +33,7 @@ function redactFreshdeskRaw(raw: unknown, map: TokenMap, customerSlug: string | 
   }
   if (t.company && typeof t.company === "object") {
     const c = t.company as Record<string, any>;
-    if (c.name != null) c.name = name; // company == customer; keep as the slug
+    if (c.name != null) c.name = name; 
   }
 
   if (typeof t.subject === "string") t.subject = scrubText(t.subject, map);
@@ -42,7 +42,7 @@ function redactFreshdeskRaw(raw: unknown, map: TokenMap, customerSlug: string | 
   if (t.custom_fields && typeof t.custom_fields === "object") {
     const cf = t.custom_fields as Record<string, any>;
     for (const k of Object.keys(cf)) {
-      if (typeof cf[k] === "string") cf[k] = scrubText(cf[k], map); // keep keys, scrub values
+      if (typeof cf[k] === "string") cf[k] = scrubText(cf[k], map); 
     }
   }
   return t;
@@ -82,7 +82,7 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
       status: t.status != null ? String(t.status) : undefined,
       groupKey: t.group_id != null ? String(t.group_id) : undefined,
       requester: t.requester_id != null ? String(t.requester_id) : undefined,
-      requesterEmail: t.requester?.email,    // only present when fetched with ?include=requester
+      requesterEmail: t.requester?.email,    
       raw: t,
       sourceCreatedAt: t.created_at,
       sourceUpdatedAt: t.updated_at,
@@ -96,8 +96,8 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
     redactRaw: redactFreshdeskRaw,
 
     async fetchItem(externalId: string): Promise<RawWorkItem> {
-      // include=requester costs 1 API credit but gives the requester email inline for customer
-      // auto-matching. Skipped in listItems to avoid doubling the cost of sync runs.
+      
+      
       const t = await get(`/tickets/${externalId}?include=requester`);
       const convos = await get(`/tickets/${externalId}/conversations`);
       const description: RawMessage = {
@@ -125,9 +125,9 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
 
       const list = await get(`/tickets?${params.toString()}`);
       const raw = Array.isArray(list) ? list : [];
-      let items = raw.map((t: any) => metadataToItem(t, [])); // metadata only on sync
+      let items = raw.map((t: any) => metadataToItem(t, [])); 
       if (opts.groupKey) items = items.filter((i) => i.groupKey === opts.groupKey);
-      // pagination decided by raw page size, not by the filtered count
+      
       const nextCursor = raw.length < 100 ? undefined : String(page + 1);
       return { items, nextCursor };
     },
