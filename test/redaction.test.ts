@@ -120,7 +120,7 @@ describe("redactNormalized", () => {
 });
 
 describe("freshdesk redactRaw", () => {
-  const redact = createFreshdeskSource({ baseUrl: "https:
+  const redact = createFreshdeskSource({ baseUrl: "https://x.freshdesk.com", slug: "fd", config: {} }).redactRaw!;
 
   it("scrubs the ticket payload but keeps custom-field keys and unrelated data", () => {
     const raw = {
@@ -168,7 +168,7 @@ describe("github redactRaw", () => {
 
 describe("redactForLlm", () => {
   it("redacts normalized fields and the source raw with one consistent token map", () => {
-    const redactRaw = createFreshdeskSource({ baseUrl: "https:
+    const redactRaw = createFreshdeskSource({ baseUrl: "https://x.freshdesk.com", slug: "fd", config: {} }).redactRaw!;
     const item: RawWorkItem = {
       externalId: "20", kind: "ticket", title: "login help",
       requester: "42", requesterEmail: "jane@acme.com",

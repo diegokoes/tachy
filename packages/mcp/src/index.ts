@@ -817,7 +817,7 @@ tool(
 tool(
   "add_source_connection",
   {
-    description: "Register a new source connection. source_type is 'freshdesk' or 'github'. slug is a short unique identifier (e.g. 'my-freshdesk') — it also determines the env var for the API token: FRESHDESK_TOKEN_<SLUG_UPPERCASED> or GITHUB_TOKEN_<SLUG_UPPERCASED> (non-alphanumerics become underscores). For Freshdesk: set base_url to your tenant root URL (e.g. https:
+    description: "Register a new source connection. source_type is 'freshdesk' or 'github'. slug is a short unique identifier (e.g. 'my-freshdesk') — it also determines the env var for the API token: FRESHDESK_TOKEN_<SLUG_UPPERCASED> or GITHUB_TOKEN_<SLUG_UPPERCASED> (non-alphanumerics become underscores). For Freshdesk: set base_url to your tenant root URL (e.g. https://your-domain.freshdesk.com). For GitHub: omit base_url and set config to {\"repos\":[\"owner/repo\"]}. The token is never stored in the DB; remind the user to set the env var before syncing.",
     inputSchema: {
       source_type: z.enum(["freshdesk", "github"]),
       slug: z.string(),
