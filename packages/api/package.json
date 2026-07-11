@@ -11,6 +11,7 @@
     "@tachy/core": "*",
     "@tachy/source-freshdesk": "*",
     "@tachy/source-github": "*",
+    "@tachy/source-azure-devops": "*",
     "hono": "^4.6.14",
     "zod": "^4.0.0"
   }

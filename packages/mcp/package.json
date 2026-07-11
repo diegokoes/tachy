@@ -6,7 +6,10 @@
   "dependencies": {
     "@tachy/core": "*",
     "@tachy/source-freshdesk": "*",
+    "@tachy/source-github": "*",
+    "@tachy/source-azure-devops": "*",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "unpdf": "^1.4.0",
     "zod": "^4.0.0"
   }
 }
