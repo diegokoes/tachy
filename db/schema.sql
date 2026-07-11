@@ -57,6 +57,69 @@ create table team_members (
     primary key (team_id, user_id)
 );
 
+-- Encrypted secrets (agent API keys, source tokens) at three scopes with
+-- most-specific-wins resolution: user > team > global > env fallback.
+-- Values are AES-256-GCM ciphertext keyed by TACHY_SECRET_KEY; plaintext
+-- never leaves the server process.
+create table credentials (
+    id               uuid primary key default gen_random_uuid(),
+    scope            text not null check (scope in ('global','team','user')),
+    team_id          uuid references teams(id) on delete cascade,
+    user_id          uuid references users(id) on delete cascade,
+    -- e.g. 'anthropic_api_key', 'copilot_token', 'freshdesk_token:<slug>'
+    name             text not null,
+    value_ciphertext bytea not null,
+    nonce            bytea not null,
+    created_by       uuid references users(id),
+    created_at       timestamptz not null default now(),
+    updated_at       timestamptz not null default now(),
+    -- scope and its FK must agree, or a scope='team' row with a null team_id
+    -- slips past the partial unique indexes and can be inserted repeatedly
+    check ((scope = 'team') = (team_id is not null)),
+    check ((scope = 'user') = (user_id is not null))
+);
+create unique index credentials_global_idx on credentials(name)          where scope = 'global';
+create unique index credentials_team_idx   on credentials(team_id, name) where scope = 'team';
+create unique index credentials_user_idx   on credentials(user_id, name) where scope = 'user';
+
+-- Non-secret per-user/per-team preferences (agent provider/model/effort),
+-- same scope layout as credentials; global defaults live in `settings`.
+create table preferences (
+    id          uuid primary key default gen_random_uuid(),
+    scope       text not null check (scope in ('global','team','user')),
+    team_id     uuid references teams(id) on delete cascade,
+    user_id     uuid references users(id) on delete cascade,
+    key         text not null,
+    value       jsonb not null,
+    updated_at  timestamptz not null default now(),
+    check ((scope = 'team') = (team_id is not null)),
+    check ((scope = 'user') = (user_id is not null))
+);
+create unique index preferences_global_idx on preferences(key)          where scope = 'global';
+create unique index preferences_team_idx   on preferences(team_id, key) where scope = 'team';
+create unique index preferences_user_idx   on preferences(user_id, key) where scope = 'user';
+
+-- Reusable chat prompt templates ("artifacts"), same scope layout as
+-- credentials/preferences; the picker unions user + team + global rows.
+create table artifacts (
+    id          uuid primary key default gen_random_uuid(),
+    scope       text not null check (scope in ('global','team','user')),
+    team_id     uuid references teams(id) on delete cascade,
+    user_id     uuid references users(id) on delete cascade,
+    slug        text not null,
+    title       text not null,
+    description text,
+    body        text not null,
+    created_by  uuid references users(id),
+    created_at  timestamptz not null default now(),
+    updated_at  timestamptz not null default now(),
+    check ((scope = 'team') = (team_id is not null)),
+    check ((scope = 'user') = (user_id is not null))
+);
+create unique index artifacts_global_idx on artifacts(slug)          where scope = 'global';
+create unique index artifacts_team_idx   on artifacts(team_id, slug) where scope = 'team';
+create unique index artifacts_user_idx   on artifacts(user_id, slug) where scope = 'user';
+
 create table source_connections (
     id            uuid primary key default gen_random_uuid(),
     source_type   text not null,
@@ -266,7 +329,7 @@ create table analysis_runs (
     id              uuid primary key default gen_random_uuid(),
     work_item_id    uuid references work_items(id) on delete set null,
     user_id         uuid references users(id) on delete set null,
-    mode            text not null check (mode in ('ingest','consult','sync')),
+    mode            text not null check (mode in ('ingest','consult','sync','create','code')),
     model           text,
     input_tokens    integer,
     output_tokens   integer,
@@ -299,6 +362,8 @@ create table reference_docs (
     structured  jsonb not null default '{}'::jsonb,
     status      text not null default 'approved'
                     check (status in ('draft','approved','archived')),
+    doc_version   text,
+    superseded_by uuid references reference_docs(id) on delete set null,
 
     search_text text generated always as (
         coalesce(title,'') || ' ' || coalesce(body,'') || ' ' || tachy_join(tags)
@@ -309,7 +374,8 @@ create table reference_docs (
 
     version     integer not null default 1,
     created_at  timestamptz not null default now(),
-    updated_at  timestamptz not null default now()
+    updated_at  timestamptz not null default now(),
+    constraint reference_docs_no_self_supersede check (superseded_by is null or superseded_by <> id)
 );
 
 create index reference_docs_product_idx on reference_docs(product_id);
@@ -318,6 +384,7 @@ create index reference_docs_status_idx  on reference_docs(status);
 create index reference_docs_tags_idx    on reference_docs using gin (tags);
 create index reference_docs_tsv_idx     on reference_docs using gin (search_tsv);
 create index reference_docs_trgm_idx    on reference_docs using gin (search_text gin_trgm_ops);
+create index reference_docs_superseded_idx on reference_docs(superseded_by);
 
 create trigger reference_docs_updated_at
     before update on reference_docs
@@ -334,3 +401,54 @@ create table reference_doc_chunks (
 
 create index reference_doc_chunks_doc_idx       on reference_doc_chunks(doc_id);
 create index reference_doc_chunks_embedding_idx on reference_doc_chunks using hnsw (embedding vector_cosine_ops);
+
+-- Linked git repositories for code consultation. Clones live on disk under
+-- TACHY_REPO_DIR; only chunk text + embeddings are stored here. Indexing is
+-- on-demand (API route / CLI), diff-only by blob sha; indexed_commit advances
+-- only on success so an interrupted run retries the same diff.
+create table repos (
+    id              uuid primary key default gen_random_uuid(),
+    slug            text not null unique,
+    url             text not null,
+    product_id      uuid references products(id) on delete set null,
+    source_slug     text references source_connections(slug) on delete set null,
+    default_branch  text not null default 'main',
+    config          jsonb not null default '{}'::jsonb,
+    index_status    text not null default 'idle'
+                        check (index_status in ('idle','cloning','indexing','ready','error')),
+    indexed_commit  text,
+    index_error     text,
+    file_count      integer not null default 0,
+    chunk_count     integer not null default 0,
+    last_indexed_at timestamptz,
+    created_at      timestamptz not null default now()
+);
+
+create table repo_files (
+    id          uuid primary key default gen_random_uuid(),
+    repo_id     uuid not null references repos(id) on delete cascade,
+    path        text not null,
+    lang        text,
+    blob_sha    text not null,
+    size_bytes  integer not null,
+    unique (repo_id, path)
+);
+
+create index repo_files_repo_idx      on repo_files(repo_id);
+create index repo_files_path_trgm_idx on repo_files using gin (path gin_trgm_ops);
+
+create table code_chunks (
+    id          uuid primary key default gen_random_uuid(),
+    repo_id     uuid not null references repos(id) on delete cascade,
+    file_id     uuid not null references repo_files(id) on delete cascade,
+    ordinal     integer not null,
+    start_line  integer not null,
+    end_line    integer not null,
+    chunk_text  text not null,
+    embedding   vector(384),
+    unique (file_id, ordinal)
+);
+
+create index code_chunks_repo_idx      on code_chunks(repo_id);
+create index code_chunks_embedding_idx on code_chunks using hnsw (embedding vector_cosine_ops);
+create index code_chunks_trgm_idx      on code_chunks using gin (chunk_text gin_trgm_ops);

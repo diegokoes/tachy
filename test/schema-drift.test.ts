@@ -62,4 +62,24 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
   it("knowledge_entries.cloud has no CHECK constraint", () => {
     expect(() => checkValues("knowledge_entries", "cloud")).toThrow(/no CHECK/);
   });
+
+  it("reference_docs carries the versioning columns", () => {
+    const block = tableBlock("reference_docs");
+    expect(block).toContain("doc_version");
+    expect(block).toContain("superseded_by");
+    expect(block).toContain("reference_docs_no_self_supersede");
+  });
+
+  it("artifacts mirrors the scoped-table layout", () => {
+    const block = tableBlock("artifacts");
+    expect(block).toContain("check (scope in ('global','team','user'))");
+    expect(block).toContain("check ((scope = 'team') = (team_id is not null))");
+    expect(block).toContain("check ((scope = 'user') = (user_id is not null))");
+    for (const idx of [
+      "artifacts_global_idx on artifacts(slug)",
+      "artifacts_team_idx   on artifacts(team_id, slug)",
+      "artifacts_user_idx   on artifacts(user_id, slug)",
+    ])
+      expect(schema).toContain(idx);
+  });
 });
