@@ -19,6 +19,13 @@ export const READ_TOOLS = [
   "list_labels",
   "list_source_connections",
   "list_source_product_maps",
+  "list_ado_wikis",
+  "list_ado_wiki_pages",
+  "get_ado_wiki_page",
+  "get_ado_work_item_schema",
+  "list_repos",
+  "search_code",
+  "read_code_file",
 ] as const;
 
 export const WRITE_TOOLS = [
@@ -39,6 +46,7 @@ export const WRITE_TOOLS = [
   "add_source_product_map",
   "post_private_note",
   "record_analysis_run",
+  "create_ado_work_item",
 ] as const;
 
 export const DISALLOWED_BUILTINS = [
