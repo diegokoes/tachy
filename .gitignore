@@ -7,7 +7,6 @@ dist/
 .fastembed-cache/
 local_cache/
 backups/
+data/repos/
 db/seed.local.sql
-elaborate-a-plan-the-jazzy-wozniak.md
 .gitignore
-tachy_plan.md

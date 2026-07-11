@@ -1,10 +1,6 @@
 <h1 align="center">tachý</h1>
 
 <p align="center">
-  <em>A self-hosted, source-agnostic knowledge engine for work items.</em>
-</p>
-
-<p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg" alt="License: AGPL-3.0-or-later"></a>
   <a href="https://0ver.org"><img src="https://img.shields.io/badge/0ver-0.1.0-blue.svg" alt="ZeroVer 0.1.0"></a>
   <img src="https://img.shields.io/badge/node-22%2B-brightgreen.svg" alt="Node 22+">
@@ -12,403 +8,200 @@
   <img src="https://img.shields.io/badge/protocol-MCP-orange.svg" alt="MCP">
 </p>
 
-tachý keeps an archive of lessons learned from past tickets and issues, and you
-consult it. Ask for help on a new ticket and it searches that archive first.
-When you solve something, save a note about it, tied to that ticket or on its
-own. You can also feed it context directly, like how a codebase or product is
-put together, with no ticket involved.
+Self-hosted knowledge engine for work items. It archives approved lessons from
+past tickets/issues and searches them when a similar one comes in. It pulls
+work items from pluggable sources (Freshdesk, GitHub, Azure DevOps), can index
+linked git repositories for code search, and stores freeform project context as
+reference docs. tachý itself only stores and retrieves — the reasoning layer is
+an MCP client (Claude Code, Codex CLI, …) or the built-in web Chat agent.
 
-It pulls work items from pluggable **sources** (Freshdesk, GitHub, more can be
-added). Pulling is manual, or scheduled through the optional REST API and CLI.
-
-tachý never calls an LLM itself. It stores and retrieves; the agent (Claude
-Code, Codex CLI, or any [MCP][mcp] client) is the reasoning layer. The one
-exception is the optional server-side agent behind the web Chat, which uses the
-Claude Agent SDK.
-
-> **Looking for internals?** Architecture, the data model, the source interface,
-> search internals, authentication, the agent, and the redaction design live in
-> the [wiki](../../wiki).
-
-<details>
-<summary>Table of Contents</summary>
+Architecture, data model, source interface, search internals, and the redaction
+design are in the [wiki](../../wiki).
 
 - [Features](#features)
-- [How it works](#how-it-works)
-- [Getting started](#getting-started)
-  - [Quick start with Docker](#quick-start-with-docker)
-  - [Manual install](#manual-install)
+- [Quick start (Docker)](#quick-start-docker)
+- [Manual install](#manual-install)
 - [Usage](#usage)
-  - [From an MCP client](#from-an-mcp-client)
-  - [MCP tools](#mcp-tools)
-  - [Web UI and agent](#web-ui-and-agent)
-  - [REST API](#rest-api)
-  - [Authentication](#authentication)
-  - [CLI](#cli)
+- [Authentication](#authentication)
+- [CLI](#cli)
 - [Configuration](#configuration)
 - [Operations](#operations)
-- [Privacy and security](#privacy-and-security)
-- [Versioning](#versioning)
-- [License](#license)
-
-</details>
 
 ## Features
 
-- **Knowledge archive** of approved lessons from tickets and issues, searched
-  automatically when a similar work item comes in. Nothing becomes knowledge
-  until a human approves it.
-- **Knowledge lifecycle.** Mark a lesson outdated (`deprecated`) instead of
-  deleting it: it stays searchable but flagged, optionally pointing at the entry
-  that supersedes it. Issues resurface; lessons should not vanish.
-- **Consistent taxonomy.** Entries anchor to a per-product component glossary
-  (with aliases and hierarchy), so the agent cannot invent competing names for
-  the same area. New areas are proposed to you, never created silently.
-- **Freeform context.** Feed in a codebase or product overview with no ticket
-  involved, stored as reference docs.
-- **Pluggable sources** (Freshdesk, GitHub Issues; more fit behind one
-  interface), pulled manually or on a schedule.
-- **MCP server** for local agents: Claude Code, VS Code Copilot, Codex CLI, or
-  any MCP client. It is vendor-neutral; drive it with your own model if you want.
-- **Web UI** to search and curate knowledge, plus a **Chat** backed by a
-  server-side agent, with human approval before anything is written.
-- **Hybrid search** (keyword plus semantic) with **fully local embeddings**.
-  Nothing leaves the machine.
-- **Customer-blind index.** Retrieval matches on the fault, not on who reported
-  it.
-- **Optional PII and secret redaction.** Scrub customer personal data,
-  credentials, and card numbers before any model sees them. Per connection, or
-  forced on for the whole deployment with one env var. Off by default.
-- **Flexible auth.** Setup wizard with password login, shared bearer token, or
-  OIDC/Entra SSO. Admin and member roles.
-- **Backups** via `pg_dump` and `pg_restore`, plus published Docker images.
+- **Knowledge archive** of lessons from tickets/issues, searched automatically
+  on similar work items. Nothing is saved without human approval.
+- **Knowledge lifecycle** — deprecate outdated lessons instead of deleting;
+  they stay searchable, flagged, optionally pointing at their replacement.
+- **Consistent taxonomy** — entries anchor to a per-product component glossary
+  (aliases, hierarchy); new areas are proposed to you, never created silently.
+- **Sources**: Freshdesk (tickets, private notes), GitHub Issues, Azure DevOps
+  work items — multi-project, with related items, linked PRs/commits, and
+  linked-ticket detection from Freshdesk custom fields / `AB#123` mentions.
+- **Azure DevOps extras** — read wiki pages into reference docs, and create
+  work items with per-project required fields discovered from ADO's own
+  schema, nothing hardcoded.
+- **Code consultation** — link git repos, index them into local embeddings,
+  and the agent searches/reads bounded snippets (`search_code`,
+  `read_code_file`) instead of burning tokens on whole files.
+- **Reference docs** for freeform context (runbooks, architecture notes),
+  chunked and embedded, versioned with supersede lineage.
+- **MCP server** (40+ tools) for Claude Code, VS Code Copilot, Codex CLI, or
+  any MCP client — vendor-neutral.
+- **Web UI + Chat agent** (`claude` or `copilot` backend, per user/team/global)
+  with slash commands (`/analyze`, `/consult`, `/create-ticket`, `/code`,
+  `/ingest-wiki`) and an approval box before any write tool runs.
+- **Credential vault** — API keys and source tokens (incl. per-user ADO PATs)
+  stored AES-256-GCM encrypted, scoped user > team > global.
+- **Hybrid search** (keyword + trigram + semantic) with fully local
+  embeddings; customer-blind index.
+- **Optional PII/secret redaction** before anything reaches a model — per
+  connection or deployment-wide.
+- **Auth**: setup wizard + password login, bearer token, or OIDC/Entra SSO;
+  admin and member roles.
+- **Backups** via `pg_dump`/`pg_restore`; published Docker images.
 
-## How it works
+## Quick start (Docker)
 
-A ticket comes in. The agent reads it, works out what is going on, and once you
-approve, writes a structured lesson into tachý. Next time a _similar_ ticket
-appears, the agent asks tachý "have we seen anything like this?" and gets the
-relevant past lessons back. Two loops around work items, plus a third way in
-that skips the ticket entirely:
-
-- **Ingest.** Analyze a work item, then save an approved lesson.
-- **Consult.** Given a new work item, surface relevant past lessons.
-- **Load context.** Feed in freeform material (a codebase overview, a runbook, an
-  architecture note) with no work item at all. It is stored as reference docs,
-  embedded, and searched alongside the lessons during consult.
-
-For architecture, packages, and data-model design, see the [wiki](../../wiki).
-
-## Getting started
-
-### Quick start with Docker
-
-The app runs from the published image, no local Node needed, but you still need
-`docker-compose.yml` and `db/schema.sql` from this repo (Postgres mounts that
-file to initialize itself), so clone it first:
+The app runs from the published image, but Postgres initializes from
+`db/schema.sql` in this repo, so clone it first:
 
 ```bash
 git clone https://github.com/diegokoes/tachy.git
 cd tachy
-
-cp .env.example .env
+cp .env.example .env      # set TACHY_SECRET_KEY and TACHY_SESSION_SECRET
 docker compose up -d
 curl localhost:8787/health
 ```
 
-Compose runs Postgres from `pgvector/pgvector:pg16` (extensions already
-included) and pulls the app image from `diegokoes/tachy`. Override with
-`TACHY_IMAGE`, or build your own with `docker compose build`.
+Compose runs Postgres from `pgvector/pgvector:pg16` and the app from
+`diegokoes/tachy` (override with `TACHY_IMAGE`, or `docker compose build`).
 
-On first boot with an empty database, open the web UI and the one-time
-[setup wizard](#authentication) creates the admin account. Until an admin
-exists (and with no token or SSO configured), the server binds to `127.0.0.1`
-inside the container, so run the wizard locally first, or set `TACHY_API_TOKEN`
-before bringing the stack up.
+On first boot with an empty database, open the web UI and the one-time setup
+wizard creates the admin account. Until an admin exists (and no token/SSO is
+configured), the server binds to `127.0.0.1` inside the container, run the
+wizard before expecting LAN access.
 
-### Manual install
+## Manual install
 
-Requires **Node 22+** (for the test suite) and **PostgreSQL 14+** with the
-`vector` (pgvector), `pg_trgm`, and `pgcrypto` extensions (`schema.sql` creates
-them). Easiest pgvector locally is the `pgvector/pgvector` Docker image or
-`apt install postgresql-16-pgvector`.
+Node 22+ and PostgreSQL 14+ with `vector`, `pg_trgm`, `pgcrypto`
+(`schema.sql` creates the extensions). `git` must be on PATH for code search.
 
 ```bash
 npm install
-
 createdb tachy
 psql "postgres://localhost:5432/tachy" -f db/schema.sql
-
-cp .env.example .env          # then fill in DATABASE_URL and your token(s)
+cp .env.example .env
+npm run web:build && npm run api    # SPA + API on :8787
 ```
 
 ## Usage
 
-### From an MCP client
+**From an MCP client.** `.mcp.json` (Claude Code) and `.vscode/mcp.json`
+(VS Code Copilot) auto-register the server from the project folder; other
+clients point at `npx tsx packages/mcp/src/index.ts`. Then talk to the agent:
+`analyze ticket 58925 from acme-freshdesk`, `what do we know about ticket
+61010?`.
 
-tachý exposes 35 tools over the [Model Context Protocol][mcp]. Any MCP-capable
-host can drive them. `.mcp.json` (Claude Code) and `.vscode/mcp.json` (VS Code
-Copilot) auto-register the server from the project folder, no setup. Other
-clients (Codex CLI, and so on) use their own config; point them at
-`npx tsx packages/mcp/src/index.ts` from this folder, or the Docker form below.
+To run the MCP server via Docker, use `docker run -i --rm --env-file .env -e
+DATABASE_URL=postgres://tachy:tachy@postgres:5432/tachy --network tachy
+diegokoes/tachy npm run mcp` as the MCP command.
 
-From the project folder, start your client (for example `claude`) and talk to it
-in plain language:
+**Web UI.** Knowledge search/curation, reference docs, admin, and a Chat that
+drives the server-side agent. Chat supports slash commands (`/analyze`,
+`/consult`, `/create-ticket`, `/code`, `/ingest-wiki`). Write tools pause for
+an approval box showing the exact payload; the agent is restricted to tachý
+MCP tools and cannot touch shell or filesystem.
 
-```
-analyze ticket 58925 from acme-freshdesk
-```
+**Agent backend** is per user/team/global: `claude` (Claude Agent SDK) or
+`copilot` (GitHub Copilot SDK). API keys, source tokens, and Azure DevOps PATs
+are stored encrypted in the app (My settings / Admin › System › credentials)
+— requires `TACHY_SECRET_KEY`.
 
-The agent calls `fetch_work_item`, cleans and summarizes, shows you the summary,
-and only calls `save_knowledge_entry` after you approve. To consult:
+**Sources.** Freshdesk (tickets, private notes), GitHub Issues, Azure DevOps
+work items (multi-project; relations, linked PRs/commits, wikis, and
+schema-checked ticket creation). Register connections and group→product maps
+in-app or via the MCP admin tools.
 
-```
-what do we know that's relevant to ticket 61010?
-```
+**Code search.** Link git repos (`PUT /api/repos`), index them
+(`POST /api/repos/:slug/reindex` or the CLI), and the agent gets
+`search_code` / `read_code_file` over local embeddings. Clones live under
+`TACHY_REPO_DIR` (Docker: a named volume).
 
-The agent calls `get_context` (fetch plus search) and answers. Optionally:
+**REST API.** Everything under `/api` (zod-validated). See the wiki for the
+route reference.
 
-```
-post that analysis as a private note on 61010
-```
+## Authentication
 
-To run the MCP server in Docker instead, point your MCP config at `docker run`:
+Freely combined:
 
-```json
-{
-  "mcpServers": {
-    "tachy": {
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "--env-file",
-        ".env",
-        "-e",
-        "DATABASE_URL=postgres://tachy:tachy@postgres:5432/tachy",
-        "--network",
-        "tachy",
-        "diegokoes/tachy",
-        "npm",
-        "run",
-        "mcp"
-      ]
-    }
-  }
-}
-```
+- **Password login** — first-boot wizard creates the admin; users are managed
+  in Admin › Users. Sessions are cookies signed with `TACHY_SESSION_SECRET`.
+- **Bearer token** — `TACHY_API_TOKEN` guards `/api/*` for automation; acts as
+  admin.
+- **OIDC SSO** — `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`
+  (+ `TACHY_SESSION_SECRET`).
+- **Open** — nothing configured: no auth, binds to `127.0.0.1` only.
 
-`-i` keeps stdin/stdout open; `--network tachy` reaches the compose `postgres`
-service by name (hence the `DATABASE_URL` override, since `.env`'s `localhost`
-would mean the container itself).
+Roles: `admin` and `member`. Admin mutations return `403` for members.
 
-### MCP tools
-
-**Core loop:** `fetch_work_item`, `search_knowledge`, `get_context`,
-`save_knowledge_entry`, `post_private_note`, `add_knowledge_feedback`,
-`record_analysis_run`.
-
-**Curation:** `update_knowledge_entry` patches entries and drives the lifecycle:
-deprecate an outdated lesson (optionally linking its replacement) or archive it
-out of search entirely.
-
-**Curated vocabulary** (so the agent never invents categories from a ticket
-alone): `list_resolution_patterns` / `add_resolution_pattern`, `list_components`
-/ `add_component` (components also anchor each entry's product area),
-`list_environments`, `list_customers` / `add_customer`, `list_labels` /
-`add_label`, plus the corrections `set_work_item_customer` and
-`set_observed_version`.
-
-**Reference docs** (freeform project context): `ingest_context`,
-`save_reference_doc`, `search_reference`, `list_reference_docs` /
-`get_reference_doc` / `update_reference_doc`.
-
-**Admin / org structure:** `list_teams` / `add_team`, `list_products` /
-`add_product`, `list_source_connections` / `add_source_connection`,
-`list_source_product_maps` / `add_source_product_map`.
-
-Search is hybrid (keyword plus semantic) and the knowledge index is
-customer-blind. See the [wiki](../../wiki) for the full tool reference and how
-that works.
-
-### Web UI and agent
+## CLI
 
 ```bash
-npm run web:build    # build the SPA into packages/web/dist
-npm run api          # serves the SPA + API at http://localhost:8787
-# frontend dev with hot reload: npm run web:dev  (proxies /api to :8787)
+npm run sync sync acme-freshdesk --since=2026-06-01T00:00:00Z
+npm run sync embed-backfill                       # embed entries missing a vector
+npm run sync index-repo <repo-slug>               # clone/fetch + (re)index code
+npm run sync migrate                              # apply db/migrations/*.sql
+npm run sync backup                               # pg_dump -Fc into ./backups/
+npm run sync restore -- --file=backups/tachy-….dump   # overwrites the DB
 ```
 
-The Svelte SPA (`packages/web`) is served by the same Hono process: one origin,
-no CORS. It has read/curate views (Knowledge search, browse and detail with
-feedback; Reference docs; Admin) plus a **Chat** that drives the server-side
-agent.
-
-The agent authenticates with `ANTHROPIC_API_KEY` (or the server's Claude Code
-login if unset) and is restricted to the tachý MCP tools only; it cannot touch
-the filesystem or shell. Read tools auto-run; write tools are held for a human
-approval in the Chat UI before they execute.
-
-### REST API
-
-All data routes are under `/api` (the SPA and API share one origin):
-`GET /health`, `GET /auth/config`, `GET /api/setup/status`, `POST /api/setup`,
-`POST /api/work-items/:source/:id/fetch`, `GET /api/knowledge/search?q=`,
-`GET|POST /api/knowledge`, `GET|PATCH /api/knowledge/:id`,
-`GET|POST /api/knowledge/:id/feedback`, `GET /api/reference`,
-`GET /api/reference/search`, `GET /api/reference/:id`, `POST /api/agent/chat`
-(SSE), `POST /api/agent/approve`, `POST /api/agent/uploads`,
-`GET|POST /api/users`, `PATCH /api/users/:id`, `GET /api/system`,
-`PUT /api/settings/:key`, `GET|POST /api/resolution-patterns`,
-`GET|POST /api/products/:slug/components`, `GET|POST /api/customers`,
-`GET|POST /api/teams`, `GET|POST /api/products`.
-
-Request bodies are validated (zod); bad input, missing resources, and version
-conflicts return `400` / `404` / `409` rather than a generic `500`.
-
-### Authentication
-
-Three ways in, freely combined; the bearer token always works for automation.
-
-- **Setup wizard plus password login.** On first boot with an empty database the
-  web UI runs a one-time wizard: it creates the admin account (email plus
-  password, scrypt-hashed) and the runtime settings. From then on, interactive
-  users sign in with email and password (session cookie signed with
-  `TACHY_SESSION_SECRET`; if unset, an ephemeral secret is generated and sessions
-  reset on restart). More users are managed in **Admin › Users**.
-- **`token`.** Set `TACHY_API_TOKEN`; a shared bearer guards `/api/*`
-  (automation, scripts, CI). Treated as admin.
-- **`sso`.** Set `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` (plus
-  `TACHY_SESSION_SECRET`) for Microsoft Entra or any OIDC provider. Coexists with
-  password login; the login screen offers both.
-- **`open`** (nothing configured, wizard skipped). No auth, binds to `127.0.0.1`
-  only. Laptop dev.
-
-**Roles.** Each user is `admin` or `member`. Admins manage users, org structure,
-and settings; members use the app (reads plus agent). Mutations under the admin
-API return `403` for members. The bearer token and open mode act as admin. Users
-link to teams via team membership (Admin › Users).
-
-`/health`, the SPA shell, and `/api/setup/status` stay public; `/api/*` requires
-a session or the bearer. The first-boot wizard endpoint (`POST /api/setup`)
-disables itself permanently once an admin exists.
-
-### CLI
+With Docker use the `cli` service (not started by `up`):
 
 ```bash
-npm run sync sync acme-freshdesk --since=2026-06-01T00:00:00Z --group=48000641379
-npm run sync embed-backfill     # embed entries that don't have a vector yet
-npm run sync migrate            # apply db/migrations/*.sql (idempotent, safe to re-run)
-npm run sync backup             # pg_dump -Fc into ./backups/
-npm run sync restore --file=backups/tachy-….dump   # pg_restore (overwrites!)
-```
-
-`migrate` upgrades an **existing** database to the current schema. Fresh installs
-do not need it: Docker's initdb applies `db/schema.sql` (always the full, current
-schema), but only on an empty data dir, so upgrades of a running deployment go
-through `migrate`.
-
-`sync` only stores and refreshes raw work items; it never creates knowledge
-entries (those always require your approval). With Docker, use the `cli` service,
-which is not started by `up`:
-
-```bash
-docker compose run --rm cli npm run sync acme-freshdesk
-docker compose run --rm cli npm run sync backup     # lands in ./backups on the host
+docker compose run --rm cli npm run sync backup
+docker compose run --rm cli npm run sync index-repo line-controller
 ```
 
 ## Configuration
 
-Copy `.env.example` to `.env`. Secrets only ever come from the environment, never
-from the database. Non-secret **runtime settings** (PII redaction, agent
-model/effort/allowlist, org name) live in the database: set them in the setup
-wizard or **Admin › System**. The matching env vars below act as _fallback
-defaults_ until a DB value is set (the System tab shows which source wins).
+`.env` is bootstrap only. Everything else on the db.
 
-| Variable                                                | Used by   | Purpose                                                                                                                                                                                                                                         |
-| ------------------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                                          | all       | Postgres connection string.                                                                                                                                                                                                                     |
-| `PORT`                                                  | api       | HTTP API port (default 8787).                                                                                                                                                                                                                   |
-| `TACHY_USER_EMAIL`                                      | core      | Attribution for the standalone MCP server (`created_by`). Optional; web/SSO users are attributed from their login.                                                                                                                              |
-| `TACHY_API_TOKEN`                                       | api       | Bearer token for the REST API and automation.                                                                                                                                                                                                   |
-| `TACHY_AUTH_MODE`                                       | api       | `sso` \| `token` \| `open`. Optional; auto-derived from what is set.                                                                                                                                                                            |
-| `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | api       | Microsoft Entra (or any OIDC) SSO. Enables interactive login.                                                                                                                                                                                   |
-| `OIDC_REDIRECT_URI` / `OIDC_SCOPES`                     | api       | OIDC redirect (register in Entra) and scopes. Optional.                                                                                                                                                                                         |
-| `TACHY_SESSION_SECRET`                                  | api       | Session-cookie signing secret (32+ chars). Signs SSO and password-login sessions; unset means an ephemeral secret (sessions reset on restart).                                                                                                  |
-| `ANTHROPIC_API_KEY`                                     | agent     | Auth for the server-side agent. If unset, the server's Claude Code login is used.                                                                                                                                                               |
-| `TACHY_REDACT`                                          | core      | _Fallback default_ for the DB setting `redaction_global`. `true` forces PII and secret redaction on for **every** connection and for connection-less tools (`ingest_context`, retrieved search results). The deployment-wide compliance switch. |
-| `TACHY_AGENT_MODEL`                                     | agent     | _Fallback default_ for `agent_model` (default `claude-sonnet-5`).                                                                                                                                                                               |
-| `TACHY_AGENT_EFFORT`                                    | agent     | _Fallback default_ for `agent_effort`: `low` \| `medium` \| `high` \| `xhigh` \| `max` (default `medium`).                                                                                                                                      |
-| `TACHY_ALLOWED_MODELS`                                  | agent     | _Fallback default_ for `allowed_models` (comma-separated; empty means no restriction).                                                                                                                                                          |
-| `TACHY_UPLOAD_DIR`                                      | api       | Where Chat uploads are staged for the agent. Optional (OS tmp).                                                                                                                                                                                 |
-| `FRESHDESK_TOKEN[_SLUG]`                                | freshdesk | Freshdesk API token (per-source or shared).                                                                                                                                                                                                     |
-| `GITHUB_TOKEN[_SLUG]`                                   | github    | GitHub PAT (per-source or shared).                                                                                                                                                                                                              |
-| `FASTEMBED_CACHE`                                       | core      | Where the embedding model is cached. Optional.                                                                                                                                                                                                  |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`   | compose   | Configure the bundled Postgres container. Keep consistent with `DATABASE_URL`.                                                                                                                                                                  |
-| `TACHY_IMAGE`                                           | compose   | Override the app image (default `diegokoes/tachy:latest`).                                                                                                                                                                                      |
+| Variable                                                  | Purpose                                                              |
+| --------------------------------------------------------- | -------------------------------------------------------------------- |
+| `DATABASE_URL`                                            | Postgres connection string.                                          |
+| `PORT`                                                    | HTTP port (default 8787).                                            |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`     | Bundled Postgres container; keep consistent with `DATABASE_URL`.     |
+| `TACHY_SECRET_KEY`                                        | Vault master key (32 bytes base64). Unset = vault disabled.          |
+| `TACHY_SESSION_SECRET`                                    | Session-cookie signing (32+ chars). Unset = logins reset on restart. |
+| `TACHY_API_TOKEN`                                         | Bearer for REST automation. Optional.                                |
+| `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`   | OIDC SSO. Optional.                                                  |
+| `TACHY_IMAGE`                                             | Compose image override (default `diegokoes/tachy:latest`).           |
+| `TACHY_REPO_DIR` / `TACHY_UPLOAD_DIR` / `FASTEMBED_CACHE` | Data paths; sensible defaults, Docker image sets them.               |
 
-**PII and secret redaction** is off by default and enabled per source connection
-(`config` = `{"redaction": {"enabled": true}}` on the `source_connections` row),
-or for the whole deployment with `TACHY_REDACT=true` (or the `redaction_global`
-setting). Use the deployment-wide switch when company policy forbids sending
-customer personal data or credentials to any LLM. Only the LLM-facing copies are
-scrubbed; the database keeps full data on your own infrastructure. See the
-[wiki](../../wiki) for exactly what gets scrubbed.
+PII/secret redaction is off by default: per connection
+(`{"redaction":{"enabled":true}}` in the connection config) or deployment-wide
+via the `redaction_global` setting. Only LLM-facing copies are scrubbed; the
+database keeps full data.
 
 ## Operations
 
-### Backups
+**Deploy.** The `Jenkinsfile` tests, builds, pushes to Docker Hub, and (on
+`main`) SSHes to the server for `docker compose pull api && up -d api`. A
+restart drops in-flight chat turns; logins survive (session secret) and past
+chats resume (agent-home volume). GHCR images are also published on `v*` tags
+via `.github/workflows/publish.yml`.
 
-```bash
-npm run sync backup                 # pg_dump -Fc into ./backups/
-npm run sync restore --file=backups/tachy-….dump   # pg_restore (overwrites!)
+**Backups.** `backup` writes `pg_dump -Fc` into `./backups/` (host bind mount).
+Schedule it with cron and prune old dumps:
+
+```
+0 3 * * * cd /opt/tachy && docker compose run --rm cli npm run sync backup && find backups -name '*.dump' -mtime +14 -delete
 ```
 
-Both need the PostgreSQL client tools (`pg_dump` / `pg_restore`) on `PATH` (the
-Docker image bundles a matching v16 client). `backups/` is git-ignored. Dumps
-contain real ticket data, so keep them off any shared or synced folder. Schedule
-`backup` with cron or Windows Task Scheduler.
+Dumps contain real ticket data — keep them off shared folders. Restoring vault
+credentials also needs the original `TACHY_SECRET_KEY`, so keep the `.env`
+secrets in a password manager.
 
-### Publishing images
-
-Published to two registries:
-
-- **Docker Hub** (`diegokoes/tachy`), by hand (the included `Jenkinsfile`
-  automates the same: test, build, push `:latest` plus `:<version>`):
-
-  ```bash
-  docker build -t diegokoes/tachy:latest .
-  echo "$DOCKERHUB_TOKEN" | docker login -u diegokoes --password-stdin
-  docker push diegokoes/tachy:latest
-  ```
-
-- **GHCR** (`ghcr.io/<owner>/tachy`), automatically via
-  `.github/workflows/publish.yml` on every `v*` tag (built-in `GITHUB_TOKEN`, no
-  secret to manage). See [Versioning](#versioning) for the tag flow.
-
-End users run the image on their own machines, no deploy stage.
-
-## Privacy and security
-
-Never commit real ticket data, tokens, customer names, or internal URLs. `.env`
-is git-ignored; tokens resolve from the environment by source slug, never stored
-in the DB. The knowledge index is customer-blind, the server-side agent is locked
-to the tachý tools only, and customer PII can optionally be redacted before it
-reaches any model. Full details are in the [wiki](../../wiki).
-
-## Versioning
-
-tachý follows [ZeroVer][zerover] just because I find it funny: the major version
-is, and shall forever remain, `0`. Breaking changes can land in any release. Pin
-an exact version if you depend on it. Docker images are tagged `:latest` and
-`:<version>` (`:0.1.0`); a release is a git tag matching the `package.json`
-version.
-
-## License
-
-[AGPL-3.0-or-later](LICENSE). If you run a modified version of tachý as a network
-service, you must make the modified source available to its users.
-
-[mcp]: https://modelcontextprotocol.io
-[zerover]: https://0ver.org
+**Upgrades.** Fresh installs get the full `db/schema.sql` via Docker initdb;
+running deployments apply `npm run sync migrate` (idempotent).

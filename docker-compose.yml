@@ -15,7 +15,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tachy}
       POSTGRES_DB: ${POSTGRES_DB:-tachy}
     ports:
-      - "5433:5432"
+      # localhost-only: nothing on the office LAN needs raw Postgres access
+      - "127.0.0.1:5433:5432"
     volumes:
       - tachy-postgres-data:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
@@ -44,6 +45,13 @@ services:
       - "8787:8787"
     volumes:
       - ./backups:/app/backups
+      # Linked-repo clones for code search — survives redeploys so reindexes
+      # stay diff-only instead of re-cloning.
+      - tachy-repo-data:/app/data
+      # Claude Code login + agent SDK session transcripts. Persisting this
+      # keeps the server's Claude login and lets multi-turn chats resume
+      # across container redeploys.
+      - tachy-agent-home:/root/.claude
 
   # Not started by `up`. Run ad hoc, e.g.:
   #   docker compose run --rm cli npm run sync <source-slug>
@@ -61,6 +69,9 @@ services:
         condition: service_healthy
     volumes:
       - ./backups:/app/backups
+      - tachy-repo-data:/app/data
 
 volumes:
   tachy-postgres-data:
+  tachy-repo-data:
+  tachy-agent-home:
