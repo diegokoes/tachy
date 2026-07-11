@@ -15,7 +15,7 @@ import {
   clearPermissionCache,
   AppError,
 } from "@tachy/core";
-import { resetData, sql, tpdProductId } from "./helpers";
+import { loginCookie, resetData, sql, tpdProductId } from "./helpers";
 
 afterAll(() => sql.end());
 
@@ -111,22 +111,14 @@ describe("core permissions", () => {
 
 describe("API enforcement (team mini-admin vs member vs admin)", () => {
   const app = createApp({ passwordAuth: true });
-  const cookieOf = (res: Response) =>
-    res.headers.get("set-cookie")?.split(";")[0] ?? "";
   let adminCookie: string;
   let leadCookie: string;
   let devCookie: string;
   let ownEntryId: string;
   let otherEntryId: string;
 
-  const login = async (email: string, password: string) => {
-    const res = await app.request("/auth/password/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-      headers: { "Content-Type": "application/json" },
-    });
-    return cookieOf(res);
-  };
+  const login = (email: string, password: string) =>
+    loginCookie(app, email, password);
   const req = (cookie: string, path: string, method: string, body?: unknown) =>
     app.request(`/api${path}`, {
       method,

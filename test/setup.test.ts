@@ -1,16 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../packages/api/src/app";
-import { getSettings, clearSettingsCache } from "@tachy/core";
-import { resetData, sql } from "./helpers";
+import {
+  getSettings,
+  clearSettingsCache,
+  credentialSource,
+  resolveCredential,
+} from "@tachy/core";
+import { enableVault, json, resetData, sql } from "./helpers";
 
 afterAll(() => sql.end());
 
 const app = createApp({ passwordAuth: true });
-const json = (body: unknown) => ({
-  method: "POST",
-  body: JSON.stringify(body),
-  headers: { "Content-Type": "application/json" },
-});
 
 describe("first-run setup wizard", () => {
   beforeAll(resetData);
@@ -97,5 +97,33 @@ describe("first-run setup wizard", () => {
       json({ email: "x@example.com", password: "short" }),
     );
     expect(res.status).toBe(400);
+  });
+});
+
+describe("first-run setup with a shared agent key", () => {
+  beforeAll(async () => {
+    await resetData();
+    await sql`truncate credentials cascade`;
+    enableVault();
+  });
+
+  it("stores the agent key encrypted as the global credential", async () => {
+    const res = await app.request(
+      "/api/setup",
+      json({
+        email: "keyed@example.com",
+        password: "a-long-password",
+        settings: { agent_provider: "claude" },
+        agent_key: "sk-ant-from-wizard",
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    expect(await credentialSource("anthropic_api_key", {})).toBe("global");
+    expect(await resolveCredential("anthropic_api_key", {})).toBe(
+      "sk-ant-from-wizard",
+    );
+    const [row] = await sql`select value_ciphertext from credentials`;
+    expect(row.value_ciphertext.toString("utf8")).not.toContain("sk-ant");
   });
 });
