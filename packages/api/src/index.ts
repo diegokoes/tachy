@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { serve } from "@hono/node-server";
-import { env } from "@tachy/core";
+import { env, log, sweepInterruptedIndexes } from "@tachy/core";
 import { createApp } from "./app";
 import { isBootstrapped } from "./auth";
 
@@ -21,6 +21,9 @@ const app = createApp({
   oidc,
   passwordAuth: true,
 });
+
+const swept = await sweepInterruptedIndexes();
+if (swept) log("info", "repo_index_sweep", { interrupted: swept });
 
 const authConfigured =
   Boolean(env.apiToken || oidc) || (await isBootstrapped());

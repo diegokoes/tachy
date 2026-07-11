@@ -13,12 +13,18 @@ import {
   env,
   sql,
   loadSettingsIntoEnv,
+  getRepoBySlug,
+  indexRepo,
+  resolveCredential,
+  sourceCredentialName,
 } from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
+import { createAzureDevopsSource } from "@tachy/source-azure-devops";
 
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
+registerSource("azure-devops", createAzureDevopsSource);
 
 async function sync(
   sourceSlug: string,
@@ -50,6 +56,28 @@ async function sync(
 async function embedBackfill() {
   const n = await backfillEmbeddings();
   console.log(`embedded ${n} entr${n === 1 ? "y" : "ies"}`);
+}
+
+async function indexRepoCmd(slug: string) {
+  const repo = await getRepoBySlug(slug);
+  let token: string | undefined;
+  if (repo.source_slug) {
+    const [conn] = await sql`
+      select source_type from source_connections where slug = ${repo.source_slug}
+    `;
+    if (conn)
+      token = await resolveCredential(
+        sourceCredentialName(conn.source_type, repo.source_slug),
+        {},
+      );
+  }
+  console.log(`indexing ${slug} (${repo.url})...`);
+  const res = await indexRepo(slug, { token });
+  console.log(
+    res.upToDate
+      ? `${slug} already at ${res.indexedCommit.slice(0, 12)}`
+      : `${slug} @ ${res.indexedCommit.slice(0, 12)}: ${res.filesIndexed} file(s) re-embedded, ${res.filesDeleted} removed, ${res.chunkCount} chunks total`,
+  );
 }
 
 async function migrate(opts: { dir?: string }) {
@@ -114,6 +142,7 @@ async function restore(opts: { file?: string; yes?: boolean }) {
 const USAGE = `usage:
   sync <source-slug> [--since=ISO] [--group=KEY]   pull & store work items
   embed-backfill                                   embed entries missing a vector
+  index-repo <repo-slug>                           clone/fetch a linked repo and (re)index its code
   migrate [--dir=PATH]                             apply db/migrations/*.sql (idempotent)
   backup [--out=DIR]                               pg_dump -Fc to DIR (default ./backups)
   restore --file=PATH [--yes]                      pg_restore (overwrites the DB)`;
@@ -143,6 +172,15 @@ async function main() {
     }
     case "embed-backfill":
       return embedBackfill();
+    case "index-repo": {
+      if (!positional[0]) throw new Error("index-repo needs a <repo-slug>");
+      try {
+        await loadSettingsIntoEnv();
+      } catch {
+        /* settings table may not exist yet */
+      }
+      return indexRepoCmd(positional[0]);
+    }
     case "migrate":
       return migrate({ dir: args.dir });
     case "backup":
