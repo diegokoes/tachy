@@ -20,7 +20,7 @@ function isAdminIdentity(c: Context): boolean {
   return getIdentity(c)?.role === "admin";
 }
 
-async function memberUserId(c: Context): Promise<string> {
+export async function requireCaller(c: Context): Promise<string> {
   const id = await callerUserId(c);
   if (!id) throw forbidden("no user account is associated with this session");
   return id;
@@ -31,7 +31,7 @@ export async function assertScopeEditor(
   scope: EntryScope,
 ): Promise<void> {
   if (isAdminIdentity(c)) return;
-  await assertCanEditScope(await memberUserId(c), scope);
+  await assertCanEditScope(await requireCaller(c), scope);
 }
 
 export async function assertTeamAdmin(
@@ -39,10 +39,10 @@ export async function assertTeamAdmin(
   teamSlug: string,
 ): Promise<void> {
   if (isAdminIdentity(c)) return;
-  await assertCanManageTeamBySlug(await memberUserId(c), teamSlug);
+  await assertCanManageTeamBySlug(await requireCaller(c), teamSlug);
 }
 
 export async function assertAnyTeamAdminApi(c: Context): Promise<void> {
   if (isAdminIdentity(c)) return;
-  await assertAnyTeamAdmin(await memberUserId(c));
+  await assertAnyTeamAdmin(await requireCaller(c));
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { badInput } from "../platform/errors";
+import { badInput } from "../infra/errors";
 
 export const structuredSchema = z
   .object({
@@ -75,7 +75,7 @@ export const FEEDBACK_KINDS = [
   "note",
   "deprecation",
 ] as const;
-export const RUN_MODES = ["ingest", "consult", "sync"] as const;
+export const RUN_MODES = ["ingest", "consult", "sync", "create", "code"] as const;
 
 export const knowledgeStatusSchema = z.enum(KNOWLEDGE_STATUSES);
 export const referenceStatusSchema = z.enum(REFERENCE_STATUSES);

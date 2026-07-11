@@ -1,5 +1,5 @@
-import { sql } from "../platform/db";
-import { badInput, conflict, notFound } from "../platform/errors";
+import { sql } from "../infra/db";
+import { badInput, conflict, notFound } from "../infra/errors";
 
 export async function listComponents(productId: string) {
   return sql`

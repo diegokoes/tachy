@@ -1,14 +1,18 @@
 import { z } from "zod";
-import { sql } from "./db";
-import { badInput } from "./errors";
+import { sql } from "../infra/db";
+import { badInput } from "../infra/errors";
 
 export const AGENT_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+
+export const AGENT_PROVIDERS = ["claude", "copilot"] as const;
+export type AgentProvider = (typeof AGENT_PROVIDERS)[number];
 
 export const DEPLOYMENT_PROFILES = ["support", "engineering"] as const;
 export type DeploymentProfile = (typeof DEPLOYMENT_PROFILES)[number];
 
 const SETTING_SCHEMAS = {
   redaction_global: z.boolean(),
+  agent_provider: z.enum(AGENT_PROVIDERS),
   agent_model: z.string().min(1),
   agent_effort: z.enum(AGENT_EFFORTS),
   allowed_models: z.array(z.string().min(1)),
@@ -61,6 +65,7 @@ export type SettingSource = "db" | "env" | "default";
 
 export interface EffectiveSettings {
   redaction_global: { value: boolean; source: SettingSource };
+  agent_provider: { value: AgentProvider; source: SettingSource };
   agent_model: { value: string; source: SettingSource };
   agent_effort: {
     value: (typeof AGENT_EFFORTS)[number];
@@ -100,6 +105,13 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
       db.redaction_global,
       process.env.TACHY_REDACT === "true" ? true : undefined,
       false,
+    ),
+    agent_provider: pick<AgentProvider>(
+      db.agent_provider,
+      AGENT_PROVIDERS.includes(process.env.TACHY_AGENT_PROVIDER as never)
+        ? (process.env.TACHY_AGENT_PROVIDER as AgentProvider)
+        : undefined,
+      "claude",
     ),
     agent_model: pick(
       db.agent_model,

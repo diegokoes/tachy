@@ -1,4 +1,4 @@
-import { sql, toDate } from "../platform/db";
+import { sql, toDate } from "../infra/db";
 import type { RawWorkItem } from "../sources/source";
 import { resolveCustomerByEmail } from "../catalog/customers";
 

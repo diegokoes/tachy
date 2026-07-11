@@ -1,4 +1,4 @@
-import { githubToken, scrubText, TokenMap } from "@tachy/core";
+import { badInput, githubToken, scrubText, TokenMap } from "@tachy/core";
 import type {
   WorkItemSource,
   RawWorkItem,
@@ -38,7 +38,7 @@ function redactGithubRaw(
 function parseRef(externalId: string): { repo: string; number: string } {
   const [repo, number] = externalId.split("#");
   if (!repo || !number)
-    throw new Error(
+    throw badInput(
       `Invalid GitHub ref '${externalId}', expected 'owner/repo#123'`,
     );
   return { repo, number };
@@ -155,7 +155,7 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
     async listItems(opts: ListOptions) {
       const repos = opts.groupKey ? [opts.groupKey] : configuredRepos;
       if (repos.length === 0) {
-        throw new Error(
+        throw badInput(
           "GitHub sync needs a repo: pass --group=owner/repo or set config.repos on the connection",
         );
       }

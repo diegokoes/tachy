@@ -1,4 +1,4 @@
-import type { RawWorkItem } from "../sources/source";
+import type { RawWorkItem } from "../types";
 
 /** Stable per-item tokens: the same value always maps to the same `[KIND_n]`. */
 export class TokenMap {

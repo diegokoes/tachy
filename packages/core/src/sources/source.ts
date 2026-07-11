@@ -1,29 +1,7 @@
 import type { TokenMap } from "../compliance/redaction";
+import type { RawWorkItem } from "../types";
 
-export interface RawMessage {
-  externalId?: string;
-  author?: string;
-  visibility: "public" | "private" | "internal";
-  direction: "incoming" | "outgoing";
-  bodyText: string;
-  attachments?: unknown[];
-  createdAt?: string;
-}
-
-export interface RawWorkItem {
-  externalId: string;
-  externalUrl?: string;
-  kind: "ticket" | "issue";
-  title?: string;
-  status?: string;
-  groupKey?: string;
-  requester?: string;
-  requesterEmail?: string;
-  raw: unknown;
-  sourceCreatedAt?: string;
-  sourceUpdatedAt?: string;
-  messages: RawMessage[];
-}
+export type { RawMessage, RawWorkItem } from "../types";
 
 export interface SourceCapabilities {
   postNote: boolean;

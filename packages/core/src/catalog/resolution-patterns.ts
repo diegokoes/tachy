@@ -1,5 +1,5 @@
-import { sql } from "../platform/db";
-import { conflict, notFound } from "../platform/errors";
+import { sql } from "../infra/db";
+import { conflict, notFound } from "../infra/errors";
 
 /** The full controlled vocabulary, for Claude to pick from before tagging an entry. */
 export async function listResolutionPatterns() {

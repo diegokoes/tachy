@@ -1,5 +1,5 @@
-import { sql } from "./db";
-import { forbidden } from "./errors";
+import { sql } from "../infra/db";
+import { forbidden } from "../infra/errors";
 
 export interface EntryScope {
   productId?: string | null;
