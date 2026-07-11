@@ -11,11 +11,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 22, not 20: testcontainers' undici dependency calls a webidl API
-      # (markAsUncloneable) that doesn't exist before Node 22.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - run: npm ci
