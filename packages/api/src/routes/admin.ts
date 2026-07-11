@@ -40,6 +40,9 @@ import {
   env,
   effectiveSettings,
   setSetting,
+  secretsEnabled,
+  credentialSource,
+  AGENT_CREDENTIALS,
 } from "@tachy/core";
 import { requireAdmin } from "../auth";
 import {
@@ -121,6 +124,15 @@ export const admin = new Hono()
   .get("/system", async (c) =>
     c.json({
       settings: await effectiveSettings(),
+      credentials: {
+        vault_enabled: secretsEnabled(),
+        // Global-scope availability (source: global | env | null) — the
+        // per-user view lives under /me/credentials.
+        anthropic_api_key:
+          (await credentialSource(AGENT_CREDENTIALS.claude, {})) ?? null,
+        copilot_token:
+          (await credentialSource(AGENT_CREDENTIALS.copilot, {})) ?? null,
+      },
       env: {
         auth_mode: env.authMode,
         port: env.port,
@@ -129,17 +141,25 @@ export const admin = new Hono()
         api_token_set: Boolean(env.apiToken),
         session_secret_set: Boolean(env.sessionSecret),
         anthropic_api_key_set: Boolean(process.env.ANTHROPIC_API_KEY),
+        copilot_token_set: Boolean(
+          process.env.COPILOT_GITHUB_TOKEN ||
+            process.env.GH_TOKEN ||
+            process.env.GITHUB_TOKEN,
+        ),
         upload_dir: process.env.TACHY_UPLOAD_DIR || null,
       },
     }),
   )
 
-  .put("/settings/:key", requireAdmin, async (c) => {
-    const { value } = await c.req.json<{ value: unknown }>();
-
-    await setSetting(c.req.param("key")!, value);
-    return c.json({ settings: await effectiveSettings() });
-  })
+  .put(
+    "/settings/:key",
+    requireAdmin,
+    zValidator("json", z.object({ value: z.unknown() })),
+    async (c) => {
+      await setSetting(c.req.param("key")!, c.req.valid("json").value);
+      return c.json({ settings: await effectiveSettings() });
+    },
+  )
   .get("/resolution-patterns", async (c) =>
     c.json(await listResolutionPatterns()),
   )

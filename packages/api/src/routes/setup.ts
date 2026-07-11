@@ -9,9 +9,14 @@ import {
   addTeam,
   addProduct,
   AGENT_EFFORTS,
+  AGENT_CREDENTIALS,
+  AGENT_PROVIDERS,
   DEPLOYMENT_PROFILES,
   MIN_PASSWORD_LENGTH,
   conflict,
+  secretsEnabled,
+  setCredential,
+  getUserByEmail,
 } from "@tachy/core";
 import { setSessionCookie, markBootstrapped } from "../auth";
 
@@ -28,12 +33,14 @@ const setupSchema = z.object({
   settings: z
     .object({
       redaction_global: z.boolean().optional(),
+      agent_provider: z.enum(AGENT_PROVIDERS).optional(),
       agent_model: z.string().min(1).optional(),
       agent_effort: z.enum(AGENT_EFFORTS).optional(),
       allowed_models: z.array(z.string().min(1)).optional(),
       deployment_profile: z.enum(DEPLOYMENT_PROFILES).optional(),
     })
     .optional(),
+  agent_key: z.string().min(1).optional(),
 });
 
 export const setup = new Hono()
@@ -64,6 +71,14 @@ export const setup = new Hono()
     if (body.org_name) await setSetting("org_name", body.org_name);
     for (const [key, value] of Object.entries(body.settings ?? {}))
       if (value !== undefined) await setSetting(key, value);
+
+    if (body.agent_key && secretsEnabled()) {
+      const admin = await getUserByEmail(body.email);
+      if (admin) {
+        const name = AGENT_CREDENTIALS[body.settings?.agent_provider ?? "claude"];
+        await setCredential(admin.id, "global", undefined, name, body.agent_key);
+      }
+    }
 
     if (body.team) {
       await addTeam(body.team.slug, body.team.name);
