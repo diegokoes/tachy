@@ -1,11 +1,13 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { chatStream, approve, uploadDoc } from "./agent";
+  import { chatStream, approve, uploadDoc, getCommands, type BuiltinCommandMeta, type CommandArtifactMeta } from "./agent";
   import { chat, type Entry } from "./chatState.svelte";
   import { renderMarkdown } from "./markdown";
   import { gsap, SplitText, reducedMotion } from "./gsap";
   import TypeLine from "./TypeLine.svelte";
   import AsciiScrollbar from "./AsciiScrollbar.svelte";
+  import ArtifactPanel from "./chat/ArtifactPanel.svelte";
+  import CommandMenu, { type CommandPick } from "./chat/CommandMenu.svelte";
 
   const short = (tool: string) => tool.replace(/^mcp__tachy__/, "");
 
@@ -65,9 +67,62 @@
     else chat.entries.push({ kind: "assistant", text });
   }
 
+  let commands = $state<{ builtins: BuiltinCommandMeta[]; artifacts: CommandArtifactMeta[] } | null>(null);
+  let cmdMenu = $state<CommandMenu>();
+  let cmdDismissed = $state(false);
+
+  const cmdQuery = $derived(/^\/[a-z0-9-]*$/.test(chat.input) ? chat.input.slice(1) : null);
+  const menuOpen = $derived(cmdQuery !== null && !cmdDismissed && !chat.busy && commands !== null);
+
+  $effect(() => {
+    if (cmdQuery !== null && !commands) getCommands().then((c) => (commands = c)).catch(() => {});
+  });
+  $effect(() => {
+    void chat.input;
+    cmdDismissed = false;
+  });
+
+  function pickCommand(pick: CommandPick) {
+    if (pick.kind === "builtin") chat.input = `/${pick.builtin.name} `;
+    else {
+      chat.artifact = { id: pick.artifact.id, title: pick.artifact.title };
+      chat.input = "";
+    }
+  }
+
+  function composerKeydown(e: KeyboardEvent) {
+    if (menuOpen && cmdMenu && !cmdMenu.empty()) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        cmdMenu.move(e.key === "ArrowDown" ? 1 : -1);
+        return;
+      }
+      if (e.key === "Tab" || e.key === "Enter") {
+        e.preventDefault();
+        cmdMenu.pick();
+        return;
+      }
+      if (e.key === "Escape") {
+        cmdDismissed = true;
+        return;
+      }
+    }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  }
+
+  function parseCommand(message: string): { name: string; args: string } | undefined {
+    const m = message.match(/^\/([a-z0-9-]+)(?:\s+([\s\S]*))?$/);
+    if (!m || !commands?.builtins.some((b) => b.name === m[1])) return undefined;
+    return { name: m[1], args: m[2]?.trim() ?? "" };
+  }
+
   async function send() {
     const message = chat.input.trim();
     if (!message || chat.busy) return;
+    const command = parseCommand(message);
     chat.entries.push({ kind: "user", text: message });
     const uploadPaths = chat.uploads.map((u) => u.path);
     chat.input = "";
@@ -76,7 +131,7 @@
     clearArmed = false;
     snap(true);
     try {
-      for await (const { event, data } of chatStream({ message, sessionId: chat.sessionId, uploadPaths: uploadPaths.length ? uploadPaths : undefined })) {
+      for await (const { event, data } of chatStream({ message, sessionId: chat.sessionId, uploadPaths: uploadPaths.length ? uploadPaths : undefined, artifactId: chat.artifact?.id, command })) {
         if (event === "start") chat.turnId = data.turnId as string;
         else if (event === "text") appendAssistant(data.text as string);
         else if (event === "tool_use") chat.entries.push({ kind: "tool", tool: short(data.tool as string) });
@@ -278,28 +333,39 @@
     {/if}
   </div>
   <AsciiScrollbar target={transcriptEl} controls="chat-transcript" />
+  <ArtifactPanel />
   </div>
 
-  {#if chat.uploads.length}
+  {#if chat.uploads.length || chat.artifact}
     <div class="attachments">
+      {#if chat.artifact}
+        <span class="attach artifact-chip">
+          ▸ artifact: {chat.artifact.title}
+          <button class="chip-x" title="Detach artifact" onclick={() => (chat.artifact = undefined)}>✕</button>
+        </span>
+      {/if}
       {#each chat.uploads as u}<span class="attach">📎 {u.filename}</span>{/each}
     </div>
   {/if}
 
   <div class="composer">
+    {#if menuOpen && commands}
+      <CommandMenu
+        bind:this={cmdMenu}
+        query={cmdQuery ?? ""}
+        builtins={commands.builtins}
+        artifacts={commands.artifacts}
+        onpick={pickCommand}
+      />
+    {/if}
     <label class="upload" title="Attach a document">
       📎<input type="file" onchange={onFile} hidden />
     </label>
     <textarea
-      placeholder="Message the assistant…"
+      placeholder="Message the assistant… ( / for commands )"
       bind:value={chat.input}
       rows="2"
-      onkeydown={(e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          send();
-        }
-      }}
+      onkeydown={composerKeydown}
     ></textarea>
     {#if jsonModal}
       {@const m = jsonModal}
@@ -367,8 +433,10 @@
     pointer-events: none; /* keep drag events landing on .chat */
   }
 
-  .send-col { display: flex; flex-direction: column; gap: 0.35rem; }
-  .send-col button { width: 100%; }
+  /* Stretch with the composer row so Clear+Send always equal the textarea's
+     height exactly, splitting it between them. */
+  .send-col { display: flex; flex-direction: column; gap: 0.35rem; align-self: stretch; }
+  .send-col button { width: 100%; flex: 1; min-height: 0; padding: 0 0.9rem; }
   .clear { color: var(--muted); font-size: 0.85rem; }
   .clear.armed { background: #b91c1c; border-color: #b91c1c; color: #fff; }
 
@@ -516,9 +584,20 @@
   .ap-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
   .ap-actions .approve { border-color: #3fb950; color: #3fb950; }
   .ap-status { margin-top: 0.4rem; font-size: 0.82rem; color: var(--muted); text-transform: capitalize; }
-  .attachments { display: flex; gap: 0.4rem; padding: 0.4rem 0; }
+  .attachments { display: flex; gap: 0.4rem; padding: 0.4rem 0; flex-wrap: wrap; align-items: center; }
   .attach { font-size: 0.8rem; color: var(--muted); }
-  .composer { display: flex; gap: 0.5rem; align-items: flex-end; padding-top: 0.6rem; border-top: 1px solid var(--border); }
+  .artifact-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    padding: 0.05rem 0.6rem;
+    color: var(--accent);
+  }
+  .chip-x { border: none; background: none; padding: 0 0.1rem; color: var(--accent); font-size: 0.8rem; }
+  .chip-x:hover { color: var(--danger); }
+  .composer { position: relative; display: flex; gap: 0.5rem; align-items: stretch; padding-top: 0.6rem; border-top: 1px solid var(--border); }
   .composer textarea { flex: 1; resize: none; }
   .upload { cursor: pointer; align-self: center; font-size: 1.1rem; }
   .hint { color: var(--text); }

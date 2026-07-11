@@ -42,11 +42,17 @@ export type Setting<T> = { value: T; source: "db" | "env" | "default" };
 export type SystemInfo = {
   settings: {
     redaction_global: Setting<boolean>;
+    agent_provider: Setting<"claude" | "copilot">;
     agent_model: Setting<string>;
     agent_effort: Setting<string>;
     allowed_models: Setting<string[]>;
     org_name: Setting<string | null>;
     deployment_profile: Setting<"support" | "engineering">;
+  };
+  credentials: {
+    vault_enabled: boolean;
+    anthropic_api_key: "global" | "env" | null;
+    copilot_token: "global" | "env" | null;
   };
   env: {
     auth_mode: string;
@@ -56,6 +62,7 @@ export type SystemInfo = {
     api_token_set: boolean;
     session_secret_set: boolean;
     anthropic_api_key_set: boolean;
+    copilot_token_set: boolean;
     upload_dir: string | null;
   };
 };
@@ -84,6 +91,11 @@ export const TIP = {
   team: "Owning team. One team can own many products.",
   group:
     "The source system's own grouping key: a Freshdesk group id, a GitHub owner/repo…",
+};
+
+export const AGENT_KEY_LABELS: Record<string, string> = {
+  anthropic_api_key: "Anthropic API key",
+  copilot_token: "Copilot GitHub token",
 };
 
 export const csv = (v: string | undefined) =>

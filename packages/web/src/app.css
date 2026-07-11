@@ -115,3 +115,159 @@ button:focus-visible {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
 }
+
+/* Shared chrome for settings-style panels (System, My settings, credentials).
+   Components may override locally; scoped styles win on specificity. */
+.badge {
+  font-size: 0.72rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.05rem 0.55rem;
+  color: var(--muted);
+}
+.badge.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.edit-cell {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.mini {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.45rem;
+}
+.ghost {
+  border-color: transparent;
+  color: var(--muted);
+}
+.ghost:hover {
+  color: var(--text);
+}
+
+/* Readable measure for running prose only — containers stay full-frame so the
+   list → detail transition never changes width. */
+.prose-measure {
+  max-width: 72ch;
+}
+
+/* Shared list-view chrome (Knowledge + Reference): search/filter rows and the
+   result list. View-specific bits (badges, snippets, scores) stay scoped. */
+.controls-primary {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+.controls-filters {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.filters-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.filters-divider {
+  color: var(--border);
+  user-select: none;
+}
+.filters-count {
+  color: var(--accent);
+  font-size: 0.78rem;
+}
+.search {
+  flex: 1;
+  min-width: 16rem;
+}
+.new {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.results {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.results .row {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.65rem 0.8rem;
+  background: var(--panel);
+}
+.results .meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+.results .tag {
+  background: var(--accent-dim);
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  font-size: 0.72rem;
+  color: var(--text);
+}
+.results .empty {
+  padding: 1.5rem 0.5rem;
+}
+.results .empty p {
+  margin: 0.25rem 0;
+}
+.count {
+  margin: 0.25rem 0;
+  font-size: 0.82rem;
+}
+.muted {
+  color: var(--muted);
+}
+.error {
+  color: var(--danger);
+}
+
+/* Quiet curation toolbar (entry/doc detail): lifecycle actions render as
+   ghost buttons that only take color on hover, so they stop competing with
+   the content they curate. Destructive ones go warn on hover instead. */
+.curation {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-wrap: wrap;
+  margin: 0.15rem 0 0.75rem;
+}
+.curation-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-right: 0.35rem;
+  user-select: none;
+}
+.curation button {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  padding: 0.15rem 0.5rem;
+}
+.curation button:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+}
+.curation button.warn-btn:hover:not(:disabled) {
+  color: var(--warn);
+  border-color: var(--warn);
+}

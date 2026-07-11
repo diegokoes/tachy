@@ -2,7 +2,6 @@
   import { api, ApiError } from "./api";
   import type { KnowledgeRow, Feedback, NamedRow } from "./types";
   import Facets from "./Facets.svelte";
-  import AsciiSelect from "./AsciiSelect.svelte";
   import StructuredView from "./knowledge/StructuredView.svelte";
   import EntryForm from "./knowledge/EntryForm.svelte";
   import { isCurator, canCurateScope } from "./session.svelte";
@@ -13,11 +12,6 @@
   let feedback = $state<Feedback[]>([]);
   let error = $state<string | null>(null);
 
-  let rating = $state<number>(5);
-  let comment = $state("");
-  let saving = $state(false);
-
-  
   let editing = $state(false);
   let mutating = $state(false);
   let mutateError = $state<string | null>(null);
@@ -111,23 +105,6 @@
     }, 250);
   }
 
-  async function submitFeedback() {
-    saving = true;
-    try {
-      await api.post(`/knowledge/${id}/feedback`, {
-        kind: "rating",
-        rating,
-        comment: comment.trim() || undefined,
-      });
-      comment = "";
-      feedback = await api.get<Feedback[]>(`/knowledge/${id}/feedback`);
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-    } finally {
-      saving = false;
-    }
-  }
-
   $effect(() => {
     void id;
     editing = false;
@@ -177,6 +154,7 @@
 
       {#if canEdit}
         <div class="curation">
+          <span class="curation-label">curate:</span>
           <button class="mini" onclick={() => { editing = true; mutateError = null; }}>edit</button>
           {#if entry.status === "draft" || entry.status === "rejected"}
             <button class="mini" onclick={() => patch({ status: "approved" })} disabled={mutating}>approve</button>
@@ -251,13 +229,6 @@
 
       <section class="feedback">
         <h3>Feedback</h3>
-        <div class="fb-form">
-          <label>rating
-            <AsciiSelect bind:value={rating} options={[1, 2, 3, 4, 5]} />
-          </label>
-          <input placeholder="optional comment" bind:value={comment} />
-          <button onclick={submitFeedback} disabled={saving}>{saving ? "saving…" : "Add"}</button>
-        </div>
         {#if feedback.length}
           <ul class="fb-list">
             {#each feedback as f}
@@ -265,7 +236,7 @@
             {/each}
           </ul>
         {:else}
-          <p class="muted">No feedback yet.</p>
+          <p class="muted">No feedback recorded.</p>
         {/if}
       </section>
     {/if}
@@ -275,11 +246,10 @@
 </div>
 
 <style>
-  .detail { max-width: 820px; }
   .close { margin-bottom: 0.75rem; }
   h2 { margin: 0.25rem 0 0.5rem; font-size: 1.25rem; }
   h3 { margin: 1rem 0 0.35rem; font-size: 0.95rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
-  section p { margin: 0; white-space: pre-wrap; line-height: 1.5; }
+  section p { margin: 0; white-space: pre-wrap; line-height: 1.5; max-width: 72ch; }
   .badges { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.5rem; }
   .badge { border: 1px solid var(--border); border-radius: 6px; padding: 0.1rem 0.5rem; font-size: 0.78rem; color: var(--muted); }
   .badge.warn { border-color: var(--warn); color: var(--warn); }
@@ -295,9 +265,8 @@
     flex-wrap: wrap;
   }
   .jump { font-size: 0.8rem; padding: 0.15rem 0.55rem; border-color: var(--warn); color: var(--warn); }
-  .curation { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
   .mini { font-size: 0.78rem; padding: 0.15rem 0.5rem; }
-  .warn-btn { border-color: var(--warn); color: var(--warn); }
+  .deprecate-form .warn-btn { border-color: var(--warn); color: var(--warn); }
   .deprecate-form {
     border: 1px solid var(--warn);
     border-radius: 6px;
@@ -311,8 +280,6 @@
   .supersede-results { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.25rem; }
   .supersede-results label { display: flex; align-items: baseline; gap: 0.4rem; font-size: 0.85rem; cursor: pointer; }
   .actions { display: flex; gap: 0.5rem; }
-  .fb-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.5rem; }
-  .fb-form input { flex: 1; min-width: 12rem; }
   .fb-list { list-style: none; padding: 0; margin: 0; }
   .fb-list li { padding: 0.35rem 0; border-top: 1px solid var(--border); }
   .muted { color: var(--muted); }

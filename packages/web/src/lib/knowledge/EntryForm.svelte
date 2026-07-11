@@ -5,6 +5,7 @@
   import type { KnowledgeRow, NamedRow } from "../types";
   import AsciiSelect from "../AsciiSelect.svelte";
   import { t } from "../terms";
+  import { csv } from "../admin/shared";
 
   let {
     mode,
@@ -23,7 +24,6 @@
   } = $props();
 
   const csvJoin = (v: string[] | null | undefined) => (v ?? []).join(", ");
-  const csvSplit = (v: string) => v.split(",").map((t) => t.trim()).filter(Boolean);
 
   const seed = untrack(() => initial);
 
@@ -108,9 +108,9 @@
       issueSummary: text(issueSummary),
       rootCause: text(rootCause),
       resolution: text(resolution),
-      symptoms: csvSplit(symptoms),
-      signals: csvSplit(signals),
-      tags: csvSplit(tags),
+      symptoms: csv(symptoms),
+      signals: csv(signals),
+      tags: csv(tags),
       confidence: confidence || (mode === "edit" ? null : undefined),
       cloud: cloud.trim() || (mode === "edit" ? null : undefined),
       resolutionClarity: resolutionClarity || (mode === "edit" ? null : undefined),
@@ -228,7 +228,7 @@
 </form>
 
 <style>
-  .entry-form { display: flex; flex-direction: column; gap: 0.6rem; max-width: 820px; }
+  .entry-form { display: flex; flex-direction: column; gap: 0.6rem; }
   label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.82rem; color: var(--muted); }
   label.wide { width: 100%; }
   .hint { font-size: 0.72rem; opacity: 0.8; }

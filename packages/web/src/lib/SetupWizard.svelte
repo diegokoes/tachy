@@ -1,9 +1,8 @@
 <script lang="ts">
-  
-  
-  
   import TypeLine from "./TypeLine.svelte";
   import AsciiSelect from "./AsciiSelect.svelte";
+  import { api } from "./api";
+  import { csv } from "./admin/shared";
   import { initSession } from "./session.svelte";
 
   let { onDone, onSkip }: { onDone: () => void; onSkip: () => void } = $props();
@@ -13,7 +12,6 @@
   let error = $state<string | null>(null);
   let busy = $state(false);
 
-  
   let profile = $state<"support" | "engineering">("support");
   let email = $state("");
   let displayName = $state("");
@@ -23,12 +21,12 @@
   let teamName = $state("");
   let products = $state<{ name: string }[]>([{ name: "" }]);
   let redaction = $state(false);
+  let agentProvider = $state<"claude" | "copilot">("claude");
+  let agentKey = $state("");
   let agentModel = $state("claude-sonnet-5");
   let agentEffort = $state("medium");
   let allowedModels = $state("");
 
-  
-  
   const WIZ_TERMS = {
     support: { team: "team", product: "product", products: "products" },
     engineering: { team: "organization", product: "repository", products: "repositories" },
@@ -40,7 +38,6 @@
 
   const namedProducts = $derived(products.filter((p) => p.name.trim()));
 
-  
   const emailBad = $derived(email.length > 0 && !/\S+@\S+\.\S+/.test(email));
   const passwordBad = $derived(password.length > 0 && password.length < 10);
   const matchBad = $derived(password2.length > 0 && password !== password2);
@@ -70,25 +67,21 @@
         settings: {
           deployment_profile: profile,
           redaction_global: redaction,
+          agent_provider: agentProvider,
           agent_model: agentModel.trim() || "claude-sonnet-5",
           agent_effort: agentEffort,
           ...(allowedModels.trim()
-            ? { allowed_models: allowedModels.split(",").map((s) => s.trim()).filter(Boolean) }
+            ? { allowed_models: csv(allowedModels) }
             : {}),
         },
       };
+      if (agentKey.trim()) body.agent_key = agentKey.trim();
       if (teamName.trim()) {
         body.team = { slug: slugify(teamName), name: teamName.trim() };
         if (namedProducts.length)
           body.products = namedProducts.map((p) => ({ slug: slugify(p.name), name: p.name.trim() }));
       }
-      const res = await fetch("/api/setup", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const out = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(out.error ?? `setup failed (${res.status})`);
+      await api.post("/setup", body);
       await initSession();
       onDone();
     } catch (err) {
@@ -197,8 +190,21 @@
 
     {:else if STEPS[step] === "agent"}
       <div class="body">
-        <h3>Agent cost policy</h3>
-        <p class="muted">Which Claude model the built-in chat agent uses, and how hard it thinks. Editable later in Admin › System.</p>
+        <h3>Agent backend &amp; cost policy</h3>
+        <p class="muted">Which backend runs the built-in chat agent, which model it uses, and how hard it thinks. Editable later in Admin › System.</p>
+        <label><span>provider</span>
+          <AsciiSelect bind:value={agentProvider} options={[
+            { value: "claude", label: "claude (Anthropic API key / Claude Code login)" },
+            { value: "copilot", label: "copilot (GitHub Copilot subscription)" },
+          ]} />
+        </label>
+        {#if agentProvider === "copilot"}
+          <p class="hint">Auth: set <code>COPILOT_GITHUB_TOKEN</code> in <code>.env</code>, or log the server in once via the copilot CLI. Model ids follow Copilot's vocabulary (e.g. <code>claude-sonnet-4.5</code>, <code>gpt-5.1</code>).</p>
+        {/if}
+        <label><span>shared {agentProvider === "copilot" ? "Copilot GitHub token" : "Anthropic API key"} for everyone (optional)</span>
+          <input type="password" bind:value={agentKey} autocomplete="off"
+            placeholder="stored encrypted in the app (needs TACHY_SECRET_KEY); leave empty to use .env" />
+        </label>
         <label><span>model</span><input bind:value={agentModel} /></label>
         <label><span>effort</span>
           <AsciiSelect bind:value={agentEffort} options={["low", "medium", "high", "xhigh", "max"]} />
@@ -223,7 +229,8 @@
             <tr><td>{wt.products}</td><td>{namedProducts.length ? namedProducts.map((p) => slugify(p.name)).join(", ") : "-"}</td></tr>
             <tr class="section"><td colspan="2">policies</td></tr>
             <tr><td>redaction</td><td>{redaction ? "ON - scrub PII/secrets before the LLM" : "off"}</td></tr>
-            <tr><td>agent</td><td>{agentModel} · {agentEffort}{allowedModels.trim() ? ` · allowlist: ${allowedModels}` : ""}</td></tr>
+            <tr><td>agent</td><td>{agentProvider} · {agentModel} · {agentEffort}{allowedModels.trim() ? ` · allowlist: ${allowedModels}` : ""}</td></tr>
+            <tr><td>agent key</td><td>{agentKey.trim() ? "provided — stored encrypted as the global credential" : "from .env"}</td></tr>
           </tbody>
         </table>
         <p class="muted">
@@ -298,11 +305,8 @@
   .card-desc { font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
   .prod-row { display: flex; gap: 0.4rem; align-items: center; }
   .prod-row input { flex: 1; }
-  .mini { font-size: 0.75rem; padding: 0.15rem 0.45rem; }
   .add-more { align-self: flex-start; font-size: 0.82rem; }
   .actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
-  .actions .ghost, .ghost { border-color: transparent; color: var(--muted); }
-  .actions .ghost:hover, .ghost:hover { color: var(--text); }
   .primary { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
   .review { border-collapse: collapse; }
   .review td { border: 1px solid var(--border); padding: 0.35rem 0.7rem; font-size: 0.9rem; }

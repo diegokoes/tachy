@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api, ApiError } from "./api";
-  import type { ReferenceRow, NamedRow } from "./types";
+  import type { ReferenceRow, ReferenceLineageRow, NamedRow } from "./types";
   import Facets from "./Facets.svelte";
   import AsciiSpinner from "./AsciiSpinner.svelte";
   import AsciiSelect from "./AsciiSelect.svelte";
@@ -18,6 +18,8 @@
   
   let creating = $state(false);
   let editing = $state(false);
+  let newVersion = $state(false);
+  let lineage = $state<ReferenceLineageRow[]>([]);
   let mutating = $state(false);
   let mutateError = $state<string | null>(null);
   let conflict = $state(false);
@@ -42,8 +44,9 @@
       if (q.trim()) p.set("q", q.trim());
       if (status && mode === "browse") p.set("status", status);
       const path = mode === "search" ? `/reference/search?${p}` : `/reference?${p}`;
-      const result = await api.get<ReferenceRow[]>(path);
-      if (mySeq !== seq) return; 
+      let result = await api.get<ReferenceRow[]>(path);
+      if (mode === "search" && status) result = result.filter((r) => r.status === status);
+      if (mySeq !== seq) return;
       rows = result;
     } catch (e) {
       if (mySeq === seq) error = e instanceof Error ? e.message : String(e);
@@ -57,11 +60,17 @@
   async function open(id: string) {
     error = null;
     editing = false;
+    newVersion = false;
     mutateError = null;
     conflict = false;
     productTeamSlug = null;
     try {
       selected = await api.get<ReferenceRow>(`/reference/${id}`);
+      try {
+        lineage = await api.get<ReferenceLineageRow[]>(`/reference/${id}/lineage`);
+      } catch {
+        lineage = [];
+      }
       if (isCurator() && selected.product_id && !selected.team_id) {
         const products = await api.get<NamedRow[]>("/products");
         productTeamSlug = (products.find((p) => p.id === selected!.product_id)?.team_slug as string) ?? null;
@@ -70,6 +79,9 @@
       error = e instanceof Error ? e.message : String(e);
     }
   }
+
+  const versionLabel = (l: ReferenceLineageRow) =>
+    `${l.doc_version ? `v${l.doc_version}` : fmtDate(l.created_at) || l.id.slice(0, 8)} · ${l.status}`;
 
   async function patch(body: Record<string, unknown>) {
     if (!selected) return;
@@ -101,6 +113,7 @@
     try {
       const created = await api.post<{ id: string }>("/reference", payload);
       creating = false;
+      newVersion = false;
       await open(created.id);
       run();
     } catch (e) {
@@ -140,16 +153,39 @@
       onSubmit={patch}
       onCancel={() => { editing = false; mutateError = null; }}
     />
+  {:else if newVersion}
+    <h2>new version of “{selected.title}”</h2>
+    <ReferenceForm
+      mode="create"
+      initial={{ title: selected.title, tags: selected.tags, body: selected.body, status: "approved" }}
+      supersedes={selected.id}
+      saving={createSaving}
+      error={createError}
+      onSubmit={createDoc}
+      onCancel={() => { newVersion = false; createError = null; }}
+    />
   {:else}
     <h2>{selected.title}</h2>
     <div class="doc-meta">
       {#if selected.status !== "approved"}<span class="badge {selected.status}">{selected.status}</span>{/if}
+      {#if selected.doc_version}<span class="badge">v{selected.doc_version}</span>{/if}
       {#if selected.source}<span class="muted">source: {selected.source}</span>{/if}
       {#if selected.updated_at}<span class="muted">updated {fmtDate(selected.updated_at)}</span>{/if}
+      {#if lineage.length > 1}
+        <AsciiSelect
+          value={selected.id}
+          title="All versions of this doc"
+          options={lineage.map((l) => ({ value: l.id, label: versionLabel(l) }))}
+          onchange={(v) => open(String(v))}
+        />
+      {/if}
     </div>
     {#if canEdit}
       <div class="curation">
         <button class="mini" onclick={() => { editing = true; mutateError = null; }}>edit</button>
+        {#if selected.status === "approved"}
+          <button class="mini" onclick={() => { newVersion = true; createError = null; }}>new version…</button>
+        {/if}
         {#if selected.status === "draft"}
           <button class="mini" onclick={() => patch({ status: "approved" })} disabled={mutating}>approve</button>
         {/if}
@@ -172,7 +208,7 @@
 {:else if creating}
   <button class="close" onclick={() => (creating = false)}>← back</button>
   <h2>new reference doc</h2>
-  <p class="intro muted">Freeform project context (runbook, architecture note, process doc). Approved docs are chunked, embedded, and surface in the agent's consult search.</p>
+  <p class="intro muted prose-measure">Freeform project context (runbook, architecture note, process doc). Approved docs are chunked, embedded, and surface in the agent's consult search.</p>
   <ReferenceForm
     mode="create"
     saving={createSaving}
@@ -181,25 +217,25 @@
     onCancel={() => (creating = false)}
   />
 {:else}
-  <p class="intro muted">
-    Freeform project context the agent can consult: runbooks, architecture notes,
-    process docs - anything that isn't an issue→cause→resolution lesson. Docs are
-    chunked and embedded; search here is semantic, and the agent pulls matching
-    snippets automatically when analyzing tickets.
-  </p>
-  <div class="controls">
+
+  <div class="controls-primary">
     <input
       class="search"
       placeholder="Search docs by topic, service, procedure…"
       bind:value={q}
       onkeydown={(e) => { if (e.key === "Enter") { clearTimeout(timer); run(); } }}
     />
-    {#if !q.trim()}
-      <AsciiSelect bind:value={status} title="Doc status"
-        options={[{ value: "", label: "any status" }, "draft", "approved", "archived"]} />
-    {/if}
     {#if isCurator()}
       <button class="new" onclick={() => (creating = true)}>+ new doc</button>
+    {/if}
+  </div>
+  <div class="controls-filters">
+    <span class="filters-label">filter:</span>
+    <AsciiSelect bind:value={status} title="Doc status"
+      options={[{ value: "", label: "any status" }, "draft", "approved", "archived"]} />
+    {#if status}
+      <span class="filters-count">1 active</span>
+      <button class="mini" onclick={() => (status = "")}>clear</button>
     {/if}
   </div>
   {#if error}<p class="error">{error}</p>{/if}
@@ -214,6 +250,7 @@
           </span>
           {#if r.snippet}<span class="snippet">{r.snippet}</span>{/if}
           <span class="meta">
+            {#if r.doc_version}<span class="date">v{r.doc_version}</span>{/if}
             {#if r.tags?.length}
               {#each r.tags.slice(0, 6) as t}<span class="tag">{t}</span>{/each}
             {/if}
@@ -242,16 +279,9 @@
 {/if}
 
 <style>
-  .intro { margin: 0 0 0.9rem; font-size: 0.88rem; line-height: 1.55; max-width: 60rem; }
-  .controls { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; align-items: center; }
-  .search { flex: 1; min-width: 16rem; }
-  .new { border-color: var(--accent); color: var(--accent); }
-  .results { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4rem; }
-  .row { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 0.25rem; padding: 0.65rem 0.8rem; background: var(--panel); }
+  .intro { margin: 0 0 0.9rem; font-size: 0.88rem; line-height: 1.55; }
   .title { font-weight: 500; }
   .snippet { color: var(--muted); font-size: 0.82rem; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
-  .meta { display: flex; gap: 0.3rem; align-items: baseline; flex-wrap: wrap; }
-  .tag { background: var(--accent-dim); border-radius: 999px; padding: 0 0.5rem; font-size: 0.72rem; }
   .date { color: var(--muted); font-size: 0.75rem; margin-left: 0.3rem; }
   .badge {
     display: inline-block;
@@ -271,8 +301,4 @@
   .body { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem; white-space: pre-wrap; line-height: 1.55; overflow-x: auto; }
   .close { margin-bottom: 0.5rem; }
   h2 { font-size: 1.2rem; margin: 0.25rem 0 0.4rem; }
-  .empty { padding: 1.5rem 0.5rem; }
-  .empty p { margin: 0.25rem 0; }
-  .muted { color: var(--muted); }
-  .error { color: var(--danger); }
 </style>

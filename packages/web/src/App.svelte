@@ -4,26 +4,46 @@
   import KnowledgeView from "./lib/KnowledgeView.svelte";
   import ReferenceView from "./lib/ReferenceView.svelte";
   import AdminView from "./lib/admin/AdminView.svelte";
+  import MySettings from "./lib/MySettings.svelte";
   import IntroSplash from "./lib/IntroSplash.svelte";
   import SetupWizard from "./lib/SetupWizard.svelte";
   import LoginView from "./lib/LoginView.svelte";
+  import AsciiScrollbar from "./lib/AsciiScrollbar.svelte";
   import { session, initSession, isCurator } from "./lib/session.svelte";
   import { gsap, reducedMotion } from "./lib/gsap";
+  import {
+    ANSI16,
+    BORDERS,
+    BORDER_KEYS,
+    PATTERNS,
+    PATTERN_LABELS,
+    borderPreview,
+    patternPreview,
+  } from "./lib/ascii-patterns";
+  import {
+    themeState as th,
+    loadThemeFromStorage,
+    selectAccent,
+    resetAccent,
+    setTheme,
+    setPattern,
+    setPatternAlpha,
+    setFontScale,
+    setBorder,
+  } from "./lib/theme.svelte";
 
-  type View = "chat" | "knowledge" | "reference" | "admin" | "theme";
+  type View = "chat" | "knowledge" | "reference" | "admin" | "me" | "theme";
   const NAV_ALL: { key: View; label: string }[] = [
     { key: "chat", label: "Tachy" },
     { key: "knowledge", label: "Knowledge" },
     { key: "reference", label: "Reference" },
     { key: "admin", label: "Admin" },
+    { key: "me", label: "Settings" },
     { key: "theme", label: "Theme" },
   ];
-  
-  
+
   const nav = $derived(!isCurator() && session.me ? NAV_ALL.filter((n) => n.key !== "admin") : NAV_ALL);
 
-  
-  
   let wizardSkipped = $state(localStorage.getItem("tachy-skip-wizard") === "1");
   const showWizard = $derived(session.bootstrapped === false && !wizardSkipped);
   const showLogin = $derived(
@@ -37,15 +57,10 @@
     localStorage.setItem("tachy-skip-wizard", "1");
   }
 
-  type Theme = "dark" | "light";
-  const ACCENT_DEFAULTS: Record<Theme, string> = { dark: "#6ea8fe", light: "#31589e" };
-
   let view = $state<View>("knowledge");
-  
   let splash = $state(!reducedMotion());
   let navEl = $state<HTMLElement>();
-  
-  
+  let mainEl = $state<HTMLElement>();
   let navRevealed = $state(false);
 
   function revealNav() {
@@ -69,209 +84,12 @@
     );
   }
 
-  
-  
   $effect(() => {
     if (navEl && !splash && !navRevealed) revealNav();
   });
-  let theme = $state<Theme>("dark");
-  let patternIdx = $state(0); 
-  let patternAlpha = $state(0.35);
-  let accentColor = $state(ACCENT_DEFAULTS.dark);
-  let accentCustomized = $state(false);
-  let fontScale = $state(1);
-  let border = $state<BorderKey>("none");
-
-  
-  
-  
-  type BorderKey = "none" | "tilde" | "blocks" | "hash";
-  const BORDERS: Record<Exclude<BorderKey, "none">, { top: string; bottom: string; left: string; right: string }> = {
-    tilde: { top: "~", bottom: "~", left: "~", right: "~" },
-    blocks: { top: "▀", bottom: "▄", left: "▐", right: "▌" },
-    hash: { top: "#", bottom: "#", left: "#", right: "#" },
-  };
-  const BORDER_KEYS = Object.keys(BORDERS) as Exclude<BorderKey, "none">[];
-
-  function borderPreview(k: Exclude<BorderKey, "none">): string {
-    const b = BORDERS[k];
-    const w = 24;
-    const top = b.left + b.top.repeat(w) + b.right;
-    const mid = b.left + " ".repeat(w) + b.right;
-    return [top, mid, mid, mid, b.left + b.bottom.repeat(w) + b.right].join("\n");
-  }
-
-  function setBorder(k: BorderKey) {
-    border = k;
-    localStorage.setItem("tachy-border", k);
-  }
-
-  
-  const ANSI16: { name: string; hex: string }[] = [
-    { name: "black", hex: "#000000" },
-    { name: "red", hex: "#cd3131" },
-    { name: "green", hex: "#0dbc79" },
-    { name: "yellow", hex: "#e5e510" },
-    { name: "blue", hex: "#2472c8" },
-    { name: "magenta", hex: "#bc3fbc" },
-    { name: "cyan", hex: "#11a8cd" },
-    { name: "white", hex: "#e5e5e5" },
-    { name: "bright black", hex: "#666666" },
-    { name: "bright red", hex: "#f14c4c" },
-    { name: "bright green", hex: "#23d18b" },
-    { name: "bright yellow", hex: "#f5f543" },
-    { name: "bright blue", hex: "#3b8eea" },
-    { name: "bright magenta", hex: "#d670d6" },
-    { name: "bright cyan", hex: "#29b8db" },
-    { name: "bright white", hex: "#ffffff" },
-  ];
-
-  const PATTERN_LABELS = ["brackets", "rope", "slashes", "bricks", "stars"];
-
-  
-  
-  function patternPreview(idx: number): string {
-    const lines = PATTERNS[idx].split("\n").filter((l) => l.trim() !== "").slice(0, 5);
-    const start = Math.min(...lines.map((l) => l.search(/\S/)).filter((n) => n >= 0));
-    return lines.map((l) => l.slice(start, start + 26)).join("\n");
-  }
-
-  
-  
-  function makeBg(rows: string[], vRep = 60): string {
-    const wide = rows.map(u => u.repeat(Math.ceil(650 / u.length) + 2));
-    return (wide.join("\n") + "\n").repeat(vRep);
-  }
-
-  const P0 = makeBg([" |___  |", "    _|_|", "_  | |__", "_|_|    "]); 
-  const P1 = makeBg(["  |  ", "`.__.' _.'", ',-"  ,-""-', "  |  "]); 
-  const P2 = makeBg(["   /   __/  ", "__   \\__/  \\", "  \\__/  \\   ", "__/     /   "]); 
-  const P3 = makeBg(["__|__|   ", " __|__|  ", "|   __|__", "|__|   __"]); 
-
-  
-  
-  const STAR_LINES = [
-    "                        .",
-    "  .     '                           '                   **",
-    " ",
-    " ",
-    "                         *                                                                    *",
-    "                                         |                   ''",
-    "                                        -o-",
-    "                                         |",
-    "        .                                      .                                          *",
-    " ",
-    "              +                 '                                |",
-    "                             .:'                                -+-",
-    "                         _.::'  +             .                  |",
-    "                        (_.'                          .                                                         +",
-    "                                                                                            +",
-    "                         +                 +    ..",
-    "       o                                                                      +",
-    "                                               .                                        .            o",
-    "                         \\                o                                                           o",
-    " .                        \\                                                             .                  +",
-    "                           *                              +",
-    "                            o                           /     .                 .                       *",
-    "                                                       /        .           +",
-    "             .                                        *       '",
-    "                     o",
-    "                                                   .                     o                                          '",
-    "                                                                                                                   '",
-    "                                 .                    o                           |                    +",
-    "                                                                                --o--",
-    "                                                              .                   |",
-    "                       .+",
-    " ",
-    "                       o                                 .        *                                .   '          . '",
-    "                         +",
-    "  _|_           .         '                                                                                        '",
-    "   |                                o                                             '",
-    " ",
-    "                                                                                               '     .",
-    "           o                                                                                        _|_",
-    "              o                                                                                   +  |",
-    "                    .",
-    "                      .",
-    " ",
-    "           '",
-    "                                +",
-    "                                                                                                                   |",
-    "                                o                                                                                --o--",
-    "                                                               .                                               .   |",
-    "                               .                 '",
-    " ",
-  ];
-  const starWidth = Math.max(...STAR_LINES.map((l) => l.length));
-  const P4 = makeBg(STAR_LINES.map((l) => l.padEnd(starWidth)), 6);
-
-  const PATTERNS: string[] = [P0, P1, P2, P3, P4];
-
-  function setPattern(idx: number) {
-    patternIdx = idx;
-    localStorage.setItem("tachy-pattern", String(idx));
-  }
-
-  function setPatternAlpha(e: Event) {
-    patternAlpha = Number((e.target as HTMLInputElement).value);
-    localStorage.setItem("tachy-pattern-alpha", String(patternAlpha));
-  }
-
-  function applyAccent(v: string) {
-    accentColor = v;
-    document.documentElement.style.setProperty("--accent", v);
-  }
-
-  function selectAccent(hex: string) {
-    accentCustomized = true;
-    applyAccent(hex);
-    localStorage.setItem("tachy-accent", hex);
-  }
-
-  function resetAccent() {
-    accentCustomized = false;
-    localStorage.removeItem("tachy-accent");
-    applyAccent(ACCENT_DEFAULTS[theme]);
-  }
-
-  function setTheme(t: Theme) {
-    theme = t;
-    document.documentElement.dataset.theme = t;
-    localStorage.setItem("tachy-theme", t);
-    
-    if (!accentCustomized) applyAccent(ACCENT_DEFAULTS[t]);
-  }
-
-  function setFontScale(e: Event) {
-    fontScale = Number((e.target as HTMLInputElement).value);
-    document.documentElement.style.setProperty("--font-scale", String(fontScale));
-    localStorage.setItem("tachy-font-scale", String(fontScale));
-  }
 
   onMount(() => {
-    const savedTheme = localStorage.getItem("tachy-theme") as Theme | null;
-    if (savedTheme === "light" || savedTheme === "dark") {
-      theme = savedTheme;
-      document.documentElement.dataset.theme = savedTheme;
-    }
-    const savedPattern = localStorage.getItem("tachy-pattern");
-    if (savedPattern !== null) patternIdx = Number(savedPattern);
-    const savedAlpha = localStorage.getItem("tachy-pattern-alpha");
-    if (savedAlpha !== null) patternAlpha = Number(savedAlpha);
-    const savedAccent = localStorage.getItem("tachy-accent");
-    if (savedAccent) {
-      accentCustomized = true;
-      applyAccent(savedAccent);
-    } else {
-      applyAccent(ACCENT_DEFAULTS[theme]);
-    }
-    const savedScale = localStorage.getItem("tachy-font-scale");
-    if (savedScale) {
-      fontScale = Number(savedScale);
-      document.documentElement.style.setProperty("--font-scale", savedScale);
-    }
-    const savedBorder = localStorage.getItem("tachy-border");
-    if (savedBorder === "none" || (savedBorder && savedBorder in BORDERS)) border = savedBorder as BorderKey;
+    loadThemeFromStorage();
     initSession();
   });
 </script>
@@ -280,8 +98,8 @@
   <IntroSplash onDone={() => (splash = false)} />
 {/if}
 
-{#if patternIdx >= 0}
-  <pre class="ascii-bg" style="opacity: {patternAlpha}">{PATTERNS[patternIdx]}</pre>
+{#if th.patternIdx >= 0}
+  <pre class="ascii-bg" style="opacity: {th.patternAlpha}">{PATTERNS[th.patternIdx]}</pre>
 {/if}
 
 {#if session.loading}
@@ -301,28 +119,30 @@
   </aside>
 
   <div class="main">
-    <div class="frame" class:framed={border !== "none"}>
-      {#if border !== "none"}
-        {@const b = BORDERS[border]}
+    <div class="frame" class:framed={th.border !== "none"}>
+      {#if th.border !== "none"}
+        {@const b = BORDERS[th.border]}
         <pre class="edge v left" aria-hidden="true">{(b.left + "\n").repeat(400)}</pre>
         <pre class="edge v right" aria-hidden="true">{(b.right + "\n").repeat(400)}</pre>
         <pre class="edge h top" aria-hidden="true">{b.top.repeat(600)}</pre>
         <pre class="edge h bottom" aria-hidden="true">{b.bottom.repeat(600)}</pre>
       {/if}
-      <main>
+      <main id="main-content" bind:this={mainEl}>
       {#if view === "knowledge"}
         <KnowledgeView />
       {:else if view === "reference"}
         <ReferenceView />
       {:else if view === "admin"}
         <AdminView />
+      {:else if view === "me"}
+        <MySettings />
       {:else if view === "theme"}
         <div class="theme-panel">
           <section class="theme-section">
             <h3>Mode</h3>
             <div class="mode-row">
-              <button class:active={theme === "dark"} onclick={() => setTheme("dark")}>Dark</button>
-              <button class:active={theme === "light"} onclick={() => setTheme("light")}>Light</button>
+              <button class:active={th.theme === "dark"} onclick={() => setTheme("dark")}>Dark</button>
+              <button class:active={th.theme === "light"} onclick={() => setTheme("light")}>Light</button>
             </div>
           </section>
           <section class="theme-section">
@@ -331,7 +151,7 @@
               {#each ANSI16 as c}
                 <button
                   class="ansi-swatch"
-                  class:active={accentColor.toLowerCase() === c.hex}
+                  class:active={th.accentColor.toLowerCase() === c.hex}
                   style="background: {c.hex}"
                   title="{c.name} · {c.hex}"
                   aria-label={c.name}
@@ -340,8 +160,8 @@
               {/each}
             </div>
             <div class="accent-row">
-              <span class="accent-hex">{accentColor}</span>
-              {#if accentCustomized}
+              <span class="accent-hex">{th.accentColor}</span>
+              {#if th.accentCustomized}
                 <button class="reset" onclick={resetAccent}>reset</button>
               {/if}
             </div>
@@ -349,8 +169,9 @@
           <section class="theme-section">
             <h3>Text size</h3>
             <label class="slider-row">
-              <span>{Math.round(fontScale * 100)}%</span>
-              <input type="range" min="0.85" max="1.3" step="0.05" value={fontScale} oninput={setFontScale} />
+              <span>{Math.round(th.fontScale * 100)}%</span>
+              <input type="range" min="0.85" max="1.3" step="0.05" value={th.fontScale}
+                oninput={(e) => setFontScale(Number((e.target as HTMLInputElement).value))} />
             </label>
           </section>
           <section class="theme-section wide">
@@ -358,7 +179,7 @@
             <div class="pattern-grid">
               <button
                 class="pat-card"
-                class:active={patternIdx === -1}
+                class:active={th.patternIdx === -1}
                 onclick={() => setPattern(-1)}
                 title="plain"
               >
@@ -367,7 +188,7 @@
               {#each PATTERNS as _, i}
                 <button
                   class="pat-card"
-                  class:active={patternIdx === i}
+                  class:active={th.patternIdx === i}
                   onclick={() => setPattern(i)}
                   title={PATTERN_LABELS[i]}
                 >
@@ -377,8 +198,9 @@
             </div>
             <label class="slider-row">
               <span>Intensity</span>
-              <input type="range" min="0.1" max="1" step="0.05" value={patternAlpha}
-                oninput={setPatternAlpha} disabled={patternIdx === -1} />
+              <input type="range" min="0.1" max="1" step="0.05" value={th.patternAlpha}
+                oninput={(e) => setPatternAlpha(Number((e.target as HTMLInputElement).value))}
+                disabled={th.patternIdx === -1} />
             </label>
           </section>
           <section class="theme-section wide">
@@ -386,7 +208,7 @@
             <div class="pattern-grid">
               <button
                 class="pat-card"
-                class:active={border === "none"}
+                class:active={th.border === "none"}
                 onclick={() => setBorder("none")}
                 title="none"
               >
@@ -395,7 +217,7 @@
               {#each BORDER_KEYS as k}
                 <button
                   class="pat-card"
-                  class:active={border === k}
+                  class:active={th.border === k}
                   onclick={() => setBorder(k)}
                   title={k}
                 >
@@ -409,13 +231,13 @@
         <ChatView />
       {/if}
       </main>
+      <AsciiScrollbar target={mainEl} controls="main-content" />
     </div>
   </div>
 </div>
 {/if}
 
 <style>
-  
   .ascii-bg {
     position: fixed;
     inset: 0;
@@ -430,7 +252,6 @@
     user-select: none;
   }
 
-  
   .app {
     height: 100vh;
     position: relative;
@@ -443,7 +264,6 @@
     top: 50%;
     transform: translateY(-50%);
     z-index: 10;
-    
     background: var(--aside-bg);
 
     border: 1px solid var(--border);
@@ -508,6 +328,7 @@
     border-radius: 6px;
   }
 
+  /* Native bar hidden — the ASCII scrollbar beside it takes over. */
   main {
     flex: 1;
     min-width: 0;
@@ -516,6 +337,11 @@
     display: flex;
     flex-direction: column;
     background: transparent;
+    scrollbar-width: none;
+    margin-right: 0.35rem;
+  }
+  main::-webkit-scrollbar {
+    display: none;
   }
 
   /* Frame edges: overflow-clipped character repeats, no measurement needed.
@@ -540,7 +366,6 @@
   .edge.top { top: 0; }
   .edge.bottom { bottom: 0; }
 
-  
   main > :global(*) { flex-shrink: 0; }
   main > :global(.chat) { flex: 1 1 auto; min-height: 0; }
 
@@ -648,7 +473,6 @@
 
   .slider-row input[type="range"] { accent-color: var(--accent); width: 200px; }
 
-  
   .border-preview { font-size: 10px; line-height: 1.1; }
 
   .ansi-grid {
