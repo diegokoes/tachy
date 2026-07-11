@@ -1,6 +1,6 @@
 import { randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
-import { badInput } from "./errors";
+import { badInput } from "../infra/errors";
 
 const scrypt = promisify(scryptCb) as (
   password: string,

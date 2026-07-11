@@ -1,7 +1,8 @@
-import { sql } from "./db";
-import { env } from "./env";
-import { badInput, notFound } from "./errors";
+import { sql } from "../infra/db";
+import { env } from "../infra/env";
+import { badInput, notFound } from "../infra/errors";
 import { hashPassword } from "./passwords";
+import { clearPermissionCache } from "./permissions";
 
 export const USER_ROLES = ["admin", "member"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
@@ -110,6 +111,7 @@ export async function setUserRole(id: string, role: UserRole): Promise<void> {
   )
     throw badInput("cannot demote the last admin");
   await sql`update users set role = ${role} where id = ${id}`;
+  clearPermissionCache();
 }
 
 export async function setUserPassword(
@@ -134,6 +136,17 @@ export async function setUserDisabled(
   )
     throw badInput("cannot disable the last admin");
   await sql`update users set disabled = ${disabled} where id = ${id}`;
+  clearPermissionCache();
+}
+
+/**
+ * The team rung used for scoped credential/preference resolution: the user's
+ * team when membership is unambiguous, null when none or several.
+ */
+export async function userSoleTeamId(userId: string): Promise<string | null> {
+  const rows =
+    await sql`select team_id from team_members where user_id = ${userId} limit 2`;
+  return rows.length === 1 ? (rows[0].team_id as string) : null;
 }
 
 export interface TeamMemberRow {
@@ -174,4 +187,5 @@ export async function setTeamMember(
       on conflict (team_id, user_id) do update set role = excluded.role
     `;
   }
+  clearPermissionCache();
 }

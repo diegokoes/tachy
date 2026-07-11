@@ -1,7 +1,16 @@
-export { sql } from "./platform";
-export { env, freshdeskToken, githubToken, sourceToken } from "./platform";
-export { AppError, notFound, conflict, badInput, forbidden } from "./platform";
-export type { AppErrorCode } from "./platform";
+export { sql } from "./infra";
+export {
+  env,
+  envVarName,
+  freshdeskToken,
+  githubToken,
+  azureDevopsToken,
+  sourceToken,
+  sourceTokenOptional,
+} from "./infra";
+export { AppError, notFound, conflict, badInput, forbidden } from "./infra";
+export type { AppErrorCode } from "./infra";
+export { log } from "./infra";
 export {
   isGlobalAdmin,
   teamAdminTeams,
@@ -14,10 +23,9 @@ export {
   assertAnyTeamAdmin,
   assertGlobalAdmin,
   clearPermissionCache,
-} from "./platform";
-export type { EntryScope } from "./platform";
-export { log } from "./platform";
-export { upsertUser, resolveCurrentUserId } from "./platform";
+} from "./access";
+export type { EntryScope } from "./access";
+export { upsertUser, resolveCurrentUserId } from "./access";
 export {
   USER_ROLES,
   TEAM_ROLES,
@@ -30,11 +38,13 @@ export {
   setUserDisabled,
   listTeamMembers,
   setTeamMember,
-} from "./platform";
-export type { UserRole, TeamRole, UserRow, TeamMemberRow } from "./platform";
-export { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from "./platform";
+  userSoleTeamId,
+} from "./access";
+export type { UserRole, TeamRole, UserRow, TeamMemberRow } from "./access";
+export { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from "./access";
 export {
   AGENT_EFFORTS,
+  AGENT_PROVIDERS,
   DEPLOYMENT_PROFILES,
   SETTING_KEYS,
   getSettings,
@@ -42,14 +52,47 @@ export {
   effectiveSettings,
   loadSettingsIntoEnv,
   clearSettingsCache,
-} from "./platform";
+} from "./config";
 export type {
   SettingKey,
   SettingsMap,
   EffectiveSettings,
   SettingSource,
   DeploymentProfile,
-} from "./platform";
+  AgentProvider,
+} from "./config";
+export {
+  resolveScoped,
+  assertCanWriteScope,
+  AGENT_CREDENTIALS,
+  sourceCredentialName,
+  envCredential,
+  resolveCredential,
+  credentialSource,
+  setCredential,
+  deleteCredential,
+  listCredentials,
+  PREF_KEYS,
+  resolvePref,
+  effectivePrefs,
+  setPref,
+  deletePref,
+  listVisibleArtifacts,
+  getArtifact,
+  upsertArtifact,
+  deleteArtifact,
+} from "./config";
+export type {
+  Scope,
+  ScopeContext,
+  CredentialSource,
+  CredentialMeta,
+  PrefKey,
+  PrefSource,
+  ArtifactMeta,
+  ArtifactRow,
+} from "./config";
+export { secretsEnabled } from "./infra";
 
 export {
   saveKnowledgeEntry,
@@ -93,6 +136,7 @@ export {
   listReferenceDocs,
   updateReferenceDoc,
   searchReferenceDocs,
+  referenceDocLineage,
 } from "./reference";
 export type {
   ReferenceDocInput,
@@ -100,10 +144,10 @@ export type {
   ReferenceSearchOptions,
 } from "./reference";
 
-export { ingestWorkItem } from "./work-items";
+export { ingestWorkItem, extractAdoRefs } from "./work-items";
 export type { IngestedItem } from "./work-items";
-export { recordRun, estimateCostUsd } from "./work-items";
-export type { RunInput } from "./work-items";
+export { recordRun, estimateCostUsd } from "./analytics";
+export type { RunInput } from "./analytics";
 
 export {
   listCustomers,
@@ -135,7 +179,6 @@ export {
   resolveComponentTags,
   resolveComponentStrict,
   resolveComponentFilter,
-  getComponentPath,
 } from "./catalog";
 export type { AddComponentInput, ResolvedComponent } from "./catalog";
 export {
@@ -171,11 +214,14 @@ export type { SourceConnectionInput, SourceProductMapInput } from "./sources";
 
 export {
   embedPassage,
+  embedPassages,
   embedQuery,
   toVectorLiteral,
   EMBEDDING_DIM,
 } from "./search";
 export { chunkText } from "./search";
+
+export * from "./code";
 
 export {
   TokenMap,

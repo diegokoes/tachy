@@ -1,4 +1,4 @@
-import { sql } from "../platform/db";
+import { sql } from "../infra/db";
 
 export interface FeedbackInput {
   knowledgeEntryId: string;

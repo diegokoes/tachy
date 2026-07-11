@@ -88,17 +88,28 @@ export const env = parsed.data;
  * (FRESHDESK, my-freshdesk) -> FRESHDESK_TOKEN_MY_FRESHDESK,
  * falling back to the bare FRESHDESK_TOKEN.
  */
+export const envVarName = (s: string) =>
+  s.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+
+export function sourceTokenOptional(
+  provider: string,
+  slug: string,
+): string | undefined {
+  const perSlug = `${envVarName(provider)}_TOKEN_${envVarName(slug)}`;
+  const bare = `${envVarName(provider)}_TOKEN`;
+  return process.env[perSlug] ?? process.env[bare];
+}
+
 export function sourceToken(provider: string, slug: string): string {
-  const norm = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]+/g, "_");
-  const perSlug = `${norm(provider)}_TOKEN_${norm(slug)}`;
-  const bare = `${norm(provider)}_TOKEN`;
-  const token = process.env[perSlug] ?? process.env[bare];
+  const token = sourceTokenOptional(provider, slug);
   if (!token)
     throw new Error(
-      `Missing ${provider} token. Set ${perSlug} (or ${bare}) in your env.`,
+      `Missing ${provider} token. Set ${envVarName(provider)}_TOKEN_${envVarName(slug)} (or ${envVarName(provider)}_TOKEN) in your env.`,
     );
   return token;
 }
 
 export const freshdeskToken = (slug: string) => sourceToken("FRESHDESK", slug);
 export const githubToken = (slug: string) => sourceToken("GITHUB", slug);
+export const azureDevopsToken = (slug: string) =>
+  sourceToken("AZURE_DEVOPS", slug);
