@@ -6,6 +6,7 @@ import { z } from "zod";
 import { sql, AppError, registerSource, effectiveSettings } from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
+import { createAzureDevopsSource } from "@tachy/source-azure-devops";
 import { knowledge, analysisRuns } from "./routes/knowledge";
 import { workItems } from "./routes/work-items";
 import { admin } from "./routes/admin";
@@ -13,10 +14,15 @@ import { reference } from "./routes/reference";
 import { agent } from "./routes/agent";
 import { setup } from "./routes/setup";
 import { users } from "./routes/users";
+import { me } from "./routes/me";
+import { credentials } from "./routes/credentials";
+import { artifacts } from "./routes/artifacts";
+import { repos } from "./routes/repos";
 import { installAuth, isBootstrapped, type OidcConfig } from "./auth";
 
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
+registerSource("azure-devops", createAzureDevopsSource);
 
 const STATUS_BY_CODE = {
   not_found: 404,
@@ -33,6 +39,10 @@ function apiRoutes() {
     .route("/reference", reference)
     .route("/agent", agent)
     .route("/users", users)
+    .route("/me", me)
+    .route("/credentials", credentials)
+    .route("/artifacts", artifacts)
+    .route("/repos", repos)
     .route("/", admin);
 }
 
