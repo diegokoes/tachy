@@ -4,8 +4,9 @@ FROM node:22-slim
 # (pg_dump/pg_restore). Debian bookworm's own repo only has client v15, and
 # pg_dump refuses to talk to a newer server, so pull the matching v16 client
 # from the PGDG apt repo instead.
+# git: spawned by the code-consultation indexer (clone/fetch/ls-tree/show).
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates postgresql-common \
+ && apt-get install -y --no-install-recommends ca-certificates postgresql-common git \
  && /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y \
  && apt-get update \
  && apt-get install -y --no-install-recommends postgresql-client-16 \
@@ -20,6 +21,7 @@ COPY package.json package-lock.json ./
 COPY packages/core/package.json packages/core/package.json
 COPY packages/sources/freshdesk/package.json packages/sources/freshdesk/package.json
 COPY packages/sources/github/package.json packages/sources/github/package.json
+COPY packages/sources/azure-devops/package.json packages/sources/azure-devops/package.json
 COPY packages/mcp/package.json packages/mcp/package.json
 COPY packages/agent/package.json packages/agent/package.json
 COPY packages/api/package.json packages/api/package.json
@@ -36,6 +38,10 @@ RUN npm run web:build
 # doesn't need network access (or a multi-second stall) on its first embed.
 ENV FASTEMBED_CACHE=/app/.fastembed-cache
 RUN npx tsx scripts/warmup-embeddings.ts
+
+# Linked-repo clones for code search live here — mount a volume to keep them
+# across redeploys (otherwise the first reindex re-clones, which is fine too).
+ENV TACHY_REPO_DIR=/app/data/repos
 
 EXPOSE 8787 
 

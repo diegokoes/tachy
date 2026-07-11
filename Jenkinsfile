@@ -63,6 +63,31 @@ pipeline {
                 }
             }
         }
+
+        // Pull-and-restart on the office server. Restarting drops in-flight
+        // agent turns (SSE streams); with TACHY_SESSION_SECRET set, logins
+        // survive, and past chats resume via the persisted agent-home volume.
+        // Needs: 'tachy-deploy-ssh' SSH credentials in Jenkins, and the
+        // compose checkout living at DEPLOY_DIR on the server.
+        stage('Deploy') {
+            when { branch 'main' }
+            environment {
+                DEPLOY_HOST = 'tachy@office-laptop.local'   // <user>@<host>
+                DEPLOY_DIR  = '/opt/tachy'
+            }
+            steps {
+                sshagent(credentials: ['tachy-deploy-ssh']) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=accept-new "$DEPLOY_HOST" "
+                            cd $DEPLOY_DIR &&
+                            docker compose pull api &&
+                            docker compose up -d api &&
+                            docker image prune -f
+                        "
+                    '''
+                }
+            }
+        }
     }
 
     post {
