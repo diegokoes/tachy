@@ -9,6 +9,7 @@
     "packages/core",
     "packages/sources/freshdesk",
     "packages/sources/github",
+    "packages/sources/azure-devops",
     "packages/mcp",
     "packages/agent",
     "packages/api",
