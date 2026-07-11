@@ -3,7 +3,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg" alt="License: AGPL-3.0-or-later"></a>
   <a href="https://0ver.org"><img src="https://img.shields.io/badge/0ver-0.1.0-blue.svg" alt="ZeroVer 0.1.0"></a>
-  <img src="https://img.shields.io/badge/node-22%2B-brightgreen.svg" alt="Node 22+">
+  <img src="https://img.shields.io/badge/node-24.18%2B-brightgreen.svg" alt="Node 24.18+">
   <img src="https://img.shields.io/badge/postgres-14%2B-blue.svg" alt="Postgres 14+">
   <img src="https://img.shields.io/badge/protocol-MCP-orange.svg" alt="MCP">
 </p>
@@ -84,7 +84,7 @@ wizard before expecting LAN access.
 
 ## Manual install
 
-Node 22+ and PostgreSQL 14+ with `vector`, `pg_trgm`, `pgcrypto`
+Node 24.18+ and PostgreSQL 14+ with `vector`, `pg_trgm`, `pgcrypto`
 (`schema.sql` creates the extensions). `git` must be on PATH for code search.
 
 ```bash
