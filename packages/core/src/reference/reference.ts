@@ -1,11 +1,11 @@
-import { sql } from "../platform/db";
+import { sql } from "../infra/db";
 import { chunkText } from "../search/chunk";
 import {
-  embedPassage,
+  embedPassages,
   embedQuery,
   toVectorLiteral,
 } from "../search/embeddings";
-import { notFound, conflict } from "../platform/errors";
+import { notFound, conflict } from "../infra/errors";
 import { parseStructured } from "../knowledge/structured";
 
 export interface ReferenceDocInput {
@@ -18,6 +18,8 @@ export interface ReferenceDocInput {
   tags?: string[];
   status?: string;
   structured?: Record<string, unknown>;
+  docVersion?: string;
+  supersedes?: string;
 }
 
 export interface ReferenceDocUpdate {
@@ -27,33 +29,62 @@ export interface ReferenceDocUpdate {
   status?: string;
   source?: string | null;
   structured?: Record<string, unknown>;
+  docVersion?: string | null;
   expectedVersion?: number;
 }
 
 async function embedChunks(docId: string, body: string): Promise<number> {
   const chunks = chunkText(body);
-  let ordinal = 0;
-  for (const text of chunks) {
-    const vec = toVectorLiteral(await embedPassage(text));
-    await sql`
-      insert into reference_doc_chunks (doc_id, ordinal, chunk_text, embedding)
-      values (${docId}, ${ordinal}, ${text}, ${vec}::vector)
-    `;
-    ordinal++;
-  }
+  if (!chunks.length) return 0;
+  const vectors = await embedPassages(chunks);
+  const ordinals = chunks.map((_, i) => i);
+  const literals = vectors.map(toVectorLiteral);
+  await sql`
+    insert into reference_doc_chunks (doc_id, ordinal, chunk_text, embedding)
+    select ${docId}, u.ordinal, u.chunk_text, u.embedding::vector
+    from unnest(${ordinals}::int[], ${chunks}::text[], ${literals}::text[])
+      as u(ordinal, chunk_text, embedding)
+  `;
   return chunks.length;
 }
 
 export async function saveReferenceDoc(i: ReferenceDocInput) {
   const structured = parseStructured(i.structured);
-  const [doc] = await sql`
-    insert into reference_docs
-      (product_id, team_id, created_by, source, title, body, tags, status, structured)
-    values
-      (${i.productId ?? null}, ${i.teamId ?? null}, ${i.createdById ?? null}, ${i.source ?? null},
-       ${i.title}, ${i.body}, ${i.tags ?? []}, ${i.status ?? "approved"}, ${sql.json(structured as any)})
-    returning id, status, version
-  `;
+  let predecessor:
+    | {
+        id: string;
+        product_id: string | null;
+        team_id: string | null;
+        tags: string[];
+      }
+    | undefined;
+  if (i.supersedes) {
+    const [row] = await sql`
+      select id, product_id, team_id, tags from reference_docs where id = ${i.supersedes}
+    `;
+    if (!row) throw notFound(`Reference doc '${i.supersedes}' not found`);
+    predecessor = row as typeof predecessor;
+  }
+  const doc = await sql.begin(async (tx) => {
+    const [row] = await tx`
+      insert into reference_docs
+        (product_id, team_id, created_by, source, title, body, tags, status, structured, doc_version)
+      values
+        (${i.productId ?? predecessor?.product_id ?? null},
+         ${i.teamId ?? predecessor?.team_id ?? null},
+         ${i.createdById ?? null}, ${i.source ?? null},
+         ${i.title}, ${i.body}, ${i.tags ?? predecessor?.tags ?? []},
+         ${i.status ?? "approved"}, ${sql.json(structured as any)}, ${i.docVersion ?? null})
+      returning id, status, version
+    `;
+    if (predecessor)
+      await tx`
+        update reference_docs
+        set status = 'archived', superseded_by = ${row.id}
+        where id = ${predecessor.id}
+      `;
+    return row;
+  });
   const chunks = await embedChunks(doc.id, i.body);
   return {
     id: doc.id as string,
@@ -66,11 +97,33 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
 export async function getReferenceDoc(id: string) {
   const [row] = await sql`
     select id, product_id, team_id, source, title, body, tags, status, structured,
-           version, created_at, updated_at
+           doc_version, superseded_by, version, created_at, updated_at
     from reference_docs where id = ${id}
   `;
   if (!row) throw notFound(`Reference doc '${id}' not found`);
   return row;
+}
+
+export async function referenceDocLineage(id: string) {
+  await getReferenceDoc(id);
+  return sql`
+    with recursive fwd as (
+      select id, superseded_by from reference_docs where id = ${id}
+      union all
+      select d.id, d.superseded_by
+      from reference_docs d join fwd on d.id = fwd.superseded_by
+    ),
+    back as (
+      select id from reference_docs where id = ${id}
+      union all
+      select d.id
+      from reference_docs d join back on d.superseded_by = back.id
+    )
+    select d.id, d.title, d.doc_version, d.status, d.superseded_by, d.created_at, d.updated_at
+    from reference_docs d
+    where d.id in (select id from fwd union select id from back)
+    order by d.created_at desc
+  `;
 }
 
 export async function listReferenceDocs(
@@ -84,7 +137,8 @@ export async function listReferenceDocs(
 ) {
   const limit = opts.limit ?? 50;
   return sql`
-    select id, product_id, team_id, source, title, tags, status, version, created_at, updated_at
+    select id, product_id, team_id, source, title, tags, status, doc_version, superseded_by,
+           version, created_at, updated_at
     from reference_docs
     where 1=1
       ${opts.status ? sql`and status     = ${opts.status}` : sql``}
@@ -101,7 +155,7 @@ export async function updateReferenceDoc(
   patch: ReferenceDocUpdate,
 ) {
   const [current] = await sql`
-    select title, body, tags, status, source, structured, version
+    select title, body, tags, status, source, structured, doc_version, version
     from reference_docs where id = ${id}
   `;
   if (!current) throw notFound(`Reference doc '${id}' not found`);
@@ -124,18 +178,20 @@ export async function updateReferenceDoc(
       "structured" in patch
         ? parseStructured(patch.structured)
         : current.structured,
+    docVersion: "docVersion" in patch ? patch.docVersion : current.doc_version,
   };
   const bodyChanged = merged.body !== current.body;
 
   const [row] = await sql`
     update reference_docs set
-      title      = ${merged.title},
-      body       = ${merged.body},
-      tags       = ${merged.tags ?? []},
-      status     = ${merged.status},
-      source     = ${merged.source ?? null},
-      structured = ${sql.json((merged.structured ?? {}) as any)},
-      version    = version + 1
+      title       = ${merged.title},
+      body        = ${merged.body},
+      tags        = ${merged.tags ?? []},
+      status      = ${merged.status},
+      source      = ${merged.source ?? null},
+      structured  = ${sql.json((merged.structured ?? {}) as any)},
+      doc_version = ${merged.docVersion ?? null},
+      version     = version + 1
     where id = ${id}
     returning id, status, version
   `;
@@ -150,6 +206,9 @@ export async function updateReferenceDoc(
 export interface ReferenceSearchOptions {
   productId?: string;
   teamId?: string;
+  /** Also match docs with NO product/team (org-wide) when a scope filter is
+   *  set — for agent consults, where global runbooks still apply. */
+  includeUnscoped?: boolean;
   tags?: string[];
   limit?: number;
 }
@@ -162,7 +221,7 @@ export async function searchReferenceDocs(
   if (!query.trim()) return [];
   const qvec = toVectorLiteral(await embedQuery(query));
   return sql`
-    select d.id, d.title, d.tags, d.product_id, d.team_id, d.status, d.version, d.structured,
+    select d.id, d.title, d.tags, d.product_id, d.team_id, d.status, d.doc_version, d.version, d.structured,
            (array_agg(c.chunk_text order by (c.embedding <=> ${qvec}::vector) asc))[1] as snippet,
            ts_rank(d.search_tsv, plainto_tsquery('simple', ${query})) as fts_rank,
            similarity(d.search_text, ${query}) as trgm_sim,
@@ -173,8 +232,8 @@ export async function searchReferenceDocs(
     from reference_docs d
     left join reference_doc_chunks c on c.doc_id = d.id
     where d.status = 'approved'
-      ${opts.productId ? sql`and d.product_id = ${opts.productId}` : sql``}
-      ${opts.teamId ? sql`and d.team_id = ${opts.teamId}` : sql``}
+      ${opts.productId ? (opts.includeUnscoped ? sql`and (d.product_id = ${opts.productId} or d.product_id is null)` : sql`and d.product_id = ${opts.productId}`) : sql``}
+      ${opts.teamId ? (opts.includeUnscoped ? sql`and (d.team_id = ${opts.teamId} or d.team_id is null)` : sql`and d.team_id = ${opts.teamId}`) : sql``}
       ${opts.tags && opts.tags.length ? sql`and d.tags && ${opts.tags}` : sql``}
     group by d.id
     order by score desc

@@ -5,9 +5,12 @@ import {
   listReferenceDocs,
   updateReferenceDoc,
   searchReferenceDocs,
+  referenceDocLineage,
   chunkText,
 } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "./helpers";
+
+afterAll(() => sql.end());
 
 describe("chunkText", () => {
   it("returns a single chunk for short text and splits long text", () => {
@@ -25,7 +28,6 @@ describe("chunkText", () => {
 
 describe("reference docs", () => {
   beforeEach(resetData);
-  afterAll(() => sql.end());
 
   it("saves a doc, chunks + embeds the body, and finds it semantically", async () => {
     const saved = await saveReferenceDoc({
@@ -72,6 +74,15 @@ describe("reference docs", () => {
       { tags: ["mas"] },
     );
     expect(tagged).toHaveLength(1);
+
+    const withUnscoped = await searchReferenceDocs(
+      "aggregation station calibration",
+      { productId: tpd, includeUnscoped: true },
+    );
+    expect(withUnscoped.map((d) => d.title).sort()).toEqual([
+      "Scoped",
+      "Unscoped",
+    ]);
   });
 
   it("re-chunks and re-embeds when the body changes, and guards on version", async () => {
@@ -111,5 +122,101 @@ describe("reference docs", () => {
     expect(doc.status).toBe("archived");
     const hits = await searchReferenceDocs("alpha content");
     expect(hits.find((h) => h.id === a.id)).toBeUndefined();
+  });
+});
+
+describe("reference doc versioning", () => {
+  beforeEach(resetData);
+
+  it("round-trips doc_version through save, get, and update", async () => {
+    const saved = await saveReferenceDoc({
+      title: "Versioned",
+      body: "install steps for release two four",
+      docVersion: "2.4",
+    });
+    expect((await getReferenceDoc(saved.id)).doc_version).toBe("2.4");
+
+    await updateReferenceDoc(saved.id, {
+      docVersion: "2.4.1",
+      expectedVersion: 1,
+    });
+    expect((await getReferenceDoc(saved.id)).doc_version).toBe("2.4.1");
+
+    await updateReferenceDoc(saved.id, {
+      title: "Renamed",
+      expectedVersion: 2,
+    });
+    expect((await getReferenceDoc(saved.id)).doc_version).toBe("2.4.1");
+  });
+
+  it("supersedes archives + links the predecessor and inherits its scope", async () => {
+    const tpd = await tpdProductId();
+    const v1 = await saveReferenceDoc({
+      title: "Deploy runbook",
+      body: "deploy procedure for release one",
+      productId: tpd,
+      tags: ["runbook"],
+      docVersion: "1.0",
+    });
+    const v2 = await saveReferenceDoc({
+      title: "Deploy runbook",
+      body: "deploy procedure for release two",
+      docVersion: "2.0",
+      supersedes: v1.id,
+    });
+
+    const old = await getReferenceDoc(v1.id);
+    expect(old.status).toBe("archived");
+    expect(old.superseded_by).toBe(v2.id);
+
+    const next = await getReferenceDoc(v2.id);
+    expect(next.status).toBe("approved");
+    expect(next.product_id).toBe(tpd);
+    expect(next.tags).toEqual(["runbook"]);
+
+    const hits = await searchReferenceDocs("deploy procedure release");
+    expect(hits.map((h) => h.id)).toContain(v2.id);
+    expect(hits.map((h) => h.id)).not.toContain(v1.id);
+  });
+
+  it("rejects superseding a missing doc", async () => {
+    await expect(
+      saveReferenceDoc({
+        title: "x",
+        body: "y",
+        supersedes: "00000000-0000-0000-0000-000000000000",
+      }),
+    ).rejects.toThrow(/not found/);
+  });
+
+  it("lineage walks the whole chain from any member, newest first", async () => {
+    const v1 = await saveReferenceDoc({
+      title: "Doc",
+      body: "one",
+      docVersion: "1",
+    });
+    const v2 = await saveReferenceDoc({
+      title: "Doc",
+      body: "two",
+      docVersion: "2",
+      supersedes: v1.id,
+    });
+    const v3 = await saveReferenceDoc({
+      title: "Doc",
+      body: "three",
+      docVersion: "3",
+      supersedes: v2.id,
+    });
+
+    for (const id of [v1.id, v2.id, v3.id]) {
+      const chain = await referenceDocLineage(id);
+      expect(chain.map((r) => r.id)).toEqual([v3.id, v2.id, v1.id]);
+    }
+    const chain = await referenceDocLineage(v2.id);
+    expect(chain.map((r) => r.status)).toEqual([
+      "approved",
+      "archived",
+      "archived",
+    ]);
   });
 });

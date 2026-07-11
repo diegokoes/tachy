@@ -23,6 +23,20 @@ export async function embedPassage(text: string): Promise<number[]> {
   throw new Error("embedPassage produced no vector");
 }
 
+/** Embed many passages in model-sized batches (doc chunks). */
+export async function embedPassages(texts: string[]): Promise<number[][]> {
+  if (!texts.length) return [];
+  const m = await model();
+  const out: number[][] = [];
+  for await (const batch of m.passageEmbed(texts, 32))
+    for (const v of batch) out.push(toArray(v));
+  if (out.length !== texts.length)
+    throw new Error(
+      `embedPassages produced ${out.length} vectors for ${texts.length} inputs`,
+    );
+  return out;
+}
+
 /** Embed a search query. */
 export async function embedQuery(text: string): Promise<number[]> {
   const m = await model();
