@@ -35,6 +35,10 @@ import {
   getCustomerSlug,
   resolveRedactionPolicy,
   redactForLlm,
+  extractAdoRefs,
+  listRepos,
+  searchCode,
+  readCodeFile,
   globalRedactionEnabled,
   scrubDeep,
   scrubText,
@@ -55,6 +59,7 @@ import {
   listReferenceDocs,
   updateReferenceDoc,
   searchReferenceDocs,
+  referenceDocLineage,
   listSourceConnections,
   addSourceConnection,
   listSourceProductMaps,
@@ -76,13 +81,19 @@ import type {
   KnowledgeUpdateInput,
   ReferenceDocUpdate,
 } from "@tachy/core";
-import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { extractSource } from "./extract";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
+import {
+  createAzureDevopsSource,
+  createAdoClient,
+} from "@tachy/source-azure-devops";
+import type { AdoClient, JsonPatchOp } from "@tachy/source-azure-devops";
 
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
+registerSource("azure-devops", createAzureDevopsSource);
 
 const server = new McpServer({ name: "tachy", version: "0.1.0" });
 
@@ -99,6 +110,43 @@ function out(obj: unknown) {
 
 function outScrubbed(obj: unknown) {
   return out(globalRedactionEnabled() ? scrubDeep(obj, new TokenMap()) : obj);
+}
+
+async function resolveScopeIds(opts: {
+  product_slug?: string;
+  team_slug?: string;
+}): Promise<{ productId?: string; teamId?: string }> {
+  return {
+    productId: opts.product_slug
+      ? await getProductIdBySlug(opts.product_slug)
+      : undefined,
+    teamId: opts.team_slug ? await getTeamIdBySlug(opts.team_slug) : undefined,
+  };
+}
+
+async function componentIntoFilter(
+  productId: string | undefined,
+  component: string | undefined,
+  tags: string[] | undefined,
+): Promise<{
+  tags?: string[];
+  componentId?: string;
+  componentTags?: string[];
+}> {
+  const tagFilter = [...(tags ?? [])];
+  let componentId: string | undefined;
+  let componentTags: string[] | undefined;
+  if (component && productId) {
+    const f = await resolveComponentFilter(productId, component);
+    componentId = f.componentId;
+    componentTags = f.componentTags;
+    if (f.extraTags) tagFilter.push(...f.extraTags);
+  }
+  return {
+    tags: tagFilter.length ? tagFilter : undefined,
+    componentId,
+    componentTags,
+  };
 }
 
 type ToolConfig<I extends ZodRawShape> = {
@@ -229,14 +277,15 @@ async function loadContextSources(input: {
   paths?: string[];
   urls?: string[];
 }) {
-  const sources: { source: string; text: string }[] = [];
+  const sources: { source: string; text: string; pages?: number }[] = [];
   if (input.text?.trim()) sources.push({ source: "inline", text: input.text });
   for (const p of input.paths ?? []) {
-    sources.push({ source: p, text: await readFile(p, "utf8") });
+    const { text, pages } = await extractSource(p);
+    sources.push({ source: p, text, ...(pages != null ? { pages } : {}) });
   }
   for (const u of input.urls ?? []) {
     const res = await fetch(u);
-    if (!res.ok) throw new Error(`Failed to fetch ${u}: HTTP ${res.status}`);
+    if (!res.ok) throw badInput(`Failed to fetch ${u}: HTTP ${res.status}`);
     const raw = await res.text();
     const ct = res.headers.get("content-type") ?? "";
     sources.push({
@@ -268,6 +317,7 @@ tool(
     const forLlm = resolveRedactionPolicy(conn.config).enabled
       ? redactForLlm(raw, src.redactRaw, await getCustomerSlug(item.customerId))
       : raw;
+    const adoRefs = extractAdoRefs(raw);
     return out({
       work_item_id: item.id,
       product_id: item.productId,
@@ -276,6 +326,12 @@ tool(
       customer_name: customerName,
       observed_version: item.observedVersion,
       item: forLlm,
+      ...(adoRefs.length
+        ? {
+            linked_ado_refs: adoRefs,
+            next: "linked_ado_refs are Azure DevOps work item ids referenced by this item. If an azure-devops source connection exists (list_source_connections), you may fetch them with fetch_work_item for extra context — their relations come back as summaries already; do not fetch relations of relations.",
+          }
+        : {}),
     });
   },
 );
@@ -307,25 +363,15 @@ tool(
     fixed_version,
     limit,
   }) => {
-    const productId = product_slug
-      ? await getProductIdBySlug(product_slug)
-      : undefined;
-    const teamId = team_slug ? await getTeamIdBySlug(team_slug) : undefined;
-    const tagFilter = [...(tags ?? [])];
-    let componentId: string | undefined;
-    let componentTags: string[] | undefined;
-    if (component && productId) {
-      const f = await resolveComponentFilter(productId, component);
-      componentId = f.componentId;
-      componentTags = f.componentTags;
-      if (f.extraTags) tagFilter.push(...f.extraTags);
-    }
+    const { productId, teamId } = await resolveScopeIds({
+      product_slug,
+      team_slug,
+    });
     const rows = await searchKnowledge(query, {
       productId,
       teamId,
-      tags: tagFilter.length ? tagFilter : undefined,
-      componentId,
-      componentTags,
+      includeUnscoped: true,
+      ...(await componentIntoFilter(productId, component, tags)),
       affectedVersion: affected_version,
       fixedVersion: fixed_version,
       limit,
@@ -360,8 +406,8 @@ tool(
     const query = [raw.title, firstIncoming].filter(Boolean).join(" ");
     const productId = item.productId ?? undefined;
     const [similar, reference] = await Promise.all([
-      searchKnowledge(query, { productId, limit }),
-      searchReferenceDocs(query, { productId, limit }),
+      searchKnowledge(query, { productId, limit, includeUnscoped: true }),
+      searchReferenceDocs(query, { productId, limit, includeUnscoped: true }),
     ]);
     const customerName = await getCustomerName(item.customerId);
 
@@ -370,6 +416,7 @@ tool(
       ? redactForLlm(raw, src.redactRaw, await getCustomerSlug(item.customerId))
       : raw;
     const retrievalMap = new TokenMap();
+    const adoRefs = extractAdoRefs(raw);
     return out({
       work_item: forLlm,
       similar: redact ? scrubDeep(similar, retrievalMap) : similar,
@@ -377,6 +424,12 @@ tool(
       customer_id: item.customerId,
       customer_name: customerName,
       observed_version: item.observedVersion,
+      ...(adoRefs.length
+        ? {
+            linked_ado_refs: adoRefs,
+            next: "linked_ado_refs are Azure DevOps work item ids referenced by this item. If an azure-devops source connection exists (list_source_connections), you may fetch them with fetch_work_item for extra context — their relations come back as summaries already; do not fetch relations of relations.",
+          }
+        : {}),
     });
   },
 );
@@ -439,12 +492,9 @@ tool(
     },
   },
   async (a) => {
-    const productId =
-      a.product_id ??
-      (a.product_slug ? await getProductIdBySlug(a.product_slug) : undefined);
-    const teamId =
-      a.team_id ??
-      (a.team_slug ? await getTeamIdBySlug(a.team_slug) : undefined);
+    const resolved = await resolveScopeIds(a);
+    const productId = a.product_id ?? resolved.productId;
+    const teamId = a.team_id ?? resolved.teamId;
     await requireCanEdit(
       await newEntryScope({ productId, teamId, workItemId: a.work_item_id }),
     );
@@ -807,25 +857,15 @@ tool(
     fixed_version,
     limit,
   }) => {
-    const productId = product_slug
-      ? await getProductIdBySlug(product_slug)
-      : undefined;
-    const tagFilter = [...(tags ?? [])];
-    let componentId: string | undefined;
-    let componentTags: string[] | undefined;
-    if (component && productId) {
-      const f = await resolveComponentFilter(productId, component);
-      componentId = f.componentId;
-      componentTags = f.componentTags;
-      if (f.extraTags) tagFilter.push(...f.extraTags);
-    }
+    const { productId, teamId } = await resolveScopeIds({
+      product_slug,
+      team_slug,
+    });
     const rows = await listKnowledgeEntries({
       status,
       productId,
-      teamId: team_slug ? await getTeamIdBySlug(team_slug) : undefined,
-      tags: tagFilter.length ? tagFilter : undefined,
-      componentId,
-      componentTags,
+      teamId,
+      ...(await componentIntoFilter(productId, component, tags)),
       affectedVersion: affected_version,
       fixedVersion: fixed_version,
       limit,
@@ -838,31 +878,44 @@ tool(
   "ingest_context",
   {
     description:
-      "Load freeform project context from pasted text, local file paths, and/or URLs, and return the cleaned raw text for you to structure. This tool ONLY reads — it never saves. After loading, classify the content and route each part: durable incident lessons → save_knowledge_entry; architecture facts → add_component (ASK the user first); everything else (docs, runbooks, design notes, config explainers) → save_reference_doc. Always present a summary and get explicit user approval before any save.",
+      "Load freeform project context from pasted text, local file paths, and/or URLs, and return the cleaned raw text for you to structure. PDF paths are text-extracted automatically. This tool ONLY reads — it never saves. Long sources are truncated at max_chars (default 20000); for large documents (big PDFs), preview here, then after user approval call save_reference_doc with body_path so the full text is extracted and saved server-side. After loading, classify the content and route each part: durable incident lessons → save_knowledge_entry; architecture facts → add_component (ASK the user first); everything else (docs, runbooks, design notes, config explainers) → save_reference_doc. Always present a summary and get explicit user approval before any save.",
     inputSchema: {
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
       text: z.string().optional(),
       paths: z.array(z.string()).optional(),
       urls: z.array(z.string()).optional(),
+      max_chars: z.number().int().positive().optional(),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ product_slug, team_slug, text, paths, urls }) => {
+  async ({ product_slug, team_slug, text, paths, urls, max_chars }) => {
     const sources = await loadContextSources({ text, paths, urls });
     if (!sources.length)
       throw badInput("Provide at least one of: text, paths, urls");
 
+    const limit = max_chars ?? 20_000;
     const redact = globalRedactionEnabled();
     const map = new TokenMap();
     return out({
       product_slug: product_slug ?? null,
       team_slug: team_slug ?? null,
-      sources: sources.map((s) => ({
-        source: s.source,
-        chars: s.text.length,
-        text: redact ? scrubText(s.text, map) : s.text,
-      })),
+      sources: sources.map((s) => {
+        const truncated = s.text.length > limit;
+        const textOut = truncated ? s.text.slice(0, limit) : s.text;
+        return {
+          source: s.source,
+          chars: s.text.length,
+          ...(s.pages != null ? { pages: s.pages } : {}),
+          truncated,
+          text: redact ? scrubText(textOut, map) : textOut,
+          ...(truncated
+            ? {
+                note: `Truncated at ${limit} of ${s.text.length} chars — summarize from this preview; to save the FULL text as a reference doc, call save_reference_doc with body_path after user approval.`,
+              }
+            : {}),
+        };
+      }),
       ...(redact
         ? {
             redaction:
@@ -878,27 +931,41 @@ tool(
   "save_reference_doc",
   {
     description:
-      "Persist an APPROVED reference doc — freeform project context (docs, runbooks, architecture notes) that doesn't fit the issue→root_cause→resolution shape of a knowledge entry. The body is chunked and embedded so it surfaces in consult-mode search. Call ONLY after the user approved the content.",
+      "Persist an APPROVED reference doc — freeform project context (docs, runbooks, architecture notes) that doesn't fit the issue→root_cause→resolution shape of a knowledge entry. The body is chunked and embedded so it surfaces in consult-mode search. Provide EITHER body (inline text) OR body_path (a local file — e.g. a large PDF — extracted server-side so the full text is saved without echoing it). Pass doc_version when the source document carries a version label; pass supersedes with the id of the doc this replaces — the predecessor is archived and linked automatically, and search returns only the latest version. Call ONLY after the user approved the content.",
     inputSchema: {
       title: z.string(),
-      body: z.string(),
+      body: z.string().optional(),
+      body_path: z.string().optional(),
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
       source: z.string().optional(),
       tags: z.array(z.string()).optional(),
       status: referenceStatusSchema.optional(),
       structured: z.record(z.string(), z.any()).optional(),
+      doc_version: z.string().optional(),
+      supersedes: z.string().optional(),
     },
   },
   async (a) => {
-    const productId = a.product_slug
-      ? await getProductIdBySlug(a.product_slug)
-      : undefined;
-    const teamId = a.team_slug ? await getTeamIdBySlug(a.team_slug) : undefined;
-    await requireCanEdit({ productId, teamId });
+    if (!a.body === !a.body_path)
+      throw badInput("Provide exactly one of body or body_path");
+    const { productId, teamId } = await resolveScopeIds(a);
+    if (productId || teamId || !a.supersedes)
+      await requireCanEdit({ productId, teamId });
+    else await requireCanEdit(await referenceDocScope(a.supersedes));
+
+    let body = a.body;
+    let pages: number | undefined;
+    if (a.body_path) {
+      const extracted = await extractSource(a.body_path);
+      body = globalRedactionEnabled()
+        ? scrubText(extracted.text, new TokenMap())
+        : extracted.text;
+      pages = extracted.pages;
+    }
     const row = await saveReferenceDoc({
       title: a.title,
-      body: a.body,
+      body: body!,
       productId,
       teamId,
       createdById: await resolveCurrentUserId(),
@@ -906,12 +973,16 @@ tool(
       tags: a.tags,
       status: a.status ?? "approved",
       structured: a.structured,
+      docVersion: a.doc_version,
+      supersedes: a.supersedes,
     });
     return out({
       saved: true,
       id: row.id,
       status: row.status,
       chunks: row.chunks,
+      body_chars: body!.length,
+      ...(pages != null ? { pages } : {}),
     });
   },
 );
@@ -933,10 +1004,8 @@ tool(
   async ({ query, product_slug, team_slug, tags, limit }) =>
     outScrubbed(
       await searchReferenceDocs(query, {
-        productId: product_slug
-          ? await getProductIdBySlug(product_slug)
-          : undefined,
-        teamId: team_slug ? await getTeamIdBySlug(team_slug) : undefined,
+        ...(await resolveScopeIds({ product_slug, team_slug })),
+        includeUnscoped: true,
         tags: tags && tags.length ? tags : undefined,
         limit,
       }),
@@ -947,7 +1016,7 @@ tool(
   "list_reference_docs",
   {
     description:
-      "List reference docs (newest first), optionally filtered by status, product_slug / team_slug, or tags. Bodies are omitted; use get_reference_doc for the full text.",
+      "List reference docs (newest first), optionally filtered by status, product_slug / team_slug, or tags. Bodies are omitted; use get_reference_doc for the full text. Rows carry doc_version and superseded_by — archived rows with superseded_by set are old versions of a newer doc.",
     inputSchema: {
       status: referenceStatusSchema.optional(),
       product_slug: z.string().optional(),
@@ -961,10 +1030,7 @@ tool(
     outScrubbed(
       await listReferenceDocs({
         status,
-        productId: product_slug
-          ? await getProductIdBySlug(product_slug)
-          : undefined,
-        teamId: team_slug ? await getTeamIdBySlug(team_slug) : undefined,
+        ...(await resolveScopeIds({ product_slug, team_slug })),
         tags: tags && tags.length ? tags : undefined,
         limit,
       }),
@@ -975,18 +1041,22 @@ tool(
   "get_reference_doc",
   {
     description:
-      "Fetch a single reference doc by id, including its full body and current version.",
+      "Fetch a single reference doc by id, including its full body, doc_version, and lineage (all versions of this doc, newest first).",
     inputSchema: { id: z.string() },
     annotations: { readOnlyHint: true },
   },
-  async ({ id }) => outScrubbed(await getReferenceDoc(id)),
+  async ({ id }) =>
+    outScrubbed({
+      ...(await getReferenceDoc(id)),
+      lineage: await referenceDocLineage(id),
+    }),
 );
 
 tool(
   "update_reference_doc",
   {
     description:
-      "Update a reference doc, or change its status ('archived' to retire). Pass only the fields you want to change. If the body changes it is re-chunked and re-embedded. Pass expected_version (from list/get) to guard against concurrent edits.",
+      "Update a reference doc, or change its status ('archived' to retire). Pass only the fields you want to change. If the body changes it is re-chunked and re-embedded. To publish a NEW VERSION of a doc, do not edit the body here — call save_reference_doc with supersedes instead. Pass expected_version (from list/get) to guard against concurrent edits.",
     inputSchema: {
       id: z.string(),
       title: z.string().optional(),
@@ -995,6 +1065,7 @@ tool(
       status: referenceStatusSchema.optional(),
       source: z.string().nullable().optional(),
       structured: z.record(z.string(), z.any()).optional(),
+      doc_version: z.string().nullable().optional(),
       expected_version: z.number().int().optional(),
     },
   },
@@ -1007,6 +1078,7 @@ tool(
     if (a.status !== undefined) patch.status = a.status;
     if (a.source !== undefined) patch.source = a.source;
     if (a.structured !== undefined) patch.structured = a.structured;
+    if (a.doc_version !== undefined) patch.docVersion = a.doc_version;
     if (a.expected_version !== undefined)
       patch.expectedVersion = a.expected_version;
     const row = await updateReferenceDoc(a.id, patch);
@@ -1117,9 +1189,9 @@ tool(
   "add_source_connection",
   {
     description:
-      "Register a new source connection. source_type is 'freshdesk' or 'github'. slug is a short unique identifier (e.g. 'my-freshdesk') — it also determines the env var for the API token: FRESHDESK_TOKEN_<SLUG_UPPERCASED> or GITHUB_TOKEN_<SLUG_UPPERCASED> (non-alphanumerics become underscores). For Freshdesk: set base_url to your tenant root URL (e.g. https://your-domain.freshdesk.com). For GitHub: omit base_url and set config to {\"repos\":[\"owner/repo\"]}. The token is never stored in the DB; remind the user to set the env var before syncing.",
+      "Register a new source connection. source_type is 'freshdesk', 'github', or 'azure-devops'. slug is a short unique identifier (e.g. 'my-freshdesk') — it also determines the env var for the API token: FRESHDESK_TOKEN_<SLUG_UPPERCASED>, GITHUB_TOKEN_<SLUG_UPPERCASED>, or AZURE_DEVOPS_TOKEN_<SLUG_UPPERCASED> (non-alphanumerics become underscores). For Freshdesk: set base_url to your tenant root URL (e.g. https://your-domain.freshdesk.com). For GitHub: omit base_url and set config to {\"repos\":[\"owner/repo\"]}. For Azure DevOps: base_url is the org URL (https://dev.azure.com/<org>), config is {\"projects\":[\"ProjectA\",\"ProjectB\"]}, and the token is a PAT (scopes: Work Items Read, plus Read & Write for ticket creation, Wiki Read for wikis, Code Read for repos). Tokens are never stored in the DB — set the env var, or store per-user/team via the credentials vault.",
     inputSchema: {
-      source_type: z.enum(["freshdesk", "github"]),
+      source_type: z.enum(["freshdesk", "github", "azure-devops"]),
       slug: z.string(),
       base_url: z.string().optional(),
       config: z.record(z.string(), z.any()).optional(),
@@ -1153,7 +1225,7 @@ tool(
   "add_source_product_map",
   {
     description:
-      "Map a source-native grouping to an internal product. For Freshdesk: external_group_key is the group_id (find it in Freshdesk Admin > Groups, or from a fetched ticket's raw payload). For GitHub: external_group_key is 'owner/repo'. Call list_source_connections and list_products first to get the right slugs.",
+      "Map a source-native grouping to an internal product. For Freshdesk: external_group_key is the group_id (find it in Freshdesk Admin > Groups, or from a fetched ticket's raw payload). For GitHub: external_group_key is 'owner/repo'. For Azure DevOps: external_group_key is the project name (the fetched item's groupKey). Call list_source_connections and list_products first to get the right slugs.",
     inputSchema: {
       source_slug: z.string(),
       external_group_key: z.string(),
@@ -1167,6 +1239,325 @@ tool(
         sourceSlug: a.source_slug,
         externalGroupKey: a.external_group_key,
         productSlug: a.product_slug,
+      }),
+    );
+  },
+);
+
+async function resolveAdoClient(
+  sourceSlug: string,
+): Promise<{ conn: Awaited<ReturnType<typeof resolveSource>>["conn"]; client: AdoClient }> {
+  const { conn } = await resolveSource(sourceSlug);
+  if (conn.sourceType !== "azure-devops")
+    throw badInput(
+      `Source '${sourceSlug}' is type '${conn.sourceType}' — this tool needs an azure-devops connection (see list_source_connections)`,
+    );
+  return {
+    conn,
+    client: createAdoClient({
+      baseUrl: conn.baseUrl ?? "",
+      slug: conn.slug,
+      config: conn.config,
+    }),
+  };
+}
+
+tool(
+  "list_ado_wikis",
+  {
+    description:
+      "List the Azure DevOps wikis in a project (or across the org when project is omitted). source must be an azure-devops connection slug.",
+    inputSchema: { source: z.string(), project: z.string().optional() },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ source, project }) => {
+    const { client } = await resolveAdoClient(source);
+    const wikis = await client.listWikis(project);
+    return out(
+      wikis.map((w: any) => ({
+        id: w.id,
+        name: w.name,
+        type: w.type,
+        project: w.projectId ?? project ?? null,
+      })),
+    );
+  },
+);
+
+tool(
+  "list_ado_wiki_pages",
+  {
+    description:
+      "List page paths of an Azure DevOps wiki (flattened page tree). Use get_ado_wiki_page to fetch a page's content.",
+    inputSchema: {
+      source: z.string(),
+      project: z.string(),
+      wiki: z.string().describe("Wiki name or id from list_ado_wikis"),
+      path_prefix: z.string().optional(),
+      limit: z.number().int().positive().optional(),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ source, project, wiki, path_prefix, limit }) => {
+    const { client } = await resolveAdoClient(source);
+    let paths = await client.listWikiPages(project, wiki);
+    if (path_prefix) paths = paths.filter((p) => p.startsWith(path_prefix));
+    const max = limit ?? 100;
+    return out({
+      total: paths.length,
+      truncated: paths.length > max,
+      pages: paths.slice(0, max),
+    });
+  },
+);
+
+tool(
+  "get_ado_wiki_page",
+  {
+    description:
+      "Fetch one Azure DevOps wiki page's markdown content. READ ONLY — it never saves. To persist the knowledge, classify it (incident lesson → save_knowledge_entry; freeform doc/runbook → save_reference_doc with source set to the page URL) and save only after explicit user approval.",
+    inputSchema: {
+      source: z.string(),
+      project: z.string(),
+      wiki: z.string(),
+      path: z.string().describe("Page path from list_ado_wiki_pages"),
+      max_chars: z.number().int().positive().optional(),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ source, project, wiki, path, max_chars }) => {
+    const { conn, client } = await resolveAdoClient(source);
+    const page = await client.getWikiPage(project, wiki, path);
+    const limit = max_chars ?? 20_000;
+    const truncated = page.content.length > limit;
+    const textOut = truncated ? page.content.slice(0, limit) : page.content;
+    const redact = resolveRedactionPolicy(conn.config).enabled;
+    const map = new TokenMap();
+    return out({
+      path: page.path,
+      remote_url: page.remoteUrl ?? null,
+      chars: page.content.length,
+      truncated,
+      content: redact ? scrubText(textOut, map) : textOut,
+      ...(redact
+        ? {
+            redaction:
+              "Placeholders like [EMAIL_1]/[SECRET_1] are intentional redactions — treat them as opaque, never guess the originals.",
+          }
+        : {}),
+      next: "Summarize and propose where this belongs (reference doc, knowledge entry, or component). Save only after the user approves; cite remote_url as the doc's source.",
+    });
+  },
+);
+
+tool(
+  "get_ado_work_item_schema",
+  {
+    description:
+      "Discover what an Azure DevOps project requires to create a work item. Without type: lists the project's work item types. With type: returns each field's reference name, whether it is required, allowed values, and defaults, plus any per-project defaults configured on the connection (config.defaults[project][type]). ALWAYS call this before create_ado_work_item — required fields differ per project and type.",
+    inputSchema: {
+      source: z.string(),
+      project: z.string(),
+      type: z.string().optional().describe("Work item type, e.g. 'Bug'"),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ source, project, type }) => {
+    const { conn, client } = await resolveAdoClient(source);
+    if (!type) {
+      const types = await client.listWorkItemTypes(project);
+      return out({
+        work_item_types: types.map((t: any) => ({
+          name: t.name,
+          reference_name: t.referenceName,
+          description: t.description ?? null,
+        })),
+        next: "Call again with type to get its fields.",
+      });
+    }
+    const fields = await client.getTypeFields(project, type);
+    const defaults =
+      ((conn.config as any)?.defaults?.[project]?.[type] as
+        | Record<string, unknown>
+        | undefined) ?? {};
+    const MAX_VALUES = 50;
+    return out({
+      project,
+      type,
+      fields: fields.map((f: any) => {
+        const values = Array.isArray(f.allowedValues) ? f.allowedValues : [];
+        return {
+          reference_name: f.referenceName,
+          name: f.name,
+          required: f.alwaysRequired === true,
+          ...(values.length
+            ? {
+                allowed_values: values.slice(0, MAX_VALUES),
+                ...(values.length > MAX_VALUES
+                  ? { allowed_values_truncated: true }
+                  : {}),
+              }
+            : {}),
+          ...(f.defaultValue != null ? { default_value: f.defaultValue } : {}),
+        };
+      }),
+      config_defaults: defaults,
+    });
+  },
+);
+
+tool(
+  "create_ado_work_item",
+  {
+    description:
+      "Create a work item (Bug, Task, User Story, ...) in an Azure DevOps project. Call get_ado_work_item_schema FIRST and fill every required field — requirements differ per project/type; never guess. fields is keyed by ADO reference names (e.g. 'System.AreaPath', 'Microsoft.VSTS.Common.Severity'); connection config defaults for the project/type are applied underneath. description is plain text/HTML — ADO renders System.Description as HTML, markdown will NOT render. Present the full field set to the user for approval before calling. Requires a PAT with Work Items Read & Write.",
+    inputSchema: {
+      source: z.string(),
+      project: z.string(),
+      type: z.string(),
+      title: z.string(),
+      description: z.string().optional(),
+      fields: z.record(z.string(), z.any()).optional(),
+      parent_id: z.string().optional(),
+      related_ids: z.array(z.string()).optional(),
+      tags: z.array(z.string()).optional(),
+    },
+  },
+  async (a) => {
+    const { conn, client } = await resolveAdoClient(a.source);
+    const defaults =
+      ((conn.config as any)?.defaults?.[a.project]?.[a.type] as
+        | Record<string, unknown>
+        | undefined) ?? {};
+    const merged: Record<string, unknown> = { ...defaults, ...(a.fields ?? {}) };
+    merged["System.Title"] = a.title;
+    if (a.description != null)
+      merged["System.Description"] = /<[a-z][\s\S]*>/i.test(a.description)
+        ? a.description
+        : `<div>${a.description.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>")}</div>`;
+    if (a.tags?.length) merged["System.Tags"] = a.tags.join("; ");
+
+    const patch: JsonPatchOp[] = Object.entries(merged).map(([k, v]) => ({
+      op: "add",
+      path: `/fields/${k}`,
+      value: v,
+    }));
+    const relation = (rel: string, id: string): JsonPatchOp => ({
+      op: "add",
+      path: "/relations/-",
+      value: {
+        rel,
+        url: `${client.orgUrl}/_apis/wit/workItems/${id}`,
+      },
+    });
+    if (a.parent_id)
+      patch.push(relation("System.LinkTypes.Hierarchy-Reverse", a.parent_id));
+    for (const id of a.related_ids ?? [])
+      patch.push(relation("System.LinkTypes.Related", id));
+
+    const created = await client.createWorkItem(a.project, a.type, patch);
+    await recordRun({
+      userId: await resolveCurrentUserId(),
+      mode: "create",
+      meta: { source: a.source, project: a.project, type: a.type, ado_id: created.id },
+    });
+    return out({
+      created: true,
+      id: created.id,
+      url:
+        created._links?.html?.href ??
+        `${client.orgUrl}/${encodeURIComponent(a.project)}/_workitems/edit/${created.id}`,
+    });
+  },
+);
+
+tool(
+  "list_repos",
+  {
+    description:
+      "List linked git repositories available for code search, with index freshness. index_status 'error' or a stale last_indexed_at means results may not reflect current code — say so when citing.",
+    inputSchema: {},
+    annotations: { readOnlyHint: true },
+  },
+  async () => {
+    const rows = await listRepos();
+    return out(
+      rows.map((r) => ({
+        slug: r.slug,
+        url: r.url,
+        product_slug: r.product_slug,
+        default_branch: r.default_branch,
+        index_status: r.index_status,
+        indexed_commit: r.indexed_commit,
+        last_indexed_at: r.last_indexed_at,
+        file_count: r.file_count,
+        chunk_count: r.chunk_count,
+        ...(r.index_error ? { index_error: r.index_error } : {}),
+      })),
+    );
+  },
+);
+
+tool(
+  "search_code",
+  {
+    description:
+      "Hybrid (semantic + trigram) search over the indexed code of linked repositories. Returns the top-matching chunks with path, line range, and the commit they were indexed at. Search with symptom terms, symbol names, or error strings; then use read_code_file to read narrowly around a hit. Results reflect the indexed commit, not necessarily the latest code — always cite path:start-end @ commit and mention index age when advising.",
+    inputSchema: {
+      query: z.string(),
+      repo: z.string().optional().describe("Repo slug from list_repos"),
+      product_slug: z.string().optional(),
+      path_prefix: z.string().optional(),
+      limit: z.number().int().positive().optional(),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ query, repo, product_slug, path_prefix, limit }) => {
+    const { productId } = await resolveScopeIds({ product_slug });
+    const rows = await searchCode(query, {
+      repoSlug: repo,
+      productId,
+      pathPrefix: path_prefix,
+      limit,
+    });
+    await recordRun({
+      userId: await resolveCurrentUserId(),
+      mode: "code",
+      meta: { query, repo: repo ?? null, hits: rows.length },
+    });
+    return outScrubbed(
+      rows.map((r: any) => ({
+        repo: r.repo_slug,
+        path: r.path,
+        lines: `${r.start_line}-${r.end_line}`,
+        lang: r.lang,
+        score: Number(r.score),
+        snippet: r.snippet,
+        indexed_commit: r.indexed_commit,
+        indexed_days_ago: r.indexed_days_ago,
+      })),
+    );
+  },
+);
+
+tool(
+  "read_code_file",
+  {
+    description:
+      "Read a bounded slice of a file from a linked repo at its indexed commit (max 400 lines per call). Use after search_code to see the surrounding context of a hit. Never paste whole files into answers or saved knowledge entries — quote only the relevant lines.",
+    inputSchema: {
+      repo: z.string(),
+      path: z.string(),
+      start_line: z.number().int().positive().optional(),
+      end_line: z.number().int().positive().optional(),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ repo, path, start_line, end_line }) => {
+    return outScrubbed(
+      await readCodeFile(repo, path, {
+        startLine: start_line,
+        endLine: end_line,
       }),
     );
   },
