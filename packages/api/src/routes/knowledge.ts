@@ -24,6 +24,7 @@ import {
 } from "@tachy/core";
 import type { EntryScope, RunInput } from "@tachy/core";
 import { assertScopeEditor, callerUserId } from "../authz";
+import { csv } from "../query";
 
 const knowledgeInputSchema = z.object({
   workItemId: z.string().optional(),
@@ -77,16 +78,23 @@ const feedbackSchema = z.object({
   patch: z.record(z.string(), z.any()).optional(),
 });
 
-const csv = (v: string | undefined) =>
-  v
-    ?.split(",")
-    .map((t) => t.trim())
-    .filter(Boolean);
+type QueryCtx = { req: { query(k: string): string | undefined } };
 
-async function componentFilter(
-  c: { req: { query(k: string): string | undefined } },
-  tags: string[] | undefined,
-) {
+async function listFilters(c: QueryCtx) {
+  return {
+    productId: c.req.query("product_id"),
+    teamId: c.req.query("team_id"),
+    ...(await componentFilter(c, csv(c.req.query("tags")))),
+    cloud: c.req.query("cloud"),
+    learningValue: c.req.query("learning_value"),
+    resolutionClarity: c.req.query("resolution_clarity"),
+    affectedVersion: c.req.query("affected_version"),
+    fixedVersion: c.req.query("fixed_version"),
+    limit: c.req.query("limit") ? Number(c.req.query("limit")) : undefined,
+  };
+}
+
+async function componentFilter(c: QueryCtx, tags: string[] | undefined) {
   const component = c.req.query("component");
   const productId = c.req.query("product_id");
   if (!component || !productId)
@@ -117,17 +125,10 @@ async function newEntryScope(body: {
 
 export const knowledge = new Hono()
   .get("/search", async (c) => {
-    const rows = await searchKnowledge(c.req.query("q") ?? "", {
-      productId: c.req.query("product_id"),
-      teamId: c.req.query("team_id"),
-      ...(await componentFilter(c, csv(c.req.query("tags")))),
-      cloud: c.req.query("cloud"),
-      learningValue: c.req.query("learning_value"),
-      resolutionClarity: c.req.query("resolution_clarity"),
-      affectedVersion: c.req.query("affected_version"),
-      fixedVersion: c.req.query("fixed_version"),
-      limit: c.req.query("limit") ? Number(c.req.query("limit")) : undefined,
-    });
+    const rows = await searchKnowledge(
+      c.req.query("q") ?? "",
+      await listFilters(c),
+    );
     return c.json(rows);
   })
 
@@ -160,15 +161,7 @@ export const knowledge = new Hono()
   .get("/", async (c) => {
     const rows = await listKnowledgeEntries({
       status: c.req.query("status"),
-      productId: c.req.query("product_id"),
-      teamId: c.req.query("team_id"),
-      ...(await componentFilter(c, csv(c.req.query("tags")))),
-      cloud: c.req.query("cloud"),
-      learningValue: c.req.query("learning_value"),
-      resolutionClarity: c.req.query("resolution_clarity"),
-      affectedVersion: c.req.query("affected_version"),
-      fixedVersion: c.req.query("fixed_version"),
-      limit: c.req.query("limit") ? Number(c.req.query("limit")) : undefined,
+      ...(await listFilters(c)),
     });
     return c.json(rows);
   })

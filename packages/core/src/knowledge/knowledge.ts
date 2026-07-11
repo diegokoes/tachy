@@ -1,10 +1,10 @@
-import { sql } from "../platform/db";
+import { sql } from "../infra/db";
 import {
   embedPassage,
   embedQuery,
   toVectorLiteral,
 } from "../search/embeddings";
-import { notFound, conflict, badInput } from "../platform/errors";
+import { notFound, conflict, badInput } from "../infra/errors";
 import { parseStructured } from "./structured";
 import { resolveComponentStrict } from "../catalog/components";
 
@@ -145,6 +145,9 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
 export interface SearchOptions {
   productId?: string;
   teamId?: string;
+  /** Also match rows with NO product/team (org-wide) when a scope filter is
+   *  set — for agent consults, where global lessons still apply. */
+  includeUnscoped?: boolean;
   tags?: string[];
   componentId?: string;
   componentTags?: string[];
@@ -176,8 +179,8 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
       -- deprecated entries surface on purpose: a flagged stale lesson beats the
       -- LLM re-deriving it from scratch. Consumers must warn on status='deprecated'.
       where status in ('approved', 'deprecated')
-        ${opts.productId ? sql`and product_id = ${opts.productId}` : sql``}
-        ${opts.teamId ? sql`and team_id = ${opts.teamId}` : sql``}
+        ${opts.productId ? (opts.includeUnscoped ? sql`and (product_id = ${opts.productId} or product_id is null)` : sql`and product_id = ${opts.productId}`) : sql``}
+        ${opts.teamId ? (opts.includeUnscoped ? sql`and (team_id = ${opts.teamId} or team_id is null)` : sql`and team_id = ${opts.teamId}`) : sql``}
         ${opts.tags && opts.tags.length ? sql`and tags && ${opts.tags}` : sql``}
         ${opts.componentId ? sql`and (component_id = ${opts.componentId} or tags && ${opts.componentTags ?? []})` : sql``}
         ${opts.cloud ? sql`and cloud = ${opts.cloud}` : sql``}

@@ -71,6 +71,15 @@ describe("searchKnowledge", () => {
     const scoped = await searchKnowledge("tracking gap", { productId: tpd });
     expect(scoped.length).toBe(1);
     expect(scoped[0].issue_summary).toBe("tpd tracking gap");
+
+    const withUnscoped = await searchKnowledge("tracking gap", {
+      productId: tpd,
+      includeUnscoped: true,
+    });
+    expect(withUnscoped.map((r) => r.issue_summary).sort()).toEqual([
+      "tpd tracking gap",
+      "tracking gap elsewhere",
+    ]);
   });
 
   it("finds an entry by a signal (error code) with no other keyword overlap", async () => {
