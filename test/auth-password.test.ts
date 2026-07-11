@@ -7,18 +7,11 @@ import {
   setUserDisabled,
   AppError,
 } from "@tachy/core";
-import { resetData, sql } from "./helpers";
+import { cookieOf, json, resetData, sql } from "./helpers";
 
 afterAll(() => sql.end());
 
 const app = createApp({ passwordAuth: true });
-const json = (body: unknown) => ({
-  method: "POST",
-  body: JSON.stringify(body),
-  headers: { "Content-Type": "application/json" },
-});
-const cookieOf = (res: Response) =>
-  res.headers.get("set-cookie")?.split(";")[0] ?? "";
 
 describe("password hashing", () => {
   it("verifies a correct password and rejects a wrong one", async () => {

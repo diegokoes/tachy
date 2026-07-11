@@ -1,15 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../packages/api/src/app";
-import { resetData, sql } from "./helpers";
+import { json, resetData, sql } from "./helpers";
 
 afterAll(() => sql.end());
 
 const app = createApp();
-const json = (body: unknown) => ({
-  method: "POST",
-  body: JSON.stringify(body),
-  headers: { "Content-Type": "application/json" },
-});
 
 describe("API health", () => {
   it("reports ok when the DB is reachable", async () => {

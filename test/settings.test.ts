@@ -8,7 +8,7 @@ import {
   createUser,
   AppError,
 } from "@tachy/core";
-import { resetData, sql } from "./helpers";
+import { loginCookie, resetData, sql } from "./helpers";
 
 afterAll(() => sql.end());
 
@@ -86,8 +86,6 @@ describe("settings store", () => {
 
 describe("settings API gating", () => {
   const app = createApp({ passwordAuth: true });
-  const cookieOf = (res: Response) =>
-    res.headers.get("set-cookie")?.split(";")[0] ?? "";
   let adminCookie: string;
   let memberCookie: string;
 
@@ -103,16 +101,8 @@ describe("settings API gating", () => {
       password: "member-password",
       role: "member",
     });
-    const login = async (email: string, password: string) => {
-      const res = await app.request("/auth/password/login", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-        headers: { "Content-Type": "application/json" },
-      });
-      return cookieOf(res);
-    };
-    adminCookie = await login("boss@example.com", "admin-password");
-    memberCookie = await login("dev@example.com", "member-password");
+    adminCookie = await loginCookie(app, "boss@example.com", "admin-password");
+    memberCookie = await loginCookie(app, "dev@example.com", "member-password");
   });
 
   const put = (cookie: string, key: string, value: unknown) =>
