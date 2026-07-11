@@ -98,6 +98,20 @@
     }
   }
 
+  const activeFilters = $derived(
+    [productId, component, cloud, status, learningValue, version.trim()].filter(Boolean).length,
+  );
+
+  function clearFilters() {
+    productId = "";
+    component = "";
+    components = [];
+    cloud = "";
+    status = "";
+    learningValue = "";
+    version = "";
+  }
+
   async function createEntry(payload: Record<string, unknown>) {
     createSaving = true;
     createError = null;
@@ -146,28 +160,37 @@
     />
   </div>
 {:else}
-  <div class="controls">
+  <div class="controls-primary">
     <input
       class="search"
       placeholder="Search symptoms, error codes, root cause…"
       bind:value={q}
       onkeydown={(e) => { if (e.key === "Enter") { clearTimeout(timer); run(); } }}
     />
+    {#if isCurator()}
+      <button class="new" onclick={() => (creating = true)}>+ new entry</button>
+    {/if}
+  </div>
+  <div class="controls-filters">
+    <span class="filters-label">filter:</span>
     <AsciiSelect bind:value={productId} title={t("product")}
       options={[{ value: "", label: `any ${t("product")}` }, ...products.map((p) => ({ value: p.id as string, label: p.name as string }))]}
       onchange={(v) => onProductChange(String(v))} />
     <AsciiSelect bind:value={component} title={`Component (within the chosen ${t("product")})`}
       disabled={!productId || components.length === 0}
       options={[{ value: "", label: "any component" }, ...components.map((c) => c.slug as string)]} />
+    <span class="filters-divider">│</span>
     <AsciiSelect bind:value={cloud} title={`${t("cloud")} observed in`}
       options={[{ value: "", label: `any ${t("cloud")}` }, ...environments.map((e) => ({ value: e.cloud, label: `${e.cloud} (${e.count})` }))]} />
+    <input class="version" placeholder="affected version" bind:value={version} title="Exact affected-version match" />
+    <span class="filters-divider">│</span>
     <AsciiSelect bind:value={status} title="Entry status"
       options={[{ value: "", label: "any status" }, ...STATUSES]} />
     <AsciiSelect bind:value={learningValue} title="Learning value"
       options={[{ value: "", label: "any value" }, "high", "medium", "low"]} />
-    <input class="version" placeholder="affected version" bind:value={version} title="Exact affected-version match" />
-    {#if isCurator()}
-      <button class="new" onclick={() => (creating = true)}>+ new entry</button>
+    {#if activeFilters}
+      <span class="filters-count">{activeFilters} active</span>
+      <button class="mini" onclick={clearFilters}>clear</button>
     {/if}
   </div>
 
@@ -214,17 +237,10 @@
 {/if}
 
 <style>
-  .controls { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem; align-items: center; }
-  .search { flex: 1; min-width: 16rem; }
   .version { max-width: 9rem; }
-  .new { border-color: var(--accent); color: var(--accent); }
   .create h2 { margin: 0.5rem 0 0.25rem; font-size: 1.15rem; }
   .close { margin-bottom: 0.5rem; }
-  .count { margin: 0.25rem 0; font-size: 0.82rem; }
-  .results { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.4rem; }
-  .row { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 0.25rem; padding: 0.65rem 0.8rem; background: var(--panel); }
   .summary { font-weight: 500; }
-  .meta { color: var(--muted); font-size: 0.8rem; display: flex; align-items: baseline; gap: 0.25rem; flex-wrap: wrap; }
   .score { color: var(--accent); }
   .badge {
     display: inline-block;
@@ -240,9 +256,4 @@
   .badge.draft { border-color: var(--accent); color: var(--accent); }
   .badge.rejected, .badge.archived { opacity: 0.8; }
   .tags { display: inline-flex; gap: 0.3rem; margin-left: 0.3rem; }
-  .tag { background: var(--accent-dim); border-radius: 999px; padding: 0 0.5rem; font-size: 0.72rem; color: var(--text); }
-  .empty { padding: 1.5rem 0.5rem; }
-  .empty p { margin: 0.25rem 0; }
-  .muted { color: var(--muted); }
-  .error { color: var(--danger); }
 </style>

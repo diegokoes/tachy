@@ -1,7 +1,4 @@
 <script lang="ts">
-  
-  
-  
   import { session } from "../session.svelte";
   import { t, showCustomer } from "../terms";
   import TeamsPanel from "./TeamsPanel.svelte";
@@ -14,12 +11,13 @@
   import UsersPanel from "./UsersPanel.svelte";
   import MembershipPanel from "./MembershipPanel.svelte";
   import SystemPanel from "./SystemPanel.svelte";
+  import CredentialsPanel from "./CredentialsPanel.svelte";
 
   type Section =
     | "teams" | "products" | "sources"
     | "components" | "labels" | "patterns" | "customers"
     | "users" | "membership"
-    | "system";
+    | "system" | "credentials";
 
   const isGlobalAdmin = $derived(session.me?.role === "admin" || !session.me);
 
@@ -50,8 +48,14 @@
         { key: "membership", label: "membership" },
       ],
     };
-    const system: Group = { key: "system", label: "System", sections: [{ key: "system", label: "settings" }] };
-    return [org, taxonomy, people, ...(isGlobalAdmin ? [system] : [])];
+    const system: Group = {
+      key: "system", label: "System",
+      sections: [
+        ...(isGlobalAdmin ? [{ key: "system" as Section, label: "settings" }] : []),
+        { key: "credentials", label: "credentials" },
+      ],
+    };
+    return [org, taxonomy, people, system];
   });
 
   let active = $state<Section>("teams");
@@ -85,6 +89,7 @@
   {:else if active === "users"}<UsersPanel />
   {:else if active === "membership"}<MembershipPanel />
   {:else if active === "system"}<SystemPanel />
+  {:else if active === "credentials"}<CredentialsPanel />
   {/if}
 </div>
 

@@ -18,4 +18,5 @@ export const chat = $state({
   sessionId: undefined as string | undefined,
   turnId: undefined as string | undefined,
   uploads: [] as { path: string; filename: string }[],
+  artifact: undefined as { id: string; title: string } | undefined,
 });

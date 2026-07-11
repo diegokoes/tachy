@@ -4,6 +4,35 @@ export interface ChatBody {
   message: string;
   sessionId?: string;
   uploadPaths?: string[];
+  artifactId?: string;
+  command?: { name: string; args: string };
+}
+
+export interface BuiltinCommandMeta {
+  name: string;
+  args: string;
+  description: string;
+}
+
+export interface CommandArtifactMeta {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  scope: string;
+}
+
+export async function getCommands(): Promise<{
+  builtins: BuiltinCommandMeta[];
+  artifacts: CommandArtifactMeta[];
+}> {
+  const res = await fetch("/api/agent/commands");
+  if (res.status === 401) {
+    onUnauthorized();
+    return { builtins: [], artifacts: [] };
+  }
+  if (!res.ok) throw new Error(`commands failed: ${res.status}`);
+  return res.json();
 }
 
 export interface SseFrame {

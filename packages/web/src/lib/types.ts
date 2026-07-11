@@ -47,9 +47,21 @@ export interface ReferenceRow {
   tags: string[] | null;
   status: string;
   version: number;
+  doc_version?: string | null;
+  superseded_by?: string | null;
   snippet?: string;
   body?: string;
   structured?: Record<string, unknown> | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ReferenceLineageRow {
+  id: string;
+  title: string;
+  doc_version?: string | null;
+  status: string;
+  superseded_by?: string | null;
   created_at?: string;
   updated_at?: string;
 }

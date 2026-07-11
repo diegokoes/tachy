@@ -3,7 +3,7 @@
   import { api } from "../api";
   import { initSession } from "../session.svelte";
   import AsciiSelect from "../AsciiSelect.svelte";
-  import { errText, type SystemInfo } from "./shared";
+  import { csv, errText, type SystemInfo } from "./shared";
 
   let system = $state<SystemInfo | null>(null);
   let loading = $state(false);
@@ -85,6 +85,18 @@
         <td><span class="badge src-{system.settings.redaction_global.source}">{system.settings.redaction_global.source}</span></td>
       </tr>
       <tr>
+        <td class="tip" title="Which agent backend runs the chat: Claude (Anthropic API key / Claude Code login) or GitHub Copilot (Copilot subscription; token or copilot CLI login).">Agent provider</td>
+        <td>
+          <AsciiSelect value={system.settings.agent_provider.value}
+            options={[
+              { value: "claude", label: "claude (Anthropic)" },
+              { value: "copilot", label: "copilot (GitHub)" },
+            ]}
+            onchange={(v) => saveSetting("agent_provider", v)} />
+        </td>
+        <td><span class="badge src-{system.settings.agent_provider.source}">{system.settings.agent_provider.source}</span></td>
+      </tr>
+      <tr>
         <td>Agent model</td>
         <td class="edit-cell">
           <input bind:value={draft.agent_model} />
@@ -108,7 +120,7 @@
         <td class="edit-cell">
           <input bind:value={draft.allowed_models} placeholder="unrestricted" />
           {#if draft.allowed_models !== system.settings.allowed_models.value.join(", ")}
-            <button class="mini" onclick={() => saveSetting("allowed_models", draft.allowed_models.split(",").map((s) => s.trim()).filter(Boolean))}>apply</button>
+            <button class="mini" onclick={() => saveSetting("allowed_models", csv(draft.allowed_models))}>apply</button>
           {/if}
         </td>
         <td><span class="badge src-{system.settings.allowed_models.source}">{system.settings.allowed_models.source}</span></td>
@@ -142,6 +154,7 @@
         <td class="muted">TACHY_SESSION_SECRET</td>
       </tr>
       <tr><td>Anthropic API key</td><td>{system.env.anthropic_api_key_set ? "set" : "not set (falls back to the server's Claude Code login)"}</td><td class="muted">ANTHROPIC_API_KEY</td></tr>
+      <tr><td>Copilot GitHub token</td><td>{system.env.copilot_token_set ? "set" : "not set (falls back to the server's copilot CLI login)"}</td><td class="muted">COPILOT_GITHUB_TOKEN</td></tr>
       <tr><td>Attribution email (standalone MCP)</td><td>{system.env.user_email ?? "(anonymous)"}</td><td class="muted">TACHY_USER_EMAIL</td></tr>
       <tr><td>Upload dir</td><td>{system.env.upload_dir ?? "(OS tmp dir)"}</td><td class="muted">TACHY_UPLOAD_DIR</td></tr>
       <tr><td>API port</td><td>{system.env.port}</td><td class="muted">PORT</td></tr>
@@ -151,17 +164,9 @@
 
 <style>
   td .on { color: var(--ok); }
-  .edit-cell { display: flex; gap: 0.4rem; align-items: center; }
   .edit-cell input { min-width: 13rem; }
   label.check { display: flex; gap: 0.5rem; align-items: center; cursor: pointer; }
   label.check input { accent-color: var(--accent); }
-  .badge {
-    font-size: 0.72rem;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 0.05rem 0.55rem;
-    color: var(--muted);
-  }
   .badge.src-db { border-color: var(--accent); color: var(--accent); }
   .badge.src-env { border-color: var(--warn); color: var(--warn); }
 </style>
