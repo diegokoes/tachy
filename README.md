@@ -37,13 +37,19 @@ design are in the [wiki](../../wiki).
   (aliases, hierarchy); new areas are proposed to you, never created silently.
 - **Sources**: Freshdesk (tickets, private notes), GitHub Issues, Azure DevOps
   work items — multi-project, with related items, linked PRs/commits, and
-  linked-ticket detection from Freshdesk custom fields / `AB#123` mentions.
+  linked Azure items (Freshdesk custom fields / `AB#123` mentions) fetched and
+  attached to the analysis, not merely noticed.
+- **Projects** — each Azure DevOps project, Freshdesk group or GitHub repo is
+  registered as a project: bound to a product (with its wiki, its repos and
+  area-path→component rules), or kept productless as a place to raise and
+  reassign work items. Team admins configure their own.
 - **Azure DevOps extras** — read wiki pages into reference docs, and create
   work items with per-project required fields discovered from ADO's own
   schema, nothing hardcoded.
-- **Code consultation** — link git repos, index them into local embeddings,
-  and the agent searches/reads bounded snippets (`search_code`,
-  `read_code_file`) instead of burning tokens on whole files.
+- **Code consultation** — link git repos to the component each implements,
+  index them into local embeddings, and the agent searches/reads bounded
+  snippets (`search_code`, `read_code_file`) — narrowed to the relevant repo —
+  instead of burning tokens on whole files.
 - **Reference docs** for freeform context (runbooks, architecture notes),
   chunked and embedded, versioned with supersede lineage.
 - **MCP server** (40+ tools) for Claude Code, VS Code Copilot, Codex CLI, or
@@ -120,13 +126,29 @@ are stored encrypted in the app (My settings / Admin › System › credentials)
 
 **Sources.** Freshdesk (tickets, private notes), GitHub Issues, Azure DevOps
 work items (multi-project; relations, linked PRs/commits, wikis, and
-schema-checked ticket creation). Register connections and group→product maps
-in-app or via the MCP admin tools.
+schema-checked ticket creation). Register connections in Admin › Org › sources
+— domain/organization plus the API key or PAT, stored encrypted — then hit
+`test` to list the groups/projects that token can see. Connections and their
+tokens are org-wide, so they stay global-admin territory. The Azure client
+targets REST API **7.1** — the released version; everything in 7.2 is still
+preview.
 
-**Code search.** Link git repos (`PUT /api/repos`), index them
-(`POST /api/repos/:slug/reindex` or the CLI), and the agent gets
-`search_code` / `read_code_file` over local embeddings. Clones live under
-`TACHY_REPO_DIR` (Docker: a named volume).
+**Projects.** Admin › Org › projects is where a team admin says what each
+source-native grouping actually is. A **knowledge** project maps to a product:
+its items ingest there, it carries the project wiki, its repos, and rules
+mapping Azure DevOps area paths to components, so an incoming item lands on the
+right component instead of being guessed at. A **tracker** project has no
+product — it is a place work items get raised and reassigned, and nothing is
+filed under it. A coverage list flags what is still unwired: discovered but
+unregistered projects, missing wikis, repos with no component, failing indexes.
+
+**Code search.** Link git repos in Admin › Org › repos (or `PUT /api/repos`) —
+pick the project, the component the repo implements, and the branch; clone URLs
+are discovered from Azure DevOps. Index from the same screen
+(`POST /api/repos/:slug/reindex` or the CLI) and the agent gets `search_code` /
+`read_code_file` over local embeddings, narrowable to a component so a question
+about the portal searches the portal's repo. Clones live under `TACHY_REPO_DIR`
+(Docker: a named volume).
 
 **REST API.** Everything under `/api` (zod-validated). See the wiki for the
 route reference.
