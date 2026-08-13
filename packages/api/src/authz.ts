@@ -6,7 +6,9 @@ import {
   assertCanEditScope,
   assertCanManageTeamBySlug,
   assertAnyTeamAdmin,
+  userSoleTeamId,
   type EntryScope,
+  type ScopeContext,
 } from "@tachy/core";
 import { getIdentity } from "./auth";
 
@@ -14,6 +16,13 @@ export async function callerUserId(c: Context): Promise<string | null> {
   const email = getIdentity(c)?.email ?? env.userEmail;
   if (!email) return null;
   return (await getUserByEmail(email))?.id ?? null;
+}
+
+/** Scope for user → team → global credential/preference lookups. */
+export async function callerScope(c: Context): Promise<ScopeContext> {
+  const userId = await callerUserId(c);
+  if (!userId) return {};
+  return { userId, teamId: (await userSoleTeamId(userId)) ?? undefined };
 }
 
 function isAdminIdentity(c: Context): boolean {

@@ -11,6 +11,7 @@ import {
   setObservedVersion,
   badInput,
 } from "@tachy/core";
+import { callerScope } from "../authz";
 
 const customerSchema = z.object({ customer_slug: z.string().nullable() });
 const versionSchema = z.object({ version: z.string().nullable() });
@@ -19,7 +20,10 @@ const noteSchema = z.object({ body: z.string().min(1) });
 export const workItems = new Hono()
   .post("/:source/:id/fetch", async (c) => {
     const { source, id } = c.req.param();
-    const { conn, source: src } = await resolveSource(source);
+    const { conn, source: src } = await resolveSource(
+      source,
+      await callerScope(c),
+    );
     const raw = await src.fetchItem(id);
     const item = await ingestWorkItem(conn.id, raw);
     await recordRun({ workItemId: item.id, mode: "ingest" });
@@ -37,7 +41,7 @@ export const workItems = new Hono()
   .post("/:source/:id/notes", zValidator("json", noteSchema), async (c) => {
     const { source, id } = c.req.param();
     const { body } = c.req.valid("json");
-    const { source: src } = await resolveSource(source);
+    const { source: src } = await resolveSource(source, await callerScope(c));
     if (!src.postNote) throw badInput("notes unsupported for this source");
     await src.postNote(id, body, { private: true });
     return c.json({ posted: true });

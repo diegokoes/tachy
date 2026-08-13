@@ -34,21 +34,26 @@ import {
   renameLabel,
   listSourceConnections,
   addSourceConnection,
-  listSourceProductMaps,
-  addSourceProductMap,
-  deleteSourceProductMap,
+  deleteSourceConnection,
+  resolveSource,
   env,
   effectiveSettings,
   setSetting,
   secretsEnabled,
   credentialSource,
+  setCredential,
+  sourceCredentialName,
+  badInput,
   AGENT_CREDENTIALS,
+  type CredentialSource,
 } from "@tachy/core";
 import { requireAdmin } from "../auth";
 import {
   assertAnyTeamAdminApi,
   assertScopeEditor,
   assertTeamAdmin,
+  callerScope,
+  requireCaller,
 } from "../authz";
 
 const patternSchema = z.object({ slug: z.string(), description: z.string() });
@@ -72,16 +77,40 @@ const productSchema = z.object({
   name: z.string(),
   aliases: z.array(z.string()).optional(),
 });
+// Stricter than the generic slug: a connection slug also becomes a credential
+// name (`freshdesk_token:<slug>`) and an env var (`FRESHDESK_TOKEN_<SLUG>`).
+const connSlugField = z
+  .string()
+  .regex(
+    /^[a-z0-9][a-z0-9-]*$/,
+    "connection slug must be lowercase letters, digits and hyphens",
+  );
+
 const sourceConnSchema = z.object({
   sourceType: z.string(),
-  slug: z.string(),
+  slug: connSlugField,
   baseUrl: z.string().optional(),
   config: z.record(z.string(), z.any()).optional(),
+  /** Stored as the connection's global credential; never echoed back. */
+  token: z.string().min(1).optional(),
 });
-const productMapSchema = z.object({
-  external_group_key: z.string(),
-  product_slug: z.string(),
-});
+/** Where the caller's token for a connection comes from — null when unset.
+ *  Connections predating `connSlugField` may carry names the vault rejects. */
+async function tokenSource(
+  sourceType: string,
+  slug: string,
+  ctx: Awaited<ReturnType<typeof callerScope>>,
+): Promise<CredentialSource | null> {
+  try {
+    return (
+      (await credentialSource(sourceCredentialName(sourceType, slug), ctx)) ??
+      null
+    );
+  } catch {
+    return null;
+  }
+}
+
 const labelSchema = z.object({
   slug: z.string(),
   description: z.string().optional(),
@@ -320,9 +349,6 @@ export const admin = new Hono()
       );
     },
   )
-  .get("/source-product-maps", async (c) =>
-    c.json(await listSourceProductMaps()),
-  )
   .get("/customers", async (c) => c.json(await listCustomers()))
   .post("/customers", zValidator("json", customerSchema), async (c) => {
     await assertAnyTeamAdminApi(c);
@@ -382,35 +408,55 @@ export const admin = new Hono()
     await assertScopeEditor(c, { productId });
     return c.json(await deleteProduct(productId));
   })
-  .delete("/source-product-maps/:id", requireAdmin, async (c) => {
-    return c.json(await deleteSourceProductMap(c.req.param("id")!));
+  .get("/source-connections", async (c) => {
+    const ctx = await callerScope(c);
+    const rows = await listSourceConnections();
+    return c.json(
+      await Promise.all(
+        rows.map(async (r) => ({
+          ...r,
+          token_source: await tokenSource(r.source_type, r.slug, ctx),
+        })),
+      ),
+    );
   })
-  .get("/source-connections", async (c) =>
-    c.json(await listSourceConnections()),
-  )
   .post(
     "/source-connections",
     requireAdmin,
     zValidator("json", sourceConnSchema),
     async (c) => {
-      return c.json(await addSourceConnection(c.req.valid("json")));
+      const { token, ...conn } = c.req.valid("json");
+      if (token && !secretsEnabled())
+        throw badInput(
+          "credential storage is disabled — set TACHY_SECRET_KEY on the server to store API tokens",
+        );
+      const actor = token ? await requireCaller(c) : null;
+      const row = await addSourceConnection(conn);
+      if (token && actor)
+        await setCredential(
+          actor,
+          "global",
+          undefined,
+          sourceCredentialName(conn.sourceType, conn.slug),
+          token,
+        );
+      return c.json(row);
     },
   )
-  .get("/source-connections/:slug/product-map", async (c) => {
-    return c.json(await listSourceProductMaps(c.req.param("slug")));
+  .delete("/source-connections/:slug", requireAdmin, async (c) => {
+    return c.json(await deleteSourceConnection(c.req.param("slug")!));
   })
-  .post(
-    "/source-connections/:slug/product-map",
-    requireAdmin,
-    zValidator("json", productMapSchema),
-    async (c) => {
-      const { external_group_key, product_slug } = c.req.valid("json");
-      return c.json(
-        await addSourceProductMap({
-          sourceSlug: c.req.param("slug"),
-          externalGroupKey: external_group_key,
-          productSlug: product_slug,
-        }),
-      );
-    },
-  );
+  // Cheapest authenticated call the remote API offers, using the caller's own
+  // token. Doubles as discovery of the groups worth registering as projects.
+  .post("/source-connections/:slug/test", async (c) => {
+    const slug = c.req.param("slug");
+    try {
+      const { source } = await resolveSource(slug, await callerScope(c));
+      if (!source.verify)
+        return c.json({ ok: false, error: "this source type has no test call" });
+      const probe = await source.verify();
+      return c.json({ ok: true, ...probe });
+    } catch (e) {
+      return c.json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+  });

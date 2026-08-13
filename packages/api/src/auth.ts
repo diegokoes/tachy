@@ -16,6 +16,7 @@ import {
   countAdmins,
   verifyPassword,
   teamAdminTeams,
+  userTeams,
   env,
   type UserRole,
 } from "@tachy/core";
@@ -243,14 +244,19 @@ export function installAuth(
         role: "admin",
         via: "open",
         team_admin: [],
+        teams: [],
       });
     if (identity.via === "sso" && identity.email)
       await upsertUser(identity.email, identity.name);
 
     let teamAdmin: { team_id: string; team_slug: string }[] = [];
+    let teams: { team_id: string; team_slug: string }[] = [];
     if (identity.email) {
       const user = await getUserByEmail(identity.email);
-      if (user) teamAdmin = await teamAdminTeams(user.id);
+      if (user) {
+        teamAdmin = await teamAdminTeams(user.id);
+        teams = await userTeams(user.id);
+      }
     }
     return c.json({
       email: identity.email,
@@ -258,6 +264,7 @@ export function installAuth(
       role: identity.role,
       via: identity.via,
       team_admin: teamAdmin,
+      teams,
     });
   });
 
