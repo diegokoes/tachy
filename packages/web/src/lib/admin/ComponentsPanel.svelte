@@ -6,11 +6,12 @@
   import AsciiSelect from "../AsciiSelect.svelte";
   import RenameSlugModal from "./RenameSlugModal.svelte";
   import DeleteButton from "./DeleteButton.svelte";
-  import { TIP, csv, aliasText, errText, type Component, type Product } from "./shared";
+  import { TIP, csv, aliasText, errText, type Component, type Product, type Repo } from "./shared";
 
   let products = $state<Product[]>([]);
   let productSlug = $state("");
   let components = $state<Component[]>([]);
+  let repos = $state<Repo[]>([]);
   let loading = $state(false);
   let saving = $state(false);
   let error = $state<string | null>(null);
@@ -24,6 +25,7 @@
   let rename = $state<null | { from: string; to: string }>(null);
 
   const parentSlugOf = (c: Component) => components.find((p) => p.id === c.parent_id)?.slug ?? "";
+  const reposOf = (c: Component) => repos.filter((r) => r.component_id === c.id);
   const canEdit = $derived(canCurateScope({
     team_slug: products.find((p) => p.slug === productSlug)?.team_slug ?? null,
   }));
@@ -46,6 +48,9 @@
     error = null;
     try {
       components = await api.get(`/products/${productSlug}/components`);
+      repos = (
+        await api.get<{ repos: Repo[] }>(`/repos?product_slug=${productSlug}`)
+      ).repos;
     } catch (e) {
       error = errText(e);
     } finally {
@@ -149,6 +154,7 @@
     <th class="tip" title={TIP.slug}>slug</th><th>name</th>
     <th class="tip" title={TIP.parent}>parent</th>
     <th class="tip" title={TIP.aliases}>aliases</th><th>description</th>
+    <th class="tip" title={TIP.repoComponent}>code</th>
     {#if canEdit}<th></th>{/if}
   </tr></thead>
   <tbody>
@@ -165,6 +171,7 @@
           </td>
           <td><input class="row-input" bind:value={edit.aliases} placeholder="aliases (csv)" aria-label="aliases" onkeydown={onEditKey(r)} /></td>
           <td><input class="row-input" bind:value={edit.description} placeholder="description" aria-label="description" onkeydown={onEditKey(r)} /></td>
+          <td class="muted">{reposOf(r).map((x) => x.slug).join(", ")}</td>
           <td class="actions">
             <button class="icon-btn ok" title="save" aria-label="save" onclick={() => save(r)} disabled={saving || !edit.name.trim() || !edit.slug.trim()}>✓</button>
             <button class="icon-btn" title="cancel" aria-label="cancel" onclick={() => (editing = null)}>↺</button>
@@ -173,6 +180,14 @@
           <td>{r.slug}</td>
           <td>{r.name}</td><td class="muted">{parentSlugOf(r)}</td>
           <td class="muted">{aliasText(r.aliases)}</td><td class="muted">{r.description ?? ""}</td>
+          <td>
+            {#each reposOf(r) as repo (repo.id)}
+              <span class="repo" class:stale={repo.index_status !== "ready"}
+                title={`${repo.index_status}${repo.last_indexed_at ? ` — indexed ${new Date(repo.last_indexed_at).toLocaleDateString()}` : ", never indexed"}`}
+              >{repo.slug}</span>
+            {/each}
+            {#if !reposOf(r).length}<span class="muted">—</span>{/if}
+          </td>
           {#if canEdit}
             <td class="actions">
               <button class="icon-btn" title="edit" aria-label="edit" onclick={() => {
@@ -186,7 +201,7 @@
       </tr>
     {/each}
     {#if !loading && components.length === 0}
-      <tr><td colspan="6" class="muted">No components for this {t("product")} yet - seed them from docs via Chat, or add one below.</td></tr>
+      <tr><td colspan="7" class="muted">No components for this {t("product")} yet - seed them from docs via Chat, or add one below.</td></tr>
     {/if}
   </tbody>
 </table>
@@ -229,3 +244,10 @@
     {/if}
   </div>
 {/if}
+
+<style>
+  /* A component's repos, so it is clear what code backs it and how fresh the
+     index is — a stale one means code answers may be out of date. */
+  .repo { font-size: 0.75rem; padding: 0.1rem 0.4rem; border: 1px solid var(--border); border-radius: 0.6rem; margin-right: 0.25rem; white-space: nowrap; }
+  .repo.stale { border-color: var(--warn); color: var(--warn); }
+</style>

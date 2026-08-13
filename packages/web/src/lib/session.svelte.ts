@@ -5,6 +5,7 @@ export interface Me {
   via: "password" | "sso" | "open";
 
   team_admin?: { team_id: string; team_slug: string }[];
+  teams?: { team_id: string; team_slug: string }[];
 }
 
 export interface AuthConfig {

@@ -4,6 +4,8 @@
   import TeamsPanel from "./TeamsPanel.svelte";
   import ProductsPanel from "./ProductsPanel.svelte";
   import SourcesPanel from "./SourcesPanel.svelte";
+  import ProjectsPanel from "./ProjectsPanel.svelte";
+  import ReposPanel from "./ReposPanel.svelte";
   import ComponentsPanel from "./ComponentsPanel.svelte";
   import LabelsPanel from "./LabelsPanel.svelte";
   import PatternsPanel from "./PatternsPanel.svelte";
@@ -14,7 +16,7 @@
   import CredentialsPanel from "./CredentialsPanel.svelte";
 
   type Section =
-    | "teams" | "products" | "sources"
+    | "teams" | "products" | "sources" | "projects" | "repos"
     | "components" | "labels" | "patterns" | "customers"
     | "users" | "membership"
     | "system" | "credentials";
@@ -30,6 +32,10 @@
         { key: "teams", label: t("teams") },
         { key: "products", label: t("products") },
         ...(isGlobalAdmin ? [{ key: "sources" as Section, label: "sources" }] : []),
+        // Projects and repos are team-admin territory: connections and their
+        // tokens are org-wide, but what a project maps to is the team's call.
+        { key: "projects", label: "projects" },
+        { key: "repos", label: "repos" },
       ],
     };
     const taxonomy: Group = {
@@ -82,6 +88,8 @@
   {#if active === "teams"}<TeamsPanel />
   {:else if active === "products"}<ProductsPanel />
   {:else if active === "sources"}<SourcesPanel />
+  {:else if active === "projects"}<ProjectsPanel />
+  {:else if active === "repos"}<ReposPanel />
   {:else if active === "components"}<ComponentsPanel />
   {:else if active === "labels"}<LabelsPanel />
   {:else if active === "patterns"}<PatternsPanel />

@@ -8,8 +8,30 @@
   import AsciiScrollbar from "./AsciiScrollbar.svelte";
   import ArtifactPanel from "./chat/ArtifactPanel.svelte";
   import CommandMenu, { type CommandPick } from "./chat/CommandMenu.svelte";
+  import CompactPanel from "./chat/CompactPanel.svelte";
+  import OutputCard, { type OutputFile } from "./chat/OutputCard.svelte";
 
   const short = (tool: string) => tool.replace(/^mcp__tachy__/, "");
+
+  /** MCP results arrive as content blocks; the payload is JSON in the first text block. */
+  function toolPayload(result: unknown): Record<string, unknown> | undefined {
+    const blocks = Array.isArray(result)
+      ? result
+      : (result as { content?: unknown })?.content;
+    const text = Array.isArray(blocks)
+      ? (blocks.find(
+          (b) => (b as { type?: string })?.type === "text",
+        ) as { text?: string } | undefined)?.text
+      : typeof result === "string"
+        ? result
+        : undefined;
+    if (!text) return undefined;
+    try {
+      return JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      return undefined;
+    }
+  }
 
   
   
@@ -134,7 +156,39 @@
       for await (const { event, data } of chatStream({ message, sessionId: chat.sessionId, uploadPaths: uploadPaths.length ? uploadPaths : undefined, artifactId: chat.artifact?.id, command })) {
         if (event === "start") chat.turnId = data.turnId as string;
         else if (event === "text") appendAssistant(data.text as string);
-        else if (event === "tool_use") chat.entries.push({ kind: "tool", tool: short(data.tool as string) });
+        else if (event === "tool_use") {
+          const tool = short(data.tool as string);
+          if (tool === "compact_work_item") {
+            const input = (data.input ?? {}) as Record<string, unknown>;
+            chat.entries.push({
+              kind: "compact",
+              id: data.id as string,
+              title: [input.source, input.external_id].filter(Boolean).join(" · "),
+            });
+          } else if (tool === "export_table") {
+            chat.entries.push({ kind: "output", id: data.id as string });
+          } else chat.entries.push({ kind: "tool", tool });
+        } else if (event === "tool_result" && short(data.tool as string) === "compact_work_item") {
+          const panel = chat.entries.find(
+            (e) => e.kind === "compact" && e.id === data.id,
+          ) as Extract<Entry, { kind: "compact" }> | undefined;
+          const payload = toolPayload(data.result);
+          const stats = payload?.compaction as Extract<Entry, { kind: "compact" }>["stats"];
+          if (panel && stats) {
+            panel.stats = stats;
+            const t = payload?.ticket as { title?: string } | undefined;
+            if (t?.title) panel.title = t.title;
+          }
+        } else if (event === "tool_result" && short(data.tool as string) === "export_table") {
+          const at = chat.entries.findIndex(
+            (e) => e.kind === "output" && e.id === data.id,
+          );
+          if (at >= 0) {
+            const file = toolPayload(data.result)?.output as OutputFile | undefined;
+            if (file) (chat.entries[at] as Extract<Entry, { kind: "output" }>).file = file;
+            else chat.entries.splice(at, 1);
+          }
+        }
         else if (event === "approval_request")
           chat.entries.push({
             kind: "approval",
@@ -299,6 +353,10 @@
         <div class="bubble assistant md" class:streaming={chat.busy && i === chat.entries.length - 1}>{@html renderMarkdown(e.text)}</div>
       {:else if e.kind === "tool"}
         <div class="tool">⚙ {e.tool}</div>
+      {:else if e.kind === "compact"}
+        <CompactPanel title={e.title} stats={e.stats} />
+      {:else if e.kind === "output"}
+        <OutputCard file={e.file} />
       {:else if e.kind === "error"}
         <div class="bubble error">{e.text}</div>
       {:else if e.kind === "approval"}
@@ -340,7 +398,7 @@
     <div class="attachments">
       {#if chat.artifact}
         <span class="attach artifact-chip">
-          ▸ artifact: {chat.artifact.title}
+          ⛬ {chat.artifact.title}
           <button class="chip-x" title="Detach artifact" onclick={() => (chat.artifact = undefined)}>✕</button>
         </span>
       {/if}
@@ -511,7 +569,7 @@
     background: var(--text);
     animation: caret-blink 1.06s steps(2, jump-none) infinite;
   }
-  .transcript-wrap { flex: 1; min-height: 0; display: flex; gap: 0.35rem; }
+  .transcript-wrap { flex: 1; min-height: 0; display: flex; gap: 0.35rem; padding-right: 2.8rem; }
   /* Native bar hidden — the ASCII scrollbar next to it takes over. */
   .transcript { flex: 1; min-width: 0; overflow: auto; scrollbar-width: none; display: flex; flex-direction: column; gap: 0.6rem; padding-right: 0.5rem; }
   .transcript::-webkit-scrollbar { display: none; }

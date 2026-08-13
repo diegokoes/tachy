@@ -1,5 +1,6 @@
 <script lang="ts">
   import { session, login } from "./session.svelte";
+  import AuthShell from "./AuthShell.svelte";
 
   let email = $state("");
   let password = $state("");
@@ -21,8 +22,8 @@
   }
 </script>
 
-<div class="login-wrap">
-  <div class="login-card">
+<AuthShell>
+  <div class="login-card auth-panel">
     <div class="wordmark">tachy</div>
 
     {#if session.config?.passwordLogin}
@@ -50,21 +51,11 @@
       <p class="muted">No login method is configured. Set TACHY_API_TOKEN or OIDC_* in the environment, or run the setup wizard.</p>
     {/if}
   </div>
-</div>
+</AuthShell>
 
 <style>
-  .login-wrap {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-  }
   .login-card {
     width: min(24rem, 100%);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--panel);
     padding: 2rem 2.2rem 1.8rem;
     display: flex;
     flex-direction: column;

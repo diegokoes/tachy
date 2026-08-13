@@ -1,7 +1,12 @@
+import type { CompactStats } from "./chat/CompactPanel.svelte";
+import type { OutputFile } from "./chat/OutputCard.svelte";
+
 export type Entry =
   | { kind: "user"; text: string }
   | { kind: "assistant"; text: string }
   | { kind: "tool"; tool: string }
+  | { kind: "compact"; id: string; title: string; stats?: CompactStats }
+  | { kind: "output"; id: string; file?: OutputFile }
   | {
       kind: "approval";
       id: string;

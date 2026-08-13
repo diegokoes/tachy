@@ -266,12 +266,6 @@
           <p>No docs match “{q}”.</p>
         {:else}
           <p>No reference docs yet.</p>
-          <p class="muted">
-            Feed project context through the <strong>Chat</strong> tab - paste a wiki page,
-            attach a file, or point the agent at a URL ("here's our deployment runbook…").
-            It proposes structured docs for your approval and saves them here.
-            {#if isCurator()}Or write one by hand with <strong>+ new doc</strong>.{/if}
-          </p>
         {/if}
       </li>
     {/if}

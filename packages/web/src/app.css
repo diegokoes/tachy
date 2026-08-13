@@ -23,6 +23,11 @@
   --accent: #6ea8fe;
   --accent-dim: color-mix(in srgb, var(--accent) 14%, transparent);
   --pattern-ink: rgba(255, 255, 255, 0.16);
+  /* Auth box extrusion: alternating dark seam + grey plate, stacked toward the
+     bottom-right for a layered ASCII 3D edge. */
+  --auth-seam: #040404;
+  --auth-plate: #1d1d1d;
+  --auth-fill: #191919; /* the box's base: a normal, lighter-than-bg black */
   --ok: #3fb950;
   --warn: #d29922;
   --danger: #f85149;
@@ -42,6 +47,9 @@
   --text: #21201c;
   --muted: #857f72;
   --pattern-ink: rgba(30, 28, 20, 0.22);
+  --auth-seam: rgba(30, 28, 20, 0.42);
+  --auth-plate: #e4e0d6;
+  --auth-fill: var(--panel-solid);
   --ok: #1a7f37;
   --warn: #9a6700;
   --danger: #cf222e;
@@ -114,6 +122,81 @@ button:focus-visible {
   outline: none;
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* Shared auth surface (login + setup wizard). Opaque dark fill for readability;
+   the moving grey mesh lives in the pseudo-elements (clipped to the box, kept
+   behind content via isolate + z-index:-1). The 3D edge is a stack of offset
+   hard shadows — alternating dark seam + grey plate stepping toward the
+   bottom-right, so it reads as several overlapping ASCII borders extruded. */
+.auth-panel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 3px;
+  background-color: var(--auth-fill);
+  border: 1px solid var(--border);
+  border-right-color: var(--aside-edge-lo);
+  border-bottom-color: var(--aside-edge-lo);
+  box-shadow:
+    inset 1px 1px 0 var(--aside-edge-hi),
+    2px 2px 0 var(--auth-seam),
+    3px 3px 0 var(--auth-plate),
+    5px 5px 0 var(--auth-seam),
+    6px 6px 0 var(--auth-plate),
+    8px 8px 0 var(--auth-seam),
+    9px 9px 0 var(--auth-plate),
+    11px 11px 0 var(--auth-seam);
+}
+/* Wave layer A: soft grey light-pools that drift slowly across the box. No
+   noise — just smooth gradient waves on the lighter-black fill. */
+.auth-panel::before {
+  content: "";
+  position: absolute;
+  inset: -30%;
+  z-index: -1;
+  background:
+    radial-gradient(38% 60% at 25% 30%, rgba(210, 210, 210, 0.09), transparent 62%),
+    radial-gradient(46% 55% at 78% 62%, rgba(150, 150, 150, 0.11), transparent 60%);
+  filter: blur(8px);
+  mix-blend-mode: screen;
+  animation: auth-wave-a 24s ease-in-out infinite alternate;
+}
+/* Wave layer B: a second set of waves moving on a different path/timing, so the
+   pools cross and overlap for a fuller, wavier field. */
+.auth-panel::after {
+  content: "";
+  position: absolute;
+  inset: -30%;
+  z-index: -1;
+  background:
+    radial-gradient(42% 58% at 65% 22%, rgba(180, 180, 180, 0.08), transparent 60%),
+    radial-gradient(50% 62% at 22% 80%, rgba(130, 130, 130, 0.1), transparent 60%),
+    radial-gradient(36% 50% at 90% 88%, rgba(160, 160, 160, 0.08), transparent 58%);
+  filter: blur(8px);
+  mix-blend-mode: screen;
+  animation: auth-wave-b 31s ease-in-out infinite alternate;
+}
+@keyframes auth-wave-a {
+  0%   { transform: translate3d(-6%, -4%, 0) scale(1.05); }
+  100% { transform: translate3d(6%, 5%, 0) scale(1.18); }
+}
+@keyframes auth-wave-b {
+  0%   { transform: translate3d(5%, 3%, 0) rotate(0deg) scale(1.1); }
+  100% { transform: translate3d(-5%, -4%, 0) rotate(5deg) scale(1.22); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-panel::before,
+  .auth-panel::after { animation: none; }
+}
+/* The form controls sink IN (dark top-left, light bottom-right) so they read as
+   recessed wells against the raised panel. */
+.auth-panel input {
+  position: relative;
+  z-index: 0;
+  box-shadow:
+    inset 1px 1px 0 rgba(0, 0, 0, 0.55),
+    inset -1px -1px 0 var(--aside-edge-hi);
 }
 
 /* Shared chrome for settings-style panels (System, My settings, credentials).

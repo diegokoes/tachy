@@ -34,7 +34,7 @@
       .filter((a) => `${a.slug} ${a.title}`.toLowerCase().includes(q))
       .map((a) => ({
         key: `a:${a.id}`,
-        label: `◈ ${a.title}`,
+        label: `⛬ ${a.title}`,
         hint: "artifact",
         desc: a.description ?? "",
         pick: { kind: "artifact", artifact: a } as CommandPick,
