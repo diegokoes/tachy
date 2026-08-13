@@ -13,6 +13,7 @@ export type { AdoClient, AdoCfg, JsonPatchOp } from "./client";
 
 const RELATED_CAP = 15;
 const ARTIFACT_CAP = 10;
+const SYNC_PAGE = 200;
 
 function stripHtml(html: string): string {
   return html
@@ -37,9 +38,7 @@ function relationWorkItemId(url: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
-function parseGitArtifact(
-  url: string,
-): {
+function parseGitArtifact(url: string): {
   kind: "pr" | "commit";
   project: string;
   repo: string;
@@ -91,10 +90,14 @@ function redactAdoRaw(
   const relations = t.relations as Record<string, any> | undefined;
   if (relations && typeof relations === "object") {
     for (const group of Object.values(relations)) {
-      if (!Array.isArray(group)) continue;
-      for (const item of group) {
-        if (item && typeof item === "object" && typeof item.title === "string")
+      for (const item of Array.isArray(group) ? group : [group]) {
+        if (!item || typeof item !== "object") continue;
+        if (typeof item.title === "string")
           item.title = scrubText(item.title, map);
+        if (typeof item.comment === "string")
+          item.comment = scrubText(item.comment, map);
+        if (typeof item.author === "string")
+          item.author = map.token("USER", item.author);
       }
     }
   }
@@ -130,6 +133,7 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
       title: f["System.Title"],
       status: f["System.State"],
       groupKey: f["System.TeamProject"],
+      areaPath: f["System.AreaPath"],
       requester: createdBy?.displayName ?? uniqueName ?? undefined,
       requesterEmail: uniqueName.includes("@") ? uniqueName : undefined,
       raw: {
@@ -198,39 +202,53 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
     const pick = (ids: number[]) =>
       ids.map((id) => summaries.get(id)).filter(Boolean);
 
-    const pullRequests: unknown[] = [];
-    const commits: unknown[] = [];
-    for (const art of artifacts) {
-      try {
-        if (art.kind === "pr") {
-          const pr = await client.getPullRequest(
-            art.project,
-            art.repo,
-            art.ref,
-          );
-          pullRequests.push({
-            id: pr.pullRequestId,
-            title: pr.title,
-            status: pr.status,
-            repository: pr.repository?.name,
-            url: `${client.orgUrl}/${encodeURIComponent(pr.repository?.project?.name ?? project)}/_git/${encodeURIComponent(pr.repository?.name ?? "")}/pullrequest/${pr.pullRequestId}`,
-          });
-        } else {
+    const resolved = await Promise.all(
+      artifacts.map(async (art) => {
+        try {
+          if (art.kind === "pr") {
+            const pr = await client.getPullRequest(
+              art.project,
+              art.repo,
+              art.ref,
+            );
+            return {
+              kind: art.kind,
+              value: {
+                id: pr.pullRequestId,
+                title: pr.title,
+                status: pr.status,
+                repository: pr.repository?.name,
+                url: `${client.orgUrl}/${encodeURIComponent(pr.repository?.project?.name ?? project)}/_git/${encodeURIComponent(pr.repository?.name ?? "")}/pullrequest/${pr.pullRequestId}`,
+              },
+            };
+          }
           const c = await client.getCommit(art.project, art.repo, art.ref);
-          commits.push({
-            sha: c.commitId,
-            comment: c.comment,
-            author: c.author?.name,
-            url: c.remoteUrl,
-          });
+          return {
+            kind: art.kind,
+            value: {
+              sha: c.commitId,
+              comment: c.comment,
+              author: c.author?.name,
+              url: c.remoteUrl,
+            },
+          };
+        } catch {
+          return {
+            kind: art.kind,
+            value: {
+              ref: art.ref,
+              note: "linked but not readable with this PAT",
+            },
+          };
         }
-      } catch {
-        (art.kind === "pr" ? pullRequests : commits).push({
-          ref: art.ref,
-          note: "linked but not readable with this PAT",
-        });
-      }
-    }
+      }),
+    );
+    const pullRequests = resolved
+      .filter((r) => r.kind === "pr")
+      .map((r) => r.value);
+    const commits = resolved
+      .filter((r) => r.kind === "commit")
+      .map((r) => r.value);
 
     const out: Record<string, unknown> = {};
     if (parentIds.length) out.parent = pick(parentIds)[0];
@@ -245,6 +263,20 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
     type: "azure-devops",
     capabilities: { postNote: false, incrementalSync: true },
     redactRaw: redactAdoRaw,
+
+    async verify() {
+      // connectionData is a preview endpoint and only names the caller, so a
+      // failure there must not fail the check — the project list is the proof.
+      const [conn, projects] = await Promise.all([
+        client.getConnectionData().catch(() => null),
+        client.listProjects(),
+      ]);
+      const user = conn?.authenticatedUser;
+      return {
+        identity: user?.providerDisplayName ?? user?.properties?.Account?.$value,
+        groups: projects.map((p) => ({ key: p.name, name: p.name })),
+      };
+    },
 
     async fetchItem(externalId: string): Promise<RawWorkItem> {
       const wi = await client.getWorkItem(externalId);
@@ -303,23 +335,37 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
         );
       }
       const cursor = opts.cursor
-        ? (JSON.parse(opts.cursor) as { p: number; offset: number })
-        : { p: 0, offset: 0 };
+        ? (JSON.parse(opts.cursor) as { p: number; since?: string })
+        : { p: 0, since: opts.updatedSince };
       if (cursor.p >= projects.length) return { items: [] };
 
       const project = projects[cursor.p];
-      const ids = await client.queryWorkItemIds(project, opts.updatedSince);
-      const page = ids.slice(cursor.offset, cursor.offset + 200);
-      const fetched = page.length ? await client.getWorkItemsBatch(page) : [];
+      const ids = await client.queryWorkItemIds(
+        project,
+        cursor.since,
+        SYNC_PAGE,
+      );
+      const fetched = ids.length ? await client.getWorkItemsBatch(ids) : [];
       const items = fetched.map((wi) => toItem(wi, []));
 
-      const nextOffset = cursor.offset + 200;
-      const next =
-        nextOffset < ids.length
-          ? { p: cursor.p, offset: nextOffset }
-          : cursor.p + 1 < projects.length
-            ? { p: cursor.p + 1, offset: 0 }
-            : undefined;
+      // ChangedDate watermark cursor: the >= query re-fetches boundary items,
+      // which the ingest upsert dedupes; a full page that fails to advance the
+      // watermark (identical timestamps) is bumped 1ms to guarantee progress.
+      let next =
+        cursor.p + 1 < projects.length
+          ? { p: cursor.p + 1, since: opts.updatedSince }
+          : undefined;
+      if (ids.length === SYNC_PAGE) {
+        const changed = fetched
+          .map((wi) => Date.parse(wi.fields?.["System.ChangedDate"] ?? ""))
+          .filter(Number.isFinite);
+        if (changed.length) {
+          const prev = cursor.since ? Date.parse(cursor.since) : Number.NaN;
+          let mark = Math.max(...changed);
+          if (Number.isFinite(prev) && mark <= prev) mark = prev + 1;
+          next = { p: cursor.p, since: new Date(mark).toISOString() };
+        }
+      }
       return { items, ...(next ? { nextCursor: JSON.stringify(next) } : {}) };
     },
   };

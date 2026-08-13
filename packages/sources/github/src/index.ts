@@ -48,7 +48,7 @@ function parseRef(externalId: string): { repo: string; number: string } {
  * GitHub Issues adapter (PAT auth). config.repos lists repos to sync; base_url can be a GitHub Enterprise API URL.
  */
 export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
-  const token = githubToken(cfg.slug);
+  const token = cfg.token || githubToken(cfg.slug);
   const api = (cfg.baseUrl || "https://api.github.com").replace(/\/$/, "");
   const configuredRepos = Array.isArray(cfg.config.repos)
     ? (cfg.config.repos as string[])
@@ -131,10 +131,40 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
     capabilities: { postNote: false, incrementalSync: true },
     redactRaw: redactGithubRaw,
 
+    async verify() {
+      const me = await get("/user");
+      const identity = me?.login ?? undefined;
+      // Repo listing needs a scope the ticket reads don't; treat it as a bonus.
+      try {
+        const repos = await get("/user/repos?per_page=100&sort=updated");
+        return {
+          identity,
+          groups: (Array.isArray(repos) ? repos : []).map((r: any) => ({
+            key: r.full_name,
+            name: r.full_name,
+          })),
+        };
+      } catch (e) {
+        return {
+          identity,
+          groups: [],
+          groupsNote: e instanceof Error ? e.message : String(e),
+        };
+      }
+    },
+
     async fetchItem(externalId: string): Promise<RawWorkItem> {
       const { repo, number } = parseRef(externalId);
       const issue = await get(`/repos/${repo}/issues/${number}`);
-      const comments = await get(`/repos/${repo}/issues/${number}/comments`);
+      const comments: any[] = [];
+      for (let page = 1; ; page++) {
+        const batch = await get(
+          `/repos/${repo}/issues/${number}/comments?per_page=100&page=${page}`,
+        );
+        const arr = Array.isArray(batch) ? batch : [];
+        comments.push(...arr);
+        if (arr.length < 100) break;
+      }
       const body: RawMessage = {
         externalId: `${repo}#body${issue.number}`,
         author: issue.user?.login,
@@ -145,9 +175,7 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
       };
       const messages = [
         body,
-        ...(Array.isArray(comments)
-          ? comments.map((c) => commentToMessage(repo, c))
-          : []),
+        ...comments.map((c) => commentToMessage(repo, c)),
       ].sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
       return issueToItem(repo, issue, messages);
     },

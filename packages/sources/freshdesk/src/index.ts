@@ -61,7 +61,7 @@ function redactFreshdeskRaw(
 
 /** Freshdesk adapter. Uses *_text fields, so no HTML stripping is needed. */
 export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
-  const token = freshdeskToken(cfg.slug);
+  const token = cfg.token || freshdeskToken(cfg.slug);
   const auth = "Basic " + Buffer.from(`${token}:X`).toString("base64");
   const base = cfg.baseUrl.replace(/\/$/, "");
   const api = base + "/api/v2";
@@ -75,10 +75,47 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
     return res.json();
   }
 
-  function mapConversation(c: any): RawMessage {
+  let agentNames: Map<string, string> | null = null;
+  /** Best-effort: a non-admin key may not list agents, and unnamed turns still read fine. */
+  async function loadAgentNames(): Promise<Map<string, string>> {
+    if (agentNames) return agentNames;
+    const names = new Map<string, string>();
+    try {
+      for (let page = 1; page <= 5; page++) {
+        const batch = await get(`/agents?per_page=100&page=${page}`);
+        if (!Array.isArray(batch) || batch.length === 0) break;
+        for (const a of batch) {
+          const n = a?.contact?.name;
+          if (a?.id != null && n) names.set(String(a.id), n);
+        }
+        if (batch.length < 100) break;
+      }
+    } catch {
+      /* keep whatever was collected */
+    }
+    agentNames = names;
+    return names;
+  }
+
+  function senderLabel(c: any, names: Map<string, string>): string | undefined {
+    if (c.automation_id != null) return "support (automated)";
+    if (c.incoming) {
+      const m = String(c.from_email ?? "").match(/[\w.+-]+@[\w.-]+/);
+      if (m) return m[0].toLowerCase();
+    }
+    if (c.user_id != null) {
+      const n = names.get(String(c.user_id));
+      if (n) return n;
+    }
+    return undefined;
+  }
+
+  function mapConversation(c: any, names: Map<string, string>): RawMessage {
     return {
       externalId: String(c.id),
       author: c.user_id != null ? String(c.user_id) : undefined,
+      authorLabel: senderLabel(c, names),
+      automated: c.automation_id != null || c.auto_response === true,
       visibility: c.private ? "private" : "public",
       direction: c.incoming ? "incoming" : "outgoing",
       bodyText: c.body_text ?? "",
@@ -109,12 +146,49 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
     capabilities: { postNote: true, incrementalSync: true },
     redactRaw: redactFreshdeskRaw,
 
+    async verify() {
+      const me = await get("/agents/me");
+      const identity = me?.contact?.email ?? me?.contact?.name ?? undefined;
+      // /groups is admin-only; a plain agent key 403s here and still reads
+      // tickets fine, so the failure is reported, not thrown.
+      try {
+        const groups = await get("/groups?per_page=100");
+        return {
+          identity,
+          groups: (Array.isArray(groups) ? groups : []).map((g: any) => ({
+            key: String(g.id),
+            name: g.name ?? String(g.id),
+          })),
+        };
+      } catch (e) {
+        return {
+          identity,
+          groups: [],
+          groupsNote: e instanceof Error ? e.message : String(e),
+        };
+      }
+    },
+
     async fetchItem(externalId: string): Promise<RawWorkItem> {
       const t = await get(`/tickets/${externalId}?include=requester`);
-      const convos = await get(`/tickets/${externalId}/conversations`);
+      // Conversations page at 30 (the API default); per_page is unreliable on
+      // some endpoints, so the loop keys on the observed default instead.
+      const convos: any[] = [];
+      for (let page = 1; page <= 500; page++) {
+        const batch = await get(
+          `/tickets/${externalId}/conversations?page=${page}`,
+        );
+        if (!Array.isArray(batch) || batch.length === 0) break;
+        convos.push(...batch);
+        if (batch.length < 30) break;
+      }
+      const names = convos.some((c) => !c.incoming && c.user_id != null)
+        ? await loadAgentNames()
+        : new Map<string, string>();
       const description: RawMessage = {
         externalId: `desc-${t.id}`,
         author: t.requester_id != null ? String(t.requester_id) : undefined,
+        authorLabel: t.requester?.email?.toLowerCase(),
         visibility: "public",
         direction: "incoming",
         bodyText: t.description_text ?? "",
@@ -123,7 +197,7 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
       };
       const messages = [
         description,
-        ...(Array.isArray(convos) ? convos.map(mapConversation) : []),
+        ...convos.map((c) => mapConversation(c, names)),
       ].sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
       return metadataToItem(t, messages);
     },
@@ -145,6 +219,18 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
 
       const nextCursor = raw.length < 100 ? undefined : String(page + 1);
       return { items, nextCursor };
+    },
+
+    async deleteNote(messageId) {
+      const res = await fetch(`${api}/conversations/${messageId}`, {
+        method: "DELETE",
+        headers: { Authorization: auth },
+      });
+      // already gone is the desired end state, not a failure
+      if (!res.ok && res.status !== 404)
+        throw new Error(
+          `Freshdesk conversation DELETE -> ${res.status} ${await res.text()}`,
+        );
     },
 
     async postNote(externalId, body, o) {
