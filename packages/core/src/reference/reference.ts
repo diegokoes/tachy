@@ -1,3 +1,4 @@
+import type { TransactionSql } from "postgres";
 import { sql } from "../infra/db";
 import { chunkText } from "../search/chunk";
 import {
@@ -13,6 +14,9 @@ export interface ReferenceDocInput {
   teamId?: string | null;
   createdById?: string | null;
   source?: string;
+  /** Project this came from, and the page path within it, for wiki imports. */
+  sourceProjectId?: string | null;
+  externalKey?: string | null;
   title: string;
   body: string;
   tags?: string[];
@@ -33,19 +37,51 @@ export interface ReferenceDocUpdate {
   expectedVersion?: number;
 }
 
-async function embedChunks(docId: string, body: string): Promise<number> {
+interface ChunkVectors {
+  chunks: string[];
+  ordinals: number[];
+  literals: string[];
+}
+
+async function chunkVectors(body: string): Promise<ChunkVectors> {
   const chunks = chunkText(body);
-  if (!chunks.length) return 0;
+  if (!chunks.length) return { chunks: [], ordinals: [], literals: [] };
   const vectors = await embedPassages(chunks);
-  const ordinals = chunks.map((_, i) => i);
-  const literals = vectors.map(toVectorLiteral);
-  await sql`
+  return {
+    chunks,
+    ordinals: chunks.map((_, i) => i),
+    literals: vectors.map(toVectorLiteral),
+  };
+}
+
+async function insertChunks(
+  db: typeof sql | TransactionSql,
+  docId: string,
+  v: ChunkVectors,
+): Promise<number> {
+  if (!v.chunks.length) return 0;
+  await db`
     insert into reference_doc_chunks (doc_id, ordinal, chunk_text, embedding)
     select ${docId}, u.ordinal, u.chunk_text, u.embedding::vector
-    from unnest(${ordinals}::int[], ${chunks}::text[], ${literals}::text[])
+    from unnest(${v.ordinals}::int[], ${v.chunks}::text[], ${v.literals}::text[])
       as u(ordinal, chunk_text, embedding)
   `;
-  return chunks.length;
+  return v.chunks.length;
+}
+
+/** The live doc for a wiki page, so a re-import supersedes instead of duplicating. */
+async function currentWikiDocId(
+  sourceProjectId: string,
+  externalKey: string,
+): Promise<string | undefined> {
+  const [row] = await sql`
+    select id from reference_docs
+    where source_project_id = ${sourceProjectId} and external_key = ${externalKey}
+      and status <> 'archived'
+    order by created_at desc
+    limit 1
+  `;
+  return row?.id as string | undefined;
 }
 
 export async function saveReferenceDoc(i: ReferenceDocInput) {
@@ -58,21 +94,29 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
         tags: string[];
       }
     | undefined;
-  if (i.supersedes) {
+  const supersedes =
+    i.supersedes ??
+    (i.sourceProjectId && i.externalKey
+      ? await currentWikiDocId(i.sourceProjectId, i.externalKey)
+      : undefined);
+  if (supersedes) {
     const [row] = await sql`
-      select id, product_id, team_id, tags from reference_docs where id = ${i.supersedes}
+      select id, product_id, team_id, tags from reference_docs where id = ${supersedes}
     `;
-    if (!row) throw notFound(`Reference doc '${i.supersedes}' not found`);
+    if (!row) throw notFound(`Reference doc '${supersedes}' not found`);
     predecessor = row as typeof predecessor;
   }
-  const doc = await sql.begin(async (tx) => {
+  const vectors = await chunkVectors(i.body);
+  const { doc, chunks } = await sql.begin(async (tx) => {
     const [row] = await tx`
       insert into reference_docs
-        (product_id, team_id, created_by, source, title, body, tags, status, structured, doc_version)
+        (product_id, team_id, created_by, source, source_project_id, external_key,
+         title, body, tags, status, structured, doc_version)
       values
         (${i.productId ?? predecessor?.product_id ?? null},
          ${i.teamId ?? predecessor?.team_id ?? null},
          ${i.createdById ?? null}, ${i.source ?? null},
+         ${i.sourceProjectId ?? null}, ${i.externalKey ?? null},
          ${i.title}, ${i.body}, ${i.tags ?? predecessor?.tags ?? []},
          ${i.status ?? "approved"}, ${sql.json(structured as any)}, ${i.docVersion ?? null})
       returning id, status, version
@@ -83,9 +127,9 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
         set status = 'archived', superseded_by = ${row.id}
         where id = ${predecessor.id}
       `;
-    return row;
+    const n = await insertChunks(tx, row.id, vectors);
+    return { doc: row, chunks: n };
   });
-  const chunks = await embedChunks(doc.id, i.body);
   return {
     id: doc.id as string,
     status: doc.status as string,
@@ -181,26 +225,32 @@ export async function updateReferenceDoc(
     docVersion: "docVersion" in patch ? patch.docVersion : current.doc_version,
   };
   const bodyChanged = merged.body !== current.body;
+  const vectors = bodyChanged ? await chunkVectors(merged.body) : undefined;
 
-  const [row] = await sql`
-    update reference_docs set
-      title       = ${merged.title},
-      body        = ${merged.body},
-      tags        = ${merged.tags ?? []},
-      status      = ${merged.status},
-      source      = ${merged.source ?? null},
-      structured  = ${sql.json((merged.structured ?? {}) as any)},
-      doc_version = ${merged.docVersion ?? null},
-      version     = version + 1
-    where id = ${id}
-    returning id, status, version
-  `;
-
-  if (bodyChanged) {
-    await sql`delete from reference_doc_chunks where doc_id = ${id}`;
-    await embedChunks(id, merged.body);
-  }
-  return row;
+  return sql.begin(async (tx) => {
+    const [row] = await tx`
+      update reference_docs set
+        title       = ${merged.title},
+        body        = ${merged.body},
+        tags        = ${merged.tags ?? []},
+        status      = ${merged.status},
+        source      = ${merged.source ?? null},
+        structured  = ${sql.json((merged.structured ?? {}) as any)},
+        doc_version = ${merged.docVersion ?? null},
+        version     = version + 1
+      where id = ${id} and version = ${current.version}
+      returning id, status, version
+    `;
+    if (!row)
+      throw conflict(
+        `Version conflict: reference doc '${id}' was updated concurrently`,
+      );
+    if (vectors) {
+      await tx`delete from reference_doc_chunks where doc_id = ${id}`;
+      await insertChunks(tx, id, vectors);
+    }
+    return row;
+  });
 }
 
 export interface ReferenceSearchOptions {
@@ -221,21 +271,24 @@ export async function searchReferenceDocs(
   if (!query.trim()) return [];
   const qvec = toVectorLiteral(await embedQuery(query));
   return sql`
-    select d.id, d.title, d.tags, d.product_id, d.team_id, d.status, d.doc_version, d.version, d.structured,
-           (array_agg(c.chunk_text order by (c.embedding <=> ${qvec}::vector) asc))[1] as snippet,
-           ts_rank(d.search_tsv, plainto_tsquery('simple', ${query})) as fts_rank,
-           similarity(d.search_text, ${query}) as trgm_sim,
-           max(coalesce(1 - (c.embedding <=> ${qvec}::vector), 0)) as cos_sim,
-           ts_rank(d.search_tsv, plainto_tsquery('simple', ${query}))
-             + similarity(d.search_text, ${query})
-             + max(coalesce(1 - (c.embedding <=> ${qvec}::vector), 0)) as score
-    from reference_docs d
-    left join reference_doc_chunks c on c.doc_id = d.id
-    where d.status = 'approved'
-      ${opts.productId ? (opts.includeUnscoped ? sql`and (d.product_id = ${opts.productId} or d.product_id is null)` : sql`and d.product_id = ${opts.productId}`) : sql``}
-      ${opts.teamId ? (opts.includeUnscoped ? sql`and (d.team_id = ${opts.teamId} or d.team_id is null)` : sql`and d.team_id = ${opts.teamId}`) : sql``}
-      ${opts.tags && opts.tags.length ? sql`and d.tags && ${opts.tags}` : sql``}
-    group by d.id
+    select * from (
+      select d.id, d.title, d.tags, d.product_id, d.team_id, d.status, d.doc_version, d.version, d.structured,
+             (array_agg(c.chunk_text order by (c.embedding <=> ${qvec}::vector) asc))[1] as snippet,
+             ts_rank(d.search_tsv, plainto_tsquery('simple', ${query})) as fts_rank,
+             similarity(d.search_text, ${query}) as trgm_sim,
+             max(coalesce(1 - (c.embedding <=> ${qvec}::vector), 0)) as cos_sim,
+             ts_rank(d.search_tsv, plainto_tsquery('simple', ${query}))
+               + similarity(d.search_text, ${query})
+               + max(coalesce(1 - (c.embedding <=> ${qvec}::vector), 0)) as score
+      from reference_docs d
+      left join reference_doc_chunks c on c.doc_id = d.id
+      where d.status = 'approved'
+        ${opts.productId ? (opts.includeUnscoped ? sql`and (d.product_id = ${opts.productId} or d.product_id is null)` : sql`and d.product_id = ${opts.productId}`) : sql``}
+        ${opts.teamId ? (opts.includeUnscoped ? sql`and (d.team_id = ${opts.teamId} or d.team_id is null)` : sql`and d.team_id = ${opts.teamId}`) : sql``}
+        ${opts.tags && opts.tags.length ? sql`and d.tags && ${opts.tags}` : sql``}
+      group by d.id
+    ) ranked
+    where score > 0.05
     order by score desc
     limit ${limit}
   `;

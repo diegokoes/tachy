@@ -75,7 +75,14 @@ export const FEEDBACK_KINDS = [
   "note",
   "deprecation",
 ] as const;
-export const RUN_MODES = ["ingest", "consult", "sync", "create", "code"] as const;
+export const RUN_MODES = [
+  "ingest",
+  "consult",
+  "sync",
+  "create",
+  "code",
+  "chat",
+] as const;
 
 export const knowledgeStatusSchema = z.enum(KNOWLEDGE_STATUSES);
 export const referenceStatusSchema = z.enum(REFERENCE_STATUSES);

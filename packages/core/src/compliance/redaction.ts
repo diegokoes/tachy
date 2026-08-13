@@ -151,6 +151,12 @@ export function redactNormalized(
     messages: item.messages.map((m) => ({
       ...m,
       author: m.author ? map.token("USER", m.author) : m.author,
+      authorLabel: m.authorLabel
+        ? map.token(
+            m.authorLabel.includes("@") ? "EMAIL" : "USER",
+            m.authorLabel,
+          )
+        : m.authorLabel,
       bodyText: scrub(m.bodyText),
     })),
   };

@@ -149,6 +149,19 @@ export async function userSoleTeamId(userId: string): Promise<string | null> {
   return rows.length === 1 ? (rows[0].team_id as string) : null;
 }
 
+export async function userTeams(
+  userId: string,
+): Promise<{ team_id: string; team_slug: string }[]> {
+  const rows = await sql`
+    select t.id as team_id, t.slug as team_slug
+    from team_members tm
+    join teams t on t.id = tm.team_id
+    where tm.user_id = ${userId}
+    order by t.slug
+  `;
+  return rows as unknown as { team_id: string; team_slug: string }[];
+}
+
 export interface TeamMemberRow {
   user_id: string;
   email: string;

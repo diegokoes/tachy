@@ -399,9 +399,13 @@ export async function updateKnowledgeEntry(
       structured         = ${sql.json((merged.structured ?? {}) as any)},
       version            = version + 1
       ${contentChanged ? (vec ? sql`, embedding = ${vec}::vector` : sql`, embedding = null`) : sql``}
-    where id = ${id}
+    where id = ${id} and version = ${current.version}
     returning id, status, version
   `;
+  if (!row)
+    throw conflict(
+      `Version conflict: knowledge entry '${id}' was updated concurrently`,
+    );
   return row;
 }
 

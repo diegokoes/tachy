@@ -15,10 +15,27 @@ export interface ListOptions {
   cursor?: string;
 }
 
+/** Result of a credential/connectivity check against the remote system. */
+export interface SourceProbe {
+  /** Who the token authenticates as, when the API reports it. */
+  identity?: string;
+  /** The groups this token can see — the `external_group_key` values a product map needs. */
+  groups: { key: string; name: string }[];
+  /**
+   * Why `groups` is empty, when listing them failed. Group discovery is a
+   * convenience — a token that cannot list groups (a non-admin Freshdesk agent
+   * key, a narrow GitHub scope) still works for the fetches tachy actually
+   * does, so this never fails the probe.
+   */
+  groupsNote?: string;
+}
+
 export interface WorkItemSource {
   readonly type: string;
   readonly capabilities: SourceCapabilities;
   fetchItem(externalId: string): Promise<RawWorkItem>;
+  /** Cheapest authenticated call the API offers; throws when the token is bad. */
+  verify?(): Promise<SourceProbe>;
   listItems(
     opts: ListOptions,
   ): Promise<{ items: RawWorkItem[]; nextCursor?: string }>;
@@ -27,6 +44,11 @@ export interface WorkItemSource {
     body: string,
     opts?: { private?: boolean },
   ): Promise<void>;
+  /**
+   * Remove a note this system posted earlier, by its message id. Only ever
+   * called for notes tachy itself wrote and can still identify.
+   */
+  deleteNote?(messageId: string): Promise<void>;
   /**
    * Optional PII scrub of the source-specific `raw` payload for redaction mode.
    * Only the adapter knows its payload's field shape. Must return a deep copy and
@@ -41,4 +63,6 @@ export type SourceFactory = (cfg: {
   baseUrl: string;
   slug: string;
   config: Record<string, unknown>;
+  /** Resolved from the credential vault; falls back to the env var when absent. */
+  token?: string;
 }) => WorkItemSource;

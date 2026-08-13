@@ -12,6 +12,7 @@ export {
   linkRepo,
   listRepos,
   getRepoBySlug,
+  repoScope,
   updateRepoStatus,
   deleteRepo,
   sweepInterruptedIndexes,

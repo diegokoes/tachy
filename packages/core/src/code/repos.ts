@@ -1,6 +1,9 @@
 import { sql } from "../infra/db";
 import { badInput, notFound } from "../infra/errors";
 import { getProductIdBySlug } from "../catalog/products";
+import { resolveComponentStrict } from "../catalog/components";
+import { getSourceProject } from "../sources/projects";
+import type { EntryScope } from "../access/permissions";
 import { removeClone } from "./git";
 
 export interface RepoInput {
@@ -8,6 +11,8 @@ export interface RepoInput {
   url: string;
   productSlug?: string;
   sourceSlug?: string;
+  sourceProjectId?: string | null;
+  componentSlug?: string | null;
   defaultBranch?: string;
   config?: Record<string, unknown>;
 }
@@ -19,6 +24,10 @@ export interface RepoRow {
   product_id: string | null;
   product_slug: string | null;
   source_slug: string | null;
+  source_project_id: string | null;
+  project_key: string | null;
+  component_id: string | null;
+  component_slug: string | null;
   default_branch: string;
   config: Record<string, unknown>;
   index_status: string;
@@ -35,22 +44,50 @@ export async function linkRepo(i: RepoInput) {
     throw badInput(
       `invalid repo slug '${i.slug}' (lowercase letters, digits, hyphens)`,
     );
-  const productId = i.productSlug
-    ? await getProductIdBySlug(i.productSlug)
-    : null;
-  if (i.sourceSlug) {
-    const [conn] =
-      await sql`select slug from source_connections where slug = ${i.sourceSlug}`;
-    if (!conn) throw badInput(`Unknown source connection: ${i.sourceSlug}`);
+  let productId = i.productSlug ? await getProductIdBySlug(i.productSlug) : null;
+  let sourceSlug = i.sourceSlug ?? null;
+
+  if (i.sourceProjectId) {
+    const project = await getSourceProject(i.sourceProjectId);
+    if (!project.product_id)
+      throw badInput(
+        `project '${project.external_key}' is a tracker — it holds no code, so a repo cannot belong to it`,
+      );
+    if (productId && productId !== project.product_id)
+      throw badInput(
+        `repo product and project product disagree — project '${project.external_key}' belongs to '${project.product_slug}'`,
+      );
+    productId = project.product_id;
+    sourceSlug = sourceSlug ?? project.source_slug;
   }
+
+  if (sourceSlug) {
+    const [conn] =
+      await sql`select slug from source_connections where slug = ${sourceSlug}`;
+    if (!conn) throw badInput(`Unknown source connection: ${sourceSlug}`);
+  }
+
+  let componentId: string | null = null;
+  if (i.componentSlug) {
+    if (!productId)
+      throw badInput(
+        "a repo needs a product before it can implement a component — pass product or a project",
+      );
+    componentId = (await resolveComponentStrict(productId, i.componentSlug)).id;
+  }
+
   const [row] = await sql`
-    insert into repos (slug, url, product_id, source_slug, default_branch, config)
-    values (${i.slug}, ${i.url}, ${productId}, ${i.sourceSlug ?? null},
+    insert into repos (slug, url, product_id, source_slug, source_project_id, component_id,
+                       default_branch, config)
+    values (${i.slug}, ${i.url}, ${productId}, ${sourceSlug},
+            ${i.sourceProjectId ?? null}, ${componentId},
             ${i.defaultBranch ?? "main"}, ${sql.json((i.config ?? {}) as any)})
     on conflict (slug) do update set
       url = excluded.url,
       product_id = excluded.product_id,
       source_slug = excluded.source_slug,
+      source_project_id = excluded.source_project_id,
+      component_id = excluded.component_id,
       default_branch = excluded.default_branch,
       config = excluded.config
     returning id, slug, url, default_branch, index_status
@@ -58,22 +95,49 @@ export async function linkRepo(i: RepoInput) {
   return row;
 }
 
-export async function listRepos(): Promise<RepoRow[]> {
+const repoSelect = () => sql`
+  select r.*, p.slug as product_slug, c.slug as component_slug,
+         sp.external_key as project_key
+  from repos r
+  left join products p on p.id = r.product_id
+  left join components c on c.id = r.component_id
+  left join source_projects sp on sp.id = r.source_project_id
+`;
+
+export async function listRepos(
+  opts: {
+    productId?: string;
+    componentId?: string;
+    sourceProjectId?: string;
+  } = {},
+): Promise<RepoRow[]> {
   return (await sql`
-    select r.*, p.slug as product_slug
-    from repos r left join products p on p.id = r.product_id
+    ${repoSelect()}
+    where 1=1
+      ${opts.productId ? sql`and r.product_id = ${opts.productId}` : sql``}
+      ${opts.componentId ? sql`and r.component_id = ${opts.componentId}` : sql``}
+      ${opts.sourceProjectId ? sql`and r.source_project_id = ${opts.sourceProjectId}` : sql``}
     order by r.slug
   `) as unknown as RepoRow[];
 }
 
 export async function getRepoBySlug(slug: string): Promise<RepoRow> {
+  const [row] = await sql`${repoSelect()} where r.slug = ${slug}`;
+  if (!row) throw notFound(`Repo '${slug}' not found`);
+  return row as unknown as RepoRow;
+}
+
+/** The scope a caller must be able to edit to touch this repo. */
+export async function repoScope(slug: string): Promise<EntryScope> {
   const [row] = await sql`
-    select r.*, p.slug as product_slug
-    from repos r left join products p on p.id = r.product_id
+    select r.product_id, coalesce(p.team_id, sp.team_id) as team_id
+    from repos r
+    left join products p on p.id = r.product_id
+    left join source_projects sp on sp.id = r.source_project_id
     where r.slug = ${slug}
   `;
   if (!row) throw notFound(`Repo '${slug}' not found`);
-  return row as unknown as RepoRow;
+  return { productId: row.product_id, teamId: row.team_id };
 }
 
 export async function updateRepoStatus(

@@ -39,6 +39,7 @@ export {
   listTeamMembers,
   setTeamMember,
   userSoleTeamId,
+  userTeams,
 } from "./access";
 export type { UserRole, TeamRole, UserRow, TeamMemberRow } from "./access";
 export { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from "./access";
@@ -79,8 +80,10 @@ export {
   deletePref,
   listVisibleArtifacts,
   getArtifact,
+  getArtifactBySlug,
   upsertArtifact,
   deleteArtifact,
+  artifactSpecSchema,
 } from "./config";
 export type {
   Scope,
@@ -91,6 +94,7 @@ export type {
   PrefSource,
   ArtifactMeta,
   ArtifactRow,
+  ArtifactSpec,
 } from "./config";
 export { secretsEnabled } from "./infra";
 
@@ -146,6 +150,43 @@ export type {
 
 export { ingestWorkItem, extractAdoRefs } from "./work-items";
 export type { IngestedItem } from "./work-items";
+export {
+  WORK_ITEM_LINK_KINDS,
+  addWorkItemLink,
+  listWorkItemLinks,
+  deleteWorkItemLink,
+  recordAdoRefs,
+} from "./work-items";
+export type { WorkItemLinkKind, WorkItemLinkInput } from "./work-items";
+export {
+  compactWorkItem,
+  compactMessages,
+  normalizeBody,
+  parseMailDate,
+  splitQuotedBlocks,
+  splitPrologue,
+  renderCompactScript,
+  renderCompactHtml,
+  splitNoteBody,
+  summarizeCompaction,
+  compactForLlm,
+  normalizeAttachments,
+  formatBytes,
+  describeAttachment,
+  looksStructured,
+  IMAGE_MARK,
+  TRANSCRIPT_MARKER,
+  COMPACT_MIN_CHARS,
+  COMPACT_MIN_SAVING,
+} from "./work-items";
+export type {
+  CompactedWorkItem,
+  CompactTurn,
+  CompactStats,
+  CompactOptions,
+  CompactMeta,
+  CompactAttachment,
+} from "./work-items";
 export { recordRun, estimateCostUsd } from "./analytics";
 export type { RunInput } from "./analytics";
 
@@ -206,11 +247,38 @@ export type { ResolvedSource } from "./sources";
 export {
   listSourceConnections,
   addSourceConnection,
-  listSourceProductMaps,
-  addSourceProductMap,
-  deleteSourceProductMap,
+  deleteSourceConnection,
 } from "./sources";
-export type { SourceConnectionInput, SourceProductMapInput } from "./sources";
+export type { SourceConnectionInput } from "./sources";
+export {
+  SOURCE_PROJECT_ROLES,
+  listSourceProjects,
+  getSourceProject,
+  resolveSourceProject,
+  addSourceProject,
+  updateSourceProject,
+  deleteSourceProject,
+  sourceProjectScope,
+  listProjectAreaMap,
+  setProjectAreaMap,
+  deleteProjectAreaMap,
+  resolveAreaComponent,
+  resolveProjectContext,
+  resolveProjectContextStrict,
+  routeIngest,
+} from "./sources";
+export type {
+  SourceProjectRole,
+  SourceProjectInput,
+  SourceProjectPatch,
+  SourceProjectRow,
+  ProjectWiki,
+  AreaMapInput,
+  ProjectContext,
+  ProjectContextQuery,
+  ProjectRepoContext,
+  IngestRoute,
+} from "./sources";
 
 export {
   embedPassage,
@@ -222,6 +290,8 @@ export {
 export { chunkText } from "./search";
 
 export * from "./code";
+
+export * from "./exports";
 
 export {
   TokenMap,

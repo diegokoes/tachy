@@ -2,17 +2,21 @@ import { sql } from "../infra/db";
 import { badInput, conflict, notFound } from "../infra/errors";
 
 export async function getProductIdBySlug(slug: string): Promise<string> {
-  const [row] = await sql`
+  const rows = await sql`
     select id from products
     where slug = ${slug}
        or exists (select 1 from unnest(aliases) a where lower(a) = lower(${slug}))
-    limit 1
+    limit 2
   `;
-  if (!row)
+  if (!rows.length)
     throw badInput(
       `Unknown product '${slug}'. Call list_products or add_product first.`,
     );
-  return row.id as string;
+  if (rows.length > 1)
+    throw badInput(
+      `Ambiguous product '${slug}' — it exists in multiple teams; use a unique alias or rename one of the products.`,
+    );
+  return rows[0].id as string;
 }
 
 export async function listTeams() {
@@ -135,12 +139,16 @@ export async function deleteProduct(productId: string) {
     select
       (select count(*)::int from knowledge_entries where product_id = ${productId}) as entries,
       (select count(*)::int from work_items where product_id = ${productId}) as work_items,
-      (select count(*)::int from reference_docs where product_id = ${productId}) as docs
+      (select count(*)::int from reference_docs where product_id = ${productId}) as docs,
+      (select count(*)::int from source_projects where product_id = ${productId}) as projects,
+      (select count(*)::int from repos where product_id = ${productId}) as repos
   `;
   const parts = [
     refs.entries > 0 ? `${refs.entries} knowledge entr(y/ies)` : null,
     refs.work_items > 0 ? `${refs.work_items} work item(s)` : null,
     refs.docs > 0 ? `${refs.docs} reference doc(s)` : null,
+    refs.projects > 0 ? `${refs.projects} source project(s)` : null,
+    refs.repos > 0 ? `${refs.repos} repo(s)` : null,
   ].filter(Boolean);
   if (parts.length)
     throw conflict(
