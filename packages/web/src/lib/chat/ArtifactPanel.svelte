@@ -5,6 +5,19 @@
   import type { NamedRow } from "../types";
   import AsciiModal from "../AsciiModal.svelte";
   import AsciiSelect from "../AsciiSelect.svelte";
+  import OutputSpecEditor, {
+    emptyColumn,
+    toArtifactSpec,
+    type ArtifactSpec,
+    type OutputSpec,
+  } from "./OutputSpecEditor.svelte";
+  import { gsap, reducedMotion } from "../gsap";
+
+  let tabBtn = $state<HTMLButtonElement>();
+  let tabIcon = $state<HTMLSpanElement>();
+  let spinTween: gsap.core.Tween | undefined;
+  let pulseTween: gsap.core.Tween | undefined;
+  let glowTween: gsap.core.Tween | undefined;
 
   type ArtifactScope = "user" | "team" | "global";
 
@@ -16,6 +29,7 @@
     slug: string;
     title: string;
     description: string | null;
+    spec: ArtifactSpec | null;
     updated_at: string;
   }
 
@@ -59,7 +73,7 @@
         return;
       } catch {}
     }
-    teams = (session.me?.team_admin ?? []).map((t) => ({
+    teams = (session.me?.teams ?? []).map((t) => ({
       id: t.team_id,
       slug: t.team_slug,
     }));
@@ -74,6 +88,37 @@
     }
   }
 
+  $effect(() => {
+    if (!tabIcon || reducedMotion()) return;
+    glowTween?.kill();
+    glowTween = undefined;
+    if (chat.artifact) {
+      const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+      glowTween = gsap.fromTo(
+        tabIcon,
+        { textShadow: `0 0 0px ${accent}` },
+        { textShadow: `0 0 8px ${accent}, 0 0 14px ${accent}`, duration: 1.6, yoyo: true, repeat: -1, ease: "sine.inOut" },
+      );
+    } else {
+      gsap.set(tabIcon, { textShadow: "none" });
+    }
+  });
+
+  $effect(() => {
+    if (!tabIcon || reducedMotion()) return;
+    spinTween?.kill();
+    pulseTween?.kill();
+    spinTween = undefined;
+    pulseTween = undefined;
+    if (open) {
+      gsap.set(tabIcon, { rotation: 0, scale: 1 });
+      spinTween = gsap.to(tabIcon, { rotation: 360, duration: 1.8, ease: "none", repeat: -1 });
+      pulseTween = gsap.to(tabIcon, { scale: 1.22, duration: 0.9, ease: "sine.inOut", yoyo: true, repeat: -1 });
+    } else {
+      gsap.to(tabIcon, { rotation: 0, scale: 1, duration: 0.3, ease: "power2.out" });
+    }
+  });
+
   function select(a: ArtifactMeta) {
     chat.artifact =
       chat.artifact?.id === a.id ? undefined : { id: a.id, title: a.title };
@@ -82,16 +127,20 @@
 
   function canWrite(a: ArtifactMeta): boolean {
     if (a.scope === "user") return true;
-    if (a.scope === "team") return canCurateScope({ team_id: a.team_id });
+    if (a.scope === "team")
+      return (
+        session.me?.role === "admin" ||
+        (session.me?.teams ?? []).some((t) => t.team_id === a.team_id)
+      );
     return session.me?.role === "admin";
   }
 
   const teamOptions = $derived(teams.map((t) => t.slug));
   const scopeOptions = $derived([
-    { value: "user", label: "user (only you)" },
-    ...(teamOptions.length ? [{ value: "team", label: "team" }] : []),
+    { value: "user", label: "user" },
+    ...(teams.length ? [{ value: "team", label: "team" }] : []),
     ...(session.me?.role === "admin"
-      ? [{ value: "global", label: "global (everyone)" }]
+      ? [{ value: "global", label: "global" }]
       : []),
   ]);
   const teamSlugFor = (teamId: string | null) =>
@@ -108,6 +157,15 @@
   let fTitle = $state("");
   let fDescription = $state("");
   let fBody = $state("");
+  let fHasOutput = $state(false);
+  let fOutput = $state<OutputSpec>({ format: "xlsx", columns: [] });
+
+  const blankOutput = (): OutputSpec => ({
+    format: "xlsx",
+    sheet: "",
+    filename: "",
+    columns: [emptyColumn()],
+  });
 
   const kebab = (s: string) =>
     s
@@ -124,6 +182,8 @@
     fTitle = "";
     fDescription = "";
     fBody = "";
+    fHasOutput = false;
+    fOutput = blankOutput();
     editorError = null;
     editorOpen = true;
   }
@@ -137,6 +197,10 @@
     fTitle = a.title;
     fDescription = a.description ?? "";
     fBody = "";
+    fHasOutput = !!a.spec?.output;
+    fOutput = a.spec?.output
+      ? { sheet: "", filename: "", ...a.spec.output }
+      : blankOutput();
     editorError = null;
     editorOpen = true;
     try {
@@ -154,6 +218,11 @@
       editorError = "title, slug and body are required";
       return;
     }
+    const spec = toArtifactSpec(fHasOutput, fOutput);
+    if (fHasOutput && !spec) {
+      editorError = "give at least one output column a key, or turn off the file output";
+      return;
+    }
     editorBusy = true;
     editorError = null;
     try {
@@ -164,6 +233,7 @@
         title: fTitle.trim(),
         description: fDescription.trim() || undefined,
         body: fBody,
+        spec: spec ?? null,
       });
       editorOpen = false;
       await load();
@@ -196,16 +266,13 @@
 </script>
 
 <button
+  bind:this={tabBtn}
   class="edge-tab"
   class:active={open || !!chat.artifact}
   onclick={toggle}
   title="Artifacts — reusable prompt templates to attach as context"
   aria-label="Artifacts"
->
-  <span class="tab-logo" aria-hidden="true">◈</span>
-  <span class="tab-label" aria-hidden="true">ARTIFACTS</span>
-  <span class="tab-logo" aria-hidden="true">◈</span>
-</button>
+><span bind:this={tabIcon} class="tab-icon">⛬</span></button>
 
 {#if open}
   <aside class="flyout">
@@ -214,10 +281,6 @@
       <button class="mini" onclick={openCreate}>+ new</button>
       <button class="ghost fly-close" onclick={() => (open = false)}>✕</button>
     </div>
-    <p class="fly-hint muted">
-      Reusable context injected ahead of your message — e.g. the style and
-      structure for a docs-improvement report.
-    </p>
     {#if error}<p class="error">{error}</p>{/if}
     {#if loading}
       <p class="muted">loading…</p>
@@ -232,6 +295,10 @@
             <button class="art-pick" onclick={() => select(a)}>
               <span class="art-title">
                 {chat.artifact?.id === a.id ? "› " : ""}{a.title}
+                {#if a.spec?.output}<span
+                    class="art-out"
+                    title="produces a {a.spec.output.format} file"
+                  >⤓ {a.spec.output.format}</span>{/if}
               </span>
               {#if a.description}<span class="art-desc">{a.description}</span>{/if}
             </button>
@@ -310,9 +377,10 @@
         <textarea
           rows="10"
           bind:value={fBody}
-          placeholder="The prompt/context injected ahead of your message — style, structure, audience…"
+          placeholder="Context to inject"
         ></textarea>
       </label>
+      <OutputSpecEditor bind:enabled={fHasOutput} bind:output={fOutput} />
       {#if editorError}<p class="error">{editorError}</p>{/if}
     </div>
   </AsciiModal>
@@ -320,28 +388,23 @@
 
 <style>
   .edge-tab {
-    align-self: center;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.45rem;
-    max-height: 100%;
-    overflow: hidden;
-    padding: 0.55rem 0.1rem;
+    position: absolute;
+    right: 0.4rem;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 8;
+    padding: 0.45rem 0.5rem;
     border: 1px solid var(--border);
     border-radius: 4px;
-    background: transparent;
+    background: var(--bg);
     color: var(--muted);
-  }
-  .tab-logo {
-    font-size: 0.85rem;
+    font-size: 1.15rem;
     line-height: 1;
+    display: grid;
+    place-items: center;
   }
-  .tab-label {
-    writing-mode: vertical-rl;
-    text-orientation: upright;
-    font-size: 0.58rem;
-    letter-spacing: 0.3em;
+  .tab-icon {
+    display: inline-block;
     line-height: 1;
   }
   .edge-tab:hover,
@@ -353,7 +416,7 @@
   .flyout {
     position: absolute;
     top: 0;
-    right: 0;
+    right: 2.5rem;
     bottom: 0;
     z-index: 7;
     width: min(21rem, 90%);
@@ -394,6 +457,15 @@
     background: var(--panel);
   }
   .art-title { font-size: 0.85rem; }
+  .art-out {
+    margin-left: 0.3rem;
+    padding: 0 0.25rem;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
   .art-desc {
     color: var(--muted);
     font-size: 0.75rem;

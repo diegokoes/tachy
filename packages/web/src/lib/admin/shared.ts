@@ -30,13 +30,60 @@ export type Connection = {
   slug: string;
   base_url: string | null;
   config: Record<string, unknown> | null;
+  /** Scope the caller's API token resolves from; null when none is set. */
+  token_source?: "user" | "team" | "global" | "env" | null;
 };
-export type ProductMap = {
+export type ProjectRole = "knowledge" | "tracker";
+export type ProjectWiki = {
+  identifier: string;
+  name?: string;
+  root_path?: string;
+};
+export type SourceProject = {
   id: string;
+  source_connection_id: string;
   source_slug: string;
-  external_group_key: string;
-  product_slug: string;
-  product_name: string;
+  source_type: string;
+  external_key: string;
+  name: string;
+  role: ProjectRole;
+  product_id: string | null;
+  product_slug: string | null;
+  team_id: string;
+  team_slug: string;
+  wiki: ProjectWiki | Record<string, never>;
+  config: Record<string, unknown>;
+  notes: string | null;
+};
+export type AreaRule = {
+  id: string;
+  area_prefix: string;
+  component_id: string;
+  component_slug: string;
+  component_name: string;
+};
+export type Repo = {
+  id: string;
+  slug: string;
+  url: string;
+  product_id: string | null;
+  product_slug: string | null;
+  source_slug: string | null;
+  source_project_id: string | null;
+  project_key: string | null;
+  component_id: string | null;
+  component_slug: string | null;
+  default_branch: string;
+  config: Record<string, unknown>;
+  index_status: "idle" | "cloning" | "indexing" | "ready" | "error";
+  indexed_commit: string | null;
+  index_error: string | null;
+  file_count: number;
+  chunk_count: number;
+  last_indexed_at: string | null;
+};
+export type Discovered<K extends string, T> = { ok: boolean; error?: string } & {
+  [P in K]?: T[];
 };
 export type Setting<T> = { value: T; source: "db" | "env" | "default" };
 export type SystemInfo = {
@@ -91,6 +138,12 @@ export const TIP = {
   team: "Owning team. One team can own many products.",
   group:
     "The source system's own grouping key: a Freshdesk group id, a GitHub owner/repo…",
+  project:
+    "One project as its source knows it — an Azure DevOps project, a Freshdesk group, a GitHub owner/repo. Registering it is what tells tachy where its items, wiki and code belong.",
+  role: "knowledge: bound to a product — its items become knowledge, and it can own a wiki, repos and area rules. tracker: no product, just a place we create and reassign work items in.",
+  area: "Azure DevOps area path prefix. Items under it are filed on this component automatically; the longest matching prefix wins.",
+  repoComponent:
+    "The component this repo implements. Code search can then be narrowed to it, so a question about one part of the product searches that repo instead of everything.",
 };
 
 export const AGENT_KEY_LABELS: Record<string, string> = {

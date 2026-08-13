@@ -1,6 +1,7 @@
 <script lang="ts">
   import TypeLine from "./TypeLine.svelte";
   import AsciiSelect from "./AsciiSelect.svelte";
+  import AuthShell from "./AuthShell.svelte";
   import { api } from "./api";
   import { csv } from "./admin/shared";
   import { initSession } from "./session.svelte";
@@ -9,6 +10,7 @@
 
   const STEPS = ["welcome", "usage", "admin", "workspace", "compliance", "agent", "review"] as const;
   let step = $state(0);
+  let attempted = $state(false);
   let error = $state<string | null>(null);
   let busy = $state(false);
 
@@ -38,9 +40,17 @@
 
   const namedProducts = $derived(products.filter((p) => p.name.trim()));
 
-  const emailBad = $derived(email.length > 0 && !/\S+@\S+\.\S+/.test(email));
-  const passwordBad = $derived(password.length > 0 && password.length < 10);
-  const matchBad = $derived(password2.length > 0 && password !== password2);
+  // Empty fields only go red once the user has tried to advance, so the form
+  // doesn't shout at them before they have typed anything.
+  const emailBad = $derived(
+    email.length > 0 ? !/\S+@\S+\.\S+/.test(email) : attempted,
+  );
+  const passwordBad = $derived(
+    password.length > 0 ? password.length < 10 : attempted,
+  );
+  const matchBad = $derived(
+    password2.length > 0 ? password !== password2 : attempted,
+  );
   const adminValid = $derived(
     /\S+@\S+\.\S+/.test(email) && password.length >= 10 && password === password2,
   );
@@ -48,10 +58,18 @@
   function next() {
     error = null;
     if (STEPS[step] === "admin" && !adminValid) {
+      attempted = true;
       error = "fix the highlighted fields to continue";
       return;
     }
+    attempted = false;
     step = Math.min(step + 1, STEPS.length - 1);
+  }
+
+  function back() {
+    error = null;
+    attempted = false;
+    step = Math.max(0, step - 1);
   }
 
   async function finish() {
@@ -92,8 +110,8 @@
   }
 </script>
 
-<div class="wizard-wrap">
-  <div class="wizard">
+<AuthShell>
+  <div class="wizard auth-panel">
     <div class="head">
       <span class="wordmark">tachy</span>
       <span class="progress">[{step + 1}/{STEPS.length}] {"█".repeat(step + 1)}{"░".repeat(STEPS.length - step - 1)}</span>
@@ -102,16 +120,11 @@
     {#if STEPS[step] === "welcome"}
       <div class="body">
         <TypeLine text="First run detected. Let's set this instance up." />
-        <div class="actions">
-          <button class="primary" onclick={next}>begin setup →</button>
-          <button class="ghost" onclick={onSkip}>skip (localhost dev)</button>
-        </div>
       </div>
 
     {:else if STEPS[step] === "usage"}
       <div class="body">
         <h3>How will you use tachy?</h3>
-        <p class="muted">Display terminology only - the data model and the agent are identical either way. Changeable later in Admin › System.</p>
         <div class="cards">
           <button class="card" class:selected={profile === "support"} onclick={() => (profile = "support")}>
             <span class="card-title">{profile === "support" ? "›" : " "} Support / business</span>
@@ -119,12 +132,12 @@
           </button>
           <button class="card" class:selected={profile === "engineering"} onclick={() => (profile = "engineering")}>
             <span class="card-title">{profile === "engineering" ? "›" : " "} Engineering / repositories</span>
-            <span class="card-desc">Issues from your repos. GitHub-first; no customer dimension.</span>
+            <span class="card-desc">Issues from your repos. GitHub-first.</span>
           </button>
         </div>
         <p class="hint">
           {#if profile === "engineering"}
-            products → <code>repositories</code> · teams → <code>organizations</code> · customer facets hidden
+            products &gt;<code>repositories</code> · teams &gt; <code>organizations</code> · customer facets hidden
           {:else}
             standard vocabulary: products, teams, customers, environments
           {/if}
@@ -134,31 +147,28 @@
     {:else if STEPS[step] === "admin"}
       <div class="body">
         <h3>Admin account</h3>
-        <p class="muted">Signs in with email + password. More users (and roles) can be added later in Admin.</p>
-        <label><span>email</span><input type="email" bind:value={email} autocomplete="username" />
-          {#if emailBad}<span class="field-error">not a valid email address</span>{/if}
+        <label><span>email</span><input type="email" class:bad={emailBad} bind:value={email} autocomplete="username" />
+          {#if emailBad}<span class="field-error">{email ? "not a valid email address" : "required"}</span>{/if}
         </label>
         <label><span>display name (optional)</span><input bind:value={displayName} /></label>
-        <label><span>password (min 10 chars)</span><input type="password" bind:value={password} autocomplete="new-password" />
-          {#if passwordBad}<span class="field-error">too short - at least 10 characters</span>{/if}
+        <label><span>password (min 10 chars)</span><input type="password" class:bad={passwordBad} bind:value={password} autocomplete="new-password" />
+          {#if passwordBad}<span class="field-error">{password ? "too short - at least 10 characters" : "required"}</span>{/if}
         </label>
-        <label><span>repeat password</span><input type="password" bind:value={password2} autocomplete="new-password" />
-          {#if matchBad}<span class="field-error">passwords do not match</span>{/if}
+        <label><span>repeat password</span><input type="password" class:bad={matchBad} bind:value={password2} autocomplete="new-password" />
+          {#if matchBad}<span class="field-error">{password2 ? "passwords do not match" : "required"}</span>{/if}
         </label>
       </div>
 
     {:else if STEPS[step] === "workspace"}
       <div class="body">
         <h3>Workspace</h3>
-        <p class="muted">All optional: {wt.team}s and {wt.products} can also be added later (or by the agent, with approval).</p>
-        <label><span>organization name</span><input bind:value={orgName} placeholder="e.g. osapiens" /></label>
-        <label><span>first {wt.team}</span><input bind:value={teamName} placeholder={profile === "engineering" ? "e.g. my-github-org" : "e.g. Hardware Integrations"} /></label>
+        <label><span>organization name</span><input bind:value={orgName} /></label>
+        <label><span>first {wt.team}</span><input bind:value={teamName} /></label>
         {#each products as p, i (i)}
           <label>
             <span>{i === 0 ? `first ${wt.product} ${teamName.trim() ? "" : `(needs a ${wt.team})`}` : `${wt.product} ${i + 1}`}</span>
             <span class="prod-row">
-              <input bind:value={p.name} disabled={!teamName.trim()}
-                placeholder={profile === "engineering" ? "e.g. owner/repo-name" : "e.g. Line Controller"} />
+              <input bind:value={p.name} disabled={!teamName.trim()} />
               {#if products.length > 1}
                 <button class="ghost mini" type="button" onclick={() => (products = products.filter((_, j) => j !== i))}>✕</button>
               {/if}
@@ -176,12 +186,6 @@
     {:else if STEPS[step] === "compliance"}
       <div class="body">
         <h3>Compliance - PII redaction</h3>
-        <p class="muted">
-          When on, emails, phone numbers, credentials, card numbers and requester names are replaced
-          with placeholders (<code>[EMAIL_1]</code>, <code>[SECRET_1]</code>…) in everything sent to the
-          LLM - ticket content, search results, pasted context. The database keeps the raw data;
-          only the model boundary is scrubbed.
-        </p>
         <label class="check">
           <input type="checkbox" bind:checked={redaction} />
           <span>redact PII/secrets at the LLM boundary (recommended for customer data)</span>
@@ -191,26 +195,21 @@
     {:else if STEPS[step] === "agent"}
       <div class="body">
         <h3>Agent backend &amp; cost policy</h3>
-        <p class="muted">Which backend runs the built-in chat agent, which model it uses, and how hard it thinks. Editable later in Admin › System.</p>
         <label><span>provider</span>
           <AsciiSelect bind:value={agentProvider} options={[
             { value: "claude", label: "claude (Anthropic API key / Claude Code login)" },
             { value: "copilot", label: "copilot (GitHub Copilot subscription)" },
           ]} />
         </label>
-        {#if agentProvider === "copilot"}
-          <p class="hint">Auth: set <code>COPILOT_GITHUB_TOKEN</code> in <code>.env</code>, or log the server in once via the copilot CLI. Model ids follow Copilot's vocabulary (e.g. <code>claude-sonnet-4.5</code>, <code>gpt-5.1</code>).</p>
-        {/if}
         <label><span>shared {agentProvider === "copilot" ? "Copilot GitHub token" : "Anthropic API key"} for everyone (optional)</span>
-          <input type="password" bind:value={agentKey} autocomplete="off"
-            placeholder="stored encrypted in the app (needs TACHY_SECRET_KEY); leave empty to use .env" />
+          <input type="password" bind:value={agentKey} autocomplete="off" />
         </label>
         <label><span>model</span><input bind:value={agentModel} /></label>
         <label><span>effort</span>
           <AsciiSelect bind:value={agentEffort} options={["low", "medium", "high", "xhigh", "max"]} />
         </label>
         <label><span>allowed models (comma-separated, empty = unrestricted)</span>
-          <input bind:value={allowedModels} placeholder="claude-sonnet-5, claude-haiku-4-5" />
+          <input bind:value={allowedModels} />
         </label>
       </div>
 
@@ -233,52 +232,50 @@
             <tr><td>agent key</td><td>{agentKey.trim() ? "provided — stored encrypted as the global credential" : "from .env"}</td></tr>
           </tbody>
         </table>
-        <p class="muted">
-          Still in <code>.env</code> (secrets never live in the database): <code>DATABASE_URL</code>,
-          <code>TACHY_API_TOKEN</code>, <code>OIDC_*</code>, <code>TACHY_SESSION_SECRET</code>,
-          <code>ANTHROPIC_API_KEY</code>, source tokens. If this instance should accept remote
-          connections, restart it after finishing.
-        </p>
       </div>
     {/if}
 
-    {#if error}<p class="error">{error}</p>{/if}
+    <p class="error">{error ?? ""}</p>
 
-    {#if STEPS[step] !== "welcome"}
-      <div class="actions">
-        <button class="ghost" onclick={() => { error = null; step = Math.max(0, step - 1); }}>← back</button>
-        {#if STEPS[step] === "review"}
-          <button class="primary" onclick={finish} disabled={busy}>{busy ? "setting up…" : "finish setup"}</button>
-        {:else}
-          <button class="primary" onclick={next}>next →</button>
-        {/if}
-      </div>
-    {/if}
+    <div class="actions">
+      {#if STEPS[step] === "welcome"}
+        <button class="ghost skip" onclick={onSkip}>skip (localhost dev)</button>
+      {/if}
+      <span class="spacer"></span>
+      <button class="nav" onclick={back} disabled={step === 0} title="back" aria-label="back">↩</button>
+      {#if STEPS[step] === "review"}
+        <button class="nav primary" onclick={finish} disabled={busy}
+          title="finish setup" aria-label="finish setup">{busy ? "·" : "➠"}</button>
+      {:else}
+        <button class="nav primary" onclick={next} title="next" aria-label="next">➠</button>
+      {/if}
+    </div>
   </div>
-</div>
+</AuthShell>
 
 <style>
-  .wizard-wrap {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-  }
   .wizard {
     width: min(38rem, 100%);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--panel);
     padding: 1.6rem 2rem 1.5rem;
     display: flex;
     flex-direction: column;
     gap: 1rem;
   }
-  .head { display: flex; justify-content: space-between; align-items: baseline; }
+  .head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    min-height: 2rem;
+  }
   .wordmark { color: var(--accent); font-size: 1.4rem; letter-spacing: 0.04em; }
   .progress { color: var(--muted); font-size: 0.85rem; letter-spacing: 0.1em; }
-  .body { display: flex; flex-direction: column; gap: 0.75rem; }
+  /* Fixed so the box doesn't resize as steps change. */
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-height: 22rem;
+  }
   h3 { margin: 0; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.06em; }
   label { display: flex; flex-direction: column; gap: 0.3rem; }
   label span { font-size: 0.8rem; color: var(--muted); }
@@ -286,6 +283,7 @@
   label.check span { font-size: 0.9rem; color: var(--text); }
   .check input { accent-color: var(--accent); width: 1.05rem; height: 1.05rem; }
   .field-error { color: var(--danger); font-size: 0.78rem; }
+  input.bad { border-color: var(--danger); }
   .cards { display: flex; gap: 0.75rem; flex-wrap: wrap; }
   .card {
     flex: 1;
@@ -306,7 +304,18 @@
   .prod-row { display: flex; gap: 0.4rem; align-items: center; }
   .prod-row input { flex: 1; }
   .add-more { align-self: flex-start; font-size: 0.82rem; }
-  .actions { display: flex; gap: 0.75rem; justify-content: flex-end; }
+  .actions { display: flex; gap: 0.75rem; align-items: center; }
+  .spacer { flex: 1; }
+  .skip { font-size: 0.82rem; }
+  .nav {
+    width: 2.9rem;
+    height: 2.3rem;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    font-size: 1.1rem;
+    line-height: 1;
+  }
   .primary { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
   .review { border-collapse: collapse; }
   .review td { border: 1px solid var(--border); padding: 0.35rem 0.7rem; font-size: 0.9rem; }
@@ -320,7 +329,7 @@
     letter-spacing: 0.08em;
   }
   .hint { margin: 0; font-size: 0.8rem; color: var(--muted); }
-  .error { color: var(--danger); margin: 0; font-size: 0.88rem; }
-  .muted { color: var(--muted); font-size: 0.9rem; margin: 0; }
+  /* Always rendered, so an error appearing doesn't shift the buttons. */
+  .error { color: var(--danger); margin: 0; font-size: 0.88rem; min-height: 1.2rem; }
   code { background: var(--accent-dim); border-radius: 3px; padding: 0 0.3em; font-size: 0.92em; }
 </style>
