@@ -22,6 +22,13 @@ export interface AgentConfig {
   /** Resolved agent credential (Anthropic API key or Copilot GitHub token).
    *  When unset, the backend falls back to the process env / CLI login. */
   agentKey?: string;
+
+  /**
+   * Base tool names whose write path this turn may take without an approval
+   * box, because the user already authorised it by typing the slash command
+   * that does exactly that. Never set it from anything the model controls.
+   */
+  autoApprove?: string[];
 }
 
 export function effectiveModel(
@@ -41,6 +48,7 @@ export interface TurnUsage {
 export type AgentEvent =
   | { type: "text"; text: string }
   | { type: "tool_use"; tool: string; input: unknown; id: string }
+  | { type: "tool_result"; tool: string; id: string; result: unknown }
   | { type: "approval_request"; tool: string; input: unknown; id: string }
   | { type: "approval_resolved"; id: string; approved: boolean }
   | {
@@ -59,6 +67,8 @@ export interface Decision {
 }
 
 export interface AgentTurn {
+  readonly finished: boolean;
   events(): AsyncGenerator<AgentEvent>;
   approve(id: string, decision: Decision): void;
+  abort(): void;
 }

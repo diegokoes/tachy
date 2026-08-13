@@ -5,13 +5,14 @@ import {
   type PermissionRequestResult,
   type SessionConfig,
 } from "@github/copilot-sdk";
-import { classify, qualify, MCP_SERVER } from "./tools";
+import { classify, classifyCall, qualify, MCP_SERVER } from "./tools";
 import { effectiveModel, type AgentConfig } from "./backend";
 import { TurnBase, type ApprovalGate } from "./turn";
 
 export async function copilotPermission(
   request: PermissionRequest,
   gate: ApprovalGate,
+  autoApprove: string[] = [],
 ): Promise<PermissionRequestResult> {
   if (request.kind !== "mcp" || request.serverName !== MCP_SERVER)
     return {
@@ -20,8 +21,10 @@ export async function copilotPermission(
     };
 
   const qualified = qualify(request.toolName);
-  const { cls } = classify(qualified);
+  const { cls, base } = classifyCall(qualified, request.args ?? {});
   if (cls === "read") return { kind: "approve-once" };
+  if (cls === "write" && autoApprove.includes(base))
+    return { kind: "approve-once" };
   if (cls === "denied")
     return {
       kind: "reject",
@@ -29,7 +32,11 @@ export async function copilotPermission(
     };
 
   const input = request.args ?? {};
-  const decision = await gate(request.toolCallId ?? randomUUID(), qualified, input);
+  const decision = await gate(
+    request.toolCallId ?? randomUUID(),
+    qualified,
+    input,
+  );
   if (!decision.approve)
     return {
       kind: "reject",
@@ -56,6 +63,12 @@ export class CopilotTurn extends TurnBase {
     void this.pump(prompt, cfg, opts);
   }
 
+  private client: CopilotClient | undefined;
+
+  protected onAbort(): void {
+    void this.client?.stop().catch(() => {});
+  }
+
   private async pump(
     prompt: string,
     cfg: AgentConfig,
@@ -66,11 +79,13 @@ export class CopilotTurn extends TurnBase {
       client = new CopilotClient({
         workingDirectory: cfg.cwd,
         logLevel: "error",
-        ...(cfg.agentKey ? { gitHubToken: cfg.agentKey } : {}),
       });
+      this.client = client;
       await client.start();
 
       const sessionConfig: SessionConfig = {
+        // per-user token for multitenancy; falls back to server's gh CLI login
+        ...(cfg.agentKey ? { gitHubToken: cfg.agentKey } : {}),
         model: effectiveModel(cfg),
         systemMessage: { mode: "append", content: cfg.systemPromptAppend },
         availableTools: ["mcp:*"],
@@ -83,7 +98,7 @@ export class CopilotTurn extends TurnBase {
           },
         },
         onPermissionRequest: (request) =>
-          copilotPermission(request, this.requestApproval),
+          copilotPermission(request, this.requestApproval, cfg.autoApprove),
       };
 
       const session = opts.resume
@@ -95,6 +110,7 @@ export class CopilotTurn extends TurnBase {
       let sawUsage = false;
       let premium = 0;
       let lastText = "";
+      const toolNames = new Map<string, string>();
 
       session.on((event) => {
         switch (event.type) {
@@ -107,13 +123,29 @@ export class CopilotTurn extends TurnBase {
           case "tool.execution_start": {
             if (event.data.mcpServerName !== MCP_SERVER) break;
             const base = event.data.mcpToolName ?? event.data.toolName;
-            if (classify(qualify(base)).cls === "read")
-              this.q.push({
-                type: "tool_use",
-                tool: base,
-                input: event.data.arguments ?? {},
-                id: event.data.toolCallId,
-              });
+            const args = event.data.arguments ?? {};
+            toolNames.set(event.data.toolCallId, base);
+            // execution_start already means permitted, so every tachy tool that
+            // actually runs is announced — writes included.
+            this.q.push({
+              type: "tool_use",
+              tool: base,
+              input: args,
+              id: event.data.toolCallId,
+            });
+            break;
+          }
+          case "tool.execution_complete": {
+            const id = event.data.toolCallId;
+            const tool = toolNames.get(id);
+            if (!tool) break;
+            toolNames.delete(id);
+            this.q.push({
+              type: "tool_result",
+              tool,
+              id,
+              result: event.data.result ?? null,
+            });
             break;
           }
           case "assistant.usage":
@@ -148,9 +180,8 @@ export class CopilotTurn extends TurnBase {
         message: e instanceof Error ? e.message : String(e),
       });
     } finally {
-      this.settlePending();
       if (client) await client.stop().catch(() => {});
-      this.q.close();
+      this.finish();
     }
   }
 }
