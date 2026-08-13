@@ -7,6 +7,8 @@ import { readFileAt } from "./git";
 export interface CodeSearchOptions {
   repoSlug?: string;
   productId?: string;
+  componentId?: string;
+  sourceProjectId?: string;
   pathPrefix?: string;
   limit?: number;
 }
@@ -16,7 +18,8 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
   const limit = Math.min(opts.limit ?? 8, 25);
   const qvec = toVectorLiteral(await embedQuery(query));
   return sql`
-    select r.slug as repo_slug, f.path, f.lang, c.start_line, c.end_line,
+    select r.slug as repo_slug, comp.slug as component_slug,
+           f.path, f.lang, c.start_line, c.end_line,
            left(c.chunk_text, 1200) as snippet,
            (1 - (c.embedding <=> ${qvec}::vector)) + similarity(c.chunk_text, ${query}) as score,
            r.indexed_commit, r.last_indexed_at,
@@ -24,9 +27,12 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
     from code_chunks c
     join repo_files f on f.id = c.file_id
     join repos r on r.id = c.repo_id
+    left join components comp on comp.id = r.component_id
     where r.index_status in ('ready','indexing')
       ${opts.repoSlug ? sql`and r.slug = ${opts.repoSlug}` : sql``}
       ${opts.productId ? sql`and r.product_id = ${opts.productId}` : sql``}
+      ${opts.componentId ? sql`and r.component_id = ${opts.componentId}` : sql``}
+      ${opts.sourceProjectId ? sql`and r.source_project_id = ${opts.sourceProjectId}` : sql``}
       ${opts.pathPrefix ? sql`and f.path like ${opts.pathPrefix + "%"}` : sql``}
     order by score desc
     limit ${limit}

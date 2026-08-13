@@ -9,6 +9,7 @@
   "dependencies": {
     "dotenv": "^16.4.7",
     "fastembed": "^2.1.0",
+    "fflate": "^0.8.2",
     "postgres": "^3.4.5",
     "zod": "^4.0.0"
   }

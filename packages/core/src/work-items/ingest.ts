@@ -1,72 +1,85 @@
 import { sql, toDate } from "../infra/db";
 import type { RawWorkItem } from "../sources/source";
 import { resolveCustomerByEmail } from "../catalog/customers";
+import { routeIngest } from "../sources/projects";
 
 export interface IngestedItem {
   id: string;
+  sourceProjectId: string | null;
   productId: string | null;
   teamId: string | null;
   customerId: string | null;
   observedVersion: string | null;
+  /** Component the item's area path maps to, when the project has a rule for it. */
+  componentSlug: string | null;
 }
 
 export async function ingestWorkItem(
   connId: string,
   raw: RawWorkItem,
 ): Promise<IngestedItem> {
-  let productId: string | null = null;
-  let teamId: string | null = null;
-
-  if (raw.groupKey) {
-    const [map] = await sql`
-      select product_id from source_product_map
-      where source_connection_id = ${connId} and external_group_key = ${raw.groupKey}
-    `;
-    if (map) {
-      productId = map.product_id;
-      const [prod] =
-        await sql`select team_id from products where id = ${productId}`;
-      teamId = prod?.team_id ?? null;
-    }
-  }
+  const route = await routeIngest(connId, raw.groupKey, raw.areaPath);
+  const { sourceProjectId, productId, teamId } = route;
 
   const customerId = await resolveCustomerByEmail(raw.requesterEmail);
 
-  const [item] = await sql`
-    insert into work_items
-      (source_connection_id, external_id, external_url, kind, title, status,
-       external_group_key, product_id, team_id, customer_id, requester, raw,
-       source_created_at, source_updated_at)
-    values
-      (${connId}, ${raw.externalId}, ${raw.externalUrl ?? null}, ${raw.kind}, ${raw.title ?? null},
-       ${raw.status ?? null}, ${raw.groupKey ?? null}, ${productId}, ${teamId}, ${customerId}, ${raw.requester ?? null},
-       ${sql.json((raw.raw ?? {}) as any)}, ${toDate(raw.sourceCreatedAt)}, ${toDate(raw.sourceUpdatedAt)})
-    on conflict (source_connection_id, external_id) do update set
-      title = excluded.title,
-      status = excluded.status,
-      raw = excluded.raw,
-      source_updated_at = excluded.source_updated_at,
-      product_id = excluded.product_id,
-      team_id = excluded.team_id
-    returning id, product_id, team_id, customer_id, observed_version
-  `;
-
-  for (const m of raw.messages) {
-    await sql`
-      insert into work_item_messages
-        (work_item_id, external_id, author, visibility, direction, body_text, attachments, created_at)
+  return sql.begin(async (tx) => {
+    const [item] = await tx`
+      insert into work_items
+        (source_connection_id, external_id, external_url, kind, title, status,
+         external_group_key, source_project_id, product_id, team_id, customer_id, requester, raw,
+         source_created_at, source_updated_at)
       values
-        (${item.id}, ${m.externalId ?? null}, ${m.author ?? null}, ${m.visibility}, ${m.direction},
-         ${m.bodyText}, ${sql.json((m.attachments ?? []) as any)}, ${toDate(m.createdAt)})
-      on conflict (work_item_id, external_id) do nothing
+        (${connId}, ${raw.externalId}, ${raw.externalUrl ?? null}, ${raw.kind}, ${raw.title ?? null},
+         ${raw.status ?? null}, ${raw.groupKey ?? null}, ${sourceProjectId}, ${productId}, ${teamId}, ${customerId}, ${raw.requester ?? null},
+         ${sql.json((raw.raw ?? {}) as any)}, ${toDate(raw.sourceCreatedAt)}, ${toDate(raw.sourceUpdatedAt)})
+      on conflict (source_connection_id, external_id) do update set
+        title = excluded.title,
+        status = excluded.status,
+        external_url = excluded.external_url,
+        raw = excluded.raw,
+        source_updated_at = excluded.source_updated_at,
+        source_project_id = excluded.source_project_id,
+        product_id = excluded.product_id,
+        team_id = excluded.team_id
+      returning id, source_project_id, product_id, team_id, customer_id, observed_version
     `;
-  }
 
-  return {
-    id: item.id,
-    productId: item.product_id,
-    teamId: item.team_id,
-    customerId: item.customer_id,
-    observedVersion: item.observed_version,
-  };
+    if (raw.messages.length) {
+      const m = raw.messages;
+      await tx`
+        insert into work_item_messages
+          (work_item_id, external_id, author, visibility, direction, body_text, attachments, created_at)
+        select ${item.id}, u.external_id, u.author, u.visibility, u.direction,
+               u.body_text, u.attachments::jsonb, u.created_at::timestamptz
+        from unnest(
+          ${m.map((x) => x.externalId ?? null)}::text[],
+          ${m.map((x) => x.author ?? null)}::text[],
+          ${m.map((x) => x.visibility)}::text[],
+          ${m.map((x) => x.direction)}::text[],
+          ${m.map((x) => x.bodyText)}::text[],
+          ${m.map((x) => JSON.stringify(x.attachments ?? []))}::text[],
+          ${m.map((x) => {
+            const d = toDate(x.createdAt);
+            return d && !Number.isNaN(d.getTime()) ? d.toISOString() : null;
+          })}::text[]
+        ) as u(external_id, author, visibility, direction, body_text, attachments, created_at)
+        on conflict (work_item_id, external_id) do update set
+          author = excluded.author,
+          body_text = excluded.body_text,
+          attachments = excluded.attachments,
+          created_at = excluded.created_at
+      `;
+    }
+
+    return {
+      id: item.id,
+      sourceProjectId: item.source_project_id,
+      productId: item.product_id,
+      teamId: item.team_id,
+      customerId: item.customer_id,
+      observedVersion: item.observed_version,
+      componentSlug: route.componentSlug,
+    };
+  });
 }

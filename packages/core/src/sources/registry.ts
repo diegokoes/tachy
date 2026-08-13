@@ -1,5 +1,7 @@
 import { sql } from "../infra/db";
 import { badInput } from "../infra/errors";
+import { resolveCredential, sourceCredentialName } from "../config/credentials";
+import type { ScopeContext } from "../config/scoped";
 import type { SourceFactory, WorkItemSource } from "./source";
 
 const factories = new Map<string, SourceFactory>();
@@ -19,7 +21,15 @@ export interface ResolvedSource {
   source: WorkItemSource;
 }
 
-export async function resolveSource(slug: string): Promise<ResolvedSource> {
+/**
+ * `ctx` scopes the API token lookup to a caller (user → team → global → env).
+ * Omit it inside the per-turn MCP subprocess, whose env already carries the
+ * caller's tokens.
+ */
+export async function resolveSource(
+  slug: string,
+  ctx: ScopeContext = {},
+): Promise<ResolvedSource> {
   const [conn] = await sql`
     select id, source_type, base_url, slug, config
     from source_connections where slug = ${slug}
@@ -30,6 +40,10 @@ export async function resolveSource(slug: string): Promise<ResolvedSource> {
     throw badInput(
       `No adapter registered for source type: ${conn.source_type}`,
     );
+  const token = await resolveCredential(
+    sourceCredentialName(conn.source_type, conn.slug),
+    ctx,
+  );
   return {
     conn: {
       id: conn.id,
@@ -42,6 +56,7 @@ export async function resolveSource(slug: string): Promise<ResolvedSource> {
       baseUrl: conn.base_url ?? "",
       slug: conn.slug,
       config: conn.config ?? {},
+      ...(token ? { token } : {}),
     }),
   };
 }
