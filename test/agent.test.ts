@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   classify,
+  classifyCall,
   qualify,
   claudePermission,
   copilotPermission,
@@ -10,6 +11,7 @@ import {
   type Decision,
 } from "../packages/agent/src/index";
 import { AsyncQueue } from "../packages/agent/src/queue";
+import { TurnBase } from "../packages/agent/src/turn";
 import type { PermissionRequest } from "@github/copilot-sdk";
 
 describe("agent tool allowlist (security boundary)", () => {
@@ -30,6 +32,26 @@ describe("agent tool allowlist (security boundary)", () => {
     expect(classify("mcp__tachy__some_new_tool").cls).toBe("write");
   });
 
+  it("gates compact_work_item only when it is asked to post a note", () => {
+    const t = qualify("compact_work_item");
+    expect(classifyCall(t, { source: "fd", external_id: "1" }).cls).toBe(
+      "read",
+    );
+    expect(classifyCall(t, { post_note: false }).cls).toBe("read");
+    expect(classifyCall(t, {}).cls).toBe("read");
+    expect(classifyCall(t, { post_note: true }).cls).toBe("write");
+    // a truthy non-true value must not open the write path
+    expect(classifyCall(t, { post_note: "yes" }).cls).toBe("read");
+  });
+
+  it("classifyCall leaves every other tool's class alone", () => {
+    for (const t of READ_TOOLS)
+      expect(classifyCall(qualify(t), { post_note: true }).cls).toBe("read");
+    for (const t of WRITE_TOOLS)
+      expect(classifyCall(qualify(t), {}).cls).toBe("write");
+    expect(classifyCall("Bash", { post_note: true }).cls).toBe("denied");
+  });
+
   it("read and write sets are disjoint", () => {
     const reads = new Set<string>(READ_TOOLS);
     expect(WRITE_TOOLS.some((w) => reads.has(w))).toBe(false);
@@ -38,7 +60,9 @@ describe("agent tool allowlist (security boundary)", () => {
 
 describe("effectiveModel (allowlist clamp)", () => {
   it("passes the model through when no allowlist is set", () => {
-    expect(effectiveModel({ model: "claude-sonnet-5" })).toBe("claude-sonnet-5");
+    expect(effectiveModel({ model: "claude-sonnet-5" })).toBe(
+      "claude-sonnet-5",
+    );
     expect(effectiveModel({ model: "x", allowedModels: [] })).toBe("x");
     expect(effectiveModel({})).toBeUndefined();
   });
@@ -98,6 +122,27 @@ describe("claudePermission (approval gate)", () => {
     expect(gate).toHaveBeenCalledOnce();
   });
 
+  it("skips the gate for a write the typed command authorised", async () => {
+    const gate = gateWith({ approve: true });
+    const res = await claudePermission(
+      qualify("compact_work_item"),
+      { post_note: true },
+      "id5",
+      gate,
+      ["compact_work_item"],
+    );
+    expect(res).toMatchObject({ behavior: "allow" });
+    expect(gate).not.toHaveBeenCalled();
+  });
+
+  it("auto-approval covers only the named tool", async () => {
+    const gate = gateWith({ approve: true });
+    await claudePermission(qualify("save_knowledge_entry"), {}, "id6", gate, [
+      "compact_work_item",
+    ]);
+    expect(gate).toHaveBeenCalledOnce();
+  });
+
   it("denies write tools with the user's message on reject", async () => {
     const gate = gateWith({ approve: false, message: "wrong customer" });
     const res = await claudePermission(
@@ -145,9 +190,9 @@ describe("copilotPermission (approval gate)", () => {
 
   it("approves read tools without the gate", async () => {
     const gate = gateWith({ approve: true });
-    expect(await copilotPermission(mcpRequest("search_knowledge"), gate)).toEqual(
-      { kind: "approve-once" },
-    );
+    expect(
+      await copilotPermission(mcpRequest("search_knowledge"), gate),
+    ).toEqual({ kind: "approve-once" });
     expect(gate).not.toHaveBeenCalled();
   });
 
@@ -199,5 +244,55 @@ describe("AsyncQueue", () => {
     q.push("hi");
     expect((await next).value).toBe("hi");
     q.close();
+  });
+});
+
+describe("TurnBase approval lifecycle", () => {
+  class FakeTurn extends TurnBase {
+    aborted = false;
+    ask(id: string) {
+      return this.requestApproval(id, "save_knowledge_entry", {});
+    }
+    end() {
+      this.finish();
+    }
+    protected onAbort(): void {
+      this.aborted = true;
+    }
+  }
+
+  it("resolves a pending approval through approve()", async () => {
+    const t = new FakeTurn();
+    const pending = t.ask("a1");
+    t.approve("a1", { approve: true, updatedInput: { x: 1 } });
+    expect(await pending).toEqual({ approve: true, updatedInput: { x: 1 } });
+    expect(t.finished).toBe(false);
+    t.end();
+    expect(t.finished).toBe(true);
+  });
+
+  it("auto-denies an approval after the timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      process.env.TACHY_APPROVAL_TIMEOUT_MS = "1000";
+      const t = new FakeTurn();
+      const pending = t.ask("a2");
+      await vi.advanceTimersByTimeAsync(1001);
+      expect(await pending).toEqual({
+        approve: false,
+        message: "Approval timed out.",
+      });
+    } finally {
+      delete process.env.TACHY_APPROVAL_TIMEOUT_MS;
+      vi.useRealTimers();
+    }
+  });
+
+  it("denies pending approvals and signals onAbort on abort()", async () => {
+    const t = new FakeTurn();
+    const pending = t.ask("a3");
+    t.abort();
+    expect(t.aborted).toBe(true);
+    expect((await pending).approve).toBe(false);
   });
 });

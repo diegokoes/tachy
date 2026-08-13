@@ -101,21 +101,26 @@ describe("artifact visibility (user ∪ team ∪ global)", () => {
 });
 
 describe("artifact write guards", () => {
-  it("members write only their own user scope; team needs team-admin; global needs admin", async () => {
+  it("any team member can write team-scope; non-members and wrong scope are rejected", async () => {
     const { admin, alice, bob, teamId, otherTeamId } = await seedPeople();
 
+    // cannot write to another user's user scope
     await expect(
       upsertArtifact(bob.id, "user", alice.id, "x", { title: "x", body: "x" }),
     ).rejects.toThrow(/own/);
-    await expect(
-      upsertArtifact(bob.id, "team", teamId, "x", { title: "x", body: "x" }),
-    ).rejects.toThrow(/admin/);
+    // regular team member can write team-scope for their own team
+    await upsertArtifact(bob.id, "team", teamId, "bobs", {
+      title: "x",
+      body: "x",
+    });
+    // non-member cannot write to a team they don't belong to
     await expect(
       upsertArtifact(alice.id, "team", otherTeamId, "x", {
         title: "x",
         body: "x",
       }),
-    ).rejects.toThrow(/admin/);
+    ).rejects.toThrow(/member/);
+    // non-admin cannot write global scope
     await expect(
       upsertArtifact(alice.id, "global", undefined, "x", {
         title: "x",

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { BUILTIN_COMMANDS, findCommand } from "../packages/api/src/commands";
+import {
+  BUILTIN_COMMANDS,
+  findCommand,
+  commandAutoApprove,
+} from "../packages/api/src/commands";
 import { buildPrompt } from "../packages/api/src/routes/agent";
 
 describe("slash command registry", () => {
@@ -9,11 +13,29 @@ describe("slash command registry", () => {
       expect.arrayContaining([
         "analyze",
         "consult",
+        "compact",
         "create-ticket",
         "code",
         "ingest-wiki",
       ]),
     );
+  });
+
+  it("compact posts by default and keeps the transcript out of the chat", () => {
+    const t = findCommand("compact")!.expand("fd 59577");
+    expect(t).toContain("compact_work_item");
+    expect(t).toContain("leave post_note at its default so it posts");
+    expect(t).toContain("--no-note");
+    expect(t).toContain("Do NOT pass return_turns");
+    expect(t).toMatch(/at most four lines/);
+  });
+
+  it("only /compact carries a write auto-approval", () => {
+    expect(commandAutoApprove("compact")).toEqual(["compact_work_item"]);
+    for (const c of BUILTIN_COMMANDS)
+      if (c.name !== "compact") expect(commandAutoApprove(c.name)).toEqual([]);
+    expect(commandAutoApprove("save_knowledge_entry")).toEqual([]);
+    expect(commandAutoApprove("")).toEqual([]);
   });
 
   it("expands args into the command block", () => {

@@ -22,7 +22,10 @@ export async function loginCookie(
   email: string,
   password: string,
 ): Promise<string> {
-  const res = await app.request("/auth/password/login", json({ email, password }));
+  const res = await app.request(
+    "/auth/password/login",
+    json({ email, password }),
+  );
   return cookieOf(res);
 }
 
@@ -38,10 +41,15 @@ export function disableVault(): void {
 
 export async function resetData() {
   await sql`
-    truncate work_item_messages, work_items, knowledge_feedback,
+    truncate work_item_messages, work_items, work_item_links, knowledge_feedback,
              knowledge_entries, analysis_runs, team_members, users,
-             customers, resolution_patterns, components, labels,
-             reference_docs, reference_doc_chunks, artifacts, settings
+             customers, resolution_patterns, components, project_area_map, labels,
+             reference_docs, reference_doc_chunks, artifacts, generated_outputs,
+             settings,
+             -- repos would be swept in anyway by the cascade from components;
+             -- naming it keeps that visible. source_connections/source_projects
+             -- stay, so the seeded routing fixture survives.
+             repos, repo_files, code_chunks
     restart identity cascade
   `;
   clearSettingsCache();
