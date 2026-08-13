@@ -36,9 +36,21 @@ import {
   resolveRedactionPolicy,
   redactForLlm,
   extractAdoRefs,
+  compactWorkItem,
+  compactForLlm,
+  summarizeCompaction,
+  renderCompactHtml,
+  splitNoteBody,
   listRepos,
   searchCode,
   readCodeFile,
+  getArtifactBySlug,
+  userSoleTeamId,
+  createOutput,
+  renderTable,
+  outputFilename,
+  tableColumnSchema,
+  TABLE_FORMATS,
   globalRedactionEnabled,
   scrubDeep,
   scrubText,
@@ -62,8 +74,16 @@ import {
   referenceDocLineage,
   listSourceConnections,
   addSourceConnection,
-  listSourceProductMaps,
-  addSourceProductMap,
+  SOURCE_PROJECT_ROLES,
+  listSourceProjects,
+  addSourceProject,
+  setProjectAreaMap,
+  sourceProjectScope,
+  resolveProjectContext,
+  resolveProjectContextStrict,
+  recordAdoRefs,
+  addWorkItemLink,
+  resolveComponentStrict,
   AppError,
   log,
   cloudSchema,
@@ -80,6 +100,7 @@ import type {
   EntryScope,
   KnowledgeUpdateInput,
   ReferenceDocUpdate,
+  RawWorkItem,
 } from "@tachy/core";
 import { pathToFileURL } from "node:url";
 import { extractSource } from "./extract";
@@ -108,8 +129,130 @@ function out(obj: unknown) {
   };
 }
 
+/** Tool results have a size ceiling; a whole transcript blows it, so turns ship bounded. */
+function capTurns<T extends { text: string }>(
+  turns: T[],
+  maxChars = 30000,
+): { turns: T[]; turns_truncated?: { shown: number; of: number } } {
+  let used = 0;
+  const kept: T[] = [];
+  for (const t of turns) {
+    if (used + t.text.length > maxChars) break;
+    used += t.text.length;
+    kept.push(t);
+  }
+  return kept.length === turns.length
+    ? { turns: kept }
+    : {
+        turns: kept,
+        turns_truncated: { shown: kept.length, of: turns.length },
+      };
+}
+
+/**
+ * The ingest path reads the compacted form when compaction demonstrably helps,
+ * so /analyze and /consult stop paying for quoted chains and signatures. Runs
+ * AFTER redaction, so the model still never sees unscrubbed text, and never
+ * writes: only compact_work_item posts a note.
+ */
+function withCompaction(item: RawWorkItem): Record<string, unknown> {
+  const { item: forLlm, compacted } = compactForLlm(item);
+  if (!compacted) return { item: forLlm };
+  const { turns, compaction } = compacted;
+  return {
+    item: forLlm,
+    transcript: turns,
+    compaction: { ...compaction, ...summarizeCompaction(compacted) },
+    next: "messages were replaced by transcript: a de-duplicated, attributed turn list with quoted chains, signatures and repeats removed. The wording is verbatim — never re-summarise it. Turns with kind 'quoted' come from quoted history and may predate the ticket.",
+  };
+}
+
 function outScrubbed(obj: unknown) {
   return out(globalRedactionEnabled() ? scrubDeep(obj, new TokenMap()) : obj);
+}
+
+const MAX_LINKED_ITEMS = 5;
+const LINKED_BODY_CHARS = 2000;
+
+/**
+ * Fetch the Azure DevOps items a ticket points at and record the links. They
+ * carry most of the engineering context, so analysis reads them as a matter of
+ * course rather than offering to. Depth 1 only — a linked item's own relations
+ * already come back as summaries.
+ */
+async function withLinkedAdoItems(
+  raw: RawWorkItem,
+  fromWorkItemId: string,
+): Promise<Record<string, unknown>> {
+  const refs = extractAdoRefs(raw);
+  if (!refs.length) return {};
+
+  const [ado] = await sql`
+    select slug from source_connections where source_type = 'azure-devops' order by slug limit 1
+  `;
+  if (!ado)
+    return {
+      linked_ado_refs: refs,
+      linked_items_note:
+        "no azure-devops connection is configured, so these ids could not be read",
+    };
+
+  const wanted = refs.slice(0, MAX_LINKED_ITEMS);
+  const { conn, source: src } = await resolveSource(ado.slug as string);
+  const redact = resolveRedactionPolicy(conn.config).enabled;
+  const items: Record<string, unknown>[] = [];
+
+  for (const externalId of wanted) {
+    try {
+      const linkedRaw = await src.fetchItem(externalId);
+      const stored = await ingestWorkItem(conn.id, linkedRaw);
+      const forLlm = redact
+        ? redactForLlm(
+            linkedRaw,
+            src.redactRaw,
+            await getCustomerSlug(stored.customerId),
+          )
+        : linkedRaw;
+      const fields = (forLlm.raw as { fields?: Record<string, unknown> })
+        ?.fields;
+      items.push({
+        external_id: externalId,
+        work_item_id: stored.id,
+        title: forLlm.title,
+        state: forLlm.status,
+        type: fields?.["System.WorkItemType"] ?? null,
+        area_path: forLlm.areaPath ?? null,
+        component: stored.componentSlug,
+        url: forLlm.externalUrl,
+        body: forLlm.messages
+          .map((m) => m.bodyText)
+          .join("\n\n")
+          .slice(0, LINKED_BODY_CHARS),
+        message_count: forLlm.messages.length,
+      });
+    } catch (e) {
+      items.push({
+        external_id: externalId,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  await recordAdoRefs(fromWorkItemId, refs, {
+    sourceConnectionId: conn.id,
+    createdById: await resolveCurrentUserId(),
+  });
+
+  return {
+    linked_ado_refs: refs,
+    linked_items: items,
+    ...(refs.length > wanted.length
+      ? {
+          linked_items_note: `${refs.length} ids referenced; the first ${wanted.length} were read. Fetch the rest with fetch_work_item if they matter.`,
+        }
+      : {}),
+    next: "linked_items are the Azure DevOps items this ticket references, already read and linked — treat them as part of the context and do not fetch them again. Never fetch relations of relations.",
+  };
 }
 
 async function resolveScopeIds(opts: {
@@ -246,6 +389,23 @@ async function referenceDocScope(id: string): Promise<EntryScope> {
   return row ? { productId: row.product_id, teamId: row.team_id } : {};
 }
 
+async function workItemScope(id: string): Promise<EntryScope> {
+  const [row] =
+    await sql`select product_id, team_id from work_items where id = ${id}`;
+  return row ? { productId: row.product_id, teamId: row.team_id } : {};
+}
+
+async function externalWorkItemScope(
+  connId: string,
+  externalId: string,
+): Promise<EntryScope> {
+  const [row] = await sql`
+    select product_id, team_id from work_items
+    where source_connection_id = ${connId} and external_id = ${externalId}
+  `;
+  return row ? { productId: row.product_id, teamId: row.team_id } : {};
+}
+
 async function newEntryScope(i: {
   productId?: string | null;
   teamId?: string | null;
@@ -317,21 +477,97 @@ tool(
     const forLlm = resolveRedactionPolicy(conn.config).enabled
       ? redactForLlm(raw, src.redactRaw, await getCustomerSlug(item.customerId))
       : raw;
-    const adoRefs = extractAdoRefs(raw);
     return out({
       work_item_id: item.id,
+      source_project_id: item.sourceProjectId,
       product_id: item.productId,
       team_id: item.teamId,
       customer_id: item.customerId,
       customer_name: customerName,
       observed_version: item.observedVersion,
-      item: forLlm,
-      ...(adoRefs.length
+      ...(item.componentSlug ? { component: item.componentSlug } : {}),
+      ...withCompaction(forLlm),
+      ...(await withLinkedAdoItems(raw, item.id)),
+    });
+  },
+);
+
+tool(
+  "compact_work_item",
+  {
+    description:
+      "Compact a long ticket into a de-duplicated, attributed turn list ('X: ...' script) and post it back as a private note. Deterministic text processing, no summarising: it strips quoted reply chains, signatures, legal footers, security banners and automated reminders, drops repeated blocks, and recovers content that only ever existed inside a quote (attributed to its real sender and date). post_note (default true) writes the transcript to the ticket where it is readable in full; the reply here is only the stats, because a whole transcript does not belong in the conversation. Ask for return_turns only when you must reason over the text itself — it is truncated to fit, so the note remains the complete copy.",
+    inputSchema: {
+      source: z.string(),
+      external_id: z.string(),
+      post_note: z.boolean().optional(),
+      replace_previous: z.boolean().optional(),
+      return_turns: z.boolean().optional(),
+      keep_automated: z.boolean().optional(),
+    },
+  },
+  async ({
+    source,
+    external_id,
+    post_note,
+    replace_previous,
+    return_turns,
+    keep_automated,
+  }) => {
+    const { conn, source: src } = await resolveSource(source);
+    const raw = await src.fetchItem(external_id);
+    const item = await ingestWorkItem(conn.id, raw);
+    const opts = { keepAutomated: keep_automated === true };
+    const full = compactWorkItem(raw, opts);
+
+    let posted: { notes: number; replaced_previous?: number } | undefined;
+    let postFailed: string | undefined;
+    if (post_note !== false) {
+      if (!src.postNote)
+        postFailed = `Source '${source}' does not support notes`;
+      else {
+        await requireCanEdit(await externalWorkItemScope(conn.id, external_id));
+        const bodies = splitNoteBody(renderCompactHtml(full));
+        for (const body of bodies)
+          await src.postNote(external_id, body, { private: true });
+        posted = { notes: bodies.length };
+        // Only once the replacement is safely on the ticket, and only for notes
+        // this tool wrote and can still identify by its own marker.
+        if (replace_previous !== false && src.deleteNote) {
+          let replaced = 0;
+          for (const id of full.prior_transcript_ids)
+            await src.deleteNote(id).then(
+              () => replaced++,
+              () => {},
+            );
+          if (replaced) posted.replaced_previous = replaced;
+        }
+      }
+    }
+
+    const forLlm = resolveRedactionPolicy(conn.config).enabled
+      ? compactWorkItem(
+          redactForLlm(
+            raw,
+            src.redactRaw,
+            await getCustomerSlug(item.customerId),
+          ),
+          opts,
+        )
+      : full;
+
+    const { turns, ...summary } = forLlm;
+    return out({
+      work_item_id: item.id,
+      ...summary,
+      ...(return_turns === true ? capTurns(turns) : {}),
+      ...(posted
         ? {
-            linked_ado_refs: adoRefs,
-            next: "linked_ado_refs are Azure DevOps work item ids referenced by this item. If an azure-devops source connection exists (list_source_connections), you may fetch them with fetch_work_item for extra context — their relations come back as summaries already; do not fetch relations of relations.",
+            posted_private_note: posted,
+            next: "The full transcript is on the ticket as a private note. Report the stats briefly; do not restate the transcript.",
           }
         : {}),
+      ...(postFailed ? { note_not_posted: postFailed } : {}),
     });
   },
 );
@@ -347,6 +583,11 @@ tool(
       team_slug: z.string().optional(),
       tags: z.array(z.string()).optional(),
       component: z.string().optional(),
+      cloud: cloudSchema
+        .optional()
+        .describe(
+          "Environment slug filter, e.g. prod — see list_environments.",
+        ),
       affected_version: z.string().optional(),
       fixed_version: z.string().optional(),
       limit: z.number().optional(),
@@ -359,6 +600,7 @@ tool(
     team_slug,
     tags,
     component,
+    cloud,
     affected_version,
     fixed_version,
     limit,
@@ -372,6 +614,7 @@ tool(
       teamId,
       includeUnscoped: true,
       ...(await componentIntoFilter(productId, component, tags)),
+      cloud,
       affectedVersion: affected_version,
       fixedVersion: fixed_version,
       limit,
@@ -416,20 +659,19 @@ tool(
       ? redactForLlm(raw, src.redactRaw, await getCustomerSlug(item.customerId))
       : raw;
     const retrievalMap = new TokenMap();
-    const adoRefs = extractAdoRefs(raw);
+    const { item: workItem, ...compaction } = withCompaction(forLlm);
+    const context = await resolveProjectContext({ workItemId: item.id });
     return out({
-      work_item: forLlm,
+      work_item: workItem,
+      ...compaction,
       similar: redact ? scrubDeep(similar, retrievalMap) : similar,
       reference: redact ? scrubDeep(reference, retrievalMap) : reference,
       customer_id: item.customerId,
       customer_name: customerName,
       observed_version: item.observedVersion,
-      ...(adoRefs.length
-        ? {
-            linked_ado_refs: adoRefs,
-            next: "linked_ado_refs are Azure DevOps work item ids referenced by this item. If an azure-devops source connection exists (list_source_connections), you may fetch them with fetch_work_item for extra context — their relations come back as summaries already; do not fetch relations of relations.",
-          }
-        : {}),
+      ...(item.componentSlug ? { component: item.componentSlug } : {}),
+      ...(context.length ? { project_context: context } : {}),
+      ...(await withLinkedAdoItems(raw, item.id)),
     });
   },
 );
@@ -537,9 +779,10 @@ tool(
     },
   },
   async ({ source, external_id, body }) => {
-    const { source: src } = await resolveSource(source);
+    const { conn, source: src } = await resolveSource(source);
     if (!src.postNote)
       throw badInput(`Source '${source}' does not support notes`);
+    await requireCanEdit(await externalWorkItemScope(conn.id, external_id));
     await src.postNote(external_id, body, { private: true });
     return out({ posted: true, private: true, external_id, body });
   },
@@ -559,6 +802,7 @@ tool(
     },
   },
   async (a) => {
+    await requireCanEdit(await knowledgeEntryScope(a.knowledge_entry_id));
     const row = await addFeedback({
       knowledgeEntryId: a.knowledge_entry_id,
       userId: await resolveCurrentUserId(),
@@ -716,6 +960,7 @@ tool(
     },
   },
   async ({ work_item_id, customer_slug }) => {
+    await requireCanEdit(await workItemScope(work_item_id));
     const customerId = customer_slug
       ? await getCustomerIdBySlug(customer_slug)
       : null;
@@ -732,6 +977,7 @@ tool(
     inputSchema: { work_item_id: z.string(), version: z.string().nullable() },
   },
   async ({ work_item_id, version }) => {
+    await requireCanEdit(await workItemScope(work_item_id));
     await setObservedVersion(work_item_id, version);
     return out({ updated: true, work_item_id, observed_version: version });
   },
@@ -841,6 +1087,11 @@ tool(
         .describe(
           "Component slug/alias  matches the entry's linked component or its slug/aliases in tags. Needs product_slug.",
         ),
+      cloud: cloudSchema
+        .optional()
+        .describe(
+          "Environment slug filter, e.g. prod — see list_environments.",
+        ),
       affected_version: z.string().optional(),
       fixed_version: z.string().optional(),
       limit: z.number().optional(),
@@ -853,6 +1104,7 @@ tool(
     team_slug,
     tags,
     component,
+    cloud,
     affected_version,
     fixed_version,
     limit,
@@ -866,6 +1118,7 @@ tool(
       productId,
       teamId,
       ...(await componentIntoFilter(productId, component, tags)),
+      cloud,
       affectedVersion: affected_version,
       fixedVersion: fixed_version,
       limit,
@@ -944,6 +1197,16 @@ tool(
       structured: z.record(z.string(), z.any()).optional(),
       doc_version: z.string().optional(),
       supersedes: z.string().optional(),
+      source_project_id: z
+        .string()
+        .optional()
+        .describe("From get_ado_wiki_page — the project this page belongs to"),
+      external_key: z
+        .string()
+        .optional()
+        .describe(
+          "The wiki page path. With source_project_id, re-importing the page supersedes the previous revision instead of duplicating it.",
+        ),
     },
   },
   async (a) => {
@@ -970,6 +1233,8 @@ tool(
       teamId,
       createdById: await resolveCurrentUserId(),
       source: a.source,
+      sourceProjectId: a.source_project_id,
+      externalKey: a.external_key,
       tags: a.tags,
       status: a.status ?? "approved",
       structured: a.structured,
@@ -1119,7 +1384,7 @@ tool(
   "list_products",
   {
     description:
-      "List all products, optionally filtered by team slug. Call this to discover product slugs before calling list_components, search_knowledge with a product filter, or add_source_product_map.",
+      "List all products, optionally filtered by team slug. Call this to discover product slugs before calling list_components, search_knowledge with a product filter, or add_source_project.",
     inputSchema: { team_slug: z.string().optional() },
     annotations: { readOnlyHint: true },
   },
@@ -1189,7 +1454,7 @@ tool(
   "add_source_connection",
   {
     description:
-      "Register a new source connection. source_type is 'freshdesk', 'github', or 'azure-devops'. slug is a short unique identifier (e.g. 'my-freshdesk') — it also determines the env var for the API token: FRESHDESK_TOKEN_<SLUG_UPPERCASED>, GITHUB_TOKEN_<SLUG_UPPERCASED>, or AZURE_DEVOPS_TOKEN_<SLUG_UPPERCASED> (non-alphanumerics become underscores). For Freshdesk: set base_url to your tenant root URL (e.g. https://your-domain.freshdesk.com). For GitHub: omit base_url and set config to {\"repos\":[\"owner/repo\"]}. For Azure DevOps: base_url is the org URL (https://dev.azure.com/<org>), config is {\"projects\":[\"ProjectA\",\"ProjectB\"]}, and the token is a PAT (scopes: Work Items Read, plus Read & Write for ticket creation, Wiki Read for wikis, Code Read for repos). Tokens are never stored in the DB — set the env var, or store per-user/team via the credentials vault.",
+      'Register a new source connection. source_type is \'freshdesk\', \'github\', or \'azure-devops\'. slug is a short unique identifier (e.g. \'my-freshdesk\') — it also determines the env var for the API token: FRESHDESK_TOKEN_<SLUG_UPPERCASED>, GITHUB_TOKEN_<SLUG_UPPERCASED>, or AZURE_DEVOPS_TOKEN_<SLUG_UPPERCASED> (non-alphanumerics become underscores). For Freshdesk: set base_url to your tenant root URL (e.g. https://your-domain.freshdesk.com). For GitHub: omit base_url and set config to {"repos":["owner/repo"]}. For Azure DevOps: base_url is the org URL (https://dev.azure.com/<org>), config is {"projects":["ProjectA","ProjectB"]}, and the token is a PAT (scopes: Work Items Read, plus Read & Write for ticket creation, Wiki Read for wikis, Code Read for repos). Tokens are never stored in the DB — set the env var, or store per-user/team via the credentials vault.',
     inputSchema: {
       source_type: z.enum(["freshdesk", "github", "azure-devops"]),
       slug: z.string(),
@@ -1211,42 +1476,129 @@ tool(
 );
 
 tool(
-  "list_source_product_maps",
+  "list_source_projects",
   {
     description:
-      "List group→product mappings for one or all source connections. For Freshdesk the external_group_key is the numeric group_id (as text); for GitHub it is 'owner/repo'.",
-    inputSchema: { source_slug: z.string().optional() },
+      "List the registered projects of one or all source connections. A project is the source's own grouping — an Azure DevOps project, a Freshdesk group (numeric id as text), a GitHub 'owner/repo'. role 'knowledge' means it maps to a product and can own a wiki, repos and area→component rules; role 'tracker' means it is a productless target we only create or reassign work items in.",
+    inputSchema: {
+      source_slug: z.string().optional(),
+      product_slug: z.string().optional(),
+      role: z.enum(SOURCE_PROJECT_ROLES).optional(),
+    },
     annotations: { readOnlyHint: true },
   },
-  async ({ source_slug }) => out(await listSourceProductMaps(source_slug)),
+  async (a) =>
+    out(
+      await listSourceProjects({
+        sourceSlug: a.source_slug,
+        productId: a.product_slug
+          ? await getProductIdBySlug(a.product_slug)
+          : undefined,
+        role: a.role,
+      }),
+    ),
 );
 
 tool(
-  "add_source_product_map",
+  "get_project_context",
   {
     description:
-      "Map a source-native grouping to an internal product. For Freshdesk: external_group_key is the group_id (find it in Freshdesk Admin > Groups, or from a fetched ticket's raw payload). For GitHub: external_group_key is 'owner/repo'. For Azure DevOps: external_group_key is the project name (the fetched item's groupKey). Call list_source_connections and list_products first to get the right slugs.",
+      "Everything configured about a project in one call: its connection and source-native key, the product and team it belongs to, its wiki, its repos with the component each one implements, and its area→component rules. Resolve by product_slug, by work_item_id, or by (source_slug + external_key). Call this before search_code, /ingest-wiki or create_ado_work_item so you use the right repo, wiki and project instead of guessing.",
+    inputSchema: {
+      product_slug: z.string().optional(),
+      work_item_id: z.string().optional(),
+      source_slug: z.string().optional(),
+      external_key: z.string().optional(),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async (a) =>
+    out(
+      await resolveProjectContext({
+        productSlug: a.product_slug,
+        workItemId: a.work_item_id,
+        sourceSlug: a.source_slug,
+        externalKey: a.external_key,
+      }),
+    ),
+);
+
+tool(
+  "add_source_project",
+  {
+    description:
+      "Register a source-native project. role 'knowledge' binds it to a product (product_slug required) so its items ingest there and it can own a wiki, repos and area rules. role 'tracker' is a productless create/reassign target and needs team_slug instead. For Azure DevOps external_key is the project name (a fetched item's groupKey); for Freshdesk the group_id; for GitHub 'owner/repo'. Call list_source_connections and list_products first.",
     inputSchema: {
       source_slug: z.string(),
-      external_group_key: z.string(),
-      product_slug: z.string(),
+      external_key: z.string(),
+      name: z.string().optional(),
+      role: z.enum(SOURCE_PROJECT_ROLES),
+      product_slug: z.string().optional(),
+      team_slug: z.string().optional(),
+      wiki: z
+        .object({
+          identifier: z.string(),
+          name: z.string().optional(),
+          root_path: z.string().optional(),
+        })
+        .optional()
+        .describe("The project's wiki, from list_ado_wikis. Knowledge projects only."),
+      notes: z.string().optional(),
     },
   },
   async (a) => {
-    await requireGlobalAdmin();
+    if (a.role === "knowledge")
+      await requireCanEdit({
+        productId: a.product_slug
+          ? await getProductIdBySlug(a.product_slug)
+          : undefined,
+      });
+    else
+      await requireCanManageTeam(
+        a.team_slug ? await getTeamIdBySlug(a.team_slug) : null,
+      );
     return out(
-      await addSourceProductMap({
+      await addSourceProject({
         sourceSlug: a.source_slug,
-        externalGroupKey: a.external_group_key,
+        externalKey: a.external_key,
+        name: a.name,
+        role: a.role,
         productSlug: a.product_slug,
+        teamSlug: a.team_slug,
+        wiki: a.wiki,
+        notes: a.notes,
       }),
     );
   },
 );
 
-async function resolveAdoClient(
-  sourceSlug: string,
-): Promise<{ conn: Awaited<ReturnType<typeof resolveSource>>["conn"]; client: AdoClient }> {
+tool(
+  "set_project_area_map",
+  {
+    description:
+      "Map an Azure DevOps area path prefix to a component, so items under that area are filed on that component automatically. The longest matching prefix wins, so a rule on a sub-area beats one on the project root. component must be an existing slug/alias from list_components for the project's product.",
+    inputSchema: {
+      source_project_id: z.string(),
+      area_prefix: z.string(),
+      component: z.string(),
+    },
+  },
+  async (a) => {
+    await requireCanEdit(await sourceProjectScope(a.source_project_id));
+    return out(
+      await setProjectAreaMap({
+        sourceProjectId: a.source_project_id,
+        areaPrefix: a.area_prefix,
+        componentSlug: a.component,
+      }),
+    );
+  },
+);
+
+async function resolveAdoClient(sourceSlug: string): Promise<{
+  conn: Awaited<ReturnType<typeof resolveSource>>["conn"];
+  client: AdoClient;
+}> {
   const { conn } = await resolveSource(sourceSlug);
   if (conn.sourceType !== "azure-devops")
     throw badInput(
@@ -1262,16 +1614,60 @@ async function resolveAdoClient(
   };
 }
 
+/**
+ * Every ADO tool takes either the raw (source, project) pair or a product_slug
+ * that resolves to a registered project — with its wiki and defaults attached.
+ */
+async function resolveAdoTarget(a: {
+  source?: string;
+  project?: string;
+  product_slug?: string;
+}): Promise<{
+  sourceSlug: string;
+  project: string;
+  context: Awaited<ReturnType<typeof resolveProjectContextStrict>> | null;
+}> {
+  if (a.source && a.project && !a.product_slug)
+    return { sourceSlug: a.source, project: a.project, context: null };
+  const context = await resolveProjectContextStrict({
+    productSlug: a.product_slug,
+    sourceSlug: a.source,
+    externalKey: a.project,
+  });
+  if (context.connection.source_type !== "azure-devops")
+    throw badInput(
+      `project '${context.project.external_key}' belongs to a ${context.connection.source_type} connection — this tool needs azure-devops`,
+    );
+  return {
+    sourceSlug: context.connection.slug,
+    project: context.project.external_key,
+    context,
+  };
+}
+
+const projectDefaults = (
+  context: Awaited<ReturnType<typeof resolveProjectContextStrict>> | null,
+  type: string,
+): Record<string, unknown> | undefined =>
+  (context?.project.config as any)?.defaults?.[type];
+
 tool(
   "list_ado_wikis",
   {
     description:
-      "List the Azure DevOps wikis in a project (or across the org when project is omitted). source must be an azure-devops connection slug.",
-    inputSchema: { source: z.string(), project: z.string().optional() },
+      "List the Azure DevOps wikis in a project (or across the org when project is omitted). Pass either source (+ optional project) or product_slug, which resolves to that product's registered project.",
+    inputSchema: {
+      source: z.string().optional(),
+      project: z.string().optional(),
+      product_slug: z.string().optional(),
+    },
     annotations: { readOnlyHint: true },
   },
-  async ({ source, project }) => {
-    const { client } = await resolveAdoClient(source);
+  async (a) => {
+    const { sourceSlug, project } = a.product_slug
+      ? await resolveAdoTarget(a)
+      : { sourceSlug: a.source!, project: a.project! };
+    const { client } = await resolveAdoClient(sourceSlug);
     const wikis = await client.listWikis(project);
     return out(
       wikis.map((w: any) => ({
@@ -1288,19 +1684,31 @@ tool(
   "list_ado_wiki_pages",
   {
     description:
-      "List page paths of an Azure DevOps wiki (flattened page tree). Use get_ado_wiki_page to fetch a page's content.",
+      "List page paths of an Azure DevOps wiki (flattened page tree). Use get_ado_wiki_page to fetch a page's content. With product_slug, the project and its registered wiki are resolved for you — pass wiki only to override.",
     inputSchema: {
-      source: z.string(),
-      project: z.string(),
-      wiki: z.string().describe("Wiki name or id from list_ado_wikis"),
+      source: z.string().optional(),
+      project: z.string().optional(),
+      product_slug: z.string().optional(),
+      wiki: z
+        .string()
+        .optional()
+        .describe(
+          "Wiki name or id from list_ado_wikis; defaults to the project's registered wiki",
+        ),
       path_prefix: z.string().optional(),
       limit: z.number().int().positive().optional(),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ source, project, wiki, path_prefix, limit }) => {
-    const { client } = await resolveAdoClient(source);
-    let paths = await client.listWikiPages(project, wiki);
+  async ({ source, project, product_slug, wiki, path_prefix, limit }) => {
+    const target = await resolveAdoTarget({ source, project, product_slug });
+    const wikiId = wiki ?? target.context?.wiki?.identifier;
+    if (!wikiId)
+      throw badInput(
+        "no wiki given and this project has none registered — call list_ado_wikis, or set one on the project",
+      );
+    const { client } = await resolveAdoClient(target.sourceSlug);
+    let paths = await client.listWikiPages(target.project, wikiId);
     if (path_prefix) paths = paths.filter((p) => p.startsWith(path_prefix));
     const max = limit ?? 100;
     return out({
@@ -1315,19 +1723,29 @@ tool(
   "get_ado_wiki_page",
   {
     description:
-      "Fetch one Azure DevOps wiki page's markdown content. READ ONLY — it never saves. To persist the knowledge, classify it (incident lesson → save_knowledge_entry; freeform doc/runbook → save_reference_doc with source set to the page URL) and save only after explicit user approval.",
+      "Fetch one Azure DevOps wiki page's markdown content. READ ONLY — it never saves. To persist the knowledge, classify it (incident lesson → save_knowledge_entry; freeform doc/runbook → save_reference_doc with source set to the page URL, plus the source_project_id and external_key returned here so a re-import supersedes it instead of duplicating) and save only after explicit user approval.",
     inputSchema: {
-      source: z.string(),
-      project: z.string(),
-      wiki: z.string(),
+      source: z.string().optional(),
+      project: z.string().optional(),
+      product_slug: z.string().optional(),
+      wiki: z
+        .string()
+        .optional()
+        .describe("Defaults to the project's registered wiki"),
       path: z.string().describe("Page path from list_ado_wiki_pages"),
       max_chars: z.number().int().positive().optional(),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ source, project, wiki, path, max_chars }) => {
-    const { conn, client } = await resolveAdoClient(source);
-    const page = await client.getWikiPage(project, wiki, path);
+  async ({ source, project, product_slug, wiki, path, max_chars }) => {
+    const target = await resolveAdoTarget({ source, project, product_slug });
+    const wikiId = wiki ?? target.context?.wiki?.identifier;
+    if (!wikiId)
+      throw badInput(
+        "no wiki given and this project has none registered — call list_ado_wikis, or set one on the project",
+      );
+    const { conn, client } = await resolveAdoClient(target.sourceSlug);
+    const page = await client.getWikiPage(target.project, wikiId, path);
     const limit = max_chars ?? 20_000;
     const truncated = page.content.length > limit;
     const textOut = truncated ? page.content.slice(0, limit) : page.content;
@@ -1336,6 +1754,9 @@ tool(
     return out({
       path: page.path,
       remote_url: page.remoteUrl ?? null,
+      source_project_id: target.context?.project.id ?? null,
+      external_key: page.path,
+      product_slug: target.context?.product?.slug ?? null,
       chars: page.content.length,
       truncated,
       content: redact ? scrubText(textOut, map) : textOut,
@@ -1354,16 +1775,20 @@ tool(
   "get_ado_work_item_schema",
   {
     description:
-      "Discover what an Azure DevOps project requires to create a work item. Without type: lists the project's work item types. With type: returns each field's reference name, whether it is required, allowed values, and defaults, plus any per-project defaults configured on the connection (config.defaults[project][type]). ALWAYS call this before create_ado_work_item — required fields differ per project and type.",
+      "Discover what an Azure DevOps project requires to create a work item. Without type: lists the project's work item types. With type: returns each field's reference name, whether it is required, allowed values, and defaults, plus the defaults configured on the registered project (config.defaults[type]) or on the connection (config.defaults[project][type]). ALWAYS call this before create_ado_work_item — required fields differ per project and type. Pass either source + project, or product_slug.",
     inputSchema: {
-      source: z.string(),
-      project: z.string(),
+      source: z.string().optional(),
+      project: z.string().optional(),
+      product_slug: z.string().optional(),
       type: z.string().optional().describe("Work item type, e.g. 'Bug'"),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ source, project, type }) => {
-    const { conn, client } = await resolveAdoClient(source);
+  async (a) => {
+    const target = await resolveAdoTarget(a);
+    const { project } = target;
+    const type = a.type;
+    const { conn, client } = await resolveAdoClient(target.sourceSlug);
     if (!type) {
       const types = await client.listWorkItemTypes(project);
       return out({
@@ -1377,9 +1802,10 @@ tool(
     }
     const fields = await client.getTypeFields(project, type);
     const defaults =
+      projectDefaults(target.context, type) ??
       ((conn.config as any)?.defaults?.[project]?.[type] as
-        | Record<string, unknown>
-        | undefined) ?? {};
+        Record<string, unknown> | undefined) ??
+      {};
     const MAX_VALUES = 50;
     return out({
       project,
@@ -1410,10 +1836,11 @@ tool(
   "create_ado_work_item",
   {
     description:
-      "Create a work item (Bug, Task, User Story, ...) in an Azure DevOps project. Call get_ado_work_item_schema FIRST and fill every required field — requirements differ per project/type; never guess. fields is keyed by ADO reference names (e.g. 'System.AreaPath', 'Microsoft.VSTS.Common.Severity'); connection config defaults for the project/type are applied underneath. description is plain text/HTML — ADO renders System.Description as HTML, markdown will NOT render. Present the full field set to the user for approval before calling. Requires a PAT with Work Items Read & Write.",
+      "Create a work item (Bug, Task, User Story, ...) in an Azure DevOps project. Call get_ado_work_item_schema FIRST and fill every required field — requirements differ per project/type; never guess. Pass either source + project, or product_slug (or the project's external key) to use a registered project — a 'tracker' project is exactly a create target like this. fields is keyed by ADO reference names (e.g. 'System.AreaPath', 'Microsoft.VSTS.Common.Severity'); the project's configured defaults are applied underneath. description is plain text/HTML — ADO renders System.Description as HTML, markdown will NOT render. Pass work_item_id when raising this from a ticket, so the ticket records what tracks it. Present the full field set to the user for approval before calling. Requires a PAT with Work Items Read & Write.",
     inputSchema: {
-      source: z.string(),
-      project: z.string(),
+      source: z.string().optional(),
+      project: z.string().optional(),
+      product_slug: z.string().optional(),
       type: z.string(),
       title: z.string(),
       description: z.string().optional(),
@@ -1421,20 +1848,33 @@ tool(
       parent_id: z.string().optional(),
       related_ids: z.array(z.string()).optional(),
       tags: z.array(z.string()).optional(),
+      work_item_id: z
+        .string()
+        .optional()
+        .describe("The tachy work item this is raised from, if any"),
     },
   },
   async (a) => {
-    const { conn, client } = await resolveAdoClient(a.source);
+    const target = await resolveAdoTarget(a);
+    const project = target.project;
+    const { conn, client } = await resolveAdoClient(target.sourceSlug);
     const defaults =
-      ((conn.config as any)?.defaults?.[a.project]?.[a.type] as
-        | Record<string, unknown>
-        | undefined) ?? {};
-    const merged: Record<string, unknown> = { ...defaults, ...(a.fields ?? {}) };
+      projectDefaults(target.context, a.type) ??
+      ((conn.config as any)?.defaults?.[project]?.[a.type] as
+        Record<string, unknown> | undefined) ??
+      {};
+    const merged: Record<string, unknown> = {
+      ...defaults,
+      ...(a.fields ?? {}),
+    };
     merged["System.Title"] = a.title;
     if (a.description != null)
-      merged["System.Description"] = /<[a-z][\s\S]*>/i.test(a.description)
-        ? a.description
-        : `<div>${a.description.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>")}</div>`;
+      merged["System.Description"] =
+        /<\/?(p|div|br|ul|ol|li|b|i|em|strong|a|span|h[1-6]|table|tr|td)\b/i.test(
+          a.description,
+        )
+          ? a.description
+          : `<div>${a.description.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>")}</div>`;
     if (a.tags?.length) merged["System.Tags"] = a.tags.join("; ");
 
     const patch: JsonPatchOp[] = Object.entries(merged).map(([k, v]) => ({
@@ -1455,18 +1895,33 @@ tool(
     for (const id of a.related_ids ?? [])
       patch.push(relation("System.LinkTypes.Related", id));
 
-    const created = await client.createWorkItem(a.project, a.type, patch);
+    const created = await client.createWorkItem(project, a.type, patch);
+    const userId = await resolveCurrentUserId();
     await recordRun({
-      userId: await resolveCurrentUserId(),
+      userId,
       mode: "create",
-      meta: { source: a.source, project: a.project, type: a.type, ado_id: created.id },
+      meta: {
+        source: target.sourceSlug,
+        project,
+        type: a.type,
+        ado_id: created.id,
+      },
     });
+    if (a.work_item_id)
+      await addWorkItemLink({
+        fromWorkItemId: a.work_item_id,
+        toSourceProjectId: target.context?.project.id ?? null,
+        toExternalId: String(created.id),
+        kind: "tracked_by",
+        createdById: userId,
+      });
     return out({
       created: true,
       id: created.id,
+      ...(a.work_item_id ? { linked_to_work_item: a.work_item_id } : {}),
       url:
         created._links?.html?.href ??
-        `${client.orgUrl}/${encodeURIComponent(a.project)}/_workitems/edit/${created.id}`,
+        `${client.orgUrl}/${encodeURIComponent(project)}/_workitems/edit/${created.id}`,
     });
   },
 );
@@ -1475,17 +1930,29 @@ tool(
   "list_repos",
   {
     description:
-      "List linked git repositories available for code search, with index freshness. index_status 'error' or a stale last_indexed_at means results may not reflect current code — say so when citing.",
-    inputSchema: {},
+      "List linked git repositories available for code search, with the component each one implements and its index freshness. index_status 'error' or a stale last_indexed_at means results may not reflect current code — say so when citing. Filter by product or component to find the repo that actually holds the area you are asking about.",
+    inputSchema: {
+      product_slug: z.string().optional(),
+      component: z.string().optional(),
+    },
     annotations: { readOnlyHint: true },
   },
-  async () => {
-    const rows = await listRepos();
+  async ({ product_slug, component }) => {
+    const { productId } = await resolveScopeIds({ product_slug });
+    const rows = await listRepos({
+      productId,
+      componentId:
+        productId && component
+          ? (await resolveComponentStrict(productId, component)).id
+          : undefined,
+    });
     return out(
       rows.map((r) => ({
         slug: r.slug,
         url: r.url,
         product_slug: r.product_slug,
+        component: r.component_slug,
+        project_key: r.project_key,
         default_branch: r.default_branch,
         index_status: r.index_status,
         indexed_commit: r.indexed_commit,
@@ -1507,16 +1974,28 @@ tool(
       query: z.string(),
       repo: z.string().optional().describe("Repo slug from list_repos"),
       product_slug: z.string().optional(),
+      component: z
+        .string()
+        .optional()
+        .describe(
+          "Component slug — searches only the repos that implement it. Needs product_slug.",
+        ),
       path_prefix: z.string().optional(),
       limit: z.number().int().positive().optional(),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ query, repo, product_slug, path_prefix, limit }) => {
+  async ({ query, repo, product_slug, component, path_prefix, limit }) => {
     const { productId } = await resolveScopeIds({ product_slug });
+    if (component && !productId)
+      throw badInput("component needs product_slug to resolve against");
     const rows = await searchCode(query, {
       repoSlug: repo,
       productId,
+      componentId:
+        productId && component
+          ? (await resolveComponentStrict(productId, component)).id
+          : undefined,
       pathPrefix: path_prefix,
       limit,
     });
@@ -1528,6 +2007,7 @@ tool(
     return outScrubbed(
       rows.map((r: any) => ({
         repo: r.repo_slug,
+        component: r.component_slug,
         path: r.path,
         lines: `${r.start_line}-${r.end_line}`,
         lang: r.lang,
@@ -1560,6 +2040,100 @@ tool(
         endLine: end_line,
       }),
     );
+  },
+);
+
+tool(
+  "export_table",
+  {
+    description:
+      "Generate a downloadable spreadsheet (xlsx) or CSV from rows you produce, and return a download link. When the user attached an artifact that declares output columns, pass its artifact_slug and fill EXACTLY those columns — extra columns, renamed keys or missing required values are rejected with the reason, so fix the rows and call again. Without an artifact, pass columns yourself. Never print the table into the chat and never restate the rows afterwards: the user gets the file. The result carries only a descriptor (id, filename, size, url), never the file contents.",
+    inputSchema: {
+      artifact_slug: z
+        .string()
+        .optional()
+        .describe(
+          "Slug of an artifact whose spec.output declares the columns and format. Takes precedence over columns.",
+        ),
+      format: z
+        .enum(TABLE_FORMATS)
+        .optional()
+        .describe("Overrides the artifact's format. Defaults to xlsx."),
+      sheet: z.string().optional(),
+      filename: z
+        .string()
+        .optional()
+        .describe("Supports {date} and {slug} placeholders."),
+      columns: z
+        .array(tableColumnSchema)
+        .optional()
+        .describe("Required when artifact_slug is not given."),
+      rows: z
+        .array(z.record(z.string(), z.unknown()))
+        .describe("One object per row, keyed by column key."),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ artifact_slug, format, sheet, filename, columns, rows }) => {
+    const userId = await resolveCurrentUserId();
+    const artifact = artifact_slug
+      ? await getArtifactBySlug(artifact_slug, {
+          userId: userId ?? undefined,
+          teamId: userId
+            ? ((await userSoleTeamId(userId)) ?? undefined)
+            : undefined,
+        })
+      : undefined;
+
+    if (artifact_slug && !artifact)
+      throw badInput(`no artifact '${artifact_slug}' is visible to you`);
+
+    const output = artifact?.spec?.output;
+    const spec = output ?? {
+      format: format ?? "xlsx",
+      sheet,
+      filename,
+      columns: columns ?? [],
+    };
+    if (!spec.columns.length)
+      throw badInput(
+        "no columns: pass columns, or an artifact_slug whose spec declares them",
+      );
+
+    const chosen = format ?? spec.format;
+    const rendered = renderTable({
+      format: chosen,
+      sheet: sheet ?? spec.sheet,
+      columns: spec.columns,
+      rows,
+    });
+
+    const meta = await createOutput({
+      userId,
+      artifactId: artifact?.id ?? null,
+      utility: "export_table",
+      filename: outputFilename(
+        { filename: filename ?? spec.filename, format: chosen },
+        artifact_slug ?? "export",
+      ),
+      mime: rendered.mime,
+      bytes: rendered.bytes,
+      meta: { rows: rows.length, columns: spec.columns.length },
+    });
+
+    return out({
+      output: {
+        id: meta.id,
+        filename: meta.filename,
+        mime: meta.mime,
+        byte_size: meta.byte_size,
+        rows: rows.length,
+        columns: spec.columns.length,
+        url: `/api/outputs/${meta.id}/download`,
+        expires_at: meta.expires_at,
+      },
+      next: "The file is ready and the user sees a download card. Say one line about what it contains — do not restate the rows.",
+    });
   },
 );
 
