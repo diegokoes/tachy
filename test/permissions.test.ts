@@ -365,4 +365,112 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     });
     expect(crossTeam.status).toBe(403);
   });
+
+  it("team admin registers projects for their own team only", async () => {
+    const own = await req(leadCookie, "/source-projects", "POST", {
+      source_slug: "test-freshdesk",
+      external_key: "LeadProj",
+      role: "knowledge",
+      product_slug: "tpd",
+    });
+    expect(own.status).toBe(200);
+    const projectId = (await own.json()).id;
+
+    const otherProduct = await req(adminCookie, "/products", "POST", {
+      team_slug: "other-team",
+      slug: "otherp",
+      name: "Other Product",
+    });
+    expect(otherProduct.status).toBe(200);
+    const crossTeam = await req(leadCookie, "/source-projects", "POST", {
+      source_slug: "test-freshdesk",
+      external_key: "TheirProj",
+      role: "knowledge",
+      product_slug: "otherp",
+    });
+    expect(crossTeam.status).toBe(403);
+
+    const tracker = await req(leadCookie, "/source-projects", "POST", {
+      source_slug: "test-freshdesk",
+      external_key: "LeadTracker",
+      role: "tracker",
+      team_slug: "test-team",
+    });
+    expect(tracker.status).toBe(200);
+    const crossTracker = await req(leadCookie, "/source-projects", "POST", {
+      source_slug: "test-freshdesk",
+      external_key: "TheirTracker",
+      role: "tracker",
+      team_slug: "other-team",
+    });
+    expect(crossTracker.status).toBe(403);
+
+    // Re-pointing a project needs rights on where it lands, not just where it is.
+    const moved = await req(leadCookie, `/source-projects/${projectId}`, "PATCH", {
+      product_slug: "otherp",
+    });
+    expect(moved.status).toBe(403);
+
+    expect(
+      (await req(devCookie, "/source-projects", "POST", {
+        source_slug: "test-freshdesk",
+        external_key: "DevProj",
+        role: "knowledge",
+        product_slug: "tpd",
+      })).status,
+    ).toBe(403);
+
+    // Reads stay open — the admin panel loads them before knowing who you are.
+    expect((await req(devCookie, "/source-projects", "GET")).status).toBe(200);
+
+    const area = await req(leadCookie, `/source-projects/${projectId}/areas`, "PUT", {
+      area_prefix: "LeadProj\\Portal",
+      component_slug: "nope",
+    });
+    // 400 (unknown component), not 403: the guard passed and validation spoke.
+    expect(area.status).toBe(400);
+    expect(
+      (await req(devCookie, `/source-projects/${projectId}/areas`, "PUT", {
+        area_prefix: "x",
+        component_slug: "y",
+      })).status,
+    ).toBe(403);
+
+    await req(leadCookie, `/source-projects/${projectId}`, "DELETE");
+  });
+
+  it("repo writes follow the repo's scope, and connections stay admin-only", async () => {
+    const own = await req(leadCookie, "/repos", "PUT", {
+      slug: "leadrepo",
+      url: "https://example.invalid/lead.git",
+      product: "tpd",
+    });
+    expect(own.status).toBe(200);
+
+    // The upsert is keyed on slug, so re-pointing an existing repo is checked
+    // against both scopes — otherwise a team admin could hijack the slug.
+    expect(
+      (await req(leadCookie, "/repos", "PUT", {
+        slug: "leadrepo",
+        url: "https://example.invalid/lead.git",
+        product: "otherp",
+      })).status,
+    ).toBe(403);
+
+    expect((await req(devCookie, "/repos/leadrepo", "DELETE")).status).toBe(403);
+    expect(
+      (await req(leadCookie, "/repos", "PUT", {
+        slug: "unscoped",
+        url: "https://example.invalid/u.git",
+      })).status,
+    ).toBe(403);
+    expect((await req(leadCookie, "/repos/leadrepo", "DELETE")).status).toBe(200);
+
+    expect(
+      (await req(leadCookie, "/source-connections", "POST", {
+        sourceType: "freshdesk",
+        slug: "lead-desk",
+      })).status,
+    ).toBe(403);
+  });
 });

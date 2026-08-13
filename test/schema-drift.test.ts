@@ -12,6 +12,8 @@ import {
   LEARNING_VALUES,
   USER_ROLES,
   TEAM_ROLES,
+  SOURCE_PROJECT_ROLES,
+  WORK_ITEM_LINK_KINDS,
 } from "@tachy/core";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -46,8 +48,22 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     ["reference_docs", "status", REFERENCE_STATUSES],
     ["users", "role", USER_ROLES],
     ["team_members", "role", TEAM_ROLES],
+    ["source_projects", "role", SOURCE_PROJECT_ROLES],
+    ["work_item_links", "kind", WORK_ITEM_LINK_KINDS],
   ] as const)("%s.%s", (table, col, values) => {
     expect(checkValues(table, col).sort()).toEqual([...values].sort());
+  });
+
+  it("source_projects ties its role to having a product", () => {
+    expect(tableBlock("source_projects")).toContain(
+      "check ((role = 'knowledge') = (product_id is not null))",
+    );
+  });
+
+  it("repos carry their project and component", () => {
+    const block = tableBlock("repos");
+    expect(block).toContain("source_project_id");
+    expect(block).toContain("component_id");
   });
 
   it("knowledge_entries carries the taxonomy/lifecycle columns", () => {
@@ -81,5 +97,24 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
       "artifacts_user_idx   on artifacts(user_id, slug)",
     ])
       expect(schema).toContain(idx);
+  });
+
+  it("artifacts carries the output spec column", () => {
+    expect(tableBlock("artifacts")).toMatch(/^\s*spec\s+jsonb,$/m);
+  });
+
+  it("generated_outputs stores bytes, ownership and an expiry", () => {
+    const block = tableBlock("generated_outputs");
+    for (const col of [
+      "user_id     uuid references users(id) on delete cascade",
+      "artifact_id uuid references artifacts(id) on delete set null",
+      "bytes       bytea not null",
+      "byte_size   integer not null",
+      "expires_at  timestamptz not null",
+    ])
+      expect(block).toContain(col);
+    expect(schema).toContain(
+      "generated_outputs_expiry_idx on generated_outputs(expires_at)",
+    );
   });
 });

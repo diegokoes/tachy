@@ -61,6 +61,39 @@ describe("github adapter", () => {
     ]);
   });
 
+  it("pages through issues with more than 100 comments", async () => {
+    const fullPage = Array.from({ length: 100 }, (_, i) => ({
+      id: i + 1,
+      user: { login: "bob" },
+      body: `comment ${i + 1}`,
+      created_at: `2026-01-01T00:00:00Z`,
+    }));
+    mockFetch({
+      "/repos/o/r/issues/5": {
+        number: 5,
+        title: "Busy issue",
+        state: "open",
+        html_url: "https://github.com/o/r/issues/5",
+        user: { login: "alice" },
+        body: "it breaks",
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-02T00:00:00Z",
+      },
+      "/repos/o/r/issues/5/comments?per_page=100&page=1": fullPage,
+      "/repos/o/r/issues/5/comments?per_page=100&page=2": [
+        {
+          id: 101,
+          user: { login: "carol" },
+          body: "comment 101",
+          created_at: "2026-01-02T00:00:00Z",
+        },
+      ],
+    });
+    const item = await source().fetchItem("o/r#5");
+    expect(item.messages).toHaveLength(102);
+    expect(item.messages.at(-1)?.bodyText).toBe("comment 101");
+  });
+
   it("lists issues and skips pull requests", async () => {
     mockFetch({
       "/repos/o/r/issues": [

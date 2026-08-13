@@ -16,10 +16,11 @@ insert into source_connections (source_type, slug, base_url) values
     ('freshdesk', 'test-freshdesk', 'https://test.freshdesk.com')
 on conflict (slug) do nothing;
 
-insert into source_product_map (source_connection_id, external_group_key, product_id)
-select sc.id, '48000641379', p.id
+insert into source_projects
+    (source_connection_id, external_key, name, product_id, team_id, role)
+select sc.id, '48000641379', 'Test Group', p.id, t.id, 'knowledge'
 from source_connections sc
 join products p on p.slug = 'tpd'
 join teams t on t.id = p.team_id and t.slug = 'test-team'
 where sc.slug = 'test-freshdesk'
-on conflict (source_connection_id, external_group_key) do nothing;
+on conflict (source_connection_id, external_key) do nothing;
