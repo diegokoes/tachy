@@ -17,7 +17,9 @@ import { users } from "./routes/users";
 import { me } from "./routes/me";
 import { credentials } from "./routes/credentials";
 import { artifacts } from "./routes/artifacts";
+import { outputs } from "./routes/outputs";
 import { repos } from "./routes/repos";
+import { projects } from "./routes/projects";
 import { installAuth, isBootstrapped, type OidcConfig } from "./auth";
 
 registerSource("freshdesk", createFreshdeskSource);
@@ -42,7 +44,9 @@ function apiRoutes() {
     .route("/me", me)
     .route("/credentials", credentials)
     .route("/artifacts", artifacts)
+    .route("/outputs", outputs)
     .route("/repos", repos)
+    .route("/", projects)
     .route("/", admin);
 }
 

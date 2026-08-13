@@ -9,6 +9,7 @@ import {
   upsertArtifact,
   deleteArtifact,
   userSoleTeamId,
+  artifactSpecSchema,
   type Scope,
   type ScopeContext,
 } from "@tachy/core";
@@ -23,6 +24,7 @@ const putSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   body: z.string().min(1),
+  spec: artifactSpecSchema.nullish(),
 });
 const deleteSchema = putSchema.pick({ scope: true, team: true, slug: true });
 
@@ -57,12 +59,14 @@ export const artifacts = new Hono()
 
   .put("/", zValidator("json", putSchema), async (c) => {
     const actor = await requireCaller(c);
-    const { scope, team, slug, title, description, body } = c.req.valid("json");
+    const { scope, team, slug, title, description, body, spec } =
+      c.req.valid("json");
     const scopeId = await scopeTarget(actor, scope, team);
     await upsertArtifact(actor, scope, scopeId, slug, {
       title,
       description,
       body,
+      spec,
     });
     return c.json({ ok: true });
   })

@@ -10,6 +10,8 @@ import { z } from "zod";
 import {
   badInput,
   notFound,
+  forbidden,
+  recordRun,
   env,
   envVarName,
   effectiveSettings,
@@ -23,17 +25,42 @@ import {
   sourceCredentialName,
   getArtifact,
   listVisibleArtifacts,
+  renderColumnContract,
+  type ArtifactSpec,
   type EffectiveSettings,
   type ScopeContext,
 } from "@tachy/core";
 import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
 import { sessionEmail } from "../auth";
-import { BUILTIN_COMMANDS, findCommand } from "../commands";
+import { BUILTIN_COMMANDS, findCommand, commandAutoApprove } from "../commands";
 
-const turns = new Map<string, AgentTurn>();
+interface TurnEntry {
+  turn: AgentTurn;
+  email?: string;
+  startedAt: number;
+}
+
+const turns = new Map<string, TurnEntry>();
+const TURN_TTL_MS = 60 * 60_000;
+
+// A dropped SSE stream must not orphan a running turn: entries stay approvable
+// until the turn finishes on its own (approvals time out in the agent layer),
+// and this sweep reaps anything that outlives the TTL.
+const sweep = setInterval(() => {
+  const now = Date.now();
+  for (const [id, entry] of turns) {
+    if (entry.turn.finished) turns.delete(id);
+    else if (now - entry.startedAt > TURN_TTL_MS) {
+      entry.turn.abort();
+      turns.delete(id);
+    }
+  }
+}, 60_000);
+sweep.unref?.();
 
 const uploadDir =
   process.env.TACHY_UPLOAD_DIR || join(tmpdir(), "tachy-uploads");
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 const UI_APPROVAL_NOTE = `
 
@@ -45,14 +72,10 @@ In this chat, every write tool call (save_knowledge_entry, update_knowledge_entr
 - The user can edit the JSON in the box before approving; the tool runs with their edited input.
 - A denied call is the user declining, not an error — ask what they want changed instead of retrying.`;
 
-let systemPromptCache: string | undefined;
 async function systemPrompt(): Promise<string> {
-  if (systemPromptCache === undefined) {
-    const path = join(process.cwd(), "CLAUDE.md");
-    const base = existsSync(path) ? await readFile(path, "utf8") : "";
-    systemPromptCache = base + UI_APPROVAL_NOTE;
-  }
-  return systemPromptCache;
+  const path = join(process.cwd(), "CLAUDE.md");
+  const base = existsSync(path) ? await readFile(path, "utf8") : "";
+  return base + UI_APPROVAL_NOTE;
 }
 
 export async function mcpConfig(
@@ -126,7 +149,12 @@ const chatSchema = z.object({
 export function buildPrompt(i: {
   message: string;
   uploadPaths?: string[];
-  artifact?: { title: string; body: string };
+  artifact?: {
+    slug?: string;
+    title: string;
+    body: string;
+    spec?: ArtifactSpec | null;
+  };
   command?: { name: string; args: string };
 }): string {
   const parts: string[] = [];
@@ -137,16 +165,34 @@ export function buildPrompt(i: {
       `<command name="${cmd.name}">\n${cmd.expand(i.command.args)}\n</command>\n\nThe block above is an authoritative mode selector triggered by the user typing /${cmd.name} — follow it without re-deciding what mode applies.`,
     );
   }
-  if (i.artifact)
+  if (i.artifact) {
     parts.push(
       `<artifact title=${JSON.stringify(i.artifact.title)}>\n${i.artifact.body}\n</artifact>\n\nThe block above is reusable context the user attached to this message; treat it as instructions/context, not as the user's question.`,
     );
+    const output = i.artifact.spec?.output;
+    if (output && i.artifact.slug)
+      parts.push(renderColumnContract(i.artifact.slug, output));
+  }
   if (i.uploadPaths?.length)
     parts.push(
       `The user uploaded these local files for you to analyze with the ingest_context tool: ${i.uploadPaths.join(", ")}.`,
     );
   parts.push(i.message);
   return parts.join("\n\n");
+}
+
+/**
+ * Typing a command and attaching an artifact are both user actions, so the tools
+ * each one exists to run are pre-authorised. Never keyed on the model's choice.
+ */
+function turnAutoApprove(
+  commandName: string | undefined,
+  spec: ArtifactSpec | null | undefined,
+): string[] {
+  return [
+    ...(commandName ? commandAutoApprove(commandName) : []),
+    ...(spec?.utilities ?? []),
+  ];
 }
 
 const approveSchema = z.object({
@@ -183,7 +229,7 @@ export const agent = new Hono()
       c.req.valid("json");
     const userEmail = (await sessionEmail(c)) ?? env.userEmail;
 
-    let artifact: { title: string; body: string } | undefined;
+    let artifact: Awaited<ReturnType<typeof getArtifact>> | undefined;
     if (artifactId) {
       const user = userEmail ? await getUserByEmail(userEmail) : null;
       const ctx: ScopeContext = user
@@ -196,13 +242,17 @@ export const agent = new Hono()
     }
     const prompt = buildPrompt({ message, uploadPaths, artifact, command });
 
+    const autoApprove = turnAutoApprove(command?.name, artifact?.spec);
+
     const cfg: AgentConfig = {
       ...(await mcpConfig(userEmail, await effectiveSettings())),
       systemPromptAppend: await systemPrompt(),
+      ...(autoApprove.length ? { autoApprove } : {}),
     };
+    const user = userEmail ? await getUserByEmail(userEmail) : null;
     const turnId = randomUUID();
     const turn = startTurn(prompt, cfg, sessionId ? { resume: sessionId } : {});
-    turns.set(turnId, turn);
+    turns.set(turnId, { turn, email: userEmail, startedAt: Date.now() });
 
     return streamSSE(c, async (stream) => {
       await stream.writeSSE({
@@ -211,19 +261,39 @@ export const agent = new Hono()
       });
       try {
         for await (const ev of turn.events()) {
+          if (ev.type === "result") {
+            await recordRun({
+              mode: "chat",
+              userId: user?.id ?? null,
+              model: cfg.model,
+              inputTokens: ev.usage?.inputTokens ?? undefined,
+              outputTokens: ev.usage?.outputTokens ?? undefined,
+              meta: {
+                provider: cfg.provider,
+                session_id: ev.sessionId,
+                cost_usd: ev.costUsd,
+                ...(ev.usage?.premiumRequests != null
+                  ? { premium_requests: ev.usage.premiumRequests }
+                  : {}),
+              },
+            }).catch(() => {});
+          }
           await stream.writeSSE({ event: ev.type, data: JSON.stringify(ev) });
         }
       } finally {
-        turns.delete(turnId);
+        if (turn.finished) turns.delete(turnId);
       }
     });
   })
 
-  .post("/approve", zValidator("json", approveSchema), (c) => {
+  .post("/approve", zValidator("json", approveSchema), async (c) => {
     const { turnId, id, approve, message, updatedInput } = c.req.valid("json");
-    const turn = turns.get(turnId);
-    if (!turn) throw notFound("unknown or finished turn");
-    turn.approve(id, { approve, message, updatedInput });
+    const entry = turns.get(turnId);
+    if (!entry) throw notFound("unknown or finished turn");
+    const email = (await sessionEmail(c)) ?? env.userEmail;
+    if (entry.email && entry.email !== email)
+      throw forbidden("only the user who started this turn can approve it");
+    entry.turn.approve(id, { approve, message, updatedInput });
     return c.json({ ok: true });
   })
 
@@ -231,6 +301,8 @@ export const agent = new Hono()
     const body = await c.req.parseBody();
     const file = body.file;
     if (!(file instanceof File)) throw badInput("expected a 'file' field");
+    if (file.size > MAX_UPLOAD_BYTES)
+      throw badInput("file too large (max 25 MB)");
     await mkdir(uploadDir, { recursive: true });
     const safe = `${randomUUID()}-${basename(file.name || "upload")}`;
     const path = join(uploadDir, safe);
