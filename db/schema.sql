@@ -110,6 +110,7 @@ create table artifacts (
     title       text not null,
     description text,
     body        text not null,
+    spec        jsonb,
     created_by  uuid references users(id),
     created_at  timestamptz not null default now(),
     updated_at  timestamptz not null default now(),
@@ -120,6 +121,23 @@ create unique index artifacts_global_idx on artifacts(slug)          where scope
 create unique index artifacts_team_idx   on artifacts(team_id, slug) where scope = 'team';
 create unique index artifacts_user_idx   on artifacts(user_id, slug) where scope = 'user';
 
+-- Files produced for download (export_table, ...); short-lived by design.
+create table generated_outputs (
+    id          uuid primary key default gen_random_uuid(),
+    user_id     uuid references users(id) on delete cascade,
+    artifact_id uuid references artifacts(id) on delete set null,
+    utility     text not null,
+    filename    text not null,
+    mime        text not null,
+    bytes       bytea not null,
+    byte_size   integer not null,
+    meta        jsonb not null default '{}'::jsonb,
+    created_at  timestamptz not null default now(),
+    expires_at  timestamptz not null
+);
+create index generated_outputs_user_idx   on generated_outputs(user_id, created_at desc);
+create index generated_outputs_expiry_idx on generated_outputs(expires_at);
+
 create table source_connections (
     id            uuid primary key default gen_random_uuid(),
     source_type   text not null,
@@ -129,13 +147,35 @@ create table source_connections (
     created_at    timestamptz not null default now()
 );
 
-create table source_product_map (
+-- A project as its source system knows it: an Azure DevOps project, a Freshdesk
+-- group, a GitHub owner/repo. role='knowledge' binds it to a product — its items
+-- ingest there, and it may own a wiki, repos and area mappings. role='tracker' is
+-- a productless target we only create or reassign work items in, so team_id is
+-- its sole owner for authorization.
+create table source_projects (
     id                    uuid primary key default gen_random_uuid(),
     source_connection_id  uuid not null references source_connections(id) on delete cascade,
-    external_group_key    text not null,
-    product_id            uuid not null references products(id) on delete cascade,
-    unique (source_connection_id, external_group_key)
+    -- the source's own key: ADO project name, Freshdesk group id, 'owner/repo'
+    external_key          text not null,
+    name                  text not null,
+    product_id            uuid references products(id) on delete cascade,
+    team_id               uuid not null references teams(id) on delete cascade,
+    role                  text not null check (role in ('knowledge','tracker')),
+    -- {identifier, name, root_path} of this project's wiki, when it has one
+    wiki                  jsonb not null default '{}'::jsonb,
+    -- {defaults: {<work item type>: {<ado field>: value}}}, applied underneath
+    -- the fields create_ado_work_item is called with
+    config                jsonb not null default '{}'::jsonb,
+    notes                 text,
+    created_at            timestamptz not null default now(),
+    -- role and product must agree, or a 'knowledge' row with no product silently
+    -- routes every ingested item nowhere
+    check ((role = 'knowledge') = (product_id is not null)),
+    unique (source_connection_id, external_key)
 );
+
+create index source_projects_product_idx on source_projects(product_id);
+create index source_projects_team_idx    on source_projects(team_id);
 
 create table customers (
     id          uuid primary key default gen_random_uuid(),
@@ -157,6 +197,7 @@ create table work_items (
     title                 text,
     status                text,
     external_group_key    text,
+    source_project_id     uuid references source_projects(id) on delete set null,
     product_id            uuid references products(id) on delete set null,
     team_id               uuid references teams(id) on delete set null,
     customer_id           uuid references customers(id) on delete set null,
@@ -170,6 +211,7 @@ create table work_items (
 );
 
 create index work_items_product_idx     on work_items(product_id);
+create index work_items_project_idx     on work_items(source_project_id);
 create index work_items_team_idx        on work_items(team_id);
 create index work_items_customer_idx    on work_items(customer_id);
 create index work_items_updated_idx     on work_items(source_connection_id, source_updated_at);
@@ -189,6 +231,34 @@ create table work_item_messages (
 );
 
 create index work_item_messages_item_idx on work_item_messages(work_item_id, created_at);
+
+-- "this Freshdesk ticket is tracked by ADO #50912": written when a fetched item
+-- mentions work item ids and when one is created from a ticket. The target is
+-- often not ingested, so it is recorded either as a work item row or as
+-- (project, external id), and tightens to the former once that item is fetched.
+create table work_item_links (
+    id                   uuid primary key default gen_random_uuid(),
+    from_work_item_id    uuid not null references work_items(id) on delete cascade,
+    to_work_item_id      uuid references work_items(id) on delete cascade,
+    to_source_project_id uuid references source_projects(id) on delete set null,
+    to_external_id       text,
+    kind                 text not null check (kind in ('tracked_by','duplicates','relates')),
+    created_by           uuid references users(id) on delete set null,
+    created_at           timestamptz not null default now(),
+    check (to_work_item_id is not null or to_external_id is not null)
+);
+
+create index work_item_links_from_idx on work_item_links(from_work_item_id);
+create index work_item_links_to_idx   on work_item_links(to_work_item_id);
+-- Conflict targets for the idempotent writes: re-fetching a ticket must not pile
+-- up another copy of the same link.
+create unique index work_item_links_pair_idx
+    on work_item_links(from_work_item_id, to_work_item_id, kind)
+    where to_work_item_id is not null;
+create unique index work_item_links_external_idx
+    on work_item_links(from_work_item_id, to_source_project_id, to_external_id, kind)
+    nulls not distinct
+    where to_external_id is not null;
 
 create table resolution_patterns (
     slug         text primary key,
@@ -212,6 +282,20 @@ create table components (
 create index components_product_idx on components(product_id);
 create index components_parent_idx  on components(parent_id);
 create index components_aliases_idx on components using gin (aliases);
+
+-- Azure DevOps System.AreaPath prefix -> component, so an ingested item lands on
+-- the right component instead of being guessed at. A table rather than jsonb on
+-- source_projects: a component rename rewrites an FK, it cannot rewrite a slug
+-- buried in a blob. Longest matching prefix wins at read time.
+create table project_area_map (
+    id                 uuid primary key default gen_random_uuid(),
+    source_project_id  uuid not null references source_projects(id) on delete cascade,
+    area_prefix        text not null,
+    component_id       uuid not null references components(id) on delete cascade,
+    unique (source_project_id, area_prefix)
+);
+
+create index project_area_map_component_idx on project_area_map(component_id);
 
 create table knowledge_entries (
     id                  uuid primary key default gen_random_uuid(),
@@ -329,7 +413,7 @@ create table analysis_runs (
     id              uuid primary key default gen_random_uuid(),
     work_item_id    uuid references work_items(id) on delete set null,
     user_id         uuid references users(id) on delete set null,
-    mode            text not null check (mode in ('ingest','consult','sync','create','code')),
+    mode            text not null check (mode in ('ingest','consult','sync','create','code','chat')),
     model           text,
     input_tokens    integer,
     output_tokens   integer,
@@ -356,6 +440,12 @@ create table reference_docs (
     team_id     uuid references teams(id) on delete set null,
     created_by  uuid references users(id) on delete set null,
     source      text,
+    -- Provenance for docs pulled from a project wiki; external_key is the page
+    -- path, and (project, page) is what a re-import supersedes instead of
+    -- duplicating. Not unique: a new revision is inserted before its predecessor
+    -- is archived, inside one transaction.
+    source_project_id uuid references source_projects(id) on delete set null,
+    external_key      text,
     title       text not null,
     body        text not null,
     tags        text[] not null default '{}',
@@ -379,6 +469,7 @@ create table reference_docs (
 );
 
 create index reference_docs_product_idx on reference_docs(product_id);
+create index reference_docs_project_idx on reference_docs(source_project_id, external_key);
 create index reference_docs_team_idx    on reference_docs(team_id);
 create index reference_docs_status_idx  on reference_docs(status);
 create index reference_docs_tags_idx    on reference_docs using gin (tags);
@@ -412,6 +503,9 @@ create table repos (
     url             text not null,
     product_id      uuid references products(id) on delete set null,
     source_slug     text references source_connections(slug) on delete set null,
+    source_project_id uuid references source_projects(id) on delete set null,
+    -- one component per repo; linkRepo enforces that it belongs to product_id
+    component_id    uuid references components(id) on delete set null,
     default_branch  text not null default 'main',
     config          jsonb not null default '{}'::jsonb,
     index_status    text not null default 'idle'
@@ -423,6 +517,10 @@ create table repos (
     last_indexed_at timestamptz,
     created_at      timestamptz not null default now()
 );
+
+create index repos_product_idx   on repos(product_id);
+create index repos_project_idx   on repos(source_project_id);
+create index repos_component_idx on repos(component_id);
 
 create table repo_files (
     id          uuid primary key default gen_random_uuid(),

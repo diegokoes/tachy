@@ -32,7 +32,7 @@ alter table knowledge_feedback add constraint knowledge_feedback_kind_check
     check (kind in ('correction','rating','note','deprecation'));
 alter table analysis_runs drop constraint if exists analysis_runs_mode_check;
 alter table analysis_runs add constraint analysis_runs_mode_check
-    check (mode in ('ingest','consult','sync'));
+    check (mode in ('ingest','consult','sync','create','code','chat'));
 
 -- No automatic component backfill: existing rows keep their free-text product_area
 -- and a null component_id; map them via the curation workflow (update_knowledge_entry
