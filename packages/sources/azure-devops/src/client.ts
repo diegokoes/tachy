@@ -1,9 +1,28 @@
 import { azureDevopsToken, badInput } from "@tachy/core";
 
+/** The released Azure DevOps REST version. Everything in 7.2 is still preview. */
+const API_VERSION = "7.1";
+// No released version exists for these two, so they stay pinned to preview:
+//   work item comments -> the 7.1 reference itself documents 7.1-preview.4
+//   connectionData     -> not in the public REST reference at all
+const API_COMMENTS = "7.1-preview.4";
+const API_CONNECTION_DATA = "7.1-preview.1";
+
+/**
+ * Every request carries the version; only the preview endpoints above name their
+ * own. Concatenated rather than built through URL/searchParams, which would
+ * re-encode the `$` operators and the pre-encoded wiki page paths.
+ */
+const withVersion = (path: string) =>
+  path.includes("api-version=")
+    ? path
+    : `${path}${path.includes("?") ? "&" : "?"}api-version=${API_VERSION}`;
+
 export interface AdoCfg {
   baseUrl: string;
   slug: string;
   config: Record<string, unknown>;
+  token?: string;
 }
 
 export interface AdoWorkItemSummary {
@@ -22,10 +41,16 @@ export interface JsonPatchOp {
 
 export interface AdoClient {
   readonly orgUrl: string;
+  getConnectionData(): Promise<any>;
+  listProjects(): Promise<{ id: string; name: string }[]>;
   getWorkItem(id: string): Promise<any>;
   getWorkItemsBatch(ids: number[], fields?: string[]): Promise<any[]>;
   getComments(project: string, id: string): Promise<any[]>;
-  queryWorkItemIds(project: string, since?: string): Promise<number[]>;
+  queryWorkItemIds(
+    project: string,
+    since?: string,
+    top?: number,
+  ): Promise<number[]>;
   getPullRequest(project: string, repoId: string, prId: string): Promise<any>;
   getCommit(project: string, repoId: string, sha: string): Promise<any>;
   listWorkItemTypes(project: string): Promise<any[]>;
@@ -51,11 +76,11 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
       "azure-devops connection needs a base_url like https://dev.azure.com/<org>",
     );
   const orgUrl = cfg.baseUrl.replace(/\/$/, "");
-  const token = azureDevopsToken(cfg.slug);
+  const token = cfg.token || azureDevopsToken(cfg.slug);
   const auth = "Basic " + Buffer.from(`:${token}`).toString("base64");
 
   async function req(path: string, init?: RequestInit): Promise<any> {
-    const res = await fetch(orgUrl + path, {
+    const res = await fetch(orgUrl + withVersion(path), {
       ...init,
       headers: {
         Authorization: auth,
@@ -65,15 +90,22 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     });
     const text = await res.text();
     const trimmed = text.trim();
-    if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+    const method = init?.method ?? "GET";
+    if (!res.ok) {
+      const hint =
+        res.status === 401 || res.status === 403 || res.status === 203
+          ? " — check that the PAT is valid and has the required scopes (Work Items, Wiki, Code)"
+          : "";
       throw new Error(
-        `Azure DevOps ${init?.method ?? "GET"} ${path} -> ${res.status} returned non-JSON — check that the PAT is valid and has the required scopes (Work Items, Wiki, Code)`,
+        `Azure DevOps ${method} ${path} -> ${res.status} ${trimmed.slice(0, 2000)}${hint}`,
       );
     }
-    if (!res.ok)
+    if (!trimmed) return {};
+    if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
       throw new Error(
-        `Azure DevOps ${init?.method ?? "GET"} ${path} -> ${res.status} ${trimmed.slice(0, 2000)}`,
+        `Azure DevOps ${method} ${path} -> ${res.status} returned non-JSON — check that the PAT is valid and has the required scopes (Work Items, Wiki, Code)`,
       );
+    }
     return JSON.parse(text);
   }
 
@@ -82,8 +114,17 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
   return {
     orgUrl,
 
+    async getConnectionData() {
+      return req(`/_apis/connectionData?api-version=${API_CONNECTION_DATA}`);
+    },
+
+    async listProjects() {
+      const res = await req("/_apis/projects?$top=500");
+      return (res.value ?? []).map((p: any) => ({ id: p.id, name: p.name }));
+    },
+
     async getWorkItem(id) {
-      return req(`/_apis/wit/workitems/${id}?$expand=all&api-version=7.1`);
+      return req(`/_apis/wit/workitems/${id}?$expand=all`);
     },
 
     async getWorkItemsBatch(ids, fields) {
@@ -93,7 +134,6 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
         const params = new URLSearchParams({
           ids: chunk.join(","),
           errorPolicy: "omit",
-          "api-version": "7.1",
         });
         if (fields?.length) params.set("fields", fields.join(","));
         const res = await req(`/_apis/wit/workitems?${params.toString()}`);
@@ -107,7 +147,7 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
       let continuation: string | undefined;
       do {
         const params = new URLSearchParams({
-          "api-version": "7.1-preview.4",
+          "api-version": API_COMMENTS,
           $top: "200",
         });
         if (continuation) params.set("continuationToken", continuation);
@@ -120,47 +160,57 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
       return comments;
     },
 
-    async queryWorkItemIds(project, since) {
+    async queryWorkItemIds(project, since, top) {
       const where = [`[System.TeamProject] = @project`];
-      if (since) where.push(`[System.ChangedDate] >= '${since.slice(0, 10)}'`);
+      if (since) {
+        const d = new Date(since);
+        if (Number.isNaN(d.getTime()))
+          throw badInput(`invalid updatedSince date: ${since}`);
+        where.push(`[System.ChangedDate] >= '${d.toISOString()}'`);
+      }
       const query = `Select [System.Id] From WorkItems Where ${where.join(" And ")} Order By [System.ChangedDate] Asc`;
-      const res = await req(`${proj(project)}/_apis/wit/wiql?api-version=7.1`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
+      const params = new URLSearchParams({
+        timePrecision: "true",
+        $top: String(top ?? 200),
       });
+      const res = await req(
+        `${proj(project)}/_apis/wit/wiql?${params.toString()}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        },
+      );
       return (res.workItems ?? []).map((w: any) => Number(w.id));
     },
 
     async getPullRequest(project, repoId, prId) {
       return req(
-        `${proj(project)}/_apis/git/repositories/${repoId}/pullrequests/${prId}?api-version=7.1`,
+        `${proj(project)}/_apis/git/repositories/${repoId}/pullrequests/${prId}`,
       );
     },
 
     async getCommit(project, repoId, sha) {
       return req(
-        `${proj(project)}/_apis/git/repositories/${repoId}/commits/${sha}?api-version=7.1`,
+        `${proj(project)}/_apis/git/repositories/${repoId}/commits/${sha}`,
       );
     },
 
     async listWorkItemTypes(project) {
-      const res = await req(
-        `${proj(project)}/_apis/wit/workitemtypes?api-version=7.1`,
-      );
+      const res = await req(`${proj(project)}/_apis/wit/workitemtypes`);
       return res.value ?? [];
     },
 
     async getTypeFields(project, type) {
       const res = await req(
-        `${proj(project)}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/fields?$expand=all&api-version=7.1`,
+        `${proj(project)}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/fields?$expand=all`,
       );
       return res.value ?? [];
     },
 
     async createWorkItem(project, type, patch) {
       return req(
-        `${proj(project)}/_apis/wit/workitems/$${encodeURIComponent(type)}?api-version=7.1`,
+        `${proj(project)}/_apis/wit/workitems/$${encodeURIComponent(type)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json-patch+json" },
@@ -171,7 +221,7 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
 
     async listWikis(project) {
       const scope = project ? proj(project) : "";
-      const res = await req(`${scope}/_apis/wiki/wikis?api-version=7.1`);
+      const res = await req(`${scope}/_apis/wiki/wikis`);
       return res.value ?? [];
     },
 
@@ -179,7 +229,6 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
       const params = new URLSearchParams({
         path: "/",
         recursionLevel: "full",
-        "api-version": "7.1",
       });
       const res = await req(
         `${proj(project)}/_apis/wiki/wikis/${encodeURIComponent(wiki)}/pages?${params.toString()}`,
@@ -198,7 +247,6 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
       const params = new URLSearchParams({
         path,
         includeContent: "true",
-        "api-version": "7.1",
       });
       const res = await req(
         `${proj(project)}/_apis/wiki/wikis/${encodeURIComponent(wiki)}/pages?${params.toString()}`,
@@ -211,9 +259,7 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     },
 
     async listRepos(project) {
-      const res = await req(
-        `${proj(project)}/_apis/git/repositories?api-version=7.1`,
-      );
+      const res = await req(`${proj(project)}/_apis/git/repositories`);
       return res.value ?? [];
     },
   };
