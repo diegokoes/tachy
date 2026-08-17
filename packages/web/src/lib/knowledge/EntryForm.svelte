@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
+  import { Button } from "../tui";
   import { onMount, untrack } from "svelte";
   import { api } from "../api";
   import { canCurateScope } from "../session.svelte";
@@ -14,6 +16,7 @@
     error = null,
     onSubmit,
     onCancel,
+    extra,
   }: {
     mode: "create" | "edit";
     initial?: Partial<KnowledgeRow>;
@@ -21,7 +24,10 @@
     error?: string | null;
     onSubmit: (payload: Record<string, unknown>) => void;
     onCancel: () => void;
+    extra?: Snippet;
   } = $props();
+
+  const SUBMIT_LABEL = $derived(mode === "create" ? "create entry" : "save changes");
 
   const csvJoin = (v: string[] | null | undefined) => (v ?? []).join(", ");
 
@@ -138,25 +144,50 @@
 </script>
 
 <form class="entry-form" onsubmit={submit}>
+  <div class="formbar">
+    <span class="side"></span>
+    <span class="mid">{#if extra}{@render extra()}{/if}</span>
+    <span class="side end">
+      <Button
+        variant="ghost"
+        square
+        icon="cancel"
+        aria-label="cancel"
+        title="cancel"
+        disabled={saving}
+        onclick={onCancel}
+      />
+      <Button
+        variant="ghost"
+        tone="accent"
+        square
+        icon="save"
+        type="submit"
+        aria-label={SUBMIT_LABEL}
+        title={SUBMIT_LABEL}
+        busy={saving}
+      />
+    </span>
+  </div>
   <label class="wide">issue summary
-    <input bind:value={issueSummary} placeholder="One-paragraph problem summary, error codes inline" required />
+    <input bind:value={issueSummary} required />
   </label>
 
   <label class="wide">root cause
-    <textarea rows="3" bind:value={rootCause} placeholder="The underlying technical cause (leave empty if unknown)"></textarea>
+    <textarea rows="3" bind:value={rootCause}></textarea>
   </label>
   <label class="wide">resolution
-    <textarea rows="3" bind:value={resolution} placeholder="What was done or should be done to fix it"></textarea>
+    <textarea rows="3" bind:value={resolution}></textarea>
   </label>
 
   <label class="wide">symptoms <span class="hint">comma-separated</span>
-    <input bind:value={symptoms} placeholder="error 023 in logs, print stops mid-batch" />
+    <input bind:value={symptoms} />
   </label>
   <label class="wide">signals <span class="hint">error codes / log patterns, comma-separated</span>
-    <input bind:value={signals} placeholder="023 TOO_MANY_STRINGS, HTTP 503" />
+    <input bind:value={signals} />
   </label>
   <label class="wide">tags <span class="hint">comma-separated</span>
-    <input bind:value={tags} placeholder="lc, printing" />
+    <input bind:value={tags} />
   </label>
 
   <div class="row">
@@ -170,7 +201,7 @@
       <AsciiSelect bind:value={learningValue} options={[{ value: "", label: "unset" }, "high", "medium", "low"]} />
     </label>
     <label>{t("cloud")}
-      <input class="short" bind:value={cloud} placeholder="prod, qa…" list="entry-form-envs" />
+      <input class="short" bind:value={cloud} list="entry-form-envs" />
       <datalist id="entry-form-envs">
         {#each environments as e}<option value={e.cloud}></option>{/each}
       </datalist>
@@ -183,10 +214,10 @@
         options={[{ value: "", label: "none" }, ...patterns.map((p) => p.slug as string)]} />
     </label>
     <label>affected version
-      <input class="short" bind:value={affectedVersion} placeholder="e.g. 2.3.0" />
+      <input class="short" bind:value={affectedVersion} />
     </label>
     <label>fixed version
-      <input class="short" bind:value={fixedVersion} placeholder="e.g. 2.4.0" />
+      <input class="short" bind:value={fixedVersion} />
     </label>
     <label class="check">
       <input type="checkbox" bind:checked={hiddenFix} /> hidden fix
@@ -214,20 +245,33 @@
     {showStructured ? "▾" : "▸"} advanced: structured JSON
   </button>
   {#if showStructured}
-    <textarea class="structured" rows="8" bind:value={structuredText}
-      placeholder={'{ "investigation_steps": ["…"], "related_links": ["https://…"] }'}></textarea>
+    <textarea class="structured" rows="8" bind:value={structuredText}></textarea>
     {#if structuredError}<p class="error">{structuredError}</p>{/if}
   {/if}
 
   {#if error}<p class="error">{error}</p>{/if}
 
-  <div class="actions">
-    <button type="submit" disabled={saving}>{saving ? "saving…" : mode === "create" ? "create entry" : "save changes"}</button>
-    <button type="button" onclick={onCancel} disabled={saving}>cancel</button>
-  </div>
 </form>
 
 <style>
+  /* Three tracks so the middle group stays optically centred whatever the
+     actions on the right weigh. */
+  .formbar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: var(--pad-2);
+    margin-bottom: var(--pad-3);
+    padding-bottom: var(--pad-2);
+    border-bottom: var(--panel-line);
+  }
+  .formbar .mid,
+  .formbar .side {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+  }
+  .formbar .side.end { justify-content: flex-end; }
   .entry-form { display: flex; flex-direction: column; gap: 0.6rem; }
   label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.82rem; color: var(--muted); }
   label.wide { width: 100%; }
@@ -238,7 +282,6 @@
   .row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end; }
   .check { flex-direction: row; align-items: center; gap: 0.4rem; padding-bottom: 0.4rem; }
   .structured { font-family: inherit; font-size: 0.82rem; }
-  .actions { display: flex; gap: 0.5rem; margin-top: 0.25rem; }
   .mini { align-self: flex-start; font-size: 0.78rem; padding: 0.1rem 0.45rem; }
   .error { color: var(--danger); margin: 0; }
 </style>

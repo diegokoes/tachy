@@ -43,6 +43,11 @@ export async function initSession(): Promise<void> {
   }
 }
 
+/** Global admin. Treats "no session" as admin, matching the open-auth mode. */
+export function isGlobalAdmin(): boolean {
+  return session.me?.role === "admin" || !session.me;
+}
+
 export function isCurator(): boolean {
   const me = session.me;
   return !!me && (me.role === "admin" || (me.team_admin?.length ?? 0) > 0);

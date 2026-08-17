@@ -5,6 +5,7 @@
   import StructuredView from "./knowledge/StructuredView.svelte";
   import EntryForm from "./knowledge/EntryForm.svelte";
   import { isCurator, canCurateScope } from "./session.svelte";
+  import { Badge, Button, Icon } from "./tui";
 
   let { id, onClose, onOpen }: { id: string; onClose: () => void; onOpen?: (id: string) => void } = $props();
 
@@ -28,6 +29,11 @@
   const canEdit = $derived(
     !!entry && canCurateScope({ team_id: entry.team_id as string | null | undefined, team_slug: productTeamSlug }),
   );
+
+  const fmtDate = (d?: string) => (d ? new Date(d).toISOString().slice(0, 10) : "");
+
+  const statusTone = (s: string) =>
+    s === "approved" ? "ok" : s === "draft" ? "accent" : s === "rejected" ? "danger" : s === "deprecated" ? "warn" : "muted";
 
   async function load() {
     error = null;
@@ -114,12 +120,12 @@
 </script>
 
 <div class="detail">
-  <button class="close" onclick={onClose}>← back</button>
   {#if error}<p class="error">{error}</p>{/if}
   {#if entry}
     {#if entry.status === "deprecated"}
       <div class="deprecated-banner">
-        ⚠ This lesson is marked <strong>outdated</strong> - don't apply it as current advice.
+        <Icon name="alert" size="1em" weight={7} />
+        This lesson is marked <strong>outdated</strong> - don't apply it as current advice.
         {#if entry.superseded_by && onOpen}
           <button class="jump" onclick={() => onOpen(entry!.superseded_by!)}>view replacement →</button>
         {/if}
@@ -127,7 +133,6 @@
     {/if}
 
     {#if editing}
-      <h2>edit entry</h2>
       {#if conflict}
         <p class="error">{mutateError} <button class="mini" onclick={load}>reload</button></p>
       {/if}
@@ -140,36 +145,82 @@
         onCancel={() => { editing = false; mutateError = null; }}
       />
     {:else}
+      <div class="topbar">
+        <Button variant="ghost" square icon="back" aria-label="back" title="back" onclick={onClose} />
+        {#if canEdit}
+          <Button
+            variant="ghost"
+            square
+            tone="info"
+            icon="edit"
+            aria-label="edit"
+            title="edit"
+            onclick={() => { editing = true; mutateError = null; }}
+          />
+        {/if}
+      </div>
+
       <h2>{entry.issue_summary ?? "(no summary)"}</h2>
+
+      <div class="meta">
+        <Badge tone={statusTone(entry.status)}>{entry.status}</Badge>
+        {#if entry.updated_at}<span class="muted">updated {fmtDate(entry.updated_at)}</span>{/if}
+      </div>
+
       <div class="badges">
-        <span class="badge" class:warn={entry.status === "deprecated"}>{entry.status}</span>
-        {#if entry.confidence}<span class="badge">confidence: {entry.confidence}</span>{/if}
-        {#if entry.cloud}<span class="badge">{entry.cloud}</span>{/if}
-        {#if entry.learning_value}<span class="badge">value: {entry.learning_value}</span>{/if}
-        {#if entry.resolution_pattern}<span class="badge">{entry.resolution_pattern}</span>{/if}
-        {#if entry.product_area}<span class="badge">{entry.product_area}</span>{/if}
-        {#if entry.affected_version}<span class="badge">affected: {entry.affected_version}</span>{/if}
-        {#if entry.fixed_version}<span class="badge">fixed in: {entry.fixed_version}</span>{/if}
+        {#if entry.confidence}<Badge>confidence: {entry.confidence}</Badge>{/if}
+        {#if entry.cloud}<Badge>{entry.cloud}</Badge>{/if}
+        {#if entry.learning_value}<Badge>value: {entry.learning_value}</Badge>{/if}
+        {#if entry.resolution_pattern}<Badge>{entry.resolution_pattern}</Badge>{/if}
+        {#if entry.product_area}<Badge>{entry.product_area}</Badge>{/if}
+        {#if entry.affected_version}<Badge>affected: {entry.affected_version}</Badge>{/if}
+        {#if entry.fixed_version}<Badge>fixed in: {entry.fixed_version}</Badge>{/if}
       </div>
 
       {#if canEdit}
-        <div class="curation">
-          <span class="curation-label">curate:</span>
-          <button class="mini" onclick={() => { editing = true; mutateError = null; }}>edit</button>
-          {#if entry.status === "draft" || entry.status === "rejected"}
-            <button class="mini" onclick={() => patch({ status: "approved" })} disabled={mutating}>approve</button>
+        <div class="acts">
+          {#if entry.status !== "draft"}
+            <Button
+              variant="ghost" square tone="info" icon="doc"
+              aria-label="back to draft" title="back to draft"
+              disabled={mutating}
+              onclick={() => patch({ status: "draft" })}
+            />
           {/if}
-          {#if entry.status === "deprecated"}
-            <button class="mini" onclick={() => patch({ status: "approved", supersededBy: null })} disabled={mutating}>re-approve</button>
-          {/if}
-          {#if entry.status !== "rejected" && entry.status !== "draft"}
-            <button class="mini" onclick={() => patch({ status: "rejected" })} disabled={mutating}>reject</button>
+          {#if entry.status !== "approved"}
+            <Button
+              variant="ghost" square tone="ok" icon="check"
+              aria-label="approve" title={entry.status === "deprecated" ? "re-approve" : "approve"}
+              disabled={mutating}
+              onclick={() => patch(entry!.status === "deprecated"
+                ? { status: "approved", supersededBy: null }
+                : { status: "approved" })}
+            />
           {/if}
           {#if entry.status !== "archived"}
-            <button class="mini" onclick={() => patch({ status: "archived" })} disabled={mutating}>archive</button>
+            <Button
+              variant="ghost" square icon="archive"
+              aria-label="archive" title="archive"
+              disabled={mutating}
+              onclick={() => patch({ status: "archived" })}
+            />
+          {/if}
+          <span class="gap"></span>
+          {#if entry.status !== "rejected"}
+            <Button
+              variant="ghost" square tone="danger" icon="cancel"
+              aria-label="reject" title="reject"
+              disabled={mutating}
+              onclick={() => patch({ status: "rejected" })}
+            />
           {/if}
           {#if entry.status === "approved"}
-            <button class="mini warn-btn" onclick={() => (deprecating = !deprecating)}>deprecate…</button>
+            <Button
+              variant="ghost" square tone="warn" icon="alert"
+              aria-label="deprecate" title="deprecate…"
+              disabled={mutating}
+              onclick={() => (deprecating = !deprecating)}
+            />
           {/if}
         </div>
         {#if mutateError && !editing}
@@ -246,13 +297,21 @@
 </div>
 
 <style>
-  .close { margin-bottom: 0.75rem; }
-  h2 { margin: 0.25rem 0 0.5rem; font-size: 1.25rem; }
+  h2 { margin: var(--pad-2) 0 var(--pad-3); font-size: 1.25rem; text-align: center; }
   h3 { margin: 1rem 0 0.35rem; font-size: 0.95rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
   section p { margin: 0; white-space: pre-wrap; line-height: 1.5; max-width: 72ch; }
-  .badges { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.5rem; }
-  .badge { border: 1px solid var(--border); border-radius: 6px; padding: 0.1rem 0.5rem; font-size: 0.78rem; color: var(--muted); }
-  .badge.warn { border-color: var(--warn); color: var(--warn); }
+  .topbar { display: flex; justify-content: flex-end; align-items: center; gap: var(--pad-1); }
+  .meta {
+    display: flex; align-items: center; justify-content: center;
+    flex-wrap: wrap; gap: var(--pad-3);
+    margin-bottom: var(--pad-2); font-size: var(--fs-sm);
+  }
+  .badges { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--pad-2); margin-bottom: var(--pad-2); }
+  .acts {
+    display: flex; align-items: center; justify-content: center;
+    flex-wrap: wrap; gap: var(--pad-2); margin: var(--pad-3) 0;
+  }
+  .acts .gap { width: var(--pad-4); }
   .deprecated-banner {
     border: 1px solid var(--warn);
     border-radius: 6px;

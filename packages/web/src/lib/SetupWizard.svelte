@@ -1,14 +1,17 @@
 <script lang="ts">
-  import TypeLine from "./TypeLine.svelte";
-  import AsciiSelect from "./AsciiSelect.svelte";
-  import AuthShell from "./AuthShell.svelte";
   import { api } from "./api";
   import { csv } from "./admin/shared";
   import { initSession } from "./session.svelte";
+  import { errText } from "./resource.svelte";
+  import AuthShell from "./AuthShell.svelte";
+  import TypeLine from "./TypeLine.svelte";
+  import { Actions, Button, Field, Meter, Note, Panel, Select } from "./tui";
 
   let { onDone, onSkip }: { onDone: () => void; onSkip: () => void } = $props();
 
-  const STEPS = ["welcome", "usage", "admin", "workspace", "compliance", "agent", "review"] as const;
+  const NAV_ICON = "1.5em";
+
+  const STEPS = ["account", "workspace", "agent", "done"] as const;
   let step = $state(0);
   let attempted = $state(false);
   let error = $state<string | null>(null);
@@ -31,38 +34,53 @@
 
   const WIZ_TERMS = {
     support: { team: "team", product: "product", products: "products" },
-    engineering: { team: "organization", product: "repository", products: "repositories" },
+    engineering: {
+      team: "organization",
+      product: "repository",
+      products: "repositories",
+    },
   } as const;
   const wt = $derived(WIZ_TERMS[profile]);
 
   const slugify = (s: string) =>
-    s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    s
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
 
   const namedProducts = $derived(products.filter((p) => p.name.trim()));
 
-  // Empty fields only go red once the user has tried to advance, so the form
-  // doesn't shout at them before they have typed anything.
-  const emailBad = $derived(
-    email.length > 0 ? !/\S+@\S+\.\S+/.test(email) : attempted,
+  // Fields only go red once the user has tried to advance.
+  const emailErr = $derived(
+    (email.length > 0 ? !/\S+@\S+\.\S+/.test(email) : attempted)
+      ? "a valid email address"
+      : null,
   );
-  const passwordBad = $derived(
-    password.length > 0 ? password.length < 10 : attempted,
+  const passwordErr = $derived(
+    (password.length > 0 ? password.length < 10 : attempted)
+      ? "at least 10 characters"
+      : null,
   );
-  const matchBad = $derived(
-    password2.length > 0 ? password !== password2 : attempted,
+  const matchErr = $derived(
+    (password2.length > 0 ? password !== password2 : attempted)
+      ? "passwords must match"
+      : null,
   );
-  const adminValid = $derived(
-    /\S+@\S+\.\S+/.test(email) && password.length >= 10 && password === password2,
+  const accountValid = $derived(
+    /\S+@\S+\.\S+/.test(email) &&
+      password.length >= 10 &&
+      password === password2,
   );
 
   function next() {
     error = null;
-    if (STEPS[step] === "admin" && !adminValid) {
+    if (STEPS[step] === "account" && !accountValid) {
       attempted = true;
-      error = "fix the highlighted fields to continue";
       return;
     }
     attempted = false;
+    if (STEPS[step] === "agent") return finish();
     step = Math.min(step + 1, STEPS.length - 1);
   }
 
@@ -97,13 +115,17 @@
       if (teamName.trim()) {
         body.team = { slug: slugify(teamName), name: teamName.trim() };
         if (namedProducts.length)
-          body.products = namedProducts.map((p) => ({ slug: slugify(p.name), name: p.name.trim() }));
+          body.products = namedProducts.map((p) => ({
+            slug: slugify(p.name),
+            name: p.name.trim(),
+          }));
       }
       await api.post("/setup", body);
+      step = STEPS.length - 1;
       await initSession();
       onDone();
     } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
+      error = errText(err);
     } finally {
       busy = false;
     }
@@ -111,225 +133,275 @@
 </script>
 
 <AuthShell>
-  <div class="wizard auth-panel">
-    <div class="head">
-      <span class="wordmark">tachy</span>
-      <span class="progress">[{step + 1}/{STEPS.length}] {"█".repeat(step + 1)}{"░".repeat(STEPS.length - step - 1)}</span>
-    </div>
+  <div class="wiz">
+    <Panel title="setup">
+      {#snippet meta()}
+        <span class="prog">
+          <Meter value={(step + 1) / STEPS.length} width={6} />
+          {step + 1}/{STEPS.length}
+        </span>
+      {/snippet}
 
-    {#if STEPS[step] === "welcome"}
       <div class="body">
-        <TypeLine text="First run detected. Let's set this instance up." />
-      </div>
+        {#if STEPS[step] === "account"}
+          <h2>Your admin account</h2>
+          <div class="grid">
+            <Field label="email" required error={emailErr}>
+              <input type="email" autocomplete="username" bind:value={email} />
+            </Field>
+            <Field label="display name">
+              <input bind:value={displayName} />
+            </Field>
+            <Field label="password" required error={passwordErr}>
+              <input
+                type="password"
+                autocomplete="new-password"
+                bind:value={password}
+              />
+            </Field>
+            <Field label="repeat password" required error={matchErr}>
+              <input
+                type="password"
+                autocomplete="new-password"
+                bind:value={password2}
+              />
+            </Field>
+          </div>
+        {:else if STEPS[step] === "workspace"}
+          <h2>Your workspace</h2>
+          <div class="cards">
+            <button
+              class="card"
+              class:on={profile === "support"}
+              onclick={() => (profile = "support")}
+            >
+              <span class="ct">support</span>
+              <span class="cd">tickets, customers, environments</span>
+            </button>
+            <button
+              class="card"
+              class:on={profile === "engineering"}
+              onclick={() => (profile = "engineering")}
+            >
+              <span class="ct">engineering</span>
+              <span class="cd">repositories, organizations</span>
+            </button>
+          </div>
 
-    {:else if STEPS[step] === "usage"}
-      <div class="body">
-        <h3>How will you use tachy?</h3>
-        <div class="cards">
-          <button class="card" class:selected={profile === "support"} onclick={() => (profile = "support")}>
-            <span class="card-title">{profile === "support" ? "›" : " "} Support / business</span>
-            <span class="card-desc">Tickets, customers, products. Knowledge from a helpdesk (Freshdesk…).</span>
-          </button>
-          <button class="card" class:selected={profile === "engineering"} onclick={() => (profile = "engineering")}>
-            <span class="card-title">{profile === "engineering" ? "›" : " "} Engineering / repositories</span>
-            <span class="card-desc">Issues from your repos. GitHub-first.</span>
-          </button>
-        </div>
-        <p class="hint">
-          {#if profile === "engineering"}
-            products &gt;<code>repositories</code> · teams &gt; <code>organizations</code> · customer facets hidden
-          {:else}
-            standard vocabulary: products, teams, customers, environments
-          {/if}
-        </p>
-      </div>
+          <div class="grid">
+            <Field label="organization">
+              <input bind:value={orgName} placeholder="Acme" />
+            </Field>
+            <Field label={wt.team} hint={teamName ? slugify(teamName) : " "}>
+              <input bind:value={teamName} />
+            </Field>
+          </div>
 
-    {:else if STEPS[step] === "admin"}
-      <div class="body">
-        <h3>Admin account</h3>
-        <label><span>email</span><input type="email" class:bad={emailBad} bind:value={email} autocomplete="username" />
-          {#if emailBad}<span class="field-error">{email ? "not a valid email address" : "required"}</span>{/if}
-        </label>
-        <label><span>display name (optional)</span><input bind:value={displayName} /></label>
-        <label><span>password (min 10 chars)</span><input type="password" class:bad={passwordBad} bind:value={password} autocomplete="new-password" />
-          {#if passwordBad}<span class="field-error">{password ? "too short - at least 10 characters" : "required"}</span>{/if}
-        </label>
-        <label><span>repeat password</span><input type="password" class:bad={matchBad} bind:value={password2} autocomplete="new-password" />
-          {#if matchBad}<span class="field-error">{password2 ? "passwords do not match" : "required"}</span>{/if}
-        </label>
-      </div>
-
-    {:else if STEPS[step] === "workspace"}
-      <div class="body">
-        <h3>Workspace</h3>
-        <label><span>organization name</span><input bind:value={orgName} /></label>
-        <label><span>first {wt.team}</span><input bind:value={teamName} /></label>
-        {#each products as p, i (i)}
-          <label>
-            <span>{i === 0 ? `first ${wt.product} ${teamName.trim() ? "" : `(needs a ${wt.team})`}` : `${wt.product} ${i + 1}`}</span>
-            <span class="prod-row">
-              <input bind:value={p.name} disabled={!teamName.trim()} />
-              {#if products.length > 1}
-                <button class="ghost mini" type="button" onclick={() => (products = products.filter((_, j) => j !== i))}>✕</button>
-              {/if}
-            </span>
+          <div class="list">
+            <span class="ll">{wt.products}</span>
+            {#each products as p, i}
+              <div class="prow">
+                <input
+                  bind:value={products[i].name}
+                  disabled={!teamName.trim()}
+                  placeholder={i === 0 ? `first ${wt.product}` : ""}
+                />
+                <span class="slug">{p.name ? slugify(p.name) : ""}</span>
+                {#if products.length > 1}
+                  <Button
+                    variant="ghost"
+                    tone="danger"
+                    square
+                    icon="cancel"
+                    aria-label="remove"
+                    onclick={() => products.splice(i, 1)}
+                  />
+                {/if}
+              </div>
+            {/each}
+            <div class="addrow">
+              <Button
+                variant="ghost"
+                tone="ok"
+                square
+                icon="plus"
+                iconSize={NAV_ICON}
+                title={`add another ${wt.product}`}
+                aria-label={`add another ${wt.product}`}
+                disabled={!teamName.trim()}
+                onclick={() => products.push({ name: "" })}
+              />
+            </div>
+          </div>
+        {:else if STEPS[step] === "agent"}
+          <h2>The agent</h2>
+          <div class="grid">
+            <Field label="provider">
+              <Select
+                bind:value={agentProvider}
+                options={[
+                  { value: "claude", label: "claude (Anthropic)" },
+                  { value: "copilot", label: "copilot (GitHub)" },
+                ]}
+              />
+            </Field>
+            <Field label="model">
+              <input bind:value={agentModel} />
+            </Field>
+            <Field label="api key" hint="stored encrypted">
+              <input type="password" autocomplete="off" bind:value={agentKey} />
+            </Field>
+            <Field label="effort">
+              <Select
+                bind:value={agentEffort}
+                options={["low", "medium", "high", "xhigh", "max"]}
+              />
+            </Field>
+          </div>
+          <label class="check">
+            <input type="checkbox" bind:checked={redaction} />
+            <span>scrub emails, secrets and names before they reach the model</span>
           </label>
-        {/each}
-        {#if teamName.trim() && products[products.length - 1].name.trim()}
-          <button class="ghost add-more" type="button" onclick={() => (products = [...products, { name: "" }])}>+ add another {wt.product}</button>
-        {/if}
-        {#if teamName.trim()}
-          <p class="hint">slug: <code>{slugify(teamName)}</code>{#each namedProducts as p} / <code>{slugify(p.name)}</code>{/each}</p>
+        {:else}
+          <h2>Ready</h2>
+          <p class="done"><TypeLine text="tachy is set up. Opening…" /></p>
         {/if}
       </div>
 
-    {:else if STEPS[step] === "compliance"}
-      <div class="body">
-        <h3>Compliance - PII redaction</h3>
-        <label class="check">
-          <input type="checkbox" bind:checked={redaction} />
-          <span>redact PII/secrets at the LLM boundary (recommended for customer data)</span>
-        </label>
-      </div>
+      {#if error}<Note tone="danger">{error}</Note>{/if}
+      {#if attempted && !accountValid}
+        <Note tone="danger">fix the highlighted fields to continue</Note>
+      {/if}
 
-    {:else if STEPS[step] === "agent"}
-      <div class="body">
-        <h3>Agent backend &amp; cost policy</h3>
-        <label><span>provider</span>
-          <AsciiSelect bind:value={agentProvider} options={[
-            { value: "claude", label: "claude (Anthropic API key / Claude Code login)" },
-            { value: "copilot", label: "copilot (GitHub Copilot subscription)" },
-          ]} />
-        </label>
-        <label><span>shared {agentProvider === "copilot" ? "Copilot GitHub token" : "Anthropic API key"} for everyone (optional)</span>
-          <input type="password" bind:value={agentKey} autocomplete="off" />
-        </label>
-        <label><span>model</span><input bind:value={agentModel} /></label>
-        <label><span>effort</span>
-          <AsciiSelect bind:value={agentEffort} options={["low", "medium", "high", "xhigh", "max"]} />
-        </label>
-        <label><span>allowed models (comma-separated, empty = unrestricted)</span>
-          <input bind:value={allowedModels} />
-        </label>
-      </div>
+      {#if STEPS[step] !== "done"}
+        <Actions
+          iconOnly
+          iconSize={NAV_ICON}
+          back={step > 0 ? { label: "back", onclick: back } : undefined}
+          primary={{
+            label: STEPS[step] === "agent" ? "finish" : "next",
+            icon: STEPS[step] === "agent" ? ("save" as const) : ("next" as const),
+            onclick: next,
+            busy,
+          }}
+        />
+      {/if}
+    </Panel>
 
-    {:else}
-      <div class="body">
-        <h3>Review</h3>
-        <table class="review">
-          <tbody>
-            <tr class="section"><td colspan="2">account</td></tr>
-            <tr><td>admin</td><td>{email}{displayName.trim() ? ` (${displayName})` : ""}</td></tr>
-            <tr class="section"><td colspan="2">usage</td></tr>
-            <tr><td>profile</td><td>{profile === "engineering" ? "engineering / repositories" : "support / business"}</td></tr>
-            <tr class="section"><td colspan="2">workspace</td></tr>
-            <tr><td>organization</td><td>{orgName.trim() || "-"}</td></tr>
-            <tr><td>{wt.team}</td><td>{teamName.trim() ? slugify(teamName) : "-"}</td></tr>
-            <tr><td>{wt.products}</td><td>{namedProducts.length ? namedProducts.map((p) => slugify(p.name)).join(", ") : "-"}</td></tr>
-            <tr class="section"><td colspan="2">policies</td></tr>
-            <tr><td>redaction</td><td>{redaction ? "ON - scrub PII/secrets before the LLM" : "off"}</td></tr>
-            <tr><td>agent</td><td>{agentProvider} · {agentModel} · {agentEffort}{allowedModels.trim() ? ` · allowlist: ${allowedModels}` : ""}</td></tr>
-            <tr><td>agent key</td><td>{agentKey.trim() ? "provided — stored encrypted as the global credential" : "from .env"}</td></tr>
-          </tbody>
-        </table>
-      </div>
+    {#if step === 0}
+      <button class="skip" onclick={onSkip}>skip (localhost dev)</button>
     {/if}
-
-    <p class="error">{error ?? ""}</p>
-
-    <div class="actions">
-      {#if STEPS[step] === "welcome"}
-        <button class="ghost skip" onclick={onSkip}>skip (localhost dev)</button>
-      {/if}
-      <span class="spacer"></span>
-      <button class="nav" onclick={back} disabled={step === 0} title="back" aria-label="back">↩</button>
-      {#if STEPS[step] === "review"}
-        <button class="nav primary" onclick={finish} disabled={busy}
-          title="finish setup" aria-label="finish setup">{busy ? "·" : "➠"}</button>
-      {:else}
-        <button class="nav primary" onclick={next} title="next" aria-label="next">➠</button>
-      {/if}
-    </div>
   </div>
 </AuthShell>
 
 <style>
-  .wizard {
-    width: min(38rem, 100%);
-    padding: 1.6rem 2rem 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
+  .wiz {
+    width: min(44rem, 100%);
   }
-  .head {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    min-height: 2rem;
-  }
-  .wordmark { color: var(--accent); font-size: 1.4rem; letter-spacing: 0.04em; }
-  .progress { color: var(--muted); font-size: 0.85rem; letter-spacing: 0.1em; }
-  /* Fixed so the box doesn't resize as steps change. */
+
+  /* Pinned so the panel never resizes between steps. */
   .body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    min-height: 22rem;
+    min-height: 17rem;
   }
-  h3 { margin: 0; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.06em; }
-  label { display: flex; flex-direction: column; gap: 0.3rem; }
-  label span { font-size: 0.8rem; color: var(--muted); }
-  label.check { flex-direction: row; align-items: center; gap: 0.6rem; }
-  label.check span { font-size: 0.9rem; color: var(--text); }
-  .check input { accent-color: var(--accent); width: 1.05rem; height: 1.05rem; }
-  .field-error { color: var(--danger); font-size: 0.78rem; }
-  input.bad { border-color: var(--danger); }
-  .cards { display: flex; gap: 0.75rem; flex-wrap: wrap; }
-  .card {
-    flex: 1;
-    min-width: 14rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    text-align: left;
-    padding: 0.75rem 0.9rem;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    cursor: pointer;
+
+  h2 {
+    margin: 0 0 var(--pad-4);
+    font-size: var(--fs-lg);
+    font-weight: 500;
   }
-  .card.selected { border-color: var(--accent); background: var(--accent-dim); }
-  .card-title { color: var(--text); font-weight: 500; }
-  .card.selected .card-title { color: var(--accent); }
-  .card-desc { font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
-  .prod-row { display: flex; gap: 0.4rem; align-items: center; }
-  .prod-row input { flex: 1; }
-  .add-more { align-self: flex-start; font-size: 0.82rem; }
-  .actions { display: flex; gap: 0.75rem; align-items: center; }
-  .spacer { flex: 1; }
-  .skip { font-size: 0.82rem; }
-  .nav {
-    width: 2.9rem;
-    height: 2.3rem;
-    padding: 0;
+
+  .grid {
     display: grid;
-    place-items: center;
-    font-size: 1.1rem;
-    line-height: 1;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: var(--gap);
   }
-  .primary { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
-  .review { border-collapse: collapse; }
-  .review td { border: 1px solid var(--border); padding: 0.35rem 0.7rem; font-size: 0.9rem; }
-  .review td:first-child { color: var(--muted); }
-  .review tr.section td {
-    border: none;
-    padding-top: 0.6rem;
+
+  .prog {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pad-2);
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--gap);
+    margin-bottom: var(--pad-4);
+  }
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pad-1);
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: var(--pad-3);
+  }
+  .card.on {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+  .ct {
     color: var(--accent);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
   }
-  .hint { margin: 0; font-size: 0.8rem; color: var(--muted); }
-  /* Always rendered, so an error appearing doesn't shift the buttons. */
-  .error { color: var(--danger); margin: 0; font-size: 0.88rem; min-height: 1.2rem; }
-  code { background: var(--accent-dim); border-radius: 3px; padding: 0 0.3em; font-size: 0.92em; }
+  .cd {
+    font-size: var(--fs-xs);
+    color: var(--muted);
+  }
+
+  .list {
+    margin-top: var(--pad-3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--pad-2);
+  }
+  .ll {
+    font-size: var(--fs-sm);
+    color: var(--muted);
+    letter-spacing: var(--label-spacing);
+  }
+  .prow {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+  }
+  .prow input {
+    flex: 1;
+    min-width: 0;
+  }
+  .addrow {
+    display: flex;
+    justify-content: center;
+  }
+  .slug {
+    min-width: 9rem;
+    font-size: var(--fs-xs);
+    color: var(--muted);
+  }
+
+  .check {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+    margin-top: var(--pad-3);
+    font-size: var(--fs-sm);
+    color: var(--muted);
+  }
+
+  .done {
+    color: var(--muted);
+  }
+
+  .skip {
+    display: block;
+    margin: var(--pad-3) auto 0;
+    border-color: transparent;
+    background: transparent;
+    color: var(--muted);
+    font-size: var(--fs-xs);
+  }
 </style>

@@ -38,7 +38,13 @@ export function borderPreview(k: Exclude<BorderKey, "none">): string {
   return [top, mid, mid, mid, b.left + b.bottom.repeat(w) + b.right].join("\n");
 }
 
-export const PATTERN_LABELS = ["brackets", "rope", "slashes", "bricks", "stars"];
+export const PATTERN_LABELS = [
+  "brackets",
+  "rope",
+  "slashes",
+  "bricks",
+  "stars",
+];
 
 export function patternPreview(idx: number): string {
   const lines = PATTERNS[idx]
@@ -58,7 +64,12 @@ function makeBg(rows: string[], vRep = 60): string {
 
 const P0 = makeBg([" |___  |", "    _|_|", "_  | |__", "_|_|    "]);
 const P1 = makeBg(["  |  ", "`.__.' _.'", ',-"  ,-""-', "  |  "]);
-const P2 = makeBg(["   /   __/  ", "__   \\__/  \\", "  \\__/  \\   ", "__/     /   "]);
+const P2 = makeBg([
+  "   /   __/  ",
+  "__   \\__/  \\",
+  "  \\__/  \\   ",
+  "__/     /   ",
+]);
 const P3 = makeBg(["__|__|   ", " __|__|  ", "|   __|__", "|__|   __"]);
 
 const STAR_LINES = [
@@ -114,6 +125,9 @@ const STAR_LINES = [
   " ",
 ];
 const starWidth = Math.max(...STAR_LINES.map((l) => l.length));
-const P4 = makeBg(STAR_LINES.map((l) => l.padEnd(starWidth)), 6);
+const P4 = makeBg(
+  STAR_LINES.map((l) => l.padEnd(starWidth)),
+  6,
+);
 
 export const PATTERNS: string[] = [P0, P1, P2, P3, P4];

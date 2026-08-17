@@ -14,7 +14,8 @@
   let users = $state<UserRow[]>([]);
   let membersTeam = $state("");
   let members = $state<Member[]>([]);
-  let loading = $state(false);
+  let loading = $state(true);
+  let refsLoaded = $state(false);
   let error = $state<string | null>(null);
 
   let addEmail = $state("");
@@ -42,12 +43,15 @@
       if (!membersTeam && myTeams.length) membersTeam = myTeams[0].slug;
     } catch (e) {
       error = errText(e);
+    } finally {
+      refsLoaded = true;
     }
   }
 
   async function loadMembers() {
     if (!membersTeam) {
       members = [];
+      loading = false;
       return;
     }
     loading = true;
@@ -81,7 +85,9 @@
 
 {#if error}<p class="error">{error}</p>{/if}
 
-{#if myTeams.length === 0}
+{#if !refsLoaded}
+  <p class="muted">Loading…</p>
+{:else if myTeams.length === 0}
   <p class="muted">No {t("teams")} to manage.</p>
 {:else}
   <div class="scope">

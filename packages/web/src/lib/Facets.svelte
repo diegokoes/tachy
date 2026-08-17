@@ -1,13 +1,17 @@
 <script lang="ts">
-  
-  let { label, items }: { label: string; items: string[] | null | undefined } = $props();
+  import { Chip } from "./tui";
+
+  let {
+    label,
+    items,
+  }: { label: string; items: string[] | null | undefined } = $props();
 </script>
 
 {#if items && items.length}
   <div class="facet">
     <span class="label">{label}</span>
     <span class="chips">
-      {#each items as it}<span class="chip">{it}</span>{/each}
+      {#each items as it}<Chip>{it}</Chip>{/each}
     </span>
   </div>
 {/if}
@@ -15,25 +19,18 @@
 <style>
   .facet {
     display: flex;
-    gap: 0.5rem;
-    margin: 0.35rem 0;
+    gap: var(--gap);
+    margin: var(--pad-1) 0;
     align-items: baseline;
   }
   .label {
     color: var(--muted);
-    font-size: 0.8rem;
+    font-size: var(--fs-sm);
     min-width: 5.5rem;
   }
   .chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.3rem;
-  }
-  .chip {
-    background: var(--accent-dim);
-    color: var(--text);
-    border-radius: 999px;
-    padding: 0.1rem 0.55rem;
-    font-size: 0.78rem;
+    gap: var(--pad-1);
   }
 </style>

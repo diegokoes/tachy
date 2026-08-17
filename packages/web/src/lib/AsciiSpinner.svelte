@@ -66,11 +66,11 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.45rem;
-    padding: 0.9rem 1.2rem;
-    /* dim what's behind so the ANSI colors read on any pattern */
+    gap: var(--pad-3);
+    padding: var(--pad-4);
+    /* dim what's behind so the comet reads on any pattern */
     background: color-mix(in srgb, var(--bg) 72%, transparent);
-    border-radius: 6px;
+    border-radius: var(--radius);
   }
 
   pre {
@@ -80,16 +80,11 @@
   }
 
   .label {
-    font-size: 0.78rem;
+    font-size: var(--fs-xs);
     letter-spacing: 0.14em;
-    color: #e5e5e5; /* ansi white */
+    color: var(--text);
   }
 
-  /* DOS ANSI16, dark mode: bright black frame, bright cyan comet */
-  .dim { color: #666666; }
-  .lit { color: #29b8db; }
-
-  /* Light mode: base ANSI variants  brights wash out on the light page. */
-  :global([data-theme="light"]) .label { color: #000000; }
-  :global([data-theme="light"]) .lit { color: #11a8cd; }
+  .dim { color: var(--muted); }
+  .lit { color: var(--accent); }
 </style>

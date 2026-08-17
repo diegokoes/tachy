@@ -5,6 +5,7 @@
   import { t } from "../terms";
   import AsciiSelect from "../AsciiSelect.svelte";
   import DeleteButton from "./DeleteButton.svelte";
+  import { Button, ErrorMark } from "../tui";
   import {
     TIP,
     errText,
@@ -26,7 +27,7 @@
   let products = $state<Product[]>([]);
   let teams = $state<Team[]>([]);
   let repos = $state<Repo[]>([]);
-  let loading = $state(false);
+  let loading = $state(true);
   let saving = $state(false);
   let error = $state<string | null>(null);
 
@@ -234,7 +235,12 @@
   onMount(load);
 </script>
 
-{#if error}<p class="error">{error}</p>{/if}
+{#if error}
+  <p class="error clamped" title={error}>
+    <ErrorMark message={error} />
+    <span class="etxt">{error}</span>
+  </p>
+{/if}
 {#if loading}<p class="muted">Loading…</p>{/if}
 
 <p class="muted hint">
@@ -244,7 +250,6 @@
   a <em>tracker</em> is a productless place to raise and reassign work items.
 </p>
 
-<h4>Projects</h4>
 <table>
   <thead><tr>
     <th>source</th>
@@ -350,8 +355,8 @@
                           options={(components[p.product_slug] ?? []).map((c) => ({
                             value: c.slug, label: `${c.name} (${c.slug})` }))} />
                       </label>
-                      <button class="icon-btn ok" type="submit" title="add rule" aria-label="add rule"
-                        disabled={!areaForm.component_slug}>✓</button>
+                      <Button variant="ghost" tone="ok" square icon="plus" type="submit" title="add rule"
+                        aria-label="add rule" disabled={!areaForm.component_slug} />
                     </form>
                   {/if}
                 </div>
@@ -370,8 +375,8 @@
 {#if canAdd}
   <div class="add-area">
     {#if !showForm}
-      <button onclick={() => (showForm = true)} disabled={!connections.length}>+ register project</button>
-      {#if !connections.length}<span class="muted hint"> — add a source connection first</span>{/if}
+      <Button variant="ghost" tone="ok" square icon="plus" title="register project" aria-label="register project" disabled={!connections.length} onclick={() => (showForm = true)} />
+      {#if !loading && !connections.length}<span class="muted hint"> — add a source connection first</span>{/if}
     {:else}
       <form class="conn-form" onsubmit={add}>
         <div class="add-form">
@@ -379,10 +384,16 @@
             <AsciiSelect bind:value={form.source_slug}
               options={connections.map((c) => ({ value: c.slug, label: c.slug }))} />
           </label>
-          <button class="mini" type="button" onclick={() => discover(form.source_slug)}
-            disabled={discovering === form.source_slug}>
-            {discovering === form.source_slug ? "…" : "discover"}
-          </button>
+          <Button
+            variant="ghost"
+            square
+            icon="discover"
+            type="button"
+            title="discover projects"
+            aria-label="discover projects"
+            busy={discovering === form.source_slug}
+            onclick={() => discover(form.source_slug)}
+          />
           <label class="tip" title={TIP.project}>project
             {#if (found[form.source_slug] ?? []).length}
               <AsciiSelect bind:value={form.external_key}
@@ -410,12 +421,9 @@
                   .map((tm) => ({ value: tm.slug, label: tm.slug }))} />
             </label>
           {/if}
-          <button class="icon-btn ok" type="submit" title="save" aria-label="save"
-            disabled={saving || (form.role === "knowledge" ? !form.product_slug : !form.team_slug)}>
-            {saving ? "…" : "✓"}
-          </button>
-          <button class="icon-btn" type="button" title="cancel" aria-label="cancel"
-            onclick={() => (showForm = false)}>↺</button>
+          <Button variant="ghost" tone="accent" square icon="save" type="submit" aria-label="save" busy={saving}
+            disabled={form.role === "knowledge" ? !form.product_slug : !form.team_slug} />
+          <Button variant="ghost" square icon="cancel" aria-label="cancel" onclick={() => (showForm = false)} />
         </div>
         <p class="muted hint">
           {form.role === "knowledge"
@@ -452,6 +460,19 @@
 </ul>
 
 <style>
+  /* Two lines max: a failed discover can return a wall of text. */
+  .clamped {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--pad-2);
+  }
+  .clamped .etxt {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
   .conn-form { display: flex; flex-direction: column; gap: 0.5rem; }
   .hint { font-size: 0.8rem; }
   .linkish { background: none; border: none; padding: 0; color: inherit; font: inherit; cursor: pointer; }

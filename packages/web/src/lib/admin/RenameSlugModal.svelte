@@ -1,12 +1,8 @@
 <script lang="ts">
-  
-  
-  
-  
   import { onMount, type Snippet } from "svelte";
   import { api } from "../api";
-  import AsciiModal from "../AsciiModal.svelte";
-  import { errText } from "./shared";
+  import { errText } from "../resource.svelte";
+  import { Modal } from "../tui";
 
   export type RenameImpact = { entries: number; docs?: number };
 
@@ -20,9 +16,10 @@
     message,
   }: {
     title?: string;
-    resource: string; 
+    /** Resource path INCLUDING the current slug, e.g. /products/x/labels/y */
+    resource: string;
     to: string;
-    onRenamed: () => void | Promise<void>; 
+    onRenamed: () => void | Promise<void>;
     onCancel: () => void;
     onError: (msg: string) => void;
     message: Snippet<[RenameImpact]>;
@@ -47,13 +44,21 @@
       await onRenamed();
     } catch (e) {
       onError(errText(e));
-      busy = false; 
+      busy = false;
     }
   }
 </script>
 
 {#if impact}
-  <AsciiModal {title} confirmLabel="rename" danger {busy} onConfirm={confirm} onCancel={onCancel}>
+  <Modal
+    {title}
+    confirmLabel="rename"
+    confirmIcon="edit"
+    danger
+    {busy}
+    onConfirm={confirm}
+    {onCancel}
+  >
     {@render message(impact)}
-  </AsciiModal>
+  </Modal>
 {/if}

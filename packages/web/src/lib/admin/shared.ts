@@ -82,7 +82,10 @@ export type Repo = {
   chunk_count: number;
   last_indexed_at: string | null;
 };
-export type Discovered<K extends string, T> = { ok: boolean; error?: string } & {
+export type Discovered<K extends string, T> = {
+  ok: boolean;
+  error?: string;
+} & {
   [P in K]?: T[];
 };
 export type Setting<T> = { value: T; source: "db" | "env" | "default" };
