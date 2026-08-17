@@ -254,3 +254,38 @@ export async function indexRepo(
     throw err;
   }
 }
+
+/**
+ * Re-embed code chunks from their stored text, without touching git. `all: true`
+ * rebuilds every vector after a model change — far cheaper than re-cloning and
+ * re-indexing every repo just to get new vectors for text that has not changed.
+ */
+export async function backfillCodeEmbeddings(
+  opts: { all?: boolean } = {},
+): Promise<number> {
+  const rows = await sql`
+    select c.id, f.path, c.chunk_text
+    from code_chunks c
+    join repo_files f on f.id = c.file_id
+    ${opts.all ? sql`` : sql`where c.embedding is null`}
+    order by c.file_id, c.ordinal
+  `;
+  if (!rows.length) return 0;
+
+  let n = 0;
+  for (let i = 0; i < rows.length; i += 64) {
+    const batch = rows.slice(i, i + 64);
+    const vectors = await embedPassages(
+      // Same shape as indexing, or the query and the stored vector disagree.
+      batch.map((r) => `// ${r.path}\n${r.chunk_text}`),
+    );
+    await sql`
+      update code_chunks c set embedding = v.vec::vector
+      from (select unnest(${batch.map((r) => r.id as string)}::uuid[]) as id,
+                   unnest(${vectors.map(toVectorLiteral)}::text[]) as vec) v
+      where c.id = v.id
+    `;
+    n += batch.length;
+  }
+  return n;
+}

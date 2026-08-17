@@ -18,7 +18,7 @@ export {
   sweepInterruptedIndexes,
 } from "./repos";
 export type { RepoInput, RepoRow } from "./repos";
-export { indexRepo } from "./indexer";
+export { indexRepo, backfillCodeEmbeddings } from "./indexer";
 export type { IndexResult } from "./indexer";
 export { searchCode, readCodeFile } from "./search";
 export type { CodeSearchOptions } from "./search";

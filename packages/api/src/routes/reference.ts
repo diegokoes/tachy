@@ -9,6 +9,7 @@ import {
   updateReferenceDoc,
   referenceDocLineage,
   referenceStatusSchema,
+  resolveComponentFilter,
 } from "@tachy/core";
 import { assertScopeEditor, callerUserId } from "../authz";
 import { csv } from "../query";
@@ -24,6 +25,7 @@ const referenceInputSchema = z.object({
   structured: z.record(z.string(), z.any()).optional(),
   docVersion: z.string().optional(),
   supersedes: z.string().optional(),
+  component: z.string().nullable().optional(),
 });
 
 const referenceUpdateSchema = z.object({
@@ -34,15 +36,30 @@ const referenceUpdateSchema = z.object({
   source: z.string().nullable().optional(),
   structured: z.record(z.string(), z.any()).optional(),
   docVersion: z.string().nullable().optional(),
+  component: z.string().nullable().optional(),
   expectedVersion: z.number().int().optional(),
 });
 
-function listFilters(c: { req: { query(k: string): string | undefined } }) {
+type QueryCtx = { req: { query(k: string): string | undefined } };
+
+async function listFilters(c: QueryCtx) {
   const tags = csv(c.req.query("tags"));
+  const component = c.req.query("component");
+  const productId = c.req.query("product_id");
+  // Component slugs resolve within a product, so the pair is required — same
+  // rule the knowledge route follows.
+  const f =
+    component && productId
+      ? await resolveComponentFilter(productId, component)
+      : undefined;
+  const merged = [...(tags ?? []), ...(f?.extraTags ?? [])];
   return {
-    productId: c.req.query("product_id"),
+    productId,
     teamId: c.req.query("team_id"),
-    tags: tags?.length ? tags : undefined,
+    tags: merged.length ? merged : undefined,
+    componentId: f?.componentId,
+    componentTags: f?.componentTags,
+    docVersion: c.req.query("doc_version"),
     limit: c.req.query("limit") ? Number(c.req.query("limit")) : undefined,
   };
 }
@@ -51,7 +68,7 @@ export const reference = new Hono()
   .get("/search", async (c) => {
     const rows = await searchReferenceDocs(
       c.req.query("q") ?? "",
-      listFilters(c),
+      await listFilters(c),
     );
     return c.json(rows);
   })
@@ -71,7 +88,7 @@ export const reference = new Hono()
   .get("/", async (c) => {
     const rows = await listReferenceDocs({
       status: c.req.query("status"),
-      ...listFilters(c),
+      ...(await listFilters(c)),
     });
     return c.json(rows);
   })

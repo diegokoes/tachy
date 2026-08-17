@@ -106,6 +106,7 @@ export {
   listKnowledgeEntries,
   updateKnowledgeEntry,
   listEnvironments,
+  listAffectedVersions,
 } from "./knowledge";
 export type {
   KnowledgeInput,
@@ -141,6 +142,7 @@ export {
   updateReferenceDoc,
   searchReferenceDocs,
   referenceDocLineage,
+  backfillReferenceEmbeddings,
 } from "./reference";
 export type {
   ReferenceDocInput,
@@ -284,10 +286,33 @@ export {
   embedPassage,
   embedPassages,
   embedQuery,
+  embedQueryLiteral,
   toVectorLiteral,
   EMBEDDING_DIM,
+  EMBEDDING_MODEL,
+  EMBEDDING_SPEC,
+  EMBEDDING_MODELS,
 } from "./search";
 export { chunkText } from "./search";
+export {
+  relevance,
+  grade,
+  gradeOf,
+  withRelevance,
+  SEM_FLOOR,
+  SEM_CEIL,
+  GOOD,
+  STRONG,
+} from "./search";
+export type { Grade, Ranked } from "./search";
+export {
+  RRF_K,
+  RRF_WEIGHTS,
+  CANDIDATES,
+  HNSW_EF_SEARCH,
+  WORD_SIM_THRESHOLD,
+  clampLimit,
+} from "./search";
 
 export * from "./code";
 

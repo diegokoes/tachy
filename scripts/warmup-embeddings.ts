@@ -1,4 +1,4 @@
-import { embedPassage } from "@tachy/core";
+import { embedPassage, EMBEDDING_MODEL } from "@tachy/core";
 
 await embedPassage("warmup");
-console.log("fastembed model cached.");
+console.log(`embedding model cached: ${EMBEDDING_MODEL}`);
