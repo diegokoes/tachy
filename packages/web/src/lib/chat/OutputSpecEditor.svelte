@@ -27,18 +27,64 @@
     return { key: "", type: "string" };
   }
 
-  /** Drops half-written rows and returns undefined when nothing usable is declared. */
+  export const fieldName = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+  /** What a file name may not contain, on Windows or anywhere else. */
+  export const cleanFilename = (s: string) =>
+    s.replace(/[\x00-\x1f\x7f/\\:*?"<>|]/g, "").slice(0, 120);
+
+  /** What the workbook's tab is called when nobody names it — the server's fallback. */
+  export const DEFAULT_SHEET = "Sheet1";
+
+  /** Excel rejects these in a tab name and truncates past 31 characters. */
+  export const cleanSheet = (s: string) =>
+    s.replace(/[[\]:*?/\\]/g, "").slice(0, 31);
+
+  const heading = (c: SpecColumn) => (c.label ?? "").trim() || c.key.trim();
+
+  /** The names the agent fills, derived from the headings and unique per sheet. */
+  export function columnKeys(columns: SpecColumn[]): string[] {
+    const seen = new Set<string>();
+    return columns.map((c) => {
+      const base = fieldName(c.key.trim() || heading(c));
+      if (!base) return "";
+      let key = base;
+      for (let n = 2; seen.has(key); n++) key = `${base}_${n}`;
+      seen.add(key);
+      return key;
+    });
+  }
+
+  /** What still stops this output from being saved, in the user's words. */
+  export function outputProblem(
+    enabled: boolean,
+    output: OutputSpec,
+  ): string | null {
+    if (!enabled) return null;
+    if (!output.columns.length)
+      return "add a column, or turn the output file off";
+    if (output.columns.some((c) => !heading(c)))
+      return "every column needs a heading";
+    return null;
+  }
+
   export function toArtifactSpec(
     enabled: boolean,
     output: OutputSpec,
   ): ArtifactSpec | undefined {
     if (!enabled) return undefined;
+    const keys = columnKeys(output.columns);
     const columns = output.columns
-      .filter((c) => c.key.trim())
-      .map((c) => ({
-        key: c.key.trim(),
+      .map((c, i) => ({ c, key: keys[i] }))
+      .filter(({ key }) => key)
+      .map(({ c, key }) => ({
+        key,
         type: c.type,
-        ...(c.label?.trim() ? { label: c.label.trim() } : {}),
+        label: heading(c),
         ...(c.required ? { required: true } : {}),
         ...(c.description?.trim() ? { description: c.description.trim() } : {}),
       }));
@@ -47,35 +93,66 @@
       utilities: [EXPORT_UTILITY],
       output: {
         format: output.format,
-        ...(output.sheet?.trim() ? { sheet: output.sheet.trim() } : {}),
+        ...(output.sheet?.trim() ? { sheet: cleanSheet(output.sheet.trim()) } : {}),
         ...(output.filename?.trim()
-          ? { filename: output.filename.trim() }
+          ? { filename: cleanFilename(output.filename.trim()) }
           : {}),
         columns,
       },
     };
   }
+
+  /** Mirrors the server's own naming, so the preview is the real download name. */
+  export function previewFilename(output: OutputSpec, slug: string): string {
+    const name = slug || "artifact";
+    const base = (output.filename?.trim() || `${name}-{date}`)
+      .replace(/\{date\}/g, new Date().toISOString().slice(0, 10))
+      .replace(/\{slug\}/g, name);
+    return base.toLowerCase().endsWith(`.${output.format}`)
+      ? base
+      : `${base}.${output.format}`;
+  }
 </script>
 
 <script lang="ts">
-  import AsciiSelect from "../AsciiSelect.svelte";
+  import { Button, Field, Select, G } from "../tui";
 
   let {
     enabled = $bindable(),
     output = $bindable(),
-  }: { enabled: boolean; output: OutputSpec } = $props();
+    slug = "",
+  }: { enabled: boolean; output: OutputSpec; slug?: string } = $props();
 
-  const TYPES = ["string", "number", "date", "boolean"];
+  const TYPES = [
+    { value: "string", label: "text" },
+    { value: "number", label: "number" },
+    { value: "date", label: "date" },
+    { value: "boolean", label: "yes / no" },
+  ];
   const FORMATS = [
-    { value: "xlsx", label: "xlsx" },
-    { value: "csv", label: "csv" },
+    { value: "xlsx", label: "Excel (.xlsx)" },
+    { value: "csv", label: "CSV (.csv)" },
   ];
 
-  const kebab = (s: string) =>
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "");
+  const keys = $derived(columnKeys(output.columns));
+  const preview = $derived(previewFilename(output, slug));
+
+  /** The key follows the heading until someone gives it a life of its own. */
+  function setHeading(i: number, value: string) {
+    const col = output.columns[i];
+    const linked = !col.key || col.key === fieldName(col.label ?? "");
+    col.label = value;
+    if (linked) col.key = fieldName(value);
+  }
+
+  function sanitize(
+    e: Event & { currentTarget: HTMLInputElement },
+    clean: (s: string) => string,
+  ): string {
+    const value = clean(e.currentTarget.value);
+    e.currentTarget.value = value;
+    return value;
+  }
 
   function add() {
     output.columns = [...output.columns, emptyColumn()];
@@ -95,74 +172,118 @@
 </script>
 
 <div class="os">
-  <label class="toggle">
-    <input type="checkbox" bind:checked={enabled} />
-    <span>produces a file (declare the columns a turn must fill)</span>
-  </label>
+  <div class="head-row">
+    <label class="toggle">
+      <input type="checkbox" bind:checked={enabled} />
+      <span class="ttl">output file</span>
+    </label>
+    {#if enabled}
+      <span class="preview" title="the name the download arrives with">
+        <span class="arrow" aria-hidden="true">{G.right}</span>{preview}
+      </span>
+    {/if}
+  </div>
 
   {#if enabled}
-    <div class="row">
-      <label>format
-        <AsciiSelect bind:value={output.format} options={FORMATS} />
-      </label>
+    <div class="meta">
+      <Field label="file type">
+        <Select bind:value={output.format} options={FORMATS} aria-label="file type" />
+      </Field>
+      <Field label="file name">
+        <input
+          value={output.filename ?? ""}
+          oninput={(e) => (output.filename = sanitize(e, cleanFilename))}
+          title="Optional — defaults to the artifact name and today's date. {'{date}'} becomes today's date, {'{slug}'} the artifact name; the extension is added for you."
+          aria-label="file name"
+        />
+      </Field>
       {#if output.format === "xlsx"}
-        <label>sheet
-          <input bind:value={output.sheet} placeholder="Tickets" />
-        </label>
+        <Field label="tab name">
+          <input
+            value={output.sheet ?? ""}
+            oninput={(e) => (output.sheet = sanitize(e, cleanSheet))}
+            title="Optional — the sheet tab inside the workbook, max 31 characters. Defaults to {DEFAULT_SHEET}."
+            aria-label="tab name"
+          />
+        </Field>
       {/if}
-      <label>filename
-        <input bind:value={output.filename} placeholder="escalations-{'{date}'}" />
-      </label>
     </div>
 
     <div class="cols-head">
-      <span>columns</span>
-      <button class="mini" onclick={add}>+ column</button>
+      <span class="ttl">columns</span>
+      <Button variant="ghost" tone="ok" size="sm" icon="plus" onclick={add}>
+        column
+      </Button>
     </div>
 
     {#if output.columns.length === 0}
-      <p class="muted">No columns yet — add one.</p>
+      <p class="lede">No columns yet — add the first one.</p>
     {/if}
 
-    <ul class="cols">
+    <ol class="cols">
       {#each output.columns as col, i (i)}
         <li class="col">
-          <div class="col-main">
-            <input
-              class="key"
-              bind:value={col.key}
-              onblur={() => (col.key = kebab(col.key))}
-              placeholder="ticket_id"
-              aria-label="column key"
-            />
-            <input
-              class="lbl"
-              bind:value={col.label}
-              placeholder="Ticket"
-              aria-label="column label"
-            />
-            <span class="type">
-              <AsciiSelect bind:value={col.type} options={TYPES} aria-label="column type" />
-            </span>
-            <label class="req" title="required">
-              <input type="checkbox" bind:checked={col.required} />
-              <span>req</span>
-            </label>
-            <span class="acts">
-              <button class="ghost" title="move up" onclick={() => move(i, -1)}>↑</button>
-              <button class="ghost" title="move down" onclick={() => move(i, 1)}>↓</button>
-              <button class="ghost" title="remove" onclick={() => remove(i)}>✕</button>
-            </span>
+          <span class="idx">{i + 1}</span>
+
+          <div class="f-head">
+            <Field label="heading" required hint={keys[i] || " "}>
+              <input
+                value={col.label ?? col.key}
+                oninput={(e) => setHeading(i, e.currentTarget.value)}
+                aria-label="column heading"
+              />
+            </Field>
           </div>
-          <input
-            class="desc"
-            bind:value={col.description}
-            placeholder="what goes in this column (shown to the agent)"
-            aria-label="column description"
-          />
+
+          <div class="f-type">
+            <Field label="cell type" hint=" ">
+              <Select bind:value={col.type} options={TYPES} aria-label="cell type" />
+            </Field>
+          </div>
+
+          <label class="req" title="the agent may not leave this column empty">
+            <input type="checkbox" bind:checked={col.required} />
+            <span>required</span>
+          </label>
+
+          <span class="acts">
+            <Button
+              variant="ghost"
+              tone="danger"
+              square
+              icon="cancel"
+              title="remove column"
+              aria-label="remove column"
+              onclick={() => remove(i)}
+            />
+            <Button
+              variant="ghost"
+              square
+              icon="moveUp"
+              title="move up"
+              aria-label="move column up"
+              disabled={i === 0}
+              onclick={() => move(i, -1)}
+            />
+            <Button
+              variant="ghost"
+              square
+              icon="moveDown"
+              title="move down"
+              aria-label="move column down"
+              disabled={i === output.columns.length - 1}
+              onclick={() => move(i, 1)}
+            />
+          </span>
+
+          <div class="f-desc">
+            <Field label="what goes in it">
+              <input bind:value={col.description} aria-label="column description" />
+            </Field>
+          </div>
         </li>
       {/each}
-    </ul>
+    </ol>
   {/if}
 </div>
 
@@ -170,76 +291,132 @@
   .os {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    padding-top: 0.4rem;
+    gap: var(--pad-2);
+    padding-top: var(--pad-3);
     border-top: 1px solid var(--border);
   }
   .toggle {
     display: flex;
-    flex-direction: row;
     align-items: center;
-    gap: 0.4rem;
-    font-size: 0.78rem;
+    gap: var(--pad-2);
+    color: var(--text);
+  }
+  .ttl {
+    font-size: var(--fs-sm);
+    letter-spacing: var(--label-spacing);
+    color: var(--text);
+  }
+  .lede {
+    margin: 0;
+    font-size: var(--fs-xs);
     color: var(--muted);
   }
-  .row {
-    display: flex;
-    gap: 0.6rem;
-    flex-wrap: wrap;
-    align-items: flex-end;
+
+  .meta {
+    display: grid;
+    grid-template-columns: minmax(9rem, 1fr) minmax(13rem, 2fr) minmax(9rem, 1fr);
+    gap: var(--pad-2) var(--gap);
+    align-items: start;
   }
-  .row label {
+  @media (max-width: 46rem) {
+    .meta {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .head-row {
     display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    font-size: 0.78rem;
+    align-items: center;
+    gap: var(--pad-3);
+    min-width: 0;
+  }
+  .preview {
+    min-width: 0;
+    font-size: var(--fs-xs);
+    color: var(--accent);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .arrow {
+    margin-right: var(--pad-1);
     color: var(--muted);
   }
+
   .cols-head {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--muted);
+    justify-content: space-between;
+    gap: var(--pad-2);
+    margin-top: var(--pad-2);
   }
-  .cols-head span { flex: 1; }
+
   .cols {
     list-style: none;
     margin: 0;
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: var(--pad-2);
   }
+  /* Two text fields down the left, the two small controls stacked beside them,
+     the row actions outside both — so nothing is a lone control in open space. */
   .col {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    padding: 0.35rem 0.45rem;
+    display: grid;
+    grid-template-columns: 1.2rem minmax(10rem, 1fr) 9rem auto;
+    grid-template-areas:
+      "idx head type acts"
+      "idx desc req  acts";
+    gap: var(--pad-1) var(--gap);
+    align-items: end;
+    padding: var(--pad-2) var(--pad-3);
     background: var(--panel);
     border: 1px solid var(--border);
+    border-radius: var(--radius);
   }
-  .col-main {
-    display: flex;
-    gap: 0.35rem;
-    align-items: center;
-    flex-wrap: wrap;
+  @media (max-width: 46rem) {
+    .col {
+      grid-template-columns: 1.2rem minmax(0, 1fr) auto;
+      grid-template-areas:
+        "idx head acts"
+        "idx type acts"
+        "idx req  acts"
+        "idx desc desc";
+    }
   }
-  .col input, .desc { font: inherit; color: var(--text); }
-  .key { flex: 1 1 8rem; min-width: 0; }
-  .lbl { flex: 1 1 8rem; min-width: 0; }
-  .type { flex: 0 0 7rem; }
-  .req {
-    display: flex;
-    align-items: center;
-    gap: 0.2rem;
-    font-size: 0.7rem;
+
+  .idx {
+    grid-area: idx;
+    align-self: start;
+    padding-top: 0.1rem;
+    font-size: var(--fs-xs);
     color: var(--muted);
   }
-  .desc { width: 100%; font-size: 0.78rem; }
-  .acts { display: flex; gap: 0.15rem; }
-  .acts .ghost { padding: 0.1rem 0.35rem; font-size: 0.75rem; }
-  .muted { color: var(--muted); margin: 0; font-size: 0.78rem; }
+  .f-head { grid-area: head; min-width: 0; }
+  .f-type { grid-area: type; min-width: 0; }
+  .f-desc { grid-area: desc; min-width: 0; }
+  .f-type :global(.asel) {
+    width: 100%;
+  }
+
+  .req {
+    grid-area: req;
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+    padding-bottom: var(--pad-2);
+    font-size: var(--fs-sm);
+    color: var(--muted);
+  }
+  .req input {
+    width: auto;
+  }
+
+  .acts {
+    grid-area: acts;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    gap: var(--pad-1);
+  }
 </style>

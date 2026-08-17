@@ -1,23 +1,26 @@
 <script lang="ts">
   import { api } from "../api";
   import { chat } from "../chatState.svelte";
-  import { session, canCurateScope } from "../session.svelte";
+  import { session } from "../session.svelte";
   import type { NamedRow } from "../types";
-  import AsciiModal from "../AsciiModal.svelte";
-  import AsciiSelect from "../AsciiSelect.svelte";
+  import { Button, Field, Modal, Panel, Select, G } from "../tui";
   import OutputSpecEditor, {
     emptyColumn,
+    outputProblem,
     toArtifactSpec,
     type ArtifactSpec,
     type OutputSpec,
   } from "./OutputSpecEditor.svelte";
-  import { gsap, reducedMotion } from "../gsap";
+  import ArtifactThread from "./ArtifactThread.svelte";
+  import { clearGlow, crt, glow, jolt, settle, spin } from "../motion";
+  import { nextNavKey, superscript } from "../nav.svelte";
+  import { pushScope } from "../keys.svelte";
 
   let tabBtn = $state<HTMLButtonElement>();
   let tabIcon = $state<HTMLSpanElement>();
-  let spinTween: gsap.core.Tween | undefined;
-  let pulseTween: gsap.core.Tween | undefined;
-  let glowTween: gsap.core.Tween | undefined;
+  let pickerEl = $state<HTMLElement>();
+  let thread = $state<ArtifactThread>();
+  let firing = $state(false);
 
   type ArtifactScope = "user" | "team" | "global";
 
@@ -88,41 +91,68 @@
     }
   }
 
+  // Picks up where the tab bar's digits stop, so the row reads 1..n, artifacts.
+  const hotkey = $derived(nextNavKey());
+
+  // hidden: the tab carries the digit itself, same as the nav bar.
   $effect(() => {
-    if (!tabIcon || reducedMotion()) return;
-    glowTween?.kill();
-    glowTween = undefined;
-    if (chat.artifact) {
-      const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
-      glowTween = gsap.fromTo(
-        tabIcon,
-        { textShadow: `0 0 0px ${accent}` },
-        { textShadow: `0 0 8px ${accent}, 0 0 14px ${accent}`, duration: 1.6, yoyo: true, repeat: -1, ease: "sine.inOut" },
-      );
-    } else {
-      gsap.set(tabIcon, { textShadow: "none" });
-    }
+    const key = String(hotkey);
+    return pushScope([
+      {
+        key,
+        label: "artifacts",
+        hidden: true,
+        run: () => {
+          if (!editorOpen) toggle();
+        },
+      },
+    ]);
   });
 
   $effect(() => {
-    if (!tabIcon || reducedMotion()) return;
-    spinTween?.kill();
-    pulseTween?.kill();
-    spinTween = undefined;
-    pulseTween = undefined;
-    if (open) {
-      gsap.set(tabIcon, { rotation: 0, scale: 1 });
-      spinTween = gsap.to(tabIcon, { rotation: 360, duration: 1.8, ease: "none", repeat: -1 });
-      pulseTween = gsap.to(tabIcon, { scale: 1.22, duration: 0.9, ease: "sine.inOut", yoyo: true, repeat: -1 });
-    } else {
-      gsap.to(tabIcon, { rotation: 0, scale: 1, duration: 0.3, ease: "power2.out" });
+    const icon = tabIcon;
+    if (!icon) return;
+    if (!chat.artifact || open) {
+      clearGlow(icon);
+      return;
     }
+    const tween = glow(icon);
+    return () => tween?.kill();
+  });
+
+  $effect(() => {
+    const icon = tabIcon;
+    if (!icon) return;
+    if (!open) {
+      settle(icon);
+      return;
+    }
+    const tweens = spin(icon);
+    return () => {
+      for (const t of tweens) t.kill();
+      settle(icon);
+    };
+  });
+
+  // Closing takes the thread (and any send in flight) with it.
+  $effect(() => {
+    if (!open) firing = false;
   });
 
   function select(a: ArtifactMeta) {
-    chat.artifact =
-      chat.artifact?.id === a.id ? undefined : { id: a.id, title: a.title };
-    open = false;
+    if (firing) return;
+    const attaching = chat.artifact?.id !== a.id;
+    chat.artifact = attaching ? { id: a.id, title: a.title } : undefined;
+    if (!attaching || !thread) {
+      open = false;
+      return;
+    }
+    firing = true;
+    thread.discharge(() => {
+      if (tabBtn) jolt(tabBtn);
+      open = false;
+      firing = false;
+    });
   }
 
   function canWrite(a: ArtifactMeta): boolean {
@@ -135,30 +165,45 @@
     return session.me?.role === "admin";
   }
 
-  const teamOptions = $derived(teams.map((t) => t.slug));
-  const scopeOptions = $derived([
-    { value: "user", label: "user" },
-    ...(teams.length ? [{ value: "team", label: "team" }] : []),
-    ...(session.me?.role === "admin"
-      ? [{ value: "global", label: "global" }]
-      : []),
-  ]);
   const teamSlugFor = (teamId: string | null) =>
     teams.find((t) => t.id === teamId)?.slug;
 
+  /** One list instead of a scope picker plus a team picker to go with it. */
+  const audienceOptions = $derived([
+    { value: "user", label: "only me" },
+    ...teams.map((t) => ({ value: `team:${t.slug}`, label: `team ${t.slug}` })),
+    ...(session.me?.role === "admin"
+      ? [{ value: "global", label: "everyone" }]
+      : []),
+  ]);
+
   let editorOpen = $state(false);
+  let fetching = $state<string | null>(null);
   let editorMode = $state<"create" | "edit">("create");
   let editorBusy = $state(false);
   let editorError = $state<string | null>(null);
-  let fScope = $state<ArtifactScope>("user");
-  let fTeam = $state("");
-  let fSlug = $state("");
-  let fSlugTouched = $state(false);
+  let fAudience = $state("user");
+  let fWasAudience = $state("user");
+  let fEditId = $state<string | null>(null);
+  let fEditSlug = $state("");
   let fTitle = $state("");
   let fDescription = $state("");
-  let fBody = $state("");
+  let fPrompt = $state("");
   let fHasOutput = $state(false);
   let fOutput = $state<OutputSpec>({ format: "xlsx", columns: [] });
+
+  const TEAM_PREFIX = "team:";
+  const audienceOf = (a: ArtifactMeta) =>
+    a.scope === "team"
+      ? `${TEAM_PREFIX}${teamSlugFor(a.team_id) ?? ""}`
+      : a.scope;
+  const scopeOf = (audience: string): ArtifactScope =>
+    audience.startsWith(TEAM_PREFIX) ? "team" : (audience as ArtifactScope);
+  const teamOf = (audience: string) =>
+    audience.startsWith(TEAM_PREFIX) ? audience.slice(TEAM_PREFIX.length) : "";
+
+  const fScope = $derived(scopeOf(fAudience));
+  const fTeam = $derived(teamOf(fAudience));
 
   const blankOutput = (): OutputSpec => ({
     format: "xlsx",
@@ -173,70 +218,134 @@
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
+  /* The name the agent and `/artifact` use. Nobody should have to invent one,
+     so it follows the title — suffixed when that name is already taken where
+     the artifact is going, which is also what keeps a move from landing on
+     someone else's artifact. */
+  function freeSlug(
+    base: string,
+    scope: ArtifactScope,
+    team: string,
+    keep: string | null,
+  ): string {
+    const taken = new Set(
+      items
+        .filter(
+          (a) =>
+            a.id !== keep &&
+            a.scope === scope &&
+            (scope !== "team" || teamSlugFor(a.team_id) === team),
+        )
+        .map((a) => a.slug),
+    );
+    if (!taken.has(base)) return base;
+    let n = 2;
+    while (taken.has(`${base}-${n}`)) n++;
+    return `${base}-${n}`;
+  }
+
+  const fSlug = $derived(
+    freeSlug(
+      editorMode === "edit" ? fEditSlug : kebab(fTitle) || "artifact",
+      fScope,
+      fTeam,
+      fEditId,
+    ),
+  );
+
   function openCreate() {
     editorMode = "create";
-    fScope = "user";
-    fTeam = teamOptions[0] ?? "";
-    fSlug = "";
-    fSlugTouched = false;
+    fAudience = "user";
+    fWasAudience = "user";
+    fEditId = null;
+    fEditSlug = "";
     fTitle = "";
     fDescription = "";
-    fBody = "";
+    fPrompt = "";
     fHasOutput = false;
     fOutput = blankOutput();
     editorError = null;
     editorOpen = true;
   }
 
+  // The prompt is fetched BEFORE the modal opens, so it comes up filled instead
+  // of blinking its content in a beat later.
   async function openEdit(a: ArtifactMeta) {
-    editorMode = "edit";
-    fScope = a.scope;
-    fTeam = teamSlugFor(a.team_id) ?? "";
-    fSlug = a.slug;
-    fSlugTouched = true;
-    fTitle = a.title;
-    fDescription = a.description ?? "";
-    fBody = "";
-    fHasOutput = !!a.spec?.output;
-    fOutput = a.spec?.output
-      ? { sheet: "", filename: "", ...a.spec.output }
-      : blankOutput();
-    editorError = null;
-    editorOpen = true;
+    if (fetching) return;
+    fetching = a.id;
+    let body = "";
+    let failed: string | null = null;
     try {
       const full = await api.get<ArtifactMeta & { body: string }>(
         `/artifacts/${a.id}`,
       );
-      fBody = full.body;
+      body = full.body;
     } catch (e) {
-      editorError = e instanceof Error ? e.message : String(e);
+      failed = e instanceof Error ? e.message : String(e);
     }
+    fetching = null;
+    editorMode = "edit";
+    fAudience = audienceOf(a);
+    fWasAudience = fAudience;
+    fEditId = a.id;
+    fEditSlug = a.slug;
+    fTitle = a.title;
+    fDescription = a.description ?? "";
+    fPrompt = body;
+    fHasOutput = !!a.spec?.output;
+    fOutput = a.spec?.output
+      ? { sheet: "", filename: "", ...a.spec.output }
+      : blankOutput();
+    editorError = failed;
+    editorOpen = true;
   }
 
   async function save() {
-    if (!fTitle.trim() || !fSlug.trim() || !fBody.trim()) {
-      editorError = "title, slug and body are required";
+    if (!fTitle.trim() || !fPrompt.trim()) {
+      editorError = "a name and a prompt are required";
       return;
     }
-    const spec = toArtifactSpec(fHasOutput, fOutput);
-    if (fHasOutput && !spec) {
-      editorError = "give at least one output column a key, or turn off the file output";
+    const problem = outputProblem(fHasOutput, fOutput);
+    if (problem) {
+      editorError = problem;
       return;
     }
+    /* A row belongs to one scope, so changing the audience writes the artifact
+       where it now lives and drops the old copy — and re-attaches it, since a
+       moved artifact is a new row with a new id. */
+    const moved = editorMode === "edit" && fAudience !== fWasAudience;
+    const wasScope = scopeOf(fWasAudience);
+    const wasTeam = teamOf(fWasAudience);
+    const wasAttached = !!fEditId && chat.artifact?.id === fEditId;
+    const slug = fSlug;
+
     editorBusy = true;
     editorError = null;
     try {
       await api.put("/artifacts", {
         scope: fScope,
         ...(fScope === "team" ? { team: fTeam } : {}),
-        slug: fSlug.trim(),
+        slug,
         title: fTitle.trim(),
         description: fDescription.trim() || undefined,
-        body: fBody,
-        spec: spec ?? null,
+        body: fPrompt,
+        spec: toArtifactSpec(fHasOutput, fOutput) ?? null,
       });
+      if (moved)
+        await api.delete("/artifacts", {
+          scope: wasScope,
+          ...(wasScope === "team" ? { team: wasTeam } : {}),
+          slug: fEditSlug,
+        });
       editorOpen = false;
       await load();
+      if (moved) {
+        const now = items.find(
+          (a) => a.slug === slug && audienceOf(a) === fAudience,
+        );
+        if (wasAttached)
+          chat.artifact = now ? { id: now.id, title: now.title } : undefined;
+      }
     } catch (e) {
       editorError = e instanceof Error ? e.message : String(e);
     } finally {
@@ -265,64 +374,119 @@
   }
 </script>
 
-<button
-  bind:this={tabBtn}
-  class="edge-tab"
-  class:active={open || !!chat.artifact}
-  onclick={toggle}
-  title="Artifacts — reusable prompt templates to attach as context"
-  aria-label="Artifacts"
-><span bind:this={tabIcon} class="tab-icon">⛬</span></button>
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key === "Escape" && open && !editorOpen) open = false;
+  }}
+/>
+
+<div class="edge-slot">
+  <span class="tab-key" aria-hidden="true">{superscript(hotkey)}</span>
+  <button
+    bind:this={tabBtn}
+    class="edge-tab"
+    class:active={open || !!chat.artifact}
+    onclick={toggle}
+    title="Artifacts — reusable prompt templates to attach as context ({hotkey})"
+    aria-label="Artifacts"
+    aria-expanded={open}
+  ><span bind:this={tabIcon} class="tab-icon">{G.artifact}</span></button>
+</div>
 
 {#if open}
-  <aside class="flyout">
-    <div class="fly-head">
-      <span class="fly-title">artifacts</span>
-      <button class="mini" onclick={openCreate}>+ new</button>
-      <button class="ghost fly-close" onclick={() => (open = false)}>✕</button>
-    </div>
-    {#if error}<p class="error">{error}</p>{/if}
-    {#if loading}
-      <p class="muted">loading…</p>
-    {:else if items.length === 0 && !error}
-      <p class="muted">No artifacts yet — create one with + new.</p>
-    {/if}
-    {#each grouped as g (g.scope)}
-      <div class="scope-head">{SCOPE_LABELS[g.scope]}</div>
-      <ul class="art-list">
-        {#each g.rows as a (a.id)}
-          <li class="art-row" class:selected={chat.artifact?.id === a.id}>
-            <button class="art-pick" onclick={() => select(a)}>
-              <span class="art-title">
-                {chat.artifact?.id === a.id ? "› " : ""}{a.title}
-                {#if a.spec?.output}<span
-                    class="art-out"
-                    title="produces a {a.spec.output.format} file"
-                  >⤓ {a.spec.output.format}</span>{/if}
-              </span>
-              {#if a.description}<span class="art-desc">{a.description}</span>{/if}
-            </button>
-            {#if canWrite(a)}
-              <span class="art-actions">
-                <button class="ghost" title="edit" onclick={() => openEdit(a)}>✎</button>
-                <button
-                  class="ghost"
-                  class:danger={armedDelete === a.id}
-                  title="delete"
-                  onclick={() => remove(a)}
-                >{armedDelete === a.id ? "sure?" : "✕"}</button>
-              </span>
-            {/if}
-          </li>
-        {/each}
-      </ul>
-    {/each}
-  </aside>
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+  <div
+    class="scrim"
+    class:hushed={editorOpen}
+    onclick={() => (open = false)}
+  ></div>
+
+  <div class="stage">
+    <aside class="picker" bind:this={pickerEl} transition:crt>
+      <Panel title="artifacts" tone="accent" scan>
+        {#snippet meta()}
+          <span class="head-acts">
+            <Button
+              variant="ghost"
+              tone="ok"
+              square
+              icon="plus"
+              title="new artifact"
+              aria-label="new artifact"
+              onclick={openCreate}
+            />
+            <Button
+              variant="ghost"
+              square
+              icon="cancel"
+              title="close"
+              aria-label="close"
+              onclick={() => (open = false)}
+            />
+          </span>
+        {/snippet}
+
+        <div class="pick-body">
+          {#if error}<p class="error">{error}</p>{/if}
+          {#if loading}
+            <p class="muted">loading…</p>
+          {:else if items.length === 0 && !error}
+            <p class="muted empty">No artifacts yet</p>
+          {/if}
+          {#each grouped as g (g.scope)}
+            <div class="scope-head">{SCOPE_LABELS[g.scope]}</div>
+            <ul class="art-list">
+              {#each g.rows as a (a.id)}
+                <li class="art-row" class:selected={chat.artifact?.id === a.id}>
+                  <button class="art-pick" onclick={() => select(a)}>
+                    <span class="art-title">
+                      {chat.artifact?.id === a.id ? `${G.selected} ` : ""}{a.title}
+                      {#if a.spec?.output}<span
+                          class="art-out"
+                          title="produces a {a.spec.output.format} file"
+                        >{G.file} {a.spec.output.format}</span>{/if}
+                    </span>
+                    {#if a.description}<span class="art-desc">{a.description}</span>{/if}
+                  </button>
+                  {#if canWrite(a)}
+                    <span class="art-actions">
+                      <Button
+                        variant="ghost"
+                        tone="info"
+                        square
+                        icon="edit"
+                        title="edit"
+                        aria-label="edit"
+                        busy={fetching === a.id}
+                        onclick={() => openEdit(a)}
+                      />
+                      <Button
+                        variant="ghost"
+                        tone="danger"
+                        square
+                        icon={armedDelete === a.id ? "check" : "cancel"}
+                        title={armedDelete === a.id ? "click again to delete" : "delete"}
+                        aria-label="delete"
+                        onclick={() => remove(a)}
+                      />
+                    </span>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+          {/each}
+        </div>
+      </Panel>
+    </aside>
+  </div>
+
+  <ArtifactThread bind:this={thread} from={pickerEl} to={tabBtn} />
 {/if}
 
 {#if editorOpen}
-  <AsciiModal
+  <Modal
     title={editorMode === "create" ? "new artifact" : "edit artifact"}
+    width="46rem"
     confirmLabel="save"
     busy={editorBusy}
     onConfirm={save}
@@ -335,67 +499,56 @@
         if (e.key === "Enter") e.stopPropagation();
       }}
     >
-      <div class="ed-row">
-        <label>scope
-          <AsciiSelect
-            bind:value={fScope}
-            options={scopeOptions}
-            disabled={editorMode === "edit"}
+      <div class="who">
+        <Field label="who can use it">
+          <Select
+            bind:value={fAudience}
+            options={audienceOptions}
+            aria-label="who can use it"
           />
-        </label>
-        {#if fScope === "team"}
-          <label>team
-            <AsciiSelect
-              bind:value={fTeam}
-              options={teamOptions}
-              disabled={editorMode === "edit"}
-            />
-          </label>
-        {/if}
-        <label>slug
-          <input
-            bind:value={fSlug}
-            oninput={() => (fSlugTouched = true)}
-            disabled={editorMode === "edit"}
-            placeholder="docs-report"
-          />
-        </label>
+        </Field>
       </div>
-      <label>title
-        <input
-          bind:value={fTitle}
-          oninput={() => {
-            if (!fSlugTouched) fSlug = kebab(fTitle);
-          }}
-          placeholder="Docs improvement report"
-        />
-      </label>
-      <label>description
-        <input bind:value={fDescription} placeholder="when to use this (shown in the picker)" />
-      </label>
-      <label>body
-        <textarea
-          rows="10"
-          bind:value={fBody}
-          placeholder="Context to inject"
-        ></textarea>
-      </label>
-      <OutputSpecEditor bind:enabled={fHasOutput} bind:output={fOutput} />
+
+      <Field label="name" required>
+        <input bind:value={fTitle} />
+      </Field>
+
+      <Field label="when to use it">
+        <input bind:value={fDescription} />
+      </Field>
+
+      <Field label="prompt" required>
+        <textarea rows="10" bind:value={fPrompt}></textarea>
+      </Field>
+
+      <OutputSpecEditor
+        bind:enabled={fHasOutput}
+        bind:output={fOutput}
+        slug={fSlug}
+      />
+
       {#if editorError}<p class="error">{editorError}</p>{/if}
     </div>
-  </AsciiModal>
+  </Modal>
 {/if}
 
 <style>
-  .edge-tab {
+  .edge-slot {
     position: absolute;
     right: 0.4rem;
     top: 50%;
     transform: translateY(-50%);
-    z-index: 8;
-    padding: 0.45rem 0.5rem;
+    z-index: 9;
+    display: flex;
+    align-items: center;
+    gap: var(--pad-1);
+    pointer-events: none;
+  }
+  .edge-tab {
+    pointer-events: auto;
+    padding: var(--pad-2);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius);
     background: var(--bg);
     color: var(--muted);
     font-size: 1.15rem;
@@ -407,44 +560,72 @@
     display: inline-block;
     line-height: 1;
   }
+  .tab-key {
+    font-size: var(--fs-xs);
+    line-height: 1;
+    color: var(--accent);
+    transform: translateY(-0.65rem);
+  }
   .edge-tab:hover,
   .edge-tab.active {
     color: var(--accent);
     border-color: var(--accent);
   }
 
-  .flyout {
+  .scrim {
     position: absolute;
-    top: 0;
-    right: 2.5rem;
-    bottom: 0;
-    z-index: 7;
-    width: min(21rem, 90%);
-    overflow-y: auto;
-    padding: 0.75rem 0.9rem;
-    background: var(--panel-solid);
-    border: 1px solid var(--accent);
-    border-radius: 8px;
+    inset: 0;
+    z-index: 6;
+    background: color-mix(in srgb, var(--bg) 74%, transparent);
+  }
+  /* The editor lays its own scrim on top; two at 74% stack to solid black. */
+  .scrim.hushed {
+    background: color-mix(in srgb, var(--bg) 25%, transparent);
+  }
+
+  .stage {
+    position: absolute;
+    inset: 0;
+    z-index: 8;
+    display: grid;
+    place-items: center;
+    padding: var(--pad-4) 6rem var(--pad-4) var(--pad-4);
+    pointer-events: none;
+  }
+  .picker {
+    pointer-events: auto;
+    width: min(46rem, 100%);
+    transform-origin: center;
+  }
+
+  .head-acts { display: inline-flex; gap: var(--pad-2); align-items: center; }
+
+  .pick-body {
     display: flex;
     flex-direction: column;
-    gap: 0.4rem;
+    gap: var(--pad-2);
+    max-height: min(24rem, 45vh);
+    overflow-y: auto;
   }
-  .fly-head { display: flex; align-items: center; gap: 0.5rem; }
-  .fly-title { flex: 1; letter-spacing: 0.1em; text-transform: uppercase; font-size: 0.8rem; }
-  .fly-close { padding: 0.1rem 0.4rem; }
-  .fly-hint { margin: 0; font-size: 0.75rem; line-height: 1.4; }
 
   .scope-head {
-    margin-top: 0.4rem;
+    margin-top: var(--pad-2);
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: var(--fs-xs);
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: var(--label-spacing);
     border-bottom: 1px solid var(--border);
-    padding-bottom: 0.15rem;
+    padding-bottom: var(--pad-1);
   }
-  .art-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
-  .art-row { display: flex; align-items: flex-start; gap: 0.25rem; }
+  .art-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: var(--pad-2);
+  }
+  .art-row { display: flex; align-items: stretch; gap: var(--pad-1); min-width: 0; }
   .art-row.selected .art-pick { border-color: var(--accent); }
   .art-pick {
     flex: 1;
@@ -452,43 +633,58 @@
     text-align: left;
     display: flex;
     flex-direction: column;
-    gap: 0.15rem;
-    padding: 0.4rem 0.55rem;
+    gap: var(--pad-1);
+    padding: var(--pad-2) var(--pad-3);
     background: var(--panel);
   }
-  .art-title { font-size: 0.85rem; }
+  .art-title { font-size: var(--fs-sm); }
   .art-out {
-    margin-left: 0.3rem;
-    padding: 0 0.25rem;
+    margin-left: var(--pad-1);
+    padding: 0 var(--pad-1);
     border: 1px solid var(--accent);
     color: var(--accent);
     font-size: 0.62rem;
-    letter-spacing: 0.06em;
+    letter-spacing: var(--label-spacing);
     white-space: nowrap;
   }
   .art-desc {
     color: var(--muted);
-    font-size: 0.75rem;
+    font-size: var(--fs-xs);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .art-actions { display: flex; flex-direction: column; gap: 0.15rem; }
-  .art-actions .ghost { padding: 0.1rem 0.35rem; font-size: 0.75rem; }
-  .art-actions .danger { color: var(--danger); border-color: var(--danger); }
+  .art-actions { display: flex; flex-direction: column; gap: var(--pad-1); }
 
-  .ed-form { display: flex; flex-direction: column; gap: 0.5rem; text-align: left; }
-  .ed-row { display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: flex-end; }
-  .ed-form label {
+  /* The form scrolls inside the modal — an output spec with a dozen columns
+     is taller than any screen. */
+  .ed-form {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
-    font-size: 0.78rem;
-    color: var(--muted);
+    gap: var(--pad-2);
+    text-align: left;
+    min-width: min(28rem, 100%);
+    max-height: min(30rem, 58vh);
+    overflow-y: auto;
+    padding-right: var(--pad-2);
   }
-  .ed-form input, .ed-form textarea { font: inherit; color: var(--text); }
-  .ed-form textarea { resize: vertical; min-width: 26rem; max-width: 100%; }
+  .ed-form textarea { resize: vertical; max-width: 100%; }
+
+  .who {
+    display: grid;
+    justify-items: center;
+    text-align: center;
+    padding-bottom: var(--pad-2);
+    border-bottom: 1px solid var(--border);
+  }
 
   .muted { color: var(--muted); }
+  .empty {
+    margin: auto;
+    min-height: 5rem;
+    display: grid;
+    place-items: center;
+    text-align: center;
+  }
   .error { color: var(--danger); margin: 0; font-size: 0.8rem; }
 </style>

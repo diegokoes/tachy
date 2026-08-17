@@ -8,6 +8,7 @@
     options,
     title,
     disabled = false,
+    active = false,
     onchange,
     "aria-label": ariaLabel,
   }: {
@@ -15,6 +16,9 @@
     options: OptIn[];
     title?: string;
     disabled?: boolean;
+    /** Holds a non-default value — worn as an accent border, so a narrowed
+     *  list is visible without a separate "N active" counter. */
+    active?: boolean;
     onchange?: (v: Val) => void;
     "aria-label"?: string;
   } = $props();
@@ -26,7 +30,7 @@
   );
 
   let open = $state(false);
-  let active = $state(0); 
+  let cursor = $state(0); 
   let dropUp = $state(false); 
   let root: HTMLDivElement;
   let listEl: HTMLDivElement | undefined = $state();
@@ -38,7 +42,7 @@
 
   function openPanel() {
     if (disabled) return;
-    active = selectedIndex >= 0 ? selectedIndex : 0;
+    cursor = selectedIndex >= 0 ? selectedIndex : 0;
     const r = root?.getBoundingClientRect();
     const below = r ? window.innerHeight - r.bottom : Infinity;
     const est = Math.min(opts.length * 32 + 8, 240);
@@ -57,12 +61,12 @@
   }
   function step(dir: number) {
     const n = opts.length;
-    let i = active;
+    let i = cursor;
     for (let k = 0; k < n; k++) {
       i = (i + dir + n) % n;
       if (!opts[i]?.disabled) break;
     }
-    active = i;
+    cursor = i;
   }
 
   function onKeydown(e: KeyboardEvent) {
@@ -76,15 +80,15 @@
         open ? step(-1) : openPanel();
         break;
       case "Home":
-        if (open) { e.preventDefault(); active = 0; if (opts[0]?.disabled) step(1); }
+        if (open) { e.preventDefault(); cursor = 0; if (opts[0]?.disabled) step(1); }
         break;
       case "End":
-        if (open) { e.preventDefault(); active = opts.length - 1; if (opts[active]?.disabled) step(-1); }
+        if (open) { e.preventDefault(); cursor = opts.length - 1; if (opts[cursor]?.disabled) step(-1); }
         break;
       case "Enter":
       case " ":
         e.preventDefault();
-        open ? choose(active) : openPanel();
+        open ? choose(cursor) : openPanel();
         break;
       case "Escape":
         if (open) { e.preventDefault(); close(); }
@@ -101,7 +105,7 @@
 
   $effect(() => {
     if (!open || !listEl) return;
-    const el = listEl.children[active] as HTMLElement | undefined;
+    const el = listEl.children[cursor] as HTMLElement | undefined;
     el?.scrollIntoView({ block: "nearest" });
   });
 </script>
@@ -112,6 +116,7 @@
   <button
     type="button"
     class="trigger"
+    class:active
     {title}
     {disabled}
     aria-haspopup="listbox"
@@ -129,13 +134,13 @@
       {#each opts as o, i}
         <div
           class="opt"
-          class:active={i === active}
+          class:cursor={i === cursor}
           class:selected={o.value === value}
           class:disabled={o.disabled}
           role="option"
           tabindex="-1"
           aria-selected={o.value === value}
-          onpointerenter={() => (active = i)}
+          onpointerenter={() => (cursor = i)}
           onpointerdown={(e) => { e.preventDefault(); choose(i); }}
         >
           <span class="mark" aria-hidden="true">{o.value === value ? "›" : " "}</span>
@@ -154,14 +159,18 @@
     align-items: center;
     gap: 0.5rem;
     width: 100%;
-    padding: 0.4rem 0.5rem 0.4rem 0.65rem;
+    padding: var(--pad-2) var(--pad-3);
     font: inherit;
     color: var(--text);
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 3px;
+    border-radius: var(--radius);
     cursor: pointer;
     text-align: left;
+  }
+  .trigger.active {
+    border-color: var(--accent);
+    background: var(--accent-dim);
   }
   .trigger:hover { border-color: var(--accent); color: var(--text); }
   .trigger:focus-visible {
@@ -198,17 +207,17 @@
     max-height: 15rem;
     overflow-y: auto;
     padding: 2px;
-    background: var(--panel-solid);
+    background: var(--panel-bg);
     border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
-    border-radius: 2px;
+    border-radius: var(--radius);
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
   }
 
   .opt {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.28rem 0.5rem;
+    gap: var(--pad-2);
+    padding: var(--pad-1) var(--pad-3);
     white-space: nowrap;
     cursor: pointer;
     color: var(--text);
@@ -217,9 +226,9 @@
   .opt.selected { color: var(--accent); }
   .opt.disabled { opacity: 0.4; cursor: default; }
 
-  .opt.active {
+  .opt.cursor {
     background: var(--accent);
     color: var(--bg);
   }
-  .opt.active .mark { color: var(--bg); }
+  .opt.cursor .mark { color: var(--bg); }
 </style>

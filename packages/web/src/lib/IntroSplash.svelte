@@ -1,9 +1,4 @@
 <script lang="ts">
-  
-  
-  
-  
-  
   import { onMount } from "svelte";
   import { gsap, SplitText } from "./gsap";
 
@@ -48,30 +43,26 @@
     tl = gsap.timeline({ onComplete: onDone });
     tl.to(q(".word"), { opacity: 1, duration: 0.45, ease: "power2.out" })
       
-      .to(q(".word"), { rotation: 360, duration: 3.2, ease: "power1.inOut" }, 0.15)
-      
-      
-      
+      .to(q(".word"), { rotation: 360, duration: 1.2, ease: "power1.inOut" }, 0.15)
       .to(
         extras,
         {
           x: 0,
           y: 0,
-          scale: 0.12,
+          scale: 0.92,
           opacity: 0,
-          duration: 1.6,
-          ease: "power1.in",
-          stagger: 0.002,
+          duration: 0.9,
+          ease: "power2.in",
+          stagger: 0.0022,
         },
         0.7,
       )
-      
       .to(
         survivors,
-        { x: 0, y: 0, scale: 1, ease: "elastic.out(1, 0.55)", duration: 2.4, stagger: 0.05 },
-        2.2,
+        { x: 0, y: 0, scale: 1, ease: "power2.inOut", duration: 1, stagger: 0.045 },
+        1.95,
       )
-      .to(q(".footer"), { opacity: 1, duration: 0.5 }, 4.3)
+      .to(q(".footer"), { opacity: 1, duration: 0.5 }, 3.35)
       .to(root!, { opacity: 0, duration: 0.5 }, "+=0.7");
 
     return () => {
@@ -123,7 +114,6 @@
     font-kerning: none;
   }
 
-  /* All copies stack in one grid cell; transforms fan the chars out from it. */
   .line {
     grid-area: 1 / 1;
     white-space: nowrap;

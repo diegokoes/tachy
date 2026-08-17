@@ -6,7 +6,7 @@
   import { csv, errText, type SystemInfo } from "./shared";
 
   let system = $state<SystemInfo | null>(null);
-  let loading = $state(false);
+  let loading = $state(true);
   let error = $state<string | null>(null);
   
   let draft = $state<Record<string, string>>({});

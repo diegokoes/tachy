@@ -1,15 +1,20 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { chatStream, approve, uploadDoc, getCommands, type BuiltinCommandMeta, type CommandArtifactMeta } from "./agent";
-  import { chat, type Entry } from "./chatState.svelte";
+  import { addEntry, chat, type Entry } from "./chatState.svelte";
   import { renderMarkdown } from "./markdown";
-  import { gsap, SplitText, reducedMotion } from "./gsap";
-  import TypeLine from "./TypeLine.svelte";
+  import { gsap, reducedMotion } from "./gsap";
+  import { shatterAll } from "./motion";
   import AsciiScrollbar from "./AsciiScrollbar.svelte";
   import ArtifactPanel from "./chat/ArtifactPanel.svelte";
-  import CommandMenu, { type CommandPick } from "./chat/CommandMenu.svelte";
+  import CommandMenu, { matchArtifacts, type CommandPick } from "./chat/CommandMenu.svelte";
   import CompactPanel from "./chat/CompactPanel.svelte";
   import OutputCard, { type OutputFile } from "./chat/OutputCard.svelte";
+  import Approval from "./chat/Approval.svelte";
+  import JsonModal from "./chat/JsonModal.svelte";
+  import Launcher from "./chat/Launcher.svelte";
+  import { G, Icon } from "./tui";
+  import { pushScope } from "./keys.svelte";
 
   const short = (tool: string) => tool.replace(/^mcp__tachy__/, "");
 
@@ -36,7 +41,20 @@
   
   
   let transcriptEl = $state<HTMLDivElement>();
+  let composerEl = $state<HTMLTextAreaElement>();
   let pinned = true;
+
+  $effect(() =>
+    pushScope([
+      {
+        key: "ctrl+k",
+        label: "",
+        hidden: true,
+        inFields: true,
+        run: () => composerEl?.focus(),
+      },
+    ]),
+  );
 
   function onScroll() {
     const el = transcriptEl;
@@ -57,47 +75,28 @@
 
   
   
-  function shatter(node: HTMLElement) {
-    if (reducedMotion()) return;
-    const split = new SplitText(node, { type: "chars", reduceWhiteSpace: false });
-    const tl = gsap.timeline({
-      onComplete: () => {
-        split.revert();
-        node.style.visibility = "hidden";
-      },
-    });
-    tl.to(split.chars, {
-      y: () => gsap.utils.random(60, 200),
-      rotation: () => gsap.utils.random(-30, 30),
-      opacity: 0,
-      duration: 0.6,
-      ease: "power1.in",
-      stagger: { amount: 0.45 },
-    });
-    tl.to(node, { height: 0, marginTop: 0, duration: 0.3 }, "-=0.15");
-    return {
-      destroy: () => {
-        tl.kill();
-        split.revert();
-      },
-    };
-  }
-
   function appendAssistant(text: string) {
     const last = chat.entries[chat.entries.length - 1];
     if (last && last.kind === "assistant") last.text += text;
-    else chat.entries.push({ kind: "assistant", text });
+    else addEntry({ kind: "assistant", text });
   }
 
   let commands = $state<{ builtins: BuiltinCommandMeta[]; artifacts: CommandArtifactMeta[] } | null>(null);
   let cmdMenu = $state<CommandMenu>();
   let cmdDismissed = $state(false);
 
-  const cmdQuery = $derived(/^\/[a-z0-9-]*$/.test(chat.input) ? chat.input.slice(1) : null);
-  const menuOpen = $derived(cmdQuery !== null && !cmdDismissed && !chat.busy && commands !== null);
+  /** `/name` picks a command; `/artifact <query>` picks that command's argument. */
+  const cmdCtx = $derived.by(() => {
+    const name = chat.input.match(/^\/([a-z0-9-]*)$/);
+    if (name) return { mode: "command" as const, query: name[1] };
+    const arg = chat.input.match(/^\/artifact[ \t]+([^\n]*)$/);
+    if (arg) return { mode: "artifact" as const, query: arg[1] };
+    return null;
+  });
+  const menuOpen = $derived(cmdCtx !== null && !cmdDismissed && !chat.busy && commands !== null);
 
   $effect(() => {
-    if (cmdQuery !== null && !commands) getCommands().then((c) => (commands = c)).catch(() => {});
+    if (cmdCtx && !commands) getCommands().then((c) => (commands = c)).catch(() => {});
   });
   $effect(() => {
     void chat.input;
@@ -113,7 +112,7 @@
   }
 
   function composerKeydown(e: KeyboardEvent) {
-    if (menuOpen && cmdMenu && !cmdMenu.empty()) {
+    if (menuOpen && cmdMenu && (!cmdMenu.empty() || cmdCtx?.mode === "artifact")) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         cmdMenu.move(e.key === "ArrowDown" ? 1 : -1);
@@ -144,8 +143,13 @@
   async function send() {
     const message = chat.input.trim();
     if (!message || chat.busy) return;
+    if (cmdCtx?.mode === "artifact") {
+      const hits = matchArtifacts(commands?.artifacts ?? [], cmdCtx.query);
+      if (hits.length === 1) pickCommand({ kind: "artifact", artifact: hits[0] });
+      return;
+    }
     const command = parseCommand(message);
-    chat.entries.push({ kind: "user", text: message });
+    addEntry({ kind: "user", text: message });
     const uploadPaths = chat.uploads.map((u) => u.path);
     chat.input = "";
     chat.uploads = [];
@@ -160,14 +164,14 @@
           const tool = short(data.tool as string);
           if (tool === "compact_work_item") {
             const input = (data.input ?? {}) as Record<string, unknown>;
-            chat.entries.push({
+            addEntry({
               kind: "compact",
               id: data.id as string,
               title: [input.source, input.external_id].filter(Boolean).join(" · "),
             });
           } else if (tool === "export_table") {
-            chat.entries.push({ kind: "output", id: data.id as string });
-          } else chat.entries.push({ kind: "tool", tool });
+            addEntry({ kind: "output", id: data.id as string });
+          } else addEntry({ kind: "tool", tool });
         } else if (event === "tool_result" && short(data.tool as string) === "compact_work_item") {
           const panel = chat.entries.find(
             (e) => e.kind === "compact" && e.id === data.id,
@@ -190,7 +194,7 @@
           }
         }
         else if (event === "approval_request")
-          chat.entries.push({
+          addEntry({
             kind: "approval",
             id: data.id as string,
             tool: short(data.tool as string),
@@ -201,11 +205,11 @@
           const a = chat.entries.find((e) => e.kind === "approval" && e.id === data.id) as Extract<Entry, { kind: "approval" }> | undefined;
           if (a) a.status = data.approved ? "approved" : "denied";
         } else if (event === "result") chat.sessionId = data.sessionId as string;
-        else if (event === "error") chat.entries.push({ kind: "error", text: data.message as string });
+        else if (event === "error") addEntry({ kind: "error", text: data.message as string });
         snap();
       }
     } catch (e) {
-      chat.entries.push({ kind: "error", text: e instanceof Error ? e.message : String(e) });
+      addEntry({ kind: "error", text: e instanceof Error ? e.message : String(e) });
       snap();
     } finally {
       chat.busy = false;
@@ -225,7 +229,7 @@
       try {
         updated = JSON.parse(entry.editable);
       } catch {
-        chat.entries.push({ kind: "error", text: "Edited JSON is invalid - fix it before approving." });
+        addEntry({ kind: "error", text: "Edited JSON is invalid - fix it before approving." });
         return;
       }
     }
@@ -238,7 +242,7 @@
       try {
         chat.uploads.push(await uploadDoc(file));
       } catch (err) {
-        chat.entries.push({ kind: "error", text: err instanceof Error ? err.message : String(err) });
+        addEntry({ kind: "error", text: err instanceof Error ? err.message : String(err) });
       }
     }
   }
@@ -295,25 +299,8 @@
   function confirmClear() {
     clearTimeout(disarmTimer);
     clearArmed = false;
-    if (reducedMotion() || !transcriptEl) return wipe();
-    const nodes = transcriptNodes();
-    const split = new SplitText(nodes, { type: "chars", reduceWhiteSpace: false });
-    const tl = gsap.timeline({
-      onComplete: () => {
-        split.revert();
-        wipe();
-      },
-    });
-    tl.to(split.chars, {
-      y: () => gsap.utils.random(60, 200),
-      rotation: () => gsap.utils.random(-30, 30),
-      opacity: 0,
-      duration: 0.6,
-      ease: "power1.in",
-      stagger: { amount: 0.5 },
-    });
-    
-    tl.to(nodes, { y: 40, opacity: 0, duration: 0.35, ease: "power1.in" }, 0.25);
+    if (!transcriptEl) return wipe();
+    shatterAll(transcriptNodes(), wipe);
   }
 
   function onClear() {
@@ -346,48 +333,36 @@
   {/if}
   <div class="transcript-wrap">
   <div class="transcript" id="chat-transcript" bind:this={transcriptEl} onscroll={onScroll}>
-    {#each chat.entries as e, i (i)}
+    {#each chat.entries as e, i (e.key)}
       {#if e.kind === "user"}
-        <div class="bubble user">{e.text}</div>
+        <div class="turn user"><span class="who">{G.marker}you</span><div class="body">{e.text}</div></div>
       {:else if e.kind === "assistant"}
-        <div class="bubble assistant md" class:streaming={chat.busy && i === chat.entries.length - 1}>{@html renderMarkdown(e.text)}</div>
+        <div class="turn"><span class="who">{G.marker}tachy</span>
+          <div class="body md" class:streaming={chat.busy && i === chat.entries.length - 1}>{@html renderMarkdown(e.text)}</div>
+        </div>
       {:else if e.kind === "tool"}
-        <div class="tool">⚙ {e.tool}</div>
+        <div class="tool">{G.tool} {e.tool}</div>
       {:else if e.kind === "compact"}
         <CompactPanel title={e.title} stats={e.stats} />
       {:else if e.kind === "output"}
         <OutputCard file={e.file} />
       {:else if e.kind === "error"}
-        <div class="bubble error">{e.text}</div>
+        <div class="turn"><span class="who err">{G.marker}error</span><div class="body err">{e.text}</div></div>
       {:else if e.kind === "approval"}
-        <div class="approval {e.status}">
-          <div class="ap-head">Agent wants to run <strong>{e.tool}</strong> - review & approve</div>
-          {#if e.status === "denied"}
-            <pre class="proposal" use:shatter>{peek(e.editable)}</pre>
-          {:else}
-            <button class="json-peek" title="View full payload" onclick={() => (jsonModal = e)}>
-              <span class="peek-text">{peek(e.editable)}</span>
-              <span class="peek-hint">⛶ view</span>
-            </button>
-          {/if}
-          {#if e.status === "pending"}
-            <div class="ap-actions">
-              <button class="approve" onclick={() => decide(e, true)}>Approve</button>
-              <button onclick={() => decide(e, false)}>Deny</button>
-            </div>
-          {:else}
-            <div class="ap-status">{e.status}</div>
-          {/if}
-        </div>
+        <Approval
+          entry={e}
+          ondecide={(ok) => decide(e, ok)}
+          oninspect={() => (jsonModal = e)}
+        />
       {/if}
     {/each}
     {#if chat.busy && chat.entries[chat.entries.length - 1]?.kind !== "assistant"}
-      <div class="bubble assistant waiting"><span class="caret" aria-hidden="true"></span></div>
+      <div class="turn"><span class="who">{G.marker}tachy</span>
+        <div class="body waiting"><span class="caret" aria-hidden="true"></span></div>
+      </div>
     {/if}
     {#if chat.entries.length === 0}
-      <div class="hint">
-        <TypeLine text="Ask about a ticket, or attach a document to save as knowledge." />
-      </div>
+      <Launcher />
     {/if}
   </div>
   <AsciiScrollbar target={transcriptEl} controls="chat-transcript" />
@@ -410,16 +385,19 @@
     {#if menuOpen && commands}
       <CommandMenu
         bind:this={cmdMenu}
-        query={cmdQuery ?? ""}
+        mode={cmdCtx?.mode ?? "command"}
+        query={cmdCtx?.query ?? ""}
         builtins={commands.builtins}
         artifacts={commands.artifacts}
         onpick={pickCommand}
       />
     {/if}
     <label class="upload" title="Attach a document">
-      📎<input type="file" onchange={onFile} hidden />
+      <Icon name="attach" label="Attach a document" />
+      <input type="file" onchange={onFile} hidden />
     </label>
     <textarea
+      bind:this={composerEl}
       placeholder="Message the assistant… ( / for commands )"
       bind:value={chat.input}
       rows="2"
@@ -427,39 +405,11 @@
     ></textarea>
     {#if jsonModal}
       {@const m = jsonModal}
-      <!-- Fixed overlay: inspecting/editing the payload never reflows the chat. -->
-      <div
-        class="json-backdrop"
-        role="presentation"
-        onclick={(e) => {
-          if (e.target === e.currentTarget) jsonModal = null;
-        }}
-      >
-        <div class="json-modal" role="dialog" aria-label="Tool payload">
-          <div class="jm-head">
-            <span><strong>{m.tool}</strong>  {m.status === "pending" ? "review & edit the payload" : m.status}</span>
-            <button class="jm-close" onclick={() => (jsonModal = null)}>✕</button>
-          </div>
-          <textarea class="jm-editor" bind:value={m.editable} disabled={m.status !== "pending"}></textarea>
-          {#if m.status === "pending"}
-            <div class="ap-actions">
-              <button
-                class="approve"
-                onclick={() => {
-                  decide(m, true);
-                  jsonModal = null;
-                }}
-              >Approve</button>
-              <button
-                onclick={() => {
-                  decide(m, false);
-                  jsonModal = null;
-                }}
-              >Deny</button>
-            </div>
-          {/if}
-        </div>
-      </div>
+      <JsonModal
+        entry={m}
+        onclose={() => (jsonModal = null)}
+        ondecide={(ok) => decide(m, ok)}
+      />
     {/if}
 
     <div class="send-col">
@@ -468,8 +418,11 @@
         class:armed={clearArmed}
         onclick={onClear}
         disabled={chat.busy || !chat.entries.length}
-      >{clearArmed ? "SURE?" : "Clear"}</button>
-      <button onclick={send} disabled={chat.busy || !chat.input.trim()}>Send</button>
+        title={clearArmed ? "click again to clear" : "Clear the conversation"}
+      >{#if clearArmed}SURE?{:else}<Icon name="erase" label="Clear the conversation" />{/if}</button>
+      <button onclick={send} disabled={chat.busy || !chat.input.trim()} title="Send">
+        <Icon name="send" label="Send" />
+      </button>
     </div>
   </div>
 </div>
@@ -493,8 +446,24 @@
 
   /* Stretch with the composer row so Clear+Send always equal the textarea's
      height exactly, splitting it between them. */
-  .send-col { display: flex; flex-direction: column; gap: 0.35rem; align-self: stretch; }
-  .send-col button { width: 100%; flex: 1; min-height: 0; padding: 0 0.9rem; }
+  /* Fixed width so arming Clear ("SURE?") can't reflow the column. */
+  .send-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    align-self: stretch;
+    flex: none;
+    width: 5.5rem;
+  }
+  .send-col button {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
   .clear { color: var(--muted); font-size: 0.85rem; }
   .clear.armed { background: #b91c1c; border-color: #b91c1c; color: #fff; }
 
@@ -573,75 +542,22 @@
   /* Native bar hidden — the ASCII scrollbar next to it takes over. */
   .transcript { flex: 1; min-width: 0; overflow: auto; scrollbar-width: none; display: flex; flex-direction: column; gap: 0.6rem; padding-right: 0.5rem; }
   .transcript::-webkit-scrollbar { display: none; }
-  .bubble { max-width: 80%; padding: 0.6rem 0.8rem; border-radius: 10px; white-space: pre-wrap; line-height: 1.5; }
-  .bubble.user { align-self: flex-end; background: var(--accent-dim); }
-  .bubble.assistant { align-self: flex-start; background: var(--panel); border: 1px solid var(--border); }
-  .bubble.error { align-self: flex-start; background: #3d1418; border: 1px solid #5c1a20; color: #ffb4ac; }
-  .tool { align-self: flex-start; font-size: 0.8rem; color: var(--muted); }
-  .approval { align-self: stretch; border: 1px solid var(--accent); border-radius: 10px; padding: 0.7rem; background: var(--panel); transition: border-color 0.6s ease, opacity 0.6s ease; }
-  .approval.approved { border-color: #3fb950; }
-  .approval.denied { border-color: transparent; opacity: 0.7; }
-  .ap-head { font-size: 0.88rem; margin-bottom: 0.5rem; }
-  .proposal { margin: 0; font-family: ui-monospace, monospace; font-size: 0.8rem; line-height: 1.45; white-space: pre-wrap; overflow: hidden; max-height: 16rem; }
-
-  /* Collapsed payload: one ellipsized line; the modal shows the real thing. */
-  .json-peek {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    width: 100%;
-    text-align: left;
-    background: var(--panel-solid);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 0.45rem 0.6rem;
-    cursor: pointer;
-  }
-  .peek-text {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-family: ui-monospace, monospace;
-    font-size: 0.78rem;
+  /* A turn is a speaker marker plus its text — no boxes. Only events
+     (approval, compaction, export) get a Panel. */
+  .turn { display: flex; flex-direction: column; gap: 0.1rem; max-width: 62rem; }
+  .turn .who {
+    font-size: var(--fs-xs);
+    letter-spacing: var(--label-spacing);
     color: var(--muted);
   }
-  .peek-hint { flex: none; font-size: 0.78rem; color: var(--accent); }
+  .turn.user .who { color: var(--accent); }
+  .turn .who.err { color: var(--danger); }
+  .turn .body { white-space: pre-wrap; line-height: 1.6; padding-left: 1ch; }
+  .turn .body.md { white-space: normal; }
+  .turn .body.err { color: var(--danger); }
+  .turn .body.waiting { min-height: 1.5em; }
+  .tool { font-size: var(--fs-xs); color: var(--muted); padding-left: 1ch; }
 
-  .json-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 60;
-    display: grid;
-    place-items: center;
-    background: color-mix(in srgb, var(--bg) 62%, transparent);
-  }
-  .json-modal {
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-    width: min(900px, 92vw);
-    height: min(80vh, 60rem);
-    padding: 0.9rem 1rem;
-    background: var(--panel-solid);
-    border: 1px solid var(--accent);
-    border-radius: 10px;
-  }
-  .jm-head { display: flex; align-items: center; justify-content: space-between; font-size: 0.9rem; }
-  .jm-close { border-color: transparent; background: transparent; color: var(--muted); font-size: 1rem; }
-  .jm-close:hover { color: var(--text); }
-  .jm-editor {
-    flex: 1;
-    resize: none;
-    width: 100%;
-    font-family: ui-monospace, monospace;
-    font-size: 0.82rem;
-    line-height: 1.5;
-  }
-  .ap-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
-  .ap-actions .approve { border-color: #3fb950; color: #3fb950; }
-  .ap-status { margin-top: 0.4rem; font-size: 0.82rem; color: var(--muted); text-transform: capitalize; }
   .attachments { display: flex; gap: 0.4rem; padding: 0.4rem 0; flex-wrap: wrap; align-items: center; }
   .attach { font-size: 0.8rem; color: var(--muted); }
   .artifact-chip {
@@ -658,6 +574,4 @@
   .composer { position: relative; display: flex; gap: 0.5rem; align-items: stretch; padding-top: 0.6rem; border-top: 1px solid var(--border); }
   .composer textarea { flex: 1; resize: none; }
   .upload { cursor: pointer; align-self: center; font-size: 1.1rem; }
-  .hint { color: var(--text); }
-  .muted { color: var(--muted); }
 </style>

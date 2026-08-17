@@ -5,6 +5,7 @@
   import AsciiSelect from "../AsciiSelect.svelte";
   import DeleteButton from "./DeleteButton.svelte";
   import { TIP, csv, errText, type Connection, type SourceProject } from "./shared";
+  import { Button, ErrorMark } from "../tui";
 
   type SourceType = "freshdesk" | "azure-devops" | "github";
   type Probe = {
@@ -61,7 +62,7 @@
 
   let connections = $state<Connection[]>([]);
   let projects = $state<SourceProject[]>([]);
-  let loading = $state(false);
+  let loading = $state(true);
   let saving = $state(false);
   let error = $state<string | null>(null);
 
@@ -219,10 +220,14 @@
   onMount(load);
 </script>
 
-{#if error}<p class="error">{error}</p>{/if}
+{#if error}
+  <p class="error clamped" title={error}>
+    <ErrorMark message={error} />
+    <span class="etxt">{error}</span>
+  </p>
+{/if}
 {#if loading}<p class="muted">Loading…</p>{/if}
 
-<h4>Connections</h4>
 <table>
   <thead><tr>
     <th class="tip" title={TIP.slug}>slug</th>
@@ -244,11 +249,17 @@
         </td>
         <td>{redactionOn(r) ? "on" : "off"}</td>
         <td class="actions">
-          <button class="mini" onclick={() => test(r.slug)} disabled={testing === r.slug}>
-            {testing === r.slug ? "…" : "test"}
-          </button>
+          <Button
+            variant="ghost"
+            square
+            icon="test"
+            title="test connection"
+            aria-label="test connection"
+            busy={testing === r.slug}
+            onclick={() => test(r.slug)}
+          />
           {#if isGlobalAdmin}
-            <button class="icon-btn" title="edit" aria-label="edit" onclick={() => openEdit(r)}>✎</button>
+            <Button variant="ghost" tone="info" square icon="edit" title="edit" aria-label="edit" onclick={() => openEdit(r)} />
             <DeleteButton onConfirm={() => del(r)} />
           {/if}
         </td>
@@ -257,7 +268,7 @@
         <tr class="probe-row">
           <td colspan="6">
             {#if !probe.ok}
-              <span class="error">✕ {probe.error}</span>
+              <ErrorMark message={probe.error ?? "failed"} label="connection test" />
             {:else}
               <span class="ok-text">✓ connected{probe.identity ? ` as ${probe.identity}` : ""}</span>
               {#if probe.groupsNote}
@@ -296,7 +307,7 @@
 {#if isGlobalAdmin}
   <div class="add-area">
     {#if !showForm}
-      <button onclick={openAdd}>+ add connection</button>
+      <Button variant="ghost" tone="ok" square icon="plus" title="add connection" aria-label="add connection" onclick={openAdd} />
     {:else}
       <form class="conn-form" onsubmit={save}>
         <div class="add-form">
@@ -333,8 +344,8 @@
           <label class="check">
             <input type="checkbox" bind:checked={form.redaction} /> redact PII
           </label>
-          <button class="icon-btn ok" type="submit" title="save" aria-label="save" disabled={saving}>{saving ? "…" : "✓"}</button>
-          <button class="icon-btn" type="button" title="cancel" aria-label="cancel" onclick={() => (showForm = false)}>↺</button>
+          <Button variant="ghost" tone="accent" square icon="save" type="submit" aria-label="save" busy={saving} />
+          <Button variant="ghost" square icon="cancel" aria-label="cancel" onclick={() => (showForm = false)} />
         </div>
         <p class="muted hint">{spec.tokenHint}</p>
       </form>
@@ -343,6 +354,19 @@
 {/if}
 
 <style>
+  /* Two lines max: a failed discover can return a wall of text. */
+  .clamped {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--pad-2);
+  }
+  .clamped .etxt {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
   .conn-form { display: flex; flex-direction: column; gap: 0.5rem; }
   .conn-form .host { min-width: 18rem; }
   .conn-form .token { min-width: 16rem; }

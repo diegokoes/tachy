@@ -1,7 +1,7 @@
 import type { CompactStats } from "./chat/CompactPanel.svelte";
 import type { OutputFile } from "./chat/OutputCard.svelte";
 
-export type Entry =
+export type EntryData =
   | { kind: "user"; text: string }
   | { kind: "assistant"; text: string }
   | { kind: "tool"; tool: string }
@@ -15,6 +15,18 @@ export type Entry =
       status: "pending" | "approved" | "denied";
     }
   | { kind: "error"; text: string };
+
+/** Stable per-entry key — index keys break on the export_table splice. */
+export type Entry = EntryData & { key: number };
+
+let nextKey = 1;
+
+/** Push an entry, stamping it with a stable key. */
+export function addEntry(e: EntryData): Entry {
+  const full = { ...e, key: nextKey++ } as Entry;
+  chat.entries.push(full);
+  return full;
+}
 
 export const chat = $state({
   entries: [] as Entry[],

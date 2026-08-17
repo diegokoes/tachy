@@ -7,6 +7,30 @@ const ACCENT_DEFAULTS: Record<Theme, string> = {
   light: "#31589e",
 };
 
+export type Density = "compact" | "normal" | "roomy";
+export type PanelBorder = "single" | "double" | "heavy" | "ascii" | "none";
+
+export const DENSITIES: Density[] = ["compact", "normal", "roomy"];
+export const PANEL_BORDERS: PanelBorder[] = [
+  "single",
+  "double",
+  "heavy",
+  "ascii",
+  "none",
+];
+
+/** Corner glyphs per border set, for the Settings preview swatches. */
+export const PANEL_BORDER_SAMPLE: Record<PanelBorder, string> = {
+  single: "┌─┐",
+  double: "╔═╗",
+  heavy: "┏━┓",
+  ascii: "+-+",
+  none: "   ",
+};
+
+export const RADIUS_MIN = 0;
+export const RADIUS_MAX = 6;
+
 export const themeState = $state({
   theme: "dark" as Theme,
   patternIdx: 0,
@@ -14,6 +38,9 @@ export const themeState = $state({
   accentColor: ACCENT_DEFAULTS.dark,
   accentCustomized: false,
   fontScale: 1,
+  radius: 3,
+  density: "normal" as Density,
+  panelBorder: "single" as PanelBorder,
   border: "none" as BorderKey,
 });
 
@@ -62,6 +89,25 @@ export function setBorder(k: BorderKey) {
   localStorage.setItem("tachy-border", k);
 }
 
+export function setRadius(px: number) {
+  const v = Math.min(RADIUS_MAX, Math.max(RADIUS_MIN, Math.round(px)));
+  themeState.radius = v;
+  document.documentElement.style.setProperty("--radius", `${v}px`);
+  localStorage.setItem("tachy-radius", String(v));
+}
+
+export function setDensity(d: Density) {
+  themeState.density = d;
+  document.documentElement.dataset.density = d;
+  localStorage.setItem("tachy-density", d);
+}
+
+export function setPanelBorder(b: PanelBorder) {
+  themeState.panelBorder = b;
+  document.documentElement.dataset.border = b;
+  localStorage.setItem("tachy-panel-border", b);
+}
+
 export function loadThemeFromStorage() {
   const savedTheme = localStorage.getItem("tachy-theme") as Theme | null;
   if (savedTheme === "light" || savedTheme === "dark") {
@@ -87,4 +133,23 @@ export function loadThemeFromStorage() {
   const savedBorder = localStorage.getItem("tachy-border");
   if (savedBorder === "none" || (savedBorder && savedBorder in BORDERS))
     themeState.border = savedBorder as BorderKey;
+
+  const savedRadius = localStorage.getItem("tachy-radius");
+  setRadius(savedRadius === null ? themeState.radius : Number(savedRadius));
+
+  const savedDensity = localStorage.getItem("tachy-density") as Density | null;
+  setDensity(
+    savedDensity && DENSITIES.includes(savedDensity)
+      ? savedDensity
+      : themeState.density,
+  );
+
+  const savedPanel = localStorage.getItem(
+    "tachy-panel-border",
+  ) as PanelBorder | null;
+  setPanelBorder(
+    savedPanel && PANEL_BORDERS.includes(savedPanel)
+      ? savedPanel
+      : themeState.panelBorder,
+  );
 }

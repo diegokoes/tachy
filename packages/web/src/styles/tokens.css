@@ -1,0 +1,149 @@
+/* Design tokens. Everything downstream derives from these — no component may
+   hard-code a color, a radius, or a spacing step.
+
+   Three axes are user-controlled from Settings › theme and land here as
+   attributes on <html>: data-theme, data-density, data-border. --radius and
+   --font-scale are set inline on <html> by theme.svelte.ts. */
+
+:root {
+  /* Without this the browser paints form controls and any remaining native
+     scrollbars in light mode — white bars on the dark UI. */
+  color-scheme: dark;
+  font-size: calc(clamp(14.5px, 0.35vw + 12.5px, 18px) * var(--font-scale, 1));
+  font-family:
+    ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, monospace;
+
+  --bg: #080808;
+  --panel: rgba(8, 8, 8, 0.82);
+  --panel-solid: #101010;
+  /* Panels are opaque so the wallpaper reads BETWEEN boxes, not through them —
+     and so inline titles can mask the rule they straddle. */
+  --panel-bg: var(--panel-solid);
+  --border: rgba(255, 255, 255, 0.09);
+  --text: #e2e2e2;
+  --muted: #6d6d6d;
+  --accent: #6ea8fe;
+  --accent-dim: color-mix(in srgb, var(--accent) 14%, transparent);
+  --pattern-ink: rgba(255, 255, 255, 0.16);
+  --ok: #3fb950;
+  --warn: #d29922;
+  --danger: #f85149;
+  /* Action colors are semantic, not decorative: delete=danger, new=ok,
+     edit=info, save=accent. `info` is its own token rather than --accent so
+     edit stays blue when the user picks a different accent. */
+  --info: #3b8eea;
+  /* Kind marks in the library: an entry is accent, a doc is manila. */
+  --doc: #c49a4a;
+  /* Cut into a filled gauge, so the tier marks read as gaps in the bar. */
+  --gauge-tick: #0a0a0a;
+
+  /* Raised/recessed edge pair, for anything that needs text-mode 3D. */
+  --edge-hi: rgba(255, 255, 255, 0.22);
+  --edge-lo: rgba(0, 0, 0, 0.55);
+  --drop: rgba(0, 0, 0, 0.9);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f2efe7;
+  --panel: rgba(252, 251, 247, 0.88);
+  --panel-solid: #faf8f2;
+  --border: rgba(30, 28, 20, 0.14);
+  --text: #21201c;
+  --muted: #857f72;
+  --pattern-ink: rgba(30, 28, 20, 0.22);
+  --ok: #1a7f37;
+  --warn: #9a6700;
+  --danger: #cf222e;
+  --info: #2472c8;
+  --doc: #8a6520;
+  --gauge-tick: #fbfaf6;
+
+  --edge-hi: rgba(30, 28, 20, 0.3);
+  --edge-lo: rgba(255, 255, 255, 0.8);
+  --drop: rgba(30, 28, 20, 0.26);
+}
+
+/* ── Radius ───────────────────────────────────────────────────────────────
+   One user-set value, 0 (hard DOS corner) to 6 (soft). Chips lean rounder so
+   they still read as chips, but collapse to square along with everything else
+   at 0 — that is the point of a single axis. */
+:root {
+  --radius: 3px;
+  --radius-chip: calc(var(--radius) * 1.6);
+}
+
+/* ── Density ──────────────────────────────────────────────────────────────
+   Every padding, gap and row height in the app is one of these four steps.
+   A component that needs a value not on the scale is a component that needs
+   rethinking. */
+:root,
+:root[data-density="normal"] {
+  --pad-1: 0.2rem;
+  --pad-2: 0.4rem;
+  --pad-3: 0.65rem;
+  --pad-4: 1rem;
+  --gap: 0.5rem;
+  --row-h: 1.9rem;
+}
+
+:root[data-density="compact"] {
+  --pad-1: 0.1rem;
+  --pad-2: 0.25rem;
+  --pad-3: 0.45rem;
+  --pad-4: 0.7rem;
+  --gap: 0.3rem;
+  --row-h: 1.55rem;
+}
+
+:root[data-density="roomy"] {
+  --pad-1: 0.3rem;
+  --pad-2: 0.55rem;
+  --pad-3: 0.9rem;
+  --pad-4: 1.4rem;
+  --gap: 0.7rem;
+  --row-h: 2.3rem;
+}
+
+/* ── Panel border ─────────────────────────────────────────────────────────
+   The rule is a CSS border — a continuous line, which is exactly what ─
+   renders as. Each set picks the CSS style matching its weight. */
+:root,
+:root[data-border="single"] {
+  /* Mixed off --muted, not --border: a box rule has to actually read as a
+     drawn line, which 9%-white does not. */
+  --panel-line: 1px solid color-mix(in srgb, var(--muted) 50%, transparent);
+}
+
+:root[data-border="double"] {
+  --panel-line: 3px double var(--muted);
+}
+
+:root[data-border="heavy"] {
+  --panel-line: 2px solid var(--muted);
+}
+
+:root[data-border="ascii"] {
+  --panel-line: 1px dashed var(--muted);
+}
+
+:root[data-border="none"] {
+  --panel-line: 1px solid transparent;
+}
+
+/* ── Type scale ───────────────────────────────────────────────────────────
+   Four sizes. Anything smaller than --fs-xs is unreadable at density
+   compact; anything between these is drift. */
+:root {
+  --fs-xs: 0.72rem;
+  --fs-sm: 0.82rem;
+  --fs-md: 0.92rem;
+  --fs-lg: 1rem;
+
+  /* Uppercase micro-labels: panel titles, field labels, hint rules. */
+  --label-spacing: 0.08em;
+
+  --z-drawer: 20;
+  --z-dropdown: 40;
+  --z-overlay: 100;
+}

@@ -5,6 +5,7 @@
   import { t } from "../terms";
   import AsciiSelect from "../AsciiSelect.svelte";
   import DeleteButton from "./DeleteButton.svelte";
+  import { Button, ErrorMark } from "../tui";
   import {
     TIP,
     csv,
@@ -21,7 +22,7 @@
   let projects = $state<SourceProject[]>([]);
   let products = $state<Product[]>([]);
   let components = $state<Record<string, Component[]>>({});
-  let loading = $state(false);
+  let loading = $state(true);
   let saving = $state(false);
   let error = $state<string | null>(null);
   let indexing = $state<string | null>(null);
@@ -230,7 +231,12 @@
   onMount(load);
 </script>
 
-{#if error}<p class="error">{error}</p>{/if}
+{#if error}
+  <p class="error clamped" title={error}>
+    <ErrorMark message={error} />
+    <span class="etxt">{error}</span>
+  </p>
+{/if}
 {#if loading}<p class="muted">Loading…</p>{/if}
 
 <p class="muted hint">
@@ -239,7 +245,6 @@
   about one part of the {t("product")} search that repo instead of all of them.
 </p>
 
-<h4>Repositories</h4>
 <table>
   <thead><tr>
     <th class="tip" title={TIP.slug}>slug</th>
@@ -274,13 +279,13 @@
               disabled={indexing === r.slug || r.index_status === "cloning" || r.index_status === "indexing"}>
               {indexing === r.slug ? "…" : "reindex"}
             </button>
-            <button class="icon-btn" title="edit" aria-label="edit" onclick={() => openEdit(r)}>✎</button>
+            <Button variant="ghost" tone="info" square icon="edit" title="edit" aria-label="edit" onclick={() => openEdit(r)} />
             <DeleteButton onConfirm={() => del(r)} />
           {/if}
         </td>
       </tr>
       {#if r.index_error}
-        <tr class="err-row"><td colspan="7"><span class="error">✕ {r.index_error}</span></td></tr>
+        <tr class="err-row"><td colspan="7"><ErrorMark message={r.index_error} label="index error" /></td></tr>
       {/if}
     {/each}
     {#if !loading && repos.length === 0}
@@ -292,8 +297,8 @@
 {#if canAdd}
   <div class="add-area">
     {#if !showForm}
-      <button onclick={openAdd} disabled={!knowledgeProjects.length && !products.length}>+ link repository</button>
-      {#if !knowledgeProjects.length}
+      <Button variant="ghost" tone="ok" square icon="plus" title="link repository" aria-label="link repository" disabled={!knowledgeProjects.length && !products.length} onclick={openAdd} />
+      {#if !loading && !knowledgeProjects.length}
         <span class="muted hint"> — register a knowledge project first, under Org › projects</span>
       {/if}
     {:else}
@@ -312,9 +317,16 @@
             </label>
           {/if}
           {#if formProject}
-            <button class="mini" type="button" onclick={discover} disabled={discovering}>
-              {discovering ? "…" : "discover repos"}
-            </button>
+            <Button
+              variant="ghost"
+              square
+              icon="discover"
+              type="button"
+              title="discover repos"
+              aria-label="discover repos"
+              busy={discovering}
+              onclick={discover}
+            />
           {/if}
         </div>
         {#if formProject && (found[formProject.id] ?? []).length}
@@ -351,11 +363,8 @@
             max file KB
             <input class="short" bind:value={form.max_file_kb} placeholder="200" />
           </label>
-          <button class="icon-btn ok" type="submit" title="save" aria-label="save" disabled={saving}>
-            {saving ? "…" : "✓"}
-          </button>
-          <button class="icon-btn" type="button" title="cancel" aria-label="cancel"
-            onclick={() => (showForm = false)}>↺</button>
+          <Button variant="ghost" tone="accent" square icon="save" type="submit" aria-label="save" busy={saving} />
+          <Button variant="ghost" square icon="cancel" aria-label="cancel" onclick={() => (showForm = false)} />
         </div>
         <p class="muted hint">
           Cloning uses the project connection's stored token. Linking does not index —
@@ -367,6 +376,19 @@
 {/if}
 
 <style>
+  /* Two lines max: a failed discover can return a wall of text. */
+  .clamped {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--pad-2);
+  }
+  .clamped .etxt {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
   .repo-form { display: flex; flex-direction: column; gap: 0.5rem; }
   .hint { font-size: 0.8rem; }
   .url { font-size: 0.75rem; opacity: 0.7; }

@@ -25,7 +25,14 @@ export interface KnowledgeRow {
   version: number;
   created_at?: string;
   updated_at?: string;
-  score?: number;
+  /* Search only. `relevance`/`grade` are calibrated server-side against the
+     embedding model's measured distribution; the raw signals are the inputs. */
+  relevance?: number;
+  grade?: string;
+  rrf?: number;
+  cos_sim?: number;
+  fts_rank?: number;
+  trgm_sim?: number;
 }
 
 export interface Feedback {
@@ -43,6 +50,8 @@ export interface ReferenceRow {
   title: string;
   product_id?: string | null;
   team_id?: string | null;
+  component_id?: string | null;
+  product_area?: string | null;
   source?: string | null;
   tags: string[] | null;
   status: string;
@@ -54,6 +63,12 @@ export interface ReferenceRow {
   structured?: Record<string, unknown> | null;
   created_at?: string;
   updated_at?: string;
+  relevance?: number;
+  grade?: string;
+  rrf?: number;
+  cos_sim?: number;
+  fts_rank?: number;
+  trgm_sim?: number;
 }
 
 export interface ReferenceLineageRow {

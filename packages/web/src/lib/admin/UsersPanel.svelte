@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../api";
+  import { Button } from "../tui";
   import AsciiSelect from "../AsciiSelect.svelte";
   import { errText, type UserRow } from "./shared";
 
   const PAGE = 25;
 
   let users = $state<UserRow[]>([]);
-  let loading = $state(false);
+  let loading = $state(true);
   let saving = $state(false);
   let error = $state<string | null>(null);
 
@@ -148,7 +149,7 @@
         <AsciiSelect bind:value={form.role} options={["member", "admin"]} />
       </label>
       <button class="icon-btn ok" type="submit" title="save" aria-label="save" disabled={saving}>{saving ? "…" : "✓"}</button>
-      <button class="icon-btn" type="button" title="cancel" aria-label="cancel" onclick={() => (showForm = false)}>↺</button>
+      <Button variant="ghost" square icon="cancel" title="cancel" aria-label="cancel" onclick={() => (showForm = false)} />
     </form>
     <p class="muted hint">No password = SSO-only (or attribution-only) user; a password can be set later.</p>
   {/if}
