@@ -189,17 +189,17 @@ docker compose run --rm cli npm run sync index-repo line-controller
 
 `.env` is bootstrap only. Everything else on the db.
 
-| Variable                                                  | Purpose                                                              |
-| --------------------------------------------------------- | -------------------------------------------------------------------- |
-| `DATABASE_URL`                                            | Postgres connection string.                                          |
-| `PORT`                                                    | HTTP port (default 8787).                                            |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`     | Bundled Postgres container; keep consistent with `DATABASE_URL`.     |
-| `TACHY_SECRET_KEY`                                        | Vault master key (32 bytes base64). Unset = vault disabled.          |
-| `TACHY_SESSION_SECRET`                                    | Session-cookie signing (32+ chars). Unset = logins reset on restart. |
-| `TACHY_API_TOKEN`                                         | Bearer for REST automation. Optional.                                |
-| `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`   | OIDC SSO. Optional.                                                  |
-| `TACHY_IMAGE`                                             | Compose image override (default `diegokoes/tachy:latest`).           |
-| `TACHY_REPO_DIR` / `TACHY_UPLOAD_DIR` / `FASTEMBED_CACHE` | Data paths; sensible defaults, Docker image sets them.               |
+| Variable                                                    | Purpose                                                              |
+| ----------------------------------------------------------- | -------------------------------------------------------------------- |
+| `DATABASE_URL`                                              | Postgres connection string.                                          |
+| `PORT`                                                      | HTTP port (default 8787).                                            |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`       | Bundled Postgres container; keep consistent with `DATABASE_URL`.     |
+| `TACHY_SECRET_KEY`                                          | Vault master key (32 bytes base64). Unset = vault disabled.          |
+| `TACHY_SESSION_SECRET`                                      | Session-cookie signing (32+ chars). Unset = logins reset on restart. |
+| `TACHY_API_TOKEN`                                           | Bearer for REST automation. Optional.                                |
+| `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`     | OIDC SSO. Optional.                                                  |
+| `TACHY_IMAGE`                                               | Compose image override (default `diegokoes/tachy:latest`).           |
+| `TACHY_REPO_DIR` / `TACHY_UPLOAD_DIR` / `TACHY_MODEL_CACHE` | Data paths; sensible defaults, Docker image sets them.               |
 
 PII/secret redaction is off by default: per connection
 (`{"redaction":{"enabled":true}}` in the connection config) or deployment-wide
