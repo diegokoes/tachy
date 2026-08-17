@@ -173,7 +173,6 @@ Roles: `admin` and `member`. Admin mutations return `403` for members.
 npm run sync sync acme-freshdesk --since=2026-06-01T00:00:00Z
 npm run sync embed-backfill                       # embed entries missing a vector
 npm run sync index-repo <repo-slug>               # clone/fetch + (re)index code
-npm run sync migrate                              # apply db/migrations/*.sql
 npm run sync backup                               # pg_dump -Fc into ./backups/
 npm run sync restore -- --file=backups/tachy-….dump   # overwrites the DB
 ```
@@ -225,5 +224,8 @@ Dumps contain real ticket data — keep them off shared folders. Restoring vault
 credentials also needs the original `TACHY_SECRET_KEY`, so keep the `.env`
 secrets in a password manager.
 
-**Upgrades.** Fresh installs get the full `db/schema.sql` via Docker initdb;
-running deployments apply `npm run sync migrate` (idempotent).
+**Upgrades.** Fresh installs get the full `db/schema.sql` via Docker initdb.
+Existing deployments upgrade by backing up, recreating the database from the
+current `db/schema.sql`, and restoring the data tables — then `npm run sync
+reembed` if the embedding model or vector dimension changed, since vectors from
+two different models are not comparable.

@@ -19,12 +19,23 @@ you ran, what you expected, and what actually happened.
 
 ## Database schema changes
 
-`db/schema.sql` is canonical for fresh installs (Docker initdb applies it only to
-an empty data dir). Existing deployments upgrade via `db/migrations/*.sql`
-(applied by `npm run sync migrate`). Every schema change therefore lands in **both**
-places: update `schema.sql` AND add an idempotent migration. The test setup applies
-schema + all migrations on every run, and `test/schema-drift.test.ts` checks the
-CHECK constraints against the core enums — so drift fails CI.
+`db/schema.sql` is the single source of truth. Edit it directly; the test setup
+applies it on every run, and `test/schema-drift.test.ts` checks its CHECK
+constraints against the core enums, so drift fails CI.
+
+There is deliberately no migrations directory. The previous one held three files
+that were already fully mirrored in `schema.sql` — no-ops on a fresh database —
+while re-running them silently rewrote `analysis_runs.mode` for every `create` /
+`code` / `chat` row, because the normalizing `UPDATE` predated the widened CHECK
+beside it. There was no applied-migrations table, so every run re-applied every
+file.
+
+Upgrading an existing deployment is therefore a dump, a fresh schema, and a
+restore of the data tables — plus `npm run sync reembed` whenever the embedding
+model or vector dimension changed, since vectors from two models share no space.
+If incremental migrations come back, they need an applied-migrations table and a
+test that diffs `schema.sql` against schema-plus-migrations; without both, the
+two drift apart silently.
 
 ## Commit messages
 
