@@ -7,6 +7,8 @@ import {
   searchReferenceDocs,
   referenceDocLineage,
   chunkText,
+  addComponent,
+  resolveComponentFilter,
 } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "./helpers";
 
@@ -218,5 +220,111 @@ describe("reference doc versioning", () => {
       "archived",
       "archived",
     ]);
+  });
+});
+
+describe("reference docs carry the same taxonomy as knowledge entries", () => {
+  beforeEach(resetData);
+
+  const seedComponent = async () => {
+    const productId = await tpdProductId();
+    const comp = await addComponent({
+      productId,
+      slug: "line-controller",
+      name: "Line Controller",
+      aliases: ["lc"],
+    });
+    return { productId, componentId: comp.id as string };
+  };
+
+  it("maps a doc to a component and derives product_area", async () => {
+    const { productId } = await seedComponent();
+    const saved = await saveReferenceDoc({
+      productId,
+      component: "line-controller",
+      title: "LC failover",
+      body: "The standby promotes itself when the active node loses its heartbeat.",
+    });
+    const doc = await getReferenceDoc(saved.id);
+    expect(doc.component_id).not.toBeNull();
+    expect(doc.product_area).toMatch(/line/i);
+  });
+
+  it("accepts an alias, and a product-only doc with no component", async () => {
+    const { productId, componentId } = await seedComponent();
+    const viaAlias = await saveReferenceDoc({
+      productId,
+      component: "lc",
+      title: "Via alias",
+      body: "aggregation station calibration steps for the line controller",
+    });
+    expect((await getReferenceDoc(viaAlias.id)).component_id).toBe(componentId);
+
+    const general = await saveReferenceDoc({
+      productId,
+      title: "Onboarding",
+      body: "How to get a laptop, an account and a badge on your first day.",
+    });
+    expect((await getReferenceDoc(general.id)).component_id).toBeNull();
+  });
+
+  it("rejects a component with no product, since slugs resolve within one", async () => {
+    await expect(
+      saveReferenceDoc({
+        component: "line-controller",
+        title: "Orphan",
+        body: "no product scope",
+      }),
+    ).rejects.toThrow(/component requires a product/i);
+  });
+
+  it("filters search and list by component", async () => {
+    const { productId } = await seedComponent();
+    const mapped = await saveReferenceDoc({
+      productId,
+      component: "line-controller",
+      title: "Failover runbook",
+      body: "The standby node promotes itself and replays the journal.",
+    });
+    await saveReferenceDoc({
+      productId,
+      title: "Release process",
+      body: "The standby node promotes itself and replays the journal.",
+    });
+
+    const f = await resolveComponentFilter(productId, "line-controller");
+    const hits = await searchReferenceDocs("standby node promotes itself", {
+      productId,
+      componentId: f.componentId,
+      componentTags: f.componentTags,
+    });
+    expect(hits.map((h) => h.id)).toEqual([mapped.id]);
+
+    const listed = await listReferenceDocs({
+      productId,
+      componentId: f.componentId,
+      componentTags: f.componentTags,
+    });
+    expect(listed.map((d) => d.id)).toEqual([mapped.id]);
+  });
+
+  it("changes and clears the mapping on update", async () => {
+    const { productId, componentId } = await seedComponent();
+    const saved = await saveReferenceDoc({
+      productId,
+      component: "line-controller",
+      title: "Mapped",
+      body: "some body text",
+    });
+
+    // Omitting `component` leaves the mapping alone.
+    await updateReferenceDoc(saved.id, { title: "Renamed" });
+    expect((await getReferenceDoc(saved.id)).component_id).toBe(componentId);
+
+    // Passing null clears it.
+    await updateReferenceDoc(saved.id, { component: null });
+    const cleared = await getReferenceDoc(saved.id);
+    expect(cleared.component_id).toBeNull();
+    expect(cleared.product_area).toBeNull();
   });
 });
