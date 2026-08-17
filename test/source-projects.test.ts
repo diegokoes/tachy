@@ -148,7 +148,10 @@ describe("source projects", () => {
       componentSlug: "portal",
     });
     await expect(
-      updateSourceProject(project.id, { role: "tracker", teamSlug: "test-team" }),
+      updateSourceProject(project.id, {
+        role: "tracker",
+        teamSlug: "test-team",
+      }),
     ).rejects.toThrow(/area rule/);
   });
 
@@ -209,9 +212,9 @@ describe("area path mapping", () => {
     const rules = await listProjectAreaMap(project.id);
     expect(rules).toHaveLength(1);
     expect(rules[0].component_slug).toBe("web-portal");
-    expect((await resolveAreaComponent(project.id, "ProjA\\Portal"))?.slug).toBe(
-      "web-portal",
-    );
+    expect(
+      (await resolveAreaComponent(project.id, "ProjA\\Portal"))?.slug,
+    ).toBe("web-portal");
   });
 
   it("rejects an unknown component with nearest matches, and trackers outright", async () => {

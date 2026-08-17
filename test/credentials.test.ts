@@ -98,23 +98,56 @@ describe("scoped credential resolution (user > team > global > env)", () => {
     try {
       expect(await resolveCredential("anthropic_api_key", ctx)).toBe("env-key");
 
-      await setCredential(admin.id, "global", undefined, "anthropic_api_key", "global-key");
-      expect(await resolveCredential("anthropic_api_key", ctx)).toBe("global-key");
+      await setCredential(
+        admin.id,
+        "global",
+        undefined,
+        "anthropic_api_key",
+        "global-key",
+      );
+      expect(await resolveCredential("anthropic_api_key", ctx)).toBe(
+        "global-key",
+      );
 
-      await setCredential(alice.id, "team", teamId, "anthropic_api_key", "team-key");
-      expect(await resolveCredential("anthropic_api_key", ctx)).toBe("team-key");
+      await setCredential(
+        alice.id,
+        "team",
+        teamId,
+        "anthropic_api_key",
+        "team-key",
+      );
+      expect(await resolveCredential("anthropic_api_key", ctx)).toBe(
+        "team-key",
+      );
 
-      await setCredential(alice.id, "user", alice.id, "anthropic_api_key", "user-key");
-      expect(await resolveCredential("anthropic_api_key", ctx)).toBe("user-key");
+      await setCredential(
+        alice.id,
+        "user",
+        alice.id,
+        "anthropic_api_key",
+        "user-key",
+      );
+      expect(await resolveCredential("anthropic_api_key", ctx)).toBe(
+        "user-key",
+      );
       expect(await credentialSource("anthropic_api_key", ctx)).toBe("user");
 
       await deleteCredential(alice.id, "user", alice.id, "anthropic_api_key");
-      expect(await resolveCredential("anthropic_api_key", ctx)).toBe("team-key");
+      expect(await resolveCredential("anthropic_api_key", ctx)).toBe(
+        "team-key",
+      );
 
       await deleteCredential(alice.id, "team", teamId, "anthropic_api_key");
-      expect(await resolveCredential("anthropic_api_key", ctx)).toBe("global-key");
+      expect(await resolveCredential("anthropic_api_key", ctx)).toBe(
+        "global-key",
+      );
 
-      await deleteCredential(admin.id, "global", undefined, "anthropic_api_key");
+      await deleteCredential(
+        admin.id,
+        "global",
+        undefined,
+        "anthropic_api_key",
+      );
       expect(await resolveCredential("anthropic_api_key", ctx)).toBe("env-key");
       expect(await credentialSource("anthropic_api_key", ctx)).toBe("env");
     } finally {
@@ -126,14 +159,18 @@ describe("scoped credential resolution (user > team > global > env)", () => {
     const { alice } = await seedPeople();
     await setCredential(alice.id, "user", alice.id, "copilot_token", "one");
     await setCredential(alice.id, "user", alice.id, "copilot_token", "two");
-    expect(await resolveCredential("copilot_token", { userId: alice.id })).toBe("two");
+    expect(await resolveCredential("copilot_token", { userId: alice.id })).toBe(
+      "two",
+    );
     expect(await listCredentials("user", alice.id)).toHaveLength(1);
   });
 
   it("resolves source-token names through the env fallback", async () => {
     process.env.FRESHDESK_TOKEN_MY_CONN = "fd-token";
     try {
-      expect(await resolveCredential("freshdesk_token:my-conn", {})).toBe("fd-token");
+      expect(await resolveCredential("freshdesk_token:my-conn", {})).toBe(
+        "fd-token",
+      );
     } finally {
       delete process.env.FRESHDESK_TOKEN_MY_CONN;
     }
@@ -195,17 +232,19 @@ describe("resolveScoped (the shared walk)", () => {
     const { admin, alice, teamId } = await seedPeople();
     const ctx = { userId: alice.id, teamId };
 
-    expect(await resolveScoped("preferences", "agent_model", ctx)).toBeUndefined();
+    expect(
+      await resolveScoped("preferences", "agent_model", ctx),
+    ).toBeUndefined();
 
     await setPref(admin.id, "global", undefined, "agent_model", "g");
-    expect((await resolveScoped("preferences", "agent_model", ctx))?.scope).toBe(
-      "global",
-    );
+    expect(
+      (await resolveScoped("preferences", "agent_model", ctx))?.scope,
+    ).toBe("global");
 
     await setPref(alice.id, "team", teamId, "agent_model", "t");
-    expect((await resolveScoped("preferences", "agent_model", ctx))?.scope).toBe(
-      "team",
-    );
+    expect(
+      (await resolveScoped("preferences", "agent_model", ctx))?.scope,
+    ).toBe("team");
 
     await setPref(alice.id, "user", alice.id, "agent_model", "u");
     const hit = await resolveScoped("preferences", "agent_model", ctx);
@@ -268,8 +307,7 @@ describe("scoped preferences", () => {
 describe("API never leaks plaintext or ciphertext", () => {
   const app = createApp({ passwordAuth: true });
 
-  const login = (email: string) =>
-    loginCookie(app, email, "a-long-password");
+  const login = (email: string) => loginCookie(app, email, "a-long-password");
 
   it("stores via /me and /credentials, lists only metadata", async () => {
     const { admin, alice } = await seedPeople();

@@ -273,7 +273,8 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
       ]);
       const user = conn?.authenticatedUser;
       return {
-        identity: user?.providerDisplayName ?? user?.properties?.Account?.$value,
+        identity:
+          user?.providerDisplayName ?? user?.properties?.Account?.$value,
         groups: projects.map((p) => ({ key: p.name, name: p.name })),
       };
     },

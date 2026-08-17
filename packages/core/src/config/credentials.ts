@@ -1,11 +1,7 @@
 import { sql } from "../infra/db";
 import { badInput } from "../infra/errors";
 import { sourceTokenOptional } from "../infra/env";
-import {
-  secretsEnabled,
-  encryptSecret,
-  decryptSecret,
-} from "../infra/secrets";
+import { secretsEnabled, encryptSecret, decryptSecret } from "../infra/secrets";
 import {
   resolveScoped,
   assertCanWriteScope,

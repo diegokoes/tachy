@@ -75,8 +75,15 @@ export const setup = new Hono()
     if (body.agent_key && secretsEnabled()) {
       const admin = await getUserByEmail(body.email);
       if (admin) {
-        const name = AGENT_CREDENTIALS[body.settings?.agent_provider ?? "claude"];
-        await setCredential(admin.id, "global", undefined, name, body.agent_key);
+        const name =
+          AGENT_CREDENTIALS[body.settings?.agent_provider ?? "claude"];
+        await setCredential(
+          admin.id,
+          "global",
+          undefined,
+          name,
+          body.agent_key,
+        );
       }
     }
 

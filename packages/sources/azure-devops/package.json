@@ -1,6 +1,5 @@
 {
   "name": "@tachy/source-azure-devops",
-  "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",
   "exports": {
