@@ -75,9 +75,7 @@ export async function createUser(input: {
   return rows[0] as unknown as UserRow;
 }
 
-export async function getUserByEmail(
-  email: string,
-): Promise<{
+export async function getUserByEmail(email: string): Promise<{
   id: string;
   email: string;
   display_name: string | null;

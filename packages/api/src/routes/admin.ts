@@ -172,8 +172,8 @@ export const admin = new Hono()
         anthropic_api_key_set: Boolean(process.env.ANTHROPIC_API_KEY),
         copilot_token_set: Boolean(
           process.env.COPILOT_GITHUB_TOKEN ||
-            process.env.GH_TOKEN ||
-            process.env.GITHUB_TOKEN,
+          process.env.GH_TOKEN ||
+          process.env.GITHUB_TOKEN,
         ),
         upload_dir: process.env.TACHY_UPLOAD_DIR || null,
       },
@@ -453,10 +453,16 @@ export const admin = new Hono()
     try {
       const { source } = await resolveSource(slug, await callerScope(c));
       if (!source.verify)
-        return c.json({ ok: false, error: "this source type has no test call" });
+        return c.json({
+          ok: false,
+          error: "this source type has no test call",
+        });
       const probe = await source.verify();
       return c.json({ ok: true, ...probe });
     } catch (e) {
-      return c.json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+      return c.json({
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   });

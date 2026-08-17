@@ -158,11 +158,23 @@ describe("token resolution reaches the adapter", () => {
     await sql`insert into source_connections (source_type, slug, base_url)
               values ('fake', 'ui-conn', 'https://acme.example.com')`;
 
-    await setCredential(admin.id, "global", undefined, "fake_token:ui-conn", "global-token");
+    await setCredential(
+      admin.id,
+      "global",
+      undefined,
+      "fake_token:ui-conn",
+      "global-token",
+    );
     await resolveSource("ui-conn", { userId: alice.id });
     expect(seen?.token).toBe("global-token");
 
-    await setCredential(alice.id, "user", alice.id, "fake_token:ui-conn", "alices-token");
+    await setCredential(
+      alice.id,
+      "user",
+      alice.id,
+      "fake_token:ui-conn",
+      "alices-token",
+    );
     await resolveSource("ui-conn", { userId: alice.id });
     expect(seen?.token).toBe("alices-token");
   });
@@ -265,7 +277,13 @@ describe("deleting a connection", () => {
       insert into source_connections (source_type, slug, base_url)
       values ('fake', 'ui-conn', 'https://acme.example.com') returning id
     `;
-    await setCredential(admin.id, "global", undefined, "fake_token:ui-conn", "t");
+    await setCredential(
+      admin.id,
+      "global",
+      undefined,
+      "fake_token:ui-conn",
+      "t",
+    );
     await sql`
       insert into work_items (source_connection_id, external_id, kind, title, raw)
       values (${conn.id}, '1', 'ticket', 'x', '{}'::jsonb)
@@ -303,7 +321,8 @@ describe("registering projects on a connection", () => {
       method: "POST",
       headers,
     });
-    const groups = ((await probe.json()) as { groups: { key: string }[] }).groups;
+    const groups = ((await probe.json()) as { groups: { key: string }[] })
+      .groups;
     expect(groups.map((g) => g.key)).toContain("Proj A");
 
     const created = await app.request("/api/source-projects", {
@@ -318,7 +337,9 @@ describe("registering projects on a connection", () => {
     expect(created.status).toBe(200);
 
     const list = (await (
-      await app.request("/api/source-projects?source=ui-conn", { headers: { cookie } })
+      await app.request("/api/source-projects?source=ui-conn", {
+        headers: { cookie },
+      })
     ).json()) as { external_key: string; role: string; team_slug: string }[];
     expect(list).toEqual([
       expect.objectContaining({

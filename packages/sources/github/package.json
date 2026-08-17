@@ -1,6 +1,5 @@
 {
   "name": "@tachy/source-github",
-  "version": "0.1.0",
   "type": "module",
   "main": "src/index.ts",
   "exports": {

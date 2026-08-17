@@ -44,7 +44,9 @@ export async function linkRepo(i: RepoInput) {
     throw badInput(
       `invalid repo slug '${i.slug}' (lowercase letters, digits, hyphens)`,
     );
-  let productId = i.productSlug ? await getProductIdBySlug(i.productSlug) : null;
+  let productId = i.productSlug
+    ? await getProductIdBySlug(i.productSlug)
+    : null;
   let sourceSlug = i.sourceSlug ?? null;
 
   if (i.sourceProjectId) {

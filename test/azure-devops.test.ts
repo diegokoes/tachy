@@ -296,7 +296,9 @@ describe("azure-devops adapter", () => {
 describe("azure-devops client", () => {
   it("versions every request: 7.1, except the endpoints with no released version", async () => {
     const { calls } = mockFetch({
-      "/_apis/connectionData": { authenticatedUser: { providerDisplayName: "svc" } },
+      "/_apis/connectionData": {
+        authenticatedUser: { providerDisplayName: "svc" },
+      },
       "/_apis/projects": { value: [{ id: "1", name: "ProjA" }] },
       "/_apis/wit/workitems?": { value: [] },
       "/_apis/wit/workitems/42": { id: 42, fields: {} },
@@ -347,7 +349,9 @@ describe("azure-devops client", () => {
   });
 
   it("leaves ADO's own query operators and encoded wiki paths untouched", async () => {
-    const { calls } = mockFetch({ "/ProjA/_apis/wiki/wikis/w/pages": { path: "/" } });
+    const { calls } = mockFetch({
+      "/ProjA/_apis/wiki/wikis/w/pages": { path: "/" },
+    });
     await client().getWikiPage("ProjA", "w", "/Home/Setup Guide");
     expect(calls[0]).toContain("path=%2FHome%2FSetup+Guide");
     expect(calls[0]).toContain("includeContent=true");

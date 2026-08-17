@@ -406,34 +406,48 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     expect(crossTracker.status).toBe(403);
 
     // Re-pointing a project needs rights on where it lands, not just where it is.
-    const moved = await req(leadCookie, `/source-projects/${projectId}`, "PATCH", {
-      product_slug: "otherp",
-    });
+    const moved = await req(
+      leadCookie,
+      `/source-projects/${projectId}`,
+      "PATCH",
+      {
+        product_slug: "otherp",
+      },
+    );
     expect(moved.status).toBe(403);
 
     expect(
-      (await req(devCookie, "/source-projects", "POST", {
-        source_slug: "test-freshdesk",
-        external_key: "DevProj",
-        role: "knowledge",
-        product_slug: "tpd",
-      })).status,
+      (
+        await req(devCookie, "/source-projects", "POST", {
+          source_slug: "test-freshdesk",
+          external_key: "DevProj",
+          role: "knowledge",
+          product_slug: "tpd",
+        })
+      ).status,
     ).toBe(403);
 
     // Reads stay open — the admin panel loads them before knowing who you are.
     expect((await req(devCookie, "/source-projects", "GET")).status).toBe(200);
 
-    const area = await req(leadCookie, `/source-projects/${projectId}/areas`, "PUT", {
-      area_prefix: "LeadProj\\Portal",
-      component_slug: "nope",
-    });
+    const area = await req(
+      leadCookie,
+      `/source-projects/${projectId}/areas`,
+      "PUT",
+      {
+        area_prefix: "LeadProj\\Portal",
+        component_slug: "nope",
+      },
+    );
     // 400 (unknown component), not 403: the guard passed and validation spoke.
     expect(area.status).toBe(400);
     expect(
-      (await req(devCookie, `/source-projects/${projectId}/areas`, "PUT", {
-        area_prefix: "x",
-        component_slug: "y",
-      })).status,
+      (
+        await req(devCookie, `/source-projects/${projectId}/areas`, "PUT", {
+          area_prefix: "x",
+          component_slug: "y",
+        })
+      ).status,
     ).toBe(403);
 
     await req(leadCookie, `/source-projects/${projectId}`, "DELETE");
@@ -450,27 +464,37 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     // The upsert is keyed on slug, so re-pointing an existing repo is checked
     // against both scopes — otherwise a team admin could hijack the slug.
     expect(
-      (await req(leadCookie, "/repos", "PUT", {
-        slug: "leadrepo",
-        url: "https://example.invalid/lead.git",
-        product: "otherp",
-      })).status,
+      (
+        await req(leadCookie, "/repos", "PUT", {
+          slug: "leadrepo",
+          url: "https://example.invalid/lead.git",
+          product: "otherp",
+        })
+      ).status,
     ).toBe(403);
 
-    expect((await req(devCookie, "/repos/leadrepo", "DELETE")).status).toBe(403);
+    expect((await req(devCookie, "/repos/leadrepo", "DELETE")).status).toBe(
+      403,
+    );
     expect(
-      (await req(leadCookie, "/repos", "PUT", {
-        slug: "unscoped",
-        url: "https://example.invalid/u.git",
-      })).status,
+      (
+        await req(leadCookie, "/repos", "PUT", {
+          slug: "unscoped",
+          url: "https://example.invalid/u.git",
+        })
+      ).status,
     ).toBe(403);
-    expect((await req(leadCookie, "/repos/leadrepo", "DELETE")).status).toBe(200);
+    expect((await req(leadCookie, "/repos/leadrepo", "DELETE")).status).toBe(
+      200,
+    );
 
     expect(
-      (await req(leadCookie, "/source-connections", "POST", {
-        sourceType: "freshdesk",
-        slug: "lead-desk",
-      })).status,
+      (
+        await req(leadCookie, "/source-connections", "POST", {
+          sourceType: "freshdesk",
+          slug: "lead-desk",
+        })
+      ).status,
     ).toBe(403);
   });
 });
