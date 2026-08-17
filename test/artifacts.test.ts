@@ -212,19 +212,30 @@ describe("artifacts API", () => {
     expect(((await del.json()) as { deleted: boolean }).deleted).toBe(true);
   });
 
-  it("a member cannot write team or global scope through the route", async () => {
+  it("a member writes their own team's scope, but not another team's or global", async () => {
     await seedPeople();
     const bobCookie = await login("bob@example.com");
-    for (const payload of [
-      { scope: "team", team: "hw", slug: "x", title: "x", body: "x" },
-      { scope: "global", slug: "x", title: "x", body: "x" },
-    ]) {
-      const res = await app.request("/api/artifacts", {
+    const put = (payload: Record<string, unknown>) =>
+      app.request("/api/artifacts", {
         method: "PUT",
         body: JSON.stringify(payload),
         headers: { "Content-Type": "application/json", cookie: bobCookie },
       });
-      expect(res.status).toBe(403);
+
+    const own = await put({
+      scope: "team",
+      team: "hw",
+      slug: "x",
+      title: "x",
+      body: "x",
+    });
+    expect(own.status).toBe(200);
+
+    for (const payload of [
+      { scope: "team", team: "sw", slug: "x", title: "x", body: "x" },
+      { scope: "global", slug: "x", title: "x", body: "x" },
+    ]) {
+      expect((await put(payload)).status).toBe(403);
     }
   });
 });
