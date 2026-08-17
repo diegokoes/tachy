@@ -340,19 +340,27 @@ create table knowledge_entries (
     fixed_version       text,
     structured          jsonb not null default '{}'::jsonb,
 
-    embedding           vector(384),
+    embedding           vector(768),
 
+    -- cloud and affected_version are in here so they are searchable as words:
+    -- typing "prod printer error" narrows by environment without spending a
+    -- filter control on it.
     search_text text generated always as (
         coalesce(issue_summary,'') || ' ' ||
         coalesce(root_cause,'')   || ' ' ||
         coalesce(resolution,'')   || ' ' ||
         coalesce(resolution_pattern,'') || ' ' ||
         coalesce(product_area,'') || ' ' ||
+        coalesce(cloud,'')        || ' ' ||
+        coalesce(affected_version,'') || ' ' ||
         tachy_join(symptoms) || ' ' ||
         tachy_join(signals)  || ' ' ||
         tachy_join(tags)
     ) stored,
 
+    -- Two configs on purpose. 'simple' keeps error codes and identifiers exact
+    -- (023, ECONNREFUSED, TOO_MANY_STRINGS); 'english' adds stemming so
+    -- "printer stopped" finds "printer stops". Searches match against either.
     search_tsv tsvector generated always as (
         to_tsvector('simple',
             coalesce(issue_summary,'') || ' ' ||
@@ -360,6 +368,23 @@ create table knowledge_entries (
             coalesce(resolution,'')   || ' ' ||
             coalesce(resolution_pattern,'') || ' ' ||
             coalesce(product_area,'') || ' ' ||
+            coalesce(cloud,'')        || ' ' ||
+            coalesce(affected_version,'') || ' ' ||
+            tachy_join(symptoms) || ' ' ||
+            tachy_join(signals)  || ' ' ||
+            tachy_join(tags)
+        )
+    ) stored,
+
+    search_tsv_en tsvector generated always as (
+        to_tsvector('english',
+            coalesce(issue_summary,'') || ' ' ||
+            coalesce(root_cause,'')   || ' ' ||
+            coalesce(resolution,'')   || ' ' ||
+            coalesce(resolution_pattern,'') || ' ' ||
+            coalesce(product_area,'') || ' ' ||
+            coalesce(cloud,'')        || ' ' ||
+            coalesce(affected_version,'') || ' ' ||
             tachy_join(symptoms) || ' ' ||
             tachy_join(signals)  || ' ' ||
             tachy_join(tags)
@@ -381,8 +406,10 @@ create index knowledge_symptoms_idx    on knowledge_entries using gin (symptoms)
 create index knowledge_signals_idx     on knowledge_entries using gin (signals);
 create index knowledge_tags_idx        on knowledge_entries using gin (tags);
 create index knowledge_tsv_idx         on knowledge_entries using gin (search_tsv);
+create index knowledge_tsv_en_idx      on knowledge_entries using gin (search_tsv_en);
 create index knowledge_trgm_idx        on knowledge_entries using gin (search_text gin_trgm_ops);
-create index knowledge_embedding_idx   on knowledge_entries using hnsw (embedding vector_cosine_ops);
+create index knowledge_embedding_idx   on knowledge_entries using hnsw (embedding vector_cosine_ops)
+    with (m = 16, ef_construction = 64);
 
 create or replace function set_updated_at() returns trigger as $$
 begin
@@ -446,6 +473,14 @@ create table reference_docs (
     -- is archived, inside one transaction.
     source_project_id uuid references source_projects(id) on delete set null,
     external_key      text,
+    -- Same taxonomy anchor as knowledge_entries: a doc scoped to a product may
+    -- also name the component it documents. Optional on purpose — a general
+    -- product doc (onboarding, release process) belongs to the product and to
+    -- no single component. product_area is DERIVED from the component hierarchy
+    -- at write time, kept as a column so the generated search columns below can
+    -- reference it (they can't join other tables).
+    component_id  uuid references components(id) on delete set null,
+    product_area  text,
     title       text not null,
     body        text not null,
     tags        text[] not null default '{}',
@@ -456,10 +491,16 @@ create table reference_docs (
     superseded_by uuid references reference_docs(id) on delete set null,
 
     search_text text generated always as (
-        coalesce(title,'') || ' ' || coalesce(body,'') || ' ' || tachy_join(tags)
+        coalesce(title,'') || ' ' || coalesce(body,'') || ' ' ||
+        coalesce(product_area,'') || ' ' || coalesce(doc_version,'') || ' ' || tachy_join(tags)
     ) stored,
     search_tsv tsvector generated always as (
-        to_tsvector('simple', coalesce(title,'') || ' ' || coalesce(body,'') || ' ' || tachy_join(tags))
+        to_tsvector('simple', coalesce(title,'') || ' ' || coalesce(body,'') || ' ' ||
+            coalesce(product_area,'') || ' ' || coalesce(doc_version,'') || ' ' || tachy_join(tags))
+    ) stored,
+    search_tsv_en tsvector generated always as (
+        to_tsvector('english', coalesce(title,'') || ' ' || coalesce(body,'') || ' ' ||
+            coalesce(product_area,'') || ' ' || coalesce(doc_version,'') || ' ' || tachy_join(tags))
     ) stored,
 
     version     integer not null default 1,
@@ -469,11 +510,13 @@ create table reference_docs (
 );
 
 create index reference_docs_product_idx on reference_docs(product_id);
+create index reference_docs_component_idx on reference_docs(component_id);
 create index reference_docs_project_idx on reference_docs(source_project_id, external_key);
 create index reference_docs_team_idx    on reference_docs(team_id);
 create index reference_docs_status_idx  on reference_docs(status);
 create index reference_docs_tags_idx    on reference_docs using gin (tags);
 create index reference_docs_tsv_idx     on reference_docs using gin (search_tsv);
+create index reference_docs_tsv_en_idx  on reference_docs using gin (search_tsv_en);
 create index reference_docs_trgm_idx    on reference_docs using gin (search_text gin_trgm_ops);
 create index reference_docs_superseded_idx on reference_docs(superseded_by);
 
@@ -486,12 +529,14 @@ create table reference_doc_chunks (
     doc_id      uuid not null references reference_docs(id) on delete cascade,
     ordinal     integer not null,
     chunk_text  text not null,
-    embedding   vector(384),
+    embedding   vector(768),
     unique (doc_id, ordinal)
 );
 
 create index reference_doc_chunks_doc_idx       on reference_doc_chunks(doc_id);
-create index reference_doc_chunks_embedding_idx on reference_doc_chunks using hnsw (embedding vector_cosine_ops);
+create index reference_doc_chunks_embedding_idx on reference_doc_chunks using hnsw (embedding vector_cosine_ops)
+    with (m = 16, ef_construction = 64);
+create index reference_doc_chunks_trgm_idx      on reference_doc_chunks using gin (chunk_text gin_trgm_ops);
 
 -- Linked git repositories for code consultation. Clones live on disk under
 -- TACHY_REPO_DIR; only chunk text + embeddings are stored here. Indexing is
@@ -543,10 +588,11 @@ create table code_chunks (
     start_line  integer not null,
     end_line    integer not null,
     chunk_text  text not null,
-    embedding   vector(384),
+    embedding   vector(768),
     unique (file_id, ordinal)
 );
 
 create index code_chunks_repo_idx      on code_chunks(repo_id);
-create index code_chunks_embedding_idx on code_chunks using hnsw (embedding vector_cosine_ops);
+create index code_chunks_embedding_idx on code_chunks using hnsw (embedding vector_cosine_ops)
+    with (m = 16, ef_construction = 64);
 create index code_chunks_trgm_idx      on code_chunks using gin (chunk_text gin_trgm_ops);
