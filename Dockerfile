@@ -14,6 +14,11 @@ RUN apt-get update \
 
 WORKDIR /app
 
+# node:24-slim ships npm 11.x. Pin the version explicitly so the image does not
+# drift with the base image, and so it matches what the lockfile is maintained
+# with locally.
+RUN npm i -g npm@12.0.2
+
 # Copy just the package.jsons first so `npm ci` is cached unless a dependency
 # actually changed (everything here runs straight off the source via tsx, no
 # build step, so the workspace symlinks npm ci creates are all that's needed).
