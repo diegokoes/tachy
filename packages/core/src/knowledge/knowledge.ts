@@ -1,9 +1,19 @@
 import { sql } from "../infra/db";
 import {
   embedPassage,
-  embedQuery,
+  embedPassages,
+  embedQueryLiteral,
   toVectorLiteral,
 } from "../search/embeddings";
+import {
+  CANDIDATES,
+  clampLimit,
+  ftsMatch,
+  ftsRank,
+  fusedCte,
+  withSearchSession,
+} from "../search/rank";
+import { SEM_FLOOR, withRelevance } from "../search/relevance";
 import { notFound, conflict, badInput } from "../infra/errors";
 import { parseStructured } from "./structured";
 import { resolveComponentStrict } from "../catalog/components";
@@ -66,21 +76,33 @@ async function resolvePatternDescription(
   return pattern.description as string;
 }
 
+/**
+ * Must stay in step with the generated search_text column: a field the vector
+ * cannot see is only findable by exact words. `resolution` is the one that
+ * matters — a query phrased as the fix ("restart the label cache service")
+ * otherwise has no semantic representation at all.
+ */
 function buildEmbedText(
   i: {
     issueSummary?: string;
     symptoms?: string[];
     rootCause?: string;
+    resolution?: string;
     signals?: string[];
+    tags?: string[];
   },
   patternDescription: string,
+  productArea?: string | null,
 ): string {
   return [
     i.issueSummary,
     (i.symptoms ?? []).join(" "),
     i.rootCause,
+    i.resolution,
     patternDescription,
+    productArea,
     (i.signals ?? []).join(" "),
+    (i.tags ?? []).join(" "),
   ]
     .filter(Boolean)
     .join(" ")
@@ -121,7 +143,7 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
   const patternDescription = await resolvePatternDescription(
     i.resolutionPattern,
   );
-  const text = buildEmbedText(i, patternDescription);
+  const text = buildEmbedText(i, patternDescription, productArea);
   const embedding = text ? toVectorLiteral(await embedPassage(text)) : null;
 
   const [row] = await sql`
@@ -157,43 +179,79 @@ export interface SearchOptions {
   affectedVersion?: string;
   fixedVersion?: string;
   limit?: number;
+  /** Pre-embedded query, so a caller searching two surfaces embeds once. */
+  queryVector?: string;
 }
 
 export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
-  const limit = opts.limit ?? 8;
+  const limit = clampLimit(opts.limit, 8);
   if (!query.trim()) return [];
-  const qvec = toVectorLiteral(await embedQuery(query));
-  const rows = await sql`
-    select * from (
-      select id, work_item_id, status, superseded_by, issue_summary, root_cause, resolution,
-             resolution_pattern, component_id, product_area, confidence, cloud, resolution_clarity, learning_value, hidden_fix,
-             affected_version, fixed_version,
-             symptoms, signals, tags, structured, version,
-             least(ts_rank(search_tsv, plainto_tsquery('simple', ${query})), 1.0) as fts_rank,
-             similarity(search_text, ${query}) as trgm_sim,
-             greatest(coalesce(1 - (embedding <=> ${qvec}::vector), 0), 0) as cos_sim,
-             1.0 * greatest(coalesce(1 - (embedding <=> ${qvec}::vector), 0), 0)
-               + 0.5 * least(ts_rank(search_tsv, plainto_tsquery('simple', ${query})), 1.0)
-               + 0.3 * similarity(search_text, ${query}) as score
-      from knowledge_entries
-      -- deprecated entries surface on purpose: a flagged stale lesson beats the
-      -- LLM re-deriving it from scratch. Consumers must warn on status='deprecated'.
-      where status in ('approved', 'deprecated')
-        ${opts.productId ? (opts.includeUnscoped ? sql`and (product_id = ${opts.productId} or product_id is null)` : sql`and product_id = ${opts.productId}`) : sql``}
-        ${opts.teamId ? (opts.includeUnscoped ? sql`and (team_id = ${opts.teamId} or team_id is null)` : sql`and team_id = ${opts.teamId}`) : sql``}
-        ${opts.tags && opts.tags.length ? sql`and tags && ${opts.tags}` : sql``}
-        ${opts.componentId ? sql`and (component_id = ${opts.componentId} or tags && ${opts.componentTags ?? []})` : sql``}
-        ${opts.cloud ? sql`and cloud = ${opts.cloud}` : sql``}
-        ${opts.learningValue ? sql`and learning_value = ${opts.learningValue}` : sql``}
-        ${opts.resolutionClarity ? sql`and resolution_clarity = ${opts.resolutionClarity}` : sql``}
-        ${opts.affectedVersion ? sql`and affected_version = ${opts.affectedVersion}` : sql``}
-        ${opts.fixedVersion ? sql`and fixed_version = ${opts.fixedVersion}` : sql``}
-    ) ranked
-    where score > 0.02
-    order by score desc
-    limit ${limit}
+  const qvec = opts.queryVector ?? (await embedQueryLiteral(query));
+
+  // deprecated entries surface on purpose: a flagged stale lesson beats the
+  // LLM re-deriving it from scratch. Consumers must warn on status='deprecated'.
+  const filters = sql`
+    status in ('approved', 'deprecated')
+    ${opts.productId ? (opts.includeUnscoped ? sql`and (product_id = ${opts.productId} or product_id is null)` : sql`and product_id = ${opts.productId}`) : sql``}
+    ${opts.teamId ? (opts.includeUnscoped ? sql`and (team_id = ${opts.teamId} or team_id is null)` : sql`and team_id = ${opts.teamId}`) : sql``}
+    ${opts.tags && opts.tags.length ? sql`and tags && ${opts.tags}` : sql``}
+    ${opts.componentId ? sql`and (component_id = ${opts.componentId} or tags && ${opts.componentTags ?? []})` : sql``}
+    ${opts.cloud ? sql`and cloud = ${opts.cloud}` : sql``}
+    ${opts.learningValue ? sql`and learning_value = ${opts.learningValue}` : sql``}
+    ${opts.resolutionClarity ? sql`and resolution_clarity = ${opts.resolutionClarity}` : sql``}
+    ${opts.affectedVersion ? sql`and affected_version = ${opts.affectedVersion}` : sql``}
+    ${opts.fixedVersion ? sql`and fixed_version = ${opts.fixedVersion}` : sql``}
   `;
-  return rows;
+
+  const rows = await withSearchSession(
+    (tx) => tx`
+    with
+    -- Each leg generates its own candidates through its own index, so a query
+    -- that matches nothing on every leg returns nothing at all.
+    vec as (
+      select id,
+             row_number() over (order by embedding <=> ${qvec}::vector) as rnk,
+             1 - (embedding <=> ${qvec}::vector) as cos_sim
+      from knowledge_entries
+      where ${filters} and embedding is not null
+        and 1 - (embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
+      order by embedding <=> ${qvec}::vector
+      limit ${CANDIDATES}
+    ),
+    lex as (
+      select id,
+             row_number() over (order by ${ftsRank(sql`search_tsv`, sql`search_tsv_en`, query)} desc) as rnk,
+             ${ftsRank(sql`search_tsv`, sql`search_tsv_en`, query)} as fts_rank
+      from knowledge_entries
+      where ${filters} and ${ftsMatch(sql`search_tsv`, sql`search_tsv_en`, query)}
+      order by ${ftsRank(sql`search_tsv`, sql`search_tsv_en`, query)} desc
+      limit ${CANDIDATES}
+    ),
+    fuzzy as (
+      select id,
+             row_number() over (order by word_similarity(${query}, search_text) desc) as rnk,
+             word_similarity(${query}, search_text) as trgm_sim
+      from knowledge_entries
+      where ${filters} and ${query} <% search_text
+      order by word_similarity(${query}, search_text) desc
+      limit ${CANDIDATES}
+    ),
+    ${fusedCte()}
+    select e.id, e.work_item_id, e.status, e.superseded_by, e.issue_summary, e.root_cause, e.resolution,
+           e.resolution_pattern, e.component_id, e.product_area, e.confidence, e.cloud,
+           e.resolution_clarity, e.learning_value, e.hidden_fix,
+           e.affected_version, e.fixed_version,
+           e.symptoms, e.signals, e.tags, e.structured, e.version, e.created_at, e.updated_at,
+           f.cos_sim, f.fts_rank, f.trgm_sim, f.rrf
+    from fused f
+    join knowledge_entries e on e.id = f.id
+    order by f.rrf desc, e.updated_at desc
+    limit ${limit}
+  `,
+  );
+  return (rows as unknown as Parameters<typeof withRelevance>[0][]).map(
+    withRelevance,
+  );
 }
 
 export async function getKnowledgeEntry(id: string) {
@@ -259,6 +317,30 @@ export async function listEnvironments(): Promise<
     order by count desc, cloud
   `;
   return rows as unknown as { cloud: string; count: number }[];
+}
+
+/**
+ * The affected versions actually recorded, narrowed by product and component so
+ * the filter only ever offers values that can return a row.
+ */
+export async function listAffectedVersions(
+  opts: {
+    productId?: string;
+    componentId?: string;
+    componentTags?: string[];
+  } = {},
+): Promise<{ version: string; count: number }[]> {
+  const rows = await sql`
+    select affected_version as version, count(*)::int as count
+    from knowledge_entries
+    where affected_version is not null and affected_version <> ''
+      and status not in ('rejected', 'archived')
+      ${opts.productId ? sql`and product_id = ${opts.productId}` : sql``}
+      ${opts.componentId ? sql`and (component_id = ${opts.componentId} or tags && ${opts.componentTags ?? []})` : sql``}
+    group by affected_version
+    order by count desc, affected_version desc
+  `;
+  return rows as unknown as { version: string; count: number }[];
 }
 
 export async function updateKnowledgeEntry(
@@ -354,9 +436,12 @@ export async function updateKnowledgeEntry(
   const contentChanged =
     merged.issueSummary !== current.issue_summary ||
     merged.rootCause !== current.root_cause ||
+    merged.resolution !== current.resolution ||
     merged.resolutionPattern !== current.resolution_pattern ||
+    productArea !== current.product_area ||
     (merged.symptoms ?? []).join("\0") !==
       (current.symptoms ?? []).join("\0") ||
+    (merged.tags ?? []).join("\0") !== (current.tags ?? []).join("\0") ||
     (merged.signals ?? []).join("\0") !== (current.signals ?? []).join("\0");
 
   let vec: string | null = null;
@@ -369,9 +454,12 @@ export async function updateKnowledgeEntry(
         issueSummary: merged.issueSummary ?? undefined,
         symptoms: merged.symptoms,
         rootCause: merged.rootCause ?? undefined,
+        resolution: merged.resolution ?? undefined,
         signals: merged.signals,
+        tags: merged.tags,
       },
       patternDescription,
+      productArea,
     );
     vec = text ? toVectorLiteral(await embedPassage(text)) : null;
   }
@@ -409,30 +497,55 @@ export async function updateKnowledgeEntry(
   return row;
 }
 
-/** Compute and store embeddings for entries that don't have one yet. Returns the count embedded. */
-export async function backfillEmbeddings(): Promise<number> {
+/**
+ * Embed knowledge entries. `all: true` re-embeds every row — needed after a
+ * model change, since vectors from different models are not comparable and a
+ * half-migrated table ranks nonsense above matches.
+ */
+export async function backfillEmbeddings(
+  opts: { all?: boolean } = {},
+): Promise<number> {
   const rows = await sql`
-    select id, issue_summary, root_cause, resolution_pattern, symptoms, signals
-    from knowledge_entries where embedding is null
+    select id, issue_summary, root_cause, resolution, resolution_pattern,
+           product_area, symptoms, signals, tags
+    from knowledge_entries
+    ${opts.all ? sql`` : sql`where embedding is null`}
   `;
-  let n = 0;
+
+  const patternDescriptions = new Map<string, string>();
+  const texts: string[] = [];
+  const ids: string[] = [];
   for (const r of rows) {
-    const patternDescription = await resolvePatternDescription(
-      r.resolution_pattern ?? undefined,
-    );
+    const key = r.resolution_pattern ?? "";
+    if (!patternDescriptions.has(key))
+      patternDescriptions.set(
+        key,
+        await resolvePatternDescription(r.resolution_pattern ?? undefined),
+      );
     const text = buildEmbedText(
       {
         issueSummary: r.issue_summary,
         rootCause: r.root_cause,
+        resolution: r.resolution,
         symptoms: r.symptoms,
         signals: r.signals,
+        tags: r.tags,
       },
-      patternDescription,
+      patternDescriptions.get(key)!,
+      r.product_area,
     );
     if (!text) continue;
-    const vec = toVectorLiteral(await embedPassage(text));
-    await sql`update knowledge_entries set embedding = ${vec}::vector where id = ${r.id}`;
-    n++;
+    texts.push(text);
+    ids.push(r.id);
   }
-  return n;
+  if (!texts.length) return 0;
+
+  const vectors = await embedPassages(texts);
+  await sql`
+    update knowledge_entries e set embedding = v.vec::vector
+    from (select unnest(${ids}::uuid[]) as id,
+                 unnest(${vectors.map(toVectorLiteral)}::text[]) as vec) v
+    where e.id = v.id
+  `;
+  return ids.length;
 }

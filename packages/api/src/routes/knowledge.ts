@@ -8,6 +8,7 @@ import {
   getKnowledgeEntry,
   listKnowledgeEntries,
   listEnvironments,
+  listAffectedVersions,
   addFeedback,
   listFeedback,
   recordRun,
@@ -133,6 +134,18 @@ export const knowledge = new Hono()
   })
 
   .get("/environments", async (c) => c.json(await listEnvironments()))
+  // Feeds the library's affected-version filter, so it only ever offers values
+  // that can actually return a row for the chosen product/component.
+  .get("/versions", async (c) => {
+    const { componentId, componentTags } = await componentFilter(c, undefined);
+    return c.json(
+      await listAffectedVersions({
+        productId: c.req.query("product_id"),
+        componentId,
+        componentTags,
+      }),
+    );
+  })
   .get("/:id/feedback", async (c) =>
     c.json(await listFeedback(c.req.param("id"))),
   )

@@ -10,6 +10,9 @@ import {
   recordRun,
   resolveCurrentUserId,
   backfillEmbeddings,
+  backfillReferenceEmbeddings,
+  backfillCodeEmbeddings,
+  EMBEDDING_MODEL,
   env,
   sql,
   loadSettingsIntoEnv,
@@ -53,9 +56,26 @@ async function sync(
   console.log(`synced ${total} item(s) from ${sourceSlug}`);
 }
 
-async function embedBackfill() {
-  const n = await backfillEmbeddings();
-  console.log(`embedded ${n} entr${n === 1 ? "y" : "ies"}`);
+async function embedBackfill(all: boolean) {
+  console.log(
+    `${all ? "re-embedding everything" : "embedding missing vectors"} with ${EMBEDDING_MODEL}`,
+  );
+  const entries = await backfillEmbeddings({ all });
+  console.log(`  knowledge entries: ${entries}`);
+  const chunks = await backfillReferenceEmbeddings({ all });
+  console.log(`  reference chunks:  ${chunks}`);
+  const code = await backfillCodeEmbeddings({ all });
+  console.log(`  code chunks:       ${code}`);
+
+  const [left] = await sql`
+    select (select count(*) from knowledge_entries where embedding is null)
+             + (select count(*) from reference_doc_chunks where embedding is null)
+             + (select count(*) from code_chunks where embedding is null) as n
+  `;
+  if (Number(left.n) > 0)
+    console.log(
+      `  warning: ${left.n} row(s) still have no vector (empty text is skipped)`,
+    );
 }
 
 async function indexRepoCmd(slug: string) {
@@ -141,9 +161,9 @@ async function restore(opts: { file?: string; yes?: boolean }) {
 
 const USAGE = `usage:
   sync <source-slug> [--since=ISO] [--group=KEY]   pull & store work items
-  embed-backfill                                   embed entries missing a vector
+  embed-backfill                                   embed rows missing a vector
+  reembed                                          re-embed EVERYTHING (after a model change)
   index-repo <repo-slug>                           clone/fetch a linked repo and (re)index its code
-  migrate [--dir=PATH]                             apply db/migrations/*.sql (idempotent)
   backup [--out=DIR]                               pg_dump -Fc to DIR (default ./backups)
   restore --file=PATH [--yes]                      pg_restore (overwrites the DB)`;
 
@@ -171,7 +191,9 @@ async function main() {
       return sync(positional[0], { since: args.since, group: args.group });
     }
     case "embed-backfill":
-      return embedBackfill();
+      return embedBackfill(false);
+    case "reembed":
+      return embedBackfill(true);
     case "index-repo": {
       if (!positional[0]) throw new Error("index-repo needs a <repo-slug>");
       try {

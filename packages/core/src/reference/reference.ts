@@ -3,10 +3,20 @@ import { sql } from "../infra/db";
 import { chunkText } from "../search/chunk";
 import {
   embedPassages,
-  embedQuery,
+  embedQueryLiteral,
   toVectorLiteral,
 } from "../search/embeddings";
-import { notFound, conflict } from "../infra/errors";
+import {
+  CANDIDATES,
+  clampLimit,
+  ftsMatch,
+  ftsRank,
+  fusedCte,
+  withSearchSession,
+} from "../search/rank";
+import { SEM_FLOOR, withRelevance } from "../search/relevance";
+import { notFound, conflict, badInput } from "../infra/errors";
+import { resolveComponentStrict } from "../catalog/components";
 import { parseStructured } from "../knowledge/structured";
 
 export interface ReferenceDocInput {
@@ -24,6 +34,9 @@ export interface ReferenceDocInput {
   structured?: Record<string, unknown>;
   docVersion?: string;
   supersedes?: string;
+  /** Component slug/alias, resolved within productId. Optional: a general
+   *  product doc belongs to the product and to no single component. */
+  component?: string | null;
 }
 
 export interface ReferenceDocUpdate {
@@ -34,6 +47,7 @@ export interface ReferenceDocUpdate {
   source?: string | null;
   structured?: Record<string, unknown>;
   docVersion?: string | null;
+  component?: string | null;
   expectedVersion?: number;
 }
 
@@ -84,6 +98,23 @@ async function currentWikiDocId(
   return row?.id as string | undefined;
 }
 
+/**
+ * Component slugs resolve within a product, so naming one without a product is
+ * ambiguous rather than merely incomplete — reject it instead of guessing.
+ */
+async function resolveDocComponent(
+  productId: string | null,
+  component: string | null | undefined,
+): Promise<{ componentId: string | null; productArea: string | null }> {
+  if (!component) return { componentId: null, productArea: null };
+  if (!productId)
+    throw badInput(
+      "component requires a product (pass product_slug); a doc with no product cannot name one",
+    );
+  const resolved = await resolveComponentStrict(productId, component);
+  return { componentId: resolved.id, productArea: resolved.path };
+}
+
 export async function saveReferenceDoc(i: ReferenceDocInput) {
   const structured = parseStructured(i.structured);
   let predecessor:
@@ -106,17 +137,23 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
     if (!row) throw notFound(`Reference doc '${supersedes}' not found`);
     predecessor = row as typeof predecessor;
   }
+  const productId = i.productId ?? predecessor?.product_id ?? null;
+  const { componentId, productArea } = await resolveDocComponent(
+    productId,
+    i.component,
+  );
   const vectors = await chunkVectors(i.body);
   const { doc, chunks } = await sql.begin(async (tx) => {
     const [row] = await tx`
       insert into reference_docs
         (product_id, team_id, created_by, source, source_project_id, external_key,
-         title, body, tags, status, structured, doc_version)
+         component_id, product_area, title, body, tags, status, structured, doc_version)
       values
-        (${i.productId ?? predecessor?.product_id ?? null},
+        (${productId},
          ${i.teamId ?? predecessor?.team_id ?? null},
          ${i.createdById ?? null}, ${i.source ?? null},
          ${i.sourceProjectId ?? null}, ${i.externalKey ?? null},
+         ${componentId}, ${productArea},
          ${i.title}, ${i.body}, ${i.tags ?? predecessor?.tags ?? []},
          ${i.status ?? "approved"}, ${sql.json(structured as any)}, ${i.docVersion ?? null})
       returning id, status, version
@@ -140,8 +177,9 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
 
 export async function getReferenceDoc(id: string) {
   const [row] = await sql`
-    select id, product_id, team_id, source, title, body, tags, status, structured,
-           doc_version, superseded_by, version, created_at, updated_at
+    select id, product_id, team_id, component_id, product_area, source, title, body,
+           tags, status, structured, doc_version, superseded_by, version,
+           created_at, updated_at
     from reference_docs where id = ${id}
   `;
   if (!row) throw notFound(`Reference doc '${id}' not found`);
@@ -176,18 +214,24 @@ export async function listReferenceDocs(
     productId?: string;
     teamId?: string;
     tags?: string[];
+    componentId?: string;
+    componentTags?: string[];
+    docVersion?: string;
     limit?: number;
   } = {},
 ) {
   const limit = opts.limit ?? 50;
   return sql`
-    select id, product_id, team_id, source, title, tags, status, doc_version, superseded_by,
-           version, created_at, updated_at
+    select id, product_id, team_id, component_id, product_area, source, title, tags,
+           status, doc_version, superseded_by,
+           version, created_at, updated_at, left(body, 400) as snippet
     from reference_docs
     where 1=1
       ${opts.status ? sql`and status     = ${opts.status}` : sql``}
       ${opts.productId ? sql`and product_id = ${opts.productId}` : sql``}
       ${opts.teamId ? sql`and team_id    = ${opts.teamId}` : sql``}
+      ${opts.componentId ? sql`and (component_id = ${opts.componentId} or tags && ${opts.componentTags ?? []})` : sql``}
+      ${opts.docVersion ? sql`and doc_version = ${opts.docVersion}` : sql``}
       ${opts.tags && opts.tags.length ? sql`and tags && ${opts.tags}` : sql``}
     order by updated_at desc
     limit ${limit}
@@ -199,7 +243,8 @@ export async function updateReferenceDoc(
   patch: ReferenceDocUpdate,
 ) {
   const [current] = await sql`
-    select title, body, tags, status, source, structured, doc_version, version
+    select title, body, tags, status, source, structured, doc_version, version,
+           product_id, component_id, product_area
     from reference_docs where id = ${id}
   `;
   if (!current) throw notFound(`Reference doc '${id}' not found`);
@@ -224,6 +269,14 @@ export async function updateReferenceDoc(
         : current.structured,
     docVersion: "docVersion" in patch ? patch.docVersion : current.doc_version,
   };
+  // Passing component: null clears it; omitting it leaves the mapping alone.
+  const { componentId, productArea } =
+    "component" in patch
+      ? await resolveDocComponent(current.product_id, patch.component)
+      : {
+          componentId: current.component_id,
+          productArea: current.product_area,
+        };
   const bodyChanged = merged.body !== current.body;
   const vectors = bodyChanged ? await chunkVectors(merged.body) : undefined;
 
@@ -237,6 +290,8 @@ export async function updateReferenceDoc(
         source      = ${merged.source ?? null},
         structured  = ${sql.json((merged.structured ?? {}) as any)},
         doc_version = ${merged.docVersion ?? null},
+        component_id = ${componentId},
+        product_area = ${productArea},
         version     = version + 1
       where id = ${id} and version = ${current.version}
       returning id, status, version
@@ -260,36 +315,117 @@ export interface ReferenceSearchOptions {
    *  set — for agent consults, where global runbooks still apply. */
   includeUnscoped?: boolean;
   tags?: string[];
+  componentId?: string;
+  componentTags?: string[];
+  docVersion?: string;
   limit?: number;
+  /** Pre-embedded query, so a caller searching two surfaces embeds once. */
+  queryVector?: string;
 }
 
 export async function searchReferenceDocs(
   query: string,
   opts: ReferenceSearchOptions = {},
 ) {
-  const limit = opts.limit ?? 6;
+  const limit = clampLimit(opts.limit, 6);
   if (!query.trim()) return [];
-  const qvec = toVectorLiteral(await embedQuery(query));
-  return sql`
-    select * from (
-      select d.id, d.title, d.tags, d.product_id, d.team_id, d.status, d.doc_version, d.version, d.structured,
-             (array_agg(c.chunk_text order by (c.embedding <=> ${qvec}::vector) asc))[1] as snippet,
-             ts_rank(d.search_tsv, plainto_tsquery('simple', ${query})) as fts_rank,
-             similarity(d.search_text, ${query}) as trgm_sim,
-             max(coalesce(1 - (c.embedding <=> ${qvec}::vector), 0)) as cos_sim,
-             ts_rank(d.search_tsv, plainto_tsquery('simple', ${query}))
-               + similarity(d.search_text, ${query})
-               + max(coalesce(1 - (c.embedding <=> ${qvec}::vector), 0)) as score
-      from reference_docs d
-      left join reference_doc_chunks c on c.doc_id = d.id
-      where d.status = 'approved'
-        ${opts.productId ? (opts.includeUnscoped ? sql`and (d.product_id = ${opts.productId} or d.product_id is null)` : sql`and d.product_id = ${opts.productId}`) : sql``}
-        ${opts.teamId ? (opts.includeUnscoped ? sql`and (d.team_id = ${opts.teamId} or d.team_id is null)` : sql`and d.team_id = ${opts.teamId}`) : sql``}
-        ${opts.tags && opts.tags.length ? sql`and d.tags && ${opts.tags}` : sql``}
-      group by d.id
-    ) ranked
-    where score > 0.05
-    order by score desc
-    limit ${limit}
+  const qvec = opts.queryVector ?? (await embedQueryLiteral(query));
+
+  const filters = sql`
+    d.status = 'approved'
+    ${opts.productId ? (opts.includeUnscoped ? sql`and (d.product_id = ${opts.productId} or d.product_id is null)` : sql`and d.product_id = ${opts.productId}`) : sql``}
+    ${opts.teamId ? (opts.includeUnscoped ? sql`and (d.team_id = ${opts.teamId} or d.team_id is null)` : sql`and d.team_id = ${opts.teamId}`) : sql``}
+    ${opts.componentId ? sql`and (d.component_id = ${opts.componentId} or d.tags && ${opts.componentTags ?? []})` : sql``}
+    ${opts.docVersion ? sql`and d.doc_version = ${opts.docVersion}` : sql``}
+    ${opts.tags && opts.tags.length ? sql`and d.tags && ${opts.tags}` : sql``}
   `;
+
+  const rows = await withSearchSession(
+    (tx) => tx`
+    with
+    -- The vector leg is chunk-level and keyed back to the doc, so a long
+    -- runbook is judged by its best passage rather than its average.
+    chunk_hits as (
+      select c.doc_id, c.chunk_text,
+             1 - (c.embedding <=> ${qvec}::vector) as cos_sim
+      from reference_doc_chunks c
+      join reference_docs d on d.id = c.doc_id
+      where ${filters} and c.embedding is not null
+        and 1 - (c.embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
+      order by c.embedding <=> ${qvec}::vector
+      limit ${CANDIDATES}
+    ),
+    best_chunk as (
+      select distinct on (doc_id) doc_id as id, chunk_text as snippet, cos_sim
+      from chunk_hits
+      order by doc_id, cos_sim desc
+    ),
+    vec as (
+      select id, row_number() over (order by cos_sim desc) as rnk, cos_sim
+      from best_chunk
+    ),
+    lex as (
+      select d.id,
+             row_number() over (order by ${ftsRank(sql`d.search_tsv`, sql`d.search_tsv_en`, query)} desc) as rnk,
+             ${ftsRank(sql`d.search_tsv`, sql`d.search_tsv_en`, query)} as fts_rank
+      from reference_docs d
+      where ${filters} and ${ftsMatch(sql`d.search_tsv`, sql`d.search_tsv_en`, query)}
+      order by ${ftsRank(sql`d.search_tsv`, sql`d.search_tsv_en`, query)} desc
+      limit ${CANDIDATES}
+    ),
+    fuzzy as (
+      select d.id,
+             row_number() over (order by word_similarity(${query}, d.search_text) desc) as rnk,
+             word_similarity(${query}, d.search_text) as trgm_sim
+      from reference_docs d
+      where ${filters} and ${query} <% d.search_text
+      order by word_similarity(${query}, d.search_text) desc
+      limit ${CANDIDATES}
+    ),
+    ${fusedCte()}
+    select d.id, d.title, d.tags, d.product_id, d.team_id, d.component_id, d.product_area,
+           d.status, d.doc_version, d.version, d.structured, d.source, d.created_at, d.updated_at,
+           coalesce(b.snippet, left(d.body, 400)) as snippet,
+           f.cos_sim, f.fts_rank, f.trgm_sim, f.rrf
+    from fused f
+    join reference_docs d on d.id = f.id
+    left join best_chunk b on b.id = f.id
+    order by f.rrf desc, d.updated_at desc
+    limit ${limit}
+  `,
+  );
+  return (rows as unknown as Parameters<typeof withRelevance>[0][]).map(
+    withRelevance,
+  );
+}
+
+/**
+ * Re-embed reference chunks. `all: true` rebuilds every vector — required after
+ * a model change, since vectors from two models share no space.
+ */
+export async function backfillReferenceEmbeddings(
+  opts: { all?: boolean } = {},
+): Promise<number> {
+  const rows = await sql`
+    select id, chunk_text from reference_doc_chunks
+    ${opts.all ? sql`` : sql`where embedding is null`}
+    order by doc_id, ordinal
+  `;
+  if (!rows.length) return 0;
+
+  let n = 0;
+  for (let i = 0; i < rows.length; i += 64) {
+    const batch = rows.slice(i, i + 64);
+    const vectors = await embedPassages(
+      batch.map((r) => r.chunk_text as string),
+    );
+    await sql`
+      update reference_doc_chunks c set embedding = v.vec::vector
+      from (select unnest(${batch.map((r) => r.id as string)}::uuid[]) as id,
+                   unnest(${vectors.map(toVectorLiteral)}::text[]) as vec) v
+      where c.id = v.id
+    `;
+    n += batch.length;
+  }
+  return n;
 }

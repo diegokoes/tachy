@@ -71,6 +71,7 @@ import {
   listReferenceDocs,
   updateReferenceDoc,
   searchReferenceDocs,
+  embedQueryLiteral,
   referenceDocLineage,
   listSourceConnections,
   addSourceConnection,
@@ -169,6 +170,29 @@ function withCompaction(item: RawWorkItem): Record<string, unknown> {
 
 function outScrubbed(obj: unknown) {
   return out(globalRedactionEnabled() ? scrubDeep(obj, new TokenMap()) : obj);
+}
+
+/**
+ * Raw cos_sim / fts_rank / trgm_sim / rrf are uninterpretable without knowing
+ * each signal's scale, and they cost context on every row. `relevance` (0-1) and
+ * `grade` carry the same information in a form the model can act on.
+ */
+function forAgent<T extends Record<string, unknown>>(rows: T[]) {
+  return rows.map(({ cos_sim, fts_rank, trgm_sim, rrf, ...rest }) => rest);
+}
+
+/**
+ * An empty result is an answer. Saying so explicitly stops the model filling the
+ * silence with a plausible-sounding recollection.
+ */
+const NO_MATCHES =
+  "no entries cleared the relevance floor for this query — the archive has nothing on this. Say so rather than inferring an answer.";
+
+function searchOut(rows: Record<string, unknown>[], kind: string) {
+  const trimmed = forAgent(rows);
+  return outScrubbed(
+    trimmed.length ? trimmed : { results: [], note: `${kind}: ${NO_MATCHES}` },
+  );
 }
 
 const MAX_LINKED_ITEMS = 5;
@@ -619,7 +643,7 @@ tool(
       fixedVersion: fixed_version,
       limit,
     });
-    return outScrubbed(rows);
+    return searchOut(rows, "search_knowledge");
   },
 );
 
@@ -644,13 +668,30 @@ tool(
       mode: "consult",
     });
 
-    const firstIncoming =
-      raw.messages.find((m) => m.direction === "incoming")?.bodyText ?? "";
+    // The embedding window is 512 tokens; a whole first message overruns it and
+    // the tail is dropped silently. The lead carries the symptom anyway.
+    const firstIncoming = (
+      raw.messages.find((m) => m.direction === "incoming")?.bodyText ?? ""
+    ).slice(0, 1000);
     const query = [raw.title, firstIncoming].filter(Boolean).join(" ");
     const productId = item.productId ?? undefined;
+    // One embedding, two searches — the same string was being embedded twice.
+    const queryVector = query.trim()
+      ? await embedQueryLiteral(query)
+      : undefined;
     const [similar, reference] = await Promise.all([
-      searchKnowledge(query, { productId, limit, includeUnscoped: true }),
-      searchReferenceDocs(query, { productId, limit, includeUnscoped: true }),
+      searchKnowledge(query, {
+        productId,
+        limit,
+        includeUnscoped: true,
+        queryVector,
+      }),
+      searchReferenceDocs(query, {
+        productId,
+        limit,
+        includeUnscoped: true,
+        queryVector,
+      }),
     ]);
     const customerName = await getCustomerName(item.customerId);
 
@@ -664,8 +705,15 @@ tool(
     return out({
       work_item: workItem,
       ...compaction,
-      similar: redact ? scrubDeep(similar, retrievalMap) : similar,
-      reference: redact ? scrubDeep(reference, retrievalMap) : reference,
+      similar: redact
+        ? scrubDeep(forAgent(similar), retrievalMap)
+        : forAgent(similar),
+      reference: redact
+        ? scrubDeep(forAgent(reference), retrievalMap)
+        : forAgent(reference),
+      ...(similar.length || reference.length
+        ? {}
+        : { retrieval_note: NO_MATCHES }),
       customer_id: item.customerId,
       customer_name: customerName,
       observed_version: item.observedVersion,
@@ -1184,13 +1232,14 @@ tool(
   "save_reference_doc",
   {
     description:
-      "Persist an APPROVED reference doc — freeform project context (docs, runbooks, architecture notes) that doesn't fit the issue→root_cause→resolution shape of a knowledge entry. The body is chunked and embedded so it surfaces in consult-mode search. Provide EITHER body (inline text) OR body_path (a local file — e.g. a large PDF — extracted server-side so the full text is saved without echoing it). Pass doc_version when the source document carries a version label; pass supersedes with the id of the doc this replaces — the predecessor is archived and linked automatically, and search returns only the latest version. Call ONLY after the user approved the content.",
+      "Persist an APPROVED reference doc — freeform project context (docs, runbooks, architecture notes) that doesn't fit the issue→root_cause→resolution shape of a knowledge entry. The body is chunked and embedded so it surfaces in consult-mode search. Provide EITHER body (inline text) OR body_path (a local file — e.g. a large PDF — extracted server-side so the full text is saved without echoing it). Scope it with product_slug, and add component when the doc is about one part of that product (leave it off for general product docs). Pass doc_version when the source document carries a version label; pass supersedes with the id of the doc this replaces — the predecessor is archived and linked automatically, and search returns only the latest version. Call ONLY after the user approved the content.",
     inputSchema: {
       title: z.string(),
       body: z.string().optional(),
       body_path: z.string().optional(),
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
+      component: z.string().optional(),
       source: z.string().optional(),
       tags: z.array(z.string()).optional(),
       status: referenceStatusSchema.optional(),
@@ -1240,6 +1289,7 @@ tool(
       structured: a.structured,
       docVersion: a.doc_version,
       supersedes: a.supersedes,
+      component: a.component,
     });
     return out({
       saved: true,
@@ -1261,45 +1311,80 @@ tool(
       query: z.string(),
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
+      component: z.string().optional(),
+      doc_version: z.string().optional(),
       tags: z.array(z.string()).optional(),
       limit: z.number().optional(),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ query, product_slug, team_slug, tags, limit }) =>
-    outScrubbed(
+  async ({
+    query,
+    product_slug,
+    team_slug,
+    component,
+    doc_version,
+    tags,
+    limit,
+  }) => {
+    const { productId, teamId } = await resolveScopeIds({
+      product_slug,
+      team_slug,
+    });
+    return searchOut(
       await searchReferenceDocs(query, {
-        ...(await resolveScopeIds({ product_slug, team_slug })),
+        productId,
+        teamId,
         includeUnscoped: true,
-        tags: tags && tags.length ? tags : undefined,
+        ...(await componentIntoFilter(productId, component, tags)),
+        docVersion: doc_version,
         limit,
       }),
-    ),
+      "search_reference",
+    );
+  },
 );
 
 tool(
   "list_reference_docs",
   {
     description:
-      "List reference docs (newest first), optionally filtered by status, product_slug / team_slug, or tags. Bodies are omitted; use get_reference_doc for the full text. Rows carry doc_version and superseded_by — archived rows with superseded_by set are old versions of a newer doc.",
+      "List reference docs (newest first), optionally filtered by status, product_slug / team_slug, component, doc_version or tags. Bodies are omitted; use get_reference_doc for the full text. Rows carry doc_version and superseded_by — archived rows with superseded_by set are old versions of a newer doc.",
     inputSchema: {
       status: referenceStatusSchema.optional(),
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
+      component: z.string().optional(),
+      doc_version: z.string().optional(),
       tags: z.array(z.string()).optional(),
       limit: z.number().optional(),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ status, product_slug, team_slug, tags, limit }) =>
-    outScrubbed(
+  async ({
+    status,
+    product_slug,
+    team_slug,
+    component,
+    doc_version,
+    tags,
+    limit,
+  }) => {
+    const { productId, teamId } = await resolveScopeIds({
+      product_slug,
+      team_slug,
+    });
+    return outScrubbed(
       await listReferenceDocs({
         status,
-        ...(await resolveScopeIds({ product_slug, team_slug })),
-        tags: tags && tags.length ? tags : undefined,
+        productId,
+        teamId,
+        ...(await componentIntoFilter(productId, component, tags)),
+        docVersion: doc_version,
         limit,
       }),
-    ),
+    );
+  },
 );
 
 tool(
@@ -1542,7 +1627,9 @@ tool(
           root_path: z.string().optional(),
         })
         .optional()
-        .describe("The project's wiki, from list_ado_wikis. Knowledge projects only."),
+        .describe(
+          "The project's wiki, from list_ado_wikis. Knowledge projects only.",
+        ),
       notes: z.string().optional(),
     },
   },
@@ -2004,18 +2091,20 @@ tool(
       mode: "code",
       meta: { query, repo: repo ?? null, hits: rows.length },
     });
-    return outScrubbed(
+    return searchOut(
       rows.map((r: any) => ({
         repo: r.repo_slug,
         component: r.component_slug,
         path: r.path,
         lines: `${r.start_line}-${r.end_line}`,
         lang: r.lang,
-        score: Number(r.score),
+        relevance: r.relevance,
+        grade: r.grade,
         snippet: r.snippet,
         indexed_commit: r.indexed_commit,
         indexed_days_ago: r.indexed_days_ago,
       })),
+      "search_code",
     );
   },
 );
