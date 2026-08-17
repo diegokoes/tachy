@@ -100,21 +100,6 @@ async function indexRepoCmd(slug: string) {
   );
 }
 
-async function migrate(opts: { dir?: string }) {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const dir = opts.dir ?? join(here, "..", "..", "..", "db", "migrations");
-  if (!existsSync(dir)) throw new Error(`no migrations directory at ${dir}`);
-  const files = readdirSync(dir)
-    .filter((f) => f.endsWith(".sql"))
-    .sort();
-  for (const f of files) {
-    const content = readFileSync(join(dir, f), "utf8");
-    await sql.begin((tx) => tx.unsafe(content));
-    console.log(`applied ${f}`);
-  }
-  if (files.length === 0) console.log("no migrations found");
-}
-
 function runPg(bin: string, args: string[]) {
   const res = spawnSync(bin, args, { stdio: "inherit" });
   if (res.error && (res.error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -203,8 +188,6 @@ async function main() {
       }
       return indexRepoCmd(positional[0]);
     }
-    case "migrate":
-      return migrate({ dir: args.dir });
     case "backup":
       return backup({ out: args.out });
     case "restore":
