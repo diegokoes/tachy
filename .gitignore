@@ -4,7 +4,7 @@ dist/
 .env
 .vscode/mcp.json
 .DS_Store
-.fastembed-cache/
+.model-cache/
 local_cache/
 backups/
 data/repos/

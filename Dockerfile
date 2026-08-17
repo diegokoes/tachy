@@ -34,9 +34,9 @@ COPY . .
 # Build the Svelte SPA to packages/web/dist so the API serves it (single origin).
 RUN npm run web:build
 
-# Pre-download the fastembed model at build time so a freshly pulled container
+# Pre-download the embedding model at build time so a freshly pulled container
 # doesn't need network access (or a multi-second stall) on its first embed.
-ENV FASTEMBED_CACHE=/app/.fastembed-cache
+ENV TACHY_MODEL_CACHE=/app/.model-cache
 RUN npx tsx scripts/warmup-embeddings.ts
 
 # Linked-repo clones for code search live here — mount a volume to keep them
