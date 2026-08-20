@@ -11,7 +11,11 @@ import {
   DISALLOWED_BUILTINS,
   MCP_SERVER,
 } from "./tools";
-import { effectiveModel, type AgentConfig } from "./backend";
+import {
+  effectiveModel,
+  type AgentConfig,
+  type AgentErrorKind,
+} from "./backend";
 import { TurnBase, type ApprovalGate } from "./turn";
 
 interface ContentBlock {
@@ -20,6 +24,76 @@ interface ContentBlock {
   name?: string;
   input?: unknown;
   id?: string;
+}
+
+/**
+ * Credential sources Claude Code consults ahead of CLAUDE_CODE_OAUTH_TOKEN.
+ * Any one of these left in the inherited environment silently outranks the
+ * caller's own credential and bills the wrong account.
+ */
+const OUTRANKING_CREDENTIAL_VARS = [
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_AUTH_TOKEN",
+  "CLAUDE_CODE_OAUTH_TOKEN",
+  "ANTHROPIC_PROFILE",
+  "ANTHROPIC_FEDERATION_RULE_ID",
+  "ANTHROPIC_ORGANIZATION_ID",
+  "CLAUDE_CODE_USE_BEDROCK",
+  "CLAUDE_CODE_USE_VERTEX",
+  "CLAUDE_CODE_USE_FOUNDRY",
+];
+
+/**
+ * Turn a Claude Code failure string into something a chat user can act on.
+ * These three arrive as ordinary errors and are otherwise indistinguishable
+ * from a crash, though only one of them means anything is actually broken.
+ */
+export function explainFailure(raw: string): {
+  message: string;
+  kind: AgentErrorKind;
+} {
+  const resets = /resets\s+([^\n·]+)/i.exec(raw)?.[1]?.trim();
+  if (/session limit/i.test(raw))
+    return {
+      kind: "rate_limit",
+      message: `Your Claude subscription has hit its usage limit${
+        resets ? `, which resets ${resets}` : ""
+      }. The turn was not lost — send it again once the limit resets.`,
+    };
+  if (/not logged in|run \/login/i.test(raw))
+    return {
+      kind: "no_credential",
+      message:
+        "No Claude credential is set for your account. Add one under Settings › Keys.",
+    };
+  if (/invalid api key|fix external api key/i.test(raw))
+    return {
+      kind: "bad_credential",
+      message:
+        "Your saved Claude credential was rejected. It may be expired, revoked, or saved in the wrong field — re-add it under Settings › Keys.",
+    };
+  return { kind: "other", message: raw };
+}
+
+/**
+ * Environment for the spawned `claude` process. The SDK replaces the child
+ * environment wholesale, so the inherited one is copied for PATH and friends,
+ * then every credential source is stripped before the caller's own is set.
+ */
+export function claudeEnv(cfg: AgentConfig): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env))
+    if (typeof v === "string") env[k] = v;
+  for (const k of OUTRANKING_CREDENTIAL_VARS) delete env[k];
+
+  if (cfg.agentAuth?.kind === "anthropic_api_key")
+    env.ANTHROPIC_API_KEY = cfg.agentAuth.value;
+  else if (cfg.agentAuth?.kind === "anthropic_oauth")
+    env.CLAUDE_CODE_OAUTH_TOKEN = cfg.agentAuth.value;
+
+  if (cfg.configDir) env.CLAUDE_CONFIG_DIR = cfg.configDir;
+  env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = "1";
+  return env;
 }
 
 export async function claudePermission(
@@ -104,9 +178,7 @@ export class ClaudeTurn extends TurnBase {
       },
       includePartialMessages: false,
       ...(opts.resume ? { resume: opts.resume } : {}),
-      ...(cfg.agentKey
-        ? { env: { ...process.env, ANTHROPIC_API_KEY: cfg.agentKey } }
-        : {}),
+      env: claudeEnv(cfg),
     };
 
     const pending = new Map<string, string>();
@@ -166,10 +238,8 @@ export class ClaudeTurn extends TurnBase {
         }
       }
     } catch (e) {
-      this.q.push({
-        type: "error",
-        message: e instanceof Error ? e.message : String(e),
-      });
+      const raw = e instanceof Error ? e.message : String(e);
+      this.q.push({ type: "error", ...explainFailure(raw) });
     } finally {
       this.finish();
     }

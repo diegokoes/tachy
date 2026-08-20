@@ -1,13 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   classify,
   classifyCall,
   qualify,
   claudePermission,
+  claudeEnv,
   copilotPermission,
   effectiveModel,
+  explainFailure,
   READ_TOOLS,
   WRITE_TOOLS,
+  type AgentConfig,
   type Decision,
 } from "../packages/agent/src/index";
 import { AsyncQueue } from "../packages/agent/src/queue";
@@ -294,5 +297,112 @@ describe("TurnBase approval lifecycle", () => {
     t.abort();
     expect(t.aborted).toBe(true);
     expect((await pending).approve).toBe(false);
+  });
+});
+
+describe("claude subprocess environment (per-user credential isolation)", () => {
+  const base: AgentConfig = {
+    provider: "claude",
+    mcpCommand: "node",
+    mcpArgs: [],
+    mcpEnv: {},
+    cwd: "/tmp",
+    systemPromptAppend: "",
+  };
+
+  const HOST_VARS = [
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "ANTHROPIC_PROFILE",
+    "CLAUDE_CODE_USE_BEDROCK",
+  ];
+  const saved = new Map<string, string | undefined>();
+  const setHost = (k: string, v: string) => {
+    if (!saved.has(k)) saved.set(k, process.env[k]);
+    process.env[k] = v;
+  };
+
+  afterEach(() => {
+    for (const [k, v] of saved)
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    saved.clear();
+  });
+
+  it("sends a subscription token as CLAUDE_CODE_OAUTH_TOKEN", () => {
+    const env = claudeEnv({
+      ...base,
+      agentAuth: { kind: "anthropic_oauth", value: "oat-abc" },
+    });
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe("oat-abc");
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
+  it("sends an API key as ANTHROPIC_API_KEY", () => {
+    const env = claudeEnv({
+      ...base,
+      agentAuth: { kind: "anthropic_api_key", value: "sk-ant-api03-x" },
+    });
+    expect(env.ANTHROPIC_API_KEY).toBe("sk-ant-api03-x");
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+  });
+
+  // The regression that matters: Claude Code ranks every one of these above
+  // CLAUDE_CODE_OAUTH_TOKEN, so a leftover host credential would silently
+  // answer the turn on the wrong account.
+  it("strips host credentials that would outrank the caller's own", () => {
+    for (const k of HOST_VARS) setHost(k, "host-value");
+    const env = claudeEnv({
+      ...base,
+      agentAuth: { kind: "anthropic_oauth", value: "oat-abc" },
+    });
+    expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe("oat-abc");
+    for (const k of HOST_VARS.filter((k) => k !== "CLAUDE_CODE_OAUTH_TOKEN"))
+      expect(env[k]).toBeUndefined();
+  });
+
+  it("strips host credentials even when the caller has none", () => {
+    setHost("ANTHROPIC_API_KEY", "host-key");
+    const env = claudeEnv(base);
+    expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
+  it("keeps inherited non-credential vars such as PATH", () => {
+    expect(claudeEnv(base).PATH).toBe(process.env.PATH);
+  });
+
+  it("isolates config dir and auto memory", () => {
+    const env = claudeEnv({ ...base, configDir: "/state/users/u1" });
+    expect(env.CLAUDE_CONFIG_DIR).toBe("/state/users/u1");
+    expect(env.CLAUDE_CODE_DISABLE_AUTO_MEMORY).toBe("1");
+  });
+});
+
+describe("failure explanations", () => {
+  it("reads a session limit as retryable, with its reset time", () => {
+    const out = explainFailure(
+      "Claude Code returned an error result: You've hit your session limit · resets 12:20am (Europe/Madrid)",
+    );
+    expect(out.kind).toBe("rate_limit");
+    expect(out.message).toContain("12:20am");
+  });
+
+  it("points a missing credential at settings", () => {
+    const out = explainFailure("Not logged in · Please run /login");
+    expect(out.kind).toBe("no_credential");
+    expect(out.message).toMatch(/Settings/);
+  });
+
+  it("distinguishes a rejected credential from a missing one", () => {
+    const out = explainFailure("Invalid API key · Fix external API key");
+    expect(out.kind).toBe("bad_credential");
+  });
+
+  it("passes anything else through unchanged", () => {
+    expect(explainFailure("ECONNRESET")).toEqual({
+      kind: "other",
+      message: "ECONNRESET",
+    });
   });
 });

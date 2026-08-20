@@ -3,6 +3,16 @@ export type AgentProvider = (typeof AGENT_PROVIDERS)[number];
 
 export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
 
+/** Why a turn failed, when the cause is known and the user can act on it. */
+export type AgentErrorKind =
+  "rate_limit" | "no_credential" | "bad_credential" | "other";
+
+/** Resolved credential for a turn. Mirrors the shape `@tachy/core` produces. */
+export interface AgentAuth {
+  kind: "anthropic_api_key" | "anthropic_oauth" | "copilot_token";
+  value: string;
+}
+
 export interface AgentConfig {
   provider: AgentProvider;
 
@@ -19,9 +29,16 @@ export interface AgentConfig {
 
   systemPromptAppend: string;
 
-  /** Resolved agent credential (Anthropic API key or Copilot GitHub token).
-   *  When unset, the backend falls back to the process env / CLI login. */
-  agentKey?: string;
+  /**
+   * Per-user Claude Code state directory (credentials, session transcripts).
+   * Must be stable for a user across turns: a fresh directory mints a new
+   * machine identity and orphans the transcripts that `resume` needs.
+   */
+  configDir?: string;
+
+  /** Resolved agent credential. When unset, the backend falls back to the
+   *  process env / CLI login. */
+  agentAuth?: AgentAuth;
 
   /**
    * Base tool names whose write path this turn may take without an approval
@@ -58,7 +75,7 @@ export type AgentEvent =
       sessionId: string;
       usage?: TurnUsage;
     }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string; kind?: AgentErrorKind };
 
 export interface Decision {
   approve: boolean;

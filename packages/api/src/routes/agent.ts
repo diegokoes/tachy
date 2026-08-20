@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, basename } from "node:path";
-import { tmpdir } from "node:os";
+import { tmpdir, homedir } from "node:os";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { zValidator } from "@hono/zod-validator";
@@ -19,9 +19,9 @@ import {
   userSoleTeamId,
   effectivePrefs,
   resolveCredential,
+  resolveAgentAuth,
   secretsEnabled,
   listSourceConnections,
-  AGENT_CREDENTIALS,
   sourceCredentialName,
   getArtifact,
   listVisibleArtifacts,
@@ -62,20 +62,44 @@ const uploadDir =
   process.env.TACHY_UPLOAD_DIR || join(tmpdir(), "tachy-uploads");
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
+/**
+ * The review box invariant lives in prompt.md, where the tool descriptions
+ * agree with it. This only names the surface it renders on — anything more
+ * would restate instructions the model already has, on every turn.
+ */
 const UI_APPROVAL_NOTE = `
 
-## Web chat approval UI (overrides "ask before saving" above)
+## Web chat
 
-In this chat, every write tool call (save_knowledge_entry, update_knowledge_entry, save_reference_doc, add_component, post_private_note, …) is intercepted by a review box: the user sees your exact tool input as editable JSON and must Approve or Deny before it runs. That review box IS the user approval the rules require.
+The review box named in the invariants renders here as an editable form, one per write tool call. The user edits the fields before approving, and the tool runs with their edits.`;
 
-- Summarize the proposed entry briefly, then CALL the tool right away — do not ask "shall I save?" in prose first.
-- The user can edit the JSON in the box before approving; the tool runs with their edited input.
-- A denied call is the user declining, not an error — ask what they want changed instead of retrying.`;
-
+/**
+ * Byte-identical on every turn, which is what lets prompt caching amortise it.
+ * Never interpolate per-turn state (time, user, session) in here: a varying
+ * prefix invalidates the cache and multiplies what each turn consumes.
+ *
+ * Deliberately not the root CLAUDE.md: that file also loads into every Claude
+ * Code session opened on this repo, and contributors and the agent want
+ * different text. Anything belonging to a single tool belongs in that tool's
+ * MCP description instead, where it ships with the tool rather than every turn.
+ */
 async function systemPrompt(): Promise<string> {
-  const path = join(process.cwd(), "CLAUDE.md");
+  const path = join(process.cwd(), "packages/agent/prompt.md");
   const base = existsSync(path) ? await readFile(path, "utf8") : "";
   return base + UI_APPROVAL_NOTE;
+}
+
+/**
+ * Per-user Claude Code state directory. Without it every turn falls back to
+ * whatever login the server itself holds, so users share one identity and one
+ * pool of session transcripts. Created once and reused: a fresh directory
+ * mints a new machine identity and orphans the transcripts `resume` needs.
+ */
+async function userConfigDir(userId: string | undefined): Promise<string> {
+  const home = process.env.TACHY_AGENT_HOME || join(homedir(), ".claude");
+  const dir = join(home, "users", userId ?? "_default");
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  return dir;
 }
 
 export async function mcpConfig(
@@ -120,7 +144,8 @@ export async function mcpConfig(
         agent_effort: settings.agent_effort,
       };
   const provider = prefs.agent_provider.value;
-  const agentKey = await resolveCredential(AGENT_CREDENTIALS[provider], ctx);
+  const agentAuth = await resolveAgentAuth(provider, ctx);
+  const configDir = await userConfigDir(user?.id);
 
   const allowedModels = settings.allowed_models.value;
   return {
@@ -129,9 +154,10 @@ export async function mcpConfig(
     mcpArgs: args,
     mcpEnv,
     cwd: process.cwd(),
+    configDir,
     model: prefs.agent_model.value,
     effort: prefs.agent_effort.value as AgentConfig["effort"],
-    ...(agentKey ? { agentKey } : {}),
+    ...(agentAuth ? { agentAuth } : {}),
     ...(allowedModels.length ? { allowedModels } : {}),
   };
 }
