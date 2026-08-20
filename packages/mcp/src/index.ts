@@ -29,6 +29,12 @@ import {
   listCustomers,
   addCustomer,
   getCustomerIdBySlug,
+  getCustomerProfile,
+  setCustomerFact,
+  deleteCustomerFact,
+  listCustomerFactKinds,
+  linkCustomerComponent,
+  unlinkCustomerComponent,
   setWorkItemCustomer,
   setObservedVersion,
   getCustomerName,
@@ -82,6 +88,7 @@ import {
   sourceProjectScope,
   resolveProjectContext,
   resolveProjectContextStrict,
+  matchWiki,
   recordAdoRefs,
   addWorkItemLink,
   resolveComponentStrict,
@@ -118,6 +125,17 @@ registerSource("github", createGithubSource);
 registerSource("azure-devops", createAzureDevopsSource);
 
 const server = new McpServer({ name: "tachy", version: "0.1.0" });
+
+/**
+ * The single most common tool-call mistake is passing the source *type* here.
+ * Every tool that takes one reuses this so the correction travels with the field
+ * rather than living in the system prompt.
+ */
+const sourceSlug = z
+  .string()
+  .describe(
+    "Source CONNECTION SLUG from list_source_connections (e.g. 'osapiens-freshdesk'), never the source type ('freshdesk', 'azure-devops'). Call list_source_connections first if you do not have it.",
+  );
 
 function out(obj: unknown) {
   return {
@@ -164,9 +182,68 @@ function withCompaction(item: RawWorkItem): Record<string, unknown> {
     item: forLlm,
     transcript: turns,
     compaction: { ...compaction, ...summarizeCompaction(compacted) },
-    next: "messages were replaced by transcript: a de-duplicated, attributed turn list with quoted chains, signatures and repeats removed. The wording is verbatim — never re-summarise it. Turns with kind 'quoted' come from quoted history and may predate the ticket.",
+    next: "messages were replaced by transcript: a de-duplicated, attributed turn list with quoted chains, signatures, banners, automated mail and repeats removed. The wording is verbatim — never re-summarise or re-order it. Each turn has speaker, at, kind (reply / internal_note / quoted) and optional attachments; '[image]' marks an inline image, and a turn with empty text but attachments carried only a file. Turns with kind 'quoted' were recovered from quoted history and may predate the ticket — that is mail existing nowhere else in the system, worth reading first. This is a read-path transform and writes nothing to the ticket.",
   };
 }
+
+/**
+ * The customer's own install, inline on the turn that fetched their ticket.
+ * Their version and addons decide whether a general answer even applies, and the
+ * model will not think to go and ask — so it arrives unasked, kept short.
+ */
+async function withCustomerProfile(
+  customerId: string | null | undefined,
+): Promise<Record<string, unknown>> {
+  if (!customerId) return {};
+  const profile = await getCustomerProfile(customerId);
+  if (!profile) return {};
+  const has =
+    profile.facts.length ||
+    profile.components.length ||
+    profile.repos.length ||
+    profile.projects.length;
+  if (!has) return {};
+  return {
+    customer_profile: {
+      slug: profile.slug,
+      ...(profile.notes ? { notes: profile.notes } : {}),
+      ...(profile.facts.length
+        ? {
+            specifics: profile.facts.map((f) =>
+              [f.kind, f.label, f.value].filter(Boolean).join(": "),
+            ),
+          }
+        : {}),
+      ...(profile.components.length
+        ? { components: profile.components.map((c) => c.slug) }
+        : {}),
+      ...(profile.repos.length
+        ? { repos: profile.repos.map((r) => r.slug) }
+        : {}),
+      ...(profile.projects.length
+        ? { projects: profile.projects.map((p) => p.external_key) }
+        : {}),
+    },
+    customer_profile_note:
+      "This is THIS customer's install, not the product in general. Check their version against an entry's affected_version/fixed_version before repeating its advice, and search their own repos for addon behaviour. Anything you learn here that is true only of them belongs on their profile (set_customer_fact), not in a knowledge entry.",
+  };
+}
+
+/**
+ * An unresolved customer is invisible otherwise — the field is simply null, while
+ * the ticket usually names the company in a domain or a signature.
+ */
+const unresolvedCustomer = (
+  customerId: string | null | undefined,
+  ambiguity?: string,
+) =>
+  customerId
+    ? {}
+    : {
+        customer_note: ambiguity
+          ? `customer_id is null — ${ambiguity}. Read the ticket for which of them it actually concerns, then set_work_item_customer. Do not guess from the sender's domain.`
+          : "customer_id is null — no known customer matched. The sender's own company is often NOT the customer: partners and distributors raise tickets on a customer's behalf, so read who the ticket is about rather than who sent it. If it identifies one, check list_customers, add_customer if it is missing (put the partner's domain in email_domains on the customer they front for), then set_work_item_customer. Propose it in the same review step rather than asking separately.",
+      };
 
 function outScrubbed(obj: unknown) {
   return out(globalRedactionEnabled() ? scrubDeep(obj, new TokenMap()) : obj);
@@ -178,7 +255,22 @@ function outScrubbed(obj: unknown) {
  * `grade` carry the same information in a form the model can act on.
  */
 function forAgent<T extends Record<string, unknown>>(rows: T[]) {
-  return rows.map(({ cos_sim, fts_rank, trgm_sim, rrf, ...rest }) => rest);
+  return rows.map(
+    ({
+      cos_sim,
+      fts_rank,
+      trgm_sim,
+      rrf,
+      customer_id,
+      customer_slug,
+      ...rest
+    }) => ({
+      ...rest,
+      // One spelling of the customer across all three search surfaces, and the
+      // slug rather than the uuid — the uuid is not something to cite or filter by.
+      ...(customer_slug ? { customer: customer_slug } : {}),
+    }),
+  );
 }
 
 /**
@@ -188,10 +280,26 @@ function forAgent<T extends Record<string, unknown>>(rows: T[]) {
 const NO_MATCHES =
   "no entries cleared the relevance floor for this query — the archive has nothing on this. Say so rather than inferring an answer.";
 
+/** Calibration for the scores every search returns; shared so the three stay in step. */
+const GRADE_NOTE =
+  "Each hit carries relevance (0-1) and grade (strong / good / weak), calibrated against the embedding model's measured distribution: a weak hit is context, not an answer, and saying so beats presenting it as a prior case. Re-running the same search with reworded queries to force a hit is not research.";
+
+/**
+ * Fires whenever a result set is not uniformly general. Said once per call, on
+ * the results themselves, because attribution is only wrong at the moment the
+ * answer is written — and a mixed list is exactly where one install's fix gets
+ * retold as how the product behaves.
+ */
+const CUSTOMER_NOTE =
+  "Some hits carry a `customer`: that material came from one customer's install and must be attributed to them by name — never restated as general product behaviour. Hits with customer null are general. Where the two disagree, say so rather than merging them.";
+
 function searchOut(rows: Record<string, unknown>[], kind: string) {
   const trimmed = forAgent(rows);
+  if (!trimmed.length)
+    return outScrubbed({ results: [], note: `${kind}: ${NO_MATCHES}` });
+  const scoped = rows.some((r) => r.customer_slug ?? r.customer);
   return outScrubbed(
-    trimmed.length ? trimmed : { results: [], note: `${kind}: ${NO_MATCHES}` },
+    scoped ? { results: trimmed, note: CUSTOMER_NOTE } : trimmed,
   );
 }
 
@@ -484,8 +592,11 @@ tool(
   "fetch_work_item",
   {
     description:
-      "Fetch a work item (ticket/issue) from a source, store it, and return its normalized metadata + cleaned messages for analysis.",
-    inputSchema: { source: z.string(), external_id: z.string() },
+      "Fetch a work item (ticket/issue) from a source, store it, and return its normalized metadata + cleaned messages for analysis. Read the messages chronologically. linked_items holds the Azure DevOps items this ticket references, already fetched — they usually carry the engineering side of the story, so treat them as part of the ticket; never re-fetch them and never fetch relations of relations. component is the area→component match when the project has a rule for it. A long, repetitive ticket comes back as transcript + compaction instead of item.messages.",
+    inputSchema: {
+      source: sourceSlug,
+      external_id: z.string(),
+    },
   },
   async ({ source, external_id }) => {
     const { conn, source: src } = await resolveSource(source);
@@ -508,6 +619,8 @@ tool(
       team_id: item.teamId,
       customer_id: item.customerId,
       customer_name: customerName,
+      ...unresolvedCustomer(item.customerId, item.customerAmbiguity),
+      ...(await withCustomerProfile(item.customerId)),
       observed_version: item.observedVersion,
       ...(item.componentSlug ? { component: item.componentSlug } : {}),
       ...withCompaction(forLlm),
@@ -522,7 +635,7 @@ tool(
     description:
       "Compact a long ticket into a de-duplicated, attributed turn list ('X: ...' script) and post it back as a private note. Deterministic text processing, no summarising: it strips quoted reply chains, signatures, legal footers, security banners and automated reminders, drops repeated blocks, and recovers content that only ever existed inside a quote (attributed to its real sender and date). post_note (default true) writes the transcript to the ticket where it is readable in full; the reply here is only the stats, because a whole transcript does not belong in the conversation. Ask for return_turns only when you must reason over the text itself — it is truncated to fit, so the note remains the complete copy.",
     inputSchema: {
-      source: z.string(),
+      source: sourceSlug,
       external_id: z.string(),
       post_note: z.boolean().optional(),
       replace_previous: z.boolean().optional(),
@@ -599,14 +712,19 @@ tool(
 tool(
   "search_knowledge",
   {
-    description:
-      "Search prior knowledge entries by keyword / symptom / error code. Use for consult mode. Results may include status 'deprecated' entries (possibly with superseded_by pointing at their replacement) — warn that those are outdated, never present them as current advice. Filter with product_slug / team_slug (slugs or aliases — not UUIDs), tags (entry must carry at least one), and/or component (matches the entry's linked component or its slug/aliases in tags).",
+    description: `Search prior knowledge entries by keyword / symptom / error code. Use for consult mode. Results may include status 'deprecated' entries (possibly with superseded_by pointing at their replacement) — warn that those are outdated, never present them as current advice. Filter with product_slug / team_slug (slugs or aliases — not UUIDs), tags (entry must carry at least one), and/or component (matches the entry's linked component or its slug/aliases in tags). ${GRADE_NOTE}`,
     inputSchema: {
       query: z.string(),
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
       tags: z.array(z.string()).optional(),
       component: z.string().optional(),
+      customer: z
+        .string()
+        .optional()
+        .describe(
+          "Customer slug from list_customers. Ranks that customer's own material first WITHOUT hiding the rest — a fix found on one install is often the answer for the next.",
+        ),
       cloud: cloudSchema
         .optional()
         .describe(
@@ -624,6 +742,7 @@ tool(
     team_slug,
     tags,
     component,
+    customer,
     cloud,
     affected_version,
     fixed_version,
@@ -638,6 +757,9 @@ tool(
       teamId,
       includeUnscoped: true,
       ...(await componentIntoFilter(productId, component, tags)),
+      boostCustomerId: customer
+        ? await getCustomerIdBySlug(customer)
+        : undefined,
       cloud,
       affectedVersion: affected_version,
       fixedVersion: fixed_version,
@@ -651,9 +773,9 @@ tool(
   "get_context",
   {
     description:
-      "Fetch a new work item AND auto-search the archive for similar prior cases. One-shot consult helper.",
+      "Fetch a work item AND auto-search the archive for similar prior cases in one call — the consult-mode entry point. Returns 'similar' (past knowledge entries with their full structured context) and 'reference' (matching project reference docs), each graded; check every similar entry's status, because a 'deprecated' one is outdated and must be flagged as such rather than presented as current advice. 'linked_items' holds the referenced Azure DevOps items, already fetched — read them, never re-fetch. 'project_context' names the ticket's project, its wiki and its repos with the component each implements: use it to aim search_code at the right repo instead of searching everything. A long, repetitive ticket comes back as transcript + compaction instead of item.messages.",
     inputSchema: {
-      source: z.string(),
+      source: sourceSlug,
       external_id: z.string(),
       limit: z.number().optional(),
     },
@@ -716,6 +838,8 @@ tool(
         : { retrieval_note: NO_MATCHES }),
       customer_id: item.customerId,
       customer_name: customerName,
+      ...unresolvedCustomer(item.customerId, item.customerAmbiguity),
+      ...(await withCustomerProfile(item.customerId)),
       observed_version: item.observedVersion,
       ...(item.componentSlug ? { component: item.componentSlug } : {}),
       ...(context.length ? { project_context: context } : {}),
@@ -728,7 +852,7 @@ tool(
   "save_knowledge_entry",
   {
     description:
-      "Persist an APPROVED structured knowledge entry. Call ONLY after the user reviewed and approved the summary. resolution_pattern must be an existing slug from list_resolution_patterns (or omitted) — it is not free text. component must be an existing slug/alias from list_components; if the ticket's area is missing from the glossary, propose add_component in the same review step and call it after user approval, then save. product_area is derived automatically from the component hierarchy — it is not an input. For manual entries (no work_item_id) that set component, pass product_slug — component slugs resolve within a product.",
+      "Persist a structured knowledge entry. The call is gated by a review box the user can edit before it runs, so draft it and call — do not ask for approval in prose first. resolution_pattern must be an existing slug from list_resolution_patterns (or omitted) — it is not free text. component must be an existing slug/alias from list_components; if the ticket's area is missing from the glossary, call add_component first — it gets its own review box — then save. product_area is derived automatically from the component hierarchy — it is not an input. For manual entries (no work_item_id) that set component, pass product_slug — component slugs resolve within a product.",
     inputSchema: {
       work_item_id: z.string().optional(),
       product_slug: z
@@ -748,16 +872,65 @@ tool(
         .string()
         .optional()
         .describe("Team UUID — otherwise use team_slug."),
+      customer_slug: z
+        .string()
+        .nullable()
+        .optional()
+        .describe(
+          "Set ONLY when the lesson is true of one customer's install and not of the product — their addon, their configuration, their version. It is not inherited from the ticket, and whose ticket it was is not the test: most problems found on a customer's ticket are the product's behaviour and must stay general, or they will not be found for anyone else. Setting it makes every future answer cite the entry as that customer's case.",
+        ),
       status: knowledgeStatusSchema.optional(),
-      issue_summary: z.string().optional(),
-      symptoms: z.array(z.string()).optional(),
-      signals: z.array(z.string()).optional(),
-      root_cause: z.string().optional(),
-      resolution: z.string().optional(),
-      resolution_pattern: z.string().optional(),
-      component: z.string().optional(),
-      confidence: confidenceSchema.optional(),
-      tags: z.array(z.string()).optional(),
+      issue_summary: z
+        .string()
+        .optional()
+        .describe(
+          "One-paragraph summary of the problem, with error codes and key symptoms inline.",
+        ),
+      symptoms: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Observable behaviours, as short phrases rather than sentences. Facts, not interpretations: 'Error 023 in logs' yes, 'possible template issue' no.",
+        ),
+      signals: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Raw searchable identifiers exactly as they appear — error codes, log patterns, status codes: ['023 TOO_MANY_STRINGS', 'ECONNREFUSED', 'HTTP 503']. Trigram-indexed, so a future search for '023' matches.",
+        ),
+      root_cause: z
+        .string()
+        .optional()
+        .describe(
+          "The underlying technical cause, stated precisely. Omit rather than guess — an unknown cause means confidence 'low'.",
+        ),
+      resolution: z
+        .string()
+        .optional()
+        .describe("What was done, or should be done, to fix it."),
+      resolution_pattern: z
+        .string()
+        .optional()
+        .describe(
+          "Slug from list_resolution_patterns — a controlled vocabulary, never free text. Omit entirely if none fits.",
+        ),
+      component: z
+        .string()
+        .optional()
+        .describe(
+          "Slug or alias from list_components. Unknown values are rejected with nearest-match suggestions.",
+        ),
+      confidence: confidenceSchema
+        .optional()
+        .describe(
+          "How confident you are in the root cause + resolution together.",
+        ),
+      tags: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Free-form labels for filtering. Call list_labels first and reuse a slug rather than inventing a near-duplicate; a component slug used as a tag makes the entry findable by component.",
+        ),
       cloud: cloudSchema
         .optional()
         .describe(
@@ -765,7 +938,12 @@ tool(
         ),
       resolution_clarity: resolutionClaritySchema.optional(),
       learning_value: learningValueSchema.optional(),
-      hidden_fix: z.boolean().optional(),
+      hidden_fix: z
+        .boolean()
+        .optional()
+        .describe(
+          "True when the real fix was not visible on the ticket surface — the reporter's described problem and the actual cause diverged. Marks the entries worth reading before trusting a ticket at face value, and is filterable in the library.",
+        ),
       affected_version: z
         .string()
         .optional()
@@ -778,7 +956,12 @@ tool(
         .describe(
           "Product version the fix landed in  only when actually known.",
         ),
-      structured: z.record(z.string(), z.any()).optional(),
+      structured: z
+        .record(z.string(), z.any())
+        .optional()
+        .describe(
+          "Narrative context — stored and returned wholesale, never filtered on. Include only the keys that apply; don't force empty objects. Known shape: environment {machine, line, component}, key_signals {error_description, context}, investigation_steps [], conversation_summary, technical_analysis {what_happened, why, system_behavior}, constraints_and_rules [], related_configuration [], related_links [] (full URLs). Extra keys are kept.",
+        ),
     },
   },
   async (a) => {
@@ -792,6 +975,7 @@ tool(
       workItemId: a.work_item_id,
       productId,
       teamId,
+      customerSlug: a.customer_slug,
       createdById: await resolveCurrentUserId(),
       status: a.status ?? "approved",
       issueSummary: a.issue_summary,
@@ -821,7 +1005,7 @@ tool(
     description:
       "Write a private note back to the source work item (e.g. a Freshdesk private note) with the learned analysis.",
     inputSchema: {
-      source: z.string(),
+      source: sourceSlug,
       external_id: z.string(),
       body: z.string(),
     },
@@ -840,7 +1024,7 @@ tool(
   "add_knowledge_feedback",
   {
     description:
-      "Record human feedback (a correction, rating, or note) on an existing knowledge entry, so it can be improved over time. kind 'deprecation' records WHY an entry is outdated — the actual retirement is a separate update_knowledge_entry call with status 'deprecated' after user confirmation.",
+      "Record human feedback (a correction, rating, or note) on an existing knowledge entry, so it can be improved over time. kind 'deprecation' records WHY an entry is outdated — the actual retirement is a separate update_knowledge_entry call with status 'deprecated'.",
     inputSchema: {
       knowledge_entry_id: z.string(),
       kind: feedbackKindSchema.optional(),
@@ -942,7 +1126,7 @@ tool(
   "add_component",
   {
     description:
-      "Add (or update) a fact in the architecture glossary, e.g. a service, module, or config pool. Two valid call patterns: (1) the user is directly describing the app's architecture — call immediately; (2) a ticket mentions something not yet in the list — ASK the user first, call only after they confirm. Never silently invent components from a ticket. Use aliases for alternate names (e.g. slug 'line-controller' with aliases ['lc','LC']) so naming variants resolve to one component.",
+      "Add (or update) a fact in the architecture glossary, e.g. a service, module, or config pool. Call it whenever a component is genuinely missing — when the user describes the architecture, or when a ticket names an area absent from the list. The review box is where the user refuses one they don't want, so never work around a missing component by inventing a slug inline or forcing the entry onto an unrelated one. Use aliases for alternate names (e.g. slug 'line-controller' with aliases ['lc','LC']) so naming variants resolve to one component.",
     inputSchema: {
       product_slug: z.string(),
       slug: z.string(),
@@ -972,7 +1156,7 @@ tool(
   "list_customers",
   {
     description:
-      "List known customers, including aliases (other names / email domains resolving to the same account, e.g. a distributor). Use to check before correcting a work item's customer.",
+      "List known customers with their aliases (other NAMES the account trades under) and email_domains (sender domains that resolve to it, including a partner or distributor who raises tickets on their behalf). Use to check before correcting a work item's customer.",
     inputSchema: {},
     annotations: { readOnlyHint: true },
   },
@@ -983,17 +1167,138 @@ tool(
   "add_customer",
   {
     description:
-      "Add (or extend) a customer, including aliases for distributors/resellers that front for the same account. Call when the user describes a customer or asks to add one — not inferred silently from a ticket.",
+      "Add (or extend) a customer. Call when the user describes a customer, asks to add one, or a ticket names one that is unresolved but unambiguous; the review box is their chance to refuse it.",
     inputSchema: {
       name: z.string(),
       slug: z.string(),
-      aliases: z.array(z.string()).optional(),
+      aliases: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Other NAMES this account trades under. Not email domains — a domain here would come back out of list_customers as something to call them.",
+        ),
+      email_domains: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Sender domains that mean this customer, including a partner or distributor who raises tickets for them (arvato.com on Davidoff, tabacaleracigar.com on Logista). A domain listed on two customers deliberately resolves to neither, so give a shared integrator's domain to nobody.",
+        ),
       notes: z.string().optional(),
     },
   },
   async (a) => {
     await requireAnyTeamAdmin();
-    return out(await addCustomer(a));
+    return out(
+      await addCustomer({
+        name: a.name,
+        slug: a.slug,
+        aliases: a.aliases,
+        emailDomains: a.email_domains,
+        notes: a.notes,
+      }),
+    );
+  },
+);
+
+tool(
+  "get_customer_profile",
+  {
+    description:
+      "Everything configured about one customer's install: their specifics (the version they run, their layout, integrations), the components they have, their own repos, and any source project that exists for them. Call it before advising a named customer — a general answer can be wrong for them because of what is here. Arrives automatically on fetch_work_item/get_context when the ticket resolves to a customer, so do not re-fetch it then.",
+    inputSchema: { customer: z.string().describe("Slug from list_customers") },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ customer }) =>
+    out(await getCustomerProfile(await getCustomerIdBySlug(customer))),
+);
+
+tool(
+  "list_customer_fact_kinds",
+  {
+    description:
+      "The kinds of customer specific already recorded in this deployment (version, environment, layout, …), with usage counts. The vocabulary is deployment-specific, so call this before set_customer_fact and reuse an existing kind rather than coining a near-duplicate.",
+    inputSchema: {},
+    annotations: { readOnlyHint: true },
+  },
+  async () => out(await listCustomerFactKinds()),
+);
+
+tool(
+  "set_customer_fact",
+  {
+    description:
+      "Record one specific about a customer's install — the version they run, their line layout, an integration they depend on. This is where customer-specific truth belongs; a knowledge entry is for a problem and its resolution, so do not use one to store what is really a configuration fact. Re-setting the same (kind, label) replaces the value, so this is how a version gets updated rather than duplicated. Call list_customer_fact_kinds first and reuse a kind.",
+    inputSchema: {
+      customer: z.string().describe("Slug from list_customers"),
+      kind: z
+        .string()
+        .describe("What sort of specific this is, e.g. version, layout"),
+      label: z
+        .string()
+        .optional()
+        .describe(
+          "What it is about when the kind alone is ambiguous — which product a version belongs to, which line a layout describes. Together with kind it identifies the fact, so reuse it to update rather than add.",
+        ),
+      value: z.string(),
+      notes: z.string().optional(),
+      source: z
+        .string()
+        .optional()
+        .describe(
+          "Where this was learned — a ticket URL, a wiki page, a person.",
+        ),
+      product_slug: z.string().optional(),
+      component: z
+        .string()
+        .optional()
+        .describe("Pin the fact to one component. Needs product_slug."),
+    },
+  },
+  async (a) => {
+    await requireAnyTeamAdmin();
+    return out(
+      await setCustomerFact({
+        customerSlug: a.customer,
+        kind: a.kind,
+        label: a.label,
+        value: a.value,
+        notes: a.notes,
+        source: a.source,
+        componentSlug: a.component,
+        productId: a.product_slug
+          ? await getProductIdBySlug(a.product_slug)
+          : null,
+      }),
+    );
+  },
+);
+
+tool(
+  "set_customer_component",
+  {
+    description:
+      "Record that a customer runs a component, or that they no longer do (linked: false). Many-to-many on purpose: a shared component has many customers, one built for a single customer has just that one. Use it to answer 'who else runs this?' before treating a fix as safe for everyone.",
+    inputSchema: {
+      customer: z.string().describe("Slug from list_customers"),
+      product_slug: z.string(),
+      component: z.string().describe("Slug or alias from list_components"),
+      linked: z.boolean().optional().describe("false removes the link"),
+      notes: z.string().optional(),
+    },
+  },
+  async (a) => {
+    await requireAnyTeamAdmin();
+    const productId = await getProductIdBySlug(a.product_slug);
+    return out(
+      a.linked === false
+        ? await unlinkCustomerComponent(a.customer, productId, a.component)
+        : await linkCustomerComponent(
+            a.customer,
+            productId,
+            a.component,
+            a.notes,
+          ),
+    );
   },
 );
 
@@ -1047,6 +1352,13 @@ tool(
       signals: z.array(z.string()).optional(),
       tags: z.array(z.string()).optional(),
       component: z.string().nullable().optional(),
+      customer_slug: z
+        .string()
+        .nullable()
+        .optional()
+        .describe(
+          "Re-file whose install this was learned on; null makes the lesson general again.",
+        ),
       superseded_by: z.string().nullable().optional(),
       confidence: confidenceSchema.nullable().optional(),
       cloud: cloudSchema
@@ -1085,6 +1397,7 @@ tool(
     if (a.signals !== undefined) patch.signals = a.signals;
     if (a.tags !== undefined) patch.tags = a.tags;
     if (a.component !== undefined) patch.component = a.component;
+    if (a.customer_slug !== undefined) patch.customerSlug = a.customer_slug;
     if (a.superseded_by !== undefined) patch.supersededBy = a.superseded_by;
     if (a.confidence !== undefined) patch.confidence = a.confidence;
     if (a.cloud !== undefined) patch.cloud = a.cloud;
@@ -1179,7 +1492,7 @@ tool(
   "ingest_context",
   {
     description:
-      "Load freeform project context from pasted text, local file paths, and/or URLs, and return the cleaned raw text for you to structure. PDF paths are text-extracted automatically. This tool ONLY reads — it never saves. Long sources are truncated at max_chars (default 20000); for large documents (big PDFs), preview here, then after user approval call save_reference_doc with body_path so the full text is extracted and saved server-side. After loading, classify the content and route each part: durable incident lessons → save_knowledge_entry; architecture facts → add_component (ASK the user first); everything else (docs, runbooks, design notes, config explainers) → save_reference_doc. Always present a summary and get explicit user approval before any save.",
+      "Load freeform project context from pasted text, local file paths, and/or URLs, and return the cleaned raw text for you to structure. PDF paths are text-extracted automatically. This tool ONLY reads — it never saves. Long sources are truncated at max_chars (default 20000); for large documents (big PDFs), preview here, then call save_reference_doc with body_path so the full text is extracted and saved server-side. After loading, classify the content and route each part: durable incident lessons → save_knowledge_entry; architecture facts → add_component; everything else (docs, runbooks, design notes, config explainers) → save_reference_doc. Say briefly how you routed it, then make the calls — each is gated by its own review box.",
     inputSchema: {
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
@@ -1212,7 +1525,7 @@ tool(
           text: redact ? scrubText(textOut, map) : textOut,
           ...(truncated
             ? {
-                note: `Truncated at ${limit} of ${s.text.length} chars — summarize from this preview; to save the FULL text as a reference doc, call save_reference_doc with body_path after user approval.`,
+                note: `Truncated at ${limit} of ${s.text.length} chars — summarize from this preview; to save the FULL text as a reference doc, call save_reference_doc with body_path.`,
               }
             : {}),
         };
@@ -1223,7 +1536,7 @@ tool(
               "Placeholders like [EMAIL_1]/[SECRET_1] are intentional redactions — treat them as opaque, never guess the originals.",
           }
         : {}),
-      next: "Summarize, then propose knowledge_entries / reference_docs / components. Save only after the user approves.",
+      next: "Summarize how this routes, then call save_knowledge_entry / save_reference_doc / add_component. Each call is gated by its own review box.",
     });
   },
 );
@@ -1232,7 +1545,7 @@ tool(
   "save_reference_doc",
   {
     description:
-      "Persist an APPROVED reference doc — freeform project context (docs, runbooks, architecture notes) that doesn't fit the issue→root_cause→resolution shape of a knowledge entry. The body is chunked and embedded so it surfaces in consult-mode search. Provide EITHER body (inline text) OR body_path (a local file — e.g. a large PDF — extracted server-side so the full text is saved without echoing it). Scope it with product_slug, and add component when the doc is about one part of that product (leave it off for general product docs). Pass doc_version when the source document carries a version label; pass supersedes with the id of the doc this replaces — the predecessor is archived and linked automatically, and search returns only the latest version. Call ONLY after the user approved the content.",
+      "Persist an APPROVED reference doc — freeform project context (docs, runbooks, architecture notes) that doesn't fit the issue→root_cause→resolution shape of a knowledge entry. The body is chunked and embedded so it surfaces in consult-mode search. Provide EITHER body (inline text) OR body_path (a local file — e.g. a large PDF — extracted server-side so the full text is saved without echoing it). Scope it with product_slug, and add component when the doc is about one part of that product (leave it off for general product docs). Pass doc_version when the source document carries a version label; pass supersedes with the id of the doc this replaces — the predecessor is archived and linked automatically, and search returns only the latest version. The call is gated by a review box the user can edit, so draft it and call rather than asking first.",
     inputSchema: {
       title: z.string(),
       body: z.string().optional(),
@@ -1240,7 +1553,19 @@ tool(
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
       component: z.string().optional(),
-      source: z.string().optional(),
+      customer_slug: z
+        .string()
+        .nullable()
+        .optional()
+        .describe(
+          "Set only when the doc describes ONE customer's install (their addon, their configuration). Leave it off for anything true of the product generally — a customer here means the doc is cited as that customer's setup, not as how the product works.",
+        ),
+      source: z
+        .string()
+        .optional()
+        .describe(
+          "Where the content came from — a URL (an ADO wiki page's remote_url), file path or origin note. Provenance, not a connection slug.",
+        ),
       tags: z.array(z.string()).optional(),
       status: referenceStatusSchema.optional(),
       structured: z.record(z.string(), z.any()).optional(),
@@ -1290,6 +1615,7 @@ tool(
       docVersion: a.doc_version,
       supersedes: a.supersedes,
       component: a.component,
+      customerSlug: a.customer_slug,
     });
     return out({
       saved: true,
@@ -1305,13 +1631,18 @@ tool(
 tool(
   "search_reference",
   {
-    description:
-      "Semantic search over approved reference docs (project context). Returns the best-matching snippet per doc. Filter by product_slug / team_slug (slug or alias) and tags.",
+    description: `Semantic search over approved reference docs (project context). Returns the best-matching snippet per doc. Only the latest approved version of a doc is returned. Filter by product_slug / team_slug (slug or alias) and tags. ${GRADE_NOTE}`,
     inputSchema: {
       query: z.string(),
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
       component: z.string().optional(),
+      customer: z
+        .string()
+        .optional()
+        .describe(
+          "Customer slug from list_customers. Ranks that customer's own material first WITHOUT hiding the rest.",
+        ),
       doc_version: z.string().optional(),
       tags: z.array(z.string()).optional(),
       limit: z.number().optional(),
@@ -1323,6 +1654,7 @@ tool(
     product_slug,
     team_slug,
     component,
+    customer,
     doc_version,
     tags,
     limit,
@@ -1337,6 +1669,9 @@ tool(
         teamId,
         includeUnscoped: true,
         ...(await componentIntoFilter(productId, component, tags)),
+        boostCustomerId: customer
+          ? await getCustomerIdBySlug(customer)
+          : undefined,
         docVersion: doc_version,
         limit,
       }),
@@ -1416,6 +1751,13 @@ tool(
       source: z.string().nullable().optional(),
       structured: z.record(z.string(), z.any()).optional(),
       doc_version: z.string().nullable().optional(),
+      customer_slug: z
+        .string()
+        .nullable()
+        .optional()
+        .describe(
+          "Re-file whose install this documents; null makes it general again.",
+        ),
       expected_version: z.number().int().optional(),
     },
   },
@@ -1429,6 +1771,7 @@ tool(
     if (a.source !== undefined) patch.source = a.source;
     if (a.structured !== undefined) patch.structured = a.structured;
     if (a.doc_version !== undefined) patch.docVersion = a.doc_version;
+    if (a.customer_slug !== undefined) patch.customerSlug = a.customer_slug;
     if (a.expected_version !== undefined)
       patch.expectedVersion = a.expected_version;
     const row = await updateReferenceDoc(a.id, patch);
@@ -1528,7 +1871,7 @@ tool(
   "list_source_connections",
   {
     description:
-      "List all configured source connections (Freshdesk tenants, GitHub orgs, etc.).",
+      "List all configured source connections (Freshdesk tenants, GitHub orgs, Azure DevOps organizations). Each connection's 'slug' is what every other tool's 'source' parameter takes — call this first whenever you only know the source type.",
     inputSchema: {},
     annotations: { readOnlyHint: true },
   },
@@ -1564,7 +1907,7 @@ tool(
   "list_source_projects",
   {
     description:
-      "List the registered projects of one or all source connections. A project is the source's own grouping — an Azure DevOps project, a Freshdesk group (numeric id as text), a GitHub 'owner/repo'. role 'knowledge' means it maps to a product and can own a wiki, repos and area→component rules; role 'tracker' means it is a productless target we only create or reassign work items in.",
+      "List the registered projects of one or all source connections. A project is the source's own grouping — an Azure DevOps project, a Freshdesk group (numeric id as text), a GitHub 'owner/repo'. role 'knowledge' means it maps to a product and can own wikis, repos and area→component rules; role 'tracker' means it is a productless target we only create or reassign work items in.",
     inputSchema: {
       source_slug: z.string().optional(),
       product_slug: z.string().optional(),
@@ -1588,7 +1931,7 @@ tool(
   "get_project_context",
   {
     description:
-      "Everything configured about a project in one call: its connection and source-native key, the product and team it belongs to, its wiki, its repos with the component each one implements, and its area→component rules. Resolve by product_slug, by work_item_id, or by (source_slug + external_key). Call this before search_code, /ingest-wiki or create_ado_work_item so you use the right repo, wiki and project instead of guessing.",
+      "Everything configured about a project in one call: its connection and source-native key, the product and team it belongs to, its wikis (`wiki` is the default one, `wikis` lists them all — an ADO project usually has several), its repos with the component each implements and the customer each belongs to (null = shared product code), and its area→component rules. Resolve by product_slug, by work_item_id, or by (source_slug + external_key). Call this before search_code, /ingest-wiki or create_ado_work_item so you use the right repo, wiki and project instead of guessing.",
     inputSchema: {
       product_slug: z.string().optional(),
       work_item_id: z.string().optional(),
@@ -1620,15 +1963,25 @@ tool(
       role: z.enum(SOURCE_PROJECT_ROLES),
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
-      wiki: z
-        .object({
-          identifier: z.string(),
-          name: z.string().optional(),
-          root_path: z.string().optional(),
-        })
+      customer_slug: z
+        .string()
         .optional()
         .describe(
-          "The project's wiki, from list_ado_wikis. Knowledge projects only.",
+          "Set ONLY when the whole project exists for one customer (their own ADO project). Every item ingested from it is then theirs by configuration, which beats guessing at the sender's domain. Leave it off for a product project that serves many customers — a wrong value here mis-files everything in it.",
+        ),
+      wikis: z
+        .array(
+          z.object({
+            identifier: z.string(),
+            name: z.string().optional(),
+            type: z.string().optional(),
+            root_path: z.string().optional(),
+            default: z.boolean().optional(),
+          }),
+        )
+        .optional()
+        .describe(
+          "The project's wikis, from list_ado_wikis — an ADO project usually has several (one project wiki plus a code wiki per repo). Flag one 'default': that is the one every wiki tool uses when no wiki is named, and the first is taken if you flag none. Knowledge projects only.",
         ),
       notes: z.string().optional(),
     },
@@ -1652,7 +2005,8 @@ tool(
         role: a.role,
         productSlug: a.product_slug,
         teamSlug: a.team_slug,
-        wiki: a.wiki,
+        customerSlug: a.customer_slug,
+        wikis: a.wikis,
         notes: a.notes,
       }),
     );
@@ -1738,13 +2092,63 @@ const projectDefaults = (
 ): Record<string, unknown> | undefined =>
   (context?.project.config as any)?.defaults?.[type];
 
+/**
+ * A wiki argument is matched against the project's registered wikis first, so
+ * either the friendly name or the identifier works; anything unrecognised is
+ * passed to Azure DevOps as given, which is what makes an unregistered wiki
+ * still reachable. With no argument the project's default is used.
+ */
+function resolveWikiId(
+  context: Awaited<ReturnType<typeof resolveProjectContextStrict>> | null,
+  wanted: string | undefined,
+): string {
+  const registered = context?.wikis ?? [];
+  if (wanted) return matchWiki(registered, wanted)?.identifier ?? wanted;
+  const fallback = context?.wiki?.identifier;
+  if (fallback) return fallback;
+  throw badInput(
+    registered.length
+      ? "this project's registered wikis have no default — name one with `wiki`"
+      : "no wiki given and this project has none registered — call list_ado_wikis, or set them on the project",
+  );
+}
+
+/**
+ * A wiki URL's last segment is a display slug, not the page path: spaces become
+ * dashes, so "/Customer specific (processes)" arrives as
+ * "/Customer-specific-(processes)" and the path endpoint 404s on it. When a path
+ * misses, the real page tree is consulted and the dashed form matched back.
+ */
+async function fetchWikiPage(
+  client: { getWikiPage: Function; listWikiPages: Function },
+  project: string,
+  wikiId: string,
+  path: string,
+): Promise<{ path: string; content: string; remoteUrl?: string }> {
+  try {
+    return await client.getWikiPage(project, wikiId, path);
+  } catch (e) {
+    const flat = (s: string) =>
+      s
+        .replace(/[-\s]+/g, " ")
+        .trim()
+        .toLowerCase();
+    const paths: string[] = await client
+      .listWikiPages(project, wikiId)
+      .catch(() => []);
+    const hit = paths.find((p) => flat(p) === flat(path));
+    if (!hit) throw e;
+    return client.getWikiPage(project, wikiId, hit);
+  }
+}
+
 tool(
   "list_ado_wikis",
   {
     description:
       "List the Azure DevOps wikis in a project (or across the org when project is omitted). Pass either source (+ optional project) or product_slug, which resolves to that product's registered project.",
     inputSchema: {
-      source: z.string().optional(),
+      source: sourceSlug.optional(),
       project: z.string().optional(),
       product_slug: z.string().optional(),
     },
@@ -1771,16 +2175,16 @@ tool(
   "list_ado_wiki_pages",
   {
     description:
-      "List page paths of an Azure DevOps wiki (flattened page tree). Use get_ado_wiki_page to fetch a page's content. With product_slug, the project and its registered wiki are resolved for you — pass wiki only to override.",
+      "List page paths of an Azure DevOps wiki (flattened page tree). Use get_ado_wiki_page to fetch a page's content. With product_slug, the project and its default wiki are resolved for you — pass wiki only to reach one of its other wikis. A big wiki runs to hundreds of pages, so narrow with path_prefix rather than raising limit.",
     inputSchema: {
-      source: z.string().optional(),
+      source: sourceSlug.optional(),
       project: z.string().optional(),
       product_slug: z.string().optional(),
       wiki: z
         .string()
         .optional()
         .describe(
-          "Wiki name or id from list_ado_wikis; defaults to the project's registered wiki",
+          "One of the project's registered wikis, by name or identifier (get_project_context lists them), or any wiki name/id from list_ado_wikis. Defaults to the project's default wiki.",
         ),
       path_prefix: z.string().optional(),
       limit: z.number().int().positive().optional(),
@@ -1789,19 +2193,21 @@ tool(
   },
   async ({ source, project, product_slug, wiki, path_prefix, limit }) => {
     const target = await resolveAdoTarget({ source, project, product_slug });
-    const wikiId = wiki ?? target.context?.wiki?.identifier;
-    if (!wikiId)
-      throw badInput(
-        "no wiki given and this project has none registered — call list_ado_wikis, or set one on the project",
-      );
+    const wikiId = resolveWikiId(target.context, wiki);
     const { client } = await resolveAdoClient(target.sourceSlug);
     let paths = await client.listWikiPages(target.project, wikiId);
     if (path_prefix) paths = paths.filter((p) => p.startsWith(path_prefix));
     const max = limit ?? 100;
     return out({
+      wiki: wikiId,
       total: paths.length,
       truncated: paths.length > max,
       pages: paths.slice(0, max),
+      ...(paths.length > max
+        ? {
+            next: "only the first page paths are shown — narrow with path_prefix to see the rest of the tree rather than raising limit.",
+          }
+        : {}),
     });
   },
 );
@@ -1810,29 +2216,43 @@ tool(
   "get_ado_wiki_page",
   {
     description:
-      "Fetch one Azure DevOps wiki page's markdown content. READ ONLY — it never saves. To persist the knowledge, classify it (incident lesson → save_knowledge_entry; freeform doc/runbook → save_reference_doc with source set to the page URL, plus the source_project_id and external_key returned here so a re-import supersedes it instead of duplicating) and save only after explicit user approval.",
+      "Fetch one Azure DevOps wiki page's markdown content. READ ONLY — it never saves. To persist the knowledge, classify it (incident lesson → save_knowledge_entry; freeform doc/runbook → save_reference_doc with source set to the page URL, plus the source_project_id and external_key returned here so a re-import supersedes it instead of duplicating). The save call is gated by its own review box.",
     inputSchema: {
-      source: z.string().optional(),
+      source: sourceSlug.optional(),
       project: z.string().optional(),
       product_slug: z.string().optional(),
       wiki: z
         .string()
         .optional()
-        .describe("Defaults to the project's registered wiki"),
-      path: z.string().describe("Page path from list_ado_wiki_pages"),
+        .describe(
+          "One of the project's registered wikis, by name or identifier; defaults to the project's default wiki",
+        ),
+      path: z
+        .string()
+        .optional()
+        .describe(
+          "Page path from list_ado_wiki_pages, e.g. '/Delivery Processes & Tools'. A path copied out of a browser URL has dashes where the real path has spaces; that form is recovered automatically, but page_id is the exact way in.",
+        ),
+      page_id: z
+        .union([z.string(), z.number()])
+        .optional()
+        .describe(
+          "The numeric id in a wiki URL — .../_wiki/wikis/<wiki>/1648/Start means page_id 1648. Use it when the user pasted a link; it needs no path guessing.",
+        ),
       max_chars: z.number().int().positive().optional(),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ source, project, product_slug, wiki, path, max_chars }) => {
+  async ({ source, project, product_slug, wiki, path, page_id, max_chars }) => {
+    if (!path && page_id == null)
+      throw badInput("pass either path or page_id (a wiki URL carries the id)");
     const target = await resolveAdoTarget({ source, project, product_slug });
-    const wikiId = wiki ?? target.context?.wiki?.identifier;
-    if (!wikiId)
-      throw badInput(
-        "no wiki given and this project has none registered — call list_ado_wikis, or set one on the project",
-      );
+    const wikiId = resolveWikiId(target.context, wiki);
     const { conn, client } = await resolveAdoClient(target.sourceSlug);
-    const page = await client.getWikiPage(target.project, wikiId, path);
+    const page =
+      page_id != null
+        ? await client.getWikiPageById(target.project, wikiId, page_id)
+        : await fetchWikiPage(client, target.project, wikiId, path!);
     const limit = max_chars ?? 20_000;
     const truncated = page.content.length > limit;
     const textOut = truncated ? page.content.slice(0, limit) : page.content;
@@ -1853,7 +2273,7 @@ tool(
               "Placeholders like [EMAIL_1]/[SECRET_1] are intentional redactions — treat them as opaque, never guess the originals.",
           }
         : {}),
-      next: "Summarize and propose where this belongs (reference doc, knowledge entry, or component). Save only after the user approves; cite remote_url as the doc's source.",
+      next: "Say where this belongs (reference doc, knowledge entry, or component), then call the matching save — its review box is the approval. Cite remote_url as the doc's source.",
     });
   },
 );
@@ -1864,7 +2284,7 @@ tool(
     description:
       "Discover what an Azure DevOps project requires to create a work item. Without type: lists the project's work item types. With type: returns each field's reference name, whether it is required, allowed values, and defaults, plus the defaults configured on the registered project (config.defaults[type]) or on the connection (config.defaults[project][type]). ALWAYS call this before create_ado_work_item — required fields differ per project and type. Pass either source + project, or product_slug.",
     inputSchema: {
-      source: z.string().optional(),
+      source: sourceSlug.optional(),
       project: z.string().optional(),
       product_slug: z.string().optional(),
       type: z.string().optional().describe("Work item type, e.g. 'Bug'"),
@@ -1923,9 +2343,9 @@ tool(
   "create_ado_work_item",
   {
     description:
-      "Create a work item (Bug, Task, User Story, ...) in an Azure DevOps project. Call get_ado_work_item_schema FIRST and fill every required field — requirements differ per project/type; never guess. Pass either source + project, or product_slug (or the project's external key) to use a registered project — a 'tracker' project is exactly a create target like this. fields is keyed by ADO reference names (e.g. 'System.AreaPath', 'Microsoft.VSTS.Common.Severity'); the project's configured defaults are applied underneath. description is plain text/HTML — ADO renders System.Description as HTML, markdown will NOT render. Pass work_item_id when raising this from a ticket, so the ticket records what tracks it. Present the full field set to the user for approval before calling. Requires a PAT with Work Items Read & Write.",
+      "Create a work item (Bug, Task, User Story, ...) in an Azure DevOps project. Call get_ado_work_item_schema FIRST and fill every required field — requirements differ per project/type; never guess. Pass either source + project, or product_slug (or the project's external key) to use a registered project — a 'tracker' project is exactly a create target like this. fields is keyed by ADO reference names (e.g. 'System.AreaPath', 'Microsoft.VSTS.Common.Severity'); the project's configured defaults are applied underneath. description is plain text/HTML — ADO renders System.Description as HTML, markdown will NOT render. Pass work_item_id when raising this from a ticket, so the ticket records what tracks it. The review box shows the full field set for the user to edit, so draft it and call; a denial means they want changes, not a retry. Requires a PAT with Work Items Read & Write.",
     inputSchema: {
-      source: z.string().optional(),
+      source: sourceSlug.optional(),
       project: z.string().optional(),
       product_slug: z.string().optional(),
       type: z.string(),
@@ -2017,14 +2437,20 @@ tool(
   "list_repos",
   {
     description:
-      "List linked git repositories available for code search, with the component each one implements and its index freshness. index_status 'error' or a stale last_indexed_at means results may not reflect current code — say so when citing. Filter by product or component to find the repo that actually holds the area you are asking about.",
+      "List linked git repositories available for code search, with the component each one implements, the customer it belongs to (null = shared product code), and its index freshness. index_status 'error' or a stale last_indexed_at means results may not reflect current code — say so when citing. Filter by product or component to find the repo that actually holds the area you are asking about, or by customer to find their addon.",
     inputSchema: {
       product_slug: z.string().optional(),
       component: z.string().optional(),
+      customer: z
+        .string()
+        .optional()
+        .describe(
+          "Customer slug from list_customers. Returns their own addon repos AND the shared ones, because an addon sits on shared product code.",
+        ),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ product_slug, component }) => {
+  async ({ product_slug, component, customer }) => {
     const { productId } = await resolveScopeIds({ product_slug });
     const rows = await listRepos({
       productId,
@@ -2032,6 +2458,7 @@ tool(
         productId && component
           ? (await resolveComponentStrict(productId, component)).id
           : undefined,
+      customerId: customer ? await getCustomerIdBySlug(customer) : undefined,
     });
     return out(
       rows.map((r) => ({
@@ -2039,6 +2466,7 @@ tool(
         url: r.url,
         product_slug: r.product_slug,
         component: r.component_slug,
+        customer: r.customer_slug,
         project_key: r.project_key,
         default_branch: r.default_branch,
         index_status: r.index_status,
@@ -2055,8 +2483,7 @@ tool(
 tool(
   "search_code",
   {
-    description:
-      "Hybrid (semantic + trigram) search over the indexed code of linked repositories. Returns the top-matching chunks with path, line range, and the commit they were indexed at. Search with symptom terms, symbol names, or error strings; then use read_code_file to read narrowly around a hit. Results reflect the indexed commit, not necessarily the latest code — always cite path:start-end @ commit and mention index age when advising.",
+    description: `Hybrid (semantic + trigram) search over the indexed code of linked repositories. Returns the top-matching chunks with path, line range, and the commit they were indexed at. Search with symptom terms, symbol names, or error strings; then use read_code_file to read narrowly around a hit. Results reflect the indexed commit, not necessarily the latest code — always cite path:start-end @ commit and mention index age when advising. ${GRADE_NOTE}`,
     inputSchema: {
       query: z.string(),
       repo: z.string().optional().describe("Repo slug from list_repos"),
@@ -2067,12 +2494,26 @@ tool(
         .describe(
           "Component slug — searches only the repos that implement it. Needs product_slug.",
         ),
+      customer: z
+        .string()
+        .optional()
+        .describe(
+          "Customer slug — searches their addon repos AND the shared ones, since an addon sits on shared product code. Another customer's addon is excluded.",
+        ),
       path_prefix: z.string().optional(),
       limit: z.number().int().positive().optional(),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ query, repo, product_slug, component, path_prefix, limit }) => {
+  async ({
+    query,
+    repo,
+    product_slug,
+    component,
+    customer,
+    path_prefix,
+    limit,
+  }) => {
     const { productId } = await resolveScopeIds({ product_slug });
     if (component && !productId)
       throw badInput("component needs product_slug to resolve against");
@@ -2083,6 +2524,7 @@ tool(
         productId && component
           ? (await resolveComponentStrict(productId, component)).id
           : undefined,
+      customerId: customer ? await getCustomerIdBySlug(customer) : undefined,
       pathPrefix: path_prefix,
       limit,
     });
@@ -2095,6 +2537,7 @@ tool(
       rows.map((r: any) => ({
         repo: r.repo_slug,
         component: r.component_slug,
+        customer: r.customer_slug,
         path: r.path,
         lines: `${r.start_line}-${r.end_line}`,
         lang: r.lang,
@@ -2159,7 +2602,9 @@ tool(
         .describe("Required when artifact_slug is not given."),
       rows: z
         .array(z.record(z.string(), z.unknown()))
-        .describe("One object per row, keyed by column key."),
+        .describe(
+          "One object per row, keyed by column key. Dates as ISO strings and numbers as numbers, so the cells are typed and Excel sorts them properly. Leave an optional column null rather than inventing a value.",
+        ),
     },
     annotations: { readOnlyHint: true },
   },
