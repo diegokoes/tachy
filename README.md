@@ -124,6 +124,37 @@ MCP tools and cannot touch shell or filesystem.
 are stored encrypted in the app (My settings / Admin › System › credentials)
 — requires `TACHY_SECRET_KEY`.
 
+**Claude authentication — two rails.** Each turn spawns a `claude` subprocess
+carrying the calling user's own credential and a per-user state directory under
+`TACHY_AGENT_HOME` (default `~/.claude`), so users never share a login or each
+other's session transcripts. Either credential works, and the most specific
+scope wins (user › team › global › env); an API key wins an exact tie.
+
+| Credential                                       | Get it with                                                               | Billed to                                                    |
+| ------------------------------------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| **Claude subscription token** (`sk-ant-oat01-…`) | `claude setup-token` on your own machine, then paste into Settings › Keys | that account's own subscription; bounded by its usage limits |
+| **Anthropic API key** (`sk-ant-api03-…`)         | console.anthropic.com                                                     | the organisation's API billing                               |
+
+Nothing observable distinguishes a personal-account token from a work-seat one,
+so tell people to approve with their work account — the app cannot check it.
+
+`ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` in the server's own
+environment is the `env` rung: the lowest one. It answers for users who have
+added nothing of their own and never overrides a credential they did add, which
+makes it the way to keep an existing deployment working while people onboard.
+The server's own `claude login` no longer answers anyone's turn — each user
+gets their own state directory, so a user with no credential anywhere sees
+"add your Claude token in Settings › Keys" rather than silently borrowing the
+server's account.
+
+Subscription seats are bounded by usage limits rather than spend. A turn costs
+what its input costs, and every turn carries the agent prompt
+(`packages/agent/prompt.md`), so limits arrive sooner than interactive-chat
+intuition suggests — keeping that file short is the cheapest lever if users
+start hitting them. It holds only what shapes reasoning before a tool is
+called; anything about how to call one tool belongs in that tool's MCP
+description, which ships with the tool instead of with every turn.
+
 **Sources.** Freshdesk (tickets, private notes), GitHub Issues, Azure DevOps
 work items (multi-project; relations, linked PRs/commits, wikis, and
 schema-checked ticket creation). Register connections in Admin › Org › sources
@@ -167,6 +198,9 @@ Freely combined:
 
 Roles: `admin` and `member`. Admin mutations return `403` for members.
 
+This is how people sign in to tachý. How a chat turn then authenticates to
+Claude is separate — see **Claude authentication** under [Usage](#usage).
+
 ## CLI
 
 ```bash
@@ -199,6 +233,8 @@ docker compose run --rm cli npm run sync index-repo line-controller
 | `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`     | OIDC SSO. Optional.                                                  |
 | `TACHY_IMAGE`                                               | Compose image override (default `diegokoes/tachy:latest`).           |
 | `TACHY_REPO_DIR` / `TACHY_UPLOAD_DIR` / `TACHY_MODEL_CACHE` | Data paths; sensible defaults, Docker image sets them.               |
+| `TACHY_AGENT_HOME`                                          | Root for per-user Claude Code state (default `~/.claude`).           |
+| `CLAUDE_CODE_OAUTH_TOKEN`                                   | Fallback Claude subscription token when the vault holds none.        |
 
 PII/secret redaction is off by default: per connection
 (`{"redaction":{"enabled":true}}` in the connection config) or deployment-wide
