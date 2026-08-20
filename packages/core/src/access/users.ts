@@ -112,6 +112,14 @@ export async function setUserRole(id: string, role: UserRole): Promise<void> {
   clearPermissionCache();
 }
 
+export async function setUserDisplayName(
+  id: string,
+  displayName: string | null,
+): Promise<void> {
+  await requireUser(id);
+  await sql`update users set display_name = ${displayName} where id = ${id}`;
+}
+
 export async function setUserPassword(
   id: string,
   password: string,
@@ -179,6 +187,24 @@ export async function listTeamMembers(
     order by u.email
   `;
   return rows as unknown as TeamMemberRow[];
+}
+
+export interface MembershipRow {
+  user_id: string;
+  team_slug: string;
+  team_name: string;
+  team_role: TeamRole;
+}
+
+/** Every membership at once — the access table shows teams per user. */
+export async function listMemberships(): Promise<MembershipRow[]> {
+  const rows = await sql`
+    select tm.user_id, t.slug as team_slug, t.name as team_name, tm.role as team_role
+    from team_members tm
+    join teams t on t.id = tm.team_id
+    order by t.name
+  `;
+  return rows as unknown as MembershipRow[];
 }
 
 export async function setTeamMember(
