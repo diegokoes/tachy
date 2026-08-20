@@ -16,6 +16,13 @@ export interface CodeSearchOptions {
   productId?: string;
   componentId?: string;
   sourceProjectId?: string;
+  customerId?: string;
+  /**
+   * With a customer, also search the repos belonging to no customer — their
+   * addon sits on shared product code, and the answer is as often in one as the
+   * other. Set false for only what is theirs.
+   */
+  includeShared?: boolean;
   pathPrefix?: string;
   limit?: number;
   /** Pre-embedded query, so a caller searching two surfaces embeds once. */
@@ -36,6 +43,13 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
     ${opts.productId ? sql`and r.product_id = ${opts.productId}` : sql``}
     ${opts.componentId ? sql`and r.component_id = ${opts.componentId}` : sql``}
     ${opts.sourceProjectId ? sql`and r.source_project_id = ${opts.sourceProjectId}` : sql``}
+    ${
+      opts.customerId
+        ? opts.includeShared === false
+          ? sql`and r.customer_id = ${opts.customerId}`
+          : sql`and (r.customer_id = ${opts.customerId} or r.customer_id is null)`
+        : sql``
+    }
     ${escapedPrefix ? sql`and f.path like ${escapedPrefix + "%"}` : sql``}
   `;
 
@@ -69,7 +83,7 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
       limit ${CANDIDATES}
     ),
     ${fusedCte()}
-    select r.slug as repo_slug, comp.slug as component_slug,
+    select r.slug as repo_slug, comp.slug as component_slug, cu.slug as customer_slug,
            f.path, f.lang, c.start_line, c.end_line,
            left(c.chunk_text, 1200) as snippet,
            fu.cos_sim, fu.fts_rank, fu.trgm_sim, fu.rrf,
@@ -80,6 +94,7 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
     join repo_files f on f.id = c.file_id
     join repos r on r.id = c.repo_id
     left join components comp on comp.id = r.component_id
+    left join customers cu on cu.id = r.customer_id
     order by fu.rrf desc, f.path, c.start_line
     limit ${limit}
   `,

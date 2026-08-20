@@ -30,6 +30,14 @@ export const CANDIDATES = 50;
 export const RRF_WEIGHTS = { vec: 1.0, lex: 1.0, fuzzy: 0.5 } as const;
 
 /**
+ * Same-customer material leads, on the same scale as everything else: the boost
+ * is what one top-ranked tiebreaker signal is worth, not a raw score added to
+ * incomparable units. Deliberately small — a customer's own history should win a
+ * tie, never bury a better answer that happens to be general.
+ */
+export const CUSTOMER_BOOST = 0.5 / (RRF_K + 1);
+
+/**
  * HNSW search breadth. The default of 40 is thin once a WHERE clause filters
  * results after the index returns them.
  */
@@ -81,8 +89,14 @@ export const ftsRank = (
  * Fuse three candidate CTEs named `vec`, `lex` and `fuzzy`, each exposing
  * (id, rnk) plus its own raw signal. Emits a `fused` relation with the raw
  * signals kept for display and `rrf` for ordering.
+ *
+ * `boost` names a table with (id, customer_id) to lift rows belonging to
+ * `customerId`. Rows of other customers are not excluded — a fix for one
+ * install is often the answer for the next.
  */
-export const fusedCte = () => sql`
+export const fusedCte = (
+  boost?: { table: string; customerId: string } | null,
+) => sql`
   ids as (
     select id from vec
     union select id from lex
@@ -95,7 +109,17 @@ export const fusedCte = () => sql`
            coalesce(f.trgm_sim, 0) as trgm_sim,
              ${RRF_WEIGHTS.vec}   * coalesce(1.0 / (${RRF_K} + v.rnk), 0)
            + ${RRF_WEIGHTS.lex}   * coalesce(1.0 / (${RRF_K} + l.rnk), 0)
-           + ${RRF_WEIGHTS.fuzzy} * coalesce(1.0 / (${RRF_K} + f.rnk), 0) as rrf
+           + ${RRF_WEIGHTS.fuzzy} * coalesce(1.0 / (${RRF_K} + f.rnk), 0)
+           ${
+             boost
+               ? // Both branches cast: Postgres types the parameter from the
+                 // literal it sits beside, and a bare 0 makes the boost an int.
+                 sql`+ coalesce((select case when b.customer_id = ${boost.customerId}
+                                            then ${CUSTOMER_BOOST}::float8
+                                            else 0::float8 end
+                        from ${sql.unsafe(boost.table)} b where b.id = i.id), 0::float8)`
+               : sql``
+           } as rrf
     from ids i
     left join vec   v on v.id = i.id
     left join lex   l on l.id = i.id

@@ -1,6 +1,7 @@
 import { sql } from "../infra/db";
 import { badInput, notFound } from "../infra/errors";
 import { getProductIdBySlug } from "../catalog/products";
+import { getCustomerIdBySlug } from "../catalog/customers";
 import { resolveComponentStrict } from "../catalog/components";
 import { getSourceProject } from "../sources/projects";
 import type { EntryScope } from "../access/permissions";
@@ -13,6 +14,8 @@ export interface RepoInput {
   sourceSlug?: string;
   sourceProjectId?: string | null;
   componentSlug?: string | null;
+  /** Set for a customer's own addon repo; null/absent means shared product code. */
+  customerSlug?: string | null;
   defaultBranch?: string;
   config?: Record<string, unknown>;
 }
@@ -28,6 +31,8 @@ export interface RepoRow {
   project_key: string | null;
   component_id: string | null;
   component_slug: string | null;
+  customer_id: string | null;
+  customer_slug: string | null;
   default_branch: string;
   config: Record<string, unknown>;
   index_status: string;
@@ -78,11 +83,15 @@ export async function linkRepo(i: RepoInput) {
     componentId = (await resolveComponentStrict(productId, i.componentSlug)).id;
   }
 
+  const customerId = i.customerSlug
+    ? await getCustomerIdBySlug(i.customerSlug)
+    : null;
+
   const [row] = await sql`
     insert into repos (slug, url, product_id, source_slug, source_project_id, component_id,
-                       default_branch, config)
+                       customer_id, default_branch, config)
     values (${i.slug}, ${i.url}, ${productId}, ${sourceSlug},
-            ${i.sourceProjectId ?? null}, ${componentId},
+            ${i.sourceProjectId ?? null}, ${componentId}, ${customerId},
             ${i.defaultBranch ?? "main"}, ${sql.json((i.config ?? {}) as any)})
     on conflict (slug) do update set
       url = excluded.url,
@@ -90,6 +99,7 @@ export async function linkRepo(i: RepoInput) {
       source_slug = excluded.source_slug,
       source_project_id = excluded.source_project_id,
       component_id = excluded.component_id,
+      customer_id = excluded.customer_id,
       default_branch = excluded.default_branch,
       config = excluded.config
     returning id, slug, url, default_branch, index_status
@@ -99,26 +109,45 @@ export async function linkRepo(i: RepoInput) {
 
 const repoSelect = () => sql`
   select r.*, p.slug as product_slug, c.slug as component_slug,
-         sp.external_key as project_key
+         cu.slug as customer_slug, sp.external_key as project_key
   from repos r
   left join products p on p.id = r.product_id
   left join components c on c.id = r.component_id
+  left join customers cu on cu.id = r.customer_id
   left join source_projects sp on sp.id = r.source_project_id
 `;
 
+export interface ListReposOptions {
+  productId?: string;
+  componentId?: string;
+  sourceProjectId?: string;
+  customerId?: string;
+  /**
+   * With a customer, also return the repos belonging to no customer. A question
+   * about one customer's install is nearly always answered partly by the shared
+   * product code their addon sits on, so excluding it is the wrong default.
+   * Set false to see only what is theirs.
+   */
+  includeShared?: boolean;
+}
+
 export async function listRepos(
-  opts: {
-    productId?: string;
-    componentId?: string;
-    sourceProjectId?: string;
-  } = {},
+  opts: ListReposOptions = {},
 ): Promise<RepoRow[]> {
+  const shared = opts.includeShared !== false;
   return (await sql`
     ${repoSelect()}
     where 1=1
       ${opts.productId ? sql`and r.product_id = ${opts.productId}` : sql``}
       ${opts.componentId ? sql`and r.component_id = ${opts.componentId}` : sql``}
       ${opts.sourceProjectId ? sql`and r.source_project_id = ${opts.sourceProjectId}` : sql``}
+      ${
+        opts.customerId
+          ? shared
+            ? sql`and (r.customer_id = ${opts.customerId} or r.customer_id is null)`
+            : sql`and r.customer_id = ${opts.customerId}`
+          : sql``
+      }
     order by r.slug
   `) as unknown as RepoRow[];
 }

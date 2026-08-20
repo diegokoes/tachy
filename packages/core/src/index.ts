@@ -36,12 +36,20 @@ export {
   setUserRole,
   setUserPassword,
   setUserDisabled,
+  setUserDisplayName,
   listTeamMembers,
+  listMemberships,
   setTeamMember,
   userSoleTeamId,
   userTeams,
 } from "./access";
-export type { UserRole, TeamRole, UserRow, TeamMemberRow } from "./access";
+export type {
+  UserRole,
+  TeamRole,
+  UserRow,
+  TeamMemberRow,
+  MembershipRow,
+} from "./access";
 export { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from "./access";
 export {
   AGENT_EFFORTS,
@@ -66,9 +74,12 @@ export {
   resolveScoped,
   assertCanWriteScope,
   AGENT_CREDENTIALS,
+  ANTHROPIC_OAUTH_CREDENTIAL,
   sourceCredentialName,
   envCredential,
+  validateCredential,
   resolveCredential,
+  resolveAgentAuth,
   credentialSource,
   setCredential,
   deleteCredential,
@@ -90,6 +101,7 @@ export type {
   ScopeContext,
   CredentialSource,
   CredentialMeta,
+  AgentAuth,
   PrefKey,
   PrefSource,
   ArtifactMeta,
@@ -106,12 +118,16 @@ export {
   listKnowledgeEntries,
   updateKnowledgeEntry,
   listEnvironments,
-  listAffectedVersions,
+  listKnowledgeFacets,
 } from "./knowledge";
 export type {
   KnowledgeInput,
   KnowledgeUpdateInput,
   SearchOptions,
+  KnowledgeListOptions,
+  KnowledgeFilters,
+  FacetKey,
+  FacetCount,
 } from "./knowledge";
 export { addFeedback, listFeedback } from "./knowledge";
 export type { FeedbackInput } from "./knowledge";
@@ -198,13 +214,26 @@ export {
   updateCustomer,
   deleteCustomer,
   resolveCustomerByEmail,
+  setCustomerFact,
+  deleteCustomerFact,
+  listCustomerFacts,
+  listCustomerFactKinds,
+  linkCustomerComponent,
+  unlinkCustomerComponent,
+  listCustomerComponents,
+  getCustomerProfile,
   getCustomerIdBySlug,
   setWorkItemCustomer,
   setObservedVersion,
   getCustomerName,
   getCustomerSlug,
 } from "./catalog";
-export type { CustomerInput } from "./catalog";
+export type {
+  CustomerInput,
+  CustomerMatch,
+  CustomerFactInput,
+  CustomerProfile,
+} from "./catalog";
 export {
   listResolutionPatterns,
   addResolutionPattern,
@@ -268,6 +297,9 @@ export {
   resolveProjectContext,
   resolveProjectContextStrict,
   routeIngest,
+  normalizeWikis,
+  defaultWiki,
+  matchWiki,
 } from "./sources";
 export type {
   SourceProjectRole,
