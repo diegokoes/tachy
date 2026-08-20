@@ -134,6 +134,7 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
       groupKey: t.group_id != null ? String(t.group_id) : undefined,
       requester: t.requester_id != null ? String(t.requester_id) : undefined,
       requesterEmail: t.requester?.email,
+      requesterName: t.requester?.name,
       raw: t,
       sourceCreatedAt: t.created_at,
       sourceUpdatedAt: t.updated_at,
@@ -182,9 +183,10 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
         convos.push(...batch);
         if (batch.length < 30) break;
       }
-      const names = convos.some((c) => !c.incoming && c.user_id != null)
-        ? await loadAgentNames()
-        : new Map<string, string>();
+      // Loaded unconditionally, not just when an agent replied: redaction needs
+      // the colleagues a thread only ever *mentions*, and the map is cached for
+      // the life of the adapter, so this costs one directory read per process.
+      const names = await loadAgentNames();
       const description: RawMessage = {
         externalId: `desc-${t.id}`,
         author: t.requester_id != null ? String(t.requester_id) : undefined,
@@ -199,7 +201,10 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
         description,
         ...convos.map((c) => mapConversation(c, names)),
       ].sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
-      return metadataToItem(t, messages);
+      return {
+        ...metadataToItem(t, messages),
+        knownPeople: [...names.values()],
+      };
     },
 
     async listItems(opts: ListOptions) {

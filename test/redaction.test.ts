@@ -28,6 +28,27 @@ describe("scrubText", () => {
     expect(out).toBe("reach me at [EMAIL_1] or [EMAIL_1], call [PHONE_1]");
   });
 
+  it("keeps bare digit groups, which in a ticket are identifiers not phones", () => {
+    const map = new TokenMap();
+    const out = scrubText("UID 040 5900 1234 failed to lock", map);
+    expect(out).toBe("UID 040 5900 1234 failed to lock");
+  });
+
+  it("still takes a bare group when a word announces it as a phone", () => {
+    const map = new TokenMap();
+    expect(scrubText("Tel: 040 5900 1234", map)).toBe("Tel: [PHONE_1]");
+    expect(scrubText("móvil 629 563 807", new TokenMap())).toBe(
+      "móvil [PHONE_1]",
+    );
+  });
+
+  it("takes an international number with no announcing word", () => {
+    const map = new TokenMap();
+    expect(scrubText("signature line +34 629 56 38 07 here", map)).toBe(
+      "signature line [PHONE_1] here",
+    );
+  });
+
   it("does not mangle ISO dates or short status codes", () => {
     const map = new TokenMap();
     const out = scrubText(
@@ -108,6 +129,41 @@ describe("scrubKnownNames", () => {
         map,
       ),
     ).toBe("42 is the answer by Al");
+  });
+
+  it("matches a first name alone, on the full name's token", () => {
+    const map = new TokenMap();
+    expect(
+      scrubKnownNames("Hola Javier, ping Javier Banos.", ["Javier Banos"], map),
+    ).toBe("Hola [USER_1], ping [USER_1].");
+  });
+
+  it("gives an adjacent run of parts one token, not one each", () => {
+    const map = new TokenMap();
+    expect(
+      scrubKnownNames("thanks Javier Banos for the fix", ["Javier Banos"], map),
+    ).toBe("thanks [USER_1] for the fix");
+  });
+
+  it("matches across whatever whitespace each side happens to use", () => {
+    const map = new TokenMap();
+    expect(
+      scrubKnownNames("from Javier  Banos today", ["Javier\n Banos"], map),
+    ).toBe("from [USER_1] today");
+  });
+
+  it("bounds accented names correctly", () => {
+    const map = new TokenMap();
+    expect(scrubKnownNames("Hola José, ¿todo bien?", ["José Pérez"], map)).toBe(
+      "Hola [USER_1], ¿todo bien?",
+    );
+  });
+
+  it("leaves short parts alone so ordinary words survive", () => {
+    const map = new TokenMap();
+    expect(scrubKnownNames("an ave flew by", ["Ave Andersen"], map)).toBe(
+      "an ave flew by",
+    );
   });
 });
 

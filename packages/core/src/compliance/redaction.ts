@@ -19,8 +19,23 @@ export class TokenMap {
 
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 
-const PHONE_RE =
-  /(?:\+\d[\d\s().-]{6,}\d)|(?:\(\d{2,4}\)[\s.-]?\d{3,4}[\s.-]?\d{3,4})|(?:\b\d{3}[\s.-]\d{3,4}[\s.-]\d{3,4}\b)/g;
+/**
+ * The first two branches carry their own evidence (a country code, an area code
+ * in brackets). The third is bare digit groups, which in a support ticket are far
+ * more often the identifiers the ticket is *about* — UIDs, serials, order numbers
+ * — than a phone number, so it only fires behind a word that announces one.
+ * Tokenizing those identifiers is privacy-neutral and destroys the case.
+ */
+const PHONE_WORD = String.raw`(?:tel|telephone|tele?fono|tfno|tlf|phone|mobile|m[oó]vil|cell|fax|whatsapp)`;
+
+const PHONE_RE = new RegExp(
+  [
+    String.raw`(?:\+\d[\d\s().-]{6,}\d)`,
+    String.raw`(?:\(\d{2,4}\)[\s.-]?\d{3,4}[\s.-]?\d{3,4})`,
+    String.raw`(?<=\b${PHONE_WORD}\b[\s:.=-]{0,4})(?:\d{3}[\s.-]\d{3,4}[\s.-]\d{3,4})`,
+  ].join("|"),
+  "gi",
+);
 
 const PEM_RE =
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g;
@@ -79,10 +94,29 @@ export function scrubText(text: string | undefined, map: TokenMap): string {
   return out;
 }
 
+const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Collapses the whitespace a name is stored with onto what the text uses. */
+const flatten = (s: string) => s.replace(/\s+/g, " ").trim();
+
+/** Parts short enough to collide with ordinary words are left alone. */
+const NAME_PART_MIN = 4;
+
 /**
  * Tokenize known person names wherever they appear in free text — same USER
  * kind as the author fields, so mentions map to the same token. Best-effort:
- * only names the item itself declares are matched.
+ * only names the item declares, or that the source could name for it, are found.
+ *
+ * Each name's own parts are matched too, mapping to the token of the full name
+ * they came from: people are addressed by first name far more often than by the
+ * full one their account is registered under ("Hola Javier," opening a mail from
+ * Javier Baños).
+ *
+ * One alternation over one pass, rather than a replace per name — a long ticket
+ * against a full agent directory is hundreds of names across hundreds of KB, and
+ * that many sequential scans is the difference between milliseconds and seconds.
+ * Longest first, so the full name wins wherever both could match and a part never
+ * eats half of one.
  */
 export function scrubKnownNames(
   text: string | undefined,
@@ -90,16 +124,52 @@ export function scrubKnownNames(
   map: TokenMap,
 ): string {
   if (!text) return text ?? "";
-  let out = text;
+
+  // Keyed on the flattened, lowercased form, which is also how a match is
+  // looked up — so a name stored "Javier  Baños" still finds "Javier Baños".
+  const byKey = new Map<string, string>();
+  const add = (pattern: string, full: string) => {
+    const key = flatten(pattern).toLowerCase();
+    if (key && !byKey.has(key)) byKey.set(key, full);
+  };
   for (const name of names) {
-    const n = name?.trim();
-    if (!n || n.length < 3) continue;
-    const escaped = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    out = out.replace(new RegExp(`\\b${escaped}\\b`, "gi"), () =>
-      map.token("USER", n),
-    );
+    const n = flatten(name ?? "");
+    if (n.length < 3) continue;
+    add(n, n);
   }
-  return out;
+  // Parts in a second pass, so a full name is never shadowed by a part of
+  // another name that happened to be listed first.
+  for (const name of names) {
+    const n = flatten(name ?? "");
+    if (n.length < 3) continue;
+    for (const part of n.split(/[\s,]+/))
+      if (part.length >= NAME_PART_MIN && /^\p{L}+$/u.test(part)) add(part, n);
+  }
+  if (!byKey.size) return text;
+
+  const alternation = [...byKey.keys()]
+    .sort((a, b) => b.length - a.length)
+    .map((k) => reEscape(k).replace(/ /g, "\\s+"))
+    .join("|");
+  // A run of adjacent known parts is one person, so it becomes one token.
+  // Matching them separately turns "Javier Baños" into "[USER_1] [USER_1]",
+  // which reads as two people talking.
+  const re = new RegExp(
+    `(?<![\\p{L}\\p{N}])(?:${alternation})(?:\\s+(?:${alternation}))*(?![\\p{L}\\p{N}])`,
+    "giu",
+  );
+
+  /** The longest leading run of words that is itself a known name. */
+  const canonical = (hit: string): string => {
+    const words = flatten(hit).toLowerCase().split(" ");
+    for (let n = words.length; n > 0; n--) {
+      const full = byKey.get(words.slice(0, n).join(" "));
+      if (full) return full;
+    }
+    return words.join(" ");
+  };
+
+  return text.replace(re, (hit) => map.token("USER", canonical(hit)));
 }
 
 /**
@@ -140,7 +210,15 @@ export function redactNormalized(
   const { customerSlug, map } = opts;
   const customerToken = customerSlug || "[CUSTOMER]";
 
-  const knownNames = [item.requester, ...item.messages.map((m) => m.author)];
+  // authorLabel is where the display names actually live: `requester` and
+  // `author` are account ids on most sources (a Freshdesk user id, an ADO
+  // descriptor), and feeding those to the name scrubber matches nothing.
+  const knownNames = [
+    item.requester,
+    item.requesterName,
+    ...(item.knownPeople ?? []),
+    ...item.messages.flatMap((m) => [m.author, m.authorLabel]),
+  ];
   const scrub = (text: string | undefined) =>
     scrubKnownNames(scrubText(text, map), knownNames, map);
   return {
@@ -148,6 +226,8 @@ export function redactNormalized(
     title: item.title ? scrub(item.title) : item.title,
     requester: item.requester ? customerToken : item.requester,
     requesterEmail: undefined,
+    requesterName: undefined,
+    knownPeople: undefined,
     messages: item.messages.map((m) => ({
       ...m,
       author: m.author ? map.token("USER", m.author) : m.author,

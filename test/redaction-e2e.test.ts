@@ -55,7 +55,7 @@ describe("redaction end-to-end via resolveSource", () => {
     await addCustomer({
       name: "Dalmoor",
       slug: "dalmoor",
-      aliases: ["dalmoor.example"],
+      emailDomains: ["dalmoor.example"],
     });
 
     const { conn, source } = await resolveSource("test-freshdesk");
