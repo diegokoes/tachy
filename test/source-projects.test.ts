@@ -126,7 +126,7 @@ describe("source projects", () => {
         externalKey: "DocsOnly",
         role: "tracker",
         teamSlug: "test-team",
-        wiki: { identifier: "DocsOnly.wiki" },
+        wikis: [{ identifier: "DocsOnly.wiki" }],
       }),
     ).rejects.toThrow(/cannot own a wiki/);
   });
@@ -271,7 +271,7 @@ describe("project context", () => {
     const tpd = await tpdProductId();
     await addComponent({ productId: tpd, slug: "portal", name: "Portal" });
     await updateSourceProject(project.id, {
-      wiki: { identifier: "TPD.wiki", name: "TPD.wiki" },
+      wikis: [{ identifier: "TPD.wiki", name: "TPD.wiki" }],
     });
     await linkRepo({
       slug: "portal",

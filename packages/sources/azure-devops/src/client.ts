@@ -67,6 +67,11 @@ export interface AdoClient {
     wiki: string,
     path: string,
   ): Promise<{ path: string; content: string; remoteUrl?: string }>;
+  getWikiPageById(
+    project: string,
+    wiki: string,
+    id: string | number,
+  ): Promise<{ path: string; content: string; remoteUrl?: string }>;
   listRepos(project: string): Promise<any[]>;
 }
 
@@ -253,6 +258,23 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
       );
       return {
         path: res.path ?? path,
+        content: res.content ?? "",
+        remoteUrl: res.remoteUrl,
+      };
+    },
+
+    /**
+     * The id a wiki URL carries (.../_wiki/wikis/foo.wiki/1648/Start). Worth its
+     * own call because the trailing segment of that URL is a display slug, not
+     * the page path — dashes where the path has spaces — so it does not round-trip
+     * through the path endpoint.
+     */
+    async getWikiPageById(project, wiki, id) {
+      const res = await req(
+        `${proj(project)}/_apis/wiki/wikis/${encodeURIComponent(wiki)}/pages/${encodeURIComponent(String(id))}?includeContent=true`,
+      );
+      return {
+        path: res.path ?? "",
         content: res.content ?? "",
         remoteUrl: res.remoteUrl,
       };

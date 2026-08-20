@@ -9,6 +9,8 @@ export interface IngestedItem {
   productId: string | null;
   teamId: string | null;
   customerId: string | null;
+  /** Set when the sender's domain matched several customers and so decided none. */
+  customerAmbiguity?: string;
   observedVersion: string | null;
   /** Component the item's area path maps to, when the project has a rule for it. */
   componentSlug: string | null;
@@ -21,7 +23,21 @@ export async function ingestWorkItem(
   const route = await routeIngest(connId, raw.groupKey, raw.areaPath);
   const { sourceProjectId, productId, teamId } = route;
 
-  const customerId = await resolveCustomerByEmail(raw.requesterEmail);
+  /*
+   * A project that exists for one customer settles the question by configuration,
+   * and beats the sender's domain — which partners, freemail and internally-filed
+   * tickets all defeat. A disagreement is reported rather than swallowed: it means
+   * either the project is not really single-customer, or the domain belongs on a
+   * different customer's row, and both are worth someone's attention.
+   */
+  const match = await resolveCustomerByEmail(raw.requesterEmail);
+  const customerId = route.customerId ?? match.customerId;
+  const conflict =
+    route.customerId &&
+    match.customerId &&
+    route.customerId !== match.customerId
+      ? "the sender's email domain points at a different customer than the project this came from — the project won; check which is wrong"
+      : undefined;
 
   return sql.begin(async (tx) => {
     const [item] = await tx`
@@ -78,6 +94,11 @@ export async function ingestWorkItem(
       productId: item.product_id,
       teamId: item.team_id,
       customerId: item.customer_id,
+      ...(conflict
+        ? { customerAmbiguity: conflict }
+        : match.reason && !route.customerId
+          ? { customerAmbiguity: match.reason }
+          : {}),
       observedVersion: item.observed_version,
       componentSlug: route.componentSlug,
     };

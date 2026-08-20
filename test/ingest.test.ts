@@ -3,6 +3,9 @@ import { ingestWorkItem, addCustomer, setWorkItemCustomer } from "@tachy/core";
 import type { RawWorkItem } from "@tachy/core";
 import { resetData, seededFreshdeskConnId, sql, tpdProductId } from "./helpers";
 
+// File scope: a later describe would otherwise run against a closed pool.
+afterAll(() => sql.end());
+
 function rawItem(over: Partial<RawWorkItem> = {}): RawWorkItem {
   return {
     externalId: "58925",
@@ -18,7 +21,6 @@ function rawItem(over: Partial<RawWorkItem> = {}): RawWorkItem {
 
 describe("ingestWorkItem", () => {
   beforeEach(resetData);
-  afterAll(() => sql.end());
 
   it("resolves product/team from the seeded group mapping", async () => {
     const connId = await seededFreshdeskConnId();
@@ -52,12 +54,12 @@ describe("ingestWorkItem", () => {
     expect(rows[0].n).toBe(1);
   });
 
-  it("auto-matches a customer by requester email domain, including aliases", async () => {
+  it("auto-matches a customer by requester email domain, including a partner's", async () => {
     const connId = await seededFreshdeskConnId();
     const customer = await addCustomer({
       name: "Davidoff",
       slug: "davidoff",
-      aliases: ["davidoff.com", "arvato.com"],
+      emailDomains: ["davidoff.com", "arvato.com"],
     });
 
     const direct = await ingestWorkItem(
@@ -84,7 +86,7 @@ describe("ingestWorkItem", () => {
     const wrong = await addCustomer({
       name: "Wrong Co",
       slug: "wrong-co",
-      aliases: ["shared.example"],
+      emailDomains: ["shared.example"],
     });
     const right = await addCustomer({ name: "Right Co", slug: "right-co" });
 
@@ -100,5 +102,65 @@ describe("ingestWorkItem", () => {
       rawItem({ requesterEmail: "agent@shared.example", title: "updated" }),
     );
     expect(resynced.customerId).toBe(right.id);
+  });
+});
+
+describe("customer attribution precedence", () => {
+  beforeEach(resetData);
+
+  /** A project that exists for one customer, plus a domain pointing elsewhere. */
+  async function setup() {
+    const connId = await seededFreshdeskConnId();
+    const knauf = await addCustomer({
+      name: "Knauf",
+      slug: "knauf",
+      emailDomains: ["knauf.com"],
+    });
+    await addCustomer({
+      name: "Logista",
+      slug: "logista",
+      emailDomains: ["logista.com"],
+    });
+    await sql`
+      update source_projects set customer_id = ${knauf.id}
+      where external_key = '48000641379'
+    `;
+    return { connId, knaufId: knauf.id as string };
+  }
+
+  it("a single-customer project decides, even when no domain matches", async () => {
+    const { connId, knaufId } = await setup();
+    const item = await ingestWorkItem(connId, {
+      ...rawItem(),
+      requesterEmail: "someone@gmail.com",
+    });
+    expect(item.customerId).toBe(knaufId);
+    expect(item.customerAmbiguity).toBeUndefined();
+  });
+
+  it("the project beats a domain that disagrees, and says so", async () => {
+    const { connId, knaufId } = await setup();
+    const item = await ingestWorkItem(connId, {
+      ...rawItem(),
+      requesterEmail: "buyer@logista.com",
+    });
+    expect(item.customerId).toBe(knaufId);
+    expect(item.customerAmbiguity).toMatch(
+      /different customer than the project/,
+    );
+  });
+
+  it("with no project customer, the sender's domain still decides", async () => {
+    const connId = await seededFreshdeskConnId();
+    const logista = await addCustomer({
+      name: "Logista",
+      slug: "logista",
+      emailDomains: ["logista.com"],
+    });
+    const item = await ingestWorkItem(connId, {
+      ...rawItem(),
+      requesterEmail: "buyer@logista.com",
+    });
+    expect(item.customerId).toBe(logista.id);
   });
 });
