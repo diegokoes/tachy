@@ -72,6 +72,20 @@ export async function updateComponent(
         throw badInput(
           `Unknown parent component '${patch.parentSlug}' for this product`,
         );
+      // Walking up from the proposed parent must not arrive back here, or the
+      // branch detaches into a ring that product_area paths never terminate on.
+      const [{ cycles }] = await sql`
+        with recursive up as (
+          select id, parent_id from components where id = ${parent.id}
+          union all
+          select c.id, c.parent_id from components c join up on c.id = up.parent_id
+        )
+        select count(*)::int as cycles from up where id = ${current.id}
+      `;
+      if (cycles > 0)
+        throw badInput(
+          `'${patch.parentSlug}' sits under '${slug}' — that would make a cycle`,
+        );
       parentId = parent.id;
     }
   }
