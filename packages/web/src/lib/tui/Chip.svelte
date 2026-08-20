@@ -10,7 +10,7 @@
     onremove,
     children,
   }: {
-    tone?: "default" | "accent" | "warn";
+    tone?: "default" | "accent" | "warn" | "muted";
     selected?: boolean;
     title?: string;
     onclick?: () => void;
@@ -50,6 +50,11 @@
   .chip.accent {
     border-color: var(--accent);
     color: var(--accent);
+  }
+  .chip.muted {
+    border-color: var(--border);
+    color: var(--muted);
+    background: none;
   }
   .chip.warn {
     border-color: var(--warn);

@@ -3,14 +3,26 @@
   import { api } from "../api";
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
-  import AsciiSelect from "../AsciiSelect.svelte";
-  import DeleteButton from "./DeleteButton.svelte";
-  import { Button, ErrorMark } from "../tui";
+  import { createResource, errText } from "../resource.svelte";
+  import { slugify, uniqueSlug } from "../slug";
+  import {
+    Badge,
+    Button,
+    Checkbox,
+    Chip,
+    CrudTable,
+    ErrorMark,
+    Field,
+    Modal,
+    Note,
+    type Column,
+    type Draft,
+  } from "../tui";
   import {
     TIP,
     csv,
-    errText,
     type Component,
+    type Customer,
     type Product,
     type Repo,
     type SourceProject,
@@ -18,54 +30,54 @@
 
   type FoundRepo = { name: string; url: string; default_branch: string };
 
-  let repos = $state<Repo[]>([]);
-  let projects = $state<SourceProject[]>([]);
-  let products = $state<Product[]>([]);
+  const repos = createResource(
+    () => api.get<{ repos: Repo[] }>("/repos").then((r) => r.repos),
+    [],
+  );
+  const projects = createResource(
+    () => api.get<SourceProject[]>("/source-projects"),
+    [],
+  );
+  const products = createResource(() => api.get<Product[]>("/products"), []);
+  const customers = createResource(
+    () => api.get<Customer[]>("/customers"),
+    [],
+  );
+
   let components = $state<Record<string, Component[]>>({});
-  let loading = $state(true);
-  let saving = $state(false);
   let error = $state<string | null>(null);
   let indexing = $state<string | null>(null);
-
-  let showForm = $state(false);
-  let editingSlug = $state<string | null>(null);
-  let form = $state({
-    slug: "",
-    url: "",
-    source_project_id: "",
-    product_slug: "",
-    component: "",
-    branch: "main",
-    extensions: "",
-    max_file_kb: "",
-  });
-
   let found = $state<Record<string, FoundRepo[]>>({});
   let discovering = $state(false);
   let poll: ReturnType<typeof setInterval> | undefined;
 
   const knowledgeProjects = $derived(
-    projects.filter((p) => p.role === "knowledge"),
+    projects.data.filter((p) => p.role === "knowledge"),
   );
-  const formProject = $derived(
-    knowledgeProjects.find((p) => p.id === form.source_project_id),
-  );
-  const formProductSlug = $derived(
-    formProject?.product_slug ?? form.product_slug,
-  );
+  const projectOf = (id: string) =>
+    knowledgeProjects.find((p) => p.id === id) ?? null;
+
+  /** A repo is scoped by its project when it has one, else directly by product. */
+  const productOfDraft = (d: Draft) =>
+    projectOf(String(d.source_project_id ?? ""))?.product_slug ??
+    String(d.product_slug ?? "");
+
   const canEditRepo = (r: Repo) => {
-    const project = projects.find((p) => p.id === r.source_project_id);
+    const project = projects.data.find((p) => p.id === r.source_project_id);
     const team =
       project?.team_slug ??
-      products.find((p) => p.slug === r.product_slug)?.team_slug ??
+      products.data.find((p) => p.slug === r.product_slug)?.team_slug ??
       null;
     return canCurateScope({ team_slug: team });
   };
-  const canAdd = $derived(
-    products.some((p) => canCurateScope({ team_slug: p.team_slug })),
+  const myProducts = $derived(
+    products.data.filter((p) => canCurateScope({ team_slug: p.team_slug })),
   );
+  const canAdd = $derived(myProducts.length > 0);
   const busyIndex = $derived(
-    repos.some((r) => r.index_status === "cloning" || r.index_status === "indexing"),
+    repos.data.some(
+      (r) => r.index_status === "cloning" || r.index_status === "indexing",
+    ),
   );
 
   const freshness = (r: Repo) => {
@@ -76,23 +88,13 @@
     return days === 0 ? "today" : `${days}d ago`;
   };
 
-  async function load() {
-    loading = true;
-    error = null;
-    try {
-      const [repoRes, projectRes, productRes] = await Promise.all([
-        api.get<{ repos: Repo[] }>("/repos"),
-        api.get<SourceProject[]>("/source-projects"),
-        api.get<Product[]>("/products"),
-      ]);
-      repos = repoRes.repos;
-      projects = projectRes;
-      products = productRes;
-    } catch (e) {
-      error = errText(e);
-    } finally {
-      loading = false;
-    }
+  async function reload() {
+    await Promise.all([
+      repos.reload(),
+      projects.reload(),
+      products.reload(),
+      customers.reload(),
+    ]);
   }
 
   async function loadComponents(productSlug: string) {
@@ -106,17 +108,90 @@
     }
   }
 
+  /* Bulk linking, because an Azure DevOps project routinely holds fifty repos
+     and the single-repo form is one dialog each. Component and customer stay a
+     per-repo decision afterwards — only the tedious part is batched. */
+  let bulk = $state<{ project: SourceProject; picked: Set<string> } | null>(
+    null,
+  );
+  let bulkBusy = $state(false);
+  let bulkError = $state<string | null>(null);
+  let bulkResults = $state<{ slug: string; ok: boolean; error?: string }[]>([]);
+
+  const linkedUrls = $derived(new Set(repos.data.map((r) => r.url)));
+
+  async function openBulk(project: SourceProject) {
+    bulkError = null;
+    bulkResults = [];
+    bulk = { project, picked: new Set() };
+    if (!found[project.id]) await discover({ source_project_id: project.id });
+    const hits = found[project.id] ?? [];
+    // Pre-tick everything not already linked: the normal intent is "all of them",
+    // and un-ticking the few you don't want is less work than ticking fifty.
+    bulk = {
+      project,
+      picked: new Set(
+        hits.filter((r) => !linkedUrls.has(r.url)).map((r) => r.name),
+      ),
+    };
+  }
+
+  function toggleBulk(name: string, on: boolean) {
+    if (!bulk) return;
+    const picked = new Set(bulk.picked);
+    if (on) picked.add(name);
+    else picked.delete(name);
+    bulk = { ...bulk, picked };
+  }
+
+  async function saveBulk() {
+    if (!bulk) return;
+    const hits = (found[bulk.project.id] ?? []).filter((r) =>
+      bulk!.picked.has(r.name),
+    );
+    if (!hits.length) return;
+    bulkBusy = true;
+    bulkError = null;
+    try {
+      const taken = repos.data.map((r) => r.slug);
+      const payload = hits.map((r) => {
+        const slug = uniqueSlug(slugify(r.name), taken);
+        taken.push(slug);
+        return { slug, url: r.url, branch: r.default_branch || "main" };
+      });
+      const res = await api.put<{
+        ok: boolean;
+        results: { slug: string; ok: boolean; error?: string }[];
+      }>("/repos/bulk", {
+        source_project_id: bulk.project.id,
+        repos: payload,
+      });
+      await repos.reload();
+      bulkResults = res.results.filter((r) => !r.ok);
+      if (res.ok) bulk = null;
+    } catch (e) {
+      bulkError = errText(e);
+    } finally {
+      bulkBusy = false;
+    }
+  }
+
   /** Repos of the chosen project, so the clone URL is picked, not transcribed. */
-  async function discover() {
-    if (!formProject) return;
+  async function discover(d: Draft) {
+    const p = projectOf(String(d.source_project_id ?? ""));
+    if (!p) return;
     discovering = true;
     error = null;
     try {
-      const res = await api.get<{ ok: boolean; error?: string; repos?: FoundRepo[] }>(
-        `/source-connections/${formProject.source_slug}/discover/repos?project=${encodeURIComponent(formProject.external_key)}`,
+      const res = await api.get<{
+        ok: boolean;
+        error?: string;
+        repos?: FoundRepo[];
+      }>(
+        `/source-connections/${p.source_slug}/discover/repos?project=${encodeURIComponent(p.external_key)}`,
       );
       if (!res.ok) throw new Error(res.error ?? "discovery failed");
-      found[formProject.id] = res.repos ?? [];
+      found[p.id] = res.repos ?? [];
     } catch (e) {
       error = errText(e);
     } finally {
@@ -124,71 +199,140 @@
     }
   }
 
-  function pickFound(r: FoundRepo) {
-    form.url = r.url;
-    if (r.default_branch) form.branch = r.default_branch;
-    if (!form.slug)
-      form.slug = r.name.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
-  }
+  const columns: Column<Repo>[] = $derived([
+    {
+      key: "slug",
+      label: "repo",
+      width: "16rem",
+      edit: "text",
+      required: true,
+      editable: () => false,
+      hint: TIP.slug,
+      cell: repoCell,
+      derive: (d) =>
+        uniqueSlug(
+          slugify(
+            String(d.url ?? "")
+              .replace(/\.git$/, "")
+              .split("/")
+              .filter(Boolean)
+              .pop() ?? "",
+          ),
+          repos.data.map((r) => r.slug),
+        ),
+    },
+    {
+      key: "url",
+      label: "clone URL",
+      formOnly: true,
+      edit: "text",
+      required: true,
+      hint: "Cloning uses the project connection's stored token.",
+    },
+    {
+      key: "source_project_id",
+      label: "project",
+      width: "13rem",
+      edit: "select",
+      hint: "Which registered project this repo belongs to. Its connection supplies the clone credentials.",
+      options: [
+        { value: "", label: `(none — scope by ${t("product")})` },
+        ...knowledgeProjects.map((p) => ({
+          value: p.id,
+          label: `${p.external_key} (${p.product_slug})`,
+        })),
+      ],
+      // The id, because that is what the options carry and what the API takes;
+      // the table shows project_key through `cell`.
+      value: (r) => r.source_project_id ?? "",
+      cell: projectCell,
+    },
+    {
+      key: "product_slug",
+      label: t("product"),
+      formOnly: true,
+      edit: "select",
+      hint: `Only needed when the repo has no project. Ignored otherwise.`,
+      options: [
+        { value: "", label: "(from the project)" },
+        ...myProducts.map((p) => ({ value: p.slug, label: p.name })),
+      ],
+    },
+    {
+      key: "customer_slug",
+      label: "customer",
+      width: "10rem",
+      edit: "select",
+      hint: "Set only for a customer's own addon repo. Left empty the repo is shared product code — and a customer-scoped search returns the shared ones too.",
+      options: [
+        { value: "", label: "(none — shared)" },
+        ...customers.data.map((cu) => ({ value: cu.slug, label: cu.name })),
+      ],
+    },
+    {
+      key: "component_slug",
+      label: "component",
+      width: "10rem",
+      edit: "select",
+      hint: TIP.repoComponent,
+      options: (d) => [
+        { value: "", label: "(none)" },
+        ...(components[productOfDraft(d)] ?? []).map((c) => ({
+          value: c.slug,
+          label: `${c.name} (${c.slug})`,
+        })),
+      ],
+    },
+    {
+      key: "default_branch",
+      label: "branch",
+      width: "8rem",
+      edit: "text",
+      initial: "main",
+    },
+    {
+      key: "extensions",
+      label: "extensions",
+      formOnly: true,
+      edit: "text",
+      hint: "Comma-separated, e.g. ts, cs, sql. Empty uses the built-in code allowlist.",
+      value: (r) =>
+        (Array.isArray(r.config?.include_extensions)
+          ? (r.config.include_extensions as string[])
+          : []
+        ).join(", "),
+    },
+    {
+      key: "max_file_kb",
+      label: "max file KB",
+      formOnly: true,
+      edit: "text",
+      hint: "Files larger than this are skipped. Empty means the default, 200.",
+      value: (r) => r.config?.max_file_kb ?? "",
+    },
+    { key: "index_status", label: "index", width: "8rem", cell: indexCell },
+    { key: "indexed", label: "indexed", width: "10rem", cell: freshnessCell },
+  ]);
 
-  function openAdd() {
-    editingSlug = null;
-    form = {
-      slug: "",
-      url: "",
-      source_project_id: knowledgeProjects[0]?.id ?? "",
-      product_slug: "",
-      component: "",
-      branch: "main",
-      extensions: "",
-      max_file_kb: "",
-    };
-    showForm = true;
-    void loadComponents(formProductSlug);
-  }
-
-  function openEdit(r: Repo) {
-    editingSlug = r.slug;
-    const cfg = r.config ?? {};
-    form = {
-      slug: r.slug,
-      url: r.url,
-      source_project_id: r.source_project_id ?? "",
-      product_slug: r.product_slug ?? "",
-      component: r.component_slug ?? "",
-      branch: r.default_branch,
-      extensions: (Array.isArray(cfg.include_extensions) ? cfg.include_extensions : []).join(", "),
-      max_file_kb: cfg.max_file_kb == null ? "" : String(cfg.max_file_kb),
-    };
-    showForm = true;
-    void loadComponents(r.product_slug ?? "");
-  }
-
-  async function save(e: SubmitEvent) {
-    e.preventDefault();
-    saving = true;
-    error = null;
-    try {
-      const config: Record<string, unknown> = {};
-      const ext = csv(form.extensions);
-      if (ext.length) config.include_extensions = ext;
-      if (form.max_file_kb.trim()) config.max_file_kb = Number(form.max_file_kb);
-      await api.put("/repos", {
-        slug: form.slug.trim(),
-        url: form.url.trim(),
-        ...(form.source_project_id ? { source_project_id: form.source_project_id } : {}),
-        ...(formProductSlug ? { product: formProductSlug } : {}),
-        component: form.component || null,
-        branch: form.branch.trim() || "main",
-        config,
-      });
-      showForm = false;
-      await load();
-    } catch (err) {
-      error = errText(err);
-    } finally {
-      saving = false;
-    }
+  async function save(d: Draft) {
+    const config: Record<string, unknown> = {};
+    const ext = csv(String(d.extensions ?? ""));
+    if (ext.length) config.include_extensions = ext;
+    if (String(d.max_file_kb ?? "").trim())
+      config.max_file_kb = Number(d.max_file_kb);
+    const product = productOfDraft(d);
+    await api.put("/repos", {
+      slug: String(d.slug).trim(),
+      url: String(d.url).trim(),
+      ...(d.source_project_id
+        ? { source_project_id: d.source_project_id }
+        : {}),
+      ...(product ? { product } : {}),
+      component: d.component_slug || null,
+      customer: d.customer_slug || null,
+      branch: String(d.default_branch ?? "").trim() || "main",
+      config,
+    });
   }
 
   async function reindex(r: Repo) {
@@ -196,7 +340,7 @@
     error = null;
     try {
       await api.post(`/repos/${r.slug}/reindex`, {});
-      await load();
+      await repos.reload();
     } catch (e) {
       error = errText(e);
     } finally {
@@ -204,198 +348,253 @@
     }
   }
 
-  async function del(r: Repo) {
-    error = null;
-    try {
-      await api.delete(`/repos/${r.slug}`);
-      await load();
-    } catch (e) {
-      error = errText(e);
-    }
-  }
-
   // Indexing runs in the background on the server, so the table follows it.
   $effect(() => {
-    if (busyIndex && !poll) poll = setInterval(load, 3000);
+    if (busyIndex && !poll) poll = setInterval(repos.reload, 3000);
     if (!busyIndex && poll) {
       clearInterval(poll);
       poll = undefined;
     }
   });
 
+  // The component picker switches product as the form's project changes, so
+  // every curatable product's components are on hand before the form opens.
   $effect(() => {
-    void loadComponents(formProductSlug);
+    for (const p of myProducts) void loadComponents(p.slug);
   });
 
   onDestroy(() => poll && clearInterval(poll));
-  onMount(load);
+  onMount(reload);
 </script>
 
-{#if error}
-  <p class="error clamped" title={error}>
-    <ErrorMark message={error} />
-    <span class="etxt">{error}</span>
-  </p>
-{/if}
-{#if loading}<p class="muted">Loading…</p>{/if}
+{#snippet projectCell(r: Repo)}
+  <span class:dim={!r.project_key}>{r.project_key ?? "—"}</span>
+{/snippet}
 
-<p class="muted hint">
-  Linked repositories are cloned and indexed so the agent can ground answers in real
-  code. Map each one to the component it implements — that is what lets a question
-  about one part of the {t("product")} search that repo instead of all of them.
-</p>
+{#snippet repoCell(r: Repo)}
+  <span class="repo">
+    {r.slug}
+    <span class="url">{r.url}</span>
+  </span>
+{/snippet}
 
-<table>
-  <thead><tr>
-    <th class="tip" title={TIP.slug}>slug</th>
-    <th>project</th>
-    <th class="tip" title={TIP.repoComponent}>component</th>
-    <th>branch</th>
-    <th>index</th>
-    <th>indexed</th>
-    <th></th>
-  </tr></thead>
-  <tbody>
-    {#each repos as r (r.id)}
-      <tr>
-        <td>{r.slug}<div class="muted url">{r.url}</div></td>
-        <td class="muted">{r.project_key ?? r.product_slug ?? "—"}</td>
-        <td>
-          {#if r.component_slug}{r.component_slug}
-          {:else}<span class="muted">unmapped</span>{/if}
-        </td>
-        <td class="muted">{r.default_branch}</td>
-        <td>
-          <span class="badge" class:on={r.index_status === "ready"}
-            class:bad={r.index_status === "error"}>{r.index_status}</span>
-        </td>
-        <td class="muted">
-          {freshness(r)}
-          {#if r.file_count}<span class="counts">{r.file_count} files / {r.chunk_count} chunks</span>{/if}
-        </td>
-        <td class="actions">
-          {#if canEditRepo(r)}
-            <button class="mini" onclick={() => reindex(r)}
-              disabled={indexing === r.slug || r.index_status === "cloning" || r.index_status === "indexing"}>
-              {indexing === r.slug ? "…" : "reindex"}
-            </button>
-            <Button variant="ghost" tone="info" square icon="edit" title="edit" aria-label="edit" onclick={() => openEdit(r)} />
-            <DeleteButton onConfirm={() => del(r)} />
-          {/if}
-        </td>
-      </tr>
-      {#if r.index_error}
-        <tr class="err-row"><td colspan="7"><ErrorMark message={r.index_error} label="index error" /></td></tr>
-      {/if}
+{#snippet indexCell(r: Repo)}
+  <Badge
+    tone={r.index_status === "ready"
+      ? "ok"
+      : r.index_status === "error"
+        ? "danger"
+        : "muted"}>{r.index_status}</Badge
+  >
+{/snippet}
+
+{#snippet freshnessCell(r: Repo)}
+  <span class="fresh">
+    {freshness(r)}
+    {#if r.file_count}
+      <span class="counts">{r.file_count} files / {r.chunk_count} chunks</span>
+    {/if}
+  </span>
+{/snippet}
+
+{#snippet reindexAction(r: Repo)}
+  {#if canEditRepo(r)}
+    <Button
+      variant="ghost"
+      square
+      icon="index"
+      title="reindex"
+      aria-label="reindex"
+      busy={indexing === r.slug}
+      disabled={r.index_status === "cloning" || r.index_status === "indexing"}
+      onclick={() => reindex(r)}
+    />
+  {/if}
+{/snippet}
+
+{#snippet indexErrors()}
+  {#each repos.data.filter((r) => r.index_error) as r (r.id)}
+    <ErrorMark message={r.index_error ?? ""} label={`${r.slug} index`} />
+  {/each}
+{/snippet}
+
+{#snippet discoverField(f: {
+  mode: "create" | "edit";
+  row: Repo | null;
+  draft: Draft;
+})}
+  {@const project = projectOf(String(f.draft.source_project_id ?? ""))}
+  {@const hits = project ? (found[project.id] ?? []) : []}
+  {#if project}
+    <Field
+      label="discover"
+      hint="List the repos in this project and pick one, instead of transcribing its clone URL."
+    >
+      <Button
+        variant="ghost"
+        size="sm"
+        icon="discover"
+        busy={discovering}
+        onclick={() => discover(f.draft)}>discover</Button
+      >
+    </Field>
+    {#if hits.length}
+      <div class="chips">
+        {#each hits as r (r.name)}
+          <Chip
+            tone={f.draft.url === r.url ? "accent" : "default"}
+            onclick={() => {
+              f.draft.url = r.url;
+              if (r.default_branch) f.draft.default_branch = r.default_branch;
+            }}>{r.name}</Chip
+          >
+        {/each}
+      </div>
+    {/if}
+  {/if}
+{/snippet}
+
+{#if error}<Note tone="danger">{error}</Note>{/if}
+{@render indexErrors()}
+
+{#if knowledgeProjects.length}
+  <div class="bulkbar">
+    <span class="dim">link many at once from</span>
+    {#each knowledgeProjects as p (p.id)}
+      <Button
+        variant="ghost"
+        size="sm"
+        icon="discover"
+        disabled={!canCurateScope({ team_slug: p.team_slug })}
+        onclick={() => openBulk(p)}>{p.external_key}</Button
+      >
     {/each}
-    {#if !loading && repos.length === 0}
-      <tr><td colspan="7" class="muted">No repositories linked yet.</td></tr>
-    {/if}
-  </tbody>
-</table>
-
-{#if canAdd}
-  <div class="add-area">
-    {#if !showForm}
-      <Button variant="ghost" tone="ok" square icon="plus" title="link repository" aria-label="link repository" disabled={!knowledgeProjects.length && !products.length} onclick={openAdd} />
-      {#if !loading && !knowledgeProjects.length}
-        <span class="muted hint"> — register a knowledge project first, under Org › projects</span>
-      {/if}
-    {:else}
-      <form class="repo-form" onsubmit={save}>
-        <div class="add-form">
-          <label>project
-            <AsciiSelect bind:value={form.source_project_id}
-              options={[{ value: "", label: "(none — scope by product)" },
-                ...knowledgeProjects.map((p) => ({ value: p.id, label: `${p.external_key} (${p.product_slug})` }))]} />
-          </label>
-          {#if !form.source_project_id}
-            <label>{t("product")}
-              <AsciiSelect bind:value={form.product_slug}
-                options={products.filter((p) => canCurateScope({ team_slug: p.team_slug }))
-                  .map((p) => ({ value: p.slug, label: p.slug }))} />
-            </label>
-          {/if}
-          {#if formProject}
-            <Button
-              variant="ghost"
-              square
-              icon="discover"
-              type="button"
-              title="discover repos"
-              aria-label="discover repos"
-              busy={discovering}
-              onclick={discover}
-            />
-          {/if}
-        </div>
-        {#if formProject && (found[formProject.id] ?? []).length}
-          <div class="chips">
-            {#each found[formProject.id] as f (f.name)}
-              <button class="chip" type="button" onclick={() => pickFound(f)}>{f.name}</button>
-            {/each}
-          </div>
-        {/if}
-        <div class="add-form">
-          <label class="tip" title={TIP.slug}>slug
-            <input bind:value={form.slug} required pattern="[a-z0-9][a-z0-9\-]*"
-              disabled={!!editingSlug} placeholder="portal" />
-          </label>
-          <label>clone URL
-            <input class="url-input" bind:value={form.url} required
-              placeholder="https://dev.azure.com/org/project/_git/repo" />
-          </label>
-          <label class="tip" title={TIP.repoComponent}>component
-            <AsciiSelect bind:value={form.component}
-              options={[{ value: "", label: "(none)" },
-                ...(components[formProductSlug] ?? []).map((c) => ({ value: c.slug, label: c.slug }))]} />
-          </label>
-          <label>branch
-            <input class="short" bind:value={form.branch} placeholder="main" />
-          </label>
-        </div>
-        <div class="add-form">
-          <label class="tip" title="Only these file extensions are indexed. Leave empty for the built-in code allowlist.">
-            extensions
-            <input bind:value={form.extensions} placeholder="ts, cs, sql — optional" />
-          </label>
-          <label class="tip" title="Files larger than this are skipped (default 200).">
-            max file KB
-            <input class="short" bind:value={form.max_file_kb} placeholder="200" />
-          </label>
-          <Button variant="ghost" tone="accent" square icon="save" type="submit" aria-label="save" busy={saving} />
-          <Button variant="ghost" square icon="cancel" aria-label="cancel" onclick={() => (showForm = false)} />
-        </div>
-        <p class="muted hint">
-          Cloning uses the project connection's stored token. Linking does not index —
-          hit <em>reindex</em> once it is saved.
-        </p>
-      </form>
-    {/if}
   </div>
 {/if}
 
+<CrudTable
+  {columns}
+  rows={repos.data}
+  rowKey={(r) => r.slug}
+  loading={repos.loading}
+  error={repos.error}
+  emptyTitle="No repositories linked yet."
+  canEdit={canEditRepo}
+  canDelete={canEditRepo}
+  canCreate={canAdd}
+  addLabel="link repository"
+  editTitle={(r) => r.slug}
+  extraActions={reindexAction}
+  formExtra={discoverField}
+  oncreate={(d) => repos.mutate(() => save(d))}
+  onsave={(_row, d) => repos.mutate(() => save(d))}
+  ondelete={(r) => repos.mutate(() => api.delete(`/repos/${r.slug}`))}
+/>
+
+{#if bulk}
+  {@const b = bulk}
+  {@const hits = found[b.project.id] ?? []}
+  <Modal
+    title={`link repos from ${b.project.external_key}`}
+    width="42rem"
+    busy={bulkBusy}
+    confirmLabel={`link ${b.picked.size}`}
+    confirmIcon="save"
+    onConfirm={saveBulk}
+    onCancel={() => (bulk = null)}
+  >
+    {#if bulkError}<Note tone="danger">{bulkError}</Note>{/if}
+    {#if bulkResults.length}
+      <Note tone="warn">
+        {bulkResults.length} could not be linked:
+        {bulkResults.map((r) => `${r.slug} (${r.error})`).join("; ")}
+      </Note>
+    {/if}
+    {#if !hits.length}
+      <p class="dim">
+        {discovering ? "asking the source…" : "no repos readable with this token"}
+      </p>
+    {:else}
+      <p class="dim sm">
+        Already-linked repos are shown ticked and locked. Set each one's
+        component and customer afterwards, in its own row.
+      </p>
+      <div class="picklist">
+        {#each hits as r (r.name)}
+          {@const linked = linkedUrls.has(r.url)}
+          <label class="prow" class:linked>
+            <Checkbox
+              ariaLabel={r.name}
+              checked={linked || b.picked.has(r.name)}
+              disabled={linked || bulkBusy}
+              onchange={(on) => toggleBulk(r.name, on)}
+            />
+            <span>{r.name}</span>
+            <span class="dim sm">{r.default_branch || "main"}</span>
+            {#if linked}<Badge tone="muted">linked</Badge>{/if}
+          </label>
+        {/each}
+      </div>
+    {/if}
+  </Modal>
+{/if}
+
 <style>
-  /* Two lines max: a failed discover can return a wall of text. */
-  .clamped {
+  .bulkbar {
     display: flex;
-    align-items: flex-start;
-    gap: var(--pad-2);
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--pad-1);
+    margin-bottom: var(--pad-2);
+    font-size: var(--fs-sm);
   }
-  .clamped .etxt {
+  .picklist {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pad-1);
+    max-height: 22rem;
+    overflow-y: auto;
+  }
+  .prow {
+    display: flex;
+    align-items: center;
+    gap: var(--gap);
+    font-size: var(--fs-sm);
+  }
+  .prow.linked {
+    color: var(--muted);
+  }
+  .sm {
+    font-size: var(--fs-xs);
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pad-1);
+    margin-bottom: var(--pad-2);
+  }
+  .repo,
+  .fresh {
+    display: block;
+    min-width: 0;
+  }
+  .fresh {
+    color: var(--muted);
+  }
+  .url {
+    display: block;
+    font-size: var(--fs-xs);
+    color: var(--muted);
     overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .repo-form { display: flex; flex-direction: column; gap: 0.5rem; }
-  .hint { font-size: 0.8rem; }
-  .url { font-size: 0.75rem; opacity: 0.7; }
-  .url-input { min-width: 22rem; }
-  .short { min-width: 5rem; }
-  .counts { display: block; font-size: 0.72rem; opacity: 0.7; }
-  .err-row td { border-bottom: 1px solid var(--border); padding-top: 0; font-size: 0.8rem; }
-  .chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-  .chip { font-size: 0.75rem; padding: 0.1rem 0.5rem; }
+  .counts {
+    display: block;
+    font-size: var(--fs-xs);
+    opacity: 0.7;
+  }
+  .dim {
+    color: var(--muted);
+  }
 </style>

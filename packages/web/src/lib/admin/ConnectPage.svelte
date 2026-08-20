@@ -29,7 +29,7 @@
   );
   const noWiki = $derived(
     knowledge.filter(
-      (p) => p.source_type === "azure-devops" && !("identifier" in (p.wiki ?? {})),
+      (p) => p.source_type === "azure-devops" && !(p.wikis ?? []).length,
     ).length,
   );
   const ready = $derived(

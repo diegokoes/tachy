@@ -2,10 +2,31 @@
   import { onMount } from "svelte";
   import { api } from "../api";
   import { session } from "../session.svelte";
-  import AsciiSelect from "../AsciiSelect.svelte";
-  import DeleteButton from "./DeleteButton.svelte";
-  import { TIP, csv, errText, type Connection, type SourceProject } from "./shared";
-  import { Button, ErrorMark } from "../tui";
+  import { createResource, errText } from "../resource.svelte";
+  import { slugify, uniqueSlug } from "../slug";
+  import {
+    Badge,
+    Button,
+    Chip,
+    CrudTable,
+    ErrorMark,
+    Field,
+    Modal,
+    Note,
+    Select,
+    type Column,
+    type Draft,
+  } from "../tui";
+  import { canCurateScope } from "../session.svelte";
+  import { t } from "../terms";
+  import {
+    TIP,
+    csv,
+    type Connection,
+    type Product,
+    type SourceProject,
+    type Team,
+  } from "./shared";
 
   type SourceType = "freshdesk" | "azure-devops" | "github";
   type Probe = {
@@ -16,76 +37,147 @@
     groupsNote?: string;
   };
 
-  const SPEC: Record<SourceType, {
-    label: string;
-    hostLabel: string;
-    hostPlaceholder: string;
-    tokenLabel: string;
-    tokenHint: string;
-    groupLabel: string;
-    groupPlaceholder: string;
-    configKey: "projects" | "repos" | null;
-  }> = {
+  const SPEC: Record<
+    SourceType,
+    {
+      label: string;
+      hostLabel: string;
+      hostHint: string;
+      tokenLabel: string;
+      tokenHint: string;
+      groupLabel: string;
+      configKey: "projects" | "repos" | null;
+    }
+  > = {
     freshdesk: {
       label: "Freshdesk",
       hostLabel: "domain",
-      hostPlaceholder: "acme.freshdesk.com",
+      hostHint: "The Freshdesk domain, e.g. acme.freshdesk.com",
       tokenLabel: "API key",
-      tokenHint: "Freshdesk profile → API key (a per-agent key; tickets are read with that agent's permissions).",
+      tokenHint:
+        "Freshdesk profile → API key (a per-agent key; tickets are read with that agent's permissions).",
       groupLabel: "group",
-      groupPlaceholder: "group id",
       configKey: null,
     },
     "azure-devops": {
       label: "Azure DevOps",
       hostLabel: "organization",
-      hostPlaceholder: "my-org  (or https://dev.azure.com/my-org)",
+      hostHint: "The org name, e.g. my-org (or the full dev.azure.com URL).",
       tokenLabel: "PAT",
-      tokenHint: "A personal access token, org-scoped: it reaches every project you have permissions on. Scopes: Work Items (read, or read & write to create tickets), Wiki read, Code read.",
+      tokenHint:
+        "A personal access token, org-scoped: it reaches every project you have permissions on. Scopes: Work Items (read, or read & write to create tickets), Wiki read, Code read.",
       groupLabel: "project",
-      groupPlaceholder: "project name",
       configKey: "projects",
     },
     github: {
       label: "GitHub",
       hostLabel: "API base URL",
-      hostPlaceholder: "https://api.github.com  (or GHE /api/v3)",
+      hostHint: "https://api.github.com, or a GitHub Enterprise /api/v3 URL.",
       tokenLabel: "token",
       tokenHint: "A PAT with repo/issues read access.",
       groupLabel: "repo",
-      groupPlaceholder: "owner/repo",
       configKey: "repos",
     },
   };
 
-  const isGlobalAdmin = $derived(session.me?.role === "admin" || !session.me);
+  const typeOf = (d: Draft) => (d.source_type ?? "freshdesk") as SourceType;
 
-  let connections = $state<Connection[]>([]);
-  let projects = $state<SourceProject[]>([]);
-  let loading = $state(true);
-  let saving = $state(false);
-  let error = $state<string | null>(null);
+  const admin = $derived(session.me?.role === "admin" || !session.me);
 
-  let showForm = $state(false);
-  let editingSlug = $state<string | null>(null);
-  let form = $state({
-    sourceType: "freshdesk" as SourceType,
-    slug: "",
-    host: "",
-    token: "",
-    groups: "",
-    redaction: false,
-  });
-  let slugTouched = $state(false);
+  const connections = createResource(
+    () => api.get<Connection[]>("/source-connections"),
+    [],
+  );
+  const projects = createResource(
+    () => api.get<SourceProject[]>("/source-projects"),
+    [],
+  );
+  const products = createResource(() => api.get<Product[]>("/products"), []);
+  const teams = createResource(() => api.get<Team[]>("/teams"), []);
 
-  /** Per-connection probe results — also the group vocabulary for the map form. */
   let probes = $state<Record<string, Probe>>({});
   let testing = $state<string | null>(null);
+  let expanded = $state(new Set<string>());
 
-  const spec = $derived(SPEC[form.sourceType]);
-  const configOf = (c: Connection) => (c.config ?? {}) as Record<string, unknown>;
+  /* Registering from the probe list, where the projects are actually in front
+     of you. Without this the discovered names are inert text and the only way
+     to act on one is to retype its key in another panel. */
+  let claim = $state<{
+    slug: string;
+    key: string;
+    name: string;
+    role: "knowledge" | "tracker";
+    scope: string;
+  } | null>(null);
+  let claiming = $state(false);
+  let claimError = $state<string | null>(null);
+
+  const myProducts = $derived(
+    products.data.filter((p) => canCurateScope({ team_slug: p.team_slug })),
+  );
+  const myTeams = $derived(
+    teams.data.filter((tm) => canCurateScope({ team_slug: tm.slug })),
+  );
+  const scopeOptions = $derived(
+    claim?.role === "tracker"
+      ? myTeams.map((tm) => ({ value: tm.slug, label: tm.name }))
+      : myProducts.map((p) => ({ value: p.slug, label: p.name })),
+  );
+
+  const projectFor = (slug: string, key: string) =>
+    projects.data.find((p) => p.source_slug === slug && p.external_key === key);
+
+  function openClaim(slug: string, g: { key: string; name: string }) {
+    claimError = null;
+    claim = {
+      slug,
+      key: g.key,
+      name: g.name,
+      role: "knowledge",
+      scope: myProducts[0]?.slug ?? "",
+    };
+  }
+
+  /* The scope means a different thing per role, so switching role must not
+     carry the previous answer over — a product slug sent as a team_slug is
+     rejected by the server with an error the user cannot act on. */
+  function setRole(role: "knowledge" | "tracker") {
+    if (!claim) return;
+    claim = {
+      ...claim,
+      role,
+      scope: (role === "tracker" ? myTeams[0]?.slug : myProducts[0]?.slug) ?? "",
+    };
+  }
+
+  async function saveClaim() {
+    if (!claim || !claim.scope) return;
+    claiming = true;
+    claimError = null;
+    try {
+      await api.post("/source-projects", {
+        source_slug: claim.slug,
+        external_key: claim.key,
+        name: claim.name,
+        role: claim.role,
+        ...(claim.role === "knowledge"
+          ? { product_slug: claim.scope }
+          : { team_slug: claim.scope }),
+      });
+      await projects.reload();
+      claim = null;
+    } catch (e) {
+      claimError = errText(e);
+    } finally {
+      claiming = false;
+    }
+  }
+
+  const configOf = (c: Connection) =>
+    (c.config ?? {}) as Record<string, unknown>;
   const redactionOn = (c: Connection) =>
-    ((configOf(c).redaction as { enabled?: boolean } | undefined)?.enabled) === true;
+    (configOf(c).redaction as { enabled?: boolean } | undefined)?.enabled ===
+    true;
   const groupsOf = (c: Connection): string[] => {
     const key = SPEC[c.source_type as SourceType]?.configKey;
     const v = key ? configOf(c)[key] : undefined;
@@ -93,7 +185,7 @@
   };
 
   const registered = $derived(
-    new Set(projects.map((p) => `${p.source_slug} ${p.external_key}`)),
+    new Set(projects.data.map((p) => `${p.source_slug} ${p.external_key}`)),
   );
 
   function hostToBaseUrl(type: SourceType, host: string): string {
@@ -107,282 +199,313 @@
 
   function baseUrlToHost(type: SourceType, baseUrl: string | null): string {
     const v = (baseUrl ?? "").replace(/\/+$/, "");
-    if (type === "azure-devops") return v.replace(/^https?:\/\/dev\.azure\.com\//i, "");
+    if (type === "azure-devops")
+      return v.replace(/^https?:\/\/dev\.azure\.com\//i, "");
     if (type === "freshdesk") return v.replace(/^https?:\/\//i, "");
     return v;
   }
 
-  /** Derive a connection slug from the host, e.g. acme.freshdesk.com → acme-freshdesk. */
+  /** acme.freshdesk.com → acme-freshdesk: the slug names the connection, not the host. */
   function suggestSlug(type: SourceType, host: string): string {
-    const raw = host.trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+    const raw = host
+      .trim()
+      .replace(/^https?:\/\//i, "")
+      .replace(/\/+$/, "");
     const stem =
       type === "azure-devops"
         ? raw.replace(/^dev\.azure\.com\//i, "").split("/")[0]
         : raw.split("/")[0].split(".")[0];
-    const base = stem.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
+    const base = slugify(stem);
     if (!base) return "";
-    return type === "freshdesk" ? `${base}-freshdesk` : type === "azure-devops" ? `${base}-ado` : base;
+    return type === "freshdesk"
+      ? `${base}-freshdesk`
+      : type === "azure-devops"
+        ? `${base}-ado`
+        : base;
   }
 
-  async function load() {
-    loading = true;
-    error = null;
-    try {
-      [connections, projects] = await Promise.all([
-        api.get<Connection[]>("/source-connections"),
-        api.get<SourceProject[]>("/source-projects"),
-      ]);
-    } catch (e) {
-      error = errText(e);
-    } finally {
-      loading = false;
-    }
-  }
+  const columns: Column<Connection>[] = $derived([
+    {
+      key: "source_type",
+      label: "type",
+      width: "10rem",
+      edit: "select",
+      required: true,
+      initial: "freshdesk",
+      editable: () => false,
+      options: (Object.keys(SPEC) as SourceType[]).map((k) => ({
+        value: k,
+        label: SPEC[k].label,
+      })),
+      value: (r) => SPEC[r.source_type as SourceType]?.label ?? r.source_type,
+    },
+    {
+      key: "slug",
+      label: "slug",
+      width: "12rem",
+      edit: "text",
+      required: true,
+      hint: `${TIP.slug} It also names this connection's stored credential, so it cannot change later.`,
+      derive: (d) =>
+        uniqueSlug(
+          suggestSlug(typeOf(d), String(d.host ?? "")),
+          connections.data.map((c) => c.slug),
+        ),
+    },
+    {
+      key: "host",
+      label: "host",
+      edit: "text",
+      required: true,
+      hint: (d) => `${SPEC[typeOf(d)].hostLabel} — ${SPEC[typeOf(d)].hostHint}`,
+      value: (r) => baseUrlToHost(r.source_type as SourceType, r.base_url),
+    },
+    {
+      key: "token",
+      label: "token",
+      formOnly: true,
+      edit: "secret",
+      hint: (d) => SPEC[typeOf(d)].tokenHint,
+    },
+    { key: "token_source", label: "token", width: "8rem", cell: tokenCell },
+    {
+      key: "groups",
+      label: "scope",
+      formOnly: true,
+      edit: "text",
+      visible: (d) => Boolean(SPEC[typeOf(d)].configKey),
+      hint: (d) =>
+        `Comma-separated ${SPEC[typeOf(d)].groupLabel}s. Limits sync and gives the agent a default set to look in instead of the whole org. Optional.`,
+      value: (r) => groupsOf(r).join(", "),
+    },
+    {
+      key: "redaction",
+      label: "redaction",
+      width: "8rem",
+      edit: "checkbox",
+      hint: "Strips PII out of this source's payloads before the model sees them.",
+      value: (r) => (redactionOn(r) ? "on" : "off"),
+    },
+  ]);
 
-  function openAdd() {
-    editingSlug = null;
-    slugTouched = false;
-    form = { sourceType: "freshdesk", slug: "", host: "", token: "", groups: "", redaction: false };
-    showForm = true;
-  }
+  async function save(row: Connection | null, d: Draft) {
+    const type = typeOf(d);
+    // Merge, never replace: the connection's config also carries keys this
+    // form knows nothing about (per-project work item defaults).
+    const config: Record<string, unknown> = row ? { ...configOf(row) } : {};
+    const key = SPEC[type].configKey;
+    if (key) config[key] = csv(String(d.groups ?? ""));
+    if (d.redaction) config.redaction = { enabled: true };
+    else delete config.redaction;
 
-  function openEdit(c: Connection) {
-    const type = c.source_type as SourceType;
-    editingSlug = c.slug;
-    slugTouched = true;
-    form = {
+    const slug = String(d.slug).trim();
+    await api.post("/source-connections", {
       sourceType: type,
-      slug: c.slug,
-      host: baseUrlToHost(type, c.base_url),
-      token: "",
-      groups: groupsOf(c).join(", "),
-      redaction: redactionOn(c),
-    };
-    showForm = true;
-  }
-
-  async function save(e: SubmitEvent) {
-    e.preventDefault();
-    saving = true;
-    error = null;
-    try {
-      // Merge, never replace: the connection's config also carries keys this
-      // form knows nothing about (per-project work item defaults).
-      const existing = editingSlug
-        ? { ...configOf(connections.find((c) => c.slug === editingSlug)!) }
-        : {};
-      const config: Record<string, unknown> = existing;
-      const key = spec.configKey;
-      if (key) config[key] = csv(form.groups);
-      if (form.redaction) config.redaction = { enabled: true };
-      else delete config.redaction;
-      await api.post("/source-connections", {
-        sourceType: form.sourceType,
-        slug: form.slug.trim(),
-        baseUrl: hostToBaseUrl(form.sourceType, form.host),
-        config,
-        ...(form.token.trim() ? { token: form.token.trim() } : {}),
-      });
-      const saved = form.slug.trim();
-      showForm = false;
-      form.token = "";
-      await load();
-      await test(saved);
-    } catch (err) {
-      error = errText(err);
-    } finally {
-      saving = false;
-    }
-  }
-
-  async function del(c: Connection) {
-    error = null;
-    try {
-      await api.delete(`/source-connections/${c.slug}`);
-      delete probes[c.slug];
-      await load();
-    } catch (e) {
-      error = errText(e);
-    }
+      slug,
+      baseUrl: hostToBaseUrl(type, String(d.host ?? "")),
+      config,
+      ...(String(d.token ?? "").trim()
+        ? { token: String(d.token).trim() }
+        : {}),
+    });
+    await connections.reload();
+    await test(slug);
   }
 
   async function test(slug: string) {
     testing = slug;
     try {
-      probes[slug] = await api.post<Probe>(`/source-connections/${slug}/test`, {});
+      probes[slug] = await api.post<Probe>(
+        `/source-connections/${slug}/test`,
+        {},
+      );
     } catch (e) {
       probes[slug] = { ok: false, error: errText(e) };
     } finally {
       testing = null;
+      expanded = new Set([...expanded, slug]);
     }
   }
 
-  onMount(load);
+  onMount(() => {
+    connections.reload();
+    projects.reload();
+    products.reload();
+    teams.reload();
+  });
 </script>
 
-{#if error}
-  <p class="error clamped" title={error}>
-    <ErrorMark message={error} />
-    <span class="etxt">{error}</span>
-  </p>
-{/if}
-{#if loading}<p class="muted">Loading…</p>{/if}
+{#snippet tokenCell(r: Connection)}
+  <Badge tone={r.token_source ? "ok" : "warn"}>{r.token_source ?? "unset"}</Badge
+  >
+{/snippet}
 
-<table>
-  <thead><tr>
-    <th class="tip" title={TIP.slug}>slug</th>
-    <th>type</th>
-    <th>base URL</th>
-    <th class="tip" title="API key / PAT for this connection, and which scope it came from. Personal keys are set in My settings.">token</th>
-    <th class="tip" title="Redacts PII out of this source's payloads before the model sees them.">redaction</th>
-    <th></th>
-  </tr></thead>
-  <tbody>
-    {#each connections as r (r.id)}
-      {@const probe = probes[r.slug]}
-      <tr>
-        <td>{r.slug}</td>
-        <td>{SPEC[r.source_type as SourceType]?.label ?? r.source_type}</td>
-        <td class="muted">{r.base_url ?? ""}</td>
-        <td>
-          <span class="badge" class:on={!!r.token_source}>{r.token_source ?? "unset"}</span>
-        </td>
-        <td>{redactionOn(r) ? "on" : "off"}</td>
-        <td class="actions">
-          <Button
-            variant="ghost"
-            square
-            icon="test"
-            title="test connection"
-            aria-label="test connection"
-            busy={testing === r.slug}
-            onclick={() => test(r.slug)}
-          />
-          {#if isGlobalAdmin}
-            <Button variant="ghost" tone="info" square icon="edit" title="edit" aria-label="edit" onclick={() => openEdit(r)} />
-            <DeleteButton onConfirm={() => del(r)} />
+{#snippet probeRow(r: Connection)}
+  {@const probe = probes[r.slug]}
+  {#if !probe}
+    <p class="dim">Not tested yet — hit the probe icon on this row.</p>
+  {:else if !probe.ok}
+    <ErrorMark message={probe.error ?? "failed"} label="connection test" />
+  {:else}
+    <p class="ok-text">
+      ✓ connected{probe.identity ? ` as ${probe.identity}` : ""}
+    </p>
+    {#if probe.groupsNote}
+      <Note tone="warn">
+        This token can't list {SPEC[r.source_type as SourceType]?.groupLabel ??
+          "group"}s — fine for fetching, it just means you type the key in
+        yourself when registering the project.
+        <span class="reason">{probe.groupsNote}</span>
+      </Note>
+    {/if}
+    {#if probe.groups?.length}
+      <p class="dim">
+        {SPEC[r.source_type as SourceType]?.groupLabel ?? "group"}s visible to
+        this token. Click an unregistered one to register it here — as a
+        knowledge project bound to a {t("product")}, or as a tracker you only
+        raise work items in.
+      </p>
+      <div class="chips">
+        {#each probe.groups as g (g.key)}
+          {@const known = projectFor(r.slug, g.key)}
+          {#if known}
+            <Chip tone={known.role === "knowledge" ? "accent" : "muted"}>
+              {g.name} · {known.role}
+            </Chip>
+          {:else}
+            <Chip
+              tone="default"
+              onclick={admin ? () => openClaim(r.slug, g) : undefined}
+              >{g.name}</Chip
+            >
           {/if}
-        </td>
-      </tr>
-      {#if probe}
-        <tr class="probe-row">
-          <td colspan="6">
-            {#if !probe.ok}
-              <ErrorMark message={probe.error ?? "failed"} label="connection test" />
-            {:else}
-              <span class="ok-text">✓ connected{probe.identity ? ` as ${probe.identity}` : ""}</span>
-              {#if probe.groupsNote}
-                <div class="muted note">
-                  This token can't list {SPEC[r.source_type as SourceType]?.groupLabel ?? "group"}s
-                  — fine for fetching, it just means you type the key in yourself when
-                  registering the project.
-                  <span class="reason">{probe.groupsNote}</span>
-                </div>
-              {/if}
-              {#if probe.groups?.length}
-                <div class="groups">
-                  <span class="muted">
-                    {SPEC[r.source_type as SourceType]?.groupLabel ?? "group"}s visible to this token —
-                    highlighted ones are registered as projects; register the rest under
-                    <strong>Org › projects</strong>:
-                  </span>
-                  <div class="chips">
-                    {#each probe.groups as g (g.key)}
-                      <span class="chip" class:mapped={registered.has(`${r.slug} ${g.key}`)}>{g.name}</span>
-                    {/each}
-                  </div>
-                </div>
-              {/if}
-            {/if}
-          </td>
-        </tr>
+        {/each}
+      </div>
+    {/if}
+  {/if}
+{/snippet}
+
+{#snippet testAction(r: Connection)}
+  <Button
+    variant="ghost"
+    square
+    icon="test"
+    title="test connection"
+    aria-label="test connection"
+    busy={testing === r.slug}
+    onclick={() => test(r.slug)}
+  />
+{/snippet}
+
+<CrudTable
+  {columns}
+  rows={connections.data}
+  rowKey={(r) => r.slug}
+  loading={connections.loading}
+  error={connections.error}
+  emptyTitle="No source connections yet."
+  canEdit={() => admin}
+  canDelete={() => admin}
+  canCreate={admin}
+  addLabel="add connection"
+  editTitle={(r) => r.slug}
+  expand={probeRow}
+  {expanded}
+  ontoggle={(k) => {
+    const next = new Set(expanded);
+    if (next.has(k)) next.delete(k);
+    else next.add(k);
+    expanded = next;
+  }}
+  extraActions={testAction}
+  oncreate={(d) => connections.mutate(() => save(null, d))}
+  onsave={(row, d) => connections.mutate(() => save(row, d))}
+  ondelete={(row) =>
+    connections.mutate(async () => {
+      await api.delete(`/source-connections/${row.slug}`);
+      delete probes[row.slug];
+    })}
+/>
+
+{#if claim}
+  {@const c = claim}
+  <Modal
+    title={`register ${c.key}`}
+    width="34rem"
+    busy={claiming}
+    confirmLabel="register"
+    confirmIcon="save"
+    onConfirm={saveClaim}
+    onCancel={() => (claim = null)}
+  >
+    {#if claimError}<Note tone="danger">{claimError}</Note>{/if}
+    <div class="claim">
+      <Field label="name" hint="How it reads in lists here.">
+        <input aria-label="name" bind:value={c.name} />
+      </Field>
+      <Field
+        label="role"
+        required
+        hint={c.role === "tracker"
+          ? "A create/reassign target only — nothing is filed under it, and it holds no wiki, repos or area rules."
+          : `Its items ingest into a ${t("product")}, and it can carry the wikis, repos and area rules.`}
+      >
+        <Select
+          value={c.role}
+          aria-label="role"
+          options={[
+            { value: "knowledge", label: "knowledge" },
+            { value: "tracker", label: "tracker" },
+          ]}
+          onchange={(v) => setRole(v as "knowledge" | "tracker")}
+        />
+      </Field>
+      <Field
+        label={c.role === "tracker" ? t("team") : t("product")}
+        required
+        hint={c.role === "tracker"
+          ? `The ${t("team")} that raises work items here.`
+          : `The ${t("product")} its items ingest into.`}
+      >
+        <Select
+          value={c.scope}
+          aria-label="scope"
+          options={scopeOptions}
+          onchange={(v) => (c.scope = String(v))}
+        />
+      </Field>
+      {#if !scopeOptions.length}
+        <Note tone="warn">
+          You can't curate any {c.role === "tracker"
+            ? `${t("team")}s`
+            : `${t("product")}s`} yet — create one under Org first.
+        </Note>
       {/if}
-    {/each}
-    {#if !loading && connections.length === 0}
-      <tr><td colspan="6" class="muted">No source connections yet.</td></tr>
-    {/if}
-  </tbody>
-</table>
-
-{#if isGlobalAdmin}
-  <div class="add-area">
-    {#if !showForm}
-      <Button variant="ghost" tone="ok" square icon="plus" title="add connection" aria-label="add connection" onclick={openAdd} />
-    {:else}
-      <form class="conn-form" onsubmit={save}>
-        <div class="add-form">
-          <label>type
-            <AsciiSelect value={form.sourceType} disabled={!!editingSlug}
-              options={(Object.keys(SPEC) as SourceType[]).map((k) => ({ value: k, label: SPEC[k].label }))}
-              onchange={(v) => {
-                form.sourceType = v as SourceType;
-                if (!slugTouched) form.slug = suggestSlug(form.sourceType, form.host);
-              }} />
-          </label>
-          <label>{spec.hostLabel}
-            <input class="host" bind:value={form.host} placeholder={spec.hostPlaceholder}
-              required={form.sourceType !== "github"}
-              oninput={() => { if (!slugTouched) form.slug = suggestSlug(form.sourceType, form.host); }} />
-          </label>
-          <label class="tip" title={TIP.slug}>slug
-            <input bind:value={form.slug} placeholder="my-freshdesk" required
-              pattern="[a-z0-9][a-z0-9\-]*" oninput={() => (slugTouched = true)}
-              disabled={!!editingSlug} />
-          </label>
-        </div>
-        <div class="add-form">
-          <label class="tip" title={spec.tokenHint}>{spec.tokenLabel}
-            <input class="token" type="password" bind:value={form.token} autocomplete="off"
-              placeholder={editingSlug ? "(leave blank to keep the current one)" : "stored encrypted, global scope"} />
-          </label>
-          {#if spec.configKey}
-            <label class="tip" title="Limits sync and gives the agent a default set to look in, instead of the whole org.">
-              {spec.groupLabel}s
-              <input class="groups-input" bind:value={form.groups} placeholder="comma-separated, optional" />
-            </label>
-          {/if}
-          <label class="check">
-            <input type="checkbox" bind:checked={form.redaction} /> redact PII
-          </label>
-          <Button variant="ghost" tone="accent" square icon="save" type="submit" aria-label="save" busy={saving} />
-          <Button variant="ghost" square icon="cancel" aria-label="cancel" onclick={() => (showForm = false)} />
-        </div>
-        <p class="muted hint">{spec.tokenHint}</p>
-      </form>
-    {/if}
-  </div>
+    </div>
+  </Modal>
 {/if}
 
 <style>
-  /* Two lines max: a failed discover can return a wall of text. */
-  .clamped {
+  .claim {
     display: flex;
-    align-items: flex-start;
+    flex-direction: column;
     gap: var(--pad-2);
+    min-width: 22rem;
   }
-  .clamped .etxt {
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
+  .ok-text {
+    margin: 0;
+    color: var(--ok);
   }
-  .conn-form { display: flex; flex-direction: column; gap: 0.5rem; }
-  .conn-form .host { min-width: 18rem; }
-  .conn-form .token { min-width: 16rem; }
-  .conn-form .groups-input { min-width: 14rem; }
-  /* The panel gives .add-form inputs a 9rem floor; a checkbox must opt out. */
-  .check { display: flex; gap: 0.35rem; align-items: center; color: var(--muted); font-size: 0.85rem; }
-  .conn-form .check input[type="checkbox"] { min-width: 0; width: 0.9rem; }
-  .hint { font-size: 0.8rem; }
-  /* Probe result hangs under its connection row rather than in a modal, so the
-     discovered groups stay next to the connection they came from. */
-  .probe-row td { border-bottom: 1px solid var(--border); padding-top: 0; font-size: 0.85rem; }
-  .ok-text { color: var(--ok); }
-  .groups { margin-top: 0.35rem; display: flex; flex-direction: column; gap: 0.3rem; }
-  .chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-  .chip { font-size: 0.75rem; padding: 0.1rem 0.5rem; }
-  .chip.mapped { border-color: var(--accent); color: var(--accent); }
-  .note { margin-top: 0.3rem; }
-  .note .reason { opacity: 0.65; }
+  .dim {
+    margin: 0 0 var(--pad-2);
+    color: var(--muted);
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pad-1);
+  }
+  .reason {
+    opacity: 0.65;
+  }
 </style>

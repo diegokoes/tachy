@@ -11,6 +11,9 @@ export interface KnowledgeRow {
   resolution_pattern: string | null;
   component_id?: string | null;
   product_area: string | null;
+  /** Whose install this was learned on. Null = general to every customer. */
+  customer_id?: string | null;
+  customer_slug?: string | null;
   confidence: string | null;
   cloud: string | null;
   resolution_clarity: string | null;
@@ -52,6 +55,8 @@ export interface ReferenceRow {
   team_id?: string | null;
   component_id?: string | null;
   product_area?: string | null;
+  customer_id?: string | null;
+  customer_slug?: string | null;
   source?: string | null;
   tags: string[] | null;
   status: string;
