@@ -8,13 +8,14 @@ import {
   getKnowledgeEntry,
   listKnowledgeEntries,
   listEnvironments,
-  listAffectedVersions,
+  listKnowledgeFacets,
   addFeedback,
   listFeedback,
   recordRun,
   sql,
   notFound,
   resolveComponentFilter,
+  getCustomerIdBySlug,
   cloudSchema,
   resolutionClaritySchema,
   learningValueSchema,
@@ -39,6 +40,7 @@ const knowledgeInputSchema = z.object({
   resolution: z.string().optional(),
   resolutionPattern: z.string().optional(),
   component: z.string().optional(),
+  customerSlug: z.string().nullable().optional(),
   confidence: confidenceSchema.optional(),
   tags: z.array(z.string()).optional(),
   cloud: cloudSchema.optional(),
@@ -60,6 +62,7 @@ const knowledgeUpdateSchema = z.object({
   signals: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
   component: z.string().nullable().optional(),
+  customerSlug: z.string().nullable().optional(),
   supersededBy: z.string().nullable().optional(),
   confidence: confidenceSchema.nullable().optional(),
   cloud: cloudSchema.nullable().optional(),
@@ -81,14 +84,29 @@ const feedbackSchema = z.object({
 
 type QueryCtx = { req: { query(k: string): string | undefined } };
 
+/** `hidden_fix` is the one boolean facet — absent means "don't filter". */
+function boolParam(v: string | undefined): boolean | undefined {
+  return v === undefined || v === "" ? undefined : v === "true";
+}
+
+/** The library filters by slug; the query wants the id. */
+async function customerFilter(c: QueryCtx) {
+  const slug = c.req.query("customer");
+  return slug ? { customerId: await getCustomerIdBySlug(slug) } : {};
+}
+
 async function listFilters(c: QueryCtx) {
   return {
     productId: c.req.query("product_id"),
     teamId: c.req.query("team_id"),
     ...(await componentFilter(c, csv(c.req.query("tags")))),
+    ...(await customerFilter(c)),
     cloud: c.req.query("cloud"),
+    confidence: c.req.query("confidence"),
     learningValue: c.req.query("learning_value"),
     resolutionClarity: c.req.query("resolution_clarity"),
+    resolutionPattern: c.req.query("resolution_pattern"),
+    hiddenFix: boolParam(c.req.query("hidden_fix")),
     affectedVersion: c.req.query("affected_version"),
     fixedVersion: c.req.query("fixed_version"),
     limit: c.req.query("limit") ? Number(c.req.query("limit")) : undefined,
@@ -134,18 +152,16 @@ export const knowledge = new Hono()
   })
 
   .get("/environments", async (c) => c.json(await listEnvironments()))
-  // Feeds the library's affected-version filter, so it only ever offers values
-  // that can actually return a row for the chosen product/component.
-  .get("/versions", async (c) => {
-    const { componentId, componentTags } = await componentFilter(c, undefined);
-    return c.json(
-      await listAffectedVersions({
-        productId: c.req.query("product_id"),
-        componentId,
-        componentTags,
+  // Feeds every filter the library offers, so none of them can present a value
+  // with no rows behind it under whatever else is already selected.
+  .get("/facets", async (c) =>
+    c.json(
+      await listKnowledgeFacets({
+        ...(await listFilters(c)),
+        status: c.req.query("status"),
       }),
-    );
-  })
+    ),
+  )
   .get("/:id/feedback", async (c) =>
     c.json(await listFeedback(c.req.param("id"))),
   )

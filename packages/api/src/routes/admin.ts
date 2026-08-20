@@ -12,6 +12,14 @@ import {
   updateComponent,
   deleteComponent,
   getProductIdBySlug,
+  getCustomerIdBySlug,
+  getCustomerProfile,
+  setCustomerFact,
+  deleteCustomerFact,
+  listCustomerFactKinds,
+  listCustomerFacts,
+  linkCustomerComponent,
+  unlinkCustomerComponent,
   componentRenameImpact,
   renameComponent,
   listCustomers,
@@ -56,9 +64,16 @@ import {
   requireCaller,
 } from "../authz";
 
-const patternSchema = z.object({ slug: z.string(), description: z.string() });
+const slugField = z
+  .string()
+  .regex(
+    /^[a-z0-9][a-z0-9._/-]*$/,
+    "slug must be lowercase (letters, digits, . _ / -)",
+  );
+
+const patternSchema = z.object({ slug: slugField, description: z.string() });
 const componentSchema = z.object({
-  slug: z.string(),
+  slug: slugField,
   name: z.string(),
   parentSlug: z.string().optional(),
   description: z.string().optional(),
@@ -66,14 +81,15 @@ const componentSchema = z.object({
 });
 const customerSchema = z.object({
   name: z.string(),
-  slug: z.string(),
+  slug: slugField,
   aliases: z.array(z.string()).optional(),
+  emailDomains: z.array(z.string()).optional(),
   notes: z.string().optional(),
 });
-const teamSchema = z.object({ slug: z.string(), name: z.string() });
+const teamSchema = z.object({ slug: slugField, name: z.string() });
 const productSchema = z.object({
-  team_slug: z.string(),
-  slug: z.string(),
+  team_slug: slugField,
+  slug: slugField,
   name: z.string(),
   aliases: z.array(z.string()).optional(),
 });
@@ -112,22 +128,30 @@ async function tokenSource(
 }
 
 const labelSchema = z.object({
-  slug: z.string(),
+  slug: slugField,
   description: z.string().optional(),
 });
 
-const slugField = z
-  .string()
-  .regex(
-    /^[a-z0-9][a-z0-9._/-]*$/,
-    "slug must be lowercase (letters, digits, . _ / -)",
-  );
-
 const renameSchema = z.object({ to: slugField });
 
+const customerFactSchema = z.object({
+  kind: z.string().min(1),
+  label: z.string().optional(),
+  value: z.string().min(1),
+  notes: z.string().nullable().optional(),
+  source: z.string().nullable().optional(),
+  product_slug: z.string().optional(),
+  component: z.string().optional(),
+});
+const customerComponentSchema = z.object({
+  product_slug: z.string(),
+  component: z.string(),
+  notes: z.string().nullable().optional(),
+});
 const customerPatchSchema = z.object({
   name: z.string().optional(),
   aliases: z.array(z.string()).optional(),
+  emailDomains: z.array(z.string()).optional(),
   notes: z.string().nullable().optional(),
 });
 const componentPatchSchema = z.object({
@@ -144,6 +168,7 @@ const productPatchSchema = z.object({
   name: z.string().optional(),
   aliases: z.array(z.string()).optional(),
   slug: slugField.optional(),
+  team_slug: slugField.optional(),
 });
 const labelPatchSchema = z.object({ description: z.string().nullable() });
 const patternPatchSchema = z.object({ description: z.string() });
@@ -368,6 +393,77 @@ export const admin = new Hono()
     await assertAnyTeamAdminApi(c);
     return c.json(await deleteCustomer(c.req.param("slug")));
   })
+
+  // The customer's own install: their specifics, plus the records that are theirs.
+  .get("/customers/:slug/profile", async (c) =>
+    c.json(
+      await getCustomerProfile(await getCustomerIdBySlug(c.req.param("slug"))),
+    ),
+  )
+  .get("/customers/:slug/facts", async (c) =>
+    c.json(
+      await listCustomerFacts(await getCustomerIdBySlug(c.req.param("slug"))),
+    ),
+  )
+  .get("/customer-fact-kinds", async (c) =>
+    c.json(await listCustomerFactKinds()),
+  )
+  .put(
+    "/customers/:slug/facts",
+    zValidator("json", customerFactSchema),
+    async (c) => {
+      await assertAnyTeamAdminApi(c);
+      const b = c.req.valid("json");
+      return c.json(
+        await setCustomerFact({
+          customerSlug: c.req.param("slug"),
+          kind: b.kind,
+          label: b.label,
+          value: b.value,
+          notes: b.notes,
+          source: b.source,
+          componentSlug: b.component,
+          productId: b.product_slug
+            ? await getProductIdBySlug(b.product_slug)
+            : null,
+        }),
+      );
+    },
+  )
+  .delete("/customers/:slug/facts/:id", async (c) => {
+    await assertAnyTeamAdminApi(c);
+    return c.json(await deleteCustomerFact(c.req.param("id")));
+  })
+  .put(
+    "/customers/:slug/components",
+    zValidator("json", customerComponentSchema),
+    async (c) => {
+      await assertAnyTeamAdminApi(c);
+      const b = c.req.valid("json");
+      return c.json(
+        await linkCustomerComponent(
+          c.req.param("slug"),
+          await getProductIdBySlug(b.product_slug),
+          b.component,
+          b.notes,
+        ),
+      );
+    },
+  )
+  .delete("/customers/:slug/components", async (c) => {
+    await assertAnyTeamAdminApi(c);
+    const productSlug = c.req.query("product_slug");
+    const component = c.req.query("component");
+    if (!productSlug || !component)
+      throw badInput("product_slug and component are required");
+    return c.json(
+      await unlinkCustomerComponent(
+        c.req.param("slug"),
+        await getProductIdBySlug(productSlug),
+        component,
+      ),
+    );
+  })
   .get("/teams", async (c) => c.json(await listTeams()))
   .post("/teams", requireAdmin, zValidator("json", teamSchema), async (c) => {
     const { slug, name } = c.req.valid("json");
@@ -400,7 +496,17 @@ export const admin = new Hono()
     async (c) => {
       const productId = await getProductIdBySlug(c.req.param("slug"));
       await assertScopeEditor(c, { productId });
-      return c.json(await updateProduct(productId, c.req.valid("json")));
+      const b = c.req.valid("json");
+      // Moving a product needs rights on the team it lands in, too.
+      if (b.team_slug) await assertTeamAdmin(c, b.team_slug);
+      return c.json(
+        await updateProduct(productId, {
+          name: b.name,
+          aliases: b.aliases,
+          slug: b.slug,
+          teamSlug: b.team_slug,
+        }),
+      );
     },
   )
   .delete("/products/:slug", async (c) => {
