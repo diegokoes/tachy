@@ -1,6 +1,7 @@
 import { sql } from "../infra/db";
 import { badInput, conflict, notFound } from "../infra/errors";
 import { getProductIdBySlug, getTeamIdBySlug } from "../catalog/products";
+import { getCustomerIdBySlug } from "../catalog/customers";
 import { resolveComponentStrict } from "../catalog/components";
 import type { EntryScope } from "../access/permissions";
 
@@ -10,7 +11,10 @@ export type SourceProjectRole = (typeof SOURCE_PROJECT_ROLES)[number];
 export interface ProjectWiki {
   identifier: string;
   name?: string;
+  type?: string;
   root_path?: string;
+  /** The one every tool uses when no wiki is named. Exactly one per project. */
+  default?: boolean;
 }
 
 export interface SourceProjectInput {
@@ -20,7 +24,9 @@ export interface SourceProjectInput {
   role: SourceProjectRole;
   productSlug?: string | null;
   teamSlug?: string | null;
-  wiki?: ProjectWiki | null;
+  /** Set when the whole project exists for one customer; null when it serves many. */
+  customerSlug?: string | null;
+  wikis?: ProjectWiki[] | null;
   config?: Record<string, unknown>;
   notes?: string | null;
 }
@@ -30,7 +36,8 @@ export interface SourceProjectPatch {
   role?: SourceProjectRole;
   productSlug?: string | null;
   teamSlug?: string | null;
-  wiki?: ProjectWiki | null;
+  customerSlug?: string | null;
+  wikis?: ProjectWiki[] | null;
   config?: Record<string, unknown>;
   notes?: string | null;
 }
@@ -47,7 +54,9 @@ export interface SourceProjectRow {
   product_slug: string | null;
   team_id: string;
   team_slug: string;
-  wiki: Record<string, unknown>;
+  customer_id: string | null;
+  customer_slug: string | null;
+  wikis: ProjectWiki[];
   config: Record<string, unknown>;
   notes: string | null;
   created_at: string;
@@ -56,7 +65,8 @@ export interface SourceProjectRow {
 const projectColumns = () => sql`
   sp.id, sp.source_connection_id, sc.slug as source_slug, sc.source_type,
   sp.external_key, sp.name, sp.role, sp.product_id, p.slug as product_slug,
-  sp.team_id, t.slug as team_slug, sp.wiki, sp.config, sp.notes, sp.created_at
+  sp.team_id, t.slug as team_slug, sp.customer_id, cu.slug as customer_slug,
+  sp.wikis, sp.config, sp.notes, sp.created_at
 `;
 
 const projectJoins = () => sql`
@@ -64,6 +74,7 @@ const projectJoins = () => sql`
   join source_connections sc on sc.id = sp.source_connection_id
   join teams t on t.id = sp.team_id
   left join products p on p.id = sp.product_id
+  left join customers cu on cu.id = sp.customer_id
 `;
 
 export async function listSourceProjects(
@@ -148,16 +159,63 @@ async function resolveRoleScope(
   return { productId: null, teamId: await getTeamIdBySlug(teamSlug) };
 }
 
-const asWiki = (v: Record<string, unknown> | null): ProjectWiki | null =>
-  v && typeof v.identifier === "string" && v.identifier
-    ? (v as unknown as ProjectWiki)
-    : null;
+/**
+ * Drops anything without an identifier, de-duplicates, and settles the default:
+ * whichever entry is flagged, else the first. Exactly one survives flagged, so
+ * no caller has to cope with two — or with none, which would silently turn every
+ * wiki tool into "name the wiki yourself".
+ */
+export function normalizeWikis(input: unknown): ProjectWiki[] {
+  const list = Array.isArray(input) ? input : [];
+  const seen = new Set<string>();
+  const out: ProjectWiki[] = [];
+  for (const raw of list) {
+    const w = raw as ProjectWiki;
+    const identifier = typeof w?.identifier === "string" ? w.identifier : "";
+    if (!identifier || seen.has(identifier)) continue;
+    seen.add(identifier);
+    out.push({
+      identifier,
+      ...(w.name ? { name: w.name } : {}),
+      ...(w.type ? { type: w.type } : {}),
+      ...(w.root_path ? { root_path: w.root_path } : {}),
+      ...(w.default ? { default: true } : {}),
+    });
+  }
+  if (!out.length) return out;
+  const chosen = out.findIndex((w) => w.default);
+  return out.map((w, i) => {
+    const { default: _drop, ...rest } = w;
+    return i === (chosen === -1 ? 0 : chosen)
+      ? { ...rest, default: true }
+      : rest;
+  });
+}
+
+/** The wiki every tool uses when the caller names none. */
+export const defaultWiki = (wikis: ProjectWiki[]): ProjectWiki | null =>
+  wikis.find((w) => w.default) ?? wikis[0] ?? null;
+
+/** Resolve a caller-supplied wiki against what the project has registered. */
+export const matchWiki = (
+  wikis: ProjectWiki[],
+  wanted: string,
+): ProjectWiki | null => {
+  const key = wanted.trim().toLowerCase();
+  return (
+    wikis.find(
+      (w) =>
+        w.identifier.toLowerCase() === key ||
+        (w.name ?? "").toLowerCase() === key,
+    ) ?? null
+  );
+};
 
 function assertWikiAllowed(
   role: SourceProjectRole,
-  wiki: ProjectWiki | null | undefined,
+  wikis: ProjectWiki[] | null | undefined,
 ): void {
-  if (role === "tracker" && wiki && wiki.identifier)
+  if (role === "tracker" && wikis?.length)
     throw badInput(
       "a tracker project cannot own a wiki — its pages would have no product to be filed under",
     );
@@ -174,21 +232,26 @@ export async function addSourceProject(
     );
   if (!i.externalKey.trim()) throw badInput("external_key is required");
   const scope = await resolveRoleScope(i.role, i.productSlug, i.teamSlug);
-  assertWikiAllowed(i.role, i.wiki);
+  const wikis = normalizeWikis(i.wikis);
+  assertWikiAllowed(i.role, wikis);
+  const customerId = i.customerSlug
+    ? await getCustomerIdBySlug(i.customerSlug)
+    : null;
 
   const [row] = await sql`
     insert into source_projects
-      (source_connection_id, external_key, name, product_id, team_id, role, wiki, config, notes)
+      (source_connection_id, external_key, name, product_id, team_id, customer_id, role, wikis, config, notes)
     values
       (${conn.id}, ${i.externalKey}, ${i.name || i.externalKey}, ${scope.productId},
-       ${scope.teamId}, ${i.role}, ${sql.json((i.wiki ?? {}) as any)},
+       ${scope.teamId}, ${customerId}, ${i.role}, ${sql.json(wikis as any)},
        ${sql.json((i.config ?? {}) as any)}, ${i.notes ?? null})
     on conflict (source_connection_id, external_key) do update set
       name       = excluded.name,
       product_id = excluded.product_id,
       team_id    = excluded.team_id,
+      customer_id = excluded.customer_id,
       role       = excluded.role,
-      wiki       = excluded.wiki,
+      wikis      = excluded.wikis,
       config     = excluded.config,
       notes      = coalesce(excluded.notes, source_projects.notes)
     returning id
@@ -214,8 +277,16 @@ export async function updateSourceProject(
           role === "knowledge" ? patch.productSlug : null,
           teamSlug,
         );
-  const wiki = patch.wiki !== undefined ? patch.wiki : (current.wiki as any);
-  assertWikiAllowed(role, wiki as ProjectWiki);
+  const wikis = normalizeWikis(
+    patch.wikis !== undefined ? patch.wikis : current.wikis,
+  );
+  assertWikiAllowed(role, wikis);
+  const customerId =
+    patch.customerSlug === undefined
+      ? current.customer_id
+      : patch.customerSlug
+        ? await getCustomerIdBySlug(patch.customerSlug)
+        : null;
 
   if (role === "tracker" && current.role === "knowledge") {
     const [refs] = await sql`
@@ -241,7 +312,8 @@ export async function updateSourceProject(
       role       = ${role},
       product_id = ${scope.productId},
       team_id    = ${scope.teamId},
-      wiki       = ${sql.json((wiki ?? {}) as any)},
+      customer_id = ${customerId},
+      wikis      = ${sql.json(wikis as any)},
       config     = ${sql.json((patch.config ?? current.config) as any)},
       notes      = ${patch.notes !== undefined ? patch.notes : current.notes}
     where id = ${id}
@@ -369,7 +441,11 @@ export interface ProjectContext {
   };
   product: { id: string; slug: string } | null;
   team: { id: string; slug: string };
+  customer: { id: string; slug: string } | null;
+  /** The default wiki — what every tool uses when the caller names none. */
   wiki: ProjectWiki | null;
+  /** All registered wikis. An ADO project routinely has several. */
+  wikis: ProjectWiki[];
   repos: ProjectRepoContext[];
   areas: { area_prefix: string; component_slug: string }[];
 }
@@ -458,7 +534,11 @@ export async function resolveProjectContext(
     },
     product: r.product_id ? { id: r.product_id, slug: r.product_slug! } : null,
     team: { id: r.team_id, slug: r.team_slug },
-    wiki: asWiki(r.wiki),
+    customer: r.customer_id
+      ? { id: r.customer_id, slug: r.customer_slug! }
+      : null,
+    wiki: defaultWiki(normalizeWikis(r.wikis)),
+    wikis: normalizeWikis(r.wikis),
     repos: repos
       .filter(
         (repo) =>
@@ -511,6 +591,8 @@ export interface IngestRoute {
   teamId: string | null;
   componentId: string | null;
   componentSlug: string | null;
+  /** The customer the project itself belongs to, when it exists for exactly one. */
+  customerId: string | null;
 }
 
 /** Where an incoming item belongs: its project, product/team, and component. */
@@ -525,10 +607,11 @@ export async function routeIngest(
     teamId: null,
     componentId: null,
     componentSlug: null,
+    customerId: null,
   };
   if (!groupKey) return empty;
   const [project] = await sql`
-    select id, product_id, team_id from source_projects
+    select id, product_id, team_id, customer_id from source_projects
     where source_connection_id = ${connId} and external_key = ${groupKey}
   `;
   if (!project) return empty;
@@ -541,5 +624,6 @@ export async function routeIngest(
     teamId: project.team_id as string,
     componentId: component?.id ?? null,
     componentSlug: component?.slug ?? null,
+    customerId: (project.customer_id as string | null) ?? null,
   };
 }
