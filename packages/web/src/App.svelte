@@ -163,6 +163,9 @@
   .navrow.unrevealed :global(button) {
     clip-path: inset(0 100% 0 0);
   }
+  .navrow :global(.tab .num) {
+    font-size: calc(var(--fs-xs) + 0.09rem);
+  }
 
   .content {
     flex: 1;

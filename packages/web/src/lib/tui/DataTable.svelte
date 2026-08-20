@@ -19,8 +19,6 @@
     expanded = new Set<string>(),
     ontoggle,
     rowClass,
-    cellOverride,
-    footer,
   }: {
     columns: Column<T>[];
     rows: T[];
@@ -35,9 +33,6 @@
     expanded?: Set<string>;
     ontoggle?: (key: string) => void;
     rowClass?: (row: T) => string | undefined;
-    /** Takes over every cell — used by CrudTable to swap in edit controls. */
-    cellOverride?: Snippet<[T, Column<T>]>;
-    footer?: Snippet<[number]>;
   } = $props();
 
   const span = $derived(columns.length + (expand ? 1 : 0) + (actions ? 1 : 0));
@@ -82,8 +77,7 @@
           {/if}
           {#each columns as c}
             <td class={c.align === "end" ? "end" : ""}>
-              {#if cellOverride}{@render cellOverride(row, c)}
-              {:else if c.cell}{@render c.cell(row)}
+              {#if c.cell}{@render c.cell(row)}
               {:else}<span class="v">{cellText(c, row)}</span>{/if}
             </td>
           {/each}
@@ -109,8 +103,6 @@
           </td>
         </tr>
       {/if}
-
-      {#if footer}{@render footer(span)}{/if}
     </tbody>
   </table>
 </div>

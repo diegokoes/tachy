@@ -7,6 +7,7 @@
     error,
     required = false,
     inline = false,
+    plain = false,
     children,
   }: {
     label?: string;
@@ -14,6 +15,9 @@
     error?: string | null;
     required?: boolean;
     inline?: boolean;
+    /** Renders as a div, for rows holding a value and its own button rather
+     *  than one control — a <label> around a button steals its clicks. */
+    plain?: boolean;
     children: Snippet;
   } = $props();
 
@@ -22,7 +26,12 @@
 
 <!-- The note line is ALWAYS in the layout, so showing a validation error can
      never change the field's height and shift the rows below it. -->
-<label class="field" class:inline class:noted={Boolean(hint || error)}>
+<svelte:element
+  this={plain ? "div" : "label"}
+  class="field"
+  class:inline
+  class:noted={Boolean(hint || error)}
+>
   {#if label}
     <span class="lbl"
       >{label}{#if required}<span class="req" aria-hidden="true">*</span>{/if}</span
@@ -32,7 +41,7 @@
   {#if hint || error}
     <span class="note" class:err={Boolean(error)}>{note}</span>
   {/if}
-</label>
+</svelte:element>
 
 <style>
   .field {
@@ -71,7 +80,9 @@
     gap: var(--pad-2);
     min-width: 0;
   }
-  .control > :global(input),
+  /* A checkbox is its own size — stretching one to the field width leaves the
+     box floating in the middle of an empty row. */
+  .control > :global(input:not([type="checkbox"])),
   .control > :global(textarea) {
     width: 100%;
     min-width: 0;

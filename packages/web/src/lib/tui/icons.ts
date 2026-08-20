@@ -31,6 +31,8 @@ export const ICONS = {
 
   code: '<polyline points="25,35 5,50 25,65"/><line x1="58" y1="30" x2="42" y2="70"/><polyline points="75,35 95,50 75,65"/>',
 
+  json: '<g transform="scale(3.125)" fill="currentColor" stroke="none"><polygon points="31 11 31 21 29 21 27 15 27 21 25 21 25 11 27 11 29 17 29 11"/><path d="M21.3335 21h-2.667A1.6684 1.6684 0 0 1 17 19.3335v-6.667A1.6684 1.6684 0 0 1 18.6665 11h2.667A1.6684 1.6684 0 0 1 23 12.6665v6.667A1.6684 1.6684 0 0 1 21.3335 21ZM19 19h2v-6h-2Z"/><path d="M13.3335 21H9v-2h4v-2h-2a2.002 2.002 0 0 1-2-2v-2.3335A1.6684 1.6684 0 0 1 10.6665 11H15v2h-4v2h2a2.002 2.002 0 0 1 2 2v2.3335A1.6684 1.6684 0 0 1 13.3335 21Z"/><path d="M5.3335 21H2.6665A1.6684 1.6684 0 0 1 1 19.3335V17h2v2h2v-8h2v8.3335A1.6684 1.6684 0 0 1 5.3335 21Z"/></g>',
+
   attach:
     '<polygon points="15,10 15,90 85,90 85,25 70,10"/><line x1="35" y1="55" x2="65" y2="55"/><line x1="50" y1="40" x2="50" y2="70"/><polyline points="70,10 70,25 85,25"/>',
 
@@ -49,6 +51,8 @@ export const ICONS = {
 
   alert:
     '<polygon points="50,10 95,90 5,90"/><line x1="50" y1="42" x2="50" y2="60"/><circle cx="50" cy="75" r="1"/>',
+
+  info: '<circle cx="50" cy="50" r="40"/><line x1="50" y1="30" x2="50" y2="52"/><circle cx="50" cy="68" r="1"/>',
 
   index:
     '<rect x="10" y="11" width="80" height="26"/><rect x="10" y="37" width="80" height="26"/><rect x="10" y="63" width="80" height="26"/><circle cx="30" cy="24" r="2"/><circle cx="30" cy="50" r="2"/><circle cx="30" cy="76" r="2"/>',
@@ -81,6 +85,12 @@ export const ICONS = {
   edit: '<rect x="15" y="15" width="70" height="70"/>',
 
   check: '<polyline points="10,60 40,85 85,15"/>',
+
+  checkbox: '<circle cx="50" cy="50" r="25"/>',
+
+  /** affected → fixed: an arrow travelling into the version it lands on. */
+  versionArrow:
+    '<line x1="80" y1="20" x2="80" y2="80"/><line x1="15" y1="50" x2="65" y2="50"/><polyline points="50,30 65,50 50,70"/>',
 
   test: '<polyline points="20,25 35,5 50,25"/><line x1="35" y1="5" x2="35" y2="70"/><polyline points="50,75 65,95 80,75"/><line x1="65" y1="30" x2="65" y2="95"/>',
 

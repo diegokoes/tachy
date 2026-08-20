@@ -10,8 +10,7 @@
   import LabelsPanel from "./LabelsPanel.svelte";
   import PatternsPanel from "./PatternsPanel.svelte";
   import CustomersPanel from "./CustomersPanel.svelte";
-  import UsersPanel from "./UsersPanel.svelte";
-  import MembershipPanel from "./MembershipPanel.svelte";
+  import AccessPanel from "./AccessPanel.svelte";
   import SystemPanel from "./SystemPanel.svelte";
   import CredentialsPanel from "./CredentialsPanel.svelte";
 
@@ -48,10 +47,7 @@
     </div>
   {:else if page === "access"}
     <div class="stack">
-      {#if admin}
-        <Panel title="users"><UsersPanel /></Panel>
-      {/if}
-      <Panel title="membership"><MembershipPanel /></Panel>
+      <Panel title="users & roles"><AccessPanel /></Panel>
       <Panel title="shared credentials"><CredentialsPanel /></Panel>
       {#if admin}
         <Panel title="system settings"><SystemPanel /></Panel>
@@ -64,6 +60,10 @@
 
 <style>
   .head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--panel-bg);
     margin-bottom: var(--pad-4);
   }
   .stack {
@@ -72,9 +72,9 @@
     gap: var(--pad-4);
   }
 
-  /* Chrome for panels not yet migrated to the tui primitives (sources,
-     projects, repos, users, membership, system, credentials). Deleted as each
-     one moves over. */
+  /* Chrome for the two panels still on hand-rolled markup: system settings
+     and shared credentials. Both are singleton forms, not record lists.
+     Deleted as each one moves over. */
   .admin-root :global(table) {
     width: 100%;
     border-collapse: collapse;
@@ -101,120 +101,16 @@
     font-size: var(--fs-xs);
     padding: var(--pad-1) var(--pad-3);
   }
-  .admin-root :global(.danger-btn) {
-    border-color: var(--danger);
-    color: var(--danger);
-  }
-  .admin-root :global(.icon-btn) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: var(--row-h);
-    height: var(--row-h);
-    padding: 0;
-    line-height: 1;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: transparent;
-    color: var(--muted);
-  }
-  .admin-root :global(.icon-btn + .icon-btn) {
-    margin-left: var(--pad-1);
-  }
-  .admin-root :global(.icon-btn:hover) {
-    color: var(--text);
-    border-color: var(--text);
-  }
-  .admin-root :global(.icon-btn.danger) {
-    color: var(--danger);
-    border-color: var(--danger);
-  }
-  .admin-root :global(.icon-btn.danger:hover) {
-    background: color-mix(in srgb, var(--danger) 15%, transparent);
-  }
-  .admin-root :global(.icon-btn.ok) {
-    color: var(--ok);
-    border-color: color-mix(in srgb, var(--ok) 45%, var(--border));
-  }
-  .admin-root :global(.icon-btn.ok:hover:not(:disabled)) {
-    border-color: var(--ok);
-    background: color-mix(in srgb, var(--ok) 14%, transparent);
-  }
-  .admin-root :global(.icon-btn:disabled) {
-    opacity: 0.4;
-  }
-  .admin-root :global(.icon-btn.danger.armed) {
-    background: var(--danger);
-    border-color: var(--danger);
-    color: var(--bg);
-  }
   .admin-root :global(h4) {
     margin: var(--pad-3) 0 var(--pad-2);
     font-size: var(--fs-sm);
     color: var(--muted);
     letter-spacing: var(--label-spacing);
   }
-  /* The add control is a square + button, parked at the right edge. */
-  .admin-root :global(.add-area) {
-    margin-top: var(--pad-2);
-    display: flex;
-    justify-content: flex-end;
-  }
-  .admin-root :global(.add-form) {
-    display: flex;
-    gap: var(--gap);
-    flex-wrap: wrap;
-    align-items: center;
-  }
-  .admin-root :global(.add-form label) {
-    display: flex;
-    gap: var(--pad-2);
-    align-items: center;
-    color: var(--muted);
-    font-size: var(--fs-sm);
-  }
-  .admin-root :global(.add-form input) {
-    min-width: 9rem;
-  }
-  .admin-root :global(.scope) {
-    display: flex;
-    align-items: baseline;
-    gap: var(--pad-4);
-    margin-bottom: var(--pad-3);
-    flex-wrap: wrap;
-  }
-  .admin-root :global(.scope label) {
-    display: flex;
-    gap: var(--gap);
-    align-items: baseline;
-    color: var(--muted);
-    font-size: var(--fs-sm);
-  }
-  .admin-root :global(.hint) {
-    font-size: var(--fs-xs);
-  }
   .admin-root :global(.muted) {
     color: var(--muted);
   }
   .admin-root :global(.error) {
     color: var(--danger);
-  }
-  .admin-root :global(.row-edit) {
-    display: flex;
-    gap: var(--pad-1);
-    flex-wrap: wrap;
-    align-items: center;
-  }
-  .admin-root :global(.row-edit input) {
-    min-width: 8rem;
-    font-size: var(--fs-sm);
-  }
-  .admin-root :global(.row-input) {
-    width: 100%;
-    min-width: 5ch;
-    font-size: var(--fs-sm);
-  }
-  .admin-root :global(td.actions) {
-    white-space: nowrap;
   }
 </style>

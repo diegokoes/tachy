@@ -11,7 +11,6 @@
   import CompactPanel from "./chat/CompactPanel.svelte";
   import OutputCard, { type OutputFile } from "./chat/OutputCard.svelte";
   import Approval from "./chat/Approval.svelte";
-  import JsonModal from "./chat/JsonModal.svelte";
   import Launcher from "./chat/Launcher.svelte";
   import { G, Icon } from "./tui";
   import { pushScope } from "./keys.svelte";
@@ -97,6 +96,12 @@
 
   $effect(() => {
     if (cmdCtx && !commands) getCommands().then((c) => (commands = c)).catch(() => {});
+  });
+  $effect(() => {
+    const refresh = () =>
+      getCommands().then((c) => (commands = c)).catch(() => {});
+    window.addEventListener("artifacts-changed", refresh);
+    return () => window.removeEventListener("artifacts-changed", refresh);
   });
   $effect(() => {
     void chat.input;
@@ -198,7 +203,7 @@
             kind: "approval",
             id: data.id as string,
             tool: short(data.tool as string),
-            editable: JSON.stringify(data.input, null, 2),
+            input: (data.input ?? {}) as Record<string, unknown>,
             status: "pending",
           });
         else if (event === "approval_resolved") {
@@ -218,23 +223,17 @@
 
   
   
-  let jsonModal = $state<Extract<Entry, { kind: "approval" }> | null>(null);
-
-  const peek = (json: string) => json.replace(/\s+/g, " ").slice(0, 140);
-
-  async function decide(entry: Extract<Entry, { kind: "approval" }>, ok: boolean) {
+  async function decide(
+    entry: Extract<Entry, { kind: "approval" }>,
+    ok: boolean,
+    reason?: string,
+  ) {
     if (!chat.turnId) return;
-    let updated: Record<string, unknown> | undefined;
-    if (ok) {
-      try {
-        updated = JSON.parse(entry.editable);
-      } catch {
-        addEntry({ kind: "error", text: "Edited JSON is invalid - fix it before approving." });
-        return;
-      }
+    try {
+      await approve(chat.turnId, entry.id, ok, ok ? entry.input : undefined, reason);
+    } catch (e) {
+      addEntry({ kind: "error", text: e instanceof Error ? e.message : String(e) });
     }
-    await approve(chat.turnId, entry.id, ok, updated);
-    
   }
 
   async function addFiles(files: FileList | null | undefined) {
@@ -310,12 +309,6 @@
   }
 </script>
 
-<svelte:window
-  onkeydown={(e) => {
-    if (e.key === "Escape" && jsonModal) jsonModal = null;
-  }}
-/>
-
 <div
   class="chat"
   role="region"
@@ -335,9 +328,12 @@
   <div class="transcript" id="chat-transcript" bind:this={transcriptEl} onscroll={onScroll}>
     {#each chat.entries as e, i (e.key)}
       {#if e.kind === "user"}
-        <div class="turn user"><span class="who">{G.marker}you</span><div class="body">{e.text}</div></div>
+        <div class="turn user">
+          <span class="who">you<span class="mk" aria-hidden="true">{G.marker}</span></span>
+          <div class="body">{e.text}</div>
+        </div>
       {:else if e.kind === "assistant"}
-        <div class="turn"><span class="who">{G.marker}tachy</span>
+        <div class="turn"><span class="who"><span class="mk" aria-hidden="true">{G.marker}</span>tachy</span>
           <div class="body md" class:streaming={chat.busy && i === chat.entries.length - 1}>{@html renderMarkdown(e.text)}</div>
         </div>
       {:else if e.kind === "tool"}
@@ -349,11 +345,7 @@
       {:else if e.kind === "error"}
         <div class="turn"><span class="who err">{G.marker}error</span><div class="body err">{e.text}</div></div>
       {:else if e.kind === "approval"}
-        <Approval
-          entry={e}
-          ondecide={(ok) => decide(e, ok)}
-          oninspect={() => (jsonModal = e)}
-        />
+        <Approval entry={e} ondecide={(ok, reason) => decide(e, ok, reason)} />
       {/if}
     {/each}
     {#if chat.busy && chat.entries[chat.entries.length - 1]?.kind !== "assistant"}
@@ -373,11 +365,17 @@
     <div class="attachments">
       {#if chat.artifact}
         <span class="attach artifact-chip">
-          ⛬ {chat.artifact.title}
-          <button class="chip-x" title="Detach artifact" onclick={() => (chat.artifact = undefined)}>✕</button>
+          {G.artifact} {chat.artifact.title}
+          <button class="chip-x" title="Detach artifact" onclick={() => (chat.artifact = undefined)}>{G.del}</button>
         </span>
       {/if}
-      {#each chat.uploads as u}<span class="attach">📎 {u.filename}</span>{/each}
+      {#each chat.uploads as u, i (u.path)}
+        {#if i > 0}<span class="sep" aria-hidden="true">~~</span>{/if}
+        <span class="attach">
+          {u.filename}
+          <button class="chip-x" title="Remove attachment" onclick={() => chat.uploads.splice(i, 1)}>{G.del}</button>
+        </span>
+      {/each}
     </div>
   {/if}
 
@@ -403,15 +401,6 @@
       rows="2"
       onkeydown={composerKeydown}
     ></textarea>
-    {#if jsonModal}
-      {@const m = jsonModal}
-      <JsonModal
-        entry={m}
-        onclose={() => (jsonModal = null)}
-        ondecide={(ok) => decide(m, ok)}
-      />
-    {/if}
-
     <div class="send-col">
       <button
         class="clear"
@@ -419,7 +408,7 @@
         onclick={onClear}
         disabled={chat.busy || !chat.entries.length}
         title={clearArmed ? "click again to clear" : "Clear the conversation"}
-      >{#if clearArmed}SURE?{:else}<Icon name="erase" label="Clear the conversation" />{/if}</button>
+      >{#if clearArmed}?{:else}<Icon name="erase" label="Clear the conversation" />{/if}</button>
       <button onclick={send} disabled={chat.busy || !chat.input.trim()} title="Send">
         <Icon name="send" label="Send" />
       </button>
@@ -446,14 +435,14 @@
 
   /* Stretch with the composer row so Clear+Send always equal the textarea's
      height exactly, splitting it between them. */
-  /* Fixed width so arming Clear ("SURE?") can't reflow the column. */
+  /* Fixed width so arming Clear ("?") can't reflow the column. */
   .send-col {
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
     align-self: stretch;
     flex: none;
-    width: 5.5rem;
+    width: 3.25rem;
   }
   .send-col button {
     width: 100%;
@@ -472,8 +461,11 @@
     text-shadow: -2px 0 rgba(255, 64, 64, 0.55), 2px 0 rgba(64, 224, 255, 0.4);
   }
 
-  /* Retro terminal caret: solid block, hard on/off blink — no glow, no fade. */
-  .caret {
+  /* Retro terminal caret: solid block, hard on/off blink — no glow, no fade.
+     Shared by the waiting turn and the one riding the end of a streaming
+     message, so the two can never drift apart. */
+  .caret,
+  .md.streaming > :global(:last-child)::after {
     display: inline-block;
     width: 0.55em;
     height: 1.05em;
@@ -528,29 +520,19 @@
   .md :global(hr) { border: none; border-top: 1px solid var(--border); margin: 0.7em 0; }
 
   /* While streaming, the block caret rides the end of the last element. */
-  .md.streaming > :global(:last-child)::after {
-    content: "";
-    display: inline-block;
-    width: 0.55em;
-    height: 1.05em;
-    margin-left: 0.15em;
-    vertical-align: text-bottom;
-    background: var(--text);
-    animation: caret-blink 1.06s steps(2, jump-none) infinite;
-  }
+  .md.streaming > :global(:last-child)::after { content: ""; }
   .transcript-wrap { flex: 1; min-height: 0; display: flex; gap: 0.35rem; padding-right: 2.8rem; }
   /* Native bar hidden — the ASCII scrollbar next to it takes over. */
   .transcript { flex: 1; min-width: 0; overflow: auto; scrollbar-width: none; display: flex; flex-direction: column; gap: 0.6rem; padding-right: 0.5rem; }
   .transcript::-webkit-scrollbar { display: none; }
   /* A turn is a speaker marker plus its text — no boxes. Only events
      (approval, compaction, export) get a Panel. */
-  .turn { display: flex; flex-direction: column; gap: 0.1rem; max-width: 62rem; }
+  .turn { display: flex; flex-direction: column; gap: 0.1rem; max-width: 72ch; }
   .turn .who {
     font-size: var(--fs-xs);
     letter-spacing: var(--label-spacing);
     color: var(--muted);
   }
-  .turn.user .who { color: var(--accent); }
   .turn .who.err { color: var(--danger); }
   .turn .body { white-space: pre-wrap; line-height: 1.6; padding-left: 1ch; }
   .turn .body.md { white-space: normal; }
@@ -558,18 +540,34 @@
   .turn .body.waiting { min-height: 1.5em; }
   .tool { font-size: var(--fs-xs); color: var(--muted); padding-left: 1ch; }
 
-  .attachments { display: flex; gap: 0.4rem; padding: 0.4rem 0; flex-wrap: wrap; align-items: center; }
-  .attach { font-size: 0.8rem; color: var(--muted); }
+  /* The user's turn is positioned right; its text stays left-aligned. Reading
+     returns to the left edge on every line, so ragged-left costs a re-scan —
+     which is why no chat UI right-aligns the text itself. Only the marker,
+     a single token, sits on the right. */
+  .turn.user {
+    align-self: flex-end;
+    width: fit-content;
+    max-width: 56ch;
+    text-align: left;
+    border-right: 2px solid var(--accent-dim);
+    padding-right: var(--pad-2);
+  }
+  .turn.user .who { align-self: flex-end; color: var(--accent); }
+  /* Same glyph as tachy's, mirrored — no second marker to keep in step. */
+  .turn.user .mk { display: inline-block; transform: scaleX(-1); }
+  .turn.user .body { padding-left: 0; padding-right: 1ch; }
+
+  .attachments { display: flex; gap: var(--pad-2); padding: var(--pad-2) 0; flex-wrap: wrap; align-items: center; }
+  .attach { display: inline-flex; align-items: center; gap: var(--pad-1); font-size: var(--fs-xs); color: var(--muted); }
+  .sep { color: var(--muted); opacity: 0.55; user-select: none; }
   .artifact-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
+    gap: var(--pad-2);
     border: 1px solid var(--accent);
-    border-radius: 999px;
-    padding: 0.05rem 0.6rem;
+    border-radius: var(--radius-chip);
+    padding: 0 var(--pad-3);
     color: var(--accent);
   }
-  .chip-x { border: none; background: none; padding: 0 0.1rem; color: var(--accent); font-size: 0.8rem; }
+  .chip-x { border: none; background: none; padding: 0 var(--pad-1); color: inherit; font: inherit; cursor: pointer; }
   .chip-x:hover { color: var(--danger); }
   .composer { position: relative; display: flex; gap: 0.5rem; align-items: stretch; padding-top: 0.6rem; border-top: 1px solid var(--border); }
   .composer textarea { flex: 1; resize: none; }

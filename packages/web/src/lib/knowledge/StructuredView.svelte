@@ -1,10 +1,14 @@
 <script lang="ts">
-  
-  
-  
+  import { onDestroy, tick } from "svelte";
+  import { gsap, reducedMotion } from "../gsap";
+  import Icon from "../tui/Icon.svelte";
+
   let { structured }: { structured: Record<string, unknown> } = $props();
 
   let showRaw = $state(false);
+  let jsonBody = $state<HTMLElement>();
+  let jsonView = $state<HTMLElement>();
+  let jsonAnimation: gsap.core.Tween | undefined;
 
   const KNOWN = [
     "environment", "key_signals", "investigation_steps", "conversation_summary",
@@ -29,8 +33,69 @@
     Object.fromEntries(Object.entries(structured).filter(([k]) => !KNOWN.includes(k))),
   );
 
-  
   const labelize = (k: string) => k.replaceAll("_", " ");
+  const jsonText = $derived(JSON.stringify(structured, null, 2));
+  const escapeHtml = (value: string) =>
+    value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  const highlightedJson = $derived(
+    jsonText.replace(
+      /("(?:\\.|[^"\\])*")(?=\s*:)|("(?:\\.|[^"\\])*")|\b(true|false)\b|\b(null)\b|-?\b\d+(?:\.\d+)?\b/g,
+      (match, key, string, boolean, nil) => {
+        const kind = key
+          ? "json-key"
+          : string
+            ? "json-string"
+            : boolean
+              ? "json-boolean"
+              : nil
+                ? "json-null"
+                : "json-number";
+        return `<span class="${kind}">${escapeHtml(match)}</span>`;
+      },
+    ),
+  );
+
+  $effect(() => {
+    if (!showRaw || !jsonBody) return;
+    jsonAnimation?.kill();
+    const tokens = jsonBody.querySelectorAll<HTMLElement>("span");
+    if (reducedMotion()) {
+      gsap.set(tokens, { clearProps: "opacity,scale,x,y,rotation" });
+      return;
+    }
+    jsonAnimation = gsap.from(tokens, {
+      x: () => Math.cos(Math.random() * Math.PI * 2) * 22,
+      y: () => Math.sin(Math.random() * Math.PI * 2) * 22,
+      rotation: () => gsap.utils.random(-16, 16),
+      scale: 0.94,
+      opacity: 0,
+      stagger: 0.012,
+      duration: 0.42,
+      ease: "power2.out",
+    });
+  });
+
+  onDestroy(() => jsonAnimation?.kill());
+
+  async function toggleRaw() {
+    showRaw = !showRaw;
+    if (!showRaw) return;
+    await tick();
+    if (!jsonView) return;
+    const container = jsonView.closest("main") as HTMLElement | null;
+    if (!container) return;
+    const target =
+      container.scrollTop +
+      jsonView.getBoundingClientRect().top -
+      container.getBoundingClientRect().top -
+      24;
+    gsap.to(container, {
+      scrollTop: target,
+      duration: 0.82,
+      ease: "power3.inOut",
+      overwrite: "auto",
+    });
+  }
 </script>
 
 <div class="structured">
@@ -119,26 +184,47 @@
     </div>
   {/if}
 
-  <button class="mini raw-toggle" onclick={() => (showRaw = !showRaw)}>
-    {showRaw ? "[rendered]" : "[raw]"}
+  <button
+    class="json-toggle"
+    aria-label={showRaw ? "Show rendered knowledge entry" : "Show raw JSON"}
+    title={showRaw ? "Show rendered view" : "Show raw JSON"}
+    onclick={() => void toggleRaw()}
+  >
+    <Icon name="json" size="1.8rem" />
   </button>
   {#if showRaw}
-    <pre>{JSON.stringify(structured, null, 2)}</pre>
+    <pre class="json-view" bind:this={jsonView}><code bind:this={jsonBody}>{@html highlightedJson}</code></pre>
   {/if}
 </div>
 
 <style>
-  .structured { display: flex; flex-direction: column; gap: 0.6rem; }
-  .block { border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.75rem; background: var(--panel); }
-  h4 { margin: 0 0 0.35rem; font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
-  dl { display: grid; grid-template-columns: minmax(7rem, max-content) 1fr; gap: 0.15rem 0.75rem; margin: 0; }
-  dt { color: var(--muted); font-size: 0.82rem; }
-  dd { margin: 0; white-space: pre-wrap; line-height: 1.45; font-size: 0.88rem; }
+  .structured { display: flex; flex-direction: column; gap: var(--pad-4); }
+  /* No box per key — these already sit inside a bordered section, and eight
+     nested cards read as clutter. A left rule marks the block instead. */
+  .block { border-left: 1px solid var(--border); padding-left: var(--pad-3); }
+  h4 { margin: 0 0 var(--pad-2); font-size: var(--fs-xs); color: var(--muted); text-transform: uppercase; letter-spacing: var(--label-spacing); }
+  dl { display: grid; grid-template-columns: minmax(7rem, max-content) 1fr; gap: var(--pad-1) var(--pad-3); margin: 0; }
+  dt { color: var(--muted); font-size: var(--fs-xs); }
+  dd { margin: 0; white-space: pre-wrap; line-height: 1.6; font-size: var(--fs-sm); }
   ol, ul { margin: 0; padding-left: 1.25rem; }
-  li { line-height: 1.5; font-size: 0.88rem; }
-  p { margin: 0; white-space: pre-wrap; line-height: 1.5; font-size: 0.88rem; }
-  code { background: var(--accent-dim); padding: 0 0.3rem; border-radius: 3px; font-size: 0.82rem; }
+  li { line-height: 1.6; font-size: var(--fs-sm); }
+  p { margin: 0; white-space: pre-wrap; line-height: 1.6; font-size: var(--fs-sm); }
+  /* Scoped to the blocks: the raw JSON body is a <code> too, and an accent
+     tint behind a syntax-highlighted dump only muddies it. */
+  .block code { background: var(--accent-dim); padding: 0 var(--pad-1); border-radius: var(--radius); font-size: var(--fs-xs); }
   a { color: var(--accent); word-break: break-all; }
-  pre { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem; overflow: auto; font-size: 0.8rem; margin: 0; }
-  .raw-toggle { align-self: flex-start; font-size: 0.75rem; padding: 0.1rem 0.4rem; }
+  pre { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--pad-3); overflow: auto; font-size: var(--fs-xs); margin: 0; }
+  .json-toggle { align-self: center; display: grid; place-items: center; color: var(--text); background: transparent; border: 0; padding: var(--pad-1); cursor: pointer; }
+  .json-toggle:hover { color: var(--accent); }
+  .json-view { color: #e2e2e2; background: #000; overflow: visible; white-space: pre-wrap; }
+  :global(:root[data-theme="light"]) .json-view { color: #000; background: #fff; }
+  :global(.json-key) { color: #9c36b5; }
+  :global(.json-string) { color: #2b8a3e; }
+  :global(.json-number) { color: #d9480f; }
+  :global(.json-boolean), :global(.json-null) { color: #1971c2; }
+  :global(:root[data-theme="dark"] .json-key) { color: #e599f7; }
+  :global(:root[data-theme="dark"] .json-string) { color: #8ce99a; }
+  :global(:root[data-theme="dark"] .json-number) { color: #ffa94d; }
+  :global(:root[data-theme="dark"] .json-boolean),
+  :global(:root[data-theme="dark"] .json-null) { color: #74c0fc; }
 </style>

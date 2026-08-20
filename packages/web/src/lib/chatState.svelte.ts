@@ -11,7 +11,11 @@ export type EntryData =
       kind: "approval";
       id: string;
       tool: string;
-      editable: string;
+      /** The tool input the user is editing — the object, not a JSON string. */
+      input: Record<string, unknown>;
+      /** Set only while the raw-JSON editor is open, so a half-typed payload
+          can be invalid without destroying the parsed fields behind it. */
+      raw?: string;
       status: "pending" | "approved" | "denied";
     }
   | { kind: "error"; text: string };
