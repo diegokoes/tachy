@@ -147,6 +147,24 @@ create table source_connections (
     created_at    timestamptz not null default now()
 );
 
+create table customers (
+    id          uuid primary key default gen_random_uuid(),
+    name        text not null,
+    slug        text not null unique,
+    -- other NAMES the same account trades under. Never email domains: a domain
+    -- here would come back out of list_customers as something to call them.
+    aliases     text[] not null default '{}',
+    -- domains whose senders are this customer, including partners who front for
+    -- them (a distributor raising tickets on their behalf). A domain registered
+    -- to two customers resolves to neither — see resolveCustomerByEmail.
+    email_domains text[] not null default '{}',
+    notes       text,
+    created_at  timestamptz not null default now()
+);
+
+create index customers_aliases_idx on customers using gin (aliases);
+create index customers_domains_idx on customers using gin (email_domains);
+
 -- A project as its source system knows it: an Azure DevOps project, a Freshdesk
 -- group, a GitHub owner/repo. role='knowledge' binds it to a product — its items
 -- ingest there, and it may own a wiki, repos and area mappings. role='tracker' is
@@ -160,9 +178,16 @@ create table source_projects (
     name                  text not null,
     product_id            uuid references products(id) on delete cascade,
     team_id               uuid not null references teams(id) on delete cascade,
+    -- Set when the whole project exists for one customer (their own ADO project).
+    -- Then every item ingested from it is theirs by configuration rather than by
+    -- guessing at the sender's domain, which partners and freemail defeat. Null
+    -- means the project serves many, and each ticket is resolved on its own.
+    customer_id           uuid references customers(id) on delete set null,
     role                  text not null check (role in ('knowledge','tracker')),
-    -- {identifier, name, root_path} of this project's wiki, when it has one
-    wiki                  jsonb not null default '{}'::jsonb,
+    -- [{identifier, name, type, root_path, default}] — an ADO project routinely
+    -- has several wikis (one project wiki plus a code wiki per repo). Exactly one
+    -- carries default:true; that is the one every tool uses with no wiki argument.
+    wikis                 jsonb not null default '[]'::jsonb,
     -- {defaults: {<work item type>: {<ado field>: value}}}, applied underneath
     -- the fields create_ado_work_item is called with
     config                jsonb not null default '{}'::jsonb,
@@ -174,19 +199,10 @@ create table source_projects (
     unique (source_connection_id, external_key)
 );
 
-create index source_projects_product_idx on source_projects(product_id);
+create index source_projects_product_idx  on source_projects(product_id);
+create index source_projects_customer_idx on source_projects(customer_id);
 create index source_projects_team_idx    on source_projects(team_id);
 
-create table customers (
-    id          uuid primary key default gen_random_uuid(),
-    name        text not null,
-    slug        text not null unique,
-    aliases     text[] not null default '{}',
-    notes       text,
-    created_at  timestamptz not null default now()
-);
-
-create index customers_aliases_idx on customers using gin (aliases);
 
 create table work_items (
     id                    uuid primary key default gen_random_uuid(),
@@ -283,6 +299,48 @@ create index components_product_idx on components(product_id);
 create index components_parent_idx  on components(parent_id);
 create index components_aliases_idx on components using gin (aliases);
 
+-- Which components each customer runs. Many-to-many: a shared component links to
+-- many customers, one built for a single customer links to just that one, and
+-- nothing has to declare which sort it is.
+create table customer_components (
+    customer_id  uuid not null references customers(id) on delete cascade,
+    component_id uuid not null references components(id) on delete cascade,
+    notes        text,
+    created_at   timestamptz not null default now(),
+    primary key (customer_id, component_id)
+);
+
+create index customer_components_component_idx on customer_components(component_id);
+
+-- Everything about a customer's install that is not an entity in its own right:
+-- the version they run, their line layout, an integration they depend on. Their
+-- repos, projects and components are edges instead — those are real records.
+--
+-- `kind` is a deployment-specific vocabulary, exactly like knowledge_entries.cloud:
+-- no lookup table, because what counts as a customer specific differs per
+-- deployment. list_customer_fact_kinds reports what is already in use so callers
+-- reuse a value instead of coining a near-duplicate.
+create table customer_facts (
+    id           uuid primary key default gen_random_uuid(),
+    customer_id  uuid not null references customers(id) on delete cascade,
+    kind         text not null,
+    -- What the fact is about when the kind alone is ambiguous: which product a
+    -- version belongs to, which line a layout describes. '' when it needs none,
+    -- so (customer, kind, label) can be unique and a re-set replaces in place.
+    label        text not null default '',
+    value        text not null,
+    notes        text,
+    -- Where this was learned — a ticket URL, a wiki page, a person.
+    source       text,
+    component_id uuid references components(id) on delete set null,
+    created_at   timestamptz not null default now(),
+    updated_at   timestamptz not null default now(),
+    unique (customer_id, kind, label)
+);
+
+create index customer_facts_customer_idx on customer_facts(customer_id);
+create index customer_facts_kind_idx     on customer_facts(kind);
+
 -- Azure DevOps System.AreaPath prefix -> component, so an ingested item lands on
 -- the right component instead of being guessed at. A table rather than jsonb on
 -- source_projects: a component rename rewrites an FK, it cannot rewrite a slug
@@ -302,6 +360,10 @@ create table knowledge_entries (
     work_item_id        uuid references work_items(id) on delete set null,
     product_id          uuid references products(id) on delete set null,
     team_id             uuid references teams(id) on delete set null,
+    -- whose install this was learned on. The second taxonomy axis: component says
+    -- which part of the product, customer says whose. Null = general to everyone.
+    -- Held here rather than read through work_item_id, which is set null on delete.
+    customer_id         uuid references customers(id) on delete set null,
     created_by          uuid references users(id) on delete set null,
     status              text not null default 'draft'
                             check (status in ('draft','approved','rejected','archived','deprecated')),
@@ -402,6 +464,7 @@ create index knowledge_team_idx        on knowledge_entries(team_id);
 create index knowledge_pattern_idx     on knowledge_entries(resolution_pattern);
 create index knowledge_cloud_idx       on knowledge_entries(cloud);
 create index knowledge_component_idx   on knowledge_entries(component_id);
+create index knowledge_customer_idx    on knowledge_entries(customer_id);
 create index knowledge_symptoms_idx    on knowledge_entries using gin (symptoms);
 create index knowledge_signals_idx     on knowledge_entries using gin (signals);
 create index knowledge_tags_idx        on knowledge_entries using gin (tags);
@@ -481,6 +544,8 @@ create table reference_docs (
     -- reference it (they can't join other tables).
     component_id  uuid references components(id) on delete set null,
     product_area  text,
+    -- Same second axis as knowledge_entries: whose install this documents.
+    customer_id   uuid references customers(id) on delete set null,
     title       text not null,
     body        text not null,
     tags        text[] not null default '{}',
@@ -511,6 +576,7 @@ create table reference_docs (
 
 create index reference_docs_product_idx on reference_docs(product_id);
 create index reference_docs_component_idx on reference_docs(component_id);
+create index reference_docs_customer_idx on reference_docs(customer_id);
 create index reference_docs_project_idx on reference_docs(source_project_id, external_key);
 create index reference_docs_team_idx    on reference_docs(team_id);
 create index reference_docs_status_idx  on reference_docs(status);
@@ -519,6 +585,10 @@ create index reference_docs_tsv_idx     on reference_docs using gin (search_tsv)
 create index reference_docs_tsv_en_idx  on reference_docs using gin (search_tsv_en);
 create index reference_docs_trgm_idx    on reference_docs using gin (search_text gin_trgm_ops);
 create index reference_docs_superseded_idx on reference_docs(superseded_by);
+
+create trigger customer_facts_updated_at
+    before update on customer_facts
+    for each row execute function set_updated_at();
 
 create trigger reference_docs_updated_at
     before update on reference_docs
@@ -551,6 +621,9 @@ create table repos (
     source_project_id uuid references source_projects(id) on delete set null,
     -- one component per repo; linkRepo enforces that it belongs to product_id
     component_id    uuid references components(id) on delete set null,
+    -- set only for a customer's own addon repo; null is shared product code, which
+    -- is why a customer-filtered code search returns both rather than just theirs
+    customer_id     uuid references customers(id) on delete set null,
     default_branch  text not null default 'main',
     config          jsonb not null default '{}'::jsonb,
     index_status    text not null default 'idle'
@@ -566,6 +639,7 @@ create table repos (
 create index repos_product_idx   on repos(product_id);
 create index repos_project_idx   on repos(source_project_id);
 create index repos_component_idx on repos(component_id);
+create index repos_customer_idx  on repos(customer_id);
 
 create table repo_files (
     id          uuid primary key default gen_random_uuid(),
