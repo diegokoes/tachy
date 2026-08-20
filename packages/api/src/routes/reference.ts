@@ -10,6 +10,7 @@ import {
   referenceDocLineage,
   referenceStatusSchema,
   resolveComponentFilter,
+  getCustomerIdBySlug,
 } from "@tachy/core";
 import { assertScopeEditor, callerUserId } from "../authz";
 import { csv } from "../query";
@@ -26,6 +27,7 @@ const referenceInputSchema = z.object({
   docVersion: z.string().optional(),
   supersedes: z.string().optional(),
   component: z.string().nullable().optional(),
+  customerSlug: z.string().nullable().optional(),
 });
 
 const referenceUpdateSchema = z.object({
@@ -37,6 +39,7 @@ const referenceUpdateSchema = z.object({
   structured: z.record(z.string(), z.any()).optional(),
   docVersion: z.string().nullable().optional(),
   component: z.string().nullable().optional(),
+  customerSlug: z.string().nullable().optional(),
   expectedVersion: z.number().int().optional(),
 });
 
@@ -46,6 +49,7 @@ async function listFilters(c: QueryCtx) {
   const tags = csv(c.req.query("tags"));
   const component = c.req.query("component");
   const productId = c.req.query("product_id");
+  const customerSlug = c.req.query("customer");
   // Component slugs resolve within a product, so the pair is required — same
   // rule the knowledge route follows.
   const f =
@@ -59,6 +63,9 @@ async function listFilters(c: QueryCtx) {
     tags: merged.length ? merged : undefined,
     componentId: f?.componentId,
     componentTags: f?.componentTags,
+    customerId: customerSlug
+      ? await getCustomerIdBySlug(customerSlug)
+      : undefined,
     docVersion: c.req.query("doc_version"),
     limit: c.req.query("limit") ? Number(c.req.query("limit")) : undefined,
   };

@@ -22,11 +22,15 @@ import { createAdoClient } from "@tachy/source-azure-devops";
 import { assertScopeEditor, assertTeamAdmin, callerScope } from "../authz";
 import type { Context } from "hono";
 
-const wikiSchema = z.object({
-  identifier: z.string().min(1),
-  name: z.string().optional(),
-  root_path: z.string().optional(),
-});
+const wikiSchema = z.array(
+  z.object({
+    identifier: z.string().min(1),
+    name: z.string().optional(),
+    type: z.string().optional(),
+    root_path: z.string().optional(),
+    default: z.boolean().optional(),
+  }),
+);
 
 const projectSchema = z.object({
   source_slug: z.string(),
@@ -35,7 +39,8 @@ const projectSchema = z.object({
   role: z.enum(SOURCE_PROJECT_ROLES),
   product_slug: z.string().optional(),
   team_slug: z.string().optional(),
-  wiki: wikiSchema.nullable().optional(),
+  customer_slug: z.string().nullable().optional(),
+  wikis: wikiSchema.nullable().optional(),
   config: z.record(z.string(), z.unknown()).optional(),
   notes: z.string().nullable().optional(),
 });
@@ -45,7 +50,8 @@ const projectPatchSchema = z.object({
   role: z.enum(SOURCE_PROJECT_ROLES).optional(),
   product_slug: z.string().nullable().optional(),
   team_slug: z.string().optional(),
-  wiki: wikiSchema.nullable().optional(),
+  customer_slug: z.string().nullable().optional(),
+  wikis: wikiSchema.nullable().optional(),
   config: z.record(z.string(), z.unknown()).optional(),
   notes: z.string().nullable().optional(),
 });
@@ -146,7 +152,8 @@ export const projects = new Hono()
         role: b.role,
         productSlug: b.product_slug,
         teamSlug: b.team_slug,
-        wiki: b.wiki,
+        customerSlug: b.customer_slug,
+        wikis: b.wikis,
         config: b.config,
         notes: b.notes,
       }),
@@ -174,7 +181,8 @@ export const projects = new Hono()
           role: b.role,
           productSlug: b.product_slug,
           teamSlug: b.team_slug,
-          wiki: b.wiki,
+          customerSlug: b.customer_slug,
+          wikis: b.wikis,
           config: b.config,
           notes: b.notes,
         }),
