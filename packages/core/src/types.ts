@@ -26,6 +26,15 @@ export interface RawWorkItem {
   areaPath?: string;
   requester?: string;
   requesterEmail?: string;
+  /** The requester's display name, when the source knows it. Redaction needs it:
+   *  `requester` is an opaque account id on most sources, and a name that is
+   *  never declared is a name the scrubber cannot find in the message bodies. */
+  requesterName?: string;
+  /** Display names of people the source can name for this item beyond its
+   *  authors — the agent directory, say. Colleagues are discussed far more often
+   *  than they post ("Alejandro is on holiday"), and a name nothing declares is
+   *  a name redaction cannot find. Used for redaction only; never persisted. */
+  knownPeople?: string[];
   raw: unknown;
   sourceCreatedAt?: string;
   sourceUpdatedAt?: string;
