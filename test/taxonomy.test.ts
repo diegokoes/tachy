@@ -293,6 +293,56 @@ describe("taxonomy edit/delete with reference guards", () => {
     await deleteTeam("temp");
   });
 
+  it("moves a product to another team, taking its source projects along", async () => {
+    await addTeam("from-team", "From");
+    await addTeam("to-team", "To");
+    const prod = await addProduct("from-team", "movable", "Movable");
+    const [conn] =
+      await sql`select id from source_connections where slug = 'test-freshdesk'`;
+    const [proj] = await sql`
+      insert into source_projects (source_connection_id, external_key, name, role, product_id, team_id)
+      values (${conn.id}, 'move-me', 'Move Me', 'knowledge', ${prod.id},
+              (select id from teams where slug = 'from-team'))
+      returning id
+    `;
+
+    await updateProduct(prod.id as string, { teamSlug: "to-team" });
+
+    const [after] = await sql`
+      select t.slug from source_projects sp join teams t on t.id = sp.team_id
+      where sp.id = ${proj.id}
+    `;
+    expect(after.slug).toBe("to-team");
+    // The old owner is now empty, which is the point of the cascade.
+    await deleteTeam("from-team");
+
+    await sql`delete from source_projects where id = ${proj.id}`;
+    await deleteProduct(prod.id as string);
+    await deleteTeam("to-team");
+  });
+
+  it("refuses a move onto a slug the destination team already uses", async () => {
+    await addTeam("t-a", "A");
+    await addTeam("t-b", "B");
+    const a = await addProduct("t-a", "dupe", "Dupe A");
+    const b = await addProduct("t-b", "dupe", "Dupe B");
+
+    await expect(
+      updateProduct(a.id as string, { teamSlug: "t-b" }),
+    ).rejects.toMatchObject({ code: "conflict" });
+
+    // The failed move left everything where it was.
+    const [still] = await sql`
+      select t.slug from products p join teams t on t.id = p.team_id where p.id = ${a.id}
+    `;
+    expect(still.slug).toBe("t-a");
+
+    await deleteProduct(a.id as string);
+    await deleteProduct(b.id as string);
+    await deleteTeam("t-a");
+    await deleteTeam("t-b");
+  });
+
   it("labels and resolution patterns: update, guarded pattern delete", async () => {
     const tpd = await tpdProductId();
     await addLabel(tpd, "printing", "print issues");

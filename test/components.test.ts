@@ -5,6 +5,7 @@ import {
   saveKnowledgeEntry,
   componentRenameImpact,
   renameComponent,
+  updateComponent,
 } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "./helpers";
 
@@ -43,6 +44,34 @@ describe("components", () => {
 
     expect(await listComponents(tpd)).toHaveLength(1);
     expect(await listComponents(ftrace.id)).toHaveLength(0);
+  });
+
+  it("refuses a re-parent that would close a cycle", async () => {
+    const tpd = await tpdProductId();
+    await addComponent({ productId: tpd, slug: "a", name: "A" });
+    await addComponent({
+      productId: tpd,
+      slug: "b",
+      name: "B",
+      parentSlug: "a",
+    });
+    await addComponent({
+      productId: tpd,
+      slug: "c",
+      name: "C",
+      parentSlug: "b",
+    });
+
+    await expect(
+      updateComponent(tpd, "a", { parentSlug: "c" }),
+    ).rejects.toThrow(/cycle/);
+    await expect(
+      updateComponent(tpd, "a", { parentSlug: "a" }),
+    ).rejects.toThrow(/its own parent/);
+
+    // A move that does not close a ring still goes through.
+    const moved = await updateComponent(tpd, "c", { parentSlug: "a" });
+    expect(moved.slug).toBe("c");
   });
 
   it("rejects an unknown parent slug", async () => {
