@@ -7,7 +7,9 @@ import {
   setUserRole,
   setUserPassword,
   setUserDisabled,
+  setUserDisplayName,
   listTeamMembers,
+  listMemberships,
   setTeamMember,
   USER_ROLES,
   TEAM_ROLES,
@@ -24,6 +26,7 @@ const createSchema = z.object({
 });
 
 const patchSchema = z.object({
+  display_name: z.string().nullable().optional(),
   role: z.enum(USER_ROLES).optional(),
   password: z.string().min(MIN_PASSWORD_LENGTH).optional(),
   disabled: z.boolean().optional(),
@@ -56,10 +59,17 @@ export const users = new Hono()
   .patch("/:id", requireAdmin, zValidator("json", patchSchema), async (c) => {
     const id = c.req.param("id");
     const body = c.req.valid("json");
+    if (body.display_name !== undefined)
+      await setUserDisplayName(id, body.display_name || null);
     if (body.role !== undefined) await setUserRole(id, body.role);
     if (body.password !== undefined) await setUserPassword(id, body.password);
     if (body.disabled !== undefined) await setUserDisabled(id, body.disabled);
     return c.json({ ok: true });
+  })
+
+  .get("/memberships", async (c) => {
+    await assertAnyTeamAdminApi(c);
+    return c.json(await listMemberships());
   })
 
   .get("/team-members/:teamSlug", async (c) => {

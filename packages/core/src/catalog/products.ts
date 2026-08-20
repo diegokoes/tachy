@@ -1,5 +1,6 @@
 import { sql } from "../infra/db";
 import { badInput, conflict, notFound } from "../infra/errors";
+import { clearPermissionCache } from "../access/permissions";
 
 export async function getProductIdBySlug(slug: string): Promise<string> {
   const rows = await sql`
@@ -56,6 +57,8 @@ export async function updateTeam(
       where id = ${current.id}
       returning id, slug, name
     `;
+    // Cached permission contexts hold team slugs, not ids.
+    if (patch.slug && patch.slug !== current.slug) clearPermissionCache();
     return row;
   } catch (e) {
     if ((e as { code?: string }).code === "23505")
@@ -74,6 +77,7 @@ export async function deleteTeam(slug: string) {
       `team '${slug}' still owns ${ref.n} product(s) - delete or move them first`,
     );
   await sql`delete from teams where id = ${team.id}`;
+  clearPermissionCache();
   return { deleted: true, slug };
 }
 
@@ -107,25 +111,50 @@ export async function addProduct(
 
 export async function updateProduct(
   productId: string,
-  patch: { name?: string; aliases?: string[]; slug?: string },
+  patch: {
+    name?: string;
+    aliases?: string[];
+    slug?: string;
+    teamSlug?: string;
+  },
 ) {
   const [current] =
-    await sql`select id, name, aliases, slug from products where id = ${productId}`;
+    await sql`select id, team_id, name, aliases, slug from products where id = ${productId}`;
   if (!current) throw notFound(`Product '${productId}' not found`);
+
+  let teamId = current.team_id as string;
+  if (patch.teamSlug) {
+    const [team] =
+      await sql`select id from teams where slug = ${patch.teamSlug}`;
+    if (!team) throw badInput(`Unknown team '${patch.teamSlug}'.`);
+    teamId = team.id as string;
+  }
+  const moving = teamId !== current.team_id;
+
   try {
-    const [row] = await sql`
-      update products set
-        name    = ${patch.name ?? current.name},
-        aliases = ${patch.aliases ?? current.aliases},
-        slug    = ${patch.slug ?? current.slug}
-      where id = ${productId}
-      returning id, slug, name, aliases
-    `;
+    const [row] = await sql.begin(async (tx) => {
+      const updated = await tx`
+        update products set
+          name    = ${patch.name ?? current.name},
+          aliases = ${patch.aliases ?? current.aliases},
+          slug    = ${patch.slug ?? current.slug},
+          team_id = ${teamId}
+        where id = ${productId}
+        returning id, slug, name, aliases
+      `;
+      // source_projects carries team_id alongside product_id, so a product
+      // that changes hands would otherwise leave its projects behind.
+      if (moving)
+        await tx`update source_projects set team_id = ${teamId} where product_id = ${productId}`;
+      return updated;
+    });
     return row;
   } catch (e) {
     if ((e as { code?: string }).code === "23505")
       throw conflict(
-        `slug '${patch.slug}' is already used by another product in this team`,
+        `slug '${patch.slug ?? current.slug}' is already used by another product in ${
+          patch.teamSlug ? `team '${patch.teamSlug}'` : "this team"
+        }`,
       );
     throw e;
   }
