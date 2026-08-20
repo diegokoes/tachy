@@ -2,12 +2,10 @@
   import type { Snippet } from "svelte";
   import DataTable from "./DataTable.svelte";
   import Button from "./Button.svelte";
-  import Select from "../AsciiSelect.svelte";
   import Note from "./Note.svelte";
-  import { G } from "./glyphs";
+  import RecordModal from "./RecordModal.svelte";
   import {
     blankDraft,
-    cellText,
     draftFrom,
     missingRequired,
     type Column,
@@ -26,6 +24,8 @@
     canDelete = () => true,
     canCreate = true,
     addLabel = "add",
+    editTitle,
+    formExtra,
     onsave,
     oncreate,
     ondelete,
@@ -34,6 +34,7 @@
     ontoggle,
     extraActions,
     rowClass,
+    onform,
   }: {
     columns: Column<T>[];
     rows: T[];
@@ -46,6 +47,12 @@
     canDelete?: (row: T) => boolean;
     canCreate?: boolean;
     addLabel?: string;
+    /** Modal heading when editing; defaults to the row's key. */
+    editTitle?: (row: T) => string;
+    /** Extra controls inside the record form, below the columns. */
+    formExtra?: Snippet<
+      [{ mode: "create" | "edit"; row: T | null; draft: Draft }]
+    >;
     onsave?: (row: T, draft: Draft) => Promise<void> | void;
     oncreate?: (draft: Draft) => Promise<void> | void;
     ondelete?: (row: T) => Promise<void> | void;
@@ -54,39 +61,43 @@
     ontoggle?: (key: string) => void;
     extraActions?: Snippet<[T]>;
     rowClass?: (row: T) => string | undefined;
+    /** Fires as the record form opens and closes, for state `formExtra` needs. */
+    onform?: (f: { mode: "create" | "edit"; row: T | null } | null) => void;
   } = $props();
 
-  let editing = $state<string | null>(null);
+  /* Create and edit are the same form; only the commit differs. */
+  let form = $state<{ mode: "create" | "edit"; row: T | null } | null>(null);
   let draft = $state<Draft>({});
   let armed = $state<string | null>(null);
-  let adding = $state(false);
-  let newDraft = $state<Draft>({});
   let busy = $state<string | null>(null);
   let opError = $state<string | null>(null);
 
-  const editables = $derived(
-    columns.filter((c) => c.edit && c.edit !== "none"),
+  const NEW = "::new";
+  const formKey = $derived(
+    form ? (form.row ? rowKey(form.row) : NEW) : null,
   );
 
   function startEdit(row: T) {
-    editing = rowKey(row);
     draft = draftFrom(columns, row);
+    form = { mode: "edit", row };
     armed = null;
     opError = null;
+    onform?.(form);
   }
 
-  function cancelEdit() {
-    editing = null;
+  function startAdd() {
+    draft = blankDraft(columns);
+    form = { mode: "create", row: null };
+    armed = null;
+    opError = null;
+    onform?.(form);
+  }
+
+  function close() {
+    form = null;
     draft = {};
     opError = null;
-  }
-
-  function isEditable(c: Column<T>, row: T) {
-    return (
-      Boolean(c.edit) &&
-      c.edit !== "none" &&
-      (c.editable ? c.editable(row) : true)
-    );
+    onform?.(null);
   }
 
   async function run(key: string, fn: () => Promise<void> | void) {
@@ -103,32 +114,19 @@
     }
   }
 
-  async function commitEdit(row: T) {
+  async function commit() {
+    if (!form) return;
     const missing = missingRequired(columns, draft);
     if (missing.length) {
       opError = `required: ${missing.join(", ")}`;
       return;
     }
-    if (await run(rowKey(row), () => onsave?.(row, { ...draft }))) cancelEdit();
-  }
-
-  function startAdd() {
-    adding = true;
-    newDraft = blankDraft(columns);
-    editing = null;
-    opError = null;
-  }
-
-  async function commitAdd() {
-    const missing = missingRequired(columns, newDraft);
-    if (missing.length) {
-      opError = `required: ${missing.join(", ")}`;
-      return;
-    }
-    if (await run("::new", () => oncreate?.({ ...newDraft }))) {
-      adding = false;
-      newDraft = {};
-    }
+    const payload = { ...draft };
+    const target = form.row;
+    const ok = await run(target ? rowKey(target) : NEW, () =>
+      target ? onsave?.(target, payload) : oncreate?.(payload),
+    );
+    if (ok) close();
   }
 
   async function confirmDelete(row: T) {
@@ -142,141 +140,40 @@
   }
 </script>
 
-{#snippet control(c: Column<T>, d: Draft, autofocus = false)}
-  {#if c.edit === "select"}
-    <Select
-      value={(d[c.key] ?? "") as string}
-      options={c.options ?? []}
-      aria-label={c.label}
-      onchange={(v) => (d[c.key] = v)}
-    />
-  {:else if c.edit === "checkbox"}
-    <input
-      type="checkbox"
-      aria-label={c.label}
-      checked={Boolean(d[c.key])}
-      onchange={(e) => (d[c.key] = e.currentTarget.checked)}
-    />
-  {:else if c.edit === "textarea"}
-    <textarea
-      rows="2"
-      aria-label={c.label}
-      placeholder={c.placeholder}
-      value={String(d[c.key] ?? "")}
-      oninput={(e) => (d[c.key] = e.currentTarget.value)}
-    ></textarea>
-  {:else}
-    <!-- svelte-ignore a11y_autofocus -->
-    <input
-      type="text"
-      aria-label={c.label}
-      placeholder={c.placeholder}
-      autofocus={autofocus || undefined}
-      value={String(d[c.key] ?? "")}
-      oninput={(e) => (d[c.key] = e.currentTarget.value)}
-    />
-  {/if}
-{/snippet}
-
-{#snippet cellOverride(row: T, c: Column<T>)}
-  {#if editing === rowKey(row) && isEditable(c, row)}
-    {@render control(c, draft, c.key === editables[0]?.key)}
-  {:else if c.cell}
-    {@render c.cell(row)}
-  {:else}
-    <span class="v">{cellText(c, row)}</span>
-  {/if}
-{/snippet}
-
 {#snippet actions(row: T)}
   {@const key = rowKey(row)}
-  {#if editing === key}
+  {#if extraActions}{@render extraActions(row)}{/if}
+  {#if onsave && canEdit(row)}
     <Button
       variant="ghost"
-      tone="accent"
+      tone="info"
       square
-      icon="save"
-      aria-label="save"
+      icon="edit"
+      aria-label="edit"
+      title="edit"
+      onclick={() => startEdit(row)}
+    />
+  {/if}
+  {#if ondelete && canDelete(row)}
+    <Button
+      variant="ghost"
+      tone="danger"
+      square
+      icon={armed === key ? "check" : "cancel"}
+      aria-label={armed === key ? "confirm delete" : "delete"}
+      title={armed === key ? "click again to confirm" : "delete"}
       busy={busy === key}
-      onclick={() => commitEdit(row)}
+      onclick={() => confirmDelete(row)}
     />
-    <Button
-      variant="ghost"
-      square
-      icon="cancel"
-      aria-label="cancel"
-      disabled={busy === key}
-      onclick={cancelEdit}
-    />
-  {:else}
-    {#if extraActions}{@render extraActions(row)}{/if}
-    {#if onsave && canEdit(row)}
-      <Button
-        variant="ghost"
-        tone="info"
-        square
-        icon="edit"
-        aria-label="edit"
-        onclick={() => startEdit(row)}
-      />
-    {/if}
-    {#if ondelete && canDelete(row)}
-      <Button
-        variant="ghost"
-        tone="danger"
-        square
-        icon={armed === key ? "check" : "cancel"}
-        aria-label={armed === key ? "confirm delete" : "delete"}
-        title={armed === key ? "click again to confirm" : "delete"}
-        busy={busy === key}
-        onclick={() => confirmDelete(row)}
-      />
-    {/if}
   {/if}
 {/snippet}
 
-{#snippet footer(span: number)}
-  {#if adding}
-    <tr class="addrow">
-      <td colspan={span}>
-        <div class="addform">
-          {#each editables as c}
-            <label class="f">
-              <span class="fl"
-                >{c.label}{#if c.required}<span class="req">*</span>{/if}</span
-              >
-              {@render control(c, newDraft, c.key === editables[0]?.key)}
-            </label>
-          {/each}
-          <div class="addacts">
-            <Button
-              variant="ghost"
-              tone="accent"
-              size="sm"
-              icon="save"
-              busy={busy === "::new"}
-              onclick={commitAdd}>{addLabel}</Button
-            >
-            <Button
-              variant="ghost"
-              size="sm"
-              icon="cancel"
-              disabled={busy === "::new"}
-              onclick={() => (adding = false)}>cancel</Button
-            >
-          </div>
-        </div>
-      </td>
-    </tr>
-  {/if}
-{/snippet}
-
-{#if opError}
+{#if opError && !form}
   <Note tone="danger">{opError}</Note>
 {/if}
 
 <DataTable
-  {columns}
+  columns={columns.filter((c) => !c.formOnly)}
   {rows}
   {rowKey}
   {loading}
@@ -287,12 +184,10 @@
   {expanded}
   {ontoggle}
   {rowClass}
-  {cellOverride}
-  {footer}
   actions={onsave || ondelete || extraActions ? actions : undefined}
 />
 
-{#if oncreate && canCreate && !adding}
+{#if oncreate && canCreate}
   <div class="addbar">
     <Button variant="ghost" tone="ok" size="sm" icon="plus" onclick={startAdd}
       >{addLabel}</Button
@@ -300,56 +195,31 @@
   </div>
 {/if}
 
+{#if form}
+  {@const f = form}
+  <RecordModal
+    title={f.row ? (editTitle?.(f.row) ?? `edit ${rowKey(f.row)}`) : addLabel}
+    {columns}
+    {draft}
+    mode={f.mode}
+    row={f.row ?? undefined}
+    busy={busy === formKey}
+    error={opError}
+    onConfirm={commit}
+    onCancel={close}
+  >
+    {#snippet extra()}
+      {#if formExtra}{@render formExtra({
+          mode: f.mode,
+          row: f.row,
+          draft,
+        })}{/if}
+    {/snippet}
+  </RecordModal>
+{/if}
+
 <style>
-  .v {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  /* Inputs fill their fixed <col> track, so switching a row into edit mode
-     never changes any column width. */
-  .addform :global(input[type="text"]),
-  .addform :global(textarea) {
-    width: 100%;
-  }
-
   .addbar {
     margin-top: var(--pad-2);
-  }
-
-  .addrow > td {
-    padding: var(--pad-3) var(--pad-4);
-    background: color-mix(in srgb, var(--accent) 6%, transparent);
-  }
-
-  .addform {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-    gap: var(--gap);
-    align-items: end;
-  }
-
-  .f {
-    display: flex;
-    flex-direction: column;
-    gap: var(--pad-1);
-    min-width: 0;
-  }
-  .fl {
-    font-size: var(--fs-xs);
-    letter-spacing: var(--label-spacing);
-    color: var(--muted);
-  }
-  .req {
-    color: var(--accent);
-    margin-left: 0.15em;
-  }
-
-  .addacts {
-    display: flex;
-    gap: var(--pad-2);
-    align-items: center;
   }
 </style>

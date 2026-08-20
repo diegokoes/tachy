@@ -4,13 +4,15 @@
   import { createResource } from "../resource.svelte";
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
-  import { Chip, CrudTable, Select, type Column } from "../tui";
-  import RenameSlugModal from "./RenameSlugModal.svelte";
-  import { csv } from "./shared";
+  import { Chip, CrudTable, type Column } from "../tui";
+  import { slugify, uniqueSlug } from "../slug";
+  import SlugRename from "./SlugRename.svelte";
+  import ScopeBar from "./ScopeBar.svelte";
+  import { csv, TIP } from "./shared";
   import type { Component, Product, Repo } from "./shared";
 
   let productSlug = $state("");
-  let renaming = $state<{ from: string; to: string } | null>(null);
+  let renaming = $state<Component | null>(null);
 
   const products = createResource(() => api.get<Product[]>("/products"), []);
   const components = createResource(
@@ -42,20 +44,54 @@
     }),
   );
 
-  const parentOptions = $derived([
-    { value: "", label: "(top level)" },
-    ...components.data.map((c) => ({ value: c.slug, label: c.slug })),
-  ]);
+  /** A component may not be re-parented under itself or anything beneath it. */
+  function subtree(slug: string): Set<string> {
+    const start = components.data.find((c) => c.slug === slug);
+    if (!start) return new Set();
+    const ids = new Set([start.id]);
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const c of components.data) {
+        if (c.parent_id && ids.has(c.parent_id) && !ids.has(c.id)) {
+          ids.add(c.id);
+          grew = true;
+        }
+      }
+    }
+    return ids;
+  }
 
   const columns: Column<Component>[] = $derived([
-    { key: "slug", label: "component", width: "12rem", edit: "text", required: true },
-    { key: "name", label: "name", width: "11rem", edit: "text", required: true },
+    { key: "name", label: "name", width: "13rem", edit: "text", required: true },
+    {
+      key: "slug",
+      label: "component",
+      width: "12rem",
+      edit: "text",
+      required: true,
+      hint: TIP.slug,
+      derive: (d) =>
+        uniqueSlug(
+          slugify(String(d.name ?? "")),
+          components.data.map((c) => c.slug),
+        ),
+      action: { label: "rename…", onclick: (r) => (renaming = r) },
+    },
     {
       key: "parent",
       label: "parent",
       width: "9rem",
       edit: "select",
-      options: parentOptions,
+      hint: TIP.parent,
+      options: (d) => {
+        const blocked = subtree(String(d.slug ?? ""));
+        return [
+          { value: "", label: "(top level)" },
+          ...components.data
+            .filter((c) => !blocked.has(c.id))
+            .map((c) => ({ value: c.slug, label: c.slug })),
+        ];
+      },
       value: parentSlug,
     },
     {
@@ -63,10 +99,10 @@
       label: "aliases",
       width: "9rem",
       edit: "text",
-      placeholder: "comma,separated",
+      hint: TIP.aliases.component,
       value: (r) => (r.aliases ?? []).join(", "),
     },
-    { key: "description", label: "description", edit: "text" },
+    { key: "description", label: "description", edit: "textarea" },
     { key: "code", label: "code", width: "9rem", cell: codeCell },
   ]);
 
@@ -87,7 +123,8 @@
   {#if rs.length}
     <span class="chips">
       {#each rs as r}
-        <Chip tone={r.index_status === "ready" ? "default" : "warn"}
+        <Chip
+          tone={r.index_status === "ready" ? "default" : "warn"}
           title={`${r.slug} · ${r.index_status}`}>{r.slug}</Chip
         >
       {/each}
@@ -97,17 +134,11 @@
   {/if}
 {/snippet}
 
-<div class="scope">
-  <span class="k">{t("product")}</span>
-  <Select
-    bind:value={productSlug}
-    options={products.data.map((p) => ({ value: p.slug, label: p.name }))}
-    aria-label={t("product")}
-  />
-  <span class="hint">
-    The architecture glossary the agent maps a ticket's area onto.
-  </span>
-</div>
+<ScopeBar
+  label={t("product")}
+  bind:value={productSlug}
+  options={products.data.map((p) => ({ value: p.slug, label: p.name }))}
+/>
 
 {#if productSlug}
   <CrudTable
@@ -122,6 +153,7 @@
     canDelete={() => mayEdit}
     canCreate={mayEdit}
     addLabel="add component"
+    editTitle={(r) => r.name}
     oncreate={(d) =>
       components.mutate(() =>
         api.post(`/products/${productSlug}/components`, {
@@ -133,18 +165,14 @@
         }),
       )}
     onsave={(row, d) =>
-      components.mutate(async () => {
-        if (d.slug && d.slug !== row.slug) {
-          renaming = { from: row.slug, to: String(d.slug) };
-          return;
-        }
-        await api.patch(`/products/${productSlug}/components/${row.slug}`, {
+      components.mutate(() =>
+        api.patch(`/products/${productSlug}/components/${row.slug}`, {
           name: d.name,
           parentSlug: d.parent || null,
           description: d.description || null,
           aliases: csv(String(d.aliases ?? "")),
-        });
-      })}
+        }),
+      )}
     ondelete={(row) =>
       components.mutate(() =>
         api.delete(`/products/${productSlug}/components/${row.slug}`),
@@ -154,45 +182,29 @@
 
 {#if renaming}
   {@const r = renaming}
-  <RenameSlugModal
-    resource={`/products/${productSlug}/components/${r.from}`}
-    to={r.to}
-    onRenamed={async () => {
+  <SlugRename
+    title={`rename ${r.slug}`}
+    current={r.slug}
+    taken={components.data.map((c) => c.slug)}
+    impact={`/products/${productSlug}/components/${r.slug}`}
+    onRename={(to) =>
+      api.post(`/products/${productSlug}/components/${r.slug}/rename`, { to })}
+    onDone={async () => {
       renaming = null;
       await components.reload();
     }}
     onCancel={() => (renaming = null)}
-    onError={(m) => {
-      components.error = m;
-      renaming = null;
-    }}
   >
-    {#snippet message(impact)}
+    {#snippet message(impact, to)}
       <p>
-        Renaming <strong>{r.from}</strong> to <strong>{r.to}</strong> rewrites
+        Renaming <strong>{r.slug}</strong> to <strong>{to}</strong> rewrites
         {impact.entries} knowledge {impact.entries === 1 ? "entry" : "entries"}.
       </p>
     {/snippet}
-  </RenameSlugModal>
+  </SlugRename>
 {/if}
 
 <style>
-  .scope {
-    display: flex;
-    align-items: center;
-    gap: var(--gap);
-    flex-wrap: wrap;
-    margin-bottom: var(--pad-3);
-  }
-  .k {
-    font-size: var(--fs-sm);
-    color: var(--muted);
-    letter-spacing: var(--label-spacing);
-  }
-  .hint {
-    font-size: var(--fs-xs);
-    color: var(--muted);
-  }
   .chips {
     display: flex;
     gap: var(--pad-1);

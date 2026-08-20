@@ -1,9 +1,11 @@
 import type { Snippet } from "svelte";
+import type { IconName } from "./icons";
 
 export type Opt = { value: string | number; label: string };
 
-/** How a column behaves when its row is in edit mode. */
-export type EditKind = "text" | "textarea" | "select" | "checkbox" | "none";
+/** How a column behaves in the record form. */
+export type EditKind =
+  "text" | "secret" | "textarea" | "select" | "checkbox" | "none";
 
 export type Column<T> = {
   key: string;
@@ -15,11 +17,31 @@ export type Column<T> = {
   value?: (row: T) => unknown;
   cell?: Snippet<[T]>;
   edit?: EditKind;
-  options?: Opt[];
-  placeholder?: string;
+  /** A function when the choices depend on the rest of the draft. */
+  options?: Opt[] | ((d: Draft) => Opt[]);
+  /** Sits under the control in the form — say what the field is *for*.
+   *  A function when it depends on another field, e.g. the source type. */
+  hint?: string | ((d: Draft) => string);
+  /** In the record form but not in the table, e.g. a write-only password. */
+  formOnly?: boolean;
+  /** Restricts the field to one of the form's two modes. */
+  only?: "create" | "edit";
+  /** Hides the field when the current draft does not support it. */
+  visible?: (d: Draft) => boolean;
+  /** What a fresh create form starts this field at. */
+  initial?: string | number | boolean;
   required?: boolean;
   /** Per-row override — e.g. a slug that may not be changed after creation. */
   editable?: (row: T) => boolean;
+  /**
+   * Computed from the rest of the draft while creating, never typed. Derived
+   * fields render read-only; changing one afterwards is a rename, not an edit.
+   */
+  derive?: (d: Draft) => string;
+  /** Normalises as the user types — a label whose slug *is* its name. */
+  transform?: (v: string) => string;
+  /** A way out of a read-only field in edit mode, e.g. "rename…" on a slug. */
+  action?: { label: string; icon?: IconName; onclick: (row: T) => void };
 };
 
 export type Draft = Record<string, string | number | boolean | null>;
@@ -48,7 +70,7 @@ export function blankDraft<T>(columns: Column<T>[]): Draft {
   const d: Draft = {};
   for (const c of columns) {
     if (!c.edit || c.edit === "none") continue;
-    d[c.key] = c.edit === "checkbox" ? false : c.edit === "select" ? "" : "";
+    d[c.key] = c.initial ?? (c.edit === "checkbox" ? false : "");
   }
   return d;
 }

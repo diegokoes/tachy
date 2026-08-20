@@ -3,7 +3,9 @@
   import { api } from "../api";
   import { initSession } from "../session.svelte";
   import AsciiSelect from "../AsciiSelect.svelte";
-  import { csv, errText, type SystemInfo } from "./shared";
+  import Checkbox from "../tui/Checkbox.svelte";
+  import { errText } from "../resource.svelte";
+  import { csv, type SystemInfo } from "./shared";
 
   let system = $state<SystemInfo | null>(null);
   let loading = $state(true);
@@ -53,7 +55,7 @@
 {#if loading}<p class="muted">Loading…</p>{/if}
 
 {#if system}
-  <h4>Runtime settings <span class="muted">(stored in the database - editable)</span></h4>
+  <h4>Runtime settings</h4>
   <table>
     <thead><tr><th>setting</th><th>value</th>
       <th class="tip" title="db: set here. env: falling back to the environment variable. default: built-in.">source</th>
@@ -75,8 +77,11 @@
         <td class="tip" title="When on, PII/secrets are scrubbed from everything sent to the LLM - all connections, pasted context and retrieved results. The database keeps raw data.">PII / secret redaction</td>
         <td>
           <label class="check">
-            <input type="checkbox" checked={system.settings.redaction_global.value}
-              onchange={(e) => saveSetting("redaction_global", (e.target as HTMLInputElement).checked)} />
+            <Checkbox
+              checked={system.settings.redaction_global.value}
+              ariaLabel="PII / secret redaction"
+              onchange={(checked) => saveSetting("redaction_global", checked)}
+            />
             <span class:on={system.settings.redaction_global.value}>
               {system.settings.redaction_global.value ? "on - scrub at the LLM boundary" : "off (per-connection opt-in only)"}
             </span>
@@ -137,7 +142,6 @@
       </tr>
     </tbody>
   </table>
-  <p class="muted hint">Changes apply to the next agent turn / MCP start - no restart needed for the web agent.</p>
 
   <h4>Environment <span class="muted">(bootstrap + secrets - read-only, set in .env)</span></h4>
   <table>
@@ -166,7 +170,6 @@
   td .on { color: var(--ok); }
   .edit-cell input { min-width: 13rem; }
   label.check { display: flex; gap: 0.5rem; align-items: center; cursor: pointer; }
-  label.check input { accent-color: var(--accent); }
   .badge.src-db { border-color: var(--accent); color: var(--accent); }
   .badge.src-env { border-color: var(--warn); color: var(--warn); }
 </style>

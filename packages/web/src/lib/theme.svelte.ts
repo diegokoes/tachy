@@ -7,6 +7,13 @@ const ACCENT_DEFAULTS: Record<Theme, string> = {
   light: "#31589e",
 };
 
+const OPPOSITE_ACCENTS: Record<string, string> = {
+  "#000000": "#ffffff",
+  "#666666": "#e5e5e5",
+  "#e5e5e5": "#666666",
+  "#ffffff": "#000000",
+};
+
 export type Density = "compact" | "normal" | "roomy";
 export type PanelBorder = "single" | "double" | "heavy" | "ascii" | "none";
 
@@ -62,10 +69,18 @@ export function resetAccent() {
 }
 
 export function setTheme(t: Theme) {
+  const changed = themeState.theme !== t;
   themeState.theme = t;
   document.documentElement.dataset.theme = t;
   localStorage.setItem("tachy-theme", t);
   if (!themeState.accentCustomized) applyAccent(ACCENT_DEFAULTS[t]);
+  else if (changed) {
+    const opposite = OPPOSITE_ACCENTS[themeState.accentColor.toLowerCase()];
+    if (opposite) {
+      applyAccent(opposite);
+      localStorage.setItem("tachy-accent", opposite);
+    }
+  }
 }
 
 export function setPattern(idx: number) {

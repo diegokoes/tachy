@@ -1,13 +1,16 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { Button } from "../tui";
-  import { onMount, untrack } from "svelte";
+  import { Button, Checkbox } from "../tui";
+  import { onMount, tick, untrack } from "svelte";
+  import { gsap } from "../gsap";
   import { api } from "../api";
   import { canCurateScope } from "../session.svelte";
   import type { KnowledgeRow, NamedRow } from "../types";
   import AsciiSelect from "../AsciiSelect.svelte";
   import { t } from "../terms";
   import { csv } from "../admin/shared";
+  import { componentOptions } from "../catalog";
+  import Icon from "../tui/Icon.svelte";
 
   let {
     mode,
@@ -51,6 +54,7 @@
   let component = $state(""); 
 
   let showStructured = $state(false);
+  let structuredField = $state<HTMLTextAreaElement>();
   let structuredText = $state(
     seed.structured && Object.keys(seed.structured).length
       ? JSON.stringify(seed.structured, null, 2)
@@ -121,7 +125,9 @@
       cloud: cloud.trim() || (mode === "edit" ? null : undefined),
       resolutionClarity: resolutionClarity || (mode === "edit" ? null : undefined),
       learningValue: learningValue || (mode === "edit" ? null : undefined),
-      hiddenFix: hiddenFix || (mode === "edit" ? null : undefined),
+      // A checkbox is always a real answer, so it is sent either way — the
+      // `|| null` the other optional fields use would drop an explicit false.
+      hiddenFix,
       resolutionPattern: resolutionPattern || (mode === "edit" ? null : undefined),
       affectedVersion: affectedVersion.trim() || (mode === "edit" ? null : undefined),
       fixedVersion: fixedVersion.trim() || (mode === "edit" ? null : undefined),
@@ -140,6 +146,33 @@
     e.preventDefault();
     const payload = buildPayload();
     if (payload) onSubmit(payload);
+  }
+
+  async function toggleStructured() {
+    showStructured = !showStructured;
+    if (!showStructured) return;
+    await tick();
+    if (!structuredField) return;
+    resizeStructured();
+    const container = structuredField.closest("main") as HTMLElement | null;
+    if (!container) return;
+    const target =
+      container.scrollTop +
+      structuredField.getBoundingClientRect().top -
+      container.getBoundingClientRect().top -
+      24;
+    gsap.to(container, {
+      scrollTop: target,
+      duration: 0.82,
+      ease: "power3.inOut",
+      overwrite: "auto",
+    });
+  }
+
+  function resizeStructured() {
+    if (!structuredField) return;
+    structuredField.style.height = "auto";
+    structuredField.style.height = `${Math.max(structuredField.scrollHeight, 320)}px`;
   }
 </script>
 
@@ -220,7 +253,7 @@
       <input class="short" bind:value={fixedVersion} />
     </label>
     <label class="check">
-      <input type="checkbox" bind:checked={hiddenFix} /> hidden fix
+      <Checkbox bind:checked={hiddenFix} ariaLabel="hidden fix" /> hidden fix
     </label>
   </div>
 
@@ -237,15 +270,29 @@
     <label>component
       <AsciiSelect bind:value={component} disabled={!productSlug || components.length === 0}
         title={productSlug ? undefined : `pick a ${t("product")} first`}
-        options={[{ value: "", label: "none" }, ...components.map((c) => c.slug as string)]} />
+        options={[{ value: "", label: "none" }, ...componentOptions(components)]} />
     </label>
   </div>
 
-  <button type="button" class="mini" onclick={() => (showStructured = !showStructured)}>
-    {showStructured ? "▾" : "▸"} advanced: structured JSON
+  <button
+    type="button"
+    class="json-toggle"
+    aria-label={showStructured ? "Hide structured JSON" : "Show structured JSON"}
+    title={showStructured ? "Hide structured JSON" : "Show structured JSON"}
+    onclick={() => void toggleStructured()}
+  >
+    <Icon name="json" size="1.8rem" />
   </button>
   {#if showStructured}
-    <textarea class="structured" rows="8" bind:value={structuredText}></textarea>
+    <textarea
+      bind:this={structuredField}
+      class="structured"
+      rows="16"
+      bind:value={structuredText}
+      aria-label="structured JSON"
+      spellcheck="false"
+      oninput={resizeStructured}
+    ></textarea>
     {#if structuredError}<p class="error">{structuredError}</p>{/if}
   {/if}
 
@@ -257,12 +304,17 @@
   /* Three tracks so the middle group stays optically centred whatever the
      actions on the right weigh. */
   .formbar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
     gap: var(--pad-2);
     margin-bottom: var(--pad-3);
+    padding-top: var(--pad-2);
     padding-bottom: var(--pad-2);
+    background: var(--panel-solid);
     border-bottom: var(--panel-line);
   }
   .formbar .mid,
@@ -281,7 +333,9 @@
   .short { max-width: 10rem; }
   .row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end; }
   .check { flex-direction: row; align-items: center; gap: 0.4rem; padding-bottom: 0.4rem; }
-  .structured { font-family: inherit; font-size: 0.82rem; }
-  .mini { align-self: flex-start; font-size: 0.78rem; padding: 0.1rem 0.45rem; }
+  .structured { width: 100%; min-height: 20rem; height: 20rem; box-sizing: border-box; overflow: hidden; resize: none; color: #e2e2e2; background: #000; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; line-height: 1.5; }
+  :global(:root[data-theme="light"]) .structured { color: #000; background: #fff; }
+  .json-toggle { align-self: center; display: grid; place-items: center; color: var(--text); background: transparent; border: 0; padding: 0.25rem; cursor: pointer; }
+  .json-toggle:hover { color: var(--accent); }
   .error { color: var(--danger); margin: 0; }
 </style>

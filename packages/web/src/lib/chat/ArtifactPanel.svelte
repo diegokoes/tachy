@@ -168,15 +168,6 @@
   const teamSlugFor = (teamId: string | null) =>
     teams.find((t) => t.id === teamId)?.slug;
 
-  /** One list instead of a scope picker plus a team picker to go with it. */
-  const audienceOptions = $derived([
-    { value: "user", label: "only me" },
-    ...teams.map((t) => ({ value: `team:${t.slug}`, label: `team ${t.slug}` })),
-    ...(session.me?.role === "admin"
-      ? [{ value: "global", label: "everyone" }]
-      : []),
-  ]);
-
   let editorOpen = $state(false);
   let fetching = $state<string | null>(null);
   let editorMode = $state<"create" | "edit">("create");
@@ -204,6 +195,14 @@
 
   const fScope = $derived(scopeOf(fAudience));
   const fTeam = $derived(teamOf(fAudience));
+
+  const audienceOptions = $derived([
+    { value: "user", label: "only me" },
+    ...teams.map((t) => ({ value: `team:${t.slug}`, label: `team ${t.slug}` })),
+    ...(session.me?.role === "admin"
+      ? [{ value: "global", label: "everyone" }]
+      : []),
+  ]);
 
   const blankOutput = (): OutputSpec => ({
     format: "xlsx",
@@ -246,7 +245,7 @@
 
   const fSlug = $derived(
     freeSlug(
-      editorMode === "edit" ? fEditSlug : kebab(fTitle) || "artifact",
+      kebab(fTitle) || "artifact",
       fScope,
       fTeam,
       fEditId,
@@ -310,14 +309,12 @@
       editorError = problem;
       return;
     }
-    /* A row belongs to one scope, so changing the audience writes the artifact
-       where it now lives and drops the old copy — and re-attaches it, since a
-       moved artifact is a new row with a new id. */
     const moved = editorMode === "edit" && fAudience !== fWasAudience;
     const wasScope = scopeOf(fWasAudience);
     const wasTeam = teamOf(fWasAudience);
     const wasAttached = !!fEditId && chat.artifact?.id === fEditId;
     const slug = fSlug;
+    const rekeyed = editorMode === "edit" && slug !== fEditSlug;
 
     editorBusy = true;
     editorError = null;
@@ -331,7 +328,7 @@
         body: fPrompt,
         spec: toArtifactSpec(fHasOutput, fOutput) ?? null,
       });
-      if (moved)
+      if (moved || rekeyed)
         await api.delete("/artifacts", {
           scope: wasScope,
           ...(wasScope === "team" ? { team: wasTeam } : {}),
@@ -339,13 +336,20 @@
         });
       editorOpen = false;
       await load();
-      if (moved) {
-        const now = items.find(
-          (a) => a.slug === slug && audienceOf(a) === fAudience,
-        );
-        if (wasAttached)
-          chat.artifact = now ? { id: now.id, title: now.title } : undefined;
+      const now = items.find(
+        (a) =>
+          a.slug === slug &&
+          a.scope === fScope &&
+          (fScope !== "team" || teamSlugFor(a.team_id) === fTeam),
+      );
+      if (wasAttached && now) {
+        chat.artifact = { id: now.id, title: now.title };
       }
+      if (rekeyed && wasAttached && !now) {
+        chat.artifact = undefined;
+      }
+      // The command menu is cached by ChatView and needs the new slug/title.
+      window.dispatchEvent(new Event("artifacts-changed"));
     } catch (e) {
       editorError = e instanceof Error ? e.message : String(e);
     } finally {
@@ -368,6 +372,7 @@
       });
       if (chat.artifact?.id === a.id) chat.artifact = undefined;
       await load();
+      window.dispatchEvent(new Event("artifacts-changed"));
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
@@ -428,7 +433,7 @@
 
         <div class="pick-body">
           {#if error}<p class="error">{error}</p>{/if}
-          {#if loading}
+          {#if loading && items.length === 0}
             <p class="muted">loading…</p>
           {:else if items.length === 0 && !error}
             <p class="muted empty">No artifacts yet</p>
@@ -500,13 +505,11 @@
       }}
     >
       <div class="who">
-        <Field label="who can use it">
-          <Select
-            bind:value={fAudience}
-            options={audienceOptions}
-            aria-label="who can use it"
-          />
-        </Field>
+        <Select
+          bind:value={fAudience}
+          options={audienceOptions}
+          aria-label="who can use it"
+        />
       </div>
 
       <Field label="name" required>
@@ -535,7 +538,7 @@
 <style>
   .edge-slot {
     position: absolute;
-    right: 0.4rem;
+    right: 0;
     top: 50%;
     transform: translateY(-50%);
     z-index: 9;
@@ -551,17 +554,18 @@
     border-radius: var(--radius);
     background: var(--bg);
     color: var(--muted);
-    font-size: 1.15rem;
+    font-size: 1.28rem;
     line-height: 1;
     display: grid;
     place-items: center;
   }
   .tab-icon {
     display: inline-block;
+    font-size: 1.08em;
     line-height: 1;
   }
   .tab-key {
-    font-size: var(--fs-xs);
+    font-size: calc(var(--fs-xs) + 0.09rem);
     line-height: 1;
     color: var(--accent);
     transform: translateY(-0.65rem);
@@ -573,14 +577,24 @@
   }
 
   .scrim {
-    position: absolute;
+    position: fixed;
     inset: 0;
     z-index: 6;
-    background: color-mix(in srgb, var(--bg) 74%, transparent);
+    background: color-mix(in srgb, #000 48%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
-  /* The editor lays its own scrim on top; two at 74% stack to solid black. */
+  :global(:root[data-theme="light"]) .scrim {
+    background: color-mix(in srgb, #000 22%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  /* The editor lays its own scrim on top; this keeps the underlying view soft. */
   .scrim.hushed {
-    background: color-mix(in srgb, var(--bg) 25%, transparent);
+    background: color-mix(in srgb, #000 18%, transparent);
+  }
+  :global(:root[data-theme="light"]) .scrim.hushed {
+    background: color-mix(in srgb, #000 8%, transparent);
   }
 
   .stage {
@@ -599,6 +613,11 @@
   }
 
   .head-acts { display: inline-flex; gap: var(--pad-2); align-items: center; }
+  .head-acts :global(.btn.square:focus-visible) {
+    border-color: transparent;
+    outline: none;
+    box-shadow: none;
+  }
 
   .pick-body {
     display: flex;

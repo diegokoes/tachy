@@ -9,11 +9,14 @@ export { default as Chip } from "./Chip.svelte";
 export { default as Meter } from "./Meter.svelte";
 export { default as HintRule } from "./HintRule.svelte";
 export { default as Icon } from "./Icon.svelte";
+export { default as Checkbox } from "./Checkbox.svelte";
 export { default as EmptyState } from "./EmptyState.svelte";
 export { default as Note } from "./Note.svelte";
 export { default as ErrorMark } from "./ErrorMark.svelte";
+export { default as InfoMark } from "./InfoMark.svelte";
 export { default as DataTable } from "./DataTable.svelte";
 export { default as CrudTable } from "./CrudTable.svelte";
+export { default as RecordModal } from "./RecordModal.svelte";
 
 /* Kept where they are until their last legacy call site is migrated. */
 export { default as Select } from "../AsciiSelect.svelte";

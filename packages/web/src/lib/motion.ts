@@ -81,6 +81,61 @@ export function countUp(root: HTMLElement) {
   });
 }
 
+/**
+ * Resolves a mask of password dots into plain text — in the placeholder if the
+ * node is an input, in its text otherwise. A setting the user has not set
+ * themselves still resolves to something; the decode is what says so, and says
+ * that typing or picking here replaces it.
+ *
+ * An empty string leaves an input's placeholder to the markup, and blanks a
+ * text node.
+ */
+export function decode(node: HTMLElement, text: string) {
+  const MASK = "•";
+  const CHARS = `••••••••••••••••${MASK}`;
+  const input = node instanceof HTMLInputElement ? node : null;
+  const state = { i: 0 };
+  const rand = () => CHARS[Math.floor(Math.random() * CHARS.length)];
+  let shown: string | null = null;
+
+  const show = (s: string) => {
+    if (input) input.placeholder = s;
+    else node.textContent = s;
+  };
+
+  const run = (value: string) => {
+    if (value === shown) return;
+    shown = value;
+    gsap.killTweensOf(state);
+    if (!value) {
+      if (!input) node.textContent = "";
+      return;
+    }
+    if (reducedMotion()) {
+      show(value);
+      return;
+    }
+    const len = Math.max(value.length, 10);
+    state.i = 0;
+    show(MASK.repeat(len));
+    gsap.to(state, {
+      i: len,
+      duration: 1.1,
+      ease: "none",
+      onUpdate: () => {
+        const n = Math.floor(state.i);
+        show(
+          value.slice(0, n) + Array.from({ length: len - n }, rand).join(""),
+        );
+      },
+      onComplete: () => show(value),
+    });
+  };
+
+  run(text);
+  return { update: run, destroy: () => gsap.killTweensOf(state) };
+}
+
 /** Fills a gauge upwards to `pct` (0-100), staggered by list position. */
 export function growBar(node: HTMLElement, p: { pct: number; delay?: number }) {
   const set = (v: number) => {

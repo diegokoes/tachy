@@ -7,8 +7,7 @@ export function errText(e: unknown): string {
 
 /**
  * One load/loading/error/reload lifecycle, shared by every list view instead
- * of being hand-rolled per panel. `mutate` runs a write and reloads on success,
- * surfacing failures through the same `error` field.
+ * of being hand-rolled per panel. `mutate` runs a write and reloads on success.
  */
 export function createResource<T>(load: () => Promise<T>, initial: T) {
   let data = $state<T>(initial);
@@ -34,14 +33,13 @@ export function createResource<T>(load: () => Promise<T>, initial: T) {
     }
   }
 
+  /* A failed write is rethrown, never stored: `error` stays the *load* error,
+     which is what the list's own error slot reports. Storing it here too made
+     a rejected delete print its message twice — once from the slot, once from
+     whoever caught the throw. */
   async function mutate(fn: () => Promise<unknown>) {
-    try {
-      await fn();
-      await reload();
-    } catch (e) {
-      error = errText(e);
-      throw e;
-    }
+    await fn();
+    await reload();
   }
 
   return {

@@ -10,6 +10,7 @@
   import AsciiSelect from "../AsciiSelect.svelte";
   import { t } from "../terms";
   import { csv } from "../admin/shared";
+  import { componentOptions } from "../catalog";
 
   let {
     mode,
@@ -136,12 +137,6 @@
   <label>title
     <input bind:value={title} required />
   </label>
-  <label>body
-    <textarea rows="14" bind:value={body} required></textarea>
-  </label>
-  <label>tags <span class="hint">comma-separated</span>
-    <input bind:value={tags} />
-  </label>
   <div class="row">
     <label>status
       <AsciiSelect bind:value={status} options={["approved", "draft", "archived"]} />
@@ -161,7 +156,7 @@
         disabled={!productSlug || components.length === 0}
         options={[
           { value: "", label: "whole product" },
-          ...components.map((c) => c.slug as string),
+          ...componentOptions(components),
         ]}
       />
     </label>
@@ -172,6 +167,12 @@
       <input bind:value={source} />
     </label>
   </div>
+  <label>tags <span class="hint">comma-separated</span>
+    <input bind:value={tags} />
+  </label>
+  <label>body
+    <textarea rows="14" bind:value={body} required></textarea>
+  </label>
   {#if supersedes}
     <p class="hint">Saving as a new version — the current doc will be archived and linked as the predecessor.</p>
   {/if}
@@ -184,12 +185,17 @@
   /* Three tracks so the middle group stays optically centred whatever the
      actions on the right weigh. */
   .formbar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
     gap: var(--pad-2);
     margin-bottom: var(--pad-3);
+    padding-top: var(--pad-2);
     padding-bottom: var(--pad-2);
+    background: var(--panel-solid);
     border-bottom: var(--panel-line);
   }
   .formbar .mid,

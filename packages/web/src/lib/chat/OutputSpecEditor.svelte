@@ -115,7 +115,7 @@
 </script>
 
 <script lang="ts">
-  import { Button, Field, Select, G } from "../tui";
+  import { Button, Checkbox, Field, Select, G } from "../tui";
 
   let {
     enabled = $bindable(),
@@ -174,7 +174,7 @@
 <div class="os">
   <div class="head-row">
     <label class="toggle">
-      <input type="checkbox" bind:checked={enabled} />
+      <Checkbox bind:checked={enabled} ariaLabel="output file" />
       <span class="ttl">output file</span>
     </label>
     {#if enabled}
@@ -242,7 +242,7 @@
           </div>
 
           <label class="req" title="the agent may not leave this column empty">
-            <input type="checkbox" bind:checked={col.required} />
+            <Checkbox bind:checked={col.required} ariaLabel="required" />
             <span>required</span>
           </label>
 
@@ -408,10 +408,6 @@
     font-size: var(--fs-sm);
     color: var(--muted);
   }
-  .req input {
-    width: auto;
-  }
-
   .acts {
     grid-area: acts;
     align-self: start;

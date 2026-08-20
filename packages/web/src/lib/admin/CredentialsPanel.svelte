@@ -3,7 +3,8 @@
   import { api } from "../api";
   import { session } from "../session.svelte";
   import AsciiSelect from "../AsciiSelect.svelte";
-  import { AGENT_KEY_LABELS, errText, type Team, type Connection } from "./shared";
+  import { errText } from "../resource.svelte";
+  import { AGENT_KEY_LABELS, type Team, type Connection } from "./shared";
 
   type CredList = {
     vault_enabled: boolean;
@@ -87,11 +88,6 @@
 
 <div class="cred-panel">
   <h4>Shared credentials</h4>
-  <p class="muted">
-    Provide a key once for everyone (<b>global</b>) or per team. Users can still
-    override with their own key in My&nbsp;settings — resolution is user → team →
-    global → server <code>.env</code>. Values are stored encrypted and never shown again.
-  </p>
 
   {#if error}<p class="error">{error}</p>{/if}
 

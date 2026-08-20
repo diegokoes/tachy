@@ -1,23 +1,68 @@
 <script lang="ts">
   import type { Entry } from "../chatState.svelte";
   import { shatter } from "../motion";
-  import { Button, Panel, G } from "../tui";
+  import { Button, Panel } from "../tui";
+  import ApprovalField from "./ApprovalField.svelte";
 
   type Approval = Extract<Entry, { kind: "approval" }>;
 
   let {
     entry,
     ondecide,
-    oninspect,
   }: {
     entry: Approval;
-    ondecide: (approve: boolean) => void;
-    oninspect: () => void;
+    /** `reason` travels to the model as the denial message. */
+    ondecide: (approve: boolean, reason?: string) => void;
   } = $props();
 
-  /** One-line preview; the full payload lives in the modal. */
-  const peek = (s: string) =>
-    s.replace(/\s+/g, " ").slice(0, 140) + (s.length > 140 ? "…" : "");
+  const pending = $derived(entry.status === "pending");
+  const keys = $derived(Object.keys(entry.input));
+
+  /** Collapsed summary once decided — the longest string field reads best. */
+  const peek = $derived.by(() => {
+    const s = Object.values(entry.input)
+      .filter((v): v is string => typeof v === "string")
+      .sort((a, b) => b.length - a.length)[0];
+    const t = (s ?? JSON.stringify(entry.input)).replace(/\s+/g, " ");
+    return t.length > 120 ? t.slice(0, 120) + "…" : t;
+  });
+
+  let raw = $state(false);
+  let rawBad = $state(false);
+  let denying = $state(false);
+  let reason = $state("");
+
+  function editRaw(text: string) {
+    entry.raw = text;
+    try {
+      entry.input = JSON.parse(text) as Record<string, unknown>;
+      rawBad = false;
+    } catch {
+      rawBad = true;
+    }
+  }
+
+  function toggleRaw() {
+    raw = !raw;
+    if (raw) {
+      entry.raw = JSON.stringify(entry.input, null, 2);
+      rawBad = false;
+    } else {
+      entry.raw = undefined;
+    }
+  }
+
+  function set(key: string, value: unknown) {
+    entry.input = { ...entry.input, [key]: value };
+  }
+
+  function deny() {
+    if (!denying) {
+      denying = true;
+      return;
+    }
+    ondecide(false, reason.trim() || undefined);
+  }
 </script>
 
 <div class="wrap">
@@ -30,34 +75,75 @@
         : "warn"}
   >
     {#snippet meta()}
-      <span>{entry.status === "pending" ? "review & approve" : entry.status}</span>
+      <span>{pending ? "review" : entry.status}</span>
     {/snippet}
 
-    {#if entry.status === "denied"}
-      <pre class="payload" use:shatter>{peek(entry.editable)}</pre>
+    {#if !pending}
+      {#if entry.status === "denied"}
+        <pre class="peek" use:shatter>{peek}</pre>
+      {:else}
+        <p class="peek">{peek}</p>
+      {/if}
+    {:else if raw}
+      <textarea
+        class="raw"
+        class:bad={rawBad}
+        value={entry.raw ?? ""}
+        spellcheck="false"
+        aria-label="raw tool input"
+        oninput={(e) => editRaw(e.currentTarget.value)}
+      ></textarea>
     {:else}
-      <button class="payload peek" title="View full payload" onclick={oninspect}>
-        <span class="txt">{peek(entry.editable)}</span>
-        <span class="view">⛶ view</span>
-      </button>
+      <div class="fields">
+        {#each keys as key (key)}
+          <ApprovalField
+            name={key}
+            value={entry.input[key]}
+            onchange={(v) => set(key, v)}
+          />
+        {/each}
+      </div>
     {/if}
 
-    {#if entry.status === "pending"}
+    {#if pending}
+      {#if denying}
+        <input
+          class="reason"
+          placeholder="why? (optional — the assistant reads this)"
+          bind:value={reason}
+          onkeydown={(e) => {
+            if (e.key === "Enter") ondecide(false, reason.trim() || undefined);
+            if (e.key === "Escape") denying = false;
+          }}
+        />
+      {/if}
       <div class="acts">
         <Button
           variant="ghost"
-          tone="danger"
           size="sm"
-          icon="cancel"
-          onclick={() => ondecide(false)}>deny</Button
+          title={raw ? "back to fields" : "edit raw JSON"}
+          aria-label={raw ? "back to fields" : "edit raw JSON"}
+          onclick={toggleRaw}>{raw ? "fields" : "{ }"}</Button
         >
         <Button
           variant="ghost"
-          tone="accent"
-          size="sm"
-          icon="save"
-          onclick={() => ondecide(true)}>approve</Button
-        >
+          square
+          tone="ok"
+          icon="check"
+          disabled={rawBad}
+          title={rawBad ? "fix the JSON first" : "approve"}
+          aria-label="approve"
+          onclick={() => ondecide(true)}
+        />
+        <Button
+          variant="ghost"
+          square
+          tone="danger"
+          icon="cancel"
+          title={denying ? "confirm deny" : "deny"}
+          aria-label="deny"
+          onclick={deny}
+        />
       </div>
     {/if}
   </Panel>
@@ -69,40 +155,44 @@
     margin: var(--pad-2) 0;
   }
 
-  .payload {
+  .fields {
     display: flex;
-    align-items: baseline;
-    gap: var(--gap);
-    width: 100%;
+    flex-direction: column;
+    gap: var(--pad-3);
+  }
+
+  .peek {
     margin: 0;
     font: inherit;
     font-size: var(--fs-sm);
     color: var(--muted);
-    text-align: left;
-    background: transparent;
-    border: none;
-    padding: 0;
-    overflow: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
-  .peek {
-    cursor: pointer;
+
+  .raw {
+    width: 100%;
+    min-height: 16rem;
+    max-height: 55vh;
+    resize: vertical;
+    font: inherit;
+    font-size: var(--fs-sm);
+    line-height: 1.5;
   }
-  .peek:hover {
-    color: var(--text);
+  .raw.bad {
+    border-color: var(--danger);
   }
-  .txt {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .view {
-    flex: none;
-    color: var(--accent);
-    font-size: var(--fs-xs);
+
+  .reason {
+    width: 100%;
+    margin-top: var(--pad-3);
+    font: inherit;
+    font-size: var(--fs-sm);
   }
 
   .acts {
     display: flex;
+    align-items: center;
     justify-content: flex-end;
     gap: var(--pad-2);
     margin-top: var(--pad-3);
