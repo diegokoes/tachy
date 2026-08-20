@@ -3,12 +3,10 @@
   import { session, logout } from "../session.svelte";
   import { Button, Tabs } from "../tui";
   import AgentTab from "./AgentTab.svelte";
-  import KeysTab from "./KeysTab.svelte";
   import ThemeTab from "./ThemeTab.svelte";
 
   const TABS = [
     { key: "agent", label: "agent" },
-    { key: "keys", label: "keys" },
     { key: "theme", label: "theme" },
   ];
 
@@ -31,9 +29,7 @@
   </Tabs>
 </div>
 
-{#if tab === "keys"}
-  <KeysTab />
-{:else if tab === "theme"}
+{#if tab === "theme"}
   <ThemeTab />
 {:else}
   <AgentTab />
@@ -41,6 +37,10 @@
 
 <style>
   .head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--panel-bg);
     margin-bottom: var(--pad-4);
   }
   .who {

@@ -3,9 +3,10 @@
   import { csv } from "./admin/shared";
   import { initSession } from "./session.svelte";
   import { errText } from "./resource.svelte";
+  import { slugify } from "./slug";
   import AuthShell from "./AuthShell.svelte";
   import TypeLine from "./TypeLine.svelte";
-  import { Actions, Button, Field, Meter, Note, Panel, Select } from "./tui";
+  import { Actions, Button, Checkbox, Field, Meter, Note, Panel, Select } from "./tui";
 
   let { onDone, onSkip }: { onDone: () => void; onSkip: () => void } = $props();
 
@@ -29,6 +30,9 @@
   let agentProvider = $state<"claude" | "copilot">("claude");
   let agentKey = $state("");
   let agentModel = $state("claude-sonnet-5");
+  const agentKeyIsOAuth = $derived(
+    agentProvider === "claude" && agentKey.startsWith("sk-ant-oat01-"),
+  );
   let agentEffort = $state("medium");
   let allowedModels = $state("");
 
@@ -41,13 +45,6 @@
     },
   } as const;
   const wt = $derived(WIZ_TERMS[profile]);
-
-  const slugify = (s: string) =>
-    s
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
 
   const namedProducts = $derived(products.filter((p) => p.name.trim()));
 
@@ -248,9 +245,21 @@
             <Field label="model">
               <input bind:value={agentModel} />
             </Field>
-            <Field label="api key" hint="stored encrypted">
+            <Field
+              label="api key or token"
+              hint={agentProvider === "claude"
+                ? "an API key from console.anthropic.com, or a subscription token from 'claude setup-token'"
+                : "stored encrypted"}
+            >
               <input type="password" autocomplete="off" bind:value={agentKey} />
             </Field>
+            {#if agentKeyIsOAuth}
+              <Note tone="accent">
+                Recognised as a Claude <strong>subscription token</strong> — saved as the
+                organisation-wide default. Chats will run on that account's usage limits
+                until individual users add their own under Settings › Keys.
+              </Note>
+            {/if}
             <Field label="effort">
               <Select
                 bind:value={agentEffort}
@@ -259,7 +268,7 @@
             </Field>
           </div>
           <label class="check">
-            <input type="checkbox" bind:checked={redaction} />
+            <Checkbox bind:checked={redaction} ariaLabel="scrub emails, secrets and names before they reach the model" />
             <span>scrub emails, secrets and names before they reach the model</span>
           </label>
         {:else}

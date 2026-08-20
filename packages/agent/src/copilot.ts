@@ -85,7 +85,7 @@ export class CopilotTurn extends TurnBase {
 
       const sessionConfig: SessionConfig = {
         // per-user token for multitenancy; falls back to server's gh CLI login
-        ...(cfg.agentKey ? { gitHubToken: cfg.agentKey } : {}),
+        ...(cfg.agentAuth ? { gitHubToken: cfg.agentAuth.value } : {}),
         model: effectiveModel(cfg),
         systemMessage: { mode: "append", content: cfg.systemPromptAppend },
         availableTools: ["mcp:*"],

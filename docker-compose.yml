@@ -48,9 +48,12 @@ services:
       # Linked-repo clones for code search — survives redeploys so reindexes
       # stay diff-only instead of re-cloning.
       - tachy-repo-data:/app/data
-      # Claude Code login + agent SDK session transcripts. Persisting this
-      # keeps the server's Claude login and lets multi-turn chats resume
-      # across container redeploys.
+      # Per-user Claude Code state: one directory per user under users/<id>,
+      # each holding that user's credential store and session transcripts.
+      # Persisting it lets multi-turn chats resume across redeploys. The
+      # server's own `claude login` no longer answers turns — users bring
+      # their own credential, or fall back to ANTHROPIC_API_KEY /
+      # CLAUDE_CODE_OAUTH_TOKEN from the environment.
       - tachy-agent-home:/root/.claude
 
   # Not started by `up`. Run ad hoc, e.g.:

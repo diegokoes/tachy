@@ -7,12 +7,14 @@ import {
   setCredential,
   deleteCredential,
   credentialSource,
+  resolveAgentAuth,
   effectivePrefs,
   setPref,
   deletePref,
   userSoleTeamId,
   listSourceConnections,
   AGENT_CREDENTIALS,
+  ANTHROPIC_OAUTH_CREDENTIAL,
   sourceCredentialName,
 } from "@tachy/core";
 import { requireCaller } from "../authz";
@@ -20,11 +22,12 @@ import { requireCaller } from "../authz";
 const valueSchema = z.object({ value: z.string().min(1) });
 const prefSchema = z.object({ value: z.unknown() });
 
-/** Agent-key names plus one source-token name per connection. */
+/** Agent-credential names plus one source-token name per connection. */
 async function knownCredentialNames(): Promise<string[]> {
   const connections = await listSourceConnections();
   return [
     ...Object.values(AGENT_CREDENTIALS),
+    ANTHROPIC_OAUTH_CREDENTIAL,
     ...connections.map((s) => sourceCredentialName(s.source_type, s.slug)),
   ];
 }
@@ -39,22 +42,37 @@ export const me = new Hono()
     for (const name of names)
       effective[name] =
         (await credentialSource(name, { userId, teamId })) ?? null;
+
+    // Which credential a chat turn would actually pick, so a user with both an
+    // API key and a subscription token can see which one is answering.
+    const prefs = await effectivePrefs({ userId, teamId });
+    const provider = prefs.agent_provider.value;
+    const auth = await resolveAgentAuth(provider, { userId, teamId });
+    const inUse =
+      auth &&
+      {
+        anthropic_api_key: AGENT_CREDENTIALS.claude,
+        anthropic_oauth: ANTHROPIC_OAUTH_CREDENTIAL,
+        copilot_token: AGENT_CREDENTIALS.copilot,
+      }[auth.kind];
+
     return c.json({
       vault_enabled: secretsEnabled(),
       mine: secretsEnabled() ? await listCredentials("user", userId) : [],
       effective,
+      agent: {
+        provider,
+        in_use: inUse ?? null,
+        source: auth?.source ?? null,
+      },
     });
   })
 
   .put("/credentials/:name", zValidator("json", valueSchema), async (c) => {
     const userId = await requireCaller(c);
-    await setCredential(
-      userId,
-      "user",
-      userId,
-      c.req.param("name"),
-      c.req.valid("json").value,
-    );
+    const name = c.req.param("name");
+    const { value } = c.req.valid("json");
+    await setCredential(userId, "user", userId, name, value);
     return c.json({ ok: true });
   })
 

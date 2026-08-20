@@ -15,6 +15,7 @@ import {
   MIN_PASSWORD_LENGTH,
   conflict,
   secretsEnabled,
+  ANTHROPIC_OAUTH_CREDENTIAL,
   setCredential,
   getUserByEmail,
 } from "@tachy/core";
@@ -75,8 +76,11 @@ export const setup = new Hono()
     if (body.agent_key && secretsEnabled()) {
       const admin = await getUserByEmail(body.email);
       if (admin) {
+        const provider = body.settings?.agent_provider ?? "claude";
         const name =
-          AGENT_CREDENTIALS[body.settings?.agent_provider ?? "claude"];
+          provider === "claude" && body.agent_key.startsWith("sk-ant-oat01-")
+            ? ANTHROPIC_OAUTH_CREDENTIAL
+            : AGENT_CREDENTIALS[provider];
         await setCredential(
           admin.id,
           "global",

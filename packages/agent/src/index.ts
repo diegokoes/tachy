@@ -9,7 +9,7 @@ export {
   classifyCall,
   qualify,
 } from "./tools";
-export { claudePermission } from "./claude";
+export { claudePermission, claudeEnv, explainFailure } from "./claude";
 export { copilotPermission } from "./copilot";
 export type { ApprovalGate } from "./turn";
 export {
@@ -17,6 +17,8 @@ export {
   effectiveModel,
   type AgentProvider,
   type AgentConfig,
+  type AgentAuth,
+  type AgentErrorKind,
   type AgentEvent,
   type AgentTurn,
   type Decision,

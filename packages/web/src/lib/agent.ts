@@ -79,17 +79,35 @@ export async function* chatStream(
   }
 }
 
+/**
+ * A turn that has already finished — approval timed out, or the 60-minute TTL
+ * reaped it — answers 404, and the card would otherwise sit pending forever
+ * with a button that silently does nothing. Surface it instead.
+ */
 export async function approve(
   turnId: string,
   id: string,
   approveIt: boolean,
   updatedInput?: Record<string, unknown>,
+  message?: string,
 ): Promise<void> {
-  await fetch("/api/agent/approve", {
+  const res = await fetch("/api/agent/approve", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ turnId, id, approve: approveIt, updatedInput }),
+    body: JSON.stringify({
+      turnId,
+      id,
+      approve: approveIt,
+      updatedInput,
+      message,
+    }),
   });
+  if (!res.ok)
+    throw new Error(
+      res.status === 404
+        ? "this turn already finished — the approval expired"
+        : `could not record the decision (${res.status})`,
+    );
 }
 
 export async function uploadDoc(
