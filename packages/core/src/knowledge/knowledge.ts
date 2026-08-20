@@ -17,6 +17,7 @@ import { SEM_FLOOR, withRelevance } from "../search/relevance";
 import { notFound, conflict, badInput } from "../infra/errors";
 import { parseStructured } from "./structured";
 import { resolveComponentStrict } from "../catalog/components";
+import { getCustomerIdBySlug } from "../catalog/customers";
 
 export interface KnowledgeFacets {
   cloud?: string | null;
@@ -32,6 +33,9 @@ export interface KnowledgeInput extends KnowledgeFacets {
   workItemId?: string | null;
   productId?: string | null;
   teamId?: string | null;
+  /** Whose install this describes. Never inherited from the work item — see
+   *  saveKnowledgeEntry. Absent/null means the lesson is general. */
+  customerSlug?: string | null;
   createdById?: string | null;
   status?: string;
   issueSummary?: string;
@@ -55,6 +59,7 @@ export interface KnowledgeUpdateInput extends KnowledgeFacets {
   symptoms?: string[];
   signals?: string[];
   component?: string | null;
+  customerSlug?: string | null;
   supersededBy?: string | null;
   confidence?: string | null;
   tags?: string[];
@@ -113,6 +118,17 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
   let productId = i.productId ?? null;
   let teamId = i.teamId ?? null;
   let affectedVersion = i.affectedVersion ?? null;
+  /*
+   * Deliberately NOT inherited from the work item, unlike product and team.
+   * Most lessons learned on one customer's ticket are true of the product, and a
+   * customer defaulted in is a claim nobody made: it narrows the entry's ranking
+   * and makes every future answer cite it as that customer's case. Whose ticket
+   * it was is a fact; whose behaviour it describes is a judgement, so it has to
+   * be stated.
+   */
+  const customerId = i.customerSlug
+    ? await getCustomerIdBySlug(i.customerSlug)
+    : null;
   if (
     i.workItemId &&
     (productId == null || teamId == null || affectedVersion == null)
@@ -148,12 +164,12 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
 
   const [row] = await sql`
     insert into knowledge_entries
-      (work_item_id, product_id, team_id, created_by, status, issue_summary, symptoms, signals, tags,
+      (work_item_id, product_id, team_id, customer_id, created_by, status, issue_summary, symptoms, signals, tags,
        root_cause, resolution, resolution_pattern, component_id, product_area, confidence,
        cloud, resolution_clarity, learning_value, hidden_fix, affected_version, fixed_version,
        structured, embedding)
     values
-      (${i.workItemId ?? null}, ${productId}, ${teamId}, ${i.createdById ?? null},
+      (${i.workItemId ?? null}, ${productId}, ${teamId}, ${customerId ?? null}, ${i.createdById ?? null},
        ${i.status ?? "approved"}, ${i.issueSummary ?? null}, ${i.symptoms ?? []}, ${i.signals ?? []}, ${i.tags ?? []},
        ${i.rootCause ?? null}, ${i.resolution ?? null}, ${i.resolutionPattern ?? null}, ${componentId}, ${productArea},
        ${confidence}, ${i.cloud ?? null}, ${i.resolutionClarity ?? null}, ${i.learningValue ?? null}, ${i.hiddenFix ?? null},
@@ -164,23 +180,78 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
   return row;
 }
 
-export interface SearchOptions {
+/**
+ * The low-cardinality facets an entry can be NARROWED BY. Shared verbatim by
+ * search, list and the facet counts, so a filter the library offers can never
+ * be one the query ignores. Distinct from `KnowledgeFacets` above, which is the
+ * write side: same columns, but set rather than matched.
+ */
+export interface KnowledgeFilters {
+  tags?: string[];
+  componentId?: string;
+  componentTags?: string[];
+  customerId?: string;
+  cloud?: string;
+  confidence?: string;
+  learningValue?: string;
+  resolutionClarity?: string;
+  resolutionPattern?: string;
+  hiddenFix?: boolean;
+  affectedVersion?: string;
+  fixedVersion?: string;
+}
+
+/** Facet keys, as the API and the library name them. */
+export type FacetKey =
+  | "tags"
+  | "component"
+  | "customer"
+  | "cloud"
+  | "confidence"
+  | "learning_value"
+  | "resolution_clarity"
+  | "resolution_pattern"
+  | "hidden_fix"
+  | "affected_version"
+  | "fixed_version";
+
+/**
+ * `except` drops one predicate, so counting a facet's own options is not
+ * narrowed by the value already chosen for it — otherwise picking "high"
+ * leaves "high" as the only option you could ever pick again.
+ */
+function facetSql(o: KnowledgeFilters, except?: FacetKey) {
+  const on = (k: FacetKey) => k !== except;
+  return sql`
+    ${o.tags && o.tags.length && on("tags") ? sql`and tags && ${o.tags}` : sql``}
+    ${o.componentId && on("component") ? sql`and (component_id = ${o.componentId} or tags && ${o.componentTags ?? []})` : sql``}
+    ${o.customerId && on("customer") ? sql`and customer_id = ${o.customerId}` : sql``}
+    ${o.cloud && on("cloud") ? sql`and cloud = ${o.cloud}` : sql``}
+    ${o.confidence && on("confidence") ? sql`and confidence = ${o.confidence}` : sql``}
+    ${o.learningValue && on("learning_value") ? sql`and learning_value = ${o.learningValue}` : sql``}
+    ${o.resolutionClarity && on("resolution_clarity") ? sql`and resolution_clarity = ${o.resolutionClarity}` : sql``}
+    ${o.resolutionPattern && on("resolution_pattern") ? sql`and resolution_pattern = ${o.resolutionPattern}` : sql``}
+    ${o.hiddenFix != null && on("hidden_fix") ? sql`and coalesce(hidden_fix, false) = ${o.hiddenFix}` : sql``}
+    ${o.affectedVersion && on("affected_version") ? sql`and affected_version = ${o.affectedVersion}` : sql``}
+    ${o.fixedVersion && on("fixed_version") ? sql`and fixed_version = ${o.fixedVersion}` : sql``}
+  `;
+}
+
+export interface SearchOptions extends KnowledgeFilters {
   productId?: string;
   teamId?: string;
   /** Also match rows with NO product/team (org-wide) when a scope filter is
    *  set — for agent consults, where global lessons still apply. */
   includeUnscoped?: boolean;
-  tags?: string[];
-  componentId?: string;
-  componentTags?: string[];
-  cloud?: string;
-  learningValue?: string;
-  resolutionClarity?: string;
-  affectedVersion?: string;
-  fixedVersion?: string;
   limit?: number;
   /** Pre-embedded query, so a caller searching two surfaces embeds once. */
   queryVector?: string;
+  /**
+   * Rank this customer's entries above equally-relevant general ones, without
+   * excluding anything. Distinct from `customerId`, which narrows to them — the
+   * cross-customer lesson is frequently the one that solves the ticket.
+   */
+  boostCustomerId?: string;
 }
 
 export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
@@ -194,13 +265,7 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
     status in ('approved', 'deprecated')
     ${opts.productId ? (opts.includeUnscoped ? sql`and (product_id = ${opts.productId} or product_id is null)` : sql`and product_id = ${opts.productId}`) : sql``}
     ${opts.teamId ? (opts.includeUnscoped ? sql`and (team_id = ${opts.teamId} or team_id is null)` : sql`and team_id = ${opts.teamId}`) : sql``}
-    ${opts.tags && opts.tags.length ? sql`and tags && ${opts.tags}` : sql``}
-    ${opts.componentId ? sql`and (component_id = ${opts.componentId} or tags && ${opts.componentTags ?? []})` : sql``}
-    ${opts.cloud ? sql`and cloud = ${opts.cloud}` : sql``}
-    ${opts.learningValue ? sql`and learning_value = ${opts.learningValue}` : sql``}
-    ${opts.resolutionClarity ? sql`and resolution_clarity = ${opts.resolutionClarity}` : sql``}
-    ${opts.affectedVersion ? sql`and affected_version = ${opts.affectedVersion}` : sql``}
-    ${opts.fixedVersion ? sql`and fixed_version = ${opts.fixedVersion}` : sql``}
+    ${facetSql(opts)}
   `;
 
   const rows = await withSearchSession(
@@ -236,15 +301,21 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
       order by word_similarity(${query}, search_text) desc
       limit ${CANDIDATES}
     ),
-    ${fusedCte()}
+    ${fusedCte(
+      opts.boostCustomerId
+        ? { table: "knowledge_entries", customerId: opts.boostCustomerId }
+        : null,
+    )}
     select e.id, e.work_item_id, e.status, e.superseded_by, e.issue_summary, e.root_cause, e.resolution,
            e.resolution_pattern, e.component_id, e.product_area, e.confidence, e.cloud,
+           e.customer_id, cu.slug as customer_slug,
            e.resolution_clarity, e.learning_value, e.hidden_fix,
            e.affected_version, e.fixed_version,
            e.symptoms, e.signals, e.tags, e.structured, e.version, e.created_at, e.updated_at,
            f.cos_sim, f.fts_rank, f.trgm_sim, f.rrf
     from fused f
     join knowledge_entries e on e.id = f.id
+    left join customers cu on cu.id = e.customer_id
     order by f.rrf desc, e.updated_at desc
     limit ${limit}
   `,
@@ -256,52 +327,43 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
 
 export async function getKnowledgeEntry(id: string) {
   const [row] = await sql`
-    select id, work_item_id, product_id, team_id, status, superseded_by, issue_summary,
-           symptoms, signals, tags, root_cause, resolution, resolution_pattern,
-           component_id, product_area, confidence, cloud, resolution_clarity, learning_value, hidden_fix,
-           affected_version, fixed_version,
-           structured, version, created_at, updated_at
-    from knowledge_entries where id = ${id}
+    select e.id, e.work_item_id, e.product_id, e.team_id, e.status, e.superseded_by, e.issue_summary,
+           e.symptoms, e.signals, e.tags, e.root_cause, e.resolution, e.resolution_pattern,
+           e.component_id, e.product_area, e.confidence, e.cloud, e.resolution_clarity,
+           e.learning_value, e.hidden_fix, e.affected_version, e.fixed_version,
+           e.customer_id, cu.slug as customer_slug,
+           e.structured, e.version, e.created_at, e.updated_at
+    from knowledge_entries e
+    left join customers cu on cu.id = e.customer_id
+    where e.id = ${id}
   `;
   if (!row) throw notFound(`Knowledge entry '${id}' not found`);
   return row;
 }
 
-export async function listKnowledgeEntries(
-  opts: {
-    status?: string;
-    productId?: string;
-    teamId?: string;
-    tags?: string[];
-    componentId?: string;
-    componentTags?: string[];
-    cloud?: string;
-    learningValue?: string;
-    resolutionClarity?: string;
-    affectedVersion?: string;
-    fixedVersion?: string;
-    limit?: number;
-  } = {},
-) {
+export interface KnowledgeListOptions extends KnowledgeFilters {
+  status?: string;
+  productId?: string;
+  teamId?: string;
+  limit?: number;
+}
+
+export async function listKnowledgeEntries(opts: KnowledgeListOptions = {}) {
   const limit = opts.limit ?? 50;
   return sql`
-    select id, work_item_id, product_id, team_id, status, superseded_by, issue_summary,
-           root_cause, resolution, resolution_pattern, component_id, product_area, confidence,
-           cloud, resolution_clarity, learning_value, hidden_fix, affected_version, fixed_version,
-           symptoms, signals, tags, version, created_at, updated_at
-    from knowledge_entries
+    select e.id, e.work_item_id, e.product_id, e.team_id, e.status, e.superseded_by, e.issue_summary,
+           e.root_cause, e.resolution, e.resolution_pattern, e.component_id, e.product_area, e.confidence,
+           e.cloud, e.resolution_clarity, e.learning_value, e.hidden_fix, e.affected_version, e.fixed_version,
+           e.customer_id, cu.slug as customer_slug,
+           e.symptoms, e.signals, e.tags, e.version, e.created_at, e.updated_at
+    from knowledge_entries e
+    left join customers cu on cu.id = e.customer_id
     where 1=1
-      ${opts.status ? sql`and status     = ${opts.status}` : sql``}
-      ${opts.productId ? sql`and product_id = ${opts.productId}` : sql``}
-      ${opts.teamId ? sql`and team_id    = ${opts.teamId}` : sql``}
-      ${opts.tags && opts.tags.length ? sql`and tags && ${opts.tags}` : sql``}
-      ${opts.componentId ? sql`and (component_id = ${opts.componentId} or tags && ${opts.componentTags ?? []})` : sql``}
-      ${opts.cloud ? sql`and cloud = ${opts.cloud}` : sql``}
-      ${opts.learningValue ? sql`and learning_value = ${opts.learningValue}` : sql``}
-      ${opts.resolutionClarity ? sql`and resolution_clarity = ${opts.resolutionClarity}` : sql``}
-      ${opts.affectedVersion ? sql`and affected_version = ${opts.affectedVersion}` : sql``}
-      ${opts.fixedVersion ? sql`and fixed_version = ${opts.fixedVersion}` : sql``}
-    order by updated_at desc
+      ${opts.status ? sql`and e.status     = ${opts.status}` : sql``}
+      ${opts.productId ? sql`and e.product_id = ${opts.productId}` : sql``}
+      ${opts.teamId ? sql`and e.team_id    = ${opts.teamId}` : sql``}
+      ${facetSql(opts)}
+    order by e.updated_at desc
     limit ${limit}
   `;
 }
@@ -319,28 +381,102 @@ export async function listEnvironments(): Promise<
   return rows as unknown as { cloud: string; count: number }[];
 }
 
+export type FacetCount = { value: string; count: number };
+
 /**
- * The affected versions actually recorded, narrowed by product and component so
- * the filter only ever offers values that can return a row.
+ * What each facet could still be narrowed to, counted under the filters
+ * currently in force — so the library never offers a value with no rows behind
+ * it. A facet is counted with its own selection lifted (see `facetSql`), which
+ * is what keeps its other options reachable once one is picked.
  */
-export async function listAffectedVersions(
-  opts: {
-    productId?: string;
-    componentId?: string;
-    componentTags?: string[];
-  } = {},
-): Promise<{ version: string; count: number }[]> {
-  const rows = await sql`
-    select affected_version as version, count(*)::int as count
-    from knowledge_entries
-    where affected_version is not null and affected_version <> ''
-      and status not in ('rejected', 'archived')
+export async function listKnowledgeFacets(
+  opts: KnowledgeListOptions = {},
+): Promise<Record<FacetKey, FacetCount[]>> {
+  const scope = (except: FacetKey) => sql`
+    where 1=1
+      ${opts.status ? sql`and status = ${opts.status}` : sql``}
       ${opts.productId ? sql`and product_id = ${opts.productId}` : sql``}
-      ${opts.componentId ? sql`and (component_id = ${opts.componentId} or tags && ${opts.componentTags ?? []})` : sql``}
-    group by affected_version
-    order by count desc, affected_version desc
+      ${opts.teamId ? sql`and team_id = ${opts.teamId}` : sql``}
+      ${facetSql(opts, except)}
   `;
-  return rows as unknown as { version: string; count: number }[];
+
+  /** Every column facet counts the same way; only the column differs. */
+  const column = async (key: FacetKey, col: string): Promise<FacetCount[]> => {
+    const rows = await sql`
+      select ${sql.unsafe(col)}::text as value, count(*)::int as count
+      from knowledge_entries
+      ${scope(key)}
+        and ${sql.unsafe(col)} is not null
+        and ${sql.unsafe(col)}::text <> ''
+      group by 1
+      order by count desc, value
+    `;
+    return rows as unknown as FacetCount[];
+  };
+
+  const tagRows = async (): Promise<FacetCount[]> => {
+    const rows = await sql`
+      select tag as value, count(*)::int as count
+      from knowledge_entries, unnest(tags) as tag
+      ${scope("tags")}
+      group by tag
+      order by count desc, tag
+    `;
+    return rows as unknown as FacetCount[];
+  };
+
+  /** Counted by slug, not id — that is what the filter and the URL carry. */
+  const customerRows = async (): Promise<FacetCount[]> => {
+    const rows = await sql`
+      select cu.slug as value, count(*)::int as count
+      from knowledge_entries
+      join customers cu on cu.id = knowledge_entries.customer_id
+      ${scope("customer")}
+      group by cu.slug
+      order by count desc, value
+    `;
+    return rows as unknown as FacetCount[];
+  };
+
+  const [
+    tags,
+    customer,
+    cloud,
+    confidence,
+    learning_value,
+    resolution_clarity,
+    resolution_pattern,
+    hidden_fix,
+    affected_version,
+    fixed_version,
+  ] = await Promise.all([
+    tagRows(),
+    customerRows(),
+    column("cloud", "cloud"),
+    column("confidence", "confidence"),
+    column("learning_value", "learning_value"),
+    column("resolution_clarity", "resolution_clarity"),
+    column("resolution_pattern", "resolution_pattern"),
+    column("hidden_fix", "hidden_fix"),
+    column("affected_version", "affected_version"),
+    column("fixed_version", "fixed_version"),
+  ]);
+
+  return {
+    tags,
+    // Components are their own catalogue with a hierarchy; the picker reads
+    // that from /products/:slug/components rather than from row counts.
+    component: [],
+    customer,
+    cloud,
+    confidence,
+    learning_value,
+    resolution_clarity,
+    resolution_pattern,
+    hidden_fix,
+    affected_version,
+    fixed_version,
+  };
 }
 
 export async function updateKnowledgeEntry(
@@ -349,7 +485,7 @@ export async function updateKnowledgeEntry(
 ) {
   const [current] = await sql`
     select product_id, status, superseded_by, issue_summary, root_cause, resolution, resolution_pattern,
-           symptoms, signals, tags, component_id, product_area, confidence,
+           symptoms, signals, tags, component_id, product_area, confidence, customer_id,
            cloud, resolution_clarity, learning_value, hidden_fix, affected_version, fixed_version,
            structured, version
     from knowledge_entries where id = ${id}
@@ -382,6 +518,14 @@ export async function updateKnowledgeEntry(
       productArea = resolved.path;
     }
   }
+
+  // Same rule as component: null makes the lesson general again.
+  const customerId =
+    "customerSlug" in patch
+      ? patch.customerSlug
+        ? await getCustomerIdBySlug(patch.customerSlug)
+        : null
+      : current.customer_id;
 
   let supersededBy: string | null = current.superseded_by;
   if ("supersededBy" in patch) {
@@ -476,6 +620,7 @@ export async function updateKnowledgeEntry(
       tags               = ${merged.tags ?? []},
       component_id       = ${componentId},
       product_area       = ${productArea},
+      customer_id        = ${customerId},
       superseded_by      = ${supersededBy},
       confidence         = ${merged.confidence ?? null},
       cloud              = ${merged.cloud ?? null},

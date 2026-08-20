@@ -7,6 +7,9 @@ import {
   listKnowledgeEntries,
   addFeedback,
   listEnvironments,
+  listKnowledgeFacets,
+  addCustomer,
+  getCustomerIdBySlug,
 } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "./helpers";
 
@@ -336,5 +339,201 @@ describe("structured validation", () => {
     const stored = await getKnowledgeEntry(row.id);
     expect(stored.structured.conversation_summary).toBe("summary");
     expect(stored.structured.custom_field).toEqual({ nested: true });
+  });
+});
+
+describe("listKnowledgeFacets", () => {
+  beforeEach(resetData);
+
+  const seed = () =>
+    Promise.all([
+      saveKnowledgeEntry({
+        status: "approved",
+        issueSummary: "printer truncates labels",
+        confidence: "high",
+        learningValue: "high",
+        hiddenFix: true,
+        tags: ["printing", "firmware"],
+      }),
+      saveKnowledgeEntry({
+        status: "approved",
+        issueSummary: "scanner drops packets",
+        confidence: "low",
+        learningValue: "high",
+        tags: ["printing"],
+      }),
+      saveKnowledgeEntry({
+        status: "approved",
+        issueSummary: "cache stampede",
+        confidence: "low",
+        learningValue: "low",
+        tags: ["caching"],
+      }),
+    ]);
+
+  it("counts every facet value present", async () => {
+    await seed();
+    const f = await listKnowledgeFacets();
+
+    expect(f.confidence).toEqual([
+      { value: "low", count: 2 },
+      { value: "high", count: 1 },
+    ]);
+    expect(f.tags).toEqual([
+      { value: "printing", count: 2 },
+      { value: "caching", count: 1 },
+      { value: "firmware", count: 1 },
+    ]);
+    expect(f.hidden_fix).toEqual([{ value: "true", count: 1 }]);
+  });
+
+  it("narrows one facet's options by the other filters", async () => {
+    await seed();
+    const f = await listKnowledgeFacets({ confidence: "low" });
+
+    // Only the two low-confidence entries are in scope, so "firmware" — which
+    // only the high-confidence one carries — is no longer offered.
+    expect(f.tags).toEqual([
+      { value: "caching", count: 1 },
+      { value: "printing", count: 1 },
+    ]);
+  });
+
+  it("counts a facet with its own selection lifted, so it stays switchable", async () => {
+    await seed();
+    const f = await listKnowledgeFacets({ confidence: "low" });
+
+    // Narrowing by confidence must not reduce the confidence list to itself,
+    // or there would be no way back to "high" without clearing the filter.
+    expect(f.confidence).toEqual([
+      { value: "low", count: 2 },
+      { value: "high", count: 1 },
+    ]);
+  });
+});
+
+describe("knowledge filters", () => {
+  beforeEach(resetData);
+
+  it("filters on confidence and hidden_fix, which the library exposes via +", async () => {
+    await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "obvious fix",
+      confidence: "high",
+      hiddenFix: false,
+    });
+    await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "non-obvious fix",
+      confidence: "low",
+      hiddenFix: true,
+    });
+
+    const high = await listKnowledgeEntries({ confidence: "high" });
+    expect(high.map((r) => r.issue_summary)).toEqual(["obvious fix"]);
+
+    const hidden = await listKnowledgeEntries({ hiddenFix: true });
+    expect(hidden.map((r) => r.issue_summary)).toEqual(["non-obvious fix"]);
+
+    // A null hidden_fix means "not marked", so it must match the false filter.
+    await saveKnowledgeEntry({ status: "approved", issueSummary: "unmarked" });
+    const notHidden = await listKnowledgeEntries({ hiddenFix: false });
+    expect(notHidden.map((r) => r.issue_summary).sort()).toEqual([
+      "obvious fix",
+      "unmarked",
+    ]);
+  });
+});
+
+describe("customer scoping", () => {
+  beforeEach(resetData);
+
+  /** Two entries that say the same thing, so only the customer can order them. */
+  const twins = async () => {
+    await addCustomer({ name: "Logista", slug: "logista" });
+    await addCustomer({ name: "Villiger", slug: "villiger" });
+    await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "Codes are not locked when the quantity increases",
+      resolution: "reset the aggregation counter",
+      customerSlug: "logista",
+    });
+    await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "Codes are not locked when the quantity increases",
+      resolution: "reset the aggregation counter",
+    });
+  };
+
+  it("ranks a customer's own entry above an identical general one", async () => {
+    await twins();
+    const rows = await searchKnowledge("codes not locked quantity increase", {
+      boostCustomerId: await getCustomerIdBySlug("logista"),
+    });
+    expect(rows).toHaveLength(2);
+    expect(rows[0].customer_slug).toBe("logista");
+    expect(rows[1].customer_slug).toBeNull();
+  });
+
+  it("boosting never hides the general entry, nor another customer's", async () => {
+    await twins();
+    const rows = await searchKnowledge("codes not locked quantity increase", {
+      boostCustomerId: await getCustomerIdBySlug("villiger"),
+    });
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((r) => r.customer_slug))).toEqual(
+      new Set([null, "logista"]),
+    );
+  });
+
+  it("filtering by customer is exact — a general entry is not swept in", async () => {
+    await twins();
+    const rows = await searchKnowledge("codes not locked quantity increase", {
+      customerId: await getCustomerIdBySlug("logista"),
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].customer_slug).toBe("logista");
+  });
+
+  it("never inherits the ticket's customer — it has to be stated", async () => {
+    const c = await addCustomer({ name: "Logista", slug: "logista" });
+    const [wi] = await sql`
+      insert into work_items (source_connection_id, external_id, kind, customer_id)
+      select id, 'wi-cust-1', 'ticket', ${c.id} from source_connections limit 1
+      returning id
+    `;
+    // Learned on Logista's ticket, but a lesson about the product.
+    const general = await saveKnowledgeEntry({
+      status: "approved",
+      workItemId: wi.id,
+      issueSummary: "true of the product, found on their ticket",
+    });
+    expect((await getKnowledgeEntry(general.id)).customer_slug).toBeNull();
+
+    const theirs = await saveKnowledgeEntry({
+      status: "approved",
+      workItemId: wi.id,
+      customerSlug: "logista",
+      issueSummary: "only true of their install",
+    });
+    expect((await getKnowledgeEntry(theirs.id)).customer_slug).toBe("logista");
+  });
+
+  it("update can re-file an entry, and null makes it general again", async () => {
+    await addCustomer({ name: "Logista", slug: "logista" });
+    const row = await saveKnowledgeEntry({
+      status: "approved",
+      issueSummary: "some lesson",
+    });
+    await updateKnowledgeEntry(row.id, { customerSlug: "logista" });
+    expect((await getKnowledgeEntry(row.id)).customer_slug).toBe("logista");
+    await updateKnowledgeEntry(row.id, { customerSlug: null });
+    expect((await getKnowledgeEntry(row.id)).customer_slug).toBeNull();
+  });
+
+  it("counts customers as a facet, by slug", async () => {
+    await twins();
+    const facets = await listKnowledgeFacets({ status: "approved" });
+    expect(facets.customer).toEqual([{ value: "logista", count: 1 }]);
   });
 });

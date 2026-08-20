@@ -17,6 +17,7 @@ import {
 import { SEM_FLOOR, withRelevance } from "../search/relevance";
 import { notFound, conflict, badInput } from "../infra/errors";
 import { resolveComponentStrict } from "../catalog/components";
+import { getCustomerIdBySlug } from "../catalog/customers";
 import { parseStructured } from "../knowledge/structured";
 
 export interface ReferenceDocInput {
@@ -37,6 +38,8 @@ export interface ReferenceDocInput {
   /** Component slug/alias, resolved within productId. Optional: a general
    *  product doc belongs to the product and to no single component. */
   component?: string | null;
+  /** Whose install this documents. Absent/null = general to every customer. */
+  customerSlug?: string | null;
 }
 
 export interface ReferenceDocUpdate {
@@ -48,6 +51,7 @@ export interface ReferenceDocUpdate {
   structured?: Record<string, unknown>;
   docVersion?: string | null;
   component?: string | null;
+  customerSlug?: string | null;
   expectedVersion?: number;
 }
 
@@ -142,18 +146,21 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
     productId,
     i.component,
   );
+  const customerId = i.customerSlug
+    ? await getCustomerIdBySlug(i.customerSlug)
+    : null;
   const vectors = await chunkVectors(i.body);
   const { doc, chunks } = await sql.begin(async (tx) => {
     const [row] = await tx`
       insert into reference_docs
         (product_id, team_id, created_by, source, source_project_id, external_key,
-         component_id, product_area, title, body, tags, status, structured, doc_version)
+         component_id, product_area, customer_id, title, body, tags, status, structured, doc_version)
       values
         (${productId},
          ${i.teamId ?? predecessor?.team_id ?? null},
          ${i.createdById ?? null}, ${i.source ?? null},
          ${i.sourceProjectId ?? null}, ${i.externalKey ?? null},
-         ${componentId}, ${productArea},
+         ${componentId}, ${productArea}, ${customerId},
          ${i.title}, ${i.body}, ${i.tags ?? predecessor?.tags ?? []},
          ${i.status ?? "approved"}, ${sql.json(structured as any)}, ${i.docVersion ?? null})
       returning id, status, version
@@ -177,10 +184,13 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
 
 export async function getReferenceDoc(id: string) {
   const [row] = await sql`
-    select id, product_id, team_id, component_id, product_area, source, title, body,
-           tags, status, structured, doc_version, superseded_by, version,
-           created_at, updated_at
-    from reference_docs where id = ${id}
+    select d.id, d.product_id, d.team_id, d.component_id, d.product_area, d.source,
+           d.title, d.body, d.tags, d.status, d.structured, d.doc_version,
+           d.superseded_by, d.version, d.customer_id, cu.slug as customer_slug,
+           d.created_at, d.updated_at
+    from reference_docs d
+    left join customers cu on cu.id = d.customer_id
+    where d.id = ${id}
   `;
   if (!row) throw notFound(`Reference doc '${id}' not found`);
   return row;
@@ -216,24 +226,28 @@ export async function listReferenceDocs(
     tags?: string[];
     componentId?: string;
     componentTags?: string[];
+    customerId?: string;
     docVersion?: string;
     limit?: number;
   } = {},
 ) {
   const limit = opts.limit ?? 50;
   return sql`
-    select id, product_id, team_id, component_id, product_area, source, title, tags,
-           status, doc_version, superseded_by,
-           version, created_at, updated_at, left(body, 400) as snippet
-    from reference_docs
+    select d.id, d.product_id, d.team_id, d.component_id, d.product_area, d.source,
+           d.title, d.tags, d.status, d.doc_version, d.superseded_by,
+           d.customer_id, cu.slug as customer_slug,
+           d.version, d.created_at, d.updated_at, left(d.body, 400) as snippet
+    from reference_docs d
+    left join customers cu on cu.id = d.customer_id
     where 1=1
-      ${opts.status ? sql`and status     = ${opts.status}` : sql``}
-      ${opts.productId ? sql`and product_id = ${opts.productId}` : sql``}
-      ${opts.teamId ? sql`and team_id    = ${opts.teamId}` : sql``}
-      ${opts.componentId ? sql`and (component_id = ${opts.componentId} or tags && ${opts.componentTags ?? []})` : sql``}
-      ${opts.docVersion ? sql`and doc_version = ${opts.docVersion}` : sql``}
-      ${opts.tags && opts.tags.length ? sql`and tags && ${opts.tags}` : sql``}
-    order by updated_at desc
+      ${opts.status ? sql`and d.status     = ${opts.status}` : sql``}
+      ${opts.productId ? sql`and d.product_id = ${opts.productId}` : sql``}
+      ${opts.teamId ? sql`and d.team_id    = ${opts.teamId}` : sql``}
+      ${opts.componentId ? sql`and (d.component_id = ${opts.componentId} or d.tags && ${opts.componentTags ?? []})` : sql``}
+      ${opts.customerId ? sql`and d.customer_id = ${opts.customerId}` : sql``}
+      ${opts.docVersion ? sql`and d.doc_version = ${opts.docVersion}` : sql``}
+      ${opts.tags && opts.tags.length ? sql`and d.tags && ${opts.tags}` : sql``}
+    order by d.updated_at desc
     limit ${limit}
   `;
 }
@@ -244,7 +258,7 @@ export async function updateReferenceDoc(
 ) {
   const [current] = await sql`
     select title, body, tags, status, source, structured, doc_version, version,
-           product_id, component_id, product_area
+           product_id, component_id, product_area, customer_id
     from reference_docs where id = ${id}
   `;
   if (!current) throw notFound(`Reference doc '${id}' not found`);
@@ -277,6 +291,13 @@ export async function updateReferenceDoc(
           componentId: current.component_id,
           productArea: current.product_area,
         };
+  // Same rule as component: null clears the customer, omitting it keeps it.
+  const customerId =
+    "customerSlug" in patch
+      ? patch.customerSlug
+        ? await getCustomerIdBySlug(patch.customerSlug)
+        : null
+      : current.customer_id;
   const bodyChanged = merged.body !== current.body;
   const vectors = bodyChanged ? await chunkVectors(merged.body) : undefined;
 
@@ -292,6 +313,7 @@ export async function updateReferenceDoc(
         doc_version = ${merged.docVersion ?? null},
         component_id = ${componentId},
         product_area = ${productArea},
+        customer_id  = ${customerId},
         version     = version + 1
       where id = ${id} and version = ${current.version}
       returning id, status, version
@@ -317,10 +339,13 @@ export interface ReferenceSearchOptions {
   tags?: string[];
   componentId?: string;
   componentTags?: string[];
+  customerId?: string;
   docVersion?: string;
   limit?: number;
   /** Pre-embedded query, so a caller searching two surfaces embeds once. */
   queryVector?: string;
+  /** Rank this customer's docs first without excluding the general ones. */
+  boostCustomerId?: string;
 }
 
 export async function searchReferenceDocs(
@@ -336,6 +361,7 @@ export async function searchReferenceDocs(
     ${opts.productId ? (opts.includeUnscoped ? sql`and (d.product_id = ${opts.productId} or d.product_id is null)` : sql`and d.product_id = ${opts.productId}`) : sql``}
     ${opts.teamId ? (opts.includeUnscoped ? sql`and (d.team_id = ${opts.teamId} or d.team_id is null)` : sql`and d.team_id = ${opts.teamId}`) : sql``}
     ${opts.componentId ? sql`and (d.component_id = ${opts.componentId} or d.tags && ${opts.componentTags ?? []})` : sql``}
+    ${opts.customerId ? sql`and d.customer_id = ${opts.customerId}` : sql``}
     ${opts.docVersion ? sql`and d.doc_version = ${opts.docVersion}` : sql``}
     ${opts.tags && opts.tags.length ? sql`and d.tags && ${opts.tags}` : sql``}
   `;
@@ -382,13 +408,19 @@ export async function searchReferenceDocs(
       order by word_similarity(${query}, d.search_text) desc
       limit ${CANDIDATES}
     ),
-    ${fusedCte()}
+    ${fusedCte(
+      opts.boostCustomerId
+        ? { table: "reference_docs", customerId: opts.boostCustomerId }
+        : null,
+    )}
     select d.id, d.title, d.tags, d.product_id, d.team_id, d.component_id, d.product_area,
            d.status, d.doc_version, d.version, d.structured, d.source, d.created_at, d.updated_at,
+           d.customer_id, cu.slug as customer_slug,
            coalesce(b.snippet, left(d.body, 400)) as snippet,
            f.cos_sim, f.fts_rank, f.trgm_sim, f.rrf
     from fused f
     join reference_docs d on d.id = f.id
+    left join customers cu on cu.id = d.customer_id
     left join best_chunk b on b.id = f.id
     order by f.rrf desc, d.updated_at desc
     limit ${limit}

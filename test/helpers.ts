@@ -43,14 +43,27 @@ export async function resetData() {
   await sql`
     truncate work_item_messages, work_items, work_item_links, knowledge_feedback,
              knowledge_entries, analysis_runs, team_members, users,
-             customers, resolution_patterns, components, project_area_map, labels,
+             customers, customer_facts, customer_components,
+             resolution_patterns, components, project_area_map, labels,
              reference_docs, reference_doc_chunks, artifacts, generated_outputs,
              settings,
              -- repos would be swept in anyway by the cascade from components;
-             -- naming it keeps that visible. source_connections/source_projects
-             -- stay, so the seeded routing fixture survives.
+             -- naming it keeps that visible. source_connections stays.
              repos, repo_files, code_chunks
     restart identity cascade
+  `;
+  // source_projects references customers, so TRUNCATE ... CASCADE takes it with
+  // them however the list is written — the cascade follows the FK, not the
+  // delete rule. Re-seed the routing fixture rather than fight that.
+  await sql`
+    insert into source_projects
+        (source_connection_id, external_key, name, product_id, team_id, role)
+    select sc.id, '48000641379', 'Test Group', p.id, t.id, 'knowledge'
+    from source_connections sc
+    join products p on p.slug = 'tpd'
+    join teams t on t.id = p.team_id and t.slug = 'test-team'
+    where sc.slug = 'test-freshdesk'
+    on conflict (source_connection_id, external_key) do nothing
   `;
   clearSettingsCache();
 }
