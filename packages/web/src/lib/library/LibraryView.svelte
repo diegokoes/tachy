@@ -9,7 +9,19 @@
   import { isCurator } from "../session.svelte";
   import { t } from "../terms";
   import { errText } from "../resource.svelte";
+  import { componentOptions } from "../catalog";
   import { Button, Chip, EmptyState, Icon, Note, Select, Spinner } from "../tui";
+  import FilterMenu from "./FilterMenu.svelte";
+  import TagFilter from "./TagFilter.svelte";
+  import {
+    applyExtras,
+    byKey,
+    loadFilters,
+    pruneValues,
+    saveFilters,
+    type FacetKey,
+    type Facets,
+  } from "./filters.svelte";
   import EntryDetail from "../EntryDetail.svelte";
   import DocDetail from "./DocDetail.svelte";
   import EntryForm from "../knowledge/EntryForm.svelte";
@@ -24,10 +36,10 @@
     snippet?: Seg[];
     /** Top-right of the card: doc version, or an entry's version span. */
     version?: string;
-    /** Bottom-right, ahead of the date. */
-    facts: string[];
     updated?: string;
     tags: string[];
+    /** Set when the item describes one customer's install rather than the product. */
+    customer?: string | null;
     /** Server-calibrated 0-1 match strength — what the gauge draws. */
     relevance?: number;
     /** "strong" | "good" | "weak", from the same calibration. */
@@ -64,7 +76,13 @@
 
   let products = $state<NamedRow[]>([]);
   let components = $state<NamedRow[]>([]);
-  let versions = $state<{ version: string; count: number }[]>([]);
+
+  /** Counts for every facet under whatever else is currently selected. */
+  let facets = $state<Facets>({});
+  /** Which extra filters the user added, and to what — persisted per browser. */
+  let shown = $state<FacetKey[]>([]);
+  let extras = $state<Record<string, string>>({});
+  const versions = $derived(facets.affected_version ?? []);
 
   let items = $state<Item[]>([]);
   // Starts true so the first paint shows nothing rather than the empty state.
@@ -72,7 +90,21 @@
   let slow = $state(false);
   let error = $state<string | null>(null);
   let mode = $state<"search" | "browse">("browse");
-  let cursor = $state(0);
+  /** -1 = nothing highlighted yet. The first j/k/arrow lands on the top row. */
+  let cursor = $state(-1);
+  let rowEls = $state<(HTMLElement | undefined)[]>([]);
+  /**
+   * Keyboard navigation scrolls the list under a stationary pointer, and the
+   * browser fires mouseenter for that — which would yank the cursor back to
+   * wherever the mouse happens to sit. Ignore hover until the mouse really moves.
+   */
+  let pointerMoved = $state(true);
+
+  function moveCursor(delta: number) {
+    pointerMoved = false;
+    cursor = cursor < 0 ? 0 : Math.min(items.length - 1, Math.max(0, cursor + delta));
+    rowEls[cursor]?.scrollIntoView({ block: "nearest" });
+  }
   let searchEl = $state<HTMLInputElement>();
 
   let createSaving = $state(false);
@@ -81,13 +113,13 @@
   const showEntryFilters = $derived(kind === "entries");
   const showDocFilters = $derived(kind === "docs");
   /**
-   * Counts hidden filters too: version/value are entry-only but still travel on
-   * entryQs, so a filter you cannot see must stay clearable — otherwise the
-   * list is silently narrowed with no way out.
+   * Counts hidden filters too: the entry-only ones still travel on entryQs, so
+   * a filter you cannot see must stay clearable — otherwise the list is
+   * silently narrowed with no way out.
    */
   const activeFilters = $derived(
     [productId, component, learningValue, version, status].filter(Boolean)
-      .length,
+      .length + shown.filter((k) => extras[k]).length,
   );
 
   function scopeQs(p: URLSearchParams) {
@@ -102,7 +134,7 @@
     const p = scopeQs(new URLSearchParams());
     if (learningValue) p.set("learning_value", learningValue);
     if (version) p.set("affected_version", version);
-    return p.toString();
+    return applyExtras(p, shown, extras).toString();
   }
 
   const docQs = () => scopeQs(new URLSearchParams()).toString();
@@ -132,9 +164,9 @@
       status: r.status,
       snippet: text ? excerpt(text, query) : undefined,
       version: versionSpan(r),
-      facts: [],
       updated: fmtDate(r.updated_at ?? r.created_at),
       tags: (r.tags ?? []).slice(0, 5),
+      customer: r.customer_slug,
       relevance: r.relevance,
       grade: r.grade,
       sortAt: at(r.updated_at ?? r.created_at),
@@ -149,9 +181,9 @@
       status: r.status,
       snippet: r.snippet ? excerpt(r.snippet, query) : undefined,
       version: r.doc_version ? `v${r.doc_version}` : undefined,
-      facts: r.source ? [`from ${r.source}`] : [],
       updated: fmtDate(r.updated_at ?? r.created_at),
       tags: (r.tags ?? []).slice(0, 6),
+      customer: r.customer_slug,
       relevance: r.relevance,
       grade: r.grade,
       sortAt: at(r.updated_at ?? r.created_at),
@@ -204,7 +236,8 @@
           : b.sortAt - a.sortAt,
       );
       items = merged;
-      cursor = 0;
+      cursor = -1;
+      rowEls = [];
     } catch (e) {
       if (mine === seq) error = errText(e);
     } finally {
@@ -216,33 +249,57 @@
     }
   }
 
-  async function loadFacets() {
+  async function loadCatalog() {
     try {
       products = await api.get<NamedRow[]>("/products");
     } catch {
       products = [];
     }
-    await loadVersions();
+    await loadFacets();
   }
 
   /**
-   * Only the versions actually recorded, narrowed by the chosen product and
-   * component — an affected-version filter that offers a value with no rows
-   * behind it is worse than no filter.
+   * Every filter's options, narrowed by everything else that is selected — a
+   * filter offering a value with no rows behind it is worse than no filter.
+   * Each facet is counted with its own selection lifted, so its other options
+   * stay reachable once one is picked.
    */
-  async function loadVersions() {
+  async function loadFacets() {
     const p = new URLSearchParams();
     if (productId) p.set("product_id", productId);
     if (productId && component) p.set("component", component);
+    if (status) p.set("status", status);
+    if (learningValue) p.set("learning_value", learningValue);
+    if (version) p.set("affected_version", version);
+    applyExtras(p, shown, extras);
     try {
-      versions = await api.get<{ version: string; count: number }[]>(
-        `/knowledge/versions?${p}`,
-      );
+      facets = await api.get<Facets>(`/knowledge/facets?${p}`);
     } catch {
-      versions = [];
+      facets = {};
     }
-    if (version && !versions.some((v) => v.version === version)) version = "";
+    if (version && !versions.some((v) => v.value === version)) version = "";
+    extras = pruneValues(shown, extras, facets);
   }
+
+  function addFilter(key: FacetKey) {
+    shown = [...shown, key];
+    persist();
+    void loadFacets();
+  }
+
+  function removeFilter(key: FacetKey) {
+    shown = shown.filter((k) => k !== key);
+    const { [key]: _dropped, ...rest } = extras;
+    extras = rest;
+    persist();
+  }
+
+  function setExtra(key: FacetKey, value: string) {
+    extras = { ...extras, [key]: value };
+    persist();
+  }
+
+  const persist = () => saveFilters({ shown, values: extras });
 
   async function onProductChange(id: string) {
     component = "";
@@ -254,7 +311,7 @@
       } catch {
         components = [];
       }
-    await loadVersions();
+    await loadFacets();
   }
 
   function clearFilters() {
@@ -264,7 +321,9 @@
     status = "";
     learningValue = "";
     version = "";
-    void loadVersions();
+    extras = {};
+    persist();
+    void loadFacets();
   }
 
   function openItem(i: Item) {
@@ -303,7 +362,12 @@
     }
   }
 
-  onMount(loadFacets);
+  onMount(() => {
+    const stored = loadFilters();
+    shown = stored.shown;
+    extras = stored.values;
+    void loadCatalog();
+  });
 
   let ranOnce = false;
   $effect(() => {
@@ -315,6 +379,8 @@
     void productId;
     void component;
     void version;
+    void shown;
+    void extras;
     clearTimeout(timer);
     loading = true;
     timer = setTimeout(run, ranOnce ? 250 : 0);
@@ -322,9 +388,24 @@
     return () => clearTimeout(timer);
   });
 
+  /**
+   * Re-count the options whenever the narrowing changes — but not on `extras`,
+   * which loadFacets itself prunes; depending on it here would loop.
+   */
+  let facetsOnce = false;
+  $effect(() => {
+    void status;
+    void learningValue;
+    void version;
+    if (!facetsOnce) {
+      facetsOnce = true;
+      return;
+    }
+    void loadFacets();
+  });
+
   $effect(() => {
     if (!listing) return;
-    const n = items.length;
     return pushScope([
       {
         key: "ctrl+k",
@@ -337,25 +418,25 @@
         key: "j",
         label: "",
         hidden: true,
-        run: () => (cursor = Math.min(n - 1, cursor + 1)),
+        run: () => moveCursor(1),
       },
       {
         key: "k",
         label: "",
         hidden: true,
-        run: () => (cursor = Math.max(0, cursor - 1)),
+        run: () => moveCursor(-1),
       },
       {
         key: "↓",
         label: "",
         hidden: true,
-        run: () => (cursor = Math.min(n - 1, cursor + 1)),
+        run: () => moveCursor(1),
       },
       {
         key: "↑",
         label: "",
         hidden: true,
-        run: () => (cursor = Math.max(0, cursor - 1)),
+        run: () => moveCursor(-1),
       },
       {
         key: "⏎",
@@ -421,7 +502,7 @@
     <input
       bind:this={searchEl}
       class="search"
-      placeholder="Search symptoms, error codes, root causes, docs…  (ctrl+k)"
+      placeholder="Search symptoms, error codes, root causes, docs…"
       bind:value={q}
       onkeydown={(e) => {
         if (e.key === "Enter") {
@@ -443,8 +524,9 @@
     {/if}
   </div>
 
-  <!-- No environment control on purpose: cloud is part of the searchable text,
-       so "prod printer error" narrows by environment from the search bar. -->
+  <!-- The default row stays deliberately short. Everything else the schema can
+       be narrowed by — environment, confidence, clarity, pattern, hidden fix,
+       fixed version, tags — is one `+` away and remembered per browser. -->
   <div class="filters">
     <Select
       value={kind}
@@ -475,9 +557,9 @@
       disabled={!productId || components.length === 0}
       options={[
         { value: "", label: "any component" },
-        ...components.map((c) => c.slug as string),
+        ...componentOptions(components),
       ]}
-      onchange={() => loadVersions()}
+      onchange={() => loadFacets()}
     />
 
     {#if showEntryFilters}
@@ -489,8 +571,8 @@
         options={[
           { value: "", label: "any version" },
           ...versions.map((v) => ({
-            value: v.version,
-            label: `${v.version} (${v.count})`,
+            value: v.value,
+            label: `${v.value} (${v.count})`,
           })),
         ]}
       />
@@ -515,12 +597,57 @@
       />
     {/if}
 
+    {#if showEntryFilters}
+      {#each shown as key (key)}
+        {@const def = byKey(key)}
+        {#if def}
+          <span class="extra">
+            {#if def.kind === "tags"}
+              <TagFilter
+                value={extras[key] ?? ""}
+                options={facets.tags ?? []}
+                onchange={(v) => setExtra(key, v)}
+              />
+            {:else}
+              <Select
+                value={extras[key] ?? ""}
+                active={!!extras[key]}
+                title={def.label}
+                options={[
+                  { value: "", label: def.any },
+                  ...(def.kind === "enum"
+                    ? (def.options ?? []).map((o) => ({ value: o, label: o }))
+                    : (facets[key] ?? []).map((o) => ({
+                        value: o.value,
+                        label: `${o.value} (${o.count})`,
+                      }))),
+                ]}
+                onchange={(v) => setExtra(key, String(v))}
+              />
+            {/if}
+            <Button
+              variant="ghost"
+              size="sm"
+              square
+              icon="cancel"
+              title="remove the {def.label} filter"
+              aria-label="remove the {def.label} filter"
+              onclick={() => removeFilter(key)}
+            />
+          </span>
+        {/if}
+      {/each}
+
+      <FilterMenu {shown} {facets} onadd={addFilter} />
+    {/if}
+
     {#if activeFilters}
       <Button
         variant="ghost"
         size="sm"
         square
-        icon="cancel"
+        tone="danger"
+        icon="erase"
         title="clear filters"
         aria-label="clear filters"
         onclick={clearFilters}
@@ -540,14 +667,21 @@
     <p class="tally">{items.length} {mode === "search" ? "matches" : "items"}</p>
   {/if}
 
-  <ul class="results" class:empty-list={!loading && !error && items.length === 0}>
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <ul
+    class="results"
+    class:empty-list={!loading && !error && items.length === 0}
+    onmousemove={() => (pointerMoved = true)}
+  >
     {#each items as it, i (it.kind + it.id)}
       <li>
         <button
           class="row {it.kind}"
           class:cursor={i === cursor}
+          bind:this={rowEls[i]}
           onclick={() => openItem(it)}
           onfocus={() => (cursor = i)}
+          onmouseenter={() => pointerMoved && (cursor = i)}
         >
           <span class="mark">
             <Icon
@@ -593,11 +727,17 @@
             {/if}
             <span class="foot">
               <span class="tags">
+                {#if it.customer}
+                  <Chip
+                    tone="accent"
+                    title="specific to this customer's install — not general product behaviour"
+                    >{it.customer}</Chip
+                  >
+                {/if}
                 {#each it.tags as tag}<Chip>{tag}</Chip>{/each}
               </span>
               <span class="state {it.status}">{it.status}</span>
               <span class="stamp">
-                {#each it.facts as f}<span>{f}</span>{/each}
                 {#if it.updated}<span>updated {it.updated}</span>{/if}
               </span>
             </span>
@@ -653,6 +793,14 @@
     margin-bottom: var(--pad-3);
   }
 
+  /* An added filter travels with its own remove button, so the pair must wrap
+     as one unit however wide the row gets. */
+  .extra {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pad-1);
+  }
+
   .tally {
     margin: var(--pad-1) 0;
     font-size: var(--fs-sm);
@@ -700,7 +848,9 @@
   .row.doc {
     --kind: var(--doc);
   }
-  .row:hover,
+  /* Only `.cursor` paints — hovering MOVES the cursor rather than lighting a
+     second card, so there is exactly one highlight and the pointer and the
+     keyboard share one position. */
   .row.cursor,
   .row:focus-visible {
     outline: none;

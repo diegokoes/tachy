@@ -2,9 +2,11 @@
   import { api, ApiError } from "../api";
   import type { NamedRow, ReferenceLineageRow, ReferenceRow } from "../types";
   import { canCurateScope, isCurator } from "../session.svelte";
+  import { pushScope } from "../keys.svelte";
   import { errText } from "../resource.svelte";
   import { Badge, Button, Chip, Icon, Note, Select, G } from "../tui";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
+  import ScopeCrumb from "./ScopeCrumb.svelte";
 
   let { id, onClose }: { id: string; onClose: () => void } = $props();
 
@@ -66,11 +68,16 @@
       } catch {
         lineage = [];
       }
-      if (isCurator() && doc.product_id && !doc.team_id) {
-        const products = await api.get<NamedRow[]>("/products");
-        productTeamSlug =
-          (products.find((p) => p.id === doc!.product_id)?.team_slug as string) ??
-          null;
+      // Only for the permission check — the scope is displayed off product_area.
+      if (doc.product_id) {
+        try {
+          const products = await api.get<NamedRow[]>("/products");
+          productTeamSlug =
+            (products.find((p) => p.id === doc!.product_id)
+              ?.team_slug as string) ?? null;
+        } catch {
+          productTeamSlug = null;
+        }
       }
     } catch (e) {
       error = errText(e);
@@ -116,6 +123,12 @@
 
   $effect(() => {
     load(id);
+  });
+
+  /** Same as the entry view: backspace goes back while reading, not editing. */
+  $effect(() => {
+    if (editing || newVersion || !doc) return;
+    return pushScope([{ key: "backspace", label: "back", run: onClose }]);
   });
 </script>
 
@@ -163,12 +176,13 @@
   />
 {:else}
   <div class="topbar">
+    <ScopeCrumb area={doc.product_area} />
     <Button
       variant="ghost"
       square
       icon="back"
       aria-label="back"
-      title="back"
+      title="back (backspace)"
       onclick={onClose}
     />
     {#if canEdit}
@@ -189,11 +203,18 @@
 
   <h2>{doc.title}</h2>
 
-  <div class="meta">
-    <Badge tone={statusTone(doc.status)}>{doc.status}</Badge>
-    {#if doc.updated_at}<span class="muted"
-        >updated {fmtDate(doc.updated_at)}</span
-      >{/if}
+  <div class="meta status-meta">
+    <span><Badge tone={statusTone(doc.status)}>{doc.status}</Badge></span>
+    {#if doc.customer_slug}
+      <span
+        ><Badge
+          tone="accent"
+          title="documents this customer's install — cite it as theirs, not as how the product works"
+          >{doc.customer_slug}</Badge
+        ></span
+      >
+    {/if}
+    {#if doc.updated_at}<span class="muted">updated {fmtDate(doc.updated_at)}</span>{/if}
   </div>
 
   <div class="meta">
@@ -297,11 +318,19 @@
   .muted {
     color: var(--muted);
   }
+  .topbar :global(nav.crumb) {
+    margin-right: auto;
+  }
   .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
     display: flex;
     justify-content: flex-end;
     align-items: center;
     gap: var(--pad-1);
+    padding: var(--pad-2) 0;
+    background: var(--panel-solid);
   }
   .meta {
     display: flex;

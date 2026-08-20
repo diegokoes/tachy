@@ -21,6 +21,7 @@ export type Customer = {
   slug: string;
   name: string;
   aliases: string[] | null;
+  email_domains: string[] | null;
   notes: string | null;
 };
 export type Pattern = { slug: string; description: string };
@@ -37,7 +38,10 @@ export type ProjectRole = "knowledge" | "tracker";
 export type ProjectWiki = {
   identifier: string;
   name?: string;
+  type?: string;
   root_path?: string;
+  /** The one every wiki tool uses when none is named. Exactly one per project. */
+  default?: boolean;
 };
 export type SourceProject = {
   id: string;
@@ -51,7 +55,9 @@ export type SourceProject = {
   product_slug: string | null;
   team_id: string;
   team_slug: string;
-  wiki: ProjectWiki | Record<string, never>;
+  customer_id: string | null;
+  customer_slug: string | null;
+  wikis: ProjectWiki[];
   config: Record<string, unknown>;
   notes: string | null;
 };
@@ -73,6 +79,8 @@ export type Repo = {
   project_key: string | null;
   component_id: string | null;
   component_slug: string | null;
+  customer_id: string | null;
+  customer_slug: string | null;
   default_branch: string;
   config: Record<string, unknown>;
   index_status: "idle" | "cloning" | "indexing" | "ready" | "error";
@@ -133,9 +141,19 @@ export type Member = {
 };
 
 export const TIP = {
-  slug: "Stable lowercase machine id (no spaces) used in filters, URLs and by the agent. Immutable once things reference it.",
-  aliases:
-    'Alternative names that resolve to the same record (lc, LC, "line controller"). Keeps naming variants from becoming duplicates.',
+  slug: "Stable lowercase machine id, derived from the name. Filters, URLs and the agent go through it.",
+  /* Three tables carry aliases and they do not all mean the same thing —
+     a customer's are email domains, not names. See catalog/customers.ts. */
+  aliases: {
+    product:
+      'Other names this product answers to (portal, "the web app"). Comma-separated. The agent and the API resolve them like the slug.',
+    component:
+      'Other names this component answers to (lc, LC, "line controller"). Comma-separated. They also match knowledge and reference entries tagged with the variant.',
+    customer:
+      "Other NAMES this account trades under (Oettinger Davidoff). Comma-separated. Not email domains — those have their own field.",
+  },
+  emailDomains:
+    "Domains whose senders are this customer (acme.com, acme.co.uk), including a partner or distributor who raises tickets on their behalf. Comma-separated. Incoming tickets are attributed by the requester's domain — and a domain listed on two customers deliberately matches neither, so a shared integrator's domain belongs to nobody.",
   parent:
     "Parent component in the hierarchy - product_area paths (Product / Parent / Component) are derived from it.",
   team: "Owning team. One team can own many products.",
@@ -143,25 +161,37 @@ export const TIP = {
     "The source system's own grouping key: a Freshdesk group id, a GitHub owner/repo…",
   project:
     "One project as its source knows it — an Azure DevOps project, a Freshdesk group, a GitHub owner/repo. Registering it is what tells tachy where its items, wiki and code belong.",
-  role: "knowledge: bound to a product — its items become knowledge, and it can own a wiki, repos and area rules. tracker: no product, just a place we create and reassign work items in.",
   area: "Azure DevOps area path prefix. Items under it are filed on this component automatically; the longest matching prefix wins.",
   repoComponent:
     "The component this repo implements. Code search can then be narrowed to it, so a question about one part of the product searches that repo instead of everything.",
 };
 
 export const AGENT_KEY_LABELS: Record<string, string> = {
+  anthropic_oauth_token: "Claude subscription token",
   anthropic_api_key: "Anthropic API key",
   copilot_token: "Copilot GitHub token",
 };
+
+const AGENT_KEY_SHAPES: Record<string, { re: RegExp; hint: string }> = {
+  anthropic_oauth_token: {
+    re: /^sk-ant-oat01-\S+$/,
+    hint: "starts with sk-ant-oat01-",
+  },
+  anthropic_api_key: {
+    re: /^sk-ant-(?!oat01-)\S+$/,
+    hint: "starts with sk-ant-api03-",
+  },
+};
+
+/** Mirrors validateCredential in @tachy/core, so a typo never reaches the vault. */
+export function agentKeyError(name: string, value: string): string | null {
+  const shape = AGENT_KEY_SHAPES[name];
+  if (!shape || shape.re.test(value)) return null;
+  return `a ${AGENT_KEY_LABELS[name]} ${shape.hint}`;
+}
 
 export const csv = (v: string | undefined) =>
   v
     ?.split(",")
     .map((s) => s.trim())
     .filter(Boolean) ?? [];
-
-export const aliasText = (a: string[] | null) =>
-  a?.length ? a.join(", ") : "";
-
-export const errText = (e: unknown) =>
-  e instanceof Error ? e.message : String(e);
