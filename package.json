@@ -25,6 +25,7 @@
     "web:check": "npm run check --workspace @tachy/web",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "load": "docker compose -p tachy-dev -f docker-compose.yml -f load/k6.compose.yml run --rm k6 run",
     "format": "prettier --write ."
   },
   "engines": {
