@@ -10,7 +10,6 @@
     Chip,
     CrudTable,
     Field,
-    Note,
     Select,
     type Column,
   } from "../tui";
@@ -90,7 +89,7 @@
       edit: "text",
       required: true,
       editable: () => false,
-      hint: "Their sign-in identity. It cannot be changed later.",
+      hint: "sign-in identity — cannot change later",
     },
     { key: "display_name", label: "name", width: "12rem", edit: "text" },
     {
@@ -103,7 +102,8 @@
         { value: "admin", label: "admin" },
       ],
       initial: "member",
-      hint: ROLE_TIP,
+      hint: "org-wide",
+      info: ROLE_TIP,
     },
     { key: "teams", label: t("teams"), cell: teamsCell },
     {
@@ -112,7 +112,8 @@
       width: "8rem",
       formOnly: true,
       edit: "text",
-      hint: "At least 10 characters. Blank leaves sign-in to SSO, or keeps the current one.",
+      hint: "10+ characters; blank keeps the current one",
+      info: "Blank leaves sign-in to SSO, or keeps the existing password.",
     },
     {
       key: "disabled",
@@ -120,7 +121,7 @@
       formOnly: true,
       only: "edit",
       edit: "checkbox",
-      hint: "A disabled user cannot sign in. Their past activity stays attributed to them.",
+      hint: "cannot sign in; past activity stays attributed",
     },
     { key: "status", label: "status", width: "8rem", cell: statusCell },
   ]);
@@ -205,17 +206,9 @@
           />
         </div>
       {/if}
-      <p class="rh">{TEAM_ROLE_TIP}</p>
     </div>
   {/if}
 {/snippet}
-
-<Note>
-  Two roles, independently held. <strong>App role</strong> is org-wide: an admin
-  manages users, structure and system settings. <strong>{t("team")} role</strong
-  > is scoped: a {t("team")} admin curates that {t("team")}'s knowledge, docs, taxonomy
-  and roster, and nothing outside it.
-</Note>
 
 <div class="bar">
   <input
@@ -324,10 +317,5 @@
   }
   .rrow :global(.asel) {
     width: 11rem;
-  }
-  .rh {
-    margin: 0;
-    font-size: var(--fs-xs);
-    color: var(--muted);
   }
 </style>

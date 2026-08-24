@@ -87,6 +87,8 @@
     typeof c.options === "function" ? c.options(draft) : (c.options ?? []);
   const hintOf = (c: Column<T>) =>
     typeof c.hint === "function" ? c.hint(draft) : c.hint;
+  const infoOf = (c: Column<T>) =>
+    typeof c.info === "function" ? c.info(draft) : c.info;
 </script>
 
 <Modal
@@ -107,6 +109,7 @@
       <Field
         label={c.label}
         hint={hintOf(c)}
+        info={infoOf(c)}
         required={c.required}
         plain={readOnly(c)}
       >

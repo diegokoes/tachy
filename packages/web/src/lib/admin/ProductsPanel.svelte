@@ -7,7 +7,7 @@
   import { CrudTable, type Column } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
   import SlugRename from "./SlugRename.svelte";
-  import { csv, TIP, type Product, type Team } from "./shared";
+  import { csv, INFO, TIP, type Product, type Team } from "./shared";
 
   const products = createResource(() => api.get<Product[]>("/products"), []);
   const teams = createResource(() => api.get<Team[]>("/teams"), []);
@@ -40,6 +40,7 @@
       edit: "text",
       required: true,
       hint: TIP.slug,
+      info: INFO.slug,
       derive: (d) => uniqueSlug(slugify(String(d.name ?? "")), allSlugs),
       action: { label: "rename…", onclick: (r) => (renaming = r) },
     },
@@ -58,6 +59,7 @@
       label: "aliases",
       edit: "text",
       hint: TIP.aliases.product,
+      info: INFO.aliases.product,
       value: (r) => (r.aliases ?? []).join(", "),
     },
   ]);

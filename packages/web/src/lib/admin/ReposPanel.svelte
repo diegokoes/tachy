@@ -19,6 +19,7 @@
     type Draft,
   } from "../tui";
   import {
+    INFO,
     TIP,
     csv,
     type Component,
@@ -117,12 +118,32 @@
   let bulkBusy = $state(false);
   let bulkError = $state<string | null>(null);
   let bulkResults = $state<{ slug: string; ok: boolean; error?: string }[]>([]);
+  let bulkFilter = $state("");
 
   const linkedUrls = $derived(new Set(repos.data.map((r) => r.url)));
+
+  const bulkHits = $derived(bulk ? (found[bulk.project.id] ?? []) : []);
+  const bulkShown = $derived(
+    bulkFilter.trim()
+      ? bulkHits.filter((r) =>
+          r.name.toLowerCase().includes(bulkFilter.trim().toLowerCase()),
+        )
+      : bulkHits,
+  );
+  /** Already-linked rows render ticked and locked, so they are never a choice. */
+  const bulkSelectable = $derived(
+    bulkShown.filter((r) => !linkedUrls.has(r.url)),
+  );
+  /* Counted within the filter, not across the whole discovery: the bar
+     describes what you are looking at. The confirm button carries the total. */
+  const bulkPickedShown = $derived(
+    bulk ? bulkSelectable.filter((r) => bulk!.picked.has(r.url)).length : 0,
+  );
 
   async function openBulk(project: SourceProject) {
     bulkError = null;
     bulkResults = [];
+    bulkFilter = "";
     bulk = { project, picked: new Set() };
     if (!found[project.id]) await discover({ source_project_id: project.id });
     const hits = found[project.id] ?? [];
@@ -131,23 +152,34 @@
     bulk = {
       project,
       picked: new Set(
-        hits.filter((r) => !linkedUrls.has(r.url)).map((r) => r.name),
+        hits.filter((r) => !linkedUrls.has(r.url)).map((r) => r.url),
       ),
     };
   }
 
-  function toggleBulk(name: string, on: boolean) {
+  function toggleBulk(url: string, on: boolean) {
     if (!bulk) return;
     const picked = new Set(bulk.picked);
-    if (on) picked.add(name);
-    else picked.delete(name);
+    if (on) picked.add(url);
+    else picked.delete(url);
+    bulk = { ...bulk, picked };
+  }
+
+  /** Acts on what the filter shows, so "…-api" then "all" is two actions. */
+  function pickShown(on: boolean) {
+    if (!bulk) return;
+    const picked = new Set(bulk.picked);
+    for (const r of bulkSelectable) {
+      if (on) picked.add(r.url);
+      else picked.delete(r.url);
+    }
     bulk = { ...bulk, picked };
   }
 
   async function saveBulk() {
     if (!bulk) return;
     const hits = (found[bulk.project.id] ?? []).filter((r) =>
-      bulk!.picked.has(r.name),
+      bulk!.picked.has(r.url),
     );
     if (!hits.length) return;
     bulkBusy = true;
@@ -203,11 +235,11 @@
     {
       key: "slug",
       label: "repo",
-      width: "16rem",
       edit: "text",
       required: true,
       editable: () => false,
       hint: TIP.slug,
+      info: INFO.slug,
       cell: repoCell,
       derive: (d) =>
         uniqueSlug(
@@ -227,14 +259,15 @@
       formOnly: true,
       edit: "text",
       required: true,
-      hint: "Cloning uses the project connection's stored token.",
+      hint: "cloned with the project connection's token",
     },
     {
       key: "source_project_id",
       label: "project",
       width: "13rem",
       edit: "select",
-      hint: "Which registered project this repo belongs to. Its connection supplies the clone credentials.",
+      hint: "supplies the clone credentials",
+      info: "Which registered project this repo belongs to. Its connection is what clones it.",
       options: [
         { value: "", label: `(none — scope by ${t("product")})` },
         ...knowledgeProjects.map((p) => ({
@@ -263,7 +296,8 @@
       label: "customer",
       width: "10rem",
       edit: "select",
-      hint: "Set only for a customer's own addon repo. Left empty the repo is shared product code — and a customer-scoped search returns the shared ones too.",
+      hint: "only for a customer's own addon repo",
+      info: "Left empty the repo is shared product code — and a customer-scoped search returns the shared ones too.",
       options: [
         { value: "", label: "(none — shared)" },
         ...customers.data.map((cu) => ({ value: cu.slug, label: cu.name })),
@@ -275,6 +309,7 @@
       width: "10rem",
       edit: "select",
       hint: TIP.repoComponent,
+      info: INFO.repoComponent,
       options: (d) => [
         { value: "", label: "(none)" },
         ...(components[productOfDraft(d)] ?? []).map((c) => ({
@@ -295,7 +330,7 @@
       label: "extensions",
       formOnly: true,
       edit: "text",
-      hint: "Comma-separated, e.g. ts, cs, sql. Empty uses the built-in code allowlist.",
+      hint: "ts, cs, sql — empty uses the built-in allowlist",
       value: (r) =>
         (Array.isArray(r.config?.include_extensions)
           ? (r.config.include_extensions as string[])
@@ -307,7 +342,7 @@
       label: "max file KB",
       formOnly: true,
       edit: "text",
-      hint: "Files larger than this are skipped. Empty means the default, 200.",
+      hint: "larger files are skipped; empty means 200",
       value: (r) => r.config?.max_file_kb ?? "",
     },
     { key: "index_status", label: "index", width: "8rem", cell: indexCell },
@@ -428,7 +463,7 @@
   {#if project}
     <Field
       label="discover"
-      hint="List the repos in this project and pick one, instead of transcribing its clone URL."
+      hint="pick a repo instead of transcribing its clone URL"
     >
       <Button
         variant="ghost"
@@ -493,10 +528,9 @@
 
 {#if bulk}
   {@const b = bulk}
-  {@const hits = found[b.project.id] ?? []}
   <Modal
     title={`link repos from ${b.project.external_key}`}
-    width="42rem"
+    width="56rem"
     busy={bulkBusy}
     confirmLabel={`link ${b.picked.size}`}
     confirmIcon="save"
@@ -510,30 +544,53 @@
         {bulkResults.map((r) => `${r.slug} (${r.error})`).join("; ")}
       </Note>
     {/if}
-    {#if !hits.length}
+    {#if !bulkHits.length}
       <p class="dim">
         {discovering ? "asking the source…" : "no repos readable with this token"}
       </p>
     {:else}
-      <p class="dim sm">
-        Already-linked repos are shown ticked and locked. Set each one's
-        component and customer afterwards, in its own row.
-      </p>
+      <p class="dim sm">Already linked ones are ticked and locked.</p>
+      <div class="pickbar">
+        <input
+          placeholder="filter repos…"
+          aria-label="filter repos"
+          bind:value={bulkFilter}
+          disabled={bulkBusy}
+        />
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={bulkBusy || !bulkSelectable.length}
+          onclick={() => pickShown(true)}>all</Button
+        >
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={bulkBusy || !bulkSelectable.length}
+          onclick={() => pickShown(false)}>none</Button
+        >
+        <span class="dim sm">
+          {bulkPickedShown} of {bulkSelectable.length} selected
+        </span>
+      </div>
       <div class="picklist">
-        {#each hits as r (r.name)}
+        {#each bulkShown as r (r.url)}
           {@const linked = linkedUrls.has(r.url)}
           <label class="prow" class:linked>
             <Checkbox
               ariaLabel={r.name}
-              checked={linked || b.picked.has(r.name)}
+              checked={linked || b.picked.has(r.url)}
               disabled={linked || bulkBusy}
-              onchange={(on) => toggleBulk(r.name, on)}
+              onchange={(on) => toggleBulk(r.url, on)}
             />
-            <span>{r.name}</span>
+            <span class="pname">{r.name}</span>
             <span class="dim sm">{r.default_branch || "main"}</span>
             {#if linked}<Badge tone="muted">linked</Badge>{/if}
           </label>
         {/each}
+        {#if !bulkShown.length}
+          <p class="dim sm">nothing matches “{bulkFilter}”</p>
+        {/if}
       </div>
     {/if}
   </Modal>
@@ -548,21 +605,40 @@
     margin-bottom: var(--pad-2);
     font-size: var(--fs-sm);
   }
-  .picklist {
+  .pickbar {
     display: flex;
-    flex-direction: column;
-    gap: var(--pad-1);
-    max-height: 22rem;
+    align-items: center;
+    gap: var(--pad-2);
+    margin-bottom: var(--pad-2);
+  }
+  .pickbar input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* A project routinely holds fifty repos — down one column that is a long
+     scroll past the fold, across three it is a glance. */
+  .picklist {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+    gap: var(--pad-1) var(--gap);
+    max-height: min(28rem, 50vh);
     overflow-y: auto;
   }
   .prow {
     display: flex;
     align-items: center;
     gap: var(--gap);
+    min-width: 0;
     font-size: var(--fs-sm);
   }
   .prow.linked {
     color: var(--muted);
+  }
+  .pname {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .sm {
     font-size: var(--fs-xs);

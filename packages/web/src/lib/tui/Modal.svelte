@@ -33,7 +33,6 @@
   } = $props();
 
   let box = $state<HTMLElement>();
-  let fit = $state<HTMLElement>();
 
   /* One move: the box unfolds and its content comes up with it. A brightness
      ramp over the whole panel blows out the text and the accent on the way in,
@@ -51,43 +50,6 @@
       })
       .from(reveal, { autoAlpha: 0, duration: 0.13, ease: "none" }, "<0.06");
     return () => tl.kill();
-  });
-
-  /* The panel is only as wide as it needs to be and sits centred, so content
-     that unfolds mid-form (an output spec, an extra section) widens it from
-     both edges instead of snapping to a new width. */
-  onMount(() => {
-    const el = fit;
-    if (!el || reducedMotion()) return;
-    let last = el.offsetWidth;
-    let tweening = false;
-    const ro = new ResizeObserver(() => {
-      if (tweening) return;
-      const now = el.offsetWidth;
-      if (Math.abs(now - last) < 2) return;
-      const from = last;
-      last = now;
-      tweening = true;
-      // Our own width writes must not feed back into the observer.
-      ro.unobserve(el);
-      gsap.fromTo(
-        el,
-        { width: from, overflow: "hidden" },
-        {
-          width: now,
-          duration: 0.22,
-          ease: "power2.out",
-          onComplete: () => {
-            gsap.set(el, { clearProps: "width,overflow" });
-            last = el.offsetWidth;
-            tweening = false;
-            ro.observe(el);
-          },
-        },
-      );
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
   });
 
   function onKeydown(e: KeyboardEvent) {
@@ -121,8 +83,8 @@
     style="width: min({width}, 100%)"
     onclick={(e) => e.stopPropagation()}
   >
-    <div class="fit" bind:this={fit}>
-      <Panel {title} tone={danger ? "danger" : "default"} scan>
+    <Panel {title} tone={danger ? "danger" : "default"} scan grow>
+      <div class="stack">
         <div class="body reveal">{@render children?.()}</div>
         <div class="acts reveal">
           <Actions
@@ -140,8 +102,8 @@
             iconOnly
           />
         </div>
-      </Panel>
-    </div>
+      </div>
+    </Panel>
   </div>
 </div>
 
@@ -166,26 +128,36 @@
     }
   }
 
-  /* The declared width is a ceiling, not a shape: a short form stays narrow and
-     centred, a full one grows out to both edges. */
+  /* One width, always — a dialog that shrink-wrapped its content changed shape
+     whenever a section unfolded mid-form. */
   .wrap {
     transform-origin: center;
+    display: flex;
+    flex-direction: column;
     max-height: calc(100vh - 2 * var(--pad-4));
-    display: flex;
-    justify-content: center;
-  }
-  .fit {
-    display: flex;
     min-width: 0;
-    max-width: 100%;
+    min-height: 0;
+  }
+
+  /* The scroll lives on .body alone, so the footer stays put while a long form
+     scrolls under it. Every ancestor needs min-height:0 or the flex chain
+     refuses to shrink and the panel grows past the viewport instead. */
+  .stack {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
   }
 
   .body {
+    flex: 1 1 auto;
+    min-height: 0;
     font-size: var(--fs-md);
     line-height: 1.55;
     overflow: auto;
   }
   .acts {
+    flex: none;
     margin-top: var(--pad-4);
   }
 </style>

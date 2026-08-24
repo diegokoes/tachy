@@ -20,7 +20,7 @@
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
   import {
-    TIP,
+    INFO,
     csv,
     type Connection,
     type Product,
@@ -45,6 +45,7 @@
       hostHint: string;
       tokenLabel: string;
       tokenHint: string;
+      tokenInfo?: string;
       groupLabel: string;
       configKey: "projects" | "repos" | null;
     }
@@ -52,29 +53,31 @@
     freshdesk: {
       label: "Freshdesk",
       hostLabel: "domain",
-      hostHint: "The Freshdesk domain, e.g. acme.freshdesk.com",
+      hostHint: "acme.freshdesk.com",
       tokenLabel: "API key",
-      tokenHint:
-        "Freshdesk profile → API key (a per-agent key; tickets are read with that agent's permissions).",
+      tokenHint: "profile → API key",
+      tokenInfo:
+        "A per-agent key: tickets are read with that agent's permissions.",
       groupLabel: "group",
       configKey: null,
     },
     "azure-devops": {
       label: "Azure DevOps",
       hostLabel: "organization",
-      hostHint: "The org name, e.g. my-org (or the full dev.azure.com URL).",
+      hostHint: "my-org, or a dev.azure.com URL",
       tokenLabel: "PAT",
-      tokenHint:
-        "A personal access token, org-scoped: it reaches every project you have permissions on. Scopes: Work Items (read, or read & write to create tickets), Wiki read, Code read.",
+      tokenHint: "org-scoped personal access token",
+      tokenInfo:
+        "Reaches every project you have permissions on. Scopes: Work Items (read, or read & write to create tickets), Wiki read, Code read.",
       groupLabel: "project",
       configKey: "projects",
     },
     github: {
       label: "GitHub",
       hostLabel: "API base URL",
-      hostHint: "https://api.github.com, or a GitHub Enterprise /api/v3 URL.",
+      hostHint: "https://api.github.com, or an Enterprise /api/v3 URL",
       tokenLabel: "token",
-      tokenHint: "A PAT with repo/issues read access.",
+      tokenHint: "PAT with repo/issues read",
       groupLabel: "repo",
       configKey: "repos",
     },
@@ -245,7 +248,8 @@
       width: "12rem",
       edit: "text",
       required: true,
-      hint: `${TIP.slug} It also names this connection's stored credential, so it cannot change later.`,
+      hint: "machine id — cannot change later",
+      info: `${INFO.slug} It also names this connection's stored credential, so it cannot change later.`,
       derive: (d) =>
         uniqueSlug(
           suggestSlug(typeOf(d), String(d.host ?? "")),
@@ -266,6 +270,7 @@
       formOnly: true,
       edit: "secret",
       hint: (d) => SPEC[typeOf(d)].tokenHint,
+      info: (d) => SPEC[typeOf(d)].tokenInfo ?? "",
     },
     { key: "token_source", label: "token", width: "8rem", cell: tokenCell },
     {
@@ -274,16 +279,17 @@
       formOnly: true,
       edit: "text",
       visible: (d) => Boolean(SPEC[typeOf(d)].configKey),
-      hint: (d) =>
-        `Comma-separated ${SPEC[typeOf(d)].groupLabel}s. Limits sync and gives the agent a default set to look in instead of the whole org. Optional.`,
+      hint: (d) => `${SPEC[typeOf(d)].groupLabel}s, comma-separated; optional`,
+      info: (d) =>
+        `Limits sync and gives the agent a default set of ${SPEC[typeOf(d)].groupLabel}s to look in instead of the whole org.`,
       value: (r) => groupsOf(r).join(", "),
     },
     {
       key: "redaction",
-      label: "redaction",
+      label: "PII redaction",
       width: "8rem",
       edit: "checkbox",
-      hint: "Strips PII out of this source's payloads before the model sees them.",
+      info: "Strips PII out of this source's payloads before the model sees them.",
       value: (r) => (redactionOn(r) ? "on" : "off"),
     },
   ]);
@@ -352,18 +358,15 @@
     </p>
     {#if probe.groupsNote}
       <Note tone="warn">
-        This token can't list {SPEC[r.source_type as SourceType]?.groupLabel ??
-          "group"}s — fine for fetching, it just means you type the key in
-        yourself when registering the project.
+        Can't list {SPEC[r.source_type as SourceType]?.groupLabel ?? "group"}s —
+        type the key in yourself when registering.
         <span class="reason">{probe.groupsNote}</span>
       </Note>
     {/if}
     {#if probe.groups?.length}
       <p class="dim">
-        {SPEC[r.source_type as SourceType]?.groupLabel ?? "group"}s visible to
-        this token. Click an unregistered one to register it here — as a
-        knowledge project bound to a {t("product")}, or as a tracker you only
-        raise work items in.
+        {SPEC[r.source_type as SourceType]?.groupLabel ?? "group"}s this token
+        can see — click one to register it.
       </p>
       <div class="chips">
         {#each probe.groups as g (g.key)}
@@ -440,14 +443,15 @@
   >
     {#if claimError}<Note tone="danger">{claimError}</Note>{/if}
     <div class="claim">
-      <Field label="name" hint="How it reads in lists here.">
+      <Field label="name" hint="how it reads in lists here">
         <input aria-label="name" bind:value={c.name} />
       </Field>
       <Field
         label="role"
         required
-        hint={c.role === "tracker"
-          ? "A create/reassign target only — nothing is filed under it, and it holds no wiki, repos or area rules."
+        hint={c.role === "tracker" ? "create/reassign target" : "items ingest here"}
+        info={c.role === "tracker"
+          ? "Nothing is filed under a tracker, and it holds no wiki, repos or area rules."
           : `Its items ingest into a ${t("product")}, and it can carry the wikis, repos and area rules.`}
       >
         <Select
@@ -464,8 +468,8 @@
         label={c.role === "tracker" ? t("team") : t("product")}
         required
         hint={c.role === "tracker"
-          ? `The ${t("team")} that raises work items here.`
-          : `The ${t("product")} its items ingest into.`}
+          ? `the ${t("team")} raising work items here`
+          : `the ${t("product")} its items ingest into`}
       >
         <Select
           value={c.scope}

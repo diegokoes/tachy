@@ -1,9 +1,11 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import InfoMark from "./InfoMark.svelte";
 
   let {
     label,
     hint,
+    info,
     error,
     required = false,
     inline = false,
@@ -12,6 +14,9 @@
   }: {
     label?: string;
     hint?: string;
+    /** The long version. Keep `hint` to a phrase and put the rules here — the
+     *  note line is always in the layout, so prose there inflates the dialog. */
+    info?: string;
     error?: string | null;
     required?: boolean;
     inline?: boolean;
@@ -33,9 +38,12 @@
   class:noted={Boolean(hint || error)}
 >
   {#if label}
-    <span class="lbl"
-      >{label}{#if required}<span class="req" aria-hidden="true">*</span>{/if}</span
-    >
+    <span class="lblrow">
+      <span class="lbl"
+        >{label}{#if required}<span class="req" aria-hidden="true">*</span>{/if}</span
+      >
+      {#if info}<InfoMark label="{label} — more">{info}</InfoMark>{/if}
+    </span>
   {/if}
   <span class="control">{@render children()}</span>
   {#if hint || error}
@@ -56,7 +64,7 @@
     align-items: center;
     gap: var(--gap);
   }
-  .field.inline .lbl {
+  .field.inline .lblrow {
     flex: none;
   }
   .field.inline .control {
@@ -64,10 +72,19 @@
     min-width: 0;
   }
 
+  .lblrow {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-1);
+    min-width: 0;
+  }
   .lbl {
     font-size: var(--fs-sm);
     letter-spacing: var(--label-spacing);
     color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .req {
     color: var(--accent);
