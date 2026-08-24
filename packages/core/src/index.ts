@@ -1,4 +1,5 @@
 export { sql } from "./infra";
+export type { Db } from "./infra";
 export {
   env,
   envVarName,

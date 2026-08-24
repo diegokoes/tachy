@@ -144,13 +144,17 @@ async function restore(opts: { file?: string; yes?: boolean }) {
   console.log("restore complete");
 }
 
+import { seed, SCALE_NAMES, type ScaleName } from "./seed";
+
 const USAGE = `usage:
   sync <source-slug> [--since=ISO] [--group=KEY]   pull & store work items
   embed-backfill                                   embed rows missing a vector
   reembed                                          re-embed EVERYTHING (after a model change)
   index-repo <repo-slug>                           clone/fetch a linked repo and (re)index its code
   backup [--out=DIR]                               pg_dump -Fc to DIR (default ./backups)
-  restore --file=PATH [--yes]                      pg_restore (overwrites the DB)`;
+  restore --file=PATH [--yes]                      pg_restore (overwrites the DB)
+  seed [--scale=NAME] [--reset] [--yes] [--embed]  fill a dev database with plausible data
+                                                   (npm eats --flags: npm run sync -- seed --scale=medium)`;
 
 const [cmd, ...rest] = process.argv.slice(2);
 const positional = rest.filter((a) => !a.startsWith("--"));
@@ -192,6 +196,19 @@ async function main() {
       return backup({ out: args.out });
     case "restore":
       return restore({ file: args.file, yes: !!args.yes });
+    case "seed": {
+      const scale = (args.scale ?? "small") as ScaleName;
+      if (!SCALE_NAMES.includes(scale))
+        throw new Error(
+          `unknown --scale '${args.scale}' (${SCALE_NAMES.join("|")})`,
+        );
+      return seed({
+        scale,
+        reset: !!args.reset,
+        yes: !!args.yes,
+        embed: !!args.embed,
+      });
+    }
     default:
       console.log(USAGE);
       process.exit(1);
