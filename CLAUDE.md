@@ -21,7 +21,7 @@ Folders are named for the domain they own, never `utils` / `helpers` / `common`.
 ## Commands
 
 ```sh
-npm run typecheck && npm test    # what CI runs
+npm run typecheck && npm run web:check && npm test    # what CI runs
 npm run api                      # server on :8787
 npm run web:dev                  # SPA dev server
 npm run format                   # prettier
