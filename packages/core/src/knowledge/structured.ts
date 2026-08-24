@@ -1,5 +1,26 @@
 import { z } from "zod";
+import {
+  CLOUD_RE,
+  CLOUD_HINT,
+  RESOLUTION_CLARITIES,
+  LEARNING_VALUES,
+  KNOWLEDGE_STATUSES,
+  REFERENCE_STATUSES,
+  CONFIDENCES,
+  FEEDBACK_KINDS,
+  RUN_MODES,
+} from "@tachy/contract";
 import { badInput } from "../infra/errors";
+
+export {
+  RESOLUTION_CLARITIES,
+  LEARNING_VALUES,
+  KNOWLEDGE_STATUSES,
+  REFERENCE_STATUSES,
+  CONFIDENCES,
+  FEEDBACK_KINDS,
+  RUN_MODES,
+};
 
 export const structuredSchema = z
   .object({
@@ -48,41 +69,9 @@ export function parseStructured(value: unknown): Structured {
   return res.data;
 }
 
-export const RESOLUTION_CLARITIES = ["clear", "partial", "unclear"] as const;
-export const LEARNING_VALUES = ["high", "medium", "low"] as const;
-
-export const cloudSchema = z
-  .string()
-  .regex(
-    /^[a-z0-9][a-z0-9._/-]*$/,
-    "environment must be a lowercase slug (e.g. prod, qa, demo/preprod)",
-  );
+export const cloudSchema = z.string().regex(CLOUD_RE, CLOUD_HINT);
 export const resolutionClaritySchema = z.enum(RESOLUTION_CLARITIES);
 export const learningValueSchema = z.enum(LEARNING_VALUES);
-
-export const KNOWLEDGE_STATUSES = [
-  "draft",
-  "approved",
-  "rejected",
-  "archived",
-  "deprecated",
-] as const;
-export const REFERENCE_STATUSES = ["draft", "approved", "archived"] as const;
-export const CONFIDENCES = ["low", "medium", "high"] as const;
-export const FEEDBACK_KINDS = [
-  "correction",
-  "rating",
-  "note",
-  "deprecation",
-] as const;
-export const RUN_MODES = [
-  "ingest",
-  "consult",
-  "sync",
-  "create",
-  "code",
-  "chat",
-] as const;
 
 export const knowledgeStatusSchema = z.enum(KNOWLEDGE_STATUSES);
 export const referenceStatusSchema = z.enum(REFERENCE_STATUSES);

@@ -1,6 +1,8 @@
-import { basename } from "node:path";
+import { safeFilename } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { notFound } from "../infra/errors";
+
+export { safeFilename };
 
 export interface OutputMeta {
   id: string;
@@ -24,15 +26,6 @@ const DEFAULT_TTL_HOURS = 24;
 function ttlHours(): number {
   const raw = Number(process.env.TACHY_OUTPUT_TTL_HOURS);
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TTL_HOURS;
-}
-
-export function safeFilename(name: string): string {
-  const cleaned = basename(name)
-    .replace(/[\u0000-\u001F\u007F]/g, "")
-    .replace(/[/\\:*?"<>|]/g, "-")
-    .trim()
-    .slice(0, 180);
-  return cleaned || "download";
 }
 
 const META_COLUMNS = sql`
