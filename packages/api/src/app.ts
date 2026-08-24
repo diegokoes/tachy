@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { logger } from "hono/logger";
+import { requestId } from "hono/request-id";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { z } from "zod";
@@ -21,6 +21,7 @@ import { outputs } from "./routes/outputs";
 import { repos } from "./routes/repos";
 import { projects } from "./routes/projects";
 import { installAuth, isBootstrapped, type OidcConfig } from "./auth";
+import { httpLogger, noteError } from "./logging";
 
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
@@ -59,7 +60,8 @@ export function createApp(
   } = {},
 ) {
   const base = new Hono();
-  base.use("*", logger());
+  base.use("*", requestId());
+  base.use("*", httpLogger);
 
   base.get("/health", async (c) => {
     try {
@@ -106,14 +108,26 @@ export function createApp(
   app.notFound((c) => c.json({ error: "not found" }, 404));
 
   app.onError((err, c) => {
-    if (err instanceof AppError)
+    if (err instanceof AppError) {
+      noteError(c, { error: err.message, code: err.code });
       return c.json({ error: err.message }, STATUS_BY_CODE[err.code]);
-    if (err instanceof HTTPException) return err.getResponse();
-    if (err instanceof z.ZodError)
+    }
+    if (err instanceof HTTPException) {
+      noteError(c, { error: err.message });
+      return err.getResponse();
+    }
+    if (err instanceof z.ZodError) {
+      noteError(c, { error: "validation failed", issues: err.issues });
       return c.json({ error: "validation failed", issues: err.issues }, 400);
-    if (err instanceof SyntaxError)
+    }
+    if (err instanceof SyntaxError) {
+      noteError(c, { error: "invalid JSON body" });
       return c.json({ error: "invalid JSON body" }, 400);
-    console.error(err instanceof Error ? err.message : String(err));
+    }
+    noteError(c, {
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return c.json({ error: "internal error" }, 500);
   });
 

@@ -10,7 +10,8 @@ export {
 } from "./infra";
 export { AppError, notFound, conflict, badInput, forbidden } from "./infra";
 export type { AppErrorCode } from "./infra";
-export { log } from "./infra";
+export { log, runWithLogContext } from "./infra";
+export type { LogLevel } from "./infra";
 export {
   isGlobalAdmin,
   teamAdminTeams,
