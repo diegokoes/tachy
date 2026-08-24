@@ -255,7 +255,10 @@
     border-color: var(--accent);
     color: var(--accent);
   }
+  /* Box-drawing glyphs — the UI face has none of them, and a per-glyph
+     fallback would draw ┌─┐ out of three different widths. */
   .bsample {
+    font-family: var(--font-mono);
     font-size: var(--fs-lg);
     line-height: 1;
     white-space: pre;
@@ -286,7 +289,7 @@
      the same number of pattern rows fills the 4rem box at every font scale. */
   .ppreview {
     margin: 0;
-    font: 0.55rem/1.2 ui-monospace, monospace;
+    font: 0.55rem/1.2 var(--font-mono);
     color: var(--muted);
     white-space: pre;
     overflow: hidden;

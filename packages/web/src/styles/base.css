@@ -19,6 +19,22 @@ body {
   scrollbar-color: color-mix(in srgb, var(--muted) 50%, transparent) transparent;
 }
 
+/* Anything on a character grid keeps the mono face regardless of where it
+   lands. Markdown from the agent and from entries goes through these. */
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-mono);
+}
+
+/* Plex Mono at 700 is a slab; 600 is the weight that reads as emphasis without
+   turning the line into a block, and Plex Sans is continuous so it matches. */
+b,
+strong {
+  font-weight: 600;
+}
+
 a {
   color: var(--accent);
   text-decoration: none;
@@ -53,7 +69,13 @@ button:focus-visible {
 }
 
 /* Readable measure for running prose only — containers stay full-frame so the
-   list → detail transition never changes width. */
+   list → detail transition never changes width.
+
+   Both faces put "0" at exactly 0.6em, so ch is the same physical width in
+   either — but mono spends 0.6em on every letter where sans averages 0.49em.
+   A measure in ch therefore holds ~22% more text in sans, and every measure
+   below is the old character count times 0.49/0.6. This one was 72ch/72
+   characters. */
 .prose-measure {
-  max-width: 72ch;
+  max-width: 60ch;
 }

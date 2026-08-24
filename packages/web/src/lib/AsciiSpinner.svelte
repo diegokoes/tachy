@@ -75,7 +75,7 @@
 
   pre {
     margin: 0;
-    font: var(--fs-md) / 1.3 ui-monospace, monospace;
+    font: var(--fs-md) / 1.3 var(--font-mono);
     user-select: none;
   }
 

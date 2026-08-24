@@ -59,7 +59,7 @@
     bottom: calc(100% + var(--pad-2));
     z-index: var(--z-dropdown);
     width: max-content;
-    max-width: 34ch;
+    max-width: 28ch;
     padding: var(--pad-2) var(--pad-3);
     border: var(--panel-line);
     border-radius: var(--radius);

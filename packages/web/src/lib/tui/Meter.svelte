@@ -37,6 +37,10 @@
 <style>
   .meter {
     display: inline-block;
+    /* RAMP mixes · with the block glyphs, and a proportional face has · but
+       not █░▒▓ — the bar would be drawn half from the UI font and half from
+       whatever fallback supplies the blocks, and stop lining up. */
+    font-family: var(--font-mono);
     letter-spacing: -0.04em;
     line-height: 1;
     white-space: pre;

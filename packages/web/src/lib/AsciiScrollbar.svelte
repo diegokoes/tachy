@@ -102,6 +102,9 @@
 <style>
   .ascii-scrollbar {
     position: relative;
+    /* The width is in ch, so the face has to be on this element and not only
+       on the layers inside it. */
+    font-family: var(--font-mono);
     width: 1.25ch;
     align-self: stretch;
     overflow: hidden;
@@ -116,7 +119,7 @@
     padding: 0;
     overflow: hidden;
     white-space: pre;
-    font: var(--fs-xs) / 0.9rem monospace;
+    font: var(--fs-xs) / 0.9rem var(--font-mono);
     text-align: center;
     pointer-events: none;
   }

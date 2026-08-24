@@ -153,8 +153,12 @@
     background: var(--accent-dim);
   }
 
+  /* Plain cell values only — ids, slugs, counts, dates, all of which are read
+     by comparing one row against the one above it. A `cell` snippet renders
+     its own chips and buttons and stays on the UI face. */
   .v {
     display: block;
+    font-family: var(--font-mono);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

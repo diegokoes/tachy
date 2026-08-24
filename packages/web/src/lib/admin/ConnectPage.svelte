@@ -190,6 +190,7 @@
     gap: var(--pad-2);
   }
   .pending {
+    font-family: var(--font-mono);
     color: var(--border);
     letter-spacing: 0.35em;
     user-select: none;

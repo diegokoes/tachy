@@ -82,6 +82,7 @@
     width: min(24rem, 100%);
   }
   .wordmark {
+    font-family: var(--font-mono);
     color: var(--accent);
     font-size: 2rem;
     letter-spacing: 0.04em;
