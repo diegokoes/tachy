@@ -1,20 +1,30 @@
 <script lang="ts" module>
-  export type CellType = "string" | "number" | "date" | "boolean";
+  import {
+    columnHeading,
+    columnKeys,
+    fieldName,
+    outputFilename,
+    stripFilenameChars,
+    stripSheetChars,
+    DEFAULT_SHEET,
+  } from "@tachy/contract";
+  import type {
+    TableCellType,
+    TableColumn,
+    TableOutput,
+  } from "@tachy/contract";
 
-  export interface SpecColumn {
-    key: string;
-    label?: string;
-    type: CellType;
-    required?: boolean;
-    description?: string;
-  }
+  export {
+    columnKeys,
+    fieldName,
+    stripFilenameChars,
+    stripSheetChars,
+    DEFAULT_SHEET,
+  };
 
-  export interface OutputSpec {
-    format: "xlsx" | "csv";
-    sheet?: string;
-    filename?: string;
-    columns: SpecColumn[];
-  }
+  export type CellType = TableCellType;
+  export type SpecColumn = TableColumn;
+  export type OutputSpec = TableOutput;
 
   export interface ArtifactSpec {
     utilities?: string[];
@@ -27,38 +37,6 @@
     return { key: "", type: "string" };
   }
 
-  export const fieldName = (s: string) =>
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "");
-
-  /** What a file name may not contain, on Windows or anywhere else. */
-  export const cleanFilename = (s: string) =>
-    s.replace(/[\x00-\x1f\x7f/\\:*?"<>|]/g, "").slice(0, 120);
-
-  /** What the workbook's tab is called when nobody names it — the server's fallback. */
-  export const DEFAULT_SHEET = "Sheet1";
-
-  /** Excel rejects these in a tab name and truncates past 31 characters. */
-  export const cleanSheet = (s: string) =>
-    s.replace(/[[\]:*?/\\]/g, "").slice(0, 31);
-
-  const heading = (c: SpecColumn) => (c.label ?? "").trim() || c.key.trim();
-
-  /** The names the agent fills, derived from the headings and unique per sheet. */
-  export function columnKeys(columns: SpecColumn[]): string[] {
-    const seen = new Set<string>();
-    return columns.map((c) => {
-      const base = fieldName(c.key.trim() || heading(c));
-      if (!base) return "";
-      let key = base;
-      for (let n = 2; seen.has(key); n++) key = `${base}_${n}`;
-      seen.add(key);
-      return key;
-    });
-  }
-
   /** What still stops this output from being saved, in the user's words. */
   export function outputProblem(
     enabled: boolean,
@@ -67,7 +45,7 @@
     if (!enabled) return null;
     if (!output.columns.length)
       return "add a column, or turn the output file off";
-    if (output.columns.some((c) => !heading(c)))
+    if (output.columns.some((c) => !columnHeading(c)))
       return "every column needs a heading";
     return null;
   }
@@ -84,7 +62,7 @@
       .map(({ c, key }) => ({
         key,
         type: c.type,
-        label: heading(c),
+        label: columnHeading(c),
         ...(c.required ? { required: true } : {}),
         ...(c.description?.trim() ? { description: c.description.trim() } : {}),
       }));
@@ -93,25 +71,20 @@
       utilities: [EXPORT_UTILITY],
       output: {
         format: output.format,
-        ...(output.sheet?.trim() ? { sheet: cleanSheet(output.sheet.trim()) } : {}),
+        ...(output.sheet?.trim()
+          ? { sheet: stripSheetChars(output.sheet.trim()) }
+          : {}),
         ...(output.filename?.trim()
-          ? { filename: cleanFilename(output.filename.trim()) }
+          ? { filename: stripFilenameChars(output.filename.trim()) }
           : {}),
         columns,
       },
     };
   }
 
-  /** Mirrors the server's own naming, so the preview is the real download name. */
-  export function previewFilename(output: OutputSpec, slug: string): string {
-    const name = slug || "artifact";
-    const base = (output.filename?.trim() || `${name}-{date}`)
-      .replace(/\{date\}/g, new Date().toISOString().slice(0, 10))
-      .replace(/\{slug\}/g, name);
-    return base.toLowerCase().endsWith(`.${output.format}`)
-      ? base
-      : `${base}.${output.format}`;
-  }
+  /** The server's own naming, so the preview is the real download name. */
+  export const previewFilename = (output: OutputSpec, slug: string) =>
+    outputFilename(output, slug || "artifact");
 </script>
 
 <script lang="ts">
@@ -192,7 +165,7 @@
       <Field label="file name">
         <input
           value={output.filename ?? ""}
-          oninput={(e) => (output.filename = sanitize(e, cleanFilename))}
+          oninput={(e) => (output.filename = sanitize(e, stripFilenameChars))}
           title="Optional — defaults to the artifact name and today's date. {'{date}'} becomes today's date, {'{slug}'} the artifact name; the extension is added for you."
           aria-label="file name"
         />
@@ -201,7 +174,7 @@
         <Field label="tab name">
           <input
             value={output.sheet ?? ""}
-            oninput={(e) => (output.sheet = sanitize(e, cleanSheet))}
+            oninput={(e) => (output.sheet = sanitize(e, stripSheetChars))}
             title="Optional — the sheet tab inside the workbook, max 31 characters. Defaults to {DEFAULT_SHEET}."
             aria-label="tab name"
           />
@@ -242,7 +215,11 @@
           </div>
 
           <label class="req" title="the agent may not leave this column empty">
-            <Checkbox bind:checked={col.required} ariaLabel="required" />
+            <Checkbox
+              checked={!!col.required}
+              onchange={(v) => (col.required = v)}
+              ariaLabel="required"
+            />
             <span>required</span>
           </label>
 

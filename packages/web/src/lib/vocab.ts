@@ -1,22 +1,23 @@
 /**
- * Controlled vocabularies, mirrored from `packages/core/src/knowledge/structured.ts`.
- *
- * The SPA talks to the API over HTTP and does not depend on core, so these lists
- * cannot be imported — they are duplicated here deliberately, in one place
- * rather than inline at each call site. A change to the enums in core has to
- * land here too; the check constraints in `db/schema.sql` are the backstop.
+ * The controlled vocabularies come from `@tachy/contract` — the same lists the
+ * API validates against and `db/schema.sql` constrains. Re-exported here so the
+ * SPA's call sites have one import to reach for.
  */
-export const CONFIDENCES = ["low", "medium", "high"] as const;
-export const RESOLUTION_CLARITIES = ["clear", "partial", "unclear"] as const;
-export const LEARNING_VALUES = ["high", "medium", "low"] as const;
-export const KNOWLEDGE_STATUSES = [
-  "draft",
-  "approved",
-  "deprecated",
-  "archived",
-  "rejected",
-] as const;
-export const REFERENCE_STATUSES = ["draft", "approved", "archived"] as const;
+import {
+  CONFIDENCES,
+  RESOLUTION_CLARITIES,
+  LEARNING_VALUES,
+  KNOWLEDGE_STATUSES,
+  REFERENCE_STATUSES,
+} from "@tachy/contract";
+
+export {
+  CONFIDENCES,
+  RESOLUTION_CLARITIES,
+  LEARNING_VALUES,
+  KNOWLEDGE_STATUSES,
+  REFERENCE_STATUSES,
+};
 
 /**
  * Keys whose values come from a fixed list wherever they appear — used to give

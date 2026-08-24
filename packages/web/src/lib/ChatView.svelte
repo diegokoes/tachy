@@ -526,8 +526,12 @@
   .transcript { flex: 1; min-width: 0; overflow: auto; scrollbar-width: none; display: flex; flex-direction: column; gap: 0.6rem; padding-right: 0.5rem; }
   .transcript::-webkit-scrollbar { display: none; }
   /* A turn is a speaker marker plus its text — no boxes. Only events
-     (approval, compaction, export) get a Panel. */
-  .turn { display: flex; flex-direction: column; gap: 0.1rem; max-width: 72ch; }
+     (approval, compaction, export) get a Panel.
+
+     The transcript is the longest thing anyone reads here, so the prose is on
+     the UI face; code, tool traces and event panels stay mono. 60ch and 46ch
+     hold the 72 and 56 characters the mono measures did. */
+  .turn { display: flex; flex-direction: column; gap: 0.1rem; max-width: 60ch; }
   .turn .who {
     font-size: var(--fs-xs);
     letter-spacing: var(--label-spacing);
@@ -538,7 +542,8 @@
   .turn .body.md { white-space: normal; }
   .turn .body.err { color: var(--danger); }
   .turn .body.waiting { min-height: 1.5em; }
-  .tool { font-size: var(--fs-xs); color: var(--muted); padding-left: 1ch; }
+  /* A tool line is a trace, not prose — it keeps the terminal face. */
+  .tool { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--muted); padding-left: 1ch; }
 
   /* The user's turn is positioned right; its text stays left-aligned. Reading
      returns to the left edge on every line, so ragged-left costs a re-scan —
@@ -547,7 +552,7 @@
   .turn.user {
     align-self: flex-end;
     width: fit-content;
-    max-width: 56ch;
+    max-width: 46ch;
     text-align: left;
     border-right: 2px solid var(--accent-dim);
     padding-right: var(--pad-2);

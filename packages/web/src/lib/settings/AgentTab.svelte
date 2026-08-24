@@ -4,12 +4,13 @@
   import { errText } from "../resource.svelte";
   import { decode } from "../motion";
   import { AGENT_KEY_LABELS, agentKeyError } from "../admin/shared";
+  import type { AgentProvider } from "@tachy/contract";
   import { Button, InfoMark, Note, Panel, Select } from "../tui";
 
   type PrefSource = "user" | "team" | "db" | "env" | "default";
   type Pref<T> = { value: T; source: PrefSource };
   type Prefs = {
-    agent_provider: Pref<"claude" | "copilot">;
+    agent_provider: Pref<AgentProvider>;
     agent_model: Pref<string>;
     agent_effort: Pref<string>;
   };

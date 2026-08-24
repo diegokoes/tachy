@@ -23,6 +23,7 @@ RUN npm i -g npm@12.0.2
 # actually changed (everything here runs straight off the source via tsx, no
 # build step, so the workspace symlinks npm ci creates are all that's needed).
 COPY package.json package-lock.json ./
+COPY packages/contract/package.json packages/contract/package.json
 COPY packages/core/package.json packages/core/package.json
 COPY packages/sources/freshdesk/package.json packages/sources/freshdesk/package.json
 COPY packages/sources/github/package.json packages/sources/github/package.json

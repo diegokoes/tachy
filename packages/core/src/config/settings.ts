@@ -1,11 +1,13 @@
 import { z } from "zod";
+import { AGENT_PROVIDERS } from "@tachy/contract";
+import type { AgentProvider } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { badInput } from "../infra/errors";
 
-export const AGENT_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+export { AGENT_PROVIDERS };
+export type { AgentProvider };
 
-export const AGENT_PROVIDERS = ["claude", "copilot"] as const;
-export type AgentProvider = (typeof AGENT_PROVIDERS)[number];
+export const AGENT_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 
 export const DEPLOYMENT_PROFILES = ["support", "engineering"] as const;
 export type DeploymentProfile = (typeof DEPLOYMENT_PROFILES)[number];

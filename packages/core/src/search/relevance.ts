@@ -1,3 +1,9 @@
+import { GOOD, STRONG, grade } from "@tachy/contract";
+import type { Grade } from "@tachy/contract";
+
+export { GOOD, STRONG, grade };
+export type { Grade };
+
 /**
  * Raw cosine is not a relevance percentage, and it never starts at zero.
  * Contrastively-trained embedding models compress their similarity range: BAAI
@@ -25,12 +31,6 @@
 export const SEM_FLOOR = 0.6;
 export const SEM_CEIL = 0.75;
 
-/** Below GOOD a hit is noise; at or above STRONG it is a confident match. */
-export const GOOD = 0.35;
-export const STRONG = 0.7;
-
-export type Grade = "strong" | "good" | "weak";
-
 export interface Ranked {
   cos_sim?: number | null;
   fts_rank?: number | null;
@@ -53,9 +53,6 @@ export function relevance(r: Ranked): number {
   // unrelated — that second case is the entire reason lexical is in the mix.
   return clamp01(0.85 * sem + 0.72 * lex);
 }
-
-export const grade = (v: number): Grade =>
-  v >= STRONG ? "strong" : v >= GOOD ? "good" : "weak";
 
 export const gradeOf = (r: Ranked): Grade => grade(relevance(r));
 

@@ -8,7 +8,7 @@
   import { slugify, uniqueSlug } from "../slug";
   import SlugRename from "./SlugRename.svelte";
   import ScopeBar from "./ScopeBar.svelte";
-  import { csv, TIP } from "./shared";
+  import { csv, INFO, TIP } from "./shared";
   import type { Component, Product, Repo } from "./shared";
 
   let productSlug = $state("");
@@ -70,6 +70,7 @@
       edit: "text",
       required: true,
       hint: TIP.slug,
+      info: INFO.slug,
       derive: (d) =>
         uniqueSlug(
           slugify(String(d.name ?? "")),
@@ -83,6 +84,7 @@
       width: "9rem",
       edit: "select",
       hint: TIP.parent,
+      info: INFO.parent,
       options: (d) => {
         const blocked = subtree(String(d.slug ?? ""));
         return [
@@ -100,6 +102,7 @@
       width: "9rem",
       edit: "text",
       hint: TIP.aliases.component,
+      info: INFO.aliases.component,
       value: (r) => (r.aliases ?? []).join(", "),
     },
     { key: "description", label: "description", edit: "textarea" },

@@ -130,7 +130,7 @@
     padding: 0;
     overflow: hidden;
     white-space: pre;
-    font: 15px/1.3 monospace;
+    font: 15px/1.3 var(--font-mono);
     color: var(--pattern-ink);
     pointer-events: none;
     user-select: none;
@@ -146,7 +146,7 @@
 
   .app :global(> section) {
     flex: 1;
-    max-width: 1400px;
+    max-width: 78rem;
     margin: 0 auto;
     min-width: 0;
   }

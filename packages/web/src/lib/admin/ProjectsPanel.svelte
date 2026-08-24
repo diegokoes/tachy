@@ -17,6 +17,7 @@
     type Draft,
   } from "../tui";
   import {
+    INFO,
     TIP,
     type AreaRule,
     type Component,
@@ -223,18 +224,18 @@
     {
       key: "external_key",
       label: "project",
-      width: "14rem",
       edit: "text",
       required: true,
       editable: () => false,
       hint: TIP.project,
+      info: INFO.project,
     },
     {
       key: "name",
       label: "name",
       formOnly: true,
       edit: "text",
-      hint: "How it reads in lists here. Defaults to the project's own key.",
+      hint: "how it reads in lists here",
     },
     {
       key: "role",
@@ -257,8 +258,12 @@
       required: true,
       hint: (d) =>
         d.role === "tracker"
-          ? `The ${t("team")} that raises work items here. Nothing is filed under a tracker.`
-          : `The ${t("product")} its items ingest into. It can also carry the wiki, repos and area rules.`,
+          ? `the ${t("team")} raising work items here`
+          : `the ${t("product")} its items ingest into`,
+      info: (d) =>
+        d.role === "tracker"
+          ? "Nothing is filed under a tracker."
+          : "It can also carry the wiki, repos and area rules.",
       options: (d) =>
         d.role === "tracker"
           ? myTeams.map((tm) => ({ value: tm.slug, label: tm.name }))
@@ -270,7 +275,8 @@
       label: "customer",
       width: "10rem",
       edit: "select",
-      hint: "Set only when the whole project exists for one customer. Its items are then theirs by configuration, which beats guessing at the sender's email domain. Leave empty for a project serving many.",
+      hint: "only when the project serves one customer",
+      info: "Its items are then theirs by configuration, which beats guessing at the sender's email domain. Leave empty for a project serving many.",
       options: [
         { value: "", label: "(none — serves many)" },
         ...customers.data.map((cu) => ({ value: cu.slug, label: cu.name })),
@@ -347,8 +353,8 @@
 {#snippet detail(p: SourceProject)}
   {#if p.role === "tracker"}
     <p class="dim">
-      A tracker — work items are raised and reassigned here, and nothing is
-      filed under it. Give it a {t("product")} to make it a knowledge project.
+      A tracker — nothing is filed under it. Give it a {t("product")} to make it
+      a knowledge project.
     </p>
   {:else}
     <div class="detail">
@@ -411,7 +417,7 @@
       </div>
 
       <div class="block wide">
-        <span class="dim" title={TIP.area}>area path → component</span>
+        <span class="dim" title={INFO.area}>area path → component</span>
         {#each areas[p.id] ?? [] as a (a.id)}
           <div class="arow">
             <code>{a.area_prefix}</code>
@@ -464,7 +470,6 @@
               onclick={() => addArea(p)}
             />
           </div>
-          <span class="dim sm">{TIP.area}</span>
         {/if}
       </div>
     </div>
@@ -479,10 +484,7 @@
   {#if f.mode === "create"}
     {@const slug = String(f.draft.source_slug ?? "")}
     {@const hits = found[slug] ?? []}
-    <Field
-      label="discover"
-      hint="Ask the source which projects this token can see, then pick one instead of typing its key."
-    >
+    <Field label="discover" hint="pick a project instead of typing its key">
       <Button
         variant="ghost"
         square

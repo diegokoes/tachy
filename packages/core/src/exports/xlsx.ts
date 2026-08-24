@@ -1,5 +1,8 @@
 import { strToU8, zipSync } from "fflate";
+import { sheetName } from "@tachy/contract";
 import type { CellValue, TableColumn } from "./table";
+
+export { sheetName };
 
 const XML_HEADER = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g;
@@ -34,15 +37,6 @@ export function colRef(index: number): string {
     n = Math.floor((n - 1) / 26);
   }
   return ref;
-}
-
-/** Excel rejects `[]:*?/\` in sheet names and truncates past 31 chars. */
-export function sheetName(name: string | undefined): string {
-  const cleaned = (name ?? "Sheet1")
-    .replace(/[[\]:*?/\\]/g, " ")
-    .trim()
-    .slice(0, 31);
-  return cleaned || "Sheet1";
 }
 
 const dateSerial = (d: Date) => d.getTime() / MS_PER_DAY + EXCEL_EPOCH_OFFSET;

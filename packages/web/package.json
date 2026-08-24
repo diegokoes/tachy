@@ -15,6 +15,9 @@
     "vite": "^6.0.7"
   },
   "dependencies": {
+    "@fontsource-variable/ibm-plex-sans": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@tachy/contract": "*",
     "dompurify": "^3.4.13",
     "gsap": "^3.15.0",
     "marked": "^18.0.5"

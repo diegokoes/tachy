@@ -89,7 +89,10 @@
 </div>
 
 <style>
+  /* The splash is the product introducing itself as a terminal — the whole
+     panel stays on the mono face, wordmark and caption both. */
   .splash {
+    font-family: var(--font-mono);
     position: fixed;
     inset: 0;
     z-index: 100;

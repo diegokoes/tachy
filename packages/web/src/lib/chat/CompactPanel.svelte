@@ -201,7 +201,7 @@
     background: var(--panel-solid);
     /* double rule + seated corners = the text-mode box the modals use */
     border: 3px double var(--muted);
-    font-family: ui-monospace, "Cascadia Mono", monospace;
+    font-family: var(--font-mono);
     background-image: repeating-linear-gradient(
       var(--bg) 0 1px,
       transparent 1px 3px

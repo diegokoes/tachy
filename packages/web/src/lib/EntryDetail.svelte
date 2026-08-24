@@ -371,10 +371,10 @@
   /* One reading column: the title, the meta band and every section share the
      same measure and the same side padding, so nothing stops half-way across
      a frame that keeps running. The column is centred in the frame; the prose
-     inside stays left-aligned (never justified — monospace justification opens
-     rivers of whitespace). */
+     inside stays left-aligned, never justified. 64ch of sans holds the 78
+     characters 78ch of mono did — see .prose-measure in base.css. */
   .content {
-    max-width: 78ch;
+    max-width: 64ch;
     margin-inline: auto;
     padding: 0 var(--pad-4);
   }

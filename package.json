@@ -5,6 +5,7 @@
   "description": "Self-hosted knowledge engine for engineering work items. Pluggable sources (Freshdesk, GitHub, ...), Claude-Code-driven ingest/consult loop.",
   "license": "AGPL-3.0-or-later",
   "workspaces": [
+    "packages/contract",
     "packages/core",
     "packages/sources/freshdesk",
     "packages/sources/github",
@@ -21,6 +22,7 @@
     "sync": "tsx packages/cli/src/index.ts",
     "web:dev": "npm run dev --workspace @tachy/web",
     "web:build": "npm run build --workspace @tachy/web",
+    "web:check": "npm run check --workspace @tachy/web",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "format": "prettier --write ."

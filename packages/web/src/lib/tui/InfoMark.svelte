@@ -8,8 +8,15 @@
   }: { label?: string; children: Snippet } = $props();
 </script>
 
+<!-- The mark sits inside a <label> in Field, where a bare click would fall
+     through and focus the labelled control. It has no action of its own. -->
 <span class="mark">
-  <button class="btn" type="button" aria-label={label}>
+  <button
+    class="btn"
+    type="button"
+    aria-label={label}
+    onclick={(e) => e.preventDefault()}
+  >
     <Icon name="info" size="1em" weight={7} />
   </button>
   <span class="tip" role="tooltip">{@render children()}</span>
@@ -52,7 +59,7 @@
     bottom: calc(100% + var(--pad-2));
     z-index: var(--z-dropdown);
     width: max-content;
-    max-width: 34ch;
+    max-width: 28ch;
     padding: var(--pad-2) var(--pad-3);
     border: var(--panel-line);
     border-radius: var(--radius);

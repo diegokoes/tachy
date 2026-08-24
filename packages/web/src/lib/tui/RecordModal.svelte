@@ -87,6 +87,8 @@
     typeof c.options === "function" ? c.options(draft) : (c.options ?? []);
   const hintOf = (c: Column<T>) =>
     typeof c.hint === "function" ? c.hint(draft) : c.hint;
+  const infoOf = (c: Column<T>) =>
+    typeof c.info === "function" ? c.info(draft) : c.info;
 </script>
 
 <Modal
@@ -107,6 +109,7 @@
       <Field
         label={c.label}
         hint={hintOf(c)}
+        info={infoOf(c)}
         required={c.required}
         plain={readOnly(c)}
       >
@@ -144,6 +147,7 @@
           />
         {:else if c.edit === "secret"}
           <input
+            class="mono"
             type="password"
             autocomplete="off"
             aria-label={c.label}
@@ -159,6 +163,7 @@
           ></textarea>
         {:else}
           <input
+            class:mono={Boolean(c.transform)}
             type="text"
             aria-label={c.label}
             value={String(draft[c.key] ?? "")}
@@ -185,15 +190,23 @@
     min-width: 24rem;
   }
 
+  /* A key being pasted in, or a value normalised as it is typed — both are
+     read character by character rather than as words. */
+  .mono {
+    font-family: var(--font-mono);
+  }
+
   /* Selects are inline-flex by default and would otherwise shrink to their
      current label. */
   .form :global(.asel) {
     width: 100%;
   }
 
+  /* Read-only fields are slugs and derived names — identifiers, not prose. */
   .ro {
     flex: 1;
     min-width: 0;
+    font-family: var(--font-mono);
     color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;

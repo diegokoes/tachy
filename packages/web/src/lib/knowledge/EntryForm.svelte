@@ -333,7 +333,7 @@
   .short { max-width: 10rem; }
   .row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end; }
   .check { flex-direction: row; align-items: center; gap: 0.4rem; padding-bottom: 0.4rem; }
-  .structured { width: 100%; min-height: 20rem; height: 20rem; box-sizing: border-box; overflow: hidden; resize: none; color: #e2e2e2; background: #000; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; line-height: 1.5; }
+  .structured { width: 100%; min-height: 20rem; height: 20rem; box-sizing: border-box; overflow: hidden; resize: none; color: #e2e2e2; background: #000; font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.5; }
   :global(:root[data-theme="light"]) .structured { color: #000; background: #fff; }
   .json-toggle { align-self: center; display: grid; place-items: center; color: var(--text); background: transparent; border: 0; padding: 0.25rem; cursor: pointer; }
   .json-toggle:hover { color: var(--accent); }

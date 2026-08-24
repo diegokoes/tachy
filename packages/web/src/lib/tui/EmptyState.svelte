@@ -46,7 +46,7 @@
     margin: 0;
     font-size: var(--fs-sm);
     color: var(--muted);
-    max-width: 44ch;
+    max-width: 36ch;
   }
   .extra {
     margin-top: var(--pad-3);
