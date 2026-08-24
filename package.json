@@ -5,6 +5,7 @@
   "description": "Self-hosted knowledge engine for engineering work items. Pluggable sources (Freshdesk, GitHub, ...), Claude-Code-driven ingest/consult loop.",
   "license": "AGPL-3.0-or-later",
   "workspaces": [
+    "packages/contract",
     "packages/core",
     "packages/sources/freshdesk",
     "packages/sources/github",
