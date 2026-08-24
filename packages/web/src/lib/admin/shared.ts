@@ -1,3 +1,6 @@
+import { validateCredential } from "@tachy/contract";
+import type { AgentProvider } from "@tachy/contract";
+
 export type Team = { id: string; slug: string; name: string };
 export type Product = {
   id: string;
@@ -100,7 +103,7 @@ export type Setting<T> = { value: T; source: "db" | "env" | "default" };
 export type SystemInfo = {
   settings: {
     redaction_global: Setting<boolean>;
-    agent_provider: Setting<"claude" | "copilot">;
+    agent_provider: Setting<AgentProvider>;
     agent_model: Setting<string>;
     agent_effort: Setting<string>;
     allowed_models: Setting<string[]>;
@@ -172,23 +175,8 @@ export const AGENT_KEY_LABELS: Record<string, string> = {
   copilot_token: "Copilot GitHub token",
 };
 
-const AGENT_KEY_SHAPES: Record<string, { re: RegExp; hint: string }> = {
-  anthropic_oauth_token: {
-    re: /^sk-ant-oat01-\S+$/,
-    hint: "starts with sk-ant-oat01-",
-  },
-  anthropic_api_key: {
-    re: /^sk-ant-(?!oat01-)\S+$/,
-    hint: "starts with sk-ant-api03-",
-  },
-};
-
-/** Mirrors validateCredential in @tachy/core, so a typo never reaches the vault. */
-export function agentKeyError(name: string, value: string): string | null {
-  const shape = AGENT_KEY_SHAPES[name];
-  if (!shape || shape.re.test(value)) return null;
-  return `a ${AGENT_KEY_LABELS[name]} ${shape.hint}`;
-}
+/** The vault's own check, run in the field the key was typed into. */
+export const agentKeyError = validateCredential;
 
 export const csv = (v: string | undefined) =>
   v
