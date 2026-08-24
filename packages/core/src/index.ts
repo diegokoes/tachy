@@ -72,6 +72,7 @@ export type {
   AgentProvider,
 } from "./config";
 export {
+  SCOPES,
   resolveScoped,
   assertCanWriteScope,
   AGENT_CREDENTIALS,
