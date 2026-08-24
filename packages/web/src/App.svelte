@@ -130,7 +130,7 @@
     padding: 0;
     overflow: hidden;
     white-space: pre;
-    font: 15px/1.3 monospace;
+    font: 15px/1.3 var(--font-mono);
     color: var(--pattern-ink);
     pointer-events: none;
     user-select: none;
