@@ -243,11 +243,44 @@ database keeps full data.
 
 ## Operations
 
-**Deploy.** The `Jenkinsfile` tests, builds, pushes to Docker Hub, and (on
-`main`) SSHes to the server for `docker compose pull api && up -d api`. A
-restart drops in-flight chat turns; logins survive (session secret) and past
-chats resume (agent-home volume). GHCR images are also published on `v*` tags
-via `.github/workflows/publish.yml`.
+**Deploy.** The `Jenkinsfile` tests, builds, pushes to Docker Hub, and SSHes
+to the server for `docker compose pull api && up -d api` — from `main` into
+`/opt/tachy`, and from `dev` into `/opt/tachy-dev`. A restart drops in-flight
+chat turns; logins survive (session secret) and past chats resume (agent-home
+volume). GHCR images are also published on `v*` tags via
+`.github/workflows/publish.yml`.
+
+**The dev stack.** A second compose project on the same host, for trying a
+branch against a running server. `docker-compose.yml` takes its project name,
+ports and image tag from the environment, so dev is just a second checkout with
+its own `.env` (see `.env.dev.example`) — no override file, because Compose
+appends `ports:` across `-f` files rather than replacing them. It gets its own
+network, containers, volumes and database: API on `:8788`, Postgres on `:5434`.
+
+```sh
+cd /opt/tachy-dev && docker compose up -d          # .env sets COMPOSE_PROJECT_NAME
+docker compose run --rm cli npm run sync -- seed --scale=medium --reset --yes
+```
+
+Because `db/schema.sql` is applied only by Postgres initdb, **resetting the dev
+database is `docker compose down -v && up -d`** — that re-runs the current
+schema from scratch. Then re-seed. See [load/README.md](load/README.md) for the
+k6 suite that runs against it.
+
+**Seeding.** `npm run sync -- seed [--scale=small|medium|large]` fills every
+table with deterministic, plausible data: org structure, customers, work items
+and messages, knowledge entries, reference docs, indexed code, and run history.
+Logins are `admin@tachy.local` and `dev-member@tachy.local`, both with the
+password `tachy-dev-password`. It refuses to run against a database holding
+rows it did not create, so it cannot eat a real deployment. Embedding vectors
+are synthetic unless you pass `--embed`; see the caveat in
+[load/README.md](load/README.md#the-caveat-that-matters-synthetic-embeddings).
+
+**Logs.** One JSON line per request on stderr, carrying a request id that is
+also returned as the `x-request-id` header, plus the method, path, status,
+duration and user. `LOG_LEVEL` (`debug|info|warn|error`, default `info`)
+controls the floor; `/health` logs at `debug` so the healthcheck stays quiet.
+Failed requests carry the error on the same line rather than a second one.
 
 **Backups.** `backup` writes `pg_dump -Fc` into `./backups/` (host bind mount).
 Schedule it with cron and prune old dumps:
