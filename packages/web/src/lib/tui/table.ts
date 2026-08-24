@@ -19,9 +19,12 @@ export type Column<T> = {
   edit?: EditKind;
   /** A function when the choices depend on the rest of the draft. */
   options?: Opt[] | ((d: Draft) => Opt[]);
-  /** Sits under the control in the form — say what the field is *for*.
-   *  A function when it depends on another field, e.g. the source type. */
+  /** Sits under the control in the form — say what the field is *for*, in a
+   *  phrase. A function when it depends on another field, e.g. the source type. */
   hint?: string | ((d: Draft) => string);
+  /** The rules behind the field, behind an info mark beside its label. Anything
+   *  that would run to a sentence or more belongs here rather than in `hint`. */
+  info?: string | ((d: Draft) => string);
   /** In the record form but not in the table, e.g. a write-only password. */
   formOnly?: boolean;
   /** Restricts the field to one of the form's two modes. */

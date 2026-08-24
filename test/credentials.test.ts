@@ -103,10 +103,10 @@ describe("scoped credential resolution (user > team > global > env)", () => {
         "global",
         undefined,
         "anthropic_api_key",
-        "global-key",
+        "sk-ant-api03-global",
       );
       expect(await resolveCredential("anthropic_api_key", ctx)).toBe(
-        "global-key",
+        "sk-ant-api03-global",
       );
 
       await setCredential(
@@ -114,10 +114,10 @@ describe("scoped credential resolution (user > team > global > env)", () => {
         "team",
         teamId,
         "anthropic_api_key",
-        "team-key",
+        "sk-ant-api03-team",
       );
       expect(await resolveCredential("anthropic_api_key", ctx)).toBe(
-        "team-key",
+        "sk-ant-api03-team",
       );
 
       await setCredential(
@@ -125,21 +125,21 @@ describe("scoped credential resolution (user > team > global > env)", () => {
         "user",
         alice.id,
         "anthropic_api_key",
-        "user-key",
+        "sk-ant-api03-user",
       );
       expect(await resolveCredential("anthropic_api_key", ctx)).toBe(
-        "user-key",
+        "sk-ant-api03-user",
       );
       expect(await credentialSource("anthropic_api_key", ctx)).toBe("user");
 
       await deleteCredential(alice.id, "user", alice.id, "anthropic_api_key");
       expect(await resolveCredential("anthropic_api_key", ctx)).toBe(
-        "team-key",
+        "sk-ant-api03-team",
       );
 
       await deleteCredential(alice.id, "team", teamId, "anthropic_api_key");
       expect(await resolveCredential("anthropic_api_key", ctx)).toBe(
-        "global-key",
+        "sk-ant-api03-global",
       );
 
       await deleteCredential(
@@ -181,34 +181,76 @@ describe("write authorization matrix", () => {
   it("a plain member cannot write team or global credentials", async () => {
     const { bob, teamId } = await seedPeople();
     await expect(
-      setCredential(bob.id, "team", teamId, "anthropic_api_key", "x"),
+      setCredential(
+        bob.id,
+        "team",
+        teamId,
+        "anthropic_api_key",
+        "sk-ant-api03-x",
+      ),
     ).rejects.toThrow(/admin rights/);
     await expect(
-      setCredential(bob.id, "global", undefined, "anthropic_api_key", "x"),
+      setCredential(
+        bob.id,
+        "global",
+        undefined,
+        "anthropic_api_key",
+        "sk-ant-api03-x",
+      ),
     ).rejects.toThrow(/global admin/);
   });
 
   it("a team admin can write team but not global", async () => {
     const { alice, teamId } = await seedPeople();
-    await setCredential(alice.id, "team", teamId, "anthropic_api_key", "x");
+    await setCredential(
+      alice.id,
+      "team",
+      teamId,
+      "anthropic_api_key",
+      "sk-ant-api03-x",
+    );
     await expect(
-      setCredential(alice.id, "global", undefined, "anthropic_api_key", "x"),
+      setCredential(
+        alice.id,
+        "global",
+        undefined,
+        "anthropic_api_key",
+        "sk-ant-api03-x",
+      ),
     ).rejects.toThrow(/global admin/);
   });
 
   it("a user cannot write another user's row", async () => {
     const { alice, bob } = await seedPeople();
     await expect(
-      setCredential(bob.id, "user", alice.id, "anthropic_api_key", "x"),
+      setCredential(
+        bob.id,
+        "user",
+        alice.id,
+        "anthropic_api_key",
+        "sk-ant-api03-x",
+      ),
     ).rejects.toThrow(/your own/);
   });
 
   it("a demoted team admin loses write rights immediately (no 60s window)", async () => {
     const { alice, teamId } = await seedPeople();
-    await setCredential(alice.id, "team", teamId, "anthropic_api_key", "x");
+    await setCredential(
+      alice.id,
+      "team",
+      teamId,
+      "anthropic_api_key",
+      "sk-ant-api03-x",
+    );
     await setTeamMember("hw", "alice@example.com", "member");
     await expect(
-      setCredential(alice.id, "team", teamId, "anthropic_api_key", "y"),
+      setCredential(
+        alice.id,
+        "team",
+        teamId,
+        "anthropic_api_key",
+        "sk-ant-api03-y",
+      ),
     ).rejects.toThrow(/admin rights/);
   });
 });
@@ -317,7 +359,7 @@ describe("API never leaks plaintext or ciphertext", () => {
 
     const put = await app.request("/api/me/credentials/anthropic_api_key", {
       method: "PUT",
-      body: JSON.stringify({ value: "super-secret-user-key" }),
+      body: JSON.stringify({ value: "sk-ant-api03-super-secret-user" }),
       headers: { "Content-Type": "application/json", cookie },
     });
     expect(put.status).toBe(200);
@@ -413,14 +455,14 @@ describe("API never leaks plaintext or ciphertext", () => {
       "global",
       undefined,
       "anthropic_api_key",
-      "global-key",
+      "sk-ant-api03-global",
     );
     const cookie = await login("alice@example.com");
     const headers = { "Content-Type": "application/json", cookie };
 
     await app.request("/api/me/credentials/anthropic_api_key", {
       method: "PUT",
-      body: JSON.stringify({ value: "alices-key" }),
+      body: JSON.stringify({ value: "sk-ant-api03-alices" }),
       headers,
     });
     let body = await (

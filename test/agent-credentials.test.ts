@@ -62,7 +62,7 @@ describe("per-turn agent config isolation (cross-user token safety)", () => {
       "user",
       alice.id,
       "anthropic_api_key",
-      "alice-anthropic-key",
+      "sk-ant-api03-alice",
     );
   });
 
@@ -73,7 +73,7 @@ describe("per-turn agent config isolation (cross-user token safety)", () => {
     expect(aliceCfg.mcpEnv.TACHY_USER_EMAIL).toBe("alice@example.com");
     expect(aliceCfg.agentAuth).toMatchObject({
       kind: "anthropic_api_key",
-      value: "alice-anthropic-key",
+      value: "sk-ant-api03-alice",
     });
 
     aliceCfg.mcpEnv[TOKEN_VAR] = "tampered";
@@ -111,7 +111,7 @@ describe("per-turn agent config isolation (cross-user token safety)", () => {
     expect(aliceCfg.provider).toBe("claude");
     expect(aliceCfg.agentAuth).toMatchObject({
       kind: "anthropic_api_key",
-      value: "alice-anthropic-key",
+      value: "sk-ant-api03-alice",
     });
   });
 
@@ -179,7 +179,7 @@ describe("Claude credential selection (API key vs subscription token)", () => {
       "global",
       undefined,
       "anthropic_api_key",
-      "org-wide-key",
+      "sk-ant-api03-org-wide",
     );
     expect(await resolveAgentAuth("claude", { userId: dana.id })).toMatchObject(
       {
@@ -196,7 +196,7 @@ describe("Claude credential selection (API key vs subscription token)", () => {
     });
     expect(await resolveAgentAuth("claude", { userId: eve.id })).toMatchObject({
       kind: "anthropic_api_key",
-      value: "org-wide-key",
+      value: "sk-ant-api03-org-wide",
       source: "global",
     });
   });
@@ -218,7 +218,7 @@ describe("Claude credential selection (API key vs subscription token)", () => {
       "user",
       frank.id,
       "anthropic_api_key",
-      "frank-key",
+      "sk-ant-api03-frank",
     );
     expect(
       await resolveAgentAuth("claude", { userId: frank.id }),
@@ -239,10 +239,24 @@ describe("credential shape validation", () => {
     ).toMatch(/starts with sk-ant-oat01-/);
   });
 
+  it("rejects a value that is no kind of Anthropic key at all", () => {
+    for (const value of ["hunter2", "", "sk-ant-api03-a b"])
+      expect(validateCredential("anthropic_api_key", value)).toMatch(
+        /starts with sk-ant-api03-/,
+      );
+  });
+
   it("accepts each in its own field", () => {
     expect(validateCredential(ANTHROPIC_OAUTH_CREDENTIAL, OAUTH)).toBeNull();
     expect(
       validateCredential("anthropic_api_key", "sk-ant-api03-abc"),
+    ).toBeNull();
+  });
+
+  it("leaves credentials it has no shape for alone", () => {
+    expect(validateCredential("copilot_token", "ghu_whatever")).toBeNull();
+    expect(
+      validateCredential("freshdesk_token:acme", "anything at all"),
     ).toBeNull();
   });
 

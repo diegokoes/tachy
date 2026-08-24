@@ -2,14 +2,13 @@
  * Which parts of a hit's text to show on a library card.
  *
  * Match strength is NOT computed here. The server returns `relevance` (0-1) and
- * `grade` from @tachy/core, calibrated against the embedding model's measured
- * distribution — the same numbers the MCP tools hand the agent. Duplicating that
- * arithmetic in the client is how the two drift apart on the next model change.
+ * `grade`, calibrated against the embedding model's measured distribution — the
+ * same numbers the MCP tools hand the agent. Duplicating that arithmetic in the
+ * client is how the two drift apart on the next model change. The band edges
+ * the gauge draws its tick marks at come from @tachy/contract.
  */
 
-/** Kept in step with STRONG/GOOD in @tachy/core, for the gauge's tick marks. */
-export const GOOD = 0.35;
-export const STRONG = 0.7;
+export { GOOD, STRONG } from "@tachy/contract";
 
 export type Seg = { t: string; hit?: boolean };
 

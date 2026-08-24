@@ -16,6 +16,9 @@
     PANEL_BORDER_SAMPLE,
     RADIUS_MAX,
     RADIUS_MIN,
+    SCALE_MAX,
+    SCALE_MIN,
+    SCALE_STEP,
   } from "../theme.svelte";
   import { Button, Panel } from "../tui";
 
@@ -71,9 +74,9 @@
       <span class="val">{Math.round(th.fontScale * 100)}%</span>
       <input
         type="range"
-        min="0.85"
-        max="1.3"
-        step="0.05"
+        min={SCALE_MIN}
+        max={SCALE_MAX}
+        step={SCALE_STEP}
         value={th.fontScale}
         oninput={(e) => setFontScale(Number(e.currentTarget.value))}
       />
@@ -252,7 +255,10 @@
     border-color: var(--accent);
     color: var(--accent);
   }
+  /* Box-drawing glyphs — the UI face has none of them, and a per-glyph
+     fallback would draw ┌─┐ out of three different widths. */
   .bsample {
+    font-family: var(--font-mono);
     font-size: var(--fs-lg);
     line-height: 1;
     white-space: pre;
@@ -279,9 +285,11 @@
   .pcard.on {
     border-color: var(--accent);
   }
+  /* A texture swatch, not text — sized off rem rather than the type scale so
+     the same number of pattern rows fills the 4rem box at every font scale. */
   .ppreview {
     margin: 0;
-    font: 10px/1.2 ui-monospace, monospace;
+    font: 0.55rem/1.2 var(--font-mono);
     color: var(--muted);
     white-space: pre;
     overflow: hidden;

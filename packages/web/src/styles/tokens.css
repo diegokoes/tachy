@@ -10,8 +10,22 @@
      scrollbars in light mode — white bars on the dark UI. */
   color-scheme: dark;
   font-size: calc(clamp(14.5px, 0.35vw + 12.5px, 18px) * var(--font-scale, 1));
-  font-family:
-    ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo, monospace;
+  font-family: var(--font-ui);
+
+  /* Two faces out of one family. Sans carries prose, labels and controls; mono
+     carries anything that sits on a character grid — table cells, ids, code,
+     meters, the ASCII chrome. Plex Sans and Plex Mono share a skeleton and a
+     cap height, so a mono cell in a sans row still reads as one UI rather than
+     two pasted together.
+
+     `ch` is the width of "0" in the *inherited* face. Any rule that measures in
+     ch has to be on --font-mono, or the number means nothing. */
+  --font-ui:
+    "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui,
+    "Segoe UI", sans-serif;
+  --font-mono:
+    "IBM Plex Mono", ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo,
+    monospace;
 
   --bg: #080808;
   --panel: rgba(8, 8, 8, 0.82);

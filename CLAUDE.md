@@ -9,6 +9,7 @@ Folders are named for the domain they own, never `utils` / `helpers` / `common`.
 
 | Package              | Owns                                                                                                                                                                     |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/contract`  | What the browser and the server must agree on: vocabularies, grade bands, credential and export-naming rules. No dependencies, ever — it is bundled into the SPA         |
 | `packages/core`      | Everything with logic: `knowledge`, `reference`, `search`, `work-items`, `code`, `catalog`, `access`, `config`, `compliance`, `exports`, `analytics`, `sources`, `infra` |
 | `packages/sources/*` | One connector each: `freshdesk`, `github`, `azure-devops`                                                                                                                |
 | `packages/mcp`       | The MCP server — every tool the agent can call                                                                                                                           |
@@ -20,7 +21,7 @@ Folders are named for the domain they own, never `utils` / `helpers` / `common`.
 ## Commands
 
 ```sh
-npm run typecheck && npm test    # what CI runs
+npm run typecheck && npm run web:check && npm test    # what CI runs
 npm run api                      # server on :8787
 npm run web:dev                  # SPA dev server
 npm run format                   # prettier
@@ -49,5 +50,11 @@ that needs it. `withCompaction`, `NO_MATCHES` and `unresolvedCustomer` in
   migrations directory, deliberately; see CONTRIBUTING.md.
 - **Credentials** live in the encrypted vault (`TACHY_SECRET_KEY`). The MCP
   subprocess env is built fresh per turn and must never be pooled across users.
+- **The SPA imports `@tachy/contract`, never `@tachy/core`.** Core opens
+  Postgres on import. A rule both sides enforce — a vocabulary, a validation, a
+  naming convention — belongs in the contract, and core re-exports it so server
+  code still reaches it through `@tachy/core`. Copying it into `packages/web`
+  instead is how the admin panel and the vault came to disagree about what a
+  valid Anthropic key looks like.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for PRs, schema changes and licensing.

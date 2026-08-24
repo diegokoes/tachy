@@ -23,6 +23,10 @@ jobs:
 
       - run: npm run typecheck
 
+      # `typecheck` excludes packages/web, which has its own tsconfig — this is
+      # what holds the SPA to the shapes in @tachy/contract.
+      - run: npm run web:check
+
       # Tests start their own Postgres via Testcontainers; the GitHub-hosted
       # ubuntu runner has Docker preinstalled, so no service container needed.
       - run: npm test

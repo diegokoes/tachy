@@ -38,6 +38,14 @@ export const PANEL_BORDER_SAMPLE: Record<PanelBorder, string> = {
 export const RADIUS_MIN = 0;
 export const RADIUS_MAX = 6;
 
+/* The fluid clamp in tokens.css tops out at 18px and saturates around a
+   1571px viewport, so width alone cannot tell a 27" 1440p display from a 32"
+   4K one — only pixel density can, and CSS cannot read it. This is the knob
+   that covers the difference, so it has to reach far enough to. */
+export const SCALE_MIN = 0.85;
+export const SCALE_MAX = 1.75;
+export const SCALE_STEP = 0.05;
+
 export const themeState = $state({
   theme: "dark" as Theme,
   patternIdx: 0,
@@ -94,9 +102,12 @@ export function setPatternAlpha(v: number) {
 }
 
 export function setFontScale(v: number) {
-  themeState.fontScale = v;
-  document.documentElement.style.setProperty("--font-scale", String(v));
-  localStorage.setItem("tachy-font-scale", String(v));
+  const s = Number.isFinite(v)
+    ? Math.min(SCALE_MAX, Math.max(SCALE_MIN, v))
+    : 1;
+  themeState.fontScale = s;
+  document.documentElement.style.setProperty("--font-scale", String(s));
+  localStorage.setItem("tachy-font-scale", String(s));
 }
 
 export function setBorder(k: BorderKey) {
@@ -141,10 +152,7 @@ export function loadThemeFromStorage() {
     applyAccent(ACCENT_DEFAULTS[themeState.theme]);
   }
   const savedScale = localStorage.getItem("tachy-font-scale");
-  if (savedScale) {
-    themeState.fontScale = Number(savedScale);
-    document.documentElement.style.setProperty("--font-scale", savedScale);
-  }
+  if (savedScale) setFontScale(Number(savedScale));
   const savedBorder = localStorage.getItem("tachy-border");
   if (savedBorder === "none" || (savedBorder && savedBorder in BORDERS))
     themeState.border = savedBorder as BorderKey;

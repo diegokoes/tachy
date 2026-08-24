@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from "./api";
+  import type { AgentProvider } from "@tachy/contract";
   import { csv } from "./admin/shared";
   import { initSession } from "./session.svelte";
   import { errText } from "./resource.svelte";
@@ -27,7 +28,7 @@
   let teamName = $state("");
   let products = $state<{ name: string }[]>([{ name: "" }]);
   let redaction = $state(false);
-  let agentProvider = $state<"claude" | "copilot">("claude");
+  let agentProvider = $state<AgentProvider>("claude");
   let agentKey = $state("");
   let agentModel = $state("claude-sonnet-5");
   const agentKeyIsOAuth = $derived(

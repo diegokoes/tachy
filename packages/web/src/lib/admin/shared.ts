@@ -1,3 +1,6 @@
+import { validateCredential } from "@tachy/contract";
+import type { AgentProvider } from "@tachy/contract";
+
 export type Team = { id: string; slug: string; name: string };
 export type Product = {
   id: string;
@@ -100,7 +103,7 @@ export type Setting<T> = { value: T; source: "db" | "env" | "default" };
 export type SystemInfo = {
   settings: {
     redaction_global: Setting<boolean>;
-    agent_provider: Setting<"claude" | "copilot">;
+    agent_provider: Setting<AgentProvider>;
     agent_model: Setting<string>;
     agent_effort: Setting<string>;
     allowed_models: Setting<string[]>;
@@ -140,30 +143,45 @@ export type Member = {
   team_role: string;
 };
 
+/** The phrase under the control. Anything longer belongs in INFO. */
 export const TIP = {
-  slug: "Stable lowercase machine id, derived from the name. Filters, URLs and the agent go through it.",
+  slug: "machine id, from the name",
   /* Three tables carry aliases and they do not all mean the same thing —
      a customer's are email domains, not names. See catalog/customers.ts. */
   aliases: {
+    product: 'portal, "the web app" — comma-separated',
+    component: 'lc, LC, "line controller" — comma-separated',
+    customer: "other trading names — comma-separated",
+  },
+  emailDomains: "acme.com, acme.co.uk — comma-separated",
+  parent: "parent in the hierarchy",
+  team: "owning team",
+  project: "the project as its source knows it",
+  area: "Azure DevOps area path prefix",
+  repoComponent: "narrows code search to this part",
+};
+
+/** The rules behind a field, shown on the info mark beside its label. */
+export const INFO = {
+  slug: "Stable lowercase machine id, derived from the name. Filters, URLs and the agent go through it.",
+  aliases: {
     product:
-      'Other names this product answers to (portal, "the web app"). Comma-separated. The agent and the API resolve them like the slug.',
+      "Other names this product answers to. The agent and the API resolve them like the slug.",
     component:
-      'Other names this component answers to (lc, LC, "line controller"). Comma-separated. They also match knowledge and reference entries tagged with the variant.',
+      "Other names this component answers to. They also match knowledge and reference entries tagged with the variant.",
     customer:
-      "Other NAMES this account trades under (Oettinger Davidoff). Comma-separated. Not email domains — those have their own field.",
+      "Other NAMES this account trades under (Oettinger Davidoff). Not email domains — those have their own field.",
   },
   emailDomains:
-    "Domains whose senders are this customer (acme.com, acme.co.uk), including a partner or distributor who raises tickets on their behalf. Comma-separated. Incoming tickets are attributed by the requester's domain — and a domain listed on two customers deliberately matches neither, so a shared integrator's domain belongs to nobody.",
+    "Domains whose senders are this customer, including a partner or distributor who raises tickets on their behalf. Incoming tickets are attributed by the requester's domain — and a domain listed on two customers deliberately matches neither, so a shared integrator's domain belongs to nobody.",
   parent:
-    "Parent component in the hierarchy - product_area paths (Product / Parent / Component) are derived from it.",
-  team: "Owning team. One team can own many products.",
-  group:
-    "The source system's own grouping key: a Freshdesk group id, a GitHub owner/repo…",
+    "product_area paths (Product / Parent / Component) are derived from it.",
+  team: "One team can own many products.",
   project:
     "One project as its source knows it — an Azure DevOps project, a Freshdesk group, a GitHub owner/repo. Registering it is what tells tachy where its items, wiki and code belong.",
-  area: "Azure DevOps area path prefix. Items under it are filed on this component automatically; the longest matching prefix wins.",
+  area: "Items under it are filed on this component automatically; the longest matching prefix wins.",
   repoComponent:
-    "The component this repo implements. Code search can then be narrowed to it, so a question about one part of the product searches that repo instead of everything.",
+    "The component this repo implements. A question about one part of the product then searches that repo instead of everything.",
 };
 
 export const AGENT_KEY_LABELS: Record<string, string> = {
@@ -172,23 +190,8 @@ export const AGENT_KEY_LABELS: Record<string, string> = {
   copilot_token: "Copilot GitHub token",
 };
 
-const AGENT_KEY_SHAPES: Record<string, { re: RegExp; hint: string }> = {
-  anthropic_oauth_token: {
-    re: /^sk-ant-oat01-\S+$/,
-    hint: "starts with sk-ant-oat01-",
-  },
-  anthropic_api_key: {
-    re: /^sk-ant-(?!oat01-)\S+$/,
-    hint: "starts with sk-ant-api03-",
-  },
-};
-
-/** Mirrors validateCredential in @tachy/core, so a typo never reaches the vault. */
-export function agentKeyError(name: string, value: string): string | null {
-  const shape = AGENT_KEY_SHAPES[name];
-  if (!shape || shape.re.test(value)) return null;
-  return `a ${AGENT_KEY_LABELS[name]} ${shape.hint}`;
-}
+/** The vault's own check, run in the field the key was typed into. */
+export const agentKeyError = validateCredential;
 
 export const csv = (v: string | undefined) =>
   v

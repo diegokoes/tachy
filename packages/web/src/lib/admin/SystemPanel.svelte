@@ -62,7 +62,7 @@
     </tr></thead>
     <tbody>
       <tr>
-        <td class="tip" title="Support/business relabels nothing; Engineering/repositories reads product→repository, team→organization and hides customers. Display only - slugs and the agent contract never change.">Deployment profile</td>
+        <td class="tip" title="Engineering/repositories reads product→repository, team→organization and hides customers. Display only — slugs and the agent contract never change.">Deployment profile</td>
         <td>
           <AsciiSelect value={system.settings.deployment_profile.value}
             options={[
@@ -74,7 +74,7 @@
         <td><span class="badge src-{system.settings.deployment_profile.source}">{system.settings.deployment_profile.source}</span></td>
       </tr>
       <tr>
-        <td class="tip" title="When on, PII/secrets are scrubbed from everything sent to the LLM - all connections, pasted context and retrieved results. The database keeps raw data.">PII / secret redaction</td>
+        <td class="tip" title="Scrubs PII/secrets from everything sent to the LLM — all connections, pasted context and retrieved results. The database keeps raw data.">PII / secret redaction</td>
         <td>
           <label class="check">
             <Checkbox
@@ -83,14 +83,14 @@
               onchange={(checked) => saveSetting("redaction_global", checked)}
             />
             <span class:on={system.settings.redaction_global.value}>
-              {system.settings.redaction_global.value ? "on - scrub at the LLM boundary" : "off (per-connection opt-in only)"}
+              {system.settings.redaction_global.value ? "on — at the LLM boundary" : "off — per-connection opt-in only"}
             </span>
           </label>
         </td>
         <td><span class="badge src-{system.settings.redaction_global.source}">{system.settings.redaction_global.source}</span></td>
       </tr>
       <tr>
-        <td class="tip" title="Which agent backend runs the chat: Claude (Anthropic API key / Claude Code login) or GitHub Copilot (Copilot subscription; token or copilot CLI login).">Agent provider</td>
+        <td class="tip" title="Which backend runs the chat. Claude: Anthropic API key or Claude Code login. Copilot: token or copilot CLI login.">Agent provider</td>
         <td>
           <AsciiSelect value={system.settings.agent_provider.value}
             options={[
