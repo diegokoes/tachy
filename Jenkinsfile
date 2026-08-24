@@ -2,7 +2,8 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = 'tachy'
+        IMAGE_NAME  = 'tachy'
+        DEPLOY_HOST = 'tachy@office-laptop.local'   // <user>@<host>
     }
 
     options {
@@ -23,6 +24,7 @@ pipeline {
                 sh '''
                     npm ci
                     npm run typecheck
+                    npm run web:check
                     npm test
                 '''
             }
@@ -35,13 +37,19 @@ pipeline {
                         script: "node -p \"require('./package.json').version\"",
                         returnStdout: true
                     ).trim()
+
+                    // main publishes :latest and :<version>; dev publishes :dev.
+                    // Separate tags are what keep the two stacks from ever
+                    // pulling each other's image.
+                    env.TAGS = env.BRANCH_NAME == 'dev'
+                        ? "dev"
+                        : "latest ${env.VERSION}"
+
+                    def args = env.TAGS.split(' ').collect {
+                        "-t ${env.IMAGE_NAME}:${it}"
+                    }.join(' ')
+                    sh "docker build ${args} ."
                 }
-                sh """
-                    docker build \
-                        -t ${IMAGE_NAME}:latest \
-                        -t ${IMAGE_NAME}:${VERSION} \
-                        .
-                """
             }
         }
 
@@ -52,14 +60,18 @@ pipeline {
                     usernameVariable: 'DH_USER',
                     passwordVariable: 'DH_PASS'
                 )]) {
-                    sh """
-                        trap 'docker logout' EXIT
-                        echo "\$DH_PASS" | docker login -u "\$DH_USER" --password-stdin
-                        docker tag ${IMAGE_NAME}:latest \$DH_USER/${IMAGE_NAME}:latest
-                        docker tag ${IMAGE_NAME}:${VERSION} \$DH_USER/${IMAGE_NAME}:${VERSION}
-                        docker push \$DH_USER/${IMAGE_NAME}:latest
-                        docker push \$DH_USER/${IMAGE_NAME}:${VERSION}
-                    """
+                    script {
+                        sh '''
+                            trap 'docker logout' EXIT
+                            echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin
+                        '''
+                        for (tag in env.TAGS.split(' ')) {
+                            sh """
+                                docker tag ${IMAGE_NAME}:${tag} \$DH_USER/${IMAGE_NAME}:${tag}
+                                docker push \$DH_USER/${IMAGE_NAME}:${tag}
+                            """
+                        }
+                    }
                 }
             }
         }
@@ -72,14 +84,38 @@ pipeline {
         stage('Deploy') {
             when { branch 'main' }
             environment {
-                DEPLOY_HOST = 'tachy@office-laptop.local'   // <user>@<host>
-                DEPLOY_DIR  = '/opt/tachy'
+                DEPLOY_DIR = '/opt/tachy'
             }
             steps {
                 sshagent(credentials: ['tachy-deploy-ssh']) {
                     sh '''
                         ssh -o StrictHostKeyChecking=accept-new "$DEPLOY_HOST" "
                             cd $DEPLOY_DIR &&
+                            docker compose pull api &&
+                            docker compose up -d api &&
+                            docker image prune -f
+                        "
+                    '''
+                }
+            }
+        }
+
+        // The dev stack: a second checkout, on the dev branch, running as its
+        // own compose project (COMPOSE_PROJECT_NAME in its .env). It resets to
+        // origin/dev because docker-compose.yml is itself versioned, so the
+        // checkout has to match the image being pulled.
+        stage('Deploy dev') {
+            when { branch 'dev' }
+            environment {
+                DEPLOY_DIR = '/opt/tachy-dev'
+            }
+            steps {
+                sshagent(credentials: ['tachy-deploy-ssh']) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=accept-new "$DEPLOY_HOST" "
+                            cd $DEPLOY_DIR &&
+                            git fetch origin dev &&
+                            git reset --hard origin/dev &&
                             docker compose pull api &&
                             docker compose up -d api &&
                             docker image prune -f
@@ -95,7 +131,7 @@ pipeline {
             cleanWs()
         }
         success {
-            echo "Published ${IMAGE_NAME}:${VERSION} and :latest to Docker Hub"
+            echo "Published ${IMAGE_NAME} tags: ${env.TAGS}"
         }
         failure {
             echo "Build #${BUILD_NUMBER} failed"
