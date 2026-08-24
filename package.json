@@ -22,6 +22,7 @@
     "sync": "tsx packages/cli/src/index.ts",
     "web:dev": "npm run dev --workspace @tachy/web",
     "web:build": "npm run build --workspace @tachy/web",
+    "web:check": "npm run check --workspace @tachy/web",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "format": "prettier --write ."
