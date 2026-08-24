@@ -1,15 +1,20 @@
 import { z } from "zod";
+import {
+  TABLE_CELL_TYPES,
+  TABLE_FORMATS,
+  outputFilename,
+} from "@tachy/contract";
+import type {
+  TableCellType,
+  TableFormat,
+  TableColumn,
+  TableOutput,
+} from "@tachy/contract";
 import { badInput } from "../infra/errors";
 import { renderXlsx } from "./xlsx";
 
-export const TABLE_CELL_TYPES = [
-  "string",
-  "number",
-  "date",
-  "boolean",
-] as const;
-export const TABLE_FORMATS = ["xlsx", "csv"] as const;
-export type TableFormat = (typeof TABLE_FORMATS)[number];
+export { TABLE_CELL_TYPES, TABLE_FORMATS, outputFilename };
+export type { TableCellType, TableFormat, TableColumn, TableOutput };
 
 export const tableColumnSchema = z.object({
   key: z.string().min(1),
@@ -18,7 +23,6 @@ export const tableColumnSchema = z.object({
   required: z.boolean().optional(),
   description: z.string().optional(),
 });
-export type TableColumn = z.infer<typeof tableColumnSchema>;
 
 export const tableOutputSchema = z.object({
   format: z.enum(TABLE_FORMATS).default("xlsx"),
@@ -26,7 +30,18 @@ export const tableOutputSchema = z.object({
   filename: z.string().optional(),
   columns: z.array(tableColumnSchema).min(1),
 });
-export type TableOutput = z.infer<typeof tableOutputSchema>;
+
+/**
+ * The schemas above are only the parser; @tachy/contract owns the shape, so the
+ * editor in the SPA and the renderer here cannot disagree about it. This stops
+ * compiling if the two drift apart.
+ */
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const _shapesMatch: [
+  Same<z.infer<typeof tableColumnSchema>, TableColumn>,
+  Same<z.infer<typeof tableOutputSchema>, TableOutput>,
+] = [true, true];
+void _shapesMatch;
 
 export type CellValue = string | number | boolean | Date | null;
 export type TableRow = Record<string, unknown>;
@@ -178,18 +193,6 @@ export function renderTable(i: {
       `generated file is ${bytes.byteLength} bytes, over the ${MAX_OUTPUT_BYTES} limit — export fewer rows`,
     );
   return { bytes, mime: MIME_BY_FORMAT[i.format], format: i.format };
-}
-
-export function outputFilename(
-  output: Pick<TableOutput, "filename" | "format">,
-  fallback: string,
-): string {
-  const base = (output.filename ?? `${fallback}-{date}`)
-    .replace(/\{date\}/g, new Date().toISOString().slice(0, 10))
-    .replace(/\{slug\}/g, fallback);
-  return base.toLowerCase().endsWith(`.${output.format}`)
-    ? base
-    : `${base}.${output.format}`;
 }
 
 /** The column contract injected into a turn when the attached artifact declares one. */
