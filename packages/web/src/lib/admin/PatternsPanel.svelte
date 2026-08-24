@@ -5,7 +5,7 @@
   import { CrudTable, type Column } from "../tui";
   import { slugify } from "../slug";
   import SlugRename from "./SlugRename.svelte";
-  import { TIP, type Pattern } from "./shared";
+  import { INFO, TIP, type Pattern } from "./shared";
 
   const patterns = createResource(
     () => api.get<Pattern[]>("/resolution-patterns"),
@@ -22,6 +22,7 @@
       edit: "text",
       required: true,
       hint: TIP.slug,
+      info: INFO.slug,
       transform: slugify,
       editable: () => false,
       action: { label: "rename…", onclick: (r) => (renaming = r) },

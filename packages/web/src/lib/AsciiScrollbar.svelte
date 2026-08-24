@@ -2,11 +2,18 @@
   
   
   
+  import { themeState } from "./theme.svelte";
+
   let { target, controls }: { target: HTMLElement | undefined; controls?: string } = $props();
 
-  const ROW = 16; 
+  /* Must stay equal to the .layer line-height below: the row maths here and
+     the glyphs painted there have to agree, at every font scale. */
+  const ROW_REM = 0.9;
+  const rowPx = () =>
+    ROW_REM * parseFloat(getComputedStyle(document.documentElement).fontSize);
 
   let bar = $state<HTMLDivElement>();
+  let ROW = $state(16);
   let rows = $state(0); 
   let thumbStart = $state(0);
   let thumbLen = $state(1);
@@ -17,6 +24,7 @@
   function update() {
     const el = target;
     if (!el) return;
+    ROW = rowPx();
     visible = el.scrollHeight > el.clientHeight + 1;
     if (!visible) return;
     rows = Math.max(3, Math.floor(el.clientHeight / ROW) - 2);
@@ -53,6 +61,9 @@
   $effect(() => {
     const el = target;
     if (!el) return;
+    /* Read so a font-scale change re-runs this: it moves the row height without
+       necessarily resizing the target, so neither observer below would fire. */
+    themeState.fontScale;
     update();
     el.addEventListener("scroll", update);
     const ro = new ResizeObserver(update);
@@ -105,7 +116,7 @@
     padding: 0;
     overflow: hidden;
     white-space: pre;
-    font: 12px/16px monospace;
+    font: var(--fs-xs) / 0.9rem monospace;
     text-align: center;
     pointer-events: none;
   }

@@ -215,7 +215,11 @@
           </div>
 
           <label class="req" title="the agent may not leave this column empty">
-            <Checkbox bind:checked={col.required} ariaLabel="required" />
+            <Checkbox
+              checked={!!col.required}
+              onchange={(v) => (col.required = v)}
+              ariaLabel="required"
+            />
             <span>required</span>
           </label>
 

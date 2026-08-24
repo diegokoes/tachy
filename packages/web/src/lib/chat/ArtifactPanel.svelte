@@ -491,7 +491,7 @@
 {#if editorOpen}
   <Modal
     title={editorMode === "create" ? "new artifact" : "edit artifact"}
-    width="46rem"
+    width="60rem"
     confirmLabel="save"
     busy={editorBusy}
     onConfirm={save}
@@ -675,16 +675,11 @@
   }
   .art-actions { display: flex; flex-direction: column; gap: var(--pad-1); }
 
-  /* The form scrolls inside the modal — an output spec with a dozen columns
-     is taller than any screen. */
   .ed-form {
     display: flex;
     flex-direction: column;
     gap: var(--pad-2);
     text-align: left;
-    min-width: min(28rem, 100%);
-    max-height: min(30rem, 58vh);
-    overflow-y: auto;
     padding-right: var(--pad-2);
   }
   .ed-form textarea { resize: vertical; max-width: 100%; }

@@ -146,7 +146,7 @@
 
   .app :global(> section) {
     flex: 1;
-    max-width: 1400px;
+    max-width: 78rem;
     margin: 0 auto;
     min-width: 0;
   }

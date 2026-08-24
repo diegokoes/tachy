@@ -15,6 +15,7 @@
   import { slugify, uniqueSlug } from "../slug";
   import {
     csv,
+    INFO,
     TIP,
     type Component,
     type Customer,
@@ -170,6 +171,7 @@
       edit: "text",
       required: true,
       hint: TIP.slug,
+      info: INFO.slug,
       derive: (d) =>
         uniqueSlug(
           slugify(String(d.name ?? "")),
@@ -181,6 +183,7 @@
       label: "email domains",
       edit: "text",
       hint: TIP.emailDomains,
+      info: INFO.emailDomains,
       value: (r) => (r.email_domains ?? []).join(", "),
     },
     {
@@ -189,6 +192,7 @@
       formOnly: true,
       edit: "text",
       hint: TIP.aliases.customer,
+      info: INFO.aliases.customer,
       value: (r) => (r.aliases ?? []).join(", "),
     },
     { key: "notes", label: "notes", edit: "textarea" },
@@ -204,7 +208,9 @@
   {@const p = profiles[r.slug]}
   <div class="profile">
     <div class="block wide">
-      <span class="dim" title="What is true of THIS customer's install and of nobody else — the version they run, their layout, an integration they depend on. Not knowledge: a fact, not a problem and its fix."
+      <span
+        class="dim"
+        title="True of THIS install and nobody else — the version they run, their layout, an integration they depend on. A fact, not a problem and its fix."
         >specifics</span
       >
       {#each facts[r.slug] ?? [] as f (f.id)}
