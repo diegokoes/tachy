@@ -38,6 +38,8 @@ RUN npm ci
 COPY . .
 
 # Build the Svelte SPA to packages/web/dist so the API serves it (single origin).
+ARG VITE_DEV_BADGE
+ENV VITE_DEV_BADGE=$VITE_DEV_BADGE
 RUN npm run web:build
 
 # Pre-download the embedding model at build time so a freshly pulled container

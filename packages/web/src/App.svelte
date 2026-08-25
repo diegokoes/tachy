@@ -80,6 +80,10 @@
     ]}</pre>
 {/if}
 
+{#if import.meta.env.VITE_DEV_BADGE}
+  <div class="dev-badge">DEV</div>
+{/if}
+
 {#if session.loading}
   <!-- background only while the session resolves; the splash covers cold loads -->
 {:else if showWizard}
@@ -172,6 +176,20 @@
     display: flex;
     min-height: 0;
     min-width: 0;
+  }
+
+  .dev-badge {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 9999;
+    background: #f59e0b;
+    color: #000;
+    font: 700 0.85rem/1 var(--font-mono);
+    padding: 0.35rem 0.7rem;
+    letter-spacing: 0.1em;
+    pointer-events: none;
+    user-select: none;
   }
 
   /* Native bar hidden — the ASCII scrollbar beside it takes over. */

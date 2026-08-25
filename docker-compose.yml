@@ -32,7 +32,10 @@ services:
 
   api:
     image: ${TACHY_IMAGE:-diegokoes/tachy:latest}
-    build: .
+    build:
+      context: .
+      args:
+        VITE_DEV_BADGE: ${VITE_DEV_BADGE:-}
     container_name: ${COMPOSE_PROJECT_NAME:-tachy}-api
     restart: unless-stopped
     env_file: .env
