@@ -7,6 +7,15 @@ import { getSourceProject } from "../sources/projects";
 import type { EntryScope } from "../access/permissions";
 import { removeClone } from "./git";
 
+export const REPO_INDEX_STATUSES = [
+  "idle",
+  "cloning",
+  "indexing",
+  "ready",
+  "error",
+] as const;
+export type RepoIndexStatus = (typeof REPO_INDEX_STATUSES)[number];
+
 export interface RepoInput {
   slug: string;
   url: string;
@@ -35,7 +44,7 @@ export interface RepoRow {
   customer_slug: string | null;
   default_branch: string;
   config: Record<string, unknown>;
-  index_status: string;
+  index_status: RepoIndexStatus;
   indexed_commit: string | null;
   index_error: string | null;
   file_count: number;

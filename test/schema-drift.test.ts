@@ -14,6 +14,8 @@ import {
   TEAM_ROLES,
   SOURCE_PROJECT_ROLES,
   WORK_ITEM_LINK_KINDS,
+  REPO_INDEX_STATUSES,
+  SCOPES,
 } from "@tachy/core";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -50,6 +52,10 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     ["team_members", "role", TEAM_ROLES],
     ["source_projects", "role", SOURCE_PROJECT_ROLES],
     ["work_item_links", "kind", WORK_ITEM_LINK_KINDS],
+    ["repos", "index_status", REPO_INDEX_STATUSES],
+    ["credentials", "scope", SCOPES],
+    ["preferences", "scope", SCOPES],
+    ["artifacts", "scope", SCOPES],
   ] as const)("%s.%s", (table, col, values) => {
     expect(checkValues(table, col).sort()).toEqual([...values].sort());
   });

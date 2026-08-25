@@ -9,6 +9,7 @@ export {
 } from "./git";
 export type { TreeEntry } from "./git";
 export {
+  REPO_INDEX_STATUSES,
   linkRepo,
   listRepos,
   getRepoBySlug,
@@ -17,7 +18,7 @@ export {
   deleteRepo,
   sweepInterruptedIndexes,
 } from "./repos";
-export type { RepoInput, RepoRow } from "./repos";
+export type { RepoInput, RepoRow, RepoIndexStatus } from "./repos";
 export { indexRepo, backfillCodeEmbeddings } from "./indexer";
 export type { IndexResult } from "./indexer";
 export { searchCode, readCodeFile } from "./search";

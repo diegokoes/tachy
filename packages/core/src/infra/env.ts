@@ -24,6 +24,7 @@ const envSchema = z
   .object({
     databaseUrl: z.string().url("DATABASE_URL must be a valid postgres:// URL"),
     port: z.coerce.number().int().positive("PORT must be a positive integer"),
+    logLevel: z.enum(["debug", "info", "warn", "error"]),
     userEmail: z.string().email().optional(),
     apiToken: z.string().min(1).optional(),
 
@@ -65,6 +66,7 @@ const envSchema = z
 const parsed = envSchema.safeParse({
   databaseUrl: process.env.DATABASE_URL ?? "postgres://localhost:5432/tachy",
   port: process.env.PORT ?? 8787,
+  logLevel: process.env.LOG_LEVEL ?? "info",
   userEmail: process.env.TACHY_USER_EMAIL || undefined,
   apiToken: apiTokenRaw,
   authMode:
