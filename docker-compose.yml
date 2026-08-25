@@ -1,6 +1,6 @@
 networks:
   default:
-    name: tachy
+    name: ${COMPOSE_PROJECT_NAME:-tachy}
 
 services:
   postgres:
@@ -8,7 +8,7 @@ services:
     # postgresql-contrib needed (verified directly; see test/global-setup.ts,
     # which relies on the same fact for the test suite's Testcontainers DB).
     image: pgvector/pgvector:pg16
-    container_name: tachy-postgres
+    container_name: ${COMPOSE_PROJECT_NAME:-tachy}-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-tachy}
@@ -16,7 +16,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-tachy}
     ports:
       # localhost-only: nothing on the office LAN needs raw Postgres access
-      - "127.0.0.1:5433:5432"
+      - "127.0.0.1:${TACHY_PG_PORT:-5433}:5432"
     volumes:
       - tachy-postgres-data:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
@@ -33,7 +33,7 @@ services:
   api:
     image: ${TACHY_IMAGE:-diegokoes/tachy:latest}
     build: .
-    container_name: tachy-api
+    container_name: ${COMPOSE_PROJECT_NAME:-tachy}-api
     restart: unless-stopped
     env_file: .env
     environment:
@@ -42,7 +42,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "8787:8787"
+      - "${TACHY_API_PORT:-8787}:8787"
     volumes:
       - ./backups:/app/backups
       # Linked-repo clones for code search — survives redeploys so reindexes

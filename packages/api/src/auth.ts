@@ -18,6 +18,7 @@ import {
   teamAdminTeams,
   userTeams,
   env,
+  log,
   type UserRole,
 } from "@tachy/core";
 
@@ -41,9 +42,10 @@ export const sessionSecret: string =
   env.sessionSecret ??
   (() => {
     const s = randomBytes(32).toString("hex");
-    console.warn(
-      "TACHY_SESSION_SECRET is not set — using an ephemeral secret; sessions reset on restart",
-    );
+    log("warn", "session_secret_missing", {
+      detail:
+        "TACHY_SESSION_SECRET is not set — using an ephemeral secret; sessions reset on restart",
+    });
     return s;
   })();
 

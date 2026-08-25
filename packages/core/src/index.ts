@@ -1,4 +1,5 @@
 export { sql } from "./infra";
+export type { Db } from "./infra";
 export {
   env,
   envVarName,
@@ -10,7 +11,8 @@ export {
 } from "./infra";
 export { AppError, notFound, conflict, badInput, forbidden } from "./infra";
 export type { AppErrorCode } from "./infra";
-export { log } from "./infra";
+export { log, runWithLogContext } from "./infra";
+export type { LogLevel } from "./infra";
 export {
   isGlobalAdmin,
   teamAdminTeams,
@@ -71,6 +73,7 @@ export type {
   AgentProvider,
 } from "./config";
 export {
+  SCOPES,
   resolveScoped,
   assertCanWriteScope,
   AGENT_CREDENTIALS,
