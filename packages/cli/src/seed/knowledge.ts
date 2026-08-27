@@ -2,7 +2,6 @@ import {
   CONFIDENCES,
   FEEDBACK_KINDS,
   KNOWLEDGE_STATUSES,
-  LEARNING_VALUES,
   REFERENCE_STATUSES,
   RESOLUTION_CLARITIES,
 } from "@tachy/core";
@@ -93,7 +92,6 @@ export async function seedKnowledge(
       confidence: pick(rng, CONFIDENCES),
       cloud: pick(rng, CLOUDS),
       resolution_clarity: pick(rng, RESOLUTION_CLARITIES),
-      learning_value: pick(rng, LEARNING_VALUES),
       hidden_fix: chance(rng, 0.15),
       affected_version: `${intBetween(rng, 3, 9)}.${intBetween(rng, 0, 12)}`,
       fixed_version: chance(rng, 0.6)
@@ -134,7 +132,6 @@ export async function seedKnowledge(
       "confidence",
       "cloud",
       "resolution_clarity",
-      "learning_value",
       "hidden_fix",
       "affected_version",
       "fixed_version",

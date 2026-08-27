@@ -136,7 +136,7 @@ describe("promoted facets (cloud / quality)", () => {
       status: "approved",
       issueSummary: "prod outage in pipeline",
       cloud: "prod",
-      learningValue: "high",
+      resolutionClarity: "clear",
     });
     await saveKnowledgeEntry({
       status: "approved",
@@ -147,7 +147,7 @@ describe("promoted facets (cloud / quality)", () => {
     const prod = await searchKnowledge("pipeline", { cloud: "prod" });
     expect(prod.length).toBe(1);
     expect(prod[0].cloud).toBe("prod");
-    expect(prod[0].learning_value).toBe("high");
+    expect(prod[0].resolution_clarity).toBe("clear");
   });
 
   it("round-trips facets and lets update clear them with null", async () => {
@@ -351,7 +351,7 @@ describe("listKnowledgeFacets", () => {
         status: "approved",
         issueSummary: "printer truncates labels",
         confidence: "high",
-        learningValue: "high",
+        resolutionClarity: "clear",
         hiddenFix: true,
         tags: ["printing", "firmware"],
       }),
@@ -359,14 +359,14 @@ describe("listKnowledgeFacets", () => {
         status: "approved",
         issueSummary: "scanner drops packets",
         confidence: "low",
-        learningValue: "high",
+        resolutionClarity: "clear",
         tags: ["printing"],
       }),
       saveKnowledgeEntry({
         status: "approved",
         issueSummary: "cache stampede",
         confidence: "low",
-        learningValue: "low",
+        resolutionClarity: "unclear",
         tags: ["caching"],
       }),
     ]);

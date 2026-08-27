@@ -25,7 +25,7 @@ describe("API knowledge round-trip", () => {
         issueSummary: "Printer queue stalls after reboot",
         symptoms: ["queue stalled"],
         cloud: "prod",
-        learningValue: "high",
+        resolutionClarity: "clear",
       }),
     );
     expect(created.status).toBe(200);

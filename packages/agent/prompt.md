@@ -143,7 +143,7 @@ stored; then `add_source_project` to register the source's grouping. Once only.
 
 `issue_summary`, `symptoms`, `signals`, `root_cause`, `resolution`, `component` and
 `confidence` are the core; `resolution_pattern`, `cloud`, `resolution_clarity`,
-`learning_value`, `hidden_fix` and `tags` are the facets. `save_knowledge_entry`'s schema
+`hidden_fix` and `tags` are the facets. `save_knowledge_entry`'s schema
 documents each one. What follows is what shapes how you _read the ticket_, before you get
 as far as the call:
 

@@ -70,7 +70,6 @@
 
   let q = $state("");
   let status = $state("");
-  let learningValue = $state("");
   let productId = $state("");
   let component = $state("");
   let version = $state("");
@@ -125,8 +124,8 @@
    * silently narrowed with no way out.
    */
   const activeFilters = $derived(
-    [productId, component, learningValue, version, status].filter(Boolean)
-      .length + shown.filter((k) => extras[k]).length,
+    [productId, component, version, status].filter(Boolean).length +
+      shown.filter((k) => extras[k]).length,
   );
 
   function scopeQs(p: URLSearchParams) {
@@ -139,7 +138,6 @@
 
   function entryQs() {
     const p = scopeQs(new URLSearchParams());
-    if (learningValue) p.set("learning_value", learningValue);
     if (version) p.set("affected_version", version);
     return applyExtras(p, shown, extras).toString();
   }
@@ -276,7 +274,6 @@
     if (productId) p.set("product_id", productId);
     if (productId && component) p.set("component", component);
     if (status) p.set("status", status);
-    if (learningValue) p.set("learning_value", learningValue);
     if (version) p.set("affected_version", version);
     applyExtras(p, shown, extras);
     try {
@@ -326,7 +323,6 @@
     component = "";
     components = [];
     status = "";
-    learningValue = "";
     version = "";
     extras = {};
     persist();
@@ -382,7 +378,6 @@
     void q;
     void kind;
     void status;
-    void learningValue;
     void productId;
     void component;
     void version;
@@ -402,7 +397,6 @@
   let facetsOnce = false;
   $effect(() => {
     void status;
-    void learningValue;
     void version;
     if (!facetsOnce) {
       facetsOnce = true;
@@ -626,15 +620,6 @@
         ...(showDocFilters ? DOC_STATUSES : STATUSES),
       ]}
     />
-
-    {#if showEntryFilters}
-      <Select
-        bind:value={learningValue}
-        active={!!learningValue}
-        title="Learning value"
-        options={[{ value: "", label: "any value" }, "high", "medium", "low"]}
-      />
-    {/if}
 
     {#if showEntryFilters}
       {#each shown as key (key)}

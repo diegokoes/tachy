@@ -96,7 +96,6 @@ import {
   log,
   cloudSchema,
   resolutionClaritySchema,
-  learningValueSchema,
   badInput,
   knowledgeStatusSchema,
   referenceStatusSchema,
@@ -923,7 +922,7 @@ tool(
       confidence: confidenceSchema
         .optional()
         .describe(
-          "How confident you are in the root cause + resolution together.",
+          "How sure you are that the root_cause and resolution written here are CORRECT — a property of this entry, not of the ticket. 'high': cause identified and the fix confirmed to address it. 'medium': plausible cause, fix worked but was never confirmed to be the reason. 'low': cause unknown or guessed. No root_cause means 'low'.",
         ),
       tags: z
         .array(z.string())
@@ -936,8 +935,11 @@ tool(
         .describe(
           "Environment the issue was observed in — lowercase slug (e.g. prod, qa, dev). Call list_environments first and reuse an existing value when one fits.",
         ),
-      resolution_clarity: resolutionClaritySchema.optional(),
-      learning_value: learningValueSchema.optional(),
+      resolution_clarity: resolutionClaritySchema
+        .optional()
+        .describe(
+          "Whether the ticket actually ended in a fix — a property of what happened, not of how sure you are. 'clear': a specific fix was applied and the issue confirmed gone. 'partial': mitigated or worked around, the underlying cause still stands. 'unclear': closed with no real resolution — it stopped recurring, the customer went quiet, nobody identified a fix. Independent of confidence: a restart that verifiably fixed it with no known cause is clear + low; a cause you fully understand that was never fixed is unclear + high.",
+        ),
       hidden_fix: z
         .boolean()
         .optional()
@@ -989,7 +991,6 @@ tool(
       tags: a.tags,
       cloud: a.cloud,
       resolutionClarity: a.resolution_clarity,
-      learningValue: a.learning_value,
       hiddenFix: a.hidden_fix,
       affectedVersion: a.affected_version,
       fixedVersion: a.fixed_version,
@@ -1368,7 +1369,6 @@ tool(
           "Environment slug — reuse an existing value from list_environments when one fits; null clears it.",
         ),
       resolution_clarity: resolutionClaritySchema.nullable().optional(),
-      learning_value: learningValueSchema.nullable().optional(),
       hidden_fix: z.boolean().nullable().optional(),
       affected_version: z
         .string()
@@ -1403,7 +1403,6 @@ tool(
     if (a.cloud !== undefined) patch.cloud = a.cloud;
     if (a.resolution_clarity !== undefined)
       patch.resolutionClarity = a.resolution_clarity;
-    if (a.learning_value !== undefined) patch.learningValue = a.learning_value;
     if (a.hidden_fix !== undefined) patch.hiddenFix = a.hidden_fix;
     if (a.affected_version !== undefined)
       patch.affectedVersion = a.affected_version;
