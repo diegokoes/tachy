@@ -7,6 +7,7 @@
   import ScopeCrumb from "./library/ScopeCrumb.svelte";
   import { isCurator, canCurateScope } from "./session.svelte";
   import { pushScope } from "./keys.svelte";
+  import { vimState } from "./vim.svelte";
   import { Badge, Button, Chip, Icon } from "./tui";
 
   let { id, onClose, onOpen }: { id: string; onClose: () => void; onOpen?: (id: string) => void } = $props();
@@ -40,7 +41,13 @@
       would sit one stray keystroke away from discarding a form. */
   $effect(() => {
     if (editing || !entry) return;
-    return pushScope([{ key: "backspace", label: "back", run: onClose }]);
+    return pushScope([
+      { key: "backspace", label: "back", run: onClose },
+      // esc is the vim reflex for "back out of here"; backspace stays either way.
+      ...(vimState.enabled
+        ? [{ key: "esc", label: "", hidden: true, run: onClose }]
+        : []),
+    ]);
   });
 
   async function load() {
@@ -190,7 +197,6 @@
             <QualityBars
               confidence={entry.confidence}
               clarity={entry.resolution_clarity}
-              learningValue={entry.learning_value}
             />
           </div>
 
@@ -371,9 +377,10 @@
   /* One reading column: the title, the meta band and every section share the
      same measure and the same side padding, so nothing stops half-way across
      a frame that keeps running. The column is centred in the frame; the prose
-     inside stays left-aligned, never justified. 64ch of sans holds the 78
-     characters 78ch of mono did — see .prose-measure in base.css. */
+     inside stays left-aligned, never justified. ch tracks the reading face, so
+     the measure holds its character count whichever one is picked. */
   .content {
+    font-family: var(--font-prose);
     max-width: 64ch;
     margin-inline: auto;
     padding: 0 var(--pad-4);

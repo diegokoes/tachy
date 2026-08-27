@@ -1,20 +1,17 @@
 <script lang="ts">
-  
-  
-  
   import { themeState } from "./theme.svelte";
 
   let { target, controls }: { target: HTMLElement | undefined; controls?: string } = $props();
 
-  /* Must stay equal to the .layer line-height below: the row maths here and
-     the glyphs painted there have to agree, at every font scale. */
+  /* Must stay equal to the --row height below: the row maths here and the
+     cells painted there have to agree, at every font scale. */
   const ROW_REM = 0.9;
   const rowPx = () =>
     ROW_REM * parseFloat(getComputedStyle(document.documentElement).fontSize);
 
   let bar = $state<HTMLDivElement>();
   let ROW = $state(16);
-  let rows = $state(0); 
+  let rows = $state(0);
   let thumbStart = $state(0);
   let thumbLen = $state(1);
   let visible = $state(false);
@@ -34,9 +31,6 @@
     thumbStart = Math.round(p * (rows - thumbLen));
     pct = Math.round(p * 100);
   }
-
-  const track = $derived("▲\n" + "░\n".repeat(rows) + "▼");
-  const thumb = $derived("\n".repeat(1 + thumbStart) + "█\n".repeat(thumbLen));
 
   function seek(e: PointerEvent) {
     const el = target;
@@ -68,7 +62,7 @@
     el.addEventListener("scroll", update);
     const ro = new ResizeObserver(update);
     ro.observe(el);
-    
+
     const mo = new MutationObserver(update);
     mo.observe(el, { childList: true, subtree: true, characterData: true });
     return () => {
@@ -83,7 +77,7 @@
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -- it really is a scrollbar -->
   <div
     bind:this={bar}
-    class="ascii-scrollbar"
+    class="scrollbar"
     role="scrollbar"
     aria-controls={controls}
     aria-valuenow={pct}
@@ -94,36 +88,74 @@
     onpointerup={() => (dragging = false)}
     onlostpointercapture={() => (dragging = false)}
   >
-    <pre class="layer track">{track}</pre>
-    <pre class="layer thumb">{thumb}</pre>
+    <span class="cap up" aria-hidden="true"></span>
+    {#each { length: rows } as _, i}
+      <span
+        class="row"
+        class:on={i >= thumbStart && i < thumbStart + thumbLen}
+        aria-hidden="true"
+      ></span>
+    {/each}
+    <span class="cap down" aria-hidden="true"></span>
   </div>
 {/if}
 
 <style>
-  .ascii-scrollbar {
-    position: relative;
-    /* The width is in ch, so the face has to be on this element and not only
-       on the layers inside it. */
-    font-family: var(--font-mono);
-    width: 1.25ch;
+  /* Drawn, not typed. This was a ▲░█▼ column on --font-mono, and neither
+     bundled face carries those glyphs — every row came from whatever fallback
+     the OS supplied, so the track drifted out of step with the row maths
+     above on any machine whose fallback had different metrics. */
+  .scrollbar {
+    --row: 0.9rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 0.75rem;
     align-self: stretch;
     overflow: hidden;
     cursor: pointer;
     user-select: none;
     touch-action: none;
   }
-  .layer {
-    position: absolute;
-    inset: 0;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    white-space: pre;
-    font: var(--fs-xs) / 0.9rem var(--font-mono);
-    text-align: center;
-    pointer-events: none;
+  .row,
+  .cap {
+    flex: none;
+    height: var(--row);
+    width: 0.28rem;
   }
-  .track { color: var(--muted); opacity: 0.55; }
-  .thumb { color: var(--accent); }
-  .ascii-scrollbar:hover .track { opacity: 0.85; }
+  .row {
+    background: color-mix(in srgb, var(--muted) 40%, transparent);
+  }
+  .row.on {
+    background: var(--accent);
+    border-radius: 1px;
+  }
+  .scrollbar:hover .row {
+    background: color-mix(in srgb, var(--muted) 70%, transparent);
+  }
+  .scrollbar:hover .row.on {
+    background: var(--accent);
+  }
+
+  /* Triangles from borders — the same reason as above, one step further: no
+     glyph at all, so nothing to substitute. The cap keeps its full row height
+     so the arrow slots stay exactly one ROW, which is what down() measures. */
+  .cap {
+    width: 0.6rem;
+    display: grid;
+    place-items: center;
+  }
+  .cap::before {
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 0.25rem solid transparent;
+    border-right: 0.25rem solid transparent;
+  }
+  .cap.up::before {
+    border-bottom: 0.34rem solid var(--muted);
+  }
+  .cap.down::before {
+    border-top: 0.34rem solid var(--muted);
+  }
 </style>

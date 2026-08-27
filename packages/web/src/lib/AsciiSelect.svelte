@@ -164,7 +164,7 @@
     color: var(--text);
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-control);
     cursor: pointer;
     text-align: left;
   }
@@ -209,7 +209,7 @@
     padding: 2px;
     background: var(--panel-bg);
     border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
-    border-radius: var(--radius);
+    border-radius: var(--radius-control);
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
   }
 

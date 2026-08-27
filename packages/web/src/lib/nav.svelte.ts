@@ -20,7 +20,3 @@ export function navItems(): NavItem[] {
 export function nextNavKey(): number {
   return navItems().length + 1;
 }
-
-const SUP = "¹²³⁴⁵⁶⁷⁸⁹";
-
-export const superscript = (n: number): string => SUP[n - 1] ?? String(n);

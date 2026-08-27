@@ -1,49 +1,59 @@
 <script lang="ts">
   import { navigate, segment } from "../router.svelte";
   import { session, logout } from "../session.svelte";
-  import { Button, Tabs } from "../tui";
+  import { Button } from "../tui";
+  import { setSubnav } from "../subnav.svelte";
   import AgentTab from "./AgentTab.svelte";
-  import ThemeTab from "./ThemeTab.svelte";
+  import UiTab from "./UiTab.svelte";
+  import KeybindsTab from "./KeybindsTab.svelte";
 
   const TABS = [
     { key: "agent", label: "agent" },
-    { key: "theme", label: "theme" },
+    { key: "ui", label: "ui" },
+    { key: "keybinds", label: "keybinds" },
   ];
 
-  const tab = $derived(segment(1) ?? "agent");
+  const raw = $derived(segment(1) ?? "agent");
+  // "theme" was this tab's name until the UI rework; keep old links working.
+  const tab = $derived(raw === "theme" ? "ui" : raw);
+
+  $effect(() =>
+    setSubnav({
+      items: TABS,
+      active: tab,
+      onpick: (k) => navigate(`/settings/${k}`),
+      actions: account,
+    }),
+  );
 </script>
 
-<div class="head">
-  <Tabs
-    items={TABS}
-    active={tab}
-    hotkeys="shift"
-    onpick={(k) => navigate(`/settings/${k}`)}
-  >
-    {#snippet right()}
-      <span class="who">{session.me?.email ?? ""}</span>
-      {#if session.me}
-        <Button variant="ghost" size="sm" onclick={logout}>log out</Button>
-      {/if}
-    {/snippet}
-  </Tabs>
-</div>
+<!-- Rendered by App into the carved row beside the subnav, not here. Who you
+     are signed in as is a Settings concern, so it stays owned by this view
+     rather than becoming global chrome. -->
+{#snippet account()}
+  <span class="who">{session.me?.email ?? ""}</span>
+  {#if session.me}
+    <Button size="sm" onclick={logout}>log out</Button>
+  {/if}
+{/snippet}
 
-{#if tab === "theme"}
-  <ThemeTab />
+{#if tab === "ui"}
+  <UiTab />
+{:else if tab === "keybinds"}
+  <KeybindsTab />
 {:else}
   <AgentTab />
 {/if}
 
 <style>
-  .head {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    background: var(--panel-bg);
-    margin-bottom: var(--pad-4);
-  }
+  /* Truncates rather than pushing the log-out button into the recess when the
+     window is narrow and the address is long. */
   .who {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fs-xs);
     color: var(--muted);
   }
 </style>

@@ -3,7 +3,10 @@
   import { gsap, reducedMotion } from "../gsap";
   import { PULSE } from "../motion";
 
-  let { from, to }: { from?: HTMLElement; to?: HTMLElement } = $props();
+  /* Element, not HTMLElement: `to` is the tab's frame <svg>, and everything
+     done with these ends is getBoundingClientRect and ResizeObserver.observe,
+     both of which are defined on Element. */
+  let { from, to }: { from?: Element; to?: Element } = $props();
 
   let svg = $state<SVGSVGElement>();
   let core = $state<SVGPathElement>();
@@ -188,7 +191,28 @@
     if (still) return;
 
     let since = 0;
+    /* Whether either endpoint has moved since the last frame. The tab's
+       open/close grow is a transform, which changes no layout box — so the
+       ResizeObserver above never fires for it and the wire would hang off the
+       hexagon's old edge until the next random flicker. Watching the client
+       rect catches it, and catches anything else that moves an end. */
+    let anchors = "";
+    const moved = () => {
+      if (!from || !to) return false;
+      const a = from.getBoundingClientRect();
+      const b = to.getBoundingClientRect();
+      const sig = `${a.right.toFixed(1)},${a.top.toFixed(1)},${a.height.toFixed(1)}|${b.left.toFixed(1)},${b.top.toFixed(1)},${b.height.toFixed(1)}`;
+      if (sig === anchors) return false;
+      anchors = sig;
+      return true;
+    };
+
     const flicker = (_t: number, dt: number) => {
+      if (moved()) {
+        since = 0;
+        jag();
+        return;
+      }
       since += dt;
       if (since < nextJag) return;
       since = 0;

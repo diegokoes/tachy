@@ -22,7 +22,6 @@ import { getCustomerIdBySlug } from "../catalog/customers";
 export interface KnowledgeFacets {
   cloud?: string | null;
   resolutionClarity?: string | null;
-  learningValue?: string | null;
   hiddenFix?: boolean | null;
 
   affectedVersion?: string | null;
@@ -166,13 +165,13 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
     insert into knowledge_entries
       (work_item_id, product_id, team_id, customer_id, created_by, status, issue_summary, symptoms, signals, tags,
        root_cause, resolution, resolution_pattern, component_id, product_area, confidence,
-       cloud, resolution_clarity, learning_value, hidden_fix, affected_version, fixed_version,
+       cloud, resolution_clarity, hidden_fix, affected_version, fixed_version,
        structured, embedding)
     values
       (${i.workItemId ?? null}, ${productId}, ${teamId}, ${customerId ?? null}, ${i.createdById ?? null},
        ${i.status ?? "approved"}, ${i.issueSummary ?? null}, ${i.symptoms ?? []}, ${i.signals ?? []}, ${i.tags ?? []},
        ${i.rootCause ?? null}, ${i.resolution ?? null}, ${i.resolutionPattern ?? null}, ${componentId}, ${productArea},
-       ${confidence}, ${i.cloud ?? null}, ${i.resolutionClarity ?? null}, ${i.learningValue ?? null}, ${i.hiddenFix ?? null},
+       ${confidence}, ${i.cloud ?? null}, ${i.resolutionClarity ?? null}, ${i.hiddenFix ?? null},
        ${affectedVersion}, ${i.fixedVersion ?? null},
        ${sql.json(structured as any)}, ${embedding}::vector)
     returning id, status
@@ -193,7 +192,6 @@ export interface KnowledgeFilters {
   customerId?: string;
   cloud?: string;
   confidence?: string;
-  learningValue?: string;
   resolutionClarity?: string;
   resolutionPattern?: string;
   hiddenFix?: boolean;
@@ -208,7 +206,6 @@ export type FacetKey =
   | "customer"
   | "cloud"
   | "confidence"
-  | "learning_value"
   | "resolution_clarity"
   | "resolution_pattern"
   | "hidden_fix"
@@ -228,7 +225,6 @@ function facetSql(o: KnowledgeFilters, except?: FacetKey) {
     ${o.customerId && on("customer") ? sql`and customer_id = ${o.customerId}` : sql``}
     ${o.cloud && on("cloud") ? sql`and cloud = ${o.cloud}` : sql``}
     ${o.confidence && on("confidence") ? sql`and confidence = ${o.confidence}` : sql``}
-    ${o.learningValue && on("learning_value") ? sql`and learning_value = ${o.learningValue}` : sql``}
     ${o.resolutionClarity && on("resolution_clarity") ? sql`and resolution_clarity = ${o.resolutionClarity}` : sql``}
     ${o.resolutionPattern && on("resolution_pattern") ? sql`and resolution_pattern = ${o.resolutionPattern}` : sql``}
     ${o.hiddenFix != null && on("hidden_fix") ? sql`and coalesce(hidden_fix, false) = ${o.hiddenFix}` : sql``}
@@ -309,7 +305,7 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
     select e.id, e.work_item_id, e.status, e.superseded_by, e.issue_summary, e.root_cause, e.resolution,
            e.resolution_pattern, e.component_id, e.product_area, e.confidence, e.cloud,
            e.customer_id, cu.slug as customer_slug,
-           e.resolution_clarity, e.learning_value, e.hidden_fix,
+           e.resolution_clarity, e.hidden_fix,
            e.affected_version, e.fixed_version,
            e.symptoms, e.signals, e.tags, e.structured, e.version, e.created_at, e.updated_at,
            f.cos_sim, f.fts_rank, f.trgm_sim, f.rrf
@@ -330,7 +326,7 @@ export async function getKnowledgeEntry(id: string) {
     select e.id, e.work_item_id, e.product_id, e.team_id, e.status, e.superseded_by, e.issue_summary,
            e.symptoms, e.signals, e.tags, e.root_cause, e.resolution, e.resolution_pattern,
            e.component_id, e.product_area, e.confidence, e.cloud, e.resolution_clarity,
-           e.learning_value, e.hidden_fix, e.affected_version, e.fixed_version,
+           e.hidden_fix, e.affected_version, e.fixed_version,
            e.customer_id, cu.slug as customer_slug,
            e.structured, e.version, e.created_at, e.updated_at
     from knowledge_entries e
@@ -353,7 +349,7 @@ export async function listKnowledgeEntries(opts: KnowledgeListOptions = {}) {
   return sql`
     select e.id, e.work_item_id, e.product_id, e.team_id, e.status, e.superseded_by, e.issue_summary,
            e.root_cause, e.resolution, e.resolution_pattern, e.component_id, e.product_area, e.confidence,
-           e.cloud, e.resolution_clarity, e.learning_value, e.hidden_fix, e.affected_version, e.fixed_version,
+           e.cloud, e.resolution_clarity, e.hidden_fix, e.affected_version, e.fixed_version,
            e.customer_id, cu.slug as customer_slug,
            e.symptoms, e.signals, e.tags, e.version, e.created_at, e.updated_at
     from knowledge_entries e
@@ -443,7 +439,6 @@ export async function listKnowledgeFacets(
     customer,
     cloud,
     confidence,
-    learning_value,
     resolution_clarity,
     resolution_pattern,
     hidden_fix,
@@ -454,7 +449,6 @@ export async function listKnowledgeFacets(
     customerRows(),
     column("cloud", "cloud"),
     column("confidence", "confidence"),
-    column("learning_value", "learning_value"),
     column("resolution_clarity", "resolution_clarity"),
     column("resolution_pattern", "resolution_pattern"),
     column("hidden_fix", "hidden_fix"),
@@ -470,7 +464,6 @@ export async function listKnowledgeFacets(
     customer,
     cloud,
     confidence,
-    learning_value,
     resolution_clarity,
     resolution_pattern,
     hidden_fix,
@@ -486,7 +479,7 @@ export async function updateKnowledgeEntry(
   const [current] = await sql`
     select product_id, status, superseded_by, issue_summary, root_cause, resolution, resolution_pattern,
            symptoms, signals, tags, component_id, product_area, confidence, customer_id,
-           cloud, resolution_clarity, learning_value, hidden_fix, affected_version, fixed_version,
+           cloud, resolution_clarity, hidden_fix, affected_version, fixed_version,
            structured, version
     from knowledge_entries where id = ${id}
   `;
@@ -562,8 +555,6 @@ export async function updateKnowledgeEntry(
       "resolutionClarity" in patch
         ? patch.resolutionClarity
         : current.resolution_clarity,
-    learningValue:
-      "learningValue" in patch ? patch.learningValue : current.learning_value,
     hiddenFix: "hiddenFix" in patch ? patch.hiddenFix : current.hidden_fix,
     affectedVersion:
       "affectedVersion" in patch
@@ -625,7 +616,6 @@ export async function updateKnowledgeEntry(
       confidence         = ${merged.confidence ?? null},
       cloud              = ${merged.cloud ?? null},
       resolution_clarity = ${merged.resolutionClarity ?? null},
-      learning_value     = ${merged.learningValue ?? null},
       hidden_fix         = ${merged.hiddenFix ?? null},
       affected_version   = ${merged.affectedVersion ?? null},
       fixed_version      = ${merged.fixedVersion ?? null},

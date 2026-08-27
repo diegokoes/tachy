@@ -101,7 +101,7 @@
     flex-wrap: wrap;
     gap: var(--pad-1);
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-control);
     background: var(--panel);
     padding: 0 var(--pad-2);
     min-height: var(--row-h);
@@ -135,7 +135,7 @@
     margin: 0;
     padding: var(--pad-1);
     border: 1px solid var(--accent);
-    border-radius: var(--radius);
+    border-radius: var(--radius-control);
     background: var(--panel-solid);
   }
   .suggest button {
@@ -149,7 +149,7 @@
     color: var(--text);
     background: none;
     border: none;
-    border-radius: var(--radius);
+    border-radius: var(--radius-control);
     padding: var(--pad-1) var(--pad-2);
     cursor: pointer;
     text-align: left;
