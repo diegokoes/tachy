@@ -134,10 +134,9 @@ contract between you and the database.
 | `resolution`         | string                                                 | YES (if resolved) | What was done or should be done to fix it.                                                                                                                                                         |
 | `resolution_pattern` | string (slug)                                          | If applicable     | Must be a slug from `list_resolution_patterns`. NEVER invent one — call `list_resolution_patterns` first. If none fits, leave unset (don't call `add_resolution_pattern` without user permission). |
 | `product_area`       | string                                                 | YES               | Slash-separated path: "TPD / Printing / Domino Integration".                                                                                                                                       |
-| `confidence`         | `"low"` \| `"medium"` \| `"high"`                      | YES               | How confident you are in the root cause + resolution. Must be lowercase.                                                                                                                           |
+| `confidence`         | `"low"` \| `"medium"` \| `"high"`                      | YES               | How sure you are that the root cause + resolution recorded here are correct — about the entry, not the ticket. Must be lowercase.                                                                  |
 | `cloud`              | `"prod"` \| `"qa"` \| `"private-cloud"` \| `"on-prem"` | Optional          | Environment the issue was observed in. A real, indexed column (filter with `cloud=` on search/list). Lowercase.                                                                                    |
-| `resolution_clarity` | `"clear"` \| `"partial"` \| `"unclear"`                | Optional          | How firmly the resolution is established. Lowercase.                                                                                                                                               |
-| `learning_value`     | `"high"` \| `"medium"` \| `"low"`                      | Optional          | Curation signal — how reusable this lesson is. Lowercase.                                                                                                                                          |
+| `resolution_clarity` | `"clear"` \| `"partial"` \| `"unclear"`                | Optional          | Whether the ticket actually ended in a fix — about what happened, not how sure you are. Independent of `confidence`. Lowercase.                                                                    |
 | `hidden_fix`         | boolean                                                | Optional          | True if the real fix wasn't obvious from the ticket surface.                                                                                                                                       |
 | `tags`               | string[]                                               | Optional          | Free-form labels for filtering/search (e.g. `["lc","printing"]`). Reuse existing slugs — call `list_labels` first; use a component's slug as a tag to make it findable by component.               |
 
@@ -146,7 +145,7 @@ contract between you and the database.
 Everything else goes here — the narrative/display fields that are stored and
 returned wholesale but never filtered on. Search results include this field, so
 the LLM has access to it during consult mode. Include what's relevant. (The
-filterable facets `cloud`, `resolution_clarity`, `learning_value`, `hidden_fix`
+filterable facets `cloud`, `resolution_clarity`, `hidden_fix`
 are now **top-level fields**, not nested here — see the table above. It is
 validated on save against a known shape, but extra keys are kept.)
 

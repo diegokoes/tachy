@@ -50,7 +50,7 @@ select {
   background: var(--panel);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-control);
   padding: var(--pad-2) var(--pad-3);
   /* Terminal caret everywhere: accent-colored; block shape where supported. */
   caret-color: var(--accent);
@@ -71,11 +71,9 @@ button:focus-visible {
 /* Readable measure for running prose only — containers stay full-frame so the
    list → detail transition never changes width.
 
-   Both faces put "0" at exactly 0.6em, so ch is the same physical width in
-   either — but mono spends 0.6em on every letter where sans averages 0.49em.
-   A measure in ch therefore holds ~22% more text in sans, and every measure
-   below is the old character count times 0.49/0.6. This one was 72ch/72
-   characters. */
+   ch is the width of "0" in the inherited face, so this stays a character-count
+   measure whichever reading font is picked. */
 .prose-measure {
+  font-family: var(--font-prose);
   max-width: 60ch;
 }

@@ -4,6 +4,7 @@
   import type { KnowledgeRow, NamedRow, ReferenceRow } from "../types";
   import { navigate, segment } from "../router.svelte";
   import { pushScope } from "../keys.svelte";
+  import { vimState } from "../vim.svelte";
   import { growBar } from "../motion";
   import { entryText, excerpt, type Seg } from "./matching";
   import { isCurator } from "../session.svelte";
@@ -69,7 +70,6 @@
 
   let q = $state("");
   let status = $state("");
-  let learningValue = $state("");
   let productId = $state("");
   let component = $state("");
   let version = $state("");
@@ -105,6 +105,12 @@
     cursor = cursor < 0 ? 0 : Math.min(items.length - 1, Math.max(0, cursor + delta));
     rowEls[cursor]?.scrollIntoView({ block: "nearest" });
   }
+
+  function jumpCursor(to: number) {
+    pointerMoved = false;
+    cursor = Math.min(items.length - 1, Math.max(0, to));
+    rowEls[cursor]?.scrollIntoView({ block: "nearest" });
+  }
   let searchEl = $state<HTMLInputElement>();
 
   let createSaving = $state(false);
@@ -118,8 +124,8 @@
    * silently narrowed with no way out.
    */
   const activeFilters = $derived(
-    [productId, component, learningValue, version, status].filter(Boolean)
-      .length + shown.filter((k) => extras[k]).length,
+    [productId, component, version, status].filter(Boolean).length +
+      shown.filter((k) => extras[k]).length,
   );
 
   function scopeQs(p: URLSearchParams) {
@@ -132,7 +138,6 @@
 
   function entryQs() {
     const p = scopeQs(new URLSearchParams());
-    if (learningValue) p.set("learning_value", learningValue);
     if (version) p.set("affected_version", version);
     return applyExtras(p, shown, extras).toString();
   }
@@ -269,7 +274,6 @@
     if (productId) p.set("product_id", productId);
     if (productId && component) p.set("component", component);
     if (status) p.set("status", status);
-    if (learningValue) p.set("learning_value", learningValue);
     if (version) p.set("affected_version", version);
     applyExtras(p, shown, extras);
     try {
@@ -319,7 +323,6 @@
     component = "";
     components = [];
     status = "";
-    learningValue = "";
     version = "";
     extras = {};
     persist();
@@ -375,7 +378,6 @@
     void q;
     void kind;
     void status;
-    void learningValue;
     void productId;
     void component;
     void version;
@@ -395,7 +397,6 @@
   let facetsOnce = false;
   $effect(() => {
     void status;
-    void learningValue;
     void version;
     if (!facetsOnce) {
       facetsOnce = true;
@@ -444,6 +445,38 @@
         hidden: true,
         run: () => items[cursor] && openItem(items[cursor]),
       },
+      // j/k and the arrows are always on — they cost nothing and cannot be
+      // typed by accident outside a field. The rest is vim-mode only, because
+      // g, G and / are keys someone who did not ask for vim would rather have.
+      ...(vimState.enabled
+        ? [
+            { key: "g g", label: "", hidden: true, run: () => jumpCursor(0) },
+            {
+              key: "shift+g",
+              label: "",
+              hidden: true,
+              run: () => jumpCursor(items.length - 1),
+            },
+            {
+              key: "/",
+              label: "",
+              hidden: true,
+              run: () => searchEl?.focus(),
+            },
+            // With a query on, the rows are the matches, so n/N steps them.
+            ...(q.trim()
+              ? [
+                  { key: "n", label: "", hidden: true, run: () => moveCursor(1) },
+                  {
+                    key: "shift+n",
+                    label: "",
+                    hidden: true,
+                    run: () => moveCursor(-1),
+                  },
+                ]
+              : []),
+          ]
+        : []),
     ]);
   });
 </script>
@@ -587,15 +620,6 @@
         ...(showDocFilters ? DOC_STATUSES : STATUSES),
       ]}
     />
-
-    {#if showEntryFilters}
-      <Select
-        bind:value={learningValue}
-        active={!!learningValue}
-        title="Learning value"
-        options={[{ value: "", label: "any value" }, "high", "medium", "low"]}
-      />
-    {/if}
 
     {#if showEntryFilters}
       {#each shown as key (key)}

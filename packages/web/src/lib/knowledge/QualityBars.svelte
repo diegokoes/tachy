@@ -5,14 +5,16 @@
   let {
     confidence,
     clarity,
-    learningValue,
   }: {
     confidence?: string | null;
     clarity?: string | null;
-    learningValue?: string | null;
   } = $props();
 
-  /** Each vocabulary is three ordered steps, so they share one scale. */
+  /**
+   * Two different questions — how sure we are of the entry, and how definitely
+   * the ticket was actually resolved — that happen to share a three-step
+   * ordering, so one scale draws both.
+   */
   const STEPS: Record<string, number> = {
     low: 1,
     unclear: 1,
@@ -30,7 +32,6 @@
       [
         ["conf", confidence],
         ["clar", clarity],
-        ["value", learningValue],
       ] as const
     )
       .filter(([, v]) => v && STEPS[v])

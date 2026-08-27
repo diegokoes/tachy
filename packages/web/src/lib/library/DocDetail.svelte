@@ -3,6 +3,7 @@
   import type { NamedRow, ReferenceLineageRow, ReferenceRow } from "../types";
   import { canCurateScope, isCurator } from "../session.svelte";
   import { pushScope } from "../keys.svelte";
+  import { vimState } from "../vim.svelte";
   import { errText } from "../resource.svelte";
   import { Badge, Button, Chip, Icon, Note, Select, G } from "../tui";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
@@ -128,7 +129,12 @@
   /** Same as the entry view: backspace goes back while reading, not editing. */
   $effect(() => {
     if (editing || newVersion || !doc) return;
-    return pushScope([{ key: "backspace", label: "back", run: onClose }]);
+    return pushScope([
+      { key: "backspace", label: "back", run: onClose },
+      ...(vimState.enabled
+        ? [{ key: "esc", label: "", hidden: true, run: onClose }]
+        : []),
+    ]);
   });
 </script>
 

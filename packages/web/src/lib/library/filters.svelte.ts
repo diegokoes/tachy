@@ -6,7 +6,6 @@ export type FacetKey =
   | "customer"
   | "cloud"
   | "confidence"
-  | "learning_value"
   | "resolution_clarity"
   | "resolution_pattern"
   | "hidden_fix"
@@ -32,11 +31,11 @@ export type ExtraFilter = {
 
 /**
  * Everything the `+` menu can add. The default controls — product, component,
- * affected version, status, learning value — stay hard-wired in the view; these
- * are the ones that were reachable from no filter at all before.
+ * affected version, status — stay hard-wired in the view; these are the ones
+ * that were reachable from no filter at all before.
  *
- * All of them are entry-only, like affected version and learning value already
- * are: `/knowledge/facets` counts knowledge entries, so offering them while
+ * All of them are entry-only, like affected version already is:
+ * `/knowledge/facets` counts knowledge entries, so offering them while
  * browsing docs would show counts that do not describe the list.
  */
 export const EXTRA_FILTERS: ExtraFilter[] = [
