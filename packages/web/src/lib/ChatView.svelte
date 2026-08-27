@@ -5,14 +5,14 @@
   import { renderMarkdown } from "./markdown";
   import { gsap, reducedMotion } from "./gsap";
   import { shatterAll } from "./motion";
-  import AsciiScrollbar from "./AsciiScrollbar.svelte";
+  import Scrollbar from "./Scrollbar.svelte";
   import ArtifactPanel from "./chat/ArtifactPanel.svelte";
   import CommandMenu, { matchArtifacts, type CommandPick } from "./chat/CommandMenu.svelte";
   import CompactPanel from "./chat/CompactPanel.svelte";
   import OutputCard, { type OutputFile } from "./chat/OutputCard.svelte";
   import Approval from "./chat/Approval.svelte";
   import Launcher from "./chat/Launcher.svelte";
-  import { G, Icon } from "./tui";
+  import { ArtifactMark, G, Icon } from "./tui";
   import { pushScope } from "./keys.svelte";
 
   const short = (tool: string) => tool.replace(/^mcp__tachy__/, "");
@@ -357,7 +357,7 @@
       <Launcher />
     {/if}
   </div>
-  <AsciiScrollbar target={transcriptEl} controls="chat-transcript" />
+  <Scrollbar target={transcriptEl} controls="chat-transcript" />
   <ArtifactPanel />
   </div>
 
@@ -365,7 +365,7 @@
     <div class="attachments">
       {#if chat.artifact}
         <span class="attach artifact-chip">
-          {G.artifact} {chat.artifact.title}
+          <ArtifactMark size="1em" /> {chat.artifact.title}
           <button class="chip-x" title="Detach artifact" onclick={() => (chat.artifact = undefined)}>{G.del}</button>
         </span>
       {/if}
@@ -538,7 +538,7 @@
     color: var(--muted);
   }
   .turn .who.err { color: var(--danger); }
-  .turn .body { white-space: pre-wrap; line-height: 1.6; padding-left: 1ch; }
+  .turn .body { font-family: var(--font-prose); white-space: pre-wrap; line-height: 1.6; padding-left: 1ch; }
   .turn .body.md { white-space: normal; }
   .turn .body.err { color: var(--danger); }
   .turn .body.waiting { min-height: 1.5em; }

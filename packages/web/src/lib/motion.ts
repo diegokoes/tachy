@@ -216,7 +216,14 @@ export function settle(node: Element) {
   gsap.to(node, { rotation: 0, scale: 1, duration: 0.3, ease: "power2.out" });
 }
 
-/** One discharge into a node — the far end of an arriving thread. */
+/**
+ * One discharge into a node — the far end of an arriving thread.
+ *
+ * drop-shadow, not box-shadow: box-shadow traces the element's border box, so
+ * on a node whose visible shape is drawn rather than boxed — the artifact tab
+ * is a hexagon on a borderless button — it flashes a rectangle around it.
+ * drop-shadow follows what is actually painted.
+ */
 export function jolt(node: Element) {
   if (reducedMotion()) return null;
   const accent = getComputedStyle(document.documentElement)
@@ -224,12 +231,12 @@ export function jolt(node: Element) {
     .trim();
   return gsap.fromTo(
     node,
-    { boxShadow: `0 0 9px 1px ${accent}` },
+    { filter: `drop-shadow(0 0 7px ${accent})` },
     {
-      boxShadow: `0 0 0px 0px ${accent}`,
+      filter: `drop-shadow(0 0 0px ${accent})`,
       duration: 0.4,
       ease: "power2.out",
-      clearProps: "boxShadow",
+      clearProps: "filter",
     },
   );
 }
@@ -245,6 +252,60 @@ export function crt(_node: Element, { duration = 220 } = {}) {
       `filter: brightness(${1 + 1.6 * (1 - t)});` +
       `opacity: ${Math.min(1, t * 4)}`,
   };
+}
+
+/**
+ * Squash-and-stretch on click, settling elastic. A press has to feel like it
+ * landed on something with give, so the overshoot is the point.
+ */
+export function jellyPress(node: HTMLElement) {
+  const press = () => {
+    if (reducedMotion()) return;
+    gsap
+      .timeline()
+      .to(node, { scaleX: 1.18, scaleY: 0.82, duration: 0.1 })
+      .to(node, { scaleX: 0.92, scaleY: 1.08, duration: 0.1 })
+      .to(node, {
+        scaleX: 1,
+        scaleY: 1,
+        duration: 0.5,
+        ease: "elastic.out(1, 0.4)",
+      });
+  };
+  node.addEventListener("click", press);
+  return {
+    destroy: () => {
+      node.removeEventListener("click", press);
+      gsap.killTweensOf(node);
+    },
+  };
+}
+
+/**
+ * Tweens a plain number, for state a component renders from rather than a
+ * style GSAP can write directly. Returns the tween so a caller can kill it.
+ *
+ * Opening overshoots, closing does not: a thing that springs shut reads as a
+ * glitch where springing open reads as intent.
+ */
+export function tweenValue(
+  from: number,
+  to: number,
+  set: (v: number) => void,
+  o: { duration?: number; delay?: number; ease?: string } = {},
+) {
+  if (reducedMotion()) {
+    set(to);
+    return null;
+  }
+  const box = { v: from };
+  return gsap.to(box, {
+    v: to,
+    delay: o.delay ?? 0,
+    duration: o.duration ?? 0.4,
+    ease: o.ease ?? "power2.out",
+    onUpdate: () => set(box.v),
+  });
 }
 
 /** Horizontal clip-path wipe, staggered — the nav reveal. */
