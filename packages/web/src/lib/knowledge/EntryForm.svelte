@@ -45,7 +45,6 @@
   let confidence = $state(seed.confidence ?? "");
   let cloud = $state(seed.cloud ?? "");
   let resolutionClarity = $state(seed.resolution_clarity ?? "");
-  let learningValue = $state(seed.learning_value ?? "");
   let hiddenFix = $state(Boolean(seed.hidden_fix));
   let resolutionPattern = $state(seed.resolution_pattern ?? "");
   let affectedVersion = $state(seed.affected_version ?? "");
@@ -124,7 +123,6 @@
       confidence: confidence || (mode === "edit" ? null : undefined),
       cloud: cloud.trim() || (mode === "edit" ? null : undefined),
       resolutionClarity: resolutionClarity || (mode === "edit" ? null : undefined),
-      learningValue: learningValue || (mode === "edit" ? null : undefined),
       // A checkbox is always a real answer, so it is sent either way — the
       // `|| null` the other optional fields use would drop an explicit false.
       hiddenFix,
@@ -229,9 +227,6 @@
     </label>
     <label>clarity
       <AsciiSelect bind:value={resolutionClarity} options={[{ value: "", label: "unset" }, "clear", "partial", "unclear"]} />
-    </label>
-    <label>learning value
-      <AsciiSelect bind:value={learningValue} options={[{ value: "", label: "unset" }, "high", "medium", "low"]} />
     </label>
     <label>{t("cloud")}
       <input class="short" bind:value={cloud} list="entry-form-envs" />

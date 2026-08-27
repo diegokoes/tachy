@@ -1,6 +1,5 @@
 export {
   RESOLUTION_CLARITIES,
-  LEARNING_VALUES,
   KNOWLEDGE_STATUSES,
   REFERENCE_STATUSES,
   CONFIDENCES,
@@ -11,7 +10,6 @@ export {
 } from "./vocabulary";
 export type {
   ResolutionClarity,
-  LearningValue,
   KnowledgeStatus,
   ReferenceStatus,
   Confidence,

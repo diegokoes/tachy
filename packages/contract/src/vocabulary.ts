@@ -6,7 +6,6 @@
  */
 
 export const RESOLUTION_CLARITIES = ["clear", "partial", "unclear"] as const;
-export const LEARNING_VALUES = ["high", "medium", "low"] as const;
 
 export const KNOWLEDGE_STATUSES = [
   "draft",
@@ -33,7 +32,6 @@ export const RUN_MODES = [
 ] as const;
 
 export type ResolutionClarity = (typeof RESOLUTION_CLARITIES)[number];
-export type LearningValue = (typeof LEARNING_VALUES)[number];
 export type KnowledgeStatus = (typeof KNOWLEDGE_STATUSES)[number];
 export type ReferenceStatus = (typeof REFERENCE_STATUSES)[number];
 export type Confidence = (typeof CONFIDENCES)[number];

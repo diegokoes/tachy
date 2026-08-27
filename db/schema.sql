@@ -385,16 +385,21 @@ create table knowledge_entries (
     -- columns below can reference it — they can't join other tables).
     component_id        uuid references components(id) on delete set null,
     product_area        text,
+    -- confidence and resolution_clarity answer two different questions and are
+    -- deliberately not collapsed: confidence is about THIS ROW ("is what we
+    -- wrote here correct?"), resolution_clarity is about the WORLD ("did the
+    -- ticket actually end in a fix?"). They come apart in both directions — a
+    -- restart that verifiably fixed it with nobody knowing why is clear/low;
+    -- a customer who went silent on a cause we fully understand is unclear/high.
     confidence          text check (confidence is null or confidence in ('low','medium','high')),
 
     -- low-cardinality, filterable facets promoted out of `structured` so they're
-    -- indexable/queryable (e.g. "all prod issues", "high learning-value entries").
+    -- indexable/queryable (e.g. "all prod issues", "all unclear resolutions").
     -- cloud = observed environment. Deliberately no CHECK: the vocabulary is
     -- deployment-specific (prod/qa vs dev/demo/preprod…). The app layer enforces
     -- a lowercase-slug shape and surfaces existing values for reuse.
     cloud               text,
     resolution_clarity  text check (resolution_clarity is null or resolution_clarity in ('clear','partial','unclear')),
-    learning_value      text check (learning_value is null or learning_value in ('high','medium','low')),
     hidden_fix          boolean,
     -- Optional, free-form (like cloud). affected_version seeds from the work
     -- item's observed_version at save time; fixed_version is set on resolution.

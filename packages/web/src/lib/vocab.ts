@@ -6,7 +6,6 @@
 import {
   CONFIDENCES,
   RESOLUTION_CLARITIES,
-  LEARNING_VALUES,
   KNOWLEDGE_STATUSES,
   REFERENCE_STATUSES,
 } from "@tachy/contract";
@@ -14,7 +13,6 @@ import {
 export {
   CONFIDENCES,
   RESOLUTION_CLARITIES,
-  LEARNING_VALUES,
   KNOWLEDGE_STATUSES,
   REFERENCE_STATUSES,
 };
@@ -26,6 +24,5 @@ export {
 export const ENUM_FIELDS: Record<string, readonly string[]> = {
   confidence: CONFIDENCES,
   resolution_clarity: RESOLUTION_CLARITIES,
-  learning_value: LEARNING_VALUES,
   status: KNOWLEDGE_STATUSES,
 };

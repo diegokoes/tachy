@@ -197,7 +197,6 @@
             <QualityBars
               confidence={entry.confidence}
               clarity={entry.resolution_clarity}
-              learningValue={entry.learning_value}
             />
           </div>
 

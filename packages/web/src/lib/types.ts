@@ -17,7 +17,6 @@ export interface KnowledgeRow {
   confidence: string | null;
   cloud: string | null;
   resolution_clarity: string | null;
-  learning_value: string | null;
   hidden_fix: boolean | null;
   affected_version?: string | null;
   fixed_version?: string | null;
