@@ -2,7 +2,8 @@
   import { navigate, segment } from "../router.svelte";
   import { isGlobalAdmin } from "../session.svelte";
   import { t, showCustomer } from "../terms";
-  import { Panel, Tabs } from "../tui";
+  import { Panel } from "../tui";
+  import { setSubnav } from "../subnav.svelte";
   import ConnectPage from "./ConnectPage.svelte";
   import TeamsPanel from "./TeamsPanel.svelte";
   import ProductsPanel from "./ProductsPanel.svelte";
@@ -21,17 +22,16 @@
   ];
 
   const page = $derived(segment(1) ?? "connect");
+
+  $effect(() =>
+    setSubnav({
+      items: PAGES,
+      active: page,
+      onpick: (k) => navigate(`/admin/${k}`),
+    }),
+  );
   const admin = $derived(isGlobalAdmin());
 </script>
-
-<div class="head">
-  <Tabs
-    items={PAGES}
-    active={page}
-    hotkeys="shift"
-    onpick={(k) => navigate(`/admin/${k}`)}
-  />
-</div>
 
 <div class="admin-root">
   {#if page === "structure"}
@@ -59,13 +59,6 @@
 </div>
 
 <style>
-  .head {
-    position: sticky;
-    top: 0;
-    z-index: 1;
-    background: var(--panel-bg);
-    margin-bottom: var(--pad-4);
-  }
   .stack {
     display: flex;
     flex-direction: column;

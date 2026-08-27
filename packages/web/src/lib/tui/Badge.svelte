@@ -22,7 +22,7 @@
     font-size: var(--fs-xs);
     line-height: 1.4;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-chip);
     padding: 0 var(--pad-2);
     white-space: nowrap;
     color: var(--muted);

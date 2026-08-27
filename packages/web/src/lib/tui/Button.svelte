@@ -74,7 +74,7 @@
     color: var(--text);
     background: transparent;
     border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border-radius: var(--radius-control);
     padding: var(--pad-2) var(--pad-4);
   }
 

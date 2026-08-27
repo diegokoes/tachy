@@ -4,6 +4,7 @@
   import type { KnowledgeRow, NamedRow, ReferenceRow } from "../types";
   import { navigate, segment } from "../router.svelte";
   import { pushScope } from "../keys.svelte";
+  import { vimState } from "../vim.svelte";
   import { growBar } from "../motion";
   import { entryText, excerpt, type Seg } from "./matching";
   import { isCurator } from "../session.svelte";
@@ -103,6 +104,12 @@
   function moveCursor(delta: number) {
     pointerMoved = false;
     cursor = cursor < 0 ? 0 : Math.min(items.length - 1, Math.max(0, cursor + delta));
+    rowEls[cursor]?.scrollIntoView({ block: "nearest" });
+  }
+
+  function jumpCursor(to: number) {
+    pointerMoved = false;
+    cursor = Math.min(items.length - 1, Math.max(0, to));
     rowEls[cursor]?.scrollIntoView({ block: "nearest" });
   }
   let searchEl = $state<HTMLInputElement>();
@@ -444,6 +451,38 @@
         hidden: true,
         run: () => items[cursor] && openItem(items[cursor]),
       },
+      // j/k and the arrows are always on — they cost nothing and cannot be
+      // typed by accident outside a field. The rest is vim-mode only, because
+      // g, G and / are keys someone who did not ask for vim would rather have.
+      ...(vimState.enabled
+        ? [
+            { key: "g g", label: "", hidden: true, run: () => jumpCursor(0) },
+            {
+              key: "shift+g",
+              label: "",
+              hidden: true,
+              run: () => jumpCursor(items.length - 1),
+            },
+            {
+              key: "/",
+              label: "",
+              hidden: true,
+              run: () => searchEl?.focus(),
+            },
+            // With a query on, the rows are the matches, so n/N steps them.
+            ...(q.trim()
+              ? [
+                  { key: "n", label: "", hidden: true, run: () => moveCursor(1) },
+                  {
+                    key: "shift+n",
+                    label: "",
+                    hidden: true,
+                    run: () => moveCursor(-1),
+                  },
+                ]
+              : []),
+          ]
+        : []),
     ]);
   });
 </script>
