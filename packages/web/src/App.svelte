@@ -47,8 +47,8 @@
   let navRevealed = $state(false);
   let subEl = $state<HTMLElement>();
   let windowEl = $state<HTMLElement>();
-  let subW = $state(0);
   let subH = $state(0);
+  let settling = $state(false);
   let carveMask = $state("none");
   let carveOutline = $state("");
   let carveW = $state(0);
@@ -67,38 +67,42 @@
   /**
    * The recess outline, as one path.
    *
-   * Walls are vertical: the mouth and the floor sit at the same x, so the two
-   * corner pairs line up and the rounding on each reads as belonging to the
-   * same shape. Its width comes from the window, not the bar — it opens out to
-   * within `--sub-reserve` of each edge, leaving a corner for the row's own
-   * content, and only falls back to hugging the bar when the window is too
-   * narrow for that.
+   * The recess opens at the window's own left edge and runs right to `wall`,
+   * which comes from the window rather than the bar: to within `--sub-reserve`
+   * of the right edge, leaving a corner for the row's own content, falling
+   * back to clearing the centred bar only when the window is too narrow for
+   * that.
    *
-   * The floor rounds inward like any box corner; the mouth rounds outward, so
-   * the window's top rule sweeps down into the recess instead of stopping at a
-   * square shoulder. A CSS border cannot turn that way, which is why the
-   * outline is stroked from the same path the mask is filled from — generating
-   * them separately is how a cut and the line drawn on it drift apart.
+   * So the left end is not a mouth but the window's top-left corner, moved
+   * down to the recess floor and rounded like every other corner on the box.
+   * The right end keeps the floor's inward round and a mouth that rounds
+   * outward, so the window's top rule sweeps down into the recess instead of
+   * stopping at a square shoulder. A CSS border cannot turn that way, which is
+   * why the outline is stroked from the same path the mask is filled from —
+   * generating them separately is how a cut and the line drawn on it drift
+   * apart.
    *
-   * `y0` lifts the open ends: the stroke is centred on the path, so starting it
-   * half a line-width down lands it exactly on the window's own top rule.
+   * `x0` / `y0` pull the open ends in: the stroke is centred on the path, so
+   * starting it half a line-width inside lands it exactly on the window's own
+   * left and top rules.
    */
-  function recessPath(half: number, h: number, round: number, y0: number) {
-    const W = 2 * (half + round);
-    const l = round;
-    const r = W - round;
+  function recessPath(
+    wall: number,
+    h: number,
+    round: number,
+    x0: number,
+    y0: number,
+  ) {
     // Two decimals: sub-pixel is plenty, and the raw floats triple the length
     // of the data URI this ends up inside.
     const n = (v: number) => Math.round(v * 100) / 100;
     return [
-      `M0 ${n(y0)}`,
-      `Q${n(l)} ${n(y0)} ${n(l)} ${n(y0 + round)}`,
-      `L${n(l)} ${n(h - round)}`,
-      `Q${n(l)} ${n(h)} ${n(l + round)} ${n(h)}`,
-      `L${n(r - round)} ${n(h)}`,
-      `Q${n(r)} ${n(h)} ${n(r)} ${n(h - round)}`,
-      `L${n(r)} ${n(y0 + round)}`,
-      `Q${n(r)} ${n(y0)} ${n(W)} ${n(y0)}`,
+      `M${n(x0)} ${n(h + round)}`,
+      `Q${n(x0)} ${n(h)} ${n(x0 + round)} ${n(h)}`,
+      `L${n(wall - round)} ${n(h)}`,
+      `Q${n(wall)} ${n(h)} ${n(wall)} ${n(h - round)}`,
+      `L${n(wall)} ${n(y0 + round)}`,
+      `Q${n(wall)} ${n(y0)} ${n(wall + round)} ${n(y0)}`,
     ].join(" ");
   }
 
@@ -111,7 +115,6 @@
     const host = windowEl;
     const el = subEl;
     if (!host || !el) {
-      subW = 0;
       subH = 0;
       carveMask = "none";
       carveOutline = "";
@@ -130,7 +133,6 @@
       if (!w || !h0 || sig === last) return;
       last = sig;
 
-      subW = w;
       subH = h0;
 
       const air = cssPx(host, "var(--sub-air)");
@@ -139,18 +141,19 @@
       // The bar's own radius, so the two read as the same family of corner.
       const round = cssPx(host, "var(--radius)");
 
-      // Open to within `reserve` of each edge, but never tighter than the air
-      // the bar needs — which is what happens on a window too narrow for both.
-      const half = Math.max(w / 2 + air, avail / 2 - reserve);
+      // Open to within `reserve` of the right edge, but never tighter than the
+      // centred bar's own right edge plus its air — which is what happens on a
+      // window too narrow for both.
+      const wall = Math.max(avail / 2 + w / 2 + air, avail - reserve);
       const h = h0 + air;
-      carveW = 2 * (half + round);
-      carveH = h + line;
+      carveW = wall + round;
+      carveH = h + round + line;
 
       const svg =
-        `<svg xmlns="http://www.w3.org/2000/svg" width="${carveW}" height="${h}">` +
-        `<path d="${recessPath(half, h, round, 0)} Z" fill="black"/></svg>`;
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${carveW}" height="${carveH}">` +
+        `<path d="${recessPath(wall, h, round, 0, 0)} L0 0 Z" fill="black"/></svg>`;
       carveMask = `url('data:image/svg+xml,${encodeURIComponent(svg)}')`;
-      carveOutline = recessPath(half, h, round, line / 2);
+      carveOutline = recessPath(wall, h, round, line / 2, line / 2);
     };
 
     read();
@@ -158,6 +161,28 @@
     ro.observe(el);
     ro.observe(host);
     return () => ro.disconnect();
+  });
+
+  /* The subnav bar outlives a section change: an incoming view registers its
+     tabs before the outgoing view's disposer runs — deliberately, so the row
+     never blanks mid-switch — so the same element is reused and its indicator
+     would slide from wherever the old section's tab happened to sit. Sliding
+     is for moving within a section; arriving in one should just be there.
+
+     Two frames, not one. The bar is centred, so the recess ResizeObserver
+     writing a new width re-centres it a frame after the switch, and the
+     indicator would take that second move as something to animate. */
+  $effect(() => {
+    void view;
+    settling = true;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => (settling = false));
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
   });
 
   $effect(() => {
@@ -231,7 +256,12 @@
       <div class="mark"><Wordmark /></div>
       <div class="navbar" bind:this={navEl} class:unrevealed={!navRevealed}>
         <Panel>
-          <Tabs items={nav} active={view} onpick={(k) => navigate(`/${k}`)} />
+          <Tabs
+            items={nav}
+            active={view}
+            anchor="--tab-nav"
+            onpick={(k) => navigate(`/${k}`)}
+          />
         </Panel>
       </div>
       <!-- Balances the wordmark's track so the pill sits on the true centre. -->
@@ -257,15 +287,14 @@
         >
           <path d={carveOutline} />
         </svg>
-        <div class="subnav" bind:this={subEl}>
-          <Panel>
-            <Tabs
-              items={sub.items}
-              active={sub.active}
-              hotkeys="shift"
-              onpick={sub.onpick}
-            />
-          </Panel>
+        <div class="subnav" class:settling bind:this={subEl}>
+          <Tabs
+            items={sub.items}
+            active={sub.active}
+            hotkeys="shift"
+            anchor="--tab-sub"
+            onpick={sub.onpick}
+          />
         </div>
         {#if sub.actions}
           <div class="top-acts">{@render sub.actions()}</div>
@@ -305,7 +334,10 @@
 
      The bottom gutter is the widest of the three: the window's lower edge is
      the one nothing else sits against, so it needs air to read as a floating
-     object rather than as content jammed into the viewport. */
+     object rather than as content jammed into the viewport. The gap is now the
+     narrowest, for the opposite reason — the nav and the subnav in the recess
+     below it are one control in two registers, and reading as a pair means
+     sitting closer to each other than either does to anything else. */
   .app {
     position: relative;
     z-index: 1;
@@ -313,7 +345,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--pad-3);
+    gap: var(--pad-2);
     padding: var(--pad-3) clamp(0.75rem, 3vw, 2.5rem) var(--pad-4);
   }
 
@@ -369,9 +401,13 @@
     display: flex;
     justify-content: center;
   }
+  /* The subnav's box, not a Panel's default: the two bars sit on the same
+     centre line and stacking a taller one above a shorter one read as two
+     different objects rather than one control in two registers. */
   .navbar :global(> section) {
     width: max-content;
     max-width: 100%;
+    padding: var(--pad-2) var(--pad-3);
   }
   /* The rule fills a full-width bar; a hugging pill has no edge to run to. */
   .navbar :global(.rule) {
@@ -398,9 +434,9 @@
      redefining it here would silently swap a colour for a length everywhere
      inside the window. */
   .window {
-    --sub-air: var(--pad-3);
-    /* Window edge to recess wall: the corner the carved row keeps for its own
-       content. The recess takes everything else. */
+    --sub-air: var(--pad-2);
+    /* Right edge to recess wall: the corner the carved row keeps for its own
+       content. The recess takes everything else, out to the left edge. */
     --sub-reserve: 15rem;
     --sub-depth: calc(var(--sub-h-raw, 0px) + var(--sub-air));
   }
@@ -414,7 +450,7 @@
       auto,
       100% 100%;
     mask-position:
-      top center,
+      top left,
       0 0;
     mask-repeat: no-repeat;
     mask-composite: exclude;
@@ -427,8 +463,7 @@
   .notch {
     position: absolute;
     top: 0;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
     z-index: 1;
     overflow: visible;
     pointer-events: none;
@@ -439,26 +474,33 @@
     stroke-width: var(--panel-line-w);
   }
 
-  /* Flush with the window's top edge, so the bar's own top rule lands where
-     the window's would have run. */
+  /* No box of its own — the recess is the box. A second bordered pill hung
+     under the nav's read as chrome about chrome; bare labels in a cut let the
+     window's own edge do the framing, and cost the row a border and two steps
+     of padding on the way. Its padding is what the Panel used to supply, so
+     the labels still clear the recess floor.
+
+     Centred on the window's centre line — the same one the nav pill sits on,
+     so the two stack. */
   .subnav {
     position: absolute;
     top: 0;
     left: 50%;
     transform: translateX(-50%);
     z-index: 2;
+    padding: var(--pad-2) var(--pad-3);
   }
-  /* The window's own top row, either side of the recess — space the carve
-     opens up and nothing else was using. Aligned to the Panel's content edge
-     so it reads as part of the page, and capped short of the recess mouth so
-     it can never collide with it. */
+  /* The window's own top row, right of the recess — space the carve opens up
+     and nothing else was using. Aligned to the Panel's content edge so it
+     reads as part of the page, and capped short of the recess mouth so it can
+     never collide with it. */
   .top-acts {
     position: absolute;
     top: 0;
     right: var(--pad-4);
     z-index: 2;
     height: var(--sub-depth);
-    max-width: calc(50% - var(--sub-mouth, 0px) / 2 - var(--pad-4));
+    max-width: calc(100% - var(--sub-mouth, 0px) - var(--pad-4));
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -470,9 +512,10 @@
   .subnav :global(.rule) {
     display: none;
   }
-  .subnav :global(> section) {
-    width: max-content;
-    padding: var(--pad-2) var(--pad-3);
+  /* Held for the two frames a section change takes to settle, so the indicator
+     lands on the incoming section's tab instead of travelling to it. */
+  .subnav.settling :global(.tabs::before) {
+    transition: none;
   }
 
   /* Content clears the recess floor, less the padding the Panel already
@@ -489,9 +532,15 @@
     );
   }
 
-  /* Wiped out until the GSAP reveal takes over (its inline clip-path wins). */
+  /* Wiped out until the GSAP reveal takes over (its inline clip-path wins).
+     The tab indicator is anchored to a layout box, which exists from the first
+     frame — so it has to be held back too, or it draws under a label that has
+     not wiped in yet. */
   .navbar.unrevealed :global(button) {
     clip-path: inset(0 100% 0 0);
+  }
+  .navbar.unrevealed :global(.tabs::before) {
+    opacity: 0;
   }
 
   .content {
