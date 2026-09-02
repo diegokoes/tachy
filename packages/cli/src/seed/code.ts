@@ -1,11 +1,40 @@
 import { REPO_INDEX_STATUSES } from "@tachy/core";
-import { insertRows, type Tx } from "./batches";
-import { intBetween, pastDate, rngFor, uuidFor } from "./deterministic";
-import { CODE_SNIPPET } from "./corpus";
+import { insertRows, insertWindowed, type Tx } from "./batches";
+import { intBetween, pastDate, pick, rngFor, uuidFor } from "./deterministic";
+import {
+  CODE_AREAS,
+  CODE_LANGS,
+  CODE_NOUNS,
+  CODE_TEMPLATES,
+  CODE_VERBS,
+  namesFor,
+} from "./corpus";
+import { embedColumn, type Embedder } from "./embed";
 import type { SeededProduct } from "./org";
 import type { SeededComponent, SeededCustomer } from "./catalog";
 import type { SeededProject } from "./sources";
 import type { Volumes } from "./scale";
+
+/**
+ * The identity of one generated file. Chunks read it rather than each drawing
+ * their own, so a file's chunks name the same module and the same symbols —
+ * which is what makes a trigram hit on an identifier land somewhere specific.
+ */
+function fileIdentity(i: number) {
+  const rng = rngFor("file", i);
+  const area = pick(rng, CODE_AREAS);
+  const noun = pick(rng, CODE_NOUNS);
+  const verb = pick(rng, CODE_VERBS);
+  const [lang, ext] = pick(rng, CODE_LANGS);
+  return {
+    rng,
+    lang,
+    // The index is part of the name, so the path is unique across every repo
+    // and a chunk that quotes it is unique too.
+    path: `src/${area}/${verb}-${noun}-${i}.${ext}`,
+    names: namesFor(area, noun, verb),
+  };
+}
 
 export async function seedCode(
   tx: Tx,
@@ -15,7 +44,7 @@ export async function seedCode(
   customers: SeededCustomer[],
   projects: SeededProject[],
   connections: { id: string; slug: string }[],
-  embed: (kind: string, i: number, text: string) => Promise<string>,
+  embed: Embedder,
 ): Promise<void> {
   const repos = Array.from({ length: v.repos }, (_, i) => ({
     id: uuidFor("repo", i),
@@ -64,56 +93,36 @@ export async function seedCode(
     }),
   );
 
-  const files: { id: string; repoId: string }[] = [];
-  const fileRows: Record<string, unknown>[] = [];
   const perRepo = Math.max(
     1,
     Math.floor(v.repoFiles / Math.max(1, repos.length)),
   );
-  for (const repo of repos)
-    for (let k = 0; k < perRepo; k++) {
-      const i = fileRows.length;
-      const id = uuidFor("repo_file", i);
-      files.push({ id, repoId: repo.id });
-      fileRows.push({
-        id,
-        repo_id: repo.id,
-        // The counter is the path, so (repo_id, path) is unique.
-        path: `src/module${k % 12}/file${k}.ts`,
-        lang: "typescript",
-        blob_sha: uuidFor("blob", i).replace(/-/g, "").slice(0, 40),
-        size_bytes: intBetween(rngFor("file", i), 400, 24_000),
-      });
-    }
-  await insertRows(
+  const fileCount = repos.length * perRepo;
+
+  await insertWindowed(
     tx,
     "repo_files",
     ["id", "repo_id", "path", "lang", "blob_sha", "size_bytes"],
-    fileRows,
+    fileCount,
+    (i) => {
+      const { lang, path, rng } = fileIdentity(i);
+      return {
+        id: uuidFor("repo_file", i),
+        repo_id: repos[Math.floor(i / perRepo)].id,
+        path,
+        lang,
+        blob_sha: uuidFor("blob", i).replace(/-/g, "").slice(0, 40),
+        size_bytes: intBetween(rng, 400, 24_000),
+      };
+    },
   );
 
-  const chunkRows: Record<string, unknown>[] = [];
   const perFile = Math.max(
     1,
-    Math.floor(v.codeChunks / Math.max(1, files.length)),
+    Math.floor(v.codeChunks / Math.max(1, fileCount)),
   );
-  for (const file of files)
-    for (let k = 0; k < perFile; k++) {
-      const i = chunkRows.length;
-      const start = 1 + k * 40;
-      chunkRows.push({
-        id: uuidFor("code_chunk", i),
-        repo_id: file.repoId,
-        file_id: file.id,
-        // (file_id, ordinal) unique by construction.
-        ordinal: k,
-        start_line: start,
-        end_line: start + 39,
-        chunk_text: CODE_SNIPPET,
-        embedding: await embed("code_chunk", i, CODE_SNIPPET),
-      });
-    }
-  await insertRows(
+
+  await insertWindowed(
     tx,
     "code_chunks",
     [
@@ -126,7 +135,38 @@ export async function seedCode(
       "chunk_text",
       "embedding",
     ],
-    chunkRows,
+    fileCount * perFile,
+    (i) => {
+      const f = Math.floor(i / perFile);
+      const k = i % perFile;
+      const start = 1 + k * 40;
+      /*
+       * Every chunk used to hold one shared snippet constant: 60k identical
+       * rows at --scale=large, and under --embed 60k identical vectors, which
+       * makes the HNSW graph degenerate and the trigram index useless. The
+       * template is drawn per chunk and interpolates the file's own names.
+       */
+      const { names, path } = fileIdentity(f);
+      const template =
+        CODE_TEMPLATES[
+          (f + k * 7) % CODE_TEMPLATES.length // co-prime stride: a file's chunks differ
+        ];
+      // Path first, the shape `backfillCodeEmbeddings` embeds, so a seeded
+      // vector and a re-embedded one are built from the same text.
+      const chunkText = `// ${path}:${start}-${start + 39}\n${template(names)}`;
+      return {
+        id: uuidFor("code_chunk", i),
+        repo_id: repos[Math.floor(f / perRepo)].id,
+        file_id: uuidFor("repo_file", f),
+        // (file_id, ordinal) unique by construction.
+        ordinal: k,
+        start_line: start,
+        end_line: start + 39,
+        chunk_text: chunkText,
+        embedding: chunkText,
+      };
+    },
+    { fill: embedColumn(embed, "code_chunk") },
   );
 
   // Keep the denormalised counters honest, the way the indexer leaves them.

@@ -3,6 +3,7 @@
   import { api } from "../api";
   import type { KnowledgeRow, NamedRow, ReferenceRow } from "../types";
   import { navigate, segment } from "../router.svelte";
+  import { setSubnav } from "../subnav.svelte";
   import { pushScope } from "../keys.svelte";
   import { vimState } from "../vim.svelte";
   import { growBar } from "../motion";
@@ -11,7 +12,7 @@
   import { t } from "../terms";
   import { errText } from "../resource.svelte";
   import { componentOptions } from "../catalog";
-  import { Button, Chip, EmptyState, Icon, Note, Select, Spinner } from "../tui";
+  import { Button, Chip, EmptyState, Note, Select, Spinner } from "../tui";
   import FilterMenu from "./FilterMenu.svelte";
   import TagFilter from "./TagFilter.svelte";
   import {
@@ -25,12 +26,16 @@
   } from "./filters.svelte";
   import EntryDetail from "../EntryDetail.svelte";
   import DocDetail from "./DocDetail.svelte";
+  import WikiView from "../wiki/WikiView.svelte";
   import EntryForm from "../knowledge/EntryForm.svelte";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
 
   type Item = {
-    kind: "entry" | "doc";
+    kind: "entry" | "doc" | "article";
     id: string;
+    /** Articles are addressed by slug within a wiki, not by id. */
+    slug?: string;
+    productId?: string;
     title: string;
     status: string;
     /** Query-centred excerpt of the matching chunk, split on the hits. */
@@ -48,10 +53,20 @@
     sortAt: number;
   };
 
+  // The section's places, rendered as the subnav across the window's top edge.
+  // Keys are URL segments and labels are not: the segment stays 'entries' so
+  // existing links keep resolving, while the tab reads 'knowledge'.
+  //
+  // 'all' is the landing on purpose. Entries and docs are one corpus that
+  // search spans; splitting them is an optional narrowing, never a gate you
+  // have to pass to see anything. The wiki is the odd one out — a place rather
+  // than a search scope, so picking it leaves the result list entirely and its
+  // own pages take over.
   const KINDS = [
     { key: "all", label: "all" },
-    { key: "entries", label: "entries" },
+    { key: "entries", label: "knowledge" },
     { key: "docs", label: "docs" },
+    { key: "wiki", label: "wiki" },
   ];
 
   const STATUSES = ["draft", "approved", "deprecated", "archived", "rejected"];
@@ -60,11 +75,19 @@
   const kind = $derived(segment(1) ?? "all");
   const param = $derived(segment(2));
   const listing = $derived(
-    kind === "new" ? false : !param || kind === "all",
+    kind === "new" || kind === "wiki" ? false : !param || kind === "all",
   );
 
   /** The tab a detail view was opened from, so "back" returns there. */
   let origin = $state("all");
+
+  $effect(() =>
+    setSubnav({
+      items: KINDS,
+      active: kind === "new" ? origin : kind,
+      onpick: (k) => navigate(k === "all" ? "/library" : `/library/${k}`),
+    }),
+  );
   /** Which form the create screen shows — in the URL, so it deep-links. */
   const newKind = $derived(param === "doc" ? "doc" : "entry");
 
@@ -180,8 +203,10 @@
 
   function toDoc(r: ReferenceRow, query: string): Item {
     return {
-      kind: "doc",
+      kind: r.kind === "wiki" ? "article" : "doc",
       id: r.id,
+      slug: r.slug ?? undefined,
+      productId: r.product_id ?? undefined,
       title: r.title,
       status: r.status,
       snippet: r.snippet ? excerpt(r.snippet, query) : undefined,
@@ -331,6 +356,12 @@
 
   function openItem(i: Item) {
     origin = kind;
+    if (i.kind === "article" && i.slug) {
+      const scope =
+        products.find((p) => p.id === i.productId)?.slug ?? "general";
+      navigate(`/library/wiki/${scope}/${i.slug}`);
+      return;
+    }
     navigate(`/library/${i.kind === "entry" ? "entries" : "docs"}/${i.id}`);
   }
 
@@ -502,7 +533,9 @@
   </span>
 {/snippet}
 
-{#if kind === "entries" && param}
+{#if kind === "wiki"}
+  <WikiView />
+{:else if kind === "entries" && param}
   <EntryDetail
     id={param}
     onClose={backToList}
@@ -561,13 +594,6 @@
        be narrowed by — environment, confidence, clarity, pattern, hidden fix,
        fixed version, tags — is one `+` away and remembered per browser. -->
   <div class="filters">
-    <Select
-      value={kind}
-      title="entries, docs, or both"
-      options={KINDS.map((k) => ({ value: k.key, label: k.label }))}
-      onchange={(v) => navigate(v === "all" ? "/library" : `/library/${v}`)}
-    />
-
     <!-- product and component scope entries AND docs, so they stay visible in
          every mode; version and value exist only on entries. -->
     <Select
@@ -707,35 +733,27 @@
           onfocus={() => (cursor = i)}
           onmouseenter={() => pointerMoved && (cursor = i)}
         >
-          <span class="mark">
-            <Icon
-              name={it.kind === "entry" ? "analyze" : "doc"}
-              size="1em"
-              weight={7}
-              label={it.kind === "entry" ? "knowledge entry" : "reference doc"}
-            />
-            {#if it.relevance != null}
+          {#if it.relevance != null}
+            <span
+              class="gauge {it.grade ?? 'weak'}"
+              role="meter"
+              aria-valuenow={Math.round(it.relevance * 100)}
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-label="match"
+              title="{it.grade ?? 'weak'} match — {Math.round(
+                it.relevance * 100,
+              )}%"
+            >
               <span
-                class="gauge {it.grade ?? 'weak'}"
-                role="meter"
-                aria-valuenow={Math.round(it.relevance * 100)}
-                aria-valuemin="0"
-                aria-valuemax="100"
-                aria-label="match"
-                title="{it.grade ?? 'weak'} match — {Math.round(
-                  it.relevance * 100,
-                )}%"
-              >
-                <span
-                  class="fill"
-                  use:growBar={{
-                    pct: fill(it.relevance),
-                    delay: Math.min(i * 0.06, 0.6),
-                  }}
-                ></span>
-              </span>
-            {/if}
-          </span>
+                class="fill"
+                use:growBar={{
+                  pct: fill(it.relevance),
+                  delay: Math.min(i * 0.06, 0.6),
+                }}
+              ></span>
+            </span>
+          {/if}
 
           <span class="body">
             <span class="line">
@@ -848,13 +866,12 @@
     justify-content: center;
   }
 
-  /* One kind color per card, worn by the left bar and the row's mark. The
-     mark column spans the card, so the gauge can run its full height. */
+  /* One kind color per card, worn by the left bar and the match gauge, which
+     spans the card so it can run its full height. */
   .row {
     width: 100%;
     text-align: left;
-    display: grid;
-    grid-template-columns: auto 1fr;
+    display: flex;
     align-items: stretch;
     gap: var(--pad-3);
     font: inherit;
@@ -872,6 +889,10 @@
   .row.doc {
     --kind: var(--doc);
   }
+  /* An article is curated rather than imported, so it reads as its own shelf. */
+  .row.article {
+    --kind: var(--ok, var(--accent));
+  }
   /* Only `.cursor` paints — hovering MOVES the cursor rather than lighting a
      second card, so there is exactly one highlight and the pointer and the
      keyboard share one position. */
@@ -883,18 +904,8 @@
     background: var(--accent-dim);
   }
 
-  /* Fixed mark column, so every title starts at the same x whatever the
-     card carries on its right. */
-  .mark {
-    color: var(--kind);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--pad-2);
-    padding-top: 0.2em;
-    width: 1em;
-  }
   .body {
+    flex: 1;
     display: flex;
     flex-direction: column;
     gap: var(--pad-1);
@@ -907,13 +918,13 @@
     gap: var(--pad-3);
   }
 
-  /* The track runs from under the mark to the foot of the card, so a card with
-     a preview simply gets a longer bar. The tiers stay at fixed PERCENTAGES —
-     that is the shared reference — and are cut out in the page color so they
-     read as notches through the fill. */
+  /* The track runs the full height of the card, so a card with a preview
+     simply gets a longer bar. The tiers stay at fixed PERCENTAGES — that is
+     the shared reference — and are cut out in the page color so they read as
+     notches through the fill. */
   .gauge {
     position: relative;
-    flex: 1;
+    flex: none;
     min-height: 1.4rem;
     width: 5px;
     background: color-mix(in srgb, var(--muted) 26%, transparent);

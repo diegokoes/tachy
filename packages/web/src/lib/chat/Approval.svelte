@@ -3,6 +3,8 @@
   import { shatter } from "../motion";
   import { Button, Panel } from "../tui";
   import ApprovalField from "./ApprovalField.svelte";
+  import { api } from "../api";
+  import type { WorkItemSchema } from "../types";
 
   type Approval = Extract<Entry, { kind: "approval" }>;
 
@@ -28,6 +30,62 @@
   });
 
   let raw = $state(false);
+
+  /* ---- work-item field schema -------------------------------------------
+     create_ado_work_item takes an open `fields` object keyed by ADO reference
+     names, so without a schema the box can only offer a JSON blob. Fetching the
+     project's own schema turns it into real controls with the required fields
+     marked. Best-effort by design: if the call is slow or fails, the JSON view
+     below is what the user gets, because an approval that never renders blocks
+     the turn. */
+  let schema = $state<WorkItemSchema | null>(null);
+  let schemaTried = $state(false);
+
+  const isAdoCreate = $derived(entry.tool === "create_ado_work_item");
+  const adoFields = $derived(
+    isAdoCreate && entry.input.fields && typeof entry.input.fields === "object"
+      ? (entry.input.fields as Record<string, unknown>)
+      : null,
+  );
+
+  $effect(() => {
+    if (!isAdoCreate || schemaTried || !pending) return;
+    const input = entry.input as Record<string, unknown>;
+    const source = input.source as string | undefined;
+    const project = input.project as string | undefined;
+    const type = input.type as string | undefined;
+    if (!source || !project || !type) return;
+    schemaTried = true;
+    api
+      .get<WorkItemSchema>(
+        `/source-connections/${encodeURIComponent(source)}/work-item-schema` +
+          `?project=${encodeURIComponent(project)}&type=${encodeURIComponent(type)}`,
+      )
+      .then((s) => (schema = s))
+      .catch(() => (schema = null));
+  });
+
+  const specFor = (ref: string) =>
+    schema?.fields.find((f) => f.reference_name === ref);
+
+  /** Required fields the model did not fill — the commonest reason a create bounces. */
+  const missing = $derived(
+    schema && adoFields
+      ? schema.fields
+          .filter(
+            (f) =>
+              f.required &&
+              !f.read_only &&
+              (adoFields[f.reference_name] ?? "") === "" &&
+              schema!.config_defaults[f.reference_name] === undefined,
+          )
+          .map((f) => f.name)
+      : [],
+  );
+
+  function setField(ref: string, v: unknown) {
+    set("fields", { ...(adoFields ?? {}), [ref]: v });
+  }
   let rawBad = $state(false);
   let denying = $state(false);
   let reason = $state("");
@@ -96,11 +154,34 @@
     {:else}
       <div class="fields">
         {#each keys as key (key)}
-          <ApprovalField
-            name={key}
-            value={entry.input[key]}
-            onchange={(v) => set(key, v)}
-          />
+          {#if key === "fields" && schema && adoFields}
+            <!-- The one per-tool branch: ADO's own schema, when we have it. -->
+            <div class="subfields">
+              <span class="grouplabel">
+                fields
+                <span class="dim">{schema.type} · {schema.project}</span>
+              </span>
+              {#if missing.length}
+                <p class="missing">
+                  required and empty: {missing.join(", ")}
+                </p>
+              {/if}
+              {#each schema.fields.filter((f) => !f.read_only && (f.required || f.reference_name in adoFields)) as f (f.reference_name)}
+                <ApprovalField
+                  name={f.reference_name}
+                  spec={f}
+                  value={adoFields[f.reference_name] ?? null}
+                  onchange={(v) => setField(f.reference_name, v)}
+                />
+              {/each}
+            </div>
+          {:else}
+            <ApprovalField
+              name={key}
+              value={entry.input[key]}
+              onchange={(v) => set(key, v)}
+            />
+          {/if}
         {/each}
       </div>
     {/if}
@@ -150,6 +231,27 @@
 </div>
 
 <style>
+  .subfields {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    border-left: 2px solid var(--line, currentColor);
+    padding-left: 0.6rem;
+    margin: 0.2rem 0;
+  }
+  .grouplabel {
+    opacity: 0.7;
+    font-size: 0.85em;
+  }
+  .grouplabel .dim {
+    opacity: 0.6;
+    margin-left: 0.4rem;
+  }
+  .missing {
+    margin: 0.1rem 0;
+    font-size: 0.85em;
+    color: var(--warn, orange);
+  }
   .wrap {
     max-width: 46rem;
     margin: var(--pad-2) 0;

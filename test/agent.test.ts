@@ -10,9 +10,13 @@ import {
   explainFailure,
   READ_TOOLS,
   WRITE_TOOLS,
+  CONDITIONAL_WRITES,
   type AgentConfig,
   type Decision,
 } from "../packages/agent/src/index";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { AsyncQueue } from "../packages/agent/src/queue";
 import { TurnBase } from "../packages/agent/src/turn";
 import type { PermissionRequest } from "@github/copilot-sdk";
@@ -24,6 +28,32 @@ describe("agent tool allowlist (security boundary)", () => {
 
   it("classifies write tools as approval-gated", () => {
     for (const t of WRITE_TOOLS) expect(classify(qualify(t)).cls).toBe("write");
+  });
+
+  /**
+   * An MCP tool missing from both lists is not a loud failure: it stays callable
+   * and silently raises an approval box on every call, forever. The lists are
+   * hand-maintained, so hold them against what is actually registered.
+   */
+  it("classifies every registered MCP tool", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const src = readFileSync(
+      join(here, "..", "packages", "mcp", "src", "index.ts"),
+      "utf8",
+    );
+    const registered = [...src.matchAll(/^tool\(\n\s*"([a-z0-9_]+)"/gm)].map(
+      (m) => m[1],
+    );
+    expect(registered.length).toBeGreaterThan(40);
+
+    // A conditional write is classified too — by its flag rather than a list.
+    const listed = new Set<string>([
+      ...READ_TOOLS,
+      ...WRITE_TOOLS,
+      ...Object.keys(CONDITIONAL_WRITES),
+    ]);
+    const unlisted = registered.filter((t) => !listed.has(t));
+    expect(unlisted).toEqual([]);
   });
 
   it("denies any non-tachy / built-in tool", () => {

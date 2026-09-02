@@ -50,6 +50,31 @@
   // and the control stays disabled until one is picked.
   let component = $state("");
   let components = $state<NamedRow[]>([]);
+  let customerSlug = $state(seed.customer_slug ?? "");
+  let customers = $state<NamedRow[]>([]);
+  let unitSlug = $state(seed.customer_unit_slug ?? "");
+  /** Units belong to one customer, so the list is reloaded when it changes. */
+  let units = $state<NamedRow[]>([]);
+
+  async function loadUnits(slug: string) {
+    units = slug
+      ? await api.get<NamedRow[]>(`/customers/${slug}/units`).catch(() => [])
+      : [];
+    if (unitSlug && !units.some((u) => u.slug === unitSlug)) unitSlug = "";
+  }
+
+  const unitOptions = $derived([
+    { value: "", label: "the whole account" },
+    ...units.map((u) => ({
+      value: u.slug as string,
+      label: `${u.name} (${u.kind})`,
+    })),
+  ]);
+
+  const customerOptions = $derived([
+    { value: "", label: "none (general)" },
+    ...customers.map((c) => ({ value: c.slug as string, label: c.name as string })),
+  ]);
 
   const productOptions = $derived([
     { value: "", label: `no ${t("product")}` },
@@ -64,6 +89,12 @@
     } catch {
       products = [];
     }
+    try {
+      customers = await api.get<NamedRow[]>("/customers");
+    } catch {
+      customers = [];
+    }
+    if (customerSlug) await loadUnits(customerSlug);
     if (mode === "edit" && seed.product_id) {
       productSlug =
         (products.find((p) => p.id === seed.product_id)?.slug as string) ?? "";
@@ -98,6 +129,8 @@
       source: source.trim() || (mode === "edit" ? null : undefined),
       docVersion: docVersion.trim() || (mode === "edit" ? null : undefined),
       component: component || (mode === "edit" ? null : undefined),
+      customerSlug: customerSlug || (mode === "edit" ? null : undefined),
+      unit: unitSlug || (mode === "edit" ? null : undefined),
     };
     if (mode === "create") {
       const prod = products.find((p) => p.slug === productSlug);
@@ -159,6 +192,14 @@
           ...componentOptions(components),
         ]}
       />
+    </label>
+    <label>{t("customer")} <span class="hint">optional</span>
+      <AsciiSelect bind:value={customerSlug} options={customerOptions}
+        onchange={(v) => loadUnits(String(v))} />
+    </label>
+    <label>unit <span class="hint">optional</span>
+      <AsciiSelect bind:value={unitSlug} options={unitOptions}
+        disabled={!customerSlug || units.length === 0} />
     </label>
     <label>doc version
       <input bind:value={docVersion} class="short" />

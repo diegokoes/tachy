@@ -3,6 +3,8 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   SOURCE_PROJECT_ROLES,
+  badInput,
+  notFound,
   addSourceProject,
   deleteProjectAreaMap,
   deleteSourceProject,
@@ -18,7 +20,7 @@ import {
   sql,
   updateSourceProject,
 } from "@tachy/core";
-import { createAdoClient } from "@tachy/source-azure-devops";
+import { createAdoClient, workItemSchema } from "@tachy/source-azure-devops";
 import { assertScopeEditor, assertTeamAdmin, callerScope } from "../authz";
 import type { Context } from "hono";
 
@@ -220,6 +222,29 @@ export const projects = new Hono()
   .delete("/source-projects/:id/areas/:areaId", async (c) => {
     await assertScopeEditor(c, await sourceProjectScope(c.req.param("id")));
     return c.json(await deleteProjectAreaMap(c.req.param("areaId")));
+  })
+
+  /**
+   * The field schema behind the chat approval box. Guarded, unlike the
+   * discover/* routes below: those are setup-screen probes, this is read on
+   * behalf of whoever is composing a work item, and the PAT it uses is theirs.
+   */
+  .get("/source-connections/:slug/work-item-schema", async (c) => {
+    const project = c.req.query("project");
+    const type = c.req.query("type");
+    if (!project || !type) throw badInput("project and type are required");
+    // Authorize before looking anything up: checking existence first would let
+    // a non-curator probe which connection slugs exist.
+    await assertScopeEditor(c, {});
+    const [conn] = await sql`
+      select config from source_connections where slug = ${c.req.param("slug")}
+    `;
+    if (!conn) throw notFound(`Unknown source connection`);
+    const client = await adoClient(c, c.req.param("slug"));
+    const defaults =
+      ((conn.config as any)?.defaults?.[project]?.[type] as
+        Record<string, unknown> | undefined) ?? {};
+    return c.json(await workItemSchema(client, project, type, defaults));
   })
 
   // Live discovery for the setup screens — read-only, never writes anything.

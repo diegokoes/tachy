@@ -1,4 +1,4 @@
-import { scrubText, TokenMap } from "@tachy/core";
+import { listSourceProjects, scrubText, TokenMap } from "@tachy/core";
 import type {
   WorkItemSource,
   RawWorkItem,
@@ -9,6 +9,8 @@ import type {
 import { createAdoClient, type AdoWorkItemSummary } from "./client";
 
 export { createAdoClient } from "./client";
+export { projectFields, workItemSchema, MAX_ALLOWED_VALUES } from "./fields";
+export type { FieldSpec, WorkItemSchema, AdoFieldType } from "./fields";
 export type { AdoClient, AdoCfg, JsonPatchOp } from "./client";
 
 const RELATED_CAP = 15;
@@ -106,7 +108,8 @@ function redactAdoRaw(
 
 /**
  * Azure DevOps work item adapter (PAT auth, org-wide ids). base_url is
- * https://dev.azure.com/<org>; config.projects lists projects to sync.
+ * https://dev.azure.com/<org>; the projects to sync are the knowledge-role
+ * `source_projects` registered against this connection.
  * Read-only: ADO comments have no private flag, so postNote is unsupported.
  */
 export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
@@ -114,6 +117,21 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
   const configuredProjects = Array.isArray(cfg.config.projects)
     ? (cfg.config.projects as string[])
     : [];
+
+  /**
+   * The registry is the source of truth: a project registered in the admin UI
+   * is what gets synced. `config.projects` stays as a fallback for connections
+   * that predate the registry, which would otherwise silently sync nothing.
+   */
+  async function syncProjects(): Promise<string[]> {
+    const registered = await listSourceProjects({
+      sourceSlug: cfg.slug,
+      role: "knowledge",
+    });
+    return registered.length
+      ? [...new Set(registered.map((r) => r.external_key))]
+      : configuredProjects;
+  }
 
   function toItem(
     wi: any,
@@ -329,10 +347,10 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
     },
 
     async listItems(opts: ListOptions) {
-      const projects = opts.groupKey ? [opts.groupKey] : configuredProjects;
+      const projects = opts.groupKey ? [opts.groupKey] : await syncProjects();
       if (projects.length === 0) {
         throw new Error(
-          "azure-devops sync needs a project: pass --group=<project> or set config.projects on the connection",
+          "azure-devops sync needs a project: pass --group=<project>, or register one against this connection in the admin UI",
         );
       }
       const cursor = opts.cursor

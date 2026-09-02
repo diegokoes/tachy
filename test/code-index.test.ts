@@ -15,6 +15,8 @@ import {
   chunkCode,
 } from "@tachy/core";
 
+afterAll(() => sql.end());
+
 let srcDir: string;
 let dataDir: string;
 

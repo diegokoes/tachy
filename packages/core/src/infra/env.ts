@@ -26,6 +26,14 @@ const envSchema = z
     port: z.coerce.number().int().positive("PORT must be a positive integer"),
     logLevel: z.enum(["debug", "info", "warn", "error"]),
     userEmail: z.string().email().optional(),
+    /**
+     * Set only by the API when it spawns an MCP subprocess for an agent turn,
+     * so a write made during a turn is distinguishable from one made by someone
+     * pointing their own MCP client at tachy. `turnId` joins to
+     * analysis_runs.meta->>'turn_id'.
+     */
+    actor: z.enum(["agent", "mcp"]).optional(),
+    turnId: z.string().optional(),
     apiToken: z.string().min(1).optional(),
 
     authMode: z.enum(["sso", "token", "open"]),
@@ -68,6 +76,8 @@ const parsed = envSchema.safeParse({
   port: process.env.PORT ?? 8787,
   logLevel: process.env.LOG_LEVEL ?? "info",
   userEmail: process.env.TACHY_USER_EMAIL || undefined,
+  actor: process.env.TACHY_ACTOR === "agent" ? "agent" : undefined,
+  turnId: process.env.TACHY_TURN_ID || undefined,
   apiToken: apiTokenRaw,
   authMode:
     (process.env.TACHY_AUTH_MODE as "sso" | "token" | "open" | undefined) ??

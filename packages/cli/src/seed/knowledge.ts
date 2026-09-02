@@ -5,7 +5,8 @@ import {
   REFERENCE_STATUSES,
   RESOLUTION_CLARITIES,
 } from "@tachy/core";
-import { insertRows, type Tx } from "./batches";
+import { insertRows, insertWindowed, type Tx } from "./batches";
+import { embedColumn, type Embedder } from "./embed";
 import {
   chance,
   intBetween,
@@ -13,26 +14,39 @@ import {
   pick,
   pickMany,
   rngFor,
-  unitVector,
   uuidFor,
-  vectorLiteral,
 } from "./deterministic";
 import {
   CLOUDS,
+  CONTEXTS,
+  DIAGNOSTICS,
   DOC_TITLES,
+  IMPACTS,
   RESOLUTIONS,
   ROOT_CAUSES,
+  SECTION_HEADINGS,
   SYMPTOMS,
   TAGS,
 } from "./corpus";
 import type { SeededProduct, SeededUser } from "./org";
-import type { SeededComponent, SeededCustomer } from "./catalog";
+import type { SeededComponent, SeededCustomer, SeededUnit } from "./catalog";
 import type { SeededProject, SeededWorkItem } from "./sources";
 import type { Volumes } from "./scale";
 
 export interface Knowledge {
   entries: string[];
   docs: string[];
+}
+
+function groupBy<T>(xs: T[], key: (x: T) => string): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const x of xs) {
+    const k = key(x);
+    const bucket = out.get(k);
+    if (bucket) bucket.push(x);
+    else out.set(k, [x]);
+  }
+  return out;
 }
 
 /**
@@ -49,66 +63,19 @@ export async function seedKnowledge(
   workItems: SeededWorkItem[],
   projects: SeededProject[],
   patterns: string[],
-  embed: (kind: string, i: number, text: string) => Promise<string>,
+  units: SeededUnit[],
+  embed: Embedder,
 ): Promise<Knowledge> {
-  const entries: string[] = [];
-  const rows: Record<string, unknown>[] = [];
+  const entries = Array.from({ length: v.knowledgeEntries }, (_, i) =>
+    uuidFor("knowledge_entry", i),
+  );
 
-  for (let i = 0; i < v.knowledgeEntries; i++) {
-    const rng = rngFor("knowledge", i);
-    const id = uuidFor("knowledge_entry", i);
-    entries.push(id);
-    const product = products[i % products.length];
-    const mine = components.filter((c) => c.productId === product.id);
-    const component = mine.length ? mine[i % mine.length] : undefined;
-    const symptom = SYMPTOMS[i % SYMPTOMS.length];
-    const cause = ROOT_CAUSES[i % ROOT_CAUSES.length];
-    const fix = RESOLUTIONS[i % RESOLUTIONS.length];
-    const created = pastDate(rng, 500);
+  // Grouped once. Filtering the whole component list inside the row loop is
+  // 25k x 250 comparisons at --scale=large, for an answer that never changes.
+  const byProduct = groupBy(components, (c) => c.productId);
+  const byCustomer = groupBy(units, (u) => u.customerId);
 
-    rows.push({
-      id,
-      work_item_id: workItems.length
-        ? workItems[i % workItems.length].id
-        : null,
-      product_id: product.id,
-      team_id: product.teamId,
-      customer_id: chance(rng, 0.5) ? customers[i % customers.length].id : null,
-      created_by: users[i % users.length].id,
-      status: pick(rng, KNOWLEDGE_STATUSES),
-      // superseded_by is a second pass: see supersede() below.
-      superseded_by: null,
-      issue_summary: `${symptom} on ${product.slug}`,
-      symptoms: pickMany(rng, SYMPTOMS, intBetween(rng, 1, 3)),
-      root_cause: cause,
-      resolution: fix,
-      resolution_pattern: patterns.length ? pick(rng, patterns) : null,
-      signals: [`error code E${intBetween(rng, 100, 999)}`],
-      tags: pickMany(rng, TAGS, intBetween(rng, 1, 4)),
-      component_id: component ? component.id : null,
-      // product_area is DERIVED from the component hierarchy: filled by the
-      // recursive-CTE pass in index.ts, exactly as saveKnowledgeEntry does.
-      product_area: null,
-      confidence: pick(rng, CONFIDENCES),
-      cloud: pick(rng, CLOUDS),
-      resolution_clarity: pick(rng, RESOLUTION_CLARITIES),
-      hidden_fix: chance(rng, 0.15),
-      affected_version: `${intBetween(rng, 3, 9)}.${intBetween(rng, 0, 12)}`,
-      fixed_version: chance(rng, 0.6)
-        ? `${intBetween(rng, 9, 11)}.${intBetween(rng, 0, 6)}`
-        : null,
-      structured: JSON.stringify({ seeded: true }),
-      embedding: await embed(
-        "knowledge_entry",
-        i,
-        `${symptom} ${cause} ${fix}`,
-      ),
-      created_at: created,
-      updated_at: created,
-    });
-  }
-
-  await insertRows(
+  await insertWindowed(
     tx,
     "knowledge_entries",
     [
@@ -117,6 +84,7 @@ export async function seedKnowledge(
       "product_id",
       "team_id",
       "customer_id",
+      "customer_unit_id",
       "created_by",
       "status",
       "superseded_by",
@@ -140,7 +108,101 @@ export async function seedKnowledge(
       "created_at",
       "updated_at",
     ],
-    rows,
+    v.knowledgeEntries,
+    (i) => {
+      const rng = rngFor("knowledge", i);
+      /*
+       * Drawn from the row's own stream rather than by `i % list.length`. Modular
+       * cycling correlated the parts: ROOT_CAUSES and RESOLUTIONS are the same
+       * length, so every entry paired cause N with fix N, and the whole corpus
+       * collapsed to lcm(12,10,10) = 60 distinct bodies — and therefore 60
+       * distinct embeddings, however many rows were asked for. Independent draws
+       * plus the row-specific detail below keep the text effectively unique.
+       */
+      const product = pick(rng, products);
+      const mine = byProduct.get(product.id) ?? [];
+      const component = mine.length ? pick(rng, mine) : undefined;
+      const symptom = pick(rng, SYMPTOMS);
+      // One index for both: they are written as a matched cause/fix pair.
+      const scenario = intBetween(
+        rng,
+        0,
+        Math.min(ROOT_CAUSES.length, RESOLUTIONS.length) - 1,
+      );
+      const cause = ROOT_CAUSES[scenario];
+      const fix = RESOLUTIONS[scenario];
+      const context = pick(rng, CONTEXTS);
+      const impact = pick(rng, IMPACTS);
+      const diagnostic = pick(rng, DIAGNOSTICS);
+      const errorCode = `E${intBetween(rng, 100, 999)}`;
+      const affected = `${intBetween(rng, 3, 9)}.${intBetween(rng, 0, 12)}`;
+      const created = pastDate(rng, 500);
+
+      const customer = chance(rng, 0.5) ? pick(rng, customers) : null;
+      const mineUnits = customer ? (byCustomer.get(customer.id) ?? []) : [];
+      const unit =
+        mineUnits.length && chance(rng, 0.66) ? pick(rng, mineUnits) : null;
+
+      const summary = component
+        ? `${symptom} on ${product.slug} ${component.slug} (${errorCode})`
+        : `${symptom} on ${product.slug} (${errorCode})`;
+      // The diagnostic is an observation, not a claim about the cause, so it goes
+      // in signals rather than being asserted as part of the explanation.
+      const rootCause = `${cause}. Seen ${context}.`;
+      const resolution = `${fix}. Until then ${impact}. Confirmed on ${affected}.`;
+
+      return {
+        id: entries[i],
+        work_item_id: workItems.length
+          ? workItems[i % workItems.length].id
+          : null,
+        product_id: product.id,
+        team_id: product.teamId,
+        customer_id: customer ? customer.id : null,
+        /*
+         * Mirrors the product rule: a unit only ever sits beside the customer it
+         * belongs to. Two thirds of the estate owner's entries land on a line, and
+         * the lines that share a profile get enough of them for D3's sibling boost
+         * to be visible rather than theoretical.
+         */
+        customer_unit_id: unit ? unit.id : null,
+        created_by: users[i % users.length].id,
+        status: pick(rng, KNOWLEDGE_STATUSES),
+        // superseded_by is a second pass: see supersede() below.
+        superseded_by: null,
+        issue_summary: summary,
+        symptoms: pickMany(rng, SYMPTOMS, intBetween(rng, 1, 3)),
+        root_cause: rootCause,
+        resolution: resolution,
+        resolution_pattern: patterns.length ? pick(rng, patterns) : null,
+        signals: [
+          `error code ${errorCode}`,
+          `${product.slug} ${affected}`,
+          diagnostic,
+        ],
+        tags: pickMany(rng, TAGS, intBetween(rng, 1, 4)),
+        component_id: component ? component.id : null,
+        // product_area is DERIVED from the component hierarchy: filled by the
+        // recursive-CTE pass in index.ts, exactly as saveKnowledgeEntry does.
+        product_area: null,
+        confidence: pick(rng, CONFIDENCES),
+        cloud: pick(rng, CLOUDS),
+        resolution_clarity: pick(rng, RESOLUTION_CLARITIES),
+        hidden_fix: chance(rng, 0.15),
+        affected_version: affected,
+        fixed_version: chance(rng, 0.6)
+          ? `${intBetween(rng, 9, 11)}.${intBetween(rng, 0, 6)}`
+          : null,
+        structured: JSON.stringify({ seeded: true }),
+        // The embed text is the row's real prose, so distinct rows get distinct
+        // vectors — the whole point of decorrelating the draws above. The column
+        // holds it until the window's fill swaps in the vector.
+        embedding: `${summary} ${rootCause} ${resolution}`,
+        created_at: created,
+        updated_at: created,
+      };
+    },
+    { fill: embedColumn(embed, "knowledge_entry") },
   );
 
   await seedFeedback(tx, v, entries, users);
@@ -208,44 +270,29 @@ async function seedReference(
   users: SeededUser[],
   components: SeededComponent[],
   projects: SeededProject[],
-  embed: (kind: string, i: number, text: string) => Promise<string>,
+  embed: Embedder,
 ): Promise<string[]> {
-  const docs: string[] = [];
-  const rows: Record<string, unknown>[] = [];
+  const byProduct = groupBy(components, (c) => c.productId);
 
-  for (let i = 0; i < v.referenceDocs; i++) {
+  /** What a chunk needs from its parent, so the two read as one document. */
+  const meta = Array.from({ length: v.referenceDocs }, (_, i) => {
     const rng = rngFor("reference", i);
-    const id = uuidFor("reference_doc", i);
-    docs.push(id);
-    const product = products[i % products.length];
-    const mine = components.filter((c) => c.productId === product.id);
-    const component = mine.length ? mine[i % mine.length] : undefined;
-    const title = DOC_TITLES[i % DOC_TITLES.length];
-    const project = projects[i % projects.length];
+    const product = pick(rng, products);
+    const mine = byProduct.get(product.id) ?? [];
+    const component = mine.length ? pick(rng, mine) : undefined;
+    const title = pick(rng, DOC_TITLES);
+    return {
+      id: uuidFor("reference_doc", i),
+      rng,
+      product,
+      component,
+      title,
+      fullTitle: i >= DOC_TITLES.length ? `${title} (${i})` : title,
+    };
+  });
+  const docs = meta.map((m) => m.id);
 
-    rows.push({
-      id,
-      product_id: product.id,
-      team_id: product.teamId,
-      created_by: users[i % users.length].id,
-      source: "seed",
-      source_project_id: chance(rng, 0.4) ? project.id : null,
-      external_key: chance(rng, 0.4) ? `wiki/page-${i}` : null,
-      component_id: component ? component.id : null,
-      product_area: null,
-      customer_id: null,
-      title: i >= DOC_TITLES.length ? `${title} (${i})` : title,
-      body: `${title}. ${ROOT_CAUSES[i % ROOT_CAUSES.length]}. ${RESOLUTIONS[i % RESOLUTIONS.length]}.`,
-      tags: pickMany(rng, TAGS, intBetween(rng, 1, 3)),
-      structured: JSON.stringify({ seeded: true }),
-      status: pick(rng, REFERENCE_STATUSES),
-      doc_version: `${intBetween(rng, 1, 9)}.0`,
-      superseded_by: null,
-      version: 1,
-    });
-  }
-
-  await insertRows(
+  await insertWindowed(
     tx,
     "reference_docs",
     [
@@ -268,31 +315,92 @@ async function seedReference(
       "superseded_by",
       "version",
     ],
-    rows,
+    v.referenceDocs,
+    (i) => {
+      const { rng, product, component, title } = meta[i];
+      const project = pick(rng, projects);
+      // Same reasoning as the entries above: independent draws, and a body built
+      // from several of them, so docs do not collapse onto a handful of vectors.
+      const docScenario = intBetween(
+        rng,
+        0,
+        Math.min(ROOT_CAUSES.length, RESOLUTIONS.length) - 1,
+      );
+      const docBody = [
+        `${title} — ${product.slug}${component ? ` / ${component.slug}` : ""}.`,
+        `${ROOT_CAUSES[docScenario]}.`,
+        `${RESOLUTIONS[docScenario]}.`,
+        `Applies ${pick(rng, CONTEXTS)}. ${pick(rng, DIAGNOSTICS)}.`,
+      ].join(" ");
+
+      return {
+        id: meta[i].id,
+        product_id: product.id,
+        team_id: product.teamId,
+        created_by: users[i % users.length].id,
+        source: "seed",
+        source_project_id: chance(rng, 0.4) ? project.id : null,
+        external_key: chance(rng, 0.4) ? `wiki/page-${i}` : null,
+        component_id: component ? component.id : null,
+        product_area: null,
+        customer_id: null,
+        title: meta[i].fullTitle,
+        body: docBody,
+        tags: pickMany(rng, TAGS, intBetween(rng, 1, 3)),
+        structured: JSON.stringify({ seeded: true }),
+        status: pick(rng, REFERENCE_STATUSES),
+        doc_version: `${intBetween(rng, 1, 9)}.0`,
+        superseded_by: null,
+        version: 1,
+      };
+    },
   );
 
-  const chunkRows: Record<string, unknown>[] = [];
   const per = Math.max(
     1,
     Math.floor(v.referenceChunks / Math.max(1, docs.length)),
   );
-  for (let d = 0; d < docs.length; d++)
-    for (let k = 0; k < per; k++) {
-      const i = chunkRows.length;
-      chunkRows.push({
-        id: uuidFor("reference_doc_chunk", i),
-        doc_id: docs[d],
-        // (doc_id, ordinal) unique by construction.
-        ordinal: k,
-        chunk_text: `${DOC_TITLES[d % DOC_TITLES.length]} — section ${k}. ${ROOT_CAUSES[i % ROOT_CAUSES.length]}`,
-        embedding: await embed("reference_doc_chunk", i, `section ${k}`),
-      });
-    }
-  await insertRows(
+  await insertWindowed(
     tx,
     "reference_doc_chunks",
     ["id", "doc_id", "ordinal", "chunk_text", "embedding"],
-    chunkRows,
+    docs.length * per,
+    (i) => {
+      const d = Math.floor(i / per);
+      const k = i % per;
+      const crng = rngFor("reference_chunk", i);
+      const cs = intBetween(
+        crng,
+        0,
+        Math.min(ROOT_CAUSES.length, RESOLUTIONS.length) - 1,
+      );
+      const parent = meta[d];
+      /*
+       * Anchored to its own document. The heading used to be drawn from
+       * DOC_TITLES independently of `docs[d]`, which both made a chunk read as
+       * if it belonged to a different page and capped the corpus at
+       * 20x4x28x8 combinations — below the birthday bound for the 16k chunks
+       * --scale=large asks for, so thousands were exact duplicates.
+       */
+      const heading = SECTION_HEADINGS[k % SECTION_HEADINGS.length];
+      const chunkText = [
+        `${parent.fullTitle} — ${heading} (${parent.product.slug}${parent.component ? ` / ${parent.component.slug}` : ""}).`,
+        `${ROOT_CAUSES[cs]}. ${RESOLUTIONS[cs]}.`,
+        `Applies ${pick(crng, CONTEXTS)}. ${pick(crng, DIAGNOSTICS)}.`,
+        `Otherwise ${pick(crng, IMPACTS)}.`,
+      ].join(" ");
+      return {
+        id: uuidFor("reference_doc_chunk", i),
+        doc_id: parent.id,
+        // (doc_id, ordinal) unique by construction.
+        ordinal: k,
+        // Embed the chunk's own text: embedding the literal string "section 3"
+        // gave every third chunk in the corpus the same vector.
+        chunk_text: chunkText,
+        embedding: chunkText,
+      };
+    },
+    { fill: embedColumn(embed, "reference_doc_chunk") },
   );
 
   return docs;
@@ -359,8 +467,3 @@ export async function deriveProductAreas(tx: Tx): Promise<void> {
      from path where path.leaf = d.component_id`,
   );
 }
-
-export const syntheticVector = async (
-  kind: string,
-  i: number,
-): Promise<string> => vectorLiteral(unitVector(kind, i));

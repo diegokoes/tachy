@@ -5,6 +5,8 @@ import {
   RESOLUTION_CLARITIES,
   KNOWLEDGE_STATUSES,
   REFERENCE_STATUSES,
+  REFERENCE_KINDS,
+  LINK_KINDS,
   CONFIDENCES,
   FEEDBACK_KINDS,
   RUN_MODES,
@@ -15,6 +17,8 @@ export {
   RESOLUTION_CLARITIES,
   KNOWLEDGE_STATUSES,
   REFERENCE_STATUSES,
+  REFERENCE_KINDS,
+  LINK_KINDS,
   CONFIDENCES,
   FEEDBACK_KINDS,
   RUN_MODES,
@@ -72,6 +76,7 @@ export const resolutionClaritySchema = z.enum(RESOLUTION_CLARITIES);
 
 export const knowledgeStatusSchema = z.enum(KNOWLEDGE_STATUSES);
 export const referenceStatusSchema = z.enum(REFERENCE_STATUSES);
+export const referenceKindSchema = z.enum(REFERENCE_KINDS);
 export const confidenceSchema = z.enum(CONFIDENCES);
 export const feedbackKindSchema = z.enum(FEEDBACK_KINDS);
 export const runModeSchema = z.enum(RUN_MODES);

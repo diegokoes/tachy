@@ -5,6 +5,7 @@ import type { AgentConfig, AgentTurn } from "./backend";
 export {
   READ_TOOLS,
   WRITE_TOOLS,
+  CONDITIONAL_WRITES,
   classify,
   classifyCall,
   qualify,

@@ -1,4 +1,10 @@
-import { badInput, githubToken, scrubText, TokenMap } from "@tachy/core";
+import {
+  badInput,
+  githubToken,
+  scrubText,
+  sourceFetch,
+  TokenMap,
+} from "@tachy/core";
 import type {
   WorkItemSource,
   RawWorkItem,
@@ -55,7 +61,7 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
     : [];
 
   async function get(path: string): Promise<any> {
-    const res = await fetch(api + path, {
+    const res = await sourceFetch(`GitHub GET ${path}`, api + path, {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/vnd.github+json",
