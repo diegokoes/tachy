@@ -1,5 +1,5 @@
 import { WORK_ITEM_LINK_KINDS } from "@tachy/core";
-import { insertRows, type Tx } from "./batches";
+import { insertRows, insertWindowed, type Tx } from "./batches";
 import {
   chance,
   intBetween,
@@ -8,7 +8,15 @@ import {
   rngFor,
   uuidFor,
 } from "./deterministic";
-import { SYMPTOMS } from "./corpus";
+import {
+  CONTEXTS,
+  DIAGNOSTICS,
+  IMPACTS,
+  MESSAGE_OPENERS,
+  MESSAGE_OUTCOMES,
+  MESSAGE_STEPS,
+  SYMPTOMS,
+} from "./corpus";
 import type { SeededProduct, SeededTeam } from "./org";
 import type { SeededComponent, SeededCustomer } from "./catalog";
 import type { Volumes } from "./scale";
@@ -160,58 +168,13 @@ async function seedWorkItems(
   customers: SeededCustomer[],
 ): Promise<SeededWorkItem[]> {
   const knowledgeProjects = projects.filter((p) => p.role === "knowledge");
-  const items: SeededWorkItem[] = [];
-  const rows: Record<string, unknown>[] = [];
 
   // external_id is a per-connection counter, so (connection, external_id)
   // is unique without needing a conflict clause.
   const counters = new Map<string, number>();
+  const items: SeededWorkItem[] = [];
 
-  for (let i = 0; i < v.workItems; i++) {
-    const conn = connections[i % connections.length];
-    const next = (counters.get(conn.id) ?? 0) + 1;
-    counters.set(conn.id, next);
-    const externalId = `${next}`;
-    const id = uuidFor("work_item", i);
-    items.push({ id, connectionId: conn.id, externalId });
-
-    const rng = rngFor("work_item", i);
-    const project = knowledgeProjects[i % knowledgeProjects.length];
-    const product = products[i % products.length];
-    const symptom = SYMPTOMS[i % SYMPTOMS.length];
-    const created = pastDate(rng, 540);
-
-    rows.push({
-      id,
-      source_connection_id: conn.id,
-      external_id: externalId,
-      external_url: `https://example.invalid/${conn.slug}/${externalId}`,
-      kind: pick(rng, ["ticket", "issue", "bug", "task"]),
-      title: `${symptom} on ${product.slug}`,
-      status: pick(rng, STATUSES),
-      external_group_key: `${480_000 + (i % 8)}`,
-      source_project_id: project.id,
-      product_id: product.id,
-      team_id: product.teamId,
-      customer_id: chance(rng, 0.75)
-        ? customers[i % customers.length].id
-        : null,
-      observed_version: `${intBetween(rng, 3, 9)}.${intBetween(rng, 0, 12)}`,
-      requester: `contact${i % 200}@example.invalid`,
-      // Capped deliberately: a realistic blob dominates database size at 40k.
-      raw: JSON.stringify({
-        seeded: true,
-        symptom,
-        priority: intBetween(rng, 1, 4),
-      }),
-      source_created_at: created,
-      source_updated_at: new Date(
-        created.getTime() + intBetween(rng, 0, 72) * 3_600_000,
-      ),
-    });
-  }
-
-  await insertRows(
+  await insertWindowed(
     tx,
     "work_items",
     [
@@ -233,8 +196,59 @@ async function seedWorkItems(
       "source_created_at",
       "source_updated_at",
     ],
-    rows,
+    v.workItems,
+    (i) => {
+      const conn = connections[i % connections.length];
+      const next = (counters.get(conn.id) ?? 0) + 1;
+      counters.set(conn.id, next);
+      const externalId = `${next}`;
+      const id = uuidFor("work_item", i);
+      items.push({ id, connectionId: conn.id, externalId });
+
+      const rng = rngFor("work_item", i);
+      /*
+       * Drawn from the row's stream, not by `i % list.length`. Cycling gave
+       * lcm(SYMPTOMS, products) distinct titles — 60 of them across the 40k rows
+       * --scale=large asks for — so the trigram index saw 60 strings repeated
+       * 667 times each. Same reasoning as the knowledge entries.
+       */
+      const project = pick(rng, knowledgeProjects);
+      const product = pick(rng, products);
+      const symptom = pick(rng, SYMPTOMS);
+      const errorCode = `E${intBetween(rng, 100, 999)}`;
+      const created = pastDate(rng, 540);
+
+      return {
+        id,
+        source_connection_id: conn.id,
+        external_id: externalId,
+        external_url: `https://example.invalid/${conn.slug}/${externalId}`,
+        kind: pick(rng, ["ticket", "issue", "bug", "task"]),
+        title: `${symptom} on ${product.slug} ${pick(rng, CONTEXTS)} (${errorCode})`,
+        status: pick(rng, STATUSES),
+        external_group_key: `${480_000 + (i % 8)}`,
+        source_project_id: project.id,
+        product_id: product.id,
+        team_id: product.teamId,
+        customer_id: chance(rng, 0.75)
+          ? customers[i % customers.length].id
+          : null,
+        observed_version: `${intBetween(rng, 3, 9)}.${intBetween(rng, 0, 12)}`,
+        requester: `contact${i % 200}@example.invalid`,
+        // Capped deliberately: a realistic blob dominates database size at 40k.
+        raw: JSON.stringify({
+          seeded: true,
+          symptom,
+          priority: intBetween(rng, 1, 4),
+        }),
+        source_created_at: created,
+        source_updated_at: new Date(
+          created.getTime() + intBetween(rng, 0, 72) * 3_600_000,
+        ),
+      };
+    },
   );
+
   return items;
 }
 
@@ -243,29 +257,9 @@ async function seedMessages(
   v: Volumes,
   items: SeededWorkItem[],
 ): Promise<void> {
-  const rows: Record<string, unknown>[] = [];
   const per = Math.max(1, Math.floor(v.workItemMessages / items.length));
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    for (let k = 0; k < per; k++) {
-      const rng = rngFor("message", rows.length);
-      rows.push({
-        id: uuidFor("work_item_message", rows.length),
-        work_item_id: item.id,
-        // Per-item ordinal: (work_item_id, external_id) is unique.
-        external_id: `${k}`,
-        author: k % 2 === 0 ? "customer@example.invalid" : "agent@tachy.local",
-        visibility: chance(rng, 0.2) ? "private" : "public",
-        direction: k % 2 === 0 ? "inbound" : "outbound",
-        body_text:
-          k === 0
-            ? `We are seeing: ${SYMPTOMS[i % SYMPTOMS.length]}. It started after the last upgrade.`
-            : `Update ${k}: checked the logs, ${pick(rng, ["no change", "partially reproduced", "confirmed", "cannot reproduce"])}.`,
-        created_at: pastDate(rng, 500),
-      });
-    }
-  }
-  await insertRows(
+
+  await insertWindowed(
     tx,
     "work_item_messages",
     [
@@ -278,7 +272,37 @@ async function seedMessages(
       "body_text",
       "created_at",
     ],
-    rows,
+    items.length * per,
+    (i) => {
+      const item = items[Math.floor(i / per)];
+      const k = i % per;
+      const rng = rngFor("message", i);
+      /*
+       * The follow-ups used to be `Update ${k}: checked the logs, ${one of
+       * four}` — 12 distinct strings across the 120k rows --scale=large writes.
+       * Composing a step with an outcome and a detail multiplies instead.
+       */
+      const symptom = pick(rng, SYMPTOMS);
+      // The thread quotes its own ticket, the way a real one does. That is also
+      // what keeps a body unique: the composed halves alone repeat at 160k rows.
+      const ref = `${item.externalId}`;
+      const body =
+        k === 0
+          ? `${pick(rng, MESSAGE_OPENERS)}: ${symptom}. It shows up ${pick(rng, CONTEXTS)}, and ${pick(rng, IMPACTS)}. Logged as #${ref} against ${intBetween(rng, 3, 9)}.${intBetween(rng, 0, 12)}.`
+          : `Update ${k} on #${ref}: ${pick(rng, MESSAGE_STEPS)} — ${pick(rng, MESSAGE_OUTCOMES)}. ${pick(rng, DIAGNOSTICS)}. Seen ${intBetween(rng, 2, 400)} times in the last ${intBetween(rng, 2, 72)} hours.`;
+
+      return {
+        id: uuidFor("work_item_message", i),
+        work_item_id: item.id,
+        // Per-item ordinal: (work_item_id, external_id) is unique.
+        external_id: `${k}`,
+        author: k % 2 === 0 ? "customer@example.invalid" : "agent@tachy.local",
+        visibility: chance(rng, 0.2) ? "private" : "public",
+        direction: k % 2 === 0 ? "inbound" : "outbound",
+        body_text: body,
+        created_at: pastDate(rng, 500),
+      };
+    },
   );
 }
 

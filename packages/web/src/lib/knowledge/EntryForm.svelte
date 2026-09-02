@@ -50,7 +50,11 @@
   let affectedVersion = $state(seed.affected_version ?? "");
   let fixedVersion = $state(seed.fixed_version ?? "");
   let status = $state(seed.status ?? "approved");
-  let component = $state(""); 
+  let component = $state("");
+  let customerSlug = $state(seed.customer_slug ?? "");
+  let unitSlug = $state(seed.customer_unit_slug ?? "");
+  /** Units belong to one customer, so the list is reloaded when it changes. */
+  let units = $state<NamedRow[]>([]);
 
   let showStructured = $state(false);
   let structuredField = $state<HTMLTextAreaElement>();
@@ -66,7 +70,28 @@
   let components = $state<NamedRow[]>([]);
   let patterns = $state<NamedRow[]>([]);
   let environments = $state<{ cloud: string; count: number }[]>([]);
+  let customers = $state<NamedRow[]>([]);
   let productSlug = $state("");
+
+  async function loadUnits(slug: string) {
+    units = slug
+      ? await api.get<NamedRow[]>(`/customers/${slug}/units`).catch(() => [])
+      : [];
+    if (unitSlug && !units.some((u) => u.slug === unitSlug)) unitSlug = "";
+  }
+
+  const unitOptions = $derived([
+    { value: "", label: "the whole account" },
+    ...units.map((u) => ({
+      value: u.slug as string,
+      label: `${u.name} (${u.kind})`,
+    })),
+  ]);
+
+  const customerOptions = $derived([
+    { value: "", label: "none (general)" },
+    ...customers.map((c) => ({ value: c.slug as string, label: c.name as string })),
+  ]);
 
   const productOptions = $derived([
     { value: "", label: `no ${t("product")}` },
@@ -85,14 +110,17 @@
 
   onMount(async () => {
     try {
-      const [prods, pats, envs] = await Promise.all([
+      const [prods, pats, envs, custs] = await Promise.all([
         api.get<NamedRow[]>("/products"),
         api.get<NamedRow[]>("/resolution-patterns"),
         api.get<{ cloud: string; count: number }[]>("/knowledge/environments"),
+        api.get<NamedRow[]>("/customers"),
       ]);
       products = prods;
       patterns = pats;
       environments = envs;
+      customers = custs;
+      if (customerSlug) await loadUnits(customerSlug);
       if (mode === "edit" && initial.product_id) {
         productSlug = (prods.find((p) => p.id === initial.product_id)?.slug as string) ?? "";
       }
@@ -130,6 +158,8 @@
       affectedVersion: affectedVersion.trim() || (mode === "edit" ? null : undefined),
       fixedVersion: fixedVersion.trim() || (mode === "edit" ? null : undefined),
       component: component || (mode === "edit" ? null : undefined),
+      customerSlug: customerSlug || (mode === "edit" ? null : undefined),
+      unit: unitSlug || (mode === "edit" ? null : undefined),
     };
     if (structured !== undefined) payload.structured = structured;
     if (mode === "create") {
@@ -266,6 +296,18 @@
       <AsciiSelect bind:value={component} disabled={!productSlug || components.length === 0}
         title={productSlug ? undefined : `pick a ${t("product")} first`}
         options={[{ value: "", label: "none" }, ...componentOptions(components)]} />
+    </label>
+    <label>{t("customer")}
+      <AsciiSelect bind:value={customerSlug} options={customerOptions}
+        onchange={(v) => loadUnits(String(v))}
+        title="whose install this was learned on; leave as none if it is true for everyone" />
+    </label>
+    <label>unit
+      <AsciiSelect bind:value={unitSlug} options={unitOptions}
+        disabled={!customerSlug || units.length === 0}
+        title={customerSlug
+          ? "which part of their estate — a site or line"
+          : `pick a ${t("customer")} first`} />
     </label>
   </div>
 

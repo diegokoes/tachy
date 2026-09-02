@@ -13,7 +13,11 @@ import {
 } from "@tachy/core";
 import { callerScope } from "../authz";
 
-const customerSchema = z.object({ customer_slug: z.string().nullable() });
+const customerSchema = z.object({
+  customer_slug: z.string().nullable(),
+  /** Which part of their estate. Ignored when the customer is being cleared. */
+  unit: z.string().nullable().optional(),
+});
 const versionSchema = z.object({ version: z.string().nullable() });
 const noteSchema = z.object({ body: z.string().min(1) });
 
@@ -47,11 +51,11 @@ export const workItems = new Hono()
     return c.json({ posted: true });
   })
   .patch("/:id/customer", zValidator("json", customerSchema), async (c) => {
-    const { customer_slug } = c.req.valid("json");
+    const { customer_slug, unit } = c.req.valid("json");
     const customerId = customer_slug
       ? await getCustomerIdBySlug(customer_slug)
       : null;
-    await setWorkItemCustomer(c.req.param("id"), customerId);
+    await setWorkItemCustomer(c.req.param("id"), customerId, unit);
     return c.json({ updated: true, customer_id: customerId });
   })
   .patch(

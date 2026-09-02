@@ -1,6 +1,10 @@
 <script lang="ts">
   import { api, ApiError } from "./api";
   import type { KnowledgeRow, Feedback, NamedRow } from "./types";
+  import History from "./library/History.svelte";
+  import Backlinks from "./wiki/Backlinks.svelte";
+  import { renderMarkdown, markBrokenLinks } from "./markdown";
+  import { LinkTargets } from "./wikilinks.svelte";
   import StructuredView from "./knowledge/StructuredView.svelte";
   import QualityBars from "./knowledge/QualityBars.svelte";
   import EntryForm from "./knowledge/EntryForm.svelte";
@@ -14,6 +18,15 @@
 
   let entry = $state<KnowledgeRow | null>(null);
   let feedback = $state<Feedback[]>([]);
+  const links = new LinkTargets();
+
+  /**
+   * An entry's prose is markdown like an article's, so a [[link]] written in a
+   * resolution is followable rather than shown as literal brackets. The stored
+   * edge and what the reader sees then agree.
+   */
+  const prose = (text: string) =>
+    markBrokenLinks(renderMarkdown(text), links.resolved);
   let error = $state<string | null>(null);
 
   let editing = $state(false);
@@ -56,6 +69,7 @@
     try {
       entry = await api.get<KnowledgeRow>(`/knowledge/${id}`);
       feedback = await api.get<Feedback[]>(`/knowledge/${id}/feedback`);
+      await links.load("knowledge", id);
 
 
       if (isCurator() && entry.product_id && !entry.team_id) {
@@ -340,8 +354,22 @@
           {/if}
         {/if}
 
-        {#if entry.root_cause}<section><h3>Root cause</h3><p>{entry.root_cause}</p></section>{/if}
-        {#if entry.resolution}<section><h3>Resolution</h3><p>{entry.resolution}</p></section>{/if}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        {#if entry.root_cause}
+          <section>
+            <h3>Root cause</h3>
+            <div class="md prose" onclick={links.onClick}>{@html prose(entry.root_cause)}</div>
+          </section>
+        {/if}
+        {#if entry.resolution}
+          <section>
+            <h3>Resolution</h3>
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="md prose" onclick={links.onClick}>{@html prose(entry.resolution)}</div>
+          </section>
+        {/if}
 
         {@render chips("Symptoms", entry.symptoms)}
         {@render chips("Signals", entry.signals)}
@@ -353,6 +381,16 @@
             <StructuredView structured={entry.structured} />
           </section>
         {/if}
+
+        <Backlinks base="knowledge" id={id} />
+
+        <History
+          base="knowledge"
+          {id}
+          version={entry.version}
+          canEdit={canEdit}
+          onReverted={load}
+        />
 
         <section>
           <h3>Feedback</h3>

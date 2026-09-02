@@ -14,6 +14,12 @@ import {
   getProductIdBySlug,
   getCustomerIdBySlug,
   getCustomerProfile,
+  listCustomerUnits,
+  addCustomerUnit,
+  updateCustomerUnit,
+  deleteCustomerUnit,
+  resolveUnitFacts,
+  resolveUnit,
   setCustomerFact,
   deleteCustomerFact,
   listCustomerFactKinds,
@@ -134,7 +140,22 @@ const labelSchema = z.object({
 
 const renameSchema = z.object({ to: slugField });
 
+const customerUnitSchema = z.object({
+  slug: z.string().min(1),
+  name: z.string().min(1),
+  kind: z.string().min(1),
+  parent: z.string().nullable().optional(),
+  profile: z.string().nullable().optional(),
+  aliases: z.array(z.string()).optional(),
+  notes: z.string().nullable().optional(),
+});
+
+const customerUnitPatchSchema = customerUnitSchema
+  .partial()
+  .omit({ slug: true });
+
 const customerFactSchema = z.object({
+  unit: z.string().nullable().optional(),
   kind: z.string().min(1),
   label: z.string().optional(),
   value: z.string().min(1),
@@ -395,11 +416,78 @@ export const admin = new Hono()
   })
 
   // The customer's own install: their specifics, plus the records that are theirs.
+  // ?unit= resolves the facts for one part of their estate, each carrying where
+  // it came from, instead of listing the customer's flat set.
   .get("/customers/:slug/profile", async (c) =>
     c.json(
-      await getCustomerProfile(await getCustomerIdBySlug(c.req.param("slug"))),
+      await getCustomerProfile(
+        await getCustomerIdBySlug(c.req.param("slug")),
+        c.req.query("unit") ?? null,
+      ),
     ),
   )
+  .get("/customers/:slug/units", async (c) =>
+    c.json(
+      await listCustomerUnits(await getCustomerIdBySlug(c.req.param("slug"))),
+    ),
+  )
+  .put(
+    "/customers/:slug/units",
+    zValidator("json", customerUnitSchema),
+    async (c) => {
+      await assertAnyTeamAdminApi(c);
+      const b = c.req.valid("json");
+      return c.json(
+        await addCustomerUnit({
+          customerSlug: c.req.param("slug"),
+          slug: b.slug,
+          name: b.name,
+          kind: b.kind,
+          parentSlug: b.parent,
+          profileSlug: b.profile,
+          aliases: b.aliases,
+          notes: b.notes,
+        }),
+      );
+    },
+  )
+  .patch(
+    "/customers/:slug/units/:unit",
+    zValidator("json", customerUnitPatchSchema),
+    async (c) => {
+      await assertAnyTeamAdminApi(c);
+      const b = c.req.valid("json");
+      return c.json(
+        await updateCustomerUnit(
+          await getCustomerIdBySlug(c.req.param("slug")),
+          c.req.param("unit"),
+          {
+            ...(b.name !== undefined ? { name: b.name } : {}),
+            ...(b.kind !== undefined ? { kind: b.kind } : {}),
+            ...("parent" in b ? { parentSlug: b.parent } : {}),
+            ...("profile" in b ? { profileSlug: b.profile } : {}),
+            ...(b.aliases !== undefined ? { aliases: b.aliases } : {}),
+            ...("notes" in b ? { notes: b.notes } : {}),
+          },
+        ),
+      );
+    },
+  )
+  .delete("/customers/:slug/units/:unit", async (c) => {
+    await assertAnyTeamAdminApi(c);
+    return c.json(
+      await deleteCustomerUnit(
+        await getCustomerIdBySlug(c.req.param("slug")),
+        c.req.param("unit"),
+      ),
+    );
+  })
+  // The resolved ladder for one unit, each fact carrying where it came from.
+  .get("/customers/:slug/units/:unit/facts", async (c) => {
+    const customerId = await getCustomerIdBySlug(c.req.param("slug"));
+    const unit = await resolveUnit(customerId, c.req.param("unit"));
+    return c.json(await resolveUnitFacts(unit.id));
+  })
   .get("/customers/:slug/facts", async (c) =>
     c.json(
       await listCustomerFacts(await getCustomerIdBySlug(c.req.param("slug"))),
@@ -417,6 +505,7 @@ export const admin = new Hono()
       return c.json(
         await setCustomerFact({
           customerSlug: c.req.param("slug"),
+          unit: b.unit,
           kind: b.kind,
           label: b.label,
           value: b.value,

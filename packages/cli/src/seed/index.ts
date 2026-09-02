@@ -16,11 +16,20 @@ import { seedSources } from "./sources";
 import {
   deriveProductAreas,
   seedKnowledge,
+  type Knowledge,
   supersede,
-  syntheticVector,
 } from "./knowledge";
+import {
+  EMBED_MODES,
+  embedEstimateSeconds,
+  realEmbedder,
+  syntheticEmbedder,
+  type EmbedMode,
+} from "./embed";
 import { seedCode } from "./code";
 import { seedActivity } from "./activity";
+import { seedLibrary } from "./library";
+import { seedWiki } from "./wiki";
 
 export { SCALE_NAMES, type ScaleName } from "./scale";
 export { ADMIN_EMAIL, MEMBER_EMAIL, DEV_PASSWORD } from "./org";
@@ -29,7 +38,8 @@ export interface SeedOptions {
   scale: ScaleName;
   reset: boolean;
   yes: boolean;
-  embed: boolean;
+  /** `true` is kept for callers that predate the modes and means "all". */
+  embed: boolean | EmbedMode;
 }
 
 /**
@@ -43,6 +53,11 @@ const MARKER = "dev_seed";
 /** Everything the seeder writes, in an order the FKs tolerate. */
 const TABLES = [
   "generated_outputs",
+  "library_links",
+  "library_views",
+  "library_revisions",
+  "wiki_article_categories",
+  "wiki_categories",
   "analysis_runs",
   "code_chunks",
   "repo_files",
@@ -58,6 +73,7 @@ const TABLES = [
   "source_projects",
   "source_connections",
   "customer_facts",
+  "customer_units",
   "customer_components",
   "customers",
   "components",
@@ -82,10 +98,16 @@ const LOCAL_HOSTS = new Set([
   "tachy-dev-postgres",
 ]);
 
-const HNSW_INDEXES = [
-  "knowledge_embedding_idx",
-  "reference_doc_chunks_embedding_idx",
-  "code_chunks_embedding_idx",
+/**
+ * The tables the bulk load fills in volume. Their HNSW and GIN indexes come off
+ * for the duration and are rebuilt from the catalog afterwards.
+ */
+const BULK_TABLES = [
+  "knowledge_entries",
+  "reference_docs",
+  "reference_doc_chunks",
+  "repo_files",
+  "code_chunks",
 ];
 
 async function confirm(question: string): Promise<boolean> {
@@ -136,27 +158,55 @@ async function assertDevDatabase(opts: SeedOptions): Promise<void> {
 }
 
 /**
- * Incremental HNSW insertion is a graph traversal per row, so a bulk rebuild
- * is far cheaper. The DDL comes back out of the catalog rather than being
- * restated here, so it cannot drift from db/schema.sql.
+ * Incremental HNSW insertion is a graph traversal per row, and a GIN index
+ * pays its posting-list maintenance on every one, so a bulk rebuild is far
+ * cheaper than either. B-tree indexes stay: they are cheap to maintain and the
+ * FK checks during the load use them.
+ *
+ * The DDL comes back out of the catalog rather than being restated here, so it
+ * cannot drift from db/schema.sql.
  */
-async function withoutHnsw<T>(tx: Tx, fn: () => Promise<T>): Promise<T> {
-  const defs: string[] = [];
-  for (const name of HNSW_INDEXES) {
-    // Qualified by schema: the test setup runs eight schemas side by side,
-    // each holding an index of this same name.
-    const [row] = await tx<{ indexdef: string }[]>`
-      select indexdef from pg_indexes
-      where indexname = ${name} and schemaname = current_schema()
-    `;
-    if (!row) continue;
-    defs.push(row.indexdef);
-    await tx.unsafe(`drop index ${name}`);
-  }
+async function withoutBulkIndexes<T>(tx: Tx, fn: () => Promise<T>): Promise<T> {
+  // Qualified by schema: the test setup runs eight schemas side by side, each
+  // holding indexes of these same names.
+  const rows = await tx<{ indexname: string; indexdef: string }[]>`
+    select indexname, indexdef from pg_indexes
+    where schemaname = current_schema()
+      and tablename = any(${BULK_TABLES})
+      and indexdef ~* ' using (hnsw|gin) '
+    order by indexname
+  `;
+  for (const row of rows) await tx.unsafe(`drop index ${row.indexname}`);
+
   const out = await fn();
+
   await tx.unsafe(`set local maintenance_work_mem = '512MB'`);
-  for (const def of defs) await tx.unsafe(def);
+  for (const row of rows) await tx.unsafe(row.indexdef);
   return out;
+}
+
+/**
+ * Elapsed time per generator. Until this existed the only number printed was
+ * the total, so a seed that took an hour was something you waited through
+ * rather than something you could point at.
+ */
+class Phases {
+  readonly ms = new Map<string, number>();
+
+  async run<T>(name: string, fn: () => Promise<T>): Promise<T> {
+    const at = Date.now();
+    try {
+      return await fn();
+    } finally {
+      this.ms.set(name, (this.ms.get(name) ?? 0) + (Date.now() - at));
+    }
+  }
+
+  report(): void {
+    const width = Math.max(...[...this.ms.keys()].map((k) => k.length));
+    for (const [name, ms] of this.ms)
+      console.log(`  ${name.padEnd(width)}  ${(ms / 1000).toFixed(1)}s`);
+  }
 }
 
 export async function seed(opts: SeedOptions): Promise<void> {
@@ -164,58 +214,98 @@ export async function seed(opts: SeedOptions): Promise<void> {
   await assertDevDatabase(opts);
 
   const started = Date.now();
-  const embed = opts.embed ? await realEmbedder() : syntheticVector;
+  const phases = new Phases();
+  const mode = embedMode(opts.embed);
+  const estimate = embedEstimateSeconds(mode, {
+    knowledge_entry: v.knowledgeEntries,
+    reference_doc_chunk: v.referenceChunks,
+    code_chunk: v.codeChunks,
+  });
+  if (estimate > 60)
+    console.log(
+      `embedding ${mode === "all" ? "every corpus" : "the search corpora"} with the real model: ` +
+        `about ${Math.round(estimate / 60)} min of CPU before the seed commits.` +
+        (mode === "all"
+          ? "\n  --embed=search skips code_chunks, which is most of that and only search_code reads."
+          : ""),
+    );
+  const embed =
+    mode === "none"
+      ? syntheticEmbedder
+      : await realEmbedder(mode, (kind, done) =>
+          process.stderr.write(`\r  embedded ${done} ${kind}(s)   `),
+        );
 
   // The bulk load is one transaction; the core helpers called afterwards open
   // their own connections and would deadlock against the truncate's locks.
   await sql.begin(async (tx: Tx) => {
     await tx.unsafe(`set local synchronous_commit = off`);
     if (opts.reset)
-      await tx.unsafe(`truncate ${TABLES.join(", ")} restart identity cascade`);
+      await phases.run("truncate", () =>
+        tx.unsafe(`truncate ${TABLES.join(", ")} restart identity cascade`),
+      );
 
-    const org = await seedOrg(tx, v);
-    const catalog = await seedCatalog(tx, v, org.products);
-    const sources = await seedSources(
-      tx,
-      v,
-      org.teams,
-      org.products,
-      catalog.customers,
-      catalog.components,
+    const org = await phases.run("org", () => seedOrg(tx, v));
+    const catalog = await phases.run("catalog", () =>
+      seedCatalog(tx, v, org.products),
+    );
+    const sources = await phases.run("sources", () =>
+      seedSources(
+        tx,
+        v,
+        org.teams,
+        org.products,
+        catalog.customers,
+        catalog.components,
+      ),
     );
 
+    let knowledge: Knowledge = { entries: [], docs: [] };
     const heavy = async () => {
-      await seedKnowledge(
-        tx,
-        v,
-        org.products,
-        org.users,
-        catalog.components,
-        catalog.customers,
-        sources.workItems,
-        sources.projects,
-        catalog.patterns,
-        embed,
+      knowledge = await phases.run("knowledge", () =>
+        seedKnowledge(
+          tx,
+          v,
+          org.products,
+          org.users,
+          catalog.components,
+          catalog.customers,
+          sources.workItems,
+          sources.projects,
+          catalog.patterns,
+          catalog.units,
+          embed,
+        ),
       );
-      await seedCode(
-        tx,
-        v,
-        org.products,
-        catalog.components,
-        catalog.customers,
-        sources.projects,
-        sources.connections,
-        embed,
+      await phases.run("code", () =>
+        seedCode(
+          tx,
+          v,
+          org.products,
+          catalog.components,
+          catalog.customers,
+          sources.projects,
+          sources.connections,
+          embed,
+        ),
       );
     };
     // At small scale the rebuild costs more than the inserts it saves.
     if (opts.scale === "small") await heavy();
-    else await withoutHnsw(tx, heavy);
+    else await phases.run("indexes", () => withoutBulkIndexes(tx, heavy));
 
-    await deriveProductAreas(tx);
-    await supersede(tx);
-    await seedActivity(tx, v, org.users, sources.workItems, org.artifacts);
+    await phases.run("derive", async () => {
+      await deriveProductAreas(tx);
+      await supersede(tx);
+    });
+    await phases.run("activity", () =>
+      seedActivity(tx, v, org.users, sources.workItems, org.artifacts),
+    );
+    await phases.run("library", () => seedLibrary(tx, v, knowledge, org.users));
+    await phases.run("wiki", () => seedWiki(tx, org.products, org.users));
   });
+
+  if (mode !== "none") process.stderr.write("\n");
 
   clearPermissionCache();
   await seedSettings();
@@ -226,7 +316,12 @@ export async function seed(opts: SeedOptions): Promise<void> {
     on conflict (key) do update set value = excluded.value, updated_at = now()
   `;
 
-  await report(opts, Date.now() - started, credentials);
+  await phases.run("count", () => report(opts, credentials));
+  phases.report();
+  console.log(
+    `\nseeded '${opts.scale}' in ${((Date.now() - started) / 1000).toFixed(1)}s`,
+  );
+  banner(opts, credentials);
 }
 
 async function seedSettings(): Promise<void> {
@@ -267,18 +362,7 @@ async function seedCredentials(): Promise<number> {
   return n;
 }
 
-async function realEmbedder(): Promise<
-  (kind: string, i: number, text: string) => Promise<string>
-> {
-  const { embedPassage } = await import("@tachy/core");
-  return async (_kind, _i, text) => `[${(await embedPassage(text)).join(",")}]`;
-}
-
-async function report(
-  opts: SeedOptions,
-  ms: number,
-  credentials: number,
-): Promise<void> {
+async function report(opts: SeedOptions, credentials: number): Promise<void> {
   const counts = await sql.unsafe<{ table: string; n: string }[]>(
     TABLES.map(
       (t) => `select '${t}' as table, count(*)::text as n from ${t}`,
@@ -287,8 +371,10 @@ async function report(
   const width = Math.max(...TABLES.map((t) => t.length));
   for (const row of counts)
     console.log(`  ${row.table.padEnd(width)}  ${row.n.padStart(8)}`);
+  console.log();
+}
 
-  console.log(`\nseeded '${opts.scale}' in ${(ms / 1000).toFixed(1)}s`);
+function banner(opts: SeedOptions, credentials: number): void {
   console.log(`  login: ${ADMIN_EMAIL} / ${DEV_PASSWORD}  (admin)`);
   console.log(
     `         ${MEMBER_EMAIL} / ${DEV_PASSWORD}  (member, used by k6)`,
@@ -297,9 +383,26 @@ async function report(
     console.log(
       "  vault disabled — skipped credentials; set TACHY_SECRET_KEY to seed them",
     );
-  if (!opts.embed)
+  const mode = embedMode(opts.embed);
+  if (mode === "none")
     console.log(
       "  embeddings are SYNTHETIC: search exercises the query paths but its\n" +
         "  results are meaningless. Re-run with --embed for real vectors.",
     );
+  else if (mode === "search")
+    console.log(
+      "  knowledge and reference vectors are real; code_chunks are synthetic,\n" +
+        "  so search_code results are not meaningful. --embed=all covers those too.",
+    );
+}
+
+/** `--embed` with no value means everything, as it did before the modes. */
+function embedMode(embed: boolean | EmbedMode): EmbedMode {
+  if (embed === true) return "all";
+  if (embed === false) return "none";
+  if (!EMBED_MODES.includes(embed))
+    throw new Error(
+      `unknown --embed '${embed}' (${EMBED_MODES.join("|")}, or bare for all)`,
+    );
+  return embed;
 }

@@ -12,6 +12,8 @@ import {
 import { createApp } from "../packages/api/src/app";
 import { sql, resetData, loginCookie, enableVault } from "./helpers";
 
+afterAll(() => sql.end());
+
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = readFileSync(join(here, "fixtures.sql"), "utf8");
 

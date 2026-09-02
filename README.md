@@ -272,8 +272,15 @@ table with deterministic, plausible data: org structure, customers, work items
 and messages, knowledge entries, reference docs, indexed code, and run history.
 Logins are `admin@tachy.local` and `dev-member@tachy.local`, both with the
 password `tachy-dev-password`. It refuses to run against a database holding
-rows it did not create, so it cannot eat a real deployment. Embedding vectors
-are synthetic unless you pass `--embed`; see the caveat in
+rows it did not create, and refuses outright under `NODE_ENV=production` --
+which is what the compose `cli` service passes unless the stack's `.env` says
+otherwise -- so it cannot eat a real deployment.
+
+Embedding vectors are synthetic unless you pass `--embed`, which is the slow
+part: `--embed=search` covers knowledge and reference (what a search reads),
+and `--embed` or `--embed=all` adds code chunks, roughly tripling the time. The
+seeder estimates the wait up front and prints per-phase timings after. See the
+caveat in
 [load/README.md](load/README.md#the-caveat-that-matters-synthetic-embeddings).
 
 **Logs.** One JSON line per request on stderr, carrying a request id that is

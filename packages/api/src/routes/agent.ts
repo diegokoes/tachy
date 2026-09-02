@@ -105,11 +105,18 @@ async function userConfigDir(userId: string | undefined): Promise<string> {
 export async function mcpConfig(
   userEmail: string | undefined,
   settings: EffectiveSettings,
+  turnId?: string,
 ): Promise<Omit<AgentConfig, "systemPromptAppend">> {
   const mcpEnv: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env))
     if (typeof v === "string") mcpEnv[k] = v;
   if (userEmail) mcpEnv.TACHY_USER_EMAIL = userEmail;
+  // Lets a write made during a turn be told apart from one made by someone
+  // pointing their own MCP client at tachy, and links it back to the run.
+  if (turnId) {
+    mcpEnv.TACHY_ACTOR = "agent";
+    mcpEnv.TACHY_TURN_ID = turnId;
+  }
   if (settings.redaction_global.value) mcpEnv.TACHY_REDACT = "true";
 
   const command = process.env.TACHY_MCP_COMMAND || process.execPath;
@@ -270,13 +277,15 @@ export const agent = new Hono()
 
     const autoApprove = turnAutoApprove(command?.name, artifact?.spec);
 
+    // Minted before the config so the MCP subprocess can carry it: a knowledge
+    // edit made mid-turn records which conversation made it.
+    const turnId = randomUUID();
     const cfg: AgentConfig = {
-      ...(await mcpConfig(userEmail, await effectiveSettings())),
+      ...(await mcpConfig(userEmail, await effectiveSettings(), turnId)),
       systemPromptAppend: await systemPrompt(),
       ...(autoApprove.length ? { autoApprove } : {}),
     };
     const user = userEmail ? await getUserByEmail(userEmail) : null;
-    const turnId = randomUUID();
     const turn = startTurn(prompt, cfg, sessionId ? { resume: sessionId } : {});
     turns.set(turnId, { turn, email: userEmail, startedAt: Date.now() });
 
@@ -296,6 +305,7 @@ export const agent = new Hono()
               outputTokens: ev.usage?.outputTokens ?? undefined,
               meta: {
                 provider: cfg.provider,
+                turn_id: turnId,
                 session_id: ev.sessionId,
                 cost_usd: ev.costUsd,
                 ...(ev.usage?.premiumRequests != null

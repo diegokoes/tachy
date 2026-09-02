@@ -1,4 +1,4 @@
-import { azureDevopsToken, badInput } from "@tachy/core";
+import { azureDevopsToken, badInput, sourceFetch } from "@tachy/core";
 
 /** The released Azure DevOps REST version. Everything in 7.2 is still preview. */
 const API_VERSION = "7.1";
@@ -55,6 +55,12 @@ export interface AdoClient {
   getCommit(project: string, repoId: string, sha: string): Promise<any>;
   listWorkItemTypes(project: string): Promise<any[]>;
   getTypeFields(project: string, type: string): Promise<any[]>;
+  /**
+   * Account-wide field definitions. The per-type endpoint above returns what a
+   * type requires and allows but carries NO data type, so the widget a field
+   * deserves is only knowable by joining these two on referenceName.
+   */
+  listFields(): Promise<any[]>;
   createWorkItem(
     project: string,
     type: string,
@@ -85,17 +91,21 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
   const auth = "Basic " + Buffer.from(`:${token}`).toString("base64");
 
   async function req(path: string, init?: RequestInit): Promise<any> {
-    const res = await fetch(orgUrl + withVersion(path), {
-      ...init,
-      headers: {
-        Authorization: auth,
-        Accept: "application/json",
-        ...(init?.headers ?? {}),
+    const method = init?.method ?? "GET";
+    const res = await sourceFetch(
+      `Azure DevOps ${method} ${path}`,
+      orgUrl + withVersion(path),
+      {
+        ...init,
+        headers: {
+          Authorization: auth,
+          Accept: "application/json",
+          ...(init?.headers ?? {}),
+        },
       },
-    });
+    );
     const text = await res.text();
     const trimmed = text.trim();
-    const method = init?.method ?? "GET";
     if (!res.ok) {
       const hint =
         res.status === 401 || res.status === 403 || res.status === 203
@@ -203,6 +213,11 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
 
     async listWorkItemTypes(project) {
       const res = await req(`${proj(project)}/_apis/wit/workitemtypes`);
+      return res.value ?? [];
+    },
+
+    async listFields() {
+      const res = await req(`/_apis/wit/fields`);
       return res.value ?? [];
     },
 

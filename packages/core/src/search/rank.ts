@@ -38,6 +38,15 @@ export const RRF_WEIGHTS = { vec: 1.0, lex: 1.0, fuzzy: 0.5 } as const;
 export const CUSTOMER_BOOST = 0.5 / (RRF_K + 1);
 
 /**
+ * Smaller than CUSTOMER_BOOST, deliberately. The customer boost is already
+ * sized at one top-ranked tiebreaker signal; a unit is a narrower claim than a
+ * customer, so it must move a result less, not more. A sibling on the same
+ * shared profile is a weaker claim again.
+ */
+export const UNIT_BOOST = CUSTOMER_BOOST / 2;
+export const SIBLING_UNIT_BOOST = CUSTOMER_BOOST / 4;
+
+/**
  * HNSW search breadth. The default of 40 is thin once a WHERE clause filters
  * results after the index returns them.
  */
@@ -93,9 +102,14 @@ export const ftsRank = (
  * `boost` names a table with (id, customer_id) to lift rows belonging to
  * `customerId`. Rows of other customers are not excluded — a fix for one
  * install is often the answer for the next.
+ *
+ * With `unitId`, a row from a SIBLING unit sharing the same profile gets a
+ * smaller lift than the unit's own: what was learned on TLC191 is likely true
+ * of TLC192 if both conform to layout 3, and unlikely to be true of a line on a
+ * different layout. Still a lift, never a filter.
  */
 export const fusedCte = (
-  boost?: { table: string; customerId: string } | null,
+  boost?: { table: string; customerId: string; unitId?: string | null } | null,
 ) => sql`
   ids as (
     select id from vec
@@ -117,7 +131,24 @@ export const fusedCte = (
                  sql`+ coalesce((select case when b.customer_id = ${boost.customerId}
                                             then ${CUSTOMER_BOOST}::float8
                                             else 0::float8 end
-                        from ${sql.unsafe(boost.table)} b where b.id = i.id), 0::float8)`
+                        from ${sql.unsafe(boost.table)} b where b.id = i.id), 0::float8)
+                     ${
+                       boost.unitId
+                         ? sql`+ coalesce((select case
+                                    when b.customer_unit_id = ${boost.unitId}
+                                      then ${UNIT_BOOST}::float8
+                                    when b.customer_unit_id is not null
+                                     and exists (
+                                       select 1 from customer_units mine, customer_units theirs
+                                       where mine.id = ${boost.unitId}
+                                         and theirs.id = b.customer_unit_id
+                                         and mine.profile_id is not null
+                                         and mine.profile_id = theirs.profile_id)
+                                      then ${SIBLING_UNIT_BOOST}::float8
+                                    else 0::float8 end
+                             from ${sql.unsafe(boost.table)} b where b.id = i.id), 0::float8)`
+                         : sql``
+                     }`
                : sql``
            } as rrf
     from ids i
