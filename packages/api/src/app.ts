@@ -19,6 +19,7 @@ import { credentials } from "./routes/credentials";
 import { artifacts } from "./routes/artifacts";
 import { outputs } from "./routes/outputs";
 import { repos } from "./routes/repos";
+import { library } from "./routes/library";
 import { projects } from "./routes/projects";
 import { installAuth, isBootstrapped, type OidcConfig } from "./auth";
 import { httpLogger, noteError } from "./logging";
@@ -47,6 +48,7 @@ function apiRoutes() {
     .route("/artifacts", artifacts)
     .route("/outputs", outputs)
     .route("/repos", repos)
+    .route("/library", library)
     .route("/", projects)
     .route("/", admin);
 }
