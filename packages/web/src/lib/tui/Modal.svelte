@@ -75,15 +75,26 @@
       win && !reducedMotion()
         ? gsap
             .timeline()
+            /* clearProps is load-bearing, not tidiness: GSAP leaves the
+               transform inline when the tween lands, and a transformed
+               ancestor is a containing block — which would quietly turn every
+               `position: fixed` popup inside the dialog back into an absolute
+               one, cropped by the scrolling body. */
             .from(win, {
               scaleY: 0.06,
               autoAlpha: 0,
               duration: 0.17,
               ease: "power3.out",
+              clearProps: "transform,opacity,visibility",
             })
             .from(
               win.querySelectorAll<HTMLElement>(".reveal"),
-              { autoAlpha: 0, duration: 0.13, ease: "none" },
+              {
+                autoAlpha: 0,
+                duration: 0.13,
+                ease: "none",
+                clearProps: "opacity,visibility",
+              },
               "<0.06",
             )
         : null;
