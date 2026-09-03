@@ -4,7 +4,17 @@
   import { chat } from "../chatState.svelte";
   import { session } from "../session.svelte";
   import type { NamedRow } from "../types";
-  import { ArtifactMark, Button, Field, Modal, Panel, Select, G, Icon } from "../tui";
+  import {
+    ArtifactMark,
+    Button,
+    Field,
+    Modal,
+    Panel,
+    Scrim,
+    Select,
+    G,
+    Icon,
+  } from "../tui";
   import OutputSpecEditor, {
     emptyColumn,
     outputProblem,
@@ -430,7 +440,7 @@
     class="edge-tab"
     class:active={open || !!chat.artifact}
     onclick={toggle}
-    title="Artifacts — reusable prompt templates to attach as context ({hotkey})"
+    title="Artifacts: reusable prompt templates to attach as context ({hotkey})"
     aria-label="Artifacts"
     aria-expanded={open}
   >
@@ -453,12 +463,7 @@
 </div>
 
 {#if open}
-  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-  <div
-    class="scrim"
-    class:hushed={editorOpen}
-    onclick={() => (open = false)}
-  ></div>
+  <Scrim z={6} soft={editorOpen} onclick={() => (open = false)} />
 
   <div class="stage">
     <aside class="picker" bind:this={pickerEl} transition:crt>
@@ -665,26 +670,6 @@
     stroke-width: 5;
   }
 
-  .scrim {
-    position: fixed;
-    inset: 0;
-    z-index: 6;
-    background: color-mix(in srgb, #000 48%, transparent);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-  }
-  :global(:root[data-theme="light"]) .scrim {
-    background: color-mix(in srgb, #000 22%, transparent);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-  }
-  /* The editor lays its own scrim on top; this keeps the underlying view soft. */
-  .scrim.hushed {
-    background: color-mix(in srgb, #000 18%, transparent);
-  }
-  :global(:root[data-theme="light"]) .scrim.hushed {
-    background: color-mix(in srgb, #000 8%, transparent);
-  }
 
   .stage {
     position: absolute;

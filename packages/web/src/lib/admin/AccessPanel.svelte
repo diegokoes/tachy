@@ -23,7 +23,7 @@
   };
 
   const ROLE_TIP =
-    "app admin: manages users, org structure and system settings. member: uses the app — curation comes from a team role.";
+    "app admin: manages users, org structure and system settings. member: uses the app; curation comes from a team role.";
   const TEAM_ROLE_TIP = `team admin: curates this ${t("team")}'s knowledge, docs, taxonomy and members. member: uses the app.`;
 
   const users = createResource(() => api.get<UserRow[]>("/users"), []);
@@ -89,7 +89,7 @@
       edit: "text",
       required: true,
       editable: () => false,
-      hint: "sign-in identity — cannot change later",
+      info: "The sign-in identity. It cannot be changed once the user exists.",
     },
     { key: "display_name", label: "name", width: "12rem", edit: "text" },
     {
@@ -102,7 +102,6 @@
         { value: "admin", label: "admin" },
       ],
       initial: "member",
-      hint: "org-wide",
       info: ROLE_TIP,
     },
     { key: "teams", label: t("teams"), cell: teamsCell },
@@ -112,8 +111,8 @@
       width: "8rem",
       formOnly: true,
       edit: "text",
-      hint: "10+ characters; blank keeps the current one",
-      info: "Blank leaves sign-in to SSO, or keeps the existing password.",
+      placeholder: "10+ characters",
+      info: "Ten characters or more. Blank leaves sign-in to SSO, or keeps the existing password.",
     },
     {
       key: "disabled",
@@ -121,7 +120,7 @@
       formOnly: true,
       only: "edit",
       edit: "checkbox",
-      hint: "cannot sign in; past activity stays attributed",
+      info: "A disabled user cannot sign in. Their past activity stays attributed to them.",
     },
     { key: "status", label: "status", width: "8rem", cell: statusCell },
   ]);
@@ -255,7 +254,7 @@
         (d.role !== row.role || Boolean(d.disabled) !== row.disabled)
       )
         throw new Error(
-          "that change would lock you out — have another admin make it",
+          "that change would lock you out. Have another admin make it",
         );
       await api.patch(`/users/${row.id}`, {
         display_name: d.display_name || null,

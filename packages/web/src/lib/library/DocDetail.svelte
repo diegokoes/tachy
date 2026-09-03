@@ -107,7 +107,7 @@
       if (e instanceof ApiError && e.status === 409) {
         conflict = true;
         mutateError =
-          "someone else edited this doc in the meantime — reload to get the latest version";
+          "someone else edited this doc in the meantime. Reload to get the latest version";
       } else {
         mutateError = errText(e);
       }
@@ -221,7 +221,7 @@
       <span
         ><Badge
           tone="accent"
-          title="documents this customer's install — cite it as theirs, not as how the product works"
+          title="documents this customer's install. Cite it as theirs, not as how the product works"
           >{doc.customer_slug}</Badge
         ></span
       >

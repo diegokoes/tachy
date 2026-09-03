@@ -743,7 +743,7 @@
               aria-valuemin="0"
               aria-valuemax="100"
               aria-label="match"
-              title="{it.grade ?? 'weak'} match — {Math.round(
+              title="{it.grade ?? 'weak'} match, {Math.round(
                 it.relevance * 100,
               )}%"
             >
@@ -774,7 +774,7 @@
                 {#if it.customer}
                   <Chip
                     tone="accent"
-                    title="specific to this customer's install — not general product behaviour"
+                    title="specific to this customer's install, not general product behaviour"
                     >{it.customer}</Chip
                   >
                 {/if}

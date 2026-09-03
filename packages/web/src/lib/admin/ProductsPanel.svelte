@@ -7,7 +7,7 @@
   import { CrudTable, type Column } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
   import SlugRename from "./SlugRename.svelte";
-  import { csv, INFO, TIP, type Product, type Team } from "./shared";
+  import { csv, INFO, EXAMPLE, type Product, type Team } from "./shared";
 
   const products = createResource(() => api.get<Product[]>("/products"), []);
   const teams = createResource(() => api.get<Team[]>("/teams"), []);
@@ -39,7 +39,6 @@
       width: "12rem",
       edit: "text",
       required: true,
-      hint: TIP.slug,
       info: INFO.slug,
       derive: (d) => uniqueSlug(slugify(String(d.name ?? "")), allSlugs),
       action: { label: "rename…", onclick: (r) => (renaming = r) },
@@ -52,13 +51,13 @@
       options: teamOptions,
       required: true,
       initial: teams.data[0]?.slug,
-      hint: `Who owns this ${t("product")}. Moving it takes its source projects along.`,
+      info: `Who owns this ${t("product")}. Moving it takes its source projects along.`,
     },
     {
       key: "aliases",
       label: "aliases",
       edit: "text",
-      hint: TIP.aliases.product,
+      placeholder: EXAMPLE.aliases.product,
       info: INFO.aliases.product,
       value: (r) => (r.aliases ?? []).join(", "),
     },
@@ -109,7 +108,7 @@
     title={`rename ${target.slug}`}
     current={target.slug}
     taken={allSlugs}
-    warning={`Anything that names this ${t("product")} by slug — saved filters, links, agent instructions — stops resolving. Add the old name to aliases if it is in use.`}
+    warning={`Anything that names this ${t("product")} by slug (saved filters, links, agent instructions) stops resolving. Add the old name to aliases if it is in use.`}
     onRename={(slug) => api.patch(`/products/${target.slug}`, { slug })}
     onDone={() => {
       renaming = null;

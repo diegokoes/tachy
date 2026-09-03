@@ -190,7 +190,7 @@
       {#if denying}
         <input
           class="reason"
-          placeholder="why? (optional — the assistant reads this)"
+          placeholder="why? (optional, the assistant reads this)"
           bind:value={reason}
           onkeydown={(e) => {
             if (e.key === "Enter") ondecide(false, reason.trim() || undefined);

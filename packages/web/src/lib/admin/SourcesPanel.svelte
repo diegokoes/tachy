@@ -14,6 +14,7 @@
     Modal,
     Note,
     Select,
+    Subject,
     type Column,
     type Draft,
   } from "../tui";
@@ -42,10 +43,9 @@
     {
       label: string;
       hostLabel: string;
-      hostHint: string;
+      hostExample: string;
       tokenLabel: string;
-      tokenHint: string;
-      tokenInfo?: string;
+      tokenInfo: string;
       groupLabel: string;
       configKey: "projects" | "repos" | null;
     }
@@ -53,31 +53,29 @@
     freshdesk: {
       label: "Freshdesk",
       hostLabel: "domain",
-      hostHint: "acme.freshdesk.com",
+      hostExample: "acme.freshdesk.com",
       tokenLabel: "API key",
-      tokenHint: "profile → API key",
       tokenInfo:
-        "A per-agent key: tickets are read with that agent's permissions.",
+        "Found under profile, API key. It is per-agent: tickets are read with that agent's permissions.",
       groupLabel: "group",
       configKey: null,
     },
     "azure-devops": {
       label: "Azure DevOps",
       hostLabel: "organization",
-      hostHint: "my-org, or a dev.azure.com URL",
+      hostExample: "my-org, or a dev.azure.com URL",
       tokenLabel: "PAT",
-      tokenHint: "org-scoped personal access token",
       tokenInfo:
-        "Reaches every project you have permissions on. Scopes: Work Items (read, or read & write to create tickets), Wiki read, Code read.",
+        "An org-scoped personal access token. It reaches every project you have permissions on. Scopes: Work Items (read, or read & write to create tickets), Wiki read, Code read.",
       groupLabel: "project",
       configKey: "projects",
     },
     github: {
       label: "GitHub",
       hostLabel: "API base URL",
-      hostHint: "https://api.github.com, or an Enterprise /api/v3 URL",
+      hostExample: "https://api.github.com, or an Enterprise /api/v3 URL",
       tokenLabel: "token",
-      tokenHint: "PAT with repo/issues read",
+      tokenInfo: "A personal access token with repo and issues read.",
       groupLabel: "repo",
       configKey: "repos",
     },
@@ -248,7 +246,6 @@
       width: "12rem",
       edit: "text",
       required: true,
-      hint: "machine id — cannot change later",
       info: `${INFO.slug} It also names this connection's stored credential, so it cannot change later.`,
       derive: (d) =>
         uniqueSlug(
@@ -261,7 +258,8 @@
       label: "host",
       edit: "text",
       required: true,
-      hint: (d) => `${SPEC[typeOf(d)].hostLabel} — ${SPEC[typeOf(d)].hostHint}`,
+      placeholder: (d) => SPEC[typeOf(d)].hostExample,
+      info: (d) => `The ${SPEC[typeOf(d)].hostLabel} this connection talks to.`,
       value: (r) => baseUrlToHost(r.source_type as SourceType, r.base_url),
     },
     {
@@ -269,8 +267,7 @@
       label: "token",
       formOnly: true,
       edit: "secret",
-      hint: (d) => SPEC[typeOf(d)].tokenHint,
-      info: (d) => SPEC[typeOf(d)].tokenInfo ?? "",
+      info: (d) => SPEC[typeOf(d)].tokenInfo,
     },
     { key: "token_source", label: "token", width: "8rem", cell: tokenCell },
     {
@@ -279,9 +276,8 @@
       formOnly: true,
       edit: "text",
       visible: (d) => Boolean(SPEC[typeOf(d)].configKey),
-      hint: (d) => `${SPEC[typeOf(d)].groupLabel}s, comma-separated; optional`,
       info: (d) =>
-        `Limits sync and gives the agent a default set of ${SPEC[typeOf(d)].groupLabel}s to look in instead of the whole org.`,
+        `Optional, comma-separated. Limits sync and gives the agent a default set of ${SPEC[typeOf(d)].groupLabel}s to look in instead of the whole org.`,
       value: (r) => groupsOf(r).join(", "),
     },
     {
@@ -385,7 +381,7 @@
 {#snippet probeRow(r: Connection)}
   {@const probe = probes[r.slug]}
   {#if !probe}
-    <p class="dim">Not tested yet — hit <em>test</em> on this row.</p>
+    <p class="dim">Not tested yet. Hit <em>test</em> on this row.</p>
   {:else if !probe.ok}
     <Note tone="danger">{probe.error ?? "failed"}</Note>
   {:else}
@@ -394,7 +390,7 @@
     </p>
     {#if probe.groupsNote}
       <Note tone="warn">
-        Can't list {SPEC[r.source_type as SourceType]?.groupLabel ?? "group"}s —
+        Can't list {SPEC[r.source_type as SourceType]?.groupLabel ?? "group"}s.
         type the key in yourself when registering.
         <span class="reason">{probe.groupsNote}</span>
       </Note>
@@ -402,7 +398,7 @@
     {#if probe.groups?.length}
       <p class="dim">
         {SPEC[r.source_type as SourceType]?.groupLabel ?? "group"}s this token
-        can see — click one to register it.
+        can see. Click one to register it.
       </p>
       <div class="chips">
         {#each probe.groups as g (g.key)}
@@ -471,10 +467,11 @@
   {@const type = connections.data.find((c) => c.slug === slug)
     ?.source_type as SourceType | undefined}
   <Modal
-    title={`connection test — ${slug}`}
+    title={`connection test: ${slug}`}
     width="38rem"
     onCancel={() => (probeOpen = null)}
   >
+    <Subject verb="tested" name={slug} />
     {#if !probe}
       <p class="dim">no result</p>
     {:else if !probe.ok}
@@ -485,7 +482,7 @@
       </Note>
       {#if probe.groupsNote}
         <Note tone="warn">
-          Can't list {(type && SPEC[type]?.groupLabel) ?? "group"}s — type the
+          Can't list {(type && SPEC[type]?.groupLabel) ?? "group"}s. Type the
           key in yourself when registering.
           <span class="reason">{probe.groupsNote}</span>
         </Note>
@@ -493,7 +490,7 @@
       {#if probe.groups?.length}
         <p class="dim">
           {(type && SPEC[type]?.groupLabel) ?? "group"}s this token can see.
-          The key is what a project map is written against — close this and
+          The key is what a project map is written against. Close this and
           click one in the row's drawer to register it.
         </p>
         <ul class="groups">
@@ -520,16 +517,16 @@
     onCancel={() => (claim = null)}
   >
     {#if claimError}<Note tone="danger">{claimError}</Note>{/if}
+    <Subject verb="registering" name={c.key} />
     <div class="claim">
-      <Field label="name" hint="how it reads in lists here">
+      <Field label="name" info="How it reads in lists here.">
         <input aria-label="name" bind:value={c.name} />
       </Field>
       <Field
         label="role"
         required
-        hint={c.role === "tracker" ? "create/reassign target" : "items ingest here"}
         info={c.role === "tracker"
-          ? "Nothing is filed under a tracker, and it holds no wiki, repos or area rules."
+          ? "A create and reassign target. Nothing is filed under a tracker, and it holds no wiki, repos or area rules."
           : `Its items ingest into a ${t("product")}, and it can carry the wikis, repos and area rules.`}
       >
         <Select
@@ -545,9 +542,9 @@
       <Field
         label={c.role === "tracker" ? t("team") : t("product")}
         required
-        hint={c.role === "tracker"
-          ? `the ${t("team")} raising work items here`
-          : `the ${t("product")} its items ingest into`}
+        info={c.role === "tracker"
+          ? `The ${t("team")} raising work items here.`
+          : `The ${t("product")} its items ingest into.`}
       >
         <Select
           value={c.scope}
@@ -560,7 +557,7 @@
         <Note tone="warn">
           You can't curate any {c.role === "tracker"
             ? `${t("team")}s`
-            : `${t("product")}s`} yet — create one under Org first.
+            : `${t("product")}s`} yet. Create one under Org first.
         </Note>
       {/if}
     </div>

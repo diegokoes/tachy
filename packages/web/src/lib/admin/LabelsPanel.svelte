@@ -7,7 +7,7 @@
   import { slugify } from "../slug";
   import ScopeBar from "./ScopeBar.svelte";
   import SlugRename from "./SlugRename.svelte";
-  import { INFO, TIP, type Label, type Product } from "./shared";
+  import { INFO, type Label, type Product } from "./shared";
 
   let product = $state("");
   let renaming = $state<Label | null>(null);
@@ -29,7 +29,6 @@
       width: "16rem",
       edit: "text",
       required: true,
-      hint: TIP.slug,
       info: INFO.slug,
       transform: slugify,
       editable: () => false,

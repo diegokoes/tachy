@@ -190,7 +190,12 @@
             <Field label="organization">
               <input bind:value={orgName} placeholder="Acme" />
             </Field>
-            <Field label={wt.team} hint={teamName ? slugify(teamName) : " "}>
+            <Field
+              label={wt.team}
+              info={teamName
+                ? `Its machine id will be ${slugify(teamName)}.`
+                : undefined}
+            >
               <input bind:value={teamName} />
             </Field>
           </div>
@@ -248,9 +253,9 @@
             </Field>
             <Field
               label="api key or token"
-              hint={agentProvider === "claude"
-                ? "an API key from console.anthropic.com, or a subscription token from 'claude setup-token'"
-                : "stored encrypted"}
+              info={agentProvider === "claude"
+                ? "An API key from console.anthropic.com, or a subscription token from 'claude setup-token'. Stored encrypted."
+                : "Stored encrypted."}
             >
               <input type="password" autocomplete="off" bind:value={agentKey} />
             </Field>
