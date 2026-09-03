@@ -121,7 +121,7 @@
   .cap {
     flex: none;
     height: var(--row);
-    width: 0.28rem;
+    width: 0.4rem;
   }
   .row {
     background: color-mix(in srgb, var(--muted) 40%, transparent);
@@ -149,13 +149,13 @@
     content: "";
     width: 0;
     height: 0;
-    border-left: 0.25rem solid transparent;
-    border-right: 0.25rem solid transparent;
+    border-left: 0.29rem solid transparent;
+    border-right: 0.29rem solid transparent;
   }
   .cap.up::before {
-    border-bottom: 0.34rem solid var(--muted);
+    border-bottom: 0.39rem solid var(--muted);
   }
   .cap.down::before {
-    border-top: 0.34rem solid var(--muted);
+    border-top: 0.39rem solid var(--muted);
   }
 </style>
