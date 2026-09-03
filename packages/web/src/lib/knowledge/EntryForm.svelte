@@ -9,6 +9,7 @@
   import AsciiSelect from "../AsciiSelect.svelte";
   import { t } from "../terms";
   import { csv } from "../admin/shared";
+  import { setTopActions } from "../subnav.svelte";
   import { componentOptions } from "../catalog";
   import Icon from "../tui/Icon.svelte";
 
@@ -50,7 +51,11 @@
   let affectedVersion = $state(seed.affected_version ?? "");
   let fixedVersion = $state(seed.fixed_version ?? "");
   let status = $state(seed.status ?? "approved");
-  let component = $state(""); 
+  let component = $state("");
+  let customerSlug = $state(seed.customer_slug ?? "");
+  let unitSlug = $state(seed.customer_unit_slug ?? "");
+  /** Units belong to one customer, so the list is reloaded when it changes. */
+  let units = $state<NamedRow[]>([]);
 
   let showStructured = $state(false);
   let structuredField = $state<HTMLTextAreaElement>();
@@ -66,7 +71,28 @@
   let components = $state<NamedRow[]>([]);
   let patterns = $state<NamedRow[]>([]);
   let environments = $state<{ cloud: string; count: number }[]>([]);
+  let customers = $state<NamedRow[]>([]);
   let productSlug = $state("");
+
+  async function loadUnits(slug: string) {
+    units = slug
+      ? await api.get<NamedRow[]>(`/customers/${slug}/units`).catch(() => [])
+      : [];
+    if (unitSlug && !units.some((u) => u.slug === unitSlug)) unitSlug = "";
+  }
+
+  const unitOptions = $derived([
+    { value: "", label: "the whole account" },
+    ...units.map((u) => ({
+      value: u.slug as string,
+      label: `${u.name} (${u.kind})`,
+    })),
+  ]);
+
+  const customerOptions = $derived([
+    { value: "", label: "none (general)" },
+    ...customers.map((c) => ({ value: c.slug as string, label: c.name as string })),
+  ]);
 
   const productOptions = $derived([
     { value: "", label: `no ${t("product")}` },
@@ -85,14 +111,17 @@
 
   onMount(async () => {
     try {
-      const [prods, pats, envs] = await Promise.all([
+      const [prods, pats, envs, custs] = await Promise.all([
         api.get<NamedRow[]>("/products"),
         api.get<NamedRow[]>("/resolution-patterns"),
         api.get<{ cloud: string; count: number }[]>("/knowledge/environments"),
+        api.get<NamedRow[]>("/customers"),
       ]);
       products = prods;
       patterns = pats;
       environments = envs;
+      customers = custs;
+      if (customerSlug) await loadUnits(customerSlug);
       if (mode === "edit" && initial.product_id) {
         productSlug = (prods.find((p) => p.id === initial.product_id)?.slug as string) ?? "";
       }
@@ -130,6 +159,8 @@
       affectedVersion: affectedVersion.trim() || (mode === "edit" ? null : undefined),
       fixedVersion: fixedVersion.trim() || (mode === "edit" ? null : undefined),
       component: component || (mode === "edit" ? null : undefined),
+      customerSlug: customerSlug || (mode === "edit" ? null : undefined),
+      unit: unitSlug || (mode === "edit" ? null : undefined),
     };
     if (structured !== undefined) payload.structured = structured;
     if (mode === "create") {
@@ -139,6 +170,8 @@
     }
     return Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined));
   }
+
+  $effect(() => setTopActions(formActions));
 
   function submit(e: SubmitEvent) {
     e.preventDefault();
@@ -174,32 +207,23 @@
   }
 </script>
 
-<form class="entry-form" onsubmit={submit}>
-  <div class="formbar">
-    <span class="side"></span>
-    <span class="mid">{#if extra}{@render extra()}{/if}</span>
-    <span class="side end">
-      <Button
-        variant="ghost"
-        square
-        icon="cancel"
-        aria-label="cancel"
-        title="cancel"
-        disabled={saving}
-        onclick={onCancel}
-      />
-      <Button
-        variant="ghost"
-        tone="accent"
-        square
-        icon="save"
-        type="submit"
-        aria-label={SUBMIT_LABEL}
-        title={SUBMIT_LABEL}
-        busy={saving}
-      />
-    </span>
-  </div>
+<!-- Rendered by App into the carved row beside the subnav, not here. The save
+     button is outside the <form> in the DOM, so it carries `form` — that keeps
+     native required-field validation, which calling submit() directly loses. -->
+{#snippet formActions()}
+  <Button icon="cancel" disabled={saving} onclick={onCancel}>cancel</Button>
+  <Button
+    variant="primary"
+    icon="save"
+    type="submit"
+    form="entry-form"
+    title={SUBMIT_LABEL}
+    busy={saving}>save</Button
+  >
+{/snippet}
+
+<form id="entry-form" class="entry-form" onsubmit={submit}>
+  {#if extra}<div class="formbar">{@render extra()}</div>{/if}
   <label class="wide">issue summary
     <input bind:value={issueSummary} required />
   </label>
@@ -267,6 +291,18 @@
         title={productSlug ? undefined : `pick a ${t("product")} first`}
         options={[{ value: "", label: "none" }, ...componentOptions(components)]} />
     </label>
+    <label>{t("customer")}
+      <AsciiSelect bind:value={customerSlug} options={customerOptions}
+        onchange={(v) => loadUnits(String(v))}
+        title="whose install this was learned on; leave as none if it is true for everyone" />
+    </label>
+    <label>unit
+      <AsciiSelect bind:value={unitSlug} options={unitOptions}
+        disabled={!customerSlug || units.length === 0}
+        title={customerSlug
+          ? "which part of their estate — a site or line"
+          : `pick a ${t("customer")} first`} />
+    </label>
   </div>
 
   <button
@@ -296,29 +332,17 @@
 </form>
 
 <style>
-  /* Three tracks so the middle group stays optically centred whatever the
-     actions on the right weigh. */
+  /* Cancel and save moved to the carved row, so this holds only whatever the
+     caller passes as `extra` — centred, and gone entirely when there is none. */
   .formbar {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: center;
-    gap: var(--pad-2);
-    margin-bottom: var(--pad-3);
-    padding-top: var(--pad-2);
-    padding-bottom: var(--pad-2);
-    background: var(--panel-solid);
-    border-bottom: var(--panel-line);
-  }
-  .formbar .mid,
-  .formbar .side {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: var(--pad-2);
+    margin-bottom: var(--pad-3);
+    padding-bottom: var(--pad-2);
+    border-bottom: var(--panel-line);
   }
-  .formbar .side.end { justify-content: flex-end; }
   .entry-form { display: flex; flex-direction: column; gap: 0.6rem; }
   label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.82rem; color: var(--muted); }
   label.wide { width: 100%; }

@@ -145,6 +145,7 @@ async function restore(opts: { file?: string; yes?: boolean }) {
 }
 
 import { seed, SCALE_NAMES, type ScaleName } from "./seed";
+import type { EmbedMode } from "./seed/embed";
 
 const USAGE = `usage:
   sync <source-slug> [--since=ISO] [--group=KEY]   pull & store work items
@@ -153,7 +154,9 @@ const USAGE = `usage:
   index-repo <repo-slug>                           clone/fetch a linked repo and (re)index its code
   backup [--out=DIR]                               pg_dump -Fc to DIR (default ./backups)
   restore --file=PATH [--yes]                      pg_restore (overwrites the DB)
-  seed [--scale=NAME] [--reset] [--yes] [--embed]  fill a dev database with plausible data
+  seed [--scale=NAME] [--reset] [--yes]            fill a dev database with plausible data
+       [--embed[=search|all]]                      real vectors: search = knowledge + reference,
+                                                   all also does code (most of the time cost)
                                                    (npm eats --flags: npm run sync -- seed --scale=medium)`;
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -202,11 +205,18 @@ async function main() {
         throw new Error(
           `unknown --scale '${args.scale}' (${SCALE_NAMES.join("|")})`,
         );
+      // `--embed` with no value arrives as the string "true" from the parser
+      // above; the seeder reads that as every corpus.
       return seed({
         scale,
         reset: !!args.reset,
         yes: !!args.yes,
-        embed: !!args.embed,
+        embed:
+          args.embed === undefined
+            ? false
+            : args.embed === "true"
+              ? true
+              : (args.embed as EmbedMode),
       });
     }
     default:

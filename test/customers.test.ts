@@ -4,6 +4,7 @@ import {
   listCustomers,
   resolveCustomerByEmail,
   getCustomerIdBySlug,
+  resolveCustomer,
   getCustomerName,
   linkRepo,
   listRepos,
@@ -235,5 +236,40 @@ describe("customer profile", () => {
       await getCustomerIdBySlug("logista"),
     );
     expect(after?.components.map((c) => c.slug)).toEqual(["aggregation"]);
+  });
+});
+
+describe("customer resolution by slug or alias", () => {
+  beforeEach(resetData);
+
+  it("resolves an alias to the customer, case-insensitively", async () => {
+    const c = await addCustomer({
+      name: "Imperial Brands",
+      slug: "itg",
+      aliases: ["Altadis", "Imperial Tobacco"],
+    });
+    expect((await resolveCustomer("itg")).id).toBe(c.id);
+    expect((await resolveCustomer("altadis")).id).toBe(c.id);
+    expect((await resolveCustomer("IMPERIAL TOBACCO")).id).toBe(c.id);
+    expect(await getCustomerIdBySlug("Altadis")).toBe(c.id);
+  });
+
+  it("prefers an exact slug over another customer's alias for the same string", async () => {
+    const real = await addCustomer({ name: "Altadis SA", slug: "altadis" });
+    await addCustomer({ name: "Imperial", slug: "itg", aliases: ["altadis"] });
+    expect((await resolveCustomer("altadis")).id).toBe(real.id);
+  });
+
+  it("refuses an alias two customers both claim rather than guessing", async () => {
+    await addCustomer({ name: "One", slug: "one", aliases: ["shared"] });
+    await addCustomer({ name: "Two", slug: "two", aliases: ["shared"] });
+    await expect(resolveCustomer("shared")).rejects.toThrow(/Ambiguous/);
+  });
+
+  it("names the nearest customers on a miss", async () => {
+    await addCustomer({ name: "Davidoff", slug: "davidoff" });
+    await expect(resolveCustomer("davidof")).rejects.toThrow(
+      /Nearest matches: 'davidoff'/,
+    );
   });
 });

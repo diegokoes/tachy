@@ -22,6 +22,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      # Same gate as ci.yml: typecheck excludes packages/web, so without this a
+      # tag could publish an image whose SPA does not compile.
+      - run: npm run web:check
+
+      - uses: actions/cache@v4
+        with:
+          path: .model-cache
+          key: model-Xenova-bge-base-en-v1.5
+      - run: npx tsx scripts/warmup-embeddings.ts
+
       - run: npm test # Testcontainers uses the runner's preinstalled Docker
 
   publish:

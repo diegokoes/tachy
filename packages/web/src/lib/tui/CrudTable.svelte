@@ -147,24 +147,23 @@
     <Button
       variant="ghost"
       tone="info"
-      square
+      size="sm"
       icon="edit"
-      aria-label="edit"
       title="edit"
-      onclick={() => startEdit(row)}
-    />
+      onclick={() => startEdit(row)}>edit</Button
+    >
   {/if}
   {#if ondelete && canDelete(row)}
     <Button
       variant="ghost"
       tone="danger"
-      square
-      icon={armed === key ? "check" : "cancel"}
-      aria-label={armed === key ? "confirm delete" : "delete"}
+      size="sm"
+      icon={armed === key ? "check" : "del"}
       title={armed === key ? "click again to confirm" : "delete"}
       busy={busy === key}
       onclick={() => confirmDelete(row)}
-    />
+      >{armed === key ? "confirm" : "delete"}</Button
+    >
   {/if}
 {/snippet}
 

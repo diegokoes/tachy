@@ -102,8 +102,17 @@ import {
   confidenceSchema,
   feedbackKindSchema,
   runModeSchema,
+  env,
+  draftSources,
+  wikiToc,
+  findArticle,
+  setArticleCategories,
+  setComposedFrom,
+  listCustomerUnits,
+  addCustomerUnit,
 } from "@tachy/core";
 import type {
+  ActorRef,
   EntryScope,
   KnowledgeUpdateInput,
   ReferenceDocUpdate,
@@ -116,6 +125,7 @@ import { createGithubSource } from "@tachy/source-github";
 import {
   createAzureDevopsSource,
   createAdoClient,
+  workItemSchema,
 } from "@tachy/source-azure-devops";
 import type { AdoClient, JsonPatchOp } from "@tachy/source-azure-devops";
 
@@ -243,6 +253,43 @@ const unresolvedCustomer = (
           ? `customer_id is null — ${ambiguity}. Read the ticket for which of them it actually concerns, then set_work_item_customer. Do not guess from the sender's domain.`
           : "customer_id is null — no known customer matched. The sender's own company is often NOT the customer: partners and distributors raise tickets on a customer's behalf, so read who the ticket is about rather than who sent it. If it identifies one, check list_customers, add_customer if it is missing (put the partner's domain in email_domains on the customer they front for), then set_work_item_customer. Propose it in the same review step rather than asking separately.",
       };
+
+/**
+ * Surface which part of a customer's estate a ticket might concern, without
+ * assigning it. Same discipline as unresolvedCustomer: a confidently wrong
+ * attribution files the ticket, the entry learned from it and every future
+ * search hit under a place nobody chose, and is not recoverable.
+ */
+async function unresolvedUnit(
+  customerId: string | null | undefined,
+  unitId: string | null | undefined,
+  text: string,
+): Promise<Record<string, unknown>> {
+  if (!customerId || unitId) return {};
+  const units = await listCustomerUnits(customerId);
+  if (!units.length) return {};
+  const haystack = text.toLowerCase();
+  const named = units.filter(
+    (u) =>
+      haystack.includes(u.slug.toLowerCase()) ||
+      u.aliases.some((a) => a && haystack.includes(a.toLowerCase())),
+  );
+  if (!named.length) return {};
+  return {
+    unit_note:
+      `This customer's estate is divided into units, and the ticket names ` +
+      `${named.map((u) => `'${u.slug}'`).join(", ")}. Facts recorded against a ` +
+      `unit are NOT visible on the customer as a whole — call ` +
+      `get_customer_profile with that unit before advising. If the ticket really ` +
+      `is about it, propose set_work_item_customer with the unit in the same ` +
+      `review step rather than assuming.`,
+    unit_candidates: named.map((u) => ({
+      slug: u.slug,
+      name: u.name,
+      kind: u.kind,
+    })),
+  };
+}
 
 function outScrubbed(obj: unknown) {
   return out(globalRedactionEnabled() ? scrubDeep(obj, new TokenMap()) : obj);
@@ -478,6 +525,19 @@ async function enforcementActive(): Promise<boolean> {
   return enforcementCache;
 }
 
+/**
+ * Who this subprocess is writing as. The user is the same either way — the API
+ * builds this env per turn from the caller's session — so `actor` is what says
+ * whether an edit came from an agent turn or from someone's own MCP client.
+ */
+async function mcpActor(): Promise<ActorRef> {
+  return {
+    userId: await resolveCurrentUserId(),
+    actor: env.actor === "agent" ? "agent" : "mcp",
+    turnId: env.turnId ?? null,
+  };
+}
+
 async function gateUserId(): Promise<string | null> {
   const userId = await resolveCurrentUserId();
   if (!userId) return null;
@@ -619,6 +679,14 @@ tool(
       customer_id: item.customerId,
       customer_name: customerName,
       ...unresolvedCustomer(item.customerId, item.customerAmbiguity),
+      ...(await unresolvedUnit(
+        item.customerId,
+        item.customerUnitId,
+        `${raw.title ?? ""} ${raw.messages
+          .map((m) => m.bodyText ?? "")
+          .join(" ")
+          .slice(0, 4000)}`,
+      )),
       ...(await withCustomerProfile(item.customerId)),
       observed_version: item.observedVersion,
       ...(item.componentSlug ? { component: item.componentSlug } : {}),
@@ -800,18 +868,25 @@ tool(
     const queryVector = query.trim()
       ? await embedQueryLiteral(query)
       : undefined;
+    // The ticket's own customer lifts their history without excluding anyone
+    // else's — the same tiebreaker search_knowledge gives an explicit `customer`.
+    const boostCustomerId = item.customerId ?? undefined;
+    const boostUnitId = item.customerUnitId ?? undefined;
     const [similar, reference] = await Promise.all([
       searchKnowledge(query, {
         productId,
         limit,
         includeUnscoped: true,
         queryVector,
+        boostCustomerId,
+        boostUnitId,
       }),
       searchReferenceDocs(query, {
         productId,
         limit,
         includeUnscoped: true,
         queryVector,
+        boostCustomerId,
       }),
     ]);
     const customerName = await getCustomerName(item.customerId);
@@ -838,6 +913,14 @@ tool(
       customer_id: item.customerId,
       customer_name: customerName,
       ...unresolvedCustomer(item.customerId, item.customerAmbiguity),
+      ...(await unresolvedUnit(
+        item.customerId,
+        item.customerUnitId,
+        `${raw.title ?? ""} ${raw.messages
+          .map((m) => m.bodyText ?? "")
+          .join(" ")
+          .slice(0, 4000)}`,
+      )),
       ...(await withCustomerProfile(item.customerId)),
       observed_version: item.observedVersion,
       ...(item.componentSlug ? { component: item.componentSlug } : {}),
@@ -877,6 +960,12 @@ tool(
         .optional()
         .describe(
           "Set ONLY when the lesson is true of one customer's install and not of the product — their addon, their configuration, their version. It is not inherited from the ticket, and whose ticket it was is not the test: most problems found on a customer's ticket are the product's behaviour and must stay general, or they will not be found for anyone else. Setting it makes every future answer cite the entry as that customer's case.",
+        ),
+      unit: z
+        .string()
+        .optional()
+        .describe(
+          "Which part of that customer's estate it was learned on — a unit slug from list_customer_units. Needs customer_slug. When the entry comes from a ticket already filed against a unit AND you name that same customer, it is inherited automatically, so pass this only to override.",
         ),
       status: knowledgeStatusSchema.optional(),
       issue_summary: z
@@ -978,7 +1067,9 @@ tool(
       productId,
       teamId,
       customerSlug: a.customer_slug,
+      unit: a.unit,
       createdById: await resolveCurrentUserId(),
+      actor: await mcpActor(),
       status: a.status ?? "approved",
       issueSummary: a.issue_summary,
       symptoms: a.symptoms,
@@ -1205,12 +1296,96 @@ tool(
   "get_customer_profile",
   {
     description:
-      "Everything configured about one customer's install: their specifics (the version they run, their layout, integrations), the components they have, their own repos, and any source project that exists for them. Call it before advising a named customer — a general answer can be wrong for them because of what is here. Arrives automatically on fetch_work_item/get_context when the ticket resolves to a customer, so do not re-fetch it then.",
+      "Everything configured about one customer's install: their specifics (the version they run, their layout, integrations), the components they have, their own repos, any source project that exists for them, and the parts their estate divides into (`units` — sites, production lines, tenants). Call it before advising a named customer — a general answer can be wrong for them because of what is here. Pass `unit` when the question is about one part of their estate: the facts then come back RESOLVED for that unit, each carrying `origin` and `inherited`, so you can say a thing is true of every line on a shared layout rather than only of the one asked about. Arrives automatically on fetch_work_item/get_context when the ticket resolves to a customer, so do not re-fetch it then.",
+    inputSchema: {
+      customer: z.string().describe("Slug from list_customers"),
+      unit: z
+        .string()
+        .optional()
+        .describe(
+          "Unit slug or alias from list_customer_units. Resolves facts for that part of their estate instead of listing the customer's flat set.",
+        ),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ customer, unit }) =>
+    out(await getCustomerProfile(await getCustomerIdBySlug(customer), unit)),
+);
+
+tool(
+  "list_customer_units",
+  {
+    description:
+      "The parts one customer's estate divides into — sites, production lines, tenants — with how they nest and which shared profile each conforms to. `kind` is a deployment-specific vocabulary, not a fixed list. Read this before set_customer_fact with a unit, or before answering a question about a named line or site: a fact recorded against a line is not visible on the customer as a whole.",
     inputSchema: { customer: z.string().describe("Slug from list_customers") },
     annotations: { readOnlyHint: true },
   },
-  async ({ customer }) =>
-    out(await getCustomerProfile(await getCustomerIdBySlug(customer))),
+  async ({ customer }) => {
+    const units = await listCustomerUnits(await getCustomerIdBySlug(customer));
+    if (!units.length)
+      return out({
+        units: [],
+        note: "This customer's estate is not broken down into units, so every fact about them is customer-wide.",
+      });
+    const bySlug = new Map(units.map((u) => [u.id, u.slug]));
+    return out({
+      units: units.map((u) => ({
+        slug: u.slug,
+        name: u.name,
+        kind: u.kind,
+        parent: u.parent_id ? (bySlug.get(u.parent_id) ?? null) : null,
+        profile: u.profile_id ? (bySlug.get(u.profile_id) ?? null) : null,
+        aliases: u.aliases,
+        notes: u.notes,
+      })),
+    });
+  },
+);
+
+tool(
+  "add_customer_unit",
+  {
+    description:
+      "Add (or update) one part of a customer's estate. `parent` is containment — a line is inside a site. `profile` is sharing WITHOUT containment: the shared layout several lines conform to, whose facts they inherit without being part of it. Pick `kind` to match what this deployment already uses (see list_customer_units); it is free text, not a fixed vocabulary. Do not invent units from ticket text — propose one and let the user confirm.",
+    inputSchema: {
+      customer: z.string().describe("Slug from list_customers"),
+      slug: z.string().describe("Short identifier, e.g. 'tlc191'"),
+      name: z.string(),
+      kind: z
+        .string()
+        .describe("What sort of part this is, e.g. site, line, layout, tenant"),
+      parent: z
+        .string()
+        .optional()
+        .describe("The unit that CONTAINS this one."),
+      profile: z
+        .string()
+        .optional()
+        .describe(
+          "A unit whose facts this one inherits without being inside it — a shared layout or template.",
+        ),
+      aliases: z
+        .array(z.string())
+        .optional()
+        .describe("Other names the site calls it by."),
+      notes: z.string().optional(),
+    },
+  },
+  async (a) => {
+    await requireAnyTeamAdmin();
+    return out(
+      await addCustomerUnit({
+        customerSlug: a.customer,
+        slug: a.slug,
+        name: a.name,
+        kind: a.kind,
+        parentSlug: a.parent,
+        profileSlug: a.profile,
+        aliases: a.aliases,
+        notes: a.notes,
+      }),
+    );
+  },
 );
 
 tool(
@@ -1228,9 +1403,15 @@ tool(
   "set_customer_fact",
   {
     description:
-      "Record one specific about a customer's install — the version they run, their line layout, an integration they depend on. This is where customer-specific truth belongs; a knowledge entry is for a problem and its resolution, so do not use one to store what is really a configuration fact. Re-setting the same (kind, label) replaces the value, so this is how a version gets updated rather than duplicated. Call list_customer_fact_kinds first and reuse a kind.",
+      "Record one specific about a customer's install — the version they run, their line layout, an integration they depend on. This is where customer-specific truth belongs; a knowledge entry is for a problem and its resolution, so do not use one to store what is really a configuration fact. Re-setting the same (unit, kind, label) replaces the value, so this is how a version gets updated rather than duplicated. Pass `unit` when the fact is true of one part of their estate rather than of the whole account — an IP belongs to a line, a timezone to a site. Call list_customer_fact_kinds first and reuse a kind.",
     inputSchema: {
       customer: z.string().describe("Slug from list_customers"),
+      unit: z
+        .string()
+        .optional()
+        .describe(
+          "Unit slug/alias when the fact is true of one site or line rather than the whole customer. Omit for a customer-wide fact.",
+        ),
       kind: z
         .string()
         .describe("What sort of specific this is, e.g. version, layout"),
@@ -1260,6 +1441,7 @@ tool(
     return out(
       await setCustomerFact({
         customerSlug: a.customer,
+        unit: a.unit,
         kind: a.kind,
         label: a.label,
         value: a.value,
@@ -1310,16 +1492,27 @@ tool(
       "Correct (or clear) the customer auto-matched to a work item. Use when the auto-match is wrong or missing, e.g. a ticket routed through a distributor.",
     inputSchema: {
       work_item_id: z.string(),
+      unit: z
+        .string()
+        .optional()
+        .describe(
+          "Which part of that customer's estate the ticket concerns — a unit slug or alias from list_customer_units. Only meaningful alongside a customer.",
+        ),
       customer_slug: z.string().nullable(),
     },
   },
-  async ({ work_item_id, customer_slug }) => {
+  async ({ work_item_id, customer_slug, unit }) => {
     await requireCanEdit(await workItemScope(work_item_id));
     const customerId = customer_slug
       ? await getCustomerIdBySlug(customer_slug)
       : null;
-    await setWorkItemCustomer(work_item_id, customerId);
-    return out({ updated: true, work_item_id, customer_id: customerId });
+    await setWorkItemCustomer(work_item_id, customerId, unit);
+    return out({
+      updated: true,
+      work_item_id,
+      customer_id: customerId,
+      ...(unit ? { unit } : {}),
+    });
   },
 );
 
@@ -1410,7 +1603,7 @@ tool(
     if (a.structured !== undefined) patch.structured = a.structured;
     if (a.expected_version !== undefined)
       patch.expectedVersion = a.expected_version;
-    const row = await updateKnowledgeEntry(a.id, patch);
+    const row = await updateKnowledgeEntry(a.id, patch, await mcpActor());
     return out({
       updated: true,
       id: row.id,
@@ -1541,6 +1734,149 @@ tool(
 );
 
 tool(
+  "draft_wiki_page",
+  {
+    description:
+      "Gather everything recorded under one component — knowledge entries and reference docs, including its sub-components — so a wiki article can be composed from them. Returns the substance, not just ids, so you can write from this one call. Use it when asked to write or refresh an article about a part of the product; then compose the article and call save_wiki_article with the ids you actually used in `sources`. Check the wiki's table of contents first (list_wiki_articles) so you extend the structure rather than duplicating a page that exists.",
+    inputSchema: {
+      product_slug: z.string(),
+      component: z
+        .string()
+        .describe("Component slug; its sub-components are included."),
+      limit: z.number().int().optional(),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async (a) => {
+    const productId = await getProductIdBySlug(a.product_slug);
+    const sources = await draftSources(productId, a.component, a.limit ?? 40);
+    if (!sources.length)
+      return out({
+        sources: [],
+        note: `Nothing is recorded under '${a.component}' yet, so there is nothing to consolidate. Say so rather than writing an article from general knowledge.`,
+      });
+    return outScrubbed({
+      sources,
+      next: "Compose the article, then call save_wiki_article with `sources` naming the ids you used. It lands as a draft for the user to approve.",
+    });
+  },
+);
+
+tool(
+  "list_wiki_articles",
+  {
+    description:
+      "The wiki's table of contents for one product: its categories, nested, with the articles filed under each, plus anything uncategorised. Read this before writing an article, so a new page joins the existing structure instead of duplicating it. Pass product_slug omitted for the org-wide wiki (material that belongs to no single product).",
+    inputSchema: { product_slug: z.string().optional() },
+    annotations: { readOnlyHint: true },
+  },
+  async (a) => {
+    const productId = a.product_slug
+      ? await getProductIdBySlug(a.product_slug)
+      : null;
+    return out(await wikiToc(productId));
+  },
+);
+
+tool(
+  "save_wiki_article",
+  {
+    description:
+      "Write a wiki article — the canonical, browsable answer for a topic, as opposed to a knowledge entry (one incident) or a reference doc (imported material). The body is markdown; use ## headings, which become the article's contents box. Link to other articles with [[slug]], and to a knowledge entry with [[entry:<id>|short label]] — links are extracted on save and become backlinks. Saving with an existing slug UPDATES that article in place, keeping its links and its history. Always pass `sources` with the ids you composed from: that is what lets the page flag itself stale when the material behind it changes. Lands as a draft unless told otherwise; the call is gated by a review box the user can edit.",
+    inputSchema: {
+      slug: z
+        .string()
+        .describe(
+          "Stable address, kebab-case. Reused on a later save to update the same article rather than making a second one.",
+        ),
+      title: z.string(),
+      body: z
+        .string()
+        .describe("Markdown. ## headings become the contents box."),
+      product_slug: z
+        .string()
+        .optional()
+        .describe("Omit for the org-wide wiki."),
+      categories: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Category slugs from list_wiki_articles. An article may sit in several.",
+        ),
+      component: z.string().optional(),
+      sources: z
+        .array(
+          z.object({
+            kind: z.enum(["entry", "doc"]),
+            id: z.string(),
+          }),
+        )
+        .optional()
+        .describe(
+          "What the article was composed from, so staleness can be detected later.",
+        ),
+      status: referenceStatusSchema.optional(),
+      doc_version: z.string().optional(),
+    },
+  },
+  async (a) => {
+    const productId = a.product_slug
+      ? await getProductIdBySlug(a.product_slug)
+      : null;
+    await requireCanEdit(productId ? { productId } : {});
+
+    const existing = await findArticle(productId, a.slug).catch(() => null);
+    const actor = await mcpActor();
+    const row = existing
+      ? await updateReferenceDoc(
+          existing.id as string,
+          {
+            title: a.title,
+            body: a.body,
+            status: a.status ?? "draft",
+            ...(a.component !== undefined ? { component: a.component } : {}),
+            ...(a.doc_version !== undefined
+              ? { docVersion: a.doc_version }
+              : {}),
+          },
+          actor,
+        )
+      : await saveReferenceDoc({
+          productId,
+          kind: "wiki",
+          slug: a.slug,
+          title: a.title,
+          body: a.body,
+          status: a.status ?? "draft",
+          component: a.component,
+          docVersion: a.doc_version,
+          createdById: await resolveCurrentUserId(),
+          actor,
+        });
+
+    if (a.categories)
+      await setArticleCategories(productId, row.id, a.categories);
+    if (a.sources?.length)
+      await setComposedFrom(
+        sql,
+        row.id,
+        a.sources.map((s) =>
+          s.kind === "entry" ? { entryId: s.id } : { docId: s.id },
+        ),
+      );
+
+    return out({
+      saved: true,
+      id: row.id,
+      slug: a.slug,
+      status: row.status,
+      updated: !!existing,
+      next: `The article is at /library/wiki/${a.product_slug ?? "general"}/${a.slug}. It is a ${row.status}; tell the user where it is rather than pasting it back.`,
+    });
+  },
+);
+
+tool(
   "save_reference_doc",
   {
     description:
@@ -1605,6 +1941,7 @@ tool(
       productId,
       teamId,
       createdById: await resolveCurrentUserId(),
+      actor: await mcpActor(),
       source: a.source,
       sourceProjectId: a.source_project_id,
       externalKey: a.external_key,
@@ -1773,7 +2110,7 @@ tool(
     if (a.customer_slug !== undefined) patch.customerSlug = a.customer_slug;
     if (a.expected_version !== undefined)
       patch.expectedVersion = a.expected_version;
-    const row = await updateReferenceDoc(a.id, patch);
+    const row = await updateReferenceDoc(a.id, patch, await mcpActor());
     return out({
       updated: true,
       id: row.id,
@@ -2306,35 +2643,14 @@ tool(
         next: "Call again with type to get its fields.",
       });
     }
-    const fields = await client.getTypeFields(project, type);
     const defaults =
       projectDefaults(target.context, type) ??
       ((conn.config as any)?.defaults?.[project]?.[type] as
         Record<string, unknown> | undefined) ??
       {};
-    const MAX_VALUES = 50;
-    return out({
-      project,
-      type,
-      fields: fields.map((f: any) => {
-        const values = Array.isArray(f.allowedValues) ? f.allowedValues : [];
-        return {
-          reference_name: f.referenceName,
-          name: f.name,
-          required: f.alwaysRequired === true,
-          ...(values.length
-            ? {
-                allowed_values: values.slice(0, MAX_VALUES),
-                ...(values.length > MAX_VALUES
-                  ? { allowed_values_truncated: true }
-                  : {}),
-              }
-            : {}),
-          ...(f.defaultValue != null ? { default_value: f.defaultValue } : {}),
-        };
-      }),
-      config_defaults: defaults,
-    });
+    // Shared with GET /source-connections/:slug/work-item-schema, so what the
+    // approval box renders and what the model is told are the same projection.
+    return out(await workItemSchema(client, project, type, defaults));
   },
 );
 

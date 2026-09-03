@@ -2,9 +2,12 @@ export {
   RESOLUTION_CLARITIES,
   KNOWLEDGE_STATUSES,
   REFERENCE_STATUSES,
+  REFERENCE_KINDS,
+  LINK_KINDS,
   CONFIDENCES,
   FEEDBACK_KINDS,
   RUN_MODES,
+  LIBRARY_ACTORS,
   CLOUD_RE,
   CLOUD_HINT,
 } from "./vocabulary";
@@ -12,10 +15,16 @@ export type {
   ResolutionClarity,
   KnowledgeStatus,
   ReferenceStatus,
+  ReferenceKind,
+  LinkKind,
   Confidence,
   FeedbackKind,
   RunMode,
+  LibraryActor,
 } from "./vocabulary";
+
+export { WIKILINK_RE, parseWikilink, parseWikilinks } from "./wikilink";
+export type { Wikilink, WikilinkTargetKind } from "./wikilink";
 
 export { GOOD, STRONG, grade } from "./relevance";
 export type { Grade } from "./relevance";

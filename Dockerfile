@@ -35,6 +35,15 @@ COPY packages/cli/package.json packages/cli/package.json
 COPY packages/web/package.json packages/web/package.json
 RUN npm ci
 
+# Pre-download the embedding model at build time so a freshly pulled container
+# doesn't need network access (or a multi-second stall) on its first embed.
+# Ahead of `COPY . .` and given only the two files it reads, so an ordinary
+# source change reuses the download instead of refetching it from HuggingFace.
+ENV TACHY_MODEL_CACHE=/app/.model-cache
+COPY packages/core/src/search/model.ts packages/core/src/search/model.ts
+COPY scripts/warmup-embeddings.ts scripts/warmup-embeddings.ts
+RUN npx tsx scripts/warmup-embeddings.ts
+
 COPY . .
 
 # Build the Svelte SPA to packages/web/dist so the API serves it (single origin).
@@ -42,16 +51,11 @@ ARG VITE_DEV_BADGE
 ENV VITE_DEV_BADGE=$VITE_DEV_BADGE
 RUN npm run web:build
 
-# Pre-download the embedding model at build time so a freshly pulled container
-# doesn't need network access (or a multi-second stall) on its first embed.
-ENV TACHY_MODEL_CACHE=/app/.model-cache
-RUN npx tsx scripts/warmup-embeddings.ts
-
 # Linked-repo clones for code search live here — mount a volume to keep them
 # across redeploys (otherwise the first reindex re-clones, which is fine too).
 ENV TACHY_REPO_DIR=/app/data/repos
 
-EXPOSE 8787 
+EXPOSE 8787
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD node -e "fetch('http://localhost:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

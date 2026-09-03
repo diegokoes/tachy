@@ -2,7 +2,6 @@
   import { onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { decode } from "../motion";
   import { AGENT_KEY_LABELS, agentKeyError } from "../admin/shared";
   import type { AgentProvider } from "@tachy/contract";
   import { Button, InfoMark, Note, Panel, Select } from "../tui";
@@ -139,8 +138,7 @@
           />
         </span>
         <span class="a">
-          <span class="from" use:decode={heldBy(prefs.agent_provider.source)}
-          ></span>
+          <span class="from">{heldBy(prefs.agent_provider.source)}</span>
           <span class="slot">
             {#if prefs.agent_provider.source === "user"}
               <Button
@@ -163,8 +161,7 @@
           <input bind:value={modelDraft} placeholder={prefs.agent_model.value} />
         </span>
         <span class="a">
-          <span class="from" use:decode={heldBy(prefs.agent_model.source)}
-          ></span>
+          <span class="from">{heldBy(prefs.agent_model.source)}</span>
           <span class="slot">
             {#if modelChanged}
               <Button
@@ -201,8 +198,7 @@
           />
         </span>
         <span class="a">
-          <span class="from" use:decode={heldBy(prefs.agent_effort.source)}
-          ></span>
+          <span class="from">{heldBy(prefs.agent_effort.source)}</span>
           <span class="slot">
             {#if prefs.agent_effort.source === "user"}
               <Button
@@ -246,9 +242,8 @@
                 autocomplete="off"
                 class:bad
                 bind:value={drafts[name]}
-                placeholder={mine.has(name) ? MASK : ""}
+                placeholder={held || (mine.has(name) ? MASK : "")}
                 title={held ? `set at ${from} scope — type to override` : null}
-                use:decode={held}
               />
             </span>
             <span class="a">
@@ -319,11 +314,13 @@
     align-items: center;
     min-height: var(--row-h);
   }
+  /* The trailing 1fr is empty on purpose: it takes the slack so the marks sit
+     against the control instead of being flung to the panel's right edge. */
   .row.pref {
-    grid-template-columns: 7rem minmax(0, 16rem) 1fr;
+    grid-template-columns: 7rem minmax(0, 16rem) auto 1fr;
   }
   .row.key {
-    grid-template-columns: 14rem minmax(0, 24rem) 1fr;
+    grid-template-columns: 12rem minmax(0, 20rem) auto 1fr;
   }
   .k {
     font-size: var(--fs-sm);
@@ -347,7 +344,6 @@
   .a {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
     gap: var(--pad-1);
   }
   .from {

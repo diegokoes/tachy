@@ -1,4 +1,4 @@
-import { freshdeskToken, scrubText, TokenMap } from "@tachy/core";
+import { freshdeskToken, scrubText, sourceFetch, TokenMap } from "@tachy/core";
 import type {
   WorkItemSource,
   RawWorkItem,
@@ -67,7 +67,9 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
   const api = base + "/api/v2";
 
   async function get(path: string): Promise<any> {
-    const res = await fetch(api + path, { headers: { Authorization: auth } });
+    const res = await sourceFetch(`Freshdesk GET ${path}`, api + path, {
+      headers: { Authorization: auth },
+    });
     if (!res.ok)
       throw new Error(
         `Freshdesk GET ${path} -> ${res.status} ${await res.text()}`,
@@ -227,10 +229,11 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
     },
 
     async deleteNote(messageId) {
-      const res = await fetch(`${api}/conversations/${messageId}`, {
-        method: "DELETE",
-        headers: { Authorization: auth },
-      });
+      const res = await sourceFetch(
+        "Freshdesk conversation DELETE",
+        `${api}/conversations/${messageId}`,
+        { method: "DELETE", headers: { Authorization: auth } },
+      );
       // already gone is the desired end state, not a failure
       if (!res.ok && res.status !== 404)
         throw new Error(
@@ -239,11 +242,15 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
     },
 
     async postNote(externalId, body, o) {
-      const res = await fetch(`${api}/tickets/${externalId}/notes`, {
-        method: "POST",
-        headers: { Authorization: auth, "Content-Type": "application/json" },
-        body: JSON.stringify({ body, private: o?.private ?? true }),
-      });
+      const res = await sourceFetch(
+        "Freshdesk note POST",
+        `${api}/tickets/${externalId}/notes`,
+        {
+          method: "POST",
+          headers: { Authorization: auth, "Content-Type": "application/json" },
+          body: JSON.stringify({ body, private: o?.private ?? true }),
+        },
+      );
       if (!res.ok)
         throw new Error(
           `Freshdesk note POST -> ${res.status} ${await res.text()}`,

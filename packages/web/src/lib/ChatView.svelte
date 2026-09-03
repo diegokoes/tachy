@@ -12,7 +12,7 @@
   import OutputCard, { type OutputFile } from "./chat/OutputCard.svelte";
   import Approval from "./chat/Approval.svelte";
   import Launcher from "./chat/Launcher.svelte";
-  import { ArtifactMark, G, Icon } from "./tui";
+  import { ArtifactMark, Button, G, Icon } from "./tui";
   import { pushScope } from "./keys.svelte";
 
   const short = (tool: string) => tool.replace(/^mcp__tachy__/, "");
@@ -402,16 +402,23 @@
       onkeydown={composerKeydown}
     ></textarea>
     <div class="send-col">
-      <button
-        class="clear"
-        class:armed={clearArmed}
-        onclick={onClear}
+      <Button
+        variant={clearArmed ? "danger" : "ghost"}
+        icon={clearArmed ? undefined : "erase"}
+        glyph={clearArmed ? "?" : undefined}
         disabled={chat.busy || !chat.entries.length}
+        aria-label="Clear the conversation"
         title={clearArmed ? "click again to clear" : "Clear the conversation"}
-      >{#if clearArmed}?{:else}<Icon name="erase" label="Clear the conversation" />{/if}</button>
-      <button onclick={send} disabled={chat.busy || !chat.input.trim()} title="Send">
-        <Icon name="send" label="Send" />
-      </button>
+        onclick={onClear}
+      />
+      <Button
+        variant="ghost"
+        icon="send"
+        disabled={chat.busy || !chat.input.trim()}
+        aria-label="Send"
+        title="Send"
+        onclick={send}
+      />
     </div>
   </div>
 </div>
@@ -444,17 +451,23 @@
     flex: none;
     width: 3.25rem;
   }
-  .send-col button {
+  .send-col :global(.btn) {
     width: 100%;
     flex: 1;
     min-height: 0;
     padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
-  .clear { color: var(--muted); font-size: 0.85rem; }
-  .clear.armed { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+  /* Ghost has no border of its own; these two need the composer's edge to
+     read as controls sitting beside the textarea. */
+  .send-col :global(.btn.ghost) {
+    border-color: var(--border);
+  }
+  /* Armed Clear inverts to a solid block, the same move .btn.primary makes on
+     hover — the label rides on --bg so it reads in either theme. */
+  .send-col :global(.btn.danger) {
+    background: var(--danger);
+    color: var(--bg);
+  }
 
   /* Momentary RGB-split while the clear glitch timeline jitters the blocks. */
   :global(.glitching) {
@@ -576,5 +589,29 @@
   .chip-x:hover { color: var(--danger); }
   .composer { position: relative; display: flex; gap: 0.5rem; align-items: stretch; padding-top: 0.6rem; border-top: 1px solid var(--border); }
   .composer textarea { flex: 1; resize: none; }
-  .upload { cursor: pointer; align-self: center; font-size: 1.1rem; }
+  /* A <label>, not a <button> — it has to wrap the file input — so it borrows
+     the mark's hover language rather than inheriting it from Button. */
+  .upload {
+    cursor: pointer;
+    align-self: center;
+    font-size: 1.1rem;
+    color: var(--muted);
+  }
+  .upload :global(svg) {
+    transition:
+      stroke-width 0.12s ease,
+      filter 0.12s ease;
+  }
+  .upload:hover {
+    color: var(--accent);
+  }
+  .upload:hover :global(svg) {
+    stroke-width: var(--sw-hover, 9);
+    filter: brightness(1.35);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .upload :global(svg) {
+      transition: none;
+    }
+  }
 </style>

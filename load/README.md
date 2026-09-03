@@ -101,8 +101,13 @@ you see came from the lexical and trigram legs. Concretely:
 For numbers that reflect real vector search, seed with `--embed`:
 
 ```sh
-docker compose -p tachy-dev run --rm cli npm run sync -- seed --scale=medium --reset --yes --embed
+docker compose -p tachy-dev run --rm cli npm run sync -- seed --scale=medium --reset --yes --embed=search
 ```
 
-That runs the real bge-base model over every seeded row. It takes minutes and
-saturates the CPU, which is why it is not the default.
+`--embed=search` embeds what a search reads: knowledge entries and reference
+chunks. `--embed` (or `--embed=all`) adds `code_chunks`, which no scenario here
+touches and which is most of the cost — measured on a 20-core workstation the
+model manages roughly 33 knowledge entries, 25 reference chunks or 20 code
+chunks a second, so at `--scale=large` that is about 23 minutes for `search`
+against 73 for `all`. The model saturates the cores it is given; the seeder
+prints an estimate before it starts and its per-phase timings after.

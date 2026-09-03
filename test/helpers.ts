@@ -43,10 +43,17 @@ export async function resetData() {
   await sql`
     truncate work_item_messages, work_items, work_item_links, knowledge_feedback,
              knowledge_entries, analysis_runs, team_members, users,
-             customers, customer_facts, customer_components,
+             customers, customer_facts, customer_components, customer_units,
              resolution_patterns, components, project_area_map, labels,
              reference_docs, reference_doc_chunks, artifacts, generated_outputs,
-             settings,
+             settings, library_revisions, library_views,
+             -- Global-scope rows (user_id and team_id both null) survive the
+             -- cascade from users, so name both or a credential written by one
+             -- file turns up in the next file on this worker's schema.
+             credentials, preferences,
+             -- wiki_categories hangs off products, which survive resetData, so
+             -- it has to be named or a category outlives the test that made it.
+             wiki_categories, wiki_article_categories, library_links,
              -- repos would be swept in anyway by the cascade from components;
              -- naming it keeps that visible. source_connections stays.
              repos, repo_files, code_chunks

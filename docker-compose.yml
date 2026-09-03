@@ -41,6 +41,9 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-tachy}:${POSTGRES_PASSWORD:-tachy}@postgres:5432/${POSTGRES_DB:-tachy}
+      # `npm run sync seed` truncates. Its last-ditch refusal is this variable,
+      # so the deployed database must always carry it.
+      NODE_ENV: production
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,12 +67,18 @@ services:
   #   docker compose run --rm cli npm run sync backup
   #   docker compose run --rm cli npm run sync embed-backfill
   cli:
+    # No `build:` — a second build definition for the same tag would race the
+    # api's, and drop VITE_DEV_BADGE from the SPA the api serves. `up -d --build`
+    # produces the image this runs on.
     image: ${TACHY_IMAGE:-diegokoes/tachy:latest}
-    build: .
     profiles: ["tools"]
     env_file: .env
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-tachy}:${POSTGRES_PASSWORD:-tachy}@postgres:5432/${POSTGRES_DB:-tachy}
+      # Overridable because `seed` runs through this service, and the dev stack
+      # is meant to be seeded. The dev .env sets NODE_ENV=development; a stack
+      # that says nothing gets the refusal.
+      NODE_ENV: ${NODE_ENV:-production}
     depends_on:
       postgres:
         condition: service_healthy

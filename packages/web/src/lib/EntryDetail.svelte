@@ -1,12 +1,17 @@
 <script lang="ts">
   import { api, ApiError } from "./api";
   import type { KnowledgeRow, Feedback, NamedRow } from "./types";
+  import History from "./library/History.svelte";
+  import Backlinks from "./wiki/Backlinks.svelte";
+  import { renderMarkdown, markBrokenLinks } from "./markdown";
+  import { LinkTargets } from "./wikilinks.svelte";
   import StructuredView from "./knowledge/StructuredView.svelte";
   import QualityBars from "./knowledge/QualityBars.svelte";
   import EntryForm from "./knowledge/EntryForm.svelte";
   import ScopeCrumb from "./library/ScopeCrumb.svelte";
   import { isCurator, canCurateScope } from "./session.svelte";
   import { pushScope } from "./keys.svelte";
+  import { setTopActions } from "./subnav.svelte";
   import { vimState } from "./vim.svelte";
   import { Badge, Button, Chip, Icon } from "./tui";
 
@@ -14,6 +19,15 @@
 
   let entry = $state<KnowledgeRow | null>(null);
   let feedback = $state<Feedback[]>([]);
+  const links = new LinkTargets();
+
+  /**
+   * An entry's prose is markdown like an article's, so a [[link]] written in a
+   * resolution is followable rather than shown as literal brackets. The stored
+   * edge and what the reader sees then agree.
+   */
+  const prose = (text: string) =>
+    markBrokenLinks(renderMarkdown(text), links.resolved);
   let error = $state<string | null>(null);
 
   let editing = $state(false);
@@ -38,16 +52,27 @@
     s === "approved" ? "ok" : s === "draft" ? "accent" : s === "rejected" ? "danger" : s === "deprecated" ? "warn" : "muted";
 
   /** Reading the entry, backspace goes back. Not bound while editing, where it
-      would sit one stray keystroke away from discarding a form. */
+      would sit one stray keystroke away from discarding a form.
+
+      Hidden: back is a labelled button in the carved row now, so printing it
+      in the hint rule as well says the same thing twice. */
   $effect(() => {
     if (editing || !entry) return;
     return pushScope([
-      { key: "backspace", label: "back", run: onClose },
+      { key: "backspace", label: "", hidden: true, run: onClose },
       // esc is the vim reflex for "back out of here"; backspace stays either way.
       ...(vimState.enabled
         ? [{ key: "esc", label: "", hidden: true, run: onClose }]
         : []),
     ]);
+  });
+
+  /* The carved row, while reading. Editing hands it to the form instead, which
+     claims it on mount; the disposer's identity check keeps the handover from
+     wiping whichever of the two lands second. */
+  $effect(() => {
+    if (editing || !entry) return;
+    return setTopActions(readActions);
   });
 
   async function load() {
@@ -56,6 +81,7 @@
     try {
       entry = await api.get<KnowledgeRow>(`/knowledge/${id}`);
       feedback = await api.get<Feedback[]>(`/knowledge/${id}/feedback`);
+      await links.load("knowledge", id);
 
 
       if (isCurator() && entry.product_id && !entry.team_id) {
@@ -145,6 +171,22 @@
   {/if}
 {/snippet}
 
+<!-- Rendered by App into the carved row beside the subnav, not here. -->
+{#snippet readActions()}
+  <Button icon="back" title="back (backspace)" onclick={onClose}>back</Button>
+  {#if canEdit}
+    <Button
+      tone="info"
+      icon="edit"
+      title="edit"
+      onclick={() => {
+        editing = true;
+        mutateError = null;
+      }}>edit</Button
+    >
+  {/if}
+{/snippet}
+
 <div class="detail">
   {#if error}<p class="error">{error}</p>{/if}
   {#if entry}
@@ -171,21 +213,7 @@
         onCancel={() => { editing = false; mutateError = null; }}
       />
     {:else}
-      <div class="topbar">
-        <ScopeCrumb area={entry.product_area} />
-        <Button variant="ghost" square icon="back" aria-label="back" title="back (backspace)" onclick={onClose} />
-        {#if canEdit}
-          <Button
-            variant="ghost"
-            square
-            tone="info"
-            icon="edit"
-            aria-label="edit"
-            title="edit"
-            onclick={() => { editing = true; mutateError = null; }}
-          />
-        {/if}
-      </div>
+      <ScopeCrumb area={entry.product_area} />
 
       <div class="content">
         <h2>{entry.issue_summary ?? "(no summary)"}</h2>
@@ -272,7 +300,7 @@
             <span class="gap"></span>
             {#if entry.status !== "rejected"}
               <Button
-                variant="ghost" square tone="danger" icon="cancel"
+                variant="ghost" square tone="danger" icon="reject"
                 aria-label="reject" title="reject"
                 disabled={mutating}
                 onclick={() => patch({ status: "rejected" })}
@@ -340,8 +368,22 @@
           {/if}
         {/if}
 
-        {#if entry.root_cause}<section><h3>Root cause</h3><p>{entry.root_cause}</p></section>{/if}
-        {#if entry.resolution}<section><h3>Resolution</h3><p>{entry.resolution}</p></section>{/if}
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        {#if entry.root_cause}
+          <section>
+            <h3>Root cause</h3>
+            <div class="md prose" onclick={links.onClick}>{@html prose(entry.root_cause)}</div>
+          </section>
+        {/if}
+        {#if entry.resolution}
+          <section>
+            <h3>Resolution</h3>
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
+            <div class="md prose" onclick={links.onClick}>{@html prose(entry.resolution)}</div>
+          </section>
+        {/if}
 
         {@render chips("Symptoms", entry.symptoms)}
         {@render chips("Signals", entry.signals)}
@@ -353,6 +395,16 @@
             <StructuredView structured={entry.structured} />
           </section>
         {/if}
+
+        <Backlinks base="knowledge" id={id} />
+
+        <History
+          base="knowledge"
+          {id}
+          version={entry.version}
+          canEdit={canEdit}
+          onReverted={load}
+        />
 
         <section>
           <h3>Feedback</h3>
@@ -412,22 +464,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--pad-1);
-  }
-
-  .topbar {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: var(--pad-1);
-    padding: var(--pad-2) 0;
-    background: var(--panel-solid);
-  }
-  /* The crumb takes the slack, pushing the actions to the right edge. */
-  .topbar :global(nav.crumb) {
-    margin-right: auto;
   }
 
   .meta {
