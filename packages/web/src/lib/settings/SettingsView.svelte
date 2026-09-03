@@ -33,7 +33,7 @@
 {#snippet account()}
   <span class="who">{session.me?.email ?? ""}</span>
   {#if session.me}
-    <Button size="sm" onclick={logout}>log out</Button>
+    <Button onclick={logout}>log out</Button>
   {/if}
 {/snippet}
 

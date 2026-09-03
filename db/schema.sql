@@ -165,6 +165,41 @@ create table customers (
 create index customers_aliases_idx on customers using gin (aliases);
 create index customers_domains_idx on customers using gin (email_domains);
 
+-- A named part of one customer's estate: a site, a production line, a tenant.
+-- The second axis of the customer model — customers say WHO, units say WHICH OF
+-- THEIRS — because most of what is true of a big account is true of one place in
+-- it rather than of the account.
+--
+-- `kind` is a deployment-specific vocabulary exactly like customer_facts.kind
+-- and knowledge_entries.cloud: no lookup table, because what a customer divides
+-- into differs per product (site/line here, tenant/region elsewhere).
+create table customer_units (
+    id           uuid primary key default gen_random_uuid(),
+    customer_id  uuid not null references customers(id) on delete cascade,
+    -- Containment: a line is inside a site.
+    parent_id    uuid references customer_units(id) on delete cascade,
+    -- Sharing WITHOUT containment: a unit whose facts this one inherits without
+    -- being part of it — the layout several production lines conform to. Set
+    -- null on delete rather than cascade: losing a template must not delete the
+    -- lines that referenced it.
+    profile_id   uuid references customer_units(id) on delete set null,
+    kind         text not null,
+    slug         text not null,
+    name         text not null,
+    aliases      text[] not null default '{}',
+    notes        text,
+    created_at   timestamptz not null default now(),
+    updated_at   timestamptz not null default now(),
+    unique (customer_id, slug),
+    constraint customer_units_no_self_parent  check (parent_id  is null or parent_id  <> id),
+    constraint customer_units_no_self_profile check (profile_id is null or profile_id <> id)
+);
+
+create index customer_units_customer_idx on customer_units(customer_id);
+create index customer_units_parent_idx   on customer_units(parent_id);
+create index customer_units_profile_idx  on customer_units(profile_id);
+create index customer_units_aliases_idx  on customer_units using gin (aliases);
+
 -- A project as its source system knows it: an Azure DevOps project, a Freshdesk
 -- group, a GitHub owner/repo. role='knowledge' binds it to a product — its items
 -- ingest there, and it may own a wiki, repos and area mappings. role='tracker' is
@@ -217,6 +252,10 @@ create table work_items (
     product_id            uuid references products(id) on delete set null,
     team_id               uuid references teams(id) on delete set null,
     customer_id           uuid references customers(id) on delete set null,
+    -- Which part of their estate this ticket is about. Never inferred from the
+    -- text: a confidently wrong attribution is not recoverable, so it is set
+    -- deliberately or left null.
+    customer_unit_id uuid references customer_units(id) on delete set null,
     observed_version      text,
     requester             text,
     raw                   jsonb,
@@ -328,17 +367,26 @@ create table customer_facts (
     -- version belongs to, which line a layout describes. '' when it needs none,
     -- so (customer, kind, label) can be unique and a re-set replaces in place.
     label        text not null default '',
+    -- Which part of their estate this is true of. Null = true of the whole
+    -- customer, which is what every fact was before units existed.
+    unit_id      uuid references customer_units(id) on delete cascade,
     value        text not null,
     notes        text,
     -- Where this was learned — a ticket URL, a wiki page, a person.
     source       text,
     component_id uuid references components(id) on delete set null,
     created_at   timestamptz not null default now(),
-    updated_at   timestamptz not null default now(),
-    unique (customer_id, kind, label)
+    updated_at   timestamptz not null default now()
 );
 
+-- `nulls not distinct` so a customer-level fact (unit_id null) still upserts in
+-- place rather than piling up a row per set — the idiom
+-- work_item_links_external_idx uses.
+create unique index customer_facts_key_idx
+    on customer_facts(customer_id, unit_id, kind, label) nulls not distinct;
+
 create index customer_facts_customer_idx on customer_facts(customer_id);
+create index customer_facts_unit_idx     on customer_facts(unit_id);
 create index customer_facts_kind_idx     on customer_facts(kind);
 
 -- Azure DevOps System.AreaPath prefix -> component, so an ingested item lands on
@@ -364,6 +412,9 @@ create table knowledge_entries (
     -- which part of the product, customer says whose. Null = general to everyone.
     -- Held here rather than read through work_item_id, which is set null on delete.
     customer_id         uuid references customers(id) on delete set null,
+    -- Whose part of the estate this was learned on. Narrows customer_id the way
+    -- component_id narrows product_id.
+    customer_unit_id    uuid references customer_units(id) on delete set null,
     created_by          uuid references users(id) on delete set null,
     status              text not null default 'draft'
                             check (status in ('draft','approved','rejected','archived','deprecated')),
@@ -469,6 +520,7 @@ create index knowledge_team_idx        on knowledge_entries(team_id);
 create index knowledge_pattern_idx     on knowledge_entries(resolution_pattern);
 create index knowledge_cloud_idx       on knowledge_entries(cloud);
 create index knowledge_component_idx   on knowledge_entries(component_id);
+create index knowledge_unit_idx     on knowledge_entries(customer_unit_id);
 create index knowledge_customer_idx    on knowledge_entries(customer_id);
 create index knowledge_symptoms_idx    on knowledge_entries using gin (symptoms);
 create index knowledge_signals_idx     on knowledge_entries using gin (signals);
@@ -549,8 +601,10 @@ create table reference_docs (
     -- reference it (they can't join other tables).
     component_id  uuid references components(id) on delete set null,
     product_area  text,
-    -- Same second axis as knowledge_entries: whose install this documents.
+    -- Same second axis as knowledge_entries: whose install this documents, and
+    -- which part of it.
     customer_id   uuid references customers(id) on delete set null,
+    customer_unit_id uuid references customer_units(id) on delete set null,
     title       text not null,
     body        text not null,
     tags        text[] not null default '{}',
@@ -559,6 +613,15 @@ create table reference_docs (
                     check (status in ('draft','approved','archived')),
     doc_version   text,
     superseded_by uuid references reference_docs(id) on delete set null,
+    -- 'wiki' = an article authored here, placed by wiki_article_categories and
+    -- addressed by slug. NOT an imported Azure DevOps wiki page — those are
+    -- 'reference', with source_project_id/external_key set.
+    kind        text not null default 'reference'
+                    check (kind in ('reference','wiki')),
+    -- Stable address for an article. Articles are linked by slug, so it has to
+    -- survive an edit — which is why they are updated in place and never
+    -- superseded. Null for imported docs.
+    slug        text,
 
     search_text text generated always as (
         coalesce(title,'') || ' ' || coalesce(body,'') || ' ' ||
@@ -582,6 +645,7 @@ create table reference_docs (
 create index reference_docs_product_idx on reference_docs(product_id);
 create index reference_docs_component_idx on reference_docs(component_id);
 create index reference_docs_customer_idx on reference_docs(customer_id);
+create index reference_docs_unit_idx     on reference_docs(customer_unit_id);
 create index reference_docs_project_idx on reference_docs(source_project_id, external_key);
 create index reference_docs_team_idx    on reference_docs(team_id);
 create index reference_docs_status_idx  on reference_docs(status);
@@ -590,6 +654,85 @@ create index reference_docs_tsv_idx     on reference_docs using gin (search_tsv)
 create index reference_docs_tsv_en_idx  on reference_docs using gin (search_tsv_en);
 create index reference_docs_trgm_idx    on reference_docs using gin (search_text gin_trgm_ops);
 create index reference_docs_superseded_idx on reference_docs(superseded_by);
+-- One live article per slug per wiki. product_id null is the org-wide wiki, so
+-- `nulls not distinct` keeps those unique among themselves rather than treating
+-- every one of them as a distinct key.
+create unique index reference_docs_wiki_slug_idx
+    on reference_docs(product_id, slug)
+    nulls not distinct
+    where kind = 'wiki' and status <> 'archived';
+
+-- The wiki's own taxonomy, one tree per product (product_id null = the org-wide
+-- wiki). The general table of contents is this tree rendered. Distinct from
+-- `components`, which describes the product itself: a category is how a reader
+-- navigates, a component is what an article is about, and an article usually
+-- has both.
+create table wiki_categories (
+    id          uuid primary key default gen_random_uuid(),
+    product_id  uuid references products(id) on delete cascade,
+    parent_id   uuid references wiki_categories(id) on delete cascade,
+    slug        text not null,
+    name        text not null,
+    description text,
+    ordinal     integer not null default 0,
+    created_at  timestamptz not null default now(),
+    updated_at  timestamptz not null default now(),
+    constraint wiki_categories_no_self_parent check (parent_id is null or parent_id <> id)
+);
+
+create unique index wiki_categories_slug_idx
+    on wiki_categories(product_id, slug) nulls not distinct;
+create index wiki_categories_parent_idx on wiki_categories(parent_id);
+
+-- Many-to-many on purpose: "Spooler stalls" belongs under both
+-- Troubleshooting/Printing and Hardware/Printers without being duplicated.
+create table wiki_article_categories (
+    doc_id      uuid not null references reference_docs(id) on delete cascade,
+    category_id uuid not null references wiki_categories(id) on delete cascade,
+    ordinal     integer not null default 0,
+    primary key (doc_id, category_id)
+);
+
+create index wiki_article_categories_category_idx
+    on wiki_article_categories(category_id, ordinal);
+
+-- A link from one library item to another: an article citing a knowledge entry,
+-- an article pointing at another article. Polymorphic on both ends, the same
+-- two-nullable-targets shape work_item_links and library_revisions use.
+--
+-- Edges are derived from the body on every save, so they cannot disagree with
+-- what a reader sees. An unresolved [[link]] is still stored, with its label, so
+-- a rename shows up as a broken link rather than vanishing silently.
+create table library_links (
+    id             uuid primary key default gen_random_uuid(),
+    from_doc_id    uuid references reference_docs(id) on delete cascade,
+    from_entry_id  uuid references knowledge_entries(id) on delete cascade,
+    check (num_nonnulls(from_doc_id, from_entry_id) = 1),
+    to_doc_id      uuid references reference_docs(id) on delete cascade,
+    to_entry_id    uuid references knowledge_entries(id) on delete cascade,
+    -- 'mentions'      = a [[wikilink]] parsed out of a body
+    -- 'composed_from' = this article consolidates that item (agent drafting)
+    kind           text not null check (kind in ('mentions','composed_from')),
+    -- What was written inside the brackets. Kept for every link so a broken one
+    -- can still be rendered, and so the target it MEANT survives a rename.
+    target         text not null,
+    -- The display text, when the link gave one.
+    label          text,
+    created_at     timestamptz not null default now()
+);
+
+create index library_links_from_doc_idx   on library_links(from_doc_id);
+create index library_links_from_entry_idx on library_links(from_entry_id);
+create index library_links_to_doc_idx     on library_links(to_doc_id);
+create index library_links_to_entry_idx   on library_links(to_entry_id);
+
+create trigger wiki_categories_updated_at
+    before update on wiki_categories
+    for each row execute function set_updated_at();
+
+create trigger customer_units_updated_at
+    before update on customer_units
+    for each row execute function set_updated_at();
 
 create trigger customer_facts_updated_at
     before update on customer_facts
@@ -612,6 +755,72 @@ create index reference_doc_chunks_doc_idx       on reference_doc_chunks(doc_id);
 create index reference_doc_chunks_embedding_idx on reference_doc_chunks using hnsw (embedding vector_cosine_ops)
     with (m = 16, ef_construction = 64);
 create index reference_doc_chunks_trgm_idx      on reference_doc_chunks using gin (chunk_text gin_trgm_ops);
+
+-- A kept version of a library item -- a knowledge entry or a reference doc. The
+-- live row is always current; a revision is what the row looked like AFTER the
+-- edit that produced that version number, plus who made it. Reconstructing
+-- version N is one row lookup, never a replay of diffs.
+--
+-- The snapshot deliberately holds no embedding and no generated search columns:
+-- a 768-dim vector is larger than the text it was built from, and nothing ever
+-- semantic-searches history. That exclusion is what keeps this table cheap.
+--
+-- Two nullable targets rather than two tables, the same shape work_item_links
+-- uses -- one code path, one API shape, one panel in the UI.
+create table library_revisions (
+    id                 uuid primary key default gen_random_uuid(),
+    knowledge_entry_id uuid references knowledge_entries(id) on delete cascade,
+    reference_doc_id   uuid references reference_docs(id) on delete cascade,
+    check (num_nonnulls(knowledge_entry_id, reference_doc_id) = 1),
+    -- the value the row's own `version` column was set TO by this edit.
+    version            integer not null,
+    -- The human either way: an agent edit is attributed to the person whose turn
+    -- spawned the MCP subprocess. `actor` is the door, which is the only thing
+    -- that separates a manual edit from one the agent made on their behalf.
+    user_id            uuid references users(id) on delete set null,
+    actor              text not null check (actor in ('web','agent','mcp','api','ingest')),
+    -- Set only for actor='agent': joins to analysis_runs.meta->>'turn_id', so an
+    -- edit leads back to the conversation that made it.
+    turn_id            text,
+    changed_fields     text[] not null default '{}',
+    snapshot           jsonb not null,
+    created_at         timestamptz not null default now()
+);
+
+create unique index library_revisions_entry_idx
+    on library_revisions(knowledge_entry_id, version) where knowledge_entry_id is not null;
+create unique index library_revisions_doc_idx
+    on library_revisions(reference_doc_id, version) where reference_doc_id is not null;
+create index library_revisions_user_idx on library_revisions(user_id, created_at desc);
+
+-- Human reads of a library item, bucketed by day. The agent reads through MCP in
+-- its own subprocess and never reaches the HTTP route that writes here, so this
+-- counts people rather than tool calls -- no filtering required.
+--
+-- Bucketed rather than one row per hit: growth is bounded by
+-- (item x viewer x active day), and "most read this month" stays a cheap
+-- aggregate. A counter column on the item itself is the thing to avoid -- it
+-- would fire set_updated_at, dirty a row carrying a vector and three GIN
+-- indexes on every page view, and serialise readers on a row lock.
+create table library_views (
+    id                 uuid primary key default gen_random_uuid(),
+    knowledge_entry_id uuid references knowledge_entries(id) on delete cascade,
+    reference_doc_id   uuid references reference_docs(id) on delete cascade,
+    check (num_nonnulls(knowledge_entry_id, reference_doc_id) = 1),
+    user_id            uuid references users(id) on delete set null,
+    day                date not null,
+    views              integer not null default 1,
+    last_viewed_at     timestamptz not null default now()
+);
+
+-- nulls not distinct so an unattributed read (bearer token, open dev mode) still
+-- buckets instead of inserting a fresh row per hit.
+create unique index library_views_entry_idx
+    on library_views(knowledge_entry_id, user_id, day)
+    nulls not distinct where knowledge_entry_id is not null;
+create unique index library_views_doc_idx
+    on library_views(reference_doc_id, user_id, day)
+    nulls not distinct where reference_doc_id is not null;
 
 -- Linked git repositories for code consultation. Clones live on disk under
 -- TACHY_REPO_DIR; only chunk text + embeddings are stored here. Indexing is

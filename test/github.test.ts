@@ -123,3 +123,23 @@ describe("github adapter", () => {
     expect(source().postNote).toBeUndefined();
   });
 });
+
+describe("github request deadline", () => {
+  it("gives every request an abort signal, so a hung upstream cannot hang the turn", async () => {
+    const inits: (RequestInit | undefined)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        inits.push(init);
+        return {
+          ok: true,
+          json: async () => ({}),
+          text: async () => "",
+        } as Response;
+      }),
+    );
+    await source().fetchItem("o/r#5");
+    expect(inits.length).toBeGreaterThan(0);
+    for (const init of inits) expect(init?.signal).toBeInstanceOf(AbortSignal);
+  });
+});

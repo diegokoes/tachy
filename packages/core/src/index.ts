@@ -120,6 +120,7 @@ export {
   getKnowledgeEntry,
   listKnowledgeEntries,
   updateKnowledgeEntry,
+  revertKnowledgeEntry,
   listEnvironments,
   listKnowledgeFacets,
 } from "./knowledge";
@@ -133,7 +134,73 @@ export type {
   FacetCount,
 } from "./knowledge";
 export { addFeedback, listFeedback } from "./knowledge";
+export {
+  LIBRARY_ACTORS,
+  UNKNOWN_ACTOR,
+  VIEW_DEDUPE_MINUTES,
+  snapshotOf,
+  changedFields,
+  recordRevision,
+  listRevisions,
+  getRevision,
+  revertPatch,
+  recordView,
+  countView,
+  viewStats,
+  viewHistory,
+  syncLinks,
+  outboundLinks,
+  backlinks,
+  relinkBySlug,
+  setComposedFrom,
+  articleStaleness,
+  coverage,
+  parseWikilinks,
+  LINK_KINDS,
+} from "./library";
+export type {
+  LibraryActor,
+  LibraryTarget,
+  ActorRef,
+  RevisionRow,
+  ViewStats,
+  DailyViews,
+  LinkKind,
+  LinkSource,
+  OutboundLink,
+  Backlink,
+  ComposedSource,
+  Staleness,
+  Coverage,
+  CoverageNode,
+  CoverageCounts,
+} from "./library";
 export type { FeedbackInput } from "./knowledge";
+
+export {
+  MAIN_PAGE_SLUG,
+  listWikiCategories,
+  getWikiCategory,
+  addWikiCategory,
+  updateWikiCategory,
+  deleteWikiCategory,
+  wikiToc,
+  articleCategories,
+  setArticleCategories,
+  findArticle,
+  findMainPage,
+  listWikis,
+  draftSources,
+} from "./wiki";
+export type {
+  WikiCategoryRow,
+  WikiCategoryInput,
+  WikiCategoryPatch,
+  WikiArticleRef,
+  WikiTocNode,
+  WikiToc,
+  DraftSource,
+} from "./wiki";
 export {
   structuredSchema,
   cloudSchema,
@@ -141,11 +208,13 @@ export {
   RESOLUTION_CLARITIES,
   knowledgeStatusSchema,
   referenceStatusSchema,
+  referenceKindSchema,
   confidenceSchema,
   feedbackKindSchema,
   runModeSchema,
   KNOWLEDGE_STATUSES,
   REFERENCE_STATUSES,
+  REFERENCE_KINDS,
   CONFIDENCES,
   FEEDBACK_KINDS,
   RUN_MODES,
@@ -157,6 +226,7 @@ export {
   getReferenceDoc,
   listReferenceDocs,
   updateReferenceDoc,
+  revertReferenceDoc,
   searchReferenceDocs,
   referenceDocLineage,
   backfillReferenceEmbeddings,
@@ -224,6 +294,13 @@ export {
   listCustomerComponents,
   getCustomerProfile,
   getCustomerIdBySlug,
+  resolveCustomer,
+  listCustomerUnits,
+  resolveUnit,
+  addCustomerUnit,
+  updateCustomerUnit,
+  deleteCustomerUnit,
+  resolveUnitFacts,
   setWorkItemCustomer,
   setObservedVersion,
   getCustomerName,
@@ -234,6 +311,11 @@ export type {
   CustomerMatch,
   CustomerFactInput,
   CustomerProfile,
+  ResolvedCustomer,
+  CustomerUnitRow,
+  CustomerUnitInput,
+  CustomerUnitPatch,
+  ResolvedFact,
 } from "./catalog";
 export {
   listResolutionPatterns,
@@ -274,6 +356,7 @@ export {
 } from "./catalog";
 
 export * from "./sources/source";
+export * from "./sources/fetch";
 export { registerSource, resolveSource } from "./sources";
 export type { ResolvedSource } from "./sources";
 export {

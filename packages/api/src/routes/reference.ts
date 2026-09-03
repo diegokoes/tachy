@@ -7,12 +7,20 @@ import {
   searchReferenceDocs,
   saveReferenceDoc,
   updateReferenceDoc,
+  revertReferenceDoc,
+  listRevisions,
+  getRevision,
+  countView,
+  backlinks,
+  outboundLinks,
+  viewStats,
+  viewHistory,
   referenceDocLineage,
   referenceStatusSchema,
   resolveComponentFilter,
   getCustomerIdBySlug,
 } from "@tachy/core";
-import { assertScopeEditor, callerUserId } from "../authz";
+import { assertScopeEditor, callerActor, callerUserId } from "../authz";
 import { csv } from "../query";
 
 const referenceInputSchema = z.object({
@@ -28,6 +36,7 @@ const referenceInputSchema = z.object({
   supersedes: z.string().optional(),
   component: z.string().nullable().optional(),
   customerSlug: z.string().nullable().optional(),
+  unit: z.string().nullable().optional(),
 });
 
 const referenceUpdateSchema = z.object({
@@ -40,6 +49,7 @@ const referenceUpdateSchema = z.object({
   docVersion: z.string().nullable().optional(),
   component: z.string().nullable().optional(),
   customerSlug: z.string().nullable().optional(),
+  unit: z.string().nullable().optional(),
   expectedVersion: z.number().int().optional(),
 });
 
@@ -82,7 +92,54 @@ export const reference = new Hono()
   .get("/:id/lineage", async (c) =>
     c.json(await referenceDocLineage(c.req.param("id"))),
   )
-  .get("/:id", async (c) => c.json(await getReferenceDoc(c.req.param("id"))))
+  .get("/:id/revisions", async (c) =>
+    c.json(await listRevisions({ docId: c.req.param("id") })),
+  )
+  .get("/:id/revisions/:version", async (c) =>
+    c.json(
+      await getRevision(
+        { docId: c.req.param("id") },
+        Number(c.req.param("version")),
+      ),
+    ),
+  )
+  .post("/:id/revert/:version", async (c) => {
+    const id = c.req.param("id");
+    const doc = await getReferenceDoc(id);
+    await assertScopeEditor(c, {
+      productId: doc.product_id,
+      teamId: doc.team_id,
+    });
+    return c.json(
+      await revertReferenceDoc(
+        id,
+        Number(c.req.param("version")),
+        await callerActor(c),
+      ),
+    );
+  })
+  .get("/:id/links", async (c) => {
+    const id = c.req.param("id");
+    const [inbound, outbound] = await Promise.all([
+      backlinks({ docId: id }),
+      outboundLinks({ docId: id }),
+    ]);
+    return c.json({ inbound, outbound });
+  })
+  .get("/:id/views", async (c) => {
+    const target = { docId: c.req.param("id") };
+    const [stats, history] = await Promise.all([
+      viewStats(target),
+      viewHistory(target),
+    ]);
+    return c.json({ ...stats, history });
+  })
+  .get("/:id", async (c) => {
+    const id = c.req.param("id");
+    const doc = await getReferenceDoc(id);
+    countView({ docId: id }, await callerUserId(c));
+    return c.json(doc);
+  })
   .patch("/:id", zValidator("json", referenceUpdateSchema), async (c) => {
     const id = c.req.param("id");
     const doc = await getReferenceDoc(id);
@@ -90,7 +147,9 @@ export const reference = new Hono()
       productId: doc.product_id,
       teamId: doc.team_id,
     });
-    return c.json(await updateReferenceDoc(id, c.req.valid("json")));
+    return c.json(
+      await updateReferenceDoc(id, c.req.valid("json"), await callerActor(c)),
+    );
   })
   .get("/", async (c) => {
     const rows = await listReferenceDocs({
@@ -106,6 +165,10 @@ export const reference = new Hono()
       teamId: body.teamId,
     });
     return c.json(
-      await saveReferenceDoc({ ...body, createdById: await callerUserId(c) }),
+      await saveReferenceDoc({
+        ...body,
+        createdById: await callerUserId(c),
+        actor: await callerActor(c),
+      }),
     );
   });

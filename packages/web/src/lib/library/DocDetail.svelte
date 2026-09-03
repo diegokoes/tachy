@@ -2,7 +2,12 @@
   import { api, ApiError } from "../api";
   import type { NamedRow, ReferenceLineageRow, ReferenceRow } from "../types";
   import { canCurateScope, isCurator } from "../session.svelte";
+  import History from "./History.svelte";
+  import Backlinks from "../wiki/Backlinks.svelte";
+  import { renderMarkdown, markBrokenLinks } from "../markdown";
+  import { LinkTargets } from "../wikilinks.svelte";
   import { pushScope } from "../keys.svelte";
+  import { setTopActions } from "../subnav.svelte";
   import { vimState } from "../vim.svelte";
   import { errText } from "../resource.svelte";
   import { Badge, Button, Chip, Icon, Note, Select, G } from "../tui";
@@ -12,6 +17,7 @@
   let { id, onClose }: { id: string; onClose: () => void } = $props();
 
   let doc = $state<ReferenceRow | null>(null);
+  const links = new LinkTargets();
   let lineage = $state<ReferenceLineageRow[]>([]);
   let error = $state<string | null>(null);
   let editing = $state(false);
@@ -62,6 +68,7 @@
     productTeamSlug = null;
     try {
       doc = await api.get<ReferenceRow>(`/reference/${docId}`);
+      await links.load("reference", docId);
       try {
         lineage = await api.get<ReferenceLineageRow[]>(
           `/reference/${docId}/lineage`,
@@ -126,17 +133,40 @@
     load(id);
   });
 
-  /** Same as the entry view: backspace goes back while reading, not editing. */
+  /** Same as the entry view: backspace goes back while reading, not editing.
+      Hidden, because back is a labelled button in the carved row. */
   $effect(() => {
     if (editing || newVersion || !doc) return;
     return pushScope([
-      { key: "backspace", label: "back", run: onClose },
+      { key: "backspace", label: "", hidden: true, run: onClose },
       ...(vimState.enabled
         ? [{ key: "esc", label: "", hidden: true, run: onClose }]
         : []),
     ]);
   });
+
+  /* The carved row, while reading. The form claims it while editing. */
+  $effect(() => {
+    if (editing || newVersion || !doc) return;
+    return setTopActions(readActions);
+  });
 </script>
+
+<!-- Rendered by App into the carved row beside the subnav, not here. -->
+{#snippet readActions()}
+  <Button icon="back" title="back (backspace)" onclick={onClose}>back</Button>
+  {#if canEdit}
+    <Button
+      tone="info"
+      icon="edit"
+      title="edit"
+      onclick={() => {
+        editing = true;
+        mutateError = null;
+      }}>edit</Button
+    >
+  {/if}
+{/snippet}
 
 {#if error}
   <Note tone="danger">{error}</Note>
@@ -181,31 +211,7 @@
     }}
   />
 {:else}
-  <div class="topbar">
-    <ScopeCrumb area={doc.product_area} />
-    <Button
-      variant="ghost"
-      square
-      icon="back"
-      aria-label="back"
-      title="back (backspace)"
-      onclick={onClose}
-    />
-    {#if canEdit}
-      <Button
-        variant="ghost"
-        square
-        tone="info"
-        icon="edit"
-        aria-label="edit"
-        title="edit"
-        onclick={() => {
-          editing = true;
-          mutateError = null;
-        }}
-      />
-    {/if}
-  </div>
+  <ScopeCrumb area={doc.product_area} />
 
   <h2>{doc.title}</h2>
 
@@ -283,7 +289,7 @@
           variant="ghost"
           square
           tone="accent"
-          icon="upload"
+          icon="newVersion"
           aria-label="new version"
           title="new version…"
           onclick={() => {
@@ -312,7 +318,23 @@
     </div>
   {/if}
 
-  <pre class="body">{doc.body ?? "(no body)"}</pre>
+  <!-- Imported bodies are markdown at the source (an ADO wiki page is), and a
+       [[wikilink]] cannot render inside a <pre>. -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="body md" onclick={links.onClick}>
+    {@html markBrokenLinks(renderMarkdown(doc.body ?? "(no body)"), links.resolved)}
+  </div>
+
+  <Backlinks base="reference" id={doc.id} />
+
+  <History
+    base="reference"
+    id={doc.id}
+    version={doc.version}
+    {canEdit}
+    onReverted={() => load(doc!.id)}
+  />
 {/if}
 
 <style>
@@ -323,20 +345,6 @@
   }
   .muted {
     color: var(--muted);
-  }
-  .topbar :global(nav.crumb) {
-    margin-right: auto;
-  }
-  .topbar {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: var(--pad-1);
-    padding: var(--pad-2) 0;
-    background: var(--panel-solid);
   }
   .meta {
     display: flex;
@@ -376,8 +384,14 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: var(--pad-4);
-    white-space: pre-wrap;
     line-height: 1.55;
     overflow-x: auto;
+  }
+  /* Imported bodies are not always well-formed markdown, so long unbroken
+     strings still have to wrap rather than stretch the panel. */
+  .body :global(pre),
+  .body :global(code) {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 </style>

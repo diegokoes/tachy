@@ -427,7 +427,7 @@
                 variant="ghost"
                 tone="danger"
                 square
-                icon="cancel"
+                icon="del"
                 title="remove rule"
                 aria-label="remove rule"
                 onclick={() => delArea(p, a.id)}

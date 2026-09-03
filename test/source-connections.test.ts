@@ -355,3 +355,58 @@ describe("registering projects on a connection", () => {
     ).toHaveLength(0);
   });
 });
+
+describe("the work-item field schema route", () => {
+  const conn = async (cookie: string) => {
+    const res = await app.request("/api/source-connections", {
+      ...json({
+        sourceType: "azure-devops",
+        slug: "ui-ado",
+        baseUrl: "https://dev.azure.com/myorg",
+      }),
+      headers: { "Content-Type": "application/json", cookie },
+    });
+    expect(res.status).toBe(200);
+  };
+
+  it("is curator-only, unlike the neighbouring discovery probes", async () => {
+    const cookie = await adminCookie();
+    await conn(cookie);
+    await createUser({
+      email: "outsider@example.com",
+      password: "a-long-password",
+      role: "member",
+    });
+    const theirs = await loginCookie(
+      app,
+      "outsider@example.com",
+      "a-long-password",
+    );
+
+    const res = await app.request(
+      "/api/source-connections/ui-ado/work-item-schema?project=ProjA&type=Bug",
+      { headers: { Cookie: theirs } },
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("requires both project and type", async () => {
+    const cookie = await adminCookie();
+    await conn(cookie);
+    const res = await app.request(
+      "/api/source-connections/ui-ado/work-item-schema?project=ProjA",
+      { headers: { Cookie: cookie } },
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/project and type/);
+  });
+
+  it("404s an unknown connection", async () => {
+    const cookie = await adminCookie();
+    const res = await app.request(
+      "/api/source-connections/nope/work-item-schema?project=P&type=Bug",
+      { headers: { Cookie: cookie } },
+    );
+    expect(res.status).toBe(404);
+  });
+});

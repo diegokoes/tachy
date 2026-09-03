@@ -5,6 +5,7 @@ dist/
 .vscode/mcp.json
 .DS_Store
 .model-cache/
+coverage/
 local_cache/
 backups/
 data/repos/

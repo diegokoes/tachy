@@ -9,6 +9,8 @@ export interface IngestedItem {
   productId: string | null;
   teamId: string | null;
   customerId: string | null;
+  /** Which part of their estate, when someone has said. Never inferred here. */
+  customerUnitId: string | null;
   /** Set when the sender's domain matched several customers and so decided none. */
   customerAmbiguity?: string;
   observedVersion: string | null;
@@ -58,7 +60,8 @@ export async function ingestWorkItem(
         source_project_id = excluded.source_project_id,
         product_id = excluded.product_id,
         team_id = excluded.team_id
-      returning id, source_project_id, product_id, team_id, customer_id, observed_version
+      returning id, source_project_id, product_id, team_id, customer_id,
+                customer_unit_id, observed_version
     `;
 
     if (raw.messages.length) {
@@ -94,6 +97,7 @@ export async function ingestWorkItem(
       productId: item.product_id,
       teamId: item.team_id,
       customerId: item.customer_id,
+      customerUnitId: item.customer_unit_id ?? null,
       ...(conflict
         ? { customerAmbiguity: conflict }
         : match.reason && !route.customerId

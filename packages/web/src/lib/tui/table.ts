@@ -13,7 +13,16 @@ export type Column<T> = {
   /** A CSS width for <col>. Fixed tracks are what keep rows from resizing. */
   width?: string;
   align?: "start" | "end";
-  /** Plain display value; ignored when `cell` is given. */
+  /**
+   * Plain display value; ignored when `cell` is given.
+   *
+   * On an editable column this is also what seeds the record form, so it must
+   * return the **stored** form — the option's `value`, not its label; a boolean,
+   * not "on"/"off". Anything a column wants to *show* differently belongs in
+   * `cell`. Returning a label here put "Freshdesk" where "freshdesk" was
+   * expected and crashed the source form on open, and made every edit of a
+   * connection turn its redaction flag on.
+   */
   value?: (row: T) => unknown;
   cell?: Snippet<[T]>;
   edit?: EditKind;
@@ -54,6 +63,7 @@ export function cellText<T>(c: Column<T>, row: T): string {
   return v == null || v === "" ? "—" : String(v);
 }
 
+/** Seeds the record form from a row. See the note on `Column.value`. */
 export function draftFrom<T>(columns: Column<T>[], row: T): Draft {
   const d: Draft = {};
   for (const c of columns) {

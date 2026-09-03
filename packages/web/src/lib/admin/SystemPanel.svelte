@@ -4,6 +4,7 @@
   import { initSession } from "../session.svelte";
   import AsciiSelect from "../AsciiSelect.svelte";
   import Checkbox from "../tui/Checkbox.svelte";
+  import Icon from "../tui/Icon.svelte";
   import { errText } from "../resource.svelte";
   import { csv, type SystemInfo } from "./shared";
 
@@ -82,7 +83,12 @@
               ariaLabel="PII / secret redaction"
               onchange={(checked) => saveSetting("redaction_global", checked)}
             />
-            <span class:on={system.settings.redaction_global.value}>
+            <span class="state" class:on={system.settings.redaction_global.value}>
+              <Icon
+                name={system.settings.redaction_global.value ? "lockOn" : "lockOff"}
+                size="1em"
+                weight={7}
+              />
               {system.settings.redaction_global.value ? "on — at the LLM boundary" : "off — per-connection opt-in only"}
             </span>
           </label>
@@ -168,6 +174,7 @@
 
 <style>
   td .on { color: var(--ok); }
+  td .state { display: inline-flex; align-items: center; gap: var(--pad-2); }
   .edit-cell input { min-width: 13rem; }
   label.check { display: flex; gap: 0.5rem; align-items: center; cursor: pointer; }
   .badge.src-db { border-color: var(--accent); color: var(--accent); }

@@ -5,6 +5,14 @@ import {
   saveKnowledgeEntry,
   searchKnowledge,
   updateKnowledgeEntry,
+  revertKnowledgeEntry,
+  listRevisions,
+  getRevision,
+  countView,
+  backlinks,
+  outboundLinks,
+  viewStats,
+  viewHistory,
   getKnowledgeEntry,
   listKnowledgeEntries,
   listEnvironments,
@@ -24,7 +32,7 @@ import {
   runModeSchema,
 } from "@tachy/core";
 import type { EntryScope, RunInput } from "@tachy/core";
-import { assertScopeEditor, callerUserId } from "../authz";
+import { assertScopeEditor, callerActor, callerUserId } from "../authz";
 import { csv } from "../query";
 
 const knowledgeInputSchema = z.object({
@@ -40,6 +48,7 @@ const knowledgeInputSchema = z.object({
   resolutionPattern: z.string().optional(),
   component: z.string().optional(),
   customerSlug: z.string().nullable().optional(),
+  unit: z.string().nullable().optional(),
   confidence: confidenceSchema.optional(),
   tags: z.array(z.string()).optional(),
   cloud: cloudSchema.optional(),
@@ -61,6 +70,7 @@ const knowledgeUpdateSchema = z.object({
   tags: z.array(z.string()).optional(),
   component: z.string().nullable().optional(),
   customerSlug: z.string().nullable().optional(),
+  unit: z.string().nullable().optional(),
   supersededBy: z.string().nullable().optional(),
   confidence: confidenceSchema.nullable().optional(),
   cloud: cloudSchema.nullable().optional(),
@@ -138,6 +148,13 @@ async function newEntryScope(body: {
   return {};
 }
 
+async function entryScope(id: string): Promise<EntryScope> {
+  const [row] =
+    await sql`select product_id, team_id from knowledge_entries where id = ${id}`;
+  if (!row) throw notFound(`knowledge entry ${id} not found`);
+  return { productId: row.product_id, teamId: row.team_id };
+}
+
 export const knowledge = new Hono()
   .get("/search", async (c) => {
     const rows = await searchKnowledge(
@@ -171,17 +188,58 @@ export const knowledge = new Hono()
       }),
     );
   })
-  .get("/:id", async (c) => c.json(await getKnowledgeEntry(c.req.param("id"))))
+  .get("/:id/revisions", async (c) =>
+    c.json(await listRevisions({ entryId: c.req.param("id") })),
+  )
+  .get("/:id/revisions/:version", async (c) =>
+    c.json(
+      await getRevision(
+        { entryId: c.req.param("id") },
+        Number(c.req.param("version")),
+      ),
+    ),
+  )
+  .post("/:id/revert/:version", async (c) => {
+    const id = c.req.param("id");
+    await assertScopeEditor(c, await entryScope(id));
+    return c.json(
+      await revertKnowledgeEntry(
+        id,
+        Number(c.req.param("version")),
+        await callerActor(c),
+      ),
+    );
+  })
+  .get("/:id/links", async (c) => {
+    const id = c.req.param("id");
+    const [inbound, outbound] = await Promise.all([
+      backlinks({ entryId: id }),
+      outboundLinks({ entryId: id }),
+    ]);
+    return c.json({ inbound, outbound });
+  })
+  .get("/:id/views", async (c) => {
+    const target = { entryId: c.req.param("id") };
+    const [stats, history] = await Promise.all([
+      viewStats(target),
+      viewHistory(target),
+    ]);
+    return c.json({ ...stats, history });
+  })
+  .get("/:id", async (c) => {
+    const id = c.req.param("id");
+    const entry = await getKnowledgeEntry(id);
+    // Not awaited: a read must not pay for its own bookkeeping. The agent reads
+    // through MCP and never reaches here, so this counts people.
+    countView({ entryId: id }, await callerUserId(c));
+    return c.json(entry);
+  })
   .patch("/:id", zValidator("json", knowledgeUpdateSchema), async (c) => {
     const id = c.req.param("id");
-    const [row] =
-      await sql`select product_id, team_id from knowledge_entries where id = ${id}`;
-    if (!row) throw notFound(`knowledge entry ${id} not found`);
-    await assertScopeEditor(c, {
-      productId: row.product_id,
-      teamId: row.team_id,
-    });
-    return c.json(await updateKnowledgeEntry(id, c.req.valid("json")));
+    await assertScopeEditor(c, await entryScope(id));
+    return c.json(
+      await updateKnowledgeEntry(id, c.req.valid("json"), await callerActor(c)),
+    );
   })
   .get("/", async (c) => {
     const rows = await listKnowledgeEntries({
@@ -194,7 +252,11 @@ export const knowledge = new Hono()
     const body = c.req.valid("json");
     await assertScopeEditor(c, await newEntryScope(body));
     return c.json(
-      await saveKnowledgeEntry({ ...body, createdById: await callerUserId(c) }),
+      await saveKnowledgeEntry({
+        ...body,
+        createdById: await callerUserId(c),
+        actor: await callerActor(c),
+      }),
     );
   });
 
