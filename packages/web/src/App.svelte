@@ -546,7 +546,6 @@
     flex-direction: column;
     min-height: 0;
     height: 100%;
-    gap: var(--pad-2);
     padding-top: max(
       0px,
       calc(var(--sub-depth) - var(--pad-3) + var(--sub-air))
@@ -569,6 +568,12 @@
     display: flex;
     min-height: 0;
     min-width: 0;
+  }
+  /* Hung in the Panel's own right padding instead of beside the content. The
+     bar rides the window's edge, where a scrollbar belongs, and `main` gets
+     the track's column back rather than paying for it twice. */
+  .content > :global(.scrollbar) {
+    margin-right: calc(-1 * var(--pad-3));
   }
 
   .dev-badge {
@@ -613,8 +618,18 @@
     min-height: 0;
   }
 
+  /* Its own top spacing rather than a gap on .shell, so that when the row has
+     nothing to print it takes up nothing at all. Almost every scope now marks
+     its bindings hidden — Settings › keybinds is the discovery surface — so a
+     permanently reserved row was a dead band above the window's lower edge on
+     every view. */
   .hintrow {
     flex: none;
     min-height: 1.2rem;
+    padding-top: var(--pad-2);
+  }
+  .hintrow:not(:has(*)) {
+    min-height: 0;
+    padding-top: 0;
   }
 </style>
