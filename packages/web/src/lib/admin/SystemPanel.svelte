@@ -63,7 +63,7 @@
     </tr></thead>
     <tbody>
       <tr>
-        <td class="tip" title="Engineering/repositories reads product→repository, team→organization and hides customers. Display only — slugs and the agent contract never change.">Deployment profile</td>
+        <td class="tip" title="Engineering/repositories reads product→repository, team→organization and hides customers. Display only: slugs and the agent contract never change.">Deployment profile</td>
         <td>
           <AsciiSelect value={system.settings.deployment_profile.value}
             options={[
@@ -75,7 +75,7 @@
         <td><span class="badge src-{system.settings.deployment_profile.source}">{system.settings.deployment_profile.source}</span></td>
       </tr>
       <tr>
-        <td class="tip" title="Scrubs PII/secrets from everything sent to the LLM — all connections, pasted context and retrieved results. The database keeps raw data.">PII / secret redaction</td>
+        <td class="tip" title="Scrubs PII/secrets from everything sent to the LLM: all connections, pasted context and retrieved results. The database keeps raw data.">PII / secret redaction</td>
         <td>
           <label class="check">
             <Checkbox
@@ -89,7 +89,7 @@
                 size="1em"
                 weight={7}
               />
-              {system.settings.redaction_global.value ? "on — at the LLM boundary" : "off — per-connection opt-in only"}
+              {system.settings.redaction_global.value ? "on, at the LLM boundary" : "off, per-connection opt-in only"}
             </span>
           </label>
         </td>

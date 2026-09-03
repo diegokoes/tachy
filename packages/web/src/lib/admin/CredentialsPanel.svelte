@@ -33,7 +33,7 @@
   );
 
   const targetOptions = $derived([
-    ...(isGlobalAdmin ? [{ value: "global", label: "global — everyone" }] : []),
+    ...(isGlobalAdmin ? [{ value: "global", label: "global (everyone)" }] : []),
     ...(isGlobalAdmin
       ? teams.map((t) => ({ value: t.slug, label: `team ${t.slug}` }))
       : (session.me?.team_admin ?? []).map((t) => ({ value: t.team_slug, label: `team ${t.team_slug}` }))),
@@ -97,7 +97,7 @@
   </div>
 
   {#if list && !list.vault_enabled}
-    <p class="muted">Credential storage is disabled — set <code>TACHY_SECRET_KEY</code>
+    <p class="muted">Credential storage is disabled. Set <code>TACHY_SECRET_KEY</code>
       (32 bytes base64, e.g. <code>openssl rand -base64 32</code>) in the server
       environment and restart. Until then keys come from <code>.env</code>.</p>
   {:else if list}
@@ -109,7 +109,7 @@
             <td>{AGENT_KEY_LABELS[name] ?? name}</td>
             <td class="edit-cell">
               <input type="password" bind:value={drafts[name]}
-                placeholder={setNames.has(name) ? "(set — enter to replace)" : "(not set)"} autocomplete="off" />
+                placeholder={setNames.has(name) ? "(set, enter to replace)" : "(not set)"} autocomplete="off" />
               {#if drafts[name]?.trim()}
                 <button class="mini" onclick={() => save(name)}>save</button>
               {/if}

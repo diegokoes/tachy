@@ -105,7 +105,7 @@ export async function approve(
   if (!res.ok)
     throw new Error(
       res.status === 404
-        ? "this turn already finished — the approval expired"
+        ? "this turn already finished; the approval expired"
         : `could not record the decision (${res.status})`,
     );
 }

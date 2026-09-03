@@ -253,7 +253,7 @@
                 {#if entry.customer_slug}
                   <Badge
                     tone="accent"
-                    title="learned on this customer's install — cite it as theirs, not as how the product behaves"
+                    title="learned on this customer's install. Cite it as theirs, not as how the product behaves"
                     >{entry.customer_slug}</Badge
                   >
                 {/if}

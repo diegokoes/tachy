@@ -108,7 +108,7 @@
         <button class="tiny" title="rename or move" onclick={() => startEdit(node)}>edit</button>
         <button
           class="tiny"
-          title="remove — its children move up rather than being deleted"
+          title="remove; its children move up rather than being deleted"
           onclick={() => remove(node.slug)}>remove</button>
       </span>
     {/if}

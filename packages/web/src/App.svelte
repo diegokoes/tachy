@@ -378,7 +378,7 @@
      opaque, so their inline titles still mask the rule they straddle. */
   .window > :global(section),
   .navbar :global(> section) {
-    background: color-mix(in srgb, var(--panel-solid) 93%, transparent);
+    background: var(--window-bg);
   }
 
   /* Three tracks, and the outer two are equal: the pill stays on the frame's

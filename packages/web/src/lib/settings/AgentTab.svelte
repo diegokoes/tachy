@@ -222,7 +222,7 @@
   <Panel title="keys">
     {#if creds && !creds.vault_enabled}
       <Note tone="warn">
-        Credential storage is disabled on this server — set <code
+        Credential storage is disabled on this server. Set <code
           >TACHY_SECRET_KEY</code
         > (32 bytes base64) in the server environment to enable per-user keys. Until
         then keys come from <code>.env</code>.
@@ -243,7 +243,7 @@
                 class:bad
                 bind:value={drafts[name]}
                 placeholder={held || (mine.has(name) ? MASK : "")}
-                title={held ? `set at ${from} scope — type to override` : null}
+                title={held ? `set at ${from} scope, type to override` : null}
               />
             </span>
             <span class="a">

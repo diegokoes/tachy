@@ -15,12 +15,12 @@
     Field,
     Modal,
     Note,
+    Subject,
     type Column,
     type Draft,
   } from "../tui";
   import {
     INFO,
-    TIP,
     csv,
     type Component,
     type Customer,
@@ -238,7 +238,6 @@
       edit: "text",
       required: true,
       editable: () => false,
-      hint: TIP.slug,
       info: INFO.slug,
       cell: repoCell,
       derive: (d) =>
@@ -259,17 +258,16 @@
       formOnly: true,
       edit: "text",
       required: true,
-      hint: "cloned with the project connection's token",
+      info: "The repo is cloned with the project connection's token.",
     },
     {
       key: "source_project_id",
       label: "project",
       width: "13rem",
       edit: "select",
-      hint: "supplies the clone credentials",
-      info: "Which registered project this repo belongs to. Its connection is what clones it.",
+      info: "Which registered project this repo belongs to. Its connection supplies the credentials that clone it.",
       options: [
-        { value: "", label: `(none — scope by ${t("product")})` },
+        { value: "", label: `(none, scope by ${t("product")})` },
         ...knowledgeProjects.map((p) => ({
           value: p.id,
           label: `${p.external_key} (${p.product_slug})`,
@@ -285,7 +283,7 @@
       label: t("product"),
       formOnly: true,
       edit: "select",
-      hint: `Only needed when the repo has no project. Ignored otherwise.`,
+      info: "Only needed when the repo has no project. Ignored otherwise.",
       options: [
         { value: "", label: "(from the project)" },
         ...myProducts.map((p) => ({ value: p.slug, label: p.name })),
@@ -296,10 +294,9 @@
       label: "customer",
       width: "10rem",
       edit: "select",
-      hint: "only for a customer's own addon repo",
-      info: "Left empty the repo is shared product code — and a customer-scoped search returns the shared ones too.",
+      info: "Set this only for a customer's own addon repo. Left empty the repo is shared product code, and a customer-scoped search returns the shared ones too.",
       options: [
-        { value: "", label: "(none — shared)" },
+        { value: "", label: "(none, shared)" },
         ...customers.data.map((cu) => ({ value: cu.slug, label: cu.name })),
       ],
     },
@@ -308,7 +305,6 @@
       label: "component",
       width: "10rem",
       edit: "select",
-      hint: TIP.repoComponent,
       info: INFO.repoComponent,
       options: (d) => [
         { value: "", label: "(none)" },
@@ -330,7 +326,8 @@
       label: "extensions",
       formOnly: true,
       edit: "text",
-      hint: "ts, cs, sql — empty uses the built-in allowlist",
+      placeholder: "ts, cs, sql",
+      info: "Comma-separated. Empty uses the built-in allowlist.",
       value: (r) =>
         (Array.isArray(r.config?.include_extensions)
           ? (r.config.include_extensions as string[])
@@ -342,7 +339,8 @@
       label: "max file KB",
       formOnly: true,
       edit: "text",
-      hint: "larger files are skipped; empty means 200",
+      placeholder: "200",
+      info: "Files larger than this are skipped. Empty means 200.",
       value: (r) => r.config?.max_file_kb ?? "",
     },
     { key: "index_status", label: "index", width: "8rem", cell: indexCell },
@@ -462,7 +460,7 @@
   {#if project}
     <Field
       label="discover"
-      hint="pick a repo instead of transcribing its clone URL"
+      info="Pick a repo instead of transcribing its clone URL."
     >
       <Button
         variant="ghost"
@@ -537,6 +535,7 @@
     onCancel={() => (bulk = null)}
   >
     {#if bulkError}<Note tone="danger">{bulkError}</Note>{/if}
+    <Subject verb="linking repos from" name={b.project.external_key} />
     {#if bulkResults.length}
       <Note tone="warn">
         {bulkResults.length} could not be linked:

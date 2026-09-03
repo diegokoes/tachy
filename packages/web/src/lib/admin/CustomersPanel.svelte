@@ -16,7 +16,7 @@
   import {
     csv,
     INFO,
-    TIP,
+    EXAMPLE,
     type Component,
     type Customer,
     type Product,
@@ -325,7 +325,6 @@
       width: "12rem",
       edit: "text",
       required: true,
-      hint: TIP.slug,
       info: INFO.slug,
       derive: (d) =>
         uniqueSlug(
@@ -337,7 +336,7 @@
       key: "email_domains",
       label: "email domains",
       edit: "text",
-      hint: TIP.emailDomains,
+      placeholder: EXAMPLE.emailDomains,
       info: INFO.emailDomains,
       value: (r) => (r.email_domains ?? []).join(", "),
     },
@@ -346,7 +345,7 @@
       label: "aliases",
       formOnly: true,
       edit: "text",
-      hint: TIP.aliases.customer,
+      placeholder: EXAMPLE.aliases.customer,
       info: INFO.aliases.customer,
       value: (r) => (r.aliases ?? []).join(", "),
     },
@@ -365,7 +364,7 @@
     <div class="block wide">
       <span
         class="dim"
-        title="The parts their estate divides into — sites, lines, tenants. A `profile` is a shared template a unit inherits from without being inside it."
+        title="The parts their estate divides into: sites, lines, tenants. A `profile` is a shared template a unit inherits from without being inside it."
         >estate</span
       >
       {#each unitTree(units[r.slug] ?? []) as { u, depth } (u.id)}
@@ -423,7 +422,7 @@
             <input
               aria-label="unit aliases"
               placeholder="aliases: line 191, l191"
-              title="Other names the site calls it by — these resolve too."
+              title="Other names the site calls it by. These resolve too."
               bind:value={editForm.aliases}
             />
             <Button size="sm" variant="primary" busy={busy === r.slug} onclick={() => saveUnit(r.slug)}>
@@ -437,7 +436,7 @@
       {/each}
       {#if !(units[r.slug] ?? []).length}
         <span class="dim sm">
-          Not broken down — every fact below is true of the whole account.
+          Not broken down. Every fact below is true of the whole account.
         </span>
       {/if}
       <div class="frow add">
@@ -482,7 +481,7 @@
     <div class="block wide">
       <span
         class="dim"
-        title="True of THIS install and nobody else — the version they run, their layout, an integration they depend on. A fact, not a problem and its fix."
+        title="True of THIS install and nobody else: the version they run, their layout, an integration they depend on. A fact, not a problem and its fix."
         >specifics</span
       >
       {#if (units[r.slug] ?? []).length}
@@ -540,7 +539,7 @@
       {/each}
       {#if !(facts[r.slug] ?? []).length}
         <span class="dim sm">
-          Nothing recorded — an answer for them is only as good as what is here.
+          Nothing recorded. An answer for them is only as good as what is here.
         </span>
       {/if}
       {/if}
@@ -578,7 +577,7 @@
       <div class="frow add">
         <input
           aria-label="source"
-          placeholder="where this was learned — ticket URL, wiki page, person"
+          placeholder="ticket URL, wiki page, person"
           bind:value={factForm.source}
         />
         <input aria-label="notes" placeholder="notes (optional)" bind:value={factForm.notes} />
@@ -625,7 +624,7 @@
       </datalist>
       {#if kinds.length}
         <span class="dim sm">
-          already in use: {kinds.map((k) => k.kind).join(", ")} — reuse one
+          already in use: {kinds.map((k) => k.kind).join(", ")}. Reuse one
           rather than coining a near-duplicate.
         </span>
       {/if}
@@ -689,7 +688,7 @@
         {/each}
         {#if !(p?.repos ?? []).length && !(p?.projects ?? []).length}
           <span class="dim sm">
-            no repo or project is filed under them — set those on the repo and
+            no repo or project is filed under them. Set those on the repo and
             project rows.
           </span>
         {/if}

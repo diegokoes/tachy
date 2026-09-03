@@ -75,7 +75,7 @@
 
   const hint = $derived(
     spec?.is_identity
-      ? "a person — use their email or unique name; a display name alone is ambiguous"
+      ? "a person. Use their email or unique name; a display name alone is ambiguous"
       : (spec?.help_text ?? undefined),
   );
 

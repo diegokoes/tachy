@@ -63,7 +63,7 @@
     <h2>{slug}</h2>
     <p class="muted">
       No article here yet.{#if slug === "main"}
-        A main page is what a reader lands on — what this product is, where to
+        A main page is what a reader lands on: what this product is, where to
         start, what matters.{/if}
     </p>
     {#if isCurator()}

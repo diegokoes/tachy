@@ -259,7 +259,7 @@
       </div>
     {:else}
       <span class="muted sm">
-        No categories in this wiki yet — the article lands in Uncategorised.
+        No categories in this wiki yet. The article lands in Uncategorised.
       </span>
     {/if}
   </div>
