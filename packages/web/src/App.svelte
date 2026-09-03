@@ -19,7 +19,7 @@
   import { hints, pushScope, startKeys } from "./lib/keys.svelte";
   import { navKey } from "./lib/keys/bindings.svelte";
   import { loadVim, vimState, scrollBindings } from "./lib/vim.svelte";
-  import { subnav } from "./lib/subnav.svelte";
+  import { subnav, topActions } from "./lib/subnav.svelte";
   import { HintRule, Panel, Scrollbar, Tabs } from "./lib/tui";
 
   const nav = $derived(navItems());
@@ -296,8 +296,9 @@
             onpick={sub.onpick}
           />
         </div>
-        {#if sub.actions}
-          <div class="top-acts">{@render sub.actions()}</div>
+        {@const acts = topActions() ?? sub.actions}
+        {#if acts}
+          <div class="top-acts">{@render acts()}</div>
         {/if}
       {/if}
 
@@ -435,6 +436,11 @@
      inside the window. */
   .window {
     --sub-air: var(--pad-2);
+    /* The air `main` keeps above and below its content. Named because a
+       sticky child cannot rise above its containing block — `main`'s content
+       box — so it pins this far down the scrollport and has to paint the
+       strip left over it. See .bar in LibraryView. */
+    --main-air: calc(var(--fs-xs) * 0.9);
     /* Right edge to recess wall: the corner the carved row keeps for its own
        content. The recess takes everything else, out to the left edge. */
     --sub-reserve: 15rem;
@@ -499,12 +505,27 @@
     top: 0;
     right: var(--pad-4);
     z-index: 2;
-    height: var(--sub-depth);
-    max-width: calc(100% - var(--sub-mouth, 0px) - var(--pad-4));
+    /* The band down to where page content actually starts, not down to the
+       recess floor. `.shell` clears the floor by another --sub-air and the
+       Panel's own rule sits above that, so a row the depth of the recess
+       centres too high — six pixels of air above it against fourteen below,
+       which reads as pinned to the top edge rather than centred in the row. */
+    height: calc(
+      var(--sub-depth) + var(--sub-air) + var(--panel-line-w)
+    );
+    /* Sized to the corner rather than to its contents, so the row centres in
+       the space the carve opens up instead of hugging the window's right
+       edge. The width is what is left of the top row once the recess mouth
+       and the Panel's own inset are taken off it. */
+    width: calc(100% - var(--sub-mouth, 0px) - var(--pad-4));
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: var(--gap);
+    justify-content: center;
+    gap: var(--pad-3);
+    min-width: 0;
+  }
+  /* Labels ellipsize rather than overrun the corner on a narrow window. */
+  .top-acts :global(.btn) {
     min-width: 0;
   }
 
@@ -578,7 +599,7 @@
     flex-direction: column;
     scrollbar-width: none;
     padding-right: var(--pad-2);
-    padding-block: calc(var(--fs-xs) * 0.9);
+    padding-block: var(--main-air);
   }
   main::-webkit-scrollbar {
     display: none;
