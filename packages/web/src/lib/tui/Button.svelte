@@ -16,6 +16,7 @@
     full = false,
     title,
     type = "button",
+    form,
     onclick,
     children,
     "aria-label": ariaLabel,
@@ -35,6 +36,8 @@
     full?: boolean;
     title?: string;
     type?: "button" | "submit";
+    /** Submits a form this button is not nested in — the carved action row. */
+    form?: string;
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
     "aria-label"?: string;
@@ -46,6 +49,7 @@
   class:square
   class:full
   {type}
+  {form}
   {title}
   aria-label={ariaLabel}
   aria-busy={busy || undefined}
@@ -214,7 +218,7 @@
       filter 0.12s ease;
   }
   .btn:hover:not(:disabled) :global(svg) {
-    stroke-width: 9;
+    stroke-width: var(--sw-hover, 9);
     filter: brightness(1.35);
   }
   /* Keyboard focus still needs to be visible — that is not a hover effect. */

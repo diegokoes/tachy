@@ -46,7 +46,7 @@
   }
   .mark:hover .btn :global(svg),
   .btn:focus-visible :global(svg) {
-    stroke-width: 9;
+    stroke-width: var(--sw-hover, 9);
   }
   .btn:focus-visible {
     outline: 1px solid currentColor;

@@ -1,6 +1,4 @@
 <script lang="ts">
-  import Icon from "./Icon.svelte";
-
   let {
     checked = $bindable(false),
     disabled = false,
@@ -14,9 +12,10 @@
   } = $props();
 </script>
 
-<span class="checkbox" class:checked class:disabled>
-  <span class="fill" aria-hidden="true"></span>
-  <Icon name="checkbox" size="1.35em" weight={6} />
+<!-- The input is wrapped rather than paired by id, so the component stacks in a
+     list without needing a unique one. Visually hidden rather than display:none
+     because a display:none input cannot take focus. -->
+<label class="tgl" class:disabled>
   <input
     type="checkbox"
     bind:checked
@@ -24,47 +23,72 @@
     aria-label={ariaLabel}
     onchange={(event) => onchange?.(event.currentTarget.checked)}
   />
-</span>
+  <span class="track" aria-hidden="true"><span class="knob"></span></span>
+</label>
 
 <style>
-  .checkbox {
+  .tgl {
     position: relative;
     display: inline-flex;
     flex: none;
-    width: 1.35em;
-    height: 1.35em;
-    align-items: center;
-    justify-content: center;
-    color: var(--text);
     cursor: pointer;
   }
-
-  .checkbox .fill {
-    position: absolute;
-    width: 0.8em;
-    height: 0.8em;
-    border-radius: 50%;
-    background: transparent;
-  }
-
-  .checkbox.checked .fill {
-    background: var(--accent);
-  }
-
-  .checkbox.disabled {
+  .tgl.disabled {
     cursor: default;
     opacity: 0.55;
   }
 
-  .checkbox input {
+  .tgl input {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    margin: 0;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
     padding: 0;
     border: 0;
-    opacity: 0;
-    cursor: inherit;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .track {
+    box-sizing: border-box;
+    display: block;
+    width: 2.4em;
+    height: 1.2em;
+    padding: var(--panel-line-w);
+    border: var(--panel-line-w) solid var(--border);
+    border-radius: var(--radius-chip);
+    background: var(--panel-solid);
+    transition: border-color 0.2s ease;
+  }
+  .knob {
+    display: block;
+    width: 50%;
+    height: 100%;
+    border-radius: var(--radius-chip);
+    background: var(--border);
+    transition:
+      transform 0.2s ease,
+      background 0.2s ease;
+  }
+
+  .tgl input:checked + .track {
+    border-color: var(--accent);
+  }
+  .tgl input:checked + .track .knob {
+    transform: translateX(100%);
+    background: var(--accent);
+  }
+
+  .tgl input:focus-visible + .track {
+    outline: 1px solid currentColor;
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .track,
+    .knob {
+      transition: none;
+    }
   }
 </style>
