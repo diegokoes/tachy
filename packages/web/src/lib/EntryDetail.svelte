@@ -11,6 +11,7 @@
   import ScopeCrumb from "./library/ScopeCrumb.svelte";
   import { isCurator, canCurateScope } from "./session.svelte";
   import { pushScope } from "./keys.svelte";
+  import { setTopActions } from "./subnav.svelte";
   import { vimState } from "./vim.svelte";
   import { Badge, Button, Chip, Icon } from "./tui";
 
@@ -51,16 +52,27 @@
     s === "approved" ? "ok" : s === "draft" ? "accent" : s === "rejected" ? "danger" : s === "deprecated" ? "warn" : "muted";
 
   /** Reading the entry, backspace goes back. Not bound while editing, where it
-      would sit one stray keystroke away from discarding a form. */
+      would sit one stray keystroke away from discarding a form.
+
+      Hidden: back is a labelled button in the carved row now, so printing it
+      in the hint rule as well says the same thing twice. */
   $effect(() => {
     if (editing || !entry) return;
     return pushScope([
-      { key: "backspace", label: "back", run: onClose },
+      { key: "backspace", label: "", hidden: true, run: onClose },
       // esc is the vim reflex for "back out of here"; backspace stays either way.
       ...(vimState.enabled
         ? [{ key: "esc", label: "", hidden: true, run: onClose }]
         : []),
     ]);
+  });
+
+  /* The carved row, while reading. Editing hands it to the form instead, which
+     claims it on mount; the disposer's identity check keeps the handover from
+     wiping whichever of the two lands second. */
+  $effect(() => {
+    if (editing || !entry) return;
+    return setTopActions(readActions);
   });
 
   async function load() {
@@ -159,6 +171,22 @@
   {/if}
 {/snippet}
 
+<!-- Rendered by App into the carved row beside the subnav, not here. -->
+{#snippet readActions()}
+  <Button icon="back" title="back (backspace)" onclick={onClose}>back</Button>
+  {#if canEdit}
+    <Button
+      tone="info"
+      icon="edit"
+      title="edit"
+      onclick={() => {
+        editing = true;
+        mutateError = null;
+      }}>edit</Button
+    >
+  {/if}
+{/snippet}
+
 <div class="detail">
   {#if error}<p class="error">{error}</p>{/if}
   {#if entry}
@@ -185,21 +213,7 @@
         onCancel={() => { editing = false; mutateError = null; }}
       />
     {:else}
-      <div class="topbar">
-        <ScopeCrumb area={entry.product_area} />
-        <Button variant="ghost" square icon="back" aria-label="back" title="back (backspace)" onclick={onClose} />
-        {#if canEdit}
-          <Button
-            variant="ghost"
-            square
-            tone="info"
-            icon="edit"
-            aria-label="edit"
-            title="edit"
-            onclick={() => { editing = true; mutateError = null; }}
-          />
-        {/if}
-      </div>
+      <ScopeCrumb area={entry.product_area} />
 
       <div class="content">
         <h2>{entry.issue_summary ?? "(no summary)"}</h2>
@@ -286,7 +300,7 @@
             <span class="gap"></span>
             {#if entry.status !== "rejected"}
               <Button
-                variant="ghost" square tone="danger" icon="cancel"
+                variant="ghost" square tone="danger" icon="reject"
                 aria-label="reject" title="reject"
                 disabled={mutating}
                 onclick={() => patch({ status: "rejected" })}
@@ -450,22 +464,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--pad-1);
-  }
-
-  .topbar {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: var(--pad-1);
-    padding: var(--pad-2) 0;
-    background: var(--panel-solid);
-  }
-  /* The crumb takes the slack, pushing the actions to the right edge. */
-  .topbar :global(nav.crumb) {
-    margin-right: auto;
   }
 
   .meta {

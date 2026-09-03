@@ -9,6 +9,7 @@
   import AsciiSelect from "../AsciiSelect.svelte";
   import { t } from "../terms";
   import { csv } from "../admin/shared";
+  import { setTopActions } from "../subnav.svelte";
   import { componentOptions } from "../catalog";
   import Icon from "../tui/Icon.svelte";
 
@@ -170,6 +171,8 @@
     return Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined));
   }
 
+  $effect(() => setTopActions(formActions));
+
   function submit(e: SubmitEvent) {
     e.preventDefault();
     const payload = buildPayload();
@@ -204,32 +207,23 @@
   }
 </script>
 
-<form class="entry-form" onsubmit={submit}>
-  <div class="formbar">
-    <span class="side"></span>
-    <span class="mid">{#if extra}{@render extra()}{/if}</span>
-    <span class="side end">
-      <Button
-        variant="ghost"
-        square
-        icon="cancel"
-        aria-label="cancel"
-        title="cancel"
-        disabled={saving}
-        onclick={onCancel}
-      />
-      <Button
-        variant="ghost"
-        tone="accent"
-        square
-        icon="save"
-        type="submit"
-        aria-label={SUBMIT_LABEL}
-        title={SUBMIT_LABEL}
-        busy={saving}
-      />
-    </span>
-  </div>
+<!-- Rendered by App into the carved row beside the subnav, not here. The save
+     button is outside the <form> in the DOM, so it carries `form` — that keeps
+     native required-field validation, which calling submit() directly loses. -->
+{#snippet formActions()}
+  <Button icon="cancel" disabled={saving} onclick={onCancel}>cancel</Button>
+  <Button
+    variant="primary"
+    icon="save"
+    type="submit"
+    form="entry-form"
+    title={SUBMIT_LABEL}
+    busy={saving}>save</Button
+  >
+{/snippet}
+
+<form id="entry-form" class="entry-form" onsubmit={submit}>
+  {#if extra}<div class="formbar">{@render extra()}</div>{/if}
   <label class="wide">issue summary
     <input bind:value={issueSummary} required />
   </label>
@@ -338,29 +332,17 @@
 </form>
 
 <style>
-  /* Three tracks so the middle group stays optically centred whatever the
-     actions on the right weigh. */
+  /* Cancel and save moved to the carved row, so this holds only whatever the
+     caller passes as `extra` — centred, and gone entirely when there is none. */
   .formbar {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: center;
-    gap: var(--pad-2);
-    margin-bottom: var(--pad-3);
-    padding-top: var(--pad-2);
-    padding-bottom: var(--pad-2);
-    background: var(--panel-solid);
-    border-bottom: var(--panel-line);
-  }
-  .formbar .mid,
-  .formbar .side {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: var(--pad-2);
+    margin-bottom: var(--pad-3);
+    padding-bottom: var(--pad-2);
+    border-bottom: var(--panel-line);
   }
-  .formbar .side.end { justify-content: flex-end; }
   .entry-form { display: flex; flex-direction: column; gap: 0.6rem; }
   label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.82rem; color: var(--muted); }
   label.wide { width: 100%; }

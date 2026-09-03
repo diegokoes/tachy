@@ -86,6 +86,9 @@
       items: KINDS,
       active: kind === "new" ? origin : kind,
       onpick: (k) => navigate(k === "all" ? "/library" : `/library/${k}`),
+      // Only over a list. A detail view claims the row for itself, and a
+      // create screen has nothing to create from.
+      actions: listing && isCurator() ? newAction : undefined,
     }),
   );
   /** Which form the create screen shows — in the URL, so it deep-links. */
@@ -512,6 +515,16 @@
   });
 </script>
 
+<!-- Rendered by App into the carved row beside the subnav, not here. -->
+{#snippet newAction()}
+  <Button
+    tone="ok"
+    icon="plus"
+    title="new entry or doc"
+    onclick={() => navigate("/library/new/entry")}>new</Button
+  >
+{/snippet}
+
 {#snippet kindToggle()}
   <span class="toggle">
     <Button
@@ -577,17 +590,6 @@
         }
       }}
     />
-    {#if isCurator()}
-      <Button
-        variant="primary"
-        square
-        tone="ok"
-        icon="plus"
-        title="new entry or doc"
-        aria-label="new entry or doc"
-        onclick={() => navigate("/library/new/entry")}
-      />
-    {/if}
   </div>
 
   <!-- The default row stays deliberately short. Everything else the schema can
@@ -813,10 +815,31 @@
     margin-bottom: var(--pad-3);
   }
 
+  /* Pinned: the filters and the result list scroll under it, so the query that
+     produced them is never off screen. It needs a ground of its own — the rows
+     it pins over are opaque cards, and without one they read through it. */
   .bar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
     display: flex;
     gap: var(--pad-2);
     align-items: center;
+    background: var(--panel-bg);
+    padding-block: var(--pad-2);
+  }
+  /* A sticky box cannot rise above its containing block, and `main`'s content
+     box starts one --main-air below the scrollport. So the bar pins that far
+     down and rows scroll up through the strip above it. It carries its own
+     ground up over that strip; `main`'s overflow clips whatever overshoots. */
+  .bar::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: var(--main-air, 0.65rem);
+    background: var(--panel-bg);
   }
   .search {
     flex: 1;
