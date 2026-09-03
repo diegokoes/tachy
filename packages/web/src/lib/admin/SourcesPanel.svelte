@@ -9,8 +9,8 @@
     Button,
     Chip,
     CrudTable,
-    ErrorMark,
     Field,
+    Icon,
     Modal,
     Note,
     Select,
@@ -240,7 +240,7 @@
         value: k,
         label: SPEC[k].label,
       })),
-      value: (r) => SPEC[r.source_type as SourceType]?.label ?? r.source_type,
+      cell: typeCell,
     },
     {
       key: "slug",
@@ -290,7 +290,8 @@
       width: "8rem",
       edit: "checkbox",
       info: "Strips PII out of this source's payloads before the model sees them.",
-      value: (r) => (redactionOn(r) ? "on" : "off"),
+      value: (r) => redactionOn(r),
+      cell: lockCell,
     },
   ]);
 
@@ -318,6 +319,19 @@
     await test(slug);
   }
 
+  /** Which connection's probe result is on screen. */
+  let probeOpen = $state<string | null>(null);
+
+  /**
+   * The result goes to a dialog, not to the row's drawer. A probe is something
+   * you asked for and are waiting on, and burying the answer — a failure most
+   * of all — behind an expander and a warning triangle's tooltip meant going
+   * looking for what you had just triggered. The drawer still keeps the last
+   * result, so it stays readable after the dialog is dismissed.
+   *
+   * `save` calls this too, so writing a connection's credentials shows you
+   * straight away whether they work and what they can see.
+   */
   async function test(slug: string) {
     testing = slug;
     try {
@@ -329,7 +343,7 @@
       probes[slug] = { ok: false, error: errText(e) };
     } finally {
       testing = null;
-      expanded = new Set([...expanded, slug]);
+      probeOpen = slug;
     }
   }
 
@@ -341,6 +355,28 @@
   });
 </script>
 
+{#snippet typeCell(r: Connection)}
+  {SPEC[r.source_type as SourceType]?.label ?? r.source_type}
+{/snippet}
+
+{#snippet lockCell(r: Connection)}
+  {@const on = redactionOn(r)}
+  <span
+    class="lock"
+    class:on
+    title={on
+      ? "PII is scrubbed from this source before the model sees it"
+      : "this source's payloads reach the model unscrubbed"}
+  >
+    <Icon
+      name={on ? "lockOn" : "lockOff"}
+      size="1em"
+      weight={7}
+      label={on ? "redaction on" : "redaction off"}
+    />
+  </span>
+{/snippet}
+
 {#snippet tokenCell(r: Connection)}
   <Badge tone={r.token_source ? "ok" : "warn"}>{r.token_source ?? "unset"}</Badge
   >
@@ -349,9 +385,9 @@
 {#snippet probeRow(r: Connection)}
   {@const probe = probes[r.slug]}
   {#if !probe}
-    <p class="dim">Not tested yet — hit the probe icon on this row.</p>
+    <p class="dim">Not tested yet — hit <em>test</em> on this row.</p>
   {:else if !probe.ok}
-    <ErrorMark message={probe.error ?? "failed"} label="connection test" />
+    <Note tone="danger">{probe.error ?? "failed"}</Note>
   {:else}
     <p class="ok-text">
       ✓ connected{probe.identity ? ` as ${probe.identity}` : ""}
@@ -391,13 +427,12 @@
 {#snippet testAction(r: Connection)}
   <Button
     variant="ghost"
-    square
+    size="sm"
     icon="test"
     title="test connection"
-    aria-label="test connection"
     busy={testing === r.slug}
-    onclick={() => test(r.slug)}
-  />
+    onclick={() => test(r.slug)}>test</Button
+  >
 {/snippet}
 
 <CrudTable
@@ -429,6 +464,49 @@
       delete probes[row.slug];
     })}
 />
+
+{#if probeOpen}
+  {@const slug = probeOpen}
+  {@const probe = probes[slug]}
+  {@const type = connections.data.find((c) => c.slug === slug)
+    ?.source_type as SourceType | undefined}
+  <Modal
+    title={`connection test — ${slug}`}
+    width="38rem"
+    onCancel={() => (probeOpen = null)}
+  >
+    {#if !probe}
+      <p class="dim">no result</p>
+    {:else if !probe.ok}
+      <Note tone="danger">{probe.error ?? "failed"}</Note>
+    {:else}
+      <Note tone="ok">
+        connected{probe.identity ? ` as ${probe.identity}` : ""}
+      </Note>
+      {#if probe.groupsNote}
+        <Note tone="warn">
+          Can't list {(type && SPEC[type]?.groupLabel) ?? "group"}s — type the
+          key in yourself when registering.
+          <span class="reason">{probe.groupsNote}</span>
+        </Note>
+      {/if}
+      {#if probe.groups?.length}
+        <p class="dim">
+          {(type && SPEC[type]?.groupLabel) ?? "group"}s this token can see.
+          The key is what a project map is written against — close this and
+          click one in the row's drawer to register it.
+        </p>
+        <ul class="groups">
+          {#each probe.groups as g (g.key)}
+            <li><code>{g.key}</code><span>{g.name}</span></li>
+          {/each}
+        </ul>
+      {:else if !probe.groupsNote}
+        <p class="dim">This token can see no groups.</p>
+      {/if}
+    {/if}
+  </Modal>
+{/if}
 
 {#if claim}
   {@const c = claim}
@@ -500,6 +578,15 @@
     margin: 0;
     color: var(--ok);
   }
+  /* Locked is the safe state, so it wears the ok colour; open is a fact about
+     this connection, not a fault, so it stays muted rather than red. */
+  .lock {
+    display: inline-flex;
+    color: var(--muted);
+  }
+  .lock.on {
+    color: var(--ok);
+  }
   .dim {
     margin: 0 0 var(--pad-2);
     color: var(--muted);
@@ -508,6 +595,33 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--pad-1);
+  }
+  /* Keys stay selectable text rather than chips — they get pasted into a
+     project map, so they have to be copyable. */
+  .groups {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 18rem;
+    overflow: auto;
+    font-size: var(--fs-sm);
+  }
+  .groups li {
+    display: flex;
+    gap: var(--pad-3);
+    align-items: baseline;
+    padding: var(--pad-1) 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  }
+  .groups code {
+    font-family: var(--font-mono);
+    user-select: all;
+  }
+  .groups span {
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .reason {
     opacity: 0.65;

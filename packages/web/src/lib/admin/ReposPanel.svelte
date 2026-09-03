@@ -436,14 +436,13 @@
   {#if canEditRepo(r)}
     <Button
       variant="ghost"
-      square
+      size="sm"
       icon="index"
       title="reindex"
-      aria-label="reindex"
       busy={indexing === r.slug}
       disabled={r.index_status === "cloning" || r.index_status === "indexing"}
-      onclick={() => reindex(r)}
-    />
+      onclick={() => reindex(r)}>index</Button
+    >
   {/if}
 {/snippet}
 
