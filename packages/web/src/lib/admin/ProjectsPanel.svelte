@@ -10,8 +10,11 @@
     Checkbox,
     Chip,
     CrudTable,
+    FilterBar,
     Field,
+    GroupHead,
     Note,
+
     Select,
     type Column,
     type Draft,
@@ -28,6 +31,7 @@
     type SourceProject,
     type Team,
   } from "./shared";
+  import { claimTopAction } from "./topAction.svelte";
 
   type Found = { key: string; name: string };
   type Wiki = { identifier: string; name: string; type?: string };
@@ -337,6 +341,24 @@
   );
 
   onMount(reload);
+
+  let filter = $state("");
+  const filtered = $derived.by(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return projects.data;
+    return projects.data.filter((p) =>
+      [
+      p.external_key ?? "",
+      p.name ?? "",
+      p.source_slug ?? "",
+      p.product_slug ?? "",
+      p.team_slug ?? "",
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    );
+  });
 </script>
 
 {#snippet roleCell(p: SourceProject)}
@@ -507,9 +529,18 @@
 
 {#if error}<Note tone="danger">{error}</Note>{/if}
 
+<FilterBar
+  bind:value={filter}
+  shown={filtered.length}
+  total={projects.data.length}
+  placeholder="filter projects…"
+  label="filter projects"
+/>
+
 <CrudTable
+  hoist={claimTopAction}
   {columns}
-  rows={projects.data}
+  rows={filtered}
   rowKey={(p) => p.id}
   loading={projects.loading}
   error={projects.error}
@@ -543,7 +574,7 @@
 />
 
 <div class="coverage">
-  <p class="ch">coverage</p>
+  <GroupHead label="coverage" />
   <ul class="gaps">
     {#if gaps.unregistered.length}
       <li>
@@ -643,12 +674,6 @@
 
   .coverage {
     margin-top: var(--pad-4);
-  }
-  .ch {
-    margin: 0 0 var(--pad-2);
-    font-size: var(--fs-xs);
-    letter-spacing: var(--label-spacing);
-    color: var(--muted);
   }
   .gaps {
     list-style: none;

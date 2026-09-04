@@ -8,6 +8,7 @@
   import { slugify, uniqueSlug } from "../slug";
   import SlugRename from "./SlugRename.svelte";
   import { INFO, type Product, type Team } from "./shared";
+  import { claimTopAction } from "./topAction.svelte";
 
   const teams = createResource(() => api.get<Team[]>("/teams"), []);
   const products = createResource(() => api.get<Product[]>("/products"), []);
@@ -49,10 +50,10 @@
     await Promise.all([teams.reload(), products.reload()]);
   }
 
-  onMount(reloadBoth);
-</script>
+  onMount(reloadBoth);</script>
 
 <CrudTable
+  hoist={claimTopAction}
   {columns}
   rows={teams.data}
   rowKey={(r) => r.slug}

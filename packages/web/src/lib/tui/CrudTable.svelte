@@ -35,6 +35,7 @@
     extraActions,
     rowClass,
     onform,
+    hoist,
   }: {
     columns: Column<T>[];
     rows: T[];
@@ -63,7 +64,21 @@
     rowClass?: (row: T) => string | undefined;
     /** Fires as the record form opens and closes, for state `formExtra` needs. */
     onform?: (f: { mode: "create" | "edit"; row: T | null } | null) => void;
+    /**
+     * Offers the add action to whoever is laying out the page, which then
+     * draws it somewhere with more standing than a bar under the table. Given
+     * one, the bar goes away rather than showing the same button twice.
+     */
+    hoist?: (a: { label: string; run: () => void } | null) => void;
   } = $props();
+
+  $effect(() => {
+    if (!hoist) return;
+    const offer =
+      oncreate && canCreate ? { label: addLabel, run: startAdd } : null;
+    hoist(offer);
+    return () => hoist(null);
+  });
 
   /* Create and edit are the same form; only the commit differs. */
   let form = $state<{ mode: "create" | "edit"; row: T | null } | null>(null);
@@ -186,7 +201,7 @@
   actions={onsave || ondelete || extraActions ? actions : undefined}
 />
 
-{#if oncreate && canCreate}
+{#if oncreate && canCreate && !hoist}
   <div class="addbar">
     <Button variant="ghost" tone="ok" size="sm" icon="plus" onclick={startAdd}
       >{addLabel}</Button

@@ -8,6 +8,7 @@
     Button,
     Chip,
     CrudTable,
+    FilterBar,
     Note,
     Select,
     type Column,
@@ -21,6 +22,7 @@
     type Customer,
     type Product,
   } from "./shared";
+  import { claimTopAction } from "./topAction.svelte";
 
   type CustomerUnit = {
     id: string;
@@ -355,6 +357,23 @@
   onMount(() => {
     customers.reload();
     products.reload();
+  });
+
+  let filter = $state("");
+  const filtered = $derived.by(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return customers.data;
+    return customers.data.filter((c) =>
+      [
+      c.slug ?? "",
+      c.name ?? "",
+      (c.aliases ?? []).join(" "),
+      (c.email_domains ?? []).join(" "),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    );
   });
 </script>
 
@@ -699,9 +718,18 @@
 
 {#if error}<Note tone="danger">{error}</Note>{/if}
 
+<FilterBar
+  bind:value={filter}
+  shown={filtered.length}
+  total={customers.data.length}
+  placeholder="filter customers…"
+  label="filter customers"
+/>
+
 <CrudTable
+  hoist={claimTopAction}
   {columns}
-  rows={customers.data}
+  rows={filtered}
   rowKey={(r) => r.slug}
   expand={detail}
   {expanded}

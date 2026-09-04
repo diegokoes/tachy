@@ -6,6 +6,7 @@
   import { slugify } from "../slug";
   import SlugRename from "./SlugRename.svelte";
   import { INFO, type Pattern } from "./shared";
+  import { claimTopAction } from "./topAction.svelte";
 
   const patterns = createResource(
     () => api.get<Pattern[]>("/resolution-patterns"),
@@ -34,10 +35,10 @@
     },
   ];
 
-  onMount(patterns.reload);
-</script>
+  onMount(patterns.reload);</script>
 
 <CrudTable
+  hoist={claimTopAction}
   {columns}
   rows={patterns.data}
   rowKey={(r) => r.slug}

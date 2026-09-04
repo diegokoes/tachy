@@ -8,6 +8,8 @@ export { float, type FloatOptions } from "./float";
 export { default as Scrim } from "./Scrim.svelte";
 export { default as Subject } from "./Subject.svelte";
 export { default as Tabs } from "./Tabs.svelte";
+export { default as Rail, type RailItem } from "./Rail.svelte";
+export { default as FilterBar } from "./FilterBar.svelte";
 export { default as Badge } from "./Badge.svelte";
 export { default as Chip } from "./Chip.svelte";
 export { default as Meter } from "./Meter.svelte";

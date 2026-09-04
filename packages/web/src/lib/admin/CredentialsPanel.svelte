@@ -87,8 +87,6 @@
 </script>
 
 <div class="cred-panel">
-  <h4>Shared credentials</h4>
-
   {#if error}<p class="error">{error}</p>{/if}
 
   <div class="scope-row">
@@ -125,7 +123,6 @@
 
 <style>
   .cred-panel { display: flex; flex-direction: column; gap: 0.75rem; }
-  h4 { margin: 0; }
   .muted { color: var(--muted); font-size: 0.9rem; margin: 0; }
   .error { color: var(--danger); margin: 0; }
   .scope-row { display: flex; gap: 0.6rem; align-items: center; }

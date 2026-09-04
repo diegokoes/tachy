@@ -53,6 +53,7 @@ export type {
   MembershipRow,
 } from "./access";
 export { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from "./access";
+export { userCensus } from "./access";
 export {
   AGENT_EFFORTS,
   AGENT_PROVIDERS,
@@ -305,6 +306,7 @@ export {
   setObservedVersion,
   getCustomerName,
   getCustomerSlug,
+  catalogCensus,
 } from "./catalog";
 export type {
   CustomerInput,
@@ -363,6 +365,7 @@ export {
   listSourceConnections,
   addSourceConnection,
   deleteSourceConnection,
+  sourceCensus,
 } from "./sources";
 export type { SourceConnectionInput } from "./sources";
 export {

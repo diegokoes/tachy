@@ -11,6 +11,7 @@
     Checkbox,
     Chip,
     CrudTable,
+    FilterBar,
     ErrorMark,
     Field,
     Modal,
@@ -28,6 +29,7 @@
     type Repo,
     type SourceProject,
   } from "./shared";
+  import { claimTopAction } from "./topAction.svelte";
 
   type FoundRepo = { name: string; url: string; default_branch: string };
 
@@ -398,6 +400,24 @@
 
   onDestroy(() => poll && clearInterval(poll));
   onMount(reload);
+
+  let filter = $state("");
+  const filtered = $derived.by(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return repos.data;
+    return repos.data.filter((r) =>
+      [
+      r.slug ?? "",
+      r.url ?? "",
+      r.product_slug ?? "",
+      r.component_slug ?? "",
+      r.project_key ?? "",
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    );
+  });
 </script>
 
 {#snippet projectCell(r: Repo)}
@@ -504,9 +524,18 @@
   </div>
 {/if}
 
+<FilterBar
+  bind:value={filter}
+  shown={filtered.length}
+  total={repos.data.length}
+  placeholder="filter repos…"
+  label="filter repositories"
+/>
+
 <CrudTable
+  hoist={claimTopAction}
   {columns}
-  rows={repos.data}
+  rows={filtered}
   rowKey={(r) => r.slug}
   loading={repos.loading}
   error={repos.error}

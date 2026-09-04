@@ -28,6 +28,7 @@
     type SourceProject,
     type Team,
   } from "./shared";
+  import { claimTopAction } from "./topAction.svelte";
 
   type SourceType = "freshdesk" | "azure-devops" | "github";
   type Probe = {
@@ -348,8 +349,7 @@
     projects.reload();
     products.reload();
     teams.reload();
-  });
-</script>
+  });</script>
 
 {#snippet typeCell(r: Connection)}
   {SPEC[r.source_type as SourceType]?.label ?? r.source_type}
@@ -432,6 +432,7 @@
 {/snippet}
 
 <CrudTable
+  hoist={claimTopAction}
   {columns}
   rows={connections.data}
   rowKey={(r) => r.slug}

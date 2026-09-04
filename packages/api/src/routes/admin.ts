@@ -33,6 +33,10 @@ import {
   updateCustomer,
   deleteCustomer,
   listTeams,
+  catalogCensus,
+  userCensus,
+  sourceCensus,
+  repoCensus,
   addTeam,
   updateTeam,
   deleteTeam,
@@ -195,6 +199,52 @@ const labelPatchSchema = z.object({ description: z.string().nullable() });
 const patternPatchSchema = z.object({ description: z.string() });
 
 export const admin = new Hono()
+
+  /**
+   * The admin index's counts, in one request rather than one per section.
+   * Composed here from each domain's own census: a count of teams belongs to
+   * catalog and a count of repos to code, and nothing in core reaches across
+   * to another domain's tables to produce this.
+   */
+  .get("/overview", async (c) => {
+    const ctx = await callerScope(c);
+    const [catalog, users, sources, repos, conns] = await Promise.all([
+      catalogCensus(),
+      userCensus(),
+      sourceCensus(),
+      repoCensus(),
+      listSourceConnections(),
+    ]);
+    /* Through the same resolver the connections list uses, not a join against
+       the vault: a token supplied by the environment is a token, and counting
+       rows would have flagged every one of those as missing. */
+    const untokened = (
+      await Promise.all(
+        conns.map((r) =>
+          tokenSource(r.source_type as string, r.slug as string, ctx),
+        ),
+      )
+    ).filter((s) => s === null).length;
+    return c.json({
+      counts: {
+        sources: sources.connections,
+        projects: sources.projects,
+        repos: repos.repos,
+        teams: catalog.teams,
+        products: catalog.products,
+        components: catalog.components,
+        labels: catalog.labels,
+        patterns: catalog.patterns,
+        customers: catalog.customers,
+        users: users.users,
+      },
+      warn: {
+        sources: untokened,
+        repos: repos.failing,
+        users: users.disabled,
+      },
+    });
+  })
 
   .get("/system", async (c) =>
     c.json({
