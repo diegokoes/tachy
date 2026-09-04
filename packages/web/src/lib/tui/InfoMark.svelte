@@ -52,7 +52,7 @@
     <span
       class="tip"
       role="tooltip"
-      use:float={{ anchor: btn, placement: "above-end", gap: 6 }}
+      use:float={{ anchor: btn, placement: "above-start", gap: 6 }}
       >{@render children()}</span
     >
   {/if}
@@ -92,8 +92,9 @@
   /* Placed by the float action, in viewport coordinates. As an absolutely
      positioned child it was cropped by whatever scrolling body it opened in,
      which is why hovering a mark near the bottom of a dialog showed half a
-     box. The width is in ch so the measure stays readable at any font scale;
-     the action keeps it inside the screen. */
+     box. It grows rightward from the mark, the way the label beside it reads,
+     and the action pulls it back when that would run off the screen. The width
+     is in ch so the measure holds at any font scale. */
   .tip {
     z-index: calc(var(--z-overlay) + 1);
     width: max-content;
