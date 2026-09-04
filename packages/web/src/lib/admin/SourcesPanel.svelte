@@ -44,7 +44,7 @@
     {
       label: string;
       hostLabel: string;
-      hostExample: string;
+      hostShape: string;
       tokenLabel: string;
       tokenInfo: string;
       groupLabel: string;
@@ -54,7 +54,7 @@
     freshdesk: {
       label: "Freshdesk",
       hostLabel: "domain",
-      hostExample: "acme.freshdesk.com",
+      hostShape: "the subdomain and freshdesk.com, not a full URL",
       tokenLabel: "API key",
       tokenInfo:
         "Found under profile, API key. It is per-agent: tickets are read with that agent's permissions.",
@@ -64,7 +64,7 @@
     "azure-devops": {
       label: "Azure DevOps",
       hostLabel: "organization",
-      hostExample: "my-org, or a dev.azure.com URL",
+      hostShape: "the organization on its own, or a dev.azure.com URL",
       tokenLabel: "PAT",
       tokenInfo:
         "An org-scoped personal access token. It reaches every project you have permissions on. Scopes: Work Items (read, or read & write to create tickets), Wiki read, Code read.",
@@ -74,7 +74,7 @@
     github: {
       label: "GitHub",
       hostLabel: "API base URL",
-      hostExample: "https://api.github.com, or an Enterprise /api/v3 URL",
+      hostShape: "https://api.github.com, or an Enterprise /api/v3 URL",
       tokenLabel: "token",
       tokenInfo: "A personal access token with repo and issues read.",
       groupLabel: "repo",
@@ -259,8 +259,8 @@
       label: "host",
       edit: "text",
       required: true,
-      placeholder: (d) => SPEC[typeOf(d)].hostExample,
-      info: (d) => `The ${SPEC[typeOf(d)].hostLabel} this connection talks to.`,
+      info: (d) =>
+        `The ${SPEC[typeOf(d)].hostLabel} this connection talks to: ${SPEC[typeOf(d)].hostShape}.`,
       value: (r) => baseUrlToHost(r.source_type as SourceType, r.base_url),
     },
     {

@@ -8,7 +8,7 @@
   import { slugify, uniqueSlug } from "../slug";
   import SlugRename from "./SlugRename.svelte";
   import ScopeBar from "./ScopeBar.svelte";
-  import { csv, INFO, EXAMPLE } from "./shared";
+  import { csv, INFO } from "./shared";
   import type { Component, Product, Repo } from "./shared";
   import { claimTopAction } from "./topAction.svelte";
 
@@ -100,7 +100,6 @@
       label: "aliases",
       width: "9rem",
       edit: "text",
-      placeholder: EXAMPLE.aliases.component,
       info: INFO.aliases.component,
       value: (r) => (r.aliases ?? []).join(", "),
     },

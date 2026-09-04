@@ -115,7 +115,6 @@
       width: "8rem",
       formOnly: true,
       edit: "text",
-      placeholder: "10+ characters",
       info: "Ten characters or more. Blank leaves sign-in to SSO, or keeps the existing password.",
     },
     {

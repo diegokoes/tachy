@@ -17,7 +17,6 @@
   import {
     csv,
     INFO,
-    EXAMPLE,
     type Component,
     type Customer,
     type Product,
@@ -338,7 +337,6 @@
       key: "email_domains",
       label: "email domains",
       edit: "text",
-      placeholder: EXAMPLE.emailDomains,
       info: INFO.emailDomains,
       value: (r) => (r.email_domains ?? []).join(", "),
     },
@@ -347,7 +345,6 @@
       label: "aliases",
       formOnly: true,
       edit: "text",
-      placeholder: EXAMPLE.aliases.customer,
       info: INFO.aliases.customer,
       value: (r) => (r.aliases ?? []).join(", "),
     },
@@ -416,8 +413,8 @@
         {#if editUnit[r.slug] === u.slug}
           <div class="frow add" style="--depth: {depth}">
             <span class="indent"></span>
-            <input aria-label="unit name" placeholder="TLC191" bind:value={editForm.name} />
-            <input aria-label="unit kind" placeholder="line" bind:value={editForm.kind} />
+            <input aria-label="unit name" placeholder="name" bind:value={editForm.name} />
+            <input aria-label="unit kind" placeholder="kind" bind:value={editForm.kind} />
             <Select
               bind:value={editForm.parent}
               aria-label="inside"
@@ -440,7 +437,7 @@
             />
             <input
               aria-label="unit aliases"
-              placeholder="aliases: line 191, l191"
+              placeholder="aliases"
               title="Other names the site calls it by. These resolve too."
               bind:value={editForm.aliases}
             />
@@ -459,9 +456,9 @@
         </span>
       {/if}
       <div class="frow add">
-        <input aria-label="unit slug" placeholder="tlc191" bind:value={unitForm.slug} />
-        <input aria-label="unit name" placeholder="TLC191" bind:value={unitForm.name} />
-        <input aria-label="unit kind" placeholder="line" list="unit-kinds" bind:value={unitForm.kind} />
+        <input aria-label="unit slug" placeholder="slug" bind:value={unitForm.slug} />
+        <input aria-label="unit name" placeholder="name" bind:value={unitForm.name} />
+        <input aria-label="unit kind" placeholder="kind" list="unit-kinds" bind:value={unitForm.kind} />
         <Select
           bind:value={unitForm.parent}
           aria-label="inside"
@@ -576,7 +573,7 @@
         />
         <input
           aria-label="value"
-          placeholder="4.2.1"
+          placeholder="value"
           bind:value={factForm.value}
           onkeydown={(e) => e.key === "Enter" && addFact(r.slug)}
         />
