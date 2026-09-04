@@ -276,7 +276,7 @@
     flex: 1 1 auto;
     display: flex;
     min-height: 0;
-    padding: var(--pad-3) var(--pad-3) var(--pad-3) var(--pad-4);
+    padding: var(--pad-4) var(--pad-3) var(--pad-4) var(--pad-4);
     gap: var(--pad-2);
   }
   .body {

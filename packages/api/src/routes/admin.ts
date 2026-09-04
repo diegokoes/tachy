@@ -238,10 +238,12 @@ export const admin = new Hono()
         customers: catalog.customers,
         users: users.users,
       },
+      /* Only what is actionable. A disabled user is a normal state; a
+         connection that cannot authenticate and a repo that stopped indexing
+         are not. */
       warn: {
         sources: untokened,
         repos: repos.failing,
-        users: users.disabled,
       },
     });
   })

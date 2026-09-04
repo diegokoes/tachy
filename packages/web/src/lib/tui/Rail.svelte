@@ -116,10 +116,10 @@
   .n.pending {
     opacity: 0.6;
   }
-  .n.warn {
+  .row .n.warn {
     color: var(--warn);
   }
-  .n.danger {
+  .row .n.danger {
     color: var(--danger);
   }
 
