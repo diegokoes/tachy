@@ -7,7 +7,8 @@
   import { CrudTable, type Column } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
   import SlugRename from "./SlugRename.svelte";
-  import { INFO, TIP, type Product, type Team } from "./shared";
+  import { INFO, type Product, type Team } from "./shared";
+  import { claimTopAction } from "./topAction.svelte";
 
   const teams = createResource(() => api.get<Team[]>("/teams"), []);
   const products = createResource(() => api.get<Product[]>("/products"), []);
@@ -38,7 +39,6 @@
       width: "12rem",
       edit: "text",
       required: true,
-      hint: TIP.slug,
       info: INFO.slug,
       derive: (d) => uniqueSlug(slugify(String(d.name ?? "")), slugs),
       action: { label: "rename…", onclick: (r) => (renaming = r) },
@@ -50,10 +50,10 @@
     await Promise.all([teams.reload(), products.reload()]);
   }
 
-  onMount(reloadBoth);
-</script>
+  onMount(reloadBoth);</script>
 
 <CrudTable
+  hoist={claimTopAction}
   {columns}
   rows={teams.data}
   rowKey={(r) => r.slug}
@@ -89,7 +89,7 @@
     title={`rename ${target.slug}`}
     current={target.slug}
     taken={slugs}
-    warning={`Anything that names this ${t("team")} by slug — saved filters, links, agent instructions — stops resolving.`}
+    warning={`Anything that names this ${t("team")} by slug (saved filters, links, agent instructions) stops resolving.`}
     onRename={(slug) => api.patch(`/teams/${target.slug}`, { slug })}
     onDone={() => {
       renaming = null;

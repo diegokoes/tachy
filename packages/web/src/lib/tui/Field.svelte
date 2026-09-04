@@ -4,18 +4,18 @@
 
   let {
     label,
-    hint,
     info,
     error,
     required = false,
     inline = false,
     plain = false,
+    wide = false,
     children,
   }: {
     label?: string;
-    hint?: string;
-    /** The long version. Keep `hint` to a phrase and put the rules here — the
-     *  note line is always in the layout, so prose there inflates the dialog. */
+    /** What the field is for and the rules behind it, behind the info mark.
+     *  There is no second line under the control: prose there inflated every
+     *  dialog it appeared in, and it always said what the mark already says. */
     info?: string;
     error?: string | null;
     required?: boolean;
@@ -23,31 +23,34 @@
     /** Renders as a div, for rows holding a value and its own button rather
      *  than one control — a <label> around a button steals its clicks. */
     plain?: boolean;
+    /** Spans every column of the grid it is laid out in. */
+    wide?: boolean;
     children: Snippet;
   } = $props();
 
-  const note = $derived(error || hint || "");
+  /* Reserved only where an error can actually appear, so showing one cannot
+     shift the rows below it, and every other field keeps its height. */
+  const errable = $derived(error !== undefined);
 </script>
 
-<!-- The note line is ALWAYS in the layout, so showing a validation error can
-     never change the field's height and shift the rows below it. -->
 <svelte:element
   this={plain ? "div" : "label"}
   class="field"
   class:inline
-  class:noted={Boolean(hint || error)}
+  class:wide
+  class:errable
 >
   {#if label}
     <span class="lblrow">
       <span class="lbl"
         >{label}{#if required}<span class="req" aria-hidden="true">*</span>{/if}</span
       >
-      {#if info}<InfoMark label="{label} — more">{info}</InfoMark>{/if}
+      {#if info}<InfoMark label="about {label}">{info}</InfoMark>{/if}
     </span>
   {/if}
   <span class="control">{@render children()}</span>
-  {#if hint || error}
-    <span class="note" class:err={Boolean(error)}>{note}</span>
+  {#if errable}
+    <span class="note">{error ?? ""}</span>
   {/if}
 </svelte:element>
 
@@ -57,6 +60,9 @@
     flex-direction: column;
     gap: var(--pad-1);
     min-width: 0;
+  }
+  .field.wide {
+    grid-column: 1 / -1;
   }
 
   .field.inline {
@@ -109,9 +115,6 @@
     min-height: 1.15rem;
     font-size: var(--fs-xs);
     line-height: 1.15rem;
-    color: var(--muted);
-  }
-  .note.err {
     color: var(--danger);
   }
 </style>

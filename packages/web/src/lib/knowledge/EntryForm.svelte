@@ -300,7 +300,7 @@
       <AsciiSelect bind:value={unitSlug} options={unitOptions}
         disabled={!customerSlug || units.length === 0}
         title={customerSlug
-          ? "which part of their estate — a site or line"
+          ? "which part of their estate: a site or line"
           : `pick a ${t("customer")} first`} />
     </label>
   </div>

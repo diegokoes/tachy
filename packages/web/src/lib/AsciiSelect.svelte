@@ -1,4 +1,7 @@
 <script lang="ts">
+  import Scrollbar from "./Scrollbar.svelte";
+  import { float } from "./tui/float";
+
   type Val = string | number;
   type Opt = { value: Val; label: string; disabled?: boolean };
   type OptIn = Opt | string | number;
@@ -23,6 +26,9 @@
     "aria-label"?: string;
   } = $props();
 
+  /** Below this a filter box costs more room than the scan it saves. */
+  const FILTERABLE = 8;
+
   const opts = $derived(
     options.map((o) =>
       typeof o === "object" ? o : { value: o, label: String(o) },
@@ -30,41 +36,51 @@
   );
 
   let open = $state(false);
-  let cursor = $state(0); 
-  let dropUp = $state(false); 
+  let cursor = $state(0);
+  let query = $state("");
   let root: HTMLDivElement;
+  let trigger = $state<HTMLElement>();
   let listEl: HTMLDivElement | undefined = $state();
+  let scrollEl = $state<HTMLElement>();
+  let queryEl = $state<HTMLInputElement>();
+
+  const filterable = $derived(opts.length > FILTERABLE);
+  const shown = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return opts;
+    return opts.filter((o) => o.label.toLowerCase().includes(q));
+  });
 
   const selectedIndex = $derived(opts.findIndex((o) => o.value === value));
-  const label = $derived(
-    selectedIndex >= 0 ? opts[selectedIndex].label : "",
-  );
+  const label = $derived(selectedIndex >= 0 ? opts[selectedIndex].label : "");
 
   function openPanel() {
     if (disabled) return;
-    cursor = selectedIndex >= 0 ? selectedIndex : 0;
-    const r = root?.getBoundingClientRect();
-    const below = r ? window.innerHeight - r.bottom : Infinity;
-    const est = Math.min(opts.length * 32 + 8, 240);
-    dropUp = !!r && below < est && r.top > below;
+    query = "";
+    cursor = Math.max(
+      0,
+      shown.findIndex((o) => o.value === value),
+    );
     open = true;
   }
   function close() {
     open = false;
+    query = "";
   }
   function choose(i: number) {
-    const o = opts[i];
+    const o = shown[i];
     if (!o || o.disabled) return;
     value = o.value;
     onchange?.(o.value);
     close();
   }
   function step(dir: number) {
-    const n = opts.length;
+    const n = shown.length;
+    if (!n) return;
     let i = cursor;
     for (let k = 0; k < n; k++) {
       i = (i + dir + n) % n;
-      if (!opts[i]?.disabled) break;
+      if (!shown[i]?.disabled) break;
     }
     cursor = i;
   }
@@ -80,18 +96,36 @@
         open ? step(-1) : openPanel();
         break;
       case "Home":
-        if (open) { e.preventDefault(); cursor = 0; if (opts[0]?.disabled) step(1); }
+        if (open) {
+          e.preventDefault();
+          cursor = 0;
+          if (shown[0]?.disabled) step(1);
+        }
         break;
       case "End":
-        if (open) { e.preventDefault(); cursor = opts.length - 1; if (opts[cursor]?.disabled) step(-1); }
+        if (open) {
+          e.preventDefault();
+          cursor = shown.length - 1;
+          if (shown[cursor]?.disabled) step(-1);
+        }
         break;
       case "Enter":
+        e.preventDefault();
+        open ? choose(cursor) : openPanel();
+        break;
       case " ":
+        /* Once a filter box has focus, space is a character. */
+        if (open && filterable) break;
         e.preventDefault();
         open ? choose(cursor) : openPanel();
         break;
       case "Escape":
-        if (open) { e.preventDefault(); close(); }
+        if (open) {
+          e.preventDefault();
+          e.stopPropagation();
+          close();
+          trigger?.focus();
+        }
         break;
       case "Tab":
         close();
@@ -103,6 +137,18 @@
     if (open && root && !root.contains(e.target as Node)) close();
   }
 
+  /* A filtered list is a different list: the cursor has to land back on
+     something that exists, or Enter commits whatever index it was left on. */
+  $effect(() => {
+    query;
+    if (cursor >= shown.length) cursor = Math.max(0, shown.length - 1);
+  });
+
+  $effect(() => {
+    if (!open) return;
+    queryEl?.focus();
+  });
+
   $effect(() => {
     if (!open || !listEl) return;
     const el = listEl.children[cursor] as HTMLElement | undefined;
@@ -112,11 +158,12 @@
 
 <svelte:window onpointerdown={onWindowPointer} />
 
-<div class="asel" class:open class:up={dropUp} bind:this={root}>
+<div class="asel" class:open bind:this={root}>
   <button
     type="button"
     class="trigger"
     class:active
+    bind:this={trigger}
     {title}
     {disabled}
     aria-haspopup="listbox"
@@ -130,29 +177,61 @@
   </button>
 
   {#if open}
-    <div class="panel" role="listbox" bind:this={listEl} tabindex="-1">
-      {#each opts as o, i}
-        <div
-          class="opt"
-          class:cursor={i === cursor}
-          class:selected={o.value === value}
-          class:disabled={o.disabled}
-          role="option"
-          tabindex="-1"
-          aria-selected={o.value === value}
-          onpointerenter={() => (cursor = i)}
-          onpointerdown={(e) => { e.preventDefault(); choose(i); }}
-        >
-          <span class="mark" aria-hidden="true">{o.value === value ? "›" : " "}</span>
-          <span class="txt">{o.label}</span>
+    <div class="panel" use:float={{ anchor: trigger, matchWidth: true }}>
+      {#if filterable}
+        <input
+          class="q"
+          type="text"
+          bind:this={queryEl}
+          bind:value={query}
+          placeholder="filter…"
+          aria-label="filter options"
+          autocomplete="off"
+          onkeydown={onKeydown}
+        />
+      {/if}
+
+      <div class="scroller">
+        <div class="list" role="listbox" bind:this={listEl} tabindex="-1">
+          <div class="rows" bind:this={scrollEl}>
+            {#each shown as o, i (o.value)}
+              <div
+                class="opt"
+                class:cursor={i === cursor}
+                class:selected={o.value === value}
+                class:disabled={o.disabled}
+                role="option"
+                tabindex="-1"
+                aria-selected={o.value === value}
+                onpointerenter={() => (cursor = i)}
+                onpointerdown={(e) => {
+                  e.preventDefault();
+                  choose(i);
+                }}
+              >
+                <span class="mark" aria-hidden="true"
+                  >{o.value === value ? "›" : " "}</span
+                >
+                <span class="txt">{o.label}</span>
+              </div>
+            {/each}
+            {#if !shown.length}
+              <p class="none">no match</p>
+            {/if}
+          </div>
         </div>
-      {/each}
+        <Scrollbar target={scrollEl} />
+      </div>
     </div>
   {/if}
 </div>
 
 <style>
-  .asel { position: relative; display: inline-flex; max-width: 100%; }
+  .asel {
+    position: relative;
+    display: inline-flex;
+    max-width: 100%;
+  }
 
   .trigger {
     display: inline-flex;
@@ -172,15 +251,26 @@
     border-color: var(--accent);
     background: var(--accent-dim);
   }
-  .trigger:hover { border-color: var(--accent); color: var(--text); }
+  .trigger:hover {
+    border-color: var(--accent);
+    color: var(--text);
+  }
   .trigger:focus-visible {
     outline: none;
     border-color: var(--accent);
     box-shadow: inset 0 0 0 1px var(--accent);
   }
-  .trigger:disabled { opacity: 0.5; cursor: default; }
+  .trigger:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
 
-  .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .arrow {
     flex: none;
     font-size: 0.7em;
@@ -188,29 +278,51 @@
     color: var(--accent);
     transition: transform 0.12s;
   }
-  .open .arrow { transform: rotate(180deg); }
+  .open .arrow {
+    transform: rotate(180deg);
+  }
 
+  /* Placed by the float action, in viewport coordinates: as a child of the
+     trigger this list was cropped by whatever dialog body it opened inside. */
   .panel {
-    position: absolute;
-    top: calc(100% + 2px);
-    left: 0;
-  }
-  .up .panel {
-    top: auto;
-    bottom: calc(100% + 2px);
-  }
-  .panel {
-    z-index: 40;
-    min-width: 100%;
+    z-index: calc(var(--z-overlay) + 1);
+    display: flex;
+    flex-direction: column;
     width: max-content;
     max-width: min(90vw, 24rem);
-    max-height: 15rem;
-    overflow-y: auto;
+    overflow: hidden;
     padding: 2px;
     background: var(--panel-bg);
     border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
     border-radius: var(--radius-control);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 4px 14px var(--drop);
+  }
+
+  .q {
+    flex: none;
+    margin-bottom: 2px;
+    border-radius: calc(var(--radius-control) - 2px);
+  }
+
+  .scroller {
+    display: flex;
+    min-height: 0;
+    gap: 2px;
+  }
+  .list {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    min-height: 0;
+  }
+  .rows {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .rows::-webkit-scrollbar {
+    display: none;
   }
 
   .opt {
@@ -222,13 +334,31 @@
     cursor: pointer;
     color: var(--text);
   }
-  .opt .mark { flex: none; width: 0.6em; color: var(--accent); }
-  .opt.selected { color: var(--accent); }
-  .opt.disabled { opacity: 0.4; cursor: default; }
+  .opt .mark {
+    flex: none;
+    width: 0.6em;
+    color: var(--accent);
+  }
+  .opt.selected {
+    color: var(--accent);
+  }
+  .opt.disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
 
   .opt.cursor {
     background: var(--accent);
     color: var(--bg);
   }
-  .opt.cursor .mark { color: var(--bg); }
+  .opt.cursor .mark {
+    color: var(--bg);
+  }
+
+  .none {
+    margin: 0;
+    padding: var(--pad-2) var(--pad-3);
+    font-size: var(--fs-xs);
+    color: var(--muted);
+  }
 </style>

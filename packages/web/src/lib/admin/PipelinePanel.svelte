@@ -2,11 +2,7 @@
   import { onMount } from "svelte";
   import { api } from "../api";
   import { createResource } from "../resource.svelte";
-  import { isGlobalAdmin } from "../session.svelte";
-  import { Badge, Meter, Note, Panel, G, RAMP } from "../tui";
-  import SourcesPanel from "./SourcesPanel.svelte";
-  import ProjectsPanel from "./ProjectsPanel.svelte";
-  import ReposPanel from "./ReposPanel.svelte";
+  import { Badge, Meter, Note, G, RAMP } from "../tui";
   import type { Connection, Repo, SourceProject } from "./shared";
 
   const conns = createResource(
@@ -21,8 +17,6 @@
     () => api.get<{ repos: Repo[] }>("/repos").then((r) => r.repos),
     [],
   );
-
-  const admin = $derived(isGlobalAdmin());
 
   const knowledge = $derived(
     projects.data.filter((p) => p.role === "knowledge"),
@@ -78,89 +72,73 @@
 {#snippet pending()}
   <span class="stat pending" aria-label="loading">{RAMP[0].repeat(12)}</span>
 {/snippet}
-
-<div class="stack">
-<Panel title="pipeline">
-  <ol class="spine">
-    <li>
-      <span class="rank">{G.marker}</span>
-      <span class="name">sources</span>
-      {#if conns.loading}
-        {@render pending()}
-      {:else}
-        <span class="stat">
-          {conns.data.length} connected{byType ? ` · ${byType}` : ""}
-        </span>
-        {#if noToken}
-          <Badge tone="warn">{noToken} without a token</Badge>
-        {/if}
+<ol class="spine">
+  <li>
+    <span class="rank">{G.marker}</span>
+    <span class="name">sources</span>
+    {#if conns.loading}
+      {@render pending()}
+    {:else}
+      <span class="stat">
+        {conns.data.length} connected{byType ? ` · ${byType}` : ""}
+      </span>
+      {#if noToken}
+        <Badge tone="warn">{noToken} without a token</Badge>
       {/if}
-    </li>
-    <li>
-      <span class="rank">{G.marker}</span>
-      <span class="name">projects</span>
-      {#if projects.loading}
-        {@render pending()}
-      {:else}
-        <span class="stat">
-          {projects.data.length} registered · {knowledge.length} knowledge · {trackers}
-          tracker
-        </span>
-        {#if noWiki}<Badge tone="warn">{noWiki} without a wiki</Badge>{/if}
-        {#if !conns.loading && !conns.data.length}
-          <Badge tone="muted">needs a source</Badge>
-        {/if}
+    {/if}
+  </li>
+  <li>
+    <span class="rank">{G.marker}</span>
+    <span class="name">projects</span>
+    {#if projects.loading}
+      {@render pending()}
+    {:else}
+      <span class="stat">
+        {projects.data.length} registered · {knowledge.length} knowledge · {trackers}
+        tracker
+      </span>
+      {#if noWiki}<Badge tone="warn">{noWiki} without a wiki</Badge>{/if}
+      {#if !conns.loading && !conns.data.length}
+        <Badge tone="muted">needs a source</Badge>
       {/if}
-    </li>
-    <li>
-      <span class="rank">{G.marker}</span>
-      <span class="name">repos</span>
-      {#if repos.loading}
-        {@render pending()}
-      {:else}
-        <span class="stat">
-          {#if repos.data.length}
-            <Meter
-              value={ready / repos.data.length}
-              width={8}
-              tone={failing ? "warn" : "ok"}
-              label="indexed"
-            />
-            {ready}/{repos.data.length} indexed · {chunks.toLocaleString()} chunks from {files.toLocaleString()} files{oldest
-              ? ` · oldest ${oldest}`
-              : ""}
-          {:else}
-            none linked
-          {/if}
-        </span>
-        {#if failing}<Badge tone="danger">{failing} failing</Badge>{/if}
-        {#if unmapped}
-          <Badge tone="warn">{unmapped} without a component</Badge>
+    {/if}
+  </li>
+  <li>
+    <span class="rank">{G.marker}</span>
+    <span class="name">repos</span>
+    {#if repos.loading}
+      {@render pending()}
+    {:else}
+      <span class="stat">
+        {#if repos.data.length}
+          <Meter
+            value={ready / repos.data.length}
+            width={8}
+            tone={failing ? "warn" : "ok"}
+            label="indexed"
+          />
+          {ready}/{repos.data.length} indexed · {chunks.toLocaleString()} chunks from {files.toLocaleString()} files{oldest
+            ? ` · oldest ${oldest}`
+            : ""}
+        {:else}
+          none linked
         {/if}
+      </span>
+      {#if failing}<Badge tone="danger">{failing} failing</Badge>{/if}
+      {#if unmapped}
+        <Badge tone="warn">{unmapped} without a component</Badge>
       {/if}
-    </li>
-  </ol>
+    {/if}
+  </li>
+</ol>
 
-  {#if conns.error || projects.error || repos.error}
-    <Note tone="danger"
-      >{conns.error ?? projects.error ?? repos.error}</Note
-    >
-  {/if}
-</Panel>
-
-{#if admin}
-  <Panel title="sources"><SourcesPanel /></Panel>
+{#if conns.error || projects.error || repos.error}
+  <Note tone="danger"
+    >{conns.error ?? projects.error ?? repos.error}</Note
+  >
 {/if}
-<Panel title="projects"><ProjectsPanel /></Panel>
-<Panel title="repos"><ReposPanel /></Panel>
-</div>
 
 <style>
-  .stack {
-    display: flex;
-    flex-direction: column;
-    gap: var(--pad-4);
-  }
   .spine {
     list-style: none;
     margin: 0;

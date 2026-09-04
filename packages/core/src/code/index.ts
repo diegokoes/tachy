@@ -17,6 +17,7 @@ export {
   updateRepoStatus,
   deleteRepo,
   sweepInterruptedIndexes,
+  repoCensus,
 } from "./repos";
 export type { RepoInput, RepoRow, RepoIndexStatus } from "./repos";
 export { indexRepo, backfillCodeEmbeddings } from "./indexer";

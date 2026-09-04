@@ -1,25 +1,61 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import Icon from "./Icon.svelte";
+  import { float } from "./float";
 
   let {
     label = "info",
     children,
   }: { label?: string; children: Snippet } = $props();
+
+  let btn = $state<HTMLElement>();
+  let hovered = $state(false);
+  let focused = $state(false);
+  let pinned = $state(false);
+  const open = $derived(hovered || focused || pinned);
 </script>
 
 <!-- The mark sits inside a <label> in Field, where a bare click would fall
-     through and focus the labelled control. It has no action of its own. -->
+     through and focus the labelled control. The click is its own action here:
+     on touch there is no hover to open it with. -->
 <span class="mark">
   <button
     class="btn"
     type="button"
+    bind:this={btn}
+    onpointerenter={() => (hovered = true)}
+    onpointerleave={() => (hovered = false)}
     aria-label={label}
-    onclick={(e) => e.preventDefault()}
+    aria-expanded={open}
+    onclick={(e) => {
+      e.preventDefault();
+      pinned = !pinned;
+    }}
+    onfocus={() => (focused = true)}
+    onblur={() => {
+      focused = false;
+      pinned = false;
+    }}
+    onkeydown={(e) => {
+      if (e.key === "Escape" && open) {
+        e.preventDefault();
+        e.stopPropagation();
+        pinned = false;
+        focused = false;
+      }
+    }}
   >
     <Icon name="info" size="1em" weight={7} />
   </button>
-  <span class="tip" role="tooltip">{@render children()}</span>
+
+  {#if open}
+    <span
+      class="tip"
+      role="tooltip"
+      use:float={{ anchor: btn, placement: "above-start", gap: 6 }}
+      >{@render children()}</span
+    >
+  {/if}
 </span>
 
 <style>
@@ -53,30 +89,28 @@
     outline-offset: 2px;
   }
 
+  /* Placed by the float action, in viewport coordinates. As an absolutely
+     positioned child it was cropped by whatever scrolling body it opened in,
+     which is why hovering a mark near the bottom of a dialog showed half a
+     box. It grows rightward from the mark, the way the label beside it reads,
+     and the action pulls it back when that would run off the screen. The width
+     is in ch so the measure holds at any font scale. */
   .tip {
-    position: absolute;
-    right: 0;
-    bottom: calc(100% + var(--pad-2));
-    z-index: var(--z-dropdown);
+    z-index: calc(var(--z-overlay) + 1);
     width: max-content;
-    max-width: 28ch;
+    max-width: min(38ch, calc(100vw - 2rem));
+    overflow-y: auto;
     padding: var(--pad-2) var(--pad-3);
     border: var(--panel-line);
     border-radius: var(--radius);
     background: var(--panel-solid);
     box-shadow: 0 2px 8px var(--drop);
     font-size: var(--fs-xs);
+    line-height: 1.5;
     color: var(--text);
     text-align: left;
     white-space: normal;
-    opacity: 0;
-    visibility: hidden;
     pointer-events: none;
-  }
-  .mark:hover .tip,
-  .btn:focus-visible + .tip {
-    opacity: 1;
-    visibility: visible;
   }
 
   @media (prefers-reduced-motion: reduce) {

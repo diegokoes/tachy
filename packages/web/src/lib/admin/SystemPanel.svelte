@@ -7,6 +7,7 @@
   import Icon from "../tui/Icon.svelte";
   import { errText } from "../resource.svelte";
   import { csv, type SystemInfo } from "./shared";
+  import { GroupHead } from "../tui";
 
   let system = $state<SystemInfo | null>(null);
   let loading = $state(true);
@@ -56,14 +57,14 @@
 {#if loading}<p class="muted">Loading…</p>{/if}
 
 {#if system}
-  <h4>Runtime settings</h4>
+  <GroupHead label="runtime settings" />
   <table>
     <thead><tr><th>setting</th><th>value</th>
       <th class="tip" title="db: set here. env: falling back to the environment variable. default: built-in.">source</th>
     </tr></thead>
     <tbody>
       <tr>
-        <td class="tip" title="Engineering/repositories reads product→repository, team→organization and hides customers. Display only — slugs and the agent contract never change.">Deployment profile</td>
+        <td class="tip" title="Engineering/repositories reads product→repository, team→organization and hides customers. Display only: slugs and the agent contract never change.">Deployment profile</td>
         <td>
           <AsciiSelect value={system.settings.deployment_profile.value}
             options={[
@@ -75,7 +76,7 @@
         <td><span class="badge src-{system.settings.deployment_profile.source}">{system.settings.deployment_profile.source}</span></td>
       </tr>
       <tr>
-        <td class="tip" title="Scrubs PII/secrets from everything sent to the LLM — all connections, pasted context and retrieved results. The database keeps raw data.">PII / secret redaction</td>
+        <td class="tip" title="Scrubs PII/secrets from everything sent to the LLM: all connections, pasted context and retrieved results. The database keeps raw data.">PII / secret redaction</td>
         <td>
           <label class="check">
             <Checkbox
@@ -89,7 +90,7 @@
                 size="1em"
                 weight={7}
               />
-              {system.settings.redaction_global.value ? "on — at the LLM boundary" : "off — per-connection opt-in only"}
+              {system.settings.redaction_global.value ? "on, at the LLM boundary" : "off, per-connection opt-in only"}
             </span>
           </label>
         </td>
@@ -149,7 +150,7 @@
     </tbody>
   </table>
 
-  <h4>Environment <span class="muted">(bootstrap + secrets - read-only, set in .env)</span></h4>
+  <GroupHead label="environment (read-only, set in .env)" />
   <table>
     <thead><tr><th>setting</th><th>value</th><th>env var</th></tr></thead>
     <tbody>
