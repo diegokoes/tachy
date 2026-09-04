@@ -188,7 +188,7 @@
 
           <div class="grid">
             <Field label="organization">
-              <input bind:value={orgName} placeholder="Acme" />
+              <input bind:value={orgName} />
             </Field>
             <Field
               label={wt.team}

@@ -226,14 +226,13 @@
   <div class="head">
     <label class="grow">
       title
-      <input bind:value={title} placeholder="Printing subsystem" required />
+      <input bind:value={title} required />
     </label>
     <label>
       slug
       <input
         bind:value={slug}
         oninput={() => (slugTouched = true)}
-        placeholder="printing-subsystem"
         required
       />
     </label>

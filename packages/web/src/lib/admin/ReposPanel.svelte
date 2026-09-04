@@ -328,7 +328,6 @@
       label: "extensions",
       formOnly: true,
       edit: "text",
-      placeholder: "ts, cs, sql",
       info: "Comma-separated. Empty uses the built-in allowlist.",
       value: (r) =>
         (Array.isArray(r.config?.include_extensions)
@@ -341,7 +340,6 @@
       label: "max file KB",
       formOnly: true,
       edit: "text",
-      placeholder: "200",
       info: "Files larger than this are skipped. Empty means 200.",
       value: (r) => r.config?.max_file_kb ?? "",
     },
