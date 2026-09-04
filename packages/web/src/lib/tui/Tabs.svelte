@@ -61,7 +61,16 @@
       class="tab"
       class:on
       aria-current={on ? "page" : undefined}
-      onclick={() => onpick(it.key)}
+      onclick={(e) => {
+        onpick(it.key);
+        // A pointer click (detail > 0) leaves the button focused but not
+        // :focus-visible — until an unrelated later keypress makes Chrome
+        // upgrade that stale focus, stealing the anchored indicator from
+        // whichever tab is actually active. Blurring after a pointer click
+        // avoids that; a keyboard-activated click (detail === 0) keeps focus
+        // so the ring still shows where it legitimately belongs.
+        if (e.detail !== 0) e.currentTarget.blur();
+      }}
       use:jellyPress
     >
       <span class="lbl"
@@ -149,6 +158,8 @@
   }
   .tab:focus-visible {
     outline: none;
+    border-color: transparent;
+    box-shadow: none;
     text-decoration: underline;
     text-underline-offset: 3px;
   }
