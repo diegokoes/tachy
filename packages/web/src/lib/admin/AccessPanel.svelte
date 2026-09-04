@@ -10,10 +10,14 @@
     Chip,
     CrudTable,
     Field,
+    FilterBar,
+    GroupHead,
     Select,
+
     type Column,
   } from "../tui";
   import type { Member, Team, UserRow } from "./shared";
+  import { claimTopAction } from "./topAction.svelte";
 
   type Membership = {
     user_id: string;
@@ -23,7 +27,7 @@
   };
 
   const ROLE_TIP =
-    "app admin: manages users, org structure and system settings. member: uses the app — curation comes from a team role.";
+    "app admin: manages users, org structure and system settings. member: uses the app; curation comes from a team role.";
   const TEAM_ROLE_TIP = `team admin: curates this ${t("team")}'s knowledge, docs, taxonomy and members. member: uses the app.`;
 
   const users = createResource(() => api.get<UserRow[]>("/users"), []);
@@ -89,7 +93,7 @@
       edit: "text",
       required: true,
       editable: () => false,
-      hint: "sign-in identity — cannot change later",
+      info: "The sign-in identity. It cannot be changed once the user exists.",
     },
     { key: "display_name", label: "name", width: "12rem", edit: "text" },
     {
@@ -102,7 +106,6 @@
         { value: "admin", label: "admin" },
       ],
       initial: "member",
-      hint: "org-wide",
       info: ROLE_TIP,
     },
     { key: "teams", label: t("teams"), cell: teamsCell },
@@ -112,8 +115,7 @@
       width: "8rem",
       formOnly: true,
       edit: "text",
-      hint: "10+ characters; blank keeps the current one",
-      info: "Blank leaves sign-in to SSO, or keeps the existing password.",
+      info: "Ten characters or more. Blank leaves sign-in to SSO, or keeps the existing password.",
     },
     {
       key: "disabled",
@@ -121,7 +123,7 @@
       formOnly: true,
       only: "edit",
       edit: "checkbox",
-      hint: "cannot sign in; past activity stays attributed",
+      info: "A disabled user cannot sign in. Their past activity stays attributed to them.",
     },
     { key: "status", label: "status", width: "8rem", cell: statusCell },
   ]);
@@ -130,8 +132,7 @@
     users.reload();
     teams.reload();
     memberships.reload();
-  });
-</script>
+  });</script>
 
 {#snippet teamsCell(u: UserRow)}
   {@const ms = teamsOf(u)}
@@ -163,7 +164,7 @@
 {#snippet rosterEditor(f: { mode: "create" | "edit"; row: UserRow | null })}
   {#if f.row && myTeams.length}
     <div class="roster">
-      <p class="rl">{t("teams")}</p>
+      <GroupHead label={t("teams")} />
       {#each myTeams.filter((tm) => tm.slug in roster) as tm (tm.slug)}
         <div class="rrow">
           <span class="rn">{tm.name}</span>
@@ -210,16 +211,16 @@
   {/if}
 {/snippet}
 
-<div class="bar">
-  <input
-    placeholder="filter by email or name…"
-    aria-label="filter users"
-    bind:value={filter}
-  />
-  <span class="count">{filtered.length} of {users.data.length}</span>
-</div>
+<FilterBar
+  bind:value={filter}
+  shown={filtered.length}
+  total={users.data.length}
+  placeholder="filter by email or name…"
+  label="filter users"
+/>
 
 <CrudTable
+  hoist={claimTopAction}
   {columns}
   rows={filtered}
   rowKey={(u) => u.id}
@@ -255,7 +256,7 @@
         (d.role !== row.role || Boolean(d.disabled) !== row.disabled)
       )
         throw new Error(
-          "that change would lock you out — have another admin make it",
+          "that change would lock you out. Have another admin make it",
         );
       await api.patch(`/users/${row.id}`, {
         display_name: d.display_name || null,
@@ -269,19 +270,6 @@
 />
 
 <style>
-  .bar {
-    display: flex;
-    align-items: center;
-    gap: var(--gap);
-    margin-bottom: var(--pad-3);
-  }
-  .bar input {
-    min-width: 16rem;
-  }
-  .count {
-    font-size: var(--fs-xs);
-    color: var(--muted);
-  }
   .chips {
     display: flex;
     gap: var(--pad-1);
@@ -295,12 +283,6 @@
     margin-top: var(--pad-3);
     padding-top: var(--pad-3);
     border-top: 1px dashed var(--border);
-  }
-  .rl {
-    margin: 0 0 var(--pad-2);
-    font-size: var(--fs-sm);
-    letter-spacing: var(--label-spacing);
-    color: var(--muted);
   }
   .rrow {
     display: flex;

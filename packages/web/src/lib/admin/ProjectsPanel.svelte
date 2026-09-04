@@ -10,15 +10,17 @@
     Checkbox,
     Chip,
     CrudTable,
+    FilterBar,
     Field,
+    GroupHead,
     Note,
+
     Select,
     type Column,
     type Draft,
   } from "../tui";
   import {
     INFO,
-    TIP,
     type AreaRule,
     type Component,
     type Connection,
@@ -29,6 +31,7 @@
     type SourceProject,
     type Team,
   } from "./shared";
+  import { claimTopAction } from "./topAction.svelte";
 
   type Found = { key: string; name: string };
   type Wiki = { identifier: string; name: string; type?: string };
@@ -227,7 +230,6 @@
       edit: "text",
       required: true,
       editable: () => false,
-      hint: TIP.project,
       info: INFO.project,
     },
     {
@@ -235,7 +237,7 @@
       label: "name",
       formOnly: true,
       edit: "text",
-      hint: "how it reads in lists here",
+      info: "How it reads in lists here.",
     },
     {
       key: "role",
@@ -256,14 +258,10 @@
       width: "12rem",
       edit: "select",
       required: true,
-      hint: (d) =>
-        d.role === "tracker"
-          ? `the ${t("team")} raising work items here`
-          : `the ${t("product")} its items ingest into`,
       info: (d) =>
         d.role === "tracker"
-          ? "Nothing is filed under a tracker."
-          : "It can also carry the wiki, repos and area rules.",
+          ? `The ${t("team")} raising work items here. Nothing is filed under a tracker.`
+          : `The ${t("product")} its items ingest into. It can also carry the wiki, repos and area rules.`,
       options: (d) =>
         d.role === "tracker"
           ? myTeams.map((tm) => ({ value: tm.slug, label: tm.name }))
@@ -275,10 +273,9 @@
       label: "customer",
       width: "10rem",
       edit: "select",
-      hint: "only when the project serves one customer",
-      info: "Its items are then theirs by configuration, which beats guessing at the sender's email domain. Leave empty for a project serving many.",
+      info: "Set this only when the project serves one customer. Its items are then theirs by configuration, which beats guessing at the sender's email domain. Leave empty for a project serving many.",
       options: [
-        { value: "", label: "(none — serves many)" },
+        { value: "", label: "(none, serves many)" },
         ...customers.data.map((cu) => ({ value: cu.slug, label: cu.name })),
       ],
     },
@@ -344,6 +341,24 @@
   );
 
   onMount(reload);
+
+  let filter = $state("");
+  const filtered = $derived.by(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return projects.data;
+    return projects.data.filter((p) =>
+      [
+      p.external_key ?? "",
+      p.name ?? "",
+      p.source_slug ?? "",
+      p.product_slug ?? "",
+      p.team_slug ?? "",
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    );
+  });
 </script>
 
 {#snippet roleCell(p: SourceProject)}
@@ -353,7 +368,7 @@
 {#snippet detail(p: SourceProject)}
   {#if p.role === "tracker"}
     <p class="dim">
-      A tracker — nothing is filed under it. Give it a {t("product")} to make it
+      A tracker. Nothing is filed under it. Give it a {t("product")} to make it
       a knowledge project.
     </p>
   {:else}
@@ -391,7 +406,7 @@
             <span class="dim sm">no wikis readable with this token</span>
           {:else if !wikisOf(p).length}
             <span class="dim sm">
-              none registered — tick the ones this {t("product")} should search.
+              none registered. Tick the ones this {t("product")} should search.
             </span>
           {/if}
         {:else}
@@ -412,7 +427,7 @@
             {/each}
           </div>
         {:else}
-          <span class="dim sm">none linked — add them under repos below</span>
+          <span class="dim sm">none linked. Add them under repos below</span>
         {/if}
       </div>
 
@@ -437,7 +452,7 @@
         {/each}
         {#if !(areas[p.id] ?? []).length}
           <span class="dim sm">
-            No rules — items keep whatever component the analysis infers.
+            No rules. Items keep whatever component the analysis infers.
           </span>
         {/if}
 
@@ -484,7 +499,7 @@
   {#if f.mode === "create"}
     {@const slug = String(f.draft.source_slug ?? "")}
     {@const hits = found[slug] ?? []}
-    <Field label="discover" hint="pick a project instead of typing its key">
+    <Field label="discover" info="Pick a project instead of typing its key.">
       <Button
         variant="ghost"
         square
@@ -514,9 +529,18 @@
 
 {#if error}<Note tone="danger">{error}</Note>{/if}
 
+<FilterBar
+  bind:value={filter}
+  shown={filtered.length}
+  total={projects.data.length}
+  placeholder="filter projects…"
+  label="filter projects"
+/>
+
 <CrudTable
+  hoist={claimTopAction}
   {columns}
-  rows={projects.data}
+  rows={filtered}
   rowKey={(p) => p.id}
   loading={projects.loading}
   error={projects.error}
@@ -550,7 +574,7 @@
 />
 
 <div class="coverage">
-  <p class="ch">coverage</p>
+  <GroupHead label="coverage" />
   <ul class="gaps">
     {#if gaps.unregistered.length}
       <li>
@@ -650,12 +674,6 @@
 
   .coverage {
     margin-top: var(--pad-4);
-  }
-  .ch {
-    margin: 0 0 var(--pad-2);
-    font-size: var(--fs-xs);
-    letter-spacing: var(--label-spacing);
-    color: var(--muted);
   }
   .gaps {
     list-style: none;

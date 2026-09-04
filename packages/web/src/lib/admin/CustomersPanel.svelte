@@ -8,6 +8,7 @@
     Button,
     Chip,
     CrudTable,
+    FilterBar,
     Note,
     Select,
     type Column,
@@ -16,11 +17,11 @@
   import {
     csv,
     INFO,
-    TIP,
     type Component,
     type Customer,
     type Product,
   } from "./shared";
+  import { claimTopAction } from "./topAction.svelte";
 
   type CustomerUnit = {
     id: string;
@@ -325,7 +326,6 @@
       width: "12rem",
       edit: "text",
       required: true,
-      hint: TIP.slug,
       info: INFO.slug,
       derive: (d) =>
         uniqueSlug(
@@ -337,7 +337,6 @@
       key: "email_domains",
       label: "email domains",
       edit: "text",
-      hint: TIP.emailDomains,
       info: INFO.emailDomains,
       value: (r) => (r.email_domains ?? []).join(", "),
     },
@@ -346,7 +345,6 @@
       label: "aliases",
       formOnly: true,
       edit: "text",
-      hint: TIP.aliases.customer,
       info: INFO.aliases.customer,
       value: (r) => (r.aliases ?? []).join(", "),
     },
@@ -357,6 +355,23 @@
     customers.reload();
     products.reload();
   });
+
+  let filter = $state("");
+  const filtered = $derived.by(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return customers.data;
+    return customers.data.filter((c) =>
+      [
+      c.slug ?? "",
+      c.name ?? "",
+      (c.aliases ?? []).join(" "),
+      (c.email_domains ?? []).join(" "),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    );
+  });
 </script>
 
 {#snippet detail(r: Customer)}
@@ -365,7 +380,7 @@
     <div class="block wide">
       <span
         class="dim"
-        title="The parts their estate divides into — sites, lines, tenants. A `profile` is a shared template a unit inherits from without being inside it."
+        title="The parts their estate divides into: sites, lines, tenants. A `profile` is a shared template a unit inherits from without being inside it."
         >estate</span
       >
       {#each unitTree(units[r.slug] ?? []) as { u, depth } (u.id)}
@@ -398,8 +413,8 @@
         {#if editUnit[r.slug] === u.slug}
           <div class="frow add" style="--depth: {depth}">
             <span class="indent"></span>
-            <input aria-label="unit name" placeholder="TLC191" bind:value={editForm.name} />
-            <input aria-label="unit kind" placeholder="line" bind:value={editForm.kind} />
+            <input aria-label="unit name" placeholder="name" bind:value={editForm.name} />
+            <input aria-label="unit kind" placeholder="kind" bind:value={editForm.kind} />
             <Select
               bind:value={editForm.parent}
               aria-label="inside"
@@ -422,8 +437,8 @@
             />
             <input
               aria-label="unit aliases"
-              placeholder="aliases: line 191, l191"
-              title="Other names the site calls it by — these resolve too."
+              placeholder="aliases"
+              title="Other names the site calls it by. These resolve too."
               bind:value={editForm.aliases}
             />
             <Button size="sm" variant="primary" busy={busy === r.slug} onclick={() => saveUnit(r.slug)}>
@@ -437,13 +452,13 @@
       {/each}
       {#if !(units[r.slug] ?? []).length}
         <span class="dim sm">
-          Not broken down — every fact below is true of the whole account.
+          Not broken down. Every fact below is true of the whole account.
         </span>
       {/if}
       <div class="frow add">
-        <input aria-label="unit slug" placeholder="tlc191" bind:value={unitForm.slug} />
-        <input aria-label="unit name" placeholder="TLC191" bind:value={unitForm.name} />
-        <input aria-label="unit kind" placeholder="line" list="unit-kinds" bind:value={unitForm.kind} />
+        <input aria-label="unit slug" placeholder="slug" bind:value={unitForm.slug} />
+        <input aria-label="unit name" placeholder="name" bind:value={unitForm.name} />
+        <input aria-label="unit kind" placeholder="kind" list="unit-kinds" bind:value={unitForm.kind} />
         <Select
           bind:value={unitForm.parent}
           aria-label="inside"
@@ -482,7 +497,7 @@
     <div class="block wide">
       <span
         class="dim"
-        title="True of THIS install and nobody else — the version they run, their layout, an integration they depend on. A fact, not a problem and its fix."
+        title="True of THIS install and nobody else: the version they run, their layout, an integration they depend on. A fact, not a problem and its fix."
         >specifics</span
       >
       {#if (units[r.slug] ?? []).length}
@@ -540,7 +555,7 @@
       {/each}
       {#if !(facts[r.slug] ?? []).length}
         <span class="dim sm">
-          Nothing recorded — an answer for them is only as good as what is here.
+          Nothing recorded. An answer for them is only as good as what is here.
         </span>
       {/if}
       {/if}
@@ -558,7 +573,7 @@
         />
         <input
           aria-label="value"
-          placeholder="4.2.1"
+          placeholder="value"
           bind:value={factForm.value}
           onkeydown={(e) => e.key === "Enter" && addFact(r.slug)}
         />
@@ -578,7 +593,7 @@
       <div class="frow add">
         <input
           aria-label="source"
-          placeholder="where this was learned — ticket URL, wiki page, person"
+          placeholder="ticket URL, wiki page, person"
           bind:value={factForm.source}
         />
         <input aria-label="notes" placeholder="notes (optional)" bind:value={factForm.notes} />
@@ -625,7 +640,7 @@
       </datalist>
       {#if kinds.length}
         <span class="dim sm">
-          already in use: {kinds.map((k) => k.kind).join(", ")} — reuse one
+          already in use: {kinds.map((k) => k.kind).join(", ")}. Reuse one
           rather than coining a near-duplicate.
         </span>
       {/if}
@@ -689,7 +704,7 @@
         {/each}
         {#if !(p?.repos ?? []).length && !(p?.projects ?? []).length}
           <span class="dim sm">
-            no repo or project is filed under them — set those on the repo and
+            no repo or project is filed under them. Set those on the repo and
             project rows.
           </span>
         {/if}
@@ -700,9 +715,18 @@
 
 {#if error}<Note tone="danger">{error}</Note>{/if}
 
+<FilterBar
+  bind:value={filter}
+  shown={filtered.length}
+  total={customers.data.length}
+  placeholder="filter customers…"
+  label="filter customers"
+/>
+
 <CrudTable
+  hoist={claimTopAction}
   {columns}
-  rows={customers.data}
+  rows={filtered}
   rowKey={(r) => r.slug}
   expand={detail}
   {expanded}

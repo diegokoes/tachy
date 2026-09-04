@@ -226,14 +226,13 @@
   <div class="head">
     <label class="grow">
       title
-      <input bind:value={title} placeholder="Printing subsystem" required />
+      <input bind:value={title} required />
     </label>
     <label>
       slug
       <input
         bind:value={slug}
         oninput={() => (slugTouched = true)}
-        placeholder="printing-subsystem"
         required
       />
     </label>
@@ -259,7 +258,7 @@
       </div>
     {:else}
       <span class="muted sm">
-        No categories in this wiki yet — the article lands in Uncategorised.
+        No categories in this wiki yet. The article lands in Uncategorised.
       </span>
     {/if}
   </div>

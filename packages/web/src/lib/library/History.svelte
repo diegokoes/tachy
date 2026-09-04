@@ -167,7 +167,7 @@
     </ul>
   {:else}
     <p class="muted">
-      No history recorded — this item predates version tracking. The next edit
+      No history recorded. This item predates version tracking. The next edit
       starts it.
     </p>
   {/if}

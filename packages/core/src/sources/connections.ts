@@ -46,3 +46,13 @@ export async function deleteSourceConnection(slug: string) {
   await sql`delete from source_connections where id = ${conn.id}`;
   return { deleted: true, slug };
 }
+
+/** For the admin index: how much this domain holds. */
+export async function sourceCensus() {
+  const [row] = await sql`
+    select
+      (select count(*)::int from source_connections) as connections,
+      (select count(*)::int from source_projects) as projects
+  `;
+  return row as { connections: number; projects: number };
+}

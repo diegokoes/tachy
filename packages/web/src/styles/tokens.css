@@ -63,6 +63,17 @@
   --edge-hi: rgba(255, 255, 255, 0.22);
   --edge-lo: rgba(0, 0, 0, 0.55);
   --drop: rgba(0, 0, 0, 0.9);
+
+  /* The window's own surface. The wallpaper reads through it, just barely, and
+     dialogs wear it too: a modal is another window, not a different material
+     laid over the app. */
+  --window-bg: color-mix(in srgb, var(--panel-solid) 93%, transparent);
+
+  /* Behind anything modal. The blur is what separates the two planes; ink alone
+     leaves the text underneath legible through the gap and reads as dirt. */
+  --scrim-ink: color-mix(in srgb, #000 48%, transparent);
+  --scrim-soft: color-mix(in srgb, #000 18%, transparent);
+  --scrim-blur: 10px;
 }
 
 :root[data-theme="light"] {
@@ -89,6 +100,10 @@
   --edge-hi: rgba(30, 28, 20, 0.3);
   --edge-lo: rgba(255, 255, 255, 0.8);
   --drop: rgba(30, 28, 20, 0.26);
+
+  --scrim-ink: color-mix(in srgb, #000 22%, transparent);
+  --scrim-soft: color-mix(in srgb, #000 8%, transparent);
+  --scrim-blur: 8px;
 }
 
 /* ── Radius ───────────────────────────────────────────────────────────────
