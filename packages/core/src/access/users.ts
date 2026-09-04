@@ -226,3 +226,14 @@ export async function setTeamMember(
   }
   clearPermissionCache();
 }
+
+/** For the admin index: users, and how many of them cannot sign in. */
+export async function userCensus() {
+  const [row] = await sql`
+    select
+      count(*)::int as users,
+      count(*) filter (where disabled)::int as disabled
+    from users
+  `;
+  return row as { users: number; disabled: number };
+}

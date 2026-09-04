@@ -7,6 +7,7 @@
   import Icon from "../tui/Icon.svelte";
   import { errText } from "../resource.svelte";
   import { csv, type SystemInfo } from "./shared";
+  import { GroupHead } from "../tui";
 
   let system = $state<SystemInfo | null>(null);
   let loading = $state(true);
@@ -56,7 +57,7 @@
 {#if loading}<p class="muted">Loading…</p>{/if}
 
 {#if system}
-  <h4>Runtime settings</h4>
+  <GroupHead label="runtime settings" />
   <table>
     <thead><tr><th>setting</th><th>value</th>
       <th class="tip" title="db: set here. env: falling back to the environment variable. default: built-in.">source</th>
@@ -149,7 +150,7 @@
     </tbody>
   </table>
 
-  <h4>Environment <span class="muted">(bootstrap + secrets - read-only, set in .env)</span></h4>
+  <GroupHead label="environment (read-only, set in .env)" />
   <table>
     <thead><tr><th>setting</th><th>value</th><th>env var</th></tr></thead>
     <tbody>

@@ -4,12 +4,13 @@
   import { createResource } from "../resource.svelte";
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
-  import { Chip, CrudTable, type Column } from "../tui";
+  import { Chip, CrudTable, FilterBar, type Column } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
   import SlugRename from "./SlugRename.svelte";
   import ScopeBar from "./ScopeBar.svelte";
   import { csv, INFO, EXAMPLE } from "./shared";
   import type { Component, Product, Repo } from "./shared";
+  import { claimTopAction } from "./topAction.svelte";
 
   let productSlug = $state("");
   let renaming = $state<Component | null>(null);
@@ -117,6 +118,18 @@
     components.reload();
     repos.reload();
   });
+
+  let filter = $state("");
+  const filtered = $derived.by(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return components.data;
+    return components.data.filter((c) =>
+      [c.slug, c.name, (c.aliases ?? []).join(" ")]
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    );
+  });
 </script>
 
 {#snippet codeCell(c: Component)}
@@ -142,9 +155,18 @@
 />
 
 {#if productSlug}
+  <FilterBar
+    bind:value={filter}
+    shown={filtered.length}
+    total={components.data.length}
+    placeholder="filter components…"
+    label="filter components"
+  />
+
   <CrudTable
+    hoist={claimTopAction}
     {columns}
-    rows={components.data}
+    rows={filtered}
     rowKey={(r) => r.slug}
     loading={components.loading}
     error={components.error}

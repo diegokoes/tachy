@@ -219,3 +219,14 @@ export async function sweepInterruptedIndexes(): Promise<number> {
   `;
   return rows.length;
 }
+
+/** For the admin index: repos, and how many are not answering searches. */
+export async function repoCensus() {
+  const [row] = await sql`
+    select
+      count(*)::int as repos,
+      count(*) filter (where index_status = 'error')::int as failing
+    from repos
+  `;
+  return row as { repos: number; failing: number };
+}

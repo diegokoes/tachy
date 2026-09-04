@@ -8,6 +8,7 @@
   import ScopeBar from "./ScopeBar.svelte";
   import SlugRename from "./SlugRename.svelte";
   import { INFO, type Label, type Product } from "./shared";
+  import { claimTopAction } from "./topAction.svelte";
 
   let product = $state("");
   let renaming = $state<Label | null>(null);
@@ -45,8 +46,7 @@
   $effect(() => {
     void product;
     labels.reload();
-  });
-</script>
+  });</script>
 
 <ScopeBar
   label={t("product")}
@@ -56,6 +56,7 @@
 
 {#if product}
   <CrudTable
+  hoist={claimTopAction}
     {columns}
     rows={labels.data}
     rowKey={(r) => r.slug}
