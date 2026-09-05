@@ -14,6 +14,7 @@ import {
   formatBytes,
   compactForLlm,
   COMPACT_MIN_CHARS,
+  TRANSCRIPT_MARKER,
   type RawMessage,
   type RawWorkItem,
 } from "@tachy/core";
@@ -734,11 +735,63 @@ describe("renderers", () => {
     const stripped = parts
       .map((p) =>
         p.replace(
-          /^<p style="color:#888">\[compacted transcript \d+\/\d+\]<\/p>\n/,
+          /^<p style="color:#888">\[compacted transcript \d+\/\d+\] \[tachy:compacted-transcript\]<\/p>\n/,
           "",
         ),
       )
       .join("\n");
     expect(stripped).toBe(html);
+  });
+});
+
+describe("a split transcript identifies itself", () => {
+  it("marks every part, not just the one carrying the header", () => {
+    const html = Array.from(
+      { length: 400 },
+      (_, i) => `<p>turn ${i} ${"x".repeat(400)}</p>`,
+    ).join("\n");
+    const parts = splitNoteBody(html, 20000);
+    expect(parts.length).toBeGreaterThan(1);
+    for (const part of parts) expect(part).toContain(TRANSCRIPT_MARKER);
+  });
+
+  it("recognises every part it posted back on the next fetch", () => {
+    const long = renderCompactHtml(
+      compactMessages(
+        [
+          msg({
+            externalId: "1",
+            bodyText: Array.from(
+              { length: 300 },
+              (_, i) => `linea ${i} ${"y".repeat(300)}`,
+            ).join("\n\n"),
+          }),
+        ],
+        meta,
+      ),
+    );
+    const parts = splitNoteBody(long, 20000);
+    expect(parts.length).toBeGreaterThan(1);
+
+    // Each part comes back as its own private note. All of them must be
+    // recognised, or the next run compacts its own output and replace_previous
+    // deletes part 1 while orphaning the rest.
+    const again = compactMessages(
+      [
+        msg({ externalId: "1", bodyText: "el problema real" }),
+        ...parts.map((body, i) =>
+          msg({
+            externalId: `note-${i}`,
+            visibility: "private",
+            bodyText: body.replace(/<[^>]+>/g, " "),
+          }),
+        ),
+      ],
+      meta,
+    );
+    expect(again.compaction.dropped.prior_transcript).toBe(parts.length);
+    expect(again.prior_transcript_ids).toEqual(
+      parts.map((_, i) => `note-${i}`),
+    );
   });
 });

@@ -114,29 +114,30 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
     };
   }
 
-  async function listRepoIssues(
+  const PER_PAGE = 100;
+
+  /** One page of one repo — the unit the sync loop advances through. */
+  async function listRepoIssuePage(
     repo: string,
+    page: number,
     opts: ListOptions,
-  ): Promise<RawWorkItem[]> {
+  ): Promise<{ items: RawWorkItem[]; more: boolean }> {
+    const params = new URLSearchParams({
+      state: "all",
+      per_page: String(PER_PAGE),
+      page: String(page),
+      sort: "updated",
+      direction: "asc",
+    });
+    if (opts.updatedSince) params.set("since", opts.updatedSince);
+    const batch = await get(`/repos/${repo}/issues?${params.toString()}`);
+    const arr = Array.isArray(batch) ? batch : [];
     const items: RawWorkItem[] = [];
-    for (let page = 1; ; page++) {
-      const params = new URLSearchParams({
-        state: "all",
-        per_page: "100",
-        page: String(page),
-        sort: "updated",
-        direction: "asc",
-      });
-      if (opts.updatedSince) params.set("since", opts.updatedSince);
-      const batch = await get(`/repos/${repo}/issues?${params.toString()}`);
-      const arr = Array.isArray(batch) ? batch : [];
-      for (const issue of arr) {
-        if (issue.pull_request) continue;
-        items.push(issueToItem(repo, issue, []));
-      }
-      if (arr.length < 100) break;
+    for (const issue of arr) {
+      if (issue.pull_request) continue;
+      items.push(issueToItem(repo, issue, []));
     }
-    return items;
+    return { items, more: arr.length === PER_PAGE };
   }
 
   return {
@@ -193,6 +194,12 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
       return issueToItem(repo, issue, messages);
     },
 
+    /**
+     * One page per call, like the other adapters: this used to walk every page
+     * of every configured repo into one array before returning, so a real org's
+     * backlog was an out-of-memory rather than a slow sync. The cursor is
+     * "<repo index>:<page>" — which repo the walk has reached, and where in it.
+     */
     async listItems(opts: ListOptions) {
       const repos = opts.groupKey ? [opts.groupKey] : configuredRepos;
       if (repos.length === 0) {
@@ -200,10 +207,29 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
           "GitHub sync needs a repo: pass --group=owner/repo or set config.repos on the connection",
         );
       }
-      const items: RawWorkItem[] = [];
-      for (const repo of repos)
-        items.push(...(await listRepoIssues(repo, opts)));
-      return { items };
+      const [at = "0", page = "1"] = (opts.cursor ?? "").split(":");
+      let repoIndex = Number(at);
+      let pageNumber = Number(page);
+      if (!Number.isInteger(repoIndex) || !Number.isInteger(pageNumber))
+        throw badInput(`Invalid GitHub sync cursor '${opts.cursor}'`);
+
+      // An empty page mid-walk is not the end of the sync, only the end of one
+      // repo, so this advances until it has something or has run out of repos.
+      while (repoIndex < repos.length) {
+        const { items, more } = await listRepoIssuePage(
+          repos[repoIndex],
+          pageNumber,
+          opts,
+        );
+        const nextCursor = more
+          ? `${repoIndex}:${pageNumber + 1}`
+          : repoIndex + 1 < repos.length
+            ? `${repoIndex + 1}:1`
+            : undefined;
+        if (items.length || !nextCursor) return { items, nextCursor };
+        [repoIndex, pageNumber] = nextCursor.split(":").map(Number);
+      }
+      return { items: [] };
     },
   };
 };
