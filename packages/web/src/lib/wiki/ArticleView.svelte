@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { createSequence } from "../resource.svelte";
   import { api, ApiError } from "../api";
   import { navigate } from "../router.svelte";
   import { renderMarkdown, markBrokenLinks } from "../markdown";
@@ -37,15 +38,25 @@
     load();
   });
 
+  const current = createSequence();
+
   async function load() {
+    // Navigating between articles used to leave the previous body on screen
+    // until whichever request finished last won, and `links` is shared state
+    // that a slower load would overwrite behind a faster one.
+    const isCurrent = current();
     error = null;
     missing = false;
+    article = null;
     try {
-      article = await api.get<ReferenceRow>(
+      const next = await api.get<ReferenceRow>(
         `/library/wiki/${scope}/articles/${slug}`,
       );
-      await links.load("reference", article.id);
+      if (!isCurrent()) return;
+      article = next;
+      await links.load("reference", next.id);
     } catch (e) {
+      if (!isCurrent()) return;
       if (e instanceof ApiError && e.status === 404) {
         missing = true;
         article = null;
@@ -108,9 +119,11 @@
       </nav>
     {/if}
 
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="body md" onclick={links.onClick}>{@html html}</div>
+    <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
+           focusable wikilink anchors this div delegates to -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
+           wrapper, not an interactive element of its own -->
+    <div class="body md" onclick={links.onClick} onkeydown={links.onKeydown}>{@html html}</div>
 
     {#if article.categories?.length}
       <section class="cats">

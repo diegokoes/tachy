@@ -149,11 +149,15 @@
     }
 
     build();
-    if (reducedMotion()) {
-      draw();
-      return;
-    }
     draw();
+
+    /*
+     * Resize and theme still have to redraw under reduced motion — the mark is
+     * painted to a canvas, so nothing repaints it on its own. Returning here,
+     * as this used to, left those viewers with a wordmark stuck in the previous
+     * theme's colours at the previous size. Only the pointer chase is motion.
+     */
+    const reduced = reducedMotion();
 
     const onMove = (e: PointerEvent) => {
       const b = host.getBoundingClientRect();
@@ -169,8 +173,10 @@
       wake();
     };
 
-    host.addEventListener("pointermove", onMove);
-    host.addEventListener("pointerleave", onLeave);
+    if (!reduced) {
+      host.addEventListener("pointermove", onMove);
+      host.addEventListener("pointerleave", onLeave);
+    }
 
     const ro = new ResizeObserver(() => {
       build();

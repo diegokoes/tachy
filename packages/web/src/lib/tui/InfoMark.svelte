@@ -9,6 +9,9 @@
   }: { label?: string; children: Snippet } = $props();
 
   let btn = $state<HTMLElement>();
+  // The tip carries the field's actual rule, so the button has to point at it:
+  // aria-expanded alone says something opened, not what it says.
+  const tipId = `infomark-${crypto.randomUUID().slice(0, 8)}`;
   let hovered = $state(false);
   let focused = $state(false);
   let pinned = $state(false);
@@ -27,6 +30,7 @@
     onpointerleave={() => (hovered = false)}
     aria-label={label}
     aria-expanded={open}
+    aria-describedby={open ? tipId : undefined}
     onclick={(e) => {
       e.preventDefault();
       pinned = !pinned;
@@ -51,6 +55,7 @@
   {#if open}
     <span
       class="tip"
+      id={tipId}
       role="tooltip"
       use:float={{ anchor: btn, placement: "above-start", gap: 6 }}
       >{@render children()}</span
@@ -96,6 +101,8 @@
      and the action pulls it back when that would run off the screen. The width
      is in ch so the measure holds at any font scale. */
   .tip {
+    /* Not pointer-events: none — a tip long enough to scroll has to be
+       scrollable, and these carry the actual rule for the field beside them. */
     z-index: calc(var(--z-overlay) + 1);
     width: max-content;
     max-width: min(38ch, calc(100vw - 2rem));
@@ -110,7 +117,6 @@
     color: var(--text);
     text-align: left;
     white-space: normal;
-    pointer-events: none;
   }
 
   @media (prefers-reduced-motion: reduce) {

@@ -15,8 +15,16 @@ let claim = $state.raw<TopAction | null>(null);
 
 export const topAction = () => claim;
 
-/** Pass null to give the row back. Safe to call from an $effect teardown. */
-export function claimTopAction(next: TopAction | null) {
-  if (next === null) claim = null;
-  else claim = next;
+/**
+ * Claim the row, and return the disposer that gives it back — the same shape as
+ * setSubnav and setTopActions, and for the same reason. Switching admin sections
+ * registers the incoming panel's claim before the outgoing panel's teardown
+ * runs, so a teardown that clears unconditionally wipes the button that has just
+ * been offered. The identity check is what the `$state.raw` above is for.
+ */
+export function claimTopAction(next: TopAction | null): () => void {
+  claim = next;
+  return () => {
+    if (claim === next) claim = null;
+  };
 }

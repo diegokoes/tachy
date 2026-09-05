@@ -32,7 +32,12 @@
   let password2 = $state("");
   let orgName = $state("");
   let teamName = $state("");
-  let products = $state<{ name: string }[]>([{ name: "" }]);
+  // `id` exists only to key the {#each}: the rows have no identity of their own
+  // until they are named, and splicing one shifts every index after it.
+  let nextProductId = 1;
+  let products = $state<{ id: number; name: string }[]>([
+    { id: nextProductId++, name: "" },
+  ]);
   let redaction = $state(false);
   let agentProvider = $state<AgentProvider>("claude");
   let agentKey = $state("");
@@ -208,7 +213,10 @@
 
           <div class="list">
             <span class="ll">{wt.products}</span>
-            {#each products as p, i}
+            <!-- Keyed: the list is spliced from the middle, and binding by
+                 index into an unkeyed block shifts values under the cursor of
+                 whoever is typing in a later row. -->
+            {#each products as p, i (p.id)}
               <div class="prow">
                 <input
                   bind:value={products[i].name}
@@ -238,7 +246,7 @@
                 title={`add another ${wt.product}`}
                 aria-label={`add another ${wt.product}`}
                 disabled={!teamName.trim()}
-                onclick={() => products.push({ name: "" })}
+                onclick={() => products.push({ id: nextProductId++, name: "" })}
               />
             </div>
           </div>
