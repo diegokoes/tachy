@@ -52,10 +52,12 @@ export {
   columnHeading,
   fieldName,
   columnKeys,
+  ARTIFACT_UTILITIES,
 } from "./exports";
 export type {
   TableCellType,
   TableFormat,
   TableColumn,
   TableOutput,
+  ArtifactUtility,
 } from "./exports";

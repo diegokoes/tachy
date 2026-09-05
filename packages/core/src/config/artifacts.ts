@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ARTIFACT_UTILITIES } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { badInput, forbidden, notFound } from "../infra/errors";
 import { tableOutputSchema } from "../exports/table";
@@ -12,7 +13,7 @@ import {
 
 export const artifactSpecSchema = z
   .object({
-    utilities: z.array(z.string()).optional(),
+    utilities: z.array(z.enum(ARTIFACT_UTILITIES)).optional(),
     output: tableOutputSchema.optional(),
   })
   .strict();

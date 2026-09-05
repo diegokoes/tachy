@@ -426,7 +426,7 @@ export interface KnowledgeListOptions extends KnowledgeFilters {
 }
 
 export async function listKnowledgeEntries(opts: KnowledgeListOptions = {}) {
-  const limit = opts.limit ?? 50;
+  const limit = clampLimit(opts.limit, 50);
   return sql`
     select e.id, e.work_item_id, e.product_id, e.team_id, e.status, e.superseded_by, e.issue_summary,
            e.root_cause, e.resolution, e.resolution_pattern, e.component_id, e.product_area, e.confidence,

@@ -139,7 +139,9 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     },
 
     async getWorkItem(id) {
-      return req(`/_apis/wit/workitems/${id}?$expand=all`);
+      return req(
+        `/_apis/wit/workitems/${encodeURIComponent(String(id))}?$expand=all`,
+      );
     },
 
     async getWorkItemsBatch(ids, fields) {
@@ -167,7 +169,7 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
         });
         if (continuation) params.set("continuationToken", continuation);
         const res = await req(
-          `${proj(project)}/_apis/wit/workItems/${id}/comments?${params.toString()}`,
+          `${proj(project)}/_apis/wit/workItems/${encodeURIComponent(String(id))}/comments?${params.toString()}`,
         );
         comments.push(...(res.comments ?? []));
         continuation = res.continuationToken || undefined;
@@ -201,13 +203,13 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
 
     async getPullRequest(project, repoId, prId) {
       return req(
-        `${proj(project)}/_apis/git/repositories/${repoId}/pullrequests/${prId}`,
+        `${proj(project)}/_apis/git/repositories/${encodeURIComponent(repoId)}/pullrequests/${encodeURIComponent(String(prId))}`,
       );
     },
 
     async getCommit(project, repoId, sha) {
       return req(
-        `${proj(project)}/_apis/git/repositories/${repoId}/commits/${sha}`,
+        `${proj(project)}/_apis/git/repositories/${encodeURIComponent(repoId)}/commits/${encodeURIComponent(sha)}`,
       );
     },
 

@@ -100,8 +100,31 @@ async function indexRepoCmd(slug: string) {
   );
 }
 
+/**
+ * The connection string carries the password, and argv is world-readable via
+ * /proc — so it travels in the child's environment instead, and is never printed
+ * back. `redactedDbUrl` is what a prompt or a log line gets.
+ */
+function pgEnv(): NodeJS.ProcessEnv {
+  const u = new URL(env.databaseUrl);
+  const e = { ...process.env };
+  e.PGHOST = u.hostname;
+  if (u.port) e.PGPORT = u.port;
+  if (u.username) e.PGUSER = decodeURIComponent(u.username);
+  if (u.password) e.PGPASSWORD = decodeURIComponent(u.password);
+  const db = u.pathname.replace(/^\//, "");
+  if (db) e.PGDATABASE = db;
+  return e;
+}
+
+function redactedDbUrl(): string {
+  const u = new URL(env.databaseUrl);
+  if (u.password) u.password = "***";
+  return u.toString();
+}
+
 function runPg(bin: string, args: string[]) {
-  const res = spawnSync(bin, args, { stdio: "inherit" });
+  const res = spawnSync(bin, args, { stdio: "inherit", env: pgEnv() });
   if (res.error && (res.error as NodeJS.ErrnoException).code === "ENOENT") {
     throw new Error(
       `${bin} not found on PATH. Install the PostgreSQL client tools to use this command.`,
@@ -116,7 +139,7 @@ function backup(opts: { out?: string }) {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19);
   const file = join(dir, `tachy-${stamp}.dump`);
-  runPg("pg_dump", ["-Fc", "-d", env.databaseUrl, "-f", file]);
+  runPg("pg_dump", ["-Fc", "-f", file]);
   console.log(`wrote ${file}`);
 }
 
@@ -129,7 +152,7 @@ async function restore(opts: { file?: string; yes?: boolean }) {
       output: process.stdout,
     });
     const ans = await rl.question(
-      `This OVERWRITES the database at ${env.databaseUrl}. Continue? [y/N] `,
+      `This OVERWRITES the database at ${redactedDbUrl()}. Continue? [y/N] `,
     );
     rl.close();
     if (ans.trim().toLowerCase() !== "y") return console.log("aborted");
@@ -138,7 +161,7 @@ async function restore(opts: { file?: string; yes?: boolean }) {
     "--clean",
     "--if-exists",
     "-d",
-    env.databaseUrl,
+    pgEnv().PGDATABASE!,
     opts.file,
   ]);
   console.log("restore complete");

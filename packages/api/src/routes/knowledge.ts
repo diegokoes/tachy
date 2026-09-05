@@ -32,7 +32,12 @@ import {
   runModeSchema,
 } from "@tachy/core";
 import type { EntryScope, RunInput } from "@tachy/core";
-import { assertScopeEditor, callerActor, callerUserId } from "../authz";
+import {
+  assertScopeEditor,
+  callerActor,
+  callerUserId,
+  requireCaller,
+} from "../authz";
 import { csv } from "../query";
 
 const knowledgeInputSchema = z.object({
@@ -262,17 +267,26 @@ export const knowledge = new Hono()
 
 const runSchema = z.object({
   mode: runModeSchema,
-  workItemId: z.string().optional(),
-  model: z.string().optional(),
-  inputTokens: z.number().int().optional(),
-  outputTokens: z.number().int().optional(),
+  workItemId: z.uuid().optional(),
+  model: z.string().max(200).optional(),
+  inputTokens: z.number().int().nonnegative().optional(),
+  outputTokens: z.number().int().nonnegative().optional(),
   meta: z.record(z.string(), z.any()).optional(),
 });
 
+/*
+ * These rows are the cost and usage record, so they are written as the caller
+ * rather than for whoever the body claims: `userId` is deliberately not in the
+ * schema. Requiring an account also stops an anonymous bearer-token client
+ * filling the table.
+ */
 export const analysisRuns = new Hono().post(
   "/",
   zValidator("json", runSchema),
   async (c) => {
-    return c.json(await recordRun(c.req.valid("json") as RunInput));
+    const userId = await requireCaller(c);
+    return c.json(
+      await recordRun({ ...c.req.valid("json"), userId } as RunInput),
+    );
   },
 );
