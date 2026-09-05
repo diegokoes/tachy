@@ -70,7 +70,7 @@ create table credentials (
     name             text not null,
     value_ciphertext bytea not null,
     nonce            bytea not null,
-    created_by       uuid references users(id),
+    created_by       uuid references users(id) on delete set null,
     created_at       timestamptz not null default now(),
     updated_at       timestamptz not null default now(),
     -- scope and its FK must agree, or a scope='team' row with a null team_id
@@ -111,7 +111,7 @@ create table artifacts (
     description text,
     body        text not null,
     spec        jsonb,
-    created_by  uuid references users(id),
+    created_by  uuid references users(id) on delete set null,
     created_at  timestamptz not null default now(),
     updated_at  timestamptz not null default now(),
     check ((scope = 'team') = (team_id is not null)),

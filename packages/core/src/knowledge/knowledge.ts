@@ -755,6 +755,9 @@ export async function updateKnowledgeEntry(
  * model change, since vectors from different models are not comparable and a
  * half-migrated table ranks nonsense above matches.
  */
+/** Matches the reference and code backfills, which have always walked in 64s. */
+const EMBED_BATCH = 64;
+
 export async function backfillEmbeddings(
   opts: { all?: boolean } = {},
 ): Promise<number> {
@@ -765,16 +768,19 @@ export async function backfillEmbeddings(
     ${opts.all ? sql`` : sql`where embedding is null`}
   `;
 
+  // One lookup per distinct pattern, resolved up front rather than inside the
+  // walk, which awaited once per row.
   const patternDescriptions = new Map<string, string>();
+  for (const key of new Set(rows.map((r) => r.resolution_pattern ?? "")))
+    patternDescriptions.set(
+      key as string,
+      await resolvePatternDescription((key as string) || undefined),
+    );
+
   const texts: string[] = [];
   const ids: string[] = [];
   for (const r of rows) {
     const key = r.resolution_pattern ?? "";
-    if (!patternDescriptions.has(key))
-      patternDescriptions.set(
-        key,
-        await resolvePatternDescription(r.resolution_pattern ?? undefined),
-      );
     const text = buildEmbedText(
       {
         issueSummary: r.issue_summary,
@@ -793,13 +799,19 @@ export async function backfillEmbeddings(
   }
   if (!texts.length) return 0;
 
-  const vectors = await embedPassages(texts);
-  await sql`
-    update knowledge_entries e set embedding = v.vec::vector
-    from (select unnest(${ids}::uuid[]) as id,
-                 unnest(${vectors.map(toVectorLiteral)}::text[]) as vec) v
-    where e.id = v.id
-  `;
+  // In batches, as both siblings do: embedding the whole corpus in one call
+  // held every row and every vector in memory at once, which is a large table's
+  // worth on a `reembed`.
+  for (let i = 0; i < ids.length; i += EMBED_BATCH) {
+    const batchIds = ids.slice(i, i + EMBED_BATCH);
+    const vectors = await embedPassages(texts.slice(i, i + EMBED_BATCH));
+    await sql`
+      update knowledge_entries e set embedding = v.vec::vector
+      from (select unnest(${batchIds}::uuid[]) as id,
+                   unnest(${vectors.map(toVectorLiteral)}::text[]) as vec) v
+      where e.id = v.id
+    `;
+  }
   return ids.length;
 }
 
