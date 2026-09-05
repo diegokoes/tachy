@@ -1,3 +1,4 @@
+import type { DeploymentProfile } from "@tachy/contract";
 import { validateCredential } from "@tachy/contract";
 import type { AgentProvider } from "@tachy/contract";
 
@@ -108,7 +109,7 @@ export type SystemInfo = {
     agent_effort: Setting<string>;
     allowed_models: Setting<string[]>;
     org_name: Setting<string | null>;
-    deployment_profile: Setting<"support" | "engineering">;
+    deployment_profile: Setting<DeploymentProfile>;
   };
   credentials: {
     vault_enabled: boolean;

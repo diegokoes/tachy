@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { PROVIDER_OPTIONS } from "../vocab";
+  import { AGENT_EFFORTS } from "@tachy/contract";
   import { onMount } from "svelte";
   import { api } from "../api";
   import { initSession } from "../session.svelte";
@@ -100,10 +102,7 @@
         <td class="tip" title="Which backend runs the chat. Claude: Anthropic API key or Claude Code login. Copilot: token or copilot CLI login.">Agent provider</td>
         <td>
           <AsciiSelect value={system.settings.agent_provider.value}
-            options={[
-              { value: "claude", label: "claude (Anthropic)" },
-              { value: "copilot", label: "copilot (GitHub)" },
-            ]}
+            options={PROVIDER_OPTIONS}
             onchange={(v) => saveSetting("agent_provider", v)} />
         </td>
         <td><span class="badge src-{system.settings.agent_provider.source}">{system.settings.agent_provider.source}</span></td>
@@ -122,7 +121,7 @@
         <td>Agent effort</td>
         <td>
           <AsciiSelect value={system.settings.agent_effort.value}
-            options={["low", "medium", "high", "xhigh", "max"]}
+            options={[...AGENT_EFFORTS]}
             onchange={(v) => saveSetting("agent_effort", v)} />
         </td>
         <td><span class="badge src-{system.settings.agent_effort.source}">{system.settings.agent_effort.source}</span></td>

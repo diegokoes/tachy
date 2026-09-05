@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    AGENT_CREDENTIALS,
+    ANTHROPIC_OAUTH_CREDENTIAL,
+    validateCredential,
+  } from "@tachy/contract";
   import { onMount } from "svelte";
   import { api } from "../api";
   import { session } from "../session.svelte";
@@ -21,9 +26,15 @@
   let target = $state<string>("global");
   let drafts = $state<Record<string, string>>({});
 
+  /*
+   * From the contract's own list rather than retyped, and including the Claude
+   * subscription token — which was missing, so it could not be set at global or
+   * team scope from here at all, even though the wizard tells the operator that
+   * is where it saved one.
+   */
   const knownNames = $derived([
-    "anthropic_api_key",
-    "copilot_token",
+    ...Object.values(AGENT_CREDENTIALS),
+    ANTHROPIC_OAUTH_CREDENTIAL,
     ...connections.map((s) => `${s.source_type}_token:${s.slug}`),
   ]);
   const setNames = $derived(new Set(list?.credentials.map((c) => c.name) ?? []));
@@ -61,9 +72,19 @@
       : { scope: "team", team: target, name };
   }
 
+  // The same check the vault runs on the way in, so a typo is caught in the
+  // field it was typed into rather than coming back as a server error.
+  const draftError = (name: string) =>
+    drafts[name]?.trim() ? validateCredential(name, drafts[name].trim()) : null;
+
   async function save(name: string) {
     const value = drafts[name]?.trim();
     if (!value) return;
+    const invalid = validateCredential(name, value);
+    if (invalid) {
+      error = invalid;
+      return;
+    }
     error = null;
     try {
       await api.put("/credentials", { ...body(name), value });
@@ -109,7 +130,9 @@
               <input type="password" bind:value={drafts[name]}
                 placeholder={setNames.has(name) ? "(set, enter to replace)" : "(not set)"} autocomplete="off" />
               {#if drafts[name]?.trim()}
-                <button class="mini" onclick={() => save(name)}>save</button>
+                {@const bad = draftError(name)}
+                <button class="mini" disabled={!!bad} onclick={() => save(name)}>save</button>
+                {#if bad}<p class="field-error">{bad}</p>{/if}
               {/if}
             </td>
             <td><span class="badge" class:on={setNames.has(name)}>{setNames.has(name) ? "set" : "unset"}</span></td>
@@ -125,6 +148,7 @@
   .cred-panel { display: flex; flex-direction: column; gap: 0.75rem; }
   .muted { color: var(--muted); font-size: 0.9rem; margin: 0; }
   .error { color: var(--danger); margin: 0; }
+  .field-error { color: var(--danger); margin: 0.2rem 0 0; font-size: 0.9em; }
   .scope-row { display: flex; gap: 0.6rem; align-items: center; }
   .edit-cell input { min-width: 16rem; }
   code { background: var(--accent-dim); border-radius: 3px; padding: 0 0.3em; font-size: 0.92em; }

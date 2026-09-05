@@ -1,5 +1,11 @@
 <script lang="ts">
+  import { PROVIDER_OPTIONS } from "./vocab";
   import { api } from "./api";
+  import {
+    AGENT_EFFORTS,
+    MIN_PASSWORD_LENGTH,
+    OAUTH_PREFIX,
+  } from "@tachy/contract";
   import type { AgentProvider } from "@tachy/contract";
   import { csv } from "./admin/shared";
   import { initSession } from "./session.svelte";
@@ -32,7 +38,7 @@
   let agentKey = $state("");
   let agentModel = $state("claude-sonnet-5");
   const agentKeyIsOAuth = $derived(
-    agentProvider === "claude" && agentKey.startsWith("sk-ant-oat01-"),
+    agentProvider === "claude" && agentKey.startsWith(OAUTH_PREFIX),
   );
   let agentEffort = $state("medium");
   let allowedModels = $state("");
@@ -56,8 +62,8 @@
       : null,
   );
   const passwordErr = $derived(
-    (password.length > 0 ? password.length < 10 : attempted)
-      ? "at least 10 characters"
+    (password.length > 0 ? password.length < MIN_PASSWORD_LENGTH : attempted)
+      ? `at least ${MIN_PASSWORD_LENGTH} characters`
       : null,
   );
   const matchErr = $derived(
@@ -67,7 +73,7 @@
   );
   const accountValid = $derived(
     /\S+@\S+\.\S+/.test(email) &&
-      password.length >= 10 &&
+      password.length >= MIN_PASSWORD_LENGTH &&
       password === password2,
   );
 
@@ -242,10 +248,7 @@
             <Field label="provider">
               <Select
                 bind:value={agentProvider}
-                options={[
-                  { value: "claude", label: "claude (Anthropic)" },
-                  { value: "copilot", label: "copilot (GitHub)" },
-                ]}
+                options={PROVIDER_OPTIONS}
               />
             </Field>
             <Field label="model">
@@ -269,7 +272,7 @@
             <Field label="effort">
               <Select
                 bind:value={agentEffort}
-                options={["low", "medium", "high", "xhigh", "max"]}
+                options={[...AGENT_EFFORTS]}
               />
             </Field>
           </div>

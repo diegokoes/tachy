@@ -1,3 +1,4 @@
+import { SLUG_RE } from "@tachy/contract";
 import type { TransactionSql } from "postgres";
 import { sql } from "../infra/db";
 import { chunkText } from "../search/chunk";
@@ -42,8 +43,6 @@ import { parseStructured } from "../knowledge/structured";
  * Checked here rather than in the API so the MCP write path cannot bypass it.
  */
 export const RESERVED_ARTICLE_SLUGS = ["toc", "c", "coverage", "new"] as const;
-
-const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 export function assertArticleSlug(slug: string): void {
   if (!SLUG_RE.test(slug))

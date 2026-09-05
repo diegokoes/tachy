@@ -44,7 +44,12 @@ export interface CustomerUnitPatch {
   notes?: string | null;
 }
 
-const SLUG_RE = /^[a-z0-9][a-z0-9._-]*$/i;
+/**
+ * Deliberately looser than the contract's SLUG_RE, and case-insensitive: unit
+ * slugs are transcribed off equipment labels — TLC191, acme.eu — rather than
+ * typed as identifiers.
+ */
+const UNIT_SLUG_RE = /^[a-z0-9][a-z0-9._-]*$/i;
 
 export async function listCustomerUnits(
   customerId: string,
@@ -108,7 +113,7 @@ async function assertNoCycle(
 }
 
 export async function addCustomerUnit(i: CustomerUnitInput) {
-  if (!SLUG_RE.test(i.slug))
+  if (!UNIT_SLUG_RE.test(i.slug))
     throw badInput(
       `Invalid unit slug '${i.slug}' — letters, digits, dot, dash and underscore.`,
     );

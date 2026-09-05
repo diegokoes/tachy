@@ -1,11 +1,9 @@
-/** The machine id behind a display name: lowercase, kebab, ascii-safe. */
-export function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+/*
+ * The machine id behind a display name. From the contract, not reimplemented
+ * here: the server validates what this produces, and the two had already
+ * drifted — a unit slug the API would have accepted was rewritten on the way in.
+ */
+export { slugify } from "@tachy/contract";
 
 /**
  * Every create route upserts on its slug, so a collision would silently

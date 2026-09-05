@@ -1,7 +1,15 @@
-export const AGENT_PROVIDERS = ["claude", "copilot"] as const;
-export type AgentProvider = (typeof AGENT_PROVIDERS)[number];
+// A second list here meant adding a backend updated half the system: core
+// re-exports the contract's, and this package used to define its own because
+// it had no dependency on the contract. The contract has none of its own, so
+// taking it costs nothing.
+import type { AgentProvider, AgentEffort } from "@tachy/contract";
 
-export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
+export {
+  AGENT_PROVIDERS,
+  AGENT_EFFORTS,
+  type AgentProvider,
+  type AgentEffort,
+} from "@tachy/contract";
 
 /** Why a turn failed, when the cause is known and the user can act on it. */
 export type AgentErrorKind =
@@ -25,7 +33,7 @@ export interface AgentConfig {
 
   allowedModels?: string[];
 
-  effort?: EffortLevel;
+  effort?: AgentEffort;
 
   systemPromptAppend: string;
 

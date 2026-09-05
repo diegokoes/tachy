@@ -10,6 +10,11 @@ export {
   LIBRARY_ACTORS,
   CLOUD_RE,
   CLOUD_HINT,
+  AGENT_EFFORTS,
+  DEPLOYMENT_PROFILES,
+  MIN_PASSWORD_LENGTH,
+  SLUG_RE,
+  slugify,
 } from "./vocabulary";
 export type {
   ResolutionClarity,
@@ -21,6 +26,8 @@ export type {
   FeedbackKind,
   RunMode,
   LibraryActor,
+  AgentEffort,
+  DeploymentProfile,
 } from "./vocabulary";
 
 export { WIKILINK_RE, parseWikilink, parseWikilinks } from "./wikilink";

@@ -18,6 +18,7 @@ import {
   env,
   secretsEnabled,
   ANTHROPIC_OAUTH_CREDENTIAL,
+  OAUTH_PREFIX,
   setCredential,
   getUserByEmail,
 } from "@tachy/core";
@@ -116,7 +117,7 @@ export const setup = new Hono()
       if (admin) {
         const provider = body.settings?.agent_provider ?? "claude";
         const name =
-          provider === "claude" && body.agent_key.startsWith("sk-ant-oat01-")
+          provider === "claude" && body.agent_key.startsWith(OAUTH_PREFIX)
             ? ANTHROPIC_OAUTH_CREDENTIAL
             : AGENT_CREDENTIALS[provider];
         await setCredential(

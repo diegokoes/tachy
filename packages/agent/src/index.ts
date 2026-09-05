@@ -23,7 +23,7 @@ export {
   type AgentEvent,
   type AgentTurn,
   type Decision,
-  type EffortLevel,
+  type AgentEffort,
   type TurnUsage,
 } from "./backend";
 

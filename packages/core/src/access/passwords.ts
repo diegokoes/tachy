@@ -1,3 +1,4 @@
+import { MIN_PASSWORD_LENGTH } from "@tachy/contract";
 import { randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { badInput } from "../infra/errors";
@@ -15,7 +16,8 @@ const P = 1;
 const KEYLEN = 64;
 const MAXMEM = 64 * 1024 * 1024;
 
-export const MIN_PASSWORD_LENGTH = 10;
+// Owned by the contract: the wizard checks it in the field, this checks it again.
+export { MIN_PASSWORD_LENGTH };
 
 export async function hashPassword(password: string): Promise<string> {
   if (password.length < MIN_PASSWORD_LENGTH)
