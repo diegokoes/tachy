@@ -300,6 +300,24 @@ Dumps contain real ticket data — keep them off shared folders. Restoring vault
 credentials also needs the original `TACHY_SECRET_KEY`, so keep the `.env`
 secrets in a password manager.
 
+**Upgrading past the unprivileged-user change.** The container used to run as
+root; it now runs as `node` (uid 1000), and the agent-home volume moved from
+`/root/.claude` to `/home/node/.claude`. Docker only chowns a volume it creates
+itself, so an existing deployment has to hand over what it already wrote — once,
+before starting the new image:
+
+```sh
+cd /opt/tachy && docker compose down
+docker run --rm -v tachy_tachy-agent-home:/h -v tachy_tachy-repo-data:/d \
+  alpine chown -R 1000:1000 /h /d
+sudo chown -R 1000:1000 ./backups
+docker compose up -d
+```
+
+Per-user chat state and repo clones survive; the volume names are prefixed with
+the compose project (`tachy_` here, `tachy-dev_` on the dev stack — check with
+`docker volume ls`). A fresh install needs none of this.
+
 **Upgrades.** Fresh installs get the full `db/schema.sql` via Docker initdb.
 Existing deployments upgrade by backing up, recreating the database from the
 current `db/schema.sql`, and restoring the data tables — then `npm run sync
