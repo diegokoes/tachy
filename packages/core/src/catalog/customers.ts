@@ -174,11 +174,29 @@ export async function setWorkItemCustomer(
   customerId: string | null,
   unit?: string | null,
 ) {
+  /*
+   * An absent `unit` is "leave it alone", an explicit null is "clear it". They
+   * used to be the same, so setting a ticket's customer with no unit in the
+   * body — the common call — silently dropped the line it had been narrowed to,
+   * and db/schema.sql says a wrong attribution there is not recoverable.
+   *
+   * It survives only while the customer is unchanged. Moving the ticket to a
+   * different customer, or clearing it, clears the unit with it: a unit belongs
+   * to one customer, so any other pairing cannot be read back sensibly.
+   */
+  const [current] =
+    await sql`select customer_id from work_items where id = ${workItemId}`;
+  const keepUnit =
+    unit === undefined &&
+    customerId !== null &&
+    current?.customer_id === customerId;
+
   const unitId =
     customerId && unit ? (await resolveUnit(customerId, unit)).id : null;
   await sql`
     update work_items
-    set customer_id = ${customerId}, customer_unit_id = ${unitId}
+    set customer_id = ${customerId},
+        customer_unit_id = ${keepUnit ? sql`customer_unit_id` : sql`${unitId}`}
     where id = ${workItemId}
   `;
 }

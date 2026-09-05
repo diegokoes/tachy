@@ -131,9 +131,16 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
   };
 }
 
+/**
+ * Both directions, deliberately: `globalRedactionEnabled()` reads the variable
+ * at call time, so setting it and never clearing it left the admin panel
+ * reporting redaction off from the database while every scrub path still ran —
+ * and the MCP subprocess inherited that.
+ */
 export async function loadSettingsIntoEnv(): Promise<void> {
   const eff = await effectiveSettings();
   if (eff.redaction_global.value) process.env.TACHY_REDACT = "true";
+  else delete process.env.TACHY_REDACT;
 }
 
 export function clearSettingsCache(): void {

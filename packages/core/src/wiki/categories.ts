@@ -1,4 +1,5 @@
 import { sql } from "../infra/db";
+import { wouldCycle } from "../infra/hierarchy";
 import { badInput, conflict, notFound } from "../infra/errors";
 
 export interface WikiCategoryRow {
@@ -81,6 +82,20 @@ export async function addWikiCategory(i: WikiCategoryInput) {
   assertCategorySlug(i.slug);
   const productId = i.productId ?? null;
   const parentId = await parentIdOf(productId, i.parentSlug);
+  if (parentId) {
+    const [existing] = await sql`
+      select id from wiki_categories
+      where product_id is not distinct from ${productId} and slug = ${i.slug}
+    `;
+    if (
+      existing &&
+      (await wouldCycle("wiki_categories", existing.id, parentId))
+    )
+      throw badInput(
+        `'${i.parentSlug}' sits under '${i.slug}' — that would make a cycle`,
+      );
+  }
+
   const [row] = await sql`
     insert into wiki_categories (product_id, parent_id, slug, name, description, ordinal)
     values (${productId}, ${parentId}, ${i.slug}, ${i.name},
@@ -107,23 +122,12 @@ export async function updateWikiCategory(
     parentId = await parentIdOf(productId, patch.parentSlug);
     if (parentId === current.id)
       throw badInput(`'${slug}' cannot be its own parent`);
-    if (parentId) {
-      // Walking up from the proposed parent must not arrive back here, or the
-      // branch detaches into a ring the table of contents never terminates on.
-      const [{ cycles }] = await sql`
-        with recursive up as (
-          select id, parent_id from wiki_categories where id = ${parentId}
-          union all
-          select c.id, c.parent_id
-          from wiki_categories c join up on c.id = up.parent_id
-        )
-        select count(*)::int as cycles from up where id = ${current.id}
-      `;
-      if (cycles > 0)
-        throw badInput(
-          `'${patch.parentSlug}' sits under '${slug}' — that would make a cycle`,
-        );
-    }
+    // Walking up from the proposed parent must not arrive back here, or the
+    // branch detaches into a ring the table of contents never terminates on.
+    if (await wouldCycle("wiki_categories", current.id, parentId))
+      throw badInput(
+        `'${patch.parentSlug}' sits under '${slug}' — that would make a cycle`,
+      );
   }
 
   if (patch.slug && patch.slug !== slug) assertCategorySlug(patch.slug);
