@@ -55,6 +55,17 @@ export function envCredential(name: string): string | undefined {
  * Most-specific-wins credential lookup: user > team > global > env var.
  * Returns plaintext — never expose the result through an API response.
  */
+/**
+ * Which row a ciphertext belongs to: its scope, whose it is, and what it is
+ * called — exactly the columns the unique indexes are built on, so no two rows
+ * share one. Moving a value to another row changes this, and the open fails.
+ */
+function credentialAad(row: Record<string, unknown>): string {
+  return [row.scope, row.user_id ?? "", row.team_id ?? "", row.name].join(
+    "\u0000",
+  );
+}
+
 export async function resolveCredential(
   name: string,
   ctx: ScopeContext,
@@ -65,6 +76,7 @@ export async function resolveCredential(
     if (hit)
       return decryptSecret(
         hit.row as { value_ciphertext: Buffer; nonce: Buffer },
+        credentialAad(hit.row),
       );
   }
   return envCredential(name);
@@ -145,7 +157,15 @@ export async function setCredential(
   const invalid = validateCredential(name, value);
   if (invalid) throw badInput(invalid);
   await assertCanWriteScope(actorUserId, scope, scopeId);
-  const { ciphertext, nonce } = encryptSecret(value);
+  const { ciphertext, nonce } = encryptSecret(
+    value,
+    credentialAad({
+      scope,
+      user_id: scope === "user" ? scopeId : null,
+      team_id: scope === "team" ? scopeId : null,
+      name,
+    }),
+  );
   await upsertScoped("credentials", scope, scopeId, name, {
     value_ciphertext: ciphertext,
     nonce,

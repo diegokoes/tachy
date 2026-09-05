@@ -1,4 +1,11 @@
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vitest";
 import {
   createUser,
   addTeam,
@@ -480,5 +487,54 @@ describe("API never leaks plaintext or ciphertext", () => {
     ).json();
     expect(body.effective.anthropic_api_key).toBe("global");
     expect(body.mine).toEqual([]);
+  });
+});
+
+describe("a ciphertext is bound to the row that holds it", () => {
+  beforeAll(async () => {
+    await resetData();
+    await sql`truncate credentials cascade`;
+    enableVault();
+  });
+
+  it("refuses a value moved into another user's row", async () => {
+    const alice = await createUser({ email: "aad-alice@example.com" });
+    const bob = await createUser({ email: "aad-bob@example.com" });
+    await setCredential(alice.id, "user", alice.id, "freshdesk_token:x", "alice-secret");
+    await setCredential(bob.id, "user", bob.id, "freshdesk_token:x", "bob-secret");
+
+    expect(await resolveCredential("freshdesk_token:x", { userId: bob.id })).toBe(
+      "bob-secret",
+    );
+
+    // Someone with write access to the table, but not to TACHY_SECRET_KEY,
+    // copies Alice's encrypted value over Bob's.
+    await sql`
+      update credentials dst
+      set value_ciphertext = src.value_ciphertext, nonce = src.nonce
+      from credentials src
+      where dst.user_id = ${bob.id} and src.user_id = ${alice.id}
+        and dst.name = 'freshdesk_token:x' and src.name = 'freshdesk_token:x'
+    `;
+
+    await expect(
+      resolveCredential("freshdesk_token:x", { userId: bob.id }),
+    ).rejects.toThrow();
+  });
+
+  it("still opens a row written before values were bound", async () => {
+    const carol = await createUser({ email: "aad-carol@example.com" });
+    await setCredential(carol.id, "user", carol.id, "freshdesk_token:y", "carol-secret");
+
+    // Rewrite it the way the old code did — no AAD — and it must still resolve.
+    const legacy = encryptSecret("carol-legacy");
+    await sql`
+      update credentials
+      set value_ciphertext = ${legacy.ciphertext}, nonce = ${legacy.nonce}
+      where user_id = ${carol.id} and name = 'freshdesk_token:y'
+    `;
+    expect(
+      await resolveCredential("freshdesk_token:y", { userId: carol.id }),
+    ).toBe("carol-legacy");
   });
 });
