@@ -879,8 +879,14 @@ export function splitNoteBody(html: string, maxChars = 60000): string[] {
     size += p.length + 1;
   }
   if (buf.length) parts.push(buf.join("\n"));
+  /*
+   * The marker has to be on every part, not only the one carrying the header.
+   * Parts 2..n come back on the next fetch as ordinary messages otherwise, get
+   * compacted along with the ticket, and are missed by `prior_transcript_ids` —
+   * so `replace_previous` deletes part 1 and orphans the rest.
+   */
   return parts.map(
     (p, i) =>
-      `<p style="color:#888">[compacted transcript ${i + 1}/${parts.length}]</p>\n${p}`,
+      `<p style="color:#888">[compacted transcript ${i + 1}/${parts.length}] ${TRANSCRIPT_MARKER}</p>\n${p}`,
   );
 }

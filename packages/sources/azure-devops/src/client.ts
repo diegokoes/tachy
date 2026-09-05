@@ -5,6 +5,13 @@ const API_VERSION = "7.1";
 // No released version exists for these two, so they stay pinned to preview:
 //   work item comments -> the 7.1 reference itself documents 7.1-preview.4
 //   connectionData     -> not in the public REST reference at all
+/**
+ * At $top=200 this is 20k comments on one work item — far past anything real,
+ * and the point at which a continuation token that never clears is a bug rather
+ * than a big ticket.
+ */
+const MAX_PAGES = 100;
+
 const API_COMMENTS = "7.1-preview.4";
 const API_CONNECTION_DATA = "7.1-preview.1";
 
@@ -162,7 +169,9 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     async getComments(project, id) {
       const comments: any[] = [];
       let continuation: string | undefined;
-      do {
+      // A server that echoes the same continuation token would otherwise spin
+      // here for as long as the process runs.
+      for (let page = 0; page < MAX_PAGES; page++) {
         const params = new URLSearchParams({
           "api-version": API_COMMENTS,
           $top: "200",
@@ -173,7 +182,8 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
         );
         comments.push(...(res.comments ?? []));
         continuation = res.continuationToken || undefined;
-      } while (continuation);
+        if (!continuation) break;
+      }
       return comments;
     },
 

@@ -144,6 +144,10 @@ create table source_connections (
     slug          text not null unique,
     base_url      text,
     config        jsonb not null default '{}'::jsonb,
+    -- How far a successful `sync` got. Without it --since is hand-typed, and a
+    -- run that fails at item 900 of 1000 commits the first 899 and discards the
+    -- cursor -- the retry then re-walks from wherever the operator pointed.
+    last_synced_at timestamptz,
     created_at    timestamptz not null default now()
 );
 
