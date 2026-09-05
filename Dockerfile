@@ -54,6 +54,17 @@ RUN npm run web:build
 # Linked-repo clones for code search live here — mount a volume to keep them
 # across redeploys (otherwise the first reindex re-clones, which is fine too).
 ENV TACHY_REPO_DIR=/app/data/repos
+ENV TACHY_AGENT_HOME=/home/node/.claude
+
+# node:24-slim already carries an unprivileged `node` (uid 1000). Everything the
+# server writes at runtime is created and handed over here, because Docker only
+# chowns a named volume it creates itself — an existing one keeps the ownership
+# it was populated with. See README > Operations for the one-time chown an
+# already-running deployment needs.
+RUN mkdir -p /app/data/repos /app/backups /home/node/.claude \
+ && chown -R node:node /app/data /app/backups /home/node/.claude
+
+USER node
 
 EXPOSE 8787
 

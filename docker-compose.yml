@@ -60,7 +60,8 @@ services:
       # server's own `claude login` no longer answers turns — users bring
       # their own credential, or fall back to ANTHROPIC_API_KEY /
       # CLAUDE_CODE_OAUTH_TOKEN from the environment.
-      - tachy-agent-home:/root/.claude
+      # Under /home/node, not /root: the container runs as an unprivileged user.
+      - tachy-agent-home:/home/node/.claude
 
   # Not started by `up`. Run ad hoc, e.g.:
   #   docker compose run --rm cli npm run sync <source-slug>
