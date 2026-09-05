@@ -10,7 +10,7 @@ import {
   sql,
 } from "@tachy/core";
 import type { Tx } from "./batches";
-import { SCALES, SCALE_NAMES, type ScaleName } from "./scale";
+import { SCALES, type ScaleName } from "./scale";
 import { seedOrg, ADMIN_EMAIL, DEV_PASSWORD, MEMBER_EMAIL } from "./org";
 import { seedCatalog } from "./catalog";
 import { seedSources } from "./sources";

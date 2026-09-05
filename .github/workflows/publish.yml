@@ -32,7 +32,10 @@ jobs:
           key: model-Xenova-bge-base-en-v1.5
       - run: npx tsx scripts/warmup-embeddings.ts
 
-      - run: npm test # Testcontainers uses the runner's preinstalled Docker
+      # `coverage`, not `test`: it is the same suite plus the thresholds, and a
+      # tag must not publish an image that would have failed the ratchet.
+      # Testcontainers uses the runner's preinstalled Docker.
+      - run: npm run coverage
 
   publish:
     needs: test

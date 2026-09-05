@@ -236,6 +236,10 @@ docker compose run --rm cli npm run sync index-repo line-controller
 | `TACHY_AGENT_HOME`                                          | Root for per-user Claude Code state (default `~/.claude`).           |
 | `CLAUDE_CODE_OAUTH_TOKEN`                                   | Fallback Claude subscription token when the vault holds none.        |
 
+The table is the short list. `.env.example` carries every variable the code
+reads, commented, including the agent defaults, the redaction switch, the
+embedding model and the data paths.
+
 PII/secret redaction is off by default: per connection
 (`{"redaction":{"enabled":true}}` in the connection config) or deployment-wide
 via the `redaction_global` setting. Only LLM-facing copies are scrubbed; the

@@ -1,7 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import {
   registerSource,

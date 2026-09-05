@@ -7,7 +7,6 @@ import {
   getProductIdBySlug,
   getCustomerIdBySlug,
   getRepoBySlug,
-  getUserByEmail,
   indexRepo,
   linkRepo,
   listRepos,
@@ -19,12 +18,9 @@ import {
   sourceCredentialName,
   sourceProjectScope,
   sql,
-  userSoleTeamId,
   type EntryScope,
-  type ScopeContext,
 } from "@tachy/core";
-import { assertScopeEditor, requireCaller } from "../authz";
-import { getIdentity } from "../auth";
+import { assertScopeEditor, callerScope, requireCaller } from "../authz";
 import type { Context } from "hono";
 
 const linkSchema = z.object({
@@ -61,16 +57,6 @@ const bulkLinkSchema = z.object({
 
 const inFlight = new Set<string>();
 
-async function callerCtx(c: Context): Promise<ScopeContext> {
-  const email = getIdentity(c)?.email;
-  const user = email ? await getUserByEmail(email) : null;
-  if (!user) return {};
-  return {
-    userId: user.id,
-    teamId: (await userSoleTeamId(user.id)) ?? undefined,
-  };
-}
-
 async function resolveRepoToken(
   c: Context,
   sourceSlug: string | null,
@@ -82,7 +68,7 @@ async function resolveRepoToken(
   if (!conn) return undefined;
   return resolveCredential(
     sourceCredentialName(conn.source_type, sourceSlug),
-    await callerCtx(c),
+    await callerScope(c),
   );
 }
 
