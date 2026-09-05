@@ -2926,7 +2926,11 @@ tool(
           "One object per row, keyed by column key. Dates as ISO strings and numbers as numbers, so the cells are typed and Excel sorts them properly. Leave an optional column null rather than inventing a value.",
         ),
     },
-    annotations: { readOnlyHint: true },
+    // Not readOnlyHint: createOutput inserts the rendered bytes as a row.
+    // The tool is in READ_TOOLS because a table the user asked for is not a
+    // change to the library, but a client deciding whether to run it
+    // unattended should know it writes.
+    annotations: { readOnlyHint: false },
   },
   async ({ artifact_slug, format, sheet, filename, columns, rows }) => {
     const userId = await resolveCurrentUserId();
