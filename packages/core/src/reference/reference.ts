@@ -315,7 +315,7 @@ export async function listReferenceDocs(
     limit?: number;
   } = {},
 ) {
-  const limit = opts.limit ?? 50;
+  const limit = clampLimit(opts.limit, 50);
   const kind = opts.kind ?? "reference";
   return sql`
     select d.id, d.product_id, d.team_id, d.component_id, d.product_area, d.source,

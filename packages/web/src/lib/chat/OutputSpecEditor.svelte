@@ -9,6 +9,7 @@
     DEFAULT_SHEET,
   } from "@tachy/contract";
   import type {
+    ArtifactUtility,
     TableCellType,
     TableColumn,
     TableOutput,
@@ -31,7 +32,7 @@
     output?: OutputSpec;
   }
 
-  export const EXPORT_UTILITY = "export_table";
+  export const EXPORT_UTILITY: ArtifactUtility = "export_table";
 
   export function emptyColumn(): SpecColumn {
     return { key: "", type: "string" };

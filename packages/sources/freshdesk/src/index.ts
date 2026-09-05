@@ -173,13 +173,16 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
     },
 
     async fetchItem(externalId: string): Promise<RawWorkItem> {
-      const t = await get(`/tickets/${externalId}?include=requester`);
+      // The id arrives from a route parameter, so it is encoded rather than
+      // pasted: unescaped it could carry its own query string into the path.
+      const ticketId = encodeURIComponent(externalId);
+      const t = await get(`/tickets/${ticketId}?include=requester`);
       // Conversations page at 30 (the API default); per_page is unreliable on
       // some endpoints, so the loop keys on the observed default instead.
       const convos: any[] = [];
       for (let page = 1; page <= 500; page++) {
         const batch = await get(
-          `/tickets/${externalId}/conversations?page=${page}`,
+          `/tickets/${ticketId}/conversations?page=${page}`,
         );
         if (!Array.isArray(batch) || batch.length === 0) break;
         convos.push(...batch);
@@ -244,7 +247,7 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
     async postNote(externalId, body, o) {
       const res = await sourceFetch(
         "Freshdesk note POST",
-        `${api}/tickets/${externalId}/notes`,
+        `${api}/tickets/${encodeURIComponent(externalId)}/notes`,
         {
           method: "POST",
           headers: { Authorization: auth, "Content-Type": "application/json" },

@@ -706,8 +706,8 @@ export const admin = new Hono()
   })
   // Cheapest authenticated call the remote API offers, using the caller's own
   // token. Doubles as discovery of the groups worth registering as projects.
-  .post("/source-connections/:slug/test", async (c) => {
-    const slug = c.req.param("slug");
+  .post("/source-connections/:slug/test", requireAdmin, async (c) => {
+    const slug = c.req.param("slug")!;
     try {
       const { source } = await resolveSource(slug, await callerScope(c));
       if (!source.verify)

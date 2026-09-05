@@ -41,9 +41,16 @@ function redactGithubRaw(
   return issue;
 }
 
+/**
+ * `owner/repo#123`, checked rather than merely split: both halves are pasted
+ * into a URL path, and the id reaches here from a route parameter. The slash
+ * between owner and repo is the only one that belongs there.
+ */
+const OWNER_REPO_RE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
+
 function parseRef(externalId: string): { repo: string; number: string } {
   const [repo, number] = externalId.split("#");
-  if (!repo || !number)
+  if (!repo || !number || !OWNER_REPO_RE.test(repo) || !/^\d+$/.test(number))
     throw badInput(
       `Invalid GitHub ref '${externalId}', expected 'owner/repo#123'`,
     );
