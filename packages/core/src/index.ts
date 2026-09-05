@@ -8,6 +8,7 @@ export {
   azureDevopsToken,
   sourceToken,
   sourceTokenOptional,
+  uploadDir,
 } from "./infra";
 export { AppError, notFound, conflict, badInput, forbidden } from "./infra";
 export type { AppErrorCode } from "./infra";
@@ -239,6 +240,7 @@ export type {
 } from "./reference";
 
 export { ingestWorkItem, extractAdoRefs } from "./work-items";
+export { workItemScope, externalWorkItemScope } from "./work-items";
 export type { IngestedItem } from "./work-items";
 export {
   WORK_ITEM_LINK_KINDS,

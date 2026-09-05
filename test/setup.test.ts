@@ -23,6 +23,30 @@ describe("first-run setup wizard", () => {
     expect(teams.status).toBe(200);
   });
 
+  it("refuses to take over an account that already exists", async () => {
+    // An attribution user — what `TACHY_USER_EMAIL` creates on a sync or an MCP
+    // call, before anyone has run the wizard. It has no password and no role,
+    // and taking it over would hand back a session as its owner.
+    await sql`insert into users (email) values ('colleague@example.com')`;
+
+    const res = await app.request(
+      "/api/setup",
+      json({
+        email: "colleague@example.com",
+        password: "attacker-chosen-password",
+      }),
+    );
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/already exists/);
+
+    const [row] =
+      await sql`select role, password_hash from users where email = 'colleague@example.com'`;
+    expect(row.role).toBe("member");
+    expect(row.password_hash).toBeNull();
+
+    await sql`delete from users where email = 'colleague@example.com'`;
+  });
+
   it("bootstraps admin + settings + workspace in one POST", async () => {
     const res = await app.request(
       "/api/setup",

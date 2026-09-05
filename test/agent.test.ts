@@ -65,21 +65,32 @@ describe("agent tool allowlist (security boundary)", () => {
     expect(classify("mcp__tachy__some_new_tool").cls).toBe("write");
   });
 
-  it("gates compact_work_item only when it is asked to post a note", () => {
+  it("gates compact_work_item unless it is told not to post", () => {
     const t = qualify("compact_work_item");
+    // The tool posts on `post_note !== false`, so an omitted flag is a write.
     expect(classifyCall(t, { source: "fd", external_id: "1" }).cls).toBe(
-      "read",
+      "write",
     );
-    expect(classifyCall(t, { post_note: false }).cls).toBe("read");
-    expect(classifyCall(t, {}).cls).toBe("read");
+    expect(classifyCall(t, {}).cls).toBe("write");
     expect(classifyCall(t, { post_note: true }).cls).toBe("write");
-    // a truthy non-true value must not open the write path
-    expect(classifyCall(t, { post_note: "yes" }).cls).toBe("read");
+    expect(classifyCall(t, { post_note: "yes" }).cls).toBe("write");
+    expect(classifyCall(t, { post_note: false }).cls).toBe("read");
+  });
+
+  it("gates ingest_context only when it is given a URL to fetch", () => {
+    const t = qualify("ingest_context");
+    expect(classifyCall(t, { text: "pasted" }).cls).toBe("read");
+    expect(classifyCall(t, { paths: ["/uploads/a.pdf"] }).cls).toBe("read");
+    expect(classifyCall(t, { urls: [] }).cls).toBe("read");
+    expect(classifyCall(t, { urls: ["https://example.com"] }).cls).toBe(
+      "write",
+    );
   });
 
   it("classifyCall leaves every other tool's class alone", () => {
     for (const t of READ_TOOLS)
       expect(classifyCall(qualify(t), { post_note: true }).cls).toBe("read");
+    // compact_work_item and ingest_context are the only conditional ones.
     for (const t of WRITE_TOOLS)
       expect(classifyCall(qualify(t), {}).cls).toBe("write");
     expect(classifyCall("Bash", { post_note: true }).cls).toBe("denied");

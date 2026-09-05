@@ -115,7 +115,8 @@ export type SystemInfo = {
     anthropic_api_key: "global" | "env" | null;
     copilot_token: "global" | "env" | null;
   };
-  env: {
+  /** Admin-only: the server withholds it from a member. */
+  env?: {
     auth_mode: string;
     port: number;
     user_email: string | null;

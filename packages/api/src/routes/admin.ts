@@ -65,7 +65,7 @@ import {
   AGENT_CREDENTIALS,
   type CredentialSource,
 } from "@tachy/core";
-import { requireAdmin } from "../auth";
+import { getIdentity, requireAdmin } from "../auth";
 import {
   assertAnyTeamAdminApi,
   assertScopeEditor,
@@ -248,6 +248,13 @@ export const admin = new Hono()
     });
   })
 
+  /*
+   * Members read this: the settings and the global-credential availability are
+   * what the app renders its own chrome from. The `env` block is different —
+   * which secrets are configured, where uploads land, what the API port is — and
+   * only Admin > System renders it, so it travels only to an admin. `upload_dir`
+   * in particular is a path the ingest tools read from.
+   */
   .get("/system", async (c) =>
     c.json({
       settings: await effectiveSettings(),
@@ -260,21 +267,25 @@ export const admin = new Hono()
         copilot_token:
           (await credentialSource(AGENT_CREDENTIALS.copilot, {})) ?? null,
       },
-      env: {
-        auth_mode: env.authMode,
-        port: env.port,
-        user_email: env.userEmail ?? null,
-        oidc_configured: Boolean(env.oidc),
-        api_token_set: Boolean(env.apiToken),
-        session_secret_set: Boolean(env.sessionSecret),
-        anthropic_api_key_set: Boolean(process.env.ANTHROPIC_API_KEY),
-        copilot_token_set: Boolean(
-          process.env.COPILOT_GITHUB_TOKEN ||
-          process.env.GH_TOKEN ||
-          process.env.GITHUB_TOKEN,
-        ),
-        upload_dir: process.env.TACHY_UPLOAD_DIR || null,
-      },
+      ...(getIdentity(c)?.role === "admin"
+        ? {
+            env: {
+              auth_mode: env.authMode,
+              port: env.port,
+              user_email: env.userEmail ?? null,
+              oidc_configured: Boolean(env.oidc),
+              api_token_set: Boolean(env.apiToken),
+              session_secret_set: Boolean(env.sessionSecret),
+              anthropic_api_key_set: Boolean(process.env.ANTHROPIC_API_KEY),
+              copilot_token_set: Boolean(
+                process.env.COPILOT_GITHUB_TOKEN ||
+                process.env.GH_TOKEN ||
+                process.env.GITHUB_TOKEN,
+              ),
+              upload_dir: process.env.TACHY_UPLOAD_DIR || null,
+            },
+          }
+        : {}),
     }),
   )
 
