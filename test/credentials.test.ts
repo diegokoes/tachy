@@ -1,11 +1,4 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-} from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   createUser,
   addTeam,
@@ -500,12 +493,24 @@ describe("a ciphertext is bound to the row that holds it", () => {
   it("refuses a value moved into another user's row", async () => {
     const alice = await createUser({ email: "aad-alice@example.com" });
     const bob = await createUser({ email: "aad-bob@example.com" });
-    await setCredential(alice.id, "user", alice.id, "freshdesk_token:x", "alice-secret");
-    await setCredential(bob.id, "user", bob.id, "freshdesk_token:x", "bob-secret");
-
-    expect(await resolveCredential("freshdesk_token:x", { userId: bob.id })).toBe(
+    await setCredential(
+      alice.id,
+      "user",
+      alice.id,
+      "freshdesk_token:x",
+      "alice-secret",
+    );
+    await setCredential(
+      bob.id,
+      "user",
+      bob.id,
+      "freshdesk_token:x",
       "bob-secret",
     );
+
+    expect(
+      await resolveCredential("freshdesk_token:x", { userId: bob.id }),
+    ).toBe("bob-secret");
 
     // Someone with write access to the table, but not to TACHY_SECRET_KEY,
     // copies Alice's encrypted value over Bob's.
@@ -524,7 +529,13 @@ describe("a ciphertext is bound to the row that holds it", () => {
 
   it("still opens a row written before values were bound", async () => {
     const carol = await createUser({ email: "aad-carol@example.com" });
-    await setCredential(carol.id, "user", carol.id, "freshdesk_token:y", "carol-secret");
+    await setCredential(
+      carol.id,
+      "user",
+      carol.id,
+      "freshdesk_token:y",
+      "carol-secret",
+    );
 
     // Rewrite it the way the old code did — no AAD — and it must still resolve.
     const legacy = encryptSecret("carol-legacy");

@@ -604,6 +604,11 @@ export async function revertReferenceDoc(
   const [cust] = s.customer_id
     ? await sql`select slug from customers where id = ${s.customer_id}`
     : [];
+  // Passed even when null: the revision records it, and leaving it out carried
+  // the live unit forward instead of restoring the one being reverted to.
+  const [unit] = s.customer_unit_id
+    ? await sql`select slug from customer_units where id = ${s.customer_unit_id}`
+    : [];
   return updateReferenceDoc(
     id,
     {
@@ -616,6 +621,7 @@ export async function revertReferenceDoc(
       docVersion: s.doc_version,
       component: (comp?.slug as string) ?? null,
       customerSlug: (cust?.slug as string) ?? null,
+      unit: (unit?.slug as string) ?? null,
     },
     actor,
   );

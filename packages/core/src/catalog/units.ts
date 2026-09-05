@@ -1,4 +1,5 @@
 import { sql } from "../infra/db";
+import { wouldCycle, type ParentColumn } from "../infra/hierarchy";
 import { badInput, notFound } from "../infra/errors";
 
 /**
@@ -97,19 +98,10 @@ export async function resolveUnit(
 async function assertNoCycle(
   at: string,
   from: string,
-  column: "parent_id" | "profile_id",
+  column: ParentColumn,
   label: string,
 ): Promise<void> {
-  const [{ cycles }] = await sql`
-    with recursive up as (
-      select id, ${sql(column)} as next from customer_units where id = ${from}
-      union all
-      select u.id, u.${sql(column)}
-      from customer_units u join up on u.id = up.next
-    )
-    select count(*)::int as cycles from up where id = ${at}
-  `;
-  if (cycles > 0)
+  if (await wouldCycle("customer_units", at, from, column))
     throw badInput(
       `'${label}' already sits under this unit — that would cycle`,
     );
@@ -127,6 +119,26 @@ export async function addCustomerUnit(i: CustomerUnitInput) {
   const profileId = i.profileSlug
     ? (await resolveUnit(customerId, i.profileSlug)).id
     : null;
+
+  // The insert cannot ring; the `do update` half re-parents an existing row,
+  // and both self-references can close one.
+  if (parentId || profileId) {
+    const [existing] = await sql`
+      select id from customer_units
+      where customer_id = ${customerId} and slug = ${i.slug}
+    `;
+    if (existing) {
+      if (parentId)
+        await assertNoCycle(existing.id, parentId, "parent_id", i.parentSlug!);
+      if (profileId)
+        await assertNoCycle(
+          existing.id,
+          profileId,
+          "profile_id",
+          i.profileSlug!,
+        );
+    }
+  }
 
   const [row] = await sql`
     insert into customer_units

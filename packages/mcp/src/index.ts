@@ -160,7 +160,12 @@ function out(obj: unknown) {
   };
 }
 
-/** Tool results have a size ceiling; a whole transcript blows it, so turns ship bounded. */
+/**
+ * Tool results have a size ceiling; a whole transcript blows it, so turns ship
+ * bounded. Skips what does not fit rather than stopping at it — one long turn
+ * early in a ticket used to end the walk, and the model got `shown: 0` on a
+ * transcript that had plenty of readable turns after it.
+ */
 function capTurns<T extends { text: string }>(
   turns: T[],
   maxChars = 30000,
@@ -168,7 +173,7 @@ function capTurns<T extends { text: string }>(
   let used = 0;
   const kept: T[] = [];
   for (const t of turns) {
-    if (used + t.text.length > maxChars) break;
+    if (used + t.text.length > maxChars) continue;
     used += t.text.length;
     kept.push(t);
   }
@@ -190,9 +195,14 @@ function withCompaction(item: RawWorkItem): Record<string, unknown> {
   const { item: forLlm, compacted } = compactForLlm(item);
   if (!compacted) return { item: forLlm };
   const { turns, compaction } = compacted;
+  // Bounded here too: compaction only fires above COMPACT_MIN_CHARS, so by
+  // construction this array is never small, and on a long ticket it is hundreds
+  // of KB going through the same ceiling capTurns exists for.
+  const { turns: shown, turns_truncated } = capTurns(turns);
   return {
     item: forLlm,
-    transcript: turns,
+    transcript: shown,
+    ...(turns_truncated ? { transcript_truncated: turns_truncated } : {}),
     compaction: { ...compaction, ...summarizeCompaction(compacted) },
     next: "messages were replaced by transcript: a de-duplicated, attributed turn list with quoted chains, signatures, banners, automated mail and repeats removed. The wording is verbatim — never re-summarise or re-order it. Each turn has speaker, at, kind (reply / internal_note / quoted) and optional attachments; '[image]' marks an inline image, and a turn with empty text but attachments carried only a file. Turns with kind 'quoted' were recovered from quoted history and may predate the ticket — that is mail existing nowhere else in the system, worth reading first. This is a read-path transform and writes nothing to the ticket.",
   };
@@ -1814,7 +1824,13 @@ tool(
       : null;
     await requireCanEdit(productId ? { productId } : {});
 
-    const existing = await findArticle(productId, a.slug).catch(() => null);
+    // Only "no such article" takes the create branch. Swallowing every error
+    // meant a transient database failure inserted a second row at the same
+    // slug, splitting the article's links and its history.
+    const existing = await findArticle(productId, a.slug).catch((e) => {
+      if (e instanceof AppError && e.code === "not_found") return null;
+      throw e;
+    });
     const actor = await mcpActor();
     const row = existing
       ? await updateReferenceDoc(
