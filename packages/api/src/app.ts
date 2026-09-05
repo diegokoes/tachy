@@ -21,7 +21,7 @@ import { outputs } from "./routes/outputs";
 import { repos } from "./routes/repos";
 import { library } from "./routes/library";
 import { projects } from "./routes/projects";
-import { installAuth, isBootstrapped, type OidcConfig } from "./auth";
+import { initOidc, installAuth, isBootstrapped, type OidcConfig } from "./auth";
 import { httpLogger, noteError } from "./logging";
 
 registerSource("freshdesk", createFreshdeskSource);
@@ -88,6 +88,10 @@ export function createApp(
     });
   });
 
+  // Ahead of installAuth's `/api/*` guard, deliberately: on a fresh install
+  // there is no identity to check yet. initOidc still runs first, so the wizard
+  // can tell an operator already holding an SSO session from a stranger.
+  if (opts.oidc) initOidc(base, opts.oidc);
   base.route("/api/setup", setup);
 
   installAuth(base, {

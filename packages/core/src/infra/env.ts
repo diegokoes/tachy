@@ -1,4 +1,6 @@
 import "dotenv/config";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
 
 const oidcRaw =
@@ -94,6 +96,16 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+/**
+ * Where a chat upload lands, and the only directory the ingest tools may read
+ * back. Defined here because the API writes into it and the MCP subprocess
+ * reads out of it — two packages that must not disagree about which directory
+ * "an uploaded file" means.
+ */
+export function uploadDir(): string {
+  return process.env.TACHY_UPLOAD_DIR || join(tmpdir(), "tachy-uploads");
+}
 
 /**
  * Resolve a source token from env by provider + connection slug, e.g.

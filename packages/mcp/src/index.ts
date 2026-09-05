@@ -110,6 +110,9 @@ import {
   setComposedFrom,
   listCustomerUnits,
   addCustomerUnit,
+  fetchUntrustedUrl,
+  workItemScope,
+  externalWorkItemScope,
 } from "@tachy/core";
 import type {
   ActorRef,
@@ -580,23 +583,6 @@ async function referenceDocScope(id: string): Promise<EntryScope> {
   return row ? { productId: row.product_id, teamId: row.team_id } : {};
 }
 
-async function workItemScope(id: string): Promise<EntryScope> {
-  const [row] =
-    await sql`select product_id, team_id from work_items where id = ${id}`;
-  return row ? { productId: row.product_id, teamId: row.team_id } : {};
-}
-
-async function externalWorkItemScope(
-  connId: string,
-  externalId: string,
-): Promise<EntryScope> {
-  const [row] = await sql`
-    select product_id, team_id from work_items
-    where source_connection_id = ${connId} and external_id = ${externalId}
-  `;
-  return row ? { productId: row.product_id, teamId: row.team_id } : {};
-}
-
 async function newEntryScope(i: {
   productId?: string | null;
   teamId?: string | null;
@@ -635,7 +621,7 @@ async function loadContextSources(input: {
     sources.push({ source: p, text, ...(pages != null ? { pages } : {}) });
   }
   for (const u of input.urls ?? []) {
-    const res = await fetch(u);
+    const res = await fetchUntrustedUrl("ingest_context", u);
     if (!res.ok) throw badInput(`Failed to fetch ${u}: HTTP ${res.status}`);
     const raw = await res.text();
     const ct = res.headers.get("content-type") ?? "";
@@ -1693,7 +1679,10 @@ tool(
       urls: z.array(z.string()).optional(),
       max_chars: z.number().int().positive().optional(),
     },
-    annotations: { readOnlyHint: true },
+    // readOnlyHint because nothing here is persisted; openWorldHint because
+    // `urls` reaches hosts outside this deployment, which is what a client
+    // deciding whether to run this unattended needs to weigh.
+    annotations: { readOnlyHint: true, openWorldHint: true },
   },
   async ({ product_slug, team_slug, text, paths, urls, max_chars }) => {
     const sources = await loadContextSources({ text, paths, urls });

@@ -14,12 +14,14 @@ import {
   DEPLOYMENT_PROFILES,
   MIN_PASSWORD_LENGTH,
   conflict,
+  forbidden,
+  env,
   secretsEnabled,
   ANTHROPIC_OAUTH_CREDENTIAL,
   setCredential,
   getUserByEmail,
 } from "@tachy/core";
-import { setSessionCookie, markBootstrapped } from "../auth";
+import { setSessionCookie, markBootstrapped, sessionEmail } from "../auth";
 
 const slugName = z.object({ slug: z.string().min(1), name: z.string().min(1) });
 
@@ -53,12 +55,48 @@ export const setup = new Hono()
     const body = c.req.valid("json");
     const hash = await hashPassword(body.password);
 
+    /*
+     * This route sits outside the `/api/*` identity guard — on a fresh install
+     * there is nobody to authenticate yet. The admin count is therefore the only
+     * thing standing between a stranger and an admin account, and on an SSO
+     * deployment it never rises: `upsertUser` provisions members, so nothing
+     * closes the door. Hence the second gate: where SSO can say who is calling,
+     * it has to, and the wizard promotes that person rather than anyone who
+     * asks.
+     */
+    let verified: string | undefined;
+    if (env.oidc) {
+      verified = await sessionEmail(c);
+      if (!verified)
+        throw forbidden(
+          "this deployment uses SSO — sign in first, then run setup",
+        );
+      if (verified.toLowerCase() !== body.email.toLowerCase())
+        throw forbidden(
+          `signed in as ${verified} — setup can only promote the account you are signed in as`,
+        );
+    }
+
     await sql.begin(async (tx) => {
       await tx`lock table users in exclusive mode`;
       const [row] =
         await tx`select count(*)::int as n from users where role = 'admin' and not disabled`;
       if ((row.n as number) > 0)
         throw conflict("already set up — log in as an admin instead");
+
+      /*
+       * Taking over an existing row means resetting its password and handing
+       * back a session as its owner, so it needs proof the caller is that
+       * person. SSO is the only thing that can give that proof here; without it
+       * the wizard may only create an account nobody was using.
+       */
+      const [existing] =
+        await tx`select id from users where email = ${body.email}`;
+      if (existing && !verified)
+        throw conflict(
+          `an account for ${body.email} already exists — sign in with it instead`,
+        );
+
       await tx`
         insert into users (email, display_name, role, password_hash)
         values (${body.email}, ${body.display_name ?? null}, 'admin', ${hash})

@@ -5,7 +5,7 @@ import { getCustomerIdBySlug } from "../catalog/customers";
 import { resolveComponentStrict } from "../catalog/components";
 import { getSourceProject } from "../sources/projects";
 import type { EntryScope } from "../access/permissions";
-import { removeClone } from "./git";
+import { assertBranchName, assertRepoUrl, removeClone } from "./git";
 
 export const REPO_INDEX_STATUSES = [
   "idle",
@@ -95,6 +95,11 @@ export async function linkRepo(i: RepoInput) {
   const customerId = i.customerSlug
     ? await getCustomerIdBySlug(i.customerSlug)
     : null;
+
+  // Checked here as well as at the spawn: a value that cannot be cloned should
+  // be refused in the form the operator typed it into, not on a later reindex.
+  assertRepoUrl(i.url);
+  if (i.defaultBranch) assertBranchName(i.defaultBranch);
 
   const [row] = await sql`
     insert into repos (slug, url, product_id, source_slug, source_project_id, component_id,
