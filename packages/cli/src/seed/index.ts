@@ -1,6 +1,7 @@
 import { createInterface } from "node:readline/promises";
 import {
   AGENT_CREDENTIALS,
+  API_KEY_EXAMPLE,
   clearPermissionCache,
   env,
   secretsEnabled,
@@ -346,7 +347,7 @@ async function seedCredentials(): Promise<number> {
   if (!admin) return 0;
 
   const values: [string, string][] = [
-    [AGENT_CREDENTIALS.claude, `sk-ant-api03-${"seeded".padEnd(95, "0")}`],
+    [AGENT_CREDENTIALS.claude, `${API_KEY_EXAMPLE}${"seeded".padEnd(95, "0")}`],
     [AGENT_CREDENTIALS.copilot, `ghu_${"seeded".padEnd(36, "0")}`],
   ];
   let n = 0;

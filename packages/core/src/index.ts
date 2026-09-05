@@ -80,6 +80,9 @@ export {
   assertCanWriteScope,
   AGENT_CREDENTIALS,
   ANTHROPIC_OAUTH_CREDENTIAL,
+  API_KEY_EXAMPLE,
+  API_KEY_PREFIX,
+  OAUTH_PREFIX,
   sourceCredentialName,
   envCredential,
   validateCredential,
@@ -450,3 +453,26 @@ export {
   globalRedactionEnabled,
 } from "./compliance";
 export type { RedactOptions, RedactionPolicy } from "./compliance";
+
+/*
+ * The rest of the contract, re-exported wholesale. packages/api and the CLI
+ * import only from here, so anything the contract owns but core does not pass
+ * on is a rule they have to write out by hand — which is how two copies of it
+ * come to exist and drift. test/contract-reach.test.ts holds this complete.
+ */
+export {
+  CLOUD_RE,
+  CLOUD_HINT,
+  SLUG_RE,
+  slugify,
+  WIKILINK_RE,
+  parseWikilink,
+  DEFAULT_SHEET,
+  stripSheetChars,
+  stripFilenameChars,
+  sheetName,
+  columnHeading,
+  fieldName,
+  columnKeys,
+  ARTIFACT_UTILITIES,
+} from "@tachy/contract";

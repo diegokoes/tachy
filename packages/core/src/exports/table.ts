@@ -3,6 +3,7 @@ import {
   TABLE_CELL_TYPES,
   TABLE_FORMATS,
   outputFilename,
+  columnHeading,
 } from "@tachy/contract";
 import type {
   TableCellType,
@@ -176,7 +177,7 @@ export function renderCsv(
   columns: TableColumn[],
   rows: CellValue[][],
 ): Uint8Array {
-  const head = columns.map((c) => csvCell(c.label ?? c.key)).join(",");
+  const head = columns.map((c) => csvCell(columnHeading(c))).join(",");
   const body = rows.map((row) => row.map(csvCell).join(","));
   return new TextEncoder().encode(
     `${CSV_BOM}${[head, ...body].join("\r\n")}\r\n`,

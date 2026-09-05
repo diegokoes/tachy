@@ -1,3 +1,5 @@
+import type { DeploymentProfile } from "@tachy/contract";
+
 export interface Me {
   email: string | null;
   name: string | null;
@@ -13,7 +15,7 @@ export interface AuthConfig {
   sso: boolean;
   passwordLogin: boolean;
 
-  profile?: "support" | "engineering";
+  profile?: DeploymentProfile;
 }
 
 export const session = $state<{

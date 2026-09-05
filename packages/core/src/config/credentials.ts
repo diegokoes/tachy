@@ -14,10 +14,26 @@ import type { AgentProvider } from "./settings";
 import {
   AGENT_CREDENTIALS,
   ANTHROPIC_OAUTH_CREDENTIAL,
+  API_KEY_EXAMPLE,
+  API_KEY_PREFIX,
+  OAUTH_PREFIX,
   validateCredential,
 } from "@tachy/contract";
 
-export { AGENT_CREDENTIALS, ANTHROPIC_OAUTH_CREDENTIAL, validateCredential };
+/*
+ * The prefixes travel with the names. packages/api imports only from
+ * @tachy/core, so leaving them out of this line is what forced
+ * routes/setup.ts to write "sk-ant-oat01-" out by hand — the second copy of a
+ * rule the contract exists to hold once.
+ */
+export {
+  AGENT_CREDENTIALS,
+  ANTHROPIC_OAUTH_CREDENTIAL,
+  API_KEY_EXAMPLE,
+  API_KEY_PREFIX,
+  OAUTH_PREFIX,
+  validateCredential,
+};
 
 /** Where a resolved/available credential came from. */
 export type CredentialSource = Scope | "env";

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { CLOUD_HINT, CLOUD_RE } from "@tachy/contract";
+  import { CONFIDENCES, RESOLUTION_CLARITIES } from "../vocab";
   import type { Snippet } from "svelte";
   import { Button, Checkbox } from "../tui";
   import { onMount, tick, untrack } from "svelte";
@@ -45,6 +47,12 @@
   let tags = $state(csvJoin(seed.tags));
   let confidence = $state(seed.confidence ?? "");
   let cloud = $state(seed.cloud ?? "");
+  // The rule and its wording both come from the contract, which is where the
+  // API's own zod schema gets them: an environment typed as "Prod EU" used to
+  // submit the whole form and come back as a server error.
+  const cloudErr = $derived(
+    cloud && !CLOUD_RE.test(cloud) ? CLOUD_HINT : null,
+  );
   let resolutionClarity = $state(seed.resolution_clarity ?? "");
   let hiddenFix = $state(Boolean(seed.hidden_fix));
   let resolutionPattern = $state(seed.resolution_pattern ?? "");
@@ -247,13 +255,15 @@
 
   <div class="row">
     <label>confidence
-      <AsciiSelect bind:value={confidence} options={[{ value: "", label: "unset" }, "low", "medium", "high"]} />
+      <AsciiSelect bind:value={confidence} options={[{ value: "", label: "unset" }, ...CONFIDENCES]} />
     </label>
     <label>clarity
-      <AsciiSelect bind:value={resolutionClarity} options={[{ value: "", label: "unset" }, "clear", "partial", "unclear"]} />
+      <AsciiSelect bind:value={resolutionClarity} options={[{ value: "", label: "unset" }, ...RESOLUTION_CLARITIES]} />
     </label>
     <label>{t("cloud")}
-      <input class="short" bind:value={cloud} list="entry-form-envs" />
+      <input class="short" bind:value={cloud} list="entry-form-envs"
+        aria-invalid={cloudErr ? "true" : undefined} />
+      {#if cloudErr}<p class="field-error">{cloudErr}</p>{/if}
       <datalist id="entry-form-envs">
         {#each environments as e}<option value={e.cloud}></option>{/each}
       </datalist>
@@ -332,6 +342,7 @@
 </form>
 
 <style>
+  .field-error { color: var(--danger); margin: 0.2rem 0 0; font-size: 0.9em; }
   /* Cancel and save moved to the carved row, so this holds only whatever the
      caller passes as `extra` — centred, and gone entirely when there is none. */
   .formbar {

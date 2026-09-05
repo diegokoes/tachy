@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { KNOWLEDGE_STATUSES, REFERENCE_STATUSES } from "../vocab";
   import { onMount } from "svelte";
   import { api } from "../api";
   import type { KnowledgeRow, NamedRow, ReferenceRow } from "../types";
@@ -69,8 +70,11 @@
     { key: "wiki", label: "wiki" },
   ];
 
-  const STATUSES = ["draft", "approved", "deprecated", "archived", "rejected"];
-  const DOC_STATUSES = ["draft", "approved", "archived"];
+  // From vocab.ts, which exists so these are written once: the hand-typed
+  // copies had drifted out of the order the contract documents as the order
+  // they should be offered in.
+  const STATUSES = KNOWLEDGE_STATUSES;
+  const DOC_STATUSES = REFERENCE_STATUSES;
 
   const kind = $derived(segment(1) ?? "all");
   const param = $derived(segment(2));

@@ -1,3 +1,4 @@
+import { SLUG_RE } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { wouldCycle } from "../infra/hierarchy";
 import { badInput, conflict, notFound } from "../infra/errors";
@@ -28,8 +29,6 @@ export interface WikiCategoryPatch {
   description?: string | null;
   ordinal?: number;
 }
-
-const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 function assertCategorySlug(slug: string): void {
   if (!SLUG_RE.test(slug))
