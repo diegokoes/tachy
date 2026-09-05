@@ -364,6 +364,7 @@ export {
 
 export * from "./sources/source";
 export * from "./sources/fetch";
+export { stripHtml } from "./sources/html";
 export { registerSource, resolveSource } from "./sources";
 export type { ResolvedSource } from "./sources";
 export {

@@ -10,6 +10,5 @@ local_cache/
 backups/
 data/repos/
 db/seed.local.sql
-.gitignore
 .claude/
 docs/

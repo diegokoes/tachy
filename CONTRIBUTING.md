@@ -12,8 +12,9 @@ you ran, what you expected, and what actually happened.
 ## Pull requests
 
 - Branch off `main`, keep the diff focused on one thing.
-- Run `npm run typecheck && npm test` before opening it. CI runs the same two
-  commands and won't merge if they fail.
+- Run `npm run typecheck && npm run web:check && npm run coverage` before
+  opening it. CI runs the same three and won't merge if they fail — `coverage`
+  rather than `test` because that is what applies the thresholds.
 - tachý is AGPL-3.0-or-later; your contribution will be licensed the same way
   once merged.
 

@@ -1,4 +1,9 @@
-import { listSourceProjects, scrubText, TokenMap } from "@tachy/core";
+import {
+  stripHtml,
+  listSourceProjects,
+  scrubText,
+  TokenMap,
+} from "@tachy/core";
 import type {
   WorkItemSource,
   RawWorkItem,
@@ -16,24 +21,6 @@ export type { AdoClient, AdoCfg, JsonPatchOp } from "./client";
 const RELATED_CAP = 15;
 const ARTIFACT_CAP = 10;
 const SYNC_PAGE = 200;
-
-function stripHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
 
 function relationWorkItemId(url: string): number | null {
   const m = url.match(/\/workItems\/(\d+)$/i);

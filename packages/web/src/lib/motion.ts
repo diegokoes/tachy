@@ -58,29 +58,6 @@ export function shatterAll(nodes: HTMLElement[], onComplete: () => void) {
   return tl;
 }
 
-/** Counts [data-val] nodes up from zero; falls back to the final text. */
-export function countUp(root: HTMLElement) {
-  const nodes = root.querySelectorAll<HTMLElement>("[data-val]");
-  if (reducedMotion()) {
-    for (const el of nodes) el.textContent = el.dataset.final ?? "";
-    return;
-  }
-  nodes.forEach((el, i) => {
-    const target = Number(el.dataset.val ?? 0);
-    const suffix = el.dataset.suffix ?? "";
-    const obj = { val: 0 };
-    gsap.to(obj, {
-      val: target,
-      duration: 2.6,
-      delay: i * 0.08,
-      ease: "power2.out",
-      onUpdate: () => {
-        el.textContent = Math.round(obj.val).toLocaleString() + suffix;
-      },
-    });
-  });
-}
-
 /**
  * Resolves a mask of password dots into plain text — in the placeholder if the
  * node is an input, in its text otherwise. A setting the user has not set

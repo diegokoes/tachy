@@ -31,7 +31,6 @@ import {
   getCustomerIdBySlug,
   getCustomerProfile,
   setCustomerFact,
-  deleteCustomerFact,
   listCustomerFactKinds,
   linkCustomerComponent,
   unlinkCustomerComponent,
@@ -111,6 +110,7 @@ import {
   listCustomerUnits,
   addCustomerUnit,
   fetchUntrustedUrl,
+  stripHtml,
   workItemScope,
   externalWorkItemScope,
 } from "@tachy/core";
@@ -608,16 +608,39 @@ async function newEntryScope(i: {
   return {};
 }
 
-function stripHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
+/*
+ * Named once, used by both save_knowledge_entry and update_knowledge_entry.
+ * The update tool's copies were bare — no description at all — so the model got
+ * the guidance on the call that creates an entry and none on the call that
+ * rewrites one. Naming them is also what stops the two drifting.
+ */
+const structuredField = z
+  .record(z.string(), z.any())
+  .optional()
+  .describe(
+    "Narrative context — stored and returned wholesale, never filtered on. Include only the keys that apply; don't force empty objects. Known shape: environment {machine, line, component}, key_signals {error_description, context}, investigation_steps [], conversation_summary, technical_analysis {what_happened, why, system_behavior}, constraints_and_rules [], related_configuration [], related_links [] (full URLs). Extra keys are kept.",
+  );
+
+const symptomsField = z
+  .array(z.string())
+  .optional()
+  .describe(
+    "Observable behaviours, as short phrases rather than sentences. Facts, not interpretations: 'Error 023 in logs' yes, 'possible template issue' no.",
+  );
+
+const signalsField = z
+  .array(z.string())
+  .optional()
+  .describe(
+    "Raw searchable identifiers exactly as they appear — error codes, log patterns, status codes: ['023 TOO_MANY_STRINGS', 'ECONNREFUSED', 'HTTP 503']. Trigram-indexed, so a future search for '023' matches.",
+  );
+
+const tagsField = z
+  .array(z.string())
+  .optional()
+  .describe(
+    "Free-form labels for filtering. Call list_labels first and reuse a slug rather than inventing a near-duplicate; a component slug used as a tag makes the entry findable by component.",
+  );
 
 async function loadContextSources(input: {
   text?: string;
@@ -970,18 +993,8 @@ tool(
         .describe(
           "One-paragraph summary of the problem, with error codes and key symptoms inline.",
         ),
-      symptoms: z
-        .array(z.string())
-        .optional()
-        .describe(
-          "Observable behaviours, as short phrases rather than sentences. Facts, not interpretations: 'Error 023 in logs' yes, 'possible template issue' no.",
-        ),
-      signals: z
-        .array(z.string())
-        .optional()
-        .describe(
-          "Raw searchable identifiers exactly as they appear — error codes, log patterns, status codes: ['023 TOO_MANY_STRINGS', 'ECONNREFUSED', 'HTTP 503']. Trigram-indexed, so a future search for '023' matches.",
-        ),
+      symptoms: symptomsField,
+      signals: signalsField,
       root_cause: z
         .string()
         .optional()
@@ -1009,12 +1022,7 @@ tool(
         .describe(
           "How sure you are that the root_cause and resolution written here are CORRECT — a property of this entry, not of the ticket. 'high': cause identified and the fix confirmed to address it. 'medium': plausible cause, fix worked but was never confirmed to be the reason. 'low': cause unknown or guessed. No root_cause means 'low'.",
         ),
-      tags: z
-        .array(z.string())
-        .optional()
-        .describe(
-          "Free-form labels for filtering. Call list_labels first and reuse a slug rather than inventing a near-duplicate; a component slug used as a tag makes the entry findable by component.",
-        ),
+      tags: tagsField,
       cloud: cloudSchema
         .optional()
         .describe(
@@ -1043,12 +1051,7 @@ tool(
         .describe(
           "Product version the fix landed in  only when actually known.",
         ),
-      structured: z
-        .record(z.string(), z.any())
-        .optional()
-        .describe(
-          "Narrative context — stored and returned wholesale, never filtered on. Include only the keys that apply; don't force empty objects. Known shape: environment {machine, line, component}, key_signals {error_description, context}, investigation_steps [], conversation_summary, technical_analysis {what_happened, why, system_behavior}, constraints_and_rules [], related_configuration [], related_links [] (full URLs). Extra keys are kept.",
-        ),
+      structured: structuredField,
     },
   },
   async (a) => {
@@ -1095,7 +1098,11 @@ tool(
     inputSchema: {
       source: sourceSlug,
       external_id: z.string(),
-      body: z.string(),
+      body: z
+        .string()
+        .describe(
+          "Private note text. It lands on the customer's own ticket in their helpdesk — private to your organisation, not to you, and visible to every agent who opens it. Write it as something a colleague will read six months from now.",
+        ),
     },
   },
   async ({ source, external_id, body }) => {
@@ -1118,7 +1125,12 @@ tool(
       kind: feedbackKindSchema.optional(),
       rating: z.number().int().min(1).max(5).optional(),
       comment: z.string().optional(),
-      patch: z.record(z.string(), z.any()).optional(),
+      patch: z
+        .record(z.string(), z.any())
+        .optional()
+        .describe(
+          "A proposed correction, recorded alongside the feedback rather than applied. Nothing reads it back automatically — a curator decides. To actually change an entry, call update_knowledge_entry.",
+        ),
     },
   },
   async (a) => {
@@ -1144,9 +1156,20 @@ tool(
       mode: runModeSchema,
       work_item_id: z.string().optional(),
       model: z.string().optional(),
-      input_tokens: z.number().int().optional(),
+      input_tokens: z
+        .number()
+        .int()
+        .optional()
+        .describe(
+          "Actual tokens consumed. These rows are what the cost report adds up, so an estimate here becomes a figure someone reads as measured.",
+        ),
       output_tokens: z.number().int().optional(),
-      meta: z.record(z.string(), z.any()).optional(),
+      meta: z
+        .record(z.string(), z.any())
+        .optional()
+        .describe(
+          "Free-form context for this run — the work item, the source, what was attempted. Not a place for the content itself.",
+        ),
     },
   },
   async (a) => {
@@ -1538,9 +1561,9 @@ tool(
       root_cause: z.string().nullable().optional(),
       resolution: z.string().nullable().optional(),
       resolution_pattern: z.string().nullable().optional(),
-      symptoms: z.array(z.string()).optional(),
-      signals: z.array(z.string()).optional(),
-      tags: z.array(z.string()).optional(),
+      symptoms: symptomsField,
+      signals: signalsField,
+      tags: tagsField,
       component: z.string().nullable().optional(),
       customer_slug: z
         .string()
@@ -1569,7 +1592,7 @@ tool(
         .nullable()
         .optional()
         .describe("Product version the fix landed in; null clears it."),
-      structured: z.record(z.string(), z.any()).optional(),
+      structured: structuredField,
       expected_version: z.number().int().optional(),
     },
   },
@@ -1908,7 +1931,7 @@ tool(
         ),
       tags: z.array(z.string()).optional(),
       status: referenceStatusSchema.optional(),
-      structured: z.record(z.string(), z.any()).optional(),
+      structured: structuredField,
       doc_version: z.string().optional(),
       supersedes: z.string().optional(),
       source_project_id: z
@@ -2090,7 +2113,7 @@ tool(
       tags: z.array(z.string()).optional(),
       status: referenceStatusSchema.optional(),
       source: z.string().nullable().optional(),
-      structured: z.record(z.string(), z.any()).optional(),
+      structured: structuredField,
       doc_version: z.string().nullable().optional(),
       customer_slug: z
         .string()

@@ -237,7 +237,7 @@ export function installAuth(
   base: Hono,
   opts: { apiToken?: string; oidc?: OidcConfig; passwordAuth?: boolean },
 ): void {
-  const { apiToken, oidc, passwordAuth } = opts;
+  const { oidc, passwordAuth } = opts;
 
   if (oidc) {
     base.get("/auth/login", oidcAuthMiddleware(), (c) =>

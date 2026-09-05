@@ -25,7 +25,7 @@ pipeline {
                     npm ci
                     npm run typecheck
                     npm run web:check
-                    npm test
+                    npm run coverage
                 '''
             }
         }
@@ -40,20 +40,31 @@ pipeline {
 
                     // main publishes :latest and :<version>; dev publishes :dev.
                     // Separate tags are what keep the two stacks from ever
-                    // pulling each other's image.
-                    env.TAGS = env.BRANCH_NAME == 'dev'
-                        ? "dev"
-                        : "latest ${env.VERSION}"
+                    // pulling each other's image — and a feature branch gets
+                    // its own, because compose defaults to :latest and a
+                    // branch build tagged that way replaces production's image.
+                    env.TAGS = env.BRANCH_NAME == 'main'
+                        ? "latest ${env.VERSION}"
+                        : env.BRANCH_NAME == 'dev'
+                            ? "dev"
+                            : "branch-${env.BRANCH_NAME.replaceAll('[^A-Za-z0-9._-]', '-')}"
 
                     def args = env.TAGS.split(' ').collect {
                         "-t ${env.IMAGE_NAME}:${it}"
                     }.join(' ')
-                    sh "docker build ${args} ."
+                    // The dev stack's build passes this through compose; the
+                    // Jenkins path never did, so the :dev image it publishes
+                    // came out without the badge that says which stack it is.
+                    def badge = env.BRANCH_NAME == 'dev' ? 'dev' : ''
+                    sh "docker build ${args} --build-arg VITE_DEV_BADGE=${badge} ."
                 }
             }
         }
 
         stage('Push to Docker Hub') {
+            // Only the two branches a deployed stack pulls from. A feature
+            // branch builds, and is tested, but nothing pulls its image.
+            when { anyOf { branch 'main'; branch 'dev' } }
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-credentials',
@@ -61,8 +72,9 @@ pipeline {
                     passwordVariable: 'DH_PASS'
                 )]) {
                     script {
+                        // No trap here: it fires when *this* shell exits,
+                        // which is before the pushes below run.
                         sh '''
-                            trap 'docker logout' EXIT
                             echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin
                         '''
                         for (tag in env.TAGS.split(' ')) {
@@ -74,6 +86,9 @@ pipeline {
                     }
                 }
             }
+            // Where the trap was trying to be: after the pushes, and still on
+            // the way out of a failed one.
+            post { always { sh 'docker logout || true' } }
         }
 
         // Pull-and-restart on the office server. Restarting drops in-flight
