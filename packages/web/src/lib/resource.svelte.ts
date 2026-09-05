@@ -6,6 +6,28 @@ export function errText(e: unknown): string {
 }
 
 /**
+ * The sequence guard out of `createResource`, for the views that load by hand
+ * rather than through it. Call the returned function at the top of a load; the
+ * predicate it gives back is false once a newer load has started, so a slow
+ * response cannot overwrite a fast one that came after it.
+ *
+ *   const current = createSequence();
+ *   async function load() {
+ *     const isCurrent = current();
+ *     const next = await api.get(…);
+ *     if (!isCurrent()) return;
+ *     …
+ *   }
+ */
+export function createSequence(): () => () => boolean {
+  let seq = 0;
+  return () => {
+    const mine = ++seq;
+    return () => mine === seq;
+  };
+}
+
+/**
  * One load/loading/error/reload lifecycle, shared by every list view instead
  * of being hand-rolled per panel. `mutate` runs a write and reloads on success.
  */

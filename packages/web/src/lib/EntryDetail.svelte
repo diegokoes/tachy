@@ -78,6 +78,10 @@
   async function load() {
     error = null;
     conflict = false;
+    // Cleared with the rest, as DocDetail does: it is only refetched for an
+    // entry that has a product and no team of its own, so carrying the last
+    // entry's value forward showed an Edit button on another team's entry.
+    productTeamSlug = null;
     try {
       entry = await api.get<KnowledgeRow>(`/knowledge/${id}`);
       feedback = await api.get<Feedback[]>(`/knowledge/${id}/feedback`);
@@ -368,20 +372,24 @@
           {/if}
         {/if}
 
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
+           focusable wikilink anchors this div delegates to -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
+           wrapper, not an interactive element of its own -->
         {#if entry.root_cause}
           <section>
             <h3>Root cause</h3>
-            <div class="md prose" onclick={links.onClick}>{@html prose(entry.root_cause)}</div>
+            <div class="md prose" onclick={links.onClick} onkeydown={links.onKeydown}>{@html prose(entry.root_cause)}</div>
           </section>
         {/if}
         {#if entry.resolution}
           <section>
             <h3>Resolution</h3>
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="md prose" onclick={links.onClick}>{@html prose(entry.resolution)}</div>
+            <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
+           focusable wikilink anchors this div delegates to -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
+           wrapper, not an interactive element of its own -->
+            <div class="md prose" onclick={links.onClick} onkeydown={links.onKeydown}>{@html prose(entry.resolution)}</div>
           </section>
         {/if}
 

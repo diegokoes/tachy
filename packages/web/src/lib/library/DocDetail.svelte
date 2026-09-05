@@ -320,9 +320,11 @@
 
   <!-- Imported bodies are markdown at the source (an ADO wiki page is), and a
        [[wikilink]] cannot render inside a <pre>. -->
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="body md" onclick={links.onClick}>
+  <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
+           focusable wikilink anchors this div delegates to -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
+           wrapper, not an interactive element of its own -->
+  <div class="body md" onclick={links.onClick} onkeydown={links.onKeydown}>
     {@html markBrokenLinks(renderMarkdown(doc.body ?? "(no body)"), links.resolved)}
   </div>
 

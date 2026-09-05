@@ -31,7 +31,14 @@ export const wikilinkExtension = {
     return { type: "wikilink", raw: m[0], ...parseWikilink(m[1], m[2]) };
   },
   renderer(token: any) {
-    return `<a class="wikilink" data-wikilink="${esc(token.target)}">${esc(token.label)}</a>`;
+    /*
+     * role and tabindex, because there is no href to give it: the route a
+     * target resolves to is only known once the server has answered, and until
+     * then an anchor without href is not focusable and is not announced as a
+     * link. LinkTargets.onKeydown is the other half — without it these would be
+     * reachable by keyboard and still not followable.
+     */
+    return `<a class="wikilink" role="link" tabindex="0" data-wikilink="${esc(token.target)}">${esc(token.label)}</a>`;
   },
 };
 
@@ -45,7 +52,7 @@ export function renderMarkdown(src: string): string {
     // emits — ADD_ATTR extends ALLOWED_ATTR, which is checked independently of
     // the data-* rule.
     ALLOW_DATA_ATTR: false,
-    ADD_ATTR: ["data-wikilink"],
+    ADD_ATTR: ["data-wikilink", "role", "tabindex"],
   });
 }
 
@@ -54,11 +61,14 @@ export function renderMarkdown(src: string): string {
  * silently dead. `resolved` is the set of targets the server found a row for.
  */
 export function markBrokenLinks(html: string, resolved: Set<string>): string {
+  // Rewrites only the class, leaving the a11y attributes between it and
+  // data-wikilink alone — matching the whole opening tag by shape instead meant
+  // this silently stopped marking anything the moment one was added.
   return html.replace(
-    /<a class="wikilink" data-wikilink="([^"]*)"/g,
-    (match, target) =>
+    /<a class="wikilink"((?:\s+[a-z-]+="[^"]*")*?\s+data-wikilink="([^"]*)")/g,
+    (match, rest: string, target: string) =>
       resolved.has(target)
         ? match
-        : `<a class="wikilink broken" title="no such article yet" data-wikilink="${target}"`,
+        : `<a class="wikilink broken" title="no such article yet"${rest}`,
   );
 }

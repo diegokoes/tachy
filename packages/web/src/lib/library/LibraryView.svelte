@@ -501,18 +501,27 @@
               hidden: true,
               run: () => searchEl?.focus(),
             },
-            // With a query on, the rows are the matches, so n/N steps them.
-            ...(q.trim()
-              ? [
-                  { key: "n", label: "", hidden: true, run: () => moveCursor(1) },
-                  {
-                    key: "shift+n",
-                    label: "",
-                    hidden: true,
-                    run: () => moveCursor(-1),
-                  },
-                ]
-              : []),
+            /*
+             * n/N step the matches, and only mean that with a query on — but
+             * the check belongs inside `run`, not in the effect body. Read out
+             * here it made `q` a dependency of the whole scope, so every
+             * keystroke in the search box tore down and re-registered all
+             * eleven bindings; and because pushScope appends while resolution
+             * runs innermost-first, each re-push promoted these above any scope
+             * opened since.
+             */
+            {
+              key: "n",
+              label: "",
+              hidden: true,
+              run: () => q.trim() && moveCursor(1),
+            },
+            {
+              key: "shift+n",
+              label: "",
+              hidden: true,
+              run: () => q.trim() && moveCursor(-1),
+            },
           ]
         : []),
     ]);
