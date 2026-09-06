@@ -19,18 +19,8 @@
     type Column,
     type Draft,
   } from "../tui";
-  import {
-    INFO,
-    type AreaRule,
-    type Component,
-    type Connection,
-    type Customer,
-    type Product,
-    type ProjectWiki,
-    type Repo,
-    type SourceProject,
-    type Team,
-  } from "./shared";
+  import type { AreaRule, Component, Connection, Customer, Product, ProjectWiki, Repo, SourceProject, Team } from "./rows";
+import { INFO } from "./help";
   import { claimTopAction } from "./topAction.svelte";
 
   type Found = { key: string; name: string };

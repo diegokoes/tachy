@@ -1,7 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import {
   registerSource,
@@ -29,16 +28,41 @@ registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
 registerSource("azure-devops", createAzureDevopsSource);
 
+/**
+ * Enough pages for any real backlog. An adapter that keeps handing back the same
+ * cursor would otherwise walk one page for as long as the process runs.
+ */
+const MAX_SYNC_PAGES = 10_000;
+
 async function sync(
   sourceSlug: string,
   opts: { since?: string; group?: string },
 ) {
   const { conn, source } = await resolveSource(sourceSlug);
+  // An explicit --since wins; otherwise pick up where the last good run stopped.
+  const [row] =
+    await sql`select last_synced_at from source_connections where id = ${conn.id}`;
+  const since =
+    opts.since ??
+    (row?.last_synced_at
+      ? new Date(row.last_synced_at as string).toISOString()
+      : undefined);
+  if (!opts.since && since) console.log(`resuming from ${since}`);
+
+  // Taken before the walk, not after: anything changed while it runs must be
+  // picked up next time rather than stepped over.
+  const startedAt = new Date();
+
   let cursor: string | undefined;
   let total = 0;
-  do {
+  const seen = new Set<string>();
+  for (let page = 0; ; page++) {
+    if (page >= MAX_SYNC_PAGES)
+      throw new Error(
+        `${sourceSlug} did not finish within ${MAX_SYNC_PAGES} pages — stopping rather than looping`,
+      );
     const { items, nextCursor } = await source.listItems({
-      updatedSince: opts.since,
+      updatedSince: since,
       groupKey: opts.group,
       cursor,
     });
@@ -46,8 +70,22 @@ async function sync(
       await ingestWorkItem(conn.id, it);
       total++;
     }
+    if (!nextCursor) break;
+    if (seen.has(nextCursor))
+      throw new Error(
+        `${sourceSlug} returned the cursor '${nextCursor}' twice — stopping rather than looping`,
+      );
+    seen.add(nextCursor);
     cursor = nextCursor;
-  } while (cursor);
+  }
+
+  // Only on a clean walk. A run that threw has committed part of its items, and
+  // moving the watermark would step over the rest on the next attempt.
+  if (!opts.group)
+    await sql`
+      update source_connections set last_synced_at = ${startedAt} where id = ${conn.id}
+    `;
+
   await recordRun({
     userId: await resolveCurrentUserId(),
     mode: "sync",
@@ -100,8 +138,31 @@ async function indexRepoCmd(slug: string) {
   );
 }
 
+/**
+ * The connection string carries the password, and argv is world-readable via
+ * /proc — so it travels in the child's environment instead, and is never printed
+ * back. `redactedDbUrl` is what a prompt or a log line gets.
+ */
+function pgEnv(): NodeJS.ProcessEnv {
+  const u = new URL(env.databaseUrl);
+  const e = { ...process.env };
+  e.PGHOST = u.hostname;
+  if (u.port) e.PGPORT = u.port;
+  if (u.username) e.PGUSER = decodeURIComponent(u.username);
+  if (u.password) e.PGPASSWORD = decodeURIComponent(u.password);
+  const db = u.pathname.replace(/^\//, "");
+  if (db) e.PGDATABASE = db;
+  return e;
+}
+
+function redactedDbUrl(): string {
+  const u = new URL(env.databaseUrl);
+  if (u.password) u.password = "***";
+  return u.toString();
+}
+
 function runPg(bin: string, args: string[]) {
-  const res = spawnSync(bin, args, { stdio: "inherit" });
+  const res = spawnSync(bin, args, { stdio: "inherit", env: pgEnv() });
   if (res.error && (res.error as NodeJS.ErrnoException).code === "ENOENT") {
     throw new Error(
       `${bin} not found on PATH. Install the PostgreSQL client tools to use this command.`,
@@ -116,7 +177,7 @@ function backup(opts: { out?: string }) {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19);
   const file = join(dir, `tachy-${stamp}.dump`);
-  runPg("pg_dump", ["-Fc", "-d", env.databaseUrl, "-f", file]);
+  runPg("pg_dump", ["-Fc", "-f", file]);
   console.log(`wrote ${file}`);
 }
 
@@ -129,7 +190,7 @@ async function restore(opts: { file?: string; yes?: boolean }) {
       output: process.stdout,
     });
     const ans = await rl.question(
-      `This OVERWRITES the database at ${env.databaseUrl}. Continue? [y/N] `,
+      `This OVERWRITES the database at ${redactedDbUrl()}. Continue? [y/N] `,
     );
     rl.close();
     if (ans.trim().toLowerCase() !== "y") return console.log("aborted");
@@ -138,7 +199,7 @@ async function restore(opts: { file?: string; yes?: boolean }) {
     "--clean",
     "--if-exists",
     "-d",
-    env.databaseUrl,
+    pgEnv().PGDATABASE!,
     opts.file,
   ]);
   console.log("restore complete");

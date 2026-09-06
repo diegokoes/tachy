@@ -125,3 +125,13 @@ export function columnKeys(
     return key;
   });
 }
+
+/**
+ * Tools an artifact may pre-authorise, so that attaching one does not put up a
+ * review box for the very thing it exists to do. Enumerated rather than free
+ * text: the list becomes an auto-approve list for every user the artifact is
+ * shared with, and a team- or global-scoped artifact naming `create_ado_work_item`
+ * would silently pre-approve that for all of them.
+ */
+export const ARTIFACT_UTILITIES = ["export_table"] as const;
+export type ArtifactUtility = (typeof ARTIFACT_UTILITIES)[number];

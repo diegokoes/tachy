@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { api, ApiError } from "./api";
+  import { fmtDate } from "./dates";
+  import { statusTone } from "./library/status";
+  import { patchLibraryItem } from "./library/edit";
+  import { createSequence } from "./resource.svelte";
+  import { api } from "./api";
   import type { KnowledgeRow, Feedback, NamedRow } from "./types";
   import History from "./library/History.svelte";
   import Backlinks from "./wiki/Backlinks.svelte";
@@ -46,10 +50,6 @@
     !!entry && canCurateScope({ team_id: entry.team_id as string | null | undefined, team_slug: productTeamSlug }),
   );
 
-  const fmtDate = (d?: string) => (d ? new Date(d).toISOString().slice(0, 10) : "");
-
-  const statusTone = (s: string) =>
-    s === "approved" ? "ok" : s === "draft" ? "accent" : s === "rejected" ? "danger" : s === "deprecated" ? "warn" : "muted";
 
   /** Reading the entry, backspace goes back. Not bound while editing, where it
       would sit one stray keystroke away from discarding a form.
@@ -75,20 +75,36 @@
     return setTopActions(readActions);
   });
 
+  const current = createSequence();
+
   async function load() {
+    const isCurrent = current();
     error = null;
     conflict = false;
+    // Cleared with the rest, as DocDetail does: it is only refetched for an
+    // entry that has a product and no team of its own, so carrying the last
+    // entry's value forward showed an Edit button on another team's entry.
+    productTeamSlug = null;
+    entry = null;
     try {
-      entry = await api.get<KnowledgeRow>(`/knowledge/${id}`);
-      feedback = await api.get<Feedback[]>(`/knowledge/${id}/feedback`);
+      const next = await api.get<KnowledgeRow>(`/knowledge/${id}`);
+      if (!isCurrent()) return;
+      entry = next;
+      const fb = await api.get<Feedback[]>(`/knowledge/${id}/feedback`);
+      if (!isCurrent()) return;
+      feedback = fb;
       await links.load("knowledge", id);
+      if (!isCurrent()) return;
 
-
-      if (isCurator() && entry.product_id && !entry.team_id) {
+      if (isCurator() && next.product_id && !next.team_id) {
         const products = await api.get<NamedRow[]>("/products");
-        productTeamSlug = (products.find((p) => p.id === entry!.product_id)?.team_slug as string) ?? null;
+        if (!isCurrent()) return;
+        productTeamSlug =
+          (products.find((p) => p.id === next.product_id)
+            ?.team_slug as string) ?? null;
       }
     } catch (e) {
+      if (!isCurrent()) return;
       error = e instanceof Error ? e.message : String(e);
     }
   }
@@ -98,21 +114,21 @@
     mutating = true;
     mutateError = null;
     conflict = false;
-    try {
-      await api.patch(`/knowledge/${id}`, { ...body, expectedVersion: entry.version });
+    const res = await patchLibraryItem(
+      `/knowledge/${id}`,
+      body,
+      entry.version,
+      "entry",
+    );
+    if (res.ok) {
       editing = false;
       deprecating = false;
       await load();
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        conflict = true;
-        mutateError = "someone else edited this entry in the meantime - reload to get the latest version";
-      } else {
-        mutateError = e instanceof Error ? e.message : String(e);
-      }
-    } finally {
-      mutating = false;
+    } else {
+      conflict = res.conflict;
+      mutateError = res.message;
     }
+    mutating = false;
   }
 
   async function deprecate() {
@@ -368,20 +384,24 @@
           {/if}
         {/if}
 
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
+           focusable wikilink anchors this div delegates to -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
+           wrapper, not an interactive element of its own -->
         {#if entry.root_cause}
           <section>
             <h3>Root cause</h3>
-            <div class="md prose" onclick={links.onClick}>{@html prose(entry.root_cause)}</div>
+            <div class="md prose" onclick={links.onClick} onkeydown={links.onKeydown}>{@html prose(entry.root_cause)}</div>
           </section>
         {/if}
         {#if entry.resolution}
           <section>
             <h3>Resolution</h3>
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -->
-            <div class="md prose" onclick={links.onClick}>{@html prose(entry.resolution)}</div>
+            <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
+           focusable wikilink anchors this div delegates to -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
+           wrapper, not an interactive element of its own -->
+            <div class="md prose" onclick={links.onClick} onkeydown={links.onKeydown}>{@html prose(entry.resolution)}</div>
           </section>
         {/if}
 

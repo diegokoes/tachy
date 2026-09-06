@@ -24,6 +24,7 @@
     busy = false,
     disabled = false,
     width = "34rem",
+    element = $bindable(),
     onConfirm,
     onCancel,
     barExtra,
@@ -47,6 +48,8 @@
     busy?: boolean;
     disabled?: boolean;
     width?: string;
+    /** The dialog window itself, for a caller that has to draw against it. */
+    element?: HTMLElement;
     onConfirm?: () => void;
     onCancel: () => void;
     /** Extra bar actions, left of cancel. */
@@ -55,6 +58,9 @@
   } = $props();
 
   let win = $state<HTMLElement>();
+  $effect(() => {
+    element = win;
+  });
   let bodyEl = $state<HTMLElement>();
   let mine = 0;
   const top = $derived(mine === depth);

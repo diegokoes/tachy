@@ -1,7 +1,13 @@
 <script lang="ts">
+  import { PROVIDER_OPTIONS } from "./vocab";
   import { api } from "./api";
+  import {
+    AGENT_EFFORTS,
+    MIN_PASSWORD_LENGTH,
+    OAUTH_PREFIX,
+  } from "@tachy/contract";
   import type { AgentProvider } from "@tachy/contract";
-  import { csv } from "./admin/shared";
+  import { csv } from "./fields";
   import { initSession } from "./session.svelte";
   import { errText } from "./resource.svelte";
   import { slugify } from "./slug";
@@ -26,13 +32,18 @@
   let password2 = $state("");
   let orgName = $state("");
   let teamName = $state("");
-  let products = $state<{ name: string }[]>([{ name: "" }]);
+  // `id` exists only to key the {#each}: the rows have no identity of their own
+  // until they are named, and splicing one shifts every index after it.
+  let nextProductId = 1;
+  let products = $state<{ id: number; name: string }[]>([
+    { id: nextProductId++, name: "" },
+  ]);
   let redaction = $state(false);
   let agentProvider = $state<AgentProvider>("claude");
   let agentKey = $state("");
   let agentModel = $state("claude-sonnet-5");
   const agentKeyIsOAuth = $derived(
-    agentProvider === "claude" && agentKey.startsWith("sk-ant-oat01-"),
+    agentProvider === "claude" && agentKey.startsWith(OAUTH_PREFIX),
   );
   let agentEffort = $state("medium");
   let allowedModels = $state("");
@@ -56,8 +67,8 @@
       : null,
   );
   const passwordErr = $derived(
-    (password.length > 0 ? password.length < 10 : attempted)
-      ? "at least 10 characters"
+    (password.length > 0 ? password.length < MIN_PASSWORD_LENGTH : attempted)
+      ? `at least ${MIN_PASSWORD_LENGTH} characters`
       : null,
   );
   const matchErr = $derived(
@@ -67,7 +78,7 @@
   );
   const accountValid = $derived(
     /\S+@\S+\.\S+/.test(email) &&
-      password.length >= 10 &&
+      password.length >= MIN_PASSWORD_LENGTH &&
       password === password2,
   );
 
@@ -202,7 +213,10 @@
 
           <div class="list">
             <span class="ll">{wt.products}</span>
-            {#each products as p, i}
+            <!-- Keyed: the list is spliced from the middle, and binding by
+                 index into an unkeyed block shifts values under the cursor of
+                 whoever is typing in a later row. -->
+            {#each products as p, i (p.id)}
               <div class="prow">
                 <input
                   bind:value={products[i].name}
@@ -232,7 +246,7 @@
                 title={`add another ${wt.product}`}
                 aria-label={`add another ${wt.product}`}
                 disabled={!teamName.trim()}
-                onclick={() => products.push({ name: "" })}
+                onclick={() => products.push({ id: nextProductId++, name: "" })}
               />
             </div>
           </div>
@@ -242,10 +256,7 @@
             <Field label="provider">
               <Select
                 bind:value={agentProvider}
-                options={[
-                  { value: "claude", label: "claude (Anthropic)" },
-                  { value: "copilot", label: "copilot (GitHub)" },
-                ]}
+                options={PROVIDER_OPTIONS}
               />
             </Field>
             <Field label="model">
@@ -269,7 +280,7 @@
             <Field label="effort">
               <Select
                 bind:value={agentEffort}
-                options={["low", "medium", "high", "xhigh", "max"]}
+                options={[...AGENT_EFFORTS]}
               />
             </Field>
           </div>

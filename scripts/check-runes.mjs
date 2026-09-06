@@ -42,4 +42,60 @@ if (bad.length) {
   for (const b of bad) console.error("  " + b);
   process.exit(1);
 }
+
+/*
+ * The same failure shape from the other side, and it only bites primitives.
+ * `export const s = $state({…})` is fine: the object is a proxy, so every
+ * importer shares it and mutations are reactive — which is why `session`,
+ * `chat`, `themeState`, `keymap` and `router` are all objects. But
+ * `export const n = $state(0)` exports the value at that instant, so no
+ * importer ever sees it change, and it compiles and typechecks cleanly.
+ *
+ * A module-level `$effect` is the other one: it throws `effect_orphan` on
+ * import, which is the same blank page the check above exists for.
+ */
+const REACTIVE_MODULES = [];
+function walkSvelteTs(dir, out = []) {
+  for (const name of readdirSync(dir)) {
+    if (name === "node_modules" || name === "dist" || name.startsWith("."))
+      continue;
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) walkSvelteTs(path, out);
+    else if (/\.svelte\.[cm]?[jt]s$/.test(name)) out.push(path);
+  }
+  return out;
+}
+
+// A literal, or nothing at all — the cases where the export is a value rather
+// than a shared proxy. An object, array, call or identifier is left alone.
+const EXPORTED_PRIMITIVE =
+  /^\s*export\s+(?:const|let)\s+[\w$]+\s*(?::[^=]+)?=\s*\$(?:state|derived)(?:\.raw)?(?:<[^>]*>)?\(\s*(\)|-?\d|["'`]|true\b|false\b|null\b|undefined\b)/;
+const ORPHAN_EFFECT = /^\$effect[.(]/;
+
+for (const path of walkSvelteTs(join(ROOT, "packages"))) {
+  readFileSync(path, "utf8")
+    .split("\n")
+    .forEach((line, i) => {
+      if (EXPORTED_PRIMITIVE.test(line))
+        REACTIVE_MODULES.push(
+          `${relative(ROOT, path)}:${i + 1}  ${line.trim()}\n` +
+            "      exports the value, not the signal — wrap it in an object or a getter",
+        );
+      if (ORPHAN_EFFECT.test(line))
+        REACTIVE_MODULES.push(
+          `${relative(ROOT, path)}:${i + 1}  ${line.trim()}\n` +
+            "      $effect at module scope throws effect_orphan on import",
+        );
+    });
+}
+
+if (REACTIVE_MODULES.length) {
+  console.error(
+    "Reactive state that will not be reactive where it is used.\n" +
+      "Both of these build cleanly and fail at runtime.\n",
+  );
+  for (const b of REACTIVE_MODULES) console.error("  " + b);
+  process.exit(1);
+}
+
 console.log("check-runes: clean");

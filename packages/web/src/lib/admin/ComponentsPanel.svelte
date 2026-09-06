@@ -8,8 +8,9 @@
   import { slugify, uniqueSlug } from "../slug";
   import SlugRename from "./SlugRename.svelte";
   import ScopeBar from "./ScopeBar.svelte";
-  import { csv, INFO } from "./shared";
-  import type { Component, Product, Repo } from "./shared";
+  import { INFO } from "./help";
+import { csv } from "../fields";
+  import type { Component, Product, Repo } from "./rows";
   import { claimTopAction } from "./topAction.svelte";
 
   let productSlug = $state("");

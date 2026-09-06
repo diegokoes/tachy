@@ -1,6 +1,7 @@
 import { createInterface } from "node:readline/promises";
 import {
   AGENT_CREDENTIALS,
+  API_KEY_EXAMPLE,
   clearPermissionCache,
   env,
   secretsEnabled,
@@ -9,7 +10,7 @@ import {
   sql,
 } from "@tachy/core";
 import type { Tx } from "./batches";
-import { SCALES, SCALE_NAMES, type ScaleName } from "./scale";
+import { SCALES, type ScaleName } from "./scale";
 import { seedOrg, ADMIN_EMAIL, DEV_PASSWORD, MEMBER_EMAIL } from "./org";
 import { seedCatalog } from "./catalog";
 import { seedSources } from "./sources";
@@ -346,7 +347,7 @@ async function seedCredentials(): Promise<number> {
   if (!admin) return 0;
 
   const values: [string, string][] = [
-    [AGENT_CREDENTIALS.claude, `sk-ant-api03-${"seeded".padEnd(95, "0")}`],
+    [AGENT_CREDENTIALS.claude, `${API_KEY_EXAMPLE}${"seeded".padEnd(95, "0")}`],
     [AGENT_CREDENTIALS.copilot, `ghu_${"seeded".padEnd(36, "0")}`],
   ];
   let n = 0;

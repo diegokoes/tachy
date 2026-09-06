@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, basename } from "node:path";
-import { tmpdir, homedir } from "node:os";
+import { homedir } from "node:os";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { zValidator } from "@hono/zod-validator";
@@ -20,7 +20,6 @@ import {
   effectivePrefs,
   resolveCredential,
   resolveAgentAuth,
-  secretsEnabled,
   listSourceConnections,
   sourceCredentialName,
   getArtifact,
@@ -29,7 +28,9 @@ import {
   type ArtifactSpec,
   type EffectiveSettings,
   type ScopeContext,
+  uploadDir,
 } from "@tachy/core";
+import { requireCaller } from "../authz";
 import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
 import { sessionEmail } from "../auth";
 import { BUILTIN_COMMANDS, findCommand, commandAutoApprove } from "../commands";
@@ -58,8 +59,6 @@ const sweep = setInterval(() => {
 }, 60_000);
 sweep.unref?.();
 
-const uploadDir =
-  process.env.TACHY_UPLOAD_DIR || join(tmpdir(), "tachy-uploads");
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
 /**
@@ -102,14 +101,42 @@ async function userConfigDir(userId: string | undefined): Promise<string> {
   return dir;
 }
 
+/**
+ * What the MCP subprocess inherits from the server, named rather than copied.
+ * The subprocess runs on behalf of one caller, so anything the server holds for
+ * everyone — the vault key, the session and API secrets, the OIDC client
+ * secret, the server's own agent and source tokens — must not travel with it.
+ * A copy-then-delete list would grow a hole every time a new secret is added.
+ */
+const INHERITED_ENV = [
+  "PATH",
+  "HOME",
+  "LANG",
+  "LC_ALL",
+  "TZ",
+  "TMPDIR",
+  "NODE_ENV",
+  "DATABASE_URL",
+  "LOG_LEVEL",
+  "TACHY_REPO_DIR",
+  "TACHY_UPLOAD_DIR",
+  "TACHY_MODEL_CACHE",
+  "TACHY_EMBED_MODEL",
+  "TACHY_OUTPUT_TTL_HOURS",
+  // Set per test worker; the subprocess reads the same schema as its parent.
+  "TEST_SCHEMA",
+];
+
 export async function mcpConfig(
   userEmail: string | undefined,
   settings: EffectiveSettings,
   turnId?: string,
 ): Promise<Omit<AgentConfig, "systemPromptAppend">> {
   const mcpEnv: Record<string, string> = {};
-  for (const [k, v] of Object.entries(process.env))
+  for (const k of INHERITED_ENV) {
+    const v = process.env[k];
     if (typeof v === "string") mcpEnv[k] = v;
+  }
   if (userEmail) mcpEnv.TACHY_USER_EMAIL = userEmail;
   // Lets a write made during a turn be told apart from one made by someone
   // pointing their own MCP client at tachy, and links it back to the run.
@@ -130,17 +157,20 @@ export async function mcpConfig(
     : {};
   // Caller-scoped tokens are only safe here because this env is built fresh
   // for each turn's MCP subprocess — never pool or share it across users.
-  if (secretsEnabled()) {
-    for (const conn of await listSourceConnections()) {
-      const token = await resolveCredential(
-        sourceCredentialName(conn.source_type, conn.slug),
-        ctx,
-      );
-      if (token !== undefined)
-        mcpEnv[
-          `${envVarName(conn.source_type)}_TOKEN_${envVarName(conn.slug)}`
-        ] = token;
-    }
+  //
+  // Resolved here rather than in the subprocess, and unconditionally: the child
+  // has no TACHY_SECRET_KEY, so its own resolveCredential falls straight to
+  // these variables. Left to resolve for itself it would pass an empty scope,
+  // and the `or scope = 'global'` leg of the lookup would hand every caller the
+  // org-wide row instead of their own.
+  for (const conn of await listSourceConnections()) {
+    const token = await resolveCredential(
+      sourceCredentialName(conn.source_type, conn.slug),
+      ctx,
+    );
+    if (token !== undefined)
+      mcpEnv[`${envVarName(conn.source_type)}_TOKEN_${envVarName(conn.slug)}`] =
+        token;
   }
 
   const prefs = user
@@ -327,21 +357,31 @@ export const agent = new Hono()
     const entry = turns.get(turnId);
     if (!entry) throw notFound("unknown or finished turn");
     const email = (await sessionEmail(c)) ?? env.userEmail;
-    if (entry.email && entry.email !== email)
+    // A turn that resolved no email is answerable by whoever started it and
+    // nobody else; without the first clause an unattributed turn was open to
+    // anyone who guessed its id.
+    if (entry.email !== email)
       throw forbidden("only the user who started this turn can approve it");
     entry.turn.approve(id, { approve, message, updatedInput });
     return c.json({ ok: true });
   })
 
   .post("/uploads", async (c) => {
+    await requireCaller(c);
+    // Checked before parseBody, which buffers the whole request first: past
+    // that point the limit has already been paid for in memory.
+    const declared = Number(c.req.header("content-length") ?? 0);
+    if (declared > MAX_UPLOAD_BYTES)
+      throw badInput("file too large (max 25 MB)");
     const body = await c.req.parseBody();
     const file = body.file;
     if (!(file instanceof File)) throw badInput("expected a 'file' field");
     if (file.size > MAX_UPLOAD_BYTES)
       throw badInput("file too large (max 25 MB)");
-    await mkdir(uploadDir, { recursive: true });
+    const dir = uploadDir();
+    await mkdir(dir, { recursive: true });
     const safe = `${randomUUID()}-${basename(file.name || "upload")}`;
-    const path = join(uploadDir, safe);
+    const path = join(dir, safe);
     await writeFile(path, Buffer.from(await file.arrayBuffer()));
     return c.json({ path, filename: file.name });
   });

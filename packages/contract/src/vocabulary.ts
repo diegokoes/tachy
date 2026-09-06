@@ -62,3 +62,34 @@ export type LibraryActor = (typeof LIBRARY_ACTORS)[number];
 export const CLOUD_RE = /^[a-z0-9][a-z0-9._/-]*$/;
 export const CLOUD_HINT =
   "environment must be a lowercase slug (e.g. prod, qa, demo/preprod)";
+
+/**
+ * How hard the agent is asked to think, and which deployment the product is
+ * dressed as. Both are offered as a dropdown in the SPA and validated by the
+ * API, so both belong here rather than in core, which the SPA cannot import.
+ */
+export const AGENT_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+export type AgentEffort = (typeof AGENT_EFFORTS)[number];
+
+export const DEPLOYMENT_PROFILES = ["support", "engineering"] as const;
+export type DeploymentProfile = (typeof DEPLOYMENT_PROFILES)[number];
+
+/**
+ * The wizard refuses a shorter one in the field, and hashPassword refuses it
+ * again on the way in. Two enforcement points, so one number.
+ */
+export const MIN_PASSWORD_LENGTH = 10;
+
+/**
+ * What a slug may look like. `SLUG_RE` is the strict form most things use;
+ * environments and customer units are looser, and say so where they differ.
+ */
+export const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
+
+/** Lowercases and hyphenates a typed name into something SLUG_RE accepts. */
+export function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}

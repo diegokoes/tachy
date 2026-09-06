@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button } from "../tui";
-  import { EXTRA_FILTERS, type FacetKey, type Facets } from "./filters.svelte";
+  import { EXTRA_FILTERS, type FacetKey, type Facets } from "./filters";
 
   let {
     shown,

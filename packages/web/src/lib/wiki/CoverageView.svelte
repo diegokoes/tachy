@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { createSequence } from "../resource.svelte";
   import { api } from "../api";
   import { navigate } from "../router.svelte";
   import { isCurator } from "../session.svelte";
@@ -18,11 +19,17 @@
     load();
   });
 
+  const current = createSequence();
+
   async function load() {
+    const isCurrent = current();
     error = null;
     try {
-      data = await api.get<Coverage>(`/library/wiki/${scope}/coverage`);
+      const next = await api.get<Coverage>(`/library/wiki/${scope}/coverage`);
+      if (!isCurrent()) return;
+      data = next;
     } catch (e) {
+      if (!isCurrent()) return;
       error = e instanceof Error ? e.message : String(e);
       data = null;
     }

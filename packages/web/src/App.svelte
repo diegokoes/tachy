@@ -8,7 +8,7 @@
   import SetupWizard from "./lib/SetupWizard.svelte";
   import LoginView from "./lib/LoginView.svelte";
   import { session, initSession } from "./lib/session.svelte";
-  import { navItems } from "./lib/nav.svelte";
+  import { navItems } from "./lib/nav";
   import { reducedMotion } from "./lib/gsap";
   import { wipeIn } from "./lib/motion";
   import StarField from "./lib/StarField.svelte";

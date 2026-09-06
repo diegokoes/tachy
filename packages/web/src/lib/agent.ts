@@ -59,23 +59,33 @@ export async function* chatStream(
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let idx: number;
-    while ((idx = buf.indexOf("\n\n")) >= 0) {
-      const raw = buf.slice(0, idx);
-      buf = buf.slice(idx + 2);
-      let event = "message";
-      let data = "";
-      for (const line of raw.split("\n")) {
-        if (line.startsWith("event:")) event = line.slice(6).trim();
-        else if (line.startsWith("data:")) data += line.slice(5).trim();
+  /*
+   * The `finally` is the point: a consumer that stops early — the caller's
+   * catch, or the component being destroyed mid-turn — leaves this generator
+   * suspended at a yield, and without it the reader is never cancelled and the
+   * response body stays open.
+   */
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let idx: number;
+      while ((idx = buf.indexOf("\n\n")) >= 0) {
+        const raw = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        let event = "message";
+        let data = "";
+        for (const line of raw.split("\n")) {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) data += line.slice(5).trim();
+        }
+        if (data)
+          yield { event, data: JSON.parse(data) as Record<string, unknown> };
       }
-      if (data)
-        yield { event, data: JSON.parse(data) as Record<string, unknown> };
     }
+  } finally {
+    await reader.cancel().catch(() => {});
   }
 }
 
@@ -102,6 +112,10 @@ export async function approve(
       message,
     }),
   });
+  if (res.status === 401) {
+    onUnauthorized();
+    return;
+  }
   if (!res.ok)
     throw new Error(
       res.status === 404
@@ -116,6 +130,7 @@ export async function uploadDoc(
   const fd = new FormData();
   fd.append("file", file);
   const res = await fetch("/api/agent/uploads", { method: "POST", body: fd });
+  if (res.status === 401) onUnauthorized();
   if (!res.ok) throw new Error(`upload failed: ${res.status}`);
   return res.json();
 }

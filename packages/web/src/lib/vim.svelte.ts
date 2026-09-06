@@ -16,32 +16,6 @@ export function loadVim() {
   vimState.enabled = localStorage.getItem("tachy-vim") === "1";
 }
 
-type ListOps = {
-  move: (delta: number) => void;
-  first: () => void;
-  last: () => void;
-  open?: () => void;
-  search?: () => void;
-};
-
-/**
- * The list motions, as one set. Every list in the app registers the same keys
- * against its own cursor rather than each inventing its own subset.
- */
-export function listBindings(ops: ListOps): Binding[] {
-  if (!vimState.enabled) return [];
-  const b: Binding[] = [
-    { key: "j", label: "", hidden: true, run: () => ops.move(1) },
-    { key: "k", label: "", hidden: true, run: () => ops.move(-1) },
-    { key: "g g", label: "", hidden: true, run: ops.first },
-    { key: "shift+g", label: "", hidden: true, run: ops.last },
-  ];
-  if (ops.open) b.push({ key: "⏎", label: "", hidden: true, run: ops.open });
-  if (ops.search)
-    b.push({ key: "/", label: "", hidden: true, run: ops.search });
-  return b;
-}
-
 /** Half-page scroll on whichever container the view scrolls in. */
 export function scrollBindings(el: () => HTMLElement | undefined): Binding[] {
   if (!vimState.enabled) return [];

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import { tick } from "svelte";
   import { chatStream, approve, uploadDoc, getCommands, type BuiltinCommandMeta, type CommandArtifactMeta } from "./agent";
   import { addEntry, chat, type Entry } from "./chatState.svelte";
@@ -161,8 +162,12 @@
     chat.busy = true;
     clearArmed = false;
     snap(true);
+    // Aborted when the view goes away, so a turn left running does not hold its
+    // response open behind a component nobody is looking at any more.
+    turnAbort?.abort();
+    turnAbort = new AbortController();
     try {
-      for await (const { event, data } of chatStream({ message, sessionId: chat.sessionId, uploadPaths: uploadPaths.length ? uploadPaths : undefined, artifactId: chat.artifact?.id, command })) {
+      for await (const { event, data } of chatStream({ message, sessionId: chat.sessionId, uploadPaths: uploadPaths.length ? uploadPaths : undefined, artifactId: chat.artifact?.id, command }, turnAbort.signal)) {
         if (event === "start") chat.turnId = data.turnId as string;
         else if (event === "text") appendAssistant(data.text as string);
         else if (event === "tool_use") {
@@ -214,7 +219,9 @@
         snap();
       }
     } catch (e) {
-      addEntry({ kind: "error", text: e instanceof Error ? e.message : String(e) });
+      // An abort is this component going away, not something to report.
+      if (!(e instanceof DOMException && e.name === "AbortError"))
+        addEntry({ kind: "error", text: e instanceof Error ? e.message : String(e) });
       snap();
     } finally {
       chat.busy = false;
@@ -263,6 +270,8 @@
   
   
   
+  let turnAbort: AbortController | undefined;
+  onDestroy(() => turnAbort?.abort());
   let clearArmed = $state(false);
   let disarmTimer: ReturnType<typeof setTimeout> | undefined;
 

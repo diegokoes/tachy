@@ -59,7 +59,11 @@ export async function ingestWorkItem(
         source_updated_at = excluded.source_updated_at,
         source_project_id = excluded.source_project_id,
         product_id = excluded.product_id,
-        team_id = excluded.team_id
+        team_id = excluded.team_id,
+        -- Filled in, never overwritten: a manual set_work_item_customer has to
+        -- survive a re-fetch, but a ticket ingested before its customer existed
+        -- would otherwise stay unattributed forever, even after add_customer.
+        customer_id = coalesce(work_items.customer_id, excluded.customer_id)
       returning id, source_project_id, product_id, team_id, customer_id,
                 customer_unit_id, observed_version
     `;
@@ -98,11 +102,19 @@ export async function ingestWorkItem(
       teamId: item.team_id,
       customerId: item.customer_id,
       customerUnitId: item.customer_unit_id ?? null,
-      ...(conflict
-        ? { customerAmbiguity: conflict }
-        : match.reason && !route.customerId
-          ? { customerAmbiguity: match.reason }
-          : {}),
+      /*
+       * Only when the routing actually decided the stored value. The upsert
+       * leaves an existing attribution alone, so on a re-fetch this used to
+       * report "the project won; check which is wrong" beside a customer_id
+       * that nothing had touched.
+       */
+      ...(item.customer_id !== customerId
+        ? {}
+        : conflict
+          ? { customerAmbiguity: conflict }
+          : match.reason && !route.customerId
+            ? { customerAmbiguity: match.reason }
+            : {}),
       observedVersion: item.observed_version,
       componentSlug: route.componentSlug,
     };

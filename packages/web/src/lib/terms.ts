@@ -1,6 +1,9 @@
 import { session } from "./session.svelte";
 
-export type Profile = "support" | "engineering";
+import type { DeploymentProfile } from "@tachy/contract";
+
+/** The contract's list, under the name this module has always used for it. */
+export type Profile = DeploymentProfile;
 
 type TermKey =
   | "product"

@@ -426,7 +426,7 @@ export interface KnowledgeListOptions extends KnowledgeFilters {
 }
 
 export async function listKnowledgeEntries(opts: KnowledgeListOptions = {}) {
-  const limit = opts.limit ?? 50;
+  const limit = clampLimit(opts.limit, 50);
   return sql`
     select e.id, e.work_item_id, e.product_id, e.team_id, e.status, e.superseded_by, e.issue_summary,
            e.root_cause, e.resolution, e.resolution_pattern, e.component_id, e.product_area, e.confidence,
@@ -755,6 +755,9 @@ export async function updateKnowledgeEntry(
  * model change, since vectors from different models are not comparable and a
  * half-migrated table ranks nonsense above matches.
  */
+/** Matches the reference and code backfills, which have always walked in 64s. */
+const EMBED_BATCH = 64;
+
 export async function backfillEmbeddings(
   opts: { all?: boolean } = {},
 ): Promise<number> {
@@ -765,16 +768,19 @@ export async function backfillEmbeddings(
     ${opts.all ? sql`` : sql`where embedding is null`}
   `;
 
+  // One lookup per distinct pattern, resolved up front rather than inside the
+  // walk, which awaited once per row.
   const patternDescriptions = new Map<string, string>();
+  for (const key of new Set(rows.map((r) => r.resolution_pattern ?? "")))
+    patternDescriptions.set(
+      key as string,
+      await resolvePatternDescription((key as string) || undefined),
+    );
+
   const texts: string[] = [];
   const ids: string[] = [];
   for (const r of rows) {
     const key = r.resolution_pattern ?? "";
-    if (!patternDescriptions.has(key))
-      patternDescriptions.set(
-        key,
-        await resolvePatternDescription(r.resolution_pattern ?? undefined),
-      );
     const text = buildEmbedText(
       {
         issueSummary: r.issue_summary,
@@ -793,13 +799,19 @@ export async function backfillEmbeddings(
   }
   if (!texts.length) return 0;
 
-  const vectors = await embedPassages(texts);
-  await sql`
-    update knowledge_entries e set embedding = v.vec::vector
-    from (select unnest(${ids}::uuid[]) as id,
-                 unnest(${vectors.map(toVectorLiteral)}::text[]) as vec) v
-    where e.id = v.id
-  `;
+  // In batches, as both siblings do: embedding the whole corpus in one call
+  // held every row and every vector in memory at once, which is a large table's
+  // worth on a `reembed`.
+  for (let i = 0; i < ids.length; i += EMBED_BATCH) {
+    const batchIds = ids.slice(i, i + EMBED_BATCH);
+    const vectors = await embedPassages(texts.slice(i, i + EMBED_BATCH));
+    await sql`
+      update knowledge_entries e set embedding = v.vec::vector
+      from (select unnest(${batchIds}::uuid[]) as id,
+                   unnest(${vectors.map(toVectorLiteral)}::text[]) as vec) v
+      where e.id = v.id
+    `;
+  }
   return ids.length;
 }
 
@@ -835,9 +847,13 @@ export async function revertKnowledgeEntry(
     affectedVersion: s.affected_version,
     fixedVersion: s.fixed_version,
     structured: s.structured,
-    // The snapshot holds ids; the patch speaks slugs, so both are looked up.
+    // The snapshot holds ids; the patch speaks slugs, so all three are looked
+    // up. `unit` has to be here even when null: REVISION_COLUMNS records it, and
+    // omitting it left updateKnowledgeEntry to carry the live unit forward — so
+    // reverting to a revision filed against a different line kept the wrong one.
     component: s.component_id ? await slugOfComponent(s.component_id) : null,
     customerSlug: s.customer_id ? await slugOfCustomer(s.customer_id) : null,
+    unit: s.customer_unit_id ? await slugOfUnit(s.customer_unit_id) : null,
   };
   return updateKnowledgeEntry(id, patch, actor);
 }
@@ -850,5 +866,10 @@ async function slugOfComponent(componentId: string): Promise<string | null> {
 
 async function slugOfCustomer(customerId: string): Promise<string | null> {
   const [row] = await sql`select slug from customers where id = ${customerId}`;
+  return (row?.slug as string) ?? null;
+}
+
+async function slugOfUnit(unitId: string): Promise<string | null> {
+  const [row] = await sql`select slug from customer_units where id = ${unitId}`;
   return (row?.slug as string) ?? null;
 }

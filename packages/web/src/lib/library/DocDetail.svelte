@@ -1,5 +1,8 @@
 <script lang="ts">
-  import { api, ApiError } from "../api";
+  import { fmtDate } from "../dates";
+  import { statusTone } from "./status";
+  import { patchLibraryItem } from "./edit";
+  import { api } from "../api";
   import type { NamedRow, ReferenceLineageRow, ReferenceRow } from "../types";
   import { canCurateScope, isCurator } from "../session.svelte";
   import History from "./History.svelte";
@@ -9,7 +12,7 @@
   import { pushScope } from "../keys.svelte";
   import { setTopActions } from "../subnav.svelte";
   import { vimState } from "../vim.svelte";
-  import { errText } from "../resource.svelte";
+  import { createSequence, errText } from "../resource.svelte";
   import { Badge, Button, Chip, Icon, Note, Select, G } from "../tui";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
   import ScopeCrumb from "./ScopeCrumb.svelte";
@@ -33,8 +36,6 @@
     !!doc && canCurateScope({ team_id: doc.team_id, team_slug: productTeamSlug }),
   );
 
-  const fmtDate = (d?: string) =>
-    d ? new Date(d).toISOString().slice(0, 10) : "";
 
   const versionLabel = (l: ReferenceLineageRow) =>
     `${l.doc_version ? `v${l.doc_version}` : fmtDate(l.created_at) || l.id.slice(0, 8)} · ${l.status}`;
@@ -56,38 +57,52 @@
         : [],
   );
 
-  const statusTone = (s: string) =>
-    s === "approved" ? "ok" : s === "draft" ? "accent" : "muted";
+
+  const current = createSequence();
 
   async function load(docId: string) {
+    // Four awaits deep, and `links` is shared state: without the guard a slow
+    // load for the doc you navigated away from lands on top of the one you
+    // navigated to, and whichever finishes last is what you read.
+    const isCurrent = current();
     error = null;
     editing = false;
     newVersion = false;
     mutateError = null;
     conflict = false;
     productTeamSlug = null;
+    doc = null;
     try {
-      doc = await api.get<ReferenceRow>(`/reference/${docId}`);
+      const next = await api.get<ReferenceRow>(`/reference/${docId}`);
+      if (!isCurrent()) return;
+      doc = next;
       await links.load("reference", docId);
+      if (!isCurrent()) return;
       try {
-        lineage = await api.get<ReferenceLineageRow[]>(
+        const rows = await api.get<ReferenceLineageRow[]>(
           `/reference/${docId}/lineage`,
         );
+        if (!isCurrent()) return;
+        lineage = rows;
       } catch {
+        if (!isCurrent()) return;
         lineage = [];
       }
       // Only for the permission check — the scope is displayed off product_area.
-      if (doc.product_id) {
+      if (next.product_id) {
         try {
           const products = await api.get<NamedRow[]>("/products");
+          if (!isCurrent()) return;
           productTeamSlug =
-            (products.find((p) => p.id === doc!.product_id)
+            (products.find((p) => p.id === next.product_id)
               ?.team_slug as string) ?? null;
         } catch {
+          if (!isCurrent()) return;
           productTeamSlug = null;
         }
       }
     } catch (e) {
+      if (!isCurrent()) return;
       error = errText(e);
     }
   }
@@ -97,23 +112,18 @@
     mutating = true;
     mutateError = null;
     conflict = false;
-    try {
-      await api.patch(`/reference/${doc.id}`, {
-        ...body,
-        expectedVersion: doc.version,
-      });
-      await load(doc.id);
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        conflict = true;
-        mutateError =
-          "someone else edited this doc in the meantime. Reload to get the latest version";
-      } else {
-        mutateError = errText(e);
-      }
-    } finally {
-      mutating = false;
+    const res = await patchLibraryItem(
+      `/reference/${doc.id}`,
+      body,
+      doc.version,
+      "doc",
+    );
+    if (res.ok) await load(doc.id);
+    else {
+      conflict = res.conflict;
+      mutateError = res.message;
     }
+    mutating = false;
   }
 
   async function createDoc(payload: Record<string, unknown>) {
@@ -320,9 +330,11 @@
 
   <!-- Imported bodies are markdown at the source (an ADO wiki page is), and a
        [[wikilink]] cannot render inside a <pre>. -->
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="body md" onclick={links.onClick}>
+  <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
+           focusable wikilink anchors this div delegates to -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
+           wrapper, not an interactive element of its own -->
+  <div class="body md" onclick={links.onClick} onkeydown={links.onKeydown}>
     {@html markBrokenLinks(renderMarkdown(doc.body ?? "(no body)"), links.resolved)}
   </div>
 

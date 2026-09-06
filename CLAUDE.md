@@ -7,23 +7,24 @@ Instructions for working **on** this repo. The instructions the tachy agent runs
 
 Folders are named for the domain they own, never `utils` / `helpers` / `common`.
 
-| Package              | Owns                                                                                                                                                                     |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `packages/contract`  | What the browser and the server must agree on: vocabularies, grade bands, credential and export-naming rules. No dependencies, ever — it is bundled into the SPA         |
-| `packages/core`      | Everything with logic: `knowledge`, `reference`, `search`, `work-items`, `code`, `catalog`, `access`, `config`, `compliance`, `exports`, `analytics`, `sources`, `infra` |
-| `packages/sources/*` | One connector each: `freshdesk`, `github`, `azure-devops`                                                                                                                |
-| `packages/mcp`       | The MCP server — every tool the agent can call                                                                                                                           |
-| `packages/agent`     | Backends (`claude.ts`, `copilot.ts`), turn plumbing, and `prompt.md`                                                                                                     |
-| `packages/api`       | HTTP routes, auth, slash-command expansion                                                                                                                               |
-| `packages/web`       | Svelte SPA                                                                                                                                                               |
-| `packages/cli`       | `npm run sync` — backup/restore, indexing                                                                                                                                |
+| Package              | Owns                                                                                                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/contract`  | What the browser and the server must agree on: vocabularies, grade bands, credential and export-naming rules. No dependencies, ever — it is bundled into the SPA                            |
+| `packages/core`      | Everything with logic: `knowledge`, `reference`, `wiki`, `library`, `search`, `work-items`, `code`, `catalog`, `access`, `config`, `compliance`, `exports`, `analytics`, `sources`, `infra` |
+| `packages/sources/*` | One connector each: `freshdesk`, `github`, `azure-devops`                                                                                                                                   |
+| `packages/mcp`       | The MCP server — every tool the agent can call                                                                                                                                              |
+| `packages/agent`     | Backends (`claude.ts`, `copilot.ts`), turn plumbing, and `prompt.md`                                                                                                                        |
+| `packages/api`       | HTTP routes, auth, slash-command expansion                                                                                                                                                  |
+| `packages/web`       | Svelte SPA                                                                                                                                                                                  |
+| `packages/cli`       | `npm run sync` — backup/restore, indexing                                                                                                                                                   |
 
 ## Commands
 
 ```sh
-npm run typecheck && npm run web:check && npm test    # what CI runs
+npm run typecheck && npm run web:check && npm run coverage   # what CI runs
 npm run api                      # server on :8787
 npm run web:dev                  # SPA dev server
+npm test                         # the suite without the coverage ratchet
 npm run format                   # prettier
 ```
 

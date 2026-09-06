@@ -1,4 +1,5 @@
 import { sql } from "../infra/db";
+import { wouldCycle } from "../infra/hierarchy";
 import { badInput, conflict, notFound } from "../infra/errors";
 
 export async function listComponents(productId: string) {
@@ -29,6 +30,19 @@ export async function addComponent(i: AddComponentInput) {
       );
     parentId = parent.id;
   }
+  // The insert cannot make a cycle; the `do update` half can, because it
+  // re-parents a row that already exists. `add_component` is a routine agent
+  // call, so two of them are all it takes.
+  if (parentId) {
+    const [existing] = await sql`
+      select id from components where product_id = ${i.productId} and slug = ${i.slug}
+    `;
+    if (existing && (await wouldCycle("components", existing.id, parentId)))
+      throw badInput(
+        `'${i.parentSlug}' sits under '${i.slug}' — that would make a cycle`,
+      );
+  }
+
   const [row] = await sql`
     insert into components (product_id, parent_id, slug, name, description, aliases)
     values (${i.productId}, ${parentId}, ${i.slug}, ${i.name}, ${i.description ?? null}, ${i.aliases ?? []})
@@ -74,15 +88,7 @@ export async function updateComponent(
         );
       // Walking up from the proposed parent must not arrive back here, or the
       // branch detaches into a ring that product_area paths never terminate on.
-      const [{ cycles }] = await sql`
-        with recursive up as (
-          select id, parent_id from components where id = ${parent.id}
-          union all
-          select c.id, c.parent_id from components c join up on c.id = up.parent_id
-        )
-        select count(*)::int as cycles from up where id = ${current.id}
-      `;
-      if (cycles > 0)
+      if (await wouldCycle("components", current.id, parent.id))
         throw badInput(
           `'${patch.parentSlug}' sits under '${slug}' — that would make a cycle`,
         );

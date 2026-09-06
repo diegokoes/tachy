@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { fmtDate } from "../dates";
+  import { createSequence } from "../resource.svelte";
+  import { KNOWLEDGE_STATUSES, REFERENCE_STATUSES } from "../vocab";
   import { onMount } from "svelte";
   import { api } from "../api";
   import type { KnowledgeRow, NamedRow, ReferenceRow } from "../types";
@@ -7,7 +10,9 @@
   import { pushScope } from "../keys.svelte";
   import { vimState } from "../vim.svelte";
   import { growBar } from "../motion";
-  import { entryText, excerpt, type Seg } from "./matching";
+  import { excerpt, type Seg } from "./matching";
+  import ResultRow from "./ResultRow.svelte";
+  import { fill, toDoc, toEntry, type Item } from "./items";
   import { isCurator } from "../session.svelte";
   import { t } from "../terms";
   import { errText } from "../resource.svelte";
@@ -23,35 +28,12 @@
     saveFilters,
     type FacetKey,
     type Facets,
-  } from "./filters.svelte";
+  } from "./filters";
   import EntryDetail from "../EntryDetail.svelte";
   import DocDetail from "./DocDetail.svelte";
   import WikiView from "../wiki/WikiView.svelte";
   import EntryForm from "../knowledge/EntryForm.svelte";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
-
-  type Item = {
-    kind: "entry" | "doc" | "article";
-    id: string;
-    /** Articles are addressed by slug within a wiki, not by id. */
-    slug?: string;
-    productId?: string;
-    title: string;
-    status: string;
-    /** Query-centred excerpt of the matching chunk, split on the hits. */
-    snippet?: Seg[];
-    /** Top-right of the card: doc version, or an entry's version span. */
-    version?: string;
-    updated?: string;
-    tags: string[];
-    /** Set when the item describes one customer's install rather than the product. */
-    customer?: string | null;
-    /** Server-calibrated 0-1 match strength — what the gauge draws. */
-    relevance?: number;
-    /** "strong" | "good" | "weak", from the same calibration. */
-    grade?: string;
-    sortAt: number;
-  };
 
   // The section's places, rendered as the subnav across the window's top edge.
   // Keys are URL segments and labels are not: the segment stays 'entries' so
@@ -69,8 +51,11 @@
     { key: "wiki", label: "wiki" },
   ];
 
-  const STATUSES = ["draft", "approved", "deprecated", "archived", "rejected"];
-  const DOC_STATUSES = ["draft", "approved", "archived"];
+  // From vocab.ts, which exists so these are written once: the hand-typed
+  // copies had drifted out of the order the contract documents as the order
+  // they should be offered in.
+  const STATUSES = KNOWLEDGE_STATUSES;
+  const DOC_STATUSES = REFERENCE_STATUSES;
 
   const kind = $derived(segment(1) ?? "all");
   const param = $derived(segment(2));
@@ -170,59 +155,6 @@
 
   const docQs = () => scopeQs(new URLSearchParams()).toString();
 
-  const at = (d?: string) => (d ? Date.parse(d) || 0 : 0);
-  const fmtDate = (d?: string) => (d ? new Date(d).toISOString().slice(0, 10) : "");
-
-  const fill = (v: number) => Math.max(3, v * 100);
-
-  function versionSpan(r: KnowledgeRow) {
-    if (r.affected_version && r.fixed_version)
-      return `${r.affected_version} → ${r.fixed_version}`;
-    if (r.affected_version) return r.affected_version;
-    if (r.fixed_version) return `fixed ${r.fixed_version}`;
-    return undefined;
-  }
-
-  function toEntry(r: KnowledgeRow, query: string): Item {
-    const text = entryText(
-      [r.root_cause, r.resolution, (r.signals ?? []).join(" · ")],
-      query,
-    );
-    return {
-      kind: "entry",
-      id: r.id,
-      title: r.issue_summary ?? "(no summary)",
-      status: r.status,
-      snippet: text ? excerpt(text, query) : undefined,
-      version: versionSpan(r),
-      updated: fmtDate(r.updated_at ?? r.created_at),
-      tags: (r.tags ?? []).slice(0, 5),
-      customer: r.customer_slug,
-      relevance: r.relevance,
-      grade: r.grade,
-      sortAt: at(r.updated_at ?? r.created_at),
-    };
-  }
-
-  function toDoc(r: ReferenceRow, query: string): Item {
-    return {
-      kind: r.kind === "wiki" ? "article" : "doc",
-      id: r.id,
-      slug: r.slug ?? undefined,
-      productId: r.product_id ?? undefined,
-      title: r.title,
-      status: r.status,
-      snippet: r.snippet ? excerpt(r.snippet, query) : undefined,
-      version: r.doc_version ? `v${r.doc_version}` : undefined,
-      updated: fmtDate(r.updated_at ?? r.created_at),
-      tags: (r.tags ?? []).slice(0, 6),
-      customer: r.customer_slug,
-      relevance: r.relevance,
-      grade: r.grade,
-      sortAt: at(r.updated_at ?? r.created_at),
-    };
-  }
-
   let seq = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let slowTimer: ReturnType<typeof setTimeout> | undefined;
@@ -297,7 +229,13 @@
    * Each facet is counted with its own selection lifted, so its other options
    * stay reachable once one is picked.
    */
+  const currentFacets = createSequence();
+
   async function loadFacets() {
+    // Its own sequence, separate from `run`'s: changing two filters quickly
+    // fires two of these, and the slower one used to overwrite the newer
+    // options — leaving a filter offering values that no longer have rows.
+    const isCurrent = currentFacets();
     const p = new URLSearchParams();
     if (productId) p.set("product_id", productId);
     if (productId && component) p.set("component", component);
@@ -305,8 +243,11 @@
     if (version) p.set("affected_version", version);
     applyExtras(p, shown, extras);
     try {
-      facets = await api.get<Facets>(`/knowledge/facets?${p}`);
+      const next = await api.get<Facets>(`/knowledge/facets?${p}`);
+      if (!isCurrent()) return;
+      facets = next;
     } catch {
+      if (!isCurrent()) return;
       facets = {};
     }
     if (version && !versions.some((v) => v.value === version)) version = "";
@@ -333,14 +274,20 @@
 
   const persist = () => saveFilters({ shown, values: extras });
 
+  const currentComponents = createSequence();
+
   async function onProductChange(id: string) {
+    const isCurrent = currentComponents();
     component = "";
     components = [];
     const slug = products.find((p) => p.id === id)?.slug;
     if (slug)
       try {
-        components = await api.get<NamedRow[]>(`/products/${slug}/components`);
+        const next = await api.get<NamedRow[]>(`/products/${slug}/components`);
+        if (!isCurrent()) return;
+        components = next;
       } catch {
+        if (!isCurrent()) return;
         components = [];
       }
     await loadFacets();
@@ -497,18 +444,27 @@
               hidden: true,
               run: () => searchEl?.focus(),
             },
-            // With a query on, the rows are the matches, so n/N steps them.
-            ...(q.trim()
-              ? [
-                  { key: "n", label: "", hidden: true, run: () => moveCursor(1) },
-                  {
-                    key: "shift+n",
-                    label: "",
-                    hidden: true,
-                    run: () => moveCursor(-1),
-                  },
-                ]
-              : []),
+            /*
+             * n/N step the matches, and only mean that with a query on — but
+             * the check belongs inside `run`, not in the effect body. Read out
+             * here it made `q` a dependency of the whole scope, so every
+             * keystroke in the search box tore down and re-registered all
+             * eleven bindings; and because pushScope appends while resolution
+             * runs innermost-first, each re-push promoted these above any scope
+             * opened since.
+             */
+            {
+              key: "n",
+              label: "",
+              hidden: true,
+              run: () => q.trim() && moveCursor(1),
+            },
+            {
+              key: "shift+n",
+              label: "",
+              hidden: true,
+              run: () => q.trim() && moveCursor(-1),
+            },
           ]
         : []),
     ]);
@@ -727,66 +683,15 @@
   >
     {#each items as it, i (it.kind + it.id)}
       <li>
-        <button
-          class="row {it.kind}"
-          class:cursor={i === cursor}
-          bind:this={rowEls[i]}
-          onclick={() => openItem(it)}
+        <ResultRow
+          item={it}
+          selected={i === cursor}
+          delay={Math.min(i * 0.06, 0.6)}
+          bind:el={rowEls[i]}
+          onopen={() => openItem(it)}
           onfocus={() => (cursor = i)}
-          onmouseenter={() => pointerMoved && (cursor = i)}
-        >
-          {#if it.relevance != null}
-            <span
-              class="gauge {it.grade ?? 'weak'}"
-              role="meter"
-              aria-valuenow={Math.round(it.relevance * 100)}
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-label="match"
-              title="{it.grade ?? 'weak'} match, {Math.round(
-                it.relevance * 100,
-              )}%"
-            >
-              <span
-                class="fill"
-                use:growBar={{
-                  pct: fill(it.relevance),
-                  delay: Math.min(i * 0.06, 0.6),
-                }}
-              ></span>
-            </span>
-          {/if}
-
-          <span class="body">
-            <span class="line">
-              <span class="title">{it.title}</span>
-              <span class="tr">
-                {#if it.version}<span class="ver">{it.version}</span>{/if}
-              </span>
-            </span>
-            {#if it.snippet}
-              <span class="snippet"
-                >{#each it.snippet as s}{#if s.hit}<mark>{s.t}</mark>{:else}{s.t}{/if}{/each}</span
-              >
-            {/if}
-            <span class="foot">
-              <span class="tags">
-                {#if it.customer}
-                  <Chip
-                    tone="accent"
-                    title="specific to this customer's install, not general product behaviour"
-                    >{it.customer}</Chip
-                  >
-                {/if}
-                {#each it.tags as tag}<Chip>{tag}</Chip>{/each}
-              </span>
-              <span class="state {it.status}">{it.status}</span>
-              <span class="stamp">
-                {#if it.updated}<span>updated {it.updated}</span>{/if}
-              </span>
-            </span>
-          </span>
-        </button>
+          onhover={() => pointerMoved && (cursor = i)}
+        />
       </li>
     {/each}
 
@@ -810,9 +715,6 @@
   .toggle {
     display: inline-flex;
     gap: var(--pad-1);
-  }
-  .head {
-    margin-bottom: var(--pad-3);
   }
 
   /* Pinned: the filters and the result list scroll under it, so the query that
@@ -891,180 +793,6 @@
 
   /* One kind color per card, worn by the left bar and the match gauge, which
      spans the card so it can run its full height. */
-  .row {
-    width: 100%;
-    text-align: left;
-    display: flex;
-    align-items: stretch;
-    gap: var(--pad-3);
-    font: inherit;
-    color: inherit;
-    cursor: pointer;
-    background: var(--panel);
-    border: 1px solid transparent;
-    border-left: 3px solid var(--kind);
-    border-radius: var(--radius);
-    padding: var(--pad-3);
-  }
-  .row.entry {
-    --kind: var(--accent);
-  }
-  .row.doc {
-    --kind: var(--doc);
-  }
-  /* An article is curated rather than imported, so it reads as its own shelf. */
-  .row.article {
-    --kind: var(--ok, var(--accent));
-  }
-  /* Only `.cursor` paints — hovering MOVES the cursor rather than lighting a
-     second card, so there is exactly one highlight and the pointer and the
-     keyboard share one position. */
-  .row.cursor,
-  .row:focus-visible {
-    outline: none;
-    border-color: var(--accent);
-    border-left-color: var(--kind);
-    background: var(--accent-dim);
-  }
 
-  .body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: var(--pad-1);
-    min-width: 0;
-  }
-  .line {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: start;
-    gap: var(--pad-3);
-  }
-
-  /* The track runs the full height of the card, so a card with a preview
-     simply gets a longer bar. The tiers stay at fixed PERCENTAGES — that is
-     the shared reference — and are cut out in the page color so they read as
-     notches through the fill. */
-  .gauge {
-    position: relative;
-    flex: none;
-    min-height: 1.4rem;
-    width: 5px;
-    background: color-mix(in srgb, var(--muted) 26%, transparent);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  .gauge::before,
-  .gauge::after {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 2px;
-    z-index: 1;
-    background: var(--gauge-tick);
-  }
-  .gauge::before {
-    bottom: 35%;
-  }
-  .gauge::after {
-    bottom: 70%;
-  }
-  .fill {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 0;
-    border-radius: 2px;
-    background: var(--muted);
-  }
-  .gauge.good .fill {
-    background: var(--accent);
-  }
-  .gauge.strong .fill {
-    background: var(--ok);
-  }
-  .title {
-    font-weight: 500;
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .tr {
-    display: flex;
-    align-items: center;
-    gap: var(--pad-2);
-    font-size: var(--fs-xs);
-    color: var(--muted);
-    white-space: nowrap;
-  }
-  .ver {
-    color: var(--kind);
-  }
-
-  .snippet {
-    color: var(--muted);
-    font-size: var(--fs-xs);
-    line-height: 1.5;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-  .snippet mark {
-    background: var(--accent-dim);
-    color: var(--text);
-  }
-
-  /* Equal side tracks keep the status centred on the card, not between
-     whatever the tags and the date happen to weigh. */
-  .foot {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: baseline;
-    gap: var(--pad-3);
-    margin-top: auto;
-    font-size: var(--fs-xs);
-    color: var(--muted);
-  }
-  .tags {
-    display: flex;
-    align-items: baseline;
-    gap: var(--pad-1);
-    flex-wrap: wrap;
-    min-width: 0;
-  }
-  .stamp {
-    display: flex;
-    align-items: baseline;
-    gap: var(--pad-2);
-    justify-self: end;
-    white-space: nowrap;
-  }
-
-  /* Status reads at a glance but never competes with the title: each tone is
-     mixed halfway into --muted. */
-  .state {
-    letter-spacing: var(--label-spacing);
-    white-space: nowrap;
-    color: var(--muted);
-  }
-  .state.approved {
-    color: color-mix(in srgb, var(--ok) 55%, var(--muted));
-  }
-  .state.draft {
-    color: color-mix(in srgb, var(--accent) 55%, var(--muted));
-  }
-  .state.deprecated {
-    color: color-mix(in srgb, var(--warn) 55%, var(--muted));
-  }
-  .state.rejected {
-    color: color-mix(in srgb, var(--danger) 55%, var(--muted));
-  }
-  .state.archived {
-    color: var(--muted);
-    opacity: 0.75;
-  }
 
 </style>
