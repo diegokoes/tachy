@@ -432,7 +432,11 @@
   }}
 />
 
-<div class="edge-slot">
+<!-- lifted outlives `open`: the {#if} block below holds the scrim in the DOM
+     until the thread has finished retracting, and a tab that dropped under it
+     on the first frame of the close would blink out while the wire was still
+     travelling towards it. openT is 0 again only once the hexagon has shut. -->
+<div class="edge-slot" class:lifted={open || openT > 0}>
   <button
     bind:this={tabBtn}
     class="edge-tab"
@@ -600,6 +604,13 @@
     align-items: center;
     gap: var(--pad-1);
     pointer-events: none;
+  }
+  /* While the picker is open the tab is the far end of the wire, not part of
+     the app the scrim pushes back — so it rides over the blur, one step above
+     the thread that lands in it. Blurring the hexagon left the wire running
+     into a smudge. */
+  .edge-slot.lifted {
+    z-index: calc(var(--z-overlay) + 2);
   }
   /* A pointy-top hexagon, not the octagon the shape list also offers: at this
      size an octagon just reads as a rounded square, where six sides stay

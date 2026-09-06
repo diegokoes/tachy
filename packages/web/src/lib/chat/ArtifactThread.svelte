@@ -61,9 +61,17 @@
     const a = from.getBoundingClientRect();
     const b = to.getBoundingClientRect();
     const x1 = a.right - o.left - 1;
-    const y1 = a.top + a.height / 2 - o.top;
     const x2 = b.left - o.left;
     const y2 = b.top + b.height / 2 - o.top;
+    /* Level with the tab, not with the dialog's own centre: the dialog is
+       centred on the viewport and the tab on the transcript, so aiming at both
+       centres left the wire running downhill. Held off the corners so the join
+       stays on the dialog's edge whatever height it is. */
+    const EDGE = 10;
+    const y1 = Math.min(
+      Math.max(y2, a.top - o.top + EDGE),
+      a.bottom - o.top - EDGE,
+    );
     const dx = x2 - x1;
     const dy = y2 - y1;
     const len = Math.hypot(dx, dy) || 1;
@@ -297,10 +305,14 @@
 </svg>
 
 <style>
+  /* Above the picker's scrim, not under it: the scrim's blur is what puts the
+     app on a plane behind the dialog, and a wire drawn into that plane reads
+     as part of what was pushed back. It has to arrive on top of the blur for
+     the dialog and the tab to look connected. */
   .thread {
     position: absolute;
     inset: 0;
-    z-index: 7;
+    z-index: calc(var(--z-overlay) + 1);
     width: 100%;
     height: 100%;
     pointer-events: none;
