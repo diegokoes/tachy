@@ -9,7 +9,7 @@
   import { pushScope } from "../keys.svelte";
   import { setTopActions } from "../subnav.svelte";
   import { vimState } from "../vim.svelte";
-  import { errText } from "../resource.svelte";
+  import { createSequence, errText } from "../resource.svelte";
   import { Badge, Button, Chip, Icon, Note, Select, G } from "../tui";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
   import ScopeCrumb from "./ScopeCrumb.svelte";
@@ -59,35 +59,51 @@
   const statusTone = (s: string) =>
     s === "approved" ? "ok" : s === "draft" ? "accent" : "muted";
 
+  const current = createSequence();
+
   async function load(docId: string) {
+    // Four awaits deep, and `links` is shared state: without the guard a slow
+    // load for the doc you navigated away from lands on top of the one you
+    // navigated to, and whichever finishes last is what you read.
+    const isCurrent = current();
     error = null;
     editing = false;
     newVersion = false;
     mutateError = null;
     conflict = false;
     productTeamSlug = null;
+    doc = null;
     try {
-      doc = await api.get<ReferenceRow>(`/reference/${docId}`);
+      const next = await api.get<ReferenceRow>(`/reference/${docId}`);
+      if (!isCurrent()) return;
+      doc = next;
       await links.load("reference", docId);
+      if (!isCurrent()) return;
       try {
-        lineage = await api.get<ReferenceLineageRow[]>(
+        const rows = await api.get<ReferenceLineageRow[]>(
           `/reference/${docId}/lineage`,
         );
+        if (!isCurrent()) return;
+        lineage = rows;
       } catch {
+        if (!isCurrent()) return;
         lineage = [];
       }
       // Only for the permission check — the scope is displayed off product_area.
-      if (doc.product_id) {
+      if (next.product_id) {
         try {
           const products = await api.get<NamedRow[]>("/products");
+          if (!isCurrent()) return;
           productTeamSlug =
-            (products.find((p) => p.id === doc!.product_id)
+            (products.find((p) => p.id === next.product_id)
               ?.team_slug as string) ?? null;
         } catch {
+          if (!isCurrent()) return;
           productTeamSlug = null;
         }
       }
     } catch (e) {
+      if (!isCurrent()) return;
       error = errText(e);
     }
   }

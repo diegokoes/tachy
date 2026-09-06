@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { createSequence } from "../resource.svelte";
   import { api } from "../api";
   import { navigate } from "../router.svelte";
   import type { WikiToc, WikiTocNode, WikiArticleRef } from "../types";
@@ -14,11 +15,17 @@
     load();
   });
 
+  const current = createSequence();
+
   async function load() {
+    const isCurrent = current();
     error = null;
     try {
-      toc = await api.get<WikiToc>(`/library/wiki/${scope}/toc`);
+      const next = await api.get<WikiToc>(`/library/wiki/${scope}/toc`);
+      if (!isCurrent()) return;
+      toc = next;
     } catch (e) {
+      if (!isCurrent()) return;
       error = e instanceof Error ? e.message : String(e);
     }
   }

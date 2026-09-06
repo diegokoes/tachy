@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { createSequence } from "./resource.svelte";
   import { api, ApiError } from "./api";
   import type { KnowledgeRow, Feedback, NamedRow } from "./types";
   import History from "./library/History.svelte";
@@ -75,24 +76,36 @@
     return setTopActions(readActions);
   });
 
+  const current = createSequence();
+
   async function load() {
+    const isCurrent = current();
     error = null;
     conflict = false;
     // Cleared with the rest, as DocDetail does: it is only refetched for an
     // entry that has a product and no team of its own, so carrying the last
     // entry's value forward showed an Edit button on another team's entry.
     productTeamSlug = null;
+    entry = null;
     try {
-      entry = await api.get<KnowledgeRow>(`/knowledge/${id}`);
-      feedback = await api.get<Feedback[]>(`/knowledge/${id}/feedback`);
+      const next = await api.get<KnowledgeRow>(`/knowledge/${id}`);
+      if (!isCurrent()) return;
+      entry = next;
+      const fb = await api.get<Feedback[]>(`/knowledge/${id}/feedback`);
+      if (!isCurrent()) return;
+      feedback = fb;
       await links.load("knowledge", id);
+      if (!isCurrent()) return;
 
-
-      if (isCurator() && entry.product_id && !entry.team_id) {
+      if (isCurator() && next.product_id && !next.team_id) {
         const products = await api.get<NamedRow[]>("/products");
-        productTeamSlug = (products.find((p) => p.id === entry!.product_id)?.team_slug as string) ?? null;
+        if (!isCurrent()) return;
+        productTeamSlug =
+          (products.find((p) => p.id === next.product_id)
+            ?.team_slug as string) ?? null;
       }
     } catch (e) {
+      if (!isCurrent()) return;
       error = e instanceof Error ? e.message : String(e);
     }
   }

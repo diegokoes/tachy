@@ -9,7 +9,8 @@
   import { session } from "../session.svelte";
   import AsciiSelect from "../AsciiSelect.svelte";
   import { errText } from "../resource.svelte";
-  import { AGENT_KEY_LABELS, type Team, type Connection } from "./shared";
+  import type { Team, Connection } from "./rows";
+import { AGENT_KEY_LABELS } from "../credentials";
 
   type CredList = {
     vault_enabled: boolean;

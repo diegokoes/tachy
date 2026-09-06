@@ -20,15 +20,9 @@
     type Column,
     type Draft,
   } from "../tui";
-  import {
-    INFO,
-    csv,
-    type Component,
-    type Customer,
-    type Product,
-    type Repo,
-    type SourceProject,
-  } from "./shared";
+  import type { Component, Customer, Product, Repo, SourceProject } from "./rows";
+import { INFO } from "./help";
+import { csv } from "../fields";
   import { claimTopAction } from "./topAction.svelte";
 
   type FoundRepo = { name: string; url: string; default_branch: string };

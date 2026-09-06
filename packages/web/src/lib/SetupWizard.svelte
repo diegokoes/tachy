@@ -7,7 +7,7 @@
     OAUTH_PREFIX,
   } from "@tachy/contract";
   import type { AgentProvider } from "@tachy/contract";
-  import { csv } from "./admin/shared";
+  import { csv } from "./fields";
   import { initSession } from "./session.svelte";
   import { errText } from "./resource.svelte";
   import { slugify } from "./slug";
