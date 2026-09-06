@@ -218,19 +218,6 @@ export function jolt(node: Element) {
   );
 }
 
-/** Svelte transition: CRT power-on — a scanline that snaps to full height. */
-export function crt(_node: Element, { duration = 220 } = {}) {
-  if (reducedMotion()) return { duration: 0 };
-  return {
-    duration,
-    easing: (t: number) => 1 - Math.pow(1 - t, 3),
-    css: (t: number) =>
-      `transform: scaleY(${0.02 + 0.98 * t});` +
-      `filter: brightness(${1 + 1.6 * (1 - t)});` +
-      `opacity: ${Math.min(1, t * 4)}`,
-  };
-}
-
 /**
  * Squash-and-stretch on click, settling elastic. A press has to feel like it
  * landed on something with give, so the overshoot is the point.
