@@ -1,9 +1,9 @@
 /* Design tokens. Everything downstream derives from these — no component may
    hard-code a color, a radius, or a spacing step.
 
-   Three axes are user-controlled from Settings › theme and land here as
-   attributes on <html>: data-theme, data-density, data-border. --radius and
-   --font-scale are set inline on <html> by theme.svelte.ts. */
+   data-theme on <html> is the one attribute axis. --accent, --font-scale and
+   the three --font-* stacks are set inline on <html> by theme.svelte.ts and
+   fonts.ts. */
 
 :root {
   /* Without this the browser paints form controls and any remaining native
@@ -12,19 +12,24 @@
   font-size: calc(clamp(14.5px, 0.35vw + 12.5px, 18px) * var(--font-scale, 1));
   font-family: var(--font-ui);
 
-  /* Two faces out of one family. Sans carries prose, labels and controls; mono
-     carries anything that sits on a character grid — table cells, ids, code,
-     meters, the ASCII chrome. Plex Sans and Plex Mono share a skeleton and a
-     cap height, so a mono cell in a sans row still reads as one UI rather than
-     two pasted together.
+  /* Three semantic faces, each pickable from Settings › ui. --font-ui carries
+     chrome: nav, labels, controls, panel titles, table cells. --font-prose
+     carries running text — entry bodies, docs, chat. --font-mono carries
+     anything on a character grid: code, ids, the ASCII chrome.
 
-     `ch` is the width of "0" in the *inherited* face. Any rule that measures in
-     ch has to be on --font-mono, or the number means nothing. */
+     Every stack ends in DejaVu Mono before its generic, and that entry is not
+     decorative. Neither Plex face ships a single block, box-drawing or
+     geometric glyph — no █ ░ ▒ ▓ ─ ┌ ▲ ▾ ● ✓ ✕ ⚙ ⏎ — so without a face that
+     does, the app's own glyph vocabulary falls through to whatever the OS
+     happens to supply and stops lining up on the grid it is drawn on. DejaVu
+     Mono covers all of them and puts "0" at 0.602em against Plex Mono's
+     0.600em, so a substituted glyph still lands in its cell. */
   --font-ui:
     "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui,
-    "Segoe UI", sans-serif;
+    "Segoe UI", "DejaVu Mono", sans-serif;
+  --font-prose: var(--font-ui);
   --font-mono:
-    "IBM Plex Mono", ui-monospace, "Cascadia Mono", "JetBrains Mono", Menlo,
+    "IBM Plex Mono", ui-monospace, "Cascadia Mono", Menlo, "DejaVu Mono",
     monospace;
 
   --bg: #080808;
@@ -38,7 +43,10 @@
   --muted: #6d6d6d;
   --accent: #6ea8fe;
   --accent-dim: color-mix(in srgb, var(--accent) 14%, transparent);
-  --pattern-ink: rgba(255, 255, 255, 0.16);
+  --star-ink: rgba(255, 255, 255, 0.3);
+  /* Fainter than the starfield: the wordmark sits in the top row next to the
+     nav, so it has live UI beside it and has to stay behind it. */
+  --wordmark-ink: rgba(255, 255, 255, 0.115);
   --ok: #3fb950;
   --warn: #d29922;
   --danger: #f85149;
@@ -55,6 +63,19 @@
   --edge-hi: rgba(255, 255, 255, 0.22);
   --edge-lo: rgba(0, 0, 0, 0.55);
   --drop: rgba(0, 0, 0, 0.9);
+
+  /* The window's own surface. The wallpaper reads through it, just barely, and
+     dialogs wear it too: a modal is another window, not a different material
+     laid over the app. */
+  --window-bg: color-mix(in srgb, var(--panel-solid) 93%, transparent);
+
+  /* Behind anything modal. The blur is what separates the two planes; ink alone
+     leaves the text underneath legible through the gap and reads as dirt.
+     Enough of both to push the app back, not so much that it goes away — the
+     window behind a dialog should still be recognisably the window you left. */
+  --scrim-ink: color-mix(in srgb, #000 28%, transparent);
+  --scrim-soft: color-mix(in srgb, #000 10%, transparent);
+  --scrim-blur: 5px;
 }
 
 :root[data-theme="light"] {
@@ -65,7 +86,12 @@
   --border: rgba(30, 28, 20, 0.14);
   --text: #21201c;
   --muted: #857f72;
-  --pattern-ink: rgba(30, 28, 20, 0.22);
+  /* Higher than the dark theme's, not equal to it. A dark glyph on a light
+     ground has less perceptual contrast at this size than a light glyph on a
+     dark one, so matching the alpha would leave the light theme's sky nearly
+     blank — which is what it was. */
+  --star-ink: rgba(30, 28, 20, 0.42);
+  --wordmark-ink: rgba(30, 28, 20, 0.16);
   --ok: #1a7f37;
   --warn: #9a6700;
   --danger: #cf222e;
@@ -76,23 +102,28 @@
   --edge-hi: rgba(30, 28, 20, 0.3);
   --edge-lo: rgba(255, 255, 255, 0.8);
   --drop: rgba(30, 28, 20, 0.26);
+
+  --scrim-ink: color-mix(in srgb, #000 13%, transparent);
+  --scrim-soft: color-mix(in srgb, #000 5%, transparent);
+  --scrim-blur: 4px;
 }
 
 /* ── Radius ───────────────────────────────────────────────────────────────
-   One user-set value, 0 (hard DOS corner) to 6 (soft). Chips lean rounder so
-   they still read as chips, but collapse to square along with everything else
-   at 0 — that is the point of a single axis. */
+   Two steps, and the split is the point: rounded corners are the web's common
+   signal for "this is interactive" (Jakob's law — people read our corners with
+   habits built on everyone else's). Containers stay squarer so nobody tries to
+   click a panel; controls round off so they read as pressable at a glance. */
 :root {
-  --radius: 3px;
-  --radius-chip: calc(var(--radius) * 1.6);
+  --radius: 4px; /* surfaces: panels, dialogs, cards, table cells */
+  --radius-control: 8px; /* buttons, tabs, inputs, selects, menus */
+  --radius-chip: 999px; /* chips and badges read as pills */
 }
 
-/* ── Density ──────────────────────────────────────────────────────────────
+/* ── Spacing ──────────────────────────────────────────────────────────────
    Every padding, gap and row height in the app is one of these four steps.
    A component that needs a value not on the scale is a component that needs
    rethinking. */
-:root,
-:root[data-density="normal"] {
+:root {
   --pad-1: 0.2rem;
   --pad-2: 0.4rem;
   --pad-3: 0.65rem;
@@ -101,48 +132,15 @@
   --row-h: 1.9rem;
 }
 
-:root[data-density="compact"] {
-  --pad-1: 0.1rem;
-  --pad-2: 0.25rem;
-  --pad-3: 0.45rem;
-  --pad-4: 0.7rem;
-  --gap: 0.3rem;
-  --row-h: 1.55rem;
-}
-
-:root[data-density="roomy"] {
-  --pad-1: 0.3rem;
-  --pad-2: 0.55rem;
-  --pad-3: 0.9rem;
-  --pad-4: 1.4rem;
-  --gap: 0.7rem;
-  --row-h: 2.3rem;
-}
-
 /* ── Panel border ─────────────────────────────────────────────────────────
    The rule is a CSS border — a continuous line, which is exactly what ─
-   renders as. Each set picks the CSS style matching its weight. */
-:root,
-:root[data-border="single"] {
-  /* Mixed off --muted, not --border: a box rule has to actually read as a
-     drawn line, which 9%-white does not. */
-  --panel-line: 1px solid color-mix(in srgb, var(--muted) 50%, transparent);
-}
-
-:root[data-border="double"] {
-  --panel-line: 3px double var(--muted);
-}
-
-:root[data-border="heavy"] {
-  --panel-line: 2px solid var(--muted);
-}
-
-:root[data-border="ascii"] {
-  --panel-line: 1px dashed var(--muted);
-}
-
-:root[data-border="none"] {
-  --panel-line: 1px solid transparent;
+   renders as. Mixed off --muted, not --border: a box rule has to actually read
+   as a drawn line, which 9%-white does not. The width is its own token because
+   anything that has to meet this rule end-on — the subnav notch cut into the
+   window's top edge — needs to know how thick it is. */
+:root {
+  --panel-line-w: 2px;
+  --panel-line: var(--panel-line-w) solid var(--muted);
 }
 
 /* ── Type scale ───────────────────────────────────────────────────────────

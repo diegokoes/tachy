@@ -14,7 +14,6 @@
     emptyTitle = "nothing here yet",
     emptyDetail,
     actions,
-    actionsWidth = "7rem",
     expand,
     expanded = new Set<string>(),
     ontoggle,
@@ -28,7 +27,6 @@
     emptyTitle?: string;
     emptyDetail?: string;
     actions?: Snippet<[T]>;
-    actionsWidth?: string;
     expand?: Snippet<[T]>;
     expanded?: Set<string>;
     ontoggle?: (key: string) => void;
@@ -47,7 +45,7 @@
     <colgroup>
       {#if expand}<col style="width: 2.2rem" />{/if}
       {#each columns as c}<col style={c.width ? `width: ${c.width}` : ""} />{/each}
-      {#if actions}<col style="width: {actionsWidth}" />{/if}
+      {#if actions}<col style="width: 0" />{/if}
     </colgroup>
 
     <thead>
@@ -56,7 +54,7 @@
         {#each columns as c}
           <th class={c.align === "end" ? "end" : ""}>{c.label}</th>
         {/each}
-        {#if actions}<th class="end">actions</th>{/if}
+        {#if actions}<th aria-label="actions"></th>{/if}
       </tr>
     </thead>
 
@@ -82,7 +80,9 @@
             </td>
           {/each}
           {#if actions}
-            <td class="acts">{@render actions(row)}</td>
+            <td class="acts">
+              <div class="overlay">{@render actions(row)}</div>
+            </td>
           {/if}
         </tr>
         {#if expand && open}
@@ -164,12 +164,57 @@
     white-space: nowrap;
   }
 
-  td.acts {
-    text-align: right;
-    white-space: nowrap;
+  /* Row actions do not get a column. A track wide enough for three buttons is
+     blank on every row nobody is pointing at, and it was taking 7rem off the
+     content on every table in the app. The cell keeps no width; its overlay
+     spans the row and fades in over a scrim, so the marks read against the
+     values rather than beside them.
+
+     opacity, not visibility: an invisible button is still focusable, so
+     tabbing into a row is what raises its actions — which is the only way a
+     keyboard reaches them now.
+
+     The scrim takes no pointer events, only the marks on it do. A full-row hit
+     area would eat the expander chevron under its transparent left edge, and
+     take the row's text out of selection the moment you pointed at it. */
+  tbody tr {
+    position: relative;
   }
-  td.acts :global(.btn) {
-    vertical-align: middle;
+  td.acts {
+    width: 0;
+    padding: 0;
+  }
+  td.acts .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--pad-2);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in srgb, var(--panel-bg) 92%, transparent) 15%,
+      color-mix(in srgb, var(--panel-bg) 92%, transparent) 85%,
+      transparent 100%
+    );
+  }
+  tbody tr:hover td.acts .overlay,
+  tbody tr:focus-within td.acts .overlay {
+    opacity: 1;
+  }
+  td.acts .overlay :global(.btn) {
+    pointer-events: auto;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    td.acts .overlay {
+      transition: none;
+    }
   }
 
   .exp button {

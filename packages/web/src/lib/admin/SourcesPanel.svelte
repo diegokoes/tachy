@@ -9,24 +9,21 @@
     Button,
     Chip,
     CrudTable,
-    ErrorMark,
     Field,
+    Icon,
     Modal,
     Note,
     Select,
+    Subject,
     type Column,
     type Draft,
   } from "../tui";
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
-  import {
-    INFO,
-    csv,
-    type Connection,
-    type Product,
-    type SourceProject,
-    type Team,
-  } from "./shared";
+  import type { Connection, Product, SourceProject, Team } from "./rows";
+import { INFO } from "./help";
+import { csv } from "../fields";
+  import { claimTopAction } from "./topAction.svelte";
 
   type SourceType = "freshdesk" | "azure-devops" | "github";
   type Probe = {
@@ -42,10 +39,9 @@
     {
       label: string;
       hostLabel: string;
-      hostHint: string;
+      hostShape: string;
       tokenLabel: string;
-      tokenHint: string;
-      tokenInfo?: string;
+      tokenInfo: string;
       groupLabel: string;
       configKey: "projects" | "repos" | null;
     }
@@ -53,31 +49,29 @@
     freshdesk: {
       label: "Freshdesk",
       hostLabel: "domain",
-      hostHint: "acme.freshdesk.com",
+      hostShape: "the subdomain and freshdesk.com, not a full URL",
       tokenLabel: "API key",
-      tokenHint: "profile → API key",
       tokenInfo:
-        "A per-agent key: tickets are read with that agent's permissions.",
+        "Found under profile, API key. It is per-agent: tickets are read with that agent's permissions.",
       groupLabel: "group",
       configKey: null,
     },
     "azure-devops": {
       label: "Azure DevOps",
       hostLabel: "organization",
-      hostHint: "my-org, or a dev.azure.com URL",
+      hostShape: "the organization on its own, or a dev.azure.com URL",
       tokenLabel: "PAT",
-      tokenHint: "org-scoped personal access token",
       tokenInfo:
-        "Reaches every project you have permissions on. Scopes: Work Items (read, or read & write to create tickets), Wiki read, Code read.",
+        "An org-scoped personal access token. It reaches every project you have permissions on. Scopes: Work Items (read, or read & write to create tickets), Wiki read, Code read.",
       groupLabel: "project",
       configKey: "projects",
     },
     github: {
       label: "GitHub",
       hostLabel: "API base URL",
-      hostHint: "https://api.github.com, or an Enterprise /api/v3 URL",
+      hostShape: "https://api.github.com, or an Enterprise /api/v3 URL",
       tokenLabel: "token",
-      tokenHint: "PAT with repo/issues read",
+      tokenInfo: "A personal access token with repo and issues read.",
       groupLabel: "repo",
       configKey: "repos",
     },
@@ -240,7 +234,7 @@
         value: k,
         label: SPEC[k].label,
       })),
-      value: (r) => SPEC[r.source_type as SourceType]?.label ?? r.source_type,
+      cell: typeCell,
     },
     {
       key: "slug",
@@ -248,7 +242,6 @@
       width: "12rem",
       edit: "text",
       required: true,
-      hint: "machine id — cannot change later",
       info: `${INFO.slug} It also names this connection's stored credential, so it cannot change later.`,
       derive: (d) =>
         uniqueSlug(
@@ -261,7 +254,8 @@
       label: "host",
       edit: "text",
       required: true,
-      hint: (d) => `${SPEC[typeOf(d)].hostLabel} — ${SPEC[typeOf(d)].hostHint}`,
+      info: (d) =>
+        `The ${SPEC[typeOf(d)].hostLabel} this connection talks to: ${SPEC[typeOf(d)].hostShape}.`,
       value: (r) => baseUrlToHost(r.source_type as SourceType, r.base_url),
     },
     {
@@ -269,8 +263,7 @@
       label: "token",
       formOnly: true,
       edit: "secret",
-      hint: (d) => SPEC[typeOf(d)].tokenHint,
-      info: (d) => SPEC[typeOf(d)].tokenInfo ?? "",
+      info: (d) => SPEC[typeOf(d)].tokenInfo,
     },
     { key: "token_source", label: "token", width: "8rem", cell: tokenCell },
     {
@@ -279,9 +272,8 @@
       formOnly: true,
       edit: "text",
       visible: (d) => Boolean(SPEC[typeOf(d)].configKey),
-      hint: (d) => `${SPEC[typeOf(d)].groupLabel}s, comma-separated; optional`,
       info: (d) =>
-        `Limits sync and gives the agent a default set of ${SPEC[typeOf(d)].groupLabel}s to look in instead of the whole org.`,
+        `Optional, comma-separated. Limits sync and gives the agent a default set of ${SPEC[typeOf(d)].groupLabel}s to look in instead of the whole org.`,
       value: (r) => groupsOf(r).join(", "),
     },
     {
@@ -290,7 +282,8 @@
       width: "8rem",
       edit: "checkbox",
       info: "Strips PII out of this source's payloads before the model sees them.",
-      value: (r) => (redactionOn(r) ? "on" : "off"),
+      value: (r) => redactionOn(r),
+      cell: lockCell,
     },
   ]);
 
@@ -318,6 +311,19 @@
     await test(slug);
   }
 
+  /** Which connection's probe result is on screen. */
+  let probeOpen = $state<string | null>(null);
+
+  /**
+   * The result goes to a dialog, not to the row's drawer. A probe is something
+   * you asked for and are waiting on, and burying the answer — a failure most
+   * of all — behind an expander and a warning triangle's tooltip meant going
+   * looking for what you had just triggered. The drawer still keeps the last
+   * result, so it stays readable after the dialog is dismissed.
+   *
+   * `save` calls this too, so writing a connection's credentials shows you
+   * straight away whether they work and what they can see.
+   */
   async function test(slug: string) {
     testing = slug;
     try {
@@ -329,7 +335,7 @@
       probes[slug] = { ok: false, error: errText(e) };
     } finally {
       testing = null;
-      expanded = new Set([...expanded, slug]);
+      probeOpen = slug;
     }
   }
 
@@ -338,8 +344,29 @@
     projects.reload();
     products.reload();
     teams.reload();
-  });
-</script>
+  });</script>
+
+{#snippet typeCell(r: Connection)}
+  {SPEC[r.source_type as SourceType]?.label ?? r.source_type}
+{/snippet}
+
+{#snippet lockCell(r: Connection)}
+  {@const on = redactionOn(r)}
+  <span
+    class="lock"
+    class:on
+    title={on
+      ? "PII is scrubbed from this source before the model sees it"
+      : "this source's payloads reach the model unscrubbed"}
+  >
+    <Icon
+      name={on ? "lockOn" : "lockOff"}
+      size="1em"
+      weight={7}
+      label={on ? "redaction on" : "redaction off"}
+    />
+  </span>
+{/snippet}
 
 {#snippet tokenCell(r: Connection)}
   <Badge tone={r.token_source ? "ok" : "warn"}>{r.token_source ?? "unset"}</Badge
@@ -349,16 +376,16 @@
 {#snippet probeRow(r: Connection)}
   {@const probe = probes[r.slug]}
   {#if !probe}
-    <p class="dim">Not tested yet — hit the probe icon on this row.</p>
+    <p class="dim">Not tested yet. Hit <em>test</em> on this row.</p>
   {:else if !probe.ok}
-    <ErrorMark message={probe.error ?? "failed"} label="connection test" />
+    <Note tone="danger">{probe.error ?? "failed"}</Note>
   {:else}
     <p class="ok-text">
       ✓ connected{probe.identity ? ` as ${probe.identity}` : ""}
     </p>
     {#if probe.groupsNote}
       <Note tone="warn">
-        Can't list {SPEC[r.source_type as SourceType]?.groupLabel ?? "group"}s —
+        Can't list {SPEC[r.source_type as SourceType]?.groupLabel ?? "group"}s.
         type the key in yourself when registering.
         <span class="reason">{probe.groupsNote}</span>
       </Note>
@@ -366,7 +393,7 @@
     {#if probe.groups?.length}
       <p class="dim">
         {SPEC[r.source_type as SourceType]?.groupLabel ?? "group"}s this token
-        can see — click one to register it.
+        can see. Click one to register it.
       </p>
       <div class="chips">
         {#each probe.groups as g (g.key)}
@@ -391,16 +418,16 @@
 {#snippet testAction(r: Connection)}
   <Button
     variant="ghost"
-    square
+    size="sm"
     icon="test"
     title="test connection"
-    aria-label="test connection"
     busy={testing === r.slug}
-    onclick={() => test(r.slug)}
-  />
+    onclick={() => test(r.slug)}>test</Button
+  >
 {/snippet}
 
 <CrudTable
+  hoist={claimTopAction}
   {columns}
   rows={connections.data}
   rowKey={(r) => r.slug}
@@ -430,6 +457,50 @@
     })}
 />
 
+{#if probeOpen}
+  {@const slug = probeOpen}
+  {@const probe = probes[slug]}
+  {@const type = connections.data.find((c) => c.slug === slug)
+    ?.source_type as SourceType | undefined}
+  <Modal
+    title={`connection test: ${slug}`}
+    width="38rem"
+    onCancel={() => (probeOpen = null)}
+  >
+    <Subject verb="tested" name={slug} />
+    {#if !probe}
+      <p class="dim">no result</p>
+    {:else if !probe.ok}
+      <Note tone="danger">{probe.error ?? "failed"}</Note>
+    {:else}
+      <Note tone="ok">
+        connected{probe.identity ? ` as ${probe.identity}` : ""}
+      </Note>
+      {#if probe.groupsNote}
+        <Note tone="warn">
+          Can't list {(type && SPEC[type]?.groupLabel) ?? "group"}s. Type the
+          key in yourself when registering.
+          <span class="reason">{probe.groupsNote}</span>
+        </Note>
+      {/if}
+      {#if probe.groups?.length}
+        <p class="dim">
+          {(type && SPEC[type]?.groupLabel) ?? "group"}s this token can see.
+          The key is what a project map is written against. Close this and
+          click one in the row's drawer to register it.
+        </p>
+        <ul class="groups">
+          {#each probe.groups as g (g.key)}
+            <li><code>{g.key}</code><span>{g.name}</span></li>
+          {/each}
+        </ul>
+      {:else if !probe.groupsNote}
+        <p class="dim">This token can see no groups.</p>
+      {/if}
+    {/if}
+  </Modal>
+{/if}
+
 {#if claim}
   {@const c = claim}
   <Modal
@@ -442,16 +513,16 @@
     onCancel={() => (claim = null)}
   >
     {#if claimError}<Note tone="danger">{claimError}</Note>{/if}
+    <Subject verb="registering" name={c.key} />
     <div class="claim">
-      <Field label="name" hint="how it reads in lists here">
+      <Field label="name" info="How it reads in lists here.">
         <input aria-label="name" bind:value={c.name} />
       </Field>
       <Field
         label="role"
         required
-        hint={c.role === "tracker" ? "create/reassign target" : "items ingest here"}
         info={c.role === "tracker"
-          ? "Nothing is filed under a tracker, and it holds no wiki, repos or area rules."
+          ? "A create and reassign target. Nothing is filed under a tracker, and it holds no wiki, repos or area rules."
           : `Its items ingest into a ${t("product")}, and it can carry the wikis, repos and area rules.`}
       >
         <Select
@@ -467,9 +538,9 @@
       <Field
         label={c.role === "tracker" ? t("team") : t("product")}
         required
-        hint={c.role === "tracker"
-          ? `the ${t("team")} raising work items here`
-          : `the ${t("product")} its items ingest into`}
+        info={c.role === "tracker"
+          ? `The ${t("team")} raising work items here.`
+          : `The ${t("product")} its items ingest into.`}
       >
         <Select
           value={c.scope}
@@ -482,7 +553,7 @@
         <Note tone="warn">
           You can't curate any {c.role === "tracker"
             ? `${t("team")}s`
-            : `${t("product")}s`} yet — create one under Org first.
+            : `${t("product")}s`} yet. Create one under Org first.
         </Note>
       {/if}
     </div>
@@ -500,6 +571,15 @@
     margin: 0;
     color: var(--ok);
   }
+  /* Locked is the safe state, so it wears the ok colour; open is a fact about
+     this connection, not a fault, so it stays muted rather than red. */
+  .lock {
+    display: inline-flex;
+    color: var(--muted);
+  }
+  .lock.on {
+    color: var(--ok);
+  }
   .dim {
     margin: 0 0 var(--pad-2);
     color: var(--muted);
@@ -508,6 +588,33 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--pad-1);
+  }
+  /* Keys stay selectable text rather than chips — they get pasted into a
+     project map, so they have to be copyable. */
+  .groups {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 18rem;
+    overflow: auto;
+    font-size: var(--fs-sm);
+  }
+  .groups li {
+    display: flex;
+    gap: var(--pad-3);
+    align-items: baseline;
+    padding: var(--pad-1) 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  }
+  .groups code {
+    font-family: var(--font-mono);
+    user-select: all;
+  }
+  .groups span {
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .reason {
     opacity: 0.65;

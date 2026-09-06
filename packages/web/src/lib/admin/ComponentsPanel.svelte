@@ -4,12 +4,14 @@
   import { createResource } from "../resource.svelte";
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
-  import { Chip, CrudTable, type Column } from "../tui";
+  import { Chip, CrudTable, FilterBar, type Column } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
   import SlugRename from "./SlugRename.svelte";
   import ScopeBar from "./ScopeBar.svelte";
-  import { csv, INFO, TIP } from "./shared";
-  import type { Component, Product, Repo } from "./shared";
+  import { INFO } from "./help";
+import { csv } from "../fields";
+  import type { Component, Product, Repo } from "./rows";
+  import { claimTopAction } from "./topAction.svelte";
 
   let productSlug = $state("");
   let renaming = $state<Component | null>(null);
@@ -69,7 +71,6 @@
       width: "12rem",
       edit: "text",
       required: true,
-      hint: TIP.slug,
       info: INFO.slug,
       derive: (d) =>
         uniqueSlug(
@@ -83,7 +84,6 @@
       label: "parent",
       width: "9rem",
       edit: "select",
-      hint: TIP.parent,
       info: INFO.parent,
       options: (d) => {
         const blocked = subtree(String(d.slug ?? ""));
@@ -101,7 +101,6 @@
       label: "aliases",
       width: "9rem",
       edit: "text",
-      hint: TIP.aliases.component,
       info: INFO.aliases.component,
       value: (r) => (r.aliases ?? []).join(", "),
     },
@@ -118,6 +117,18 @@
     void productSlug;
     components.reload();
     repos.reload();
+  });
+
+  let filter = $state("");
+  const filtered = $derived.by(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return components.data;
+    return components.data.filter((c) =>
+      [c.slug, c.name, (c.aliases ?? []).join(" ")]
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    );
   });
 </script>
 
@@ -144,9 +155,18 @@
 />
 
 {#if productSlug}
+  <FilterBar
+    bind:value={filter}
+    shown={filtered.length}
+    total={components.data.length}
+    placeholder="filter components…"
+    label="filter components"
+  />
+
   <CrudTable
+    hoist={claimTopAction}
     {columns}
-    rows={components.data}
+    rows={filtered}
     rowKey={(r) => r.slug}
     loading={components.loading}
     error={components.error}

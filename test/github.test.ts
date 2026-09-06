@@ -123,3 +123,94 @@ describe("github adapter", () => {
     expect(source().postNote).toBeUndefined();
   });
 });
+
+describe("github request deadline", () => {
+  it("gives every request an abort signal, so a hung upstream cannot hang the turn", async () => {
+    const inits: (RequestInit | undefined)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        inits.push(init);
+        return {
+          ok: true,
+          json: async () => ({}),
+          text: async () => "",
+        } as Response;
+      }),
+    );
+    await source().fetchItem("o/r#5");
+    expect(inits.length).toBeGreaterThan(0);
+    for (const init of inits) expect(init?.signal).toBeInstanceOf(AbortSignal);
+  });
+});
+
+describe("github sync pagination", () => {
+  /** Answers each page from a per-repo backlog, so the cursor is exercised. */
+  function mockPaged(backlog: Record<string, number>) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const u = new URL(url);
+        const repo = u.pathname.replace("/repos/", "").replace("/issues", "");
+        const page = Number(u.searchParams.get("page"));
+        const per = Number(u.searchParams.get("per_page"));
+        const total = backlog[repo] ?? 0;
+        const start = (page - 1) * per;
+        const rows = Array.from(
+          { length: Math.max(0, Math.min(per, total - start)) },
+          (_, i) => ({
+            number: start + i + 1,
+            title: `issue ${start + i + 1}`,
+            state: "open",
+            html_url: `https://github.com/${repo}/issues/${start + i + 1}`,
+            user: { login: "alice" },
+            body: "",
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-02T00:00:00Z",
+          }),
+        );
+        return {
+          ok: true,
+          json: async () => rows,
+          text: async () => "",
+        } as Response;
+      }),
+    );
+  }
+
+  it("walks two repos a page at a time instead of buffering both", async () => {
+    mockPaged({ "o/a": 250, "o/b": 40 });
+    const src = createGithubSource({
+      baseUrl: "",
+      slug: "gh",
+      config: { repos: ["o/a", "o/b"] },
+    });
+
+    // The shape the CLI's sync loop drives.
+    const seen: number[] = [];
+    let cursor: string | undefined;
+    let calls = 0;
+    do {
+      const page = await src.listItems({ cursor });
+      calls++;
+      seen.push(page.items.length);
+      cursor = page.nextCursor;
+      expect(calls).toBeLessThan(20);
+    } while (cursor);
+
+    // 100 + 100 + 50 for the first repo, then 40 for the second.
+    expect(seen).toEqual([100, 100, 50, 40]);
+  });
+
+  it("steps over a repo with nothing in it", async () => {
+    mockPaged({ "o/a": 0, "o/b": 3 });
+    const src = createGithubSource({
+      baseUrl: "",
+      slug: "gh",
+      config: { repos: ["o/a", "o/b"] },
+    });
+    const first = await src.listItems({});
+    expect(first.items).toHaveLength(3);
+    expect(first.nextCursor).toBeUndefined();
+  });
+});

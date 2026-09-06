@@ -14,6 +14,12 @@ import {
   getProductIdBySlug,
   getCustomerIdBySlug,
   getCustomerProfile,
+  listCustomerUnits,
+  addCustomerUnit,
+  updateCustomerUnit,
+  deleteCustomerUnit,
+  resolveUnitFacts,
+  resolveUnit,
   setCustomerFact,
   deleteCustomerFact,
   listCustomerFactKinds,
@@ -27,6 +33,10 @@ import {
   updateCustomer,
   deleteCustomer,
   listTeams,
+  catalogCensus,
+  userCensus,
+  sourceCensus,
+  repoCensus,
   addTeam,
   updateTeam,
   deleteTeam,
@@ -55,7 +65,7 @@ import {
   AGENT_CREDENTIALS,
   type CredentialSource,
 } from "@tachy/core";
-import { requireAdmin } from "../auth";
+import { getIdentity, requireAdmin } from "../auth";
 import {
   assertAnyTeamAdminApi,
   assertScopeEditor,
@@ -134,7 +144,22 @@ const labelSchema = z.object({
 
 const renameSchema = z.object({ to: slugField });
 
+const customerUnitSchema = z.object({
+  slug: z.string().min(1),
+  name: z.string().min(1),
+  kind: z.string().min(1),
+  parent: z.string().nullable().optional(),
+  profile: z.string().nullable().optional(),
+  aliases: z.array(z.string()).optional(),
+  notes: z.string().nullable().optional(),
+});
+
+const customerUnitPatchSchema = customerUnitSchema
+  .partial()
+  .omit({ slug: true });
+
 const customerFactSchema = z.object({
+  unit: z.string().nullable().optional(),
   kind: z.string().min(1),
   label: z.string().optional(),
   value: z.string().min(1),
@@ -175,6 +200,61 @@ const patternPatchSchema = z.object({ description: z.string() });
 
 export const admin = new Hono()
 
+  /**
+   * The admin index's counts, in one request rather than one per section.
+   * Composed here from each domain's own census: a count of teams belongs to
+   * catalog and a count of repos to code, and nothing in core reaches across
+   * to another domain's tables to produce this.
+   */
+  .get("/overview", async (c) => {
+    const ctx = await callerScope(c);
+    const [catalog, users, sources, repos, conns] = await Promise.all([
+      catalogCensus(),
+      userCensus(),
+      sourceCensus(),
+      repoCensus(),
+      listSourceConnections(),
+    ]);
+    /* Through the same resolver the connections list uses, not a join against
+       the vault: a token supplied by the environment is a token, and counting
+       rows would have flagged every one of those as missing. */
+    const untokened = (
+      await Promise.all(
+        conns.map((r) =>
+          tokenSource(r.source_type as string, r.slug as string, ctx),
+        ),
+      )
+    ).filter((s) => s === null).length;
+    return c.json({
+      counts: {
+        sources: sources.connections,
+        projects: sources.projects,
+        repos: repos.repos,
+        teams: catalog.teams,
+        products: catalog.products,
+        components: catalog.components,
+        labels: catalog.labels,
+        patterns: catalog.patterns,
+        customers: catalog.customers,
+        users: users.users,
+      },
+      /* Only what is actionable. A disabled user is a normal state; a
+         connection that cannot authenticate and a repo that stopped indexing
+         are not. */
+      warn: {
+        sources: untokened,
+        repos: repos.failing,
+      },
+    });
+  })
+
+  /*
+   * Members read this: the settings and the global-credential availability are
+   * what the app renders its own chrome from. The `env` block is different —
+   * which secrets are configured, where uploads land, what the API port is — and
+   * only Admin > System renders it, so it travels only to an admin. `upload_dir`
+   * in particular is a path the ingest tools read from.
+   */
   .get("/system", async (c) =>
     c.json({
       settings: await effectiveSettings(),
@@ -187,21 +267,25 @@ export const admin = new Hono()
         copilot_token:
           (await credentialSource(AGENT_CREDENTIALS.copilot, {})) ?? null,
       },
-      env: {
-        auth_mode: env.authMode,
-        port: env.port,
-        user_email: env.userEmail ?? null,
-        oidc_configured: Boolean(env.oidc),
-        api_token_set: Boolean(env.apiToken),
-        session_secret_set: Boolean(env.sessionSecret),
-        anthropic_api_key_set: Boolean(process.env.ANTHROPIC_API_KEY),
-        copilot_token_set: Boolean(
-          process.env.COPILOT_GITHUB_TOKEN ||
-          process.env.GH_TOKEN ||
-          process.env.GITHUB_TOKEN,
-        ),
-        upload_dir: process.env.TACHY_UPLOAD_DIR || null,
-      },
+      ...(getIdentity(c)?.role === "admin"
+        ? {
+            env: {
+              auth_mode: env.authMode,
+              port: env.port,
+              user_email: env.userEmail ?? null,
+              oidc_configured: Boolean(env.oidc),
+              api_token_set: Boolean(env.apiToken),
+              session_secret_set: Boolean(env.sessionSecret),
+              anthropic_api_key_set: Boolean(process.env.ANTHROPIC_API_KEY),
+              copilot_token_set: Boolean(
+                process.env.COPILOT_GITHUB_TOKEN ||
+                process.env.GH_TOKEN ||
+                process.env.GITHUB_TOKEN,
+              ),
+              upload_dir: process.env.TACHY_UPLOAD_DIR || null,
+            },
+          }
+        : {}),
     }),
   )
 
@@ -395,11 +479,78 @@ export const admin = new Hono()
   })
 
   // The customer's own install: their specifics, plus the records that are theirs.
+  // ?unit= resolves the facts for one part of their estate, each carrying where
+  // it came from, instead of listing the customer's flat set.
   .get("/customers/:slug/profile", async (c) =>
     c.json(
-      await getCustomerProfile(await getCustomerIdBySlug(c.req.param("slug"))),
+      await getCustomerProfile(
+        await getCustomerIdBySlug(c.req.param("slug")),
+        c.req.query("unit") ?? null,
+      ),
     ),
   )
+  .get("/customers/:slug/units", async (c) =>
+    c.json(
+      await listCustomerUnits(await getCustomerIdBySlug(c.req.param("slug"))),
+    ),
+  )
+  .put(
+    "/customers/:slug/units",
+    zValidator("json", customerUnitSchema),
+    async (c) => {
+      await assertAnyTeamAdminApi(c);
+      const b = c.req.valid("json");
+      return c.json(
+        await addCustomerUnit({
+          customerSlug: c.req.param("slug"),
+          slug: b.slug,
+          name: b.name,
+          kind: b.kind,
+          parentSlug: b.parent,
+          profileSlug: b.profile,
+          aliases: b.aliases,
+          notes: b.notes,
+        }),
+      );
+    },
+  )
+  .patch(
+    "/customers/:slug/units/:unit",
+    zValidator("json", customerUnitPatchSchema),
+    async (c) => {
+      await assertAnyTeamAdminApi(c);
+      const b = c.req.valid("json");
+      return c.json(
+        await updateCustomerUnit(
+          await getCustomerIdBySlug(c.req.param("slug")),
+          c.req.param("unit"),
+          {
+            ...(b.name !== undefined ? { name: b.name } : {}),
+            ...(b.kind !== undefined ? { kind: b.kind } : {}),
+            ...("parent" in b ? { parentSlug: b.parent } : {}),
+            ...("profile" in b ? { profileSlug: b.profile } : {}),
+            ...(b.aliases !== undefined ? { aliases: b.aliases } : {}),
+            ...("notes" in b ? { notes: b.notes } : {}),
+          },
+        ),
+      );
+    },
+  )
+  .delete("/customers/:slug/units/:unit", async (c) => {
+    await assertAnyTeamAdminApi(c);
+    return c.json(
+      await deleteCustomerUnit(
+        await getCustomerIdBySlug(c.req.param("slug")),
+        c.req.param("unit"),
+      ),
+    );
+  })
+  // The resolved ladder for one unit, each fact carrying where it came from.
+  .get("/customers/:slug/units/:unit/facts", async (c) => {
+    const customerId = await getCustomerIdBySlug(c.req.param("slug"));
+    const unit = await resolveUnit(customerId, c.req.param("unit"));
+    return c.json(await resolveUnitFacts(unit.id));
+  })
   .get("/customers/:slug/facts", async (c) =>
     c.json(
       await listCustomerFacts(await getCustomerIdBySlug(c.req.param("slug"))),
@@ -417,6 +568,7 @@ export const admin = new Hono()
       return c.json(
         await setCustomerFact({
           customerSlug: c.req.param("slug"),
+          unit: b.unit,
           kind: b.kind,
           label: b.label,
           value: b.value,
@@ -554,8 +706,8 @@ export const admin = new Hono()
   })
   // Cheapest authenticated call the remote API offers, using the caller's own
   // token. Doubles as discovery of the groups worth registering as projects.
-  .post("/source-connections/:slug/test", async (c) => {
-    const slug = c.req.param("slug");
+  .post("/source-connections/:slug/test", requireAdmin, async (c) => {
+    const slug = c.req.param("slug")!;
     try {
       const { source } = await resolveSource(slug, await callerScope(c));
       if (!source.verify)

@@ -27,8 +27,11 @@
 {/if}
 
 <style>
+  /* Its own vertical rhythm, because it renders nothing at all when an entry
+     has no scope — a wrapper padding an empty box was the alternative. */
   .crumb {
     display: flex;
+    margin: var(--pad-2) 0;
     align-items: center;
     flex-wrap: wrap;
     gap: var(--pad-1);

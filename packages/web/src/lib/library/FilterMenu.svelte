@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Button } from "../tui";
-  import { EXTRA_FILTERS, type FacetKey, type Facets } from "./filters.svelte";
+  import { EXTRA_FILTERS, type FacetKey, type Facets } from "./filters";
 
   let {
     shown,
@@ -84,7 +84,7 @@
     margin: 0;
     padding: var(--pad-1);
     border: 1px solid var(--ok);
-    border-radius: var(--radius);
+    border-radius: var(--radius-control);
     background: var(--panel-solid);
   }
   button {
@@ -98,7 +98,7 @@
     color: var(--text);
     background: none;
     border: none;
-    border-radius: var(--radius);
+    border-radius: var(--radius-control);
     padding: var(--pad-1) var(--pad-2);
     cursor: pointer;
     text-align: left;

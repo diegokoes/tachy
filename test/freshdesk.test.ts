@@ -185,3 +185,14 @@ describe("freshdesk adapter", () => {
     expect(JSON.parse(String(req.init?.body)).private).toBe(true);
   });
 });
+
+describe("freshdesk request deadline", () => {
+  it("gives every request an abort signal, so a hung upstream cannot hang the turn", async () => {
+    mockFetch({ "/tickets/7": ticket, "/agents": [], "/tickets/7/notes": {} });
+    await source().fetchItem("7");
+    await source().postNote!("7", "note");
+    expect(requests.length).toBeGreaterThan(0);
+    for (const r of requests)
+      expect(r.init?.signal).toBeInstanceOf(AbortSignal);
+  });
+});

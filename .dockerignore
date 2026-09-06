@@ -2,6 +2,9 @@ node_modules
 .git
 .model-cache
 backups
+coverage
+packages/*/dist
 *.log
 test
 .env
+load

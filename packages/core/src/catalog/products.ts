@@ -271,3 +271,24 @@ export async function deleteLabel(productId: string, slug: string) {
   if (!row) throw notFound(`Label '${slug}' not found for this product`);
   return { deleted: true, slug };
 }
+
+/** One row for the admin index: how much of each thing the catalog holds. */
+export async function catalogCensus() {
+  const [row] = await sql`
+    select
+      (select count(*)::int from teams) as teams,
+      (select count(*)::int from products) as products,
+      (select count(*)::int from components) as components,
+      (select count(*)::int from labels) as labels,
+      (select count(*)::int from resolution_patterns) as patterns,
+      (select count(*)::int from customers) as customers
+  `;
+  return row as {
+    teams: number;
+    products: number;
+    components: number;
+    labels: number;
+    patterns: number;
+    customers: number;
+  };
+}

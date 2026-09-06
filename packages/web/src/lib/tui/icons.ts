@@ -1,101 +1,119 @@
 /**
- * Icon geometry from Hola SVG Icons by Mariana Beldi (MIT).
- * https://icons.holasvg.com — https://github.com/marianabeldi/holasvg-icons
+ * Icon geometry, from two MIT sets.
  *
- * All shapes are authored on a 0 0 100 100 grid and drawn stroke-only, so they
- * take their color from `currentColor` and their weight from Icon.svelte.
+ * Heroicons by Tailwind Labs (https://heroicons.com) carries the vocabulary —
+ * outline marks authored on a 24-unit grid at stroke 1.5. Hola SVG Icons by
+ * Mariana Beldi (https://icons.holasvg.com, https://github.com/marianabeldi/holasvg-icons)
+ * keeps the four marks Heroicons has no equivalent for.
+ *
+ * Every shape is stroke-only, so it takes its color from `currentColor` and its
+ * weight from Icon.svelte. `grid` is the side of the square it is drawn on;
+ * Icon.svelte scales the stroke by it, so one `weight` reads the same whichever
+ * set a mark came from — 6 is 6% of the grid either way.
  */
+export type IconDef = { path: string; grid?: number };
+
+/** A Heroicons outline mark: one path on the 24-unit grid. */
+const hero = (d: string): IconDef => ({ path: `<path d="${d}"/>`, grid: 24 });
+
+/** A Hola mark: a fragment of primitives on the default 100-unit grid. */
+const hola = (path: string): IconDef => ({ path });
+
 export const ICONS = {
-  chat: '<polygon points="10,20 90,20 90,70 60,70 50,80 40,70 10,70"/>',
+  /* ── Chat ─────────────────────────────────────────────────────────────── */
+  send: hero(
+    "M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5",
+  ),
+  erase: hero(
+    "M12 9.75 14.25 12m0 0 2.25 2.25M14.25 12l2.25-2.25M14.25 12 12 14.25m-2.58 4.92-6.374-6.375a1.125 1.125 0 0 1 0-1.59L9.42 4.83c.21-.211.497-.33.795-.33H19.5a2.25 2.25 0 0 1 2.25 2.25v10.5a2.25 2.25 0 0 1-2.25 2.25h-9.284c-.298 0-.585-.119-.795-.33Z",
+  ),
+  attach: hero(
+    "M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12-3-3m0 0-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z",
+  ),
 
-  library:
-    '<rect x="10" y="15" width="80" height="15"/><rect x="15" y="30" width="70" height="55"/><line x1="35" y1="52" x2="65" y2="52"/>',
+  /* ── Editing ──────────────────────────────────────────────────────────── */
+  plus: hero("M12 4.5v15m7.5-7.5h-15"),
+  edit: hero(
+    "m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10",
+  ),
+  cancel: hero("M6 18 18 6M6 6l12 12"),
+  check: hero("m4.5 12.75 6 6 9-13.5"),
+  /** Hola: no floppy in Heroicons, and save has to read as save. */
+  save: hola(
+    '<rect x="10" y="10" width="80" height="80"/><rect x="30" y="10" width="40" height="20"/><rect x="25" y="55" width="50" height="35"/>',
+  ),
+  del: hero(
+    "m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0",
+  ),
 
-  admin:
-    '<polyline points="25,20 5,35 25,50"/><line x1="5" y1="35" x2="70" y2="35"/><polyline points="75,50 95,65 75,80"/><line x1="30" y1="65" x2="95" y2="65"/>',
+  /* ── Navigation ───────────────────────────────────────────────────────── */
+  back: hero(
+    "M21 16.811c0 .864-.933 1.406-1.683.977l-7.108-4.061a1.125 1.125 0 0 1 0-1.954l7.108-4.061A1.125 1.125 0 0 1 21 8.689v8.122ZM11.25 16.811c0 .864-.933 1.406-1.683.977l-7.108-4.061a1.125 1.125 0 0 1 0-1.954l7.108-4.061a1.125 1.125 0 0 1 1.683.977v8.122Z",
+  ),
+  next: hero("M17.25 8.25 21 12m0 0-3.75 3.75M21 12H3"),
+  go: hero("M17.25 8.25 21 12m0 0-3.75 3.75M21 12H3"),
+  moveUp: hero("M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18"),
+  moveDown: hero("M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3"),
+  download: hero("M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3"),
 
-  settings:
-    '<line x1="20" y1="15" x2="20" y2="85"/><line x1="50" y1="15" x2="50" y2="85"/><line x1="80" y1="15" x2="80" y2="85"/><circle cx="20" cy="70" r="4"/><circle cx="50" cy="30" r="4"/><circle cx="80" cy="50" r="4"/>',
-
-  analyze:
-    '<circle cx="50" cy="50" r="40"/><circle cx="50" cy="50" r="22"/><circle cx="50" cy="50" r="4"/>',
-
-  consult:
-    '<circle cx="60" cy="40" r="30"/><line x1="10" y1="90" x2="38" y2="62"/>',
-
-  compact:
-    '<polyline points="10,15 30,50 55,20 80,80"/><polyline points="60,70 80,80 90,60"/>',
-
-  ticket:
-    '<polygon points="15,10 15,90 85,90 85,25 70,10"/><line x1="35" y1="55" x2="65" y2="55"/><line x1="50" y1="40" x2="50" y2="70"/><polyline points="70,10 70,25 85,25"/>',
-
-  code: '<polyline points="25,35 5,50 25,65"/><line x1="58" y1="30" x2="42" y2="70"/><polyline points="75,35 95,50 75,65"/>',
-
-  json: '<g transform="scale(3.125)" fill="currentColor" stroke="none"><polygon points="31 11 31 21 29 21 27 15 27 21 25 21 25 11 27 11 29 17 29 11"/><path d="M21.3335 21h-2.667A1.6684 1.6684 0 0 1 17 19.3335v-6.667A1.6684 1.6684 0 0 1 18.6665 11h2.667A1.6684 1.6684 0 0 1 23 12.6665v6.667A1.6684 1.6684 0 0 1 21.3335 21ZM19 19h2v-6h-2Z"/><path d="M13.3335 21H9v-2h4v-2h-2a2.002 2.002 0 0 1-2-2v-2.3335A1.6684 1.6684 0 0 1 10.6665 11H15v2h-4v2h2a2.002 2.002 0 0 1 2 2v2.3335A1.6684 1.6684 0 0 1 13.3335 21Z"/><path d="M5.3335 21H2.6665A1.6684 1.6684 0 0 1 1 19.3335V17h2v2h2v-8h2v8.3335A1.6684 1.6684 0 0 1 5.3335 21Z"/></g>',
-
-  attach:
-    '<polygon points="15,10 15,90 85,90 85,25 70,10"/><line x1="35" y1="55" x2="65" y2="55"/><line x1="50" y1="40" x2="50" y2="70"/><polyline points="70,10 70,25 85,25"/>',
-
-  send: '<polygon points="10,20 90,20 90,70 60,70 50,80 40,70 10,70"/><line x1="30" y1="38" x2="70" y2="38"/><line x1="30" y1="52" x2="50" y2="52"/>',
-
-  erase:
-    '<polygon points="5,50 30,20 90,20 90,80 30,80"/><line x1="70" y1="38" x2="45" y2="62"/><line x1="45" y1="38" x2="70" y2="62"/>',
-
-  doc: '<rect x="15" y="10" width="70" height="80"/><line x1="30" y1="30" x2="50" y2="30"/><line x1="30" y1="50" x2="70" y2="50"/><line x1="30" y1="70" x2="70" y2="70"/>',
-
-  artifact:
-    '<rect x="15" y="10" width="70" height="80"/><circle cx="30" cy="30" r="1"/><circle cx="30" cy="50" r="1"/><circle cx="30" cy="70" r="1"/><line x1="45" y1="30" x2="70" y2="30"/><line x1="45" y1="50" x2="70" y2="50"/><line x1="45" y1="70" x2="70" y2="70"/>',
-
-  download:
-    '<polyline points="10,75 10,90 90,90 90,75"/><line x1="50" y1="15" x2="50" y2="65"/><polyline points="30,50 50,65 70,50"/>',
-
-  alert:
-    '<polygon points="50,10 95,90 5,90"/><line x1="50" y1="42" x2="50" y2="60"/><circle cx="50" cy="75" r="1"/>',
-
-  info: '<circle cx="50" cy="50" r="40"/><line x1="50" y1="30" x2="50" y2="52"/><circle cx="50" cy="68" r="1"/>',
-
-  index:
-    '<rect x="10" y="11" width="80" height="26"/><rect x="10" y="37" width="80" height="26"/><rect x="10" y="63" width="80" height="26"/><circle cx="30" cy="24" r="2"/><circle cx="30" cy="50" r="2"/><circle cx="30" cy="76" r="2"/>',
-
-  archive:
-    '<rect x="15" y="15" width="70" height="35"/><rect x="15" y="50" width="70" height="35"/><circle cx="70" cy="33" r="2"/><circle cx="70" cy="69" r="2"/>',
-
-  upload:
-    '<line x1="20" y1="80" x2="80" y2="80"/><line x1="50" y1="15" x2="50" y2="65"/><polyline points="30,30 50,15 70,30"/>',
-
-  moveUp:
-    '<line x1="20" y1="80" x2="80" y2="80"/><line x1="50" y1="15" x2="50" y2="65"/><polyline points="30,30 50,15 70,30"/>',
-
-  moveDown:
-    '<line x1="20" y1="20" x2="80" y2="20"/><line x1="50" y1="40" x2="50" y2="85"/><polyline points="30,70 50,85 70,70"/>',
-
-  save: '<rect x="10" y="10" width="80" height="80"/><rect x="30" y="10" width="40" height="20"/><rect x="25" y="55" width="50" height="35"/>',
-
-  cancel:
-    '<line x1="15" y1="15" x2="85" y2="85"/><line x1="85" y1="15" x2="15" y2="85"/>',
-
-  back: '<polyline points="90,10 50,50 90,90"/><polyline points="60,10 20,50 60,90"/>',
-
-  next: '<polyline points="10,10 50,50 10,90"/><polyline points="40,10 80,50 40,90"/>',
-
-  go: '<polyline points="30,10 80,50 30,90"/>',
-
-  plus: '<line x1="20" y1="50" x2="80" y2="50"/><line x1="50" y1="20" x2="50" y2="80"/>',
-
-  edit: '<rect x="15" y="15" width="70" height="70"/>',
-
-  check: '<polyline points="10,60 40,85 85,15"/>',
-
-  checkbox: '<circle cx="50" cy="50" r="25"/>',
-
-  /** affected → fixed: an arrow travelling into the version it lands on. */
-  versionArrow:
+  /* ── Documents and lifecycle ──────────────────────────────────────────── */
+  doc: hero(
+    "M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z",
+  ),
+  newVersion: hero(
+    "M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z",
+  ),
+  archive: hero(
+    "m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z",
+  ),
+  reject: hero(
+    "M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636",
+  ),
+  /** Hola: the affected → fixed version arrow, which has no Heroicons analogue. */
+  versionArrow: hola(
     '<line x1="80" y1="20" x2="80" y2="80"/><line x1="15" y1="50" x2="65" y2="50"/><polyline points="50,30 65,50 50,70"/>',
+  ),
 
-  test: '<polyline points="20,25 35,5 50,25"/><line x1="35" y1="5" x2="35" y2="70"/><polyline points="50,75 65,95 80,75"/><line x1="65" y1="30" x2="65" y2="95"/>',
+  /* ── Marks ────────────────────────────────────────────────────────────── */
+  alert: hero(
+    "M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z",
+  ),
+  info: hero(
+    "m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z",
+  ),
+  lockOn: hero(
+    "M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z",
+  ),
+  lockOff: hero(
+    "M13.5 10.5V6.75a4.5 4.5 0 1 1 9 0v3.75M3.75 21.75h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H3.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z",
+  ),
+  json: hero(
+    "M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5",
+  ),
 
-  discover:
-    '<polyline points="10,75 10,90 90,90 90,75"/><line x1="50" y1="15" x2="50" y2="65"/><polyline points="30,50 50,65 70,50"/>',
-} as const;
+  /* ── Sources, repos, search ───────────────────────────────────────────── */
+  consult: hero(
+    "m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z",
+  ),
+  discover: hero(
+    "m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z",
+  ),
+  test: hero(
+    "M9.348 14.652a3.75 3.75 0 0 1 0-5.304m5.304 0a3.75 3.75 0 0 1 0 5.304m-7.425 2.121a6.75 6.75 0 0 1 0-9.546m9.546 0a6.75 6.75 0 0 1 0 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.807 3.808 9.98 0 13.788M12 12h.008v.008H12V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z",
+  ),
+  index: hero(
+    "M5.25 14.25h13.5m-13.5 0a3 3 0 0 1-3-3m3 3a3 3 0 1 0 0 6h13.5a3 3 0 1 0 0-6m-16.5-3a3 3 0 0 1 3-3h13.5a3 3 0 0 1 3 3m-19.5 0a4.5 4.5 0 0 1 .9-2.7L5.737 5.1a3.375 3.375 0 0 1 2.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 0 1 .9 2.7m0 0a3 3 0 0 1-3 3m0 3h.008v.008h-.008v-.008Zm0-6h.008v.008h-.008v-.008Zm-3 6h.008v.008h-.008v-.008Zm0-6h.008v.008h-.008v-.008Z",
+  ),
+
+  /* ── Empty states ─────────────────────────────────────────────────────── */
+  /** Hola: the knowledge-entry mark, a target rather than a page. */
+  analyze: hola(
+    '<circle cx="50" cy="50" r="40"/><circle cx="50" cy="50" r="22"/><circle cx="50" cy="50" r="4"/>',
+  ),
+  /** Hola: a book on a shelf — Heroicons' book marks read as a doc, not a shelf. */
+  library: hola(
+    '<rect x="10" y="15" width="80" height="15"/><rect x="15" y="30" width="70" height="55"/><line x1="35" y1="52" x2="65" y2="52"/>',
+  ),
+} satisfies Record<string, IconDef>;
 
 export type IconName = keyof typeof ICONS;

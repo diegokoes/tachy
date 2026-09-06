@@ -1,23 +1,37 @@
 export {
   RESOLUTION_CLARITIES,
-  LEARNING_VALUES,
   KNOWLEDGE_STATUSES,
   REFERENCE_STATUSES,
+  REFERENCE_KINDS,
+  LINK_KINDS,
   CONFIDENCES,
   FEEDBACK_KINDS,
   RUN_MODES,
+  LIBRARY_ACTORS,
   CLOUD_RE,
   CLOUD_HINT,
+  AGENT_EFFORTS,
+  DEPLOYMENT_PROFILES,
+  MIN_PASSWORD_LENGTH,
+  SLUG_RE,
+  slugify,
 } from "./vocabulary";
 export type {
   ResolutionClarity,
-  LearningValue,
   KnowledgeStatus,
   ReferenceStatus,
+  ReferenceKind,
+  LinkKind,
   Confidence,
   FeedbackKind,
   RunMode,
+  LibraryActor,
+  AgentEffort,
+  DeploymentProfile,
 } from "./vocabulary";
+
+export { WIKILINK_RE, parseWikilink, parseWikilinks } from "./wikilink";
+export type { Wikilink, WikilinkTargetKind } from "./wikilink";
 
 export { GOOD, STRONG, grade } from "./relevance";
 export type { Grade } from "./relevance";
@@ -45,10 +59,12 @@ export {
   columnHeading,
   fieldName,
   columnKeys,
+  ARTIFACT_UTILITIES,
 } from "./exports";
 export type {
   TableCellType,
   TableFormat,
   TableColumn,
   TableOutput,
+  ArtifactUtility,
 } from "./exports";

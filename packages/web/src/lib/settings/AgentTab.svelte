@@ -1,9 +1,14 @@
 <script lang="ts">
+  import { PROVIDER_OPTIONS } from "../vocab";
   import { onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { decode } from "../motion";
-  import { AGENT_KEY_LABELS, agentKeyError } from "../admin/shared";
+  import { AGENT_KEY_LABELS, agentKeyError } from "../credentials";
+  import {
+    AGENT_EFFORTS,
+    API_KEY_EXAMPLE,
+    OAUTH_PREFIX,
+  } from "@tachy/contract";
   import type { AgentProvider } from "@tachy/contract";
   import { Button, InfoMark, Note, Panel, Select } from "../tui";
 
@@ -131,16 +136,12 @@
         <span class="v">
           <Select
             value={prefs.agent_provider.value}
-            options={[
-              { value: "claude", label: "claude (Anthropic)" },
-              { value: "copilot", label: "copilot (GitHub)" },
-            ]}
+            options={PROVIDER_OPTIONS}
             onchange={(v) => setPref("agent_provider", v)}
           />
         </span>
         <span class="a">
-          <span class="from" use:decode={heldBy(prefs.agent_provider.source)}
-          ></span>
+          <span class="from">{heldBy(prefs.agent_provider.source)}</span>
           <span class="slot">
             {#if prefs.agent_provider.source === "user"}
               <Button
@@ -163,8 +164,7 @@
           <input bind:value={modelDraft} placeholder={prefs.agent_model.value} />
         </span>
         <span class="a">
-          <span class="from" use:decode={heldBy(prefs.agent_model.source)}
-          ></span>
+          <span class="from">{heldBy(prefs.agent_model.source)}</span>
           <span class="slot">
             {#if modelChanged}
               <Button
@@ -196,13 +196,12 @@
         <span class="v">
           <Select
             value={prefs.agent_effort.value}
-            options={["low", "medium", "high", "xhigh", "max"]}
+            options={[...AGENT_EFFORTS]}
             onchange={(v) => setPref("agent_effort", v)}
           />
         </span>
         <span class="a">
-          <span class="from" use:decode={heldBy(prefs.agent_effort.source)}
-          ></span>
+          <span class="from">{heldBy(prefs.agent_effort.source)}</span>
           <span class="slot">
             {#if prefs.agent_effort.source === "user"}
               <Button
@@ -226,7 +225,7 @@
   <Panel title="keys">
     {#if creds && !creds.vault_enabled}
       <Note tone="warn">
-        Credential storage is disabled on this server — set <code
+        Credential storage is disabled on this server. Set <code
           >TACHY_SECRET_KEY</code
         > (32 bytes base64) in the server environment to enable per-user keys. Until
         then keys come from <code>.env</code>.
@@ -246,9 +245,8 @@
                 autocomplete="off"
                 class:bad
                 bind:value={drafts[name]}
-                placeholder={mine.has(name) ? MASK : ""}
-                title={held ? `set at ${from} scope — type to override` : null}
-                use:decode={held}
+                placeholder={held || (mine.has(name) ? MASK : "")}
+                title={held ? `set at ${from} scope, type to override` : null}
               />
             </span>
             <span class="a">
@@ -256,11 +254,11 @@
                 {#if name === "anthropic_oauth_token"}
                   <InfoMark label="how to get a Claude subscription token">
                     Run <code>claude setup-token</code> and paste the
-                    <code>sk-ant-oat01-…</code> value it prints.
+                    <code>{OAUTH_PREFIX}…</code> value it prints.
                   </InfoMark>
                 {:else if name === "anthropic_api_key"}
                   <InfoMark label="what an Anthropic API key looks like">
-                    Starts with <code>sk-ant-api03-…</code>, from
+                    Starts with <code>{API_KEY_EXAMPLE}…</code>, from
                     console.anthropic.com.
                   </InfoMark>
                 {/if}
@@ -319,11 +317,13 @@
     align-items: center;
     min-height: var(--row-h);
   }
+  /* The trailing 1fr is empty on purpose: it takes the slack so the marks sit
+     against the control instead of being flung to the panel's right edge. */
   .row.pref {
-    grid-template-columns: 7rem minmax(0, 16rem) 1fr;
+    grid-template-columns: 7rem minmax(0, 16rem) auto 1fr;
   }
   .row.key {
-    grid-template-columns: 14rem minmax(0, 24rem) 1fr;
+    grid-template-columns: 12rem minmax(0, 20rem) auto 1fr;
   }
   .k {
     font-size: var(--fs-sm);
@@ -347,7 +347,6 @@
   .a {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
     gap: var(--pad-1);
   }
   .from {

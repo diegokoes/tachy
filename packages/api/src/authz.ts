@@ -9,6 +9,7 @@ import {
   userSoleTeamId,
   type EntryScope,
   type ScopeContext,
+  type ActorRef,
 } from "@tachy/core";
 import { getIdentity } from "./auth";
 
@@ -16,6 +17,19 @@ export async function callerUserId(c: Context): Promise<string | null> {
   const email = getIdentity(c)?.email ?? env.userEmail;
   if (!email) return null;
   return (await getUserByEmail(email))?.id ?? null;
+}
+
+/**
+ * Who is making this edit, for the library revision it will produce. A bearer
+ * token carries no email at all, so it is recorded as `api` rather than being
+ * passed off as a person who happened to be signed in.
+ */
+export async function callerActor(c: Context): Promise<ActorRef> {
+  const via = getIdentity(c)?.via;
+  return {
+    userId: await callerUserId(c),
+    actor: via === "token" ? "api" : "web",
+  };
 }
 
 /** Scope for user → team → global credential/preference lookups. */

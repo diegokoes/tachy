@@ -22,9 +22,11 @@
     "sync": "tsx packages/cli/src/index.ts",
     "web:dev": "npm run dev --workspace @tachy/web",
     "web:build": "npm run build --workspace @tachy/web",
-    "web:check": "npm run check --workspace @tachy/web",
+    "web:check": "node scripts/check-runes.mjs && npm run check --workspace @tachy/web",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "load": "docker compose -p tachy-dev -f docker-compose.yml -f load/k6.compose.yml run --rm k6 run",
     "format": "prettier --write ."
   },
   "engines": {
@@ -36,7 +38,9 @@
   },
   "devDependencies": {
     "@testcontainers/postgresql": "^12.0.3",
-    "@types/node": "^22.10.2",
+    "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "jsdom": "^30.0.1",
     "prettier": "^3.9.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",

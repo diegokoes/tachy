@@ -1,29 +1,69 @@
 <script lang="ts">
   import { Checkbox, Chip, Select } from "../tui";
   import { ENUM_FIELDS } from "../vocab";
+  import type { FieldSpec } from "../types";
 
   let {
     name,
     value,
+    spec,
     disabled = false,
     onchange,
   }: {
     name: string;
     value: unknown;
+    /** A schema for this field, when the caller has one. See below. */
+    spec?: FieldSpec;
     disabled?: boolean;
     onchange: (v: unknown) => void;
   } = $props();
 
   /**
-   * The widget comes from the shape of the value the model actually sent, not
-   * from a tool schema — nothing carries one to the browser, and a tool nobody
-   * anticipated still has to render. `ENUM_FIELDS` is the only per-key override.
+   * Where a schema exists it decides the widget; otherwise the widget comes from
+   * the shape of the value the model actually sent. The fallback is not a
+   * stopgap — a tool nobody anticipated still has to render, and most tools
+   * carry no schema at all. `ENUM_FIELDS` is the built-in per-key schema, and
+   * folds into the same lookup rather than sitting beside it.
    */
   type Kind = "enum" | "bool" | "number" | "list" | "text" | "line" | "json";
 
+  /** Choices for this field, from a passed spec or the built-in vocabularies. */
+  const choices = $derived<readonly string[] | undefined>(
+    spec?.allowed_values?.length
+      ? (spec.allowed_values.map(String) as string[])
+      : name in ENUM_FIELDS
+        ? ENUM_FIELDS[name]
+        : undefined,
+  );
+
+  /** ADO's FieldType, mapped onto the widgets this box actually has. */
+  function fromSpec(s: FieldSpec): Kind | undefined {
+    if (choices && (typeof value === "string" || value == null)) return "enum";
+    switch (s.type) {
+      case "integer":
+      case "double":
+        return "number";
+      case "boolean":
+        return "bool";
+      case "html":
+      case "plainText":
+        return "text";
+      // A tree path (area/iteration) needs the classification-nodes endpoint to
+      // offer real choices; until then it is a text box like any other.
+      case "treePath":
+      case "string":
+      case "dateTime":
+      case "guid":
+        return "line";
+      default:
+        return undefined;
+    }
+  }
+
   const kind = $derived.by<Kind>(() => {
-    if (name in ENUM_FIELDS && (typeof value === "string" || value == null))
-      return "enum";
+    const fromSchema = spec ? fromSpec(spec) : undefined;
+    if (fromSchema) return fromSchema;
+    if (choices && (typeof value === "string" || value == null)) return "enum";
     if (typeof value === "boolean") return "bool";
     if (typeof value === "number") return "number";
     if (Array.isArray(value) && value.every((v) => typeof v === "string"))
@@ -33,7 +73,13 @@
     return "json";
   });
 
-  const label = $derived(name.replaceAll("_", " "));
+  const hint = $derived(
+    spec?.is_identity
+      ? "a person. Use their email or unique name; a display name alone is ambiguous"
+      : (spec?.help_text ?? undefined),
+  );
+
+  const label = $derived(spec?.name ?? name.replaceAll("_", " "));
   const list = $derived(Array.isArray(value) ? (value as string[]) : []);
 
   let adding = $state("");
@@ -81,7 +127,9 @@
 </script>
 
 <div class="field" class:inline={kind === "line" || kind === "enum" || kind === "bool" || kind === "number"}>
-  <span class="label">{label}</span>
+  <span class="label" title={hint}>
+    {label}{#if spec?.required}<span class="req" title="required by this work item type">*</span>{/if}
+  </span>
 
   {#if kind === "enum"}
     <Select
@@ -90,7 +138,7 @@
       aria-label={label}
       options={[
         { value: "", label: "unset" },
-        ...ENUM_FIELDS[name].map((o) => ({ value: o, label: o })),
+        ...(choices ?? []).map((o) => ({ value: o, label: o })),
       ]}
       onchange={(v) => onchange(v === "" ? null : v)}
     />
@@ -166,6 +214,12 @@
 </div>
 
 <style>
+  /* A required field the model left empty is the commonest reason a create
+     call bounces, so the marker earns its place. */
+  .req {
+    color: var(--warn, orange);
+    margin-left: 0.15rem;
+  }
   .field {
     display: flex;
     flex-direction: column;

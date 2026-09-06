@@ -1,0 +1,16 @@
+# Not started by `up` -- run ad hoc, the same way the `cli` service is:
+#   npm run load -- /load/smoke.js
+services:
+  k6:
+    image: grafana/k6:latest
+    profiles: ["load"]
+    environment:
+      BASE_URL: ${BASE_URL:-http://api:8787}
+      LOGIN_EMAIL: ${LOGIN_EMAIL:-dev-member@tachy.local}
+      LOGIN_PASSWORD: ${LOGIN_PASSWORD:-tachy-dev-password}
+      PROFILE: ${PROFILE:-}
+      RATE: ${RATE:-}
+      DURATION: ${DURATION:-}
+    volumes:
+      # Mounted rather than piped on stdin: the scenarios import from ./lib.
+      - ./load:/load:ro

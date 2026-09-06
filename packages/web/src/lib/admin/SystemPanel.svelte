@@ -1,11 +1,16 @@
 <script lang="ts">
+  import { PROVIDER_OPTIONS } from "../vocab";
+  import { AGENT_EFFORTS } from "@tachy/contract";
   import { onMount } from "svelte";
   import { api } from "../api";
   import { initSession } from "../session.svelte";
   import AsciiSelect from "../AsciiSelect.svelte";
   import Checkbox from "../tui/Checkbox.svelte";
+  import Icon from "../tui/Icon.svelte";
   import { errText } from "../resource.svelte";
-  import { csv, type SystemInfo } from "./shared";
+  import type { SystemInfo } from "./rows";
+import { csv } from "../fields";
+  import { GroupHead } from "../tui";
 
   let system = $state<SystemInfo | null>(null);
   let loading = $state(true);
@@ -55,14 +60,14 @@
 {#if loading}<p class="muted">Loading…</p>{/if}
 
 {#if system}
-  <h4>Runtime settings</h4>
+  <GroupHead label="runtime settings" />
   <table>
     <thead><tr><th>setting</th><th>value</th>
       <th class="tip" title="db: set here. env: falling back to the environment variable. default: built-in.">source</th>
     </tr></thead>
     <tbody>
       <tr>
-        <td class="tip" title="Engineering/repositories reads product→repository, team→organization and hides customers. Display only — slugs and the agent contract never change.">Deployment profile</td>
+        <td class="tip" title="Engineering/repositories reads product→repository, team→organization and hides customers. Display only: slugs and the agent contract never change.">Deployment profile</td>
         <td>
           <AsciiSelect value={system.settings.deployment_profile.value}
             options={[
@@ -74,7 +79,7 @@
         <td><span class="badge src-{system.settings.deployment_profile.source}">{system.settings.deployment_profile.source}</span></td>
       </tr>
       <tr>
-        <td class="tip" title="Scrubs PII/secrets from everything sent to the LLM — all connections, pasted context and retrieved results. The database keeps raw data.">PII / secret redaction</td>
+        <td class="tip" title="Scrubs PII/secrets from everything sent to the LLM: all connections, pasted context and retrieved results. The database keeps raw data.">PII / secret redaction</td>
         <td>
           <label class="check">
             <Checkbox
@@ -82,8 +87,13 @@
               ariaLabel="PII / secret redaction"
               onchange={(checked) => saveSetting("redaction_global", checked)}
             />
-            <span class:on={system.settings.redaction_global.value}>
-              {system.settings.redaction_global.value ? "on — at the LLM boundary" : "off — per-connection opt-in only"}
+            <span class="state" class:on={system.settings.redaction_global.value}>
+              <Icon
+                name={system.settings.redaction_global.value ? "lockOn" : "lockOff"}
+                size="1em"
+                weight={7}
+              />
+              {system.settings.redaction_global.value ? "on, at the LLM boundary" : "off, per-connection opt-in only"}
             </span>
           </label>
         </td>
@@ -93,10 +103,7 @@
         <td class="tip" title="Which backend runs the chat. Claude: Anthropic API key or Claude Code login. Copilot: token or copilot CLI login.">Agent provider</td>
         <td>
           <AsciiSelect value={system.settings.agent_provider.value}
-            options={[
-              { value: "claude", label: "claude (Anthropic)" },
-              { value: "copilot", label: "copilot (GitHub)" },
-            ]}
+            options={PROVIDER_OPTIONS}
             onchange={(v) => saveSetting("agent_provider", v)} />
         </td>
         <td><span class="badge src-{system.settings.agent_provider.source}">{system.settings.agent_provider.source}</span></td>
@@ -115,7 +122,7 @@
         <td>Agent effort</td>
         <td>
           <AsciiSelect value={system.settings.agent_effort.value}
-            options={["low", "medium", "high", "xhigh", "max"]}
+            options={[...AGENT_EFFORTS]}
             onchange={(v) => saveSetting("agent_effort", v)} />
         </td>
         <td><span class="badge src-{system.settings.agent_effort.source}">{system.settings.agent_effort.source}</span></td>
@@ -143,31 +150,36 @@
     </tbody>
   </table>
 
-  <h4>Environment <span class="muted">(bootstrap + secrets - read-only, set in .env)</span></h4>
-  <table>
-    <thead><tr><th>setting</th><th>value</th><th>env var</th></tr></thead>
-    <tbody>
-      <tr>
-        <td>Auth</td>
-        <td>{system.env.auth_mode}{system.env.auth_mode === "open" ? " (wizard/password login takes over once set up)" : ""}</td>
-        <td class="muted">OIDC_* {system.env.oidc_configured ? "(set)" : "(unset)"} · TACHY_API_TOKEN {system.env.api_token_set ? "(set)" : "(unset)"}</td>
-      </tr>
-      <tr>
-        <td>Session secret</td>
-        <td>{system.env.session_secret_set ? "set" : "not set - ephemeral; sessions reset on restart"}</td>
-        <td class="muted">TACHY_SESSION_SECRET</td>
-      </tr>
-      <tr><td>Anthropic API key</td><td>{system.env.anthropic_api_key_set ? "set" : "not set (falls back to the server's Claude Code login)"}</td><td class="muted">ANTHROPIC_API_KEY</td></tr>
-      <tr><td>Copilot GitHub token</td><td>{system.env.copilot_token_set ? "set" : "not set (falls back to the server's copilot CLI login)"}</td><td class="muted">COPILOT_GITHUB_TOKEN</td></tr>
-      <tr><td>Attribution email (standalone MCP)</td><td>{system.env.user_email ?? "(anonymous)"}</td><td class="muted">TACHY_USER_EMAIL</td></tr>
-      <tr><td>Upload dir</td><td>{system.env.upload_dir ?? "(OS tmp dir)"}</td><td class="muted">TACHY_UPLOAD_DIR</td></tr>
-      <tr><td>API port</td><td>{system.env.port}</td><td class="muted">PORT</td></tr>
-    </tbody>
-  </table>
+  <!-- The server sends `env` to admins only, so this whole table is theirs. -->
+  {#if system.env}
+    {@const e = system.env}
+    <GroupHead label="environment (read-only, set in .env)" />
+    <table>
+      <thead><tr><th>setting</th><th>value</th><th>env var</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Auth</td>
+          <td>{e.auth_mode}{e.auth_mode === "open" ? " (wizard/password login takes over once set up)" : ""}</td>
+          <td class="muted">OIDC_* {e.oidc_configured ? "(set)" : "(unset)"} · TACHY_API_TOKEN {e.api_token_set ? "(set)" : "(unset)"}</td>
+        </tr>
+        <tr>
+          <td>Session secret</td>
+          <td>{e.session_secret_set ? "set" : "not set - ephemeral; sessions reset on restart"}</td>
+          <td class="muted">TACHY_SESSION_SECRET</td>
+        </tr>
+        <tr><td>Anthropic API key</td><td>{e.anthropic_api_key_set ? "set" : "not set (falls back to the server's Claude Code login)"}</td><td class="muted">ANTHROPIC_API_KEY</td></tr>
+        <tr><td>Copilot GitHub token</td><td>{e.copilot_token_set ? "set" : "not set (falls back to the server's copilot CLI login)"}</td><td class="muted">COPILOT_GITHUB_TOKEN</td></tr>
+        <tr><td>Attribution email (standalone MCP)</td><td>{e.user_email ?? "(anonymous)"}</td><td class="muted">TACHY_USER_EMAIL</td></tr>
+        <tr><td>Upload dir</td><td>{e.upload_dir ?? "(OS tmp dir)"}</td><td class="muted">TACHY_UPLOAD_DIR</td></tr>
+        <tr><td>API port</td><td>{e.port}</td><td class="muted">PORT</td></tr>
+      </tbody>
+    </table>
+  {/if}
 {/if}
 
 <style>
   td .on { color: var(--ok); }
+  td .state { display: inline-flex; align-items: center; gap: var(--pad-2); }
   .edit-cell input { min-width: 13rem; }
   label.check { display: flex; gap: 0.5rem; align-items: center; cursor: pointer; }
   .badge.src-db { border-color: var(--accent); color: var(--accent); }

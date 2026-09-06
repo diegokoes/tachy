@@ -58,29 +58,6 @@ export function shatterAll(nodes: HTMLElement[], onComplete: () => void) {
   return tl;
 }
 
-/** Counts [data-val] nodes up from zero; falls back to the final text. */
-export function countUp(root: HTMLElement) {
-  const nodes = root.querySelectorAll<HTMLElement>("[data-val]");
-  if (reducedMotion()) {
-    for (const el of nodes) el.textContent = el.dataset.final ?? "";
-    return;
-  }
-  nodes.forEach((el, i) => {
-    const target = Number(el.dataset.val ?? 0);
-    const suffix = el.dataset.suffix ?? "";
-    const obj = { val: 0 };
-    gsap.to(obj, {
-      val: target,
-      duration: 2.6,
-      delay: i * 0.08,
-      ease: "power2.out",
-      onUpdate: () => {
-        el.textContent = Math.round(obj.val).toLocaleString() + suffix;
-      },
-    });
-  });
-}
-
 /**
  * Resolves a mask of password dots into plain text — in the placeholder if the
  * node is an input, in its text otherwise. A setting the user has not set
@@ -216,7 +193,14 @@ export function settle(node: Element) {
   gsap.to(node, { rotation: 0, scale: 1, duration: 0.3, ease: "power2.out" });
 }
 
-/** One discharge into a node — the far end of an arriving thread. */
+/**
+ * One discharge into a node — the far end of an arriving thread.
+ *
+ * drop-shadow, not box-shadow: box-shadow traces the element's border box, so
+ * on a node whose visible shape is drawn rather than boxed — the artifact tab
+ * is a hexagon on a borderless button — it flashes a rectangle around it.
+ * drop-shadow follows what is actually painted.
+ */
 export function jolt(node: Element) {
   if (reducedMotion()) return null;
   const accent = getComputedStyle(document.documentElement)
@@ -224,27 +208,68 @@ export function jolt(node: Element) {
     .trim();
   return gsap.fromTo(
     node,
-    { boxShadow: `0 0 9px 1px ${accent}` },
+    { filter: `drop-shadow(0 0 7px ${accent})` },
     {
-      boxShadow: `0 0 0px 0px ${accent}`,
+      filter: `drop-shadow(0 0 0px ${accent})`,
       duration: 0.4,
       ease: "power2.out",
-      clearProps: "boxShadow",
+      clearProps: "filter",
     },
   );
 }
 
-/** Svelte transition: CRT power-on — a scanline that snaps to full height. */
-export function crt(_node: Element, { duration = 220 } = {}) {
-  if (reducedMotion()) return { duration: 0 };
-  return {
-    duration,
-    easing: (t: number) => 1 - Math.pow(1 - t, 3),
-    css: (t: number) =>
-      `transform: scaleY(${0.02 + 0.98 * t});` +
-      `filter: brightness(${1 + 1.6 * (1 - t)});` +
-      `opacity: ${Math.min(1, t * 4)}`,
+/**
+ * Squash-and-stretch on click, settling elastic. A press has to feel like it
+ * landed on something with give, so the overshoot is the point.
+ */
+export function jellyPress(node: HTMLElement) {
+  const press = () => {
+    if (reducedMotion()) return;
+    gsap
+      .timeline()
+      .to(node, { scaleX: 1.18, scaleY: 0.82, duration: 0.1 })
+      .to(node, { scaleX: 0.92, scaleY: 1.08, duration: 0.1 })
+      .to(node, {
+        scaleX: 1,
+        scaleY: 1,
+        duration: 0.5,
+        ease: "elastic.out(1, 0.4)",
+      });
   };
+  node.addEventListener("click", press);
+  return {
+    destroy: () => {
+      node.removeEventListener("click", press);
+      gsap.killTweensOf(node);
+    },
+  };
+}
+
+/**
+ * Tweens a plain number, for state a component renders from rather than a
+ * style GSAP can write directly. Returns the tween so a caller can kill it.
+ *
+ * Opening overshoots, closing does not: a thing that springs shut reads as a
+ * glitch where springing open reads as intent.
+ */
+export function tweenValue(
+  from: number,
+  to: number,
+  set: (v: number) => void,
+  o: { duration?: number; delay?: number; ease?: string } = {},
+) {
+  if (reducedMotion()) {
+    set(to);
+    return null;
+  }
+  const box = { v: from };
+  return gsap.to(box, {
+    v: to,
+    delay: o.delay ?? 0,
+    duration: o.duration ?? 0.4,
+    ease: o.ease ?? "power2.out",
+    onUpdate: () => set(box.v),
+  });
 }
 
 /** Horizontal clip-path wipe, staggered — the nav reveal. */
