@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { createSequence } from "../resource.svelte";
   import { KNOWLEDGE_STATUSES, REFERENCE_STATUSES } from "../vocab";
   import { onMount } from "svelte";
   import { api } from "../api";
@@ -24,7 +25,7 @@
     saveFilters,
     type FacetKey,
     type Facets,
-  } from "./filters.svelte";
+  } from "./filters";
   import EntryDetail from "../EntryDetail.svelte";
   import DocDetail from "./DocDetail.svelte";
   import WikiView from "../wiki/WikiView.svelte";
@@ -301,7 +302,13 @@
    * Each facet is counted with its own selection lifted, so its other options
    * stay reachable once one is picked.
    */
+  const currentFacets = createSequence();
+
   async function loadFacets() {
+    // Its own sequence, separate from `run`'s: changing two filters quickly
+    // fires two of these, and the slower one used to overwrite the newer
+    // options — leaving a filter offering values that no longer have rows.
+    const isCurrent = currentFacets();
     const p = new URLSearchParams();
     if (productId) p.set("product_id", productId);
     if (productId && component) p.set("component", component);
@@ -309,8 +316,11 @@
     if (version) p.set("affected_version", version);
     applyExtras(p, shown, extras);
     try {
-      facets = await api.get<Facets>(`/knowledge/facets?${p}`);
+      const next = await api.get<Facets>(`/knowledge/facets?${p}`);
+      if (!isCurrent()) return;
+      facets = next;
     } catch {
+      if (!isCurrent()) return;
       facets = {};
     }
     if (version && !versions.some((v) => v.value === version)) version = "";
@@ -337,14 +347,20 @@
 
   const persist = () => saveFilters({ shown, values: extras });
 
+  const currentComponents = createSequence();
+
   async function onProductChange(id: string) {
+    const isCurrent = currentComponents();
     component = "";
     components = [];
     const slug = products.find((p) => p.id === id)?.slug;
     if (slug)
       try {
-        components = await api.get<NamedRow[]>(`/products/${slug}/components`);
+        const next = await api.get<NamedRow[]>(`/products/${slug}/components`);
+        if (!isCurrent()) return;
+        components = next;
       } catch {
+        if (!isCurrent()) return;
         components = [];
       }
     await loadFacets();

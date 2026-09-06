@@ -3,7 +3,7 @@
   import { api } from "../api";
   import { createResource } from "../resource.svelte";
   import { Badge, Meter, Note, G, RAMP } from "../tui";
-  import type { Connection, Repo, SourceProject } from "./shared";
+  import type { Connection, Repo, SourceProject } from "./rows";
 
   const conns = createResource(
     () => api.get<Connection[]>("/source-connections"),

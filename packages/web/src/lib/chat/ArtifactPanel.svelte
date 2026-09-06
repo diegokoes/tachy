@@ -22,7 +22,7 @@
   } from "./OutputSpecEditor.svelte";
   import ArtifactThread from "./ArtifactThread.svelte";
   import { clearGlow, glow, jolt, settle, spin, tweenValue } from "../motion";
-  import { nextNavKey } from "../nav.svelte";
+  import { nextNavKey } from "../nav";
   import { pushScope } from "../keys.svelte";
 
   let tabBtn = $state<HTMLButtonElement>();

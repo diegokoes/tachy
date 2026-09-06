@@ -20,14 +20,9 @@
   } from "../tui";
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
-  import {
-    INFO,
-    csv,
-    type Connection,
-    type Product,
-    type SourceProject,
-    type Team,
-  } from "./shared";
+  import type { Connection, Product, SourceProject, Team } from "./rows";
+import { INFO } from "./help";
+import { csv } from "../fields";
   import { claimTopAction } from "./topAction.svelte";
 
   type SourceType = "freshdesk" | "azure-devops" | "github";

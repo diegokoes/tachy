@@ -10,7 +10,7 @@
   import type { KnowledgeRow, NamedRow } from "../types";
   import AsciiSelect from "../AsciiSelect.svelte";
   import { t } from "../terms";
-  import { csv } from "../admin/shared";
+  import { csv } from "../fields";
   import { setTopActions } from "../subnav.svelte";
   import { componentOptions } from "../catalog";
   import Icon from "../tui/Icon.svelte";

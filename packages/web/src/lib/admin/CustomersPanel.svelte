@@ -14,13 +14,9 @@
     type Column,
   } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
-  import {
-    csv,
-    INFO,
-    type Component,
-    type Customer,
-    type Product,
-  } from "./shared";
+  import type { Component, Customer, Product } from "./rows";
+import { INFO } from "./help";
+import { csv } from "../fields";
   import { claimTopAction } from "./topAction.svelte";
 
   type CustomerUnit = {

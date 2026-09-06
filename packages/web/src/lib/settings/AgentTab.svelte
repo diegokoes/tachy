@@ -3,7 +3,7 @@
   import { onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { AGENT_KEY_LABELS, agentKeyError } from "../admin/shared";
+  import { AGENT_KEY_LABELS, agentKeyError } from "../credentials";
   import {
     AGENT_EFFORTS,
     API_KEY_EXAMPLE,

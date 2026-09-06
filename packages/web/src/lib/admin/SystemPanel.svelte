@@ -8,7 +8,8 @@
   import Checkbox from "../tui/Checkbox.svelte";
   import Icon from "../tui/Icon.svelte";
   import { errText } from "../resource.svelte";
-  import { csv, type SystemInfo } from "./shared";
+  import type { SystemInfo } from "./rows";
+import { csv } from "../fields";
   import { GroupHead } from "../tui";
 
   let system = $state<SystemInfo | null>(null);

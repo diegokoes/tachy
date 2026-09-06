@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { createSequence } from "../resource.svelte";
   import { api } from "../api";
   import { navigate } from "../router.svelte";
   import type { NamedRow } from "../types";
@@ -28,15 +29,20 @@
     load();
   });
 
+  const current = createSequence();
+
   async function load() {
+    const isCurrent = current();
     try {
       const [links, prods] = await Promise.all([
         api.get<{ inbound: Link[] }>(`/${base}/${id}/links`),
         api.get<NamedRow[]>("/products").catch(() => [] as NamedRow[]),
       ]);
+      if (!isCurrent()) return;
       inbound = links.inbound;
       products = prods;
     } catch {
+      if (!isCurrent()) return;
       inbound = [];
     }
   }
