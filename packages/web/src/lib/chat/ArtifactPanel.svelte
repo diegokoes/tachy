@@ -9,8 +9,6 @@
     Button,
     Field,
     Modal,
-    Panel,
-    Scrim,
     Select,
     G,
     Icon,
@@ -23,7 +21,7 @@
     type OutputSpec,
   } from "./OutputSpecEditor.svelte";
   import ArtifactThread from "./ArtifactThread.svelte";
-  import { clearGlow, crt, glow, jolt, settle, spin, tweenValue } from "../motion";
+  import { clearGlow, glow, jolt, settle, spin, tweenValue } from "../motion";
   import { nextNavKey } from "../nav.svelte";
   import { pushScope } from "../keys.svelte";
 
@@ -463,32 +461,27 @@
 </div>
 
 {#if open}
-  <Scrim z={6} soft={editorOpen} onclick={() => (open = false)} />
-
-  <div class="stage">
-    <aside class="picker" bind:this={pickerEl} transition:crt>
-      <Panel title="artifacts" tone="accent" scan>
-        {#snippet meta()}
-          <span class="head-acts">
-            <Button
-              variant="ghost"
-              tone="ok"
-              square
-              icon="plus"
-              title="new artifact"
-              aria-label="new artifact"
-              onclick={openCreate}
-            />
-            <Button
-              variant="ghost"
-              square
-              icon="cancel"
-              title="close"
-              aria-label="close"
-              onclick={() => (open = false)}
-            />
-          </span>
-        {/snippet}
+  <!-- The same window every other dialog draws: shared scrim, titlebar
+       actions on the right, no heading and no scanlines. It used to wrap Panel
+       and so read as a different material from the dialogs it opens. -->
+  <Modal
+    title="artifacts"
+    width="46rem"
+    cancelLabel="close"
+    bind:element={pickerEl}
+    onCancel={() => (open = false)}
+  >
+    {#snippet barExtra()}
+      <Button
+        variant="ghost"
+        tone="ok"
+        square
+        icon="plus"
+        title="new artifact"
+        aria-label="new artifact"
+        onclick={openCreate}
+      />
+    {/snippet}
 
         <div class="pick-body">
           {#if error}<p class="error">{error}</p>{/if}
@@ -501,7 +494,11 @@
             <div class="scope-head">{SCOPE_LABELS[g.scope]}</div>
             <ul class="art-list">
               {#each g.rows as a (a.id)}
-                <li class="art-row" class:selected={chat.artifact?.id === a.id}>
+                <li
+                  class="art-row"
+                  class:selected={chat.artifact?.id === a.id}
+                  class:armed={armedDelete === a.id}
+                >
                   <button class="art-pick" onclick={() => select(a)}>
                     <span class="art-title">
                       {chat.artifact?.id === a.id ? `${G.selected} ` : ""}{a.title}
@@ -540,9 +537,7 @@
             </ul>
           {/each}
         </div>
-      </Panel>
-    </aside>
-  </div>
+  </Modal>
 
   <ArtifactThread bind:this={thread} from={pickerEl} to={tabFrame} />
 {/if}
@@ -671,34 +666,13 @@
   }
 
 
-  .stage {
-    position: absolute;
-    inset: 0;
-    z-index: 8;
-    display: grid;
-    place-items: center;
-    padding: var(--pad-4) 6rem var(--pad-4) var(--pad-4);
-    pointer-events: none;
-  }
-  .picker {
-    pointer-events: auto;
-    width: min(46rem, 100%);
-    transform-origin: center;
-  }
-
-  .head-acts { display: inline-flex; gap: var(--pad-2); align-items: center; }
-  .head-acts :global(.btn.square:focus-visible) {
-    border-color: transparent;
-    outline: none;
-    box-shadow: none;
-  }
-
+  /* No height cap and no scroller of its own: the dialog window already caps
+     its own height and scrolls its body. */
   .pick-body {
     display: flex;
     flex-direction: column;
     gap: var(--pad-2);
-    max-height: min(24rem, 45vh);
-    overflow-y: auto;
+    text-align: left;
   }
 
   .scope-head {
@@ -718,7 +692,12 @@
     grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
     gap: var(--pad-2);
   }
-  .art-row { display: flex; align-items: stretch; gap: var(--pad-1); min-width: 0; }
+  .art-row {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+  }
   .art-row.selected .art-pick { border-color: var(--accent); }
   .art-pick {
     flex: 1;
@@ -730,7 +709,7 @@
     padding: var(--pad-2) var(--pad-3);
     background: var(--panel);
   }
-  .art-title { font-size: var(--fs-sm); }
+  .art-title { font-size: var(--fs-sm); padding-right: var(--pad-4); }
   .art-out {
     margin-left: var(--pad-1);
     padding: 0 var(--pad-1);
@@ -747,7 +726,29 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .art-actions { display: flex; flex-direction: column; gap: var(--pad-1); }
+  /* Edit and delete belong to the row under the pointer, not to all of them at
+     once — a grid of cards each wearing two buttons reads as a toolbar. Hidden
+     by opacity rather than display so they keep their place in the tab order,
+     and :focus-within brings them back for anyone arriving by keyboard.
+     `armed` keeps a delete waiting for its second click visible after the
+     pointer has moved on. */
+  .art-actions {
+    position: absolute;
+    top: var(--pad-1);
+    right: var(--pad-1);
+    display: flex;
+    gap: var(--pad-1);
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .art-row:hover .art-actions,
+  .art-row:focus-within .art-actions,
+  .art-row.armed .art-actions {
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .art-actions { transition: none; }
+  }
 
   .ed-form {
     display: flex;
