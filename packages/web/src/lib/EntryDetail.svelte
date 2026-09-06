@@ -1,6 +1,9 @@
 <script lang="ts">
+  import { fmtDate } from "./dates";
+  import { statusTone } from "./library/status";
+  import { patchLibraryItem } from "./library/edit";
   import { createSequence } from "./resource.svelte";
-  import { api, ApiError } from "./api";
+  import { api } from "./api";
   import type { KnowledgeRow, Feedback, NamedRow } from "./types";
   import History from "./library/History.svelte";
   import Backlinks from "./wiki/Backlinks.svelte";
@@ -47,10 +50,6 @@
     !!entry && canCurateScope({ team_id: entry.team_id as string | null | undefined, team_slug: productTeamSlug }),
   );
 
-  const fmtDate = (d?: string) => (d ? new Date(d).toISOString().slice(0, 10) : "");
-
-  const statusTone = (s: string) =>
-    s === "approved" ? "ok" : s === "draft" ? "accent" : s === "rejected" ? "danger" : s === "deprecated" ? "warn" : "muted";
 
   /** Reading the entry, backspace goes back. Not bound while editing, where it
       would sit one stray keystroke away from discarding a form.
@@ -115,21 +114,21 @@
     mutating = true;
     mutateError = null;
     conflict = false;
-    try {
-      await api.patch(`/knowledge/${id}`, { ...body, expectedVersion: entry.version });
+    const res = await patchLibraryItem(
+      `/knowledge/${id}`,
+      body,
+      entry.version,
+      "entry",
+    );
+    if (res.ok) {
       editing = false;
       deprecating = false;
       await load();
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        conflict = true;
-        mutateError = "someone else edited this entry in the meantime - reload to get the latest version";
-      } else {
-        mutateError = e instanceof Error ? e.message : String(e);
-      }
-    } finally {
-      mutating = false;
+    } else {
+      conflict = res.conflict;
+      mutateError = res.message;
     }
+    mutating = false;
   }
 
   async function deprecate() {

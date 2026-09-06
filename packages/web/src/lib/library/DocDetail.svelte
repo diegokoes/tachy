@@ -1,5 +1,8 @@
 <script lang="ts">
-  import { api, ApiError } from "../api";
+  import { fmtDate } from "../dates";
+  import { statusTone } from "./status";
+  import { patchLibraryItem } from "./edit";
+  import { api } from "../api";
   import type { NamedRow, ReferenceLineageRow, ReferenceRow } from "../types";
   import { canCurateScope, isCurator } from "../session.svelte";
   import History from "./History.svelte";
@@ -33,8 +36,6 @@
     !!doc && canCurateScope({ team_id: doc.team_id, team_slug: productTeamSlug }),
   );
 
-  const fmtDate = (d?: string) =>
-    d ? new Date(d).toISOString().slice(0, 10) : "";
 
   const versionLabel = (l: ReferenceLineageRow) =>
     `${l.doc_version ? `v${l.doc_version}` : fmtDate(l.created_at) || l.id.slice(0, 8)} · ${l.status}`;
@@ -56,8 +57,6 @@
         : [],
   );
 
-  const statusTone = (s: string) =>
-    s === "approved" ? "ok" : s === "draft" ? "accent" : "muted";
 
   const current = createSequence();
 
@@ -113,23 +112,18 @@
     mutating = true;
     mutateError = null;
     conflict = false;
-    try {
-      await api.patch(`/reference/${doc.id}`, {
-        ...body,
-        expectedVersion: doc.version,
-      });
-      await load(doc.id);
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        conflict = true;
-        mutateError =
-          "someone else edited this doc in the meantime. Reload to get the latest version";
-      } else {
-        mutateError = errText(e);
-      }
-    } finally {
-      mutating = false;
+    const res = await patchLibraryItem(
+      `/reference/${doc.id}`,
+      body,
+      doc.version,
+      "doc",
+    );
+    if (res.ok) await load(doc.id);
+    else {
+      conflict = res.conflict;
+      mutateError = res.message;
     }
+    mutating = false;
   }
 
   async function createDoc(payload: Record<string, unknown>) {

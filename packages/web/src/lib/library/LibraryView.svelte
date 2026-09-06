@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fmtDate } from "../dates";
   import { createSequence } from "../resource.svelte";
   import { KNOWLEDGE_STATUSES, REFERENCE_STATUSES } from "../vocab";
   import { onMount } from "svelte";
@@ -176,8 +177,6 @@
   const docQs = () => scopeQs(new URLSearchParams()).toString();
 
   const at = (d?: string) => (d ? Date.parse(d) || 0 : 0);
-  const fmtDate = (d?: string) => (d ? new Date(d).toISOString().slice(0, 10) : "");
-
   const fill = (v: number) => Math.max(3, v * 100);
 
   function versionSpan(r: KnowledgeRow) {
