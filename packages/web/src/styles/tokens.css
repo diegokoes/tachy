@@ -70,10 +70,12 @@
   --window-bg: color-mix(in srgb, var(--panel-solid) 93%, transparent);
 
   /* Behind anything modal. The blur is what separates the two planes; ink alone
-     leaves the text underneath legible through the gap and reads as dirt. */
-  --scrim-ink: color-mix(in srgb, #000 48%, transparent);
-  --scrim-soft: color-mix(in srgb, #000 18%, transparent);
-  --scrim-blur: 10px;
+     leaves the text underneath legible through the gap and reads as dirt.
+     Enough of both to push the app back, not so much that it goes away — the
+     window behind a dialog should still be recognisably the window you left. */
+  --scrim-ink: color-mix(in srgb, #000 28%, transparent);
+  --scrim-soft: color-mix(in srgb, #000 10%, transparent);
+  --scrim-blur: 5px;
 }
 
 :root[data-theme="light"] {
@@ -101,9 +103,9 @@
   --edge-lo: rgba(255, 255, 255, 0.8);
   --drop: rgba(30, 28, 20, 0.26);
 
-  --scrim-ink: color-mix(in srgb, #000 22%, transparent);
-  --scrim-soft: color-mix(in srgb, #000 8%, transparent);
-  --scrim-blur: 8px;
+  --scrim-ink: color-mix(in srgb, #000 13%, transparent);
+  --scrim-soft: color-mix(in srgb, #000 5%, transparent);
+  --scrim-blur: 4px;
 }
 
 /* ── Radius ───────────────────────────────────────────────────────────────

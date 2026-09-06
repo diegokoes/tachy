@@ -43,9 +43,12 @@ export function float(node: HTMLElement, options: FloatOptions) {
     if (opts.matchWidth) node.style.minWidth = `${a.width}px`;
 
     /* Measured with the cap off, so "how tall does it want to be" is the
-       content's answer and not the last frame's. */
+       content's answer and not the last frame's. The border box is what the
+       cap is then set against — `scrollHeight` stops at the padding box, so
+       capping with it left every bordered popup two pixels short of its own
+       content and permanently scrolling. */
     node.style.maxHeight = "";
-    const wants = node.scrollHeight;
+    const wants = Math.ceil(node.getBoundingClientRect().height);
 
     const below = vh - a.bottom - gap - MARGIN;
     const above = a.top - gap - MARGIN;

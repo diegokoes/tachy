@@ -33,18 +33,13 @@ pipeline {
         stage('Build Docker image') {
             steps {
                 script {
-                    env.VERSION = sh(
-                        script: "node -p \"require('./package.json').version\"",
-                        returnStdout: true
-                    ).trim()
-
-                    // main publishes :latest and :<version>; dev publishes :dev.
-                    // Separate tags are what keep the two stacks from ever
-                    // pulling each other's image — and a feature branch gets
-                    // its own, because compose defaults to :latest and a
-                    // branch build tagged that way replaces production's image.
+                    // main publishes :latest; dev publishes :dev. Separate tags
+                    // are what keep the two stacks from ever pulling each
+                    // other's image — and a feature branch gets its own,
+                    // because compose defaults to :latest and a branch build
+                    // tagged that way replaces production's image.
                     env.TAGS = env.BRANCH_NAME == 'main'
-                        ? "latest ${env.VERSION}"
+                        ? "latest"
                         : env.BRANCH_NAME == 'dev'
                             ? "dev"
                             : "branch-${env.BRANCH_NAME.replaceAll('[^A-Za-z0-9._-]', '-')}"
