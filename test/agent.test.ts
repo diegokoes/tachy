@@ -14,7 +14,7 @@ import {
   type AgentConfig,
   type Decision,
 } from "../packages/agent/src/index";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { AsyncQueue } from "../packages/agent/src/queue";
@@ -36,15 +36,27 @@ describe("agent tool allowlist (security boundary)", () => {
    * hand-maintained, so hold them against what is actually registered.
    */
   it("classifies every registered MCP tool", () => {
+    // Every .ts under packages/mcp/src, not one file: tools live one module per
+    // domain, and a new module has to be caught without anyone remembering to
+    // add it here.
     const here = dirname(fileURLToPath(import.meta.url));
-    const src = readFileSync(
-      join(here, "..", "packages", "mcp", "src", "index.ts"),
-      "utf8",
-    );
-    const registered = [...src.matchAll(/^tool\(\n\s*"([a-z0-9_]+)"/gm)].map(
-      (m) => m[1],
+    const root = join(here, "..", "packages", "mcp", "src");
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory()
+          ? walk(join(dir, e.name))
+          : e.name.endsWith(".ts")
+            ? [join(dir, e.name)]
+            : [],
+      );
+    const registered = walk(root).flatMap((f) =>
+      [...readFileSync(f, "utf8").matchAll(/^tool\(\n\s*"([a-z0-9_]+)"/gm)].map(
+        (m) => m[1],
+      ),
     );
     expect(registered.length).toBeGreaterThan(40);
+    // No tool registered twice under two names.
+    expect(new Set(registered).size).toBe(registered.length);
 
     // A conditional write is classified too — by its flag rather than a list.
     const listed = new Set<string>([
