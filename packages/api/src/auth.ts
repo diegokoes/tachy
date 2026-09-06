@@ -18,6 +18,7 @@ import {
   teamAdminTeams,
   userTeams,
   env,
+  log,
   type UserRole,
 } from "@tachy/core";
 
@@ -41,11 +42,24 @@ export const sessionSecret: string =
   env.sessionSecret ??
   (() => {
     const s = randomBytes(32).toString("hex");
-    console.warn(
-      "TACHY_SESSION_SECRET is not set — using an ephemeral secret; sessions reset on restart",
-    );
+    log("warn", "session_secret_missing", {
+      detail:
+        "TACHY_SESSION_SECRET is not set — using an ephemeral secret; sessions reset on restart",
+    });
     return s;
   })();
+
+/**
+ * Behind a TLS-terminating proxy — which is how this is deployed — the request
+ * the app sees is plain http, so keying `Secure` off the URL alone drops the
+ * flag on exactly the deployments that need it. The forwarded header is the
+ * proxy's statement about the leg the browser actually made.
+ */
+function isHttps(c: Context): boolean {
+  const forwarded = c.req.header("x-forwarded-proto");
+  if (forwarded) return forwarded.split(",")[0].trim() === "https";
+  return c.req.url.startsWith("https:");
+}
 
 const COOKIE = "tachy_session";
 const SESSION_SECONDS = 7 * 24 * 3600;
@@ -60,7 +74,7 @@ export async function setSessionCookie(
     sameSite: "Lax",
     path: "/",
     maxAge: SESSION_SECONDS,
-    secure: c.req.url.startsWith("https:"),
+    secure: isHttps(c),
   });
 }
 
@@ -101,16 +115,36 @@ export function markBootstrapped(): void {
   bootstrappedCache = true;
 }
 
+/**
+ * Keyed on an address the caller chose, so it is only a throttle if it is also
+ * bounded: without the sweep, failed logins against made-up addresses grow it
+ * for as long as the process runs.
+ */
 const failures = new Map<string, { count: number; resetAt: number }>();
+const MAX_TRACKED_FAILURES = 10_000;
+
 function throttled(email: string): boolean {
   const f = failures.get(email);
   return !!f && f.resetAt > Date.now() && f.count >= 5;
 }
+
 function recordFailure(email: string): void {
   const f = failures.get(email);
   if (!f || f.resetAt < Date.now())
     failures.set(email, { count: 1, resetAt: Date.now() + 60_000 });
   else f.count++;
+
+  if (failures.size > MAX_TRACKED_FAILURES) {
+    const now = Date.now();
+    for (const [k, v] of failures) if (v.resetAt < now) failures.delete(k);
+    // Still full means every window is live — drop the oldest insertions, which
+    // Map iterates first. Losing one is at worst a few extra tries for them.
+    if (failures.size > MAX_TRACKED_FAILURES)
+      for (const k of failures.keys()) {
+        failures.delete(k);
+        if (failures.size <= MAX_TRACKED_FAILURES) break;
+      }
+  }
 }
 
 async function resolveIdentity(
@@ -163,9 +197,13 @@ export function getIdentity(c: Context): Identity | undefined {
   return c.get(IDENTITY_KEY as never) as Identity | undefined;
 }
 
+/**
+ * No identity is a refusal, not a pass. Every mount point today sits behind the
+ * `/api/*` middleware that guarantees one, so the old `identity && …` form was
+ * never wrong in practice — but it fails open the moment that stops being true.
+ */
 export async function requireAdmin(c: Context, next: Next): Promise<void> {
-  const identity = getIdentity(c);
-  if (identity && identity.role !== "admin")
+  if (getIdentity(c)?.role !== "admin")
     throw new HTTPException(403, { message: "admin role required" });
   await next();
 }
@@ -175,25 +213,33 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+/**
+ * Registered before any route that needs to know who is calling — including
+ * `/api/setup`, which sits outside the `/api/*` identity guard and still has to
+ * tell an operator holding an SSO session from a stranger. Separate from
+ * `installAuth` only because of that ordering.
+ */
+export function initOidc(base: Hono, oidc: OidcConfig): void {
+  base.use(
+    "*",
+    initOidcAuthMiddleware({
+      OIDC_ISSUER: oidc.issuer,
+      OIDC_CLIENT_ID: oidc.clientId,
+      OIDC_CLIENT_SECRET: oidc.clientSecret,
+      OIDC_AUTH_SECRET: oidc.sessionSecret,
+      OIDC_REDIRECT_URI: oidc.redirectUri ?? "/auth/callback",
+      OIDC_SCOPES: oidc.scopes,
+    }),
+  );
+}
+
 export function installAuth(
   base: Hono,
   opts: { apiToken?: string; oidc?: OidcConfig; passwordAuth?: boolean },
 ): void {
-  const { apiToken, oidc, passwordAuth } = opts;
+  const { oidc, passwordAuth } = opts;
 
   if (oidc) {
-    base.use(
-      "*",
-      initOidcAuthMiddleware({
-        OIDC_ISSUER: oidc.issuer,
-        OIDC_CLIENT_ID: oidc.clientId,
-        OIDC_CLIENT_SECRET: oidc.clientSecret,
-        OIDC_AUTH_SECRET: oidc.sessionSecret,
-        OIDC_REDIRECT_URI: oidc.redirectUri ?? "/auth/callback",
-        OIDC_SCOPES: oidc.scopes,
-      }),
-    );
-
     base.get("/auth/login", oidcAuthMiddleware(), (c) =>
       c.redirect(c.req.query("redirect") || "/"),
     );

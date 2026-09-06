@@ -25,7 +25,7 @@ describe("API knowledge round-trip", () => {
         issueSummary: "Printer queue stalls after reboot",
         symptoms: ["queue stalled"],
         cloud: "prod",
-        learningValue: "high",
+        resolutionClarity: "clear",
       }),
     );
     expect(created.status).toBe(200);
@@ -170,5 +170,85 @@ describe("SPA hosting", () => {
     const res = await withWeb.request("/some/client/route");
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("tachy-spa-fixture");
+  });
+});
+
+describe("API library history and reads", () => {
+  beforeEach(resetData);
+
+  const create = async () => {
+    const res = await app.request(
+      "/api/knowledge",
+      json({ status: "approved", issueSummary: "spooler stalls" }),
+    );
+    return (await res.json()).id as string;
+  };
+
+  it("serves an entry's revisions, newest first", async () => {
+    const id = await create();
+    await app.request(`/api/knowledge/${id}`, {
+      ...json({ resolution: "restart it" }),
+      method: "PATCH",
+    });
+    const revs = await (
+      await app.request(`/api/knowledge/${id}/revisions`)
+    ).json();
+    expect(revs.map((r: any) => r.version)).toEqual([2, 1]);
+    expect(revs[0].changed_fields).toEqual(["resolution"]);
+  });
+
+  it("records the door an edit came through", async () => {
+    const id = await create();
+    await app.request(`/api/knowledge/${id}`, {
+      ...json({ resolution: "restart it" }),
+      method: "PATCH",
+    });
+    const revs = await (
+      await app.request(`/api/knowledge/${id}/revisions`)
+    ).json();
+    // Unauthenticated dev mode has no bearer token, so this is a browser edit.
+    expect(revs[0].actor).toBe("web");
+  });
+
+  it("counts a GET as a read", async () => {
+    const id = await create();
+    await app.request(`/api/knowledge/${id}`);
+    // The count is fire-and-forget; give the insert a tick to land.
+    await new Promise((r) => setTimeout(r, 50));
+    const views = await (
+      await app.request(`/api/knowledge/${id}/views`)
+    ).json();
+    expect(views.views).toBe(1);
+  });
+
+  /** EntryDetail re-loads after every edit; that reload is not a second visit. */
+  it("does not inflate the count when an edit triggers a reload", async () => {
+    const id = await create();
+    await app.request(`/api/knowledge/${id}`);
+    await app.request(`/api/knowledge/${id}`, {
+      ...json({ resolution: "restart it" }),
+      method: "PATCH",
+    });
+    await app.request(`/api/knowledge/${id}`);
+    await new Promise((r) => setTimeout(r, 50));
+    const views = await (
+      await app.request(`/api/knowledge/${id}/views`)
+    ).json();
+    expect(views.views).toBe(1);
+  });
+
+  it("reverts to an earlier revision as a new version", async () => {
+    const id = await create();
+    await app.request(`/api/knowledge/${id}`, {
+      ...json({ resolution: "wrong" }),
+      method: "PATCH",
+    });
+    const res = await app.request(`/api/knowledge/${id}/revert/1`, {
+      method: "POST",
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()).version).toBe(3);
+    const entry = await (await app.request(`/api/knowledge/${id}`)).json();
+    expect(entry.resolution).toBeNull();
   });
 });

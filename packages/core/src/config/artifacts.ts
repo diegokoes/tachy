@@ -1,4 +1,6 @@
+import { SLUG_RE } from "@tachy/contract";
 import { z } from "zod";
+import { ARTIFACT_UTILITIES } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { badInput, forbidden, notFound } from "../infra/errors";
 import { tableOutputSchema } from "../exports/table";
@@ -12,7 +14,7 @@ import {
 
 export const artifactSpecSchema = z
   .object({
-    utilities: z.array(z.string()).optional(),
+    utilities: z.array(z.enum(ARTIFACT_UTILITIES)).optional(),
     output: tableOutputSchema.optional(),
   })
   .strict();
@@ -44,8 +46,6 @@ function readSpec(raw: unknown): ArtifactSpec | null {
 function withSpec<T extends { spec?: unknown }>(row: T): T {
   return { ...row, spec: readSpec(row.spec) };
 }
-
-const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 function checkSlug(slug: string): void {
   if (!SLUG_RE.test(slug))

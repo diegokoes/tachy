@@ -1,4 +1,5 @@
 export { sql } from "./infra";
+export type { Db } from "./infra";
 export {
   env,
   envVarName,
@@ -7,10 +8,12 @@ export {
   azureDevopsToken,
   sourceToken,
   sourceTokenOptional,
+  uploadDir,
 } from "./infra";
 export { AppError, notFound, conflict, badInput, forbidden } from "./infra";
 export type { AppErrorCode } from "./infra";
-export { log } from "./infra";
+export { log, runWithLogContext } from "./infra";
+export type { LogLevel } from "./infra";
 export {
   isGlobalAdmin,
   teamAdminTeams,
@@ -51,6 +54,7 @@ export type {
   MembershipRow,
 } from "./access";
 export { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from "./access";
+export { userCensus } from "./access";
 export {
   AGENT_EFFORTS,
   AGENT_PROVIDERS,
@@ -71,10 +75,14 @@ export type {
   AgentProvider,
 } from "./config";
 export {
+  SCOPES,
   resolveScoped,
   assertCanWriteScope,
   AGENT_CREDENTIALS,
   ANTHROPIC_OAUTH_CREDENTIAL,
+  API_KEY_EXAMPLE,
+  API_KEY_PREFIX,
+  OAUTH_PREFIX,
   sourceCredentialName,
   envCredential,
   validateCredential,
@@ -117,6 +125,7 @@ export {
   getKnowledgeEntry,
   listKnowledgeEntries,
   updateKnowledgeEntry,
+  revertKnowledgeEntry,
   listEnvironments,
   listKnowledgeFacets,
 } from "./knowledge";
@@ -130,21 +139,87 @@ export type {
   FacetCount,
 } from "./knowledge";
 export { addFeedback, listFeedback } from "./knowledge";
+export {
+  LIBRARY_ACTORS,
+  UNKNOWN_ACTOR,
+  VIEW_DEDUPE_MINUTES,
+  snapshotOf,
+  changedFields,
+  recordRevision,
+  listRevisions,
+  getRevision,
+  revertPatch,
+  recordView,
+  countView,
+  viewStats,
+  viewHistory,
+  syncLinks,
+  outboundLinks,
+  backlinks,
+  relinkBySlug,
+  setComposedFrom,
+  articleStaleness,
+  coverage,
+  parseWikilinks,
+  LINK_KINDS,
+} from "./library";
+export type {
+  LibraryActor,
+  LibraryTarget,
+  ActorRef,
+  RevisionRow,
+  ViewStats,
+  DailyViews,
+  LinkKind,
+  LinkSource,
+  OutboundLink,
+  Backlink,
+  ComposedSource,
+  Staleness,
+  Coverage,
+  CoverageNode,
+  CoverageCounts,
+} from "./library";
 export type { FeedbackInput } from "./knowledge";
+
+export {
+  MAIN_PAGE_SLUG,
+  listWikiCategories,
+  getWikiCategory,
+  addWikiCategory,
+  updateWikiCategory,
+  deleteWikiCategory,
+  wikiToc,
+  articleCategories,
+  setArticleCategories,
+  findArticle,
+  findMainPage,
+  listWikis,
+  draftSources,
+} from "./wiki";
+export type {
+  WikiCategoryRow,
+  WikiCategoryInput,
+  WikiCategoryPatch,
+  WikiArticleRef,
+  WikiTocNode,
+  WikiToc,
+  DraftSource,
+} from "./wiki";
 export {
   structuredSchema,
   cloudSchema,
   resolutionClaritySchema,
-  learningValueSchema,
   RESOLUTION_CLARITIES,
-  LEARNING_VALUES,
   knowledgeStatusSchema,
   referenceStatusSchema,
+  referenceKindSchema,
   confidenceSchema,
   feedbackKindSchema,
   runModeSchema,
   KNOWLEDGE_STATUSES,
   REFERENCE_STATUSES,
+  REFERENCE_KINDS,
   CONFIDENCES,
   FEEDBACK_KINDS,
   RUN_MODES,
@@ -156,6 +231,7 @@ export {
   getReferenceDoc,
   listReferenceDocs,
   updateReferenceDoc,
+  revertReferenceDoc,
   searchReferenceDocs,
   referenceDocLineage,
   backfillReferenceEmbeddings,
@@ -167,6 +243,7 @@ export type {
 } from "./reference";
 
 export { ingestWorkItem, extractAdoRefs } from "./work-items";
+export { workItemScope, externalWorkItemScope } from "./work-items";
 export type { IngestedItem } from "./work-items";
 export {
   WORK_ITEM_LINK_KINDS,
@@ -223,16 +300,29 @@ export {
   listCustomerComponents,
   getCustomerProfile,
   getCustomerIdBySlug,
+  resolveCustomer,
+  listCustomerUnits,
+  resolveUnit,
+  addCustomerUnit,
+  updateCustomerUnit,
+  deleteCustomerUnit,
+  resolveUnitFacts,
   setWorkItemCustomer,
   setObservedVersion,
   getCustomerName,
   getCustomerSlug,
+  catalogCensus,
 } from "./catalog";
 export type {
   CustomerInput,
   CustomerMatch,
   CustomerFactInput,
   CustomerProfile,
+  ResolvedCustomer,
+  CustomerUnitRow,
+  CustomerUnitInput,
+  CustomerUnitPatch,
+  ResolvedFact,
 } from "./catalog";
 export {
   listResolutionPatterns,
@@ -273,12 +363,15 @@ export {
 } from "./catalog";
 
 export * from "./sources/source";
+export * from "./sources/fetch";
+export { stripHtml } from "./sources/html";
 export { registerSource, resolveSource } from "./sources";
 export type { ResolvedSource } from "./sources";
 export {
   listSourceConnections,
   addSourceConnection,
   deleteSourceConnection,
+  sourceCensus,
 } from "./sources";
 export type { SourceConnectionInput } from "./sources";
 export {
@@ -361,3 +454,26 @@ export {
   globalRedactionEnabled,
 } from "./compliance";
 export type { RedactOptions, RedactionPolicy } from "./compliance";
+
+/*
+ * The rest of the contract, re-exported wholesale. packages/api and the CLI
+ * import only from here, so anything the contract owns but core does not pass
+ * on is a rule they have to write out by hand — which is how two copies of it
+ * come to exist and drift. test/contract-reach.test.ts holds this complete.
+ */
+export {
+  CLOUD_RE,
+  CLOUD_HINT,
+  SLUG_RE,
+  slugify,
+  WIKILINK_RE,
+  parseWikilink,
+  DEFAULT_SHEET,
+  stripSheetChars,
+  stripFilenameChars,
+  sheetName,
+  columnHeading,
+  fieldName,
+  columnKeys,
+  ARTIFACT_UTILITIES,
+} from "@tachy/contract";

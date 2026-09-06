@@ -66,6 +66,28 @@ describe("per-turn agent config isolation (cross-user token safety)", () => {
     );
   });
 
+  it("never hands the subprocess a secret that belongs to the server", async () => {
+    process.env.TACHY_API_TOKEN = "server-api-token";
+    process.env.OIDC_CLIENT_SECRET = "server-oidc-secret";
+    try {
+      const cfg = await mcpConfig(
+        "alice@example.com",
+        await effectiveSettings(),
+      );
+      // The vault key is the one that matters most: with it, and a file read,
+      // every stored credential in the deployment is recoverable.
+      expect(cfg.mcpEnv.TACHY_SECRET_KEY).toBeUndefined();
+      expect(cfg.mcpEnv.TACHY_SESSION_SECRET).toBeUndefined();
+      expect(cfg.mcpEnv.TACHY_API_TOKEN).toBeUndefined();
+      expect(cfg.mcpEnv.OIDC_CLIENT_SECRET).toBeUndefined();
+      // What it does still need in order to work at all.
+      expect(cfg.mcpEnv.DATABASE_URL).toBe(process.env.DATABASE_URL);
+    } finally {
+      delete process.env.TACHY_API_TOKEN;
+      delete process.env.OIDC_CLIENT_SECRET;
+    }
+  });
+
   it("materializes each caller's own source token into a fresh mcpEnv", async () => {
     const settings = await effectiveSettings();
     const aliceCfg = await mcpConfig("alice@example.com", settings);

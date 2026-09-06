@@ -35,6 +35,7 @@
     extraActions,
     rowClass,
     onform,
+    hoist,
   }: {
     columns: Column<T>[];
     rows: T[];
@@ -63,7 +64,22 @@
     rowClass?: (row: T) => string | undefined;
     /** Fires as the record form opens and closes, for state `formExtra` needs. */
     onform?: (f: { mode: "create" | "edit"; row: T | null } | null) => void;
+    /**
+     * Offers the add action to whoever is laying out the page, which then
+     * draws it somewhere with more standing than a bar under the table. Given
+     * one, the bar goes away rather than showing the same button twice.
+     */
+    hoist?: (a: { label: string; run: () => void } | null) => () => void;
   } = $props();
+
+  $effect(() => {
+    if (!hoist) return;
+    const offer =
+      oncreate && canCreate ? { label: addLabel, run: startAdd } : null;
+    // The store's own disposer, so releasing the row cannot clobber a claim
+    // made by the panel replacing this one.
+    return hoist(offer);
+  });
 
   /* Create and edit are the same form; only the commit differs. */
   let form = $state<{ mode: "create" | "edit"; row: T | null } | null>(null);
@@ -147,24 +163,23 @@
     <Button
       variant="ghost"
       tone="info"
-      square
+      size="sm"
       icon="edit"
-      aria-label="edit"
       title="edit"
-      onclick={() => startEdit(row)}
-    />
+      onclick={() => startEdit(row)}>edit</Button
+    >
   {/if}
   {#if ondelete && canDelete(row)}
     <Button
       variant="ghost"
       tone="danger"
-      square
-      icon={armed === key ? "check" : "cancel"}
-      aria-label={armed === key ? "confirm delete" : "delete"}
+      size="sm"
+      icon={armed === key ? "check" : "del"}
       title={armed === key ? "click again to confirm" : "delete"}
       busy={busy === key}
       onclick={() => confirmDelete(row)}
-    />
+      >{armed === key ? "confirm" : "delete"}</Button
+    >
   {/if}
 {/snippet}
 
@@ -187,7 +202,7 @@
   actions={onsave || ondelete || extraActions ? actions : undefined}
 />
 
-{#if oncreate && canCreate}
+{#if oncreate && canCreate && !hoist}
   <div class="addbar">
     <Button variant="ghost" tone="ok" size="sm" icon="plus" onclick={startAdd}
       >{addLabel}</Button

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { CLOUD_HINT, CLOUD_RE } from "@tachy/contract";
+  import { CONFIDENCES, RESOLUTION_CLARITIES } from "../vocab";
   import type { Snippet } from "svelte";
   import { Button, Checkbox } from "../tui";
   import { onMount, tick, untrack } from "svelte";
@@ -8,7 +10,8 @@
   import type { KnowledgeRow, NamedRow } from "../types";
   import AsciiSelect from "../AsciiSelect.svelte";
   import { t } from "../terms";
-  import { csv } from "../admin/shared";
+  import { csv } from "../fields";
+  import { setTopActions } from "../subnav.svelte";
   import { componentOptions } from "../catalog";
   import Icon from "../tui/Icon.svelte";
 
@@ -44,14 +47,23 @@
   let tags = $state(csvJoin(seed.tags));
   let confidence = $state(seed.confidence ?? "");
   let cloud = $state(seed.cloud ?? "");
+  // The rule and its wording both come from the contract, which is where the
+  // API's own zod schema gets them: an environment typed as "Prod EU" used to
+  // submit the whole form and come back as a server error.
+  const cloudErr = $derived(
+    cloud && !CLOUD_RE.test(cloud) ? CLOUD_HINT : null,
+  );
   let resolutionClarity = $state(seed.resolution_clarity ?? "");
-  let learningValue = $state(seed.learning_value ?? "");
   let hiddenFix = $state(Boolean(seed.hidden_fix));
   let resolutionPattern = $state(seed.resolution_pattern ?? "");
   let affectedVersion = $state(seed.affected_version ?? "");
   let fixedVersion = $state(seed.fixed_version ?? "");
   let status = $state(seed.status ?? "approved");
-  let component = $state(""); 
+  let component = $state("");
+  let customerSlug = $state(seed.customer_slug ?? "");
+  let unitSlug = $state(seed.customer_unit_slug ?? "");
+  /** Units belong to one customer, so the list is reloaded when it changes. */
+  let units = $state<NamedRow[]>([]);
 
   let showStructured = $state(false);
   let structuredField = $state<HTMLTextAreaElement>();
@@ -67,7 +79,28 @@
   let components = $state<NamedRow[]>([]);
   let patterns = $state<NamedRow[]>([]);
   let environments = $state<{ cloud: string; count: number }[]>([]);
+  let customers = $state<NamedRow[]>([]);
   let productSlug = $state("");
+
+  async function loadUnits(slug: string) {
+    units = slug
+      ? await api.get<NamedRow[]>(`/customers/${slug}/units`).catch(() => [])
+      : [];
+    if (unitSlug && !units.some((u) => u.slug === unitSlug)) unitSlug = "";
+  }
+
+  const unitOptions = $derived([
+    { value: "", label: "the whole account" },
+    ...units.map((u) => ({
+      value: u.slug as string,
+      label: `${u.name} (${u.kind})`,
+    })),
+  ]);
+
+  const customerOptions = $derived([
+    { value: "", label: "none (general)" },
+    ...customers.map((c) => ({ value: c.slug as string, label: c.name as string })),
+  ]);
 
   const productOptions = $derived([
     { value: "", label: `no ${t("product")}` },
@@ -86,14 +119,17 @@
 
   onMount(async () => {
     try {
-      const [prods, pats, envs] = await Promise.all([
+      const [prods, pats, envs, custs] = await Promise.all([
         api.get<NamedRow[]>("/products"),
         api.get<NamedRow[]>("/resolution-patterns"),
         api.get<{ cloud: string; count: number }[]>("/knowledge/environments"),
+        api.get<NamedRow[]>("/customers"),
       ]);
       products = prods;
       patterns = pats;
       environments = envs;
+      customers = custs;
+      if (customerSlug) await loadUnits(customerSlug);
       if (mode === "edit" && initial.product_id) {
         productSlug = (prods.find((p) => p.id === initial.product_id)?.slug as string) ?? "";
       }
@@ -124,7 +160,6 @@
       confidence: confidence || (mode === "edit" ? null : undefined),
       cloud: cloud.trim() || (mode === "edit" ? null : undefined),
       resolutionClarity: resolutionClarity || (mode === "edit" ? null : undefined),
-      learningValue: learningValue || (mode === "edit" ? null : undefined),
       // A checkbox is always a real answer, so it is sent either way — the
       // `|| null` the other optional fields use would drop an explicit false.
       hiddenFix,
@@ -132,6 +167,8 @@
       affectedVersion: affectedVersion.trim() || (mode === "edit" ? null : undefined),
       fixedVersion: fixedVersion.trim() || (mode === "edit" ? null : undefined),
       component: component || (mode === "edit" ? null : undefined),
+      customerSlug: customerSlug || (mode === "edit" ? null : undefined),
+      unit: unitSlug || (mode === "edit" ? null : undefined),
     };
     if (structured !== undefined) payload.structured = structured;
     if (mode === "create") {
@@ -141,6 +178,8 @@
     }
     return Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined));
   }
+
+  $effect(() => setTopActions(formActions));
 
   function submit(e: SubmitEvent) {
     e.preventDefault();
@@ -176,32 +215,23 @@
   }
 </script>
 
-<form class="entry-form" onsubmit={submit}>
-  <div class="formbar">
-    <span class="side"></span>
-    <span class="mid">{#if extra}{@render extra()}{/if}</span>
-    <span class="side end">
-      <Button
-        variant="ghost"
-        square
-        icon="cancel"
-        aria-label="cancel"
-        title="cancel"
-        disabled={saving}
-        onclick={onCancel}
-      />
-      <Button
-        variant="ghost"
-        tone="accent"
-        square
-        icon="save"
-        type="submit"
-        aria-label={SUBMIT_LABEL}
-        title={SUBMIT_LABEL}
-        busy={saving}
-      />
-    </span>
-  </div>
+<!-- Rendered by App into the carved row beside the subnav, not here. The save
+     button is outside the <form> in the DOM, so it carries `form` — that keeps
+     native required-field validation, which calling submit() directly loses. -->
+{#snippet formActions()}
+  <Button icon="cancel" disabled={saving} onclick={onCancel}>cancel</Button>
+  <Button
+    variant="primary"
+    icon="save"
+    type="submit"
+    form="entry-form"
+    title={SUBMIT_LABEL}
+    busy={saving}>save</Button
+  >
+{/snippet}
+
+<form id="entry-form" class="entry-form" onsubmit={submit}>
+  {#if extra}<div class="formbar">{@render extra()}</div>{/if}
   <label class="wide">issue summary
     <input bind:value={issueSummary} required />
   </label>
@@ -225,16 +255,15 @@
 
   <div class="row">
     <label>confidence
-      <AsciiSelect bind:value={confidence} options={[{ value: "", label: "unset" }, "low", "medium", "high"]} />
+      <AsciiSelect bind:value={confidence} options={[{ value: "", label: "unset" }, ...CONFIDENCES]} />
     </label>
     <label>clarity
-      <AsciiSelect bind:value={resolutionClarity} options={[{ value: "", label: "unset" }, "clear", "partial", "unclear"]} />
-    </label>
-    <label>learning value
-      <AsciiSelect bind:value={learningValue} options={[{ value: "", label: "unset" }, "high", "medium", "low"]} />
+      <AsciiSelect bind:value={resolutionClarity} options={[{ value: "", label: "unset" }, ...RESOLUTION_CLARITIES]} />
     </label>
     <label>{t("cloud")}
-      <input class="short" bind:value={cloud} list="entry-form-envs" />
+      <input class="short" bind:value={cloud} list="entry-form-envs"
+        aria-invalid={cloudErr ? "true" : undefined} />
+      {#if cloudErr}<p class="field-error">{cloudErr}</p>{/if}
       <datalist id="entry-form-envs">
         {#each environments as e}<option value={e.cloud}></option>{/each}
       </datalist>
@@ -272,6 +301,18 @@
         title={productSlug ? undefined : `pick a ${t("product")} first`}
         options={[{ value: "", label: "none" }, ...componentOptions(components)]} />
     </label>
+    <label>{t("customer")}
+      <AsciiSelect bind:value={customerSlug} options={customerOptions}
+        onchange={(v) => loadUnits(String(v))}
+        title="whose install this was learned on; leave as none if it is true for everyone" />
+    </label>
+    <label>unit
+      <AsciiSelect bind:value={unitSlug} options={unitOptions}
+        disabled={!customerSlug || units.length === 0}
+        title={customerSlug
+          ? "which part of their estate: a site or line"
+          : `pick a ${t("customer")} first`} />
+    </label>
   </div>
 
   <button
@@ -301,29 +342,18 @@
 </form>
 
 <style>
-  /* Three tracks so the middle group stays optically centred whatever the
-     actions on the right weigh. */
+  .field-error { color: var(--danger); margin: 0.2rem 0 0; font-size: 0.9em; }
+  /* Cancel and save moved to the carved row, so this holds only whatever the
+     caller passes as `extra` — centred, and gone entirely when there is none. */
   .formbar {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: center;
-    gap: var(--pad-2);
-    margin-bottom: var(--pad-3);
-    padding-top: var(--pad-2);
-    padding-bottom: var(--pad-2);
-    background: var(--panel-solid);
-    border-bottom: var(--panel-line);
-  }
-  .formbar .mid,
-  .formbar .side {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: var(--pad-2);
+    margin-bottom: var(--pad-3);
+    padding-bottom: var(--pad-2);
+    border-bottom: var(--panel-line);
   }
-  .formbar .side.end { justify-content: flex-end; }
   .entry-form { display: flex; flex-direction: column; gap: 0.6rem; }
   label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.82rem; color: var(--muted); }
   label.wide { width: 100%; }

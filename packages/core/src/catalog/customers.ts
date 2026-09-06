@@ -1,6 +1,7 @@
 import { sql } from "../infra/db";
 import { badInput, conflict, notFound } from "../infra/errors";
 import { resolveComponentStrict } from "./components";
+import { listCustomerUnits, resolveUnit, resolveUnitFacts } from "./units";
 
 export interface CustomerInput {
   name: string;
@@ -110,20 +111,94 @@ export async function resolveCustomerByEmail(
   return { customerId: null };
 }
 
-export async function getCustomerIdBySlug(slug: string): Promise<string> {
-  const [row] = await sql`select id from customers where slug = ${slug}`;
-  if (!row)
-    throw badInput(
-      `Unknown customer '${slug}'. Call list_customers, or add_customer first.`,
-    );
-  return row.id as string;
+export interface ResolvedCustomer {
+  id: string;
+  slug: string;
+  name: string;
 }
 
+/**
+ * Slug, then alias, then a trigram-ranked hint on a miss — the same ladder
+ * resolveComponentStrict offers, so the other names an account trades under
+ * resolve rather than merely being stored. Slugs are unique but aliases are not,
+ * so an alias claimed by two customers is ambiguous rather than a coin toss.
+ */
+export async function resolveCustomer(
+  slugOrAlias: string,
+): Promise<ResolvedCustomer> {
+  const rows = await sql`
+    select id, slug, name from customers
+    where slug = ${slugOrAlias}
+       or exists (select 1 from unnest(aliases) a where lower(a) = lower(${slugOrAlias}))
+    order by (slug = ${slugOrAlias}) desc
+    limit 2
+  `;
+  if (rows.length === 1 || (rows.length > 1 && rows[0].slug === slugOrAlias))
+    return rows[0] as ResolvedCustomer;
+  if (rows.length > 1)
+    throw badInput(
+      `Ambiguous customer '${slugOrAlias}' — it is an alias of ${rows
+        .map((r) => `'${r.slug}'`)
+        .join(" and ")}. Use the slug itself.`,
+    );
+
+  const nearest = await sql`
+    select slug from customers
+    order by greatest(
+      similarity(slug, ${slugOrAlias}),
+      similarity(name, ${slugOrAlias}),
+      coalesce((select max(similarity(a, ${slugOrAlias})) from unnest(aliases) a), 0)
+    ) desc
+    limit 5
+  `;
+  const hint = nearest.length
+    ? ` Nearest matches: ${nearest.map((r) => `'${r.slug}'`).join(", ")}.`
+    : "";
+  throw badInput(
+    `Unknown customer '${slugOrAlias}'.${hint} Call list_customers, or add_customer first.`,
+  );
+}
+
+export async function getCustomerIdBySlug(slug: string): Promise<string> {
+  return (await resolveCustomer(slug)).id;
+}
+
+/**
+ * Attribute a ticket to a customer, and optionally to one part of their estate.
+ * Clearing the customer clears the unit with it: a unit belongs to a customer,
+ * so a ticket carrying a unit but no customer is a state that cannot be read
+ * back sensibly.
+ */
 export async function setWorkItemCustomer(
   workItemId: string,
   customerId: string | null,
+  unit?: string | null,
 ) {
-  await sql`update work_items set customer_id = ${customerId} where id = ${workItemId}`;
+  /*
+   * An absent `unit` is "leave it alone", an explicit null is "clear it". They
+   * used to be the same, so setting a ticket's customer with no unit in the
+   * body — the common call — silently dropped the line it had been narrowed to,
+   * and db/schema.sql says a wrong attribution there is not recoverable.
+   *
+   * It survives only while the customer is unchanged. Moving the ticket to a
+   * different customer, or clearing it, clears the unit with it: a unit belongs
+   * to one customer, so any other pairing cannot be read back sensibly.
+   */
+  const [current] =
+    await sql`select customer_id from work_items where id = ${workItemId}`;
+  const keepUnit =
+    unit === undefined &&
+    customerId !== null &&
+    current?.customer_id === customerId;
+
+  const unitId =
+    customerId && unit ? (await resolveUnit(customerId, unit)).id : null;
+  await sql`
+    update work_items
+    set customer_id = ${customerId},
+        customer_unit_id = ${keepUnit ? sql`customer_unit_id` : sql`${unitId}`}
+    where id = ${workItemId}
+  `;
 }
 
 export async function setObservedVersion(
@@ -158,12 +233,19 @@ export interface CustomerFactInput {
   source?: string | null;
   componentSlug?: string | null;
   productId?: string | null;
+  /**
+   * Which part of their estate this is true of, by unit slug or alias. Omit for
+   * a fact true of the whole customer — which is what every fact was before
+   * units existed, so leaving it off keeps the old behaviour exactly.
+   */
+  unit?: string | null;
 }
 
 /**
- * Set one specific about a customer's install. Keyed on (customer, kind, label),
- * so re-stating a version replaces it instead of leaving two answers to the same
- * question in the profile.
+ * Set one specific about a customer's install. Keyed on
+ * (customer, unit, kind, label) with nulls not distinct, so re-stating a version
+ * replaces it instead of leaving two answers to the same question — while the
+ * same kind stated for a particular line coexists with the customer-wide one.
  */
 export async function setCustomerFact(i: CustomerFactInput) {
   const customerId = await getCustomerIdBySlug(i.customerSlug);
@@ -178,16 +260,17 @@ export async function setCustomerFact(i: CustomerFactInput) {
     componentId = (await resolveComponentStrict(i.productId, i.componentSlug))
       .id;
   }
+  const unitId = i.unit ? (await resolveUnit(customerId, i.unit)).id : null;
   const [row] = await sql`
-    insert into customer_facts (customer_id, kind, label, value, notes, source, component_id)
-    values (${customerId}, ${i.kind.trim()}, ${i.label?.trim() ?? ""}, ${i.value.trim()},
+    insert into customer_facts (customer_id, unit_id, kind, label, value, notes, source, component_id)
+    values (${customerId}, ${unitId}, ${i.kind.trim()}, ${i.label?.trim() ?? ""}, ${i.value.trim()},
             ${i.notes ?? null}, ${i.source ?? null}, ${componentId})
-    on conflict (customer_id, kind, label) do update set
+    on conflict (customer_id, unit_id, kind, label) do update set
       value        = excluded.value,
       notes        = coalesce(excluded.notes, customer_facts.notes),
       source       = coalesce(excluded.source, customer_facts.source),
       component_id = excluded.component_id
-    returning id, kind, label, value
+    returning id, kind, label, value, unit_id
   `;
   return row;
 }
@@ -274,11 +357,24 @@ export interface CustomerProfile {
   slug: string;
   name: string;
   notes: string | null;
+  /** Present when the profile was read for one unit. */
+  unit?: { slug: string; name: string; kind: string };
   facts: {
     kind: string;
     label: string;
     value: string;
     component: string | null;
+    /** Unit-resolved reads only: which level the fact came from. */
+    origin?: string | null;
+    origin_kind?: string | null;
+    inherited?: boolean;
+  }[];
+  units: {
+    slug: string;
+    name: string;
+    kind: string;
+    parent: string | null;
+    profile: string | null;
   }[];
   components: { slug: string; product_slug: string }[];
   repos: { slug: string; component: string | null; index_status: string }[];
@@ -290,16 +386,24 @@ export interface CustomerProfile {
  * install plus the records that belong to them. This is what a ticket turn needs
  * BEFORE it reasons — their version and addons decide whether a general answer
  * even applies to them.
+ *
+ * With `unit`, the facts are the RESOLVED ladder for
+ * that part of their estate — each one carrying where it came from — rather
+ * than the flat list, so an answer can say which level it is true of.
  */
 export async function getCustomerProfile(
   customerId: string,
+  unit?: string | null,
 ): Promise<CustomerProfile | null> {
   const [customer] = await sql`
     select id, slug, name, notes from customers where id = ${customerId}
   `;
   if (!customer) return null;
-  const [facts, components, repos, projects] = await Promise.all([
-    listCustomerFacts(customerId),
+  const resolvedUnit = unit ? await resolveUnit(customerId, unit) : null;
+  const [facts, components, repos, projects, units] = await Promise.all([
+    resolvedUnit
+      ? resolveUnitFacts(resolvedUnit.id)
+      : listCustomerFacts(customerId),
     listCustomerComponents(customerId),
     sql`
       select r.slug, c.slug as component_slug, r.index_status
@@ -312,17 +416,43 @@ export async function getCustomerProfile(
       join source_connections sc on sc.id = sp.source_connection_id
       where sp.customer_id = ${customerId} order by sp.external_key
     `,
+    listCustomerUnits(customerId),
   ]);
   return {
     id: customer.id as string,
     slug: customer.slug as string,
     name: customer.name as string,
     notes: (customer.notes as string) ?? null,
-    facts: facts.map((f) => ({
+    ...(resolvedUnit
+      ? {
+          unit: {
+            slug: resolvedUnit.slug,
+            name: resolvedUnit.name,
+            kind: resolvedUnit.kind,
+          },
+        }
+      : {}),
+    facts: facts.map((f: any) => ({
       kind: f.kind as string,
       label: f.label as string,
       value: f.value as string,
       component: (f.component_slug as string) ?? null,
+      // Only present when resolved for a unit: which level it came from, and
+      // whether it was inherited rather than stated here.
+      ...(resolvedUnit
+        ? {
+            origin: (f.origin_slug as string) ?? null,
+            origin_kind: (f.origin_kind as string) ?? null,
+            inherited: f.inherited as boolean,
+          }
+        : {}),
+    })),
+    units: units.map((u) => ({
+      slug: u.slug,
+      name: u.name,
+      kind: u.kind,
+      parent: units.find((p) => p.id === u.parent_id)?.slug ?? null,
+      profile: units.find((p) => p.id === u.profile_id)?.slug ?? null,
     })),
     components: components.map((c) => ({
       slug: c.slug as string,

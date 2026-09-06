@@ -1,18 +1,37 @@
 <script lang="ts">
-  import { api, ApiError } from "./api";
+  import { fmtDate } from "./dates";
+  import { statusTone } from "./library/status";
+  import { patchLibraryItem } from "./library/edit";
+  import { createSequence } from "./resource.svelte";
+  import { api } from "./api";
   import type { KnowledgeRow, Feedback, NamedRow } from "./types";
+  import History from "./library/History.svelte";
+  import Backlinks from "./wiki/Backlinks.svelte";
+  import { renderMarkdown, markBrokenLinks } from "./markdown";
+  import { LinkTargets } from "./wikilinks.svelte";
   import StructuredView from "./knowledge/StructuredView.svelte";
   import QualityBars from "./knowledge/QualityBars.svelte";
   import EntryForm from "./knowledge/EntryForm.svelte";
   import ScopeCrumb from "./library/ScopeCrumb.svelte";
   import { isCurator, canCurateScope } from "./session.svelte";
   import { pushScope } from "./keys.svelte";
+  import { setTopActions } from "./subnav.svelte";
+  import { vimState } from "./vim.svelte";
   import { Badge, Button, Chip, Icon } from "./tui";
 
   let { id, onClose, onOpen }: { id: string; onClose: () => void; onOpen?: (id: string) => void } = $props();
 
   let entry = $state<KnowledgeRow | null>(null);
   let feedback = $state<Feedback[]>([]);
+  const links = new LinkTargets();
+
+  /**
+   * An entry's prose is markdown like an article's, so a [[link]] written in a
+   * resolution is followable rather than shown as literal brackets. The stored
+   * edge and what the reader sees then agree.
+   */
+  const prose = (text: string) =>
+    markBrokenLinks(renderMarkdown(text), links.resolved);
   let error = $state<string | null>(null);
 
   let editing = $state(false);
@@ -31,31 +50,61 @@
     !!entry && canCurateScope({ team_id: entry.team_id as string | null | undefined, team_slug: productTeamSlug }),
   );
 
-  const fmtDate = (d?: string) => (d ? new Date(d).toISOString().slice(0, 10) : "");
-
-  const statusTone = (s: string) =>
-    s === "approved" ? "ok" : s === "draft" ? "accent" : s === "rejected" ? "danger" : s === "deprecated" ? "warn" : "muted";
 
   /** Reading the entry, backspace goes back. Not bound while editing, where it
-      would sit one stray keystroke away from discarding a form. */
+      would sit one stray keystroke away from discarding a form.
+
+      Hidden: back is a labelled button in the carved row now, so printing it
+      in the hint rule as well says the same thing twice. */
   $effect(() => {
     if (editing || !entry) return;
-    return pushScope([{ key: "backspace", label: "back", run: onClose }]);
+    return pushScope([
+      { key: "backspace", label: "", hidden: true, run: onClose },
+      // esc is the vim reflex for "back out of here"; backspace stays either way.
+      ...(vimState.enabled
+        ? [{ key: "esc", label: "", hidden: true, run: onClose }]
+        : []),
+    ]);
   });
 
+  /* The carved row, while reading. Editing hands it to the form instead, which
+     claims it on mount; the disposer's identity check keeps the handover from
+     wiping whichever of the two lands second. */
+  $effect(() => {
+    if (editing || !entry) return;
+    return setTopActions(readActions);
+  });
+
+  const current = createSequence();
+
   async function load() {
+    const isCurrent = current();
     error = null;
     conflict = false;
+    // Cleared with the rest, as DocDetail does: it is only refetched for an
+    // entry that has a product and no team of its own, so carrying the last
+    // entry's value forward showed an Edit button on another team's entry.
+    productTeamSlug = null;
+    entry = null;
     try {
-      entry = await api.get<KnowledgeRow>(`/knowledge/${id}`);
-      feedback = await api.get<Feedback[]>(`/knowledge/${id}/feedback`);
+      const next = await api.get<KnowledgeRow>(`/knowledge/${id}`);
+      if (!isCurrent()) return;
+      entry = next;
+      const fb = await api.get<Feedback[]>(`/knowledge/${id}/feedback`);
+      if (!isCurrent()) return;
+      feedback = fb;
+      await links.load("knowledge", id);
+      if (!isCurrent()) return;
 
-
-      if (isCurator() && entry.product_id && !entry.team_id) {
+      if (isCurator() && next.product_id && !next.team_id) {
         const products = await api.get<NamedRow[]>("/products");
-        productTeamSlug = (products.find((p) => p.id === entry!.product_id)?.team_slug as string) ?? null;
+        if (!isCurrent()) return;
+        productTeamSlug =
+          (products.find((p) => p.id === next.product_id)
+            ?.team_slug as string) ?? null;
       }
     } catch (e) {
+      if (!isCurrent()) return;
       error = e instanceof Error ? e.message : String(e);
     }
   }
@@ -65,21 +114,21 @@
     mutating = true;
     mutateError = null;
     conflict = false;
-    try {
-      await api.patch(`/knowledge/${id}`, { ...body, expectedVersion: entry.version });
+    const res = await patchLibraryItem(
+      `/knowledge/${id}`,
+      body,
+      entry.version,
+      "entry",
+    );
+    if (res.ok) {
       editing = false;
       deprecating = false;
       await load();
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409) {
-        conflict = true;
-        mutateError = "someone else edited this entry in the meantime - reload to get the latest version";
-      } else {
-        mutateError = e instanceof Error ? e.message : String(e);
-      }
-    } finally {
-      mutating = false;
+    } else {
+      conflict = res.conflict;
+      mutateError = res.message;
     }
+    mutating = false;
   }
 
   async function deprecate() {
@@ -138,6 +187,22 @@
   {/if}
 {/snippet}
 
+<!-- Rendered by App into the carved row beside the subnav, not here. -->
+{#snippet readActions()}
+  <Button icon="back" title="back (backspace)" onclick={onClose}>back</Button>
+  {#if canEdit}
+    <Button
+      tone="info"
+      icon="edit"
+      title="edit"
+      onclick={() => {
+        editing = true;
+        mutateError = null;
+      }}>edit</Button
+    >
+  {/if}
+{/snippet}
+
 <div class="detail">
   {#if error}<p class="error">{error}</p>{/if}
   {#if entry}
@@ -164,21 +229,7 @@
         onCancel={() => { editing = false; mutateError = null; }}
       />
     {:else}
-      <div class="topbar">
-        <ScopeCrumb area={entry.product_area} />
-        <Button variant="ghost" square icon="back" aria-label="back" title="back (backspace)" onclick={onClose} />
-        {#if canEdit}
-          <Button
-            variant="ghost"
-            square
-            tone="info"
-            icon="edit"
-            aria-label="edit"
-            title="edit"
-            onclick={() => { editing = true; mutateError = null; }}
-          />
-        {/if}
-      </div>
+      <ScopeCrumb area={entry.product_area} />
 
       <div class="content">
         <h2>{entry.issue_summary ?? "(no summary)"}</h2>
@@ -190,7 +241,6 @@
             <QualityBars
               confidence={entry.confidence}
               clarity={entry.resolution_clarity}
-              learningValue={entry.learning_value}
             />
           </div>
 
@@ -219,7 +269,7 @@
                 {#if entry.customer_slug}
                   <Badge
                     tone="accent"
-                    title="learned on this customer's install — cite it as theirs, not as how the product behaves"
+                    title="learned on this customer's install. Cite it as theirs, not as how the product behaves"
                     >{entry.customer_slug}</Badge
                   >
                 {/if}
@@ -266,7 +316,7 @@
             <span class="gap"></span>
             {#if entry.status !== "rejected"}
               <Button
-                variant="ghost" square tone="danger" icon="cancel"
+                variant="ghost" square tone="danger" icon="reject"
                 aria-label="reject" title="reject"
                 disabled={mutating}
                 onclick={() => patch({ status: "rejected" })}
@@ -334,8 +384,26 @@
           {/if}
         {/if}
 
-        {#if entry.root_cause}<section><h3>Root cause</h3><p>{entry.root_cause}</p></section>{/if}
-        {#if entry.resolution}<section><h3>Resolution</h3><p>{entry.resolution}</p></section>{/if}
+        <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
+           focusable wikilink anchors this div delegates to -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
+           wrapper, not an interactive element of its own -->
+        {#if entry.root_cause}
+          <section>
+            <h3>Root cause</h3>
+            <div class="md prose" onclick={links.onClick} onkeydown={links.onKeydown}>{@html prose(entry.root_cause)}</div>
+          </section>
+        {/if}
+        {#if entry.resolution}
+          <section>
+            <h3>Resolution</h3>
+            <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
+           focusable wikilink anchors this div delegates to -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
+           wrapper, not an interactive element of its own -->
+            <div class="md prose" onclick={links.onClick} onkeydown={links.onKeydown}>{@html prose(entry.resolution)}</div>
+          </section>
+        {/if}
 
         {@render chips("Symptoms", entry.symptoms)}
         {@render chips("Signals", entry.signals)}
@@ -347,6 +415,16 @@
             <StructuredView structured={entry.structured} />
           </section>
         {/if}
+
+        <Backlinks base="knowledge" id={id} />
+
+        <History
+          base="knowledge"
+          {id}
+          version={entry.version}
+          canEdit={canEdit}
+          onReverted={load}
+        />
 
         <section>
           <h3>Feedback</h3>
@@ -371,9 +449,10 @@
   /* One reading column: the title, the meta band and every section share the
      same measure and the same side padding, so nothing stops half-way across
      a frame that keeps running. The column is centred in the frame; the prose
-     inside stays left-aligned, never justified. 64ch of sans holds the 78
-     characters 78ch of mono did — see .prose-measure in base.css. */
+     inside stays left-aligned, never justified. ch tracks the reading face, so
+     the measure holds its character count whichever one is picked. */
   .content {
+    font-family: var(--font-prose);
     max-width: 64ch;
     margin-inline: auto;
     padding: 0 var(--pad-4);
@@ -405,22 +484,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--pad-1);
-  }
-
-  .topbar {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    gap: var(--pad-1);
-    padding: var(--pad-2) 0;
-    background: var(--panel-solid);
-  }
-  /* The crumb takes the slack, pushing the actions to the right edge. */
-  .topbar :global(nav.crumb) {
-    margin-right: auto;
   }
 
   .meta {

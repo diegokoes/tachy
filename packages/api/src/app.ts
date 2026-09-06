@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { logger } from "hono/logger";
+import { requestId } from "hono/request-id";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { z } from "zod";
@@ -19,8 +19,10 @@ import { credentials } from "./routes/credentials";
 import { artifacts } from "./routes/artifacts";
 import { outputs } from "./routes/outputs";
 import { repos } from "./routes/repos";
+import { library } from "./routes/library";
 import { projects } from "./routes/projects";
-import { installAuth, isBootstrapped, type OidcConfig } from "./auth";
+import { initOidc, installAuth, isBootstrapped, type OidcConfig } from "./auth";
+import { httpLogger, noteError } from "./logging";
 
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
@@ -46,6 +48,7 @@ function apiRoutes() {
     .route("/artifacts", artifacts)
     .route("/outputs", outputs)
     .route("/repos", repos)
+    .route("/library", library)
     .route("/", projects)
     .route("/", admin);
 }
@@ -59,7 +62,8 @@ export function createApp(
   } = {},
 ) {
   const base = new Hono();
-  base.use("*", logger());
+  base.use("*", requestId());
+  base.use("*", httpLogger);
 
   base.get("/health", async (c) => {
     try {
@@ -84,6 +88,10 @@ export function createApp(
     });
   });
 
+  // Ahead of installAuth's `/api/*` guard, deliberately: on a fresh install
+  // there is no identity to check yet. initOidc still runs first, so the wizard
+  // can tell an operator already holding an SSO session from a stranger.
+  if (opts.oidc) initOidc(base, opts.oidc);
   base.route("/api/setup", setup);
 
   installAuth(base, {
@@ -106,14 +114,26 @@ export function createApp(
   app.notFound((c) => c.json({ error: "not found" }, 404));
 
   app.onError((err, c) => {
-    if (err instanceof AppError)
+    if (err instanceof AppError) {
+      noteError(c, { error: err.message, code: err.code });
       return c.json({ error: err.message }, STATUS_BY_CODE[err.code]);
-    if (err instanceof HTTPException) return err.getResponse();
-    if (err instanceof z.ZodError)
+    }
+    if (err instanceof HTTPException) {
+      noteError(c, { error: err.message });
+      return err.getResponse();
+    }
+    if (err instanceof z.ZodError) {
+      noteError(c, { error: "validation failed", issues: err.issues });
       return c.json({ error: "validation failed", issues: err.issues }, 400);
-    if (err instanceof SyntaxError)
+    }
+    if (err instanceof SyntaxError) {
+      noteError(c, { error: "invalid JSON body" });
       return c.json({ error: "invalid JSON body" }, 400);
-    console.error(err instanceof Error ? err.message : String(err));
+    }
+    noteError(c, {
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return c.json({ error: "internal error" }, 500);
   });
 

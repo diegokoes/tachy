@@ -1,8 +1,11 @@
 import { Hono } from "hono";
+import { requireAdmin } from "../auth";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   SOURCE_PROJECT_ROLES,
+  badInput,
+  notFound,
   addSourceProject,
   deleteProjectAreaMap,
   deleteSourceProject,
@@ -18,7 +21,7 @@ import {
   sql,
   updateSourceProject,
 } from "@tachy/core";
-import { createAdoClient } from "@tachy/source-azure-devops";
+import { createAdoClient, workItemSchema } from "@tachy/source-azure-devops";
 import { assertScopeEditor, assertTeamAdmin, callerScope } from "../authz";
 import type { Context } from "hono";
 
@@ -222,21 +225,55 @@ export const projects = new Hono()
     return c.json(await deleteProjectAreaMap(c.req.param("areaId")));
   })
 
-  // Live discovery for the setup screens — read-only, never writes anything.
-  .get("/source-connections/:slug/discover/projects", async (c) =>
+  /**
+   * The field schema behind the chat approval box. Guarded, unlike the
+   * discover/* routes below: those are setup-screen probes, this is read on
+   * behalf of whoever is composing a work item, and the PAT it uses is theirs.
+   */
+  .get(
+    "/source-connections/:slug/work-item-schema",
+    requireAdmin,
+    async (c) => {
+      const project = c.req.query("project");
+      const type = c.req.query("type");
+      if (!project || !type) throw badInput("project and type are required");
+      // Authorize before looking anything up: checking existence first would let
+      // a non-curator probe which connection slugs exist.
+      await assertScopeEditor(c, {});
+      const [conn] = await sql`
+      select config from source_connections where slug = ${c.req.param("slug")!}
+    `;
+      if (!conn) throw notFound(`Unknown source connection`);
+      const client = await adoClient(c, c.req.param("slug")!);
+      const defaults =
+        ((conn.config as any)?.defaults?.[project]?.[type] as
+          Record<string, unknown> | undefined) ?? {};
+      return c.json(await workItemSchema(client, project, type, defaults));
+    },
+  )
+
+  /*
+   * Live discovery for the setup screens. Read-only against our own database,
+   * but each one spends the connection's credential on a remote call and hands
+   * back that system's answer — including its error text, by design, so an
+   * operator can see why a connection will not come up. That is a
+   * configuration surface, so it is held to the same rights as editing the
+   * connection itself.
+   */
+  .get("/source-connections/:slug/discover/projects", requireAdmin, async (c) =>
     c.json(
       await probe(async () => {
-        const client = await adoClient(c, c.req.param("slug"));
+        const client = await adoClient(c, c.req.param("slug")!);
         const found = await client.listProjects();
         return { projects: found.map((p) => ({ key: p.name, name: p.name })) };
       }),
     ),
   )
 
-  .get("/source-connections/:slug/discover/wikis", async (c) =>
+  .get("/source-connections/:slug/discover/wikis", requireAdmin, async (c) =>
     c.json(
       await probe(async () => {
-        const client = await adoClient(c, c.req.param("slug"));
+        const client = await adoClient(c, c.req.param("slug")!);
         const found = await client.listWikis(c.req.query("project"));
         return {
           wikis: found.map((w) => ({
@@ -249,12 +286,12 @@ export const projects = new Hono()
     ),
   )
 
-  .get("/source-connections/:slug/discover/repos", async (c) =>
+  .get("/source-connections/:slug/discover/repos", requireAdmin, async (c) =>
     c.json(
       await probe(async () => {
         const project = c.req.query("project");
         if (!project) throw new Error("project is required");
-        const client = await adoClient(c, c.req.param("slug"));
+        const client = await adoClient(c, c.req.param("slug")!);
         const found = await client.listRepos(project);
         return {
           repos: found.map((r) => ({

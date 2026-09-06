@@ -1,10 +1,17 @@
-import { azureDevopsToken, badInput } from "@tachy/core";
+import { azureDevopsToken, badInput, sourceFetch } from "@tachy/core";
 
 /** The released Azure DevOps REST version. Everything in 7.2 is still preview. */
 const API_VERSION = "7.1";
 // No released version exists for these two, so they stay pinned to preview:
 //   work item comments -> the 7.1 reference itself documents 7.1-preview.4
 //   connectionData     -> not in the public REST reference at all
+/**
+ * At $top=200 this is 20k comments on one work item — far past anything real,
+ * and the point at which a continuation token that never clears is a bug rather
+ * than a big ticket.
+ */
+const MAX_PAGES = 100;
+
 const API_COMMENTS = "7.1-preview.4";
 const API_CONNECTION_DATA = "7.1-preview.1";
 
@@ -55,6 +62,12 @@ export interface AdoClient {
   getCommit(project: string, repoId: string, sha: string): Promise<any>;
   listWorkItemTypes(project: string): Promise<any[]>;
   getTypeFields(project: string, type: string): Promise<any[]>;
+  /**
+   * Account-wide field definitions. The per-type endpoint above returns what a
+   * type requires and allows but carries NO data type, so the widget a field
+   * deserves is only knowable by joining these two on referenceName.
+   */
+  listFields(): Promise<any[]>;
   createWorkItem(
     project: string,
     type: string,
@@ -85,17 +98,21 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
   const auth = "Basic " + Buffer.from(`:${token}`).toString("base64");
 
   async function req(path: string, init?: RequestInit): Promise<any> {
-    const res = await fetch(orgUrl + withVersion(path), {
-      ...init,
-      headers: {
-        Authorization: auth,
-        Accept: "application/json",
-        ...(init?.headers ?? {}),
+    const method = init?.method ?? "GET";
+    const res = await sourceFetch(
+      `Azure DevOps ${method} ${path}`,
+      orgUrl + withVersion(path),
+      {
+        ...init,
+        headers: {
+          Authorization: auth,
+          Accept: "application/json",
+          ...(init?.headers ?? {}),
+        },
       },
-    });
+    );
     const text = await res.text();
     const trimmed = text.trim();
-    const method = init?.method ?? "GET";
     if (!res.ok) {
       const hint =
         res.status === 401 || res.status === 403 || res.status === 203
@@ -129,7 +146,9 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     },
 
     async getWorkItem(id) {
-      return req(`/_apis/wit/workitems/${id}?$expand=all`);
+      return req(
+        `/_apis/wit/workitems/${encodeURIComponent(String(id))}?$expand=all`,
+      );
     },
 
     async getWorkItemsBatch(ids, fields) {
@@ -150,18 +169,21 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     async getComments(project, id) {
       const comments: any[] = [];
       let continuation: string | undefined;
-      do {
+      // A server that echoes the same continuation token would otherwise spin
+      // here for as long as the process runs.
+      for (let page = 0; page < MAX_PAGES; page++) {
         const params = new URLSearchParams({
           "api-version": API_COMMENTS,
           $top: "200",
         });
         if (continuation) params.set("continuationToken", continuation);
         const res = await req(
-          `${proj(project)}/_apis/wit/workItems/${id}/comments?${params.toString()}`,
+          `${proj(project)}/_apis/wit/workItems/${encodeURIComponent(String(id))}/comments?${params.toString()}`,
         );
         comments.push(...(res.comments ?? []));
         continuation = res.continuationToken || undefined;
-      } while (continuation);
+        if (!continuation) break;
+      }
       return comments;
     },
 
@@ -191,18 +213,23 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
 
     async getPullRequest(project, repoId, prId) {
       return req(
-        `${proj(project)}/_apis/git/repositories/${repoId}/pullrequests/${prId}`,
+        `${proj(project)}/_apis/git/repositories/${encodeURIComponent(repoId)}/pullrequests/${encodeURIComponent(String(prId))}`,
       );
     },
 
     async getCommit(project, repoId, sha) {
       return req(
-        `${proj(project)}/_apis/git/repositories/${repoId}/commits/${sha}`,
+        `${proj(project)}/_apis/git/repositories/${encodeURIComponent(repoId)}/commits/${encodeURIComponent(sha)}`,
       );
     },
 
     async listWorkItemTypes(project) {
       const res = await req(`${proj(project)}/_apis/wit/workitemtypes`);
+      return res.value ?? [];
+    },
+
+    async listFields() {
+      const res = await req(`/_apis/wit/fields`);
       return res.value ?? [];
     },
 

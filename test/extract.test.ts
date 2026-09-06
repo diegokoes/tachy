@@ -1,6 +1,6 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { extractSource, isPdf } from "../packages/mcp/src/extract";
 
@@ -39,6 +39,7 @@ describe("extractSource", () => {
 
   it("extracts text and page count from a PDF, and passes text files through", async () => {
     const dir = await mkdtemp(join(tmpdir(), "tachy-extract-"));
+    process.env.TACHY_UPLOAD_DIR = dir;
     const pdfPath = join(dir, "runbook.pdf");
     await writeFile(pdfPath, minimalPdf("Line controller failover heartbeat"));
     const pdf = await extractSource(pdfPath);
@@ -50,5 +51,33 @@ describe("extractSource", () => {
     const txt = await extractSource(txtPath);
     expect(txt.pages).toBeUndefined();
     expect(txt.text).toBe("plain utf8 notes\n");
+  });
+
+  it("refuses a path outside the upload directory", async () => {
+    const uploads = await mkdtemp(join(tmpdir(), "tachy-uploads-"));
+    const elsewhere = await mkdtemp(join(tmpdir(), "tachy-elsewhere-"));
+    process.env.TACHY_UPLOAD_DIR = uploads;
+
+    const outside = join(elsewhere, "secrets.txt");
+    await writeFile(outside, "TACHY_SECRET_KEY=hunter2");
+    await expect(extractSource(outside)).rejects.toThrow(
+      "is not an uploaded file",
+    );
+
+    // A traversal that lands outside is the same refusal, not a read.
+    await expect(
+      extractSource(join(uploads, "..", basename(elsewhere), "secrets.txt")),
+    ).rejects.toThrow("is not an uploaded file");
+
+    // A symlink planted inside must not step back out.
+    const link = join(uploads, "link.txt");
+    await symlink(outside, link);
+    await expect(extractSource(link)).rejects.toThrow(
+      "is not an uploaded file",
+    );
+
+    const inside = join(uploads, "ok.txt");
+    await writeFile(inside, "fine");
+    expect((await extractSource(inside)).text).toBe("fine");
   });
 });

@@ -5,7 +5,7 @@ import {
   type PermissionRequestResult,
   type SessionConfig,
 } from "@github/copilot-sdk";
-import { classify, classifyCall, qualify, MCP_SERVER } from "./tools";
+import { classifyCall, qualify, MCP_SERVER } from "./tools";
 import { effectiveModel, type AgentConfig } from "./backend";
 import { TurnBase, type ApprovalGate } from "./turn";
 

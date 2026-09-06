@@ -13,18 +13,33 @@ export type Column<T> = {
   /** A CSS width for <col>. Fixed tracks are what keep rows from resizing. */
   width?: string;
   align?: "start" | "end";
-  /** Plain display value; ignored when `cell` is given. */
+  /**
+   * Plain display value; ignored when `cell` is given.
+   *
+   * On an editable column this is also what seeds the record form, so it must
+   * return the **stored** form — the option's `value`, not its label; a boolean,
+   * not "on"/"off". Anything a column wants to *show* differently belongs in
+   * `cell`. Returning a label here put "Freshdesk" where "freshdesk" was
+   * expected and crashed the source form on open, and made every edit of a
+   * connection turn its redaction flag on.
+   */
   value?: (row: T) => unknown;
   cell?: Snippet<[T]>;
   edit?: EditKind;
   /** A function when the choices depend on the rest of the draft. */
   options?: Opt[] | ((d: Draft) => Opt[]);
-  /** Sits under the control in the form — say what the field is *for*, in a
-   *  phrase. A function when it depends on another field, e.g. the source type. */
-  hint?: string | ((d: Draft) => string);
-  /** The rules behind the field, behind an info mark beside its label. Anything
-   *  that would run to a sentence or more belongs here rather than in `hint`. */
+  /** Shown in the empty control. Only ever an example of the *shape* of the
+   *  value; what the field is for and the rules behind it go in `info`. */
+  placeholder?: string | ((d: Draft) => string);
+  /** Everything the field has to say, behind an info mark beside its label.
+   *  A function when it depends on another field, e.g. the source type. */
   info?: string | ((d: Draft) => string);
+  /** Track width in the form's grid. Defaults from `edit`: prose and secrets
+   *  take the full row, everything else shares one. */
+  span?: "half" | "full";
+  /** Fields carrying the same group sit together under its label. A column
+   *  list that names no groups renders as one run of fields. */
+  group?: string;
   /** In the record form but not in the table, e.g. a write-only password. */
   formOnly?: boolean;
   /** Restricts the field to one of the form's two modes. */
@@ -54,6 +69,7 @@ export function cellText<T>(c: Column<T>, row: T): string {
   return v == null || v === "" ? "—" : String(v);
 }
 
+/** Seeds the record form from a row. See the note on `Column.value`. */
 export function draftFrom<T>(columns: Column<T>[], row: T): Draft {
   const d: Draft = {};
   for (const c of columns) {

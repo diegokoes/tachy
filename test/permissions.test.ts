@@ -116,6 +116,8 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
   let devCookie: string;
   let ownEntryId: string;
   let otherEntryId: string;
+  let ownItemId: string;
+  let otherItemId: string;
 
   const login = (email: string, password: string) =>
     loginCookie(app, email, password);
@@ -163,6 +165,25 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
       })
     ).id;
 
+    const [conn] = await sql`
+      insert into source_connections (slug, source_type, base_url)
+      values ('perm-fd', 'freshdesk', 'https://example.invalid')
+      on conflict (slug) do update set base_url = excluded.base_url
+      returning id
+    `;
+    const [ownItem] = await sql`
+      insert into work_items (source_connection_id, external_id, product_id, title)
+      values (${conn.id}, 'wi-own', ${await tpdProductId()}, 'own-team ticket')
+      returning id
+    `;
+    const [otherItem] = await sql`
+      insert into work_items (source_connection_id, external_id, team_id, title)
+      values (${conn.id}, 'wi-other', ${other.id as string}, 'other-team ticket')
+      returning id
+    `;
+    ownItemId = ownItem.id as string;
+    otherItemId = otherItem.id as string;
+
     adminCookie = await login("boss@example.com", "admin-password");
     leadCookie = await login("lead@example.com", "lead-password");
     devCookie = await login("dev@example.com", "dev-password");
@@ -182,6 +203,45 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
       { rootCause: "nope" },
     );
     expect(denied.status).toBe(403);
+  });
+
+  it("work-item attribution is held to the item's own scope", async () => {
+    const ok = await req(
+      leadCookie,
+      `/work-items/${ownItemId}/customer`,
+      "PATCH",
+      {
+        customer_slug: null,
+      },
+    );
+    expect(ok.status).toBe(200);
+
+    // Another team's ticket, and a plain member on their own team's — both are
+    // edits to curated attribution, not reads.
+    expect(
+      (
+        await req(leadCookie, `/work-items/${otherItemId}/customer`, "PATCH", {
+          customer_slug: null,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await req(devCookie, `/work-items/${ownItemId}/customer`, "PATCH", {
+          customer_slug: null,
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await req(
+          devCookie,
+          `/work-items/${ownItemId}/observed-version`,
+          "PATCH",
+          { version: "9.9.9" },
+        )
+      ).status,
+    ).toBe(403);
   });
 
   it("plain member cannot PATCH or POST knowledge", async () => {

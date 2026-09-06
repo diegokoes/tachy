@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { REFERENCE_STATUSES } from "../vocab";
   import type { Snippet } from "svelte";
   import { Button } from "../tui";
   
@@ -9,7 +10,8 @@
   import type { ReferenceRow, NamedRow } from "../types";
   import AsciiSelect from "../AsciiSelect.svelte";
   import { t } from "../terms";
-  import { csv } from "../admin/shared";
+  import { csv } from "../fields";
+  import { setTopActions } from "../subnav.svelte";
   import { componentOptions } from "../catalog";
 
   let {
@@ -50,6 +52,31 @@
   // and the control stays disabled until one is picked.
   let component = $state("");
   let components = $state<NamedRow[]>([]);
+  let customerSlug = $state(seed.customer_slug ?? "");
+  let customers = $state<NamedRow[]>([]);
+  let unitSlug = $state(seed.customer_unit_slug ?? "");
+  /** Units belong to one customer, so the list is reloaded when it changes. */
+  let units = $state<NamedRow[]>([]);
+
+  async function loadUnits(slug: string) {
+    units = slug
+      ? await api.get<NamedRow[]>(`/customers/${slug}/units`).catch(() => [])
+      : [];
+    if (unitSlug && !units.some((u) => u.slug === unitSlug)) unitSlug = "";
+  }
+
+  const unitOptions = $derived([
+    { value: "", label: "the whole account" },
+    ...units.map((u) => ({
+      value: u.slug as string,
+      label: `${u.name} (${u.kind})`,
+    })),
+  ]);
+
+  const customerOptions = $derived([
+    { value: "", label: "none (general)" },
+    ...customers.map((c) => ({ value: c.slug as string, label: c.name as string })),
+  ]);
 
   const productOptions = $derived([
     { value: "", label: `no ${t("product")}` },
@@ -64,6 +91,12 @@
     } catch {
       products = [];
     }
+    try {
+      customers = await api.get<NamedRow[]>("/customers");
+    } catch {
+      customers = [];
+    }
+    if (customerSlug) await loadUnits(customerSlug);
     if (mode === "edit" && seed.product_id) {
       productSlug =
         (products.find((p) => p.id === seed.product_id)?.slug as string) ?? "";
@@ -88,6 +121,8 @@
     }
   }
 
+  $effect(() => setTopActions(formActions));
+
   function submit(e: SubmitEvent) {
     e.preventDefault();
     const payload: Record<string, unknown> = {
@@ -98,6 +133,8 @@
       source: source.trim() || (mode === "edit" ? null : undefined),
       docVersion: docVersion.trim() || (mode === "edit" ? null : undefined),
       component: component || (mode === "edit" ? null : undefined),
+      customerSlug: customerSlug || (mode === "edit" ? null : undefined),
+      unit: unitSlug || (mode === "edit" ? null : undefined),
     };
     if (mode === "create") {
       const prod = products.find((p) => p.slug === productSlug);
@@ -108,38 +145,29 @@
   }
 </script>
 
-<form class="ref-form" onsubmit={submit}>
-  <div class="formbar">
-    <span class="side"></span>
-    <span class="mid">{#if extra}{@render extra()}{/if}</span>
-    <span class="side end">
-      <Button
-        variant="ghost"
-        square
-        icon="cancel"
-        aria-label="cancel"
-        title="cancel"
-        disabled={saving}
-        onclick={onCancel}
-      />
-      <Button
-        variant="ghost"
-        tone="accent"
-        square
-        icon="save"
-        type="submit"
-        aria-label={SUBMIT_LABEL}
-        title={SUBMIT_LABEL}
-        busy={saving}
-      />
-    </span>
-  </div>
+<!-- Rendered by App into the carved row beside the subnav, not here. The save
+     button is outside the <form> in the DOM, so it carries `form` — that keeps
+     native required-field validation, which calling submit() directly loses. -->
+{#snippet formActions()}
+  <Button icon="cancel" disabled={saving} onclick={onCancel}>cancel</Button>
+  <Button
+    variant="primary"
+    icon="save"
+    type="submit"
+    form="ref-form"
+    title={SUBMIT_LABEL}
+    busy={saving}>save</Button
+  >
+{/snippet}
+
+<form id="ref-form" class="ref-form" onsubmit={submit}>
+  {#if extra}<div class="formbar">{@render extra()}</div>{/if}
   <label>title
     <input bind:value={title} required />
   </label>
   <div class="row">
     <label>status
-      <AsciiSelect bind:value={status} options={["approved", "draft", "archived"]} />
+      <AsciiSelect bind:value={status} options={[...REFERENCE_STATUSES]} />
     </label>
     {#if mode === "create"}
       <label>{t("product")}
@@ -160,6 +188,14 @@
         ]}
       />
     </label>
+    <label>{t("customer")} <span class="hint">optional</span>
+      <AsciiSelect bind:value={customerSlug} options={customerOptions}
+        onchange={(v) => loadUnits(String(v))} />
+    </label>
+    <label>unit <span class="hint">optional</span>
+      <AsciiSelect bind:value={unitSlug} options={unitOptions}
+        disabled={!customerSlug || units.length === 0} />
+    </label>
     <label>doc version
       <input bind:value={docVersion} class="short" />
     </label>
@@ -174,7 +210,7 @@
     <textarea rows="14" bind:value={body} required></textarea>
   </label>
   {#if supersedes}
-    <p class="hint">Saving as a new version — the current doc will be archived and linked as the predecessor.</p>
+    <p class="hint">Saving as a new version. The current doc will be archived and linked as the predecessor.</p>
   {/if}
 
   {#if error}<p class="error">{error}</p>{/if}
@@ -182,29 +218,17 @@
 </form>
 
 <style>
-  /* Three tracks so the middle group stays optically centred whatever the
-     actions on the right weigh. */
+  /* Cancel and save moved to the carved row, so this holds only whatever the
+     caller passes as `extra` — centred, and gone entirely when there is none. */
   .formbar {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: center;
-    gap: var(--pad-2);
-    margin-bottom: var(--pad-3);
-    padding-top: var(--pad-2);
-    padding-bottom: var(--pad-2);
-    background: var(--panel-solid);
-    border-bottom: var(--panel-line);
-  }
-  .formbar .mid,
-  .formbar .side {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: var(--pad-2);
+    margin-bottom: var(--pad-3);
+    padding-bottom: var(--pad-2);
+    border-bottom: var(--panel-line);
   }
-  .formbar .side.end { justify-content: flex-end; }
   .ref-form { display: flex; flex-direction: column; gap: 0.6rem; }
   label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.82rem; color: var(--muted); }
   .hint { font-size: 0.72rem; opacity: 0.8; }

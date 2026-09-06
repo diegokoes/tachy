@@ -361,3 +361,41 @@ describe("taxonomy edit/delete with reference guards", () => {
     await deleteResolutionPattern("config-fix");
   });
 });
+
+describe("re-parenting cannot close a ring", () => {
+  it("refuses a cycle through add_component's upsert, not just updateComponent", async () => {
+    const tpd = await getProductIdBySlug("tpd");
+    await addComponent({ productId: tpd, slug: "ring-a", name: "A" });
+    await addComponent({
+      productId: tpd,
+      slug: "ring-b",
+      name: "B",
+      parentSlug: "ring-a",
+    });
+
+    // add_component is an upsert, so this second call re-parents an existing
+    // row — the path that had no guard. Left through, every walk up the tree
+    // afterwards is a query that does not return.
+    await expect(
+      addComponent({
+        productId: tpd,
+        slug: "ring-a",
+        name: "A",
+        parentSlug: "ring-b",
+      }),
+    ).rejects.toThrow(/cycle/);
+
+    // A refused re-parent must also not have half-applied.
+    const rows = await sql`
+      select slug, parent_id from components
+      where product_id = ${tpd} and slug in ('ring-a', 'ring-b')
+      order by slug
+    `;
+    const [a, b] = rows as unknown as {
+      slug: string;
+      parent_id: string | null;
+    }[];
+    expect(a.parent_id).toBeNull();
+    expect(b.parent_id).not.toBeNull();
+  });
+});

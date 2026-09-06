@@ -1,3 +1,5 @@
+import type { DeploymentProfile } from "@tachy/contract";
+
 export interface Me {
   email: string | null;
   name: string | null;
@@ -13,7 +15,7 @@ export interface AuthConfig {
   sso: boolean;
   passwordLogin: boolean;
 
-  profile?: "support" | "engineering";
+  profile?: DeploymentProfile;
 }
 
 export const session = $state<{
@@ -21,7 +23,15 @@ export const session = $state<{
   me: Me | null;
   config: AuthConfig | null;
   bootstrapped: boolean | null;
-}>({ loading: true, me: null, config: null, bootstrapped: null });
+  /** Set when boot could not reach the API at all, so the shell can say so. */
+  unreachable: boolean;
+}>({
+  loading: true,
+  me: null,
+  config: null,
+  bootstrapped: null,
+  unreachable: false,
+});
 
 export async function initSession(): Promise<void> {
   session.loading = true;
@@ -36,15 +46,28 @@ export async function initSession(): Promise<void> {
       ? (await statusRes.json()).bootstrapped
       : null;
     session.me = meRes.ok ? await meRes.json() : null;
+    session.unreachable = false;
   } catch {
+    /*
+     * Every field, not just config: leaving `me` and `bootstrapped` at whatever
+     * they held meant a boot with the API down rendered the whole app shell as
+     * though the user were signed in.
+     */
     session.config = null;
+    session.me = null;
+    session.bootstrapped = null;
+    session.unreachable = true;
   } finally {
     session.loading = false;
   }
 }
 
-/** Global admin. Treats "no session" as admin, matching the open-auth mode. */
+/**
+ * Global admin. Treats "no session" as admin, matching the open-auth mode —
+ * but not when boot failed, where "no session" means "we do not know".
+ */
 export function isGlobalAdmin(): boolean {
+  if (session.unreachable) return false;
   return session.me?.role === "admin" || !session.me;
 }
 
@@ -74,6 +97,15 @@ export function onUnauthorized(): void {
     return;
   }
   session.me = null;
+  /*
+   * With no interactive way back in — token or open mode — App renders no login
+   * view, so clearing `me` alone left the shell up with no session and nothing
+   * the user could do. Re-deriving the whole session is the honest answer: in
+   * open mode it comes straight back, and otherwise the shell has current
+   * config to render from.
+   */
+  if (!session.config?.passwordLogin && !session.config?.sso)
+    void initSession();
 }
 
 export async function login(email: string, password: string): Promise<void> {

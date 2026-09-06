@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, type Snippet } from "svelte";
   import { api } from "../api";
-  import { Modal, Field, Note } from "../tui";
+  import { Modal, Field, Note, Subject } from "../tui";
   import { slugify } from "../slug";
   import { errText } from "../resource.svelte";
 
@@ -77,11 +77,9 @@
 >
   {#if error}<Note tone="danger">{error}</Note>{/if}
 
-  <Field
-    label="new slug"
-    hint={clash ? undefined : `was ${current}`}
-    error={clash ? "already taken" : null}
-  >
+  <Subject verb="renaming" name={current} />
+
+  <Field label="new slug" error={clash ? "already taken" : null}>
     <input
       type="text"
       aria-label="new slug"
@@ -95,3 +93,4 @@
   {/if}
   {#if warning}<Note tone="warn">{warning}</Note>{/if}
 </Modal>
+

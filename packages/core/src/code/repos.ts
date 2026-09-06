@@ -5,7 +5,16 @@ import { getCustomerIdBySlug } from "../catalog/customers";
 import { resolveComponentStrict } from "../catalog/components";
 import { getSourceProject } from "../sources/projects";
 import type { EntryScope } from "../access/permissions";
-import { removeClone } from "./git";
+import { assertBranchName, assertRepoUrl, removeClone } from "./git";
+
+export const REPO_INDEX_STATUSES = [
+  "idle",
+  "cloning",
+  "indexing",
+  "ready",
+  "error",
+] as const;
+export type RepoIndexStatus = (typeof REPO_INDEX_STATUSES)[number];
 
 export interface RepoInput {
   slug: string;
@@ -35,7 +44,7 @@ export interface RepoRow {
   customer_slug: string | null;
   default_branch: string;
   config: Record<string, unknown>;
-  index_status: string;
+  index_status: RepoIndexStatus;
   indexed_commit: string | null;
   index_error: string | null;
   file_count: number;
@@ -86,6 +95,11 @@ export async function linkRepo(i: RepoInput) {
   const customerId = i.customerSlug
     ? await getCustomerIdBySlug(i.customerSlug)
     : null;
+
+  // Checked here as well as at the spawn: a value that cannot be cloned should
+  // be refused in the form the operator typed it into, not on a later reindex.
+  assertRepoUrl(i.url);
+  if (i.defaultBranch) assertBranchName(i.defaultBranch);
 
   const [row] = await sql`
     insert into repos (slug, url, product_id, source_slug, source_project_id, component_id,
@@ -209,4 +223,15 @@ export async function sweepInterruptedIndexes(): Promise<number> {
     returning slug
   `;
   return rows.length;
+}
+
+/** For the admin index: repos, and how many are not answering searches. */
+export async function repoCensus() {
+  const [row] = await sql`
+    select
+      count(*)::int as repos,
+      count(*) filter (where index_status = 'error')::int as failing
+    from repos
+  `;
+  return row as { repos: number; failing: number };
 }

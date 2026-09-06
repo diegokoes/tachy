@@ -9,6 +9,7 @@
     DEFAULT_SHEET,
   } from "@tachy/contract";
   import type {
+    ArtifactUtility,
     TableCellType,
     TableColumn,
     TableOutput,
@@ -31,7 +32,7 @@
     output?: OutputSpec;
   }
 
-  export const EXPORT_UTILITY = "export_table";
+  export const EXPORT_UTILITY: ArtifactUtility = "export_table";
 
   export function emptyColumn(): SpecColumn {
     return { key: "", type: "string" };
@@ -166,7 +167,7 @@
         <input
           value={output.filename ?? ""}
           oninput={(e) => (output.filename = sanitize(e, stripFilenameChars))}
-          title="Optional — defaults to the artifact name and today's date. {'{date}'} becomes today's date, {'{slug}'} the artifact name; the extension is added for you."
+          title="Optional. Defaults to the artifact name and today's date. {'{date}'} becomes today's date, {'{slug}'} the artifact name; the extension is added for you."
           aria-label="file name"
         />
       </Field>
@@ -175,7 +176,7 @@
           <input
             value={output.sheet ?? ""}
             oninput={(e) => (output.sheet = sanitize(e, stripSheetChars))}
-            title="Optional — the sheet tab inside the workbook, max 31 characters. Defaults to {DEFAULT_SHEET}."
+            title="Optional. The sheet tab inside the workbook, max 31 characters. Defaults to {DEFAULT_SHEET}."
             aria-label="tab name"
           />
         </Field>
@@ -190,7 +191,7 @@
     </div>
 
     {#if output.columns.length === 0}
-      <p class="lede">No columns yet — add the first one.</p>
+      <p class="lede">No columns yet. Add the first one.</p>
     {/if}
 
     <ol class="cols">
@@ -199,7 +200,11 @@
           <span class="idx">{i + 1}</span>
 
           <div class="f-head">
-            <Field label="heading" required hint={keys[i] || " "}>
+            <Field
+              label="heading"
+              required
+              info={keys[i] ? `Exports under the key ${keys[i]}.` : undefined}
+            >
               <input
                 value={col.label ?? col.key}
                 oninput={(e) => setHeading(i, e.currentTarget.value)}
@@ -209,7 +214,7 @@
           </div>
 
           <div class="f-type">
-            <Field label="cell type" hint=" ">
+            <Field label="cell type">
               <Select bind:value={col.type} options={TYPES} aria-label="cell type" />
             </Field>
           </div>

@@ -10,9 +10,13 @@ import {
   explainFailure,
   READ_TOOLS,
   WRITE_TOOLS,
+  CONDITIONAL_WRITES,
   type AgentConfig,
   type Decision,
 } from "../packages/agent/src/index";
+import { readFileSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { AsyncQueue } from "../packages/agent/src/queue";
 import { TurnBase } from "../packages/agent/src/turn";
 import type { PermissionRequest } from "@github/copilot-sdk";
@@ -26,6 +30,44 @@ describe("agent tool allowlist (security boundary)", () => {
     for (const t of WRITE_TOOLS) expect(classify(qualify(t)).cls).toBe("write");
   });
 
+  /**
+   * An MCP tool missing from both lists is not a loud failure: it stays callable
+   * and silently raises an approval box on every call, forever. The lists are
+   * hand-maintained, so hold them against what is actually registered.
+   */
+  it("classifies every registered MCP tool", () => {
+    // Every .ts under packages/mcp/src, not one file: tools live one module per
+    // domain, and a new module has to be caught without anyone remembering to
+    // add it here.
+    const here = dirname(fileURLToPath(import.meta.url));
+    const root = join(here, "..", "packages", "mcp", "src");
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory()
+          ? walk(join(dir, e.name))
+          : e.name.endsWith(".ts")
+            ? [join(dir, e.name)]
+            : [],
+      );
+    const registered = walk(root).flatMap((f) =>
+      [...readFileSync(f, "utf8").matchAll(/^tool\(\n\s*"([a-z0-9_]+)"/gm)].map(
+        (m) => m[1],
+      ),
+    );
+    expect(registered.length).toBeGreaterThan(40);
+    // No tool registered twice under two names.
+    expect(new Set(registered).size).toBe(registered.length);
+
+    // A conditional write is classified too — by its flag rather than a list.
+    const listed = new Set<string>([
+      ...READ_TOOLS,
+      ...WRITE_TOOLS,
+      ...Object.keys(CONDITIONAL_WRITES),
+    ]);
+    const unlisted = registered.filter((t) => !listed.has(t));
+    expect(unlisted).toEqual([]);
+  });
+
   it("denies any non-tachy / built-in tool", () => {
     for (const t of ["Bash", "Read", "Write", "Edit", "WebFetch", "Task"])
       expect(classify(t).cls).toBe("denied");
@@ -35,21 +77,32 @@ describe("agent tool allowlist (security boundary)", () => {
     expect(classify("mcp__tachy__some_new_tool").cls).toBe("write");
   });
 
-  it("gates compact_work_item only when it is asked to post a note", () => {
+  it("gates compact_work_item unless it is told not to post", () => {
     const t = qualify("compact_work_item");
+    // The tool posts on `post_note !== false`, so an omitted flag is a write.
     expect(classifyCall(t, { source: "fd", external_id: "1" }).cls).toBe(
-      "read",
+      "write",
     );
-    expect(classifyCall(t, { post_note: false }).cls).toBe("read");
-    expect(classifyCall(t, {}).cls).toBe("read");
+    expect(classifyCall(t, {}).cls).toBe("write");
     expect(classifyCall(t, { post_note: true }).cls).toBe("write");
-    // a truthy non-true value must not open the write path
-    expect(classifyCall(t, { post_note: "yes" }).cls).toBe("read");
+    expect(classifyCall(t, { post_note: "yes" }).cls).toBe("write");
+    expect(classifyCall(t, { post_note: false }).cls).toBe("read");
+  });
+
+  it("gates ingest_context only when it is given a URL to fetch", () => {
+    const t = qualify("ingest_context");
+    expect(classifyCall(t, { text: "pasted" }).cls).toBe("read");
+    expect(classifyCall(t, { paths: ["/uploads/a.pdf"] }).cls).toBe("read");
+    expect(classifyCall(t, { urls: [] }).cls).toBe("read");
+    expect(classifyCall(t, { urls: ["https://example.com"] }).cls).toBe(
+      "write",
+    );
   });
 
   it("classifyCall leaves every other tool's class alone", () => {
     for (const t of READ_TOOLS)
       expect(classifyCall(qualify(t), { post_note: true }).cls).toBe("read");
+    // compact_work_item and ingest_context are the only conditional ones.
     for (const t of WRITE_TOOLS)
       expect(classifyCall(qualify(t), {}).cls).toBe("write");
     expect(classifyCall("Bash", { post_note: true }).cls).toBe("denied");

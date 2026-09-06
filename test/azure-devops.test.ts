@@ -1,10 +1,27 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import {
   createAzureDevopsSource,
   createAdoClient,
 } from "@tachy/source-azure-devops";
-import { extractAdoRefs, TokenMap, envCredential } from "@tachy/core";
+import {
+  addSourceConnection,
+  addSourceProject,
+  extractAdoRefs,
+  TokenMap,
+  envCredential,
+} from "@tachy/core";
 import type { RawWorkItem } from "@tachy/core";
+import { sql } from "./helpers";
+
+afterAll(() => sql.end());
 
 beforeAll(() => {
   process.env.AZURE_DEVOPS_TOKEN = "test-pat";
@@ -444,5 +461,103 @@ describe("azure-devops credentials", () => {
     } finally {
       delete process.env.AZURE_DEVOPS_TOKEN_MY_ADO;
     }
+  });
+});
+
+describe("azure-devops request deadline", () => {
+  it("gives every request an abort signal, so a hung upstream cannot hang the turn", async () => {
+    const inits: (RequestInit | undefined)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        inits.push(init);
+        return { ok: true, status: 200, text: async () => "{}" } as Response;
+      }),
+    );
+    await client().getWorkItem("42");
+    expect(inits.length).toBeGreaterThan(0);
+    for (const init of inits) expect(init?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("labels a timeout with the call that timed out", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw Object.assign(
+          new Error("The operation was aborted due to timeout"),
+          {
+            name: "TimeoutError",
+          },
+        );
+      }),
+    );
+    await expect(client().getWorkItem("42")).rejects.toThrow(
+      /Azure DevOps GET \/_apis\/wit\/workitems\/42.* timed out after 30s/,
+    );
+  });
+});
+
+describe("azure-devops sync project list", () => {
+  // The factory's own cfg carries config.projects = ["ProjA"], which is the
+  // legacy list this suite has to prove is no longer what sync reads from.
+  beforeAll(async () => {
+    await addSourceConnection({
+      sourceType: "azure-devops",
+      slug: "ado",
+      baseUrl: "https://dev.azure.com/myorg",
+    });
+  });
+  afterEach(async () => {
+    await sql`
+      delete from source_projects
+      where source_connection_id in (select id from source_connections where slug = 'ado')
+    `;
+  });
+
+  /*
+   * resetData() deliberately keeps source_connections — the fixture rows every
+   * other file builds on live there — so this one has to take its own away.
+   * Test schemas are per worker slot, not per file, so a row left behind here
+   * turns up in whatever file the pool schedules on this slot next.
+   */
+  afterAll(async () => {
+    await sql`delete from source_connections where slug = 'ado'`;
+  });
+
+  const register = (externalKey: string, role: "knowledge" | "tracker") =>
+    addSourceProject({
+      sourceSlug: "ado",
+      externalKey,
+      role,
+      ...(role === "knowledge"
+        ? { productSlug: "tpd" }
+        : { teamSlug: "test-team" }),
+    });
+
+  it("syncs the projects registered against the connection, not config.projects", async () => {
+    await register("RegA", "knowledge");
+    await register("RegB", "knowledge");
+    const { calls } = mockFetch({
+      "/RegA/_apis/wit/wiql": { workItems: [] },
+      "/RegB/_apis/wit/wiql": { workItems: [] },
+    });
+    await source().listItems({});
+    expect(calls.some((c) => c.includes("/RegA/"))).toBe(true);
+    expect(calls.every((c) => !c.includes("/ProjA/"))).toBe(true);
+  });
+
+  it("ignores tracker-role projects — those receive created items, not synced ones", async () => {
+    await register("RegA", "knowledge");
+    await register("TrackerOnly", "tracker");
+    const { calls } = mockFetch({ "/RegA/_apis/wit/wiql": { workItems: [] } });
+    await source().listItems({});
+    expect(calls.some((c) => c.includes("/RegA/"))).toBe(true);
+    expect(calls.every((c) => !c.includes("/TrackerOnly/"))).toBe(true);
+  });
+
+  it("falls back to config.projects when nothing is registered yet", async () => {
+    const { calls } = mockFetch({ "/ProjA/_apis/wit/wiql": { workItems: [] } });
+    await source().listItems({});
+    expect(calls.some((c) => c.includes("/ProjA/"))).toBe(true);
   });
 });

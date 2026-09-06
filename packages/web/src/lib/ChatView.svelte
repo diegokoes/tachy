@@ -1,18 +1,19 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import { tick } from "svelte";
   import { chatStream, approve, uploadDoc, getCommands, type BuiltinCommandMeta, type CommandArtifactMeta } from "./agent";
   import { addEntry, chat, type Entry } from "./chatState.svelte";
   import { renderMarkdown } from "./markdown";
   import { gsap, reducedMotion } from "./gsap";
   import { shatterAll } from "./motion";
-  import AsciiScrollbar from "./AsciiScrollbar.svelte";
+  import Scrollbar from "./Scrollbar.svelte";
   import ArtifactPanel from "./chat/ArtifactPanel.svelte";
   import CommandMenu, { matchArtifacts, type CommandPick } from "./chat/CommandMenu.svelte";
   import CompactPanel from "./chat/CompactPanel.svelte";
   import OutputCard, { type OutputFile } from "./chat/OutputCard.svelte";
   import Approval from "./chat/Approval.svelte";
   import Launcher from "./chat/Launcher.svelte";
-  import { G, Icon } from "./tui";
+  import { ArtifactMark, Button, G, Icon } from "./tui";
   import { pushScope } from "./keys.svelte";
 
   const short = (tool: string) => tool.replace(/^mcp__tachy__/, "");
@@ -161,8 +162,12 @@
     chat.busy = true;
     clearArmed = false;
     snap(true);
+    // Aborted when the view goes away, so a turn left running does not hold its
+    // response open behind a component nobody is looking at any more.
+    turnAbort?.abort();
+    turnAbort = new AbortController();
     try {
-      for await (const { event, data } of chatStream({ message, sessionId: chat.sessionId, uploadPaths: uploadPaths.length ? uploadPaths : undefined, artifactId: chat.artifact?.id, command })) {
+      for await (const { event, data } of chatStream({ message, sessionId: chat.sessionId, uploadPaths: uploadPaths.length ? uploadPaths : undefined, artifactId: chat.artifact?.id, command }, turnAbort.signal)) {
         if (event === "start") chat.turnId = data.turnId as string;
         else if (event === "text") appendAssistant(data.text as string);
         else if (event === "tool_use") {
@@ -214,7 +219,9 @@
         snap();
       }
     } catch (e) {
-      addEntry({ kind: "error", text: e instanceof Error ? e.message : String(e) });
+      // An abort is this component going away, not something to report.
+      if (!(e instanceof DOMException && e.name === "AbortError"))
+        addEntry({ kind: "error", text: e instanceof Error ? e.message : String(e) });
       snap();
     } finally {
       chat.busy = false;
@@ -263,6 +270,8 @@
   
   
   
+  let turnAbort: AbortController | undefined;
+  onDestroy(() => turnAbort?.abort());
   let clearArmed = $state(false);
   let disarmTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -357,7 +366,7 @@
       <Launcher />
     {/if}
   </div>
-  <AsciiScrollbar target={transcriptEl} controls="chat-transcript" />
+  <Scrollbar target={transcriptEl} controls="chat-transcript" />
   <ArtifactPanel />
   </div>
 
@@ -365,7 +374,7 @@
     <div class="attachments">
       {#if chat.artifact}
         <span class="attach artifact-chip">
-          {G.artifact} {chat.artifact.title}
+          <ArtifactMark size="1em" /> {chat.artifact.title}
           <button class="chip-x" title="Detach artifact" onclick={() => (chat.artifact = undefined)}>{G.del}</button>
         </span>
       {/if}
@@ -402,16 +411,23 @@
       onkeydown={composerKeydown}
     ></textarea>
     <div class="send-col">
-      <button
-        class="clear"
-        class:armed={clearArmed}
-        onclick={onClear}
+      <Button
+        variant={clearArmed ? "danger" : "ghost"}
+        icon={clearArmed ? undefined : "erase"}
+        glyph={clearArmed ? "?" : undefined}
         disabled={chat.busy || !chat.entries.length}
+        aria-label="Clear the conversation"
         title={clearArmed ? "click again to clear" : "Clear the conversation"}
-      >{#if clearArmed}?{:else}<Icon name="erase" label="Clear the conversation" />{/if}</button>
-      <button onclick={send} disabled={chat.busy || !chat.input.trim()} title="Send">
-        <Icon name="send" label="Send" />
-      </button>
+        onclick={onClear}
+      />
+      <Button
+        variant="ghost"
+        icon="send"
+        disabled={chat.busy || !chat.input.trim()}
+        aria-label="Send"
+        title="Send"
+        onclick={send}
+      />
     </div>
   </div>
 </div>
@@ -444,17 +460,23 @@
     flex: none;
     width: 3.25rem;
   }
-  .send-col button {
+  .send-col :global(.btn) {
     width: 100%;
     flex: 1;
     min-height: 0;
     padding: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
-  .clear { color: var(--muted); font-size: 0.85rem; }
-  .clear.armed { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+  /* Ghost has no border of its own; these two need the composer's edge to
+     read as controls sitting beside the textarea. */
+  .send-col :global(.btn.ghost) {
+    border-color: var(--border);
+  }
+  /* Armed Clear inverts to a solid block, the same move .btn.primary makes on
+     hover — the label rides on --bg so it reads in either theme. */
+  .send-col :global(.btn.danger) {
+    background: var(--danger);
+    color: var(--bg);
+  }
 
   /* Momentary RGB-split while the clear glitch timeline jitters the blocks. */
   :global(.glitching) {
@@ -538,7 +560,7 @@
     color: var(--muted);
   }
   .turn .who.err { color: var(--danger); }
-  .turn .body { white-space: pre-wrap; line-height: 1.6; padding-left: 1ch; }
+  .turn .body { font-family: var(--font-prose); white-space: pre-wrap; line-height: 1.6; padding-left: 1ch; }
   .turn .body.md { white-space: normal; }
   .turn .body.err { color: var(--danger); }
   .turn .body.waiting { min-height: 1.5em; }
@@ -576,5 +598,29 @@
   .chip-x:hover { color: var(--danger); }
   .composer { position: relative; display: flex; gap: 0.5rem; align-items: stretch; padding-top: 0.6rem; border-top: 1px solid var(--border); }
   .composer textarea { flex: 1; resize: none; }
-  .upload { cursor: pointer; align-self: center; font-size: 1.1rem; }
+  /* A <label>, not a <button> — it has to wrap the file input — so it borrows
+     the mark's hover language rather than inheriting it from Button. */
+  .upload {
+    cursor: pointer;
+    align-self: center;
+    font-size: 1.1rem;
+    color: var(--muted);
+  }
+  .upload :global(svg) {
+    transition:
+      stroke-width 0.12s ease,
+      filter 0.12s ease;
+  }
+  .upload:hover {
+    color: var(--accent);
+  }
+  .upload:hover :global(svg) {
+    stroke-width: var(--sw-hover, 9);
+    filter: brightness(1.35);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .upload :global(svg) {
+      transition: none;
+    }
+  }
 </style>

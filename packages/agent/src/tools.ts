@@ -9,11 +9,16 @@ export const READ_TOOLS = [
   "search_reference",
   "list_reference_docs",
   "get_reference_doc",
+  "list_wiki_articles",
+  "draft_wiki_page",
   "ingest_context",
   "list_resolution_patterns",
   "list_environments",
   "list_components",
   "list_customers",
+  "get_customer_profile",
+  "list_customer_fact_kinds",
+  "list_customer_units",
   "list_teams",
   "list_products",
   "list_labels",
@@ -35,6 +40,7 @@ export const WRITE_TOOLS = [
   "update_knowledge_entry",
   "save_reference_doc",
   "update_reference_doc",
+  "save_wiki_article",
   "add_knowledge_feedback",
   "add_resolution_pattern",
   "add_component",
@@ -43,6 +49,9 @@ export const WRITE_TOOLS = [
   "add_team",
   "add_product",
   "set_work_item_customer",
+  "set_customer_fact",
+  "set_customer_component",
+  "add_customer_unit",
   "set_observed_version",
   "add_source_connection",
   "add_source_project",
@@ -87,25 +96,37 @@ export function classify(toolName: string): { cls: ToolClass; base: string } {
   return { cls: "write", base };
 }
 
-/** Tools whose class depends on their arguments, keyed by the flag that makes them a write. */
-const CONDITIONAL_WRITES: Record<string, string> = {
-  compact_work_item: "post_note",
+/**
+ * Tools whose class depends on their arguments, and what makes one need the
+ * review box. Each predicate has to agree with the tool's own default for that
+ * argument: an omitted flag means whatever the tool does when it is omitted,
+ * not "off".
+ */
+export const CONDITIONAL_WRITES: Record<
+  string,
+  (input: Record<string, unknown>) => boolean
+> = {
+  // `if (post_note !== false)` in the tool, so an omitted flag still posts.
+  compact_work_item: (i) => i.post_note !== false,
+  // Paths are confined to the caller's own uploads, but a URL is an outbound
+  // request to a host the model chose, and the user should see it first.
+  ingest_context: (i) => Array.isArray(i.urls) && i.urls.length > 0,
 };
 
 /**
  * Same as `classify`, but lets a tool that only sometimes writes stay read-only
- * until the writing flag is actually set.
+ * on the calls where it does not.
  */
 export function classifyCall(
   toolName: string,
   input: unknown,
 ): { cls: ToolClass; base: string } {
   const c = classify(toolName);
-  const flag = CONDITIONAL_WRITES[c.base];
-  if (c.cls === "denied" || !flag) return c;
+  const needsReview = CONDITIONAL_WRITES[c.base];
+  if (c.cls === "denied" || !needsReview) return c;
   const writes =
     typeof input === "object" &&
     input !== null &&
-    (input as Record<string, unknown>)[flag] === true;
+    needsReview(input as Record<string, unknown>);
   return { cls: writes ? "write" : "read", base: c.base };
 }

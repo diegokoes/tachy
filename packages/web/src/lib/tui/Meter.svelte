@@ -11,15 +11,18 @@
     label?: string;
   } = $props();
 
-  const pct = $derived(Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0)));
+  const pct = $derived(
+    Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0)),
+  );
 
-  const bar = $derived.by(() => {
+  /* Cells are lit whole, then the one straddling the boundary carries the
+     remainder as opacity — the fractional shading the ░▒▓ ramp used to do,
+     without asking a font for three glyphs it may not have. */
+  const cells = $derived.by(() => {
     const exact = pct * width;
-    const full = Math.floor(exact);
-    const rest = exact - full;
-    const partial = rest > 0.66 ? "▓" : rest > 0.33 ? "▒" : rest > 0 ? "░" : "";
-    const lit = "█".repeat(full) + partial;
-    return { lit, dim: "░".repeat(Math.max(0, width - lit.length)) };
+    return Array.from({ length: width }, (_, i) =>
+      Math.max(0, Math.min(1, exact - i)),
+    );
   });
 </script>
 
@@ -31,38 +34,49 @@
   aria-valuemax="100"
   aria-label={label}
 >
-  <span class="lit">{bar.lit}</span><span class="dim">{bar.dim}</span>
+  {#each cells as fill}
+    <span class="cell" class:lit={fill > 0} style="--fill: {fill}"></span>
+  {/each}
 </span>
 
 <style>
+  /* Drawn, not typed. The bar used to be a string of █░▒▓ on --font-mono, and
+     neither bundled face carries those glyphs — every cell came from whatever
+     fallback the OS supplied, at whatever width it happened to be. */
   .meter {
-    display: inline-block;
-    /* RAMP mixes · with the block glyphs, and a proportional face has · but
-       not █░▒▓ — the bar would be drawn half from the UI font and half from
-       whatever fallback supplies the blocks, and stop lining up. */
-    font-family: var(--font-mono);
-    letter-spacing: -0.04em;
-    line-height: 1;
-    white-space: pre;
+    display: inline-flex;
+    gap: 0.1em;
+    align-items: center;
+    vertical-align: middle;
     user-select: none;
   }
-  .dim {
-    color: color-mix(in srgb, var(--muted) 55%, transparent);
+  .cell {
+    width: 0.42em;
+    height: 0.85em;
+    border-radius: 1px;
+    background: color-mix(in srgb, var(--muted) 30%, transparent);
   }
-  .accent .lit,
-  .meter.accent .lit {
-    color: var(--accent);
+  .cell.lit {
+    background: color-mix(
+      in srgb,
+      var(--tone-color) calc(var(--fill) * 100%),
+      color-mix(in srgb, var(--muted) 30%, transparent)
+    );
   }
-  .meter.ok .lit {
-    color: var(--ok);
+
+  .meter.accent {
+    --tone-color: var(--accent);
   }
-  .meter.warn .lit {
-    color: var(--warn);
+  .meter.ok {
+    --tone-color: var(--ok);
   }
-  .meter.danger .lit {
-    color: var(--danger);
+  .meter.warn {
+    --tone-color: var(--warn);
   }
-  .meter.muted .lit {
-    color: var(--muted);
+  .meter.danger {
+    --tone-color: var(--danger);
+  }
+  .meter.muted {
+    --tone-color: var(--muted);
   }
 </style>

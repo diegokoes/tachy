@@ -5,15 +5,19 @@ import { describe, expect, it } from "vitest";
 import {
   KNOWLEDGE_STATUSES,
   REFERENCE_STATUSES,
+  REFERENCE_KINDS,
+  LINK_KINDS,
   CONFIDENCES,
   FEEDBACK_KINDS,
   RUN_MODES,
   RESOLUTION_CLARITIES,
-  LEARNING_VALUES,
+  LIBRARY_ACTORS,
   USER_ROLES,
   TEAM_ROLES,
   SOURCE_PROJECT_ROLES,
   WORK_ITEM_LINK_KINDS,
+  REPO_INDEX_STATUSES,
+  SCOPES,
 } from "@tachy/core";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -42,14 +46,20 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     ["knowledge_entries", "status", KNOWLEDGE_STATUSES],
     ["knowledge_entries", "confidence", CONFIDENCES],
     ["knowledge_entries", "resolution_clarity", RESOLUTION_CLARITIES],
-    ["knowledge_entries", "learning_value", LEARNING_VALUES],
     ["knowledge_feedback", "kind", FEEDBACK_KINDS],
     ["analysis_runs", "mode", RUN_MODES],
+    ["library_revisions", "actor", LIBRARY_ACTORS],
     ["reference_docs", "status", REFERENCE_STATUSES],
+    ["reference_docs", "kind", REFERENCE_KINDS],
+    ["library_links", "kind", LINK_KINDS],
     ["users", "role", USER_ROLES],
     ["team_members", "role", TEAM_ROLES],
     ["source_projects", "role", SOURCE_PROJECT_ROLES],
     ["work_item_links", "kind", WORK_ITEM_LINK_KINDS],
+    ["repos", "index_status", REPO_INDEX_STATUSES],
+    ["credentials", "scope", SCOPES],
+    ["preferences", "scope", SCOPES],
+    ["artifacts", "scope", SCOPES],
   ] as const)("%s.%s", (table, col, values) => {
     expect(checkValues(table, col).sort()).toEqual([...values].sort());
   });
@@ -77,6 +87,26 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
 
   it("knowledge_entries.cloud has no CHECK constraint", () => {
     expect(() => checkValues("knowledge_entries", "cloud")).toThrow(/no CHECK/);
+  });
+
+  /** Same reasoning as cloud: what a customer divides into differs per product. */
+  it("customer_units.kind has no CHECK constraint", () => {
+    expect(() => checkValues("customer_units", "kind")).toThrow(/no CHECK/);
+  });
+
+  it("customer_units carries both edges and guards them", () => {
+    const block = tableBlock("customer_units");
+    expect(block).toContain("parent_id");
+    expect(block).toContain("profile_id");
+    expect(block).toContain("customer_units_no_self_parent");
+    expect(block).toContain("customer_units_no_self_profile");
+  });
+
+  it("customer_facts keys on the unit, nulls not distinct", () => {
+    expect(tableBlock("customer_facts")).toContain("unit_id");
+    expect(schema).toContain(
+      "on customer_facts(customer_id, unit_id, kind, label) nulls not distinct",
+    );
   });
 
   it("reference_docs carries the versioning columns", () => {

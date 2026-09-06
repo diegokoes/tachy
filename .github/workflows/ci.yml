@@ -18,15 +18,39 @@ jobs:
 
       - run: npm ci
 
-      # for the backup/restore round-trip test
-      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
-
       - run: npm run typecheck
 
       # `typecheck` excludes packages/web, which has its own tsconfig — this is
       # what holds the SPA to the shapes in @tachy/contract.
       - run: npm run web:check
 
+      # Every fork that touches knowledge or reference loads the embedding
+      # model. Cached and warmed once here, they share the download instead of
+      # racing for it; the key carries the model name so a swap re-fetches.
+      - uses: actions/cache@v4
+        with:
+          path: .model-cache
+          key: model-Xenova-bge-base-en-v1.5
+
+      - run: npx tsx scripts/warmup-embeddings.ts
+
       # Tests start their own Postgres via Testcontainers; the GitHub-hosted
       # ubuntu runner has Docker preinstalled, so no service container needed.
-      - run: npm test
+      # `coverage` runs the same suite as `npm test` and adds the thresholds, so
+      # running both would pay for the suite twice.
+      - run: npm run coverage
+
+  # The k6 scenarios need a live, seeded server, so they cannot run here. This
+  # only bundles them: it catches a syntax error or a bad import in seconds.
+  load-scripts:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate k6 scripts
+        run: |
+          for f in load/*.js; do
+            docker run --rm -v "$PWD/load:/load:ro" grafana/k6:latest \
+              archive "/load/$(basename "$f")" -O /dev/null
+          done

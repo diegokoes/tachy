@@ -28,9 +28,10 @@ if (swept) log("info", "repo_index_sweep", { interrupted: swept });
 const authConfigured =
   Boolean(env.apiToken || oidc) || (await isBootstrapped());
 if (!authConfigured) {
-  console.warn(
-    "WARNING: no auth configured yet. Binding to 127.0.0.1 only; open the web UI to run the setup wizard (or set TACHY_API_TOKEN / OIDC_*), then restart to accept remote requests.",
-  );
+  log("warn", "auth_unconfigured", {
+    detail:
+      "no auth configured yet. Binding to 127.0.0.1 only; open the web UI to run the setup wizard (or set TACHY_API_TOKEN / OIDC_*), then restart to accept remote requests.",
+  });
 }
 serve({
   fetch: app.fetch,

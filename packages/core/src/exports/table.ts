@@ -3,6 +3,7 @@ import {
   TABLE_CELL_TYPES,
   TABLE_FORMATS,
   outputFilename,
+  columnHeading,
 } from "@tachy/contract";
 import type {
   TableCellType,
@@ -150,9 +151,25 @@ export function coerceRows(
 
 const CSV_BOM = "\uFEFF";
 
+/**
+ * Cell text is composed by the model out of ticket content, so a cell can begin
+ * with a character Excel and Sheets read as the start of a formula — a pasted
+ * `=HYPERLINK("http://…"&A1)` becomes live in the download. A leading apostrophe
+ * is the spreadsheet convention for "this is text": it is consumed on the way
+ * in and does not show in the cell.
+ *
+ * The xlsx path needs none of this, because an inline string is already
+ * unambiguously a string there.
+ */
+const FORMULA_LEAD = /^[=+\-@\t\r]/;
+
 function csvCell(value: CellValue): string {
   if (value === null) return "";
-  const text = value instanceof Date ? value.toISOString() : String(value);
+  const raw = value instanceof Date ? value.toISOString() : String(value);
+  // Only strings: a number is already unambiguous, and prefixing -5 would file
+  // it in the spreadsheet as text.
+  const text =
+    typeof value === "string" && FORMULA_LEAD.test(raw) ? `'${raw}` : raw;
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
@@ -160,7 +177,7 @@ export function renderCsv(
   columns: TableColumn[],
   rows: CellValue[][],
 ): Uint8Array {
-  const head = columns.map((c) => csvCell(c.label ?? c.key)).join(",");
+  const head = columns.map((c) => csvCell(columnHeading(c))).join(",");
   const body = rows.map((row) => row.map(csvCell).join(","));
   return new TextEncoder().encode(
     `${CSV_BOM}${[head, ...body].join("\r\n")}\r\n`,

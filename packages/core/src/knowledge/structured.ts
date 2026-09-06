@@ -3,9 +3,10 @@ import {
   CLOUD_RE,
   CLOUD_HINT,
   RESOLUTION_CLARITIES,
-  LEARNING_VALUES,
   KNOWLEDGE_STATUSES,
   REFERENCE_STATUSES,
+  REFERENCE_KINDS,
+  LINK_KINDS,
   CONFIDENCES,
   FEEDBACK_KINDS,
   RUN_MODES,
@@ -14,9 +15,10 @@ import { badInput } from "../infra/errors";
 
 export {
   RESOLUTION_CLARITIES,
-  LEARNING_VALUES,
   KNOWLEDGE_STATUSES,
   REFERENCE_STATUSES,
+  REFERENCE_KINDS,
+  LINK_KINDS,
   CONFIDENCES,
   FEEDBACK_KINDS,
   RUN_MODES,
@@ -71,10 +73,10 @@ export function parseStructured(value: unknown): Structured {
 
 export const cloudSchema = z.string().regex(CLOUD_RE, CLOUD_HINT);
 export const resolutionClaritySchema = z.enum(RESOLUTION_CLARITIES);
-export const learningValueSchema = z.enum(LEARNING_VALUES);
 
 export const knowledgeStatusSchema = z.enum(KNOWLEDGE_STATUSES);
 export const referenceStatusSchema = z.enum(REFERENCE_STATUSES);
+export const referenceKindSchema = z.enum(REFERENCE_KINDS);
 export const confidenceSchema = z.enum(CONFIDENCES);
 export const feedbackKindSchema = z.enum(FEEDBACK_KINDS);
 export const runModeSchema = z.enum(RUN_MODES);

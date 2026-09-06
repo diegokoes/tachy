@@ -143,15 +143,10 @@ stored; then `add_source_project` to register the source's grouping. Once only.
 
 `issue_summary`, `symptoms`, `signals`, `root_cause`, `resolution`, `component` and
 `confidence` are the core; `resolution_pattern`, `cloud`, `resolution_clarity`,
-`learning_value`, `hidden_fix` and `tags` are the facets. `save_knowledge_entry`'s schema
-documents each one. What follows is what shapes how you _read the ticket_, before you get
-as far as the call:
+`hidden_fix` and `tags` are the facets. `save_knowledge_entry`'s schema documents
+each field, and is where the wording for each one lives — this is only what
+shapes how you _read the ticket_, before you get as far as the call:
 
-- **`symptoms` are observable facts, not interpretations.** "Error 023 in the logs" yes;
-  "possible template issue" no.
-- **`signals` are raw searchable identifiers** — error codes, log patterns, status codes,
-  exactly as they appear: `["023 TOO_MANY_STRINGS", "ECONNREFUSED", "HTTP 503"]`. Someone
-  searching `023` a year from now has to match.
 - **Links are full URLs**, never "Azure work item 50912". Build one from the connection's
   `base_url` (`<base_url>/_workitems/edit/<id>`) or take `externalUrl` off the fetched
   item. If no URL can be constructed, record the number as a signal (`"DevOps#158327"`)

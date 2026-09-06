@@ -1,4 +1,6 @@
 import "dotenv/config";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
 
 const oidcRaw =
@@ -24,7 +26,16 @@ const envSchema = z
   .object({
     databaseUrl: z.string().url("DATABASE_URL must be a valid postgres:// URL"),
     port: z.coerce.number().int().positive("PORT must be a positive integer"),
+    logLevel: z.enum(["debug", "info", "warn", "error"]),
     userEmail: z.string().email().optional(),
+    /**
+     * Set only by the API when it spawns an MCP subprocess for an agent turn,
+     * so a write made during a turn is distinguishable from one made by someone
+     * pointing their own MCP client at tachy. `turnId` joins to
+     * analysis_runs.meta->>'turn_id'.
+     */
+    actor: z.enum(["agent", "mcp"]).optional(),
+    turnId: z.string().optional(),
     apiToken: z.string().min(1).optional(),
 
     authMode: z.enum(["sso", "token", "open"]),
@@ -65,7 +76,10 @@ const envSchema = z
 const parsed = envSchema.safeParse({
   databaseUrl: process.env.DATABASE_URL ?? "postgres://localhost:5432/tachy",
   port: process.env.PORT ?? 8787,
+  logLevel: process.env.LOG_LEVEL ?? "info",
   userEmail: process.env.TACHY_USER_EMAIL || undefined,
+  actor: process.env.TACHY_ACTOR === "agent" ? "agent" : undefined,
+  turnId: process.env.TACHY_TURN_ID || undefined,
   apiToken: apiTokenRaw,
   authMode:
     (process.env.TACHY_AUTH_MODE as "sso" | "token" | "open" | undefined) ??
@@ -82,6 +96,16 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+/**
+ * Where a chat upload lands, and the only directory the ingest tools may read
+ * back. Defined here because the API writes into it and the MCP subprocess
+ * reads out of it — two packages that must not disagree about which directory
+ * "an uploaded file" means.
+ */
+export function uploadDir(): string {
+  return process.env.TACHY_UPLOAD_DIR || join(tmpdir(), "tachy-uploads");
+}
 
 /**
  * Resolve a source token from env by provider + connection slug, e.g.

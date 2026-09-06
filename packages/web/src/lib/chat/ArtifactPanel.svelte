@@ -1,9 +1,18 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { api } from "../api";
   import { chat } from "../chatState.svelte";
   import { session } from "../session.svelte";
   import type { NamedRow } from "../types";
-  import { Button, Field, Modal, Panel, Select, G } from "../tui";
+  import {
+    ArtifactMark,
+    Button,
+    Field,
+    Modal,
+    Select,
+    G,
+    Icon,
+  } from "../tui";
   import OutputSpecEditor, {
     emptyColumn,
     outputProblem,
@@ -12,12 +21,13 @@
     type OutputSpec,
   } from "./OutputSpecEditor.svelte";
   import ArtifactThread from "./ArtifactThread.svelte";
-  import { clearGlow, crt, glow, jolt, settle, spin } from "../motion";
-  import { nextNavKey, superscript } from "../nav.svelte";
+  import { clearGlow, glow, jolt, settle, spin, tweenValue } from "../motion";
+  import { nextNavKey } from "../nav";
   import { pushScope } from "../keys.svelte";
 
   let tabBtn = $state<HTMLButtonElement>();
   let tabIcon = $state<HTMLSpanElement>();
+  let tabFrame = $state<SVGSVGElement>();
   let pickerEl = $state<HTMLElement>();
   let thread = $state<ArtifactThread>();
   let firing = $state(false);
@@ -132,6 +142,43 @@
       for (const t of tweens) t.kill();
       settle(icon);
     };
+  });
+
+  /* Opening the panel opens the mark up: the hexagon grows from its centre and
+     the three rings drift apart inside it, while the rings themselves keep
+     exactly the size they had. That is why the frame scales and the mark does
+     not — scaling the button would have taken the rings with it.
+
+     One tween drives both, so the frame and the spread can never drift out of
+     step. Growing the FRAME (rather than the button) is also what keeps the
+     thread attached: the wire is aimed at the frame element, whose client rect
+     follows this transform, where the button's would not move at all.
+
+     Closing waits for the wire to retract first. The thread freezes its path
+     on outro — it has to, since redrawing mid-retract would jump the drawn
+     fraction — so shrinking underneath it would pull the hexagon out from
+     under a wire still pointing at where the edge used to be. */
+  const SPREAD_SHUT = 30;
+  const SPREAD_OPEN = 42;
+  const FRAME_OPEN = 1.18;
+  const THREAD_RETRACT = 0.22;
+
+  let openT = $state(0);
+  const spread = $derived(SPREAD_SHUT + (SPREAD_OPEN - SPREAD_SHUT) * openT);
+  const frameScale = $derived(1 + (FRAME_OPEN - 1) * openT);
+
+  /* untrack: the tween writes openT, so reading it tracked would re-run this
+     effect on every frame it animates — killing and restarting the tween from
+     wherever it had got to. Closing never finished, because each restart also
+     re-armed the THREAD_RETRACT delay and the tween spent its life waiting. */
+  $effect(() => {
+    const to = open ? 1 : 0;
+    const tween = tweenValue(untrack(() => openT), to, (v) => (openT = v), {
+      duration: open ? 0.44 : 0.28,
+      delay: open ? 0 : THREAD_RETRACT,
+      ease: open ? "back.out(1.6)" : "power2.inOut",
+    });
+    return () => tween?.kill();
   });
 
   // Closing takes the thread (and any send in flight) with it.
@@ -385,51 +432,60 @@
   }}
 />
 
-<div class="edge-slot">
-  <span class="tab-key" aria-hidden="true">{superscript(hotkey)}</span>
+<!-- lifted outlives `open`: the {#if} block below holds the scrim in the DOM
+     until the thread has finished retracting, and a tab that dropped under it
+     on the first frame of the close would blink out while the wire was still
+     travelling towards it. openT is 0 again only once the hexagon has shut. -->
+<div class="edge-slot" class:lifted={open || openT > 0}>
   <button
     bind:this={tabBtn}
     class="edge-tab"
     class:active={open || !!chat.artifact}
     onclick={toggle}
-    title="Artifacts — reusable prompt templates to attach as context ({hotkey})"
+    title="Artifacts: reusable prompt templates to attach as context ({hotkey})"
     aria-label="Artifacts"
     aria-expanded={open}
-  ><span bind:this={tabIcon} class="tab-icon">{G.artifact}</span></button>
+  >
+    <!-- The frame is a drawn shape, not the button's own border: clip-path
+         would cut the border off along with everything else outside the
+         polygon, leaving the tab with no outline at all. -->
+    <svg
+      bind:this={tabFrame}
+      class="frame"
+      viewBox="0 0 100 115"
+      style="transform: scale({frameScale})"
+      aria-hidden="true"
+    >
+      <polygon points="50,4 96.3,30.75 96.3,84.25 50,111 3.7,84.25 3.7,30.75" />
+    </svg>
+    <span bind:this={tabIcon} class="tab-icon"
+      ><ArtifactMark size="1em" {spread} /></span
+    >
+  </button>
 </div>
 
 {#if open}
-  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-  <div
-    class="scrim"
-    class:hushed={editorOpen}
-    onclick={() => (open = false)}
-  ></div>
-
-  <div class="stage">
-    <aside class="picker" bind:this={pickerEl} transition:crt>
-      <Panel title="artifacts" tone="accent" scan>
-        {#snippet meta()}
-          <span class="head-acts">
-            <Button
-              variant="ghost"
-              tone="ok"
-              square
-              icon="plus"
-              title="new artifact"
-              aria-label="new artifact"
-              onclick={openCreate}
-            />
-            <Button
-              variant="ghost"
-              square
-              icon="cancel"
-              title="close"
-              aria-label="close"
-              onclick={() => (open = false)}
-            />
-          </span>
-        {/snippet}
+  <!-- The same window every other dialog draws: shared scrim, titlebar
+       actions on the right, no heading and no scanlines. It used to wrap Panel
+       and so read as a different material from the dialogs it opens. -->
+  <Modal
+    title="artifacts"
+    width="46rem"
+    cancelLabel="close"
+    bind:element={pickerEl}
+    onCancel={() => (open = false)}
+  >
+    {#snippet barExtra()}
+      <Button
+        variant="ghost"
+        tone="ok"
+        square
+        icon="plus"
+        title="new artifact"
+        aria-label="new artifact"
+        onclick={openCreate}
+      />
+    {/snippet}
 
         <div class="pick-body">
           {#if error}<p class="error">{error}</p>{/if}
@@ -442,14 +498,18 @@
             <div class="scope-head">{SCOPE_LABELS[g.scope]}</div>
             <ul class="art-list">
               {#each g.rows as a (a.id)}
-                <li class="art-row" class:selected={chat.artifact?.id === a.id}>
+                <li
+                  class="art-row"
+                  class:selected={chat.artifact?.id === a.id}
+                  class:armed={armedDelete === a.id}
+                >
                   <button class="art-pick" onclick={() => select(a)}>
                     <span class="art-title">
                       {chat.artifact?.id === a.id ? `${G.selected} ` : ""}{a.title}
                       {#if a.spec?.output}<span
                           class="art-out"
                           title="produces a {a.spec.output.format} file"
-                        >{G.file} {a.spec.output.format}</span>{/if}
+                        ><Icon name="download" size="0.9em" /> {a.spec.output.format}</span>{/if}
                     </span>
                     {#if a.description}<span class="art-desc">{a.description}</span>{/if}
                   </button>
@@ -481,11 +541,9 @@
             </ul>
           {/each}
         </div>
-      </Panel>
-    </aside>
-  </div>
+  </Modal>
 
-  <ArtifactThread bind:this={thread} from={pickerEl} to={tabBtn} />
+  <ArtifactThread bind:this={thread} from={pickerEl} to={tabFrame} />
 {/if}
 
 {#if editorOpen}
@@ -547,84 +605,85 @@
     gap: var(--pad-1);
     pointer-events: none;
   }
+  /* While the picker is open the tab is the far end of the wire, not part of
+     the app the scrim pushes back — so it rides over the blur, one step above
+     the thread that lands in it. Blurring the hexagon left the wire running
+     into a smudge. */
+  .edge-slot.lifted {
+    z-index: calc(var(--z-overlay) + 2);
+  }
+  /* A pointy-top hexagon, not the octagon the shape list also offers: at this
+     size an octagon just reads as a rounded square, where six sides stay
+     legible as a shape. Its vertical flanks suit a tab pinned to the edge, and
+     its point echoes the triangle of rings inside it.
+
+     Sized to the polygon's own 92.6 × 107 proportions so the viewBox is never
+     stretched, and scaled up from 2.5rem to give the ring triangle room to
+     spread without crowding the hexagon's flanks. */
   .edge-tab {
     pointer-events: auto;
-    padding: var(--pad-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--bg);
+    position: relative;
+    width: 2.9rem;
+    height: 3.35rem;
+    padding: 0;
+    border: none;
+    background: none;
     color: var(--muted);
     font-size: 1.28rem;
     line-height: 1;
     display: grid;
     place-items: center;
   }
-  .tab-icon {
-    display: inline-block;
-    font-size: 1.08em;
-    line-height: 1;
+  .frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
   }
-  .tab-key {
-    font-size: calc(var(--fs-xs) + 0.09rem);
+  .frame polygon {
+    fill: var(--bg);
+    stroke: var(--border);
+    stroke-width: 3;
+    stroke-linejoin: round;
+  }
+  /* Sized to fill the hexagon rather than float in it, with the headroom the
+     spin needs: the pulse scales the mark to 1.22x, and the rings have to stay
+     inside the polygon's narrowest point at full stretch. The ceiling here is
+     1.45em; 1.40em sits just under it. */
+  .tab-icon {
+    position: relative;
+    display: inline-block;
+    font-size: 1.4em;
     line-height: 1;
-    color: var(--accent);
-    transform: translateY(-0.65rem);
   }
   .edge-tab:hover,
   .edge-tab.active {
     color: var(--accent);
-    border-color: var(--accent);
   }
-
-  .scrim {
-    position: fixed;
-    inset: 0;
-    z-index: 6;
-    background: color-mix(in srgb, #000 48%, transparent);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+  .edge-tab:hover .frame polygon,
+  .edge-tab.active .frame polygon {
+    stroke: var(--accent);
   }
-  :global(:root[data-theme="light"]) .scrim {
-    background: color-mix(in srgb, #000 22%, transparent);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-  }
-  /* The editor lays its own scrim on top; this keeps the underlying view soft. */
-  .scrim.hushed {
-    background: color-mix(in srgb, #000 18%, transparent);
-  }
-  :global(:root[data-theme="light"]) .scrim.hushed {
-    background: color-mix(in srgb, #000 8%, transparent);
-  }
-
-  .stage {
-    position: absolute;
-    inset: 0;
-    z-index: 8;
-    display: grid;
-    place-items: center;
-    padding: var(--pad-4) 6rem var(--pad-4) var(--pad-4);
-    pointer-events: none;
-  }
-  .picker {
-    pointer-events: auto;
-    width: min(46rem, 100%);
-    transform-origin: center;
-  }
-
-  .head-acts { display: inline-flex; gap: var(--pad-2); align-items: center; }
-  .head-acts :global(.btn.square:focus-visible) {
-    border-color: transparent;
+  /* base.css rings a focused button with an inset box-shadow, which would draw
+     a rectangle around a hexagon. Put the ring on the polygon instead. */
+  .edge-tab:focus-visible {
     outline: none;
     box-shadow: none;
   }
+  .edge-tab:focus-visible .frame polygon {
+    stroke: var(--accent);
+    stroke-width: 5;
+  }
 
+
+  /* No height cap and no scroller of its own: the dialog window already caps
+     its own height and scrolls its body. */
   .pick-body {
     display: flex;
     flex-direction: column;
     gap: var(--pad-2);
-    max-height: min(24rem, 45vh);
-    overflow-y: auto;
+    text-align: left;
   }
 
   .scope-head {
@@ -644,7 +703,12 @@
     grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
     gap: var(--pad-2);
   }
-  .art-row { display: flex; align-items: stretch; gap: var(--pad-1); min-width: 0; }
+  .art-row {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+  }
   .art-row.selected .art-pick { border-color: var(--accent); }
   .art-pick {
     flex: 1;
@@ -656,7 +720,7 @@
     padding: var(--pad-2) var(--pad-3);
     background: var(--panel);
   }
-  .art-title { font-size: var(--fs-sm); }
+  .art-title { font-size: var(--fs-sm); padding-right: var(--pad-4); }
   .art-out {
     margin-left: var(--pad-1);
     padding: 0 var(--pad-1);
@@ -673,7 +737,29 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .art-actions { display: flex; flex-direction: column; gap: var(--pad-1); }
+  /* Edit and delete belong to the row under the pointer, not to all of them at
+     once — a grid of cards each wearing two buttons reads as a toolbar. Hidden
+     by opacity rather than display so they keep their place in the tab order,
+     and :focus-within brings them back for anyone arriving by keyboard.
+     `armed` keeps a delete waiting for its second click visible after the
+     pointer has moved on. */
+  .art-actions {
+    position: absolute;
+    top: var(--pad-1);
+    right: var(--pad-1);
+    display: flex;
+    gap: var(--pad-1);
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .art-row:hover .art-actions,
+  .art-row:focus-within .art-actions,
+  .art-row.armed .art-actions {
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .art-actions { transition: none; }
+  }
 
   .ed-form {
     display: flex;
