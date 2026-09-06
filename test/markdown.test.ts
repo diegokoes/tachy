@@ -61,3 +61,24 @@ describe("wikilink rendering", () => {
     expect(markBrokenLinks(html, new Set(["a", "b"]))).toBe(html);
   });
 });
+
+describe("wikilinks are reachable without a pointer", () => {
+  it("renders them focusable and announced as links", () => {
+    // There is no href to give them — the route a target resolves to is only
+    // known once the server answers — so these two are what make the anchor
+    // focusable and announce it as a link at all.
+    const html = render("see [[line-controller]]");
+    expect(html).toContain('role="link"');
+    expect(html).toContain('tabindex="0"');
+    expect(html).toContain('data-wikilink="line-controller"');
+  });
+
+  it("marks a broken link without costing it keyboard access", () => {
+    const out = markBrokenLinks(
+      render("[[real]] and [[missing]]"),
+      new Set(["real"]),
+    );
+    expect(out).toMatch(/class="wikilink broken"[^>]*data-wikilink="missing"/);
+    expect(out).toMatch(/class="wikilink broken"[^>]*tabindex="0"/);
+  });
+});

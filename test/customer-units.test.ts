@@ -480,3 +480,74 @@ describe("unit attribution on tickets and entries", () => {
     );
   });
 });
+
+describe("setting a work item's customer and its unit", () => {
+  it("leaves the unit alone when the body does not mention it", async () => {
+    const customer = await addCustomer({ slug: "wu-acme", name: "WU Acme" });
+    await addCustomerUnit({
+      customerSlug: "wu-acme",
+      slug: "line-1",
+      kind: "line",
+      name: "Line 1",
+    });
+    const [conn] = await sql`
+      insert into source_connections (slug, source_type, base_url)
+      values ('wu-fd', 'freshdesk', 'https://example.invalid')
+      on conflict (slug) do update set base_url = excluded.base_url
+      returning id
+    `;
+    const [item] = await sql`
+      insert into work_items (source_connection_id, external_id, title)
+      values (${conn.id}, 'wu-1', 'ticket') returning id
+    `;
+
+    await setWorkItemCustomer(item.id, customer.id, "line-1");
+    const unitId = (
+      await sql`select customer_unit_id from work_items where id = ${item.id}`
+    )[0].customer_unit_id;
+    expect(unitId).not.toBeNull();
+
+    // Re-attributing to the same customer with no unit in the body must not
+    // discard which line it was narrowed to.
+    await setWorkItemCustomer(item.id, customer.id);
+    expect(
+      (
+        await sql`select customer_unit_id from work_items where id = ${item.id}`
+      )[0].customer_unit_id,
+    ).toBe(unitId);
+
+    // An explicit null still clears it.
+    await setWorkItemCustomer(item.id, customer.id, null);
+    expect(
+      (
+        await sql`select customer_unit_id from work_items where id = ${item.id}`
+      )[0].customer_unit_id,
+    ).toBeNull();
+  });
+
+  it("clears the unit when the customer changes or is removed", async () => {
+    const a = await addCustomer({ slug: "wu-a", name: "A" });
+    const b = await addCustomer({ slug: "wu-b", name: "B" });
+    await addCustomerUnit({
+      customerSlug: "wu-a",
+      slug: "l1",
+      kind: "line",
+      name: "L1",
+    });
+    const [conn] =
+      await sql`select id from source_connections where slug = 'wu-fd'`;
+    const [item] = await sql`
+      insert into work_items (source_connection_id, external_id, title)
+      values (${conn.id}, 'wu-2', 'ticket') returning id
+    `;
+
+    await setWorkItemCustomer(item.id, a.id, "l1");
+    // A unit belongs to one customer, so it cannot follow the ticket across.
+    await setWorkItemCustomer(item.id, b.id);
+    expect(
+      (
+        await sql`select customer_unit_id from work_items where id = ${item.id}`
+      )[0].customer_unit_id,
+    ).toBeNull();
+  });
+});

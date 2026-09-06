@@ -63,11 +63,21 @@ export class LinkTargets {
    * {@html}, so there are no components to attach listeners to.
    */
   onClick = (e: MouseEvent): void => {
-    const el = (e.target as HTMLElement)?.closest?.("a[data-wikilink]");
+    this.follow(e.target, e);
+  };
+
+  /** Enter and Space, so a wikilink is followable without a pointer. */
+  onKeydown = (e: KeyboardEvent): void => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    this.follow(e.target, e);
+  };
+
+  private follow(from: EventTarget | null, e: Event): void {
+    const el = (from as HTMLElement)?.closest?.("a[data-wikilink]");
     const target = el?.getAttribute("data-wikilink");
     if (!target) return;
     e.preventDefault();
     const to = this.to.get(target);
     if (to) navigate(to);
-  };
+  }
 }

@@ -7,7 +7,8 @@
   import { slugify } from "../slug";
   import ScopeBar from "./ScopeBar.svelte";
   import SlugRename from "./SlugRename.svelte";
-  import { INFO, type Label, type Product } from "./shared";
+  import type { Label, Product } from "./rows";
+import { INFO } from "./help";
   import { claimTopAction } from "./topAction.svelte";
 
   let product = $state("");

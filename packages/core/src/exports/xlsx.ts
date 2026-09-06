@@ -1,5 +1,5 @@
 import { strToU8, zipSync } from "fflate";
-import { sheetName } from "@tachy/contract";
+import { columnHeading, sheetName } from "@tachy/contract";
 import type { CellValue, TableColumn } from "./table";
 
 export { sheetName };
@@ -64,7 +64,7 @@ function cellWidth(value: CellValue): number {
 
 function cols(columns: TableColumn[], rows: CellValue[][]): string {
   const entries = columns.map((column, i) => {
-    let max = (column.label ?? column.key).length;
+    let max = columnHeading(column).length;
     for (const row of rows) max = Math.max(max, cellWidth(row[i]));
     const width = Math.min(60, Math.max(8, max + 2));
     return `<col min="${i + 1}" max="${i + 1}" width="${width}" customWidth="1"/>`;
@@ -88,7 +88,7 @@ export function renderXlsx(
   const dimension = `A1:${colRef(columns.length - 1)}${rows.length + 1}`;
 
   const header = columns
-    .map((c, i) => cell(`${colRef(i)}1`, c.label ?? c.key, STYLE_HEADER))
+    .map((c, i) => cell(`${colRef(i)}1`, columnHeading(c), STYLE_HEADER))
     .join("");
   const body = rows
     .map(

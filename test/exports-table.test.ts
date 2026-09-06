@@ -192,3 +192,26 @@ describe("renderColumnContract", () => {
     expect(contract).toContain("</output-contract>");
   });
 });
+
+describe("csv cells that a spreadsheet would read as formulas", () => {
+  it("files a formula-leading string as text, and leaves numbers alone", () => {
+    const columns: TableColumn[] = [
+      { key: "note", label: "Note", type: "text" },
+      { key: "delta", label: "Delta", type: "number" },
+    ];
+    const csv = new TextDecoder().decode(
+      renderCsv(columns, [
+        ['=HYPERLINK("http://evil/","click")', -5],
+        ["+1 (555) 0100", 3],
+        ["ordinary", 0],
+      ]),
+    );
+
+    expect(csv).toContain("\"'=HYPERLINK");
+    expect(csv).toContain("'+1 (555) 0100");
+    // A negative number is a number, not a formula.
+    expect(csv).toContain("-5");
+    expect(csv).not.toContain("'-5");
+    expect(csv).toContain("ordinary");
+  });
+});

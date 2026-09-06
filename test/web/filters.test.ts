@@ -11,7 +11,7 @@ import {
   saveFilters,
   type Facets,
   type FacetKey,
-} from "../../packages/web/src/lib/library/filters.svelte";
+} from "../../packages/web/src/lib/library/filters";
 import {
   CONFIDENCES,
   RESOLUTION_CLARITIES,

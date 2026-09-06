@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { PROVIDER_OPTIONS } from "../vocab";
+  import { AGENT_EFFORTS } from "@tachy/contract";
   import { onMount } from "svelte";
   import { api } from "../api";
   import { initSession } from "../session.svelte";
@@ -6,7 +8,8 @@
   import Checkbox from "../tui/Checkbox.svelte";
   import Icon from "../tui/Icon.svelte";
   import { errText } from "../resource.svelte";
-  import { csv, type SystemInfo } from "./shared";
+  import type { SystemInfo } from "./rows";
+import { csv } from "../fields";
   import { GroupHead } from "../tui";
 
   let system = $state<SystemInfo | null>(null);
@@ -100,10 +103,7 @@
         <td class="tip" title="Which backend runs the chat. Claude: Anthropic API key or Claude Code login. Copilot: token or copilot CLI login.">Agent provider</td>
         <td>
           <AsciiSelect value={system.settings.agent_provider.value}
-            options={[
-              { value: "claude", label: "claude (Anthropic)" },
-              { value: "copilot", label: "copilot (GitHub)" },
-            ]}
+            options={PROVIDER_OPTIONS}
             onchange={(v) => saveSetting("agent_provider", v)} />
         </td>
         <td><span class="badge src-{system.settings.agent_provider.source}">{system.settings.agent_provider.source}</span></td>
@@ -122,7 +122,7 @@
         <td>Agent effort</td>
         <td>
           <AsciiSelect value={system.settings.agent_effort.value}
-            options={["low", "medium", "high", "xhigh", "max"]}
+            options={[...AGENT_EFFORTS]}
             onchange={(v) => saveSetting("agent_effort", v)} />
         </td>
         <td><span class="badge src-{system.settings.agent_effort.source}">{system.settings.agent_effort.source}</span></td>
@@ -150,27 +150,31 @@
     </tbody>
   </table>
 
-  <GroupHead label="environment (read-only, set in .env)" />
-  <table>
-    <thead><tr><th>setting</th><th>value</th><th>env var</th></tr></thead>
-    <tbody>
-      <tr>
-        <td>Auth</td>
-        <td>{system.env.auth_mode}{system.env.auth_mode === "open" ? " (wizard/password login takes over once set up)" : ""}</td>
-        <td class="muted">OIDC_* {system.env.oidc_configured ? "(set)" : "(unset)"} · TACHY_API_TOKEN {system.env.api_token_set ? "(set)" : "(unset)"}</td>
-      </tr>
-      <tr>
-        <td>Session secret</td>
-        <td>{system.env.session_secret_set ? "set" : "not set - ephemeral; sessions reset on restart"}</td>
-        <td class="muted">TACHY_SESSION_SECRET</td>
-      </tr>
-      <tr><td>Anthropic API key</td><td>{system.env.anthropic_api_key_set ? "set" : "not set (falls back to the server's Claude Code login)"}</td><td class="muted">ANTHROPIC_API_KEY</td></tr>
-      <tr><td>Copilot GitHub token</td><td>{system.env.copilot_token_set ? "set" : "not set (falls back to the server's copilot CLI login)"}</td><td class="muted">COPILOT_GITHUB_TOKEN</td></tr>
-      <tr><td>Attribution email (standalone MCP)</td><td>{system.env.user_email ?? "(anonymous)"}</td><td class="muted">TACHY_USER_EMAIL</td></tr>
-      <tr><td>Upload dir</td><td>{system.env.upload_dir ?? "(OS tmp dir)"}</td><td class="muted">TACHY_UPLOAD_DIR</td></tr>
-      <tr><td>API port</td><td>{system.env.port}</td><td class="muted">PORT</td></tr>
-    </tbody>
-  </table>
+  <!-- The server sends `env` to admins only, so this whole table is theirs. -->
+  {#if system.env}
+    {@const e = system.env}
+    <GroupHead label="environment (read-only, set in .env)" />
+    <table>
+      <thead><tr><th>setting</th><th>value</th><th>env var</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Auth</td>
+          <td>{e.auth_mode}{e.auth_mode === "open" ? " (wizard/password login takes over once set up)" : ""}</td>
+          <td class="muted">OIDC_* {e.oidc_configured ? "(set)" : "(unset)"} · TACHY_API_TOKEN {e.api_token_set ? "(set)" : "(unset)"}</td>
+        </tr>
+        <tr>
+          <td>Session secret</td>
+          <td>{e.session_secret_set ? "set" : "not set - ephemeral; sessions reset on restart"}</td>
+          <td class="muted">TACHY_SESSION_SECRET</td>
+        </tr>
+        <tr><td>Anthropic API key</td><td>{e.anthropic_api_key_set ? "set" : "not set (falls back to the server's Claude Code login)"}</td><td class="muted">ANTHROPIC_API_KEY</td></tr>
+        <tr><td>Copilot GitHub token</td><td>{e.copilot_token_set ? "set" : "not set (falls back to the server's copilot CLI login)"}</td><td class="muted">COPILOT_GITHUB_TOKEN</td></tr>
+        <tr><td>Attribution email (standalone MCP)</td><td>{e.user_email ?? "(anonymous)"}</td><td class="muted">TACHY_USER_EMAIL</td></tr>
+        <tr><td>Upload dir</td><td>{e.upload_dir ?? "(OS tmp dir)"}</td><td class="muted">TACHY_UPLOAD_DIR</td></tr>
+        <tr><td>API port</td><td>{e.port}</td><td class="muted">PORT</td></tr>
+      </tbody>
+    </table>
+  {/if}
 {/if}
 
 <style>

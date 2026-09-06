@@ -69,15 +69,16 @@
      * draws it somewhere with more standing than a bar under the table. Given
      * one, the bar goes away rather than showing the same button twice.
      */
-    hoist?: (a: { label: string; run: () => void } | null) => void;
+    hoist?: (a: { label: string; run: () => void } | null) => () => void;
   } = $props();
 
   $effect(() => {
     if (!hoist) return;
     const offer =
       oncreate && canCreate ? { label: addLabel, run: startAdd } : null;
-    hoist(offer);
-    return () => hoist(null);
+    // The store's own disposer, so releasing the row cannot clobber a claim
+    // made by the panel replacing this one.
+    return hoist(offer);
   });
 
   /* Create and edit are the same form; only the commit differs. */

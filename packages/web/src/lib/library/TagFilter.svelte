@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Chip } from "../tui";
-  import type { FacetCount } from "./filters.svelte";
+  import type { FacetCount } from "./filters";
 
   let {
     value = "",

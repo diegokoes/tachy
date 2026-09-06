@@ -38,6 +38,15 @@
   let open = $state(false);
   let cursor = $state(0);
   let query = $state("");
+  /*
+   * When the list is short enough to skip the filter input, focus stays on the
+   * trigger — so the trigger is what has to name the option the arrow keys are
+   * on. That needs ids, and ids have to be unique per instance because this is
+   * every dropdown in the product.
+   */
+  const listId = `asel-${crypto.randomUUID().slice(0, 8)}`;
+  const optId = (i: number) => `${listId}-opt-${i}`;
+
   let root: HTMLDivElement;
   let trigger = $state<HTMLElement>();
   let listEl: HTMLDivElement | undefined = $state();
@@ -166,8 +175,11 @@
     bind:this={trigger}
     {title}
     {disabled}
+    role="combobox"
     aria-haspopup="listbox"
     aria-expanded={open}
+    aria-controls={open ? listId : undefined}
+    aria-activedescendant={open && shown[cursor] ? optId(cursor) : undefined}
     aria-label={ariaLabel}
     onclick={() => (open ? close() : openPanel())}
     onkeydown={onKeydown}
@@ -192,11 +204,18 @@
       {/if}
 
       <div class="scroller">
-        <div class="list" role="listbox" bind:this={listEl} tabindex="-1">
-          <div class="rows" bind:this={scrollEl}>
+        <div class="list" bind:this={listEl} tabindex="-1">
+          <div
+            class="rows"
+            id={listId}
+            role="listbox"
+            aria-label={ariaLabel}
+            bind:this={scrollEl}
+          >
             {#each shown as o, i (o.value)}
               <div
                 class="opt"
+                id={optId(i)}
                 class:cursor={i === cursor}
                 class:selected={o.value === value}
                 class:disabled={o.disabled}

@@ -1,4 +1,9 @@
-import { listSourceProjects, scrubText, TokenMap } from "@tachy/core";
+import {
+  stripHtml,
+  listSourceProjects,
+  scrubText,
+  TokenMap,
+} from "@tachy/core";
 import type {
   WorkItemSource,
   RawWorkItem,
@@ -16,24 +21,6 @@ export type { AdoClient, AdoCfg, JsonPatchOp } from "./client";
 const RELATED_CAP = 15;
 const ARTIFACT_CAP = 10;
 const SYNC_PAGE = 200;
-
-function stripHtml(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/[ \t]{2,}/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
 
 function relationWorkItemId(url: string): number | null {
   const m = url.match(/\/workItems\/(\d+)$/i);
@@ -378,12 +365,25 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
         const changed = fetched
           .map((wi) => Date.parse(wi.fields?.["System.ChangedDate"] ?? ""))
           .filter(Number.isFinite);
-        if (changed.length) {
-          const prev = cursor.since ? Date.parse(cursor.since) : Number.NaN;
-          let mark = Math.max(...changed);
-          if (Number.isFinite(prev) && mark <= prev) mark = prev + 1;
-          next = { p: cursor.p, since: new Date(mark).toISOString() };
-        }
+        const prev = cursor.since ? Date.parse(cursor.since) : Number.NaN;
+        /*
+         * A full page means there is more of this project to walk, so the
+         * cursor stays on it. Advancing to the next project instead — which is
+         * what an unreadable page used to fall through to — silently dropped the
+         * rest of this one's backlog. The 1ms bump handles a page whose items
+         * all carry the same timestamp.
+         */
+        let mark = changed.length ? Math.max(...changed) : prev;
+        if (Number.isFinite(prev) && !(mark > prev)) mark = prev + 1;
+        if (!Number.isFinite(mark))
+          // Nothing to advance to and nowhere safe to go: continuing would walk
+          // this same page forever, and skipping would lose the backlog behind
+          // it. System.ChangedDate is a required field, so this is the API
+          // misbehaving and worth saying so.
+          throw new Error(
+            `Azure DevOps returned ${SYNC_PAGE} work items for '${project}' with no readable System.ChangedDate — cannot advance the sync cursor`,
+          );
+        next = { p: cursor.p, since: new Date(mark).toISOString() };
       }
       return { items, ...(next ? { nextCursor: JSON.stringify(next) } : {}) };
     },

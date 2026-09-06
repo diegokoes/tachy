@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { navItems } from "../nav.svelte";
+  import { navItems } from "../nav";
   import {
     keymap,
     navKey,

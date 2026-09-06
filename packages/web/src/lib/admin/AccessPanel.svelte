@@ -16,7 +16,7 @@
 
     type Column,
   } from "../tui";
-  import type { Member, Team, UserRow } from "./shared";
+  import type { Member, Team, UserRow } from "./rows";
   import { claimTopAction } from "./topAction.svelte";
 
   type Membership = {

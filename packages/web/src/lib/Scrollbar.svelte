@@ -59,14 +59,31 @@
        necessarily resizing the target, so neither observer below would fire. */
     themeState.fontScale;
     update();
-    el.addEventListener("scroll", update);
-    const ro = new ResizeObserver(update);
+
+    /*
+     * `update` reads getComputedStyle plus four layout properties. The observers
+     * below fire on every mutation of the subtree — for the chat transcript that
+     * is once per streamed token — so they are coalesced onto a frame rather
+     * than made to measure synchronously in the middle of a paint.
+     */
+    let frame = 0;
+    const schedule = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        update();
+      });
+    };
+
+    el.addEventListener("scroll", schedule);
+    const ro = new ResizeObserver(schedule);
     ro.observe(el);
 
-    const mo = new MutationObserver(update);
+    const mo = new MutationObserver(schedule);
     mo.observe(el, { childList: true, subtree: true, characterData: true });
     return () => {
-      el.removeEventListener("scroll", update);
+      if (frame) cancelAnimationFrame(frame);
+      el.removeEventListener("scroll", schedule);
       ro.disconnect();
       mo.disconnect();
     };

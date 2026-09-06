@@ -7,7 +7,8 @@
   import { CrudTable, type Column } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
   import SlugRename from "./SlugRename.svelte";
-  import { INFO, type Product, type Team } from "./shared";
+  import type { Product, Team } from "./rows";
+import { INFO } from "./help";
   import { claimTopAction } from "./topAction.svelte";
 
   const teams = createResource(() => api.get<Team[]>("/teams"), []);

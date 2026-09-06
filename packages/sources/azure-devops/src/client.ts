@@ -5,6 +5,13 @@ const API_VERSION = "7.1";
 // No released version exists for these two, so they stay pinned to preview:
 //   work item comments -> the 7.1 reference itself documents 7.1-preview.4
 //   connectionData     -> not in the public REST reference at all
+/**
+ * At $top=200 this is 20k comments on one work item — far past anything real,
+ * and the point at which a continuation token that never clears is a bug rather
+ * than a big ticket.
+ */
+const MAX_PAGES = 100;
+
 const API_COMMENTS = "7.1-preview.4";
 const API_CONNECTION_DATA = "7.1-preview.1";
 
@@ -139,7 +146,9 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     },
 
     async getWorkItem(id) {
-      return req(`/_apis/wit/workitems/${id}?$expand=all`);
+      return req(
+        `/_apis/wit/workitems/${encodeURIComponent(String(id))}?$expand=all`,
+      );
     },
 
     async getWorkItemsBatch(ids, fields) {
@@ -160,18 +169,21 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     async getComments(project, id) {
       const comments: any[] = [];
       let continuation: string | undefined;
-      do {
+      // A server that echoes the same continuation token would otherwise spin
+      // here for as long as the process runs.
+      for (let page = 0; page < MAX_PAGES; page++) {
         const params = new URLSearchParams({
           "api-version": API_COMMENTS,
           $top: "200",
         });
         if (continuation) params.set("continuationToken", continuation);
         const res = await req(
-          `${proj(project)}/_apis/wit/workItems/${id}/comments?${params.toString()}`,
+          `${proj(project)}/_apis/wit/workItems/${encodeURIComponent(String(id))}/comments?${params.toString()}`,
         );
         comments.push(...(res.comments ?? []));
         continuation = res.continuationToken || undefined;
-      } while (continuation);
+        if (!continuation) break;
+      }
       return comments;
     },
 
@@ -201,13 +213,13 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
 
     async getPullRequest(project, repoId, prId) {
       return req(
-        `${proj(project)}/_apis/git/repositories/${repoId}/pullrequests/${prId}`,
+        `${proj(project)}/_apis/git/repositories/${encodeURIComponent(repoId)}/pullrequests/${encodeURIComponent(String(prId))}`,
       );
     },
 
     async getCommit(project, repoId, sha) {
       return req(
-        `${proj(project)}/_apis/git/repositories/${repoId}/commits/${sha}`,
+        `${proj(project)}/_apis/git/repositories/${encodeURIComponent(repoId)}/commits/${encodeURIComponent(sha)}`,
       );
     },
 

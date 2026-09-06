@@ -112,13 +112,29 @@ describe("settings API gating", () => {
       headers: { "Content-Type": "application/json", cookie },
     });
 
-  it("members read /system but cannot write settings", async () => {
+  it("members read /system without its env block, and cannot write settings", async () => {
     const read = await app.request("/api/system", {
       headers: { cookie: memberCookie },
     });
     expect(read.status).toBe(200);
+    const body = await read.json();
+    // The settings and credential availability are what the app renders from.
+    expect(body.settings).toBeDefined();
+    expect(body.credentials).toBeDefined();
+    // The deployment inventory — secrets configured, upload path, port — is not.
+    expect(body.env).toBeUndefined();
+
     const res = await put(memberCookie, "agent_effort", "low");
     expect(res.status).toBe(403);
+  });
+
+  it("admins get the env block", async () => {
+    const read = await app.request("/api/system", {
+      headers: { cookie: adminCookie },
+    });
+    const body = await read.json();
+    expect(body.env.auth_mode).toBeDefined();
+    expect(body.env).toHaveProperty("upload_dir");
   });
 
   it("admins write settings; /system reflects the db source", async () => {

@@ -1,3 +1,4 @@
+import { SLUG_RE } from "@tachy/contract";
 import type { TransactionSql } from "postgres";
 import { sql } from "../infra/db";
 import { chunkText } from "../search/chunk";
@@ -42,8 +43,6 @@ import { parseStructured } from "../knowledge/structured";
  * Checked here rather than in the API so the MCP write path cannot bypass it.
  */
 export const RESERVED_ARTICLE_SLUGS = ["toc", "c", "coverage", "new"] as const;
-
-const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 export function assertArticleSlug(slug: string): void {
   if (!SLUG_RE.test(slug))
@@ -315,7 +314,7 @@ export async function listReferenceDocs(
     limit?: number;
   } = {},
 ) {
-  const limit = opts.limit ?? 50;
+  const limit = clampLimit(opts.limit, 50);
   const kind = opts.kind ?? "reference";
   return sql`
     select d.id, d.product_id, d.team_id, d.component_id, d.product_area, d.source,
@@ -604,6 +603,11 @@ export async function revertReferenceDoc(
   const [cust] = s.customer_id
     ? await sql`select slug from customers where id = ${s.customer_id}`
     : [];
+  // Passed even when null: the revision records it, and leaving it out carried
+  // the live unit forward instead of restoring the one being reverted to.
+  const [unit] = s.customer_unit_id
+    ? await sql`select slug from customer_units where id = ${s.customer_unit_id}`
+    : [];
   return updateReferenceDoc(
     id,
     {
@@ -616,6 +620,7 @@ export async function revertReferenceDoc(
       docVersion: s.doc_version,
       component: (comp?.slug as string) ?? null,
       customerSlug: (cust?.slug as string) ?? null,
+      unit: (unit?.slug as string) ?? null,
     },
     actor,
   );

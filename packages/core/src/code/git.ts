@@ -17,6 +17,38 @@ export function repoDir(slug: string): string {
   );
 }
 
+/**
+ * `execFile` keeps a shell out of it, but git parses its own arguments: a
+ * positional beginning with `-` becomes an option (`--upload-pack=` runs a
+ * command), and the `ext::` transport is documented as running one outright. So
+ * the remote has to be one of the shapes we actually clone from, not merely
+ * "not shell metacharacters".
+ *
+ * `file://` is on the list because it cannot run anything — it reads a git
+ * repository and nothing else — and it is how a local clone is indexed in
+ * tests. The transports that execute are the ones missing from it.
+ */
+const REPO_URL_RE = /^(?:https?:\/\/|ssh:\/\/|file:\/\/|git@)[A-Za-z0-9\/]/;
+
+export function assertRepoUrl(url: string): string {
+  if (!REPO_URL_RE.test(url))
+    throw badInput(
+      `'${url}' is not a repository URL — expected https://host/path, ssh://host/path or git@host:path`,
+    );
+  return url;
+}
+
+/**
+ * A ref name reaches `git clone -b` as a positional too, so the same reasoning
+ * applies. This is narrower than git's own rules deliberately — it is the set of
+ * branch names anyone actually has.
+ */
+export function assertBranchName(branch: string): string {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._\/-]*$/.test(branch) || branch.includes(".."))
+    throw badInput(`'${branch}' is not a valid branch name`);
+  return branch;
+}
+
 function authArgs(token?: string): string[] {
   if (!token) return [];
   const b64 = Buffer.from(`:${token}`).toString("base64");
@@ -48,8 +80,9 @@ export async function cloneOrFetch(
         "1",
         "--single-branch",
         "-b",
-        repo.defaultBranch,
-        repo.url,
+        assertBranchName(repo.defaultBranch),
+        "--",
+        assertRepoUrl(repo.url),
         dir,
       ],
       { maxBuffer: MAX_BUFFER },
@@ -64,8 +97,9 @@ export async function cloneOrFetch(
         "fetch",
         "--depth",
         "1",
+        "--",
         "origin",
-        repo.defaultBranch,
+        assertBranchName(repo.defaultBranch),
       ],
       { maxBuffer: MAX_BUFFER },
     );

@@ -1,8 +1,14 @@
 <script lang="ts">
+  import { PROVIDER_OPTIONS } from "../vocab";
   import { onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { AGENT_KEY_LABELS, agentKeyError } from "../admin/shared";
+  import { AGENT_KEY_LABELS, agentKeyError } from "../credentials";
+  import {
+    AGENT_EFFORTS,
+    API_KEY_EXAMPLE,
+    OAUTH_PREFIX,
+  } from "@tachy/contract";
   import type { AgentProvider } from "@tachy/contract";
   import { Button, InfoMark, Note, Panel, Select } from "../tui";
 
@@ -130,10 +136,7 @@
         <span class="v">
           <Select
             value={prefs.agent_provider.value}
-            options={[
-              { value: "claude", label: "claude (Anthropic)" },
-              { value: "copilot", label: "copilot (GitHub)" },
-            ]}
+            options={PROVIDER_OPTIONS}
             onchange={(v) => setPref("agent_provider", v)}
           />
         </span>
@@ -193,7 +196,7 @@
         <span class="v">
           <Select
             value={prefs.agent_effort.value}
-            options={["low", "medium", "high", "xhigh", "max"]}
+            options={[...AGENT_EFFORTS]}
             onchange={(v) => setPref("agent_effort", v)}
           />
         </span>
@@ -251,11 +254,11 @@
                 {#if name === "anthropic_oauth_token"}
                   <InfoMark label="how to get a Claude subscription token">
                     Run <code>claude setup-token</code> and paste the
-                    <code>sk-ant-oat01-…</code> value it prints.
+                    <code>{OAUTH_PREFIX}…</code> value it prints.
                   </InfoMark>
                 {:else if name === "anthropic_api_key"}
                   <InfoMark label="what an Anthropic API key looks like">
-                    Starts with <code>sk-ant-api03-…</code>, from
+                    Starts with <code>{API_KEY_EXAMPLE}…</code>, from
                     console.anthropic.com.
                   </InfoMark>
                 {/if}

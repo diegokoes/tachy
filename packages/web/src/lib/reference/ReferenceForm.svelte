@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { REFERENCE_STATUSES } from "../vocab";
   import type { Snippet } from "svelte";
   import { Button } from "../tui";
   
@@ -9,7 +10,7 @@
   import type { ReferenceRow, NamedRow } from "../types";
   import AsciiSelect from "../AsciiSelect.svelte";
   import { t } from "../terms";
-  import { csv } from "../admin/shared";
+  import { csv } from "../fields";
   import { setTopActions } from "../subnav.svelte";
   import { componentOptions } from "../catalog";
 
@@ -166,7 +167,7 @@
   </label>
   <div class="row">
     <label>status
-      <AsciiSelect bind:value={status} options={["approved", "draft", "archived"]} />
+      <AsciiSelect bind:value={status} options={[...REFERENCE_STATUSES]} />
     </label>
     {#if mode === "create"}
       <label>{t("product")}

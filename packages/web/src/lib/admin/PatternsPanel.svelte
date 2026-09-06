@@ -5,7 +5,8 @@
   import { CrudTable, type Column } from "../tui";
   import { slugify } from "../slug";
   import SlugRename from "./SlugRename.svelte";
-  import { INFO, type Pattern } from "./shared";
+  import type { Pattern } from "./rows";
+import { INFO } from "./help";
   import { claimTopAction } from "./topAction.svelte";
 
   const patterns = createResource(

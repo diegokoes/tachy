@@ -96,25 +96,37 @@ export function classify(toolName: string): { cls: ToolClass; base: string } {
   return { cls: "write", base };
 }
 
-/** Tools whose class depends on their arguments, keyed by the flag that makes them a write. */
-export const CONDITIONAL_WRITES: Record<string, string> = {
-  compact_work_item: "post_note",
+/**
+ * Tools whose class depends on their arguments, and what makes one need the
+ * review box. Each predicate has to agree with the tool's own default for that
+ * argument: an omitted flag means whatever the tool does when it is omitted,
+ * not "off".
+ */
+export const CONDITIONAL_WRITES: Record<
+  string,
+  (input: Record<string, unknown>) => boolean
+> = {
+  // `if (post_note !== false)` in the tool, so an omitted flag still posts.
+  compact_work_item: (i) => i.post_note !== false,
+  // Paths are confined to the caller's own uploads, but a URL is an outbound
+  // request to a host the model chose, and the user should see it first.
+  ingest_context: (i) => Array.isArray(i.urls) && i.urls.length > 0,
 };
 
 /**
  * Same as `classify`, but lets a tool that only sometimes writes stay read-only
- * until the writing flag is actually set.
+ * on the calls where it does not.
  */
 export function classifyCall(
   toolName: string,
   input: unknown,
 ): { cls: ToolClass; base: string } {
   const c = classify(toolName);
-  const flag = CONDITIONAL_WRITES[c.base];
-  if (c.cls === "denied" || !flag) return c;
+  const needsReview = CONDITIONAL_WRITES[c.base];
+  if (c.cls === "denied" || !needsReview) return c;
   const writes =
     typeof input === "object" &&
     input !== null &&
-    (input as Record<string, unknown>)[flag] === true;
+    needsReview(input as Record<string, unknown>);
   return { cls: writes ? "write" : "read", base: c.base };
 }

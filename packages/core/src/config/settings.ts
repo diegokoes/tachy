@@ -1,16 +1,21 @@
 import { z } from "zod";
-import { AGENT_PROVIDERS } from "@tachy/contract";
-import type { AgentProvider } from "@tachy/contract";
+import {
+  AGENT_PROVIDERS,
+  AGENT_EFFORTS,
+  DEPLOYMENT_PROFILES,
+} from "@tachy/contract";
+import type {
+  AgentProvider,
+  AgentEffort,
+  DeploymentProfile,
+} from "@tachy/contract";
 import { sql } from "../infra/db";
 import { badInput } from "../infra/errors";
 
-export { AGENT_PROVIDERS };
-export type { AgentProvider };
-
-export const AGENT_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
-
-export const DEPLOYMENT_PROFILES = ["support", "engineering"] as const;
-export type DeploymentProfile = (typeof DEPLOYMENT_PROFILES)[number];
+// Owned by the contract, because the SPA offers them and the API validates
+// them; re-exported so server code still reaches them through @tachy/core.
+export { AGENT_PROVIDERS, AGENT_EFFORTS, DEPLOYMENT_PROFILES };
+export type { AgentProvider, AgentEffort, DeploymentProfile };
 
 const SETTING_SCHEMAS = {
   redaction_global: z.boolean(),
@@ -131,9 +136,16 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
   };
 }
 
+/**
+ * Both directions, deliberately: `globalRedactionEnabled()` reads the variable
+ * at call time, so setting it and never clearing it left the admin panel
+ * reporting redaction off from the database while every scrub path still ran —
+ * and the MCP subprocess inherited that.
+ */
 export async function loadSettingsIntoEnv(): Promise<void> {
   const eff = await effectiveSettings();
   if (eff.redaction_global.value) process.env.TACHY_REDACT = "true";
+  else delete process.env.TACHY_REDACT;
 }
 
 export function clearSettingsCache(): void {
