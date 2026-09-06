@@ -11,4 +11,3 @@ backups/
 data/repos/
 db/seed.local.sql
 .claude/
-docs/
