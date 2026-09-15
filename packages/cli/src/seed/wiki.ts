@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { crc32, deflateSync } from "node:zlib";
+import { assetPath } from "@tachy/core";
 import { insertRows, type Tx } from "./batches";
 import { pastDate, pick, rngFor, uuidFor } from "./deterministic";
 import {
@@ -78,13 +81,57 @@ const BODY = (
   links: string[],
   scope: string,
   rng: () => number,
+  image: string | null,
 ) =>
   `## Overview\n\n${title} — what it is and when it matters on ${scope}.` +
   (links.length ? ` See ${links.map((l) => `[[${l}]]`).join(" and ")}.` : "") +
   `\n\n## Architecture\n\nHow the pieces fit together. ${pick(rng, CONTEXTS)} is the case to watch.\n\n` +
+  (image ? `![Architecture sketch](${assetPath(image)})\n\n` : "") +
   `### Components\n\nThe moving parts. ${pick(rng, DIAGNOSTICS)}.\n\n` +
   `## Common failures\n\n${pick(rng, SYMPTOMS)} — ${pick(rng, ROOT_CAUSES)}. ` +
   `${pick(rng, RESOLUTIONS)}, otherwise ${pick(rng, IMPACTS)}.\n`;
+
+/**
+ * A picture for the seeded articles to show, drawn here rather than shipped as
+ * a binary fixture: four block-shaded bands in muted green, the ░▒▓█ ramp as
+ * pixels. Enough to put the image path — upload table, route, renderer — in
+ * front of anyone running a dev database.
+ */
+function sketchPng(w = 96, h = 32): Buffer {
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body));
+    return Buffer.concat([len, body, crc]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(w, 0);
+  header.writeUInt32BE(h, 4);
+  header[8] = 8; // bits per channel
+  header[9] = 2; // truecolour RGB
+  const stride = w * 3 + 1;
+  const pixels = Buffer.alloc(stride * h);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const band = Math.floor((x / w) * 4);
+      const v = 40 + band * 40 + ((x + y) % 8 < 4 ? 0 : 12);
+      const at = y * stride + 1 + x * 3;
+      pixels[at] = v;
+      pixels[at + 1] = v + 24;
+      pixels[at + 2] = v;
+    }
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", header),
+    chunk("IDAT", deflateSync(pixels)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+/** The pages that carry the sketch — enough to see it, not so many it is noise. */
+const ILLUSTRATED = new Set(["main", "overview"]);
 
 /**
  * Who links to whom. `not-written-yet` is deliberate: an unresolved link is a
@@ -103,6 +150,17 @@ export async function seedWiki(
   users: SeededUser[],
 ): Promise<void> {
   if (!users.length) return;
+
+  const sketch = sketchPng();
+  const sketchId = uuidFor("wiki_asset", 0);
+  await tx`
+    insert into library_assets
+      (id, product_id, created_by, sha256, content_type, byte_size, filename, bytes)
+    values
+      (${sketchId}, null, ${users[0].id},
+       ${createHash("sha256").update(sketch).digest("hex")}, 'image/png',
+       ${sketch.length}, 'architecture-sketch.png', ${sketch})
+  `;
 
   // Which components each product divides into. Articles anchor to only some of
   // them on purpose: coverage is a gap report, so a dev database has to contain
@@ -190,9 +248,15 @@ export async function seedWiki(
         product_area: null,
         customer_id: null,
         title: a.title,
-        body: BODY(a.title, LINKS[a.slug] ?? [], scope.name, rng),
+        body: BODY(
+          a.title,
+          LINKS[a.slug] ?? [],
+          scope.name,
+          rng,
+          ILLUSTRATED.has(a.slug) ? sketchId : null,
+        ),
         tags: [],
-        structured: JSON.stringify({ seeded: true }),
+        structured: tx.json({ seeded: true }),
         status: "approved",
         doc_version: null,
         kind: "wiki",
@@ -361,7 +425,7 @@ export async function seedWiki(
       actor: "web",
       turn_id: null,
       changed_fields: [],
-      snapshot: JSON.stringify({ seeded: true, title: a.title }),
+      snapshot: tx.json({ seeded: true, title: String(a.title) }),
       created_at: a.created_at,
     })),
   );

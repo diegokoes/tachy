@@ -154,6 +154,11 @@
       if (hits.length === 1) pickCommand({ kind: "artifact", artifact: hits[0] });
       return;
     }
+    // The list is otherwise only fetched while a bare `/name` is being typed, so
+    // a command that arrived already written — the wiki's "draft with agent"
+    // puts one in the composer — would go out as plain text without this.
+    if (message.startsWith("/") && !commands)
+      commands = await getCommands().catch(() => null);
     const command = parseCommand(message);
     addEntry({ kind: "user", text: message });
     const uploadPaths = chat.uploads.map((u) => u.path);

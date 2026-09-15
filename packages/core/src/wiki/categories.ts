@@ -1,7 +1,8 @@
-import { SLUG_RE } from "@tachy/contract";
+import { MAIN_PAGE_SLUG, SLUG_RE } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { wouldCycle } from "../infra/hierarchy";
 import { badInput, conflict, notFound } from "../infra/errors";
+import { visibleGap } from "./gaps";
 
 export interface WikiCategoryRow {
   id: string;
@@ -330,30 +331,32 @@ export async function findArticle(productId: string | null, slug: string) {
   return row;
 }
 
-/** Every wiki that has anything in it, for the wiki index page. */
+/** Every wiki, with what it holds and what it is missing, for the switcher. */
 export async function listWikis() {
   return sql`
     select p.id as product_id, p.slug as product_slug, p.name as product_name,
-           count(d.id)::int as articles
+           (select count(*)::int from reference_docs d
+             where d.product_id = p.id and d.kind = 'wiki'
+               and d.status <> 'archived') as articles,
+           (select count(*)::int from wiki_gaps g
+             where g.product_id = p.id and ${visibleGap()}) as open_gaps
     from products p
-    left join reference_docs d
-      on d.product_id = p.id and d.kind = 'wiki' and d.status <> 'archived'
-    group by p.id, p.slug, p.name
     union all
     select null, null, null,
            (select count(*)::int from reference_docs
-            where kind = 'wiki' and status <> 'archived' and product_id is null)
+            where kind = 'wiki' and status <> 'archived' and product_id is null),
+           (select count(*)::int from wiki_gaps g
+             where g.product_id is null and ${visibleGap()})
     order by product_name nulls first
   `;
 }
 
-/**
- * The main page is a real article at a reserved slug, written like any other.
- * Returns null rather than throwing when it does not exist yet, so the route can
- * offer to create one instead of 404ing a wiki that is simply new.
- */
-export const MAIN_PAGE_SLUG = "main";
+export { MAIN_PAGE_SLUG };
 
+/**
+ * Null rather than throwing when the main page does not exist yet, so the route
+ * can offer to create one instead of 404ing a wiki that is simply new.
+ */
 export async function findMainPage(productId: string | null) {
   try {
     return await findArticle(productId, MAIN_PAGE_SLUG);

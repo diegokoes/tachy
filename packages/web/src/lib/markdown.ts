@@ -1,6 +1,7 @@
 import { marked } from "marked";
+import type { Tokens } from "marked";
 import DOMPurify from "dompurify";
-import { parseWikilink, WIKILINK_RE } from "@tachy/contract";
+import { ASSET_SRC_RE, parseWikilink, WIKILINK_RE } from "@tachy/contract";
 
 marked.setOptions({ gfm: true, breaks: true });
 
@@ -42,18 +43,49 @@ export const wikilinkExtension = {
   },
 };
 
-marked.use({ extensions: [wikilinkExtension] });
+/**
+ * A markdown image renders only when it is one of ours; anything else is shown
+ * as its alt text. See ASSET_SRC_RE for why an outside image is never fetched.
+ */
+export const imageRenderer = {
+  image({ href, title, text }: Tokens.Image): string {
+    if (!ASSET_SRC_RE.test(href)) return esc(text);
+    const titled = title ? ` title="${esc(title)}"` : "";
+    return `<img src="${esc(href)}" alt="${esc(text)}"${titled} loading="lazy">`;
+  },
+};
+
+marked.use({ extensions: [wikilinkExtension], renderer: imageRenderer });
+
+/**
+ * The renderer above only sees markdown images. A body can also carry a raw
+ * `<img>`, which marked passes through untouched, so the same rule is applied
+ * again to what the sanitizer is about to keep.
+ */
+function firstPartyImagesOnly(node: Element) {
+  if (
+    node.nodeName === "IMG" &&
+    !ASSET_SRC_RE.test(node.getAttribute("src") ?? "")
+  )
+    node.remove();
+}
 
 export function renderMarkdown(src: string): string {
-  return DOMPurify.sanitize(marked.parse(src, { async: false }), {
-    FORBID_TAGS: ["img"],
-    // DOMPurify allows every data-* attribute by default. Article bodies are
-    // untrusted, so close that and re-open only the one the wikilink renderer
-    // emits — ADD_ATTR extends ALLOWED_ATTR, which is checked independently of
-    // the data-* rule.
-    ALLOW_DATA_ATTR: false,
-    ADD_ATTR: ["data-wikilink", "role", "tabindex"],
-  });
+  // Added and removed per call rather than once at import: without a DOM,
+  // DOMPurify has no hook API at all, and the DOM-free tests import this file.
+  DOMPurify.addHook("afterSanitizeAttributes", firstPartyImagesOnly);
+  try {
+    return DOMPurify.sanitize(marked.parse(src, { async: false }), {
+      // DOMPurify allows every data-* attribute by default. Article bodies are
+      // untrusted, so close that and re-open only the one the wikilink renderer
+      // emits — ADD_ATTR extends ALLOWED_ATTR, which is checked independently
+      // of the data-* rule.
+      ALLOW_DATA_ATTR: false,
+      ADD_ATTR: ["data-wikilink", "role", "tabindex", "loading"],
+    });
+  } finally {
+    DOMPurify.removeHook("afterSanitizeAttributes", firstPartyImagesOnly);
+  }
 }
 
 /**

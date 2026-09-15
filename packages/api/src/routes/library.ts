@@ -23,6 +23,12 @@ import {
   notFound,
   badInput,
   sql,
+  saveAsset,
+  getAsset,
+  MAX_ASSET_BYTES,
+  sweepWikiGaps,
+  listWikiGaps,
+  dismissWikiGap,
 } from "@tachy/core";
 import type { EntryScope } from "@tachy/core";
 import { assertScopeEditor, callerActor, callerUserId } from "../authz";
@@ -44,6 +50,21 @@ async function scopeProductId(scope: string): Promise<string | null> {
 /** Writes are gated on the product the wiki belongs to; org-wide has no scope. */
 const wikiScope = (productId: string | null): EntryScope =>
   productId ? { productId } : {};
+
+/**
+ * Re-find one wiki's gaps after an edit through here, so writing the article a
+ * gap asked for clears it now rather than at the next hourly sweep. Awaited:
+ * the SPA reloads the switcher's counts as soon as the save returns, and a
+ * sweep still in flight would hand it the numbers from before the edit. One
+ * wiki's worth of reads, and it logs rather than throws, so the edit it
+ * follows cannot fail on its account.
+ */
+const rescan = async (productId: string | null) => {
+  await sweepWikiGaps({ productId });
+};
+
+/** Multipart framing on top of the file itself; generous, it is only a guard. */
+const UPLOAD_OVERHEAD = 64 * 1024;
 
 const categorySchema = z.object({
   slug: z.string().min(1),
@@ -86,6 +107,69 @@ const articlePatchSchema = articleSchema.partial().extend({
 export const library = new Hono()
   .get("/wiki", async (c) => c.json(await listWikis()))
 
+  // Served from this origin with everything but the image switched off, so an
+  // asset opened directly in a tab is a picture and nothing more.
+  .get("/assets/:id", async (c) => {
+    const asset = await getAsset(c.req.param("id"));
+    return c.body(new Uint8Array(asset.bytes), 200, {
+      "Content-Type": asset.contentType,
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy": "default-src 'none'; sandbox",
+      "Cache-Control": "private, max-age=31536000, immutable",
+    });
+  })
+
+  .post("/wiki/:scope/assets", async (c) => {
+    const productId = await scopeProductId(c.req.param("scope"));
+    await assertScopeEditor(c, wikiScope(productId));
+    // Checked before parseBody, which buffers the whole request first: past
+    // that point the limit has already been paid for in memory.
+    const declared = Number(c.req.header("content-length") ?? 0);
+    if (declared > MAX_ASSET_BYTES + UPLOAD_OVERHEAD)
+      throw badInput(
+        `image too large (max ${MAX_ASSET_BYTES / 1024 / 1024} MB)`,
+      );
+    const body = await c.req.parseBody();
+    const file = body.file;
+    if (!(file instanceof File)) throw badInput("expected a 'file' field");
+    return c.json(
+      await saveAsset({
+        bytes: new Uint8Array(await file.arrayBuffer()),
+        filename: file.name || null,
+        productId,
+        createdById: await callerUserId(c),
+      }),
+    );
+  })
+
+  // What the last sweep found missing, with the component tree it was measured
+  // against. The org-wide wiki has no components, so only the list.
+  .get("/wiki/:scope/gaps", async (c) => {
+    const productId = await scopeProductId(c.req.param("scope"));
+    const [gaps, tree] = await Promise.all([
+      listWikiGaps(productId),
+      productId ? coverage(productId) : Promise.resolve(null),
+    ]);
+    return c.json({ gaps, coverage: tree });
+  })
+
+  // Waits for a sweep already running rather than skipping, unlike the
+  // background ones: whoever pressed this wants the answer as of now.
+  .post("/wiki/:scope/gaps/rescan", async (c) => {
+    const productId = await scopeProductId(c.req.param("scope"));
+    await assertScopeEditor(c, wikiScope(productId));
+    await sweepWikiGaps({ productId, wait: true });
+    return c.json(await listWikiGaps(productId));
+  })
+
+  .post("/wiki/:scope/gaps/:id/dismiss", async (c) => {
+    const productId = await scopeProductId(c.req.param("scope"));
+    await assertScopeEditor(c, wikiScope(productId));
+    return c.json(
+      await dismissWikiGap(productId, c.req.param("id"), await callerUserId(c)),
+    );
+  })
+
   // A report, not the wiki's navigation: the component tree is what the product
   // is made of, and this asks which parts of it nobody has written about.
   .get("/wiki/:scope/coverage", async (c) => {
@@ -105,13 +189,14 @@ export const library = new Hono()
       const productId = await scopeProductId(c.req.param("scope"));
       if (!productId) throw badInput("components belong to a product");
       await assertScopeEditor(c, { productId });
-      return c.json(
-        await updateComponent(
-          productId,
-          c.req.param("slug"),
-          c.req.valid("json"),
-        ),
+      const row = await updateComponent(
+        productId,
+        c.req.param("slug"),
+        c.req.valid("json"),
       );
+      // A move changes which part of the tree the gaps roll up under.
+      await rescan(productId);
+      return c.json(row);
     },
   )
 
@@ -143,9 +228,9 @@ export const library = new Hono()
     async (c) => {
       const productId = await scopeProductId(c.req.param("scope"));
       await assertScopeEditor(c, wikiScope(productId));
-      return c.json(
-        await addWikiCategory({ ...c.req.valid("json"), productId }),
-      );
+      const row = await addWikiCategory({ ...c.req.valid("json"), productId });
+      await rescan(productId);
+      return c.json(row);
     },
   )
 
@@ -155,20 +240,22 @@ export const library = new Hono()
     async (c) => {
       const productId = await scopeProductId(c.req.param("scope"));
       await assertScopeEditor(c, wikiScope(productId));
-      return c.json(
-        await updateWikiCategory(
-          productId,
-          c.req.param("slug"),
-          c.req.valid("json"),
-        ),
+      const row = await updateWikiCategory(
+        productId,
+        c.req.param("slug"),
+        c.req.valid("json"),
       );
+      await rescan(productId);
+      return c.json(row);
     },
   )
 
   .delete("/wiki/:scope/categories/:slug", async (c) => {
     const productId = await scopeProductId(c.req.param("scope"));
     await assertScopeEditor(c, wikiScope(productId));
-    return c.json(await deleteWikiCategory(productId, c.req.param("slug")));
+    const gone = await deleteWikiCategory(productId, c.req.param("slug"));
+    await rescan(productId);
+    return c.json(gone);
   })
 
   .post(
@@ -187,6 +274,7 @@ export const library = new Hono()
       });
       if (categories)
         await setArticleCategories(productId, saved.id, categories);
+      await rescan(productId);
       return c.json(saved);
     },
   )
@@ -218,6 +306,7 @@ export const library = new Hono()
       );
       if (categories)
         await setArticleCategories(productId, current.id as string, categories);
+      await rescan(productId);
       return c.json(row);
     },
   );

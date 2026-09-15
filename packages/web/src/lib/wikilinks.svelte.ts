@@ -1,6 +1,7 @@
 import { api } from "./api";
 import { navigate } from "./router.svelte";
 import type { NamedRow } from "./types";
+import { libraryItemPath, ORG_WIDE } from "./wiki/paths";
 
 export interface OutboundLink {
   target: string;
@@ -33,23 +34,21 @@ export class LinkTargets {
         api.get<NamedRow[]>("/products").catch(() => [] as NamedRow[]),
       ]);
       const scopeOf = (productId: string | null) =>
-        products.find((p) => p.id === productId)?.slug ?? "general";
+        (products.find((p) => p.id === productId)?.slug as string) ?? ORG_WIDE;
 
       const next = new Set<string>();
       this.to.clear();
       for (const l of outbound) {
-        if (l.to_entry_id) {
-          next.add(l.target);
-          this.to.set(l.target, `/library/entries/${l.to_entry_id}`);
-        } else if (l.to_doc_id) {
-          next.add(l.target);
-          this.to.set(
-            l.target,
-            l.to_kind === "wiki" && l.to_slug
-              ? `/library/wiki/${scopeOf(l.to_product_id)}/${l.to_slug}`
-              : `/library/docs/${l.to_doc_id}`,
-          );
-        }
+        const path = libraryItemPath({
+          entryId: l.to_entry_id,
+          docId: l.to_doc_id,
+          kind: l.to_kind,
+          slug: l.to_slug,
+          scope: scopeOf(l.to_product_id),
+        });
+        if (!path) continue;
+        next.add(l.target);
+        this.to.set(l.target, path);
       }
       this.resolved = next;
     } catch {

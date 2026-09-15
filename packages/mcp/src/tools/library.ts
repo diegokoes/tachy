@@ -21,6 +21,8 @@ import {
   findArticle,
   setArticleCategories,
   setComposedFrom,
+  addWikiCategory,
+  listWikiGaps,
 } from "@tachy/core";
 import type { ReferenceDocUpdate } from "@tachy/core";
 import { extractSource } from "../extract";
@@ -141,6 +143,72 @@ tool(
 );
 
 tool(
+  "list_wiki_gaps",
+  {
+    description:
+      "What one wiki is missing, as the hourly sweep last found it, most pressing first. `unwritten`: a component with recorded lessons and no article (evidence.component is the slug to pass to draft_wiki_page). `outgrown`: an article whose component has gained uncited lessons since it was written (evidence.slug is the article to refresh). `stale`: an article whose sources changed. `wanted`: a [[link]] to an article nobody has written. `draft` and `uncategorised` are housekeeping. Omit product_slug for the org-wide wiki.",
+    inputSchema: { product_slug: z.string().optional() },
+    annotations: { readOnlyHint: true },
+  },
+  async (a) => {
+    const productId = a.product_slug
+      ? await getProductIdBySlug(a.product_slug)
+      : null;
+    const gaps = await listWikiGaps(productId);
+    return out({
+      gaps: gaps.map(({ kind, subject, score, evidence, first_seen_at }) => ({
+        kind,
+        subject,
+        score,
+        evidence,
+        first_seen_at,
+      })),
+      ...(gaps.length
+        ? {}
+        : {
+            note: "Nothing flagged. Say so rather than choosing a topic yourself.",
+          }),
+    });
+  },
+);
+
+tool(
+  "add_wiki_category",
+  {
+    description:
+      "Add (or update) a category in one wiki's table of contents — the tree a reader navigates by, distinct from the product's components. Call it when an article you are saving fits no existing category from list_wiki_articles; nest it with parent rather than widening the top level. The review box is where the user refuses a category they do not want.",
+    inputSchema: {
+      product_slug: z
+        .string()
+        .optional()
+        .describe("Omit for the org-wide wiki."),
+      slug: z.string().describe("kebab-case, unique within this wiki"),
+      name: z.string(),
+      parent: z
+        .string()
+        .optional()
+        .describe("Slug of the category to nest this one under."),
+      description: z.string().optional(),
+    },
+  },
+  async (a) => {
+    const productId = a.product_slug
+      ? await getProductIdBySlug(a.product_slug)
+      : null;
+    await requireCanEdit(productId ? { productId } : {});
+    return out(
+      await addWikiCategory({
+        productId,
+        slug: a.slug,
+        name: a.name,
+        parentSlug: a.parent ?? null,
+        description: a.description ?? null,
+      }),
+    );
+  },
+);
+
+tool(
   "save_wiki_article",
   {
     description:
@@ -163,7 +231,7 @@ tool(
         .array(z.string())
         .optional()
         .describe(
-          "Category slugs from list_wiki_articles. An article may sit in several.",
+          "Category slugs from list_wiki_articles, or one you created first with add_wiki_category. An article may sit in several.",
         ),
       component: z.string().optional(),
       sources: z
@@ -239,7 +307,7 @@ tool(
       slug: a.slug,
       status: row.status,
       updated: !!existing,
-      next: `The article is at /library/wiki/${a.product_slug ?? "general"}/${a.slug}. It is a ${row.status}; tell the user where it is rather than pasting it back.`,
+      next: `The article is at /wiki/${a.product_slug ?? "general"}/${a.slug}. It is a ${row.status}; tell the user where it is rather than pasting it back.`,
     });
   },
 );

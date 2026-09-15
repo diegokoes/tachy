@@ -1,3 +1,5 @@
+import type { WikiGapKind } from "@tachy/contract";
+
 export interface KnowledgeRow {
   id: string;
   work_item_id: string | null;
@@ -149,6 +151,43 @@ export interface WikiListRow {
   product_slug: string | null;
   product_name: string | null;
   articles: number;
+  /** Open gaps from the last sweep, dismissed ones left out. */
+  open_gaps: number;
+}
+
+export interface WikiGapItem {
+  kind: "entry" | "doc";
+  id: string;
+  title: string;
+}
+
+export interface WikiGap {
+  id: string;
+  product_id: string | null;
+  kind: WikiGapKind;
+  key: string;
+  subject: string;
+  score: number;
+  evidence: {
+    component?: string | null;
+    slug?: string;
+    entries?: number;
+    docs?: number;
+    items?: WikiGapItem[];
+    titles?: string[];
+    pages?: number;
+    since?: string;
+    updated_at?: string;
+  };
+  first_seen_at: string;
+  last_seen_at: string;
+  dismissed_at: string | null;
+  dismissed_score: number | null;
+}
+
+export interface WikiGaps {
+  gaps: WikiGap[];
+  coverage: Coverage | null;
 }
 
 export interface ReferenceRow {

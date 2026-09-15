@@ -31,7 +31,7 @@ describe("following a wikilink", () => {
 
   it("follows on Enter and on Space, not on any other key", () => {
     navigated.length = 0;
-    const links = withTarget("spooler", "/library/wiki/tqx/spooler");
+    const links = withTarget("spooler", "/wiki/tqx/spooler");
     const a = anchorIn(
       '<a role="link" tabindex="0" data-wikilink="spooler">x</a>',
     );
@@ -45,10 +45,7 @@ describe("following a wikilink", () => {
       a.dispatchEvent(e);
       links.onKeydown(e);
     }
-    expect(navigated).toEqual([
-      "/library/wiki/tqx/spooler",
-      "/library/wiki/tqx/spooler",
-    ]);
+    expect(navigated).toEqual(["/wiki/tqx/spooler", "/wiki/tqx/spooler"]);
 
     const tab = new KeyboardEvent("keydown", { key: "Tab", cancelable: true });
     Object.defineProperty(tab, "target", { value: a });
