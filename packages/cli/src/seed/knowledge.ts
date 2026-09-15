@@ -193,7 +193,7 @@ export async function seedKnowledge(
         fixed_version: chance(rng, 0.6)
           ? `${intBetween(rng, 9, 11)}.${intBetween(rng, 0, 6)}`
           : null,
-        structured: JSON.stringify({ seeded: true }),
+        structured: tx.json({ seeded: true }),
         // The embed text is the row's real prose, so distinct rows get distinct
         // vectors — the whole point of decorrelating the draws above. The column
         // holds it until the window's fill swaps in the vector.
@@ -347,7 +347,7 @@ async function seedReference(
         title: meta[i].fullTitle,
         body: docBody,
         tags: pickMany(rng, TAGS, intBetween(rng, 1, 3)),
-        structured: JSON.stringify({ seeded: true }),
+        structured: tx.json({ seeded: true }),
         status: pick(rng, REFERENCE_STATUSES),
         doc_version: `${intBetween(rng, 1, 9)}.0`,
         superseded_by: null,

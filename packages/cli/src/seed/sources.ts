@@ -236,7 +236,7 @@ async function seedWorkItems(
         observed_version: `${intBetween(rng, 3, 9)}.${intBetween(rng, 0, 12)}`,
         requester: `contact${i % 200}@example.invalid`,
         // Capped deliberately: a realistic blob dominates database size at 40k.
-        raw: JSON.stringify({
+        raw: tx.json({
           seeded: true,
           symptom,
           priority: intBetween(rng, 1, 4),

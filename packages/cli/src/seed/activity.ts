@@ -53,7 +53,7 @@ export async function seedActivity(
         model: pick(rng, MODELS),
         input_tokens: input,
         output_tokens: output,
-        meta: JSON.stringify({
+        meta: tx.json({
           seeded: true,
           provider: "claude",
           estimated_cost_usd: Number(
@@ -85,7 +85,7 @@ export async function seedActivity(
       bytes,
       // byte_size must agree with bytes: both come from the same Buffer.
       byte_size: bytes.length,
-      meta: JSON.stringify({ seeded: true }),
+      meta: tx.json({ seeded: true }),
       created_at: pastDate(rng, 20),
       // Half already expired, so the hourly sweep in routes/outputs.ts has work.
       expires_at: chance(rng, 0.5)
