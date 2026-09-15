@@ -64,7 +64,7 @@ export async function assertCanWriteScope(
     case "team":
       if (!scopeId) throw badInput("team scope requires a team id");
       if (!(await canManageTeam(userId, scopeId)))
-        throw forbidden("this action requires admin rights for that team");
+        throw forbidden("this action requires team admin rights for that team");
       return;
     case "global":
       await assertGlobalAdmin(userId);

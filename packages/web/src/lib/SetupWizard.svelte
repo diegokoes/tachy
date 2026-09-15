@@ -153,7 +153,7 @@
 
       <div class="body">
         {#if STEPS[step] === "account"}
-          <h2>Your admin account</h2>
+          <h2>Your app admin account</h2>
           <div class="grid">
             <Field label="email" required error={emailErr}>
               <input type="email" autocomplete="username" bind:value={email} />
