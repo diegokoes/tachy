@@ -204,7 +204,7 @@ export function getIdentity(c: Context): Identity | undefined {
  */
 export async function requireAdmin(c: Context, next: Next): Promise<void> {
   if (getIdentity(c)?.role !== "admin")
-    throw new HTTPException(403, { message: "admin role required" });
+    throw new HTTPException(403, { message: "app admin role required" });
   await next();
 }
 

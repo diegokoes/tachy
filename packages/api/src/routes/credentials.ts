@@ -33,7 +33,7 @@ async function resolveScopeTarget(
   if (!teamSlug) throw badInput("team scope requires ?team=<slug>");
   const teamId = await getTeamIdBySlug(teamSlug);
   if (!(await canManageTeam(actor, teamId)))
-    throw forbidden(`you don't have admin rights for team '${teamSlug}'`);
+    throw forbidden(`you don't have team admin rights for team '${teamSlug}'`);
   return teamId;
 }
 

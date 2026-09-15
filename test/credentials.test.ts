@@ -197,7 +197,7 @@ describe("write authorization matrix", () => {
         "anthropic_api_key",
         "sk-ant-api03-x",
       ),
-    ).rejects.toThrow(/global admin/);
+    ).rejects.toThrow(/app admin/);
   });
 
   it("a team admin can write team but not global", async () => {
@@ -217,7 +217,7 @@ describe("write authorization matrix", () => {
         "anthropic_api_key",
         "sk-ant-api03-x",
       ),
-    ).rejects.toThrow(/global admin/);
+    ).rejects.toThrow(/app admin/);
   });
 
   it("a user cannot write another user's row", async () => {

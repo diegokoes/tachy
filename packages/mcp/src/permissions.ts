@@ -49,7 +49,7 @@ export async function requireCanManageTeam(
   const userId = await gateUserId();
   if (!userId) return;
   if (!teamId || !(await canManageTeam(userId, teamId)))
-    throw forbidden("you don't have admin rights for this team");
+    throw forbidden("you don't have team admin rights for this team");
 }
 
 export async function requireAnyTeamAdmin(): Promise<void> {
