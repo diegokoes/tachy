@@ -31,7 +31,9 @@ create table users (
     id            uuid primary key default gen_random_uuid(),
     email         text not null unique,
     display_name  text,
-    -- Global role: admins manage users, org structure and settings.
+    -- App-wide role. 'admin' is the app admin: manages users, org structure
+    -- and system settings. Team curation rights come from team_members.role
+    -- instead, which stores the same two words for a different rung.
     role          text not null default 'member' check (role in ('admin','member')),
     -- Scrypt hash for password login; null = SSO-only or attribution-only user.
     password_hash text,
@@ -51,8 +53,8 @@ create table settings (
 create table team_members (
     team_id   uuid not null references teams(id) on delete cascade,
     user_id   uuid not null references users(id) on delete cascade,
-    -- 'admin' = team mini-admin: curates this team's knowledge/docs/taxonomy
-    -- and membership without org-wide admin rights.
+    -- Per-team role. 'admin' is the team admin: curates this team's
+    -- knowledge/docs/taxonomy and membership, with no rights outside it.
     role      text not null default 'member' check (role in ('admin','member')),
     primary key (team_id, user_id)
 );
@@ -729,6 +731,55 @@ create index library_links_from_doc_idx   on library_links(from_doc_id);
 create index library_links_from_entry_idx on library_links(from_entry_id);
 create index library_links_to_doc_idx     on library_links(to_doc_id);
 create index library_links_to_entry_idx   on library_links(to_entry_id);
+
+-- Images placed in library bodies, addressed as /api/library/assets/<id>. In
+-- the database rather than on disk so the pg_dump backup carries them with no
+-- second volume to remember. sha256 is unique so pasting the same screenshot
+-- twice stores it once. No SVG: it is a document that can carry script.
+create table library_assets (
+    id           uuid primary key default gen_random_uuid(),
+    product_id   uuid references products(id) on delete set null,
+    created_by   uuid references users(id) on delete set null,
+    sha256       text not null unique,
+    content_type text not null
+                     check (content_type in ('image/png','image/jpeg','image/gif','image/webp')),
+    byte_size    integer not null,
+    filename     text,
+    bytes        bytea not null,
+    created_at   timestamptz not null default now()
+);
+
+-- What a wiki is missing, as the scheduled sweep last found it. One row per
+-- (wiki, kind, subject), so a gap that persists across sweeps keeps the date it
+-- was first seen, one that goes away gets resolved_at, and one that comes back
+-- later is reopened rather than duplicated. product_id null is the org-wide
+-- wiki, hence `nulls not distinct` on the key.
+--
+-- A dismissed gap stays hidden until its score grows well past dismissed_score:
+-- "not worth an article" is a judgement about the evidence at the time, not a
+-- promise to ignore however much more of it arrives.
+create table wiki_gaps (
+    id              uuid primary key default gen_random_uuid(),
+    product_id      uuid references products(id) on delete cascade,
+    kind            text not null
+                        check (kind in ('unwritten','outgrown','stale','wanted','draft','uncategorised')),
+    -- What the gap is about, stable across sweeps: a component id, an article
+    -- id, or the slug a broken link asked for.
+    key             text not null,
+    subject         text not null,
+    evidence        jsonb not null default '{}'::jsonb,
+    score           integer not null default 0,
+    first_seen_at   timestamptz not null default now(),
+    last_seen_at    timestamptz not null default now(),
+    resolved_at     timestamptz,
+    dismissed_by    uuid references users(id) on delete set null,
+    dismissed_at    timestamptz,
+    dismissed_score integer
+);
+
+create unique index wiki_gaps_key_idx
+    on wiki_gaps(product_id, kind, key) nulls not distinct;
+create index wiki_gaps_open_idx on wiki_gaps(product_id) where resolved_at is null;
 
 create trigger wiki_categories_updated_at
     before update on wiki_categories

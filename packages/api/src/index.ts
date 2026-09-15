@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { serve } from "@hono/node-server";
-import { env, log, sweepInterruptedIndexes } from "@tachy/core";
+import { env, log, sweepInterruptedIndexes, sweepWikiGaps } from "@tachy/core";
 import { createApp } from "./app";
 import { isBootstrapped } from "./auth";
 
@@ -41,3 +41,15 @@ serve({
 console.log(
   `tachy api listening on :${env.port} [auth=${env.authMode}]${serveWeb ? ` (serving SPA from ${webRoot})` : ""}`,
 );
+
+/* Here rather than beside the routes, so it runs in the server and not in every
+   test that builds an app. Once at boot, then hourly; an edit made through the
+   wiki routes rescans its own wiki straight away, so this is what catches the
+   rest — lessons recorded by the agent, entries approved elsewhere. */
+const WIKI_GAP_SWEEP_MS = 60 * 60_000;
+const sweepGaps = () =>
+  sweepWikiGaps()
+    .then((r) => log("info", "wiki_gap_sweep", { ...r }))
+    .catch((err) => log("error", "wiki_gap_sweep", { error: String(err) }));
+void sweepGaps();
+setInterval(sweepGaps, WIKI_GAP_SWEEP_MS).unref();

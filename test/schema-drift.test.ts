@@ -18,6 +18,8 @@ import {
   WORK_ITEM_LINK_KINDS,
   REPO_INDEX_STATUSES,
   SCOPES,
+  WIKI_GAP_KINDS,
+  LIBRARY_ASSET_TYPES,
 } from "@tachy/core";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -52,6 +54,8 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     ["reference_docs", "status", REFERENCE_STATUSES],
     ["reference_docs", "kind", REFERENCE_KINDS],
     ["library_links", "kind", LINK_KINDS],
+    ["wiki_gaps", "kind", WIKI_GAP_KINDS],
+    ["library_assets", "content_type", LIBRARY_ASSET_TYPES],
     ["users", "role", USER_ROLES],
     ["team_members", "role", TEAM_ROLES],
     ["source_projects", "role", SOURCE_PROJECT_ROLES],

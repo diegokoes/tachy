@@ -78,6 +78,17 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
         argsLine(args),
       ].join("\n"),
   },
+  {
+    name: "wiki-draft",
+    args: "<product> [component=<slug>] [article=<slug>]",
+    description: "Write or refresh a wiki article from recorded knowledge",
+    expand: (args) =>
+      [
+        "Write one wiki article for this product from what the library has recorded, never from general knowledge; draft_wiki_page and save_wiki_article describe the steps.",
+        "With no component named, take the first gap list_wiki_gaps returns for the product. With article=<slug>, this is a refresh: read that article first and keep its slug, so the save updates the page in place.",
+        argsLine(args),
+      ].join("\n"),
+  },
 ];
 
 export const findCommand = (name: string): BuiltinCommand | undefined =>

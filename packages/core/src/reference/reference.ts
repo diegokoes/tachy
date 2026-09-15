@@ -1,4 +1,4 @@
-import { SLUG_RE } from "@tachy/contract";
+import { SLUG_RE, WIKI_RESERVED_SLUGS } from "@tachy/contract";
 import type { TransactionSql } from "postgres";
 import { sql } from "../infra/db";
 import { chunkText } from "../search/chunk";
@@ -38,18 +38,13 @@ const REVISION_COLUMNS = sql`
 
 import { parseStructured } from "../knowledge/structured";
 
-/**
- * Path segments an article slug may not take, because the wiki routes use them.
- * Checked here rather than in the API so the MCP write path cannot bypass it.
- */
-export const RESERVED_ARTICLE_SLUGS = ["toc", "c", "coverage", "new"] as const;
-
+/** Checked here rather than in the API so the MCP write path cannot bypass it. */
 export function assertArticleSlug(slug: string): void {
   if (!SLUG_RE.test(slug))
     throw badInput(
       `Invalid article slug '${slug}' — lowercase letters, digits and hyphens only.`,
     );
-  if ((RESERVED_ARTICLE_SLUGS as readonly string[]).includes(slug))
+  if ((WIKI_RESERVED_SLUGS as readonly string[]).includes(slug))
     throw badInput(
       `'${slug}' is reserved by the wiki's own routes; pick another slug.`,
     );

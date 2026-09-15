@@ -1,23 +1,37 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
+  import {
+    LIBRARY_ASSET_TYPES,
+    MAIN_PAGE_SLUG,
+    MAX_ASSET_BYTES,
+    slugify,
+  } from "@tachy/contract";
   import { api } from "../api";
-  import { Button, Checkbox } from "../tui";
+  import { errText } from "../resource.svelte";
+  import { setTopActions } from "../subnav.svelte";
+  import { Button, Checkbox, Note } from "../tui";
   import AsciiSelect from "../AsciiSelect.svelte";
+  import { componentOptions } from "../catalog";
   import { renderMarkdown } from "../markdown";
-  import { outline } from "../outline";
+  import { outline, withAnchors } from "../outline";
   import { REFERENCE_STATUSES } from "../vocab";
   import type {
     KnowledgeRow,
+    NamedRow,
     ReferenceRow,
     WikiArticleRef,
     WikiCategory,
     WikiToc,
     WikiTocNode,
   } from "../types";
+  import { uploadImage } from "./images";
+  import { ORG_WIDE } from "./paths";
+  import { takeSeed } from "./wikis.svelte";
 
   let {
     scope,
     initial = null,
+    presetSlug = null,
     saving = false,
     error = null,
     onSubmit,
@@ -25,6 +39,8 @@
   }: {
     scope: string;
     initial?: ReferenceRow | null;
+    /** A new article at an address something already asked for. */
+    presetSlug?: string | null;
     saving?: boolean;
     error?: string | null;
     onSubmit: (payload: Record<string, unknown>) => void;
@@ -32,16 +48,31 @@
   } = $props();
 
   const seed = untrack(() => initial);
+  const preset = untrack(() => presetSlug);
   const editing = !!seed;
+  const handed = editing ? null : takeSeed();
 
-  let title = $state(seed?.title ?? "");
-  let slug = $state(seed?.slug ?? "");
+  const humanize = (s: string) =>
+    s === MAIN_PAGE_SLUG
+      ? "Main page"
+      : s.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+
+  let title = $state(
+    seed?.title ?? handed?.title ?? (preset ? humanize(preset) : ""),
+  );
+  let slug = $state(seed?.slug ?? preset ?? "");
   let body = $state(seed?.body ?? "");
   let status = $state(seed?.status ?? "approved");
   let chosen = $state<string[]>((seed?.categories ?? []).map((c) => c.slug));
+  /** Component slug; the row carries an id, so it is resolved once they load. */
+  let component = $state(handed?.component ?? "");
+  let components = $state<NamedRow[]>([]);
 
   let categories = $state<WikiCategory[]>([]);
   let preview = $state(true);
+
+  /** Components belong to a product, and the org-wide wiki has none. */
+  const hasComponents = $derived(scope !== ORG_WIDE);
 
   /* ---- [[ autocomplete ---------------------------------------------------
      Typing `[[` opens a picker over this wiki's articles and the knowledge
@@ -55,6 +86,7 @@
   }
 
   let bodyEl = $state<HTMLTextAreaElement>();
+  let fileEl = $state<HTMLInputElement>();
   let picking = $state(false);
   /** Where the `[[` that opened the picker starts, so it can be replaced. */
   let openAt = $state(-1);
@@ -159,31 +191,109 @@
     }
   }
 
-  /** The outline the reader will get, shown live so structure is visible. */
+  /* ---- images -------------------------------------------------------------
+     Pasted, dropped or picked, each goes up on its own and lands in the body
+     as ordinary markdown pointing at the stored copy. A placeholder holds its
+     place meanwhile, so typing on while it uploads does not lose the spot. */
+  let uploadError = $state<string | null>(null);
+  let uploads = 0;
+
+  /**
+   * An image is a paragraph of its own, figure-like, whatever line the caret
+   * happened to be in the middle of — so it is padded with just enough blank
+   * lines to stand apart from the text either side of it.
+   */
+  function insertBlock(text: string) {
+    const el = bodyEl;
+    const from = el?.selectionStart ?? body.length;
+    const to = el?.selectionEnd ?? from;
+    const before = body.slice(0, from);
+    const after = body.slice(to);
+    const gap = (edge: string, full: boolean) =>
+      !edge || full ? "" : edge === "\n" ? "\n" : "\n\n";
+    const lead = gap(before.slice(-1), !before || before.endsWith("\n\n"));
+    const trail = gap(after.slice(0, 1), !after || after.startsWith("\n\n"));
+    body = before + lead + text + trail + after;
+    const pos = from + lead.length + text.length;
+    queueMicrotask(() => {
+      el?.focus();
+      el?.setSelectionRange(pos, pos);
+    });
+  }
+
+  const altFrom = (name: string) =>
+    name.replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").trim() || "image";
+
+  async function attach(files: File[]) {
+    uploadError = null;
+    for (const file of files) {
+      if (!(LIBRARY_ASSET_TYPES as readonly string[]).includes(file.type)) {
+        uploadError = `${file.name}: only PNG, JPEG, GIF or WebP`;
+        continue;
+      }
+      if (file.size > MAX_ASSET_BYTES) {
+        uploadError = `${file.name}: larger than ${MAX_ASSET_BYTES / 1024 / 1024} MB`;
+        continue;
+      }
+      const marker = `![uploading ${++uploads}…]()`;
+      insertBlock(marker);
+      try {
+        const { url } = await uploadImage(scope, file);
+        body = body.replace(marker, `![${altFrom(file.name)}](${url})`);
+      } catch (e) {
+        body = body.replace(marker, "");
+        uploadError = `${file.name}: ${errText(e)}`;
+      }
+    }
+  }
+
+  const imagesIn = (list: FileList | null | undefined) =>
+    [...(list ?? [])].filter((f) => f.type.startsWith("image/"));
+
+  function onPaste(e: ClipboardEvent) {
+    const files = imagesIn(e.clipboardData?.files);
+    if (!files.length) return;
+    e.preventDefault();
+    void attach(files);
+  }
+
+  function onDrop(e: DragEvent) {
+    const files = imagesIn(e.dataTransfer?.files);
+    if (!files.length) return;
+    e.preventDefault();
+    void attach(files);
+  }
+
+  /** What the reader will get, numbered as they will see it. */
   const items = $derived(outline(body));
+  const rendered = $derived(
+    withAnchors(renderMarkdown(body), items, { numbered: true }),
+  );
 
   onMount(async () => {
-    try {
-      categories = await api.get<WikiCategory[]>(
-        `/library/wiki/${scope}/categories`,
-      );
-    } catch {
-      categories = [];
-    }
+    const [cats, comps] = await Promise.all([
+      api
+        .get<WikiCategory[]>(`/library/wiki/${scope}/categories`)
+        .catch(() => [] as WikiCategory[]),
+      hasComponents
+        ? api
+            .get<NamedRow[]>(`/products/${scope}/components`)
+            .catch(() => [] as NamedRow[])
+        : Promise.resolve([] as NamedRow[]),
+    ]);
+    categories = cats;
+    components = comps;
+    if (seed?.component_id)
+      component =
+        (comps.find((c) => c.id === seed.component_id)?.slug as string) ?? "";
     await loadArticles();
   });
 
   /** Suggest a slug from the title, but only while creating and untouched. */
-  let slugTouched = $state(false);
+  let slugTouched = $state(!!preset);
   $effect(() => {
     if (editing || slugTouched) return;
-    const t = title;
-    slug = t
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .trim()
-      .replace(/\s+/g, "-")
-      .slice(0, 60);
+    slug = slugify(title).slice(0, 60);
   });
 
   function toggle(catSlug: string) {
@@ -208,6 +318,8 @@
     return out;
   });
 
+  $effect(() => setTopActions(formActions));
+
   function submit(e: SubmitEvent) {
     e.preventDefault();
     if (!title.trim() || !slug.trim()) return;
@@ -217,12 +329,30 @@
       body,
       status,
       categories: chosen,
+      ...(hasComponents
+        ? { component: component || (editing ? null : undefined) }
+        : {}),
       ...(editing ? { expectedVersion: seed!.version } : {}),
     });
   }
 </script>
 
-<form class="article-form" onsubmit={submit}>
+<!-- Rendered by App into the carved row beside the subnav, not here. The save
+     button is outside the <form> in the DOM, so it carries `form` — that keeps
+     native required-field validation, which calling submit() directly loses. -->
+{#snippet formActions()}
+  <Button icon="cancel" disabled={saving} onclick={onCancel}>cancel</Button>
+  <Button
+    variant="primary"
+    icon="save"
+    type="submit"
+    form="wiki-form"
+    title={editing ? "save changes" : "create article"}
+    busy={saving}>save</Button
+  >
+{/snippet}
+
+<form id="wiki-form" class="article-form" onsubmit={submit}>
   <div class="head">
     <label class="grow">
       title
@@ -240,6 +370,20 @@
       status
       <AsciiSelect bind:value={status} options={[...REFERENCE_STATUSES]} />
     </label>
+    {#if hasComponents}
+      <label>
+        about
+        <AsciiSelect
+          bind:value={component}
+          title="The part of the product this article is about. It is what coverage and the gap sweep count it against."
+          disabled={components.length === 0}
+          options={[
+            { value: "", label: "the whole product" },
+            ...componentOptions(components),
+          ]}
+        />
+      </label>
+    {/if}
   </div>
 
   <div class="cats">
@@ -263,22 +407,49 @@
     {/if}
   </div>
 
+  {#if error}<Note tone="danger">{error}</Note>{/if}
+  {#if uploadError}<Note tone="warn">{uploadError}</Note>{/if}
+
   <div class="split" class:solo={!preview}>
-    <label class="editor">
+    <!-- svelte-ignore a11y_no_static_element_interactions -- a drop target
+         for images, beside the textarea that is the real control -->
+    <div class="editor" ondragover={(e) => e.preventDefault()} ondrop={onDrop}>
       <span class="lbl">
         body
-        <button type="button" class="toggle" onclick={() => (preview = !preview)}>
-          {preview ? "hide preview" : "show preview"}
-        </button>
+        <span class="tools">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="attach"
+            title="add an image — or paste or drop one into the body"
+            onclick={() => fileEl?.click()}>image</Button
+          >
+          <button type="button" class="toggle" onclick={() => (preview = !preview)}>
+            {preview ? "hide preview" : "show preview"}
+          </button>
+        </span>
       </span>
+      <input
+        bind:this={fileEl}
+        class="file"
+        type="file"
+        accept={LIBRARY_ASSET_TYPES.join(",")}
+        multiple
+        onchange={(e) => {
+          void attach(imagesIn(e.currentTarget.files));
+          e.currentTarget.value = "";
+        }}
+      />
       <div class="editwrap">
         <textarea
           bind:this={bodyEl}
           bind:value={body}
+          aria-label="body"
           spellcheck="false"
           oninput={syncPicker}
           onkeydown={onBodyKeydown}
           onclick={syncPicker}
+          onpaste={onPaste}
           onblur={() => setTimeout(() => (picking = false), 150)}
         ></textarea>
         {#if picking && suggestions.length}
@@ -301,35 +472,14 @@
           </ul>
         {/if}
       </div>
-    </label>
+    </div>
 
     {#if preview}
       <div class="preview">
         <span class="lbl">preview</span>
-        <div class="pane">
-          {#if items.length > 1}
-            <nav class="contents">
-              <strong>Contents</strong>
-              <ol>
-                {#each items as it}
-                  <li style="--depth: {Math.max(0, it.depth - 1)}">{it.text}</li>
-                {/each}
-              </ol>
-            </nav>
-          {/if}
-          <div class="md">{@html renderMarkdown(body)}</div>
-        </div>
+        <div class="pane md">{@html rendered}</div>
       </div>
     {/if}
-  </div>
-
-  {#if error}<p class="err">{error}</p>{/if}
-
-  <div class="acts">
-    <Button variant="ghost" onclick={onCancel} type="button">cancel</Button>
-    <Button variant="primary" type="submit" busy={saving}>
-      {editing ? "save changes" : "create article"}
-    </Button>
   </div>
 </form>
 
@@ -342,11 +492,13 @@
   }
   .head {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--pad-2);
     align-items: flex-end;
   }
   .grow {
     flex: 1;
+    min-width: 14rem;
   }
   label {
     display: flex;
@@ -356,19 +508,26 @@
   .lbl {
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
+    align-items: center;
     gap: 0.5rem;
-    opacity: 0.7;
+    color: var(--muted);
     font-size: 0.85em;
+  }
+  .tools {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pad-2);
   }
   .toggle {
     background: none;
     border: none;
     font: inherit;
     color: inherit;
-    opacity: 0.8;
     cursor: pointer;
     text-decoration: underline;
+  }
+  .file {
+    display: none;
   }
   .cats .picker {
     display: flex;
@@ -394,6 +553,9 @@
     grid-template-columns: 1fr;
   }
   .editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
     min-height: 0;
   }
   .editwrap {
@@ -452,36 +614,22 @@
   .pane {
     flex: 1;
     overflow: auto;
-    border: 1px solid var(--line, currentColor);
+    border: 1px solid var(--border);
     padding: 0.6rem 0.8rem;
   }
-  .contents {
-    border: 1px solid var(--line, currentColor);
-    padding: 0.4rem 0.8rem;
-    margin-bottom: 0.8rem;
-    font-size: 0.9em;
+  .pane :global(.secno) {
+    color: var(--muted);
+    margin-right: 0.35em;
   }
-  .contents ol {
-    margin: 0.2rem 0 0;
-    padding: 0;
-    list-style: none;
-  }
-  .contents li {
-    padding-left: calc(var(--depth) * 1.2rem);
-  }
-  .acts {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
+  .pane :global(img) {
+    max-width: 100%;
+    height: auto;
   }
   .muted {
-    opacity: 0.6;
+    color: var(--muted);
   }
   .sm {
     font-size: 0.85em;
-  }
-  .err {
-    color: var(--bad, crimson);
   }
 
   @media (max-width: 60rem) {

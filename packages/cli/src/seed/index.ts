@@ -8,6 +8,7 @@ import {
   setCredential,
   setSetting,
   sql,
+  sweepWikiGaps,
 } from "@tachy/core";
 import type { Tx } from "./batches";
 import { SCALES, type ScaleName } from "./scale";
@@ -59,6 +60,8 @@ const TABLES = [
   "library_revisions",
   "wiki_article_categories",
   "wiki_categories",
+  "wiki_gaps",
+  "library_assets",
   "analysis_runs",
   "code_chunks",
   "repo_files",
@@ -316,6 +319,11 @@ export async function seed(opts: SeedOptions): Promise<void> {
     insert into settings (key, value) values (${MARKER}, ${sql.json({ scale: opts.scale, at: new Date().toISOString() })})
     on conflict (key) do update set value = excluded.value, updated_at = now()
   `;
+
+  // After the bulk transaction, like the other core calls: the gaps page reads
+  // what a sweep wrote, so a fresh dev database would otherwise show none until
+  // the API's first run.
+  await phases.run("gaps", () => sweepWikiGaps());
 
   await phases.run("count", () => report(opts, credentials));
   phases.report();

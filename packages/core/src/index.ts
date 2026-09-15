@@ -162,6 +162,9 @@ export {
   coverage,
   parseWikilinks,
   LINK_KINDS,
+  sniffImage,
+  saveAsset,
+  getAsset,
 } from "./library";
 export type {
   LibraryActor,
@@ -179,6 +182,7 @@ export type {
   Coverage,
   CoverageNode,
   CoverageCounts,
+  SavedAsset,
 } from "./library";
 export type { FeedbackInput } from "./knowledge";
 
@@ -196,6 +200,11 @@ export {
   findMainPage,
   listWikis,
   draftSources,
+  GAP_THRESHOLD,
+  findWikiGaps,
+  sweepWikiGaps,
+  listWikiGaps,
+  dismissWikiGap,
 } from "./wiki";
 export type {
   WikiCategoryRow,
@@ -205,6 +214,10 @@ export type {
   WikiTocNode,
   WikiToc,
   DraftSource,
+  WikiGapItem,
+  WikiGapFinding,
+  WikiGapRow,
+  SweepResult,
 } from "./wiki";
 export {
   structuredSchema,
@@ -464,6 +477,7 @@ export type { RedactOptions, RedactionPolicy } from "./compliance";
 export {
   CLOUD_RE,
   CLOUD_HINT,
+  MAX_PAGE,
   SLUG_RE,
   slugify,
   WIKILINK_RE,
@@ -476,4 +490,11 @@ export {
   fieldName,
   columnKeys,
   ARTIFACT_UTILITIES,
+  WIKI_RESERVED_SLUGS,
+  WIKI_GAP_KINDS,
+  LIBRARY_ASSET_TYPES,
+  MAX_ASSET_BYTES,
+  assetPath,
+  ASSET_SRC_RE,
 } from "@tachy/contract";
+export type { WikiGapKind, LibraryAssetType } from "@tachy/contract";

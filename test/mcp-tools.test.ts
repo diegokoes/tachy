@@ -5,6 +5,7 @@ import {
   addSourceConnection,
   addResolutionPattern,
   registerSource,
+  sweepWikiGaps,
   type RawWorkItem,
   type SourceFactory,
 } from "@tachy/core";
@@ -231,6 +232,71 @@ describe("reference and wiki round trips", () => {
 
     const listed = await call("list_wiki_articles", { product_slug: "tpd" });
     expect(listed.text).toMatch(/spooler-stalls/);
+  });
+
+  it("points at the article where it now lives", async () => {
+    const saved = await call("save_wiki_article", {
+      slug: "label-templates",
+      title: "Label templates",
+      body: "## Overview\n\nTemplates.",
+      product_slug: "tpd",
+    });
+    expect(saved.text).toContain("/wiki/tpd/label-templates");
+    expect(saved.text).not.toContain("/library/wiki");
+  });
+
+  it("adds a nested category the article can then be filed under", async () => {
+    expect(
+      (
+        await call("add_wiki_category", {
+          product_slug: "tpd",
+          slug: "troubleshooting",
+          name: "Troubleshooting",
+        })
+      ).isError,
+    ).toBe(false);
+    const nested = await call("add_wiki_category", {
+      product_slug: "tpd",
+      slug: "printing",
+      name: "Printing",
+      parent: "troubleshooting",
+    });
+    expect(nested.isError).toBe(false);
+
+    const saved = await call("save_wiki_article", {
+      slug: "spooler",
+      title: "Spooler",
+      body: "b",
+      product_slug: "tpd",
+      categories: ["printing"],
+    });
+    expect(saved.isError).toBe(false);
+    const listed = (await call("list_wiki_articles", { product_slug: "tpd" }))
+      .json as any;
+    expect(listed.categories[0].slug).toBe("troubleshooting");
+    expect(listed.categories[0].children[0].articles[0].slug).toBe("spooler");
+  });
+
+  it("lists a wiki's gaps, and says so when there are none", async () => {
+    const empty = (await call("list_wiki_gaps", { product_slug: "tpd" }))
+      .json as any;
+    expect(empty.gaps).toEqual([]);
+    expect(empty.note).toMatch(/Nothing flagged/);
+
+    await call("save_wiki_article", {
+      slug: "linker",
+      title: "Linker",
+      body: "see [[never-written]]",
+      product_slug: "tpd",
+    });
+    await sweepWikiGaps({ productId: await tpdProductId() });
+    const found = (await call("list_wiki_gaps", { product_slug: "tpd" }))
+      .json as any;
+    expect(found.gaps.map((g: any) => [g.kind, g.subject])).toContainEqual([
+      "wanted",
+      "never-written",
+    ]);
+    expect(found.note).toBeUndefined();
   });
 
   /** 'toc' and 'c' are the wiki's own routes; an article there is unreachable. */

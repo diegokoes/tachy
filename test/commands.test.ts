@@ -17,6 +17,7 @@ describe("slash command registry", () => {
         "create-ticket",
         "code",
         "ingest-wiki",
+        "wiki-draft",
       ]),
     );
   });
@@ -36,6 +37,19 @@ describe("slash command registry", () => {
       if (c.name !== "compact") expect(commandAutoApprove(c.name)).toEqual([]);
     expect(commandAutoApprove("save_knowledge_entry")).toEqual([]);
     expect(commandAutoApprove("")).toEqual([]);
+  });
+
+  /** Written by the wiki's gap list, so both arguments name themselves. */
+  it("wiki-draft names its arguments and falls back to the gap list", () => {
+    const t = findCommand("wiki-draft")!.expand(
+      "tpd component=printing article=spooler-stalls",
+    );
+    expect(t).toContain("list_wiki_gaps");
+    expect(t).toContain("article=<slug>");
+    expect(t).toContain("never from general knowledge");
+    expect(t).toContain(
+      "User arguments: tpd component=printing article=spooler-stalls",
+    );
   });
 
   it("expands args into the command block", () => {
