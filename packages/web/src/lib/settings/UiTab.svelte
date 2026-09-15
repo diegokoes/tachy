@@ -6,6 +6,8 @@
     resetAccent,
     setTheme,
     setFontScale,
+    setNavLabels,
+    NAV_LABELS,
     TEXT_SIZES,
   } from "../theme.svelte";
   import { FAMILIES, fontState, setFont, type FontAxis } from "../fonts.svelte";
@@ -71,6 +73,18 @@
       {/each}
     </div>
     <p class="hint">{Math.round(th.fontScale * 100)}% of the base size.</p>
+  </Panel>
+
+  <Panel title="nav labels">
+    <div class="pick">
+      {#each NAV_LABELS as l}
+        <Button
+          variant={th.navLabels === l ? "primary" : "default"}
+          size="sm"
+          onclick={() => setNavLabels(l)}>{l}</Button
+        >
+      {/each}
+    </div>
   </Panel>
 
   <Panel title="accent">
