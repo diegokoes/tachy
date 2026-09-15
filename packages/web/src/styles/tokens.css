@@ -144,13 +144,16 @@
 }
 
 /* ── Type scale ───────────────────────────────────────────────────────────
-   Four sizes. Anything smaller than --fs-xs is unreadable at density
-   compact; anything between these is drift. */
+   Four reading sizes. Anything smaller than --fs-xs is unreadable at density
+   compact; anything between these is drift. --fs-fig is not a fifth reading
+   size — it is the figure a card leads with, which has to outrank the caption
+   under it, and nothing sets running text in it. */
 :root {
   --fs-xs: 0.72rem;
   --fs-sm: 0.82rem;
   --fs-md: 0.92rem;
   --fs-lg: 1rem;
+  --fs-fig: 1.35rem;
 
   /* Uppercase micro-labels: panel titles, field labels, hint rules. */
   --label-spacing: 0.08em;

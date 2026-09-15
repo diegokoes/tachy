@@ -1,14 +1,18 @@
 <script lang="ts">
-  import { onMount, type Component } from "svelte";
-  import { api } from "../api";
-  import { createResource } from "../resource.svelte";
+  import { onMount, tick, untrack, type Component } from "svelte";
   import { navigate, segment } from "../router.svelte";
   import { isGlobalAdmin } from "../session.svelte";
   import { t, showCustomer } from "../terms";
   import { Button, Rail } from "../tui";
-  import { setSubnav, setTopActions } from "../subnav.svelte";
+  import { setSubnav, setTopActions, type SubnavItem } from "../subnav.svelte";
+  import { scrollport } from "../scrollport.svelte";
   import { topAction } from "./topAction.svelte";
+  import { census } from "./census.svelte";
+  import { createSpy, setActiveSpy } from "./scrollspy.svelte";
+  import AdminSection from "./AdminSection.svelte";
   import PipelinePanel from "./PipelinePanel.svelte";
+  import CatalogPanel from "./CatalogPanel.svelte";
+  import PosturePanel from "./PosturePanel.svelte";
   import SourcesPanel from "./SourcesPanel.svelte";
   import ProjectsPanel from "./ProjectsPanel.svelte";
   import ReposPanel from "./ReposPanel.svelte";
@@ -22,11 +26,6 @@
   import SystemPanel from "./SystemPanel.svelte";
   import CredentialsPanel from "./CredentialsPanel.svelte";
 
-  type Census = {
-    counts: Record<string, number>;
-    warn: Record<string, number>;
-  };
-
   type Section = {
     key: string;
     label: string;
@@ -36,10 +35,10 @@
     show?: boolean;
   };
 
-  const PAGES = [
-    { key: "connect", label: "connect" },
-    { key: "structure", label: "structure" },
-    { key: "access", label: "access" },
+  const PAGES: SubnavItem[] = [
+    { key: "connect", label: "connect", icon: "link" },
+    { key: "structure", label: "structure", icon: "layers" },
+    { key: "access", label: "access", icon: "key" },
   ];
 
   const admin = $derived(isGlobalAdmin());
@@ -52,6 +51,7 @@
       { key: "repos", label: "repos", view: ReposPanel, n: "repos" },
     ],
     structure: [
+      { key: "overview", label: "overview", view: CatalogPanel },
       { key: "teams", label: t("teams"), view: TeamsPanel, n: "teams" },
       { key: "products", label: t("products"), view: ProductsPanel, n: "products" },
       { key: "components", label: "components", view: ComponentsPanel, n: "components" },
@@ -60,6 +60,7 @@
       { key: "customers", label: t("customers"), view: CustomersPanel, n: "customers", show: showCustomer() },
     ],
     access: [
+      { key: "overview", label: "overview", view: PosturePanel },
       { key: "users", label: "users & roles", view: AccessPanel, n: "users" },
       { key: "credentials", label: "shared credentials", view: CredentialsPanel },
       { key: "system", label: "system settings", view: SystemPanel, show: admin },
@@ -71,15 +72,17 @@
     (SECTIONS[page] ?? SECTIONS.connect).filter((s) => s.show !== false),
   );
 
-  /* An unknown third segment, or one the caller has no permission for, lands
-     on the page's first section rather than an empty column. */
-  const current = $derived(
-    sections.find((s) => s.key === segment(2)) ?? sections[0],
-  );
+  /* Which rail row is lit. It follows the scroll, not the route — the route is
+     what the scroll writes. Reading segment(2) here instead would close the
+     loop and re-render the page on every section the reader passes. */
+  let active = $state("");
 
-  const census = createResource(() => api.get<Census>("/overview"), {
-    counts: {},
-    warn: {},
+  const spy = createSpy({
+    onactive: (key) => {
+      active = key;
+      navigate(`/admin/${page}/${key}`, { replace: true });
+    },
+    order: () => sections.map((s) => s.key),
   });
 
   const items = $derived(
@@ -103,23 +106,59 @@
     }),
   );
 
-  /* Recounted on every section change rather than by each panel reporting its
-     own writes: one cheap query, and the index is never stale by more than the
-     click it took to get here. */
+  /* One cheap query per page, not per section: every section on the page is on
+     screen now, so there is no click left to recount on. */
   $effect(() => {
-    current?.key;
+    page;
     census.reload();
   });
 
-  onMount(() => census.reload());
+  /* Rebuilt per page, because the whole column of sections is replaced. The
+     third segment is read here and nowhere else — as a place to open at, not as
+     a thing to render from. */
+  $effect(() => {
+    page;
+    const at = untrack(() => segment(2));
+    let cancelled = false;
+    tick().then(() => {
+      if (cancelled) return;
+      const first = sections[0]?.key ?? "";
+      const target = sections.find((s) => s.key === at)?.key;
+      /* The scroller is shared with every other view, so it still holds
+         whatever the last page was scrolled to. Put it back at the top before
+         the spy reads it, or arriving on a page lands halfway down it. */
+      if (!target || target === first) {
+        const port = scrollport();
+        if (port) port.scrollTop = 0;
+      }
+      spy.start();
+      active = target ?? first;
+      if (target && target !== first) spy.goto(target, false);
+    });
+    return () => {
+      cancelled = true;
+      spy.destroy();
+    };
+  });
+
+  /* Published for the overview cards, which scroll to the section that fixes
+     whatever number they are showing. */
+  onMount(() => {
+    const drop = setActiveSpy(spy);
+    return () => {
+      drop();
+      spy.destroy();
+    };
+  });
 
   /* The section's own add button, drawn in the row carved out of the window's
-     top edge. Admin was the one section leaving that corner empty. */
-  $effect(() => (topAction() ? setTopActions(add) : undefined));
+     top edge. It follows the rail marker down the page. */
+  const acting = $derived(topAction(active));
+  $effect(() => (acting ? setTopActions(add) : undefined));
 </script>
 
 {#snippet add()}
-  {@const a = topAction()}
+  {@const a = acting}
   {#if a}
     <Button variant="ghost" tone="ok" size="sm" icon="plus" onclick={a.run}
       >{a.label}</Button
@@ -130,23 +169,33 @@
 <div class="admin-root">
   <Rail
     {items}
-    active={current?.key ?? ""}
+    {active}
     label="{page} sections"
-    onpick={(k) => navigate(`/admin/${page}/${k}`)}
+    onpick={(k) => spy.goto(k)}
   />
 
   <div class="content">
-    {#if current}
-      {@const View = current.view}
-      <View />
-    {/if}
+    {#each sections as s (s.key)}
+      <AdminSection
+        {spy}
+        section={s.key}
+        label={s.label}
+        view={s.view}
+        eager={s.key === "overview"}
+      />
+    {/each}
+
+    <!-- Air under the last section so it can be scrolled to the top like any
+         other. Blank space is the price; the rail landing somewhere different
+         depending on how many rows the last table holds was the alternative. -->
+    <div class="tail" style="height: {spy.tail}px" aria-hidden="true"></div>
   </div>
 </div>
 
 <style>
-  /* The index and the one section it points at. No panel around the section:
-     the rail's active row is its heading, and a title straddling a border on
-     top of that only ever said the same thing twice. */
+  /* The index and everything it points at, in one column. The rail's active
+     row is still the heading of the part you are in — it just tracks the
+     scroll now instead of choosing what gets rendered at all. */
   .admin-root {
     display: grid;
     grid-template-columns: minmax(9rem, 12rem) 1fr;
@@ -155,7 +204,13 @@
     min-width: 0;
   }
   .content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pad-4);
     min-width: 0;
+  }
+  .tail {
+    flex: none;
   }
 
   @media (max-width: 52rem) {

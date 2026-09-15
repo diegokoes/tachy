@@ -7,7 +7,7 @@
   import SlugRename from "./SlugRename.svelte";
   import type { Pattern } from "./rows";
 import { INFO } from "./help";
-  import { claimTopAction } from "./topAction.svelte";
+  import { sectionHoist } from "./topAction.svelte";
 
   const patterns = createResource(
     () => api.get<Pattern[]>("/resolution-patterns"),
@@ -39,7 +39,7 @@ import { INFO } from "./help";
   onMount(patterns.reload);</script>
 
 <CrudTable
-  hoist={claimTopAction}
+  hoist={sectionHoist("patterns")}
   {columns}
   rows={patterns.data}
   rowKey={(r) => r.slug}
@@ -47,6 +47,7 @@ import { INFO } from "./help";
   error={patterns.error}
   emptyTitle="No resolution patterns yet."
   addLabel="add pattern"
+  noun="pattern"
   editTitle={(r) => r.slug}
   oncreate={(d) =>
     patterns.mutate(() =>

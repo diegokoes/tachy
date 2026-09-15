@@ -1,4 +1,9 @@
-import type { AgentProvider, DeploymentProfile } from "@tachy/contract";
+import type {
+  AgentProvider,
+  DeploymentProfile,
+  TeamRole,
+  UserRole,
+} from "@tachy/contract";
 
 /**
  * The shapes the admin panels render — one per table they administer, as the
@@ -135,7 +140,7 @@ export type UserRow = {
   id: string;
   email: string;
   display_name: string | null;
-  role: "admin" | "member";
+  role: UserRole;
   disabled: boolean;
   has_password: boolean;
   created_at: string;
@@ -144,5 +149,71 @@ export type Member = {
   user_id: string;
   email: string;
   display_name: string | null;
-  team_role: string;
+  team_role: TeamRole;
+};
+
+/**
+ * `GET /overview` — the whole admin index in one request. `counts` and `warn`
+ * badge the rail; `detail` is what the three overview panels render from.
+ */
+export type Census = {
+  counts: Record<string, number>;
+  warn: Record<string, number>;
+  detail: {
+    sources: {
+      connections: number;
+      projects: number;
+      knowledge: number;
+      trackers: number;
+      projects_no_wiki: number;
+      projects_for_customer: number;
+      by_type: Record<string, number>;
+      untokened: number;
+      never_synced: number;
+    };
+    repos: {
+      repos: number;
+      failing: number;
+      ready: number;
+      working: number;
+      idle: number;
+      no_component: number;
+      no_project: number;
+      never_indexed: number;
+      files: number;
+      chunks: number;
+      oldest_indexed_at: string | null;
+    };
+    catalog: {
+      teams: number;
+      products: number;
+      components: number;
+      labels: number;
+      patterns: number;
+      customers: number;
+      teams_no_product: number;
+      products_no_component: number;
+      components_root: number;
+      components_no_description: number;
+      labels_no_description: number;
+      patterns_no_description: number;
+      customers_no_domains: number;
+      customer_units: number;
+      components_by_product: { slug: string; name: string; n: number }[];
+    };
+    users: {
+      users: number;
+      disabled: number;
+      admins: number;
+      with_password: number;
+      teams_with_admin: number;
+      users_no_team: number;
+    };
+    knowledge: {
+      entries: number;
+      entries_no_component: number;
+      entries_no_product: number;
+      by_status: Record<string, number>;
+    };
+  };
 };

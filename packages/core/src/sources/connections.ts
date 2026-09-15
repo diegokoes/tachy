@@ -47,12 +47,44 @@ export async function deleteSourceConnection(slug: string) {
   return { deleted: true, slug };
 }
 
-/** For the admin index: how much this domain holds. */
+/**
+ * For the admin index: how much this domain holds, and what is not finished.
+ *
+ * A knowledge project always has a product — source_projects carries a check
+ * constraint saying so — which is why there is no count of productless ones.
+ */
 export async function sourceCensus() {
   const [row] = await sql`
     select
       (select count(*)::int from source_connections) as connections,
-      (select count(*)::int from source_projects) as projects
+      (select count(*)::int from source_projects) as projects,
+      (select count(*)::int from source_projects where role = 'knowledge') as knowledge,
+      (select count(*)::int from source_projects where role = 'tracker') as trackers,
+      (select count(*)::int from source_projects
+        where role = 'knowledge' and jsonb_array_length(wikis) = 0) as projects_no_wiki,
+      (select count(*)::int from source_projects where customer_id is not null)
+        as projects_for_customer,
+      (select count(*)::int from source_connections where last_synced_at is null)
+        as never_synced
   `;
-  return row as { connections: number; projects: number };
+  const kinds = await sql`
+    select source_type, count(*)::int as n
+    from source_connections
+    group by source_type
+    order by n desc, source_type
+  `;
+  return {
+    ...(row as {
+      connections: number;
+      projects: number;
+      knowledge: number;
+      trackers: number;
+      projects_no_wiki: number;
+      projects_for_customer: number;
+      never_synced: number;
+    }),
+    by_type: Object.fromEntries(
+      kinds.map((k) => [k.source_type as string, k.n as number]),
+    ) as Record<string, number>,
+  };
 }

@@ -24,6 +24,7 @@
     canDelete = () => true,
     canCreate = true,
     addLabel = "add",
+    noun,
     editTitle,
     formExtra,
     onsave,
@@ -48,7 +49,13 @@
     canDelete?: (row: T) => boolean;
     canCreate?: boolean;
     addLabel?: string;
-    /** Modal heading when editing; defaults to the row's key. */
+    /**
+     * What one row is, singular — "project", "repo". It prefixes the record
+     * dialog's name, because a dialog titled with a bare slug says what you
+     * are editing but never what kind of thing it is.
+     */
+    noun?: string;
+    /** Names the row in the dialog title; defaults to the row's key. */
     editTitle?: (row: T) => string;
     /** Extra controls inside the record form, below the columns. */
     formExtra?: Snippet<
@@ -152,36 +159,9 @@
       return;
     }
     armed = null;
-    await run(key, () => ondelete?.(row));
+    if (await run(key, () => ondelete?.(row))) close();
   }
 </script>
-
-{#snippet actions(row: T)}
-  {@const key = rowKey(row)}
-  {#if extraActions}{@render extraActions(row)}{/if}
-  {#if onsave && canEdit(row)}
-    <Button
-      variant="ghost"
-      tone="info"
-      size="sm"
-      icon="edit"
-      title="edit"
-      onclick={() => startEdit(row)}>edit</Button
-    >
-  {/if}
-  {#if ondelete && canDelete(row)}
-    <Button
-      variant="ghost"
-      tone="danger"
-      size="sm"
-      icon={armed === key ? "check" : "del"}
-      title={armed === key ? "click again to confirm" : "delete"}
-      busy={busy === key}
-      onclick={() => confirmDelete(row)}
-      >{armed === key ? "confirm" : "delete"}</Button
-    >
-  {/if}
-{/snippet}
 
 {#if opError && !form}
   <Note tone="danger">{opError}</Note>
@@ -199,7 +179,8 @@
   {expanded}
   {ontoggle}
   {rowClass}
-  actions={onsave || ondelete || extraActions ? actions : undefined}
+  onrowclick={onsave ? startEdit : undefined}
+  canOpen={canEdit}
 />
 
 {#if oncreate && canCreate && !hoist}
@@ -212,8 +193,14 @@
 
 {#if form}
   {@const f = form}
+  {@const named = f.row ? (editTitle?.(f.row) ?? rowKey(f.row)) : null}
+  {@const key = f.row ? rowKey(f.row) : NEW}
   <RecordModal
-    title={f.row ? (editTitle?.(f.row) ?? `edit ${rowKey(f.row)}`) : addLabel}
+    title={named
+      ? noun
+        ? `${noun}: ${named}`
+        : named
+      : addLabel}
     {columns}
     {draft}
     mode={f.mode}
@@ -221,8 +208,19 @@
     busy={busy === formKey}
     error={opError}
     onConfirm={commit}
+    destructive={f.row && ondelete && canDelete(f.row)
+      ? {
+          label: armed === key ? "click again to confirm" : "delete",
+          icon: armed === key ? "check" : "del",
+          busy: busy === key,
+          onclick: () => f.row && confirmDelete(f.row),
+        }
+      : undefined}
     onCancel={close}
   >
+    {#snippet barExtra()}
+      {#if extraActions && f.row}{@render extraActions(f.row)}{/if}
+    {/snippet}
     {#snippet extra()}
       {#if formExtra}{@render formExtra({
           mode: f.mode,

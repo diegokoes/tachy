@@ -128,6 +128,7 @@ export {
   revertKnowledgeEntry,
   listEnvironments,
   listKnowledgeFacets,
+  knowledgeCensus,
 } from "./knowledge";
 export type {
   KnowledgeInput,

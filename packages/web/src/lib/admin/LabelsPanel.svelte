@@ -9,7 +9,7 @@
   import SlugRename from "./SlugRename.svelte";
   import type { Label, Product } from "./rows";
 import { INFO } from "./help";
-  import { claimTopAction } from "./topAction.svelte";
+  import { sectionHoist } from "./topAction.svelte";
 
   let product = $state("");
   let renaming = $state<Label | null>(null);
@@ -57,7 +57,7 @@ import { INFO } from "./help";
 
 {#if product}
   <CrudTable
-  hoist={claimTopAction}
+  hoist={sectionHoist("labels")}
     {columns}
     rows={labels.data}
     rowKey={(r) => r.slug}
@@ -65,6 +65,7 @@ import { INFO } from "./help";
     error={labels.error}
     emptyTitle="No labels for this {t('product')} yet."
     addLabel="add label"
+    noun="label"
     editTitle={(r) => r.slug}
     oncreate={(d) =>
       labels.mutate(() =>

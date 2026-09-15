@@ -11,7 +11,7 @@
   import { INFO } from "./help";
 import { csv } from "../fields";
   import type { Component, Product, Repo } from "./rows";
-  import { claimTopAction } from "./topAction.svelte";
+  import { sectionHoist } from "./topAction.svelte";
 
   let productSlug = $state("");
   let renaming = $state<Component | null>(null);
@@ -164,7 +164,7 @@ import { csv } from "../fields";
   />
 
   <CrudTable
-    hoist={claimTopAction}
+    hoist={sectionHoist("components")}
     {columns}
     rows={filtered}
     rowKey={(r) => r.slug}
@@ -176,6 +176,7 @@ import { csv } from "../fields";
     canDelete={() => mayEdit}
     canCreate={mayEdit}
     addLabel="add component"
+    noun="component"
     editTitle={(r) => r.name}
     oncreate={(d) =>
       components.mutate(() =>

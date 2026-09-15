@@ -3,8 +3,10 @@
   import { subnavKey } from "../keys/bindings.svelte";
   import { vimState } from "../vim.svelte";
   import { jellyPress } from "../motion";
+  import Icon from "./Icon.svelte";
+  import type { IconName } from "./icons";
 
-  type Item = { key: string; label: string };
+  type Item = { key: string; label: string; icon?: IconName };
 
   let {
     items,
@@ -12,6 +14,7 @@
     onpick,
     hotkeys = "none",
     anchor = "--tab-bar",
+    labels = "text",
   }: {
     items: Item[];
     active: string;
@@ -24,6 +27,8 @@
      * subnav's active tab would capture the nav's indicator too.
      */
     anchor?: string;
+    /** What a tab draws. A tab with no icon shows its name whatever this says. */
+    labels?: "text" | "both" | "icons";
   } = $props();
 
   function step(delta: number) {
@@ -31,6 +36,22 @@
     const next = items[Math.min(items.length - 1, Math.max(0, i + delta))];
     if (next && next.key !== active) onpick(next.key);
   }
+
+  const activeMatches = $derived(items.some((it) => it.key === active));
+
+  /* `active` doesn't always name one of `items` — the top bar's own tab set
+     no longer includes every destination (settings moved out of it), so
+     landing there leaves no tab "on". Without a real anchor somewhere, the
+     first hover afterwards has to spring the indicator into existence from
+     an unresolved position, and the size/position jump lands out of step
+     with the colour fade that's transitioning smoothly the whole time —
+     the "not really soft yet" flash. Keeping the anchor parked on the last
+     tab that WAS on (invisible via opacity, not by lacking a position) means
+     that first hover interpolates like every other one. */
+  let stickyKey = $state<string | null>(null);
+  $effect(() => {
+    if (activeMatches) stickyKey = active;
+  });
 
   // hidden: there is no longer a digit rendered to repeat, and Settings ›
   // keybinds is where these are listed now.
@@ -57,10 +78,17 @@
 <nav class="tabs" style="--tab-anchor: {anchor}">
   {#each items as it}
     {@const on = it.key === active}
+    {@const anchorHost =
+      it.key === (activeMatches ? active : (stickyKey ?? items[0]?.key))}
+    {@const icon = labels === "text" ? undefined : it.icon}
+    {@const bare = labels === "icons" && icon !== undefined}
     <button
       class="tab"
       class:on
+      class:anchor-host={anchorHost}
       aria-current={on ? "page" : undefined}
+      aria-label={bare ? it.label : undefined}
+      title={bare ? it.label : undefined}
       onclick={(e) => {
         onpick(it.key);
         // A pointer click (detail > 0) leaves the button focused but not
@@ -74,7 +102,9 @@
       use:jellyPress
     >
       <span class="lbl"
-        ><span class="br" aria-hidden="true">[</span>{it.label}<span
+        ><span class="br" aria-hidden="true">[</span
+        >{#if icon}<span class="ico"><Icon name={icon} weight={7} /></span
+          >{/if}{#if !bare}<span class="txt">{it.label}</span>{/if}<span
           class="br"
           aria-hidden="true">]</span
         ></span
@@ -171,6 +201,19 @@
     visibility: visible;
   }
 
+  /* The icon sits on the label's own line instead of turning the label into a
+     flex row. The label's box is the line box either way, so the indicator
+     anchored to it lands on the same edges in all three modes, and the bar
+     keeps the height the text gives it — switching modes never jumps the
+     recess the subnav is cut into. */
+  .ico {
+    display: inline-block;
+    vertical-align: middle;
+  }
+  .ico + .txt {
+    margin-left: 0.4em;
+  }
+
   .rule {
     flex: 1;
     min-width: 1ch;
@@ -194,18 +237,31 @@
      subnav's own box — and the anchor only has to be a descendant of that. */
   .tab.on .lbl,
   .tab:hover .lbl,
-  .tab:focus-visible .lbl {
+  .tab:focus-visible .lbl,
+  .tab.anchor-host:not(.on) .lbl {
     anchor-name: var(--tab-anchor);
   }
 
   /* The active tab gives the name up while a tab is being pointed at, so
      exactly one element ever holds it. Without this, hovering a tab that sits
      BEFORE the active one does nothing: duplicate names resolve to the last in
-     tree order, not the nearest. */
+     tree order, not the nearest. Same for the sticky fallback below — it's
+     just standing in for an "on" tab that isn't there. */
   .tabs:has(.tab:is(:hover, :focus-visible))
     .tab.on:not(:hover, :focus-visible)
+    .lbl,
+  .tabs:has(.tab:is(:hover, :focus-visible))
+    .tab.anchor-host:not(.on):not(:hover, :focus-visible)
     .lbl {
     anchor-name: none;
+  }
+
+  /* No tab is genuinely on, so the indicator has nothing to show — but it
+     still sits at the sticky tab's position rather than an unresolved one, so
+     that the first hover afterwards slides and fades in from a real place
+     instead of springing from nowhere. */
+  .tabs:not(:has(.tab.on)):not(:has(.tab:is(:hover, :focus-visible)))::before {
+    opacity: 0;
   }
 
   @supports (anchor-name: --a) {

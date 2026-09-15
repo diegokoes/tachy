@@ -10,7 +10,7 @@
   import type { Product, Team } from "./rows";
 import { INFO } from "./help";
 import { csv } from "../fields";
-  import { claimTopAction } from "./topAction.svelte";
+  import { sectionHoist } from "./topAction.svelte";
 
   const products = createResource(() => api.get<Product[]>("/products"), []);
   const teams = createResource(() => api.get<Team[]>("/teams"), []);
@@ -71,7 +71,7 @@ import { csv } from "../fields";
   });</script>
 
 <CrudTable
-  hoist={claimTopAction}
+  hoist={sectionHoist("products")}
   {columns}
   rows={products.data}
   rowKey={(r) => r.slug}
@@ -83,6 +83,7 @@ import { csv } from "../fields";
   canDelete={mayEdit}
   canCreate={teams.data.length > 0}
   addLabel={`add ${t("product")}`}
+  noun={t("product")}
   editTitle={(r) => r.name}
   oncreate={(d) =>
     products.mutate(() =>

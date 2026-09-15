@@ -1,10 +1,12 @@
 import { gsap } from "gsap";
 import { DrawSVGPlugin } from "gsap/DrawSVGPlugin";
+import { ScrollToPlugin } from "gsap/ScrollToPlugin";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SplitText } from "gsap/SplitText";
 
-gsap.registerPlugin(DrawSVGPlugin, SplitText);
+gsap.registerPlugin(DrawSVGPlugin, ScrollToPlugin, ScrollTrigger, SplitText);
 
 export const reducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-export { gsap, DrawSVGPlugin, SplitText };
+export { gsap, DrawSVGPlugin, ScrollToPlugin, ScrollTrigger, SplitText };

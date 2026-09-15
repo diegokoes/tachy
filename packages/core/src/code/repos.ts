@@ -230,8 +230,29 @@ export async function repoCensus() {
   const [row] = await sql`
     select
       count(*)::int as repos,
-      count(*) filter (where index_status = 'error')::int as failing
+      count(*) filter (where index_status = 'error')::int as failing,
+      count(*) filter (where index_status = 'ready')::int as ready,
+      count(*) filter (where index_status in ('cloning','indexing'))::int as working,
+      count(*) filter (where index_status = 'idle')::int as idle,
+      count(*) filter (where component_id is null)::int as no_component,
+      count(*) filter (where source_project_id is null)::int as no_project,
+      count(*) filter (where last_indexed_at is null)::int as never_indexed,
+      coalesce(sum(file_count), 0)::int as files,
+      coalesce(sum(chunk_count), 0)::int as chunks,
+      min(last_indexed_at) as oldest_indexed_at
     from repos
   `;
-  return row as { repos: number; failing: number };
+  return row as {
+    repos: number;
+    failing: number;
+    ready: number;
+    working: number;
+    idle: number;
+    no_component: number;
+    no_project: number;
+    never_indexed: number;
+    files: number;
+    chunks: number;
+    oldest_indexed_at: Date | null;
+  };
 }

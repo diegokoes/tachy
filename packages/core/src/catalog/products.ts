@@ -272,7 +272,14 @@ export async function deleteLabel(productId: string, slug: string) {
   return { deleted: true, slug };
 }
 
-/** One row for the admin index: how much of each thing the catalog holds. */
+/**
+ * One row for the admin index: how much of each thing the catalog holds, and
+ * how much of it is only half-filled-in.
+ *
+ * The description counts are not tidiness. A label or component with no
+ * description is one the agent has nothing to match a question against, so it
+ * is dead weight in the taxonomy rather than an incomplete row.
+ */
 export async function catalogCensus() {
   const [row] = await sql`
     select
@@ -281,14 +288,53 @@ export async function catalogCensus() {
       (select count(*)::int from components) as components,
       (select count(*)::int from labels) as labels,
       (select count(*)::int from resolution_patterns) as patterns,
-      (select count(*)::int from customers) as customers
+      (select count(*)::int from customers) as customers,
+      (select count(*)::int from teams t
+        where not exists (select 1 from products p where p.team_id = t.id)) as teams_no_product,
+      (select count(*)::int from products p
+        where not exists (select 1 from components c where c.product_id = p.id))
+        as products_no_component,
+      (select count(*)::int from components where parent_id is null) as components_root,
+      (select count(*)::int from components
+        where description is null or description = '') as components_no_description,
+      (select count(*)::int from labels
+        where description is null or description = '') as labels_no_description,
+      (select count(*)::int from resolution_patterns where description = '')
+        as patterns_no_description,
+      (select count(*)::int from customers where cardinality(email_domains) = 0)
+        as customers_no_domains,
+      (select count(*)::int from customer_units) as customer_units
   `;
-  return row as {
-    teams: number;
-    products: number;
-    components: number;
-    labels: number;
-    patterns: number;
-    customers: number;
+  /* The shape of the tree, not just its size: which products carry it and
+     which have a slug and nothing under it. */
+  const perProduct = await sql`
+    select p.slug, p.name, count(c.id)::int as n
+    from products p
+    left join components c on c.product_id = p.id
+    group by p.id, p.slug, p.name
+    order by n desc, p.slug
+  `;
+  return {
+    ...(row as {
+      teams: number;
+      products: number;
+      components: number;
+      labels: number;
+      patterns: number;
+      customers: number;
+      teams_no_product: number;
+      products_no_component: number;
+      components_root: number;
+      components_no_description: number;
+      labels_no_description: number;
+      patterns_no_description: number;
+      customers_no_domains: number;
+      customer_units: number;
+    }),
+    components_by_product: perProduct as unknown as {
+      slug: string;
+      name: string;
+      n: number;
+    }[],
   };
 }

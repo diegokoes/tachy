@@ -9,7 +9,7 @@
   import SlugRename from "./SlugRename.svelte";
   import type { Product, Team } from "./rows";
 import { INFO } from "./help";
-  import { claimTopAction } from "./topAction.svelte";
+  import { sectionHoist } from "./topAction.svelte";
 
   const teams = createResource(() => api.get<Team[]>("/teams"), []);
   const products = createResource(() => api.get<Product[]>("/products"), []);
@@ -54,7 +54,7 @@ import { INFO } from "./help";
   onMount(reloadBoth);</script>
 
 <CrudTable
-  hoist={claimTopAction}
+  hoist={sectionHoist("teams")}
   {columns}
   rows={teams.data}
   rowKey={(r) => r.slug}
@@ -66,6 +66,7 @@ import { INFO } from "./help";
   canDelete={() => admin}
   canCreate={admin}
   addLabel={`add ${t("team")}`}
+  noun={t("team")}
   editTitle={(r) => r.name}
   oncreate={(d) =>
     teams.mutate(async () => {

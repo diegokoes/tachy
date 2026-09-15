@@ -17,7 +17,7 @@
   import type { Component, Customer, Product } from "./rows";
 import { INFO } from "./help";
 import { csv } from "../fields";
-  import { claimTopAction } from "./topAction.svelte";
+  import { sectionHoist } from "./topAction.svelte";
 
   type CustomerUnit = {
     id: string;
@@ -720,7 +720,7 @@ import { csv } from "../fields";
 />
 
 <CrudTable
-  hoist={claimTopAction}
+  hoist={sectionHoist("customers")}
   {columns}
   rows={filtered}
   rowKey={(r) => r.slug}
@@ -732,6 +732,7 @@ import { csv } from "../fields";
   emptyTitle={`No ${t("customers")} yet.`}
   emptyDetail={`Attribution is by the requester's email domain, so a ${t("customer")} needs its domains listed.`}
   addLabel={`add ${t("customer")}`}
+  noun={t("customer")}
   editTitle={(r) => r.name}
   oncreate={(d) =>
     customers.mutate(() =>
