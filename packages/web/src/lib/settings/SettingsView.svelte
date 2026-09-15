@@ -2,15 +2,15 @@
   import { navigate, segment } from "../router.svelte";
   import { session, logout } from "../session.svelte";
   import { Button } from "../tui";
-  import { setSubnav } from "../subnav.svelte";
+  import { setSubnav, type SubnavItem } from "../subnav.svelte";
   import AgentTab from "./AgentTab.svelte";
   import UiTab from "./UiTab.svelte";
   import KeybindsTab from "./KeybindsTab.svelte";
 
-  const TABS = [
-    { key: "agent", label: "agent" },
-    { key: "ui", label: "ui" },
-    { key: "keybinds", label: "keybinds" },
+  const TABS: SubnavItem[] = [
+    { key: "agent", label: "agent", icon: "sparkles" },
+    { key: "ui", label: "ui", icon: "window" },
+    { key: "keybinds", label: "keybinds", icon: "terminal" },
   ];
 
   const raw = $derived(segment(1) ?? "agent");

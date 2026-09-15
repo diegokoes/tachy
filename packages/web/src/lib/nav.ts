@@ -1,12 +1,13 @@
 import { isCurator, session } from "./session.svelte";
+import type { IconName } from "./tui/icons";
 
-export type NavItem = { key: string; label: string };
+export type NavItem = { key: string; label: string; icon?: IconName };
 
 const ALL: NavItem[] = [
-  { key: "chat", label: "chat" },
-  { key: "library", label: "library" },
-  { key: "admin", label: "admin" },
-  { key: "settings", label: "settings" },
+  { key: "chat", label: "chat", icon: "chat" },
+  { key: "library", label: "library", icon: "book" },
+  { key: "wiki", label: "wiki", icon: "globe" },
+  { key: "admin", label: "admin", icon: "lockOn" },
 ];
 
 /** The tab bar, in hotkey order — 1..n. */

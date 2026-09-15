@@ -2,31 +2,36 @@
   import { onMount } from "svelte";
   import ChatView from "./lib/ChatView.svelte";
   import LibraryView from "./lib/library/LibraryView.svelte";
+  import WikiView from "./lib/wiki/WikiView.svelte";
   import AdminView from "./lib/admin/AdminView.svelte";
   import SettingsView from "./lib/settings/SettingsView.svelte";
-  import IntroSplash from "./lib/IntroSplash.svelte";
   import SetupWizard from "./lib/SetupWizard.svelte";
   import LoginView from "./lib/LoginView.svelte";
   import { session, initSession } from "./lib/session.svelte";
   import { navItems } from "./lib/nav";
-  import { reducedMotion } from "./lib/gsap";
-  import { wipeIn } from "./lib/motion";
+  import { wipeIn, jellyPress } from "./lib/motion";
   import StarField from "./lib/StarField.svelte";
   import Wordmark from "./lib/Wordmark.svelte";
-  import { loadThemeFromStorage } from "./lib/theme.svelte";
+  import { loadThemeFromStorage, themeState } from "./lib/theme.svelte";
   import { loadFonts } from "./lib/fonts.svelte";
   import { navigate, section, startRouter } from "./lib/router.svelte";
   import { hints, pushScope, startKeys } from "./lib/keys.svelte";
-  import { navKey } from "./lib/keys/bindings.svelte";
+  import { navKey, settingsKey } from "./lib/keys/bindings.svelte";
   import { loadVim, vimState, scrollBindings } from "./lib/vim.svelte";
   import { subnav, topActions } from "./lib/subnav.svelte";
-  import { HintRule, Panel, Scrollbar, Tabs } from "./lib/tui";
+  import { setScrollport } from "./lib/scrollport.svelte";
+  import { HintRule, Icon, Panel, Scrollbar, Tabs } from "./lib/tui";
 
   const nav = $derived(navItems());
 
   const view = $derived(section("chat"));
 
   const sub = $derived(subnav());
+
+  const settingsIcon = $derived(
+    themeState.navLabels === "text" ? undefined : ("cog" as const),
+  );
+  const settingsBare = $derived(themeState.navLabels === "icons");
 
   let wizardSkipped = $state(localStorage.getItem("tachy-skip-wizard") === "1");
   const showWizard = $derived(session.bootstrapped === false && !wizardSkipped);
@@ -41,7 +46,6 @@
     localStorage.setItem("tachy-skip-wizard", "1");
   }
 
-  let splash = $state(!reducedMotion());
   let navEl = $state<HTMLElement>();
   let mainEl = $state<HTMLElement>();
   let navRevealed = $state(false);
@@ -185,8 +189,10 @@
     };
   });
 
+  $effect(() => setScrollport(mainEl ?? null));
+
   $effect(() => {
-    if (!navEl || splash || navRevealed) return;
+    if (!navEl || navRevealed) return;
     wipeIn(navEl.querySelectorAll("button"), () => (navRevealed = true));
   });
 
@@ -203,6 +209,20 @@
       })),
     );
   });
+
+  // Settings sits outside the tab bar now, so it keeps its own hidden binding
+  // rather than riding navItems()'s digit scope.
+  $effect(() =>
+    pushScope([
+      {
+        key: settingsKey(),
+        label: "",
+        hidden: true,
+        inFields: true,
+        run: () => navigate("/settings"),
+      },
+    ]),
+  );
 
   // h/l walk the sections the digits jump to; ^d/^u page the main column.
   $effect(() => {
@@ -234,10 +254,6 @@
   });
 </script>
 
-{#if splash}
-  <IntroSplash onDone={() => (splash = false)} />
-{/if}
-
 <StarField />
 
 {#if import.meta.env.VITE_DEV_BADGE}
@@ -245,7 +261,7 @@
 {/if}
 
 {#if session.loading}
-  <!-- background only while the session resolves; the splash covers cold loads -->
+  <!-- background only while the session resolves -->
 {:else if showWizard}
   <SetupWizard onDone={() => {}} onSkip={skipWizard} />
 {:else if showLogin}
@@ -260,12 +276,38 @@
             items={nav}
             active={view}
             anchor="--tab-nav"
+            labels={themeState.navLabels}
             onpick={(k) => navigate(`/${k}`)}
           />
         </Panel>
       </div>
-      <!-- Balances the wordmark's track so the pill sits on the true centre. -->
-      <div class="mark" aria-hidden="true"></div>
+      <!-- Balances the wordmark's track so the pill sits on the true centre,
+           and carries the one nav entry that isn't a section: settings has no
+           subnav of its own to swap tabs with, so it doesn't belong in the
+           bar that does that. -->
+      <div class="mark mark-end">
+        <button
+          class="settings-btn"
+          class:on={view === "settings"}
+          aria-current={view === "settings" ? "page" : undefined}
+          aria-label={settingsBare ? "settings" : undefined}
+          title={settingsBare ? "settings" : undefined}
+          onclick={(e) => {
+            navigate("/settings");
+            if (e.detail !== 0) e.currentTarget.blur();
+          }}
+          use:jellyPress
+        >
+          <span class="lbl"
+            ><span class="br" aria-hidden="true">[</span
+            >{#if settingsIcon}<span class="ico"
+                ><Icon name={settingsIcon} weight={7} /></span
+              >{/if}{#if !settingsBare}<span class="txt">settings</span
+              >{/if}<span class="br" aria-hidden="true">]</span
+            ></span
+          >
+        </button>
+      </div>
     </div>
 
     <div
@@ -293,6 +335,7 @@
             active={sub.active}
             hotkeys="shift"
             anchor="--tab-sub"
+            labels={themeState.navLabels}
             onpick={sub.onpick}
           />
         </div>
@@ -308,6 +351,8 @@
           <main id="main-content" bind:this={mainEl}>
             {#if view === "library"}
               <LibraryView />
+            {:else if view === "wiki"}
+              <WikiView />
             {:else if view === "admin"}
               <AdminView />
             {:else if view === "settings"}
@@ -394,6 +439,50 @@
     display: flex;
     align-items: center;
     min-width: 0;
+  }
+  .mark-end {
+    justify-content: flex-end;
+  }
+
+  /* A lone tab, styled like one of Tabs.svelte's own — same bracketed label,
+     same hover/focus behaviour — but with none of the machinery that only
+     makes sense among siblings: no anchor-positioned indicator to slide
+     between entries, since there is only ever this one. */
+  .settings-btn {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.1em;
+    font: inherit;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    padding: var(--pad-1) var(--pad-3);
+    white-space: nowrap;
+  }
+  .settings-btn:hover {
+    color: var(--text);
+  }
+  .settings-btn.on {
+    color: var(--accent);
+  }
+  .settings-btn:focus-visible {
+    outline: none;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .settings-btn .br {
+    visibility: hidden;
+  }
+  .settings-btn.on .br {
+    visibility: visible;
+  }
+  .settings-btn .ico {
+    display: inline-block;
+    vertical-align: middle;
+  }
+  .settings-btn .ico + .txt {
+    margin-left: 0.4em;
   }
 
   /* Hugs its content rather than the frame, so it reads as a separate object

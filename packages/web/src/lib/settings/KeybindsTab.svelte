@@ -4,12 +4,14 @@
     keymap,
     navKey,
     subnavKey,
+    settingsKey,
     setNavKey,
     setSubnavKey,
     resetKeys,
     conflicts,
     defaultNavKey,
     defaultSubnavKey,
+    defaultSettingsKey,
   } from "../keys/bindings.svelte";
   import { normalize } from "../keys.svelte";
   import { vimState, setVim } from "../vim.svelte";
@@ -22,6 +24,7 @@
   type Capture =
     | { kind: "nav"; item: string }
     | { kind: "subnav"; slot: number }
+    | { kind: "settings" }
     | null;
 
   let capturing = $state<Capture>(null);
@@ -56,7 +59,8 @@
       return;
     }
     if (capturing.kind === "nav") setNavKey(capturing.item, key);
-    else setSubnavKey(capturing.slot, key);
+    else if (capturing.kind === "subnav") setSubnavKey(capturing.slot, key);
+    else setNavKey("settings", key);
     capturing = null;
     warning = "";
   }
@@ -119,6 +123,25 @@
           {/if}
         </li>
       {/each}
+      <li>
+        <span class="what">settings</span>
+        <button
+          class="key"
+          class:arming={capturing?.kind === "settings"}
+          onclick={() => arming({ kind: "settings" })}
+        >
+          {capturing?.kind === "settings"
+            ? "press a key…"
+            : label(settingsKey())}
+        </button>
+        {#if keymap.nav.settings}
+          <button
+            class="clear"
+            title="back to {label(defaultSettingsKey)}"
+            onclick={() => setNavKey("settings", null)}>reset</button
+          >
+        {/if}
+      </li>
     </ul>
   </Panel>
 

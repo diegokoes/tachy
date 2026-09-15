@@ -36,6 +36,8 @@ function persist() {
 
 export const defaultNavKey = (i: number) => String(i + 1);
 export const defaultSubnavKey = (i: number) => `shift+${i + 1}`;
+/** Settings lives outside the tab bar, so it keeps a chord rather than a digit. */
+export const defaultSettingsKey = "ctrl+,";
 
 export function navKey(item: string, i: number): string {
   return keymap.nav[item] ?? defaultNavKey(i);
@@ -43,6 +45,13 @@ export function navKey(item: string, i: number): string {
 
 export function subnavKey(i: number): string {
   return keymap.subnav[i] ?? defaultSubnavKey(i);
+}
+
+/** Stored in the same `nav` bucket as the tab bar's own keys — settings just
+ *  isn't one of the items `navItems()` enumerates, so it can't collide with a
+ *  digit fallback the way a real slot's key could. */
+export function settingsKey(): string {
+  return keymap.nav.settings ?? defaultSettingsKey;
 }
 
 export function setNavKey(item: string, key: string | null) {
@@ -83,7 +92,10 @@ export function conflicts(
   key: string,
   navItems: { key: string; label: string }[],
   subnavCount: number,
-  skip?: { kind: "nav"; item: string } | { kind: "subnav"; slot: number },
+  skip?:
+    | { kind: "nav"; item: string }
+    | { kind: "subnav"; slot: number }
+    | { kind: "settings" },
 ): string[] {
   const hits: string[] = [];
   if (RESERVED[key]) hits.push(RESERVED[key]);
@@ -95,5 +107,6 @@ export function conflicts(
     if (skip?.kind === "subnav" && skip.slot === i) continue;
     if (subnavKey(i) === key) hits.push(`subnav tab ${i + 1}`);
   }
+  if (skip?.kind !== "settings" && settingsKey() === key) hits.push("settings");
   return hits;
 }
