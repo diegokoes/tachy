@@ -14,6 +14,7 @@
   import { setTopActions } from "../subnav.svelte";
   import { componentOptions } from "../catalog";
   import Icon from "../tui/Icon.svelte";
+  import { asStructured } from "./structured";
 
   let {
     mode,
@@ -68,8 +69,8 @@
   let showStructured = $state(false);
   let structuredField = $state<HTMLTextAreaElement>();
   let structuredText = $state(
-    seed.structured && Object.keys(seed.structured).length
-      ? JSON.stringify(seed.structured, null, 2)
+    Object.keys(asStructured(seed.structured)).length
+      ? JSON.stringify(asStructured(seed.structured), null, 2)
       : "",
   );
   let structuredError = $state<string | null>(null);

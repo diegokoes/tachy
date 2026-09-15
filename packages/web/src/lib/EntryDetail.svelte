@@ -1,23 +1,25 @@
 <script lang="ts">
   import { fmtDate } from "./dates";
-  import { statusTone } from "./library/status";
+  import { statusTone, type StatusAction } from "./library/status";
   import { patchLibraryItem } from "./library/edit";
   import { createSequence } from "./resource.svelte";
   import { api } from "./api";
   import type { KnowledgeRow, Feedback, NamedRow } from "./types";
   import History from "./library/History.svelte";
-  import Backlinks from "./wiki/Backlinks.svelte";
+  import Backlinks from "./library/Backlinks.svelte";
   import { renderMarkdown, markBrokenLinks } from "./markdown";
   import { LinkTargets } from "./wikilinks.svelte";
   import StructuredView from "./knowledge/StructuredView.svelte";
+  import { asStructured } from "./knowledge/structured";
   import QualityBars from "./knowledge/QualityBars.svelte";
   import EntryForm from "./knowledge/EntryForm.svelte";
   import ScopeCrumb from "./library/ScopeCrumb.svelte";
+  import StatusActions from "./library/StatusActions.svelte";
   import { isCurator, canCurateScope } from "./session.svelte";
   import { pushScope } from "./keys.svelte";
   import { setTopActions } from "./subnav.svelte";
   import { vimState } from "./vim.svelte";
-  import { Badge, Button, Chip, Icon } from "./tui";
+  import { Badge, Button, Chip, Icon, Modal } from "./tui";
 
   let { id, onClose, onOpen }: { id: string; onClose: () => void; onOpen?: (id: string) => void } = $props();
 
@@ -40,6 +42,8 @@
   let conflict = $state(false);
   let productTeamSlug = $state<string | null>(null);
 
+  let historyOpen = $state(false);
+
   let deprecating = $state(false);
   let deprecateReason = $state("");
   let supersedeQuery = $state("");
@@ -51,11 +55,73 @@
   );
 
 
+  /**
+   * The lifecycle column. Built as a list rather than written out as markup so
+   * the rail draws every item the same way, and so which actions apply stays
+   * one readable block of status rules.
+   */
+  function actionsFor(e: KnowledgeRow): StatusAction[] {
+    const acts: StatusAction[] = [];
+    if (e.status !== "draft")
+      acts.push({
+        icon: "doc",
+        label: "draft",
+        title: "back to draft",
+        tone: "info",
+        disabled: mutating,
+        onclick: () => patch({ status: "draft" }),
+      });
+    if (e.status !== "approved")
+      acts.push({
+        icon: "check",
+        label: e.status === "deprecated" ? "re-approve" : "approve",
+        tone: "ok",
+        disabled: mutating,
+        // Re-approving has to clear the replacement too, or the banner keeps
+        // pointing at the entry that superseded this one.
+        onclick: () =>
+          patch(
+            e.status === "deprecated"
+              ? { status: "approved", supersededBy: null }
+              : { status: "approved" },
+          ),
+      });
+    if (e.status !== "archived")
+      acts.push({
+        icon: "archive",
+        label: "archive",
+        disabled: mutating,
+        onclick: () => patch({ status: "archived" }),
+      });
+    if (e.status !== "rejected")
+      acts.push({
+        icon: "reject",
+        label: "reject",
+        tone: "danger",
+        disabled: mutating,
+        onclick: () => patch({ status: "rejected" }),
+      });
+    if (e.status === "approved")
+      acts.push({
+        icon: "alert",
+        label: "deprecate",
+        title: "deprecate\u2026",
+        tone: "warn",
+        disabled: mutating,
+        onclick: () => (deprecating = !deprecating),
+      });
+    return acts;
+  }
+
+  const statusActions = $derived(entry && canEdit ? actionsFor(entry) : []);
+
+  const structured = $derived(asStructured(entry?.structured));
+
   /** Reading the entry, backspace goes back. Not bound while editing, where it
       would sit one stray keystroke away from discarding a form.
 
-      Hidden: back is a labelled button in the carved row now, so printing it
-      in the hint rule as well says the same thing twice. */
+      Hidden: back is a button in the carved row now, so printing it in the
+      hint rule as well says the same thing twice. */
   $effect(() => {
     if (editing || !entry) return;
     return pushScope([
@@ -172,6 +238,7 @@
     void id;
     editing = false;
     deprecating = false;
+    historyOpen = false;
     load();
   });
 </script>
@@ -229,215 +296,194 @@
         onCancel={() => { editing = false; mutateError = null; }}
       />
     {:else}
-      <ScopeCrumb area={entry.product_area} />
+      <div class="read">
+        <StatusActions actions={statusActions} />
+        <ScopeCrumb area={entry.product_area} />
 
-      <div class="content">
-        <h2>{entry.issue_summary ?? "(no summary)"}</h2>
+        <div class="content">
+          <h2>{entry.issue_summary ?? "(no summary)"}</h2>
 
-        <!-- Bars left, status band centred, nothing right — the third track
-             keeps the centre optically centred whatever the bars measure. -->
-        <div class="meta">
-          <div class="left">
-            <QualityBars
-              confidence={entry.confidence}
-              clarity={entry.resolution_clarity}
-            />
-          </div>
-
-          <div class="mid">
-            <div class="band">
-              <Badge tone={statusTone(entry.status)}>{entry.status}</Badge>
-              {#if entry.updated_at}<span class="muted">updated {fmtDate(entry.updated_at)}</span>{/if}
+          <!-- Bars left, status band centred, nothing right — the third track
+               keeps the centre optically centred whatever the bars measure. -->
+          <div class="meta">
+            <div class="left">
+              <QualityBars
+                confidence={entry.confidence}
+                clarity={entry.resolution_clarity}
+              />
             </div>
 
-            {#if entry.affected_version || entry.fixed_version}
-              <div class="versions">
-                {#if entry.affected_version}
-                  <span class="affected" title="affected version">{entry.affected_version}</span>
-                {/if}
-                {#if entry.affected_version && entry.fixed_version}
-                  <Icon name="versionArrow" size="1.1em" weight={7} label="fixed in" />
-                {/if}
-                {#if entry.fixed_version}
-                  <span class="fixed" title="fixed in version">{entry.fixed_version}</span>
-                {/if}
+            <div class="mid">
+              <div class="band">
+                <span class="lifecycle"><Badge tone={statusTone(entry.status)}>{entry.status}</Badge></span>
+                <span class="when">
+                  {#if entry.updated_at}<span class="muted">updated {fmtDate(entry.updated_at)}</span>{/if}
+                </span>
+                <span class="revisions">
+                  <Button
+                    square
+                    iconSize="1.1rem"
+                    icon="history"
+                    title="revisions and reads"
+                    aria-label="revisions and reads"
+                    onclick={() => (historyOpen = true)}
+                  />
+                </span>
               </div>
-            {/if}
 
-            {#if entry.cloud || entry.resolution_pattern || entry.hidden_fix || entry.customer_slug}
-              <div class="badges">
-                {#if entry.customer_slug}
-                  <Badge
-                    tone="accent"
-                    title="learned on this customer's install. Cite it as theirs, not as how the product behaves"
-                    >{entry.customer_slug}</Badge
-                  >
-                {/if}
-                {#if entry.cloud}<Badge>{entry.cloud}</Badge>{/if}
-                {#if entry.resolution_pattern}<Badge>{entry.resolution_pattern}</Badge>{/if}
-                {#if entry.hidden_fix}
-                  <Badge tone="accent" title="the real fix wasn't visible on the ticket surface">hidden fix</Badge>
-                {/if}
-              </div>
-            {/if}
+              {#if entry.affected_version || entry.fixed_version}
+                <div class="versions">
+                  {#if entry.affected_version}
+                    <span class="affected" title="affected version">{entry.affected_version}</span>
+                  {/if}
+                  {#if entry.affected_version && entry.fixed_version}
+                    <Icon name="versionArrow" size="1.1em" weight={7} label="fixed in" />
+                  {/if}
+                  {#if entry.fixed_version}
+                    <span class="fixed" title="fixed in version">{entry.fixed_version}</span>
+                  {/if}
+                </div>
+              {/if}
+
+              {#if entry.cloud || entry.resolution_pattern || entry.hidden_fix || entry.customer_slug}
+                <div class="badges">
+                  {#if entry.customer_slug}
+                    <Badge
+                      tone="accent"
+                      title="learned on this customer's install. Cite it as theirs, not as how the product behaves"
+                      >{entry.customer_slug}</Badge
+                    >
+                  {/if}
+                  {#if entry.cloud}<Badge>{entry.cloud}</Badge>{/if}
+                  {#if entry.resolution_pattern}<Badge>{entry.resolution_pattern}</Badge>{/if}
+                  {#if entry.hidden_fix}
+                    <Badge tone="accent" title="the real fix wasn't visible on the ticket surface">hidden fix</Badge>
+                  {/if}
+                </div>
+              {/if}
+            </div>
+
+            <div class="right"></div>
           </div>
 
-          <div class="right"></div>
-        </div>
+          {#if canEdit}
+            {#if mutateError && !editing}
+              <p class="error">
+                {mutateError}
+                {#if conflict}<Button size="sm" onclick={load}>reload</Button>{/if}
+              </p>
+            {/if}
 
-        {#if canEdit}
-          <div class="acts">
-            {#if entry.status !== "draft"}
-              <Button
-                variant="ghost" square tone="info" icon="doc"
-                aria-label="back to draft" title="back to draft"
-                disabled={mutating}
-                onclick={() => patch({ status: "draft" })}
-              />
-            {/if}
-            {#if entry.status !== "approved"}
-              <Button
-                variant="ghost" square tone="ok" icon="check"
-                aria-label="approve" title={entry.status === "deprecated" ? "re-approve" : "approve"}
-                disabled={mutating}
-                onclick={() => patch(entry!.status === "deprecated"
-                  ? { status: "approved", supersededBy: null }
-                  : { status: "approved" })}
-              />
-            {/if}
-            {#if entry.status !== "archived"}
-              <Button
-                variant="ghost" square icon="archive"
-                aria-label="archive" title="archive"
-                disabled={mutating}
-                onclick={() => patch({ status: "archived" })}
-              />
-            {/if}
-            <span class="gap"></span>
-            {#if entry.status !== "rejected"}
-              <Button
-                variant="ghost" square tone="danger" icon="reject"
-                aria-label="reject" title="reject"
-                disabled={mutating}
-                onclick={() => patch({ status: "rejected" })}
-              />
-            {/if}
-            {#if entry.status === "approved"}
-              <Button
-                variant="ghost" square tone="warn" icon="alert"
-                aria-label="deprecate" title="deprecate…"
-                disabled={mutating}
-                onclick={() => (deprecating = !deprecating)}
-              />
-            {/if}
-          </div>
-          {#if mutateError && !editing}
-            <p class="error">
-              {mutateError}
-              {#if conflict}<Button size="sm" onclick={load}>reload</Button>{/if}
-            </p>
-          {/if}
-
-          {#if deprecating}
-            <div class="deprecate-form">
-              <textarea rows="2" bind:value={deprecateReason} placeholder="why is this outdated? (recorded as feedback)"></textarea>
-              <input
-                placeholder="search for the replacement entry (optional)"
-                bind:value={supersedeQuery}
-                oninput={searchSupersede}
-              />
-              {#if supersedeResults.length}
-                <ul class="supersede-results">
-                  {#each supersedeResults as r (r.id)}
+            {#if deprecating}
+              <div class="deprecate-form">
+                <textarea rows="2" bind:value={deprecateReason} placeholder="why is this outdated? (recorded as feedback)"></textarea>
+                <input
+                  placeholder="search for the replacement entry (optional)"
+                  bind:value={supersedeQuery}
+                  oninput={searchSupersede}
+                />
+                {#if supersedeResults.length}
+                  <ul class="supersede-results">
+                    {#each supersedeResults as r (r.id)}
+                      <li>
+                        <label>
+                          <input type="radio" name="supersede" checked={supersedeId === r.id}
+                            onchange={() => (supersedeId = r.id)} />
+                          {r.issue_summary ?? r.id}
+                        </label>
+                      </li>
+                    {/each}
                     <li>
                       <label>
-                        <input type="radio" name="supersede" checked={supersedeId === r.id}
-                          onchange={() => (supersedeId = r.id)} />
-                        {r.issue_summary ?? r.id}
+                        <input type="radio" name="supersede" checked={supersedeId === null}
+                          onchange={() => (supersedeId = null)} />
+                        <span class="muted">no replacement</span>
                       </label>
                     </li>
-                  {/each}
-                  <li>
-                    <label>
-                      <input type="radio" name="supersede" checked={supersedeId === null}
-                        onchange={() => (supersedeId = null)} />
-                      <span class="muted">no replacement</span>
-                    </label>
-                  </li>
-                </ul>
-              {/if}
-              <div class="actions">
-                <Button
-                  variant="ghost" square tone="warn" icon="check"
-                  aria-label="deprecate" title="deprecate"
-                  busy={mutating}
-                  onclick={deprecate}
-                />
-                <Button
-                  variant="ghost" square icon="cancel"
-                  aria-label="cancel" title="cancel"
-                  disabled={mutating}
-                  onclick={() => (deprecating = false)}
-                />
+                  </ul>
+                {/if}
+                <div class="actions">
+                  <Button
+                    variant="ghost" square tone="warn" icon="check"
+                    aria-label="deprecate" title="deprecate"
+                    busy={mutating}
+                    onclick={deprecate}
+                  />
+                  <Button
+                    variant="ghost" square icon="cancel"
+                    aria-label="cancel" title="cancel"
+                    disabled={mutating}
+                    onclick={() => (deprecating = false)}
+                  />
+                </div>
               </div>
-            </div>
+            {/if}
           {/if}
-        {/if}
 
-        <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
-           focusable wikilink anchors this div delegates to -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
-           wrapper, not an interactive element of its own -->
-        {#if entry.root_cause}
-          <section>
-            <h3>Root cause</h3>
-            <div class="md prose" onclick={links.onClick} onkeydown={links.onKeydown}>{@html prose(entry.root_cause)}</div>
-          </section>
-        {/if}
-        {#if entry.resolution}
-          <section>
-            <h3>Resolution</h3>
-            <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
-           focusable wikilink anchors this div delegates to -->
-            <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
-           wrapper, not an interactive element of its own -->
-            <div class="md prose" onclick={links.onClick} onkeydown={links.onKeydown}>{@html prose(entry.resolution)}</div>
-          </section>
-        {/if}
-
-        {@render chips("Symptoms", entry.symptoms)}
-        {@render chips("Signals", entry.signals)}
-        {@render chips("Tags", entry.tags)}
-
-        {#if entry.structured && Object.keys(entry.structured).length}
-          <section>
-            <h3>Structured context</h3>
-            <StructuredView structured={entry.structured} />
-          </section>
-        {/if}
-
-        <Backlinks base="knowledge" id={id} />
-
-        <History
-          base="knowledge"
-          {id}
-          version={entry.version}
-          canEdit={canEdit}
-          onReverted={load}
-        />
-
-        <section>
-          <h3>Feedback</h3>
-          {#if feedback.length}
-            <ul class="fb-list">
-              {#each feedback as f}
-                <li><strong>{f.kind}{f.rating ? ` · ${f.rating}★` : ""}</strong> {f.comment ?? ""}</li>
-              {/each}
-            </ul>
-          {:else}
-            <p class="muted">No feedback recorded.</p>
+          <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
+             focusable wikilink anchors this div delegates to -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
+             wrapper, not an interactive element of its own -->
+          {#if entry.root_cause}
+            <section>
+              <h3>Root cause</h3>
+              <div class="md prose" onclick={links.onClick} onkeydown={links.onKeydown}>{@html prose(entry.root_cause)}</div>
+            </section>
           {/if}
-        </section>
+          {#if entry.resolution}
+            <section>
+              <h3>Resolution</h3>
+              <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
+             focusable wikilink anchors this div delegates to -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
+             wrapper, not an interactive element of its own -->
+              <div class="md prose" onclick={links.onClick} onkeydown={links.onKeydown}>{@html prose(entry.resolution)}</div>
+            </section>
+          {/if}
+
+          {@render chips("Symptoms", entry.symptoms)}
+          {@render chips("Signals", entry.signals)}
+          {@render chips("Tags", entry.tags)}
+
+          {#if Object.keys(structured).length}
+            <section>
+              <h3>Structured context</h3>
+              <StructuredView {structured} />
+            </section>
+          {/if}
+
+          <Backlinks base="knowledge" id={id} />
+
+          <section>
+            <h3>Feedback</h3>
+            {#if feedback.length}
+              <ul class="fb-list">
+                {#each feedback as f}
+                  <li><strong>{f.kind}{f.rating ? ` · ${f.rating}★` : ""}</strong> {f.comment ?? ""}</li>
+                {/each}
+              </ul>
+            {:else}
+              <p class="muted">No feedback recorded.</p>
+            {/if}
+          </section>
+        </div>
+
+        {#if historyOpen}
+          <Modal
+            title="history"
+            cancelLabel="close"
+            width="46rem"
+            onCancel={() => (historyOpen = false)}
+          >
+            <History
+              base="knowledge"
+              {id}
+              version={entry.version}
+              {canEdit}
+              onReverted={load}
+            />
+          </Modal>
+        {/if}
       </div>
     {/if}
   {:else if !error}
@@ -456,6 +502,13 @@
     max-width: 64ch;
     margin-inline: auto;
     padding: 0 var(--pad-4);
+  }
+
+  /* The positioning context the lifecycle rail hangs off. It wraps the crumb
+     and the column both, so the rail's top edge lines up with the crumb rather
+     than with whatever banner happens to be above it. */
+  .read {
+    position: relative;
   }
 
   h2 {
@@ -500,13 +553,29 @@
     align-items: center;
     gap: var(--pad-2);
   }
-  .band,
   .badges {
     display: flex;
     align-items: center;
     justify-content: center;
     flex-wrap: wrap;
     gap: var(--pad-2);
+  }
+
+  /* Three tracks, not a centred flex row: it is the date that has to sit on
+     the column's centre line, with the status behind it and the revisions
+     button ahead of it. Equal fr cheeks give it that whatever they hold. */
+  .band {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    column-gap: var(--pad-4);
+  }
+  .band .lifecycle {
+    justify-self: end;
+  }
+  .band .revisions {
+    justify-self: start;
+    display: flex;
   }
   .versions {
     display: flex;
@@ -528,24 +597,16 @@
     .mid {
       align-items: flex-start;
     }
-    .band,
     .badges {
       justify-content: flex-start;
+    }
+    .band {
+      justify-content: start;
     }
     .right {
       display: none;
     }
   }
-
-  .acts {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: var(--pad-2);
-    margin: var(--pad-3) 0;
-  }
-  .acts .gap { width: var(--pad-4); }
 
   .deprecated-banner {
     border: 1px solid var(--warn);

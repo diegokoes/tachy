@@ -2,8 +2,11 @@
   import { onDestroy, tick } from "svelte";
   import { gsap, reducedMotion } from "../gsap";
   import Icon from "../tui/Icon.svelte";
+  import { asStructured } from "./structured";
 
-  let { structured }: { structured: Record<string, unknown> } = $props();
+  let { structured }: { structured: unknown } = $props();
+
+  const data = $derived(asStructured(structured));
 
   let showRaw = $state(false);
   let jsonBody = $state<HTMLElement>();
@@ -21,20 +24,20 @@
     Array.isArray(v) ? v.map((x) => String(x)) : null;
   const asText = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v : null);
 
-  const environment = $derived(asRecord(structured.environment));
-  const keySignals = $derived(asRecord(structured.key_signals));
-  const steps = $derived(asList(structured.investigation_steps));
-  const summary = $derived(asText(structured.conversation_summary));
-  const analysis = $derived(asRecord(structured.technical_analysis));
-  const rules = $derived(asList(structured.constraints_and_rules));
-  const config = $derived(asList(structured.related_configuration));
-  const links = $derived(asList(structured.related_links));
+  const environment = $derived(asRecord(data.environment));
+  const keySignals = $derived(asRecord(data.key_signals));
+  const steps = $derived(asList(data.investigation_steps));
+  const summary = $derived(asText(data.conversation_summary));
+  const analysis = $derived(asRecord(data.technical_analysis));
+  const rules = $derived(asList(data.constraints_and_rules));
+  const config = $derived(asList(data.related_configuration));
+  const links = $derived(asList(data.related_links));
   const extras = $derived(
-    Object.fromEntries(Object.entries(structured).filter(([k]) => !KNOWN.includes(k))),
+    Object.fromEntries(Object.entries(data).filter(([k]) => !KNOWN.includes(k))),
   );
 
   const labelize = (k: string) => k.replaceAll("_", " ");
-  const jsonText = $derived(JSON.stringify(structured, null, 2));
+  const jsonText = $derived(JSON.stringify(data, null, 2));
   const escapeHtml = (value: string) =>
     value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
   const highlightedJson = $derived(

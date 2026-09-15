@@ -3,6 +3,7 @@
   import { api } from "../api";
   import { navigate } from "../router.svelte";
   import type { NamedRow } from "../types";
+  import { libraryItemPath, ORG_WIDE } from "../wiki/paths";
 
   interface Link {
     id: string;
@@ -48,15 +49,16 @@
   }
 
   function open(l: Link) {
-    if (l.from_kind === "wiki" && l.from_slug) {
-      const scope =
-        products.find((p) => p.id === l.from_product_id)?.slug ?? "general";
-      navigate(`/library/wiki/${scope}/${l.from_slug}`);
-    } else if (l.from_entry_id) {
-      navigate(`/library/entries/${l.from_entry_id}`);
-    } else if (l.from_doc_id) {
-      navigate(`/library/docs/${l.from_doc_id}`);
-    }
+    const path = libraryItemPath({
+      entryId: l.from_entry_id,
+      docId: l.from_doc_id,
+      kind: l.from_kind,
+      slug: l.from_slug,
+      scope:
+        (products.find((p) => p.id === l.from_product_id)?.slug as string) ??
+        ORG_WIDE,
+    });
+    if (path) navigate(path);
   }
 
   const what = (l: Link) =>

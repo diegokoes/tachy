@@ -67,7 +67,7 @@
     {/each}
     <input
       bind:value={query}
-      placeholder={picked.length ? "" : "any tag"}
+      placeholder={picked.length ? "" : "any"}
       title="Filter by tag"
       aria-label="filter by tag"
       onfocus={() => (focused = true)}
