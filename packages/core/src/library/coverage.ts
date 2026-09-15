@@ -49,18 +49,21 @@ export async function coverage(productId: string): Promise<Coverage> {
       from components where product_id = ${productId}
       order by slug
     `,
+    // One subquery per count rather than two left joins: joining entries and
+    // docs onto the same component multiplied them, entries × docs rows per
+    // component, for count(distinct) to throw away again.
     sql`
       select c.id,
-             count(distinct e.id)::int as entries,
-             count(distinct d.id) filter (where d.kind = 'reference')::int as docs,
-             count(distinct d.id) filter (where d.kind = 'wiki')::int as articles
+             (select count(*)::int from knowledge_entries e
+               where e.component_id = c.id and e.status <> 'archived') as entries,
+             (select count(*)::int from reference_docs d
+               where d.component_id = c.id and d.status <> 'archived'
+                 and d.kind = 'reference') as docs,
+             (select count(*)::int from reference_docs d
+               where d.component_id = c.id and d.status <> 'archived'
+                 and d.kind = 'wiki') as articles
       from components c
-      left join knowledge_entries e
-        on e.component_id = c.id and e.status <> 'archived'
-      left join reference_docs d
-        on d.component_id = c.id and d.status <> 'archived'
       where c.product_id = ${productId}
-      group by c.id
     `,
     // Read volume follows the item to whichever component it is anchored to.
     sql`
