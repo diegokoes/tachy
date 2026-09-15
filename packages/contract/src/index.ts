@@ -12,6 +12,8 @@ export {
   CLOUD_HINT,
   AGENT_EFFORTS,
   DEPLOYMENT_PROFILES,
+  USER_ROLES,
+  TEAM_ROLES,
   MIN_PASSWORD_LENGTH,
   SLUG_RE,
   slugify,
@@ -28,10 +30,25 @@ export type {
   LibraryActor,
   AgentEffort,
   DeploymentProfile,
+  UserRole,
+  TeamRole,
 } from "./vocabulary";
 
 export { WIKILINK_RE, parseWikilink, parseWikilinks } from "./wikilink";
 export type { Wikilink, WikilinkTargetKind } from "./wikilink";
+
+export { WIKI_RESERVED_SLUGS, MAIN_PAGE_SLUG, WIKI_GAP_KINDS } from "./wiki";
+export type { WikiGapKind } from "./wiki";
+
+export {
+  LIBRARY_ASSET_TYPES,
+  MAX_ASSET_BYTES,
+  assetPath,
+  ASSET_SRC_RE,
+} from "./assets";
+export type { LibraryAssetType } from "./assets";
+
+export { MAX_PAGE } from "./paging";
 
 export { GOOD, STRONG, grade } from "./relevance";
 export type { Grade } from "./relevance";

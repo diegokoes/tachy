@@ -75,6 +75,20 @@ export const DEPLOYMENT_PROFILES = ["support", "engineering"] as const;
 export type DeploymentProfile = (typeof DEPLOYMENT_PROFILES)[number];
 
 /**
+ * Two independent rungs, stored as the same two words in different tables:
+ * `users.role` is the app-wide role, `team_members.role` the per-team one. An
+ * app admin manages users, org structure and system settings; a team admin
+ * curates one team's library and roster. Nothing in the stored value says
+ * which rung it came from, so every surface that shows one has to name the
+ * rung with it — see `roleLabel` in packages/web/src/lib/terms.ts.
+ */
+export const USER_ROLES = ["admin", "member"] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
+export const TEAM_ROLES = ["admin", "member"] as const;
+export type TeamRole = (typeof TEAM_ROLES)[number];
+
+/**
  * The wizard refuses a shorter one in the field, and hashPassword refuses it
  * again on the way in. Two enforcement points, so one number.
  */
