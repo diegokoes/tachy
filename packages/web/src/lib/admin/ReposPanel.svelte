@@ -23,7 +23,7 @@
   import type { Component, Customer, Product, Repo, SourceProject } from "./rows";
 import { INFO } from "./help";
 import { csv } from "../fields";
-  import { claimTopAction } from "./topAction.svelte";
+  import { sectionHoist } from "./topAction.svelte";
 
   type FoundRepo = { name: string; url: string; default_branch: string };
 
@@ -525,7 +525,7 @@ import { csv } from "../fields";
 />
 
 <CrudTable
-  hoist={claimTopAction}
+  hoist={sectionHoist("repos")}
   {columns}
   rows={filtered}
   rowKey={(r) => r.slug}
@@ -536,6 +536,7 @@ import { csv } from "../fields";
   canDelete={canEditRepo}
   canCreate={canAdd}
   addLabel="link repository"
+  noun="repo"
   editTitle={(r) => r.slug}
   extraActions={reindexAction}
   formExtra={discoverField}

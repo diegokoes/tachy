@@ -873,3 +873,34 @@ async function slugOfUnit(unitId: string): Promise<string | null> {
   const [row] = await sql`select slug from customer_units where id = ${unitId}`;
   return (row?.slug as string) ?? null;
 }
+
+/**
+ * For the admin index: how much of the corpus there is, and how much of it the
+ * component tree actually describes. `by_status` is left as whatever statuses
+ * are present rather than padded out to the vocabulary — a band with a zero
+ * segment in it draws a legend key for nothing.
+ */
+export async function knowledgeCensus() {
+  const [row] = await sql`
+    select
+      count(*)::int as entries,
+      count(*) filter (where component_id is null)::int as entries_no_component,
+      count(*) filter (where product_id is null)::int as entries_no_product
+    from knowledge_entries
+  `;
+  const statuses = await sql`
+    select status, count(*)::int as n
+    from knowledge_entries
+    group by status
+  `;
+  return {
+    ...(row as {
+      entries: number;
+      entries_no_component: number;
+      entries_no_product: number;
+    }),
+    by_status: Object.fromEntries(
+      statuses.map((s) => [s.status as string, s.n as number]),
+    ) as Record<string, number>,
+  };
+}

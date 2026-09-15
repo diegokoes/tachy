@@ -10,6 +10,7 @@
   import { onMount, type Snippet } from "svelte";
   import { gsap, reducedMotion } from "../gsap";
   import Scrollbar from "../Scrollbar.svelte";
+  import { scrollport } from "../scrollport.svelte";
   import Scrim from "./Scrim.svelte";
   import Button from "./Button.svelte";
   import type { IconName } from "./icons";
@@ -30,7 +31,7 @@
     barExtra,
     children,
   }: {
-    /** The dialog's accessible name. Never drawn — the chrome carries no title. */
+    /** The dialog's accessible name, and the label drawn in the titlebar. */
     title?: string;
     confirmLabel?: string;
     /** The bar is icon-only, so a confirm that isn't a save must say so. */
@@ -62,6 +63,7 @@
     element = win;
   });
   let bodyEl = $state<HTMLElement>();
+  let titleEl = $state<HTMLElement>();
   let mine = 0;
   const top = $derived(mine === depth);
 
@@ -72,9 +74,16 @@
     mine = take();
     const restore = document.activeElement as HTMLElement | null;
     /* One lock for the whole stack: the innermost dialog must not release it
-       on the way out while an outer one is still open. */
+       on the way out while an outer one is still open.
+
+       Both boxes, because the body is not what scrolls here — the view scrolls
+       inside `main`, so locking the body alone left the page running under the
+       dialog. Locking it anyway still matters on the surfaces that do. */
+    const port = scrollport();
     const locked = document.body.style.overflow;
+    const lockedPort = port?.style.overflow ?? "";
     document.body.style.overflow = "hidden";
+    if (port) port.style.overflow = "hidden";
     win?.focus();
 
     const tl =
@@ -105,10 +114,28 @@
             )
         : null;
 
+    /* The title wipes in from the left as the window grows — a step of the
+       same timeline, so the two can never drift apart. Not `wipeIn`: that one
+       is the nav's, tuned short and staggered across a row of tabs. */
+    if (tl && titleEl)
+      tl.from(
+        titleEl,
+        {
+          clipPath: "inset(0 100% 0 0)",
+          duration: 0.5,
+          ease: "power3.inOut",
+          clearProps: "clipPath",
+        },
+        "<",
+      );
+
     return () => {
       tl?.kill();
       depth--;
-      if (depth === 0) document.body.style.overflow = locked;
+      if (depth === 0) {
+        document.body.style.overflow = locked;
+        if (port) port.style.overflow = lockedPort;
+      }
       restore?.focus?.();
     };
   });
@@ -170,44 +197,50 @@
       onclick={(e) => e.stopPropagation()}
     >
       <div class="bar reveal">
-        {#if destructive}
+        <div class="side">
+          {#if destructive}
+            <Button
+              variant="ghost"
+              tone="danger"
+              square
+              icon={destructive.icon ?? "del"}
+              title={destructive.label}
+              aria-label={destructive.label}
+              busy={destructive.busy}
+              disabled={destructive.disabled}
+              onclick={destructive.onclick}
+            />
+          {/if}
+        </div>
+
+        <!-- aria-hidden: the window already carries this string as its
+             accessible name, and a screen reader should not hear it twice. -->
+        <div class="title" bind:this={titleEl} aria-hidden="true">{title}</div>
+
+        <div class="side end">
+          {#if barExtra}{@render barExtra()}{/if}
+
           <Button
             variant="ghost"
-            tone="danger"
             square
-            icon={destructive.icon ?? "del"}
-            title={destructive.label}
-            aria-label={destructive.label}
-            busy={destructive.busy}
-            disabled={destructive.disabled}
-            onclick={destructive.onclick}
+            icon="cancel"
+            title={cancelLabel}
+            aria-label={cancelLabel}
+            onclick={onCancel}
           />
-        {/if}
-
-        <span class="gap"></span>
-
-        {#if barExtra}{@render barExtra()}{/if}
-
-        <Button
-          variant="ghost"
-          square
-          icon="cancel"
-          title={cancelLabel}
-          aria-label={cancelLabel}
-          onclick={onCancel}
-        />
-        {#if onConfirm}
-          <Button
-            variant={danger ? "danger" : "primary"}
-            square
-            icon={confirmIcon}
-            title={confirmLabel}
-            aria-label={confirmLabel}
-            {busy}
-            {disabled}
-            onclick={onConfirm}
-          />
-        {/if}
+          {#if onConfirm}
+            <Button
+              variant={danger ? "danger" : "primary"}
+              square
+              icon={confirmIcon}
+              title={confirmLabel}
+              aria-label={confirmLabel}
+              {busy}
+              {disabled}
+              onclick={onConfirm}
+            />
+          {/if}
+        </div>
       </div>
 
       <div class="content reveal">
@@ -257,11 +290,14 @@
     border-color: var(--danger);
   }
 
-  /* The titlebar. Empty on the left by design: the dialog's name is carried by
-     what opened it, and a heading here only ever repeated that. */
+  /* The titlebar: what you are doing, between the buttons that end it. Three
+     columns rather than a flex row with a spacer, so the name sits at the
+     centre of the window and not at the centre of whatever is left over — the
+     two 1fr flanks are equal whether or not a destructive action is present. */
   .bar {
     flex: none;
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr minmax(0, auto) 1fr;
     align-items: center;
     gap: var(--pad-2);
     min-height: calc(var(--row-h) + var(--pad-2));
@@ -271,8 +307,26 @@
   .win.danger .bar {
     border-bottom-color: var(--danger);
   }
-  .gap {
-    flex: 1;
+  .side {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+    min-width: 0;
+  }
+  .side.end {
+    justify-content: flex-end;
+  }
+  /* A long name gives up its width before the buttons do. */
+  .title {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: var(--label-spacing);
+    user-select: none;
   }
 
   /* The scroll lives on .body alone, so the bar stays put while a long form

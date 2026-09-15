@@ -23,7 +23,7 @@
   import type { Connection, Product, SourceProject, Team } from "./rows";
 import { INFO } from "./help";
 import { csv } from "../fields";
-  import { claimTopAction } from "./topAction.svelte";
+  import { sectionHoist } from "./topAction.svelte";
 
   type SourceType = "freshdesk" | "azure-devops" | "github";
   type Probe = {
@@ -427,7 +427,7 @@ import { csv } from "../fields";
 {/snippet}
 
 <CrudTable
-  hoist={claimTopAction}
+  hoist={sectionHoist("sources")}
   {columns}
   rows={connections.data}
   rowKey={(r) => r.slug}
@@ -438,6 +438,7 @@ import { csv } from "../fields";
   canDelete={() => admin}
   canCreate={admin}
   addLabel="add connection"
+  noun="connection"
   editTitle={(r) => r.slug}
   expand={probeRow}
   {expanded}

@@ -12,6 +12,7 @@
     Select,
     G,
     Icon,
+    type IconName,
   } from "../tui";
   import OutputSpecEditor, {
     emptyColumn,
@@ -57,6 +58,11 @@
     user: "you",
     team: "team",
     global: "global",
+  };
+  const SCOPE_ICONS: Record<ArtifactScope, IconName> = {
+    user: "person",
+    team: "people",
+    global: "globe",
   };
   const grouped = $derived(
     (["user", "team", "global"] as ArtifactScope[])
@@ -495,7 +501,10 @@
             <p class="muted empty">No artifacts yet</p>
           {/if}
           {#each grouped as g (g.scope)}
-            <div class="scope-head">{SCOPE_LABELS[g.scope]}</div>
+            <div class="scope-head">
+              <Icon name={SCOPE_ICONS[g.scope]} size="0.95em" />
+              {SCOPE_LABELS[g.scope]}
+            </div>
             <ul class="art-list">
               {#each g.rows as a (a.id)}
                 <li
@@ -520,6 +529,7 @@
                         tone="info"
                         square
                         icon="edit"
+                        iconSize="1.5em"
                         title="edit"
                         aria-label="edit"
                         busy={fetching === a.id}
@@ -530,6 +540,7 @@
                         tone="danger"
                         square
                         icon={armedDelete === a.id ? "check" : "cancel"}
+                        iconSize="1.5em"
                         title={armedDelete === a.id ? "click again to delete" : "delete"}
                         aria-label="delete"
                         onclick={() => remove(a)}
@@ -687,6 +698,9 @@
   }
 
   .scope-head {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-1);
     margin-top: var(--pad-2);
     color: var(--muted);
     font-size: var(--fs-xs);
@@ -720,7 +734,7 @@
     padding: var(--pad-2) var(--pad-3);
     background: var(--panel);
   }
-  .art-title { font-size: var(--fs-sm); padding-right: var(--pad-4); }
+  .art-title { font-size: var(--fs-sm); }
   .art-out {
     margin-left: var(--pad-1);
     padding: 0 var(--pad-1);
@@ -737,19 +751,26 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  /* Edit and delete belong to the row under the pointer, not to all of them at
-     once — a grid of cards each wearing two buttons reads as a toolbar. Hidden
-     by opacity rather than display so they keep their place in the tab order,
-     and :focus-within brings them back for anyone arriving by keyboard.
-     `armed` keeps a delete waiting for its second click visible after the
-     pointer has moved on. */
+  /* The same overlay the admin tables raise over a row: edit and delete belong
+     to the card under the pointer, not to all of them at once, so they fade in
+     across the whole card over a scrim rather than perching in its corner.
+
+     opacity, not display, so the buttons keep their place in the tab order and
+     :focus-within raises them for anyone arriving by keyboard. `armed` keeps a
+     delete waiting for its second click visible after the pointer has left.
+
+     The overlay takes no pointer events, only the marks on it do — the card
+     underneath stays clickable everywhere else, which is how attaching an
+     artifact still works while its actions are showing. */
   .art-actions {
     position: absolute;
-    top: var(--pad-1);
-    right: var(--pad-1);
+    inset: 0;
     display: flex;
-    gap: var(--pad-1);
+    align-items: center;
+    justify-content: center;
+    gap: var(--pad-4);
     opacity: 0;
+    pointer-events: none;
     transition: opacity 120ms ease;
   }
   .art-row:hover .art-actions,
@@ -757,8 +778,46 @@
   .art-row.armed .art-actions {
     opacity: 1;
   }
+  /* The wash is a layer on the card's own background, not a scrim spanning the
+     row: an overlay wide enough to hold the marks also covers the card's
+     border, and the entry lost its outline for as long as you pointed at it.
+     Painted inside the button, the gradient stops at the border. */
+  .art-row:hover .art-pick,
+  .art-row:focus-within .art-pick,
+  .art-row.armed .art-pick {
+    background:
+      linear-gradient(
+        90deg,
+        transparent 0%,
+        var(--accent-dim) 28%,
+        var(--accent-dim) 72%,
+        transparent 100%
+      ),
+      var(--panel);
+  }
+  .art-title,
+  .art-desc {
+    transition: opacity 120ms ease;
+  }
+  .art-row:hover .art-title,
+  .art-row:hover .art-desc,
+  .art-row:focus-within .art-title,
+  .art-row:focus-within .art-desc,
+  .art-row.armed .art-title,
+  .art-row.armed .art-desc {
+    opacity: 0.45;
+  }
+  .art-actions :global(.btn) {
+    pointer-events: auto;
+  }
+  .art-actions :global(.btn.square) {
+    width: 2.4rem;
+    height: 2.4rem;
+  }
   @media (prefers-reduced-motion: reduce) {
-    .art-actions { transition: none; }
+    .art-actions,
+    .art-title,
+    .art-desc { transition: none; }
   }
 
   .ed-form {

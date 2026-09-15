@@ -1,14 +1,12 @@
+import type { TeamRole, UserRole } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { env } from "../infra/env";
 import { badInput, notFound } from "../infra/errors";
 import { hashPassword } from "./passwords";
 import { clearPermissionCache } from "./permissions";
 
-export const USER_ROLES = ["admin", "member"] as const;
-export type UserRole = (typeof USER_ROLES)[number];
-
-export const TEAM_ROLES = ["admin", "member"] as const;
-export type TeamRole = (typeof TEAM_ROLES)[number];
+export { USER_ROLES, TEAM_ROLES } from "@tachy/contract";
+export type { UserRole, TeamRole } from "@tachy/contract";
 
 export interface UserRow {
   id: string;
@@ -227,13 +225,32 @@ export async function setTeamMember(
   clearPermissionCache();
 }
 
-/** For the admin index: users, and how many of them cannot sign in. */
+/**
+ * For the admin index: users, how many of them cannot sign in, and who can
+ * curate. `teams_with_admin` counts teams from this domain's own membership
+ * table rather than joining the catalog's — the caller compares it against the
+ * team count it already has.
+ */
 export async function userCensus() {
   const [row] = await sql`
     select
       count(*)::int as users,
-      count(*) filter (where disabled)::int as disabled
+      count(*) filter (where disabled)::int as disabled,
+      count(*) filter (where role = 'admin' and not disabled)::int as admins,
+      count(*) filter (where password_hash is not null)::int as with_password,
+      (select count(distinct team_id)::int from team_members where role = 'admin')
+        as teams_with_admin,
+      (select count(*)::int from users u
+        where not exists (select 1 from team_members m where m.user_id = u.id))
+        as users_no_team
     from users
   `;
-  return row as { users: number; disabled: number };
+  return row as {
+    users: number;
+    disabled: number;
+    admins: number;
+    with_password: number;
+    teams_with_admin: number;
+    users_no_team: number;
+  };
 }

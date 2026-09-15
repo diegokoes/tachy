@@ -1,9 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import type { TeamRole } from "@tachy/contract";
   import { api } from "../api";
   import { createResource } from "../resource.svelte";
   import { session, isGlobalAdmin, canCurateScope } from "../session.svelte";
-  import { t } from "../terms";
+  import { roleLabel, roleTip, t } from "../terms";
   import {
     Badge,
     Button,
@@ -17,18 +18,17 @@
     type Column,
   } from "../tui";
   import type { Member, Team, UserRow } from "./rows";
-  import { claimTopAction } from "./topAction.svelte";
+  import { sectionHoist } from "./topAction.svelte";
 
   type Membership = {
     user_id: string;
     team_slug: string;
     team_name: string;
-    team_role: "admin" | "member";
+    team_role: TeamRole;
   };
 
-  const ROLE_TIP =
-    "app admin: manages users, org structure and system settings. member: uses the app; curation comes from a team role.";
-  const TEAM_ROLE_TIP = `team admin: curates this ${t("team")}'s knowledge, docs, taxonomy and members. member: uses the app.`;
+  const ROLE_TIP = $derived(roleTip("app"));
+  const TEAM_ROLE_TIP = $derived(roleTip("team"));
 
   const users = createResource(() => api.get<UserRow[]>("/users"), []);
   const teams = createResource(() => api.get<Team[]>("/teams"), []);
@@ -60,7 +60,7 @@
 
   /* Membership lives on its own endpoint, so the form edits a copy and the
      save fans the differences out afterwards. */
-  let roster = $state<Record<string, "admin" | "member">>({});
+  let roster = $state<Record<string, TeamRole>>({});
   let rosterFor = $state<string | null>(null);
   let addTeam = $state("");
 
@@ -99,11 +99,12 @@
     {
       key: "role",
       label: "app role",
-      width: "9rem",
+      width: "11rem",
+      cell: roleCell,
       edit: "select",
       options: [
         { value: "member", label: "member" },
-        { value: "admin", label: "admin" },
+        { value: "admin", label: roleLabel("app", "admin") },
       ],
       initial: "member",
       info: ROLE_TIP,
@@ -134,6 +135,14 @@
     memberships.reload();
   });</script>
 
+{#snippet roleCell(u: UserRow)}
+  {#if u.role === "admin"}
+    <Badge tone="accent" title={ROLE_TIP}>{roleLabel("app", "admin")}</Badge>
+  {:else}
+    <span class="none">member</span>
+  {/if}
+{/snippet}
+
 {#snippet teamsCell(u: UserRow)}
   {@const ms = teamsOf(u)}
   {#if ms.length}
@@ -142,7 +151,9 @@
         <Chip
           tone={m.team_role === "admin" ? "accent" : "default"}
           title={m.team_role === "admin" ? TEAM_ROLE_TIP : m.team_name}
-          >{m.team_name}{m.team_role === "admin" ? " · admin" : ""}</Chip
+          >{m.team_name}{m.team_role === "admin"
+            ? ` · ${roleLabel("team", "admin")}`
+            : ""}</Chip
         >
       {/each}
     </span>
@@ -172,11 +183,11 @@
             value={roster[tm.slug]}
             options={[
               { value: "member", label: "member" },
-              { value: "admin", label: "admin" },
+              { value: "admin", label: roleLabel("team", "admin") },
             ]}
             title={TEAM_ROLE_TIP}
             aria-label={`${tm.name} role`}
-            onchange={(v) => (roster[tm.slug] = v as "admin" | "member")}
+            onchange={(v) => (roster[tm.slug] = v as TeamRole)}
           />
           <Button
             variant="ghost"
@@ -220,7 +231,7 @@
 />
 
 <CrudTable
-  hoist={claimTopAction}
+  hoist={sectionHoist("users")}
   {columns}
   rows={filtered}
   rowKey={(u) => u.id}
@@ -236,6 +247,7 @@
   canDelete={() => false}
   canCreate={admin}
   addLabel="add user"
+  noun="user"
   editTitle={(u) => u.email}
   formExtra={rosterEditor}
   onform={openedForm}
@@ -256,7 +268,7 @@
         (d.role !== row.role || Boolean(d.disabled) !== row.disabled)
       )
         throw new Error(
-          "that change would lock you out. Have another admin make it",
+          "that change would lock you out. Have another app admin make it",
         );
       await api.patch(`/users/${row.id}`, {
         display_name: d.display_name || null,

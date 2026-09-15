@@ -51,3 +51,20 @@ const PROFILE_FACETS: Record<Profile, { customer: boolean }> = {
 export function showCustomer(): boolean {
   return PROFILE_FACETS[profile()].customer;
 }
+
+/**
+ * The stored role word is the same on both rungs, so neither is ever shown on
+ * its own: an app admin manages users, org structure and system settings; a
+ * team admin curates one team's library and roster, under whatever that
+ * deployment calls a team.
+ */
+export function roleLabel(rung: "app" | "team", role: string): string {
+  if (role !== "admin") return "member";
+  return rung === "app" ? "app admin" : `${t("team")} admin`;
+}
+
+export function roleTip(rung: "app" | "team"): string {
+  return rung === "app"
+    ? "app admin: manages users, org structure and system settings, app-wide. member: uses the app; curation rights come from a team role."
+    : `${t("team")} admin: curates this ${t("team")}'s knowledge, docs, taxonomy and members — nothing outside it. member: uses the app.`;
+}

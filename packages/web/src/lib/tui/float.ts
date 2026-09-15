@@ -46,7 +46,15 @@ export function float(node: HTMLElement, options: FloatOptions) {
        content's answer and not the last frame's. The border box is what the
        cap is then set against — `scrollHeight` stops at the padding box, so
        capping with it left every bordered popup two pixels short of its own
-       content and permanently scrolling. */
+       content and permanently scrolling.
+
+       Taking the cap off also makes the popup's own scrollers briefly
+       non-overflowing, and the browser clamps their scrollTop to 0 on the way
+       past — so what the user had scrolled to is put back once it is on. */
+    const scrolled: [Element, number][] = [];
+    for (const el of node.querySelectorAll("*"))
+      if (el.scrollTop) scrolled.push([el, el.scrollTop]);
+
     node.style.maxHeight = "";
     const wants = Math.ceil(node.getBoundingClientRect().height);
 
@@ -58,6 +66,7 @@ export function float(node: HTMLElement, options: FloatOptions) {
 
     const room = up ? above : below;
     node.style.maxHeight = `${Math.min(wants, Math.max(room, FLOOR))}px`;
+    for (const [el, top] of scrolled) el.scrollTop = top;
 
     const h = node.offsetHeight;
     const w = node.offsetWidth;
@@ -74,8 +83,13 @@ export function float(node: HTMLElement, options: FloatOptions) {
   place();
 
   /* Capture, so an ancestor scrolling under the popup moves it too — the
-     bubbling phase never sees a scroll on anything but the document. */
-  const onScroll = () => place();
+     bubbling phase never sees a scroll on anything but the document. The
+     popup's own list is the exception: it has not moved, and re-placing on it
+     re-measures, which is the one thing that disturbs the scroll being made. */
+  const onScroll = (e: Event) => {
+    if (node.contains(e.target as Node)) return;
+    place();
+  };
   window.addEventListener("scroll", onScroll, true);
   window.addEventListener("resize", onScroll);
   const ro = new ResizeObserver(place);

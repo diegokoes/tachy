@@ -13,11 +13,12 @@
     error = null,
     emptyTitle = "nothing here yet",
     emptyDetail,
-    actions,
     expand,
     expanded = new Set<string>(),
     ontoggle,
     rowClass,
+    onrowclick,
+    canOpen = () => true,
   }: {
     columns: Column<T>[];
     rows: T[];
@@ -26,14 +27,27 @@
     error?: string | null;
     emptyTitle?: string;
     emptyDetail?: string;
-    actions?: Snippet<[T]>;
     expand?: Snippet<[T]>;
     expanded?: Set<string>;
     ontoggle?: (key: string) => void;
     rowClass?: (row: T) => string | undefined;
+    /** Opening a row is the row's own job now, so the whole of it is the target. */
+    onrowclick?: (row: T) => void;
+    /** Rows this caller will not open. They take no pointer and no tab stop. */
+    canOpen?: (row: T) => boolean;
   } = $props();
 
-  const span = $derived(columns.length + (expand ? 1 : 0) + (actions ? 1 : 0));
+  /* A row is a target, not a link: a click that landed on a control inside it
+     belongs to that control, and one that ended a drag was selecting text to
+     copy, not asking to open anything. */
+  function opens(e: MouseEvent): boolean {
+    const el = e.target as HTMLElement | null;
+    if (el?.closest("button,a,input,select,textarea,label")) return false;
+    const sel = window.getSelection();
+    return !sel || sel.isCollapsed;
+  }
+
+  const span = $derived(columns.length + (expand ? 1 : 0));
 </script>
 
 {#if error}
@@ -45,7 +59,6 @@
     <colgroup>
       {#if expand}<col style="width: 2.2rem" />{/if}
       {#each columns as c}<col style={c.width ? `width: ${c.width}` : ""} />{/each}
-      {#if actions}<col style="width: 0" />{/if}
     </colgroup>
 
     <thead>
@@ -54,7 +67,6 @@
         {#each columns as c}
           <th class={c.align === "end" ? "end" : ""}>{c.label}</th>
         {/each}
-        {#if actions}<th aria-label="actions"></th>{/if}
       </tr>
     </thead>
 
@@ -62,7 +74,20 @@
       {#each rows as row (rowKey(row))}
         {@const key = rowKey(row)}
         {@const open = expanded.has(key)}
-        <tr class={rowClass?.(row)}>
+        {@const openRow = onrowclick && canOpen(row) ? onrowclick : undefined}
+        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions, a11y_no_noninteractive_tabindex -->
+        <tr
+          class={rowClass?.(row)}
+          class:open={Boolean(openRow)}
+          tabindex={openRow ? 0 : undefined}
+          onclick={openRow && ((e) => opens(e) && openRow(row))}
+          onkeydown={openRow &&
+            ((e) => {
+              if (e.key !== "Enter" || e.target !== e.currentTarget) return;
+              e.preventDefault();
+              openRow(row);
+            })}
+        >
           {#if expand}
             <td class="exp">
               <button
@@ -79,11 +104,6 @@
               {:else}<span class="v">{cellText(c, row)}</span>{/if}
             </td>
           {/each}
-          {#if actions}
-            <td class="acts">
-              <div class="overlay">{@render actions(row)}</div>
-            </td>
-          {/if}
         </tr>
         {#if expand && open}
           <tr class="detail">
@@ -153,6 +173,18 @@
     background: var(--accent-dim);
   }
 
+  /* The row is the button. A rank of marks that only appeared under the
+     pointer was three things to aim at where there is one thing to open, and
+     it hid on every row a keyboard user was not already inside. */
+  tbody tr.open {
+    cursor: pointer;
+  }
+  tbody tr.open:focus-visible {
+    outline: none;
+    background: var(--accent-dim);
+    box-shadow: inset 2px 0 0 var(--accent);
+  }
+
   /* Plain cell values only — ids, slugs, counts, dates, all of which are read
      by comparing one row against the one above it. A `cell` snippet renders
      its own chips and buttons and stays on the UI face. */
@@ -164,59 +196,9 @@
     white-space: nowrap;
   }
 
-  /* Row actions do not get a column. A track wide enough for three buttons is
-     blank on every row nobody is pointing at, and it was taking 7rem off the
-     content on every table in the app. The cell keeps no width; its overlay
-     spans the row and fades in over a scrim, so the marks read against the
-     values rather than beside them.
-
-     opacity, not visibility: an invisible button is still focusable, so
-     tabbing into a row is what raises its actions — which is the only way a
-     keyboard reaches them now.
-
-     The scrim takes no pointer events, only the marks on it do. A full-row hit
-     area would eat the expander chevron under its transparent left edge, and
-     take the row's text out of selection the moment you pointed at it. */
-  tbody tr {
-    position: relative;
-  }
-  td.acts {
-    width: 0;
-    padding: 0;
-  }
-  td.acts .overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--pad-2);
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.12s ease;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      color-mix(in srgb, var(--panel-bg) 92%, transparent) 15%,
-      color-mix(in srgb, var(--panel-bg) 92%, transparent) 85%,
-      transparent 100%
-    );
-  }
-  tbody tr:hover td.acts .overlay,
-  tbody tr:focus-within td.acts .overlay {
-    opacity: 1;
-  }
-  td.acts .overlay :global(.btn) {
-    pointer-events: auto;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    td.acts .overlay {
-      transition: none;
-    }
-  }
-
+  /* Rows no longer carry a rank of action marks. Opening one is the row's own
+     click, and everything you can do to a record — delete, test, reindex — is
+     in the titlebar of the record you opened. */
   .exp button {
     font: inherit;
     background: none;

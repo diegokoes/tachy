@@ -21,7 +21,7 @@
   } from "../tui";
   import type { AreaRule, Component, Connection, Customer, Product, ProjectWiki, Repo, SourceProject, Team } from "./rows";
 import { INFO } from "./help";
-  import { claimTopAction } from "./topAction.svelte";
+  import { sectionHoist } from "./topAction.svelte";
 
   type Found = { key: string; name: string };
   type Wiki = { identifier: string; name: string; type?: string };
@@ -528,7 +528,7 @@ import { INFO } from "./help";
 />
 
 <CrudTable
-  hoist={claimTopAction}
+  hoist={sectionHoist("projects")}
   {columns}
   rows={filtered}
   rowKey={(p) => p.id}
@@ -539,6 +539,7 @@ import { INFO } from "./help";
   canDelete={canEditProject}
   canCreate={canAdd}
   addLabel="register project"
+  noun="project"
   editTitle={(p) => p.external_key}
   expand={detail}
   {expanded}

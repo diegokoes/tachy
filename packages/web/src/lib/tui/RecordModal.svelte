@@ -8,6 +8,7 @@
   import Checkbox from "./Checkbox.svelte";
   import Select from "../AsciiSelect.svelte";
   import type { Column, Draft } from "./table";
+  import type { IconName } from "./icons";
 
   let {
     title,
@@ -19,8 +20,10 @@
     error = null,
     confirmLabel = "save",
     width = "40rem",
+    destructive,
     onConfirm,
     onCancel,
+    barExtra,
     extra,
   }: {
     /** The dialog's accessible name only; the chrome draws no heading. */
@@ -34,8 +37,18 @@
     error?: string | null;
     confirmLabel?: string;
     width?: string;
+    /** Deleting this record. Drawn at the far left of the titlebar. */
+    destructive?: {
+      label: string;
+      icon?: IconName;
+      onclick: () => void;
+      busy?: boolean;
+      disabled?: boolean;
+    };
     onConfirm: () => void;
     onCancel: () => void;
+    /** Per-record actions that are not save — test, reindex. Titlebar right. */
+    barExtra?: Snippet;
     extra?: Snippet;
   } = $props();
 
@@ -117,6 +130,8 @@
   {busy}
   {confirmLabel}
   confirmIcon="save"
+  {destructive}
+  {barExtra}
   {onConfirm}
   {onCancel}
 >

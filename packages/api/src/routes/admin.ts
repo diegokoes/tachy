@@ -37,6 +37,7 @@ import {
   userCensus,
   sourceCensus,
   repoCensus,
+  knowledgeCensus,
   addTeam,
   updateTeam,
   deleteTeam,
@@ -208,13 +209,15 @@ export const admin = new Hono()
    */
   .get("/overview", async (c) => {
     const ctx = await callerScope(c);
-    const [catalog, users, sources, repos, conns] = await Promise.all([
-      catalogCensus(),
-      userCensus(),
-      sourceCensus(),
-      repoCensus(),
-      listSourceConnections(),
-    ]);
+    const [catalog, users, sources, repos, knowledge, conns] =
+      await Promise.all([
+        catalogCensus(),
+        userCensus(),
+        sourceCensus(),
+        repoCensus(),
+        knowledgeCensus(),
+        listSourceConnections(),
+      ]);
     /* Through the same resolver the connections list uses, not a join against
        the vault: a token supplied by the environment is a token, and counting
        rows would have flagged every one of those as missing. */
@@ -244,6 +247,18 @@ export const admin = new Hono()
       warn: {
         sources: untokened,
         repos: repos.failing,
+      },
+      /* The same censuses unsummarised, for the three overview panels.
+         They are on the page beside every section they describe now, and the
+         numbers they want — labels with no description, teams with no admin —
+         are per-product or per-membership queries the browser would have had
+         to fan out one request per row to answer. */
+      detail: {
+        sources: { ...sources, untokened },
+        repos,
+        catalog,
+        users,
+        knowledge,
       },
     });
   })
