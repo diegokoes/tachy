@@ -12,6 +12,7 @@
     title,
     disabled = false,
     active = false,
+    keepOpen = false,
     onchange,
     "aria-label": ariaLabel,
   }: {
@@ -22,6 +23,12 @@
     /** Holds a non-default value — worn as an accent border, so a narrowed
      *  list is visible without a separate "N active" counter. */
     active?: boolean;
+    /**
+     * Leave the panel up after a pick, and let a second click on the picked
+     * option fall back to the empty one. For rows of filters, where the point
+     * is trying values quickly rather than committing to one.
+     */
+    keepOpen?: boolean;
     onchange?: (v: Val) => void;
     "aria-label"?: string;
   } = $props();
@@ -60,6 +67,7 @@
     return opts.filter((o) => o.label.toLowerCase().includes(q));
   });
 
+  const clearable = $derived(opts.some((o) => o.value === ""));
   const selectedIndex = $derived(opts.findIndex((o) => o.value === value));
   const label = $derived(selectedIndex >= 0 ? opts[selectedIndex].label : "");
 
@@ -79,9 +87,10 @@
   function choose(i: number) {
     const o = shown[i];
     if (!o || o.disabled) return;
-    value = o.value;
-    onchange?.(o.value);
-    close();
+    const next = keepOpen && clearable && o.value === value ? "" : o.value;
+    value = next;
+    onchange?.(next);
+    if (!keepOpen) close();
   }
   function step(dir: number) {
     const n = shown.length;

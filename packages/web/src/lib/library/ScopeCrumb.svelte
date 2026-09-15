@@ -33,6 +33,9 @@
     display: flex;
     margin: var(--pad-2) 0;
     align-items: center;
+    /* Centred on the same axis as the title below it — flush left it read as
+       a stray label rather than as the heading of the column it introduces. */
+    justify-content: center;
     flex-wrap: wrap;
     gap: var(--pad-1);
     min-width: 0;

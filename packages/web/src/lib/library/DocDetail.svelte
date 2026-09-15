@@ -1,21 +1,22 @@
 <script lang="ts">
   import { fmtDate } from "../dates";
-  import { statusTone } from "./status";
+  import { statusTone, type StatusAction } from "./status";
   import { patchLibraryItem } from "./edit";
   import { api } from "../api";
   import type { NamedRow, ReferenceLineageRow, ReferenceRow } from "../types";
   import { canCurateScope, isCurator } from "../session.svelte";
   import History from "./History.svelte";
-  import Backlinks from "../wiki/Backlinks.svelte";
+  import Backlinks from "./Backlinks.svelte";
   import { renderMarkdown, markBrokenLinks } from "../markdown";
   import { LinkTargets } from "../wikilinks.svelte";
   import { pushScope } from "../keys.svelte";
   import { setTopActions } from "../subnav.svelte";
   import { vimState } from "../vim.svelte";
   import { createSequence, errText } from "../resource.svelte";
-  import { Badge, Button, Chip, Icon, Note, Select, G } from "../tui";
+  import { Badge, Button, Chip, Icon, Modal, Note, Select } from "../tui";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
   import ScopeCrumb from "./ScopeCrumb.svelte";
+  import StatusActions from "./StatusActions.svelte";
 
   let { id, onClose }: { id: string; onClose: () => void } = $props();
 
@@ -29,6 +30,7 @@
   let mutateError = $state<string | null>(null);
   let conflict = $state(false);
   let productTeamSlug = $state<string | null>(null);
+  let historyOpen = $state(false);
   let createSaving = $state(false);
   let createError = $state<string | null>(null);
 
@@ -58,6 +60,49 @@
   );
 
 
+  /** The doc lifecycle, as the left rail draws it. See EntryDetail. */
+  function actionsFor(d: ReferenceRow): StatusAction[] {
+    const acts: StatusAction[] = [];
+    if (d.status !== "draft")
+      acts.push({
+        icon: "doc",
+        label: "draft",
+        title: "back to draft",
+        tone: "info",
+        disabled: mutating,
+        onclick: () => patch({ status: "draft" }),
+      });
+    if (d.status !== "approved")
+      acts.push({
+        icon: "check",
+        label: "approve",
+        tone: "ok",
+        disabled: mutating,
+        onclick: () => patch({ status: "approved" }),
+      });
+    if (d.status !== "archived")
+      acts.push({
+        icon: "archive",
+        label: "archive",
+        disabled: mutating,
+        onclick: () => patch({ status: "archived" }),
+      });
+    if (d.status === "approved")
+      acts.push({
+        icon: "newVersion",
+        label: "new version",
+        title: "new version\u2026",
+        tone: "accent",
+        onclick: () => {
+          newVersion = true;
+          createError = null;
+        },
+      });
+    return acts;
+  }
+
+  const statusActions = $derived(doc && canEdit ? actionsFor(doc) : []);
+
   const current = createSequence();
 
   async function load(docId: string) {
@@ -68,6 +113,7 @@
     error = null;
     editing = false;
     newVersion = false;
+    historyOpen = false;
     mutateError = null;
     conflict = false;
     productTeamSlug = null;
@@ -144,7 +190,7 @@
   });
 
   /** Same as the entry view: backspace goes back while reading, not editing.
-      Hidden, because back is a labelled button in the carved row. */
+      Hidden, because back is a button in the carved row. */
   $effect(() => {
     if (editing || newVersion || !doc) return;
     return pushScope([
@@ -221,96 +267,56 @@
     }}
   />
 {:else}
-  <ScopeCrumb area={doc.product_area} />
+  <div class="read">
+    <StatusActions actions={statusActions} />
+    <ScopeCrumb area={doc.product_area} />
 
-  <h2>{doc.title}</h2>
+    <h2>{doc.title}</h2>
 
-  <div class="meta status-meta">
-    <span><Badge tone={statusTone(doc.status)}>{doc.status}</Badge></span>
-    {#if doc.customer_slug}
-      <span
-        ><Badge
-          tone="accent"
-          title="documents this customer's install. Cite it as theirs, not as how the product works"
-          >{doc.customer_slug}</Badge
-        ></span
-      >
-    {/if}
-    {#if doc.updated_at}<span class="muted">updated {fmtDate(doc.updated_at)}</span>{/if}
-  </div>
-
-  <div class="meta">
-    <span class="source" title="source">
-      <Icon name="consult" size="1em" weight={7} />
-      <span class:muted={!doc.source}>{doc.source || "n/a"}</span>
-    </span>
-  </div>
-
-  <div class="meta">
-    <Select
-      value={doc.id}
-      title="All versions of this doc"
-      aria-label="version"
-      options={versions.map((l) => ({ value: l.id, label: versionLabel(l) }))}
-      onchange={(v) => load(String(v))}
-    />
-  </div>
-
-  {#if canEdit}
-    <div class="acts">
-      {#if doc.status !== "draft"}
+    <div class="meta status-meta">
+      <span class="lifecycle">
+        <Badge tone={statusTone(doc.status)}>{doc.status}</Badge>
+        {#if doc.customer_slug}
+          <Badge
+            tone="accent"
+            title="documents this customer's install. Cite it as theirs, not as how the product works"
+            >{doc.customer_slug}</Badge
+          >
+        {/if}
+      </span>
+      <span class="when">
+        {#if doc.updated_at}<span class="muted">updated {fmtDate(doc.updated_at)}</span>{/if}
+      </span>
+      <span class="revisions">
         <Button
-          variant="ghost"
           square
-          tone="info"
-          icon="doc"
-          aria-label="back to draft"
-          title="back to draft"
-          disabled={mutating}
-          onclick={() => patch({ status: "draft" })}
+          iconSize="1.1rem"
+          icon="history"
+          title="revisions and reads"
+          aria-label="revisions and reads"
+          onclick={() => (historyOpen = true)}
         />
-      {/if}
-      {#if doc.status !== "approved"}
-        <Button
-          variant="ghost"
-          square
-          tone="ok"
-          icon="check"
-          aria-label="approve"
-          title="approve"
-          disabled={mutating}
-          onclick={() => patch({ status: "approved" })}
-        />
-      {/if}
-      {#if doc.status !== "archived"}
-        <Button
-          variant="ghost"
-          square
-          icon="archive"
-          aria-label="archive"
-          title="archive"
-          disabled={mutating}
-          onclick={() => patch({ status: "archived" })}
-        />
-      {/if}
-      {#if doc.status === "approved"}
-        <span class="gap"></span>
-        <Button
-          variant="ghost"
-          square
-          tone="accent"
-          icon="newVersion"
-          aria-label="new version"
-          title="new version…"
-          onclick={() => {
-            newVersion = true;
-            createError = null;
-          }}
-        />
-      {/if}
+      </span>
     </div>
 
-    {#if mutateError}
+    <div class="meta">
+      <span class="source" title="source">
+        <Icon name="consult" size="1em" weight={7} />
+        <span class:muted={!doc.source}>{doc.source || "n/a"}</span>
+      </span>
+    </div>
+
+    <div class="meta">
+      <Select
+        value={doc.id}
+        title="All versions of this doc"
+        aria-label="version"
+        options={versions.map((l) => ({ value: l.id, label: versionLabel(l) }))}
+        onchange={(v) => load(String(v))}
+      />
+    </div>
+
+    {#if canEdit && mutateError}
       <Note tone="danger">
         {mutateError}
         {#snippet action()}
@@ -320,33 +326,42 @@
         {/snippet}
       </Note>
     {/if}
-  {/if}
 
-  {#if doc.tags?.length}
-    <div class="tags">
-      {#each doc.tags as tag}<Chip>{tag}</Chip>{/each}
+    {#if doc.tags?.length}
+      <div class="tags">
+        {#each doc.tags as tag}<Chip>{tag}</Chip>{/each}
+      </div>
+    {/if}
+
+    <!-- Imported bodies are markdown at the source (an ADO wiki page is), and a
+         [[wikilink]] cannot render inside a <pre>. -->
+    <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
+             focusable wikilink anchors this div delegates to -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
+             wrapper, not an interactive element of its own -->
+    <div class="body md" onclick={links.onClick} onkeydown={links.onKeydown}>
+      {@html markBrokenLinks(renderMarkdown(doc.body ?? "(no body)"), links.resolved)}
     </div>
-  {/if}
 
-  <!-- Imported bodies are markdown at the source (an ADO wiki page is), and a
-       [[wikilink]] cannot render inside a <pre>. -->
-  <!-- svelte-ignore a11y_click_events_have_key_events -- handled on the
-           focusable wikilink anchors this div delegates to -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
-           wrapper, not an interactive element of its own -->
-  <div class="body md" onclick={links.onClick} onkeydown={links.onKeydown}>
-    {@html markBrokenLinks(renderMarkdown(doc.body ?? "(no body)"), links.resolved)}
+    <Backlinks base="reference" id={doc.id} />
+
+    {#if historyOpen}
+      <Modal
+        title="history"
+        cancelLabel="close"
+        width="46rem"
+        onCancel={() => (historyOpen = false)}
+      >
+        <History
+          base="reference"
+          id={doc.id}
+          version={doc.version}
+          {canEdit}
+          onReverted={() => load(doc!.id)}
+        />
+      </Modal>
+    {/if}
   </div>
-
-  <Backlinks base="reference" id={doc.id} />
-
-  <History
-    base="reference"
-    id={doc.id}
-    version={doc.version}
-    {canEdit}
-    onReverted={() => load(doc!.id)}
-  />
 {/if}
 
 <style>
@@ -367,16 +382,29 @@
     margin-bottom: var(--pad-2);
     font-size: var(--fs-sm);
   }
-  .acts {
+  /* Three tracks, not a centred flex row: it is the date that has to sit on
+     the column's centre line, with the badges behind it and the revisions
+     button ahead of it. Equal fr cheeks give it that whatever they hold. */
+  .status-meta {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    column-gap: var(--pad-4);
+  }
+  .lifecycle {
+    justify-self: end;
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: var(--pad-2);
-    flex-wrap: wrap;
-    margin: var(--pad-3) 0;
   }
-  .acts .gap {
-    width: var(--pad-4);
+  .revisions {
+    justify-self: start;
+    display: flex;
+  }
+
+  /* The positioning context the lifecycle rail hangs off. */
+  .read {
+    position: relative;
   }
   .source {
     display: inline-flex;
