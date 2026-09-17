@@ -531,3 +531,26 @@ export {
   ASSET_SRC_RE,
 } from "@tachy/contract";
 export type { WikiGapKind, LibraryAssetType } from "@tachy/contract";
+
+// Owned by the contract, because the admin jobs form offers them and the API
+// validates them.
+export {
+  JOB_TRIGGERS,
+  JOB_STATUSES,
+  JOB_RESOURCE_CLASSES,
+  JOB_OVERLAP,
+  JOB_MISSED,
+  JOB_NOTIFY,
+  JOB_CLASS_CHAT_SLOTS,
+  JOB_FINISHED,
+  parseDuration,
+} from "@tachy/contract";
+export type {
+  JobTrigger,
+  JobStatus,
+  JobResourceClass,
+  JobOverlap,
+  JobMissed,
+  JobNotify,
+} from "@tachy/contract";
+export * from "./jobs";

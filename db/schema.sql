@@ -988,3 +988,74 @@ create index code_chunks_repo_idx      on code_chunks(repo_id);
 create index code_chunks_embedding_idx on code_chunks using hnsw (embedding vector_cosine_ops)
     with (m = 16, ef_construction = 64);
 create index code_chunks_trgm_idx      on code_chunks using gin (chunk_text gin_trgm_ops);
+
+-- The job layer (DEPLOYMENT-ARCHITECTURE.md §5.3). A kind is code; a definition
+-- is an admin's configuration of a kind; a run is one execution.
+create table job_definitions (
+    id                 uuid primary key default gen_random_uuid(),
+    kind               text not null,
+    name               text not null unique,
+    params             jsonb not null default '{}'::jsonb,
+    enabled            boolean not null default true,
+    schedule           text,
+    timezone           text not null default 'UTC',
+    resource_class     text check (resource_class in ('light','heavy')),
+    timeout            text,
+    overlap            text check (overlap in ('skip','queue')),
+    notify             text not null default 'failure' check (notify in ('failure','always','never')),
+    -- The last slot the scheduler has dealt with, so a firing is decided once.
+    last_scheduled_for timestamptz,
+    -- Set at worker start when stored params no longer validate against the kind.
+    disabled_reason    text,
+    created_by         uuid references users(id) on delete set null,
+    updated_by         uuid references users(id) on delete set null,
+    created_at         timestamptz not null default now(),
+    updated_at         timestamptz not null default now()
+);
+
+create table job_runs (
+    id               uuid primary key default gen_random_uuid(),
+    definition_id    uuid references job_definitions(id) on delete set null,
+    kind             text not null,
+    params           jsonb not null default '{}'::jsonb,
+    resource_class   text not null check (resource_class in ('light','heavy')),
+    trigger          text not null check (trigger in ('schedule','manual','event')),
+    scheduled_for    timestamptz,
+    requested_by     uuid references users(id) on delete set null,
+    status           text not null default 'queued'
+                     check (status in ('queued','running','succeeded','failed','cancelled','timed_out')),
+    attempts         integer not null default 0,
+    max_attempts     integer not null default 1,
+    timeout_ms       bigint not null,
+    run_after        timestamptz not null default now(),
+    locked_by        text,
+    locked_until     timestamptz,
+    cancel_requested boolean not null default false,
+    progress         real,
+    progress_note    text,
+    output           jsonb,
+    error            text,
+    log_tail         text not null default '',
+    created_at       timestamptz not null default now(),
+    started_at       timestamptz,
+    finished_at      timestamptz,
+    unique (definition_id, scheduled_for)
+);
+
+create index job_runs_claim_idx on job_runs(resource_class, run_after) where status = 'queued';
+create index job_runs_running_idx on job_runs(locked_until) where status = 'running';
+create index job_runs_definition_idx on job_runs(definition_id, created_at desc);
+create index job_runs_created_idx on job_runs(created_at);
+
+-- Who changed a definition and how: a schedule edit can silently stop a sync.
+create table job_definition_changes (
+    id             uuid primary key default gen_random_uuid(),
+    definition_id  uuid references job_definitions(id) on delete set null,
+    changed_by     uuid references users(id) on delete set null,
+    action         text not null check (action in ('created','updated','deleted','disabled')),
+    old_value      jsonb,
+    new_value      jsonb,
+    created_at     timestamptz not null default now()
+);
+
+create index job_definition_changes_def_idx on job_definition_changes(definition_id, created_at desc);
