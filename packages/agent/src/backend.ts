@@ -95,6 +95,8 @@ export interface AgentTurn {
   readonly finished: boolean;
   /** Approval requests still waiting on the user. */
   readonly pendingApprovals: number;
+  /** When the longest-waiting approval was requested (ms epoch), or null. */
+  readonly oldestPendingApprovalAt: number | null;
   events(): AsyncGenerator<AgentEvent>;
   approve(id: string, decision: Decision): void;
   abort(): void;

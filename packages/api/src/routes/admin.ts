@@ -71,6 +71,7 @@ import {
   type CredentialSource,
 } from "@tachy/core";
 import { getIdentity, requireAdmin } from "../auth";
+import { runtimeSnapshot } from "../runtime";
 import {
   assertAnyTeamAdminApi,
   assertScopeEditor,
@@ -328,6 +329,7 @@ export const admin = new Hono()
               env_badge: env.envBadge ?? null,
               commit: env.commit ?? null,
             },
+            runtime: await runtimeSnapshot(),
           }
         : {}),
     }),

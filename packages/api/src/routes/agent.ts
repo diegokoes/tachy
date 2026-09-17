@@ -48,6 +48,7 @@ import { BUILTIN_COMMANDS, findCommand, commandAutoApprove } from "../commands";
 
 interface TurnEntry {
   turn: AgentTurn;
+  provider: string;
   email?: string;
   startedAt: number;
   leave: () => void;
@@ -85,6 +86,29 @@ const waiting = new Map<string, { email?: string; leave: () => void }>();
 
 const ABANDONED_MS = 30_000;
 const KEEPALIVE_MS = 20_000;
+
+export function turnStats() {
+  const byProvider: Record<string, number> = {};
+  let pendingApprovals = 0;
+  let oldestApprovalAt: number | null = null;
+  for (const { turn, provider } of turns.values()) {
+    if (turn.finished) continue;
+    byProvider[provider] = (byProvider[provider] ?? 0) + 1;
+    pendingApprovals += turn.pendingApprovals;
+    const at = turn.oldestPendingApprovalAt;
+    if (at !== null && (oldestApprovalAt === null || at < oldestApprovalAt))
+      oldestApprovalAt = at;
+  }
+  return {
+    ...admission.stats,
+    running: byProvider,
+    pendingApprovals,
+    oldestApprovalAgeSeconds:
+      oldestApprovalAt === null
+        ? null
+        : Math.round((Date.now() - oldestApprovalAt) / 1000),
+  };
+}
 
 export const activeTurnCount = () =>
   [...turns.values()].filter((e) => !e.turn.finished).length;
@@ -474,6 +498,7 @@ export const agent = new Hono()
         turn = startTurn(prompt, cfg, sessionId ? { resume: sessionId } : {});
         turns.set(turnId, {
           turn,
+          provider: cfg.provider,
           email: userEmail,
           startedAt: Date.now(),
           leave,
