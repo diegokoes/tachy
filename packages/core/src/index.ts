@@ -49,6 +49,7 @@ export {
   setUserRole,
   setUserPassword,
   setUserDisabled,
+  setUserFlags,
   setUserDisplayName,
   listTeamMembers,
   listMemberships,

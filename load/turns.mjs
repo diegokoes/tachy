@@ -35,7 +35,13 @@ const admin = (path, init = {}) =>
 async function ensureUser(email) {
   const res = await admin("/api/users", {
     method: "POST",
-    body: JSON.stringify({ email, password: PASSWORD, role: "member" }),
+    body: JSON.stringify({
+      email,
+      password: PASSWORD,
+      role: "member",
+      service_account: true,
+      password_login_allowed: true,
+    }),
   });
   if (res.ok) return;
   const text = await res.text();

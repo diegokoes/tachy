@@ -15,6 +15,8 @@ export interface UserRow {
   role: UserRole;
   disabled: boolean;
   has_password: boolean;
+  service_account: boolean;
+  password_login_allowed: boolean;
   created_at: string;
 }
 
@@ -49,7 +51,8 @@ export async function countAdmins(): Promise<number> {
 export async function listUsers(): Promise<UserRow[]> {
   const rows = await sql`
     select id, email, display_name, role, disabled,
-           (password_hash is not null) as has_password, created_at
+           (password_hash is not null) as has_password,
+           service_account, password_login_allowed, created_at
     from users order by created_at
   `;
   return rows as unknown as UserRow[];
@@ -60,13 +63,19 @@ export async function createUser(input: {
   displayName?: string;
   password?: string;
   role?: UserRole;
+  serviceAccount?: boolean;
+  passwordLoginAllowed?: boolean;
 }): Promise<UserRow> {
   const hash = input.password ? await hashPassword(input.password) : null;
   const rows = await sql`
-    insert into users (email, display_name, role, password_hash)
-    values (${input.email}, ${input.displayName ?? null}, ${input.role ?? "member"}, ${hash})
+    insert into users (email, display_name, role, password_hash,
+                       service_account, password_login_allowed)
+    values (${input.email}, ${input.displayName ?? null}, ${input.role ?? "member"}, ${hash},
+            ${input.serviceAccount ?? false}, ${input.passwordLoginAllowed ?? false})
     on conflict (email) do nothing
-    returning id, email, display_name, role, disabled, (password_hash is not null) as has_password, created_at
+    returning id, email, display_name, role, disabled,
+              (password_hash is not null) as has_password,
+              service_account, password_login_allowed, created_at
   `;
   if (rows.length === 0)
     throw badInput(`a user with email '${input.email}' already exists`);
@@ -80,9 +89,11 @@ export async function getUserByEmail(email: string): Promise<{
   role: UserRole;
   disabled: boolean;
   password_hash: string | null;
+  password_login_allowed: boolean;
 } | null> {
   const [row] = await sql`
-    select id, email, display_name, role, disabled, password_hash
+    select id, email, display_name, role, disabled, password_hash,
+           password_login_allowed
     from users where email = ${email}
   `;
   return (row as never) ?? null;
@@ -125,6 +136,17 @@ export async function setUserPassword(
   await requireUser(id);
   const hash = await hashPassword(password);
   await sql`update users set password_hash = ${hash} where id = ${id}`;
+}
+
+export async function setUserFlags(
+  id: string,
+  flags: { serviceAccount?: boolean; passwordLoginAllowed?: boolean },
+): Promise<void> {
+  await requireUser(id);
+  if (flags.serviceAccount !== undefined)
+    await sql`update users set service_account = ${flags.serviceAccount} where id = ${id}`;
+  if (flags.passwordLoginAllowed !== undefined)
+    await sql`update users set password_login_allowed = ${flags.passwordLoginAllowed} where id = ${id}`;
 }
 
 export async function setUserDisabled(

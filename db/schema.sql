@@ -46,6 +46,12 @@ create table users (
     -- Scrypt hash for password login; null = SSO-only or attribution-only user.
     password_hash text,
     disabled      boolean not null default false,
+    -- A non-person account (the load-test user, later a scheduler identity):
+    -- its reads and tool calls are not counted as engagement.
+    service_account boolean not null default false,
+    -- Honoured only while SSO is configured: then password login works for
+    -- these accounts alone (break-glass admin, load-test user).
+    password_login_allowed boolean not null default false,
     created_at    timestamptz not null default now()
 );
 
