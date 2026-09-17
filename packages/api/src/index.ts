@@ -1,16 +1,19 @@
+import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { serve } from "@hono/node-server";
 import {
   backgroundSettled,
-  embedQuery,
   env,
   log,
+  setEmbedBackend,
   sql,
+  startEmbedHost,
   sweepInterruptedIndexes,
   sweepWikiGaps,
 } from "@tachy/core";
 import { createApp } from "./app";
 import { isBootstrapped } from "./auth";
+import { setEmbedEndpoint } from "./embed-endpoint";
 import { lifecycle } from "./lifecycle";
 import { abortAllTurns, activeTurnCount } from "./routes/agent";
 
@@ -25,11 +28,28 @@ const oidc =
     ? { ...env.oidc, sessionSecret: env.sessionSecret }
     : undefined;
 
+lifecycle.modelRequired = true;
+const embedder = startEmbedHost({
+  onReady: (ready) => (lifecycle.modelReady = ready),
+  onFatal: (err) => {
+    log("error", "embedding_model_failed", { error: String(err) });
+    process.exit(1);
+  },
+});
+const embed = embedder.queue.embed.bind(embedder.queue);
+setEmbedBackend(embed);
+const embedSecret = randomBytes(32).toString("hex");
+setEmbedEndpoint({
+  url: `http://127.0.0.1:${env.port}/internal/embed`,
+  secret: embedSecret,
+});
+
 const app = createApp({
   apiToken: env.apiToken,
   webRoot: serveWeb ? webRoot : undefined,
   oidc,
   passwordAuth: true,
+  internalEmbed: { secret: embedSecret, embed },
 });
 
 const swept = await sweepInterruptedIndexes();
@@ -48,17 +68,6 @@ const server = serve({
   port: env.port,
   hostname: authConfigured ? undefined : "127.0.0.1",
 });
-
-lifecycle.modelRequired = true;
-embedQuery("warmup")
-  .then(() => {
-    lifecycle.modelReady = true;
-    log("info", "embedding_model_ready", {});
-  })
-  .catch((err) => {
-    log("error", "embedding_model_failed", { error: String(err) });
-    process.exit(1);
-  });
 
 const DRAIN_MS = (Number(process.env.TACHY_DRAIN_SECONDS) || 180) * 1000;
 
@@ -83,7 +92,7 @@ async function drain(signal: string) {
     backgroundSettled(),
     new Promise((r) => setTimeout(r, 5_000)),
   ]);
-  await sql.end({ timeout: 5 });
+  await Promise.all([sql.end({ timeout: 5 }), embedder.stop()]);
   log("info", "drain_done", { aborted });
   process.exit(0);
 }
