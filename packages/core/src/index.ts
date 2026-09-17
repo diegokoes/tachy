@@ -463,6 +463,7 @@ export type {
   EmbedBackend,
   EmbedHost,
   EmbedKind,
+  EmbedPriority,
   EmbedQueueDepth,
 } from "./search";
 export {

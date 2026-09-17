@@ -72,4 +72,16 @@ describe("EmbedQueue", () => {
     await expect(good).resolves.toEqual([[1]]);
     expect(q.depth).toMatchObject({ queries: 0, passages: 0, running: false });
   });
+
+  it("serves low-priority passages only when no normal passage waits", async () => {
+    const r = recorder();
+    const q = new EmbedQueue(r.run, { passageBatch: 1, queryBatch: 32 });
+    r.hold();
+    const low = q.embed("passage", ["l1", "l2"], "worker", "low");
+    await flush();
+    const normal = q.embed("passage", ["n1", "n2"], "turn");
+    r.open();
+    await Promise.all([low, normal]);
+    expect(r.batches.map((b) => b.join())).toEqual(["l1", "n1", "n2", "l2"]);
+  });
 });

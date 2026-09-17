@@ -74,6 +74,16 @@ async function hostStatus() {
   return out;
 }
 
+async function externalDepth(): Promise<EmbedQueueDepth | null> {
+  if (!lifecycle.embedderUrl) return null;
+  return fetch(lifecycle.embedderUrl, { signal: AbortSignal.timeout(2_000) })
+    .then(
+      async (r) =>
+        ((await r.json()) as { depth?: EmbedQueueDepth }).depth ?? null,
+    )
+    .catch(() => null);
+}
+
 /** Current values only; nothing here is stored. */
 export async function runtimeSnapshot() {
   const [mem, postgres, status] = await Promise.all([
@@ -86,7 +96,7 @@ export async function runtimeSnapshot() {
     turns: turnStats(),
     memory: mem,
     eventLoopP99Ms: Math.round(loopP99Ms * 10) / 10,
-    embed: embedDepth?.() ?? null,
+    embed: embedDepth?.() ?? (await externalDepth()),
     postgres,
     status,
   };

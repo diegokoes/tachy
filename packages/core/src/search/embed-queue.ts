@@ -1,4 +1,6 @@
 export type EmbedKind = "query" | "passage";
+/** Low-priority passages (background jobs) wait until no normal passage does. */
+export type EmbedPriority = "normal" | "low";
 
 /** Runs one batch of already-prepared texts through the model. */
 export type EmbedRunner = (texts: string[]) => Promise<number[][]>;
@@ -29,6 +31,7 @@ export class EmbedQueue {
   private queries: Job[] = [];
   private passages = new Map<string, Job[]>();
   private rotation: string[] = [];
+  private lowRotation: string[] = [];
   private running = false;
 
   constructor(
@@ -40,6 +43,7 @@ export class EmbedQueue {
     kind: EmbedKind,
     texts: string[],
     caller = "local",
+    priority: EmbedPriority = "normal",
   ): Promise<number[][]> {
     if (!texts.length) return Promise.resolve([]);
     return new Promise((resolve, reject) => {
@@ -56,11 +60,12 @@ export class EmbedQueue {
       };
       if (kind === "query") this.queries.push(job);
       else {
-        const jobs = this.passages.get(caller);
+        const key = `${priority}:${caller}`;
+        const jobs = this.passages.get(key);
         if (jobs) jobs.push(job);
         else {
-          this.passages.set(caller, [job]);
-          this.rotation.push(caller);
+          this.passages.set(key, [job]);
+          (priority === "low" ? this.lowRotation : this.rotation).push(key);
         }
       }
       this.pump();
@@ -74,7 +79,7 @@ export class EmbedQueue {
     return {
       queries: this.queries.reduce((n, j) => n + j.texts.length, 0),
       passages,
-      callers: this.rotation.length,
+      callers: this.rotation.length + this.lowRotation.length,
       running: this.running,
     };
   }
@@ -84,8 +89,10 @@ export class EmbedQueue {
     const step = this.queries.length
       ? this.runQueries()
       : this.rotation.length
-        ? this.runPassages()
-        : undefined;
+        ? this.runPassages(this.rotation)
+        : this.lowRotation.length
+          ? this.runPassages(this.lowRotation)
+          : undefined;
     if (!step) return;
     this.running = true;
     void step.finally(() => {
@@ -118,8 +125,8 @@ export class EmbedQueue {
     }
   }
 
-  private async runPassages(): Promise<void> {
-    const caller = this.rotation.shift()!;
+  private async runPassages(rotation: string[]): Promise<void> {
+    const caller = rotation.shift()!;
     const jobs = this.passages.get(caller)!;
     const job = jobs[0];
     const idx = job.order.slice(job.next, job.next + this.opts.passageBatch);
@@ -136,7 +143,7 @@ export class EmbedQueue {
       jobs.shift();
       if (!failed) job.resolve(job.out);
     }
-    if (jobs.length) this.rotation.push(caller);
+    if (jobs.length) rotation.push(caller);
     else this.passages.delete(caller);
   }
 }
