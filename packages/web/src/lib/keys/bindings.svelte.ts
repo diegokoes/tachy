@@ -6,7 +6,7 @@
  * Section keys are stored per nav item, not per slot: navItems() drops `admin`
  * for non-curators, so slot 3 is `admin` for one user and `settings` for the
  * next. Subnav keys are stored per slot, because subnav items differ by section
- * and ⇧1..⇧n is meaningful as a set rather than per destination.
+ * and SHIFT + 1..n is meaningful as a set rather than per destination.
  */
 
 const KEY = "tachy-keys";
@@ -70,6 +70,40 @@ export function resetKeys() {
   keymap.nav = {};
   keymap.subnav = {};
   persist();
+}
+
+/* The glyphs normalize() bakes into a stored chord, spelled out. They are the
+   right thing on a key cap and the wrong thing in a settings list: "^," is only
+   readable to someone who already knows what it says. */
+const WORDS: Record<string, string> = {
+  "⏎": "ENTER",
+  "↑": "UP ARROW",
+  "↓": "DOWN ARROW",
+  esc: "ESC",
+  space: "SPACE",
+  backspace: "BACKSPACE",
+};
+
+const MODS = /^(shift|ctrl|alt|meta)\+/;
+
+/**
+ * A stored chord as a reader should see it: "ctrl+," is CTRL + ,  and "g g" is
+ * G then G. Display only — `normalize()` in keys.svelte.ts still owns what a
+ * binding *is*, and every saved keymap is in that spelling.
+ */
+export function keyLabel(chord: string): string {
+  return chord
+    .split(" ")
+    .map((part) => {
+      const mods: string[] = [];
+      let rest = part;
+      for (let m = MODS.exec(rest); m; m = MODS.exec(rest)) {
+        mods.push(m[1].toUpperCase());
+        rest = rest.slice(m[0].length);
+      }
+      return [...mods, WORDS[rest] ?? rest.toUpperCase()].join(" + ");
+    })
+    .join(" then ");
 }
 
 /**

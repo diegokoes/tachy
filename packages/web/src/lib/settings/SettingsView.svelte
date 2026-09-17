@@ -1,59 +1,52 @@
 <script lang="ts">
   import { navigate, segment } from "../router.svelte";
-  import { session, logout } from "../session.svelte";
-  import { Button } from "../tui";
-  import { setSubnav, type SubnavItem } from "../subnav.svelte";
-  import AgentTab from "./AgentTab.svelte";
-  import UiTab from "./UiTab.svelte";
-  import KeybindsTab from "./KeybindsTab.svelte";
+  import SectionedPage, {
+    type PageSection,
+  } from "../sections/SectionedPage.svelte";
+  import { capture, rebind } from "./rebind.svelte";
+  import Account from "./Account.svelte";
+  import Agent from "./Agent.svelte";
+  import Keys from "./Keys.svelte";
+  import Appearance from "./Appearance.svelte";
+  import Fonts from "./Fonts.svelte";
+  import NavKeys from "./NavKeys.svelte";
+  import SubnavKeys from "./SubnavKeys.svelte";
+  import VimKeys from "./VimKeys.svelte";
+  import FixedKeys from "./FixedKeys.svelte";
 
-  const TABS: SubnavItem[] = [
-    { key: "agent", label: "agent", icon: "sparkles" },
-    { key: "ui", label: "ui", icon: "window" },
-    { key: "keybinds", label: "keybinds", icon: "terminal" },
+  const SECTIONS: PageSection[] = [
+    { key: "account", label: "account", view: Account, eager: true },
+    { key: "agent", label: "agent", view: Agent },
+    { key: "keys", label: "keys", view: Keys },
+    { key: "appearance", label: "appearance", view: Appearance },
+    { key: "fonts", label: "fonts", view: Fonts },
+    { key: "section-keys", label: "section keys", view: NavKeys },
+    { key: "subnav-keys", label: "subnav keys", view: SubnavKeys },
+    { key: "vim", label: "vim controls", view: VimKeys },
+    { key: "reference", label: "fixed keys", view: FixedKeys },
   ];
 
-  const raw = $derived(segment(1) ?? "agent");
-  // "theme" was this tab's name until the UI rework; keep old links working.
-  const tab = $derived(raw === "theme" ? "ui" : raw);
+  /* Settings used to be three subnav tabs. Their URLs still exist in bookmarks
+     and in the browser's history, so each one lands on the section that took
+     its content over. */
+  const MOVED: Record<string, string> = {
+    ui: "appearance",
+    theme: "appearance",
+    keybinds: "section-keys",
+  };
 
-  $effect(() =>
-    setSubnav({
-      items: TABS,
-      active: tab,
-      onpick: (k) => navigate(`/settings/${k}`),
-      actions: account,
-    }),
-  );
+  const at = $derived.by(() => {
+    const seg = segment(1);
+    if (!seg) return undefined;
+    return MOVED[seg] ?? seg;
+  });
+
+  /* One listener for the whole page. The two rebind sections mount and unmount
+     with the scroll, and a listener per section would record the same press
+     into both of them. */
 </script>
 
-<!-- Rendered by App into the carved row beside the subnav, not here. Who you
-     are signed in as is a Settings concern, so it stays owned by this view
-     rather than becoming global chrome. -->
-{#snippet account()}
-  <span class="who">{session.me?.email ?? ""}</span>
-  {#if session.me}
-    <Button onclick={logout}>log out</Button>
-  {/if}
-{/snippet}
+<svelte:window onkeydown={rebind.target ? capture : undefined} />
 
-{#if tab === "ui"}
-  <UiTab />
-{:else if tab === "keybinds"}
-  <KeybindsTab />
-{:else}
-  <AgentTab />
-{/if}
-
-<style>
-  /* Truncates rather than pushing the log-out button into the recess when the
-     window is narrow and the address is long. */
-  .who {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: var(--fs-xs);
-    color: var(--muted);
-  }
-</style>
+<SectionedPage sections={SECTIONS} label="settings sections" {at}
+  onactive={(key) => navigate(`/settings/${key}`, { replace: true })} />
