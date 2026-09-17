@@ -1,0 +1,15 @@
+{
+  "connections": [
+    {
+      "name": "office",
+      "host": "tachy.office.lan",
+      "port": 22,
+      "user": "tachy-backup-alice",
+      "identityFile": "~/.ssh/tachy_backup",
+      "knownHostsFile": "~/.ssh/tachy_known_hosts",
+      "destination": "D:/tachy-backups/office",
+      "keepSets": 10,
+      "minFreeGB": 50
+    }
+  ]
+}
