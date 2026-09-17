@@ -2,3 +2,5 @@ node_modules
 dist
 *.sql
 coverage
+# Ansible; ansible-lint owns its formatting and disagrees with prettier on list indentation.
+deploy/host/**/*.yml

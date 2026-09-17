@@ -1,0 +1,149 @@
+- name: The tachy user owns the checkout and runs deploys
+  ansible.builtin.user:
+    name: "{{ tachy_user }}"
+    groups: [docker, tachy-admins]
+    append: true
+    shell: /bin/bash
+    create_home: true
+
+- name: Library directories for the host scripts
+  ansible.builtin.file:
+    path: "{{ tachy_lib }}/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: [host, backup, watch]
+
+- name: Data directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ tachy_srv }}/backups", owner: root, group: root, mode: "0700" }
+    - { path: "{{ tachy_srv }}/backups/staging", owner: root, group: root, mode: "0700" }
+    # Written by root (backups, watch) and by tachy (deploys); mounted
+    # read-only into the api container.
+    - { path: "{{ tachy_srv }}/status", owner: root, group: "{{ tachy_user }}", mode: "2775" }
+    - { path: /etc/tachy, owner: root, group: root, mode: "0700" }
+    - { path: /var/lib/tachy-watch, owner: root, group: root, mode: "0700" }
+    - { path: "{{ tachy_dir }}", owner: "{{ tachy_user }}", group: "{{ tachy_user }}", mode: "0750" }
+
+- name: Deploy log, appended by tachy-deploy
+  ansible.builtin.file:
+    path: "{{ tachy_srv }}/deploy.log"
+    state: touch
+    owner: "{{ tachy_user }}"
+    group: "{{ tachy_user }}"
+    mode: "0644"
+    modification_time: preserve
+    access_time: preserve
+
+- name: Checkout exists (tachy-deploy moves it to each release)
+  become: true
+  become_user: "{{ tachy_user }}"
+  ansible.builtin.git:
+    repo: "{{ tachy_repo }}"
+    dest: "{{ tachy_dir }}"
+    version: main
+    update: false
+
+- name: Backup recipients
+  ansible.builtin.copy:
+    dest: /etc/tachy/backup-recipients.txt
+    content: "{{ backup_recipients | join('\n') }}\n"
+    mode: "0644"
+  when: backup_recipients | length > 0
+
+# Host scripts are copied root-owned from the operator's checkout, not run from
+# /opt/tachy: that checkout belongs to the tachy user, and these run as root.
+- name: Host scripts
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../{{ item.src }}"
+    dest: "{{ tachy_lib }}/{{ item.src }}"
+    mode: "{{ item.mode }}"
+    owner: root
+    group: root
+  loop:
+    - { src: host/common.sh, mode: "0644" }
+    - { src: host/tachy-deploy, mode: "0755" }
+    - { src: backup/tachy-backup, mode: "0755" }
+    - { src: watch/tachy-watch, mode: "0755" }
+
+- name: Host scripts on PATH
+  ansible.builtin.file:
+    src: "{{ tachy_lib }}/{{ item.dir }}/{{ item.name }}"
+    dest: "/usr/local/bin/{{ item.name }}"
+    state: link
+  loop:
+    - { dir: host, name: tachy-deploy }
+    - { dir: backup, name: tachy-backup }
+    - { dir: watch, name: tachy-watch }
+
+- name: Host settings file, created once (fill in the secrets by hand)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/tachy.env.example"
+    dest: /etc/tachy/tachy.env
+    mode: "0640"
+    owner: root
+    group: "{{ tachy_user }}"
+    force: false
+
+- name: The tachy user may take the pre-deploy backup
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/tachy-deploy
+    content: |
+      {{ tachy_user }} ALL=(root) NOPASSWD: /usr/local/bin/tachy-backup db
+    mode: "0440"
+    validate: visudo -cf %s
+
+- name: Systemd units
+  ansible.builtin.template:
+    src: "templates/{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - tachy.service
+    - tachy-backup-db.service
+    - tachy-backup-db.timer
+    - tachy-restore-test.service
+    - tachy-restore-test.timer
+    - tachy-backup-files.service
+    - tachy-backup-files.timer
+    - tachy-watch.service
+    - tachy-watch.timer
+  notify: Reload systemd
+
+- name: Flush handlers so the units exist
+  ansible.builtin.meta: flush_handlers
+
+- name: The stack starts at boot
+  ansible.builtin.systemd_service:
+    name: tachy.service
+    enabled: true
+
+- name: Timers are running
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - tachy-backup-db.timer
+    - tachy-restore-test.timer
+    - tachy-backup-files.timer
+    - tachy-watch.timer
+
+- name: Tailscale's apt repository
+  ansible.builtin.deb822_repository:
+    name: tailscale
+    types: deb
+    uris: https://pkgs.tailscale.com/stable/debian
+    suites: "{{ ansible_distribution_release }}"
+    components: main
+    signed_by: "https://pkgs.tailscale.com/stable/debian/{{ ansible_distribution_release }}.noarmor.gpg"
+
+- name: Tailscale installed, not joined (joining is IT's decision)
+  ansible.builtin.apt:
+    name: tailscale
+    state: present

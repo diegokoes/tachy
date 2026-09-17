@@ -1,0 +1,51 @@
+- name: Lid closed is not a reason to sleep
+  ansible.builtin.copy:
+    dest: /etc/systemd/logind.conf.d/99-tachy-server.conf
+    content: |
+      [Login]
+      HandleLidSwitch=ignore
+      HandleLidSwitchExternalPower=ignore
+      HandleLidSwitchDocked=ignore
+      IdleAction=ignore
+    mode: "0644"
+
+- name: Sleep targets are masked
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    masked: true
+  loop: [sleep.target, suspend.target, hibernate.target, hybrid-sleep.target]
+
+- name: Hold the battery charge around 80% (a battery at 100% all day ages fast)
+  ansible.builtin.copy:
+    dest: /etc/tlp.d/10-tachy.conf
+    content: |
+      START_CHARGE_THRESH_BAT0={{ battery_start_threshold }}
+      STOP_CHARGE_THRESH_BAT0={{ battery_stop_threshold }}
+    mode: "0644"
+  notify: Restart tlp
+
+- name: TLP is enabled
+  ansible.builtin.systemd_service:
+    name: tlp
+    enabled: true
+    state: started
+
+- name: Shut down cleanly on battery before it runs out
+  ansible.builtin.copy:
+    dest: /etc/UPower/UPower.conf
+    content: |
+      [UPower]
+      EnableWattsUpPro=false
+      NoPollBatteries=false
+      IgnoreLid=true
+      UsePercentageForPolicy=true
+      PercentageLow=30
+      PercentageCritical=20
+      PercentageAction=15
+      TimeLow=1200
+      TimeCritical=300
+      TimeAction=120
+      AllowRiskyCriticalPowerAction=false
+      CriticalPowerAction=PowerOff
+    mode: "0644"
+  notify: Restart upower

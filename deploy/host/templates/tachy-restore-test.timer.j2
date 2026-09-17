@@ -1,0 +1,10 @@
+[Unit]
+Description=Database backup with a restore test
+
+[Timer]
+OnCalendar=Sun *-*-* 03:45:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target
