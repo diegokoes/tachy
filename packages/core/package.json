@@ -6,8 +6,9 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@tachy/contract": "*",
     "@huggingface/transformers": "^4.2.0",
+    "@tachy/contract": "*",
+    "croner": "^10.0.1",
     "dotenv": "^16.4.7",
     "fflate": "^0.8.2",
     "postgres": "^3.4.5",
