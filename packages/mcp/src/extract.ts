@@ -30,7 +30,8 @@ function normalizeText(text: string): string {
  * step straight back out of it.
  */
 async function confinedToUploads(path: string): Promise<string> {
-  const root = await realpath(uploadDir()).catch(() => resolve(uploadDir()));
+  const dir = uploadDir(process.env.TACHY_UPLOAD_OWNER || undefined);
+  const root = await realpath(dir).catch(() => resolve(dir));
   const target = await realpath(path).catch(() => resolve(path));
   if (target !== root && !target.startsWith(root + sep))
     throw badInput(

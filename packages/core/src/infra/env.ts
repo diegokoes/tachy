@@ -107,12 +107,18 @@ export const env = parsed.data;
 
 /**
  * Where a chat upload lands, and the only directory the ingest tools may read
- * back. Defined here because the API writes into it and the MCP subprocess
+ * back. With an owner (a user id), that user's own subdirectory: a turn's MCP
+ * child is confined to it, so one user's upload is not readable from another's
+ * turn even with its path. Defined here because the API writes into it and the MCP subprocess
  * reads out of it — two packages that must not disagree about which directory
  * "an uploaded file" means.
  */
-export function uploadDir(): string {
-  return process.env.TACHY_UPLOAD_DIR || join(tmpdir(), "tachy-uploads");
+export function uploadDir(owner?: string): string {
+  const root = process.env.TACHY_UPLOAD_DIR || join(tmpdir(), "tachy-uploads");
+  if (!owner) return root;
+  if (!/^[\w-]+$/.test(owner))
+    throw new Error(`invalid upload owner '${owner}'`);
+  return join(root, owner);
 }
 
 /**

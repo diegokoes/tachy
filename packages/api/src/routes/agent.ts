@@ -29,6 +29,8 @@ import {
   type EffectiveSettings,
   type ScopeContext,
   uploadDir,
+  sweepUploads,
+  log,
   unavailable,
 } from "@tachy/core";
 import { requireCaller } from "../authz";
@@ -99,6 +101,13 @@ export function abortAllTurns(): number {
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
+const uploadSweep = setInterval(() => {
+  sweepUploads()
+    .then((removed) => removed && log("info", "uploads_sweep", { removed }))
+    .catch((err) => log("error", "uploads_sweep", { error: String(err) }));
+}, 60 * 60_000);
+uploadSweep.unref?.();
+
 /**
  * The review box invariant lives in prompt.md, where the tool descriptions
  * agree with it. This only names the surface it renders on — anything more
@@ -158,6 +167,7 @@ const INHERITED_ENV = [
   "LOG_LEVEL",
   "TACHY_REPO_DIR",
   "TACHY_UPLOAD_DIR",
+  "TACHY_UPLOAD_TTL_HOURS",
   "TACHY_MODEL_CACHE",
   "TACHY_EMBED_MODEL",
   "TACHY_OUTPUT_TTL_HOURS",
@@ -230,6 +240,7 @@ export async function mcpConfig(
   const provider = prefs.agent_provider.value;
   const agentAuth = await resolveAgentAuth(provider, ctx);
   const configDir = await userConfigDir(user?.id);
+  mcpEnv.TACHY_UPLOAD_OWNER = user?.id ?? "_anonymous";
 
   const allowedModels = settings.allowed_models.value;
   return {
@@ -530,7 +541,7 @@ export const agent = new Hono()
   })
 
   .post("/uploads", async (c) => {
-    await requireCaller(c);
+    const owner = await requireCaller(c);
     // Checked before parseBody, which buffers the whole request first: past
     // that point the limit has already been paid for in memory.
     const declared = Number(c.req.header("content-length") ?? 0);
@@ -541,7 +552,7 @@ export const agent = new Hono()
     if (!(file instanceof File)) throw badInput("expected a 'file' field");
     if (file.size > MAX_UPLOAD_BYTES)
       throw badInput("file too large (max 25 MB)");
-    const dir = uploadDir();
+    const dir = uploadDir(owner);
     await mkdir(dir, { recursive: true });
     const safe = `${randomUUID()}-${basename(file.name || "upload")}`;
     const path = join(dir, safe);
