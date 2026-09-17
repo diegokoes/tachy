@@ -178,6 +178,8 @@ export type UserRow = {
   role: UserRole;
   disabled: boolean;
   has_password: boolean;
+  service_account: boolean;
+  password_login_allowed: boolean;
   created_at: string;
 };
 export type Member = {

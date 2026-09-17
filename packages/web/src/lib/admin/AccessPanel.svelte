@@ -126,6 +126,20 @@
       edit: "checkbox",
       info: "A disabled user cannot sign in. Their past activity stays attributed to them.",
     },
+    {
+      key: "password_login_allowed",
+      label: "password under SSO",
+      formOnly: true,
+      edit: "checkbox",
+      info: "Once SSO is configured, only these accounts may still sign in with a password: a break-glass admin, the load-test user.",
+    },
+    {
+      key: "service_account",
+      label: "service account",
+      formOnly: true,
+      edit: "checkbox",
+      info: "Not a person. Its reads and tool calls are left out of engagement figures.",
+    },
     { key: "status", label: "status", width: "8rem", cell: statusCell },
   ]);
 
@@ -165,6 +179,8 @@
 {#snippet statusCell(u: UserRow)}
   {#if u.disabled}
     <Badge tone="danger">disabled</Badge>
+  {:else if u.service_account}
+    <Badge>service</Badge>
   {:else if u.has_password}
     <Badge tone="ok">password</Badge>
   {:else}
@@ -258,6 +274,8 @@
         display_name: d.display_name || undefined,
         password: d.password || undefined,
         role: d.role,
+        service_account: Boolean(d.service_account),
+        password_login_allowed: Boolean(d.password_login_allowed),
       });
       await memberships.reload();
     })}
@@ -274,6 +292,8 @@
         display_name: d.display_name || null,
         role: d.role,
         disabled: Boolean(d.disabled),
+        service_account: Boolean(d.service_account),
+        password_login_allowed: Boolean(d.password_login_allowed),
         ...(d.password ? { password: String(d.password) } : {}),
       });
       await applyRoster(row);

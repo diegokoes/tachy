@@ -1,7 +1,14 @@
 # Load tests
 
-k6 scenarios for the dev stack. They are read-only: nothing here writes to the
-database, so a run is repeatable and a failure is never a data problem.
+k6 scenarios for the dev stack. They change no content: the only rows they
+write are read counters (`library_views`, bucketed per person per day, so a
+rerun does not grow the table), and a service account's reads are not counted
+at all. Run them as one (`service_account` in Admin > Access) so load never
+shows up in "most read".
+
+`smoke.js` is the post-deploy gate and reaches every route family once: the
+library, search, outputs, the wiki, the overview and `/api/system`. It checks a
+library image only when the first wiki article embeds one.
 
 ## Running
 

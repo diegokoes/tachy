@@ -1,5 +1,6 @@
 import { sql } from "../infra/db";
 import { log } from "../infra/log";
+import { SERVICE_ACCOUNT } from "../analytics/tools";
 import type { LibraryTarget } from "./revisions";
 
 /**
@@ -29,7 +30,8 @@ export async function recordView(
   if (target.entryId) {
     await sql`
       insert into library_views (knowledge_entry_id, user_id, day)
-      values (${target.entryId}, ${userId}, current_date)
+      select ${target.entryId}::uuid, ${userId}::uuid, current_date
+      where not ${SERVICE_ACCOUNT(userId)}
       on conflict (knowledge_entry_id, user_id, day)
         where knowledge_entry_id is not null
       do update set views = library_views.views + 1, last_viewed_at = now()
@@ -39,7 +41,8 @@ export async function recordView(
   }
   await sql`
     insert into library_views (reference_doc_id, user_id, day)
-    values (${docId}, ${userId}, current_date)
+    select ${docId}::uuid, ${userId}::uuid, current_date
+    where not ${SERVICE_ACCOUNT(userId)}
     on conflict (reference_doc_id, user_id, day)
       where reference_doc_id is not null
     do update set views = library_views.views + 1, last_viewed_at = now()
