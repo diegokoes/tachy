@@ -15,6 +15,7 @@ import { createApp } from "./app";
 import { isBootstrapped } from "./auth";
 import { setEmbedEndpoint } from "./embed-endpoint";
 import { lifecycle } from "./lifecycle";
+import { setEmbedDepth } from "./runtime";
 import { abortAllTurns, activeTurnCount } from "./routes/agent";
 
 export { createApp } from "./app";
@@ -38,6 +39,7 @@ const embedder = startEmbedHost({
 });
 const embed = embedder.queue.embed.bind(embedder.queue);
 setEmbedBackend(embed);
+setEmbedDepth(() => embedder.queue.depth);
 const embedSecret = randomBytes(32).toString("hex");
 setEmbedEndpoint({
   url: `http://127.0.0.1:${env.port}/internal/embed`,

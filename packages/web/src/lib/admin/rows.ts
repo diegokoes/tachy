@@ -108,6 +108,34 @@ export type Discovered<K extends string, T> = {
   [P in K]?: T[];
 };
 export type Setting<T> = { value: T; source: "db" | "env" | "default" };
+export type RuntimeInfo = {
+  draining: boolean;
+  turns: {
+    slotsUsed: number;
+    slotCap: number;
+    queued: number;
+    rejectedSinceBoot: number;
+    running: Record<string, number>;
+    pendingApprovals: number;
+    oldestApprovalAgeSeconds: number | null;
+  };
+  memory: {
+    currentBytes: number;
+    maxBytes: number | null;
+    percent: number | null;
+  } | null;
+  eventLoopP99Ms: number;
+  embed: {
+    queries: number;
+    passages: number;
+    callers: number;
+    running: boolean;
+  } | null;
+  postgres:
+    | { max: number; byProcess: { name: string; state: string; n: number }[] }
+    | { error: string };
+  status: Record<string, unknown> | null;
+};
 export type SystemInfo = {
   settings: {
     redaction_global: Setting<boolean>;
@@ -140,6 +168,8 @@ export type SystemInfo = {
     env_badge: string | null;
     commit: string | null;
   };
+  /** Admin-only: current values, nothing stored. */
+  runtime?: RuntimeInfo;
 };
 export type UserRow = {
   id: string;
