@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import { tick } from "svelte";
-  import { chatStream, approve, uploadDoc, getCommands, type BuiltinCommandMeta, type CommandArtifactMeta } from "./agent";
+  import { chatStream, approve, uploadDoc, getCommands, stopTurn, ChatRefused, type BuiltinCommandMeta, type CommandArtifactMeta } from "./agent";
   import { addEntry, chat, type Entry } from "./chatState.svelte";
   import { renderMarkdown } from "./markdown";
   import { gsap, reducedMotion } from "./gsap";
@@ -173,6 +173,7 @@
     turnAbort = new AbortController();
     try {
       for await (const { event, data } of chatStream({ message, sessionId: chat.sessionId, uploadPaths: uploadPaths.length ? uploadPaths : undefined, artifactId: chat.artifact?.id, command }, turnAbort.signal)) {
+        chat.queuePosition = event === "queued" ? (data.position as number) : null;
         if (event === "start") chat.turnId = data.turnId as string;
         else if (event === "text") appendAssistant(data.text as string);
         else if (event === "tool_use") {
@@ -225,11 +226,24 @@
       }
     } catch (e) {
       // An abort is this component going away, not something to report.
-      if (!(e instanceof DOMException && e.name === "AbortError"))
+      if (e instanceof ChatRefused && e.status === 409 && e.turnId) {
+        addEntry({ kind: "running", turnId: e.turnId, text: e.message, stopped: false });
+        chat.input = message;
+      } else if (!(e instanceof DOMException && e.name === "AbortError"))
         addEntry({ kind: "error", text: e instanceof Error ? e.message : String(e) });
       snap();
     } finally {
       chat.busy = false;
+      chat.queuePosition = null;
+    }
+  }
+
+  async function stopRunning(entry: Extract<Entry, { kind: "running" }>) {
+    try {
+      await stopTurn(entry.turnId);
+      entry.stopped = true;
+    } catch (e) {
+      addEntry({ kind: "error", text: e instanceof Error ? e.message : String(e) });
     }
   }
 
@@ -358,13 +372,19 @@
         <OutputCard file={e.file} />
       {:else if e.kind === "error"}
         <div class="turn"><span class="who err">{G.marker}error</span><div class="body err">{e.text}</div></div>
+      {:else if e.kind === "running"}
+        <div class="turn"><span class="who err">{G.marker}busy</span>
+          <div class="body err">
+            {#if e.stopped}stopped. send your message again.{:else}{e.text} <button class="mini" onclick={() => stopRunning(e)}>stop it</button>{/if}
+          </div>
+        </div>
       {:else if e.kind === "approval"}
         <Approval entry={e} ondecide={(ok, reason) => decide(e, ok, reason)} />
       {/if}
     {/each}
     {#if chat.busy && chat.entries[chat.entries.length - 1]?.kind !== "assistant"}
       <div class="turn"><span class="who">{G.marker}tachy</span>
-        <div class="body waiting"><span class="caret" aria-hidden="true"></span></div>
+        <div class="body waiting">{#if chat.queuePosition}<span class="muted">waiting for a free chat slot · #{chat.queuePosition} </span>{/if}<span class="caret" aria-hidden="true"></span></div>
       </div>
     {/if}
     {#if chat.entries.length === 0}

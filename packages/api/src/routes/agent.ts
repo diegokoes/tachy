@@ -35,6 +35,12 @@ import { requireCaller } from "../authz";
 import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
 import { sessionEmail } from "../auth";
 import { lifecycle } from "../lifecycle";
+import {
+  Admission,
+  AdmissionCancelled,
+  QueueFull,
+  type AdmissionLimits,
+} from "../admission";
 import { embedEndpoint } from "../embed-endpoint";
 import { BUILTIN_COMMANDS, findCommand, commandAutoApprove } from "../commands";
 
@@ -42,6 +48,7 @@ interface TurnEntry {
   turn: AgentTurn;
   email?: string;
   startedAt: number;
+  leave: () => void;
 }
 
 const turns = new Map<string, TurnEntry>();
@@ -53,14 +60,29 @@ const TURN_TTL_MS = 60 * 60_000;
 const sweep = setInterval(() => {
   const now = Date.now();
   for (const [id, entry] of turns) {
-    if (entry.turn.finished) turns.delete(id);
-    else if (now - entry.startedAt > TURN_TTL_MS) {
+    if (entry.turn.finished) {
+      turns.delete(id);
+      entry.leave();
+    } else if (now - entry.startedAt > TURN_TTL_MS) {
       entry.turn.abort();
       turns.delete(id);
+      entry.leave();
     }
   }
 }, 60_000);
 sweep.unref?.();
+
+let limits: AdmissionLimits = { cap: 15, queueMax: 10 };
+export const admission = new Admission(() => limits);
+
+/** User key → the turn that user has running or waiting, at most one. */
+const activeByUser = new Map<string, string>();
+
+/** Turns still waiting for a slot, so /stop can take them out of the queue. */
+const waiting = new Map<string, { email?: string; leave: () => void }>();
+
+const ABANDONED_MS = 30_000;
+const KEEPALIVE_MS = 20_000;
 
 export const activeTurnCount = () =>
   [...turns.values()].filter((e) => !e.turn.finished).length;
@@ -320,6 +342,17 @@ export const agent = new Hono()
     const { message, sessionId, uploadPaths, artifactId, command } =
       c.req.valid("json");
     const userEmail = (await sessionEmail(c)) ?? env.userEmail;
+    const userKey = userEmail ?? "anonymous";
+
+    const running = activeByUser.get(userKey);
+    if (running)
+      return c.json(
+        {
+          error: "you already have a chat turn running; stop it or wait for it",
+          turnId: running,
+        },
+        409,
+      );
 
     let artifact: Awaited<ReturnType<typeof getArtifact>> | undefined;
     if (artifactId) {
@@ -339,21 +372,101 @@ export const agent = new Hono()
     // Minted before the config so the MCP subprocess can carry it: a knowledge
     // edit made mid-turn records which conversation made it.
     const turnId = randomUUID();
+    const settings = await effectiveSettings();
     const cfg: AgentConfig = {
-      ...(await mcpConfig(userEmail, await effectiveSettings(), turnId)),
+      ...(await mcpConfig(userEmail, settings, turnId)),
       systemPromptAppend: await systemPrompt(),
       ...(autoApprove.length ? { autoApprove } : {}),
     };
     const user = userEmail ? await getUserByEmail(userEmail) : null;
-    const turn = startTurn(prompt, cfg, sessionId ? { resume: sessionId } : {});
-    turns.set(turnId, { turn, email: userEmail, startedAt: Date.now() });
+
+    if (activeByUser.has(userKey))
+      return c.json(
+        {
+          error: "you already have a chat turn running; stop it or wait for it",
+          turnId: activeByUser.get(userKey),
+        },
+        409,
+      );
+    limits = {
+      cap: settings.agent_slot_cap.value,
+      queueMax: settings.agent_queue_max.value,
+    };
+    const weight =
+      cfg.provider === "copilot" ? settings.copilot_slot_weight.value : 1;
+    let ticket;
+    try {
+      ticket = admission.admit(weight);
+    } catch (err) {
+      if (!(err instanceof QueueFull)) throw err;
+      c.header("Retry-After", "30");
+      return c.json({ error: err.message }, 429);
+    }
+    activeByUser.set(userKey, turnId);
+    const leave = () => {
+      ticket.release();
+      waiting.delete(turnId);
+      if (activeByUser.get(userKey) === turnId) activeByUser.delete(userKey);
+    };
+    if (ticket.position > 0) waiting.set(turnId, { email: userEmail, leave });
 
     return streamSSE(c, async (stream) => {
-      await stream.writeSSE({
-        event: "start",
-        data: JSON.stringify({ turnId }),
+      let streamOpen = true;
+      let turn: AgentTurn | undefined;
+      const send = (event: string, data: unknown) =>
+        streamOpen
+          ? stream
+              .writeSSE({ event, data: JSON.stringify(data) })
+              .catch(() => void (streamOpen = false))
+          : Promise.resolve();
+      const keepalive = setInterval(() => {
+        if (streamOpen) stream.write(": keepalive\n\n").catch(() => {});
+      }, KEEPALIVE_MS);
+      keepalive.unref?.();
+
+      // A closed stream cannot show an approval card, so a turn left with none
+      // pending is stopped rather than run to the one-hour TTL unseen.
+      stream.onAbort(() => {
+        streamOpen = false;
+        if (!turn) return leave();
+        const watch = setInterval(() => {
+          if (!turn || turn.finished) return clearInterval(watch);
+          if (turn.pendingApprovals === 0) {
+            turn.abort();
+            clearInterval(watch);
+          }
+        }, ABANDONED_MS);
+        watch.unref?.();
       });
+
       try {
+        await send("start", { turnId });
+        if (ticket.position > 0)
+          await send("queued", { position: ticket.position });
+        try {
+          await ticket.granted;
+        } catch (err) {
+          if (!(err instanceof AdmissionCancelled)) throw err;
+          await send("error", { type: "error", message: "Stopped." });
+          return;
+        }
+        waiting.delete(turnId);
+        if (!streamOpen) return;
+        if (lifecycle.draining) {
+          await send("error", {
+            type: "error",
+            message: "the server is restarting; try again in a moment",
+          });
+          return;
+        }
+
+        turn = startTurn(prompt, cfg, sessionId ? { resume: sessionId } : {});
+        turns.set(turnId, {
+          turn,
+          email: userEmail,
+          startedAt: Date.now(),
+          leave,
+        });
         for await (const ev of turn.events()) {
           if (ev.type === "result") {
             await recordRun({
@@ -373,13 +486,34 @@ export const agent = new Hono()
               },
             }).catch(() => {});
           }
-          await stream.writeSSE({ event: ev.type, data: JSON.stringify(ev) });
+          await send(ev.type, ev);
         }
       } finally {
-        if (turn.finished) turns.delete(turnId);
+        clearInterval(keepalive);
+        if (!turn || turn.finished) {
+          turns.delete(turnId);
+          leave();
+        }
       }
     });
   })
+
+  .post(
+    "/stop",
+    zValidator("json", z.object({ turnId: z.string() })),
+    async (c) => {
+      const { turnId } = c.req.valid("json");
+      const email = (await sessionEmail(c)) ?? env.userEmail;
+      const owner = turns.get(turnId) ?? waiting.get(turnId);
+      if (!owner) throw notFound("unknown or finished turn");
+      if (owner.email !== email)
+        throw forbidden("only the user who started this turn can stop it");
+      const entry = turns.get(turnId);
+      if (entry) entry.turn.abort();
+      else owner.leave();
+      return c.json({ ok: true });
+    },
+  )
 
   .post("/approve", zValidator("json", approveSchema), async (c) => {
     const { turnId, id, approve, message, updatedInput } = c.req.valid("json");
