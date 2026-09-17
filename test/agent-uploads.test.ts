@@ -1,8 +1,5 @@
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { createUser, uploadDir } from "@tachy/core";
+import { createUser, parseUploadRef } from "@tachy/core";
 import { createApp } from "../packages/api/src/app";
 import { loginCookie, resetData, sql } from "./helpers";
 
@@ -10,13 +7,10 @@ afterAll(() => sql.end());
 
 const app = createApp({ passwordAuth: true });
 
-beforeEach(async () => {
-  await resetData();
-  process.env.TACHY_UPLOAD_DIR = await mkdtemp(join(tmpdir(), "tachy-up-"));
-});
+beforeEach(resetData);
 
 describe("chat uploads", () => {
-  it("stores an upload under the uploader's own directory", async () => {
+  it("stores an upload in the database for its uploader and hands back a reference", async () => {
     const user = await createUser({
       email: "uploader@example.com",
       password: "a-long-password",
@@ -36,7 +30,10 @@ describe("chat uploads", () => {
     });
     expect(res.status).toBe(200);
     const { path } = await res.json();
-    expect(path.startsWith(uploadDir(user.id) + "/")).toBe(true);
-    expect(path.endsWith("-notes.txt")).toBe(true);
+    const ref = parseUploadRef(path)!;
+    expect(ref.filename).toBe("notes.txt");
+    const [row] =
+      await sql`select user_id, byte_size, expires_at > now() + interval '23 hours' as long from chat_uploads where id = ${ref.id}`;
+    expect(row).toMatchObject({ user_id: user.id, byte_size: 5, long: true });
   });
 });

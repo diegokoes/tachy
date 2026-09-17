@@ -325,7 +325,6 @@ export const admin = new Hono()
                 process.env.GH_TOKEN ||
                 process.env.GITHUB_TOKEN,
               ),
-              upload_dir: process.env.TACHY_UPLOAD_DIR || null,
               env_badge: env.envBadge ?? null,
               commit: env.commit ?? null,
             },

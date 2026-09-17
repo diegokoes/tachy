@@ -244,11 +244,11 @@ describe("buildPrompt", () => {
   it("orders artifact block, uploads notice, then the message", () => {
     const prompt = buildPrompt({
       message: "improve the docs",
-      uploadPaths: ["/tmp/a.pdf"],
+      uploadPaths: ["upload:00000000-0000-0000-0000-000000000000/a.pdf"],
       artifact: { title: "Docs report", body: "Use headings." },
     });
     const artifactAt = prompt.indexOf("<artifact");
-    const uploadsAt = prompt.indexOf("uploaded these local files");
+    const uploadsAt = prompt.indexOf("attached these files");
     const messageAt = prompt.indexOf("improve the docs");
     expect(artifactAt).toBe(0);
     expect(prompt).toContain('title="Docs report"');

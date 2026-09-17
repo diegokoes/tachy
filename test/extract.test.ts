@@ -1,16 +1,13 @@
-import {
-  mkdir,
-  mkdtemp,
-  readdir,
-  symlink,
-  utimes,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { sweepUploads } from "@tachy/core";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { createUser, saveUpload, sweepUploads } from "@tachy/core";
 import { extractSource, isPdf } from "../packages/mcp/src/extract";
+import { resetData, sql } from "./helpers";
+
+afterAll(() => sql.end());
+beforeEach(async () => {
+  await resetData();
+  await sql`truncate chat_uploads`;
+});
 
 function minimalPdf(text: string): Buffer {
   const objs: string[] = [];
@@ -45,66 +42,62 @@ describe("extractSource", () => {
     expect(isPdf("notes.txt", Buffer.from("plain text"))).toBe(false);
   });
 
-  it("extracts text and page count from a PDF, and passes text files through", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "tachy-extract-"));
-    process.env.TACHY_UPLOAD_DIR = dir;
-    const pdfPath = join(dir, "runbook.pdf");
-    await writeFile(pdfPath, minimalPdf("Line controller failover heartbeat"));
-    const pdf = await extractSource(pdfPath);
-    expect(pdf.pages).toBe(1);
-    expect(pdf.text).toBe("Line controller failover heartbeat");
+  it("extracts text and page count from an uploaded PDF, and passes text through", async () => {
+    const pdf = await saveUpload({
+      userId: null,
+      filename: "runbook.pdf",
+      bytes: minimalPdf("Line controller failover heartbeat"),
+    });
+    const got = await extractSource(pdf.ref);
+    expect(got.pages).toBe(1);
+    expect(got.text).toBe("Line controller failover heartbeat");
 
-    const txtPath = join(dir, "notes.txt");
-    await writeFile(txtPath, "plain utf8 notes\n");
-    const txt = await extractSource(txtPath);
-    expect(txt.pages).toBeUndefined();
-    expect(txt.text).toBe("plain utf8 notes\n");
+    const txt = await saveUpload({
+      userId: null,
+      filename: "notes.txt",
+      bytes: Buffer.from("plain utf8 notes\n"),
+    });
+    const t = await extractSource(txt.ref);
+    expect(t.pages).toBeUndefined();
+    expect(t.text).toBe("plain utf8 notes\n");
   });
 
-  it("refuses a path outside the upload directory", async () => {
-    const uploads = await mkdtemp(join(tmpdir(), "tachy-uploads-"));
-    const elsewhere = await mkdtemp(join(tmpdir(), "tachy-elsewhere-"));
-    process.env.TACHY_UPLOAD_DIR = uploads;
-
-    const outside = join(elsewhere, "secrets.txt");
-    await writeFile(outside, "TACHY_SECRET_KEY=hunter2");
-    await expect(extractSource(outside)).rejects.toThrow(
-      "is not an uploaded file",
-    );
-
-    // A traversal that lands outside is the same refusal, not a read.
-    await expect(
-      extractSource(join(uploads, "..", basename(elsewhere), "secrets.txt")),
-    ).rejects.toThrow("is not an uploaded file");
-
-    // A symlink planted inside must not step back out.
-    const link = join(uploads, "link.txt");
-    await symlink(outside, link);
-    await expect(extractSource(link)).rejects.toThrow(
-      "is not an uploaded file",
-    );
-
-    const inside = join(uploads, "ok.txt");
-    await writeFile(inside, "fine");
-    expect((await extractSource(inside)).text).toBe("fine");
-  });
-
-  it("confines a turn's child to its own user's uploads", async () => {
-    const uploads = await mkdtemp(join(tmpdir(), "tachy-uploads-"));
-    process.env.TACHY_UPLOAD_DIR = uploads;
-    await mkdir(join(uploads, "alice"));
-    await mkdir(join(uploads, "bob"));
-    await writeFile(join(uploads, "alice", "a.txt"), "alice's");
-    await writeFile(join(uploads, "bob", "b.txt"), "bob's");
-
-    process.env.TACHY_UPLOAD_OWNER = "alice";
-    try {
-      expect((await extractSource(join(uploads, "alice", "a.txt"))).text).toBe(
-        "alice's",
+  it("refuses anything that is not a chat upload", async () => {
+    for (const path of [
+      "/proc/self/environ",
+      "/etc/passwd",
+      "upload:not-a-uuid/x",
+      "../x",
+    ])
+      await expect(extractSource(path)).rejects.toThrow(
+        "is not an uploaded file",
       );
-      await expect(
-        extractSource(join(uploads, "bob", "b.txt")),
-      ).rejects.toThrow("is not an uploaded file");
+  });
+
+  it("confines a turn's child to its own user's uploads, and to live ones", async () => {
+    const alice = await createUser({ email: "alice@example.com" });
+    const bob = await createUser({ email: "bob@example.com" });
+    const a = await saveUpload({
+      userId: alice.id,
+      filename: "a.txt",
+      bytes: Buffer.from("alice's"),
+    });
+    const b = await saveUpload({
+      userId: bob.id,
+      filename: "b.txt",
+      bytes: Buffer.from("bob's"),
+    });
+
+    process.env.TACHY_UPLOAD_OWNER = alice.id;
+    try {
+      expect((await extractSource(a.ref)).text).toBe("alice's");
+      await expect(extractSource(b.ref)).rejects.toThrow(
+        "is not an uploaded file",
+      );
+      await sql`update chat_uploads set expires_at = now() - interval '1 second' where id = ${a.id}`;
+      await expect(extractSource(a.ref)).rejects.toThrow(
+        "is not an uploaded file",
+      );
     } finally {
       delete process.env.TACHY_UPLOAD_OWNER;
     }
@@ -112,20 +105,21 @@ describe("extractSource", () => {
 });
 
 describe("sweepUploads", () => {
-  it("removes uploads past the TTL and the owner directories they leave empty", async () => {
-    const uploads = await mkdtemp(join(tmpdir(), "tachy-uploads-"));
-    process.env.TACHY_UPLOAD_DIR = uploads;
-    await mkdir(join(uploads, "alice"));
-    await mkdir(join(uploads, "bob"));
-    const old = join(uploads, "alice", "old.txt");
-    const fresh = join(uploads, "bob", "fresh.txt");
-    await writeFile(old, "x");
-    await writeFile(fresh, "y");
-    const dayAgo = new Date(Date.now() - 25 * 60 * 60_000);
-    await utimes(old, dayAgo, dayAgo);
-
-    expect(await sweepUploads(24 * 60 * 60_000)).toBe(1);
-    expect(await readdir(uploads)).toEqual(["bob"]);
-    expect(await readdir(join(uploads, "bob"))).toEqual(["fresh.txt"]);
+  it("deletes expired uploads only", async () => {
+    const old = await saveUpload({
+      userId: null,
+      filename: "old.txt",
+      bytes: Buffer.from("x"),
+    });
+    await saveUpload({
+      userId: null,
+      filename: "new.txt",
+      bytes: Buffer.from("y"),
+    });
+    await sql`update chat_uploads set expires_at = now() - interval '1 minute' where id = ${old.id}`;
+    expect(await sweepUploads()).toBe(1);
+    expect(
+      (await sql`select filename from chat_uploads`).map((r) => r.filename),
+    ).toEqual(["new.txt"]);
   });
 });

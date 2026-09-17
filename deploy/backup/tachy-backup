@@ -93,6 +93,7 @@ restore_test() {
     local t=${pair%%=*} p=${pair#*=} r
     r=$(tr ' ' '\n' <<<"$restored_counts" | sed -n "s/^$t=//p")
     [ "$t" = generated_outputs ] && { generated=$r; continue; }
+    [ "$t" = chat_uploads ] && continue
     [ -n "$r" ] || { problems+=("$t missing"); continue; }
     local diff=$((p > r ? p - r : r - p))
     if [ "$p" -gt 0 ] && [ $((diff * 100)) -gt $((p * ROW_TOLERANCE_PCT)) ]; then
@@ -131,7 +132,7 @@ cmd_db() {
   backup_password=$(app_env TACHY_BACKUP_DB_PASSWORD)
   dc exec -T -e PGPASSWORD="$backup_password" postgres \
     pg_dump -Fc -h 127.0.0.1 -U tachy_backup -d "$(app_env POSTGRES_DB tachy)" \
-    --exclude-table-data=generated_outputs </dev/null >"$plain"
+    --exclude-table-data=generated_outputs --exclude-table-data=chat_uploads </dev/null >"$plain"
 
   if $restore; then
     ping "${HC_RESTORE_URL:-}" /start
