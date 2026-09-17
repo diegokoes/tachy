@@ -18,7 +18,11 @@ export class EmbedderUnavailable extends Error {
 }
 
 function spawn(): Worker {
-  const url = new URL("./embed-thread.ts", import.meta.url);
+  const compiled = !import.meta.url.endsWith(".ts");
+  const url = new URL(
+    compiled ? "./embed-thread.js" : "./embed-thread.ts",
+    import.meta.url,
+  );
   const tsx =
     url.pathname.endsWith(".ts") &&
     !process.execArgv.some((a) => a.includes("tsx"));

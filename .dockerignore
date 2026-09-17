@@ -8,3 +8,4 @@ packages/*/dist
 test
 .env
 load
+dist
