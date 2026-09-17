@@ -66,7 +66,7 @@ function httpBackend(url: string, secret: string): EmbedBackend {
 
 function defaultBackend(): EmbedBackend {
   const url = process.env.TACHY_EMBED_URL;
-  if (url) return httpBackend(url, process.env.TACHY_EMBED_SECRET ?? "");
+  if (url) return httpBackend(url, process.env.TACHY_INTERNAL_SECRET ?? "");
   const local = new EmbedQueue(runModel);
   return (kind, texts, caller) => local.embed(kind, texts, caller);
 }

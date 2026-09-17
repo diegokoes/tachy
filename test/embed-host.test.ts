@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import {
@@ -7,13 +7,13 @@ import {
   startEmbedHost,
   type EmbedHost,
 } from "@tachy/core";
-import { internalEmbed } from "../packages/api/src/routes/internal-embed";
+import { internalRoutes } from "../packages/api/src/routes/internal";
 
 let host: EmbedHost | undefined;
 afterAll(async () => {
   setEmbedBackend(undefined);
   delete process.env.TACHY_EMBED_URL;
-  delete process.env.TACHY_EMBED_SECRET;
+  delete process.env.TACHY_INTERNAL_SECRET;
   await host?.stop();
 });
 
@@ -43,7 +43,7 @@ describe("embedding in a worker thread", () => {
     const secret = "s".repeat(64);
     const app = new Hono().route(
       "/internal",
-      internalEmbed({ secret, embed: host!.queue.embed.bind(host!.queue) }),
+      internalRoutes({ secret, embed: host!.queue.embed.bind(host!.queue) }),
     );
     const server = serve({ fetch: app.fetch, port: 0 });
     await new Promise((r) => server.once("listening", r));
@@ -60,14 +60,57 @@ describe("embedding in a worker thread", () => {
       const local = await embedQuery("vpn drops every hour");
       setEmbedBackend(undefined);
       process.env.TACHY_EMBED_URL = url;
-      process.env.TACHY_EMBED_SECRET = secret;
+      process.env.TACHY_INTERNAL_SECRET = secret;
       const remote = await embedQuery("vpn drops every hour");
       local.forEach((v, i) => expect(remote[i]).toBeCloseTo(v, 5));
     } finally {
       setEmbedBackend(undefined);
       delete process.env.TACHY_EMBED_URL;
-      delete process.env.TACHY_EMBED_SECRET;
+      delete process.env.TACHY_INTERNAL_SECRET;
       server.close();
     }
   }, 60_000);
+});
+
+describe("internal log endpoint", () => {
+  it("writes a child's log lines to this process's log, secret required", async () => {
+    const app = new Hono().route(
+      "/internal",
+      internalRoutes({ secret: "s".repeat(64), embed: async () => [] }),
+    );
+    const lines = [
+      JSON.stringify({
+        level: "info",
+        event: "mcp_tool",
+        tool: "search_knowledge",
+      }),
+      "not json",
+    ];
+    const send = (auth: string) =>
+      app.request("/internal/log", {
+        method: "POST",
+        headers: { authorization: auth, "content-type": "application/json" },
+        body: JSON.stringify({ lines }),
+      });
+
+    expect((await send("Bearer wrong")).status).toBe(401);
+
+    const written: string[] = [];
+    const spy = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk) => (written.push(String(chunk)), true));
+    try {
+      expect((await send(`Bearer ${"s".repeat(64)}`)).status).toBe(204);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(written.map((w) => JSON.parse(w))).toEqual([
+      {
+        level: "info",
+        event: "mcp_tool",
+        tool: "search_knowledge",
+        source: "mcp",
+      },
+    ]);
+  });
 });

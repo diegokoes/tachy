@@ -27,6 +27,25 @@ export function runWithLogContext<T>(
 export const logContext = (): Readonly<Record<string, unknown>> | undefined =>
   context.getStore();
 
+const shipUrl = process.env.TACHY_LOG_URL;
+const shipSecret = process.env.TACHY_INTERNAL_SECRET ?? "";
+
+/**
+ * An MCP child spawned for a turn cannot rely on stderr: Claude Code does not
+ * pass it on. Its lines go to the API instead, which writes them to the
+ * container log. Fire and forget: a lost count line must not slow a tool down.
+ */
+function ship(line: string): void {
+  fetch(shipUrl!, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${shipSecret}`,
+    },
+    body: JSON.stringify({ lines: [line] }),
+  }).catch(() => {});
+}
+
 export function log(
   level: LogLevel,
   event: string,
@@ -37,8 +56,13 @@ export function log(
     ts: new Date().toISOString(),
     level,
     event,
+    ...(env.turnId ? { turn: env.turnId } : {}),
+    ...(process.env.TACHY_REQUEST_ID
+      ? { req: process.env.TACHY_REQUEST_ID }
+      : {}),
     ...context.getStore(),
     ...fields,
   });
   process.stderr.write(line + "\n");
+  if (shipUrl) ship(line);
 }

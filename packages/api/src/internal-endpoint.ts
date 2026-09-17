@@ -1,6 +1,9 @@
-/** Set by the server at boot; the MCP children it spawns embed through it. */
-export let embedEndpoint: { url: string; secret: string } | undefined;
+/**
+ * Set by the server at boot: where the MCP children it spawns reach it for
+ * embedding and for their log lines, and the per-boot secret they present.
+ */
+export let internalEndpoint: { baseUrl: string; secret: string } | undefined;
 
-export function setEmbedEndpoint(value: typeof embedEndpoint): void {
-  embedEndpoint = value;
+export function setInternalEndpoint(value: typeof internalEndpoint): void {
+  internalEndpoint = value;
 }

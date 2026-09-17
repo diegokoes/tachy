@@ -12,7 +12,7 @@ import {
   validateCredential,
 } from "@tachy/core";
 import { mcpConfig } from "../packages/api/src/routes/agent";
-import { setEmbedEndpoint } from "../packages/api/src/embed-endpoint";
+import { setInternalEndpoint } from "../packages/api/src/internal-endpoint";
 import { enableVault, resetData, sql } from "./helpers";
 
 const agentHome = mkdtempSync(join(tmpdir(), "tachy-agent-home-"));
@@ -346,9 +346,9 @@ describe("server-env credential is the lowest rung (deployment-wide fallback)", 
     );
   });
 
-  it("points the MCP child at the server's embedding endpoint", async () => {
-    setEmbedEndpoint({
-      url: "http://127.0.0.1:8787/internal/embed",
+  it("points the MCP child at the server's internal endpoints", async () => {
+    setInternalEndpoint({
+      baseUrl: "http://127.0.0.1:8787/internal",
       secret: "per-boot",
     });
     try {
@@ -359,9 +359,12 @@ describe("server-env credential is the lowest rung (deployment-wide fallback)", 
       expect(cfg.mcpEnv.TACHY_EMBED_URL).toBe(
         "http://127.0.0.1:8787/internal/embed",
       );
-      expect(cfg.mcpEnv.TACHY_EMBED_SECRET).toBe("per-boot");
+      expect(cfg.mcpEnv.TACHY_LOG_URL).toBe(
+        "http://127.0.0.1:8787/internal/log",
+      );
+      expect(cfg.mcpEnv.TACHY_INTERNAL_SECRET).toBe("per-boot");
     } finally {
-      setEmbedEndpoint(undefined);
+      setInternalEndpoint(undefined);
     }
   });
 });
