@@ -19,6 +19,10 @@ WORKDIR /app
 # with locally.
 RUN npm i -g npm@12.0.2
 
+# The schema diff tool tachy-deploy runs from the new image (§5.10).
+FROM golang:1.25 AS schema-diff
+RUN CGO_ENABLED=0 go install github.com/stripe/pg-schema-diff/cmd/pg-schema-diff@v1.0.9
+
 # Build stage: devDependencies, the model download, the SPA and the bundles.
 FROM base AS build
 
@@ -72,6 +76,7 @@ COPY packages/web/package.json packages/web/package.json
 RUN npm ci --omit=dev \
  && npm cache clean --force
 
+COPY --from=schema-diff /go/bin/pg-schema-diff /usr/local/bin/pg-schema-diff
 COPY --from=build /app/.model-cache /app/.model-cache
 COPY --from=build /app/dist /app/dist
 COPY --from=build /app/packages/web/dist /app/packages/web/dist
