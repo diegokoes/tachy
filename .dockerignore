@@ -7,5 +7,4 @@ packages/*/dist
 *.log
 test
 .env
-load
 dist
