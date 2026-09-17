@@ -554,3 +554,10 @@ export type {
   JobNotify,
 } from "@tachy/contract";
 export * from "./jobs";
+export { syncSource } from "./sources/sync";
+export { repoToken } from "./code/jobs";
+export {
+  sweepTranscripts,
+  rollUpUsage,
+  sweepOrphanAssets,
+} from "./compliance/retention";
