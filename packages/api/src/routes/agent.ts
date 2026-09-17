@@ -28,7 +28,7 @@ import {
   type ArtifactSpec,
   type EffectiveSettings,
   type ScopeContext,
-  uploadDir,
+  saveUpload,
   sweepUploads,
   runningHeavyJobs,
   JOB_CLASS_CHAT_SLOTS,
@@ -205,8 +205,6 @@ const INHERITED_ENV = [
   "DATABASE_URL",
   "LOG_LEVEL",
   "TACHY_REPO_DIR",
-  "TACHY_UPLOAD_DIR",
-  "TACHY_UPLOAD_TTL_HOURS",
   "TACHY_MODEL_CACHE",
   "TACHY_EMBED_MODEL",
   "TACHY_OUTPUT_TTL_HOURS",
@@ -337,7 +335,7 @@ export function buildPrompt(i: {
   }
   if (i.uploadPaths?.length)
     parts.push(
-      `The user uploaded these local files for you to analyze with the ingest_context tool: ${i.uploadPaths.join(", ")}.`,
+      `The user attached these files for you to analyze with the ingest_context tool: ${i.uploadPaths.join(", ")}.`,
     );
   parts.push(i.message);
   return parts.join("\n\n");
@@ -597,10 +595,11 @@ export const agent = new Hono()
     if (!(file instanceof File)) throw badInput("expected a 'file' field");
     if (file.size > MAX_UPLOAD_BYTES)
       throw badInput("file too large (max 25 MB)");
-    const dir = uploadDir(owner);
-    await mkdir(dir, { recursive: true });
-    const safe = `${randomUUID()}-${basename(file.name || "upload")}`;
-    const path = join(dir, safe);
-    await writeFile(path, Buffer.from(await file.arrayBuffer()));
-    return c.json({ path, filename: file.name });
+    const filename = basename(file.name || "upload");
+    const { ref } = await saveUpload({
+      userId: owner,
+      filename,
+      bytes: new Uint8Array(await file.arrayBuffer()),
+    });
+    return c.json({ path: ref, filename: file.name });
   });

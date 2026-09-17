@@ -48,7 +48,7 @@ export async function resetData() {
              knowledge_entries, analysis_runs, team_members, users,
              customers, customer_facts, customer_components, customer_units,
              resolution_patterns, components, project_area_map, labels,
-             reference_docs, reference_doc_chunks, artifacts, generated_outputs,
+             reference_docs, reference_doc_chunks, artifacts, generated_outputs, chat_uploads,
              settings, library_revisions, library_views, source_calls, mcp_tool_calls,
              -- Global-scope rows (user_id and team_id both null) survive the
              -- cascade from users, so name both or a credential written by one

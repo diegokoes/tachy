@@ -154,6 +154,19 @@ create table generated_outputs (
 create index generated_outputs_user_idx   on generated_outputs(user_id, created_at desc);
 create index generated_outputs_expiry_idx on generated_outputs(expires_at);
 
+-- Files attached to a chat, read by that turn's tools. Short-lived like
+-- generated_outputs, and in the database so any api replica can serve them.
+create table chat_uploads (
+    id           uuid primary key default gen_random_uuid(),
+    user_id      uuid references users(id) on delete cascade,
+    filename     text not null,
+    byte_size    integer not null,
+    bytes        bytea not null,
+    created_at   timestamptz not null default now(),
+    expires_at   timestamptz not null
+);
+create index chat_uploads_expiry_idx on chat_uploads(expires_at);
+
 create table source_connections (
     id            uuid primary key default gen_random_uuid(),
     source_type   text not null,
