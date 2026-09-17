@@ -19,6 +19,9 @@ WORKDIR /app
 # with locally.
 RUN npm i -g npm@12.0.2
 
+# k6, for the load runs an admin starts from the tests page (§11.3).
+FROM grafana/k6:2.2.0 AS k6
+
 # The schema diff tool tachy-deploy runs from the new image (§5.10).
 FROM golang:1.25 AS schema-diff
 RUN CGO_ENABLED=0 go install github.com/stripe/pg-schema-diff/cmd/pg-schema-diff@v1.0.9
@@ -77,10 +80,12 @@ RUN npm ci --omit=dev \
  && npm cache clean --force
 
 COPY --from=schema-diff /go/bin/pg-schema-diff /usr/local/bin/pg-schema-diff
+COPY --from=k6 /usr/bin/k6 /usr/local/bin/k6
 COPY --from=build /app/.model-cache /app/.model-cache
 COPY --from=build /app/dist /app/dist
 COPY --from=build /app/packages/web/dist /app/packages/web/dist
 COPY packages/agent/prompt.md packages/agent/prompt.md
+COPY load load
 COPY db db
 
 # `npm run api` / `npm run sync …` keep working inside the image, against the

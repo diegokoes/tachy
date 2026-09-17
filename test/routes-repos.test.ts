@@ -6,7 +6,14 @@ import {
   linkRepo,
 } from "@tachy/core";
 import { createApp } from "../packages/api/src/app";
-import { json, loginCookie, resetData, sql, tpdProductId } from "./helpers";
+import {
+  json,
+  loginCookie,
+  resetData,
+  sql,
+  tpdProductId,
+  resetJobs,
+} from "./helpers";
 
 afterAll(() => sql.end());
 
@@ -192,7 +199,7 @@ describe("PUT /api/repos/bulk", () => {
 
 describe("POST /api/repos/:slug/reindex", () => {
   it("queues a reindex run for the caller, and refuses a second while it waits", async () => {
-    await sql`truncate job_runs cascade`;
+    await resetJobs();
     const cookie = await adminCookie();
     await linkRepo({
       slug: "driver",

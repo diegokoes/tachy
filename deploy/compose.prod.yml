@@ -148,6 +148,8 @@ services:
       DATABASE_URL: postgres://tachy_app:${TACHY_APP_DB_PASSWORD:?set TACHY_APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-tachy}
       NODE_ENV: production
       TACHY_WORKER_CLASSES: heavy
+      # Load runs happen in the heavy pool; targets are named, never typed in.
+      TACHY_LOAD_TARGETS: ${TACHY_LOAD_TARGETS:-production=http://api:8787}
       TACHY_EMBED_URL: http://embedder:8790/internal/embed
       TACHY_EMBED_PRIORITY: low
       TACHY_INTERNAL_SECRET: ${TACHY_INTERNAL_SECRET:?set TACHY_INTERNAL_SECRET}

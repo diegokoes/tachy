@@ -27,6 +27,7 @@ import { outputs } from "./routes/outputs";
 import { repos } from "./routes/repos";
 import { library } from "./routes/library";
 import { jobs } from "./routes/jobs";
+import { tests } from "./routes/tests";
 import { projects } from "./routes/projects";
 import { initOidc, installAuth, isBootstrapped, type OidcConfig } from "./auth";
 import { httpLogger, noteError } from "./logging";
@@ -61,6 +62,7 @@ function apiRoutes() {
     .route("/repos", repos)
     .route("/library", library)
     .route("/jobs", jobs)
+    .route("/tests", tests)
     .route("/", projects)
     .route("/", admin);
 }
