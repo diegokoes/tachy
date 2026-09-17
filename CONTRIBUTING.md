@@ -35,6 +35,11 @@ supported, which is what [SECURITY.md](SECURITY.md) says too.
 applies it on every run, and `test/schema-drift.test.ts` checks its CHECK
 constraints against the core enums, so drift fails CI.
 
+`db/roles.sql` holds the least-privilege roles (`tachy_app` for the API and MCP
+children, `tachy_backup` for dumps) and their grants. It is idempotent and runs
+after `schema.sql`, so a new table needs no grant of its own: re-applying
+`roles.sql` covers it.
+
 There is deliberately no migrations directory. The previous one held three files
 that were already fully mirrored in `schema.sql`, no-ops on a fresh database,
 while re-running them silently rewrote `analysis_runs.mode` for every `create` /

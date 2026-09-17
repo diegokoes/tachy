@@ -137,6 +137,9 @@ export async function mcpConfig(
     const v = process.env[k];
     if (typeof v === "string") mcpEnv[k] = v;
   }
+  mcpEnv.TACHY_DB_POOL_MAX = "2";
+  mcpEnv.TACHY_DB_IDLE_TIMEOUT = "30";
+  mcpEnv.TACHY_DB_APP_NAME = "tachy-mcp";
   if (userEmail) mcpEnv.TACHY_USER_EMAIL = userEmail;
   // Lets a write made during a turn be told apart from one made by someone
   // pointing their own MCP client at tachy, and links it back to the run.

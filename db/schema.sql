@@ -574,7 +574,8 @@ create table analysis_runs (
     created_at      timestamptz not null default now()
 );
 
-create index analysis_runs_item_idx on analysis_runs(work_item_id);
+create index analysis_runs_item_idx    on analysis_runs(work_item_id);
+create index analysis_runs_created_idx on analysis_runs(created_at);
 
 create table labels (
     id          uuid primary key default gen_random_uuid(),
