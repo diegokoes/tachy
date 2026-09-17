@@ -47,8 +47,8 @@ RUN npx tsx scripts/warmup-embeddings.ts
 COPY . .
 
 # Build the Svelte SPA to packages/web/dist so the API serves it (single origin).
-ARG VITE_DEV_BADGE
-ENV VITE_DEV_BADGE=$VITE_DEV_BADGE
+# The environment badge is not baked in: the API reads TACHY_ENV_BADGE at runtime,
+# so the same image serves dev and production.
 RUN npm run web:build
 
 # Linked-repo clones for code search live here — mount a volume to keep them
@@ -70,5 +70,8 @@ EXPOSE 8787
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD node -e "fetch('http://localhost:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+ARG TACHY_COMMIT
+ENV TACHY_COMMIT=$TACHY_COMMIT
 
 CMD ["npm", "run", "api"]

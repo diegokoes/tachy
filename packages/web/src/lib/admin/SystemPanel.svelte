@@ -172,6 +172,8 @@ import { csv } from "../fields";
         <tr><td>Attribution email (standalone MCP)</td><td>{e.user_email ?? "(anonymous)"}</td><td class="muted">TACHY_USER_EMAIL</td></tr>
         <tr><td>Upload dir</td><td>{e.upload_dir ?? "(OS tmp dir)"}</td><td class="muted">TACHY_UPLOAD_DIR</td></tr>
         <tr><td>API port</td><td>{e.port}</td><td class="muted">PORT</td></tr>
+        <tr><td>Environment badge</td><td>{e.env_badge ?? "(none: production)"}</td><td class="muted">TACHY_ENV_BADGE</td></tr>
+        <tr><td>Commit</td><td>{e.commit ?? "(unknown: not built by CI)"}</td><td class="muted">TACHY_COMMIT (image build arg)</td></tr>
       </tbody>
     </table>
   {/if}

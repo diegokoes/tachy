@@ -3,7 +3,13 @@ import { requestId } from "hono/request-id";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { z } from "zod";
-import { sql, AppError, registerSource, effectiveSettings } from "@tachy/core";
+import {
+  sql,
+  env,
+  AppError,
+  registerSource,
+  effectiveSettings,
+} from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 import { createAzureDevopsSource } from "@tachy/source-azure-devops";
@@ -84,6 +90,7 @@ export function createApp(
       authMode,
       sso: Boolean(opts.oidc),
       passwordLogin: Boolean(opts.passwordAuth) && (await isBootstrapped()),
+      envBadge: env.envBadge ?? null,
       profile,
     });
   });
