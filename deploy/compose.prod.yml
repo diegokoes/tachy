@@ -43,6 +43,9 @@ services:
     logging: *logging
 
   api:
+    depends_on:
+      embedder:
+        condition: service_healthy
     ports: !reset []
     init: true
     environment:
@@ -51,6 +54,9 @@ services:
       TACHY_STATUS_DIR: /status
       # Jobs run in worker-light and worker-heavy below, not in the api.
       TACHY_WORKER: external
+      # The model runs in the embedder service below, not in the api.
+      TACHY_EMBED_URL: http://embedder:8790/internal/embed
+      TACHY_INTERNAL_SECRET: ${TACHY_INTERNAL_SECRET:?set TACHY_INTERNAL_SECRET (openssl rand -hex 32)}
     volumes:
       - ${TACHY_STATUS_HOST_DIR:-/srv/tachy/status}:/status:ro
     stop_grace_period: 210s
@@ -62,6 +68,38 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=512m
+    logging: *logging
+
+  # The one embedding model on the host (§5.4): queries first, passages in
+  # batches of 8, background jobs' passages last.
+  embedder:
+    image: ${TACHY_IMAGE:-diegokoes/tachy:latest}
+    container_name: ${COMPOSE_PROJECT_NAME:-tachy}-embedder
+    restart: unless-stopped
+    command: ["node", "dist/embedder.js"]
+    init: true
+    environment:
+      NODE_ENV: production
+      TACHY_INTERNAL_SECRET: ${TACHY_INTERNAL_SECRET:?set TACHY_INTERNAL_SECRET}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:8790/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+    mem_limit: 2g
+    cpus: 6
+    cpu_shares: 2048
+    pids_limit: 256
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: [/tmp]
     logging: *logging
 
   # Job pools (DEPLOYMENT-ARCHITECTURE.md §5.3.4). Each claims only runs of its
@@ -77,6 +115,9 @@ services:
       DATABASE_URL: postgres://tachy_app:${TACHY_APP_DB_PASSWORD:?set TACHY_APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-tachy}
       NODE_ENV: production
       TACHY_WORKER_CLASSES: light
+      TACHY_EMBED_URL: http://embedder:8790/internal/embed
+      TACHY_EMBED_PRIORITY: low
+      TACHY_INTERNAL_SECRET: ${TACHY_INTERNAL_SECRET:?set TACHY_INTERNAL_SECRET}
       TACHY_WORKER_CONCURRENCY: "4"
       TACHY_DB_APP_NAME: tachy-worker-light
       TACHY_DB_POOL_MAX: "5"
@@ -107,6 +148,9 @@ services:
       DATABASE_URL: postgres://tachy_app:${TACHY_APP_DB_PASSWORD:?set TACHY_APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-tachy}
       NODE_ENV: production
       TACHY_WORKER_CLASSES: heavy
+      TACHY_EMBED_URL: http://embedder:8790/internal/embed
+      TACHY_EMBED_PRIORITY: low
+      TACHY_INTERNAL_SECRET: ${TACHY_INTERNAL_SECRET:?set TACHY_INTERNAL_SECRET}
       TACHY_WORKER_CONCURRENCY: "1"
       TACHY_DB_APP_NAME: tachy-worker-heavy
       TACHY_DB_POOL_MAX: "5"

@@ -14,6 +14,7 @@ export interface InternalOptions {
     kind: EmbedKind,
     texts: string[],
     caller: string,
+    priority?: "normal" | "low",
   ) => Promise<number[][]>;
 }
 
@@ -64,6 +65,7 @@ export function internalRoutes(opts: InternalOptions) {
             parsed.data.kind,
             parsed.data.texts,
             `remote:${caller}`,
+            c.req.header("x-tachy-priority") === "low" ? "low" : "normal",
           );
           return c.json({ vectors });
         } catch (err) {

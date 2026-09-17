@@ -11,6 +11,7 @@ await build({
     cli: "packages/cli/src/index.ts",
     worker: "packages/worker/src/index.ts",
     mcp: "packages/mcp/src/index.ts",
+    embedder: "packages/api/src/embedder.ts",
     "embed-thread": "packages/core/src/search/embed-thread.ts",
   },
   outdir: "dist",

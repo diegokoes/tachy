@@ -9,13 +9,15 @@ export const lifecycle = {
   draining: false,
   modelRequired: false,
   modelReady: false,
+  /** The embedder service's readiness URL, when the model is not in this process. */
+  embedderUrl: undefined as string | undefined,
 };
 
 export interface Readiness {
   ready: boolean;
   database: boolean;
   schema: SchemaStampStatus | "unknown";
-  model: "ready" | "loading" | "not_required";
+  model: "ready" | "loading" | "not_required" | "external" | "unreachable";
   draining: boolean;
 }
 
@@ -27,16 +29,23 @@ export async function readiness(): Promise<Readiness> {
     database = true;
     schema = await schemaStampStatus();
   } catch {}
-  const model = !lifecycle.modelRequired
+  let model: Readiness["model"] = !lifecycle.modelRequired
     ? "not_required"
     : lifecycle.modelReady
       ? "ready"
       : "loading";
+  if (lifecycle.embedderUrl)
+    model = await fetch(lifecycle.embedderUrl, {
+      signal: AbortSignal.timeout(2_000),
+    })
+      .then((r) => (r.ok ? "external" : "unreachable"))
+      .catch(() => "unreachable" as const);
   return {
     ready:
       database &&
       schema !== "mismatch" &&
       model !== "loading" &&
+      model !== "unreachable" &&
       !lifecycle.draining,
     database,
     schema,
