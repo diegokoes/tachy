@@ -1,4 +1,4 @@
-FROM node:24-slim
+FROM node:24.21.0-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553
 
 # postgresql-client-16: needed by `npm run sync backup`/`restore`
 # (pg_dump/pg_restore). Debian bookworm's own repo only has client v15, and
