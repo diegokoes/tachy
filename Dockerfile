@@ -49,7 +49,12 @@ COPY . .
 # Build the Svelte SPA to packages/web/dist so the API serves it (single origin).
 # The environment badge is not baked in: the API reads TACHY_ENV_BADGE at runtime,
 # so the same image serves dev and production.
-RUN npm run web:build
+RUN npm run web:build \
+ && npm run build:mcp
+
+# Every chat turn spawns the MCP server; the bundle starts in half the time and
+# memory of running it under tsx. A dev checkout leaves this unset and uses tsx.
+ENV TACHY_MCP_ARGS=packages/mcp/dist/mcp.js
 
 # Linked-repo clones for code search live here — mount a volume to keep them
 # across redeploys (otherwise the first reindex re-clones, which is fine too).
