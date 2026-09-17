@@ -1,0 +1,81 @@
+# Production overrides for the office laptop (DEPLOYMENT-ARCHITECTURE.md §4.3, §7).
+#
+#   docker compose -f docker-compose.yml -f deploy/compose.prod.yml up -d
+#
+# Needs in .env: TACHY_IMAGE (by digest), TACHY_HOSTNAME, POSTGRES_PASSWORD,
+# TACHY_APP_DB_PASSWORD, TACHY_BACKUP_DB_PASSWORD, plus the app secrets.
+#
+# With TACHY_TLS=internal, the root clients must trust is exported with
+#   docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt tachy-root.crt
+
+x-logging: &logging
+  driver: local
+  options:
+    max-size: 20m
+    max-file: "10"
+
+services:
+  caddy:
+    image: caddy:2.11.4-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-tachy}-caddy
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      TACHY_HOSTNAME: ${TACHY_HOSTNAME:?set TACHY_HOSTNAME in .env}
+      TACHY_TLS: ${TACHY_TLS:-internal}
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${TACHY_TLS_CERT_DIR:-./deploy/caddy/certs}:/certs:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    mem_limit: 256m
+    cpu_shares: 1024
+    pids_limit: 256
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: [/tmp]
+    logging: *logging
+
+  api:
+    ports: !reset []
+    init: true
+    environment:
+      DATABASE_URL: postgres://tachy_app:${TACHY_APP_DB_PASSWORD:?set TACHY_APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-tachy}
+      TACHY_DRAIN_SECONDS: ${TACHY_DRAIN_SECONDS:-180}
+      TACHY_STATUS_DIR: /status
+    volumes:
+      - ${TACHY_STATUS_HOST_DIR:-/srv/tachy/status}:/status:ro
+    stop_grace_period: 210s
+    mem_limit: ${TACHY_API_MEM_LIMIT:-10g}
+    cpu_shares: 2048
+    pids_limit: 2048
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m
+    logging: *logging
+
+  postgres:
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    volumes:
+      - ./deploy/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    mem_limit: 2g
+    cpu_shares: 2048
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+
+  cli:
+    init: true
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+
+volumes:
+  caddy-data:
+  caddy-config:
