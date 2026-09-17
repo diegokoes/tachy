@@ -86,6 +86,9 @@ create table credentials (
     name             text not null,
     value_ciphertext bytea not null,
     nonce            bytea not null,
+    -- Which key opens this row (the first 8 hex of sha256 over the key). Null
+    -- for rows written before key ids; those are tried with every known key.
+    key_id           text,
     created_by       uuid references users(id) on delete set null,
     created_at       timestamptz not null default now(),
     updated_at       timestamptz not null default now(),

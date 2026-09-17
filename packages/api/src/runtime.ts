@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { monitorEventLoopDelay } from "node:perf_hooks";
-import { env, sql, type EmbedQueueDepth } from "@tachy/core";
+import { env, sql, vaultState, type EmbedQueueDepth } from "@tachy/core";
 import { lifecycle, readiness } from "./lifecycle";
 import { turnStats } from "./routes/agent";
 
@@ -96,6 +96,7 @@ async function tableSizes() {
 }
 
 async function security() {
+  const vault = await vaultState();
   const [row] = await sql`
     select count(*) filter (where password_hash is not null and not disabled)::int as with_password,
            count(*) filter (where password_login_allowed and not disabled)::int as password_under_sso,
@@ -103,6 +104,7 @@ async function security() {
     from users
   `;
   return {
+    vault,
     sso_configured: Boolean(env.oidc),
     users_with_password: row.with_password as number,
     password_login_under_sso: row.password_under_sso as number,

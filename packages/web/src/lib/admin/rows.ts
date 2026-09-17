@@ -120,6 +120,11 @@ export type RuntimeInfo = {
   };
   tableSizes: { table: string; bytes: number; rows: number }[];
   security: {
+    vault: {
+      enabled: boolean;
+      current_key: string | null;
+      by_key: { key_id: string | null; count: number; current: boolean }[];
+    };
     sso_configured: boolean;
     users_with_password: number;
     password_login_under_sso: number;

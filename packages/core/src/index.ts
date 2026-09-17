@@ -559,6 +559,8 @@ export type {
 } from "@tachy/contract";
 export * from "./jobs";
 export * from "./testing";
+export { vaultState, rotateVaultKey } from "./config/credentials";
+export { vaultKeys, keyId } from "./infra/secrets";
 export { syncSource } from "./sources/sync";
 export { repoToken } from "./code/jobs";
 export {
