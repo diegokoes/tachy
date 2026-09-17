@@ -16,6 +16,7 @@ import {
   reapExpiredRuns,
   scheduleDueRuns,
   startJobWorker,
+  startJobProcess,
   updateJobDefinition,
 } from "@tachy/core";
 import { sql, resetJobs } from "./helpers";
@@ -324,4 +325,34 @@ describe("the worker", () => {
       await worker.drain(1_000);
     }
   });
+});
+
+describe("a database whose schema is behind", () => {
+  it("waits for the job tables instead of taking the process down", async () => {
+    const schema = process.env.TEST_SCHEMA ?? "public";
+    await sql.unsafe(`alter table job_runs rename to job_runs_hidden`);
+    try {
+      const started = startJobProcess({
+        classes: ["light"],
+        concurrency: 1,
+        waitMs: 200,
+      });
+      // Still waiting after the table is gone, rather than rejecting.
+      const raced = await Promise.race([
+        started.then(() => "started"),
+        new Promise((r) => setTimeout(() => r("waiting"), 600)),
+      ]);
+      expect(raced).toBe("waiting");
+      await sql.unsafe(`alter table job_runs_hidden rename to job_runs`);
+      const worker = await started;
+      await worker.drain(500);
+      expect(schema).toBeTruthy();
+    } finally {
+      await sql`select 1`;
+      const [row] =
+        await sql`select to_regclass('job_runs_hidden') is not null as hidden`;
+      if (row.hidden)
+        await sql.unsafe(`alter table job_runs_hidden rename to job_runs`);
+    }
+  }, 20_000);
 });
