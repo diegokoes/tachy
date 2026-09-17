@@ -137,6 +137,27 @@ export const jobs = new Hono()
     },
   )
 
+  .post(
+    "/runs",
+    zValidator(
+      "json",
+      z.object({
+        kind: z.string().min(1),
+        params: z.record(z.string(), z.unknown()).default({}),
+      }),
+    ),
+    async (c) => {
+      const { kind, params } = c.req.valid("json");
+      const id = await enqueueRun({
+        kind,
+        params,
+        trigger: "manual",
+        requestedBy: await callerUserId(c),
+      });
+      return c.json({ run_id: id }, 202);
+    },
+  )
+
   .get("/runs/:id", async (c) => c.json(await getJobRun(c.req.param("id"))))
 
   .post("/runs/:id/cancel", async (c) =>

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { badInput } from "../infra/errors";
 import {
   parseDuration,
   type JobMissed,
@@ -67,7 +68,7 @@ export function defineJob<P extends z.ZodType>(
 
 export function getJobKind(kind: string): JobKind {
   const k = kinds.get(kind);
-  if (!k) throw new Error(`unknown job kind '${kind}'`);
+  if (!k) throw badInput(`unknown job kind '${kind}'`);
   return k;
 }
 
