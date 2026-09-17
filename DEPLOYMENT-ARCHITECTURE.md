@@ -780,25 +780,28 @@ generated one.
 ever written. At deploy, a tool diffs the live database against `schema.sql`,
 prints the plan, and applies it.
 
-**Candidates,** to evaluate in a spike against the real schema:
+**Decided (2026-09-17): pg-schema-diff.** The spike ran it against this schema
+and it met every criterion below; `tachy-deploy` and the `schema-plan` CI job
+use it (`scripts/schema-plan.sh`). The candidates it was chosen from:
 
-- [pg-schema-diff](https://github.com/stripe/pg-schema-diff) (Stripe).
-  Postgres 14–17; builds indexes concurrently; checks plans against a
-  temporary database; flags hazards. Its README lists "Types (Only enums are
-  currently supported)" and renames as unsupported, and says nothing about
-  extensions, functions, triggers or generated columns. The spike has to find
-  out.
-- [pgschema](https://github.com/pgplex/pgschema). A dump, plan and apply
-  workflow using an embedded Postgres, with triggers and other objects in
-  scope per its docs. **To verify** against this schema.
+- [pg-schema-diff](https://github.com/stripe/pg-schema-diff) (Stripe), v1.0.9.
+  Measured on the real schema: it plans, validates on a temporary database and
+  applies; a re-plan is empty; a database built fresh from `schema.sql` also
+  plans empty, so it round-trips the three extensions, `tachy_join`, the
+  generated `tsvector` columns, the triggers, the HNSW indexes with their
+  options and `gin_trgm_ops`. It flags a dropped column as `DELETES_DATA` and
+  refuses it unless allowed, and downloads nothing. Renames still look like a
+  drop plus an add, which is what expand and contract is for.
+- [pgschema](https://github.com/pgplex/pgschema). Not evaluated: the first
+  candidate met every acceptance criterion.
 - [Atlas](https://atlasgo.io/declarative/apply). Out of the box it manages only
   "schemas, tables, and their associated indexes and constraints"; functions,
   triggers and extensions are "available to Atlas Pro users". So it only works
   here as a paid product.
 
-**What the spike must cover:** the 3 extensions, `tachy_join`, the generated
+**What the spike covered:** the 3 extensions, `tachy_join`, the generated
 `tsvector` and `search_text` columns, the triggers, HNSW indexes with
-`with (m, ef_construction)`, and `gin_trgm_ops`.
+`with (m, ef_construction)`, and `gin_trgm_ops`. All round-trip.
 
 **Acceptance:**
 
@@ -975,10 +978,12 @@ it needs host privileges from the web app.
 | Deploy log (commit → digest → time)     | yes        | the record of what can be rolled back to                                                                                                           |
 | Repo clones, model cache, images, logs  | no         | rebuildable, or retained elsewhere                                                                                                                 |
 
-Losing `TACHY_SECRET_KEY` makes every stored credential unrecoverable (AES-256-GCM,
-`core/src/infra/secrets.ts`). Its ciphertext carries no key version, so rotating
-the key means an offline decrypt-and-re-encrypt. Adding a key id is on the
-backlog.
+Losing `TACHY_SECRET_KEY` makes every stored credential unrecoverable
+(AES-256-GCM, `core/src/infra/secrets.ts`). Each stored credential now names the
+key that wrote it, so rotation is online: the old key opens its rows from
+`TACHY_SECRET_KEY_PREVIOUS` until `npm run sync rotate-key` has moved them over
+(`deploy/runbooks/credentials.md`). Keep the old key while any backup encrypted
+with it is still held.
 
 ### 6.1 Producing backups on the host
 
@@ -2063,3 +2068,34 @@ the laptop yet.
 PR 14 in the plan (the turn load test) landed with PR 11. Still to verify on the
 laptop: the sshd log wording `tachy-watch` parses for downloads, and
 `Get-TachyBackup.ps1` under Windows PowerShell 5.1.
+
+### 16.1 Phase 2, built 2026-09-17
+
+Phase 2 is complete in code, on the same one-PR-per-branch stack.
+
+| #   | Branch                              | What                                                                                       | Verified by                                                                                   |
+| --- | ----------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| 21  | `feat/deploy-21-compiled-build`     | esbuild bundles, multi-stage image, no tsx at runtime                                      | image 3.62 GB → 2.64 GB; a real turn on the built image; no tsx or vitest in it               |
+| 22  | `feat/deploy-22-jobs-core`          | kinds, definitions, runs, scheduler, worker loop                                           | 12 tests: claiming, retries, cancel, leases, missed firings, overlap, worker end to end       |
+| 23  | `feat/deploy-23-worker-first-kinds` | worker service, repo.reindex, source.sync, embeddings.backfill, wiki.gaps, retention.sweep | on the image: reindex of a public repo went API → worker-heavy in under a second              |
+| 24  | `feat/deploy-24-jobs-admin-ui`      | jobs API and admin section                                                                 | route tests; svelte-check. Not clicked through in a browser                                   |
+| 25  | `feat/deploy-25-embedder-service`   | the model in its own service, low-priority lane for jobs                                   | api 84 MiB, embedder 925 MiB, a real turn searched through it, 401 without the secret         |
+| 26  | `feat/deploy-26-uploads-postgres`   | chat uploads in Postgres with a TTL                                                        | tests: PDF and text through references, owner confinement, expiry, host paths refused         |
+| 27  | `feat/deploy-27-schema-diff`        | schema changes as a declarative diff                                                       | on a live stack: a column added by plan, a drop refused then applied with --allow-destructive |
+| 28  | `feat/deploy-28-admin-surface`      | integrations and system pages, maintenance switch                                          | tests: chats paused while readiness stays green                                               |
+| 29  | `feat/deploy-29-ci-image-gates`     | container smoke, Trivy, gitleaks                                                           | locally: smoke 19/19 on the built image, no fixable critical CVE, no leaks in 245 commits     |
+| 30  | `feat/deploy-30-load-scenarios`     | contention, mixed, spike, breakpoint                                                       | run against a seeded stack: spike 2170 requests with no errors                                |
+| 31  | `feat/deploy-31-admin-tests`        | checks panel, test_runs, load.test job kind, guardrails                                    | on the image: a smoke load run started from the API and executed by worker-heavy, 19/19       |
+| 32  | `feat/deploy-32-vault-key-ids`      | key ids and online key rotation                                                            | tests: stamping, rotation with a previous key, and a clear error for a missing key            |
+| 33  | `feat/deploy-33-docs-phase2`        | this section                                                                               | —                                                                                             |
+
+**Phase 2 exit criteria.** A schema change has shipped by diff (§5.10,
+demonstrated end to end). One request id follows a request across the api and
+its MCP child (`source: "mcp"` lines carry `req` and `turn`). The new CI jobs
+exist; making them required is a repository setting. `contention.js` exists and
+runs, but the 1.5× baseline claim needs a laptop load window with real data, and
+the slot cap has not been raised yet for the same reason.
+
+**Still to do by hand:** run the playbook on the laptop, the Teams workflow and
+healthchecks.io checks, the backup keys and downloaders, an Entra registration
+for SSO, and the load windows that produce the laptop's own numbers.
