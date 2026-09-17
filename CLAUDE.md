@@ -16,6 +16,7 @@ Folders are named for the domain they own, never `utils` / `helpers` / `common`.
 | `packages/agent`     | Backends (`claude.ts`, `copilot.ts`), turn plumbing, and `prompt.md`                                                                                                                        |
 | `packages/api`       | HTTP routes, auth, slash-command expansion                                                                                                                                                  |
 | `packages/web`       | Svelte SPA                                                                                                                                                                                  |
+| `packages/worker`    | The job worker service: works runs of the job kinds core defines                                                                                                                            |
 | `packages/cli`       | `npm run sync` — backup/restore, indexing                                                                                                                                                   |
 
 ## Commands

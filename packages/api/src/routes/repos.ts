@@ -7,20 +7,21 @@ import {
   getProductIdBySlug,
   getCustomerIdBySlug,
   getRepoBySlug,
-  indexRepo,
+  enqueueRun,
   linkRepo,
   listRepos,
   deleteRepo,
-  log,
   repoScope,
-  resolveCredential,
-  secretsEnabled,
-  sourceCredentialName,
   sourceProjectScope,
   sql,
   type EntryScope,
 } from "@tachy/core";
-import { assertScopeEditor, callerScope, requireCaller } from "../authz";
+import {
+  assertScopeEditor,
+  callerScope,
+  callerUserId,
+  requireCaller,
+} from "../authz";
 import type { Context } from "hono";
 
 const linkSchema = z.object({
@@ -54,23 +55,6 @@ const bulkLinkSchema = z.object({
     .min(1)
     .max(200),
 });
-
-const inFlight = new Set<string>();
-
-async function resolveRepoToken(
-  c: Context,
-  sourceSlug: string | null,
-): Promise<string | undefined> {
-  if (!sourceSlug || !secretsEnabled()) return undefined;
-  const [conn] = await sql`
-    select source_type from source_connections where slug = ${sourceSlug}
-  `;
-  if (!conn) return undefined;
-  return resolveCredential(
-    sourceCredentialName(conn.source_type, sourceSlug),
-    await callerScope(c),
-  );
-}
 
 /**
  * Where a repo lands, and — on the slug-keyed upsert — where it currently is:
@@ -169,21 +153,24 @@ export const repos = new Hono()
   .post("/:slug/reindex", async (c) => {
     const slug = c.req.param("slug");
     await assertCanWriteRepo(c, {}, slug);
-    const repo = await getRepoBySlug(slug);
-    if (inFlight.has(slug))
-      throw badInput(`repo '${slug}' is already being indexed`);
-
-    const token = await resolveRepoToken(c, repo.source_slug);
-    inFlight.add(slug);
-    indexRepo(slug, { token })
-      .catch((err) =>
-        log("error", "repo_index_failed", {
-          slug,
-          error: err instanceof Error ? err.message : String(err),
-        }),
-      )
-      .finally(() => inFlight.delete(slug));
-    return c.json({ ok: true, status: "started" }, 202);
+    await getRepoBySlug(slug);
+    const [busy] = await sql`
+      select id from job_runs
+      where kind = 'repo.reindex' and params->>'repo' = ${slug}
+        and status in ('queued', 'running')
+      limit 1
+    `;
+    if (busy)
+      throw badInput(
+        `repo '${slug}' is already being indexed (run ${busy.id})`,
+      );
+    const runId = await enqueueRun({
+      kind: "repo.reindex",
+      params: { repo: slug },
+      trigger: "manual",
+      requestedBy: await callerUserId(c),
+    });
+    return c.json({ ok: true, status: "queued", run_id: runId }, 202);
   })
 
   .delete("/:slug", async (c) => {
