@@ -35,6 +35,17 @@ export async function getCommands(): Promise<{
   return res.json();
 }
 
+/** The server declined to start a turn: 409 carries the turn already running. */
+export class ChatRefused extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+    readonly turnId?: string,
+  ) {
+    super(message);
+  }
+}
+
 export interface SseFrame {
   event: string;
   data: Record<string, unknown>;
@@ -54,7 +65,20 @@ export async function* chatStream(
     onUnauthorized();
     return;
   }
-  if (!res.ok || !res.body) throw new Error(`agent chat failed: ${res.status}`);
+  if (!res.ok) {
+    const body = (await Promise.resolve()
+      .then(() => res.json())
+      .catch(() => ({}))) as {
+      error?: string;
+      turnId?: string;
+    };
+    throw new ChatRefused(
+      res.status,
+      body.error ?? `agent chat failed: ${res.status}`,
+      body.turnId,
+    );
+  }
+  if (!res.body) throw new Error(`agent chat failed: ${res.status}`);
 
   const reader = res.body.getReader();
   const dec = new TextDecoder();
@@ -122,6 +146,20 @@ export async function approve(
         ? "this turn already finished; the approval expired"
         : `could not record the decision (${res.status})`,
     );
+}
+
+export async function stopTurn(turnId: string): Promise<void> {
+  const res = await fetch("/api/agent/stop", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ turnId }),
+  });
+  if (res.status === 401) {
+    onUnauthorized();
+    return;
+  }
+  if (!res.ok && res.status !== 404)
+    throw new Error(`could not stop the turn (${res.status})`);
 }
 
 export async function uploadDoc(

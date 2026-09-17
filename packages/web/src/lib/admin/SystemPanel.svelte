@@ -24,6 +24,9 @@ import { csv } from "../fields";
       agent_model: system.settings.agent_model.value,
       allowed_models: system.settings.allowed_models.value.join(", "),
       org_name: system.settings.org_name.value ?? "",
+      agent_slot_cap: String(system.settings.agent_slot_cap.value),
+      copilot_slot_weight: String(system.settings.copilot_slot_weight.value),
+      agent_queue_max: String(system.settings.agent_queue_max.value),
     };
   }
 
@@ -146,6 +149,36 @@ import { csv } from "../fields";
           {/if}
         </td>
         <td><span class="badge src-{system.settings.org_name.source}">{system.settings.org_name.source}</span></td>
+      </tr>
+      <tr>
+        <td class="tip" title="How many chat slots all running turns may hold together. A Claude turn takes one slot. Past the cap, turns queue.">Chat slot cap</td>
+        <td class="edit-cell">
+          <input inputmode="numeric" bind:value={draft.agent_slot_cap} />
+          {#if draft.agent_slot_cap !== String(system.settings.agent_slot_cap.value) && draft.agent_slot_cap !== ""}
+            <button class="mini" onclick={() => saveSetting("agent_slot_cap", Number(draft.agent_slot_cap))}>apply</button>
+          {/if}
+        </td>
+        <td><span class="badge src-{system.settings.agent_slot_cap.source}">{system.settings.agent_slot_cap.source}</span></td>
+      </tr>
+      <tr>
+        <td class="tip" title="Slots one Copilot turn takes. Its runtime has used far more memory than Claude Code's.">Copilot turn weight</td>
+        <td class="edit-cell">
+          <input inputmode="numeric" bind:value={draft.copilot_slot_weight} />
+          {#if draft.copilot_slot_weight !== String(system.settings.copilot_slot_weight.value) && draft.copilot_slot_weight !== ""}
+            <button class="mini" onclick={() => saveSetting("copilot_slot_weight", Number(draft.copilot_slot_weight))}>apply</button>
+          {/if}
+        </td>
+        <td><span class="badge src-{system.settings.copilot_slot_weight.source}">{system.settings.copilot_slot_weight.source}</span></td>
+      </tr>
+      <tr>
+        <td class="tip" title="Turns allowed to wait for a slot. One more gets 'busy, try again'.">Chat queue length</td>
+        <td class="edit-cell">
+          <input inputmode="numeric" bind:value={draft.agent_queue_max} />
+          {#if draft.agent_queue_max !== String(system.settings.agent_queue_max.value) && draft.agent_queue_max !== ""}
+            <button class="mini" onclick={() => saveSetting("agent_queue_max", Number(draft.agent_queue_max))}>apply</button>
+          {/if}
+        </td>
+        <td><span class="badge src-{system.settings.agent_queue_max.source}">{system.settings.agent_queue_max.source}</span></td>
       </tr>
     </tbody>
   </table>

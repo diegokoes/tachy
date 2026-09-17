@@ -8,7 +8,8 @@ vi.mock("../../packages/web/src/lib/session.svelte", () => ({
   onUnauthorized: unauthorized,
 }));
 
-const { chatStream } = await import("../../packages/web/src/lib/agent");
+const { chatStream, ChatRefused } =
+  await import("../../packages/web/src/lib/agent");
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -85,6 +86,22 @@ describe("chatStream", () => {
     for await (const f of chatStream({ message: "x" } as never)) got.push(f);
     expect(got).toEqual([]);
     expect(unauthorized).toHaveBeenCalledOnce();
+  });
+
+  it("hands back the running turn when the server answers 409", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 409,
+        json: async () => ({ error: "already running", turnId: "t-1" }),
+      })),
+    );
+    const err = await (async () => {
+      for await (const _ of chatStream({ message: "x" } as never));
+    })().catch((e) => e);
+    expect(err).toBeInstanceOf(ChatRefused);
+    expect(err).toMatchObject({ status: 409, turnId: "t-1" });
   });
 
   it("throws on any other failure", async () => {

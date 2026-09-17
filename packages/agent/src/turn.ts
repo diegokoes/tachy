@@ -19,6 +19,10 @@ export abstract class TurnBase implements AgentTurn {
   private pending = new Map<string, (d: Decision) => void>();
   finished = false;
 
+  get pendingApprovals(): number {
+    return this.pending.size;
+  }
+
   events(): AsyncGenerator<AgentEvent> {
     return this.q.iterator();
   }
