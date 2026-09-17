@@ -13,8 +13,7 @@ you ran, what you expected, and what actually happened.
 
 `dev` is the integration branch and `main` is what production runs. Work
 branches off `dev`, and pull requests target `dev`. `main` only ever receives a
-merge from `dev`, and that merge is the deploy: Jenkins pushes an image and
-restarts the production stack. See the table in
+merge from `dev`, and production is deployed from it. See the table in
 [README.md](README.md#deployment).
 
 There are no version tags and no releases. Only the latest commit on `main` is
@@ -24,10 +23,9 @@ supported, which is what [SECURITY.md](SECURITY.md) says too.
 
 - Branch off `dev`, target `dev`, keep the diff focused on one thing.
 - Run `npm run typecheck && npm run web:check && npm run coverage` before
-  opening it. GitHub Actions runs the same three on every pull request and
-  Jenkins runs them again before it builds an image, so a failure blocks the
-  merge either way. `coverage` rather than `test` because that is what applies
-  the thresholds.
+  opening it. GitHub Actions runs the same three on every pull request and on
+  pushes to `dev` and `main`, so a failure blocks the merge. `coverage` rather
+  than `test` because that is what applies the thresholds.
 - tachý is AGPL-3.0-or-later; your contribution will be licensed the same way
   once merged.
 
