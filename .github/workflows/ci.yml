@@ -24,6 +24,10 @@ jobs:
       # what holds the SPA to the shapes in @tachy/contract.
       - run: npm run web:check
 
+      # The image spawns this bundle for every chat turn; a bundling error
+      # should fail here, not in production.
+      - run: npm run build:mcp
+
       # Every fork that touches knowledge or reference loads the embedding
       # model. Cached and warmed once here, they share the download instead of
       # racing for it; the key carries the model name so a swap re-fetches.

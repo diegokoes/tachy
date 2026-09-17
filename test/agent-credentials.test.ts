@@ -86,6 +86,7 @@ describe("per-turn agent config isolation (cross-user token safety)", () => {
       expect(cfg.mcpEnv.TACHY_DB_POOL_MAX).toBe("2");
       expect(cfg.mcpEnv.TACHY_DB_APP_NAME).toBe("tachy-mcp");
       expect(cfg.mcpEnv.TACHY_EMBED_URL).toBeUndefined();
+      expect(cfg.mcpEnv.NODE_OPTIONS).toBe("--max-old-space-size=256");
     } finally {
       delete process.env.TACHY_API_TOKEN;
       delete process.env.OIDC_CLIENT_SECRET;
