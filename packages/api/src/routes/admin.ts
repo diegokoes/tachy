@@ -38,6 +38,10 @@ import {
   sourceCensus,
   repoCensus,
   knowledgeCensus,
+  agentUsageCensus,
+  toolUsageCensus,
+  sourceTrafficCensus,
+  libraryEngagementCensus,
   addTeam,
   updateTeam,
   deleteTeam,
@@ -261,6 +265,29 @@ export const admin = new Hono()
         knowledge,
       },
     });
+  })
+
+  /**
+   * What the deployment has been doing, as opposed to what it holds. Its own
+   * route so the rail's counts stay one cheap query: these scan day buckets and
+   * the run log, and only the overviews render them.
+   *
+   * Everything is aggregate except two lists that name people — who spends the
+   * most tokens, who has the agent change the most — and those travel only to an
+   * app admin, for the same reason `/system` keeps its `env` block back.
+   */
+  .get("/overview/activity", async (c) => {
+    const [usage, tools, traffic, library] = await Promise.all([
+      agentUsageCensus(30),
+      toolUsageCensus(30),
+      sourceTrafficCensus(14),
+      libraryEngagementCensus(30),
+    ]);
+    if (getIdentity(c)?.role !== "admin") {
+      delete usage.top_users;
+      delete tools.writers;
+    }
+    return c.json({ usage, tools, traffic, library });
   })
 
   /*

@@ -1,0 +1,99 @@
+import { sql } from "../infra/db";
+import { inBackground } from "../infra/background";
+
+export interface ToolCallOutcome {
+  ok: boolean;
+  /** Refused as bad input — the agent held the tool wrong. */
+  misuse: boolean;
+}
+
+/** Record one agent tool call in its tool/person/day bucket. */
+export async function recordToolCall(
+  tool: string,
+  writes: boolean,
+  userId: string | null,
+  outcome: ToolCallOutcome,
+): Promise<void> {
+  await sql`
+    insert into mcp_tool_calls (tool, writes, user_id, day, calls, failures, misuse)
+    values (${tool}, ${writes}, ${userId}, current_date, 1,
+            ${outcome.ok ? 0 : 1}, ${outcome.misuse ? 1 : 0})
+    on conflict (tool, user_id, day) do update set
+      calls = mcp_tool_calls.calls + 1,
+      failures = mcp_tool_calls.failures + excluded.failures,
+      misuse = mcp_tool_calls.misuse + excluded.misuse,
+      writes = excluded.writes
+  `;
+}
+
+/**
+ * Fire and forget: the tool's answer must never wait on its own bookkeeping,
+ * and a failure to count is not a failure to act.
+ */
+export function countToolCall(
+  tool: string,
+  writes: boolean,
+  userId: string | null,
+  outcome: ToolCallOutcome,
+): void {
+  inBackground(
+    recordToolCall(tool, writes, userId, outcome),
+    "tool_call_count_failed",
+  );
+}
+
+export interface ToolUsage {
+  days: number;
+  reads: number;
+  writes: number;
+  /** Most-called tools first. */
+  tools: {
+    tool: string;
+    writes: boolean;
+    calls: number;
+    failures: number;
+    misuse: number;
+  }[];
+  /**
+   * Who has the agent change things, most writes first. Omitted by the route
+   * for anyone who is not an app admin.
+   */
+  writers?: { email: string; writes: number }[];
+}
+
+/** Tool use over the last `days` days, for the access overview. */
+export async function toolUsageCensus(days = 30): Promise<ToolUsage> {
+  const [totals] = await sql`
+    select
+      coalesce(sum(calls) filter (where not writes), 0)::int as reads,
+      coalesce(sum(calls) filter (where writes), 0)::int as writes
+    from mcp_tool_calls
+    where day > current_date - ${days}::int
+  `;
+  const tools = await sql`
+    select tool, bool_or(writes) as writes,
+           sum(calls)::int as calls, sum(failures)::int as failures,
+           sum(misuse)::int as misuse
+    from mcp_tool_calls
+    where day > current_date - ${days}::int
+    group by tool
+    order by sum(calls) desc, tool
+    limit 12
+  `;
+  const writers = await sql`
+    select u.email, sum(t.calls)::int as writes
+    from mcp_tool_calls t
+    join users u on u.id = t.user_id
+    where t.writes and t.day > current_date - ${days}::int
+    group by u.email
+    order by sum(t.calls) desc, u.email
+    limit 5
+  `;
+  return {
+    days,
+    reads: totals.reads as number,
+    writes: totals.writes as number,
+    tools: [...tools] as unknown as ToolUsage["tools"],
+    writers: [...writers] as unknown as NonNullable<ToolUsage["writers"]>,
+  };
+}

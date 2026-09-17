@@ -275,14 +275,43 @@ describe("the admin census", () => {
         insert into team_members (team_id, user_id, role)
         values (${team.id}, ${user.id}, 'member')
       `;
-      expect((await userCensus()).teams_with_admin).toBe(0);
+      const plain = await userCensus();
+      expect(plain.teams_with_admin).toBe(0);
+      expect(plain.teams_without_admin.map((t) => t.slug)).toContain(
+        "test-team",
+      );
+      expect(plain.team_admins).toBe(0);
 
       await sql`
         update team_members set role = 'admin' where user_id = ${user.id}
       `;
       const u = await userCensus();
       expect(u.teams_with_admin).toBe(1);
+      expect(u.team_admins).toBe(1);
+      expect(u.teams_without_admin.map((t) => t.slug)).not.toContain(
+        "test-team",
+      );
       expect(u.users_no_team).toBe(0);
+    });
+
+    /* The four segments the access overview draws have to partition the roll,
+       so somebody who is both rungs must land in exactly one of them. */
+    it("counts an app admin who also admins a team only as an app admin", async () => {
+      const user = await createUser({
+        email: "both@test.local",
+        role: "admin",
+      });
+      const [team] = await sql`select id from teams where slug = 'test-team'`;
+      await sql`
+        insert into team_members (team_id, user_id, role)
+        values (${team.id}, ${user.id}, 'admin')
+      `;
+
+      const u = await userCensus();
+      expect(u.admins).toBe(1);
+      expect(u.team_admins).toBe(0);
+      expect(u.teams_with_admin).toBe(1);
+      expect(u.users - u.disabled - u.admins - u.team_admins).toBe(u.users - 1);
     });
 
     it("counts a disabled user as one who cannot sign in", async () => {

@@ -51,8 +51,10 @@ const EMPTY: Census = {
       users: 0,
       disabled: 0,
       admins: 0,
+      team_admins: 0,
       with_password: 0,
       teams_with_admin: 0,
+      teams_without_admin: [],
       users_no_team: 0,
     },
     knowledge: {
@@ -69,5 +71,20 @@ const EMPTY: Census = {
  * resource inside AdminView: the rail's counts and all three overview panels
  * read the same numbers, and they are siblings on the page now rather than a
  * parent and its one child, so there is nothing to pass it down through.
+ *
+ * Every block is laid over EMPTY rather than taken as it arrives. The SPA is
+ * built separately from the server it talks to, so a browser holding a newer
+ * bundle than the API asks for figures that response has never heard of — and
+ * one `undefined` reaching a `.toLocaleString()` takes down the whole panel,
+ * not just the number that is missing.
  */
-export const census = createResource(() => api.get<Census>("/overview"), EMPTY);
+export const census = createResource(async () => {
+  const got = await api.get<Census>("/overview");
+  const detail = Object.fromEntries(
+    Object.entries(EMPTY.detail).map(([key, base]) => [
+      key,
+      { ...base, ...(got.detail?.[key as keyof Census["detail"]] ?? {}) },
+    ]),
+  ) as Census["detail"];
+  return { counts: got.counts ?? {}, warn: got.warn ?? {}, detail };
+}, EMPTY);

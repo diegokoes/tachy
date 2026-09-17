@@ -113,28 +113,50 @@ export function decode(node: HTMLElement, text: string) {
   return { update: run, destroy: () => gsap.killTweensOf(state) };
 }
 
-/** Fills a gauge upwards to `pct` (0-100), staggered by list position. */
-export function growBar(node: HTMLElement, p: { pct: number; delay?: number }) {
+/** Fills a gauge to `pct` (0-100) — upwards, or rightwards along `width` — staggered by list position. */
+export function growBar(
+  node: HTMLElement,
+  p: { pct: number; delay?: number; along?: "height" | "width" },
+) {
+  const along = p.along ?? "height";
   const set = (v: number) => {
-    node.style.height = `${v}%`;
+    node.style[along] = `${v}%`;
   };
+  let target = p.pct;
+  /* The end state first, then the tween back down to zero to play out of. GSAP
+     renders off requestAnimationFrame, which a background tab suspends
+     entirely — without this a chart built in a tab nobody is looking at yet has
+     no bars in it at all, rather than bars that have not animated. */
+  set(target);
   if (reducedMotion()) {
-    set(p.pct);
-    return { update: (n: typeof p) => set(n.pct) };
+    return { update: (n: typeof p) => set((target = n.pct)) };
   }
   gsap.fromTo(
     node,
-    { height: "0%" },
+    { [along]: "0%" },
     {
-      height: `${p.pct}%`,
+      [along]: `${target}%`,
       duration: 0.8,
       delay: p.delay ?? 0,
       ease: "power2.out",
     },
   );
   return {
-    update: (n: typeof p) =>
-      gsap.to(node, { height: `${n.pct}%`, duration: 0.4, ease: "power2.out" }),
+    /* Called whenever the argument object is rebuilt, which is every time the
+       data behind it reloads, same numbers or not. Starting a second tween then
+       left two fighting over one height — a bar not yet due in the stagger shot
+       to full, snapped back to zero and grew again. An unchanged target is not
+       news; a changed one replaces the running tween instead of joining it. */
+    update: (n: typeof p) => {
+      if (n.pct === target) return;
+      target = n.pct;
+      gsap.to(node, {
+        [along]: `${target}%`,
+        duration: 0.4,
+        ease: "power2.out",
+        overwrite: true,
+      });
+    },
     destroy: () => gsap.killTweensOf(node),
   };
 }
