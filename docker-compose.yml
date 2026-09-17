@@ -10,6 +10,11 @@ services:
     image: pgvector/pgvector:pg16
     container_name: ${COMPOSE_PROJECT_NAME:-tachy}-postgres
     restart: unless-stopped
+    # Docker's default /dev/shm is 64MB. A parallel index build allocates its
+    # whole maintenance_work_mem there, so rebuilding the HNSW/GIN indexes
+    # (a large seed, a reembed) failed with "could not resize shared memory
+    # segment ... No space left on device".
+    shm_size: 1gb
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-tachy}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tachy}
