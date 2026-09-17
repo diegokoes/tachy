@@ -87,6 +87,22 @@ describe("jobs API", () => {
     ).toBe(400);
   });
 
+  it("starts a one-off run of a kind without a definition", async () => {
+    const res = await call("/runs", "POST", {
+      kind: "embeddings.backfill",
+      params: { all: true },
+    });
+    expect(res.status).toBe(202);
+    const { run_id } = await res.json();
+    const run = await (await call(`/runs/${run_id}`)).json();
+    expect(run).toMatchObject({
+      kind: "embeddings.backfill",
+      definition_id: null,
+      params: { all: true },
+    });
+    expect((await call("/runs", "POST", { kind: "nope" })).status).toBe(400);
+  });
+
   it("is closed to members", async () => {
     await createUser({
       email: "dev@example.com",
