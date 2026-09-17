@@ -10,7 +10,15 @@ export {
   sourceTokenOptional,
   uploadDir,
 } from "./infra";
-export { AppError, notFound, conflict, badInput, forbidden } from "./infra";
+export {
+  AppError,
+  notFound,
+  conflict,
+  badInput,
+  forbidden,
+  unavailable,
+} from "./infra";
+export { schemaStampStatus, type SchemaStampStatus } from "./infra";
 export { inBackground, backgroundSettled } from "./infra";
 export type { AppErrorCode } from "./infra";
 export { log, runWithLogContext } from "./infra";

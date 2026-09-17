@@ -42,7 +42,7 @@ git clone https://github.com/diegokoes/tachy.git
 cd tachy
 cp .env.example .env      # set TACHY_SECRET_KEY and TACHY_SESSION_SECRET
 docker compose up -d --build
-curl localhost:8787/health
+curl localhost:8787/readyz
 ```
 
 On first boot with an empty database, open the web UI and the one-time setup

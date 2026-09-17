@@ -6,14 +6,6 @@ afterAll(() => sql.end());
 
 const app = createApp();
 
-describe("API health", () => {
-  it("reports ok when the DB is reachable", async () => {
-    const res = await app.request("/health");
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
-  });
-});
-
 describe("API knowledge round-trip", () => {
   beforeEach(resetData);
 

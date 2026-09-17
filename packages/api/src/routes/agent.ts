@@ -29,10 +29,12 @@ import {
   type EffectiveSettings,
   type ScopeContext,
   uploadDir,
+  unavailable,
 } from "@tachy/core";
 import { requireCaller } from "../authz";
 import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
 import { sessionEmail } from "../auth";
+import { lifecycle } from "../lifecycle";
 import { BUILTIN_COMMANDS, findCommand, commandAutoApprove } from "../commands";
 
 interface TurnEntry {
@@ -58,6 +60,19 @@ const sweep = setInterval(() => {
   }
 }, 60_000);
 sweep.unref?.();
+
+export const activeTurnCount = () =>
+  [...turns.values()].filter((e) => !e.turn.finished).length;
+
+export function abortAllTurns(): number {
+  let aborted = 0;
+  for (const entry of turns.values())
+    if (!entry.turn.finished) {
+      entry.turn.abort();
+      aborted++;
+    }
+  return aborted;
+}
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
@@ -291,6 +306,10 @@ export const agent = new Hono()
   })
 
   .post("/chat", zValidator("json", chatSchema), async (c) => {
+    if (lifecycle.draining) {
+      c.header("Retry-After", "30");
+      throw unavailable("the server is restarting; try again in a moment");
+    }
     const { message, sessionId, uploadPaths, artifactId, command } =
       c.req.valid("json");
     const userEmail = (await sessionEmail(c)) ?? env.userEmail;

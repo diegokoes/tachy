@@ -1,15 +1,9 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { requestId } from "hono/request-id";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { z } from "zod";
-import {
-  sql,
-  env,
-  AppError,
-  registerSource,
-  effectiveSettings,
-} from "@tachy/core";
+import { env, AppError, registerSource, effectiveSettings } from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 import { createAzureDevopsSource } from "@tachy/source-azure-devops";
@@ -29,6 +23,7 @@ import { library } from "./routes/library";
 import { projects } from "./routes/projects";
 import { initOidc, installAuth, isBootstrapped, type OidcConfig } from "./auth";
 import { httpLogger, noteError } from "./logging";
+import { readiness } from "./lifecycle";
 
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
@@ -39,6 +34,7 @@ const STATUS_BY_CODE = {
   conflict: 409,
   bad_input: 400,
   forbidden: 403,
+  unavailable: 503,
 } as const;
 
 function apiRoutes() {
@@ -71,13 +67,12 @@ export function createApp(
   base.use("*", requestId());
   base.use("*", httpLogger);
 
-  base.get("/health", async (c) => {
-    try {
-      await sql`select 1`;
-      return c.json({ ok: true });
-    } catch {
-      return c.json({ ok: false }, 503);
-    }
+  const livez = (c: Context) => c.json({ ok: true });
+  base.get("/livez", livez);
+  base.get("/health", livez);
+  base.get("/readyz", async (c) => {
+    const r = await readiness();
+    return c.json(r, r.ready ? 200 : 503);
   });
 
   const authMode = opts.oidc ? "sso" : opts.apiToken ? "token" : "open";
