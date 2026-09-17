@@ -14,6 +14,7 @@ export interface AuthConfig {
   authMode: string;
   sso: boolean;
   passwordLogin: boolean;
+  envBadge: string | null;
 
   profile?: DeploymentProfile;
 }
