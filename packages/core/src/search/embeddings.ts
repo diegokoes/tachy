@@ -11,6 +11,13 @@ export type { EmbeddingModelSpec } from "./model";
 
 export const toVectorLiteral = (v: number[]): string => `[${v.join(",")}]`;
 
+/**
+ * Eight, not more: on 8 threads larger batches were no faster, but held the
+ * event loop proportionally longer and grew the ONNX arena, which never shrinks
+ * (measured in DEPLOYMENT-ARCHITECTURE.md §3.1).
+ */
+const PASSAGE_BATCH = 8;
+
 const prepare = (text: string, prefix: string) =>
   prefix + text.slice(0, EMBEDDING_SPEC.maxChars);
 
@@ -43,9 +50,9 @@ export async function embedPassage(text: string): Promise<number[]> {
  *
  * Batched by length, not by input order. A batch is padded to its longest
  * member and the transformer pays for the padding, so one 400-token passage
- * beside 31 short ones costs the same as 32 long ones. Grouping similar lengths
- * together removes most of that; the result is returned in the caller's order,
- * so the sort is invisible.
+ * beside seven short ones costs the same as eight long ones. Grouping similar
+ * lengths together removes most of that; the result is returned in the caller's
+ * order, so the sort is invisible.
  */
 export async function embedPassages(texts: string[]): Promise<number[][]> {
   if (!texts.length) return [];
@@ -54,8 +61,8 @@ export async function embedPassages(texts: string[]): Promise<number[][]> {
     .sort((a, b) => texts[a].length - texts[b].length);
 
   const out = new Array<number[]>(texts.length);
-  for (let i = 0; i < order.length; i += 32) {
-    const idx = order.slice(i, i + 32);
+  for (let i = 0; i < order.length; i += PASSAGE_BATCH) {
+    const idx = order.slice(i, i + PASSAGE_BATCH);
     const vectors = await run(
       idx.map((j) => prepare(texts[j], EMBEDDING_SPEC.passagePrefix)),
     );
