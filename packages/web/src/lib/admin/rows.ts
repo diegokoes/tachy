@@ -321,3 +321,73 @@ export type Activity = {
     }[];
   };
 };
+
+export type JsonSchema = {
+  type?: string;
+  enum?: (string | number)[];
+  default?: unknown;
+  description?: string;
+  minimum?: number;
+  maximum?: number;
+  properties?: Record<string, JsonSchema>;
+  required?: string[];
+};
+export type JobKindInfo = {
+  kind: string;
+  title: string;
+  description: string | null;
+  connection: string | null;
+  default_schedule: string | null;
+  resource_class: "light" | "heavy";
+  overlap: "skip" | "queue";
+  missed: "run-once" | "skip";
+  timeout: string;
+  max_attempts: number;
+  params_schema: JsonSchema;
+};
+export type JobRunRow = {
+  id: string;
+  definition_id: string | null;
+  kind: string;
+  params: Record<string, unknown>;
+  resource_class: "light" | "heavy";
+  trigger: string;
+  status: string;
+  attempts: number;
+  max_attempts: number;
+  progress: number | null;
+  progress_note: string | null;
+  error: string | null;
+  log_tail: string;
+  output: Record<string, unknown> | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+};
+export type JobDefinitionRow = {
+  id: string;
+  kind: string;
+  name: string;
+  params: Record<string, unknown>;
+  enabled: boolean;
+  schedule: string | null;
+  timezone: string;
+  resource_class: "light" | "heavy" | null;
+  timeout: string | null;
+  overlap: "skip" | "queue" | null;
+  notify: "failure" | "always" | "never";
+  disabled_reason: string | null;
+  next_run: string | null;
+  last_run: {
+    id: string;
+    status: string;
+    created_at: string;
+    error: string | null;
+  } | null;
+};
+export type JobChange = {
+  id: string;
+  action: string;
+  changed_by: string | null;
+  created_at: string;
+};
