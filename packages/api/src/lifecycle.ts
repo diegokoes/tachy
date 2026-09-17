@@ -7,6 +7,8 @@ import { schemaStampStatus, sql, type SchemaStampStatus } from "@tachy/core";
  */
 export const lifecycle = {
   draining: false,
+  /** Set by an admin before maintenance: new chats are refused, all else serves. */
+  refusingChats: false,
   modelRequired: false,
   modelReady: false,
   /** The embedder service's readiness URL, when the model is not in this process. */

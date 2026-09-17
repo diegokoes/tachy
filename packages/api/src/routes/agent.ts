@@ -389,6 +389,12 @@ export const agent = new Hono()
       c.header("Retry-After", "30");
       throw unavailable("the server is restarting; try again in a moment");
     }
+    if (lifecycle.refusingChats) {
+      c.header("Retry-After", "300");
+      throw unavailable(
+        "chat is paused for maintenance; everything else keeps working",
+      );
+    }
     const { message, sessionId, uploadPaths, artifactId, command } =
       c.req.valid("json");
     const userEmail = (await sessionEmail(c)) ?? env.userEmail;

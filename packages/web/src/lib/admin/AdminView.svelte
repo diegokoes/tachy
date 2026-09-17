@@ -26,6 +26,8 @@
   import SystemPanel from "./SystemPanel.svelte";
   import CredentialsPanel from "./CredentialsPanel.svelte";
   import JobsPanel from "./JobsPanel.svelte";
+  import RuntimePanel from "./RuntimePanel.svelte";
+  import HostPanel from "./HostPanel.svelte";
 
   type Section = Omit<PageSection, "count" | "tone"> & {
     /** Which census key counts this section. Omitted for a section with nothing to count. */
@@ -33,16 +35,17 @@
     show?: boolean;
   };
 
-  const PAGES: SubnavItem[] = [
-    { key: "connect", label: "connect", icon: "link" },
+  const PAGES: SubnavItem[] = $derived([
+    { key: "integrations", label: "integrations", icon: "link" },
     { key: "structure", label: "structure", icon: "layers" },
     { key: "access", label: "access", icon: "key" },
-  ];
+    ...(isGlobalAdmin() ? [{ key: "system", label: "system", icon: "cog" as const }] : []),
+  ]);
 
   const admin = $derived(isGlobalAdmin());
 
   const SECTIONS: Record<string, Section[]> = $derived({
-    connect: [
+    integrations: [
       { key: "overview", label: "overview", view: PipelinePanel, eager: true },
       { key: "sources", label: "sources", view: SourcesPanel, n: "sources", show: admin },
       { key: "projects", label: "projects", view: ProjectsPanel, n: "projects" },
@@ -62,14 +65,21 @@
       { key: "overview", label: "overview", view: PosturePanel, eager: true },
       { key: "users", label: "users & roles", view: AccessPanel, n: "users" },
       { key: "credentials", label: "shared credentials", view: CredentialsPanel },
-      { key: "system", label: "system settings", view: SystemPanel, show: admin },
+    ],
+    system: [
+      { key: "overview", label: "overview", view: RuntimePanel, eager: true, show: admin },
+      { key: "host", label: "backups & host", view: HostPanel, show: admin },
+      { key: "settings", label: "settings", view: SystemPanel, show: admin },
     ],
   });
 
-  const page = $derived(segment(1) ?? "connect");
+  /* `connect` was the integrations page's old name; old links still land. */
+  const page = $derived(
+    segment(1) === "connect" ? "integrations" : (segment(1) ?? "integrations"),
+  );
 
   const sections = $derived(
-    (SECTIONS[page] ?? SECTIONS.connect)
+    (SECTIONS[page] ?? SECTIONS.integrations)
       .filter((s) => s.show !== false)
       .map(
         ({ n, show: _show, ...s }): PageSection => ({

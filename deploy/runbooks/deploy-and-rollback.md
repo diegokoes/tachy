@@ -23,7 +23,7 @@ tail -5 /srv/tachy/deploy.log | jq .
 ```
 
 `result` is `deployed`, `rolled_back`, `rollback_failed` or `refused`.
-Admin › access › system settings shows the running commit and badge.
+Admin › system shows the running commit and badge.
 
 **`rollback_failed`:** the previous release is not ready either. Check
 `docker compose logs --tail 100 api`, then restore the pre-deploy backup
