@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, untrack, type Component } from "svelte";
   import { G, RAMP } from "../tui";
-  import type { Spy } from "./scrollspy.svelte";
+  import type { Spy } from "./spy.svelte";
 
   let {
     spy,
