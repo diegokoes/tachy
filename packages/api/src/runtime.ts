@@ -1,8 +1,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { monitorEventLoopDelay } from "node:perf_hooks";
-import { sql, type EmbedQueueDepth } from "@tachy/core";
-import { lifecycle } from "./lifecycle";
+import { env, sql, type EmbedQueueDepth } from "@tachy/core";
+import { lifecycle, readiness } from "./lifecycle";
 import { turnStats } from "./routes/agent";
 
 const loopDelay = monitorEventLoopDelay({ resolution: 20 });
@@ -84,15 +84,49 @@ async function externalDepth(): Promise<EmbedQueueDepth | null> {
     .catch(() => null);
 }
 
+async function tableSizes() {
+  return sql<{ table: string; bytes: number; rows: number }[]>`
+    select c.relname as table, pg_total_relation_size(c.oid)::float8 as bytes,
+           c.reltuples::float8 as rows
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where c.relkind = 'r' and n.nspname = current_schema()
+    order by pg_total_relation_size(c.oid) desc
+    limit 12
+  `.catch(() => []);
+}
+
+async function security() {
+  const [row] = await sql`
+    select count(*) filter (where password_hash is not null and not disabled)::int as with_password,
+           count(*) filter (where password_login_allowed and not disabled)::int as password_under_sso,
+           count(*) filter (where service_account and not disabled)::int as service_accounts
+    from users
+  `;
+  return {
+    sso_configured: Boolean(env.oidc),
+    users_with_password: row.with_password as number,
+    password_login_under_sso: row.password_under_sso as number,
+    service_accounts: row.service_accounts as number,
+  };
+}
+
 /** Current values only; nothing here is stored. */
 export async function runtimeSnapshot() {
-  const [mem, postgres, status] = await Promise.all([
+  const [mem, postgres, status, ready, sizes, sec] = await Promise.all([
     memory(),
     postgresConnections(),
     hostStatus(),
+    readiness(),
+    tableSizes(),
+    security(),
   ]);
   return {
     draining: lifecycle.draining,
+    refusingChats: lifecycle.refusingChats,
+    readiness: ready,
+    tableSizes: sizes,
+    security: sec,
+    uploadTtlHours: Number(process.env.TACHY_UPLOAD_TTL_HOURS) || 24,
     turns: turnStats(),
     memory: mem,
     eventLoopP99Ms: Math.round(loopP99Ms * 10) / 10,
