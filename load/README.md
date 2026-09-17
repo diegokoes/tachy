@@ -38,6 +38,30 @@ and drops the latency bar. Stress is for finding the knee, not for passing.
 
 Overridable: `RATE`, `DURATION`, `BASE_URL`, `LOGIN_EMAIL`, `LOGIN_PASSWORD`.
 
+## Chat turns
+
+`turns.mjs` is a Node driver, not a k6 script: k6 reads an SSE response whole,
+and the numbers that matter here are time to the first event and memory while
+the turns run. It creates `load-turn-NN` members, starts `LEVELS` (default
+`1,5,10`) concurrent turns per step, and polls the admin runtime block for
+peak memory, slots, queue and Postgres connections.
+
+The agent must talk to `mock-llm/server.mjs`, a stand-in for the Anthropic
+Messages API that scripts tool calls (`MOCK_TOOL_ROUNDS`, `MOCK_TOOLS`) with a
+fixed delay (`MOCK_DELAY_MS`), through `ANTHROPIC_BASE_URL`. Real Claude Code,
+the real MCP child and the real database run; only the model is fake, so it
+costs nothing. Never point it at a server using a real provider key.
+
+`turns.compose.yml` is the load window: a scratch Postgres, the mock, and an
+`api-load` container from the production image with no published port. Run the
+driver inside `api-load` so it reads that container's cgroup memory:
+
+```sh
+docker compose -f load/turns.compose.yml up -d
+docker compose -f load/turns.compose.yml exec api-load node load/turns.mjs
+docker compose -f load/turns.compose.yml down -v
+```
+
 ## Reading the results
 
 Every request is tagged, so the per-endpoint rows are the ones that matter:
@@ -67,9 +91,6 @@ the shape of the curve, not to grade the hardware.
 
 ## What is deliberately not tested
 
-- **`POST /api/agent/chat`** — spawns a Claude Code or Copilot subprocess per
-  turn, costs real money, and its latency is dominated by a third-party API.
-  Load-testing it measures Anthropic, not tachý.
 - **Uploads and `work-items/:source/:id/fetch`** — both call third-party APIs.
 - **All writes.** `POST /api/knowledge` runs another embedding and grows the
   database, so a second run would not measure the same thing as the first.

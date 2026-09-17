@@ -1,0 +1,59 @@
+# A load window for chat turns (DEPLOYMENT-ARCHITECTURE.md §11.1), beside a
+# running stack and touching none of it: a scratch Postgres, a second api from
+# the production image with no published port, and the mock LLM, so no
+# provider key is used and no production data is written.
+#
+#   docker compose -p tachy-load -f load/turns.compose.yml up -d
+#   (optional) restore the latest dump into pg-load
+#   docker compose -p tachy-load -f load/turns.compose.yml exec api-load \
+#     node load/turns.mjs
+#   docker compose -p tachy-load -f load/turns.compose.yml down -v
+#
+# Run inside api-load so the driver reads that container's cgroup memory.
+name: tachy-load
+
+services:
+  pg-load:
+    image: pgvector/pgvector:0.8.6-pg16
+    shm_size: 1gb
+    environment:
+      POSTGRES_USER: tachy
+      POSTGRES_PASSWORD: tachy-load
+      POSTGRES_DB: tachy
+    volumes:
+      - ../db/schema.sql:/docker-entrypoint-initdb.d/10-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tachy -d tachy"]
+      interval: 5s
+      retries: 20
+
+  mock-llm:
+    image: node:24-slim
+    command: ["node", "/mock/server.mjs"]
+    environment:
+      MOCK_PORT: "4010"
+      MOCK_DELAY_MS: ${MOCK_DELAY_MS:-800}
+      MOCK_TOOL_ROUNDS: ${MOCK_TOOL_ROUNDS:-2}
+    volumes:
+      - ./mock-llm:/mock:ro
+
+  api-load:
+    image: ${TACHY_IMAGE:-diegokoes/tachy:latest}
+    init: true
+    mem_limit: ${API_LOAD_MEM_LIMIT:-10g}
+    depends_on:
+      pg-load:
+        condition: service_healthy
+      mock-llm:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://tachy:tachy-load@pg-load:5432/tachy
+      NODE_ENV: production
+      TACHY_API_TOKEN: load-window-token
+      TACHY_DB_APP_NAME: tachy-api-load
+      TACHY_DB_POOL_MAX: "15"
+      ANTHROPIC_BASE_URL: http://mock-llm:4010
+      ANTHROPIC_API_KEY: sk-mock-not-a-key
+      BASE_URL: http://127.0.0.1:8787
+    volumes:
+      - ./turns.mjs:/app/load/turns.mjs:ro
