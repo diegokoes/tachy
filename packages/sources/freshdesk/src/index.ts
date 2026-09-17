@@ -67,9 +67,12 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
   const api = base + "/api/v2";
 
   async function get(path: string): Promise<any> {
-    const res = await sourceFetch(`Freshdesk GET ${path}`, api + path, {
-      headers: { Authorization: auth },
-    });
+    const res = await sourceFetch(
+      `Freshdesk GET ${path}`,
+      api + path,
+      { headers: { Authorization: auth } },
+      { connection: cfg.slug },
+    );
     if (!res.ok)
       throw new Error(
         `Freshdesk GET ${path} -> ${res.status} ${await res.text()}`,
@@ -236,6 +239,7 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
         "Freshdesk conversation DELETE",
         `${api}/conversations/${messageId}`,
         { method: "DELETE", headers: { Authorization: auth } },
+        { connection: cfg.slug },
       );
       // already gone is the desired end state, not a failure
       if (!res.ok && res.status !== 404)
@@ -253,6 +257,7 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
           headers: { Authorization: auth, "Content-Type": "application/json" },
           body: JSON.stringify({ body, private: o?.private ?? true }),
         },
+        { connection: cfg.slug },
       );
       if (!res.ok)
         throw new Error(

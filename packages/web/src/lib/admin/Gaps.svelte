@@ -1,11 +1,16 @@
 <script lang="ts">
   import { G } from "../tui";
-  import { activeSpy } from "./scrollspy.svelte";
+  import { activeSpy } from "../sections/spy.svelte";
 
   export type Gap = {
     n: number;
     /** Reads after the number: "sources without a token". */
     label: string;
+    /**
+     * The whole line, for a gap whose count is a flag rather than a quantity —
+     * "nobody is an app admin" is one thing, not one app admin.
+     */
+    text?: string;
     tone?: "warn" | "danger";
     /** The section on this page that fixes it. */
     to: string;
@@ -31,15 +36,18 @@
           onclick={() => activeSpy()?.goto(g.to)}
           title="go to {g.to}"
         >
-          <span class="n">{g.n.toLocaleString()}</span>
-          <span class="lbl">{g.label}</span>
+          {#if g.text}
+            <span class="n" aria-hidden="true">{G.dot}</span>
+            <span class="lbl">{g.text}</span>
+          {:else}
+            <span class="n">{g.n.toLocaleString()}</span>
+            <span class="lbl">{g.label}</span>
+          {/if}
           <span class="go" aria-hidden="true">{G.right}</span>
         </button>
       </li>
     {/each}
   </ul>
-{:else}
-  <span class="clear">nothing needs attention</span>
 {/if}
 
 <style>

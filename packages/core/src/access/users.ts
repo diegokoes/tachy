@@ -230,6 +230,11 @@ export async function setTeamMember(
  * curate. `teams_with_admin` counts teams from this domain's own membership
  * table rather than joining the catalog's — the caller compares it against the
  * team count it already has.
+ *
+ * `admins` and `team_admins` are both taken among the enabled, and an app admin
+ * is never also counted as a team admin. That is what lets the overview draw
+ * app admins / team admins / members / disabled as four parts of one roll
+ * rather than four independent tallies.
  */
 export async function userCensus() {
   const [row] = await sql`
@@ -237,6 +242,11 @@ export async function userCensus() {
       count(*)::int as users,
       count(*) filter (where disabled)::int as disabled,
       count(*) filter (where role = 'admin' and not disabled)::int as admins,
+      count(*) filter (
+        where not disabled and role <> 'admin'
+          and exists (select 1 from team_members m
+                        where m.user_id = users.id and m.role = 'admin')
+      )::int as team_admins,
       count(*) filter (where password_hash is not null)::int as with_password,
       (select count(distinct team_id)::int from team_members where role = 'admin')
         as teams_with_admin,
@@ -245,12 +255,24 @@ export async function userCensus() {
         as users_no_team
     from users
   `;
-  return row as {
+  /* Named, not just counted: the overview opens this list when the ring is
+     clicked, and "3 teams have no admin" is only actionable once you know
+     which three. */
+  const teams_without_admin = await sql<{ slug: string; name: string }[]>`
+    select t.slug, t.name from teams t
+    where not exists (
+      select 1 from team_members m where m.team_id = t.id and m.role = 'admin'
+    )
+    order by t.name
+  `;
+  return { ...row, teams_without_admin: [...teams_without_admin] } as {
     users: number;
     disabled: number;
     admins: number;
+    team_admins: number;
     with_password: number;
     teams_with_admin: number;
+    teams_without_admin: { slug: string; name: string }[];
     users_no_team: number;
   };
 }

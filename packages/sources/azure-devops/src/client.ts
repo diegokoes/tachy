@@ -110,6 +110,7 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
           ...(init?.headers ?? {}),
         },
       },
+      { connection: cfg.slug },
     );
     const text = await res.text();
     const trimmed = text.trim();

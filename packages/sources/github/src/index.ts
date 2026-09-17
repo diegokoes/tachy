@@ -68,14 +68,19 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
     : [];
 
   async function get(path: string): Promise<any> {
-    const res = await sourceFetch(`GitHub GET ${path}`, api + path, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "tachy",
+    const res = await sourceFetch(
+      `GitHub GET ${path}`,
+      api + path,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "tachy",
+        },
       },
-    });
+      { connection: cfg.slug },
+    );
     if (!res.ok)
       throw new Error(
         `GitHub GET ${path} -> ${res.status} ${await res.text()}`,
