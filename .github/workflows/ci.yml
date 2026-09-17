@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
 
 jobs:
@@ -51,6 +51,6 @@ jobs:
       - name: Validate k6 scripts
         run: |
           for f in load/*.js; do
-            docker run --rm -v "$PWD/load:/load:ro" grafana/k6:latest \
+            docker run --rm -v "$PWD/load:/load:ro" grafana/k6:2.2.0 \
               archive "/load/$(basename "$f")" -O /dev/null
           done
