@@ -1,0 +1,24 @@
+- name: Packages the host scripts and monitoring need
+  ansible.builtin.apt:
+    name: [age, zstd, jq, curl, git, ca-certificates, openssl, smartmontools, nvme-cli,
+           nftables, iptables, unattended-upgrades, apt-listchanges, tlp, upower, sudo]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Unattended security upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    mode: "0644"
+
+- name: Journald keeps at most 1 GB
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/10-tachy.conf
+    content: |
+      [Journal]
+      SystemMaxUse=1G
+    mode: "0644"
+  notify: Restart journald

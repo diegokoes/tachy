@@ -19,7 +19,7 @@ HERE=$(dirname "$(readlink -f "$0")")
 IMAGE_REPO=${TACHY_IMAGE_REPO:-ghcr.io/diegokoes/tachy}
 DEPLOY_LOG=${TACHY_DEPLOY_LOG:-$TACHY_SRV/deploy.log}
 READY_TIMEOUT=${TACHY_READY_TIMEOUT:-300}
-BACKUP=${TACHY_BACKUP_BIN:-tachy-backup}
+read -ra BACKUP <<<"${TACHY_BACKUP_BIN:-tachy-backup}"
 K6_IMAGE=${TACHY_K6_IMAGE:-grafana/k6:2.2.0}
 
 PULL=true
@@ -149,7 +149,7 @@ elif [ "$LIVE_SCHEMA" != "$NEW_SCHEMA" ]; then
 fi
 
 log "pre-deploy backup"
-"$BACKUP" db
+"${BACKUP[@]}" db
 
 roll "$COMMIT" "$IMAGE"
 # Idempotent, and a new table needs its grants.
