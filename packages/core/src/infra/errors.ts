@@ -1,4 +1,5 @@
-export type AppErrorCode = "not_found" | "conflict" | "bad_input" | "forbidden";
+export type AppErrorCode =
+  "not_found" | "conflict" | "bad_input" | "forbidden" | "unavailable";
 
 export class AppError extends Error {
   constructor(
@@ -15,3 +16,6 @@ export const conflict = (message: string) => new AppError("conflict", message);
 export const badInput = (message: string) => new AppError("bad_input", message);
 export const forbidden = (message: string) =>
   new AppError("forbidden", message);
+/** Temporary: the caller should retry, e.g. while the server drains. */
+export const unavailable = (message: string) =>
+  new AppError("unavailable", message);

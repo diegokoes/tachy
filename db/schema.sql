@@ -7,6 +7,14 @@ create or replace function tachy_join(arr text[]) returns text
     language sql immutable parallel safe
     as $$ select array_to_string(arr, ' ') $$;
 
+-- One row: the sha256 of the schema.sql this database was built from, written by
+-- whatever applied it. /readyz compares it with the schema.sql in the image.
+create table schema_meta (
+    id             boolean primary key default true check (id),
+    schema_sha256  text not null,
+    applied_at     timestamptz not null default now()
+);
+
 create table teams (
     id          uuid primary key default gen_random_uuid(),
     slug        text not null unique,
