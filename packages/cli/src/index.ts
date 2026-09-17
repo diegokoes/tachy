@@ -14,6 +14,7 @@ import {
   env,
   sql,
   loadSettingsIntoEnv,
+  rotateVaultKey,
   getRepoBySlug,
   indexRepo,
 } from "@tachy/core";
@@ -180,6 +181,16 @@ async function main() {
         /* settings table may not exist yet */
       }
       return sync(positional[0], { since: args.since, group: args.group });
+    }
+    case "rotate-key": {
+      const { moved, already } = await rotateVaultKey();
+      console.log(
+        `re-encrypted ${moved} credential(s) with the current key; ${already} were already on it`,
+      );
+      console.log(
+        "once every row is on it, remove TACHY_SECRET_KEY_PREVIOUS from .env",
+      );
+      return;
     }
     case "embed-backfill":
       return embedBackfill(false);
