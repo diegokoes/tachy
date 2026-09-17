@@ -47,12 +47,25 @@ while re-running them silently rewrote `analysis_runs.mode` for every `create` /
 beside it. There was no applied-migrations table, so every run re-applied every
 file.
 
-Upgrading an existing deployment is therefore a dump, a fresh schema, and a
-restore of the data tables, plus `npm run sync reembed` whenever the embedding
-model or vector dimension changed, since vectors from two models share no space.
-If incremental migrations come back, they need an applied-migrations table and a
-test that diffs `schema.sql` against schema-plus-migrations; without both, the
-two drift apart silently.
+Upgrading an existing deployment is a declarative diff instead:
+[pg-schema-diff](https://github.com/stripe/pg-schema-diff) compares the live
+database with `db/schema.sql` and applies the difference, and `tachy-deploy`
+runs it from the new image. A pull request that changes `schema.sql` gets a
+`schema-plan` CI job (`scripts/schema-plan.sh`): the base branch's schema and
+fixtures are migrated to yours, a second plan must be empty, and a fresh
+database from your schema must plan empty too. Hazards that can lose data or
+change behaviour (`deploy/postgres/schema-hazards.sh`) fail the job unless the
+pull request carries the `schema-destructive` label, and then need
+`tachy-deploy --allow-destructive`.
+
+What a diff cannot see still needs care:
+
+- A rename looks like a drop plus an add. Ship it as expand and contract: add
+  the new column, backfill, move the code, drop the old one in a later release.
+- A release should run against the previous release's schema too, so it can be
+  rolled back without a restore.
+- Changing the embedding model or vector dimension still needs
+  `npm run sync reembed`, since vectors from two models share no space.
 
 ## Commit messages
 

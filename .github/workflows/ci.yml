@@ -93,6 +93,67 @@ jobs:
           name: image-ref
           path: image-ref.txt
 
+  # A schema.sql change must ship as a diff: planned from the base branch's schema
+  # and fixtures, applied, converged, and round-tripped (scripts/schema-plan.sh).
+  # Destructive hazards fail unless the pull request is labelled
+  # schema-destructive.
+  schema-plan:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.6-pg16
+        env:
+          POSTGRES_USER: tachy
+          POSTGRES_PASSWORD: tachy
+          POSTGRES_DB: tachy
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U tachy" --health-interval 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: changed
+        run: |
+          if git diff --quiet "origin/${{ github.base_ref }}...HEAD" -- db/schema.sql; then
+            echo "schema=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "schema=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.changed.outputs.schema == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - if: steps.changed.outputs.schema == 'true'
+        run: go install github.com/stripe/pg-schema-diff/cmd/pg-schema-diff@v1.0.9
+
+      - if: steps.changed.outputs.schema == 'true'
+        env:
+          PGHOST: localhost
+          PGUSER: tachy
+          PGPASSWORD: tachy
+          ALLOW_DESTRUCTIVE: ${{ contains(github.event.pull_request.labels.*.name, 'schema-destructive') && '1' || '0' }}
+        run: |
+          mkdir -p /tmp/base /tmp/new
+          base="origin/${{ github.base_ref }}"
+          git show "$base:db/schema.sql" > /tmp/base/10-schema.sql
+          git show "$base:db/roles.sql" > /tmp/base/20-roles.sql 2>/dev/null || rm -f /tmp/base/20-roles.sql
+          git show "$base:test/fixtures.sql" > /tmp/base/fixtures.sql
+          cp db/schema.sql /tmp/new/10-schema.sql
+          cp db/roles.sql /tmp/new/20-roles.sql
+          scripts/schema-plan.sh /tmp/base /tmp/new
+
+      - if: always() && steps.changed.outputs.schema == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-plan
+          path: schema-plan.txt
+          if-no-files-found: ignore
+
   # The k6 scenarios need a live, seeded server, so they cannot run here. This
   # only bundles them: it catches a syntax error or a bad import in seconds.
   load-scripts:
