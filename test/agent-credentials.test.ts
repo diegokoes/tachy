@@ -82,6 +82,8 @@ describe("per-turn agent config isolation (cross-user token safety)", () => {
       expect(cfg.mcpEnv.OIDC_CLIENT_SECRET).toBeUndefined();
       // What it does still need in order to work at all.
       expect(cfg.mcpEnv.DATABASE_URL).toBe(process.env.DATABASE_URL);
+      expect(cfg.mcpEnv.TACHY_DB_POOL_MAX).toBe("2");
+      expect(cfg.mcpEnv.TACHY_DB_APP_NAME).toBe("tachy-mcp");
     } finally {
       delete process.env.TACHY_API_TOKEN;
       delete process.env.OIDC_CLIENT_SECRET;
