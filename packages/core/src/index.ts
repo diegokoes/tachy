@@ -11,6 +11,7 @@ export {
   uploadDir,
 } from "./infra";
 export { AppError, notFound, conflict, badInput, forbidden } from "./infra";
+export { inBackground, backgroundSettled } from "./infra";
 export type { AppErrorCode } from "./infra";
 export { log, runWithLogContext } from "./infra";
 export type { LogLevel } from "./infra";
@@ -166,6 +167,7 @@ export {
   sniffImage,
   saveAsset,
   getAsset,
+  libraryEngagementCensus,
 } from "./library";
 export type {
   LibraryActor,
@@ -184,6 +186,7 @@ export type {
   CoverageNode,
   CoverageCounts,
   SavedAsset,
+  LibraryEngagement,
 } from "./library";
 export type { FeedbackInput } from "./knowledge";
 
@@ -296,7 +299,15 @@ export type {
   CompactMeta,
   CompactAttachment,
 } from "./work-items";
-export { recordRun, estimateCostUsd } from "./analytics";
+export {
+  recordRun,
+  estimateCostUsd,
+  agentUsageCensus,
+  toolUsageCensus,
+  countToolCall,
+  recordToolCall,
+} from "./analytics";
+export type { AgentUsage, ToolUsage, ToolCallOutcome } from "./analytics";
 export type { RunInput } from "./analytics";
 
 export {
@@ -378,6 +389,7 @@ export {
 
 export * from "./sources/source";
 export * from "./sources/fetch";
+export * from "./sources/traffic";
 export { stripHtml } from "./sources/html";
 export { registerSource, resolveSource } from "./sources";
 export type { ResolvedSource } from "./sources";

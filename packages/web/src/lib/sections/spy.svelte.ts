@@ -13,9 +13,9 @@ export type Spy = ReturnType<typeof createSpy>;
 
 /**
  * The page's spy, published for the panels rather than threaded down through
- * AdminSection: the overview cards name sections further down the same column
- * and have to be able to scroll to them, and nothing between them and
- * AdminView needs to know that.
+ * Section: an overview's figures name sections further down the same column and
+ * have to be able to scroll to them, and nothing between them and the page
+ * needs to know that.
  *
  * $state.raw and an identity-checked disposer, for the same reason as
  * `setScrollport` — and an object rather than a primitive, which is what
@@ -116,6 +116,13 @@ export function createSpy(opts: {
           end: "bottom 35%",
           onToggle: (self) => {
             if (!self.isActive || programmatic) return;
+            /* Same edge rule as onScroll below, applied here because a toggle
+               fires without a scroll event to correct it afterwards. A first
+               section shorter than a third of the window puts the 35% line over
+               its neighbour before the reader has scrolled at all, which lit
+               the second row of the rail on arrival and wrote its name into the
+               URL. */
+            if (el.scrollTop <= 2 && ordered()[0]?.key !== e.key) return;
             opts.onactive(e.key);
           },
         }),

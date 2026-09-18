@@ -71,19 +71,18 @@ Code, `.vscode/mcp.json` for VS Code Copilot. Other clients point at
 
 ## Deployment
 
-Two stacks on one host, both driven by `Jenkinsfile`:
+| Branch | Stack      | Path             | Ports       |
+| ------ | ---------- | ---------------- | ----------- |
+| `main` | production | `/opt/tachy`     | 8787 / 5433 |
+| `dev`  | dev        | `/opt/tachy-dev` | 8788 / 5434 |
 
-| Branch | Stack      | Image tag | Path             | Ports       |
-| ------ | ---------- | --------- | ---------------- | ----------- |
-| `main` | production | `latest`  | `/opt/tachy`     | 8787 / 5433 |
-| `dev`  | dev        | `dev`     | `/opt/tachy-dev` | 8788 / 5434 |
-
-Every branch runs `npm ci`, `typecheck`, `web:check` and `coverage`, then builds
-an image. Only `main` and `dev` push and deploy; a feature branch gets its own
-`branch-*` tag that nothing pulls. Deploying is an SSH to the host followed by
-`docker compose pull api && docker compose up -d api`. The dev stage first
-resets its checkout to `origin/dev`, because `docker-compose.yml` is itself
-versioned and has to match the image being pulled.
+GitHub Actions runs `typecheck`, `web:check` and `coverage` on every pull
+request and on pushes to `main` and `dev`. Deploying is
+`ssh tachy@<host> tachy-deploy <branch>` on the host: it hard-resets the
+checkout to `origin/<branch>` and builds the image there, so
+`docker-compose.yml` and `db/schema.sql` always match the code being run.
+[DEPLOYMENT-ARCHITECTURE.md](DEPLOYMENT-ARCHITECTURE.md) describes where this
+is heading.
 
 The two stacks share nothing. `docker-compose.yml` takes its project name, ports
 and image tag from the environment, so dev is just a second checkout with its

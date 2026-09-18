@@ -29,7 +29,7 @@ import {
   type EmbedMode,
 } from "./embed";
 import { seedCode } from "./code";
-import { seedActivity } from "./activity";
+import { seedActivity, seedTelemetry } from "./activity";
 import { seedLibrary } from "./library";
 import { seedWiki } from "./wiki";
 
@@ -58,6 +58,8 @@ const TABLES = [
   "library_links",
   "library_views",
   "library_revisions",
+  "mcp_tool_calls",
+  "source_calls",
   "wiki_article_categories",
   "wiki_categories",
   "wiki_gaps",
@@ -302,9 +304,10 @@ export async function seed(opts: SeedOptions): Promise<void> {
       await deriveProductAreas(tx);
       await supersede(tx);
     });
-    await phases.run("activity", () =>
-      seedActivity(tx, v, org.users, sources.workItems, org.artifacts),
-    );
+    await phases.run("activity", async () => {
+      await seedActivity(tx, v, org.users, sources.workItems, org.artifacts);
+      await seedTelemetry(tx, org.users, sources.connections);
+    });
     await phases.run("library", () => seedLibrary(tx, v, knowledge, org.users));
     await phases.run("wiki", () => seedWiki(tx, org.products, org.users));
   });

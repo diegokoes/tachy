@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { sql, clearSettingsCache } from "@tachy/core";
+import { sql, clearSettingsCache, backgroundSettled } from "@tachy/core";
 import { clearSecretKeyCache } from "../packages/core/src/infra/secrets";
 
 export { sql };
@@ -40,13 +40,16 @@ export function disableVault(): void {
 }
 
 export async function resetData() {
+  /* Tool and source calls are counted in the background; a truncate racing one
+     of those inserts deadlocks. */
+  await backgroundSettled();
   await sql`
     truncate work_item_messages, work_items, work_item_links, knowledge_feedback,
              knowledge_entries, analysis_runs, team_members, users,
              customers, customer_facts, customer_components, customer_units,
              resolution_patterns, components, project_area_map, labels,
              reference_docs, reference_doc_chunks, artifacts, generated_outputs,
-             settings, library_revisions, library_views,
+             settings, library_revisions, library_views, source_calls, mcp_tool_calls,
              -- Global-scope rows (user_id and team_id both null) survive the
              -- cascade from users, so name both or a credential written by one
              -- file turns up in the next file on this worker's schema.

@@ -877,6 +877,40 @@ create unique index library_views_doc_idx
     on library_views(reference_doc_id, user_id, day)
     nulls not distinct where reference_doc_id is not null;
 
+-- Traffic to source systems, bucketed per connection, day and origin. Counts,
+-- never timings: latency and error rates are what the metrics stack is for.
+-- What this answers and a scrape cannot is whose traffic it is -- the agent
+-- reading on somebody's behalf, a sync, or the app itself -- and how often the
+-- far end refused it for quota or for credentials.
+create table source_calls (
+    source_connection_id uuid not null references source_connections(id) on delete cascade,
+    day            date not null,
+    origin         text not null check (origin in ('agent','sync','app')),
+    calls          integer not null default 0,
+    rate_limited   integer not null default 0,
+    auth_failures  integer not null default 0,
+    primary key (source_connection_id, day, origin)
+);
+
+-- The agent's tool use, bucketed per tool, person and day for the same reason as
+-- library_views. `writes` is fixed per tool (its MCP readOnlyHint) and stored so
+-- the overview can split reads from writes without a copy of the tool list.
+-- `misuse` counts calls refused as bad input: the agent holding a tool wrong,
+-- which is feedback on that tool's description rather than an outage.
+create table mcp_tool_calls (
+    id         uuid primary key default gen_random_uuid(),
+    tool       text not null,
+    writes     boolean not null,
+    user_id    uuid references users(id) on delete set null,
+    day        date not null,
+    calls      integer not null default 0,
+    failures   integer not null default 0,
+    misuse     integer not null default 0
+);
+
+create unique index mcp_tool_calls_bucket_idx
+    on mcp_tool_calls(tool, user_id, day) nulls not distinct;
+
 -- Linked git repositories for code consultation. Clones live on disk under
 -- TACHY_REPO_DIR; only chunk text + embeddings are stored here. Indexing is
 -- on-demand (API route / CLI), diff-only by blob sha; indexed_commit advances

@@ -1,4 +1,4 @@
-import { RUN_MODES } from "@tachy/core";
+import { RUN_MODES, SOURCE_CALL_ORIGINS } from "@tachy/core";
 import { insertRows, type Tx } from "./batches";
 import {
   chance,
@@ -17,6 +17,22 @@ const MODELS = [
   "claude-sonnet-5",
   "claude-haiku-4-5-20251001",
 ];
+
+/** A spread of the agent's tools, reads heavier than writes as in real use. */
+const TOOLS: [tool: string, writes: boolean, weight: number][] = [
+  ["search_knowledge", false, 30],
+  ["get_context", false, 20],
+  ["search_code", false, 14],
+  ["read_code_file", false, 10],
+  ["get_customer_profile", false, 6],
+  ["save_knowledge_entry", true, 4],
+  ["post_private_note", true, 3],
+  ["update_knowledge_entry", true, 2],
+];
+
+const DAY_MS = 86_400_000;
+const daysAgo = (n: number) =>
+  new Date(Date.now() - n * DAY_MS).toISOString().slice(0, 10);
 
 export async function seedActivity(
   tx: Tx,
@@ -110,5 +126,70 @@ export async function seedActivity(
       "expires_at",
     ],
     rows,
+  );
+}
+
+/**
+ * Day buckets for the two activity tables, so the overviews have a fortnight
+ * of traffic and a month of tool use to draw. Bucketed the way the real
+ * counters write them: one row per connection, day and origin, and one per
+ * tool, person and day.
+ */
+export async function seedTelemetry(
+  tx: Tx,
+  users: SeededUser[],
+  connections: { id: string; slug: string }[],
+): Promise<void> {
+  await insertRows(
+    tx,
+    "source_calls",
+    [
+      "source_connection_id",
+      "day",
+      "origin",
+      "calls",
+      "rate_limited",
+      "auth_failures",
+    ],
+    connections.flatMap((c, ci) =>
+      Array.from({ length: 14 }, (_, day) =>
+        SOURCE_CALL_ORIGINS.map((origin, oi) => {
+          const rng = rngFor(`source_calls:${c.slug}:${origin}`, day);
+          return {
+            source_connection_id: c.id,
+            day: daysAgo(day),
+            origin,
+            calls: intBetween(rng, origin === "app" ? 0 : 20, 220),
+            rate_limited: chance(rng, 0.15) ? intBetween(rng, 1, 6) : 0,
+            auth_failures: ci === 1 && oi === 0 && day === 2 ? 4 : 0,
+          };
+        }),
+      ).flat(),
+    ),
+  );
+
+  const people = users.slice(0, Math.min(users.length, 6));
+  await insertRows(
+    tx,
+    "mcp_tool_calls",
+    ["id", "tool", "writes", "user_id", "day", "calls", "failures", "misuse"],
+    TOOLS.flatMap(([tool, writes, weight], ti) =>
+      people.flatMap((u, ui) =>
+        Array.from({ length: 30 }, (_, day) => {
+          const rng = rngFor(`tool_calls:${tool}:${ui}`, day);
+          const calls = intBetween(rng, 0, weight);
+          return {
+            id: uuidFor("mcp_tool_call", ti * 10_000 + ui * 100 + day),
+            tool,
+            writes,
+            user_id: u.id,
+            day: daysAgo(day),
+            calls,
+            failures: chance(rng, 0.05) ? 1 : 0,
+            misuse: writes && chance(rng, 0.1) ? 1 : 0,
+          };
+        }).filter((r) => r.calls > 0),
+      ),
+    ),
   );
 }

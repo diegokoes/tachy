@@ -56,6 +56,13 @@ export type LinkKind = (typeof LINK_KINDS)[number];
 export type Confidence = (typeof CONFIDENCES)[number];
 export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
 export type RunMode = (typeof RUN_MODES)[number];
+
+/**
+ * Who spent a call against a source system: the agent reading through MCP, a
+ * sync walking a project, or the app itself (discovery, creating a work item).
+ */
+export const SOURCE_CALL_ORIGINS = ["agent", "sync", "app"] as const;
+export type SourceCallOrigin = (typeof SOURCE_CALL_ORIGINS)[number];
 export type LibraryActor = (typeof LIBRARY_ACTORS)[number];
 
 /** Environments are open-ended, so the rule is a shape rather than a list. */

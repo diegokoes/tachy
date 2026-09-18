@@ -205,8 +205,10 @@ export type Census = {
       users: number;
       disabled: number;
       admins: number;
+      team_admins: number;
       with_password: number;
       teams_with_admin: number;
+      teams_without_admin: { slug: string; name: string }[];
       users_no_team: number;
     };
     knowledge: {
@@ -215,5 +217,70 @@ export type Census = {
       entries_no_product: number;
       by_status: Record<string, number>;
     };
+  };
+};
+
+/**
+ * `GET /overview/activity` — what the deployment has been doing rather than
+ * what it holds. The two lists that name people arrive only for an app admin.
+ */
+export type Activity = {
+  usage: {
+    days: number;
+    turns: number;
+    input_tokens: number;
+    output_tokens: number;
+    cost_usd: number;
+    active_7d: number;
+    active: number;
+    per_day: { day: string; turns: number; tokens: number }[];
+    by_model: { model: string; turns: number; tokens: number }[];
+    top_users?: {
+      email: string;
+      turns: number;
+      tokens: number;
+      cost_usd: number;
+    }[];
+  };
+  tools: {
+    days: number;
+    reads: number;
+    writes: number;
+    tools: {
+      tool: string;
+      writes: boolean;
+      calls: number;
+      failures: number;
+      misuse: number;
+    }[];
+    writers?: { email: string; writes: number }[];
+  };
+  traffic: {
+    days: number;
+    connections: {
+      slug: string;
+      source_type: string;
+      agent: number;
+      sync: number;
+      app: number;
+      rate_limited: number;
+      auth_failures: number;
+      last_auth_failure: string | null;
+    }[];
+    per_day: { day: string; agent: number; sync: number; app: number }[];
+  };
+  library: {
+    days: number;
+    reads: number;
+    readers: number;
+    corrections: number;
+    per_day: { day: string; reads: number }[];
+    top: {
+      id: string;
+      kind: "entry" | "doc";
+      title: string;
+      reads: number;
+      readers: number;
+    }[];
   };
 };

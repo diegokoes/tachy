@@ -7,6 +7,7 @@
     tone = "accent",
     label,
     size = "5.5rem",
+    rest,
     children,
   }: {
     /** 0-1. */
@@ -15,6 +16,12 @@
     tone?: "accent" | "ok" | "warn" | "danger" | "muted";
     label: string;
     size?: string;
+    /**
+     * Paints the unlit part in a tone of its own instead of the faint track,
+     * turning the meter into a two-part split — password against SSO, say —
+     * where neither part is "missing".
+     */
+    rest?: "accent" | "ok" | "warn" | "danger" | "muted" | "info";
     /** The figure that sits in the middle. */
     children?: Snippet;
   } = $props();
@@ -52,7 +59,8 @@
 
 <div
   class="dial {tone}"
-  style="--size: {size}"
+  class:split={Boolean(rest)}
+  style="--size: {size}{rest ? `; --rest-color: var(--${rest})` : ''}"
   role="meter"
   aria-valuenow={Math.round(pct * 100)}
   aria-valuemin="0"
@@ -133,5 +141,12 @@
   .muted {
     --tone-color: var(--muted);
     --track: color-mix(in srgb, var(--muted) 26%, transparent);
+  }
+  .info {
+    --tone-color: var(--info);
+  }
+  /* After the tone classes, so it wins over their track. */
+  .dial.split {
+    --track: var(--rest-color);
   }
 </style>
