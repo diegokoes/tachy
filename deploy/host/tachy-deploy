@@ -160,6 +160,10 @@ schema_diff() {
     "$@"
 }
 
+# After a pgvector image bump the library is newer than the installed extension,
+# and the plan's validation cannot recreate the old version; bring it level first.
+pg_owner -c "alter extension vector update" >/dev/null
+
 NEW_SCHEMA=$(git_ show "$COMMIT:db/schema.sql" | sha256sum | cut -d' ' -f1)
 LIVE_SCHEMA=$(live_stamp)
 SCHEMA=unchanged
