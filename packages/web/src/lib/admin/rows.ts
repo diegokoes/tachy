@@ -117,6 +117,9 @@ export type SystemInfo = {
     allowed_models: Setting<string[]>;
     org_name: Setting<string | null>;
     deployment_profile: Setting<DeploymentProfile>;
+    agent_slot_cap: Setting<number>;
+    copilot_slot_weight: Setting<number>;
+    agent_queue_max: Setting<number>;
   };
   credentials: {
     vault_enabled: boolean;
