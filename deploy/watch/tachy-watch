@@ -1,0 +1,365 @@
+#!/usr/bin/env bash
+# The host's only alerting (DEPLOYMENT-ARCHITECTURE.md §8.2). A systemd timer
+# runs it every minute, as root (smartctl and the ssh journal need it).
+#
+#   tachy-watch                 run every check, post changes to Teams, ping
+#   tachy-watch --dry-run       run every check, print results, post nothing
+#   tachy-watch --force NAME=STATE[,NAME=STATE]
+#                               pretend checks returned STATE (ok|warn|fail),
+#                               to prove an alert reaches Teams end to end
+#
+# Each check reports ok, warn, fail or skip. The last state per check lives in
+# $WATCH_STATE; Teams hears about a change, and about a check still failing
+# every 4 hours. When nothing fails the external heartbeat is pinged, so a host,
+# Docker or this script going quiet is noticed from outside.
+set -uo pipefail
+
+HERE=$(dirname "$(readlink -f "$0")")
+# shellcheck source=../host/common.sh
+. "${TACHY_COMMON:-$HERE/../host/common.sh}"
+
+WATCH_STATE=${WATCH_STATE:-/var/lib/tachy-watch/state.json}
+REPOST_SECONDS=${WATCH_REPOST_SECONDS:-14400}
+ADMIN_URL=${TACHY_ADMIN_URL:-https://$(app_env TACHY_HOSTNAME localhost)/admin}
+DRY_RUN=false
+FORCE=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+  --dry-run) DRY_RUN=true ;;
+  --force) FORCE=$2; shift ;;
+  *) echo "usage: tachy-watch [--dry-run] [--force name=state,...]" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+mkdir -p "$(dirname "$WATCH_STATE")"
+[ -s "$WATCH_STATE" ] || echo '{"checks":{},"memory":{}}' >"$WATCH_STATE"
+STATE=$(cat "$WATCH_STATE")
+NOW=$(date +%s)
+RESULTS='{}'
+
+# result <name> <state> <value> <threshold/detail>
+result() {
+  RESULTS=$(jq --arg n "$1" --arg s "$2" --arg v "$3" --arg d "$4" \
+    '.[$n] = {state: $s, value: $v, detail: $d}' <<<"$RESULTS")
+}
+remember() { STATE=$(jq --arg k "$1" --argjson v "$2" '.memory[$k] = $v' <<<"$STATE"); }
+recall() { jq -c --arg k "$1" '.memory[$k] // empty' <<<"$STATE"; }
+pct_state() { # value warn fail
+  awk -v v="$1" -v w="$2" -v f="$3" 'BEGIN { print (v > f) ? "fail" : (v > w) ? "warn" : "ok" }'
+}
+age_hours() { echo $(((NOW - $(date -d "$1" +%s)) / 3600)); }
+
+check_readyz() {
+  local host url code fails
+  host=$(app_env TACHY_HOSTNAME localhost)
+  url="https://$host/readyz"
+  local trust=(-k)
+  [ -n "${TACHY_CA_FILE:-}" ] && trust=(--cacert "$TACHY_CA_FILE")
+  code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 --resolve "$host:443:127.0.0.1" \
+    "${trust[@]}" "$url")
+  fails=$(recall readyz_fails)
+  if [ "$code" = 200 ]; then
+    remember readyz_fails 0
+    result readyz ok "$code" "$url"
+  else
+    fails=$((${fails:-0} + 1))
+    remember readyz_fails "$fails"
+    result readyz "$([ "$fails" -ge 2 ] && echo fail || echo warn)" "$code" \
+      "$url answered $code, $fails time(s) in a row; fail at 2"
+  fi
+}
+
+check_5xx() {
+  local stats total errors pct
+  stats=$(dc logs --no-log-prefix --since 10m api 2>/dev/null |
+    jq -Rr 'fromjson? | select(.event == "http") | .status' |
+    awk '{ n++ } $1 >= 500 { e++ } END { printf "%d %d", n, e }')
+  read -r total errors <<<"$stats"
+  if [ "${total:-0}" -lt 20 ]; then
+    result http_5xx ok "${errors:-0}/${total:-0}" "too few requests in 10 min to judge"
+    return
+  fi
+  pct=$(awk -v e="$errors" -v n="$total" 'BEGIN { printf "%.1f", e * 100 / n }')
+  result http_5xx "$(pct_state "$pct" 1 5)" "$pct%" "$errors of $total responses in 10 min; warn >1%, fail >5%"
+}
+
+check_memory() {
+  local id perc oom
+  id=$(dc ps -q api 2>/dev/null)
+  if [ -z "$id" ]; then
+    result api_memory fail "down" "the api container is not running"
+    return
+  fi
+  oom=$(docker events --since 70s --until 0s --filter "container=$id" --filter event=oom --format x 2>/dev/null | wc -l)
+  perc=$(docker stats --no-stream --format '{{.MemPerc}}' "$id" 2>/dev/null | tr -d '%')
+  if [ "$oom" -gt 0 ]; then
+    result api_memory fail "${perc:-?}%" "an OOM kill happened inside the api container"
+  else
+    result api_memory "$(pct_state "${perc:-0}" 85 101)" "${perc:-?}%" "of the container limit; warn >85%, fail on an OOM kill"
+  fi
+}
+
+check_turns_queued() {
+  local token queued since
+  token=$(app_env TACHY_API_TOKEN)
+  if [ -z "$token" ]; then
+    result turns_queued skip "" "TACHY_API_TOKEN is not set in .env"
+    return
+  fi
+  local host
+  host=$(app_env TACHY_HOSTNAME localhost)
+  queued=$(curl -s -m 10 -k --resolve "$host:443:127.0.0.1" -H "authorization: Bearer $token" \
+    "https://$host/api/system" | jq -r '.runtime.turns.queued // empty')
+  if [ -z "$queued" ]; then
+    result turns_queued skip "" "the runtime block did not answer"
+    return
+  fi
+  since=$(recall queued_since)
+  if [ "$queued" -eq 0 ]; then
+    remember queued_since null
+    result turns_queued ok 0 "nobody waiting for a chat slot"
+    return
+  fi
+  [ -n "$since" ] && [ "$since" != null ] || { since=$NOW; remember queued_since "$NOW"; }
+  local minutes=$(((NOW - since) / 60))
+  result turns_queued "$([ $minutes -ge 5 ] && echo fail || { [ $minutes -ge 2 ] && echo warn || echo ok; })" \
+    "$queued" "turns have queued for $minutes min; warn >2, fail >5"
+}
+
+pg() {
+  dc exec -T postgres psql -At -U "$(app_env POSTGRES_USER tachy)" -d "$(app_env POSTGRES_DB tachy)" -c "$1" </dev/null 2>/dev/null
+}
+
+check_postgres() {
+  local row used max pct longest
+  row=$(pg "select count(*), current_setting('max_connections') from pg_stat_activity")
+  if [ -z "$row" ]; then
+    result pg_connections fail "down" "Postgres did not answer"
+    result pg_long_transaction skip "" "Postgres did not answer"
+    return
+  fi
+  IFS='|' read -r used max <<<"$row"
+  pct=$((used * 100 / max))
+  result pg_connections "$(pct_state "$pct" 80 95)" "$used/$max" "warn >80%, fail >95%"
+  longest=$(pg "select coalesce(max(extract(epoch from now() - xact_start))::int, 0) from pg_stat_activity where state <> 'idle' and xact_start is not null and pid <> pg_backend_pid()")
+  result pg_long_transaction "$(pct_state "$((${longest:-0} / 60))" 4 9)" "${longest:-0}s" "oldest open transaction; warn >5 min, fail >10 min"
+}
+
+check_disk() {
+  local mount used
+  for mount in ${WATCH_MOUNTS:-/ /var /srv}; do
+    used=$(df --output=pcent "$mount" 2>/dev/null | tail -1 | tr -dc 0-9)
+    [ -n "$used" ] || continue
+    result "disk_$(tr / _ <<<"$mount" | sed 's/^_$/root/;s/^_//')" "$(pct_state "$used" 80 90)" "$used%" "$mount; warn >80%, fail >90%"
+  done
+}
+
+check_backups() {
+  local f="$TACHY_STATUS_DIR/backup.json" r="$TACHY_STATUS_DIR/restore.json" hours
+  if [ ! -s "$f" ]; then
+    result backup_age fail "none" "no backup has run yet"
+  elif [ "$(jq -r .ok "$f")" != true ]; then
+    result backup_age fail "failed" "$(jq -r .error "$f")"
+  else
+    hours=$(age_hours "$(jq -r .at "$f")")
+    result backup_age "$([ "$hours" -ge 13 ] && echo fail || { [ "$hours" -ge 7 ] && echo warn || echo ok; })" \
+      "${hours}h" "newest backup; warn >7h, fail >13h"
+  fi
+  if [ ! -s "$r" ]; then
+    result restore_test warn "none" "no restore test has run yet"
+  elif [ "$(jq -r .ok "$r")" != true ]; then
+    result restore_test fail "failed" "$(jq -r .problems "$r")"
+  else
+    hours=$(age_hours "$(jq -r .at "$r")")
+    result restore_test "$([ "$hours" -ge 192 ] && echo warn || echo ok)" "$((hours / 24))d" "last good restore test; warn >8 days"
+  fi
+}
+
+# Downloads show up in sshd's journal as internal-sftp INFO lines. A session's
+# pid ties its "close ... bytes read N" lines to the login that opened it.
+# The exact wording is checked against Debian 13's OpenSSH in the runbook.
+check_downloads() {
+  [ "${WATCH_DOWNLOADS:-1}" = 1 ] || { result laptop_downloads skip "" "WATCH_DOWNLOADS=0"; return; }
+  local people
+  people=$({ if [ -n "${WATCH_SSH_LOG:-}" ]; then cat "$WATCH_SSH_LOG"; else
+    journalctl -u ssh --since "31 days ago" -o short-unix --no-pager 2>/dev/null; fi; } |
+    sed -nE \
+      -e 's/^([0-9]+)[^[]*\[([0-9]+)\]: session opened for local user (tachy-backup-[^ ]+).*/login \2 \3/p' \
+      -e 's/^([0-9]+)[^[]*\[([0-9]+)\]: close "[^"]*(tachy-db-[^"]+\.age)" bytes read ([1-9][0-9]*).*/read \2 \1 \3/p' |
+    awk '$1 == "login" { user[$2] = $3 }
+         $1 == "read" && ($2 in user) { last[user[$2]] = $3; file[user[$2]] = $4 }
+         END { for (u in last) printf "%s %s %s\n", u, last[u], file[u] }')
+  local json='{}' newest=0 recent=0 name ts file
+  while read -r name ts file; do
+    [ -n "$name" ] || continue
+    json=$(jq --arg n "${name#tachy-backup-}" --arg at "$(date -u -d "@$ts" +%Y-%m-%dT%H:%M:%SZ)" --arg f "$file" \
+      '.[$n] = {last_download: $at, file: $f}' <<<"$json")
+    [ "$ts" -gt "$newest" ] && newest=$ts
+    recent=$((recent + 1))
+  done <<<"$people"
+  write_status downloads "$(jq -n --arg at "$(utc_now)" --argjson people "$json" '{at: $at, people: $people}')"
+  local days=$(((NOW - newest) / 86400))
+  if [ "$recent" -lt 2 ]; then
+    result laptop_downloads fail "$recent people" "fewer than 2 people downloaded a set in 30 days"
+  elif [ "$days" -ge 7 ]; then
+    result laptop_downloads warn "${days}d" "nobody downloaded a set for 7 days: run Get-TachyBackup"
+  else
+    result laptop_downloads ok "${days}d" "$recent people in 30 days"
+  fi
+}
+
+check_certificate() {
+  local host end secs tls warn fail
+  host=$(app_env TACHY_HOSTNAME localhost)
+  tls=$(app_env TACHY_TLS internal)
+  end=$(echo | openssl s_client -connect 127.0.0.1:443 -servername "$host" 2>/dev/null |
+    openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2)
+  if [ -z "$end" ]; then
+    result certificate fail "none" "no certificate served on 443"
+    return
+  fi
+  secs=$(($(date -d "$end" +%s) - NOW))
+  # Caddy's internal CA issues 12-hour leaves and renews them itself, so for it
+  # the question is whether renewal is keeping up, not whether a year is ending.
+  if [ "$tls" = internal ]; then warn=7200 fail=1800; else warn=$((14 * 86400)) fail=$((3 * 86400)); fi
+  result certificate "$([ $secs -lt $fail ] && echo fail || { [ $secs -lt $warn ] && echo warn || echo ok; })" \
+    "$((secs / 3600))h" "until $end ($tls)"
+}
+
+check_thermal() {
+  local total=0 f history hot15 hot30
+  for f in /sys/devices/system/cpu/cpu*/thermal_throttle/package_throttle_count; do
+    [ -r "$f" ] && total=$((total + $(cat "$f")))
+  done
+  local last
+  last=$(recall throttle_total)
+  local hot=0
+  [ -n "$last" ] && [ "$total" -gt "$last" ] && hot=1
+  remember throttle_total "$total"
+  history=$(recall throttle_history)
+  history=$(jq -c --argjson h "$hot" '(. // []) + [$h] | .[-30:]' <<<"${history:-[]}")
+  remember throttle_history "$history"
+  hot15=$(jq '.[-15:] | add' <<<"$history")
+  hot30=$(jq 'add' <<<"$history")
+  local s=ok
+  [ "$hot15" -ge 10 ] && s=warn
+  [ "$hot30" -ge 30 ] && s=fail
+  result thermal "$s" "$hot15/15 min" "minutes with throttling; warn 10 of 15, fail 30 of 30"
+}
+
+check_power() {
+  local ac bat
+  ac=$(cat /sys/class/power_supply/A*/online 2>/dev/null | head -1)
+  bat=$(cat /sys/class/power_supply/BAT*/capacity 2>/dev/null | head -1)
+  if [ -z "$ac" ]; then
+    result power skip "" "no AC adapter visible"
+  elif [ "$ac" = 1 ]; then
+    result power ok "AC" "battery ${bat:-?}%"
+  else
+    result power "$([ "${bat:-100}" -lt 30 ] && echo fail || echo warn)" "battery ${bat:-?}%" "on battery; fail below 30%"
+  fi
+}
+
+check_nvme() {
+  local dev=${WATCH_NVME:-/dev/nvme0} health log spare errors
+  command -v smartctl >/dev/null || { result nvme skip "" "smartctl not installed"; return; }
+  health=$(smartctl -H "$dev" 2>/dev/null | grep -o 'PASSED\|FAILED' | head -1)
+  log=$(nvme smart-log "$dev" 2>/dev/null)
+  spare=$(sed -n 's/^available_spare[^:]*: *\([0-9]*\)%.*/\1/p' <<<"$log" | head -1)
+  errors=$(sed -n 's/^media_errors[^:]*: *\([0-9,]*\).*/\1/p' <<<"$log" | tr -d , | head -1)
+  if [ "$health" = FAILED ] || [ "${errors:-0}" -gt 0 ]; then
+    result nvme fail "${health:-?}" "SMART ${health:-unknown}, media errors ${errors:-?}"
+  elif [ -n "$spare" ] && [ "$spare" -lt 20 ]; then
+    result nvme warn "spare $spare%" "available spare below 20%"
+  else
+    result nvme "$([ -n "$health" ] && echo ok || echo skip)" "${health:-unknown}" "spare ${spare:-?}%, media errors ${errors:-?}"
+  fi
+}
+
+host_status() {
+  local temp
+  temp=$(cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | sort -n | tail -1)
+  write_status host "$(jq -n --arg at "$(utc_now)" --argjson checks "$RESULTS" \
+    --arg temp "${temp:+$((temp / 1000))}" \
+    '{at: $at, cpu_temp_c: ($temp | tonumber? // null),
+      disk: ($checks | with_entries(select(.key | startswith("disk_"))) | map_values(.value)),
+      power: $checks.power.value, thermal: $checks.thermal.value, nvme: $checks.nvme.value}')"
+}
+
+post_teams() {
+  local changes=$1
+  [ -n "${TEAMS_WEBHOOK_URL:-}" ] || return 0
+  local host facts
+  host=$(uname -n)
+  facts=$(jq -c '[.[] | {type: "TextBlock", wrap: true,
+      text: "**\(.name)** \(.from) → **\(.state)**: \(.value) (\(.detail))"}]' <<<"$changes")
+  jq -n --arg title "tachy-watch on $host" --arg link "$ADMIN_URL" --argjson facts "$facts" '{
+    type: "message",
+    attachments: [{
+      contentType: "application/vnd.microsoft.card.adaptive",
+      content: {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        type: "AdaptiveCard", version: "1.2",
+        body: ([{type: "TextBlock", weight: "Bolder", text: $title}] + $facts
+          + [{type: "TextBlock", text: "[Admin page](\($link))"}])
+      }
+    }]
+  }' | curl -fsS -m 15 --retry 3 -o /dev/null -H 'content-type: application/json' \
+    --data-binary @- "$TEAMS_WEBHOOK_URL"
+}
+
+for check in readyz 5xx memory turns_queued postgres disk backups downloads certificate thermal power nvme; do
+  "check_$check" || result "$check" warn "" "the check itself errored"
+done
+
+if [ -n "$FORCE" ]; then
+  IFS=, read -ra forced <<<"$FORCE"
+  for f in "${forced[@]}"; do
+    RESULTS=$(jq --arg n "${f%%=*}" --arg s "${f#*=}" \
+      '.[$n] = ((.[$n] // {value: "forced", detail: "forced"}) + {state: $s, detail: "forced by --force"})' <<<"$RESULTS")
+  done
+fi
+
+host_status
+
+# What Teams hears: a state change, or a check still failing past the repost interval.
+CHANGES=$(jq -c --argjson prev "$(jq .checks <<<"$STATE")" --argjson now "$NOW" --argjson every "$REPOST_SECONDS" '
+  to_entries
+  | map(select(.value.state != "skip")
+      | .value + {name: .key, from: ($prev[.key].state // "new"),
+                  posted: ($prev[.key].posted // 0)})
+  | map(select((.state != .from and (.from != "new" or .state != "ok"))
+               or (.state == "fail" and ($now - .posted) >= $every)))' <<<"$RESULTS")
+
+if $DRY_RUN; then
+  jq -r 'to_entries[] | [.value.state, .key, (.value.value | if . == "" then "-" else . end), .value.detail] | @tsv' <<<"$RESULTS" |
+    while IFS=$'\t' read -r s n v d; do printf '%-5s %-22s %-14s %s\n' "$s" "$n" "$v" "$d"; done
+  echo "would post: $(jq -r 'map(.name) | join(", ")' <<<"$CHANGES")"
+  exit 0
+fi
+
+POSTED=false
+if [ "$(jq length <<<"$CHANGES")" -gt 0 ]; then
+  post_teams "$CHANGES" && POSTED=true
+fi
+
+STATE=$(jq --argjson r "$RESULTS" --argjson c "$CHANGES" --argjson now "$NOW" --argjson posted "$POSTED" '
+  .checks as $prev
+  | .checks = ($r | to_entries | map(.key as $k | {key: $k, value: {
+      state: .value.state,
+      posted: (if $posted and ([$c[].name] | index($k)) != null then $now else ($prev[$k].posted // 0) end)
+    }}) | from_entries)
+  | .last_run = $now' <<<"$STATE")
+tmp="$WATCH_STATE.partial"
+printf '%s\n' "$STATE" >"$tmp" && mv -f "$tmp" "$WATCH_STATE"
+
+write_status watch "$(jq -n --arg at "$(utc_now)" --argjson r "$RESULTS" --argjson posted "$POSTED" \
+  '{at: $at, posted_to_teams: $posted, checks: ($r | map_values({state, value}))}')"
+
+if [ "$(jq '[.[] | select(.state == "fail")] | length' <<<"$RESULTS")" -eq 0 ]; then
+  ping "${HC_WATCH_URL:-}"
+else
+  ping "${HC_WATCH_URL:-}" /fail "$(jq -c 'with_entries(select(.value.state == "fail"))' <<<"$RESULTS")"
+fi
