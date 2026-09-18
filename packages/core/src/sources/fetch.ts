@@ -1,3 +1,5 @@
+import { countSourceCall } from "./traffic";
+
 /**
  * How long one call to a source system may take. Without a deadline a hung
  * upstream hangs the tool call, the agent turn and the SSE stream behind it,
@@ -44,17 +46,26 @@ function retryDelayMs(res: Response, attempt: number): number {
 
 const MAX_RETRY_WAIT_MS = 60_000;
 
+/** ADO answers a bad PAT with a 203 sign-in page rather than a 401. */
+const AUTH_STATUSES = new Set([401, 403, 203]);
+
 /**
  * `fetch` with a deadline, and a wait when the far end asks for one. `label` is
  * what the caller would have put in its own error message, so a timeout reads
  * like the adapter's other failures rather than as a bare TimeoutError from
  * somewhere in the runtime.
+ *
+ * `meter` names the connection the call is spent against. It is counted once
+ * per logical call, however many retries the rate limiter cost; an adapter that
+ * leaves it off is simply not counted.
  */
 export async function sourceFetch(
   label: string,
   url: string,
   init?: RequestInit,
+  meter?: { connection: string },
 ): Promise<Response> {
+  let limited = false;
   for (let attempt = 0; ; attempt++) {
     const deadline = AbortSignal.timeout(SOURCE_TIMEOUT_MS);
     const signal = init?.signal
@@ -64,6 +75,11 @@ export async function sourceFetch(
     try {
       res = await fetch(url, { ...init, signal });
     } catch (e) {
+      if (meter)
+        countSourceCall(meter.connection, {
+          rateLimited: limited,
+          authFailed: false,
+        });
       // fetch rejects with the signal's reason: a DOMException named TimeoutError.
       if (e instanceof Error && e.name === "TimeoutError")
         throw new Error(
@@ -71,7 +87,16 @@ export async function sourceFetch(
         );
       throw e;
     }
-    if (attempt >= MAX_RETRIES || !isRateLimited(res)) return res;
+    const throttled = isRateLimited(res);
+    limited ||= throttled;
+    if (attempt >= MAX_RETRIES || !throttled) {
+      if (meter)
+        countSourceCall(meter.connection, {
+          rateLimited: limited,
+          authFailed: !throttled && AUTH_STATUSES.has(res.status),
+        });
+      return res;
+    }
     await new Promise((r) => setTimeout(r, retryDelayMs(res, attempt)));
   }
 }

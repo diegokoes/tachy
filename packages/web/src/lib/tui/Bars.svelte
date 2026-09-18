@@ -1,50 +1,61 @@
 <script lang="ts">
-  export type Bar = {
-    key: string;
-    label: string;
-    value: number;
-    tone?: "accent" | "ok" | "warn" | "danger" | "muted";
-  };
+  import { growBar } from "../motion";
+
+  export type Bar = { key: string; label: string; value: number };
 
   let {
     rows,
-    max,
-    unit,
+    limit = 8,
+    unit = "",
   }: {
+    /** Drawn in the order given; the caller sorts. */
     rows: Bar[];
-    /** Shared scale. Defaults to the largest row, so the top bar is always full. */
-    max?: number;
+    /** Rows past this fold into one "more" line, so a long tail cannot push the panel off the page. */
+    limit?: number;
     unit?: string;
   } = $props();
 
-  const top = $derived(max ?? Math.max(1, ...rows.map((r) => r.value)));
+  const top = $derived(Math.max(1, ...rows.map((r) => r.value)));
+  const shown = $derived(rows.length > limit + 1 ? rows.slice(0, limit) : rows);
+  const rest = $derived(rows.slice(shown.length));
+  const restTotal = $derived(rest.reduce((sum, r) => sum + r.value, 0));
 </script>
 
-<!-- One colour for every row. A ramp by size would spend the only free channel
-     restating the length, which the bar already says. -->
+<!-- Name, bar, count on every row: the scale is the numbers themselves, so the
+     plot needs no axis and nothing is hidden behind a hover. -->
 <div class="bars">
-  {#each rows as r (r.key)}
-    <div class="row {r.tone ?? 'accent'}">
+  {#each shown as r, i (r.key)}
+    <div class="row">
       <span class="lbl" title={r.label}>{r.label}</span>
       <span class="track">
-        <span class="fill" style="width: {(r.value / top) * 100}%"></span>
+        <span
+          class="fill"
+          use:growBar={{ pct: (r.value / top) * 100, delay: i * 0.05, along: "width" }}
+        ></span>
       </span>
-      <span class="n">{r.value.toLocaleString()}{unit ? ` ${unit}` : ""}</span>
+      <span class="n">{r.value.toLocaleString()}</span>
     </div>
   {/each}
+  {#if rest.length}
+    <div class="row more">
+      <span class="lbl">{rest.length} more</span>
+      <span class="track"></span>
+      <span class="n">{restTotal.toLocaleString()}{unit && ` ${unit}`}</span>
+    </div>
+  {/if}
 </div>
 
 <style>
   .bars {
     display: flex;
     flex-direction: column;
-    gap: var(--pad-2);
+    gap: var(--pad-1);
     width: 100%;
     min-width: 0;
   }
   .row {
     display: grid;
-    grid-template-columns: minmax(0, 8rem) 1fr auto;
+    grid-template-columns: minmax(6rem, 14rem) minmax(0, 1fr) 3.5rem;
     align-items: center;
     gap: var(--pad-2);
     font-size: var(--fs-xs);
@@ -59,35 +70,27 @@
     position: relative;
     height: 0.5rem;
     min-width: 0;
-    border-radius: 1px;
-    background: color-mix(in srgb, var(--muted) 26%, transparent);
-    overflow: hidden;
   }
+  /* Width is written by growBar, never by CSS — a transition would race the tween. */
   .fill {
     position: absolute;
     inset: 0 auto 0 0;
+    min-width: 1px;
     border-radius: 1px;
-    background: var(--tone-color);
+    background: var(--accent);
   }
   .n {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
     color: var(--text);
+    text-align: right;
+    white-space: nowrap;
   }
-
-  .accent {
-    --tone-color: var(--accent);
+  .more .n {
+    grid-column: 2 / 4;
+    color: var(--muted);
   }
-  .ok {
-    --tone-color: var(--ok);
-  }
-  .warn {
-    --tone-color: var(--warn);
-  }
-  .danger {
-    --tone-color: var(--danger);
-  }
-  .muted {
-    --tone-color: var(--muted);
+  .more .track {
+    display: none;
   }
 </style>

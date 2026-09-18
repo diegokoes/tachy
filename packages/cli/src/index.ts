@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import {
   registerSource,
+  setSourceOrigin,
   resolveSource,
   ingestWorkItem,
   recordRun,
@@ -27,6 +28,9 @@ import { createAzureDevopsSource } from "@tachy/source-azure-devops";
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
 registerSource("azure-devops", createAzureDevopsSource);
+
+/* The CLI's only source traffic is `sync`. */
+setSourceOrigin("sync");
 
 /**
  * Enough pages for any real backlog. An adapter that keeps handing back the same

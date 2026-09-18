@@ -13,11 +13,11 @@ export { default as FilterBar } from "./FilterBar.svelte";
 export { default as Badge } from "./Badge.svelte";
 export { default as Chip } from "./Chip.svelte";
 export { default as Meter } from "./Meter.svelte";
-export { default as Card } from "./Card.svelte";
-export { default as Deck } from "./Deck.svelte";
 export { default as Dial } from "./Dial.svelte";
+export { default as Columns, type Col } from "./Columns.svelte";
 export { default as Bars, type Bar } from "./Bars.svelte";
 export { default as Band, type Segment } from "./Band.svelte";
+export { default as Ranking, type Ranked } from "./Ranking.svelte";
 export { default as HintRule } from "./HintRule.svelte";
 export { default as Icon } from "./Icon.svelte";
 export { default as VimMark } from "./VimMark.svelte";
@@ -37,6 +37,7 @@ export { default as Spinner } from "../Spinner.svelte";
 export { default as Scrollbar } from "../Scrollbar.svelte";
 
 export { G, RAMP } from "./glyphs";
+export { compact, usd, dayOfMonth } from "./figures";
 export { ICONS, type IconName } from "./icons";
 export {
   blankDraft,

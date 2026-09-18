@@ -106,12 +106,22 @@ async function seedComponents(
   v: Volumes,
   products: SeededProduct[],
 ): Promise<SeededComponent[]> {
-  const perProduct = Math.max(1, Math.floor(v.components / products.length));
-  const roots = Math.max(1, Math.ceil(perProduct / 3));
+  /* Skewed, not even. A real catalog has a few sprawling products and a long
+     tail of small ones; an even split gave every product the same count, which
+     left the overview's components-per-product curve a flat line with nothing
+     to show. Zipf-like weights, with a floor so every product still has a
+     parent and a child to exercise. */
+  const weights = products.map((_, rank) => 1 / (rank + 1) ** 0.8);
+  const weightSum = weights.reduce((a, b) => a + b, 0);
+  const counts = weights.map((w) =>
+    Math.max(3, Math.round((v.components * w) / weightSum)),
+  );
   const components: SeededComponent[] = [];
   let n = 0;
 
-  for (const p of products) {
+  for (const [index, p] of products.entries()) {
+    const perProduct = counts[index];
+    const roots = Math.max(1, Math.ceil(perProduct / 3));
     const mine: SeededComponent[] = [];
     for (let i = 0; i < perProduct; i++) {
       const name = COMPONENT_NAMES[i % COMPONENT_NAMES.length];
