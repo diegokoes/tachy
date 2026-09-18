@@ -1,0 +1,67 @@
+# Provisions the office laptop as the tachy host (DEPLOYMENT-ARCHITECTURE.md §12).
+# Idempotent: run it again after any change to the inventory.
+- name: Tachy host
+  hosts: all
+  become: true
+  vars:
+    tachy_user: tachy
+    tachy_dir: /opt/tachy
+    tachy_srv: /srv/tachy
+    tachy_lib: /usr/local/lib/tachy
+    lan_cidrs: []
+    ssh_allowed_cidrs: []
+    admin_users: []
+    backup_downloaders: []
+    backup_recipients: []
+    tailscale_enabled: false
+    tailscale_cidr: "100.64.0.0/10"
+    docker_major: "29"
+    battery_stop_threshold: 80
+    battery_start_threshold: 75
+  handlers:
+    - name: Restart ssh
+      ansible.builtin.systemd_service:
+        name: ssh
+        state: restarted
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+    - name: Restart journald
+      ansible.builtin.systemd_service:
+        name: systemd-journald
+        state: restarted
+    - name: Restart docker
+      ansible.builtin.systemd_service:
+        name: docker
+        state: restarted
+    - name: Reload nftables
+      ansible.builtin.systemd_service:
+        name: nftables
+        state: reloaded
+    - name: Apply edge rules
+      ansible.builtin.systemd_service:
+        name: tachy-edge
+        state: restarted
+    - name: Restart tlp
+      ansible.builtin.systemd_service:
+        name: tlp
+        state: restarted
+    - name: Restart upower
+      ansible.builtin.systemd_service:
+        name: upower
+        state: restarted
+  tasks:
+    - name: Base system
+      ansible.builtin.import_tasks: tasks/base.yml
+    - name: Laptop as a server
+      ansible.builtin.import_tasks: tasks/laptop.yml
+    - name: Users and SSH
+      ansible.builtin.import_tasks: tasks/ssh.yml
+    - name: Docker
+      ansible.builtin.import_tasks: tasks/docker.yml
+    - name: Firewall
+      ansible.builtin.import_tasks: tasks/firewall.yml
+    - name: Backup downloads over SFTP
+      ansible.builtin.import_tasks: tasks/backup-sftp.yml
+    - name: Tachy scripts, directories and timers
+      ansible.builtin.import_tasks: tasks/tachy.yml

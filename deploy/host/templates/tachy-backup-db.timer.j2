@@ -1,0 +1,10 @@
+[Unit]
+Description=Encrypted database backup
+
+[Timer]
+OnCalendar=*-*-* 00/6:15:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

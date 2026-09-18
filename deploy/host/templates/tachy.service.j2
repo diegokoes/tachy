@@ -1,0 +1,17 @@
+[Unit]
+Description=tachy (docker compose)
+Requires=docker.service
+After=docker.service network-online.target tachy-edge.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+User={{ tachy_user }}
+WorkingDirectory={{ tachy_dir }}
+ExecStart=/usr/bin/docker compose -f docker-compose.yml -f deploy/compose.prod.yml up -d
+ExecStop=/usr/bin/docker compose -f docker-compose.yml -f deploy/compose.prod.yml stop
+TimeoutStopSec=300
+
+[Install]
+WantedBy=multi-user.target

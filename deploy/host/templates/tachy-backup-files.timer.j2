@@ -1,0 +1,10 @@
+[Unit]
+Description=Encrypted agent-home and Caddy CA backup
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target
