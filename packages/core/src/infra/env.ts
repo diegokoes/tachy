@@ -37,6 +37,12 @@ const envSchema = z
     actor: z.enum(["agent", "mcp"]).optional(),
     turnId: z.string().optional(),
     apiToken: z.string().min(1).optional(),
+    /**
+     * Which stack answered, set per stack in `.env` rather than baked into the
+     * image, so one image can be promoted from dev to production unchanged.
+     */
+    envBadge: z.string().max(16).optional(),
+    commit: z.string().optional(),
 
     authMode: z.enum(["sso", "token", "open"]),
     sessionSecret: z
@@ -81,6 +87,8 @@ const parsed = envSchema.safeParse({
   actor: process.env.TACHY_ACTOR === "agent" ? "agent" : undefined,
   turnId: process.env.TACHY_TURN_ID || undefined,
   apiToken: apiTokenRaw,
+  envBadge: process.env.TACHY_ENV_BADGE || undefined,
+  commit: process.env.TACHY_COMMIT || undefined,
   authMode:
     (process.env.TACHY_AUTH_MODE as "sso" | "token" | "open" | undefined) ??
     (oidcRaw ? "sso" : apiTokenRaw ? "token" : "open"),

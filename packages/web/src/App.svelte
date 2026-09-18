@@ -256,8 +256,8 @@
 
 <StarField />
 
-{#if import.meta.env.VITE_DEV_BADGE}
-  <div class="dev-badge">DEV</div>
+{#if session.config?.envBadge}
+  <div class="dev-badge">{session.config.envBadge.toUpperCase()}</div>
 {/if}
 
 {#if session.loading}
