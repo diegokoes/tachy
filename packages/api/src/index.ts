@@ -13,7 +13,7 @@ import {
 } from "@tachy/core";
 import { createApp } from "./app";
 import { isBootstrapped } from "./auth";
-import { setEmbedEndpoint } from "./embed-endpoint";
+import { setInternalEndpoint } from "./internal-endpoint";
 import { lifecycle } from "./lifecycle";
 import { setEmbedDepth } from "./runtime";
 import { abortAllTurns, activeTurnCount } from "./routes/agent";
@@ -40,10 +40,10 @@ const embedder = startEmbedHost({
 const embed = embedder.queue.embed.bind(embedder.queue);
 setEmbedBackend(embed);
 setEmbedDepth(() => embedder.queue.depth);
-const embedSecret = randomBytes(32).toString("hex");
-setEmbedEndpoint({
-  url: `http://127.0.0.1:${env.port}/internal/embed`,
-  secret: embedSecret,
+const internalSecret = randomBytes(32).toString("hex");
+setInternalEndpoint({
+  baseUrl: `http://127.0.0.1:${env.port}/internal`,
+  secret: internalSecret,
 });
 
 const app = createApp({
@@ -51,7 +51,7 @@ const app = createApp({
   webRoot: serveWeb ? webRoot : undefined,
   oidc,
   passwordAuth: true,
-  internalEmbed: { secret: embedSecret, embed },
+  internal: { secret: internalSecret, embed },
 });
 
 const swept = await sweepInterruptedIndexes();
