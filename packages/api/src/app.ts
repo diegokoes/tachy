@@ -24,10 +24,7 @@ import { projects } from "./routes/projects";
 import { initOidc, installAuth, isBootstrapped, type OidcConfig } from "./auth";
 import { httpLogger, noteError } from "./logging";
 import { readiness } from "./lifecycle";
-import {
-  internalEmbed,
-  type InternalEmbedOptions,
-} from "./routes/internal-embed";
+import { internalRoutes, type InternalOptions } from "./routes/internal";
 
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
@@ -65,7 +62,7 @@ export function createApp(
     webRoot?: string;
     oidc?: OidcConfig;
     passwordAuth?: boolean;
-    internalEmbed?: InternalEmbedOptions;
+    internal?: InternalOptions;
   } = {},
 ) {
   const base = new Hono();
@@ -75,8 +72,7 @@ export function createApp(
   const livez = (c: Context) => c.json({ ok: true });
   base.get("/livez", livez);
   base.get("/health", livez);
-  if (opts.internalEmbed)
-    base.route("/internal", internalEmbed(opts.internalEmbed));
+  if (opts.internal) base.route("/internal", internalRoutes(opts.internal));
   base.get("/readyz", async (c) => {
     const r = await readiness();
     return c.json(r, r.ready ? 200 : 503);

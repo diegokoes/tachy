@@ -37,13 +37,14 @@ import { requireCaller } from "../authz";
 import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
 import { sessionEmail } from "../auth";
 import { lifecycle } from "../lifecycle";
+import { requestIdOf } from "../logging";
 import {
   Admission,
   AdmissionCancelled,
   QueueFull,
   type AdmissionLimits,
 } from "../admission";
-import { embedEndpoint } from "../embed-endpoint";
+import { internalEndpoint } from "../internal-endpoint";
 import { BUILTIN_COMMANDS, findCommand, commandAutoApprove } from "../commands";
 
 interface TurnEntry {
@@ -212,9 +213,10 @@ export async function mcpConfig(
   mcpEnv.TACHY_DB_POOL_MAX = "2";
   mcpEnv.TACHY_DB_IDLE_TIMEOUT = "30";
   mcpEnv.TACHY_DB_APP_NAME = "tachy-mcp";
-  if (embedEndpoint) {
-    mcpEnv.TACHY_EMBED_URL = embedEndpoint.url;
-    mcpEnv.TACHY_EMBED_SECRET = embedEndpoint.secret;
+  if (internalEndpoint) {
+    mcpEnv.TACHY_EMBED_URL = `${internalEndpoint.baseUrl}/embed`;
+    mcpEnv.TACHY_LOG_URL = `${internalEndpoint.baseUrl}/log`;
+    mcpEnv.TACHY_INTERNAL_SECRET = internalEndpoint.secret;
   }
   if (userEmail) mcpEnv.TACHY_USER_EMAIL = userEmail;
   // Lets a write made during a turn be told apart from one made by someone
@@ -408,8 +410,11 @@ export const agent = new Hono()
     // edit made mid-turn records which conversation made it.
     const turnId = randomUUID();
     const settings = await effectiveSettings();
+    const base = await mcpConfig(userEmail, settings, turnId);
+    const requestId = requestIdOf(c);
+    if (requestId) base.mcpEnv.TACHY_REQUEST_ID = requestId;
     const cfg: AgentConfig = {
-      ...(await mcpConfig(userEmail, settings, turnId)),
+      ...base,
       systemPromptAppend: await systemPrompt(),
       ...(autoApprove.length ? { autoApprove } : {}),
     };
