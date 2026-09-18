@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
+  log,
   listResolutionPatterns,
   addResolutionPattern,
   deleteResolutionPattern,
@@ -72,6 +73,7 @@ import {
 } from "@tachy/core";
 import { getIdentity, requireAdmin } from "../auth";
 import { runtimeSnapshot } from "../runtime";
+import { lifecycle } from "../lifecycle";
 import {
   assertAnyTeamAdminApi,
   assertScopeEditor,
@@ -332,6 +334,17 @@ export const admin = new Hono()
           }
         : {}),
     }),
+  )
+
+  .post(
+    "/system/maintenance",
+    requireAdmin,
+    zValidator("json", z.object({ refuse_chats: z.boolean() })),
+    async (c) => {
+      lifecycle.refusingChats = c.req.valid("json").refuse_chats;
+      log("warn", "maintenance", { refuse_chats: lifecycle.refusingChats });
+      return c.json({ refuse_chats: lifecycle.refusingChats });
+    },
   )
 
   .put(

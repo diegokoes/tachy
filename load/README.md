@@ -3,7 +3,7 @@
 k6 scenarios for the dev stack. They change no content: the only rows they
 write are read counters (`library_views`, bucketed per person per day, so a
 rerun does not grow the table), and a service account's reads are not counted
-at all. Run them as one (`service_account` in Admin > Access) so load never
+at all. Run them as one (`service_account` in Admin > access) so load never
 shows up in "most read".
 
 `smoke.js` is the post-deploy gate and reaches every route family once: the

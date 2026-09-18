@@ -110,6 +110,22 @@ export type Discovered<K extends string, T> = {
 export type Setting<T> = { value: T; source: "db" | "env" | "default" };
 export type RuntimeInfo = {
   draining: boolean;
+  refusingChats: boolean;
+  readiness: {
+    ready: boolean;
+    database: boolean;
+    schema: string;
+    model: string;
+    draining: boolean;
+  };
+  tableSizes: { table: string; bytes: number; rows: number }[];
+  security: {
+    sso_configured: boolean;
+    users_with_password: number;
+    password_login_under_sso: number;
+    service_accounts: number;
+  };
+  uploadTtlHours: number;
   turns: {
     slotsUsed: number;
     slotCap: number;

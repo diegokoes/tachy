@@ -59,4 +59,38 @@ describe("Admin > System runtime", () => {
     expect(body.runtime).toBeUndefined();
     expect(body.settings).toBeDefined();
   });
+
+  it("pauses new chats for maintenance while everything else stays ready", async () => {
+    const cookie = await cookieFor("ops2@example.com", "admin");
+    const post = (body: unknown) =>
+      app.request("/api/system/maintenance", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json", Cookie: cookie },
+      });
+    try {
+      expect((await post({ refuse_chats: true })).status).toBe(200);
+      const chat = await app.request("/api/agent/chat", {
+        method: "POST",
+        body: JSON.stringify({ message: "hi" }),
+        headers: { "Content-Type": "application/json", Cookie: cookie },
+      });
+      expect(chat.status).toBe(503);
+      expect(chat.headers.get("Retry-After")).toBe("300");
+      expect((await app.request("/readyz")).status).toBe(200);
+
+      const { runtime } = await (
+        await app.request("/api/system", { headers: { Cookie: cookie } })
+      ).json();
+      expect(runtime.refusingChats).toBe(true);
+      expect(runtime.readiness.ready).toBe(true);
+      expect(runtime.security).toMatchObject({
+        sso_configured: false,
+        users_with_password: 1,
+      });
+      expect(runtime.tableSizes.length).toBeGreaterThan(0);
+    } finally {
+      await post({ refuse_chats: false });
+    }
+  });
 });
