@@ -7,8 +7,9 @@ The image is pinned (`pgvector/pgvector:<pgvector>-pg<major>`) in
 `TACHY_PG_IMAGE` for the restore test.
 
 - **pgvector minor** (same Postgres major): bump the tag everywhere in a
-  release, deploy, then `alter extension vector update;` and run a restore
-  test.
+  release and deploy; `tachy-deploy` runs `alter extension vector update`
+  before planning, because the schema plan cannot validate against an
+  extension version the new image no longer ships. Then run a restore test.
 - **Postgres major:** dump and restore. Take `tachy-backup db --restore-test`,
   stop the stack, move the old volume aside, bump the tag, start Postgres on an
   empty volume (it applies `schema.sql`, roles and the stamp), and restore the
