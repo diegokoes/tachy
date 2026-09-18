@@ -169,6 +169,8 @@ export async function mcpConfig(
   }
   if (settings.redaction_global.value) mcpEnv.TACHY_REDACT = "true";
 
+  mcpEnv.NODE_OPTIONS = "--max-old-space-size=256";
+
   const command = process.env.TACHY_MCP_COMMAND || process.execPath;
   const args = process.env.TACHY_MCP_ARGS
     ? process.env.TACHY_MCP_ARGS.split(" ")
