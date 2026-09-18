@@ -14,6 +14,7 @@ import {
 import { createApp } from "./app";
 import { isBootstrapped } from "./auth";
 import { setInternalEndpoint } from "./internal-endpoint";
+import type { InternalOptions } from "./routes/internal";
 import { lifecycle } from "./lifecycle";
 import { setEmbedDepth } from "./runtime";
 import { abortAllTurns, activeTurnCount } from "./routes/agent";
@@ -29,20 +30,33 @@ const oidc =
     ? { ...env.oidc, sessionSecret: env.sessionSecret }
     : undefined;
 
-lifecycle.modelRequired = true;
-const embedder = startEmbedHost({
-  onReady: (ready) => (lifecycle.modelReady = ready),
-  onFatal: (err) => {
-    log("error", "embedding_model_failed", { error: String(err) });
-    process.exit(1);
-  },
-});
-const embed = embedder.queue.embed.bind(embedder.queue);
-setEmbedBackend(embed);
-setEmbedDepth(() => embedder.queue.depth);
-const internalSecret = randomBytes(32).toString("hex");
+/* With TACHY_EMBED_URL the model lives in the embedder service and this process,
+   its MCP children and the workers all embed over HTTP with the shared secret.
+   Without it, the model runs in a worker thread here and the children reach it
+   through this process with a per-boot secret. */
+const externalEmbedder = process.env.TACHY_EMBED_URL;
+const internalSecret =
+  process.env.TACHY_INTERNAL_SECRET || randomBytes(32).toString("hex");
+let embed: InternalOptions["embed"] | undefined;
+if (externalEmbedder) {
+  lifecycle.embedderUrl = new URL("/readyz", externalEmbedder).toString();
+} else {
+  lifecycle.modelRequired = true;
+  const embedder = startEmbedHost({
+    onReady: (ready) => (lifecycle.modelReady = ready),
+    onFatal: (err) => {
+      log("error", "embedding_model_failed", { error: String(err) });
+      process.exit(1);
+    },
+  });
+  embed = embedder.queue.embed.bind(embedder.queue);
+  setEmbedBackend(embed);
+  setEmbedDepth(() => embedder.queue.depth);
+  process.once("exit", () => void embedder.stop());
+}
 setInternalEndpoint({
   baseUrl: `http://127.0.0.1:${env.port}/internal`,
+  embedUrl: externalEmbedder,
   secret: internalSecret,
 });
 
@@ -51,7 +65,14 @@ const app = createApp({
   webRoot: serveWeb ? webRoot : undefined,
   oidc,
   passwordAuth: true,
-  internal: { secret: internalSecret, embed },
+  internal: {
+    secret: internalSecret,
+    embed:
+      embed ??
+      (async () => {
+        throw new Error("embedding is served by TACHY_EMBED_URL");
+      }),
+  },
 });
 
 const swept = await sweepInterruptedIndexes();
@@ -95,7 +116,7 @@ async function drain(signal: string) {
     backgroundSettled(),
     new Promise((r) => setTimeout(r, 5_000)),
   ]);
-  await Promise.all([sql.end({ timeout: 5 }), embedder.stop()]);
+  await sql.end({ timeout: 5 });
   log("info", "drain_done", { aborted });
   process.exit(0);
 }

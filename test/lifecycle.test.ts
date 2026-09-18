@@ -75,4 +75,32 @@ describe("draining", () => {
     expect(res.status).toBe(503);
     expect(res.headers.get("Retry-After")).toBe("30");
   });
+
+  it("follows an external embedder's readiness", async () => {
+    const { serve } = await import("@hono/node-server");
+    const { Hono } = await import("hono");
+    let up = true;
+    const server = serve({
+      fetch: new Hono().get("/readyz", (c) =>
+        c.json({ ready: up }, up ? 200 : 503),
+      ).fetch,
+      port: 0,
+    });
+    await new Promise((r) => server.once("listening", r));
+    const { port } = server.address() as { port: number };
+    lifecycle.embedderUrl = `http://127.0.0.1:${port}/readyz`;
+    try {
+      expect(await (await app.request("/readyz")).json()).toMatchObject({
+        ready: true,
+        model: "external",
+      });
+      up = false;
+      const res = await app.request("/readyz");
+      expect(res.status).toBe(503);
+      expect((await res.json()).model).toBe("unreachable");
+    } finally {
+      lifecycle.embedderUrl = undefined;
+      server.close();
+    }
+  });
 });
