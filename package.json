@@ -18,7 +18,7 @@
   ],
   "scripts": {
     "mcp": "tsx packages/mcp/src/index.ts",
-    "build:mcp": "node scripts/build-mcp.mjs",
+    "build:server": "node scripts/build-server.mjs",
     "api": "tsx packages/api/src/index.ts",
     "sync": "tsx packages/cli/src/index.ts",
     "web:dev": "npm run dev --workspace @tachy/web",
