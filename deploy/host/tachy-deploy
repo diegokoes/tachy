@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# Deploys a commit that CI has built (DEPLOYMENT-ARCHITECTURE.md §10), as the
+# `tachy` user or root, on the host. The host never builds.
+#
+#   tachy-deploy <commit|branch>      deploy it; roll back by itself on failure
+#   tachy-deploy <commit> --no-pull   the image is already local (tagged sha-<commit>)
+#   tachy-deploy stamp                record that the live database matches the
+#                                     checked-out db/schema.sql (once, after
+#                                     verifying it by hand on a pre-stamp database)
+#
+# Rollback is `tachy-deploy <previous commit>`: safe while the previous image
+# accepts the current schema, which is what expand-and-contract is for.
+set -euo pipefail
+
+HERE=$(dirname "$(readlink -f "$0")")
+# shellcheck source=common.sh
+. "${TACHY_COMMON:-$HERE/common.sh}"
+
+IMAGE_REPO=${TACHY_IMAGE_REPO:-ghcr.io/diegokoes/tachy}
+DEPLOY_LOG=${TACHY_DEPLOY_LOG:-$TACHY_SRV/deploy.log}
+READY_TIMEOUT=${TACHY_READY_TIMEOUT:-300}
+BACKUP=${TACHY_BACKUP_BIN:-tachy-backup}
+K6_IMAGE=${TACHY_K6_IMAGE:-grafana/k6:2.2.0}
+
+PULL=true
+TARGET=""
+for arg in "$@"; do
+  case "$arg" in
+  --no-pull) PULL=false ;;
+  -*) echo "unknown option $arg" >&2; exit 2 ;;
+  *) TARGET=$arg ;;
+  esac
+done
+[ -n "$TARGET" ] || { echo "usage: tachy-deploy <commit|branch> [--no-pull] | stamp" >&2; exit 2; }
+
+exec 9>"${TACHY_DEPLOY_LOCK:-/tmp/tachy-deploy.lock}"
+flock -n 9 || { echo "another deploy is running" >&2; exit 1; }
+
+git_() { git -C "$TACHY_DIR" "$@"; }
+
+pg_owner() {
+  dc exec -T postgres psql -v ON_ERROR_STOP=1 -At -U "$(app_env POSTGRES_USER tachy)" \
+    -d "$(app_env POSTGRES_DB tachy)" "$@" </dev/null
+}
+
+live_stamp() {
+  pg_owner -c "select coalesce((select schema_sha256 from schema_meta where id), 'unstamped')" 2>/dev/null ||
+    echo unreachable
+}
+
+stamp_now() {
+  local hash
+  hash=$(sha256sum "$TACHY_DIR/db/schema.sql" | cut -d' ' -f1)
+  pg_owner -c "insert into schema_meta (schema_sha256) values ('$hash')
+    on conflict (id) do update set schema_sha256 = excluded.schema_sha256, applied_at = now()" >/dev/null
+  log "schema stamped $hash"
+}
+
+if [ "$TARGET" = stamp ]; then
+  stamp_now
+  exit 0
+fi
+
+set_env() {
+  local key=$1 value=$2 file="$TACHY_DIR/.env"
+  if grep -q "^$key=" "$file"; then
+    sed -i "s|^$key=.*|$key=$value|" "$file"
+  else
+    printf '%s=%s\n' "$key" "$value" >>"$file"
+  fi
+}
+
+wait_ready() {
+  local host deadline
+  host=$(app_env TACHY_HOSTNAME localhost)
+  deadline=$(($(date +%s) + READY_TIMEOUT))
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    if curl -fsk -m 5 --resolve "$host:${TACHY_HTTPS_PORT:-443}:127.0.0.1" \
+      "https://$host:${TACHY_HTTPS_PORT:-443}/readyz" 2>/dev/null | grep -q '"ready":true'; then
+      return 0
+    fi
+    sleep 3
+  done
+  return 1
+}
+
+smoke() {
+  if [ -z "${SMOKE_EMAIL:-}" ] || [ -z "${SMOKE_PASSWORD:-}" ]; then
+    log "smoke skipped: SMOKE_EMAIL / SMOKE_PASSWORD not set in $TACHY_ENV_FILE"
+    return 0
+  fi
+  docker run --rm --network "$(project)" -v "$TACHY_DIR/load:/load:ro" \
+    -e BASE_URL=http://api:8787 -e LOGIN_EMAIL="$SMOKE_EMAIL" -e LOGIN_PASSWORD="$SMOKE_PASSWORD" \
+    "$K6_IMAGE" run --quiet /load/smoke.js
+}
+
+resolve_image() {
+  local sha=$1 tag digest
+  tag="$IMAGE_REPO:sha-${sha:0:12}"
+  $PULL && docker pull -q "$tag" >/dev/null
+  digest=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$tag" 2>/dev/null |
+    grep "^$IMAGE_REPO@" | head -1)
+  echo "${digest:-$tag}"
+}
+
+# roll <commit> <image>: check out the commit, point .env at the image, recreate
+roll() {
+  git_ checkout -q --detach "$1"
+  set_env TACHY_IMAGE "$2"
+  set_env TACHY_COMMIT "${1:0:12}"
+  dc up -d --remove-orphans
+}
+
+record() {
+  local line
+  line=$(jq -nc --arg at "$(utc_now)" --arg commit "$1" --arg image "$2" \
+    --arg previous "$3" --arg schema "$4" --arg result "$5" --arg by "${SUDO_USER:-$(id -un)}" \
+    '{at: $at, commit: $commit, image: $image, previous: $previous, schema: $schema, result: $result, by: $by}')
+  mkdir -p "$(dirname "$DEPLOY_LOG")"
+  printf '%s\n' "$line" >>"$DEPLOY_LOG"
+  write_status release "$line"
+}
+
+git_ fetch -q --all --prune
+if git_ rev-parse -q --verify "origin/$TARGET^{commit}" >/dev/null; then
+  COMMIT=$(git_ rev-parse "origin/$TARGET^{commit}")
+else
+  COMMIT=$(git_ rev-parse "$TARGET^{commit}")
+fi
+PREV_COMMIT=$(git_ rev-parse HEAD)
+PREV_IMAGE=$(app_env TACHY_IMAGE)
+log "deploying $COMMIT (from ${PREV_COMMIT:0:12}, image $PREV_IMAGE)"
+
+IMAGE=$(resolve_image "$COMMIT")
+docker image inspect "$IMAGE" >/dev/null || { log "image $IMAGE is not available"; exit 1; }
+log "image $IMAGE"
+
+NEW_SCHEMA=$(git_ show "$COMMIT:db/schema.sql" | sha256sum | cut -d' ' -f1)
+LIVE_SCHEMA=$(live_stamp)
+SCHEMA=unchanged
+if [ "$LIVE_SCHEMA" = unstamped ]; then
+  SCHEMA=unstamped
+  log "warning: the live database has no schema stamp; run 'tachy-deploy stamp' once it is verified"
+elif [ "$LIVE_SCHEMA" != "$NEW_SCHEMA" ]; then
+  record "$COMMIT" "$IMAGE" "$PREV_IMAGE" "differs" "refused"
+  log "refused: $COMMIT changes db/schema.sql and there is no schema diff tool yet."
+  log "Upgrade by dump, recreate and restore (deploy/runbooks/schema-change.md), then stamp."
+  exit 1
+fi
+
+log "pre-deploy backup"
+"$BACKUP" db
+
+roll "$COMMIT" "$IMAGE"
+# Idempotent, and a new table needs its grants.
+dc exec -T postgres psql -v ON_ERROR_STOP=1 -q -U "$(app_env POSTGRES_USER tachy)" \
+  -d "$(app_env POSTGRES_DB tachy)" -f /dev/stdin <"$TACHY_DIR/db/roles.sql" >/dev/null
+
+if wait_ready && smoke; then
+  record "$COMMIT" "$IMAGE" "$PREV_IMAGE" "$SCHEMA" "deployed"
+  log "deployed $COMMIT"
+  exit 0
+fi
+
+log "deploy failed; rolling back to ${PREV_COMMIT:0:12} ($PREV_IMAGE)"
+dc logs --tail 50 api >&2 || true
+roll "$PREV_COMMIT" "$PREV_IMAGE"
+if wait_ready; then
+  record "$COMMIT" "$IMAGE" "$PREV_IMAGE" "$SCHEMA" "rolled_back"
+  log "rolled back to ${PREV_COMMIT:0:12}"
+else
+  record "$COMMIT" "$IMAGE" "$PREV_IMAGE" "$SCHEMA" "rollback_failed"
+  log "ROLLBACK FAILED: the previous release is not ready either"
+fi
+exit 1
