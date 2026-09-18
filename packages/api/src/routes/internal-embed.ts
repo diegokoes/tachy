@@ -1,0 +1,65 @@
+import { timingSafeEqual } from "node:crypto";
+import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { z } from "zod";
+import {
+  EMBEDDING_SPEC,
+  EmbedderUnavailable,
+  type EmbedKind,
+} from "@tachy/core";
+
+export interface InternalEmbedOptions {
+  secret: string;
+  embed: (
+    kind: EmbedKind,
+    texts: string[],
+    caller: string,
+  ) => Promise<number[][]>;
+}
+
+const MAX_TEXT = EMBEDDING_SPEC.maxChars + 256;
+
+const body = z.object({
+  kind: z.enum(["query", "passage"]),
+  texts: z.array(z.string().max(MAX_TEXT)).min(1).max(256),
+});
+
+const sameSecret = (given: string, want: string) => {
+  const a = Buffer.from(given);
+  const b = Buffer.from(want);
+  return a.length === b.length && timingSafeEqual(a, b);
+};
+
+/**
+ * Text in, vectors out, for the MCP children this process spawns. Reads and
+ * writes nothing, is never routed by the proxy, and requires the per-boot
+ * secret only the children are given.
+ */
+export function internalEmbed(opts: InternalEmbedOptions) {
+  return new Hono().post(
+    "/embed",
+    bodyLimit({ maxSize: 256 * (MAX_TEXT * 4 + 16) }),
+    async (c) => {
+      const auth = c.req.header("authorization") ?? "";
+      if (!sameSecret(auth.replace(/^Bearer /, ""), opts.secret))
+        return c.json({ error: "unauthorized" }, 401);
+      const parsed = body.safeParse(await c.req.json().catch(() => null));
+      if (!parsed.success) return c.json({ error: "validation failed" }, 400);
+      const caller = (c.req.header("x-tachy-caller") ?? "remote").slice(0, 80);
+      try {
+        const vectors = await opts.embed(
+          parsed.data.kind,
+          parsed.data.texts,
+          `remote:${caller}`,
+        );
+        return c.json({ vectors });
+      } catch (err) {
+        if (err instanceof EmbedderUnavailable) {
+          c.header("Retry-After", "2");
+          return c.json({ error: err.message }, 503);
+        }
+        throw err;
+      }
+    },
+  );
+}

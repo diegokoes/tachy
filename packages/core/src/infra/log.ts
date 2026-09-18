@@ -24,6 +24,9 @@ export function runWithLogContext<T>(
   return context.run({ ...context.getStore(), ...fields }, fn);
 }
 
+export const logContext = (): Readonly<Record<string, unknown>> | undefined =>
+  context.getStore();
+
 export function log(
   level: LogLevel,
   event: string,

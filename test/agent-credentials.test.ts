@@ -12,6 +12,7 @@ import {
   validateCredential,
 } from "@tachy/core";
 import { mcpConfig } from "../packages/api/src/routes/agent";
+import { setEmbedEndpoint } from "../packages/api/src/embed-endpoint";
 import { enableVault, resetData, sql } from "./helpers";
 
 const agentHome = mkdtempSync(join(tmpdir(), "tachy-agent-home-"));
@@ -84,6 +85,7 @@ describe("per-turn agent config isolation (cross-user token safety)", () => {
       expect(cfg.mcpEnv.DATABASE_URL).toBe(process.env.DATABASE_URL);
       expect(cfg.mcpEnv.TACHY_DB_POOL_MAX).toBe("2");
       expect(cfg.mcpEnv.TACHY_DB_APP_NAME).toBe("tachy-mcp");
+      expect(cfg.mcpEnv.TACHY_EMBED_URL).toBeUndefined();
     } finally {
       delete process.env.TACHY_API_TOKEN;
       delete process.env.OIDC_CLIENT_SECRET;
@@ -341,5 +343,24 @@ describe("server-env credential is the lowest rung (deployment-wide fallback)", 
         source: "user",
       },
     );
+  });
+
+  it("points the MCP child at the server's embedding endpoint", async () => {
+    setEmbedEndpoint({
+      url: "http://127.0.0.1:8787/internal/embed",
+      secret: "per-boot",
+    });
+    try {
+      const cfg = await mcpConfig(
+        "alice@example.com",
+        await effectiveSettings(),
+      );
+      expect(cfg.mcpEnv.TACHY_EMBED_URL).toBe(
+        "http://127.0.0.1:8787/internal/embed",
+      );
+      expect(cfg.mcpEnv.TACHY_EMBED_SECRET).toBe("per-boot");
+    } finally {
+      setEmbedEndpoint(undefined);
+    }
   });
 });

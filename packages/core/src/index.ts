@@ -21,7 +21,7 @@ export {
 export { schemaStampStatus, type SchemaStampStatus } from "./infra";
 export { inBackground, backgroundSettled } from "./infra";
 export type { AppErrorCode } from "./infra";
-export { log, runWithLogContext } from "./infra";
+export { log, logContext, runWithLogContext } from "./infra";
 export type { LogLevel } from "./infra";
 export {
   isGlobalAdmin,
@@ -446,6 +446,10 @@ export {
   embedPassages,
   embedQuery,
   embedQueryLiteral,
+  setEmbedBackend,
+  startEmbedHost,
+  EmbedQueue,
+  EmbedderUnavailable,
   toVectorLiteral,
   EMBEDDING_DIM,
   EMBEDDING_MODEL,
@@ -453,6 +457,12 @@ export {
   EMBEDDING_MODELS,
 } from "./search";
 export { chunkText } from "./search";
+export type {
+  EmbedBackend,
+  EmbedHost,
+  EmbedKind,
+  EmbedQueueDepth,
+} from "./search";
 export {
   relevance,
   grade,
