@@ -133,6 +133,18 @@
   <table>
     <tbody>
       <tr><td>Single sign-on</td><td>{r.security.sso_configured ? "configured" : "not configured"}</td><td class="muted">{r.security.sso_configured ? `password login allowed for ${r.security.password_login_under_sso} account(s)` : "password login is the only login"}</td></tr>
+      <tr>
+        <td>Credential vault</td>
+        <td>{r.security.vault.enabled ? (r.security.vault.current_key ?? "on") : "disabled"}</td>
+        <td class="muted">
+          {#if r.security.vault.enabled}
+            {r.security.vault.by_key.map((k) => `${k.key_id ?? "no key id"}: ${k.count}${k.current ? " (current)" : ""}`).join(" · ") || "nothing stored"}
+            {#if r.security.vault.by_key.some((k) => !k.current)}
+              — run `npm run sync rotate-key` to move the rest over
+            {/if}
+          {:else}TACHY_SECRET_KEY is not set{/if}
+        </td>
+      </tr>
       <tr><td>Accounts with a password</td><td>{r.security.users_with_password}</td><td class="muted">{r.security.service_accounts} service account(s)</td></tr>
     </tbody>
   </table>

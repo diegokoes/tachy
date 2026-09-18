@@ -1,7 +1,12 @@
 import { sql } from "../infra/db";
 import { badInput } from "../infra/errors";
 import { sourceTokenOptional } from "../infra/env";
-import { secretsEnabled, encryptSecret, decryptSecret } from "../infra/secrets";
+import {
+  secretsEnabled,
+  encryptSecret,
+  decryptSecret,
+  vaultKeys,
+} from "../infra/secrets";
 import {
   resolveScoped,
   assertCanWriteScope,
@@ -91,7 +96,11 @@ export async function resolveCredential(
     const hit = await resolveScoped("credentials", name, ctx);
     if (hit)
       return decryptSecret(
-        hit.row as { value_ciphertext: Buffer; nonce: Buffer },
+        hit.row as {
+          value_ciphertext: Buffer;
+          nonce: Buffer;
+          key_id: string | null;
+        },
         credentialAad(hit.row),
       );
   }
@@ -173,7 +182,7 @@ export async function setCredential(
   const invalid = validateCredential(name, value);
   if (invalid) throw badInput(invalid);
   await assertCanWriteScope(actorUserId, scope, scopeId);
-  const { ciphertext, nonce } = encryptSecret(
+  const { ciphertext, nonce, keyId } = encryptSecret(
     value,
     credentialAad({
       scope,
@@ -185,6 +194,7 @@ export async function setCredential(
   await upsertScoped("credentials", scope, scopeId, name, {
     value_ciphertext: ciphertext,
     nonce,
+    key_id: keyId,
     created_by: actorUserId,
   });
 }
@@ -226,4 +236,65 @@ export async function listCredentials(
     scope: r.scope as Scope,
     updated_at: String(r.updated_at),
   }));
+}
+
+export interface VaultState {
+  enabled: boolean;
+  /** The key new secrets are written with. */
+  current_key: string | null;
+  /** How many stored credentials each key holds, oldest first. */
+  by_key: { key_id: string | null; count: number; current: boolean }[];
+}
+
+/** What Admin > system shows about the vault, without decrypting anything. */
+export async function vaultState(): Promise<VaultState> {
+  const keys = vaultKeys();
+  const rows = await sql<{ key_id: string | null; n: number }[]>`
+    select key_id, count(*)::int as n from credentials group by key_id order by key_id nulls first
+  `;
+  return {
+    enabled: keys.length > 0,
+    current_key: keys[0]?.id ?? null,
+    by_key: rows.map((r) => ({
+      key_id: r.key_id,
+      count: r.n,
+      current: Boolean(keys[0] && r.key_id === keys[0].id),
+    })),
+  };
+}
+
+/**
+ * Re-encrypts every stored credential with the current key. Run it after
+ * putting the old key in TACHY_SECRET_KEY_PREVIOUS and the new one in
+ * TACHY_SECRET_KEY; afterwards the old key can be dropped.
+ */
+export async function rotateVaultKey(): Promise<{
+  moved: number;
+  already: number;
+}> {
+  const keys = vaultKeys();
+  if (!keys.length) throw badInput("TACHY_SECRET_KEY is not set");
+  const current = keys[0];
+  let moved = 0;
+  let already = 0;
+  const rows = await sql`select * from credentials order by created_at`;
+  for (const row of rows) {
+    if (row.key_id === current.id) {
+      already++;
+      continue;
+    }
+    const aad = credentialAad(row);
+    const value = decryptSecret(
+      row as { value_ciphertext: Buffer; nonce: Buffer; key_id: string | null },
+      aad,
+    );
+    const { ciphertext, nonce, keyId } = encryptSecret(value, aad);
+    await sql`
+      update credentials
+      set value_ciphertext = ${ciphertext}, nonce = ${nonce}, key_id = ${keyId}, updated_at = now()
+      where id = ${row.id}
+    `;
+    moved++;
+  }
+  return { moved, already };
 }
