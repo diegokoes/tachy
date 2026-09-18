@@ -1,8 +1,4 @@
-import {
-  pipeline,
-  env as hfEnv,
-  type FeatureExtractionPipeline,
-} from "@huggingface/transformers";
+import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 
 /**
  * Pooling and prefixes are per-model facts, not library defaults. Getting them
@@ -78,18 +74,21 @@ if (EMBEDDING_SPEC.dim !== EMBEDDING_DIM)
       `Change the vector(N) columns in db/schema.sql and EMBEDDING_DIM together, then re-embed with 'npm run sync reembed'.`,
   );
 
-hfEnv.cacheDir = process.env.TACHY_MODEL_CACHE ?? ".model-cache";
-
 let modelPromise: Promise<FeatureExtractionPipeline> | undefined;
 
 export function model(): Promise<FeatureExtractionPipeline> {
   // A rejected promise must not be memoized: one transient download failure
   // would otherwise disable embeddings for the whole process lifetime.
-  modelPromise ??= pipeline("feature-extraction", EMBEDDING_MODEL, {
-    dtype: "fp32",
-  }).catch((e) => {
-    modelPromise = undefined;
-    throw e;
-  });
+  // Imported here, not at the top: a process that embeds over HTTP never loads
+  // the ONNX runtime at all.
+  modelPromise ??= import("@huggingface/transformers")
+    .then(({ pipeline, env: hfEnv }) => {
+      hfEnv.cacheDir = process.env.TACHY_MODEL_CACHE ?? ".model-cache";
+      return pipeline("feature-extraction", EMBEDDING_MODEL, { dtype: "fp32" });
+    })
+    .catch((e) => {
+      modelPromise = undefined;
+      throw e;
+    });
   return modelPromise;
 }
