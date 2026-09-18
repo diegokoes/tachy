@@ -83,8 +83,9 @@ way on its own machine, with `TACHY_ENV_BADGE=dev`.
 - **Deploy.** `ssh tachy@<host> tachy-deploy <commit|branch>` pins the image
   digest, checks out the same commit, takes an encrypted backup, drains running
   chat turns, waits for `/readyz`, runs `load/smoke.js`, and rolls itself back
-  on failure. It refuses a release that changes `db/schema.sql` until that
-  schema is applied by hand.
+  on failure. A changed `db/schema.sql` is applied as a diff
+  ([pg-schema-diff](https://github.com/stripe/pg-schema-diff)); a plan that
+  would lose data needs `--allow-destructive`.
 - **Host.** `deploy/host/playbook.yml` (Ansible) sets up users, SSH, the
   firewall, Docker, read-only SFTP for backup downloads, and the systemd timers
   for `tachy-backup` (encrypted dumps every 6 hours, a weekly restore test) and
