@@ -28,6 +28,7 @@
   import JobsPanel from "./JobsPanel.svelte";
   import RuntimePanel from "./RuntimePanel.svelte";
   import HostPanel from "./HostPanel.svelte";
+  import TestsPanel from "./TestsPanel.svelte";
 
   type Section = Omit<PageSection, "count" | "tone"> & {
     /** Which census key counts this section. Omitted for a section with nothing to count. */
@@ -69,6 +70,7 @@
     system: [
       { key: "overview", label: "overview", view: RuntimePanel, eager: true, show: admin },
       { key: "host", label: "backups & host", view: HostPanel, show: admin },
+      { key: "tests", label: "checks & load", view: TestsPanel, show: admin },
       { key: "settings", label: "settings", view: SystemPanel, show: admin },
     ],
   });

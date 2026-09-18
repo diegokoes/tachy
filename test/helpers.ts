@@ -89,3 +89,8 @@ export async function tpdProductId(): Promise<string> {
   const [row] = await sql`select id from products where slug = 'tpd'`;
   return row.id as string;
 }
+
+/** Job and load-run tables, which resetData leaves alone. */
+export async function resetJobs() {
+  await sql`truncate job_definition_changes, job_definitions, job_runs, test_runs cascade`;
+}

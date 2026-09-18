@@ -4,6 +4,7 @@ import { sql } from "../infra/db";
 import { log } from "../infra/log";
 import { defineSearchJobs } from "../search/jobs";
 import { defineSourceJobs } from "../sources/jobs";
+import { defineLoadTestJobs } from "../testing/load-runs";
 import { defineWikiJobs } from "../wiki/jobs";
 import { createJobDefinition } from "./definitions";
 import { notifyRunFinished } from "./notify";
@@ -17,6 +18,7 @@ export function registerCoreJobs(): void {
   defineSearchJobs();
   defineWikiJobs();
   defineRetentionJobs();
+  defineLoadTestJobs();
 }
 
 /**
