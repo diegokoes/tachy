@@ -16,11 +16,21 @@ function approvalTimeoutMs(): number {
 
 export abstract class TurnBase implements AgentTurn {
   protected q = new AsyncQueue<AgentEvent>();
-  private pending = new Map<string, (d: Decision) => void>();
+  private pending = new Map<
+    string,
+    { resolve: (d: Decision) => void; at: number }
+  >();
   finished = false;
 
   get pendingApprovals(): number {
     return this.pending.size;
+  }
+
+  get oldestPendingApprovalAt(): number | null {
+    let oldest: number | null = null;
+    for (const { at } of this.pending.values())
+      if (oldest === null || at < oldest) oldest = at;
+    return oldest;
   }
 
   events(): AsyncGenerator<AgentEvent> {
@@ -28,10 +38,10 @@ export abstract class TurnBase implements AgentTurn {
   }
 
   approve(id: string, decision: Decision): void {
-    const resolve = this.pending.get(id);
-    if (resolve) {
+    const entry = this.pending.get(id);
+    if (entry) {
       this.pending.delete(id);
-      resolve(decision);
+      entry.resolve(decision);
     }
   }
 
@@ -49,9 +59,12 @@ export abstract class TurnBase implements AgentTurn {
         resolve({ approve: false, message: "Approval timed out." });
       }, approvalTimeoutMs());
       timer.unref?.();
-      this.pending.set(id, (d) => {
-        clearTimeout(timer);
-        resolve(d);
+      this.pending.set(id, {
+        resolve: (d) => {
+          clearTimeout(timer);
+          resolve(d);
+        },
+        at: Date.now(),
       });
       this.q.push({ type: "approval_request", tool, input, id });
     });
@@ -64,7 +77,7 @@ export abstract class TurnBase implements AgentTurn {
   };
 
   protected settlePending(): void {
-    for (const [, resolve] of this.pending)
+    for (const { resolve } of this.pending.values())
       resolve({ approve: false, message: "Turn ended." });
     this.pending.clear();
   }

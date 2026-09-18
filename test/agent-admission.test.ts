@@ -7,6 +7,7 @@ import { json, loginCookie, resetData, sql } from "./helpers";
 class FakeTurn implements AgentTurn {
   finished = false;
   pendingApprovals = 0;
+  oldestPendingApprovalAt = null;
   private push?: (ev: AgentEvent | null) => void;
   private backlog: (AgentEvent | null)[] = [];
 
