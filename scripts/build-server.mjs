@@ -1,5 +1,5 @@
 // Bundles every server entry point to plain JavaScript in dist/, so the image
-// runs node without tsx or devDependencies: the api, the CLI, the MCP server
+// runs node without tsx or devDependencies: the api, the CLI, the job worker, the MCP server
 // each chat turn spawns, and the embedding worker thread the api starts.
 // Workspace packages are bundled because they ship as TypeScript; everything
 // from npm stays external and resolves from node_modules as usual.
@@ -9,6 +9,7 @@ await build({
   entryPoints: {
     api: "packages/api/src/index.ts",
     cli: "packages/cli/src/index.ts",
+    worker: "packages/worker/src/index.ts",
     mcp: "packages/mcp/src/index.ts",
     "embed-thread": "packages/core/src/search/embed-thread.ts",
   },

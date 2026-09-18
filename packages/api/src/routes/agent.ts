@@ -30,6 +30,8 @@ import {
   type ScopeContext,
   uploadDir,
   sweepUploads,
+  runningHeavyJobs,
+  JOB_CLASS_CHAT_SLOTS,
   log,
   unavailable,
 } from "@tachy/core";
@@ -77,7 +79,19 @@ const sweep = setInterval(() => {
 sweep.unref?.();
 
 let limits: AdmissionLimits = { cap: 15, queueMax: 10 };
-export const admission = new Admission(() => limits);
+/** Chat slots held by heavy jobs running now, in any process. */
+let jobSlots = 0;
+export const admission = new Admission(() => ({
+  ...limits,
+  cap: Math.max(1, limits.cap - jobSlots),
+}));
+
+const jobPoll = setInterval(() => {
+  runningHeavyJobs()
+    .then((n) => (jobSlots = n * JOB_CLASS_CHAT_SLOTS.heavy))
+    .catch(() => {});
+}, 10_000);
+jobPoll.unref?.();
 
 /** User key → the turn that user has running or waiting, at most one. */
 const activeByUser = new Map<string, string>();
