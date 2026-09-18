@@ -33,6 +33,7 @@ COPY packages/mcp/package.json packages/mcp/package.json
 COPY packages/agent/package.json packages/agent/package.json
 COPY packages/api/package.json packages/api/package.json
 COPY packages/cli/package.json packages/cli/package.json
+COPY packages/worker/package.json packages/worker/package.json
 COPY packages/web/package.json packages/web/package.json
 RUN npm ci
 
@@ -66,6 +67,7 @@ COPY packages/mcp/package.json packages/mcp/package.json
 COPY packages/agent/package.json packages/agent/package.json
 COPY packages/api/package.json packages/api/package.json
 COPY packages/cli/package.json packages/cli/package.json
+COPY packages/worker/package.json packages/worker/package.json
 COPY packages/web/package.json packages/web/package.json
 RUN npm ci --omit=dev \
  && npm cache clean --force
@@ -78,7 +80,7 @@ COPY db db
 
 # `npm run api` / `npm run sync …` keep working inside the image, against the
 # bundles; a source checkout keeps its tsx scripts.
-RUN npm pkg set scripts.api="node dist/api.js" scripts.sync="node dist/cli.js" scripts.mcp="node dist/mcp.js"
+RUN npm pkg set scripts.api="node dist/api.js" scripts.sync="node dist/cli.js" scripts.mcp="node dist/mcp.js" scripts.worker="node dist/worker.js"
 
 ENV TACHY_MODEL_CACHE=/app/.model-cache
 ENV TACHY_MCP_ARGS=dist/mcp.js

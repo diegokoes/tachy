@@ -3,7 +3,13 @@ import { requestId } from "hono/request-id";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { z } from "zod";
-import { env, AppError, registerSource, effectiveSettings } from "@tachy/core";
+import {
+  env,
+  AppError,
+  registerSource,
+  registerCoreJobs,
+  effectiveSettings,
+} from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 import { createAzureDevopsSource } from "@tachy/source-azure-devops";
@@ -29,6 +35,7 @@ import { internalRoutes, type InternalOptions } from "./routes/internal";
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
 registerSource("azure-devops", createAzureDevopsSource);
+registerCoreJobs();
 
 const STATUS_BY_CODE = {
   not_found: 404,

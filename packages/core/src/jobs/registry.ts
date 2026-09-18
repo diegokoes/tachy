@@ -8,6 +8,8 @@ import {
 
 export interface JobContext {
   runId: string;
+  /** The user who started a manual run, whose credentials it may use. */
+  requestedBy: string | null;
   /** Aborted when the run is cancelled or times out. Check it between steps. */
   signal: AbortSignal;
   progress(fraction: number, note?: string): Promise<void>;

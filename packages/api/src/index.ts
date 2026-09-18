@@ -9,7 +9,7 @@ import {
   sql,
   startEmbedHost,
   sweepInterruptedIndexes,
-  sweepWikiGaps,
+  startJobProcess,
 } from "@tachy/core";
 import { createApp } from "./app";
 import { isBootstrapped } from "./auth";
@@ -87,6 +87,7 @@ async function drain(signal: string) {
   while (activeTurnCount() > 0 && Date.now() < deadline)
     await new Promise((r) => setTimeout(r, 500));
   const aborted = abortAllTurns();
+  await jobWorker?.drain(Math.max(0, deadline - Date.now()));
 
   server.close();
   if ("closeAllConnections" in server) server.closeAllConnections();
@@ -104,14 +105,10 @@ console.log(
   `tachy api listening on :${env.port} [auth=${env.authMode}]${serveWeb ? ` (serving SPA from ${webRoot})` : ""}`,
 );
 
-/* Here rather than beside the routes, so it runs in the server and not in every
-   test that builds an app. Once at boot, then hourly; an edit made through the
-   wiki routes rescans its own wiki straight away, so this is what catches the
-   rest — lessons recorded by the agent, entries approved elsewhere. */
-const WIKI_GAP_SWEEP_MS = 60 * 60_000;
-const sweepGaps = () =>
-  sweepWikiGaps()
-    .then((r) => log("info", "wiki_gap_sweep", { ...r }))
-    .catch((err) => log("error", "wiki_gap_sweep", { error: String(err) }));
-void sweepGaps();
-setInterval(sweepGaps, WIKI_GAP_SWEEP_MS).unref();
+/* Jobs run in a dedicated worker service in production (TACHY_WORKER=external).
+   Without one, this process works every class itself, so a single `npm run api`
+   still syncs, reindexes and sweeps. */
+const jobWorker =
+  process.env.TACHY_WORKER === "external"
+    ? null
+    : await startJobProcess({ classes: ["light", "heavy"], concurrency: 1 });

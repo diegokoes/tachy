@@ -101,6 +101,7 @@ export async function startJobWorker(
       const params = kind.params.parse(run.params);
       const ctx = {
         runId: run.id,
+        requestedBy: run.requested_by,
         signal: controller.signal,
         async progress(fraction: number, text?: string) {
           progress = Math.max(0, Math.min(1, fraction));

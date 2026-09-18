@@ -191,6 +191,37 @@ describe("PUT /api/repos/bulk", () => {
 });
 
 describe("POST /api/repos/:slug/reindex", () => {
+  it("queues a reindex run for the caller, and refuses a second while it waits", async () => {
+    await sql`truncate job_runs cascade`;
+    const cookie = await adminCookie();
+    await linkRepo({
+      slug: "driver",
+      url: "https://example.invalid/driver.git",
+    });
+    const res = await app.request("/api/repos/driver/reindex", {
+      method: "POST",
+      headers: { Cookie: cookie },
+    });
+    expect(res.status).toBe(202);
+    const { run_id } = await res.json();
+    const [run] =
+      await sql`select kind, params, trigger, requested_by, resource_class from job_runs where id = ${run_id}`;
+    expect(run).toMatchObject({
+      kind: "repo.reindex",
+      params: { repo: "driver" },
+      trigger: "manual",
+      resource_class: "heavy",
+    });
+    expect(run.requested_by).not.toBeNull();
+
+    const again = await app.request("/api/repos/driver/reindex", {
+      method: "POST",
+      headers: { Cookie: cookie },
+    });
+    expect(again.status).toBe(400);
+    expect((await again.json()).error).toMatch(/already being indexed/);
+  });
+
   it("refuses a slug nobody has linked, without cloning anything", async () => {
     const cookie = await adminCookie();
     const res = await app.request("/api/repos/no-such-repo/reindex", {
