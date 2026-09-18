@@ -1,0 +1,233 @@
+#!/usr/bin/env bash
+# Backups on the host (DEPLOYMENT-ARCHITECTURE.md §6.1). Run by systemd timers:
+#
+#   tachy-backup db [--restore-test]   dump, optionally restore-test, encrypt, publish
+#   tachy-backup files                 agent-home and Caddy's CA, encrypted
+#   tachy-backup prune                 apply retention to the export directory
+#
+# Plaintext exists only in the root-only staging directory and is deleted as
+# soon as its ciphertext is published. Files appear in the export directory by
+# rename, so a download never picks up a half-written one.
+set -euo pipefail
+
+HERE=$(dirname "$(readlink -f "$0")")
+# shellcheck source=../host/common.sh
+. "${TACHY_COMMON:-$HERE/../host/common.sh}"
+
+STAGING=${TACHY_BACKUP_STAGING:-$TACHY_SRV/backups/staging}
+EXPORT=${TACHY_BACKUP_EXPORT:-$TACHY_SRV/backup-export}
+RECIPIENTS=${TACHY_BACKUP_RECIPIENTS:-/etc/tachy/backup-recipients.txt}
+PG_IMAGE=${TACHY_PG_IMAGE:-pgvector/pgvector:0.8.6-pg16}
+ROW_TOLERANCE_PCT=${TACHY_RESTORE_ROW_TOLERANCE_PCT:-1}
+
+umask 077
+mkdir -p "$STAGING" "$EXPORT"
+chmod 0700 "$STAGING"
+chmod 0755 "$EXPORT"
+
+stamp() { date -u +%Y%m%dT%H%M%SZ; }
+
+# publish <plaintext> <name>: encrypt, checksum, rename into place, drop plaintext
+publish() {
+  local plain=$1 name=$2
+  local out="$EXPORT/$name.age"
+  age -R "$RECIPIENTS" -o "$out.partial" "$plain"
+  (cd "$EXPORT" && sha256sum "$(basename "$out.partial")" |
+    sed "s/\.partial\$//" >"$out.sha256.partial")
+  chmod 0640 "$out.partial" "$out.sha256.partial"
+  chgrp tachy-backup "$out.partial" "$out.sha256.partial" 2>/dev/null || true
+  mv -f "$out.partial" "$out"
+  mv -f "$out.sha256.partial" "$out.sha256"
+  rm -f "$plain"
+  echo "$out"
+}
+
+psql_prod() {
+  dc exec -T postgres psql -v ON_ERROR_STOP=1 -At -U "$(app_env POSTGRES_USER tachy)" \
+    -d "$(app_env POSTGRES_DB tachy)" -c "$1" </dev/null
+}
+
+table_counts() {
+  "$@" "select string_agg(format('%s=%s', c.relname,
+      (xpath('/row/n/text()', query_to_xml(format('select count(*) as n from %I', c.relname), false, true, '')))[1]::text), ' ' order by c.relname)
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind = 'r'"
+}
+
+null_embeddings() {
+  "$@" "select format('knowledge=%s reference_chunks=%s code_chunks=%s',
+      (select count(*) from knowledge_entries where embedding is null),
+      (select count(*) from reference_doc_chunks where embedding is null),
+      (select count(*) from code_chunks where embedding is null))"
+}
+
+# restore_test <dump>: restores into a throwaway Postgres with no network and
+# compares it with production. Prints a JSON object; fails on any mismatch.
+restore_test() {
+  local dump=$1 name="tachy-restore-test-$$" started ended
+  local problems=()
+  started=$(date +%s)
+  docker run -d --rm --name "$name" --network none --shm-size 1g \
+    -e POSTGRES_PASSWORD=restore-test -e POSTGRES_DB=tachy "$PG_IMAGE" >/dev/null
+  for _ in $(seq 60); do
+    docker exec "$name" pg_isready -U postgres -d tachy >/dev/null 2>&1 && break
+    sleep 1
+  done
+  sleep 2
+  local scratch=(docker exec -i "$name" psql -v ON_ERROR_STOP=1 -At -U postgres -d tachy -c)
+  docker exec -i "$name" pg_restore --no-owner --no-privileges -U postgres -d tachy <"$dump" ||
+    problems+=("pg_restore reported errors")
+
+  local prod_counts restored_counts prod_nulls restored_nulls stamp want_stamp
+  prod_counts=$(table_counts psql_prod)
+  restored_counts=$(table_counts "${scratch[@]}")
+  prod_nulls=$(null_embeddings psql_prod)
+  restored_nulls=$(null_embeddings "${scratch[@]}")
+  stamp=$("${scratch[@]}" "select coalesce((select schema_sha256 from schema_meta where id), 'unstamped')")
+  want_stamp=$(sha256sum "$TACHY_DIR/db/schema.sql" | cut -d' ' -f1)
+  ended=$(date +%s)
+  docker rm -f "$name" >/dev/null 2>&1 || true
+
+  local generated
+  for pair in $prod_counts; do
+    local t=${pair%%=*} p=${pair#*=} r
+    r=$(tr ' ' '\n' <<<"$restored_counts" | sed -n "s/^$t=//p")
+    [ "$t" = generated_outputs ] && { generated=$r; continue; }
+    [ -n "$r" ] || { problems+=("$t missing"); continue; }
+    local diff=$((p > r ? p - r : r - p))
+    if [ "$p" -gt 0 ] && [ $((diff * 100)) -gt $((p * ROW_TOLERANCE_PCT)) ]; then
+      problems+=("$t: production $p, restored $r")
+    elif [ "$p" -eq 0 ] && [ "$r" -gt 0 ]; then
+      problems+=("$t: production 0, restored $r")
+    fi
+  done
+  [ "${generated:-0}" = 0 ] || problems+=("generated_outputs data should be excluded")
+  [ "$prod_nulls" = "$restored_nulls" ] ||
+    problems+=("null embeddings: production $prod_nulls, restored $restored_nulls")
+  [ "$stamp" = unstamped ] || [ "$stamp" = "$want_stamp" ] ||
+    problems+=("schema stamp $stamp does not match db/schema.sql $want_stamp")
+
+  local ok=true detail=""
+  if [ ${#problems[@]} -gt 0 ]; then
+    ok=false
+    detail=$(printf '%s; ' "${problems[@]}")
+  fi
+  jq -n --arg at "$(utc_now)" --argjson ok "$ok" --arg detail "$detail" \
+    --argjson seconds "$((ended - started))" --arg nulls "$restored_nulls" \
+    '{ok: $ok, at: $at, seconds: $seconds, null_embeddings: $nulls, problems: $detail}'
+  [ "$ok" = true ]
+}
+
+cmd_db() {
+  local restore=false
+  [ "${1:-}" = --restore-test ] && restore=true
+  local ts started plain
+  ts=$(stamp)
+  started=$(date +%s)
+  plain="$STAGING/tachy-db-$ts.dump"
+  ping "${HC_BACKUP_URL:-}" /start
+
+  local backup_password
+  backup_password=$(app_env TACHY_BACKUP_DB_PASSWORD)
+  dc exec -T -e PGPASSWORD="$backup_password" postgres \
+    pg_dump -Fc -h 127.0.0.1 -U tachy_backup -d "$(app_env POSTGRES_DB tachy)" \
+    --exclude-table-data=generated_outputs </dev/null >"$plain"
+
+  if $restore; then
+    ping "${HC_RESTORE_URL:-}" /start
+    local result
+    if result=$(restore_test "$plain"); then
+      write_status restore "$result"
+      ping "${HC_RESTORE_URL:-}" "" "$result"
+    else
+      write_status restore "$result"
+      ping "${HC_RESTORE_URL:-}" /fail "$result"
+      rm -f "$plain"
+      fail "restore test failed: $result"
+    fi
+  fi
+
+  local bytes out
+  bytes=$(stat -c %s "$plain")
+  out=$(publish "$plain" "tachy-db-$ts.dump")
+  cmd_prune >/dev/null
+  local result
+  result=$(jq -n --arg at "$(utc_now)" --arg file "$(basename "$out")" \
+    --argjson bytes "$bytes" --argjson seconds "$(($(date +%s) - started))" \
+    --argjson restore_tested "$restore" \
+    '{ok: true, at: $at, file: $file, dump_bytes: $bytes, seconds: $seconds, restore_tested: $restore_tested}')
+  write_status backup "$result"
+  ping "${HC_BACKUP_URL:-}" "" "$result"
+  log "backup published: $out"
+}
+
+cmd_files() {
+  local ts proj
+  ts=$(stamp)
+  proj=$(project)
+  for vol in tachy-agent-home caddy-data; do
+    local plain="$STAGING/tachy-$vol-$ts.tar.zst"
+    docker volume inspect "${proj}_$vol" >/dev/null 2>&1 || {
+      log "skipping missing volume ${proj}_$vol"
+      continue
+    }
+    docker run --rm --network none -v "${proj}_$vol:/data:ro" busybox \
+      tar -C /data -cf - . | zstd -q -T0 -o "$plain"
+    publish "$plain" "tachy-$vol-$ts.tar.zst" >/dev/null
+  done
+  cmd_prune >/dev/null
+  log "file backups published"
+}
+
+# Retention per family: everything from the last 2 days, the newest per day
+# for 14 days, the newest per ISO week for 8 weeks.
+cmd_prune() {
+  local now
+  now=$(date -u +%s)
+  for family in tachy-db tachy-tachy-agent-home tachy-caddy-data; do
+    local seen_days="" seen_weeks=""
+    # newest first, so the first file of a day or week is the one kept
+    while IFS= read -r f; do
+      local ts day week age keep=false
+      ts=$(sed -E "s/^$family-([0-9]{8})T([0-9]{2})([0-9]{2})([0-9]{2})Z.*/\1 \2:\3:\4/" <<<"$(basename "$f")")
+      age=$(((now - $(date -u -d "$ts" +%s)) / 86400))
+      day=${ts%% *}
+      week=$(date -u -d "${ts%% *}" +%G-%V)
+      if [ "$age" -lt 2 ]; then
+        keep=true
+      elif [ "$age" -lt 14 ] && [[ " $seen_days " != *" $day "* ]]; then
+        keep=true
+      elif [ "$age" -lt 56 ] && [[ " $seen_weeks " != *" $week "* ]]; then
+        keep=true
+      fi
+      seen_days="$seen_days $day"
+      seen_weeks="$seen_weeks $week"
+      $keep || { rm -f "$f" "$f.sha256"; echo "pruned $(basename "$f")"; }
+    done < <(find "$EXPORT" -maxdepth 1 -name "$family-*.age" -printf '%f\n' | sort -r | sed "s#^#$EXPORT/#")
+  done
+}
+
+fail() {
+  FAILED=1
+  write_status backup "$(jq -n --arg at "$(utc_now)" --arg error "$1" '{ok: false, at: $at, error: $error}')"
+  ping "${HC_BACKUP_URL:-}" /fail "$1"
+  log "$1"
+  exit 1
+}
+
+on_exit() {
+  local rc=$?
+  [ "$rc" -eq 0 ] || [ -n "${FAILED:-}" ] || fail "tachy-backup $MODE exited with $rc"
+}
+MODE=${1:-}
+trap on_exit EXIT
+
+case "${1:-}" in
+db) shift; cmd_db "$@" ;;
+files) cmd_files ;;
+prune) cmd_prune ;;
+*)
+  echo "usage: tachy-backup db [--restore-test] | files | prune" >&2
+  exit 2
+  ;;
+esac
