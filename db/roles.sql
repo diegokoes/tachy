@@ -28,3 +28,5 @@ begin
 end $$;
 
 grant pg_read_all_data to tachy_backup;
+-- Admin > System counts connections per process from pg_stat_activity.
+grant pg_read_all_stats to tachy_app;
