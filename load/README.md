@@ -33,12 +33,16 @@ repo) and run `BASE_URL=http://localhost:8788 k6 run load/smoke.js`.
 
 ## The scenarios
 
-| Script      | Shape             | What it is for                                                                                     |
-| ----------- | ----------------- | -------------------------------------------------------------------------------------------------- |
-| `smoke.js`  | 1 VU, 1 iteration | One call to every endpoint. Run it after every deploy; it takes seconds and every check must pass. |
-| `browse.js` | 20 rps for 2 min  | The read paths a person clicks through: list, detail, facets, download.                            |
-| `search.js` | 1 → 5 → 10 rps    | The two embedding-backed endpoints. This is the one that finds the ceiling.                        |
-| `soak.js`   | 2 rps for 30 min  | Memory and pool behaviour over time, not latency.                                                  |
+| Script          | Shape                          | What it is for                                                                                         |
+| --------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `smoke.js`      | 1 VU, 1 iteration              | One call to every endpoint. Run it after every deploy; it takes seconds and every check must pass.     |
+| `browse.js`     | 20 rps for 2 min               | The read paths a person clicks through: list, detail, facets, download.                                |
+| `search.js`     | 1 → 5 → 10 rps                 | The two embedding-backed endpoints. This is the one that finds the ceiling.                            |
+| `soak.js`       | 2 rps for 30 min               | Memory and pool behaviour over time, not latency.                                                      |
+| `contention.js` | 5 rps search during a backfill | Search p95 must stay within 1.5x `BASELINE_P95_MS`; `ADMIN_TOKEN` starts `embeddings.backfill` itself. |
+| `mixed.js`      | 10 rps, weighted               | A day's traffic; replace the `W_*` placeholder weights with a week of real shares.                     |
+| `spike.js`      | 0 → 30 rps in 10 s             | The morning burst: no 5xx, and it recovers. Dev stack only.                                            |
+| `breakpoint.js` | ramps to `MAX_RATE`            | Stops when search misses 1.5 s; the rate it reached is the release's knee. Dev stack only.             |
 
 `PROFILE=stress npm run load -- /load/search.js` swaps search to 5 → 25 → 50 rps
 and drops the latency bar. Stress is for finding the knee, not for passing.
