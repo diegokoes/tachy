@@ -25,6 +25,7 @@
   import AccessPanel from "./AccessPanel.svelte";
   import SystemPanel from "./SystemPanel.svelte";
   import CredentialsPanel from "./CredentialsPanel.svelte";
+  import JobsPanel from "./JobsPanel.svelte";
 
   type Section = Omit<PageSection, "count" | "tone"> & {
     /** Which census key counts this section. Omitted for a section with nothing to count. */
@@ -46,6 +47,7 @@
       { key: "sources", label: "sources", view: SourcesPanel, n: "sources", show: admin },
       { key: "projects", label: "projects", view: ProjectsPanel, n: "projects" },
       { key: "repos", label: "repos", view: ReposPanel, n: "repos" },
+      { key: "jobs", label: "jobs", view: JobsPanel, show: admin },
     ],
     structure: [
       { key: "overview", label: "overview", view: CatalogPanel, eager: true },
