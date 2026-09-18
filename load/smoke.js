@@ -10,7 +10,7 @@ export const options = {
   thresholds: {
     http_req_failed: ["rate==0"],
     checks: ["rate==1"],
-    "http_req_duration{endpoint:health}": ["p(95)<200"],
+    "http_req_duration{endpoint:readyz}": ["p(95)<200"],
   },
 };
 
@@ -22,8 +22,8 @@ export default function (data) {
     check(res, { [`${name} is 200`]: (r) => r.status === 200 });
 
   ok(
-    "health",
-    http.get(`${BASE_URL}/health`, { tags: { endpoint: "health" } }),
+    "readyz",
+    http.get(`${BASE_URL}/readyz`, { tags: { endpoint: "readyz" } }),
   );
   ok(
     "knowledge list",
