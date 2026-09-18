@@ -1,0 +1,42 @@
+# sshd requires every component of a chroot path to be root-owned and not
+# writable by group or others (sshd_config(5)).
+- name: Chroot path is root-owned
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: ["/srv", "{{ tachy_srv }}", "{{ tachy_srv }}/backup-export"]
+
+- name: One login per downloader, no password and no shell
+  ansible.builtin.user:
+    name: "tachy-backup-{{ item.name }}"
+    group: tachy-backup
+    shell: /usr/sbin/nologin
+    home: "/var/lib/tachy-backup/{{ item.name }}"
+    create_home: true
+    password: "!"
+    system: true
+  loop: "{{ backup_downloaders }}"
+
+- name: Downloader key, restricted, and only from its network
+  ansible.posix.authorized_key:
+    user: "tachy-backup-{{ item.name }}"
+    key: "{{ item.ssh_pubkey }}"
+    key_options: 'restrict,from="{{ item.from | default(lan_cidrs | join(",")) }}{{ ("," + tailscale_cidr) if tailscale_enabled else "" }}"'
+    exclusive: true
+  loop: "{{ backup_downloaders }}"
+
+- name: Read the account list
+  ansible.builtin.getent:
+    database: passwd
+
+- name: Remove downloaders who were taken out of the inventory
+  ansible.builtin.user:
+    name: "{{ item }}"
+    state: absent
+    remove: true
+  loop: >-
+    {{ getent_passwd.keys() | select('match', '^tachy-backup-') | list
+       | difference(backup_downloaders | map(attribute='name') | map('regex_replace', '^', 'tachy-backup-') | list) }}

@@ -1,0 +1,10 @@
+[Unit]
+Description=Database backup with a restore test
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/tachy-backup db --restore-test
+Nice=10
+IOSchedulingClass=idle

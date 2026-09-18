@@ -1,0 +1,72 @@
+- name: Docker's apt repository
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: deb
+    uris: https://download.docker.com/linux/debian
+    suites: "{{ ansible_distribution_release }}"
+    components: stable
+    signed_by: https://download.docker.com/linux/debian/gpg
+
+- name: Stay on one Docker major version until an upgrade window
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/docker-major
+    content: |
+      Package: docker-ce docker-ce-cli
+      Pin: version 5:{{ docker_major }}.*
+      Pin-Priority: 1001
+    mode: "0644"
+
+- name: Docker
+  ansible.builtin.apt:
+    name: [docker-ce, docker-ce-cli, containerd.io, docker-compose-plugin, docker-buildx-plugin]
+    state: present
+    update_cache: true
+
+# /var is a 12 GB partition. With the containerd image store, layers live in
+# containerd's root, not Docker's data-root, so both move to /srv.
+- name: Is there containerd data still under /var?
+  ansible.builtin.find:
+    paths: /var/lib/containerd
+    file_type: any
+  register: containerd_var
+
+- name: Is /srv/containerd already in place?
+  ansible.builtin.stat:
+    path: /srv/containerd
+  register: containerd_srv
+
+- name: Refuse to hide existing containerd data
+  ansible.builtin.fail:
+    msg: >-
+      /var/lib/containerd holds data and /srv/containerd does not exist. Stop
+      Docker, move /var/lib/containerd to /srv/containerd by hand (runbook:
+      deploy/runbooks/full-disk.md), then run the playbook again.
+  when: containerd_var.matched > 0 and not containerd_srv.stat.exists
+
+- name: Containerd root on /srv
+  ansible.builtin.lineinfile:
+    path: /etc/containerd/config.toml
+    regexp: '^#?\s*root\s*='
+    line: 'root = "/srv/containerd"'
+    insertbefore: BOF
+    create: true
+    mode: "0644"
+  notify: Restart docker
+
+- name: Docker data-root on /srv, logs rotated by the local driver
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    content: |
+      {
+        "data-root": "/srv/docker",
+        "log-driver": "local",
+        "log-opts": { "max-size": "20m", "max-file": "10" }
+      }
+    mode: "0644"
+  notify: Restart docker
+
+- name: Docker starts at boot
+  ansible.builtin.systemd_service:
+    name: docker
+    enabled: true
+    state: started

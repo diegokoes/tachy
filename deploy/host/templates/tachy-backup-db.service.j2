@@ -1,0 +1,10 @@
+[Unit]
+Description=Encrypted database backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/tachy-backup db
+Nice=10
+IOSchedulingClass=idle
