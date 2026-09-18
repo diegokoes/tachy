@@ -5,3 +5,4 @@ export * from "./log";
 export * from "./secrets";
 export * from "./hierarchy";
 export * from "./background";
+export * from "./schema-stamp";

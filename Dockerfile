@@ -69,9 +69,10 @@ USER node
 EXPOSE 8787
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-  CMD node -e "fetch('http://localhost:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://localhost:8787/livez').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 ARG TACHY_COMMIT
 ENV TACHY_COMMIT=$TACHY_COMMIT
 
-CMD ["npm", "run", "api"]
+# node directly, not `npm run api`: SIGTERM has to reach the server's drain.
+CMD ["node", "--import", "tsx", "packages/api/src/index.ts"]

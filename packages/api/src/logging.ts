@@ -5,8 +5,8 @@ import { getIdentity } from "./auth";
 const STARTED_KEY = "tachyStartedAt";
 const ERROR_KEY = "tachyError";
 
-/** The Docker healthcheck fires every 30s; at info level it is pure noise. */
-const QUIET_PATHS = new Set(["/health"]);
+/** Probes fire every few seconds; at info level they are pure noise. */
+const QUIET_PATHS = new Set(["/health", "/livez", "/readyz"]);
 
 export const requestIdOf = (c: Context): string | undefined =>
   c.get("requestId" as never) as string | undefined;
