@@ -1,4 +1,4 @@
-FROM node:24.21.0-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553
+FROM node:24.21.0-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553 AS base
 
 # postgresql-client-16: needed by `npm run sync backup`/`restore`
 # (pg_dump/pg_restore). Debian bookworm's own repo only has client v15, and
@@ -19,9 +19,10 @@ WORKDIR /app
 # with locally.
 RUN npm i -g npm@12.0.2
 
-# Copy just the package.jsons first so `npm ci` is cached unless a dependency
-# actually changed (everything here runs straight off the source via tsx, no
-# build step, so the workspace symlinks npm ci creates are all that's needed).
+# Build stage: devDependencies, the model download, the SPA and the bundles.
+FROM base AS build
+
+# The package.jsons alone first, so `npm ci` is cached unless a dependency changed.
 COPY package.json package-lock.json ./
 COPY packages/contract/package.json packages/contract/package.json
 COPY packages/core/package.json packages/core/package.json
@@ -46,15 +47,41 @@ RUN npx tsx scripts/warmup-embeddings.ts
 
 COPY . .
 
-# Build the Svelte SPA to packages/web/dist so the API serves it (single origin).
-# The environment badge is not baked in: the API reads TACHY_ENV_BADGE at runtime,
-# so the same image serves dev and production.
+# The environment badge is not baked into the SPA: the API reads
+# TACHY_ENV_BADGE at runtime, so the same image serves dev and production.
 RUN npm run web:build \
- && npm run build:mcp
+ && npm run build:server
 
-# Every chat turn spawns the MCP server; the bundle starts in half the time and
-# memory of running it under tsx. A dev checkout leaves this unset and uses tsx.
-ENV TACHY_MCP_ARGS=packages/mcp/dist/mcp.js
+# Runtime stage: production dependencies, the bundles, and the three files the
+# server reads from disk. No TypeScript, no tsx, no test tooling.
+FROM base AS runtime
+
+COPY package.json package-lock.json ./
+COPY packages/contract/package.json packages/contract/package.json
+COPY packages/core/package.json packages/core/package.json
+COPY packages/sources/freshdesk/package.json packages/sources/freshdesk/package.json
+COPY packages/sources/github/package.json packages/sources/github/package.json
+COPY packages/sources/azure-devops/package.json packages/sources/azure-devops/package.json
+COPY packages/mcp/package.json packages/mcp/package.json
+COPY packages/agent/package.json packages/agent/package.json
+COPY packages/api/package.json packages/api/package.json
+COPY packages/cli/package.json packages/cli/package.json
+COPY packages/web/package.json packages/web/package.json
+RUN npm ci --omit=dev \
+ && npm cache clean --force
+
+COPY --from=build /app/.model-cache /app/.model-cache
+COPY --from=build /app/dist /app/dist
+COPY --from=build /app/packages/web/dist /app/packages/web/dist
+COPY packages/agent/prompt.md packages/agent/prompt.md
+COPY db db
+
+# `npm run api` / `npm run sync …` keep working inside the image, against the
+# bundles; a source checkout keeps its tsx scripts.
+RUN npm pkg set scripts.api="node dist/api.js" scripts.sync="node dist/cli.js" scripts.mcp="node dist/mcp.js"
+
+ENV TACHY_MODEL_CACHE=/app/.model-cache
+ENV TACHY_MCP_ARGS=dist/mcp.js
 
 # Linked-repo clones for code search live here — mount a volume to keep them
 # across redeploys (otherwise the first reindex re-clones, which is fine too).
@@ -83,4 +110,4 @@ ARG TACHY_COMMIT
 ENV TACHY_COMMIT=$TACHY_COMMIT
 
 # node directly, not `npm run api`: SIGTERM has to reach the server's drain.
-CMD ["node", "--import", "tsx", "packages/api/src/index.ts"]
+CMD ["node", "dist/api.js"]
