@@ -56,8 +56,6 @@ import { csv } from "../fields";
     }
   }
 
-  const mib = (bytes: number) => `${Math.round(bytes / 1024 / 1024)} MiB`;
-
   onMount(load);
 </script>
 
@@ -184,55 +182,6 @@ import { csv } from "../fields";
       </tr>
     </tbody>
   </table>
-
-  {#if system.runtime}
-    {@const r = system.runtime}
-    <GroupHead label="runtime (now, refreshes on reload)" />
-    <table>
-      <thead><tr><th>what</th><th>now</th><th>detail</th></tr></thead>
-      <tbody>
-        <tr>
-          <td>Chat slots</td>
-          <td>{r.turns.slotsUsed} / {r.turns.slotCap}{r.draining ? " · draining" : ""}</td>
-          <td class="muted">running {Object.entries(r.turns.running).map(([p, n]) => `${p} ${n}`).join(", ") || "none"} · queued {r.turns.queued} · refused since boot {r.turns.rejectedSinceBoot}</td>
-        </tr>
-        <tr>
-          <td>Approvals waiting</td>
-          <td>{r.turns.pendingApprovals}</td>
-          <td class="muted">{r.turns.oldestApprovalAgeSeconds === null ? "none" : `oldest ${Math.round(r.turns.oldestApprovalAgeSeconds / 60)} min`}</td>
-        </tr>
-        <tr>
-          <td>API memory</td>
-          <td>{r.memory ? `${mib(r.memory.currentBytes)}${r.memory.maxBytes ? ` / ${mib(r.memory.maxBytes)}` : ""}` : "unknown"}</td>
-          <td class="muted">{r.memory?.percent != null ? `${r.memory.percent}% of the container limit (turns live here)` : "no cgroup limit visible"}</td>
-        </tr>
-        <tr>
-          <td>Event loop delay</td>
-          <td>{r.eventLoopP99Ms} ms</td>
-          <td class="muted">p99 over the last minute</td>
-        </tr>
-        <tr>
-          <td>Embedding queue</td>
-          <td>{r.embed ? `${r.embed.queries} queries · ${r.embed.passages} passages` : "in-process"}</td>
-          <td class="muted">{r.embed ? `${r.embed.callers} callers waiting · ${r.embed.running ? "busy" : "idle"}` : ""}</td>
-        </tr>
-        {#if "error" in r.postgres}
-          <tr><td>Postgres connections</td><td>unknown</td><td class="muted">{r.postgres.error}</td></tr>
-        {:else}
-          <tr>
-            <td>Postgres connections</td>
-            <td>{r.postgres.byProcess.reduce((n, p) => n + p.n, 0)} / {r.postgres.max}</td>
-            <td class="muted">{r.postgres.byProcess.map((p) => `${p.name} ${p.state} ${p.n}`).join(" · ")}</td>
-          </tr>
-        {/if}
-        {#if r.status}
-          {#each Object.entries(r.status) as [name, value] (name)}
-            <tr><td>Host: {name}</td><td colspan="2" class="muted">{JSON.stringify(value)}</td></tr>
-          {/each}
-        {/if}
-      </tbody>
-    </table>
-  {/if}
 
   <!-- The server sends `env` to admins only, so this whole table is theirs. -->
   {#if system.env}
