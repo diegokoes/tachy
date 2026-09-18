@@ -1,7 +1,7 @@
 import { env } from "../infra/env";
 import { badInput } from "../infra/errors";
 import { logContext } from "../infra/log";
-import { EmbedQueue, type EmbedKind } from "./embed-queue";
+import { EmbedQueue, type EmbedKind, type EmbedPriority } from "./embed-queue";
 import { model, EMBEDDING_DIM, EMBEDDING_MODEL, EMBEDDING_SPEC } from "./model";
 
 export {
@@ -24,6 +24,7 @@ export type EmbedBackend = (
   kind: EmbedKind,
   texts: string[],
   caller: string,
+  priority?: EmbedPriority,
 ) => Promise<number[][]>;
 
 const prepare = (text: string, prefix: string) =>
@@ -42,7 +43,7 @@ async function runModel(texts: string[]): Promise<number[][]> {
 const HTTP_CHUNK = 64;
 
 function httpBackend(url: string, secret: string): EmbedBackend {
-  return async (kind, texts, caller) => {
+  return async (kind, texts, caller, priority) => {
     const out: number[][] = [];
     for (let i = 0; i < texts.length; i += HTTP_CHUNK) {
       const res = await fetch(url, {
@@ -51,6 +52,7 @@ function httpBackend(url: string, secret: string): EmbedBackend {
           "content-type": "application/json",
           authorization: `Bearer ${secret}`,
           "x-tachy-caller": caller,
+          "x-tachy-priority": priority ?? "normal",
         },
         body: JSON.stringify({ kind, texts: texts.slice(i, i + HTTP_CHUNK) }),
       });
@@ -68,7 +70,8 @@ function defaultBackend(): EmbedBackend {
   const url = process.env.TACHY_EMBED_URL;
   if (url) return httpBackend(url, process.env.TACHY_INTERNAL_SECRET ?? "");
   const local = new EmbedQueue(runModel);
-  return (kind, texts, caller) => local.embed(kind, texts, caller);
+  return (kind, texts, caller, priority) =>
+    local.embed(kind, texts, caller, priority);
 }
 
 let backend: EmbedBackend | undefined;
@@ -89,7 +92,12 @@ function currentCaller(): string {
 async function embed(kind: EmbedKind, texts: string[]): Promise<number[][]> {
   if (!texts.length) return [];
   backend ??= defaultBackend();
-  const vectors = await backend(kind, texts, currentCaller());
+  const vectors = await backend(
+    kind,
+    texts,
+    currentCaller(),
+    process.env.TACHY_EMBED_PRIORITY === "low" ? "low" : "normal",
+  );
   if (vectors.length !== texts.length)
     throw badInput(
       `embedding produced ${vectors.length} vectors for ${texts.length} inputs`,

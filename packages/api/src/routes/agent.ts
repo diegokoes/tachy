@@ -228,7 +228,8 @@ export async function mcpConfig(
   mcpEnv.TACHY_DB_IDLE_TIMEOUT = "30";
   mcpEnv.TACHY_DB_APP_NAME = "tachy-mcp";
   if (internalEndpoint) {
-    mcpEnv.TACHY_EMBED_URL = `${internalEndpoint.baseUrl}/embed`;
+    mcpEnv.TACHY_EMBED_URL =
+      internalEndpoint.embedUrl ?? `${internalEndpoint.baseUrl}/embed`;
     mcpEnv.TACHY_LOG_URL = `${internalEndpoint.baseUrl}/log`;
     mcpEnv.TACHY_INTERNAL_SECRET = internalEndpoint.secret;
   }
