@@ -1,7 +1,15 @@
-import { mkdtemp, symlink, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  symlink,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { sweepUploads } from "@tachy/core";
 import { extractSource, isPdf } from "../packages/mcp/src/extract";
 
 function minimalPdf(text: string): Buffer {
@@ -79,5 +87,45 @@ describe("extractSource", () => {
     const inside = join(uploads, "ok.txt");
     await writeFile(inside, "fine");
     expect((await extractSource(inside)).text).toBe("fine");
+  });
+
+  it("confines a turn's child to its own user's uploads", async () => {
+    const uploads = await mkdtemp(join(tmpdir(), "tachy-uploads-"));
+    process.env.TACHY_UPLOAD_DIR = uploads;
+    await mkdir(join(uploads, "alice"));
+    await mkdir(join(uploads, "bob"));
+    await writeFile(join(uploads, "alice", "a.txt"), "alice's");
+    await writeFile(join(uploads, "bob", "b.txt"), "bob's");
+
+    process.env.TACHY_UPLOAD_OWNER = "alice";
+    try {
+      expect((await extractSource(join(uploads, "alice", "a.txt"))).text).toBe(
+        "alice's",
+      );
+      await expect(
+        extractSource(join(uploads, "bob", "b.txt")),
+      ).rejects.toThrow("is not an uploaded file");
+    } finally {
+      delete process.env.TACHY_UPLOAD_OWNER;
+    }
+  });
+});
+
+describe("sweepUploads", () => {
+  it("removes uploads past the TTL and the owner directories they leave empty", async () => {
+    const uploads = await mkdtemp(join(tmpdir(), "tachy-uploads-"));
+    process.env.TACHY_UPLOAD_DIR = uploads;
+    await mkdir(join(uploads, "alice"));
+    await mkdir(join(uploads, "bob"));
+    const old = join(uploads, "alice", "old.txt");
+    const fresh = join(uploads, "bob", "fresh.txt");
+    await writeFile(old, "x");
+    await writeFile(fresh, "y");
+    const dayAgo = new Date(Date.now() - 25 * 60 * 60_000);
+    await utimes(old, dayAgo, dayAgo);
+
+    expect(await sweepUploads(24 * 60 * 60_000)).toBe(1);
+    expect(await readdir(uploads)).toEqual(["bob"]);
+    expect(await readdir(join(uploads, "bob"))).toEqual(["fresh.txt"]);
   });
 });

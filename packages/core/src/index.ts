@@ -9,6 +9,7 @@ export {
   sourceToken,
   sourceTokenOptional,
   uploadDir,
+  sweepUploads,
 } from "./infra";
 export {
   AppError,
