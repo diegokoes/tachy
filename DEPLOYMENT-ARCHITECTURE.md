@@ -305,7 +305,7 @@ Alert at 80% on every mount separately.
 Phase 1 (hardened, one api)
 
 LAN/VPN --443--> caddy --> api --+--> postgres
-                                 +--> embed queue (one model, concurrency 2)
+                                 +--> embed worker thread (one model, queries first)
                                  `--> turn trees (cap 15) --> MCP child
                                         MCP child --HTTP--> api embed queue
                                         MCP child ---------> postgres
@@ -486,7 +486,7 @@ defineJob({
     default;
   - `notify` (on failure, on success, never);
   - `created_by`, `updated_by`, and timestamps.
-- **`job_runs`** (what §5.3 called `jobs`):
+- **`job_runs`**:
   - `definition_id` (null for one-off runs), `kind`, `params` snapshot;
   - `trigger` (`schedule` / `manual` / `event`), `scheduled_for`,
     `requested_by`;
@@ -553,8 +553,9 @@ which hands the web app the host (§7). So:
   goes to `log_tail` after passing through `redactForLlm`. A kind that
   handles customer text must never print raw values.
 - **Alerting:** `tachy-watch` checks failed runs and overdue schedules through
-  `/api/admin/system` (§8.2). Per-definition `notify` sends to the same Teams
-  workflow.
+  `/api/system` (§8.2). Per-definition `notify` sends to a second Teams
+  workflow whose URL is a vault credential. `tachy-watch` keeps its own URL on
+  the host, so host alerts still work while the application is down.
 - **Retention:** runs keep 90 days; failed ones 180.
 
 #### 5.3.6 What stays out of the job layer
@@ -756,13 +757,16 @@ Pin the image to a pgvector version as well as a Postgres major: the floating
 | MCP child |          2 |
 | cli       |          5 |
 
-**Roles,** created in `db/schema.sql`:
+**Roles,** created in `db/roles.sql`. It is idempotent, and it runs after
+`schema.sql` on a fresh volume and again on every deploy, because a new table
+needs its grants. Passwords never sit in SQL: `deploy/postgres/role-passwords.sh`
+sets them from `.env`.
 
-| Role           | Used by                   | Rights                                                                              |
-| -------------- | ------------------------- | ----------------------------------------------------------------------------------- |
-| `tachy_owner`  | schema apply              | owns every object                                                                   |
-| `tachy_app`    | api, worker, MCP children | DML on application tables, `statement_timeout` (the worker raises it for long jobs) |
-| `tachy_backup` | `pg_dump`                 | `pg_read_all_data` (Postgres 14+)                                                   |
+| Role           | Used by                   | Rights                                                                                                             |
+| -------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `tachy_owner`  | schema apply              | owns every object. Not created yet: the bootstrap superuser owns the schema until the diff tool (§5.10) applies it |
+| `tachy_app`    | api, worker, MCP children | DML on application tables, `statement_timeout` (the worker raises it for long jobs)                                |
+| `tachy_backup` | `pg_dump`                 | `pg_read_all_data` (Postgres 14+)                                                                                  |
 
 **Why the roles.** The MCP child is driven by a model and receives
 `DATABASE_URL` (`routes/agent.ts:119`), which today is the image's superuser. A
@@ -996,8 +1000,8 @@ the application is broken.
 6. The export directory keeps every dump for 2 days, one a day for 14 days, and
    one a week for 8 weeks. Downloads are occasional, so the history lives on
    the host, and a laptop only needs the latest.
-7. The run records the newest backup's timestamp for the metrics collector, and
-   pings its external heartbeat.
+7. The run writes its result to `/srv/tachy/status/backup.json` and pings its
+   external heartbeat.
 
 **The recipients** are two age keys: the team backup key, and a break-glass key.
 Both private halves live only in the password manager, never on the server and
@@ -1278,7 +1282,7 @@ days, and k6 runs (§11.3) keep latency history per release.
 
 ### 8.1 Signals
 
-**Runtime state in the admin page.** `/api/admin/system` gains a `runtime`
+**Runtime state in the admin page.** `/api/system` gains a `runtime`
 block, current values only, with no time series. It feeds the checks panel:
 
 - turns active, queued and rejected since boot, per provider, against the slot
@@ -1309,9 +1313,11 @@ budget per container, starting now. Every line is one JSON object with an
 `event` field (`http`, `mcp_tool`, `repo_index_failed` and so on) and a request
 id, so `docker compose logs api | grep <request-id>` follows a request. The MCP
 children log an `mcp_tool` line per call (`mcp/src/server.ts:46`), but tachy sets
-no `stderr` callback on the agent SDK, so whether those lines reach the
-container log is **to verify**. If they don't, the api should pass the child's
-stderr through to its own log.
+no `stderr` callback on the agent SDK. Verified on 2026-09-17: those lines never
+reach the container log, because Claude Code does not pass an MCP server's
+stderr on. A child spawned for a turn therefore also posts each line to the
+api's `POST /internal/log` (the same per-boot secret as `/internal/embed`), and
+the api writes it with `source: "mcp"`, the turn id and the request id.
 
 **Tracing.** Deferred. Revisit only when turn latency can't be explained from
 logs.
@@ -1336,7 +1342,7 @@ minute by a systemd timer as `tachy`.
 | readyz through Caddy | `curl https://<name>/readyz`                                           | —                                | 2 consecutive failures         |
 | 5xx rate             | `docker compose logs --since 10m api`, `status >= 500`                 | > 1%                             | > 5%                           |
 | api memory           | the container's cgroup `memory.current` / `memory.max`                 | > 85%                            | an OOM kill in `docker events` |
-| turns queued         | `/api/admin/system` with the API token                                 | queued > 2 min                   | queued > 5 min                 |
+| turns queued         | `/api/system` with the API token                                       | queued > 2 min                   | queued > 5 min                 |
 | Postgres connections | `psql` as `tachy_backup`: `pg_stat_activity` count / `max_connections` | > 80%                            | > 95%                          |
 | long transaction     | `pg_stat_activity`                                                     | > 5 min                          | > 10 min                       |
 | disk, per mount      | `df /var /srv /`                                                       | > 80%                            | > 90%                          |
@@ -1371,12 +1377,15 @@ numbers.
 **Probes**
 
 - `/livez`: the process is up, nothing else. Docker's HEALTHCHECK uses it.
-- `/readyz`: the database answers, the schema matches what the image expects,
+- `/readyz`: the database answers, the schema matches what the image expects
+  (a one-row `schema_meta` table holds the sha256 of the `schema.sql` that
+  built the database, and the image carries its own copy; a database from
+  before the stamp reports `unstamped` and stays ready),
   the embedding model is warm (load it at boot, not on the first search), and
   the process isn't draining. Caddy's upstream check and the watch script
   use it.
 - Keep `/health` as an alias of `/livez` for existing probes. Detailed
-  diagnostics extend `/api/admin/system`, which already exists and already
+  diagnostics extend `/api/system`, which already exists and already
   shows its `env` block only to admins.
 
 **Shutdown on SIGTERM**
@@ -1431,7 +1440,7 @@ both stacks. That contradicts building once and promoting a digest.
   there.
 - `VITE_DEV_BADGE` is removed from the `Dockerfile`, the Compose build args and
   the `Jenkinsfile`.
-- `/api/admin/system` reports the badge beside the image SHA, so it's visible
+- `/api/system` reports the badge beside the image SHA, so it's visible
   which environment answered.
 
 The rule: the image never knows which environment it's in. A `main` deploy
@@ -1501,7 +1510,7 @@ numbers are still needed.
   the table grow, but the load user shows up in "most read". Either exclude the
   load-test user from engagement queries, or correct the README.
 - `smoke.js` doesn't touch the wiki, library images, the admin overview or
-  `/api/admin/system`. As the post-deploy gate, it should reach every route
+  `/api/system`. As the post-deploy gate, it should reach every route
   family at least once.
 - It logs in with a password (`load/lib/session.js`), so production needs a
   dedicated load-test user (§11.3).
@@ -1586,7 +1595,8 @@ admins.
    - every source connection answers (`POST /source-connections/:slug/test`
      already exists; this runs it for all of them);
    - each configured agent backend has a credential;
-   - the upload directory is writable, with free disk on each mount;
+   - the upload directory is writable (until uploads move into Postgres), with
+     free disk on each mount;
    - the newest backup's age, and the last restore test (§6.3);
    - CI status for the running commit, linked to its GitHub Actions run.
 2. **Load runs.** An admin picks a script and a profile, then presses start.
@@ -1711,7 +1721,7 @@ vary per environment.
     children (§5.4);
   - the passage batch reduced from 32 to 8;
   - the MCP entry point compiled to JavaScript, with a 256 MB heap cap;
-  - the `runtime` block on `/api/admin/system` (§8.1);
+  - the `runtime` block on `/api/system` (§8.1);
   - `TACHY_UPLOAD_DIR` set in the image, with an upload sweep.
 - **Backups:** the dump, encrypt and publish timer; one SFTP login per
   downloader; `Get-TachyBackup.ps1` with an example connections file; the
@@ -1727,6 +1737,9 @@ vary per environment.
     `TACHY_ENV_BADGE` at runtime (§10);
   - `tachy-deploy <sha>` with automatic rollback;
   - the Jenkinsfile removed.
+- **Load:** `load/turns.mjs` and the mock Anthropic API
+  (`load/mock-llm/server.mjs`), moved from Phase 2 because the exit criteria
+  below need them.
 - **Hygiene:** `smoke.js` extended to the wiki, library images and admin
   routes; the load-test user, excluded from engagement analytics; Dependabot
   fixed; k6, node and pgvector pinned; `report.*.json`
@@ -1769,7 +1782,7 @@ vary per environment.
 - the compiled build for everything, with no `tsx` at runtime;
 - the `container-smoke` and `schema-plan` CI jobs;
 - the schema-diff spike, adoption, and the matching CONTRIBUTING.md update;
-- k6 `turns.js` and `contention.js`;
+- k6 `contention.js`;
 - the admin `tests` section: checks, `test_runs`, the load-test runner and its
   guardrails (§11.3);
 - key ids for the vault.
@@ -1939,6 +1952,21 @@ vary per environment.
     run only against the dev stack;
   - `turns.js`, only in a load window, against `api-load` and the mock LLM,
     never against production itself (§11.1).
+- **TLS.** Caddy's internal CA to start. Clients install its root once
+  (`deploy/runbooks/tls-client-trust.md`), and `caddy-data` is backed up so a
+  lost volume never forces a reinstall everywhere. An IT-issued certificate is
+  one `.env` change (`TACHY_TLS`) whenever IT provides one.
+- **External heartbeat.** healthchecks.io, one check each for backups, the
+  restore test and `tachy-watch`.
+- **Copilot.** Kept, and counted as 4 chat slots until a turn is measured.
+- **Admin page names.** `connect` becomes `integrations` (sources, projects,
+  repos, jobs), and a `system` page holds runtime, backups, monitoring,
+  release, tests, host and system settings (Phase 2).
+- **Password login under SSO.** Only for accounts flagged
+  `password_login_allowed`: one break-glass admin and the load-test user.
+  Service accounts (`service_account`) are left out of engagement figures.
+- **Job notifications.** A second Teams workflow URL stored in the vault;
+  `tachy-watch`'s URL stays on the host.
 - **Usage counter retention.**
   - `library_views` and `mcp_tool_calls` keep per-person, per-day rows for 13
     months, which is enough to compare a month with the same month a year
@@ -1958,7 +1986,12 @@ vary per environment.
 
 ### 15.2 Still open
 
-- **Name and TLS.** This isn't optional. Entra accepts only `https` redirect
+- **Name.** The internal DNS name, and whether IT will later issue a
+  certificate for it. TLS itself is decided (§15.1); the notes below are the
+  options if the internal CA is ever replaced.
+- **Entra app registration.** SSO needs a client id and secret registered by
+  someone allowed to, with the redirect URI `https://<name>/auth/callback`.
+- **Name and TLS, the options.** This isn't optional. Entra accepts only `https` redirect
   URIs except for localhost, and without TLS, passwords and session cookies
   cross the LAN in clear text anyway. One question for IT decides the route:
   1. **An internal CA whose root is already on company laptops** (for example
@@ -1982,10 +2015,6 @@ vary per environment.
   Syncs on a schedule decide freshness. The event trigger stays internal
   (§5.3.3), so inbound webhooks can be added later as one more way to queue a
   run.
-- **Admin page names.** Proposed: rename `connect` to `integrations` (sources,
-  projects, repos, jobs), and add a `system` page for runtime, backups,
-  monitoring, release, tests, host and system settings. System settings would
-  move there from `access`.
 - **RAM upgrade.** A 32 GB DDR4-3200 SO-DIMM in place of the current 16 GB
   module, the laptop's documented maximum. Everything in §3 is planned to work
   without it; with it, the turn cap can reach about 40.
@@ -2002,13 +2031,35 @@ vary per environment.
      which the no-cloud decision (§1) rules out for now.
 - **Downloaders.** Which two people. Disk space is no constraint at the
   current dump size.
-- **SSO and password login.** SSO needs an Entra app registration made by
-  someone allowed to register apps: a client id and secret, and the redirect URI
-  `https://<name>/auth/callback`, which in turn needs TLS. Until then, password
-  login is the only login. Once SSO works, the proposal is password login only
-  for accounts flagged for it: one break-glass admin, and the load-test user.
-- **Copilot.** Only matters if anyone uses the Copilot backend. If nobody does,
-  drop it. Otherwise, before the turn cap is set, measure how much memory one
-  Copilot turn takes (one developer report showed 4.7 GB), where it saves
-  conversations (if it's inside the container, a redeploy loses "resume"), and
-  whether it can be pointed at a fake model for `turns.js`.
+
+## 16. Implementation status
+
+Built on 2026-09-17 as one branch per pull request, stacked in this order, each
+based on the one before. Phase 1 is complete in code; nothing has been run on
+the laptop yet.
+
+| #   | Branch                             | What                                                | Verified by                                                                                     |
+| --- | ---------------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| 01  | `feat/deploy-01-ci-hygiene`        | CI on `dev`, pinned k6, Dependabot, Jenkins removed | k6 bundles every script                                                                         |
+| 02  | `feat/deploy-02-runtime-env-badge` | `TACHY_ENV_BADGE` at runtime                        | tests                                                                                           |
+| 03  | `feat/deploy-03-embed-batch-8`     | passage batches of 8                                | tests                                                                                           |
+| 04  | `feat/deploy-04-db-pools-roles`    | pools by env, `db/roles.sql`, conf, pinned pgvector | fresh volume: `tachy_app` logs in, cannot create a table                                        |
+| 05  | `feat/deploy-05-health-drain`      | `/livez`, `/readyz`, schema stamp, SIGTERM drain    | SIGTERM on a live server drains and exits                                                       |
+| 06  | `feat/deploy-06-embed-worker`      | one model in a worker thread, `/internal/embed`     | MCP child after a search: 1144 MB → 118 MB                                                      |
+| 07  | `feat/deploy-07-mcp-compiled`      | esbuild MCP bundle, 256 MB heap cap                 | child 107 MB, starts in ~130 ms                                                                 |
+| 08  | `feat/deploy-08-turn-admission`    | slot cap, queue, one turn per user, stop, keepalive | route tests; real CLI: cap 2, 5 turns, 3 queued, all finished                                   |
+| 09  | `feat/deploy-09-uploads-dir-sweep` | per-user uploads, TTL sweep                         | tests                                                                                           |
+| 10  | `feat/deploy-10-admin-runtime`     | runtime block in `/api/system`                      | tests                                                                                           |
+| 11  | `feat/deploy-11-load-turns-mock`   | mock LLM, `load/turns.mjs`, MCP log shipping        | real turns against the mock; `mcp_tool` lines reach the api log                                 |
+| 12  | `feat/deploy-12-compose-prod`      | `deploy/compose.prod.yml`, Caddy                    | built image: TLS, `/internal` 404, read-only turn, `docker stop` mid-turn sends only SIGTERM    |
+| 13  | `feat/deploy-13-ghcr-publish`      | image by commit to GHCR                             | actionlint                                                                                      |
+| 15  | `feat/deploy-15-load-hygiene`      | service accounts, SSO-only passwords, fuller smoke  | tests; smoke 19/19 against a seeded server                                                      |
+| 16  | `feat/deploy-16-backups`           | `tachy-backup`, `Get-TachyBackup.ps1`               | backup + restore test on a seeded stack; drift fails it; PowerShell 7 against an SFTP container |
+| 17  | `feat/deploy-17-tachy-watch`       | `tachy-watch`                                       | posts, escalation, reposts and `--force` against a capture server                               |
+| 18  | `feat/deploy-18-tachy-deploy`      | `tachy-deploy`                                      | good deploy, broken image rolls back, schema change refused                                     |
+| 19  | `feat/deploy-19-host-playbook`     | Ansible playbook                                    | syntax check, ansible-lint, `sshd -t`, `nft -c`, rules applied twice in a container             |
+| 20  | `feat/deploy-20-docs-runbooks`     | runbooks, README, this section                      | —                                                                                               |
+
+PR 14 in the plan (the turn load test) landed with PR 11. Still to verify on the
+laptop: the sshd log wording `tachy-watch` parses for downloads, and
+`Get-TachyBackup.ps1` under Windows PowerShell 5.1.
