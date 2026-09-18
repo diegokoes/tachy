@@ -263,6 +263,11 @@ export function installAuth(
           recordFailure(email);
           return c.json({ error: "invalid email or password" }, 401);
         }
+        if (oidc && !user.password_login_allowed)
+          return c.json(
+            { error: "this account signs in with SSO; password login is off" },
+            403,
+          );
         await setSessionCookie(c, user.email);
         return c.json({
           email: user.email,

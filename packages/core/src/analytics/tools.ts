@@ -7,6 +7,10 @@ export interface ToolCallOutcome {
   misuse: boolean;
 }
 
+/** True for a service account, whose activity is not engagement. */
+export const SERVICE_ACCOUNT = (userId: string | null) =>
+  sql`coalesce((select service_account from users where id = ${userId}::uuid), false)`;
+
 /** Record one agent tool call in its tool/person/day bucket. */
 export async function recordToolCall(
   tool: string,
@@ -16,8 +20,9 @@ export async function recordToolCall(
 ): Promise<void> {
   await sql`
     insert into mcp_tool_calls (tool, writes, user_id, day, calls, failures, misuse)
-    values (${tool}, ${writes}, ${userId}, current_date, 1,
-            ${outcome.ok ? 0 : 1}, ${outcome.misuse ? 1 : 0})
+    select ${tool}, ${writes}, ${userId}::uuid, current_date, 1,
+           ${outcome.ok ? 0 : 1}, ${outcome.misuse ? 1 : 0}
+    where not ${SERVICE_ACCOUNT(userId)}
     on conflict (tool, user_id, day) do update set
       calls = mcp_tool_calls.calls + 1,
       failures = mcp_tool_calls.failures + excluded.failures,
