@@ -93,6 +93,8 @@ export interface Decision {
 
 export interface AgentTurn {
   readonly finished: boolean;
+  /** Approval requests still waiting on the user. */
+  readonly pendingApprovals: number;
   events(): AsyncGenerator<AgentEvent>;
   approve(id: string, decision: Decision): void;
   abort(): void;

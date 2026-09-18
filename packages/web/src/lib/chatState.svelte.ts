@@ -18,7 +18,8 @@ export type EntryData =
       raw?: string;
       status: "pending" | "approved" | "denied";
     }
-  | { kind: "error"; text: string };
+  | { kind: "error"; text: string }
+  | { kind: "running"; turnId: string; text: string; stopped: boolean };
 
 /** Stable per-entry key — index keys break on the export_table splice. */
 export type Entry = EntryData & { key: number };
@@ -38,6 +39,8 @@ export const chat = $state({
   busy: false,
   sessionId: undefined as string | undefined,
   turnId: undefined as string | undefined,
+  /** Place in the server's queue while every chat slot is taken. */
+  queuePosition: null as number | null,
   uploads: [] as { path: string; filename: string }[],
   artifact: undefined as { id: string; title: string } | undefined,
 });

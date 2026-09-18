@@ -25,6 +25,9 @@ const SETTING_SCHEMAS = {
   allowed_models: z.array(z.string().min(1)),
   org_name: z.string().min(1),
   deployment_profile: z.enum(DEPLOYMENT_PROFILES),
+  agent_slot_cap: z.number().int().min(1).max(500),
+  copilot_slot_weight: z.number().int().min(1).max(32),
+  agent_queue_max: z.number().int().min(0).max(500),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;
@@ -81,6 +84,9 @@ export interface EffectiveSettings {
   allowed_models: { value: string[]; source: SettingSource };
   org_name: { value: string | null; source: SettingSource };
   deployment_profile: { value: DeploymentProfile; source: SettingSource };
+  agent_slot_cap: { value: number; source: SettingSource };
+  copilot_slot_weight: { value: number; source: SettingSource };
+  agent_queue_max: { value: number; source: SettingSource };
 }
 
 export async function effectiveSettings(): Promise<EffectiveSettings> {
@@ -133,6 +139,9 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
       undefined,
       "support",
     ),
+    agent_slot_cap: pick(db.agent_slot_cap, undefined, 15),
+    copilot_slot_weight: pick(db.copilot_slot_weight, undefined, 4),
+    agent_queue_max: pick(db.agent_queue_max, undefined, 10),
   };
 }
 
