@@ -49,7 +49,12 @@ describe("seed", () => {
   it("fills every table in the schema", async () => {
     const empty: string[] = [];
     // Written by whatever applied the schema, never by the seeder.
-    const bookkeeping = new Set(["schema_meta"]);
+    const bookkeeping = new Set([
+      "schema_meta",
+      "job_definitions",
+      "job_runs",
+      "job_definition_changes",
+    ]);
     for (const t of await tables()) {
       if (bookkeeping.has(t)) continue;
       const [{ n }] = await sql.unsafe<{ n: string }[]>(

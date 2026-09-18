@@ -21,6 +21,11 @@ import {
   SCOPES,
   WIKI_GAP_KINDS,
   LIBRARY_ASSET_TYPES,
+  JOB_RESOURCE_CLASSES,
+  JOB_OVERLAP,
+  JOB_NOTIFY,
+  JOB_TRIGGERS,
+  JOB_STATUSES,
 } from "@tachy/core";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -66,6 +71,12 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     ["credentials", "scope", SCOPES],
     ["preferences", "scope", SCOPES],
     ["artifacts", "scope", SCOPES],
+    ["job_definitions", "resource_class", JOB_RESOURCE_CLASSES],
+    ["job_definitions", "overlap", JOB_OVERLAP],
+    ["job_definitions", "notify", JOB_NOTIFY],
+    ["job_runs", "resource_class", JOB_RESOURCE_CLASSES],
+    ["job_runs", "trigger", JOB_TRIGGERS],
+    ["job_runs", "status", JOB_STATUSES],
   ] as const)("%s.%s", (table, col, values) => {
     expect(checkValues(table, col).sort()).toEqual([...values].sort());
   });
