@@ -44,6 +44,55 @@ jobs:
       # running both would pay for the suite twice.
       - run: npm run coverage
 
+  # Built once per commit that passed the tests, and pulled by digest on the
+  # host; the host never builds. `dev` and `main` are convenience tags only.
+  image:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: name
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "image=ghcr.io/${owner}/tachy" >> "$GITHUB_OUTPUT"
+          echo "short=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: TACHY_COMMIT=${{ steps.name.outputs.short }}
+          tags: |
+            ${{ steps.name.outputs.image }}:sha-${{ steps.name.outputs.short }}
+            ${{ steps.name.outputs.image }}:${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Record the digest
+        run: |
+          ref="${{ steps.name.outputs.image }}@${{ steps.push.outputs.digest }}"
+          echo "$ref" > image-ref.txt
+          echo "Image: \`$ref\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-ref
+          path: image-ref.txt
+
   # The k6 scenarios need a live, seeded server, so they cannot run here. This
   # only bundles them: it catches a syntax error or a bad import in seconds.
   load-scripts:
