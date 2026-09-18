@@ -8,6 +8,11 @@
 #                                     checked-out db/schema.sql (once, after
 #                                     verifying it by hand on a pre-stamp database)
 #
+#   tachy-deploy <commit> --allow-destructive
+#                                     apply a schema plan that drops or rewrites
+#                                     data (pg-schema-diff hazards; see
+#                                     deploy/postgres/schema-hazards.sh)
+#
 # Rollback is `tachy-deploy <previous commit>`: safe while the previous image
 # accepts the current schema, which is what expand-and-contract is for.
 set -euo pipefail
@@ -15,6 +20,8 @@ set -euo pipefail
 HERE=$(dirname "$(readlink -f "$0")")
 # shellcheck source=common.sh
 . "${TACHY_COMMON:-$HERE/common.sh}"
+# shellcheck source=../postgres/schema-hazards.sh
+. "${TACHY_HAZARDS:-$HERE/../postgres/schema-hazards.sh}"
 
 IMAGE_REPO=${TACHY_IMAGE_REPO:-ghcr.io/diegokoes/tachy}
 DEPLOY_LOG=${TACHY_DEPLOY_LOG:-$TACHY_SRV/deploy.log}
@@ -23,15 +30,17 @@ read -ra BACKUP <<<"${TACHY_BACKUP_BIN:-tachy-backup}"
 K6_IMAGE=${TACHY_K6_IMAGE:-grafana/k6:2.2.0}
 
 PULL=true
+ALLOW_DESTRUCTIVE=false
 TARGET=""
 for arg in "$@"; do
   case "$arg" in
   --no-pull) PULL=false ;;
+  --allow-destructive) ALLOW_DESTRUCTIVE=true ;;
   -*) echo "unknown option $arg" >&2; exit 2 ;;
   *) TARGET=$arg ;;
   esac
 done
-[ -n "$TARGET" ] || { echo "usage: tachy-deploy <commit|branch> [--no-pull] | stamp" >&2; exit 2; }
+[ -n "$TARGET" ] || { echo "usage: tachy-deploy <commit|branch> [--no-pull] [--allow-destructive] | stamp" >&2; exit 2; }
 
 exec 9>"${TACHY_DEPLOY_LOCK:-/tmp/tachy-deploy.lock}"
 flock -n 9 || { echo "another deploy is running" >&2; exit 1; }
@@ -49,8 +58,8 @@ live_stamp() {
 }
 
 stamp_now() {
-  local hash
-  hash=$(sha256sum "$TACHY_DIR/db/schema.sql" | cut -d' ' -f1)
+  local hash=${1:-}
+  [ -n "$hash" ] || hash=$(sha256sum "$TACHY_DIR/db/schema.sql" | cut -d' ' -f1)
   pg_owner -c "insert into schema_meta (schema_sha256) values ('$hash')
     on conflict (id) do update set schema_sha256 = excluded.schema_sha256, applied_at = now()" >/dev/null
   log "schema stamped $hash"
@@ -135,21 +144,53 @@ IMAGE=$(resolve_image "$COMMIT")
 docker image inspect "$IMAGE" >/dev/null || { log "image $IMAGE is not available"; exit 1; }
 log "image $IMAGE"
 
+# schema_diff <plan|apply> [args]: pg-schema-diff from the new image, against the
+# live database, to the new image's db/schema.sql and db/roles.sql (the tool
+# loads a directory in lexical order, and the live grants come from roles.sql).
+schema_diff() {
+  local cmd=$1
+  shift
+  docker run --rm --network "$(project)" --entrypoint sh \
+    -e PGPASSWORD="$(app_env POSTGRES_PASSWORD)" "$IMAGE" -c '
+      mkdir -p /tmp/target && cp /app/db/schema.sql /tmp/target/10-schema.sql &&
+      cp /app/db/roles.sql /tmp/target/20-roles.sql &&
+      exec pg-schema-diff "$@" --to-dir /tmp/target --data-pack-new-tables=false' \
+    schema-diff "$cmd" \
+    --from-dsn "postgres://$(app_env POSTGRES_USER tachy)@postgres:5432/$(app_env POSTGRES_DB tachy)?sslmode=disable" \
+    "$@"
+}
+
 NEW_SCHEMA=$(git_ show "$COMMIT:db/schema.sql" | sha256sum | cut -d' ' -f1)
 LIVE_SCHEMA=$(live_stamp)
 SCHEMA=unchanged
-if [ "$LIVE_SCHEMA" = unstamped ]; then
-  SCHEMA=unstamped
-  log "warning: the live database has no schema stamp; run 'tachy-deploy stamp' once it is verified"
+PLAN=$(schema_diff plan --output-format json)
+STATEMENTS=$(jq '.statements | length' <<<"${PLAN:-"{\"statements\":[]}"}")
+if [ "$STATEMENTS" -gt 0 ]; then
+  SCHEMA=planned
+  log "schema plan: $STATEMENTS statement(s)"
+  jq -r '.statements[] | "  \(.ddl)" + (if (.hazards // []) | length > 0 then "  [" + ([.hazards[].type] | join(", ")) + "]" else "" end)' <<<"$PLAN" >&2
+  DESTRUCTIVE=$(jq -r --arg d "$SCHEMA_DESTRUCTIVE_HAZARDS" \
+    '[.statements[].hazards[]?.type] | map(select(. as $t | ($d | split(",") | index($t)))) | unique | join(",")' <<<"$PLAN")
+  if [ -n "$DESTRUCTIVE" ] && ! $ALLOW_DESTRUCTIVE; then
+    record "$COMMIT" "$IMAGE" "$PREV_IMAGE" "destructive: $DESTRUCTIVE" "refused"
+    log "refused: the schema plan has destructive hazards ($DESTRUCTIVE). Read it, then rerun with --allow-destructive."
+    exit 1
+  fi
 elif [ "$LIVE_SCHEMA" != "$NEW_SCHEMA" ]; then
-  record "$COMMIT" "$IMAGE" "$PREV_IMAGE" "differs" "refused"
-  log "refused: $COMMIT changes db/schema.sql and there is no schema diff tool yet."
-  log "Upgrade by dump, recreate and restore (deploy/runbooks/schema-change.md), then stamp."
-  exit 1
+  SCHEMA=stamped
 fi
 
 log "pre-deploy backup"
 "${BACKUP[@]}" db
+
+if [ "$SCHEMA" = planned ]; then
+  allow=$SCHEMA_SAFE_HAZARDS
+  $ALLOW_DESTRUCTIVE && allow="$allow,$SCHEMA_DESTRUCTIVE_HAZARDS"
+  log "applying the schema plan"
+  schema_diff apply --allow-hazards "$allow" --skip-confirm-prompt >&2
+  SCHEMA=applied
+fi
+[ "$LIVE_SCHEMA" = "$NEW_SCHEMA" ] || stamp_now "$NEW_SCHEMA"
 
 roll "$COMMIT" "$IMAGE"
 # Idempotent, and a new table needs its grants.

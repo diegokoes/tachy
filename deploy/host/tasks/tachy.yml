@@ -11,7 +11,7 @@
     path: "{{ tachy_lib }}/{{ item }}"
     state: directory
     mode: "0755"
-  loop: [host, backup, watch]
+  loop: [host, backup, watch, postgres]
 
 - name: Data directories
   ansible.builtin.file:
@@ -68,6 +68,7 @@
   loop:
     - { src: host/common.sh, mode: "0644" }
     - { src: host/tachy-deploy, mode: "0755" }
+    - { src: postgres/schema-hazards.sh, mode: "0644" }
     - { src: backup/tachy-backup, mode: "0755" }
     - { src: watch/tachy-watch, mode: "0755" }
 
