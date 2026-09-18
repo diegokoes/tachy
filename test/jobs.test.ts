@@ -18,7 +18,7 @@ import {
   startJobWorker,
   updateJobDefinition,
 } from "@tachy/core";
-import { sql } from "./helpers";
+import { sql, resetJobs } from "./helpers";
 
 afterAll(() => sql.end());
 
@@ -62,7 +62,7 @@ defineJob({
 });
 
 beforeEach(async () => {
-  await sql`truncate job_definition_changes, job_runs, job_definitions`;
+  await resetJobs();
   calls.length = 0;
 });
 

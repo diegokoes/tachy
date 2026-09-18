@@ -14,7 +14,7 @@ import {
   sweepOrphanAssets,
   sweepTranscripts,
 } from "@tachy/core";
-import { resetData, sql } from "./helpers";
+import { resetData, sql, resetJobs } from "./helpers";
 
 afterAll(() => sql.end());
 
@@ -22,7 +22,7 @@ registerCoreJobs();
 
 beforeEach(async () => {
   await resetData();
-  await sql`truncate job_definition_changes, job_runs, job_definitions`;
+  await resetJobs();
 });
 
 describe("core job kinds", () => {

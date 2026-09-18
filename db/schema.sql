@@ -1072,3 +1072,27 @@ create table job_definition_changes (
 );
 
 create index job_definition_changes_def_idx on job_definition_changes(definition_id, created_at desc);
+
+-- Load runs started from the admin page (DEPLOYMENT-ARCHITECTURE.md §11.3).
+-- Their history is the latency record per release.
+create table test_runs (
+    id            uuid primary key default gen_random_uuid(),
+    script        text not null,
+    profile       text,
+    target        text not null,
+    status        text not null default 'queued'
+                  check (status in ('queued','running','passed','failed','cancelled','error')),
+    requested_by  uuid references users(id) on delete set null,
+    image_sha     text,
+    job_run_id    uuid references job_runs(id) on delete set null,
+    summary       jsonb,
+    output_tail   text not null default '',
+    created_at    timestamptz not null default now(),
+    started_at    timestamptz,
+    finished_at   timestamptz
+);
+
+create index test_runs_created_idx on test_runs(created_at desc);
+-- One at a time: a second run would measure the first one's load.
+create unique index test_runs_active_idx on test_runs((status in ('queued','running')))
+    where status in ('queued','running');

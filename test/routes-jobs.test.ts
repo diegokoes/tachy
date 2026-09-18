@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createUser } from "@tachy/core";
 import { createApp } from "../packages/api/src/app";
-import { json, loginCookie, resetData, sql } from "./helpers";
+import { json, loginCookie, resetData, sql, resetJobs } from "./helpers";
 
 afterAll(() => sql.end());
 
@@ -20,7 +20,7 @@ const call = (path: string, method = "GET", body?: unknown, who = cookie) =>
 
 beforeEach(async () => {
   await resetData();
-  await sql`truncate job_definition_changes, job_runs, job_definitions`;
+  await resetJobs();
   await createUser({
     email: "ops@example.com",
     password: "a-long-password",

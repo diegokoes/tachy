@@ -55,6 +55,7 @@ describe("seed", () => {
       "job_runs",
       "job_definition_changes",
       "chat_uploads",
+      "test_runs",
     ]);
     for (const t of await tables()) {
       if (bookkeeping.has(t)) continue;
