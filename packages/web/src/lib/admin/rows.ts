@@ -164,7 +164,6 @@ export type SystemInfo = {
     session_secret_set: boolean;
     anthropic_api_key_set: boolean;
     copilot_token_set: boolean;
-    upload_dir: string | null;
     env_badge: string | null;
     commit: string | null;
   };

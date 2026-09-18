@@ -8,8 +8,11 @@ export {
   azureDevopsToken,
   sourceToken,
   sourceTokenOptional,
-  uploadDir,
   sweepUploads,
+  saveUpload,
+  readUpload,
+  uploadRef,
+  parseUploadRef,
 } from "./infra";
 export {
   AppError,
