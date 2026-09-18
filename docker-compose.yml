@@ -40,7 +40,7 @@ services:
     build:
       context: .
       args:
-        VITE_DEV_BADGE: ${VITE_DEV_BADGE:-}
+        TACHY_COMMIT: ${TACHY_COMMIT:-}
     container_name: ${COMPOSE_PROJECT_NAME:-tachy}-api
     restart: unless-stopped
     env_file: .env
@@ -74,8 +74,7 @@ services:
   #   docker compose run --rm cli npm run sync embed-backfill
   cli:
     # No `build:` — a second build definition for the same tag would race the
-    # api's, and drop VITE_DEV_BADGE from the SPA the api serves. `up -d --build`
-    # produces the image this runs on.
+    # api's. `up -d --build` produces the image this runs on.
     image: ${TACHY_IMAGE:-diegokoes/tachy:latest}
     profiles: ["tools"]
     env_file: .env

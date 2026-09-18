@@ -97,6 +97,7 @@ describe("first-run setup wizard", () => {
 
     const cfg = await (await app.request("/auth/config")).json();
     expect(cfg.profile).toBe("engineering");
+    expect(cfg.envBadge).toBeNull();
   });
 
   it("locks /api against anonymous requests after bootstrap", async () => {
