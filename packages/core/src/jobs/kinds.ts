@@ -54,17 +54,45 @@ export async function ensureDefaultDefinitions(): Promise<string[]> {
   return created;
 }
 
+/** Whether this database has the job layer's tables yet. */
+async function jobTablesExist(): Promise<boolean> {
+  const [row] = await sql`
+    select to_regclass('job_runs') is not null
+       and to_regclass('job_definitions') is not null as ready
+  `;
+  return Boolean(row?.ready);
+}
+
 /**
  * What a process that runs jobs does at start: register the kinds, create the
  * default definitions, and work the given classes. A run that ignores its
  * cancel signal past the grace period restarts the process, the only way to
  * stop code already running in it.
+ *
+ * An image can reach a database whose schema has not been applied yet — a
+ * deploy in flight, or a checkout someone started by hand. Jobs then wait for
+ * their tables instead of taking the process down with them; everything else
+ * keeps serving, and /readyz already reports the schema mismatch.
  */
 export async function startJobProcess(opts: {
   classes: string[];
   concurrency: number;
+  waitMs?: number;
 }) {
   registerCoreJobs();
+  const waitMs = opts.waitMs ?? 15_000;
+  for (
+    let attempt = 0;
+    !(await jobTablesExist().catch(() => false));
+    attempt++
+  ) {
+    if (attempt === 0)
+      log("error", "job_tables_missing", {
+        detail:
+          "the job tables are not in this database yet; jobs stay off until the schema is applied (tachy-deploy applies it)",
+      });
+    await new Promise((r) => setTimeout(r, waitMs));
+  }
   const created = await ensureDefaultDefinitions();
   if (created.length) log("info", "job_default_definitions", { created });
   return startJobWorker({
