@@ -21,10 +21,9 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
     args: "<source> <ticket-id>",
     description: "Ingest a ticket and draft a knowledge entry for review",
     expand: (args) =>
-      [
-        "Run INGEST MODE as defined in your instructions. Do not save anything before the user approves.",
-        argsLine(args),
-      ].join("\n"),
+      ["Run INGEST MODE as defined in your instructions.", argsLine(args)].join(
+        "\n",
+      ),
   },
   {
     name: "consult",
@@ -74,7 +73,7 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
     description: "Pull Azure DevOps wiki pages into reference docs",
     expand: (args) =>
       [
-        "Run the ADO WIKI flow of CONTEXT DUMP MODE as defined in your instructions. Save only after the user approves.",
+        "Run the ADO WIKI flow of CONTEXT DUMP MODE as defined in your instructions.",
         argsLine(args),
       ].join("\n"),
   },
