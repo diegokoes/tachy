@@ -5,7 +5,9 @@ import {
   qualify,
   claudePermission,
   claudeEnv,
+  claudeOptions,
   copilotPermission,
+  copilotSessionConfig,
   effectiveModel,
   explainFailure,
   READ_TOOLS,
@@ -66,6 +68,47 @@ describe("agent tool allowlist (security boundary)", () => {
     ]);
     const unlisted = registered.filter((t) => !listed.has(t));
     expect(unlisted).toEqual([]);
+  });
+
+  /**
+   * The prompt and the slash commands name tools by hand. A rename on the MCP
+   * side leaves them pointing at nothing, and the model is told to call a tool
+   * that does not exist. Input fields share the verbs (`post_note`), so they
+   * are told apart by being declared as a schema key.
+   */
+  it("names only registered tools in the prompt and the slash commands", () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const mcp = join(here, "..", "packages", "mcp", "src");
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory()
+          ? walk(join(dir, e.name))
+          : e.name.endsWith(".ts")
+            ? [readFileSync(join(dir, e.name), "utf8")]
+            : [],
+      );
+    const sources = walk(mcp);
+    const registered = new Set(
+      sources.flatMap((s) =>
+        [...s.matchAll(/^tool\(\n\s*"([a-z0-9_]+)"/gm)].map((m) => m[1]),
+      ),
+    );
+    const fields = new Set(
+      sources.flatMap((s) =>
+        [...s.matchAll(/^\s+([a-z0-9_]+): z\./gm)].map((m) => m[1]),
+      ),
+    );
+    const text = ["packages/agent/prompt.md", "packages/api/src/commands.ts"]
+      .map((f) => readFileSync(join(here, "..", f), "utf8"))
+      .join("\n");
+    const verbs =
+      /\b(?:list|get|add|set|save|update|search|fetch|create|post|compact|ingest|export|read|draft|record)_[a-z0-9_]+\b/g;
+    const named = new Set(text.match(verbs));
+    const missing = [...named].filter(
+      (t) => !registered.has(t) && !fields.has(t),
+    );
+    expect(named.size).toBeGreaterThan(20);
+    expect(missing).toEqual([]);
   });
 
   it("denies any non-tachy / built-in tool", () => {
@@ -360,7 +403,8 @@ describe("claude subprocess environment (per-user credential isolation)", () => 
     mcpArgs: [],
     mcpEnv: {},
     cwd: "/tmp",
-    systemPromptAppend: "",
+    sessionCwd: "/tmp/empty",
+    systemPrompt: "",
   };
 
   const HOST_VARS = [
@@ -429,6 +473,73 @@ describe("claude subprocess environment (per-user credential isolation)", () => 
     const env = claudeEnv({ ...base, configDir: "/state/users/u1" });
     expect(env.CLAUDE_CONFIG_DIR).toBe("/state/users/u1");
     expect(env.CLAUDE_CODE_DISABLE_AUTO_MEMORY).toBe("1");
+  });
+
+  it("keeps the caller's claude.ai connectors out of the turn", () => {
+    expect(claudeEnv(base).ENABLE_CLAUDEAI_MCP_SERVERS).toBe("false");
+  });
+});
+
+/**
+ * What reaches the model besides the conversation. Each SDK defaults to
+ * reading instructions, settings and servers from disk, and a file picked up
+ * that way is paid for on every turn without anyone having written it for the
+ * agent.
+ */
+describe("what each backend reads", () => {
+  const cfg: AgentConfig = {
+    provider: "claude",
+    mcpCommand: "node",
+    mcpArgs: ["packages/mcp/src/index.ts"],
+    mcpEnv: {},
+    cwd: "/app",
+    sessionCwd: "/tmp/tachy-agent-empty",
+    systemPrompt: "the prompt",
+  };
+  const allow = async () => ({ approve: true });
+
+  it("gives Claude the prompt as its whole system prompt, and nothing from disk", () => {
+    const o = claudeOptions(cfg, {}, new AbortController(), async () => ({
+      behavior: "deny",
+      message: "",
+    }));
+    expect(o.systemPrompt).toBe("the prompt");
+    expect(o.settingSources).toEqual([]);
+    expect(o.strictMcpConfig).toBe(true);
+    expect(o.title).toBeTruthy();
+    expect(o.cwd).toBe("/app");
+  });
+
+  // With tool search on, the tachy tools are deferred behind ToolSearch; a
+  // turn without it starts with no tools at all.
+  it("keeps ToolSearch and no other Claude Code built-in", () => {
+    const o = claudeOptions(cfg, {}, new AbortController(), async () => ({
+      behavior: "deny",
+      message: "",
+    }));
+    expect(o.tools).toEqual(["ToolSearch"]);
+  });
+
+  it("runs the Copilot session from the empty directory and the MCP server from the repo", () => {
+    const c = copilotSessionConfig(cfg, allow);
+    expect(c.workingDirectory).toBe("/tmp/tachy-agent-empty");
+    expect(c.skipCustomInstructions).toBe(true);
+    expect(c.availableTools).toEqual(["mcp:*"]);
+    expect(c.systemMessage).toEqual({ mode: "append", content: "the prompt" });
+    const mcp = c.mcpServers?.tachy as {
+      workingDirectory?: string;
+      tools?: string[];
+    };
+    expect(mcp.workingDirectory).toBe("/app");
+  });
+
+  // The typings call `tools` optional; the runtime logs "No tools specified
+  // for server" and starts the session without the server.
+  it("names the tools Copilot takes from the tachy server", () => {
+    const mcp = copilotSessionConfig(cfg, allow).mcpServers?.tachy as {
+      tools?: string[];
+    };
+    expect(mcp.tools).toEqual(["*"]);
   });
 });
 

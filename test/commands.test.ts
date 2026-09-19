@@ -5,6 +5,9 @@ import {
   commandAutoApprove,
 } from "../packages/api/src/commands";
 import { buildPrompt } from "../packages/api/src/turn-config";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 describe("slash command registry", () => {
   it("exposes the built-in workflow commands", () => {
@@ -50,6 +53,34 @@ describe("slash command registry", () => {
     expect(t).toContain(
       "User arguments: tpd component=printing article=spooler-stalls",
     );
+  });
+
+  /**
+   * An expansion points at a mode by name and the steps live in prompt.md.
+   * Renaming a heading there would leave the command naming a mode the model
+   * has never been told about.
+   */
+  it("names only modes the agent prompt defines", () => {
+    const prompt = readFileSync(
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        "..",
+        "packages/agent/prompt.md",
+      ),
+      "utf8",
+    );
+    const headings = new Set(
+      [...prompt.matchAll(/^### (.+?)(?: —|$)/gm)].map((m) =>
+        m[1].trim().toLowerCase(),
+      ),
+    );
+    const named = BUILTIN_COMMANDS.flatMap((c) =>
+      [...c.expand("").matchAll(/\b([A-Z][A-Z ]*[A-Z]) MODE\b/g)].map((m) =>
+        m[1].toLowerCase(),
+      ),
+    );
+    expect(named.length).toBeGreaterThan(4);
+    expect(named.filter((m) => !headings.has(m))).toEqual([]);
   });
 
   it("expands args into the command block", () => {
