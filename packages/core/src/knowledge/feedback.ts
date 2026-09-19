@@ -1,4 +1,4 @@
-import { sql } from "../infra/db";
+import { sql, jsonb } from "../infra/db";
 
 export interface FeedbackInput {
   knowledgeEntryId: string;
@@ -15,7 +15,7 @@ export async function addFeedback(i: FeedbackInput) {
       (knowledge_entry_id, user_id, kind, rating, comment, patch)
     values
       (${i.knowledgeEntryId}, ${i.userId ?? null}, ${i.kind ?? "note"}, ${i.rating ?? null},
-       ${i.comment ?? null}, ${i.patch ? sql.json(i.patch as any) : null})
+       ${i.comment ?? null}, ${i.patch ? jsonb(i.patch) : null})
     returning id, kind, created_at
   `;
   return row;

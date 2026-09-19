@@ -34,3 +34,9 @@ function toDate(v?: string | null): Date | null {
 export { toDate };
 
 export type Db = typeof sql | TransactionSql;
+
+/**
+ * A jsonb parameter. `sql.json` is typed to postgres.js's JSONValue, which a
+ * value typed `Record<string, unknown>` does not satisfy, so the cast lives here.
+ */
+export const jsonb = (value: unknown) => sql.json(value as postgres.JSONValue);

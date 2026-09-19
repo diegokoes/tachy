@@ -1,4 +1,4 @@
-import { sql } from "../infra/db";
+import { sql, jsonb } from "../infra/db";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { badInput, notFound } from "../infra/errors";
 import { addSourceProject, deleteSourceProject } from "./projects";
@@ -17,7 +17,7 @@ export async function listSourceConnections() {
 export async function addSourceConnection(i: SourceConnectionInput) {
   const [row] = await sql`
     insert into source_connections (source_type, slug, base_url, config)
-    values (${i.sourceType}, ${i.slug}, ${i.baseUrl ?? null}, ${sql.json((i.config ?? {}) as any)})
+    values (${i.sourceType}, ${i.slug}, ${i.baseUrl ?? null}, ${jsonb(i.config ?? {})})
     on conflict (slug) do update set
       source_type = excluded.source_type,
       base_url    = excluded.base_url,
