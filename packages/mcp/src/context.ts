@@ -1,3 +1,8 @@
+/**
+ * What a work item comes back with: its transcript compacted, its customer's
+ * profile inline, the Azure DevOps items it references already fetched, and
+ * whatever freeform sources were handed in alongside it.
+ */
 import {
   resolveSource,
   ingestWorkItem,
@@ -5,6 +10,7 @@ import {
   sql,
   resolveComponentFilter,
   getProductIdBySlug,
+  getCustomerName,
   getCustomerProfile,
   getCustomerSlug,
   resolveRedactionPolicy,
@@ -19,13 +25,14 @@ import {
   fetchUntrustedUrl,
   stripHtml,
 } from "@tachy/core";
-import type { RawWorkItem } from "@tachy/core";
+import type { IngestedItem, RawWorkItem } from "@tachy/core";
 import { extractSource } from "./extract";
 
 /**
- * What a work item comes back with: its transcript compacted, its customer's
- * profile inline, the Azure DevOps items it references already fetched, and
- * whatever freeform sources were handed in alongside it.
+ * Tool results have a size ceiling that a whole transcript exceeds, so turns
+ * are capped at `maxChars`. A turn that does not fit is skipped, not treated as
+ * the end: one long turn early in a ticket must not hide the readable turns
+ * after it.
  */
 export function capTurns<T extends { text: string }>(
   turns: T[],
@@ -167,6 +174,30 @@ export async function unresolvedUnit(
 
 export const MAX_LINKED_ITEMS = 5;
 export const LINKED_BODY_CHARS = 2000;
+
+/**
+ * Who a work item is about and where it sits: its customer, with a customer or
+ * unit the routing could not settle flagged, the customer's profile, the
+ * version it was observed on and its component. Both ticket reads return it.
+ */
+export async function workItemFacts(
+  item: IngestedItem,
+  raw: RawWorkItem,
+): Promise<Record<string, unknown>> {
+  const text = `${raw.title ?? ""} ${raw.messages
+    .map((m) => m.bodyText ?? "")
+    .join(" ")
+    .slice(0, 4000)}`;
+  return {
+    customer_id: item.customerId,
+    customer_name: await getCustomerName(item.customerId),
+    ...unresolvedCustomer(item.customerId, item.customerAmbiguity),
+    ...(await unresolvedUnit(item.customerId, item.customerUnitId, text)),
+    ...(await withCustomerProfile(item.customerId)),
+    observed_version: item.observedVersion,
+    ...(item.componentSlug ? { component: item.componentSlug } : {}),
+  };
+}
 
 /**
  * Fetch the Azure DevOps items a ticket points at and record the links. They

@@ -73,10 +73,6 @@ export function envCredential(name: string): string | undefined {
 }
 
 /**
- * Most-specific-wins credential lookup: user > team > global > env var.
- * Returns plaintext — never expose the result through an API response.
- */
-/**
  * Which row a ciphertext belongs to: its scope, whose it is, and what it is
  * called — exactly the columns the unique indexes are built on, so no two rows
  * share one. Moving a value to another row changes this, and the open fails.
@@ -87,6 +83,10 @@ function credentialAad(row: Record<string, unknown>): string {
   );
 }
 
+/**
+ * Most-specific-wins credential lookup: user > team > global > env var.
+ * Returns plaintext — never expose the result through an API response.
+ */
 export async function resolveCredential(
   name: string,
   ctx: ScopeContext,

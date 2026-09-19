@@ -3,6 +3,7 @@
   import { api } from "../api";
   import { Badge, Button, Chip } from "../tui";
   import type { Revision, ViewSummary } from "../types";
+  import { fmtDateTime } from "../dates";
 
   /**
    * Edit history and read counts for one library item. `base` is the collection
@@ -88,13 +89,11 @@
   const doorTone = (actor: string) =>
     actor === "agent" ? "warn" : actor === "web" ? "ok" : "muted";
 
-  const when = (ts: string) => new Date(ts).toLocaleString();
-
   const show = (v: unknown): string =>
     v == null
-      ? "—"
+      ? "-"
       : Array.isArray(v)
-        ? v.join(", ") || "—"
+        ? v.join(", ") || "-"
         : typeof v === "object"
           ? JSON.stringify(v, null, 2)
           : String(v);
@@ -112,7 +111,7 @@
         {views.viewers === 1 ? "person" : "people"}
       {/if}
       {#if views.last_viewed_at}
-        · last {when(views.last_viewed_at)}
+        · last {fmtDateTime(views.last_viewed_at)}
       {/if}
     </p>
   {/if}
@@ -129,7 +128,7 @@
             <span class="v">v{r.version}</span>
             <Badge tone={doorTone(r.actor)}>{r.actor}</Badge>
             <span class="who">{who(r)}</span>
-            <span class="at">{when(r.created_at)}</span>
+            <span class="at">{fmtDateTime(r.created_at)}</span>
             {#if r.changed_fields.length}
               <span class="fields">
                 {#each r.changed_fields as f}<Chip>{f}</Chip>{/each}

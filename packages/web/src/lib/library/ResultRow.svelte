@@ -72,7 +72,7 @@
             {#if item.customer}
               <Chip
                 tone="accent"
-                title="specific to this customer's install, not general product behaviour"
+                title="customer-specific; not general product behaviour"
                 >{item.customer}</Chip
               >
             {/if}

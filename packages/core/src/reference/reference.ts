@@ -1,12 +1,13 @@
 import { SLUG_RE, WIKI_RESERVED_SLUGS } from "@tachy/contract";
 import type { TransactionSql } from "postgres";
-import { sql } from "../infra/db";
+import { sql, jsonb } from "../infra/db";
 import { chunkText } from "../search/chunk";
 import {
   embedPassages,
   embedQueryLiteral,
   toVectorLiteral,
 } from "../search/embeddings";
+import { writeEmbeddings } from "../search/backfill";
 import {
   CANDIDATES,
   clampLimit,
@@ -16,18 +17,25 @@ import {
   withSearchSession,
 } from "../search/rank";
 import { SEM_FLOOR, withRelevance } from "../search/relevance";
-import { notFound, conflict, badInput } from "../infra/errors";
-import { resolveComponentStrict } from "../catalog/components";
-import { getCustomerIdBySlug } from "../catalog/customers";
-import { resolveUnit } from "../catalog/units";
+import { notFound, badInput } from "../infra/errors";
 import {
-  changedFields,
+  assertExpectedVersion,
+  assertUpdated,
   getRevision,
   recordRevision,
+  recordUpdate,
+  type RevisedRow,
   snapshotOf,
   UNKNOWN_ACTOR,
 } from "../library/revisions";
 import type { ActorRef } from "../library/revisions";
+import {
+  filingSlugs,
+  patchedFiling,
+  resolveFilingComponent,
+  statedCustomer,
+  type FiledRow,
+} from "../library/filing";
 import { relinkBySlug, syncLinks } from "../library/links";
 
 /** Shared by the read and the RETURNING so before/after snapshots line up. */
@@ -42,7 +50,7 @@ import { parseStructured } from "../knowledge/structured";
 export function assertArticleSlug(slug: string): void {
   if (!SLUG_RE.test(slug))
     throw badInput(
-      `Invalid article slug '${slug}' — lowercase letters, digits and hyphens only.`,
+      `Invalid article slug '${slug}': lowercase letters, digits and hyphens only.`,
     );
   if ((WIKI_RESERVED_SLUGS as readonly string[]).includes(slug))
     throw badInput(
@@ -146,22 +154,8 @@ async function currentImportedDocId(
   return row?.id as string | undefined;
 }
 
-/**
- * Component slugs resolve within a product, so naming one without a product is
- * ambiguous rather than merely incomplete — reject it instead of guessing.
- */
-async function resolveDocComponent(
-  productId: string | null,
-  component: string | null | undefined,
-): Promise<{ componentId: string | null; productArea: string | null }> {
-  if (!component) return { componentId: null, productArea: null };
-  if (!productId)
-    throw badInput(
-      "component requires a product (pass product_slug); a doc with no product cannot name one",
-    );
-  const resolved = await resolveComponentStrict(productId, component);
-  return { componentId: resolved.id, productArea: resolved.path };
-}
+const DOC_NO_PRODUCT =
+  "component requires a product (pass product_slug); a doc with no product cannot name one";
 
 export async function saveReferenceDoc(i: ReferenceDocInput) {
   const structured = parseStructured(i.structured);
@@ -186,19 +180,15 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
     predecessor = row as typeof predecessor;
   }
   const productId = i.productId ?? predecessor?.product_id ?? null;
-  const { componentId, productArea } = await resolveDocComponent(
+  const { componentId, productArea } = await resolveFilingComponent(
     productId,
     i.component,
+    DOC_NO_PRODUCT,
   );
-  const customerId = i.customerSlug
-    ? await getCustomerIdBySlug(i.customerSlug)
-    : null;
-  if (i.unit && !customerId)
-    throw badInput(
-      "a unit needs its customer — pass customer_slug alongside unit",
-    );
-  const customerUnitId =
-    i.unit && customerId ? (await resolveUnit(customerId, i.unit)).id : null;
+  const { customerId, customerUnitId } = await statedCustomer(
+    i.customerSlug,
+    i.unit,
+  );
   const kind = i.kind ?? "reference";
   if (kind === "wiki") {
     if (!i.slug) throw badInput("a wiki article needs a slug");
@@ -206,7 +196,7 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
   }
   const vectors = await chunkVectors(i.body);
   const { doc, chunks } = await sql.begin(async (tx) => {
-    const [row] = await tx`
+    const [row] = await tx<RevisedRow[]>`
       insert into reference_docs
         (product_id, team_id, created_by, source, source_project_id, external_key,
          component_id, product_area, customer_id, customer_unit_id, title, body, tags,
@@ -218,14 +208,14 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
          ${i.sourceProjectId ?? null}, ${i.externalKey ?? null},
          ${componentId}, ${productArea}, ${customerId}, ${customerUnitId},
          ${i.title}, ${i.body}, ${i.tags ?? predecessor?.tags ?? []},
-         ${i.status ?? "approved"}, ${sql.json(structured as any)},
+         ${i.status ?? "approved"}, ${jsonb(structured)},
          ${i.docVersion ?? null}, ${kind}, ${kind === "wiki" ? (i.slug ?? null) : null})
       returning id, version, ${REVISION_COLUMNS}
     `;
     await recordRevision(
       tx,
-      { docId: row.id as string },
-      row.version as number,
+      { docId: row.id },
+      row.version,
       i.actor ?? { ...UNKNOWN_ACTOR, userId: i.createdById ?? null },
       snapshotOf(row),
       [],
@@ -236,18 +226,18 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
         set status = 'archived', superseded_by = ${row.id}
         where id = ${predecessor.id}
       `;
-    await syncLinks(tx, { docId: row.id as string }, i.body, productId);
+    await syncLinks(tx, { docId: row.id }, i.body, productId);
     // Links written before this article existed were stored unresolved; now
     // that the slug is real, they stop being broken without another edit.
     if (kind === "wiki" && i.slug)
-      await relinkBySlug(tx, i.slug, row.id as string, productId);
+      await relinkBySlug(tx, i.slug, row.id, productId);
     const n = await insertChunks(tx, row.id, vectors);
     return { doc: row, chunks: n };
   });
   return {
-    id: doc.id as string,
-    status: doc.status as string,
-    version: doc.version as number,
+    id: doc.id,
+    status: doc.status,
+    version: doc.version,
     chunks,
   };
 }
@@ -337,18 +327,11 @@ export async function updateReferenceDoc(
   patch: ReferenceDocUpdate,
   actor: ActorRef = UNKNOWN_ACTOR,
 ) {
-  const [current] = await sql`
+  const [current] = await sql<(FiledRow & { version: number } & Record<string, any>)[]>`
     select ${REVISION_COLUMNS}, version from reference_docs where id = ${id}
   `;
   if (!current) throw notFound(`Reference doc '${id}' not found`);
-  if (
-    patch.expectedVersion != null &&
-    current.version !== patch.expectedVersion
-  ) {
-    throw conflict(
-      `Version conflict: expected ${patch.expectedVersion}, found ${current.version}`,
-    );
-  }
+  assertExpectedVersion(current.version, patch.expectedVersion);
 
   const merged = {
     title: patch.title ?? current.title,
@@ -366,47 +349,20 @@ export async function updateReferenceDoc(
     slug: "slug" in patch && patch.slug ? patch.slug : current.slug,
   };
   if (current.kind === "wiki" && merged.slug) assertArticleSlug(merged.slug);
-  // Passing component: null clears it; omitting it leaves the mapping alone.
-  const { componentId, productArea } =
-    "component" in patch
-      ? await resolveDocComponent(current.product_id, patch.component)
-      : {
-          componentId: current.component_id,
-          productArea: current.product_area,
-        };
-  // Same rule as component: null clears the customer, omitting it keeps it.
-  const customerId =
-    "customerSlug" in patch
-      ? patch.customerSlug
-        ? await getCustomerIdBySlug(patch.customerSlug)
-        : null
-      : current.customer_id;
-  // Same rule as knowledge entries: a unit cannot outlive the customer it
-  // belongs to, or it resolves facts from an estate this doc is not about.
-  let customerUnitId: string | null =
-    customerId === current.customer_id ? current.customer_unit_id : null;
-  if ("unit" in patch) {
-    if (patch.unit && !customerId)
-      throw badInput(
-        "a unit needs its customer — set customerSlug alongside unit",
-      );
-    customerUnitId =
-      patch.unit && customerId
-        ? (await resolveUnit(customerId, patch.unit)).id
-        : null;
-  }
+  const { componentId, productArea, customerId, customerUnitId } =
+    await patchedFiling(current, patch, DOC_NO_PRODUCT);
   const bodyChanged = merged.body !== current.body;
   const vectors = bodyChanged ? await chunkVectors(merged.body) : undefined;
 
   return sql.begin(async (tx) => {
-    const [row] = await tx`
+    const [row] = await tx<RevisedRow[]>`
       update reference_docs set
         title       = ${merged.title},
         body        = ${merged.body},
         tags        = ${merged.tags ?? []},
         status      = ${merged.status},
         source      = ${merged.source ?? null},
-        structured  = ${sql.json((merged.structured ?? {}) as any)},
+        structured  = ${jsonb(merged.structured ?? {})},
         doc_version = ${merged.docVersion ?? null},
         component_id = ${componentId},
         product_area = ${productArea},
@@ -417,10 +373,7 @@ export async function updateReferenceDoc(
       where id = ${id} and version = ${current.version}
       returning id, version, ${REVISION_COLUMNS}
     `;
-    if (!row)
-      throw conflict(
-        `Version conflict: reference doc '${id}' was updated concurrently`,
-      );
+    assertUpdated(row, `reference doc '${id}'`);
     if (vectors) {
       await tx`delete from reference_doc_chunks where doc_id = ${id}`;
       await insertChunks(tx, id, vectors);
@@ -428,20 +381,7 @@ export async function updateReferenceDoc(
     await syncLinks(tx, { docId: id }, merged.body, current.product_id);
     if (current.kind === "wiki" && merged.slug)
       await relinkBySlug(tx, merged.slug, id, current.product_id);
-    const after = snapshotOf(row);
-    await recordRevision(
-      tx,
-      { docId: id },
-      row.version as number,
-      actor,
-      after,
-      changedFields(snapshotOf(current), after),
-    );
-    return {
-      id: row.id as string,
-      status: row.status as string,
-      version: row.version as number,
-    };
+    return recordUpdate(tx, { docId: id }, current, row, actor);
   });
 }
 
@@ -565,26 +505,13 @@ export async function backfillReferenceEmbeddings(
     ${opts.all ? sql`` : sql`where embedding is null`}
     order by doc_id, ordinal
   `;
-  if (!rows.length) return 0;
-
-  let n = 0;
-  for (let i = 0; i < rows.length; i += 64) {
-    const batch = rows.slice(i, i + 64);
-    const vectors = await embedPassages(
-      batch.map((r) => r.chunk_text as string),
-    );
-    await sql`
-      update reference_doc_chunks c set embedding = v.vec::vector
-      from (select unnest(${batch.map((r) => r.id as string)}::uuid[]) as id,
-                   unnest(${vectors.map(toVectorLiteral)}::text[]) as vec) v
-      where c.id = v.id
-    `;
-    n += batch.length;
-  }
-  return n;
+  return writeEmbeddings(
+    "reference_doc_chunks",
+    rows.map((r) => ({ id: r.id, text: r.chunk_text })),
+  );
 }
 
-/** Restore a doc to a past revision. Same discipline as knowledge: a new edit. */
+/** Restore a doc to a past revision, as an ordinary edit that appends its own revision. */
 export async function revertReferenceDoc(
   id: string,
   version: number,
@@ -592,17 +519,6 @@ export async function revertReferenceDoc(
 ) {
   const { snapshot } = await getRevision({ docId: id }, version);
   const s = snapshot as Record<string, any>;
-  const [comp] = s.component_id
-    ? await sql`select slug from components where id = ${s.component_id}`
-    : [];
-  const [cust] = s.customer_id
-    ? await sql`select slug from customers where id = ${s.customer_id}`
-    : [];
-  // Passed even when null: the revision records it, and leaving it out carried
-  // the live unit forward instead of restoring the one being reverted to.
-  const [unit] = s.customer_unit_id
-    ? await sql`select slug from customer_units where id = ${s.customer_unit_id}`
-    : [];
   return updateReferenceDoc(
     id,
     {
@@ -613,9 +529,7 @@ export async function revertReferenceDoc(
       source: s.source,
       structured: s.structured,
       docVersion: s.doc_version,
-      component: (comp?.slug as string) ?? null,
-      customerSlug: (cust?.slug as string) ?? null,
-      unit: (unit?.slug as string) ?? null,
+      ...(await filingSlugs(s)),
     },
     actor,
   );

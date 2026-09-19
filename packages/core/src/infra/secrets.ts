@@ -76,7 +76,7 @@ export function encryptSecret(
   const k = key();
   if (!k)
     throw badInput(
-      "credential storage is disabled — set TACHY_SECRET_KEY to enable it",
+      "credential storage disabled: set TACHY_SECRET_KEY",
     );
   const nonce = randomBytes(NONCE_BYTES);
   const cipher = createCipheriv(ALGO, k, nonce);
@@ -122,7 +122,7 @@ export function decryptSecret(
   const keys = vaultKeys();
   if (!keys.length)
     throw badInput(
-      "credential storage is disabled — set TACHY_SECRET_KEY to enable it",
+      "credential storage disabled: set TACHY_SECRET_KEY",
     );
   // A row names its key; one written before key ids is tried with each.
   const candidates = row.key_id

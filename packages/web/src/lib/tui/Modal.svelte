@@ -63,7 +63,6 @@
     element = win;
   });
   let bodyEl = $state<HTMLElement>();
-  let titleEl = $state<HTMLElement>();
   let mine = 0;
   const top = $derived(mine === depth);
 
@@ -113,21 +112,6 @@
               "<0.06",
             )
         : null;
-
-    /* The title wipes in from the left as the window grows — a step of the
-       same timeline, so the two can never drift apart. Not `wipeIn`: that one
-       is the nav's, tuned short and staggered across a row of tabs. */
-    if (tl && titleEl)
-      tl.from(
-        titleEl,
-        {
-          clipPath: "inset(0 100% 0 0)",
-          duration: 0.5,
-          ease: "power3.inOut",
-          clearProps: "clipPath",
-        },
-        "<",
-      );
 
     return () => {
       tl?.kill();
@@ -215,7 +199,7 @@
 
         <!-- aria-hidden: the window already carries this string as its
              accessible name, and a screen reader should not hear it twice. -->
-        <div class="title" bind:this={titleEl} aria-hidden="true">{title}</div>
+        <div class="title" aria-hidden="true">{title}</div>
 
         <div class="side end">
           {#if barExtra}{@render barExtra()}{/if}

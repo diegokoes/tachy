@@ -167,7 +167,7 @@
         <input
           value={output.filename ?? ""}
           oninput={(e) => (output.filename = sanitize(e, stripFilenameChars))}
-          title="Optional. Defaults to the artifact name and today's date. {'{date}'} becomes today's date, {'{slug}'} the artifact name; the extension is added for you."
+          title="Optional. Default: artifact name and date. Tokens: {'{date}'}, {'{slug}'}. Extension added."
           aria-label="file name"
         />
       </Field>
@@ -176,7 +176,7 @@
           <input
             value={output.sheet ?? ""}
             oninput={(e) => (output.sheet = sanitize(e, stripSheetChars))}
-            title="Optional. The sheet tab inside the workbook, max 31 characters. Defaults to {DEFAULT_SHEET}."
+            title="Optional. Sheet tab, max 31 characters. Default {DEFAULT_SHEET}."
             aria-label="tab name"
           />
         </Field>

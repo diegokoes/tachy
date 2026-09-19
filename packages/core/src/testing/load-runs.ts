@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { z } from "zod";
-import { sql } from "../infra/db";
+import { sql, jsonb } from "../infra/db";
 import { badInput, conflict, notFound } from "../infra/errors";
 import { env } from "../infra/env";
 import { defineJob } from "../jobs/registry";
@@ -199,7 +199,7 @@ export function defineLoadTestJobs() {
             : "error";
       await sql`
         update test_runs set status = ${status}, finished_at = now(),
-          summary = ${summary ? sql.json(summary as never) : null}, output_tail = ${tail}
+          summary = ${summary ? jsonb(summary) : null}, output_tail = ${tail}
         where id = ${run.id}
       `;
       ctx.log(`${run.script} against ${run.target}: ${status}`);

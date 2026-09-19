@@ -12,27 +12,6 @@ type Entry = {
 export type Spy = ReturnType<typeof createSpy>;
 
 /**
- * The page's spy, published for the panels rather than threaded down through
- * Section: an overview's figures name sections further down the same column and
- * have to be able to scroll to them, and nothing between them and the page
- * needs to know that.
- *
- * $state.raw and an identity-checked disposer, for the same reason as
- * `setScrollport` — and an object rather than a primitive, which is what
- * check-runes.mjs allows at module scope.
- */
-let live = $state.raw<Spy | null>(null);
-
-export const activeSpy = () => live;
-
-export function setActiveSpy(next: Spy | null): () => void {
-  live = next;
-  return () => {
-    if (live === next) live = null;
-  };
-}
-
-/**
  * The heading pins one --main-air below the scrollport, which is as high as a
  * sticky box can go inside `main`'s content box, so a section lands flush and
  * the heading is already where it will stay.

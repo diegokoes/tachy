@@ -31,3 +31,51 @@ export const WIKI_GAP_KINDS = [
   "uncategorised",
 ] as const;
 export type WikiGapKind = (typeof WIKI_GAP_KINDS)[number];
+
+export interface WikiCategoryRow {
+  id: string;
+  product_id: string | null;
+  parent_id: string | null;
+  slug: string;
+  name: string;
+  description: string | null;
+  ordinal: number;
+}
+
+export interface WikiArticleRef {
+  id: string;
+  slug: string | null;
+  title: string;
+  status: string;
+  ordinal: number;
+  updated_at: string;
+  /** Sources this was composed from that have changed since it was written. */
+  stale?: number;
+}
+
+export interface WikiTocNode extends WikiCategoryRow {
+  articles: WikiArticleRef[];
+  children: WikiTocNode[];
+}
+
+export interface WikiToc {
+  categories: WikiTocNode[];
+  /** Articles filed under nothing — the wiki's own measure of unfiled work. */
+  uncategorised: WikiArticleRef[];
+}
+
+/** One wiki in the index: a product's, or the org-wide one with no product. */
+export interface WikiListRow {
+  product_id: string | null;
+  product_slug: string | null;
+  product_name: string | null;
+  articles: number;
+  /** Open gaps from the last sweep, dismissed ones left out. */
+  open_gaps: number;
+}
+
+export interface WikiGapItem {
+  kind: "entry" | "doc";
+  id: string;
+  title: string;
+}

@@ -20,7 +20,7 @@
   );
 </script>
 
-<p class="hint">The keys that switch between the tabs at the top of the window.</p>
+<p class="hint">Top-level tab keys.</p>
 
 <ul class="binds">
   {#each nav as n, i}

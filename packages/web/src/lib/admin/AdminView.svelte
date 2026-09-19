@@ -1,5 +1,7 @@
 <script lang="ts">
+  import type { Component } from "svelte";
   import { navigate, segment } from "../router.svelte";
+  import { scrollport } from "../scrollport.svelte";
   import { isGlobalAdmin } from "../session.svelte";
   import { t, showCustomer } from "../terms";
   import { Button } from "../tui";
@@ -7,7 +9,7 @@
   import SectionedPage, {
     type PageSection,
   } from "../sections/SectionedPage.svelte";
-  import { topAction } from "./topAction.svelte";
+  import { sectionAction } from "./sectionAction.svelte";
   import { census } from "./census.svelte";
   import { activity } from "./activity.svelte";
   import PipelinePanel from "./PipelinePanel.svelte";
@@ -27,6 +29,11 @@
   import CredentialsPanel from "./CredentialsPanel.svelte";
   import JobsPanel from "./JobsPanel.svelte";
   import RuntimePanel from "./RuntimePanel.svelte";
+  import JobsOverview from "./JobsOverview.svelte";
+  import SystemOverview from "./SystemOverview.svelte";
+  import IssuesModal from "./IssuesModal.svelte";
+  import { issues, loadIssues } from "./issues.svelte";
+  import { issueGroups } from "./issueMessages";
   import HostPanel from "./HostPanel.svelte";
   import TestsPanel from "./TestsPanel.svelte";
 
@@ -34,45 +41,57 @@
     /** Which census key counts this section. Omitted for a section with nothing to count. */
     n?: string;
     show?: boolean;
+    /** The section's panel again, opened on one record at /<section>/<key>. */
+    record?: Component<{ id: string }>;
   };
 
   const PAGES: SubnavItem[] = $derived([
     { key: "integrations", label: "integrations", icon: "link" },
     { key: "structure", label: "structure", icon: "layers" },
     { key: "access", label: "access", icon: "key" },
-    ...(isGlobalAdmin() ? [{ key: "system", label: "system", icon: "cog" as const }] : []),
+    ...(isGlobalAdmin()
+      ? [
+          { key: "workers", label: "workers", icon: "terminal" as const },
+          { key: "system", label: "system", icon: "cog" as const },
+        ]
+      : []),
   ]);
 
   const admin = $derived(isGlobalAdmin());
 
   const SECTIONS: Record<string, Section[]> = $derived({
     integrations: [
-      { key: "overview", label: "overview", view: PipelinePanel, eager: true },
-      { key: "sources", label: "sources", view: SourcesPanel, n: "sources", show: admin },
-      { key: "projects", label: "projects", view: ProjectsPanel, n: "projects" },
+      { key: "sources", label: "sources", view: SourcesPanel, record: SourcesPanel, n: "sources", show: admin },
+      { key: "projects", label: "projects", view: ProjectsPanel, record: ProjectsPanel, n: "projects" },
       { key: "repos", label: "repos", view: ReposPanel, n: "repos" },
-      { key: "jobs", label: "jobs", view: JobsPanel, show: admin },
     ],
     structure: [
-      { key: "overview", label: "overview", view: CatalogPanel, eager: true },
       { key: "teams", label: t("teams"), view: TeamsPanel, n: "teams" },
       { key: "products", label: t("products"), view: ProductsPanel, n: "products" },
       { key: "components", label: "components", view: ComponentsPanel, n: "components" },
       { key: "labels", label: "labels", view: LabelsPanel, n: "labels" },
       { key: "patterns", label: "resolution patterns", view: PatternsPanel, n: "patterns" },
-      { key: "customers", label: t("customers"), view: CustomersPanel, n: "customers", show: showCustomer() },
+      { key: "customers", label: t("customers"), view: CustomersPanel, record: CustomersPanel, n: "customers", show: showCustomer() },
     ],
     access: [
-      { key: "overview", label: "overview", view: PosturePanel, eager: true },
       { key: "users", label: "users & roles", view: AccessPanel, n: "users" },
       { key: "credentials", label: "shared credentials", view: CredentialsPanel },
     ],
+    workers: [{ key: "jobs", label: "jobs", view: JobsPanel, record: JobsPanel, show: admin }],
     system: [
-      { key: "overview", label: "overview", view: RuntimePanel, eager: true, show: admin },
+      { key: "runtime", label: "runtime", view: RuntimePanel, show: admin },
       { key: "host", label: "backups & host", view: HostPanel, show: admin },
       { key: "tests", label: "checks & load", view: TestsPanel, show: admin },
       { key: "settings", label: "settings", view: SystemPanel, show: admin },
     ],
+  });
+
+  const OVERVIEWS: Record<string, Component | undefined> = $derived({
+    integrations: PipelinePanel,
+    structure: CatalogPanel,
+    access: PosturePanel,
+    workers: admin ? JobsOverview : undefined,
+    system: admin ? SystemOverview : undefined,
   });
 
   /* `connect` was the integrations page's old name; old links still land. */
@@ -84,15 +103,14 @@
     (SECTIONS[page] ?? SECTIONS.integrations)
       .filter((s) => s.show !== false)
       .map(
-        ({ n, show: _show, ...s }): PageSection => ({
+        ({ n, show: _show, record: _record, ...s }): PageSection => ({
           ...s,
           count: n ? (census.loading ? null : (census.data.counts[n] ?? 0)) : undefined,
           tone: n && census.data.warn[n] ? ("warn" as const) : undefined,
+          action: sectionAction(s.key),
         }),
       ),
   );
-
-  let active = $state("");
 
   $effect(() =>
     setSubnav({
@@ -108,35 +126,116 @@
     page;
     census.reload();
     activity.reload();
+    void loadIssues(page);
   });
 
-  /* The section's own add button, drawn in the row carved out of the window's
-     top edge. It follows the rail marker down the page. */
-  const acting = $derived(topAction(active));
-  $effect(() => (acting ? setTopActions(add) : undefined));
+  const overview = $derived(OVERVIEWS[page]);
+  const showing = $derived(Boolean(overview) && segment(2) === "overview");
+
+  /* One record, on the page its section's rows open onto. It replaces the
+     sections rather than sitting among them: the scroll-spy would otherwise
+     rewrite the URL out from under it as the page scrolled. */
+  const opened = $derived(segment(3));
+  const Record = $derived.by(() => {
+    if (!opened) return undefined;
+    const s = (SECTIONS[page] ?? []).find((x) => x.key === segment(2));
+    return s && s.show !== false ? s.record : undefined;
+  });
+
+  const toggleOverview = () =>
+    navigate(`/admin/${page}${showing ? "" : "/overview"}`, { replace: true });
+
+  /* A record claims the carved row for its own back and edit, and this takes
+     it back once the record closes. */
+  $effect(() => {
+    if (Record) return;
+    return setTopActions(topActions);
+  });
+
+  let showIssues = $state(false);
+  const groups = $derived(issueGroups(issues.data));
+  const issueTone = $derived(
+    groups.some((g) => g.tone === "danger")
+      ? ("danger" as const)
+      : groups.length
+        ? ("warn" as const)
+        : undefined,
+  );
+
+  function pickSection(section: string) {
+    showIssues = false;
+    navigate(`/admin/${page}/${section}`);
+  }
+
+  $effect(() => {
+    if (!showing && !opened) return;
+    const port = scrollport();
+    if (port) port.scrollTop = 0;
+  });
 </script>
 
-{#snippet add()}
-  {@const a = acting}
-  {#if a}
-    <Button variant="ghost" tone="ok" size="sm" icon="plus" onclick={a.run}
-      >{a.label}</Button
+{#snippet topActions()}
+  {#if overview}
+    <Button
+      variant="ghost"
+      size="sm"
+      tone={showing ? "accent" : undefined}
+      aria-pressed={showing}
+      onclick={toggleOverview}>overview</Button
     >
   {/if}
+  <Button
+    variant="ghost"
+    size="sm"
+    tone={issueTone}
+    title={groups.length ? `${groups.length} open on this page` : "nothing open on this page"}
+    onclick={() => {
+      showIssues = true;
+      void loadIssues(page);
+    }}>issues{groups.length ? ` ${groups.length}` : ""}</Button
+  >
 {/snippet}
 
-<div class="admin-root">
-  <SectionedPage
-    {sections}
+{#if showIssues}
+  <IssuesModal
     {page}
-    bind:active
-    label="{page} sections"
-    at={segment(2)}
-    onactive={(key) => navigate(`/admin/${page}/${key}`, { replace: true })}
+    {groups}
+    loading={issues.loading}
+    error={issues.error}
+    onpick={pickSection}
+    onclose={() => (showIssues = false)}
   />
+{/if}
+
+<div class="admin-root" class:fit={showing && Boolean(overview)}>
+  {#if Record && opened}
+    {#key opened}
+      <Record id={opened} />
+    {/key}
+  {:else if showing && overview}
+    {@const View = overview}
+    <View />
+  {:else}
+    <SectionedPage
+      {sections}
+      {page}
+      label="{page} sections"
+      at={segment(2)}
+      onactive={(key) => navigate(`/admin/${page}/${key}`, { replace: true })}
+    />
+  {/if}
 </div>
 
 <style>
+  /* While the overview shows, the page is exactly the window: the overview
+     shares out the height itself instead of growing past it. */
+  .admin-root.fit {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
   /* Chrome for the two panels still on hand-rolled markup: system settings
      and shared credentials. Deleted as each one moves over. */
   .admin-root :global(table) {
@@ -160,10 +259,6 @@
     text-decoration: underline dotted;
     text-underline-offset: 3px;
     cursor: help;
-  }
-  .admin-root :global(.mini) {
-    font-size: var(--fs-xs);
-    padding: var(--pad-1) var(--pad-3);
   }
   .admin-root :global(.muted) {
     color: var(--muted);

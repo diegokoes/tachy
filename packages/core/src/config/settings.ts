@@ -9,7 +9,7 @@ import type {
   AgentEffort,
   DeploymentProfile,
 } from "@tachy/contract";
-import { sql } from "../infra/db";
+import { sql, jsonb } from "../infra/db";
 import { badInput } from "../infra/errors";
 
 // Owned by the contract, because the SPA offers them and the API validates
@@ -65,7 +65,7 @@ export async function setSetting(key: string, value: unknown): Promise<void> {
       `invalid value for '${key}': ${parsed.error.issues.map((i) => i.message).join("; ")}`,
     );
   await sql`
-    insert into settings (key, value) values (${key}, ${sql.json(parsed.data as never)})
+    insert into settings (key, value) values (${key}, ${jsonb(parsed.data)})
     on conflict (key) do update set value = excluded.value, updated_at = now()
   `;
   cache = undefined;

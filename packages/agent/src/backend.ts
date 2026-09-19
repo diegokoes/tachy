@@ -1,7 +1,6 @@
-// A second list here meant adding a backend updated half the system: core
-// re-exports the contract's, and this package used to define its own because
-// it had no dependency on the contract. The contract has none of its own, so
-// taking it costs nothing.
+// One list of providers and efforts, the contract's: a second copy here makes
+// adding a backend a two-place change. The contract has no dependencies, so
+// importing it costs nothing.
 import type { AgentProvider, AgentEffort } from "@tachy/contract";
 
 export {

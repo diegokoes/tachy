@@ -1,7 +1,9 @@
 import {
-  stripHtml,
+  customerStandIn,
   listSourceProjects,
-  scrubText,
+  scrubbableCopy,
+  scrubStrings,
+  stripHtml,
   TokenMap,
 } from "@tachy/core";
 import type {
@@ -11,10 +13,20 @@ import type {
   ListOptions,
   SourceFactory,
 } from "@tachy/core";
-import { createAdoClient, type AdoWorkItemSummary } from "./client";
+import {
+  createAdoClient,
+  type AdoRelation,
+  type AdoWorkItem,
+  type AdoWorkItemSummary,
+} from "./client";
 
 export { createAdoClient } from "./client";
-export { projectFields, workItemSchema, MAX_ALLOWED_VALUES } from "./fields";
+export {
+  projectFields,
+  workItemSchema,
+  workItemDefaults,
+  MAX_ALLOWED_VALUES,
+} from "./fields";
 export type { FieldSpec, WorkItemSchema, AdoFieldType } from "./fields";
 export type { AdoClient, AdoCfg, JsonPatchOp } from "./client";
 
@@ -65,26 +77,26 @@ function redactAdoRaw(
   map: TokenMap,
   customerSlug: string | null,
 ): unknown {
-  if (raw == null || typeof raw !== "object") return {};
-  const t = structuredClone(raw) as Record<string, any>;
-  const name = customerSlug || "[CUSTOMER]";
+  const t = scrubbableCopy(raw);
+  if (!t) return {};
+  const name = customerStandIn(customerSlug);
   const fields = t.fields as Record<string, any> | undefined;
   if (fields && typeof fields === "object") {
-    for (const k of Object.keys(fields)) {
-      if (IDENTITY_FIELD_RE.test(k)) scrubIdentity(fields[k], map, name);
-      else if (typeof fields[k] === "string")
-        fields[k] = scrubText(fields[k], map);
-    }
+    const keys = Object.keys(fields);
+    for (const k of keys.filter((k) => IDENTITY_FIELD_RE.test(k)))
+      scrubIdentity(fields[k], map, name);
+    scrubStrings(
+      fields,
+      keys.filter((k) => !IDENTITY_FIELD_RE.test(k)),
+      map,
+    );
   }
   const relations = t.relations as Record<string, any> | undefined;
   if (relations && typeof relations === "object") {
     for (const group of Object.values(relations)) {
       for (const item of Array.isArray(group) ? group : [group]) {
         if (!item || typeof item !== "object") continue;
-        if (typeof item.title === "string")
-          item.title = scrubText(item.title, map);
-        if (typeof item.comment === "string")
-          item.comment = scrubText(item.comment, map);
+        scrubStrings(item, ["title", "comment"], map);
         if (typeof item.author === "string")
           item.author = map.token("USER", item.author);
       }
@@ -121,7 +133,7 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
   }
 
   function toItem(
-    wi: any,
+    wi: AdoWorkItem,
     messages: RawMessage[],
     relations?: Record<string, unknown>,
   ): RawWorkItem {
@@ -153,10 +165,10 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
   }
 
   async function resolveRelations(
-    wi: any,
+    wi: AdoWorkItem,
     project: string,
   ): Promise<Record<string, unknown>> {
-    const rels: any[] = Array.isArray(wi.relations) ? wi.relations : [];
+    const rels: AdoRelation[] = Array.isArray(wi.relations) ? wi.relations : [];
     const parentIds: number[] = [];
     const childIds: number[] = [];
     const relatedIds: number[] = [];
@@ -366,13 +378,10 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
           .map((wi) => Date.parse(wi.fields?.["System.ChangedDate"] ?? ""))
           .filter(Number.isFinite);
         const prev = cursor.since ? Date.parse(cursor.since) : Number.NaN;
-        /*
-         * A full page means there is more of this project to walk, so the
-         * cursor stays on it. Advancing to the next project instead — which is
-         * what an unreadable page used to fall through to — silently dropped the
-         * rest of this one's backlog. The 1ms bump handles a page whose items
-         * all carry the same timestamp.
-         */
+        // A full page means this project has more to walk, so the cursor
+        // stays on it; advancing to the next project would drop the rest of
+        // this one's backlog. The 1ms bump handles a page whose items all
+        // carry the same timestamp.
         let mark = changed.length ? Math.max(...changed) : prev;
         if (Number.isFinite(prev) && !(mark > prev)) mark = prev + 1;
         if (!Number.isFinite(mark))

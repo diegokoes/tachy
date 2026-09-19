@@ -9,15 +9,15 @@
   import { api } from "../api";
   import { errText } from "../resource.svelte";
   import { setTopActions } from "../subnav.svelte";
-  import { Button, Checkbox, Note } from "../tui";
+  import { Button, Checkbox, FormActions, Note } from "../tui";
   import AsciiSelect from "../AsciiSelect.svelte";
   import { componentOptions } from "../catalog";
+  import type { ComponentRow } from "@tachy/contract";
   import { renderMarkdown } from "../markdown";
   import { outline, withAnchors } from "../outline";
   import { REFERENCE_STATUSES } from "../vocab";
   import type {
     KnowledgeRow,
-    NamedRow,
     ReferenceRow,
     WikiArticleRef,
     WikiCategory,
@@ -66,7 +66,7 @@
   let chosen = $state<string[]>((seed?.categories ?? []).map((c) => c.slug));
   /** Component slug; the row carries an id, so it is resolved once they load. */
   let component = $state(handed?.component ?? "");
-  let components = $state<NamedRow[]>([]);
+  let components = $state<ComponentRow[]>([]);
 
   let categories = $state<WikiCategory[]>([]);
   let preview = $state(true);
@@ -270,22 +270,24 @@
     withAnchors(renderMarkdown(body), items, { numbered: true }),
   );
 
+  let loadError = $state<string | null>(null);
+
   onMount(async () => {
-    const [cats, comps] = await Promise.all([
-      api
-        .get<WikiCategory[]>(`/library/wiki/${scope}/categories`)
-        .catch(() => [] as WikiCategory[]),
-      hasComponents
-        ? api
-            .get<NamedRow[]>(`/products/${scope}/components`)
-            .catch(() => [] as NamedRow[])
-        : Promise.resolve([] as NamedRow[]),
-    ]);
-    categories = cats;
-    components = comps;
-    if (seed?.component_id)
-      component =
-        (comps.find((c) => c.id === seed.component_id)?.slug as string) ?? "";
+    try {
+      const [cats, comps] = await Promise.all([
+        api.get<WikiCategory[]>(`/library/wiki/${scope}/categories`),
+        hasComponents
+          ? api.get<ComponentRow[]>(`/products/${scope}/components`)
+          : Promise.resolve([] as ComponentRow[]),
+      ]);
+      categories = cats;
+      components = comps;
+      if (seed?.component_id)
+        component =
+          comps.find((c) => c.id === seed.component_id)?.slug ?? "";
+    } catch (e) {
+      loadError = errText(e);
+    }
     await loadArticles();
   });
 
@@ -337,19 +339,8 @@
   }
 </script>
 
-<!-- Rendered by App into the carved row beside the subnav, not here. The save
-     button is outside the <form> in the DOM, so it carries `form` — that keeps
-     native required-field validation, which calling submit() directly loses. -->
 {#snippet formActions()}
-  <Button icon="cancel" disabled={saving} onclick={onCancel}>cancel</Button>
-  <Button
-    variant="primary"
-    icon="save"
-    type="submit"
-    form="wiki-form"
-    title={editing ? "save changes" : "create article"}
-    busy={saving}>save</Button
-  >
+  <FormActions form="wiki-form" {saving} title={editing ? "save changes" : "create article"} oncancel={onCancel} />
 {/snippet}
 
 <form id="wiki-form" class="article-form" onsubmit={submit}>
@@ -375,7 +366,7 @@
         about
         <AsciiSelect
           bind:value={component}
-          title="The part of the product this article is about. It is what coverage and the gap sweep count it against."
+          title="Product part covered. Used by coverage and gap sweep."
           disabled={components.length === 0}
           options={[
             { value: "", label: "the whole product" },
@@ -407,7 +398,7 @@
     {/if}
   </div>
 
-  {#if error}<Note tone="danger">{error}</Note>{/if}
+  {#if error ?? loadError}<Note tone="danger">{error ?? loadError}</Note>{/if}
   {#if uploadError}<Note tone="warn">{uploadError}</Note>{/if}
 
   <div class="split" class:solo={!preview}>
@@ -421,7 +412,7 @@
             variant="ghost"
             size="sm"
             icon="attach"
-            title="add an image — or paste or drop one into the body"
+            title="add an image, or paste or drop one into the body"
             onclick={() => fileEl?.click()}>image</Button
           >
           <button type="button" class="toggle" onclick={() => (preview = !preview)}>

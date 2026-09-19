@@ -6,6 +6,7 @@
   import { Button, Note, Select } from "../tui";
   import { presetScope } from "../library/filters";
   import type { Coverage, CoverageNode } from "../types";
+  import { flattenTree, subtreeSlugs } from "./tree";
 
   /**
    * What the product is made of and how much of each part has been written
@@ -24,18 +25,7 @@
   let busy = $state(false);
   let error = $state<string | null>(null);
 
-  function flatten(
-    nodes: CoverageNode[],
-    depth = 0,
-  ): { n: CoverageNode; depth: number }[] {
-    return nodes.flatMap((n) => [{ n, depth }, ...flatten(n.children, depth + 1)]);
-  }
-  const all = $derived(flatten(coverage.nodes));
-
-  /** A node cannot move under itself or its own descendant. */
-  function subtreeSlugs(n: CoverageNode): string[] {
-    return [n.slug, ...n.children.flatMap(subtreeSlugs)];
-  }
+  const all = $derived(flattenTree(coverage.nodes));
 
   async function move() {
     if (!moving) return;
@@ -142,7 +132,7 @@
     Filed under no component: {coverage.unfiled.entries} entries ·
     {coverage.unfiled.docs} docs · {coverage.unfiled.articles} articles
     <span class="muted">
-      — if most of the corpus is here, the component tree is not describing it.
+      · a high count means the component tree is incomplete
     </span>
   </p>
 </section>

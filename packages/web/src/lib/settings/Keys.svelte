@@ -32,10 +32,8 @@
 
 {#if creds && !creds.vault_enabled}
   <Note tone="warn">
-    Credential storage is disabled on this server. Set <code
-      >TACHY_SECRET_KEY</code
-    > (32 bytes base64) in the server environment to enable per-user keys. Until then
-    keys come from <code>.env</code>.
+    Credential storage disabled. Set <code>TACHY_SECRET_KEY</code> (32 bytes
+    base64) for per-user keys. Until then: <code>.env</code>.
   </Note>
 {:else if creds}
   <Rows>

@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { api } from "../api";
+  import { navigate } from "../router.svelte";
   import { createResource, errText } from "../resource.svelte";
   import { t } from "../terms";
   import {
@@ -12,55 +13,33 @@
     Note,
     Select,
     type Column,
+    type Draft,
   } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
-  import type { Component, Customer, Product } from "./rows";
+  import { ComponentCache } from "../filing.svelte";
+  import type { Customer, Product } from "./rows";
+  import type {
+    CustomerFactRow,
+    CustomerProfile,
+    CustomerUnitRow,
+    ResolvedFact,
+  } from "@tachy/contract";
 import { INFO } from "./help";
 import { csv } from "../fields";
-  import { sectionHoist } from "./topAction.svelte";
+  import { sectionHoist } from "./sectionAction.svelte";
+  import { NEW_RECORD, recordPath } from "./records";
+  import RecordPage from "./RecordPage.svelte";
 
-  type CustomerUnit = {
-    id: string;
-    parent_id: string | null;
-    profile_id: string | null;
-    kind: string;
-    slug: string;
-    name: string;
-    aliases: string[];
-    notes: string | null;
-  };
+  /** Given, the panel is one customer's page rather than the list of them. */
+  let { id }: { id?: string } = $props();
 
-  type ResolvedFact = {
-    kind: string;
-    label: string;
-    value: string;
-    origin_slug: string | null;
-    origin_kind: string | null;
-    inherited: boolean;
-  };
-
-  type Profile = {
-    slug: string;
-    facts: {
-      id?: string;
-      kind: string;
-      label: string;
-      value: string;
-      component: string | null;
-    }[];
-    components: { slug: string; product_slug: string }[];
-    repos: { slug: string; component: string | null }[];
-    projects: { source_slug: string; external_key: string }[];
-  };
-  type FactRow = Profile["facts"][number] & { id: string };
 
   const customers = createResource(() => api.get<Customer[]>("/customers"), []);
   const products = createResource(() => api.get<Product[]>("/products"), []);
 
-  let expanded = $state(new Set<string>());
-  let profiles = $state<Record<string, Profile>>({});
-  let facts = $state<Record<string, FactRow[]>>({});
-  let units = $state<Record<string, CustomerUnit[]>>({});
+  let profiles = $state<Record<string, CustomerProfile>>({});
+  let facts = $state<Record<string, CustomerFactRow[]>>({});
+  let units = $state<Record<string, CustomerUnitRow[]>>({});
   /** Which unit's resolved ladder is being shown, per customer. "" = the flat set. */
   let viewUnit = $state<Record<string, string>>({});
   let resolved = $state<Record<string, ResolvedFact[]>>({});
@@ -71,7 +50,7 @@ import { csv } from "../fields";
     parent: "",
     profile: "",
   });
-  let components = $state<Record<string, Component[]>>({});
+  const components = new ComponentCache();
   let kinds = $state<{ kind: string; count: number }[]>([]);
   let error = $state<string | null>(null);
   let busy = $state<string | null>(null);
@@ -83,9 +62,9 @@ import { csv } from "../fields";
   async function loadProfile(slug: string) {
     try {
       const [p, f, u] = await Promise.all([
-        api.get<Profile>(`/customers/${slug}/profile`),
-        api.get<FactRow[]>(`/customers/${slug}/facts`),
-        api.get<CustomerUnit[]>(`/customers/${slug}/units`).catch(() => []),
+        api.get<CustomerProfile>(`/customers/${slug}/profile`),
+        api.get<CustomerFactRow[]>(`/customers/${slug}/facts`),
+        api.get<CustomerUnitRow[]>(`/customers/${slug}/units`).catch(() => []),
       ]);
       units[slug] = u;
       profiles[slug] = p;
@@ -95,29 +74,10 @@ import { csv } from "../fields";
     }
   }
 
-  async function loadComponents(productSlug: string) {
-    if (!productSlug || components[productSlug]) return;
-    try {
-      components[productSlug] = await api.get<Component[]>(
-        `/products/${productSlug}/components`,
-      );
-    } catch {
-      components[productSlug] = [];
-    }
-  }
-
-  async function toggle(slug: string) {
-    const next = new Set(expanded);
-    if (next.has(slug)) {
-      next.delete(slug);
-      expanded = next;
-      return;
-    }
-    next.add(slug);
-    expanded = next;
+  async function openProfile(slug: string) {
     factForm = { kind: "", label: "", value: "", source: "", notes: "", product: "", component: "", unit: "" };
     compForm = { product: products.data[0]?.slug ?? "", component: "" };
-    if (compForm.product) await loadComponents(compForm.product);
+    if (compForm.product) await components.load(compForm.product);
     kinds = await api
       .get<{ kind: string; count: number }[]>("/customer-fact-kinds")
       .catch(() => []);
@@ -185,7 +145,7 @@ import { csv } from "../fields";
     aliases: "",
   });
 
-  function startEditUnit(slug: string, u: CustomerUnit) {
+  function startEditUnit(slug: string, u: CustomerUnitRow) {
     editUnit[slug] = u.slug;
     const rows = units[slug] ?? [];
     editForm = {
@@ -220,7 +180,7 @@ import { csv } from "../fields";
   }
 
   /** A unit cannot sit under, or conform to, its own descendant. */
-  function unitSubtree(rows: CustomerUnit[], root: CustomerUnit): string[] {
+  function unitSubtree(rows: CustomerUnitRow[], root: CustomerUnitRow): string[] {
     const kids = rows.filter((u) => u.parent_id === root.id);
     return [root.slug, ...kids.flatMap((k) => unitSubtree(rows, k))];
   }
@@ -250,11 +210,11 @@ import { csv } from "../fields";
   }
 
   /** Depth-first with a depth, so the tree reads as a tree in a flat list. */
-  function unitTree(rows: CustomerUnit[]) {
-    const byParent = new Map<string | null, CustomerUnit[]>();
+  function unitTree(rows: CustomerUnitRow[]) {
+    const byParent = new Map<string | null, CustomerUnitRow[]>();
     for (const u of rows)
       byParent.set(u.parent_id, [...(byParent.get(u.parent_id) ?? []), u]);
-    const out: { u: CustomerUnit; depth: number }[] = [];
+    const out: { u: CustomerUnitRow; depth: number }[] = [];
     const walk = (parent: string | null, depth: number) => {
       for (const u of byParent.get(parent) ?? []) {
         out.push({ u, depth });
@@ -265,7 +225,7 @@ import { csv } from "../fields";
     return out;
   }
 
-  const unitName = (rows: CustomerUnit[], id: string | null) =>
+  const unitName = (rows: CustomerUnitRow[], id: string | null) =>
     rows.find((u) => u.id === id)?.slug ?? null;
 
   async function delFact(slug: string, id: string) {
@@ -352,6 +312,47 @@ import { csv } from "../fields";
     products.reload();
   });
 
+  const creating = $derived(id === NEW_RECORD);
+  const record = $derived(
+    id && !creating ? (customers.data.find((c) => c.slug === id) ?? null) : null,
+  );
+
+  /* Everything hanging off the customer, once the products its forms offer
+     have arrived. */
+  $effect(() => {
+    if (!id || creating || products.loading) return;
+    const slug = id;
+    untrack(() => void openProfile(slug));
+  });
+
+  const back = () => navigate(recordPath("customers"));
+
+  async function createCustomer(d: Draft) {
+    await customers.mutate(() =>
+      api.post("/customers", {
+        slug: d.slug,
+        name: d.name,
+        aliases: csv(String(d.aliases ?? "")),
+        emailDomains: csv(String(d.email_domains ?? "")),
+        notes: d.notes || undefined,
+      }),
+    );
+    navigate(recordPath("customers", String(d.slug)), { replace: true });
+  }
+
+  const saveCustomer = (row: Customer, d: Draft) =>
+    customers.mutate(() =>
+      api.patch(`/customers/${row.slug}`, {
+        name: d.name,
+        aliases: csv(String(d.aliases ?? "")),
+        emailDomains: csv(String(d.email_domains ?? "")),
+        notes: d.notes || null,
+      }),
+    );
+
+  const deleteCustomer = (row: Customer) =>
+    customers.mutate(() => api.delete(`/customers/${row.slug}`));
+
   let filter = $state("");
   const filtered = $derived.by(() => {
     const q = filter.trim().toLowerCase();
@@ -372,11 +373,12 @@ import { csv } from "../fields";
 
 {#snippet detail(r: Customer)}
   {@const p = profiles[r.slug]}
+  {#if error}<Note tone="danger">{error}</Note>{/if}
   <div class="profile">
     <div class="block wide">
       <span
         class="dim"
-        title="The parts their estate divides into: sites, lines, tenants. A `profile` is a shared template a unit inherits from without being inside it."
+        title="Sites, lines, tenants. `profile`: shared template, inherited, not a parent."
         >estate</span
       >
       {#each unitTree(units[r.slug] ?? []) as { u, depth } (u.id)}
@@ -434,7 +436,7 @@ import { csv } from "../fields";
             <input
               aria-label="unit aliases"
               placeholder="aliases"
-              title="Other names the site calls it by. These resolve too."
+              title="Alternate names. Resolved like the slug."
               bind:value={editForm.aliases}
             />
             <Button size="sm" variant="primary" busy={busy === r.slug} onclick={() => saveUnit(r.slug)}>
@@ -493,7 +495,7 @@ import { csv } from "../fields";
     <div class="block wide">
       <span
         class="dim"
-        title="True of THIS install and nobody else: the version they run, their layout, an integration they depend on. A fact, not a problem and its fix."
+        title="Install-specific facts: version, layout, integrations. Not problems or fixes."
         >specifics</span
       >
       {#if (units[r.slug] ?? []).length}
@@ -602,7 +604,7 @@ import { csv } from "../fields";
           ]}
           onchange={(v) => {
             factForm.component = "";
-            loadComponents(String(v));
+            components.load(String(v));
           }}
         />
         {#if (units[r.slug] ?? []).length}
@@ -624,7 +626,7 @@ import { csv } from "../fields";
           disabled={!factForm.product}
           options={[
             { value: "", label: "whole product" },
-            ...(components[factForm.product] ?? []).map((c) => ({
+            ...components.of(factForm.product).map((c) => ({
               value: c.slug,
               label: c.name,
             })),
@@ -663,14 +665,14 @@ import { csv } from "../fields";
             value: pr.slug,
             label: pr.name,
           }))}
-          onchange={(v) => loadComponents(String(v))}
+          onchange={(v) => components.load(String(v))}
         />
         <Select
           bind:value={compForm.component}
           aria-label="component"
           options={[
             { value: "", label: "component…" },
-            ...(components[compForm.product] ?? []).map((c) => ({
+            ...components.of(compForm.product).map((c) => ({
               value: c.slug,
               label: c.name,
             })),
@@ -709,52 +711,46 @@ import { csv } from "../fields";
   </div>
 {/snippet}
 
-{#if error}<Note tone="danger">{error}</Note>{/if}
+{#if id}
+  <RecordPage
+    noun={t("customer")}
+    title={record?.name ?? ""}
+    {columns}
+    row={record}
+    {creating}
+    loading={customers.loading}
+    loadError={customers.error}
+    body={detail}
+    onclose={back}
+    oncreate={createCustomer}
+    onsave={saveCustomer}
+    ondelete={deleteCustomer}
+  />
+{:else}
+  {#if error}<Note tone="danger">{error}</Note>{/if}
 
-<FilterBar
-  bind:value={filter}
-  shown={filtered.length}
-  total={customers.data.length}
-  placeholder="filter customers…"
-  label="filter customers"
-/>
+  <FilterBar
+    bind:value={filter}
+    shown={filtered.length}
+    total={customers.data.length}
+    placeholder="filter customers…"
+    label="filter customers"
+  />
 
-<CrudTable
-  hoist={sectionHoist("customers")}
-  {columns}
-  rows={filtered}
-  rowKey={(r) => r.slug}
-  expand={detail}
-  {expanded}
-  ontoggle={toggle}
-  loading={customers.loading}
-  error={customers.error}
-  emptyTitle={`No ${t("customers")} yet.`}
-  emptyDetail={`Attribution is by the requester's email domain, so a ${t("customer")} needs its domains listed.`}
-  addLabel={`add ${t("customer")}`}
-  noun={t("customer")}
-  editTitle={(r) => r.name}
-  oncreate={(d) =>
-    customers.mutate(() =>
-      api.post("/customers", {
-        slug: d.slug,
-        name: d.name,
-        aliases: csv(String(d.aliases ?? "")),
-        emailDomains: csv(String(d.email_domains ?? "")),
-        notes: d.notes || undefined,
-      }),
-    )}
-  onsave={(row, d) =>
-    customers.mutate(() =>
-      api.patch(`/customers/${row.slug}`, {
-        name: d.name,
-        aliases: csv(String(d.aliases ?? "")),
-        emailDomains: csv(String(d.email_domains ?? "")),
-        notes: d.notes || null,
-      }),
-    )}
-  ondelete={(row) => customers.mutate(() => api.delete(`/customers/${row.slug}`))}
-/>
+  <CrudTable
+    hoist={sectionHoist("customers")}
+    {columns}
+    rows={filtered}
+    rowKey={(r) => r.slug}
+    loading={customers.loading}
+    error={customers.error}
+    emptyTitle={`No ${t("customers")} yet.`}
+    emptyDetail={`Attributed by requester email domain. List domains.`}
+    addLabel={`add ${t("customer")}`}
+    onopen={(r) => navigate(recordPath("customers", r.slug))}
+    onadd={() => navigate(recordPath("customers", NEW_RECORD))}
+  />
+{/if}
 
 <style>
   .indent {

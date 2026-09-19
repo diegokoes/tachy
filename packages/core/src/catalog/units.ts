@@ -1,27 +1,21 @@
+import type { CustomerUnitRow, ResolvedFact } from "@tachy/contract";
 import { sql } from "../infra/db";
+import { nearestSlugsHint } from "./nearest";
 import { wouldCycle, type ParentColumn } from "../infra/hierarchy";
 import { badInput, notFound } from "../infra/errors";
+
+export type { CustomerUnitRow, ResolvedFact };
 
 /**
  * Deliberately not `getCustomerIdBySlug` from ./customers: that module imports
  * resolveUnit from here, and one-way is worth a two-line query.
  */
 async function customerIdOf(slug: string): Promise<string> {
-  const [row] = await sql`select id from customers where slug = ${slug}`;
+  const [row] = await sql<{ id: string }[]>`
+    select id from customers where slug = ${slug}
+  `;
   if (!row) throw badInput(`Unknown customer '${slug}'.`);
-  return row.id as string;
-}
-
-export interface CustomerUnitRow {
-  id: string;
-  customer_id: string;
-  parent_id: string | null;
-  profile_id: string | null;
-  kind: string;
-  slug: string;
-  name: string;
-  aliases: string[];
-  notes: string | null;
+  return row.id;
 }
 
 export interface CustomerUnitInput {
@@ -54,11 +48,21 @@ const UNIT_SLUG_RE = /^[a-z0-9][a-z0-9._-]*$/i;
 export async function listCustomerUnits(
   customerId: string,
 ): Promise<CustomerUnitRow[]> {
-  return sql`
+  return sql<CustomerUnitRow[]>`
     select id, customer_id, parent_id, profile_id, kind, slug, name, aliases, notes
     from customer_units where customer_id = ${customerId}
     order by kind, slug
-  ` as Promise<CustomerUnitRow[]>;
+  `;
+}
+
+export async function getUnitSlug(
+  unitId: string | null,
+): Promise<string | null> {
+  if (!unitId) return null;
+  const [row] = await sql<{ slug: string }[]>`
+    select slug from customer_units where id = ${unitId}
+  `;
+  return row?.slug ?? null;
 }
 
 /**
@@ -81,19 +85,10 @@ export async function resolveUnit(
   `;
   if (row) return row as CustomerUnitRow;
 
-  const nearest = await sql`
-    select slug from customer_units
-    where customer_id = ${customerId}
-    order by greatest(
-      similarity(slug, ${slugOrAlias}),
-      similarity(name, ${slugOrAlias}),
-      coalesce((select max(similarity(a, ${slugOrAlias})) from unnest(aliases) a), 0)
-    ) desc
-    limit 5
-  `;
-  const hint = nearest.length
-    ? ` Nearest matches: ${nearest.map((r) => `'${r.slug}'`).join(", ")}.`
-    : "";
+  const hint = await nearestSlugsHint("customer_units", slugOrAlias, {
+    column: "customer_id",
+    id: customerId,
+  });
   throw badInput(
     `Unknown unit '${slugOrAlias}' for this customer.${hint} Call list_customer_units, or add_customer_unit first.`,
   );
@@ -108,14 +103,14 @@ async function assertNoCycle(
 ): Promise<void> {
   if (await wouldCycle("customer_units", at, from, column))
     throw badInput(
-      `'${label}' already sits under this unit — that would cycle`,
+      `'${label}' already sits under this unit; that would cycle`,
     );
 }
 
 export async function addCustomerUnit(i: CustomerUnitInput) {
   if (!UNIT_SLUG_RE.test(i.slug))
     throw badInput(
-      `Invalid unit slug '${i.slug}' — letters, digits, dot, dash and underscore.`,
+      `Invalid unit slug '${i.slug}': letters, digits, dot, dash and underscore only.`,
     );
   const customerId = await customerIdOf(i.customerSlug);
   const parentId = i.parentSlug
@@ -229,20 +224,6 @@ export async function deleteCustomerUnit(customerId: string, slug: string) {
   });
 }
 
-export interface ResolvedFact {
-  kind: string;
-  label: string;
-  value: string;
-  notes: string | null;
-  source: string | null;
-  /** Null when the fact is true of the whole customer rather than a unit. */
-  origin_slug: string | null;
-  origin_name: string | null;
-  origin_kind: string | null;
-  /** True when it came from somewhere above, not from the unit itself. */
-  inherited: boolean;
-}
-
 /**
  * Every fact that applies to one unit, most-specific first, each carrying where
  * it came from. The precedence ladder:
@@ -270,7 +251,7 @@ export async function resolveUnitFacts(
   `;
   if (!unit) throw notFound(`Unknown customer unit '${unitId}'`);
 
-  return sql`
+  return sql<ResolvedFact[]>`
     with recursive chain as (
       select id, parent_id, profile_id, 0 as depth
       from customer_units where id = ${unitId}
@@ -293,5 +274,5 @@ export async function resolveUnitFacts(
     where f.customer_id = ${unit.customer_id}
       and (f.unit_id is null or r.unit_id is not null)
     order by f.kind, f.label, coalesce(r.rank, 1000000)
-  ` as Promise<ResolvedFact[]>;
+  `;
 }

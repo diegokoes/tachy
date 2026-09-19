@@ -14,7 +14,7 @@ const EMPTY: Activity = {
     per_day: [],
     by_model: [],
   },
-  tools: { days: 30, reads: 0, writes: 0, tools: [] },
+  tools: { days: 30, reads: 0, writes: 0, tools: [], per_day: [] },
   traffic: { days: 14, connections: [], per_day: [] },
   library: {
     days: 30,
@@ -22,6 +22,7 @@ const EMPTY: Activity = {
     readers: 0,
     corrections: 0,
     per_day: [],
+    edits_per_day: [],
     top: [],
   },
 };

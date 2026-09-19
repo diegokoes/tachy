@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cloudSchema } from "@tachy/core";
 
 /**
  * Fields more than one tool takes. Named so the wording travels with the field
@@ -44,3 +45,19 @@ export const tagsField = z
   .describe(
     "Free-form labels for filtering. Call list_labels first and reuse a slug rather than inventing a near-duplicate; a component slug used as a tag makes the entry findable by component.",
   );
+
+/** A page size for list and search tools. */
+export const limitField = z.number().int().positive().max(100).optional();
+
+/** The filters knowledge search and knowledge listing share. */
+export const knowledgeFilterFields = {
+  product_slug: z.string().optional(),
+  team_slug: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  cloud: cloudSchema
+    .optional()
+    .describe("Environment slug filter, e.g. prod; see list_environments."),
+  affected_version: z.string().optional(),
+  fixed_version: z.string().optional(),
+  limit: limitField,
+};

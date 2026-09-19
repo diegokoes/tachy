@@ -18,15 +18,14 @@ export interface EmbeddingModelSpec {
 }
 
 export const EMBEDDING_MODELS: Record<string, EmbeddingModelSpec> = {
-  // CLS-pooled, no prefix on either side. The card offers an optional query
-  // instruction ("Represent this sentence for searching relevant passages: ")
-  // and notes omitting it costs only "a slight degradation". Measured on this
-  // corpus it costs nothing and helps: a constant prefix is most of the vector
-  // for a content-free query, which lifts nonsense toward everything. With the
-  // instruction, "ñ" scored 0.487 against a real entry while a true identifier
-  // match scored 0.460 — nonsense outranking a hit. Without it, vector-only
-  // top-1 over the golden set went 12/13 -> 13/13. Re-derive with
-  // scripts/eval-embeddings.ts before changing this back.
+  // CLS-pooled, no prefix on either side. The model card offers an optional
+  // query instruction ("Represent this sentence for searching relevant
+  // passages: ") and says omitting it costs "a slight degradation". On this
+  // corpus the instruction hurts: a constant prefix dominates the vector of a
+  // content-free query and pulls nonsense toward every entry. With it, "ñ"
+  // scores 0.487 against a real entry and a true identifier match 0.460.
+  // Without it, vector-only top-1 on the golden set is 13/13, against 12/13.
+  // Re-run scripts/eval-embeddings.ts before adding a prefix.
   "Xenova/bge-base-en-v1.5": {
     dim: 768,
     pooling: "cls",

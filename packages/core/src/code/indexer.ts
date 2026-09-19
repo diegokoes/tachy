@@ -1,6 +1,7 @@
 import { sql } from "../infra/db";
 import { log } from "../infra/log";
 import { embedPassages, toVectorLiteral } from "../search/embeddings";
+import { writeEmbeddings } from "../search/backfill";
 import { chunkCode } from "./chunk-code";
 import { cloneOrFetch, listTree, readFileAt, type TreeEntry } from "./git";
 import { getRepoBySlug, updateRepoStatus } from "./repos";
@@ -270,22 +271,9 @@ export async function backfillCodeEmbeddings(
     ${opts.all ? sql`` : sql`where c.embedding is null`}
     order by c.file_id, c.ordinal
   `;
-  if (!rows.length) return 0;
-
-  let n = 0;
-  for (let i = 0; i < rows.length; i += 64) {
-    const batch = rows.slice(i, i + 64);
-    const vectors = await embedPassages(
-      // Same shape as indexing, or the query and the stored vector disagree.
-      batch.map((r) => `// ${r.path}\n${r.chunk_text}`),
-    );
-    await sql`
-      update code_chunks c set embedding = v.vec::vector
-      from (select unnest(${batch.map((r) => r.id as string)}::uuid[]) as id,
-                   unnest(${vectors.map(toVectorLiteral)}::text[]) as vec) v
-      where c.id = v.id
-    `;
-    n += batch.length;
-  }
-  return n;
+  return writeEmbeddings(
+    "code_chunks",
+    // Same shape as indexing, or the query and the stored vector disagree.
+    rows.map((r) => ({ id: r.id, text: `// ${r.path}\n${r.chunk_text}` })),
+  );
 }

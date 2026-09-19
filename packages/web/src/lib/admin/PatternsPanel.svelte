@@ -7,7 +7,7 @@
   import SlugRename from "./SlugRename.svelte";
   import type { Pattern } from "./rows";
 import { INFO } from "./help";
-  import { sectionHoist } from "./topAction.svelte";
+  import { sectionHoist } from "./sectionAction.svelte";
 
   const patterns = createResource(
     () => api.get<Pattern[]>("/resolution-patterns"),

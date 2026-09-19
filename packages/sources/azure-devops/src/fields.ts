@@ -1,4 +1,7 @@
-import type { AdoClient } from "./client";
+import type { AdoFieldType, FieldSpec, WorkItemSchema } from "@tachy/core";
+import type { AdoClient, AdoField, AdoTypeField } from "./client";
+
+export type { AdoFieldType, FieldSpec, WorkItemSchema };
 
 /**
  * Azure DevOps splits what a form needs across two endpoints, and neither is
@@ -19,61 +22,20 @@ import type { AdoClient } from "./client";
  */
 export const MAX_ALLOWED_VALUES = 50;
 
-/** ADO's FieldType values, as seen in the account-wide field list. */
-export type AdoFieldType =
-  | "string"
-  | "integer"
-  | "double"
-  | "boolean"
-  | "dateTime"
-  | "plainText"
-  | "html"
-  | "treePath"
-  | "history"
-  | "guid"
-  | "identity"
-  | "picklistString";
-
-export interface FieldSpec {
-  reference_name: string;
-  name: string;
-  required: boolean;
-  allowed_values?: unknown[];
-  allowed_values_truncated?: true;
-  default_value?: unknown;
-  /** From the account-wide list; absent when the field is not defined there. */
-  type?: AdoFieldType;
-  read_only?: true;
-  /**
-   * An identity field takes a person. ADO resolves the string server-side and
-   * rejects one it cannot match, so an email / unique name is the reliable
-   * form — a display name alone is ambiguous.
-   */
-  is_identity?: true;
-  help_text?: string;
-}
-
-export interface WorkItemSchema {
-  project: string;
-  type: string;
-  fields: FieldSpec[];
-  config_defaults: Record<string, unknown>;
-}
-
 /**
  * The projection both the MCP tool and the HTTP route return. One function so
  * they cannot drift: a field the browser renders and a field the agent is told
  * about have to be the same field.
  */
 export function projectFields(
-  typeFields: any[],
-  accountFields: any[] = [],
+  typeFields: AdoTypeField[],
+  accountFields: AdoField[] = [],
 ): FieldSpec[] {
-  const byRef = new Map<string, any>();
+  const byRef = new Map<string, AdoField>();
   for (const f of accountFields)
     if (f?.referenceName) byRef.set(f.referenceName, f);
 
-  return typeFields.map((f: any) => {
+  return typeFields.map((f) => {
     const values = Array.isArray(f.allowedValues) ? f.allowedValues : [];
     const account = byRef.get(f.referenceName);
     return {
@@ -111,7 +73,7 @@ export async function workItemSchema(
 ): Promise<WorkItemSchema> {
   const [typeFields, accountFields] = await Promise.all([
     client.getTypeFields(project, type),
-    client.listFields().catch(() => [] as any[]),
+    client.listFields().catch(() => [] as AdoField[]),
   ]);
   return {
     project,
@@ -119,4 +81,29 @@ export async function workItemSchema(
     fields: projectFields(typeFields, accountFields),
     config_defaults: configDefaults,
   };
+}
+
+const dig = (v: unknown, ...keys: string[]): unknown =>
+  keys.reduce<unknown>(
+    (at, k) =>
+      at && typeof at === "object"
+        ? (at as Record<string, unknown>)[k]
+        : undefined,
+    v,
+  );
+
+/**
+ * Field values a new work item of `type` starts from: the registered project's
+ * `defaults[type]` when it has one, else the connection's
+ * `defaults[project][type]`.
+ */
+export function workItemDefaults(
+  connectionConfig: unknown,
+  project: string,
+  type: string,
+  projectConfig?: unknown,
+): Record<string, unknown> {
+  return (dig(projectConfig, "defaults", type) ??
+    dig(connectionConfig, "defaults", project, type) ??
+    {}) as Record<string, unknown>;
 }
