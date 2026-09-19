@@ -16,6 +16,7 @@ import type {
   RepoCensus,
   RepoRow,
   SourceCensus,
+  SourceConnectionRow,
   SourceTraffic,
   TeamRole,
   TeamRow,
@@ -34,12 +35,7 @@ export type Component = ComponentRow;
 export type Label = LabelRow;
 export type Customer = CustomerRow;
 export type Pattern = PatternRow;
-export type Connection = {
-  id: string;
-  source_type: string;
-  slug: string;
-  base_url: string | null;
-  config: Record<string, unknown> | null;
+export type Connection = SourceConnectionRow & {
   /** Scope the caller's API token resolves from; null when none is set. */
   token_source?: "user" | "team" | "global" | "env" | null;
 };

@@ -549,6 +549,7 @@ export type {
   CatalogCensus,
   UserCensus,
   SourceCensus,
+  SourceConnectionRow,
   KnowledgeCensus,
 } from "@tachy/contract";
 
