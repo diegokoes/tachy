@@ -1,4 +1,4 @@
-import type { TeamRole, UserRole } from "@tachy/contract";
+import type { TeamRole, UserCensus, UserRole } from "@tachy/contract";
 import { sql } from "../infra/db";
 import {
   ISSUE_ITEMS,
@@ -264,8 +264,8 @@ export async function setTeamMember(
  * app admins / team admins / members / disabled as four parts of one roll
  * rather than four independent tallies.
  */
-export async function userCensus() {
-  const [row] = await sql`
+export async function userCensus(): Promise<UserCensus> {
+  const [row] = await sql<Omit<UserCensus, "teams_without_admin">[]>`
     select
       count(*)::int as users,
       count(*) filter (where disabled)::int as disabled,
@@ -293,16 +293,7 @@ export async function userCensus() {
     )
     order by t.name
   `;
-  return { ...row, teams_without_admin: [...teams_without_admin] } as {
-    users: number;
-    disabled: number;
-    admins: number;
-    team_admins: number;
-    with_password: number;
-    teams_with_admin: number;
-    teams_without_admin: { slug: string; name: string }[];
-    users_no_team: number;
-  };
+  return { ...row, teams_without_admin: [...teams_without_admin] };
 }
 
 /** Who can curate what, and the gaps in it, by name. */

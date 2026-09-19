@@ -1,4 +1,7 @@
+import type { AdoFieldType, FieldSpec, WorkItemSchema } from "@tachy/core";
 import type { AdoClient } from "./client";
+
+export type { AdoFieldType, FieldSpec, WorkItemSchema };
 
 /**
  * Azure DevOps splits what a form needs across two endpoints, and neither is
@@ -18,47 +21,6 @@ import type { AdoClient } from "./client";
  * url}.
  */
 export const MAX_ALLOWED_VALUES = 50;
-
-/** ADO's FieldType values, as seen in the account-wide field list. */
-export type AdoFieldType =
-  | "string"
-  | "integer"
-  | "double"
-  | "boolean"
-  | "dateTime"
-  | "plainText"
-  | "html"
-  | "treePath"
-  | "history"
-  | "guid"
-  | "identity"
-  | "picklistString";
-
-export interface FieldSpec {
-  reference_name: string;
-  name: string;
-  required: boolean;
-  allowed_values?: unknown[];
-  allowed_values_truncated?: true;
-  default_value?: unknown;
-  /** From the account-wide list; absent when the field is not defined there. */
-  type?: AdoFieldType;
-  read_only?: true;
-  /**
-   * An identity field takes a person. ADO resolves the string server-side and
-   * rejects one it cannot match, so an email / unique name is the reliable
-   * form — a display name alone is ambiguous.
-   */
-  is_identity?: true;
-  help_text?: string;
-}
-
-export interface WorkItemSchema {
-  project: string;
-  type: string;
-  fields: FieldSpec[];
-  config_defaults: Record<string, unknown>;
-}
 
 /**
  * The projection both the MCP tool and the HTTP route return. One function so

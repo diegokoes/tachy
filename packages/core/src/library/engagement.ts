@@ -1,32 +1,7 @@
 import { sql } from "../infra/db";
+import type { LibraryEngagement } from "@tachy/contract";
 
-export interface LibraryEngagement {
-  days: number;
-  reads: number;
-  readers: number;
-  /** Corrections people filed against entries in the window. */
-  corrections: number;
-  /** Reads per day, oldest first, gaps filled. */
-  per_day: { day: string; reads: number }[];
-  /**
-   * Revisions saved per day, by who made them: a person in the app or over the
-   * API, the agent (directly or over MCP), or an ingest.
-   */
-  edits_per_day: {
-    day: string;
-    people: number;
-    agent: number;
-    ingest: number;
-  }[];
-  /** Most-read items, entries and docs together. */
-  top: {
-    id: string;
-    kind: "entry" | "doc";
-    title: string;
-    reads: number;
-    readers: number;
-  }[];
-}
+export type { LibraryEngagement };
 
 /**
  * What people actually read, from `library_views` and `knowledge_feedback`.

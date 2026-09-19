@@ -1,3 +1,4 @@
+import type { CatalogCensus } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { productTagRenameImpact, renameProductTag } from "./product-tags";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
@@ -250,8 +251,8 @@ export async function deleteLabel(productId: string, slug: string) {
  * description is one the agent has nothing to match a question against, so it
  * is dead weight in the taxonomy rather than an incomplete row.
  */
-export async function catalogCensus() {
-  const [row] = await sql`
+export async function catalogCensus(): Promise<CatalogCensus> {
+  const [row] = await sql<Omit<CatalogCensus, "components_by_product">[]>`
     select
       (select count(*)::int from teams) as teams,
       (select count(*)::int from products) as products,
@@ -277,36 +278,14 @@ export async function catalogCensus() {
   `;
   /* The shape of the tree, not just its size: which products carry it and
      which have a slug and nothing under it. */
-  const perProduct = await sql`
+  const perProduct = await sql<CatalogCensus["components_by_product"]>`
     select p.slug, p.name, count(c.id)::int as n
     from products p
     left join components c on c.product_id = p.id
     group by p.id, p.slug, p.name
     order by n desc, p.slug
   `;
-  return {
-    ...(row as {
-      teams: number;
-      products: number;
-      components: number;
-      labels: number;
-      patterns: number;
-      customers: number;
-      teams_no_product: number;
-      products_no_component: number;
-      components_root: number;
-      components_no_description: number;
-      labels_no_description: number;
-      patterns_no_description: number;
-      customers_no_domains: number;
-      customer_units: number;
-    }),
-    components_by_product: perProduct as unknown as {
-      slug: string;
-      name: string;
-      n: number;
-    }[],
-  };
+  return { ...row, components_by_product: [...perProduct] };
 }
 
 /** The half-filled-in parts of the catalog, by name. */

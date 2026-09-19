@@ -1,36 +1,8 @@
 import { sql } from "../infra/db";
 import { estimateCostUsd } from "./runs";
+import type { AgentUsage } from "@tachy/contract";
 
-export interface AgentUsage {
-  days: number;
-  turns: number;
-  input_tokens: number;
-  output_tokens: number;
-  /**
-   * What the provider reported where it reported anything, list price for the
-   * rest. A subscription is not billed per token, so this measures consumption
-   * rather than an invoice.
-   */
-  cost_usd: number;
-  active_7d: number;
-  /** Distinct people with a turn anywhere in the window. */
-  active: number;
-  /** Tokens and turns per day, oldest first, gaps filled; `models` splits the tokens. */
-  per_day: {
-    day: string;
-    turns: number;
-    tokens: number;
-    models: Record<string, number>;
-  }[];
-  by_model: { model: string; turns: number; tokens: number }[];
-  /** Heaviest users first. Omitted by the route for anyone not an app admin. */
-  top_users?: {
-    email: string;
-    turns: number;
-    tokens: number;
-    cost_usd: number;
-  }[];
-}
+export type { AgentUsage };
 
 /**
  * Rows grouped by model with the tokens no provider priced split out. A backend

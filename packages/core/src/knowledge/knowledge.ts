@@ -1,3 +1,4 @@
+import type { KnowledgeCensus } from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
 import {
   embedPassage,
@@ -764,27 +765,21 @@ export async function revertKnowledgeEntry(
  * are present rather than padded out to the vocabulary — a band with a zero
  * segment in it draws a legend key for nothing.
  */
-export async function knowledgeCensus() {
-  const [row] = await sql`
+export async function knowledgeCensus(): Promise<KnowledgeCensus> {
+  const [row] = await sql<Omit<KnowledgeCensus, "by_status">[]>`
     select
       count(*)::int as entries,
       count(*) filter (where component_id is null)::int as entries_no_component,
       count(*) filter (where product_id is null)::int as entries_no_product
     from knowledge_entries
   `;
-  const statuses = await sql`
+  const statuses = await sql<{ status: string; n: number }[]>`
     select status, count(*)::int as n
     from knowledge_entries
     group by status
   `;
   return {
-    ...(row as {
-      entries: number;
-      entries_no_component: number;
-      entries_no_product: number;
-    }),
-    by_status: Object.fromEntries(
-      statuses.map((s) => [s.status as string, s.n as number]),
-    ) as Record<string, number>,
+    ...row,
+    by_status: Object.fromEntries(statuses.map((s) => [s.status, s.n])),
   };
 }
