@@ -12,24 +12,25 @@ library image only when the first wiki article embeds one.
 
 ## Running
 
-The dev stack must be up and seeded:
+The dev stack must be up and seeded, with `NODE_ENV=development` in `.env` or
+the seed refuses:
 
 ```sh
-docker compose -p tachy-dev up -d
-docker compose -p tachy-dev run --rm cli npm run sync -- seed --scale=medium --reset --yes
+docker compose up -d
+docker compose run --rm cli npm run sync -- seed --scale=medium --reset --yes
 npm run load -- /load/smoke.js
 ```
 
-`npm run load` runs k6 as a container on the dev project's network, so the API
-is reachable as `http://api:8787` (the host-side 8788 mapping is only for a
-browser). To point it somewhere else:
+`npm run load` runs k6 as a container on the network of the project `.env`
+names (`COMPOSE_PROJECT_NAME`), so the API is reachable as `http://api:8787`
+whatever `TACHY_API_PORT` publishes it on. To point it somewhere else:
 
 ```sh
-BASE_URL=http://localhost:8788 npm run load -- /load/smoke.js
+BASE_URL=https://tachy-dev.office.lan npm run load -- /load/smoke.js
 ```
 
 For k6's live TUI, install it locally instead (`apt install k6` from the Grafana
-repo) and run `BASE_URL=http://localhost:8788 k6 run load/smoke.js`.
+repo) and run `BASE_URL=http://localhost:8787 k6 run load/smoke.js`.
 
 ## The scenarios
 
@@ -85,7 +86,7 @@ To chase a slow request, take its `x-request-id` response header and grep the
 API log — every request logs one JSON line carrying the same id:
 
 ```sh
-docker compose -p tachy-dev logs api | grep <request-id>
+docker compose logs api | grep <request-id>
 ```
 
 ### Measured baseline
@@ -133,7 +134,7 @@ you see came from the lexical and trigram legs. Concretely:
 For numbers that reflect real vector search, seed with `--embed`:
 
 ```sh
-docker compose -p tachy-dev run --rm cli npm run sync -- seed --scale=medium --reset --yes --embed=search
+docker compose run --rm cli npm run sync -- seed --scale=medium --reset --yes --embed=search
 ```
 
 `--embed=search` embeds what a search reads: knowledge entries and reference

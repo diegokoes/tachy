@@ -29,7 +29,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
-    "load": "docker compose -p tachy-dev -f docker-compose.yml -f load/k6.compose.yml run --rm k6 run",
+    "load": "docker compose -f docker-compose.yml -f load/k6.compose.yml run --rm k6 run",
     "format": "prettier --write ."
   },
   "engines": {
