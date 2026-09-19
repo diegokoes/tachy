@@ -21,8 +21,8 @@ const RENAMED: Record<string, string> = { toc: "contents", coverage: "gaps" };
 export const renamedPage = (page: string): string | undefined => RENAMED[page];
 
 /**
- * Where a /library/wiki/… path lives now. Chat history, the agent's own earlier
- * replies and people's bookmarks all still say the old thing.
+ * Where an old /library/wiki/… path lives. Chat history, the agent's earlier
+ * replies and people's bookmarks still carry that form.
  */
 export function movedWikiPath(segments: string[]): string {
   const [scope, page, ...rest] = segments.slice(2);

@@ -23,7 +23,7 @@
     emptyTitle?: string;
     emptyDetail?: string;
     rowClass?: (row: T) => string | undefined;
-    /** Opening a row is the row's own job now, so the whole of it is the target. */
+    /** Opening a row is the row's own job, so the whole of it is the target. */
     onrowclick?: (row: T) => void;
     /** Rows this caller will not open. They take no pointer and no tab stop. */
     canOpen?: (row: T) => boolean;
