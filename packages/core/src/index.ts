@@ -29,6 +29,8 @@ export { inBackground, backgroundSettled } from "./infra";
 export type { AppErrorCode } from "./infra";
 export { log, logContext, runWithLogContext } from "./infra";
 export type { LogLevel } from "./infra";
+export { secretsEnabled, vaultKeys, keyId } from "./infra";
+export { ISSUE_ITEMS, issueList, issueFlag, type IssueList } from "./infra";
 export {
   isGlobalAdmin,
   teamAdminTeams,
@@ -132,8 +134,7 @@ export type {
   ArtifactRow,
   ArtifactSpec,
 } from "./config";
-export { secretsEnabled } from "./infra";
-export { ISSUE_ITEMS, issueList, issueFlag, type IssueList } from "./infra";
+export { vaultState, rotateVaultKey } from "./config";
 
 export {
   saveKnowledgeEntry,
@@ -157,6 +158,7 @@ export type {
   FacetCount,
 } from "./knowledge";
 export { addFeedback, listFeedback } from "./knowledge";
+export type { FeedbackInput } from "./knowledge";
 export {
   LIBRARY_ACTORS,
   UNKNOWN_ACTOR,
@@ -204,7 +206,6 @@ export type {
   SavedAsset,
   LibraryEngagement,
 } from "./library";
-export type { FeedbackInput } from "./knowledge";
 
 export {
   MAIN_PAGE_SLUG,
@@ -404,10 +405,30 @@ export {
   renameLabel,
 } from "./catalog";
 
-export * from "./sources/source";
-export * from "./sources/fetch";
-export * from "./sources/traffic";
-export { stripHtml } from "./sources/html";
+export {
+  SOURCE_TIMEOUT_MS,
+  sourceFetch,
+  fetchUntrustedUrl,
+  stripHtml,
+  SOURCE_CALL_ORIGINS,
+  setSourceOrigin,
+  recordSourceCall,
+  countSourceCall,
+  sourceTrafficCensus,
+  syncSource,
+} from "./sources";
+export type {
+  RawMessage,
+  RawWorkItem,
+  SourceCapabilities,
+  ListOptions,
+  SourceProbe,
+  WorkItemSource,
+  SourceFactory,
+  SourceCallOrigin,
+  SourceCallOutcome,
+  SourceTraffic,
+} from "./sources";
 export { registerSource, resolveSource } from "./sources";
 export type { ResolvedSource } from "./sources";
 export {
@@ -507,6 +528,9 @@ export {
   redactForLlm,
   resolveRedactionPolicy,
   globalRedactionEnabled,
+  sweepTranscripts,
+  rollUpUsage,
+  sweepOrphanAssets,
 } from "./compliance";
 export type { RedactOptions, RedactionPolicy } from "./compliance";
 
@@ -578,12 +602,3 @@ export type {
 } from "@tachy/contract";
 export * from "./jobs";
 export * from "./testing";
-export { vaultState, rotateVaultKey } from "./config/credentials";
-export { vaultKeys, keyId } from "./infra/secrets";
-export { syncSource } from "./sources/sync";
-export { repoToken } from "./code/jobs";
-export {
-  sweepTranscripts,
-  rollUpUsage,
-  sweepOrphanAssets,
-} from "./compliance/retention";
