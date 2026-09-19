@@ -1,9 +1,12 @@
+import type { PatternRow } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { conflict, notFound } from "../infra/errors";
 
 /** The full controlled vocabulary, for Claude to pick from before tagging an entry. */
 export async function listResolutionPatterns() {
-  return sql`select slug, description from resolution_patterns order by slug`;
+  return sql<
+    PatternRow[]
+  >`select slug, description from resolution_patterns order by slug`;
 }
 
 /** Deliberately add a new pattern. Separate from saving a knowledge entry on purpose. */

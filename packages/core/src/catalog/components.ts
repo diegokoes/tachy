@@ -1,3 +1,4 @@
+import type { ComponentRow } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { productTagRenameImpact, renameProductTag } from "./product-tags";
 import { nearestSlugsHint } from "./nearest";
@@ -5,7 +6,7 @@ import { wouldCycle } from "../infra/hierarchy";
 import { badInput, conflict, notFound } from "../infra/errors";
 
 export async function listComponents(productId: string) {
-  return sql`
+  return sql<ComponentRow[]>`
     select id, parent_id, slug, name, description, aliases
     from components where product_id = ${productId}
     order by slug

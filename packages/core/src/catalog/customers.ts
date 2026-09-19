@@ -1,3 +1,4 @@
+import type { CustomerRow } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { nearestSlugsHint } from "./nearest";
 import { badInput, conflict, notFound } from "../infra/errors";
@@ -19,7 +20,9 @@ const normalizeDomains = (domains: string[] | undefined) =>
     .filter(Boolean);
 
 export async function listCustomers() {
-  return sql`select id, name, slug, aliases, email_domains, notes from customers order by name`;
+  return sql<
+    CustomerRow[]
+  >`select id, name, slug, aliases, email_domains, notes from customers order by name`;
 }
 
 export async function addCustomer(i: CustomerInput) {
