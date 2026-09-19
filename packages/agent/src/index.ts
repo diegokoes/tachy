@@ -10,8 +10,14 @@ export {
   classifyCall,
   qualify,
 } from "./tools";
-export { claudePermission, claudeEnv, explainFailure } from "./claude";
-export { copilotPermission } from "./copilot";
+export {
+  claudePermission,
+  claudeEnv,
+  claudeOptions,
+  BUILTIN_TOOLS,
+  explainFailure,
+} from "./claude";
+export { copilotPermission, copilotSessionConfig } from "./copilot";
 export type { ApprovalGate } from "./turn";
 export {
   AGENT_PROVIDERS,

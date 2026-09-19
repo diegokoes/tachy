@@ -1,15 +1,10 @@
 import {
   query,
+  type CanUseTool,
   type Options,
   type PermissionResult,
 } from "@anthropic-ai/claude-agent-sdk";
-import {
-  classifyCall,
-  qualify,
-  READ_TOOLS,
-  DISALLOWED_BUILTINS,
-  MCP_SERVER,
-} from "./tools";
+import { classifyCall, qualify, READ_TOOLS, MCP_SERVER } from "./tools";
 import {
   effectiveModel,
   type AgentConfig,
@@ -92,7 +87,58 @@ export function claudeEnv(cfg: AgentConfig): Record<string, string> {
 
   if (cfg.configDir) env.CLAUDE_CONFIG_DIR = cfg.configDir;
   env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = "1";
+  // A subscription token with the right scope would otherwise attach the
+  // caller's personal claude.ai connectors to the turn.
+  env.ENABLE_CLAUDEAI_MCP_SERVERS = "false";
   return env;
+}
+
+/**
+ * Only ToolSearch survives from Claude Code's built-ins. Tool search is on by
+ * default against the Anthropic API, and in that mode the first request goes
+ * out before the MCP server has connected: the tachy tools are deferred and
+ * reachable only through ToolSearch. Without it the model gets no tools at all.
+ */
+export const BUILTIN_TOOLS = ["ToolSearch"];
+
+/**
+ * Everything the model sees beyond the conversation is named here: the prompt
+ * as the whole system prompt, rather than appended to the Claude Code coding
+ * preset with its cwd and git status, and no settings, CLAUDE.md or .mcp.json
+ * picked up from disk.
+ */
+export function claudeOptions(
+  cfg: AgentConfig,
+  opts: { resume?: string },
+  abortController: AbortController,
+  canUseTool: CanUseTool,
+): Options {
+  return {
+    abortController,
+    model: effectiveModel(cfg),
+    ...(cfg.effort ? { effort: cfg.effort } : {}),
+    cwd: cfg.cwd,
+    systemPrompt: cfg.systemPrompt,
+    settingSources: [],
+    strictMcpConfig: true,
+    tools: BUILTIN_TOOLS,
+    // Set so Claude Code does not spend a model call naming each session.
+    title: "tachy",
+    permissionMode: "default",
+    allowedTools: READ_TOOLS.map(qualify),
+    mcpServers: {
+      [MCP_SERVER]: {
+        type: "stdio",
+        command: cfg.mcpCommand,
+        args: cfg.mcpArgs,
+        env: cfg.mcpEnv,
+      },
+    },
+    canUseTool,
+    includePartialMessages: false,
+    ...(opts.resume ? { resume: opts.resume } : {}),
+    env: claudeEnv(cfg),
+  };
 }
 
 export async function claudePermission(
@@ -138,29 +184,11 @@ export class ClaudeTurn extends TurnBase {
     cfg: AgentConfig,
     opts: { resume?: string },
   ): Promise<void> {
-    const options: Options = {
-      abortController: this.controller,
-      model: effectiveModel(cfg),
-      ...(cfg.effort ? { effort: cfg.effort } : {}),
-      cwd: cfg.cwd,
-      systemPrompt: {
-        type: "preset",
-        preset: "claude_code",
-        append: cfg.systemPromptAppend,
-      },
-      settingSources: [],
-      permissionMode: "default",
-      allowedTools: READ_TOOLS.map(qualify),
-      disallowedTools: DISALLOWED_BUILTINS,
-      mcpServers: {
-        [MCP_SERVER]: {
-          type: "stdio",
-          command: cfg.mcpCommand,
-          args: cfg.mcpArgs,
-          env: cfg.mcpEnv,
-        },
-      },
-      canUseTool: async (toolName, input, { toolUseID }) => {
+    const options = claudeOptions(
+      cfg,
+      opts,
+      this.controller,
+      async (toolName, input, { toolUseID }) => {
         const res = await claudePermission(
           toolName,
           input,
@@ -175,10 +203,7 @@ export class ClaudeTurn extends TurnBase {
           this.q.push({ type: "tool_use", tool: base, input, id: toolUseID });
         return res;
       },
-      includePartialMessages: false,
-      ...(opts.resume ? { resume: opts.resume } : {}),
-      env: claudeEnv(cfg),
-    };
+    );
 
     const pending = new Map<string, string>();
     try {
