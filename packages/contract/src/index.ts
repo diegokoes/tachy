@@ -71,6 +71,9 @@ export type {
   CustomerRow,
   CustomerUnitRow,
   ResolvedFact,
+  CustomerFactRow,
+  CustomerComponentRow,
+  CustomerProfile,
 } from "./catalog";
 export type { UserCensus } from "./access";
 export type {

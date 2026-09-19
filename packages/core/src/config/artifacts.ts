@@ -43,8 +43,11 @@ function readSpec(raw: unknown): ArtifactSpec | null {
   return parsed.success ? parsed.data : null;
 }
 
-function withSpec<T extends { spec?: unknown }>(row: T): T {
-  return { ...row, spec: readSpec(row.spec) };
+/** A row as stored: `spec` is whatever jsonb holds until readSpec parses it. */
+type Stored<T extends { spec: unknown }> = Omit<T, "spec"> & { spec: unknown };
+
+function withSpec<T extends { spec: ArtifactSpec | null }>(row: Stored<T>): T {
+  return { ...row, spec: readSpec(row.spec) } as T;
 }
 
 function checkSlug(slug: string): void {
@@ -78,26 +81,26 @@ async function assertCanWriteTeamArtifact(
 export async function listVisibleArtifacts(
   ctx: ScopeContext,
 ): Promise<ArtifactMeta[]> {
-  const rows = await sql`
+  const rows = await sql<Stored<ArtifactMeta>[]>`
     select id, scope, team_id, user_id, slug, title, description, spec, updated_at
     from artifacts
     where ${visibleCondition(ctx)}
     order by case scope when 'user' then 0 when 'team' then 1 else 2 end, title
   `;
-  return (rows as unknown as ArtifactMeta[]).map(withSpec);
+  return rows.map((r) => withSpec<ArtifactMeta>(r));
 }
 
 export async function getArtifact(
   id: string,
   ctx: ScopeContext,
 ): Promise<ArtifactRow> {
-  const [row] = await sql`
+  const [row] = await sql<Stored<ArtifactRow>[]>`
     select id, scope, team_id, user_id, slug, title, description, body, spec, updated_at
     from artifacts
     where id = ${id} and (${visibleCondition(ctx)})
   `;
   if (!row) throw notFound(`Artifact '${id}' not found`);
-  return withSpec(row as unknown as ArtifactRow);
+  return withSpec<ArtifactRow>(row);
 }
 
 /** The caller-visible artifact for `slug`, most specific scope first — the shape `export_table` resolves against. */
@@ -105,14 +108,14 @@ export async function getArtifactBySlug(
   slug: string,
   ctx: ScopeContext,
 ): Promise<ArtifactRow | undefined> {
-  const [row] = await sql`
+  const [row] = await sql<Stored<ArtifactRow>[]>`
     select id, scope, team_id, user_id, slug, title, description, body, spec, updated_at
     from artifacts
     where slug = ${slug} and (${visibleCondition(ctx)})
     order by case scope when 'user' then 0 when 'team' then 1 else 2 end
     limit 1
   `;
-  return row ? withSpec(row as unknown as ArtifactRow) : undefined;
+  return row ? withSpec<ArtifactRow>(row) : undefined;
 }
 
 export async function upsertArtifact(

@@ -11,19 +11,19 @@ export type { LibraryEngagement };
 export async function libraryEngagementCensus(
   days = 30,
 ): Promise<LibraryEngagement> {
-  const [totals] = await sql`
+  const [totals] = await sql<{ reads: number; readers: number }[]>`
     select coalesce(sum(views), 0)::int as reads,
            count(distinct user_id)::int as readers
     from library_views
     where day > current_date - ${days}::int
   `;
-  const [feedback] = await sql`
+  const [feedback] = await sql<{ corrections: number }[]>`
     select count(*)::int as corrections
     from knowledge_feedback
     where kind = 'correction' and created_at > now() - make_interval(days => ${days})
   `;
   const perDayWindow = Math.min(days, 14);
-  const per_day = await sql`
+  const per_day = await sql<LibraryEngagement["per_day"]>`
     select to_char(d.day, 'YYYY-MM-DD') as day,
            coalesce(sum(v.views), 0)::int as reads
     from generate_series(current_date - ${perDayWindow - 1}::int, current_date, interval '1 day') as d(day)
@@ -31,7 +31,7 @@ export async function libraryEngagementCensus(
     group by d.day
     order by d.day
   `;
-  const edits_per_day = await sql`
+  const edits_per_day = await sql<LibraryEngagement["edits_per_day"]>`
     select to_char(d.day, 'YYYY-MM-DD') as day,
       count(r.id) filter (where r.actor in ('web', 'api'))::int as people,
       count(r.id) filter (where r.actor in ('agent', 'mcp'))::int as agent,
@@ -41,7 +41,7 @@ export async function libraryEngagementCensus(
     group by d.day
     order by d.day
   `;
-  const top = await sql`
+  const top = await sql<LibraryEngagement["top"]>`
     select * from (
       select e.id::text as id, 'entry' as kind,
              coalesce(e.issue_summary, 'untitled entry') as title,
@@ -63,13 +63,11 @@ export async function libraryEngagementCensus(
   `;
   return {
     days,
-    reads: totals.reads as number,
-    readers: totals.readers as number,
-    corrections: feedback.corrections as number,
-    per_day: [...per_day] as unknown as LibraryEngagement["per_day"],
-    edits_per_day: [
-      ...edits_per_day,
-    ] as unknown as LibraryEngagement["edits_per_day"],
-    top: [...top] as unknown as LibraryEngagement["top"],
+    reads: totals.reads,
+    readers: totals.readers,
+    corrections: feedback.corrections,
+    per_day: [...per_day],
+    edits_per_day: [...edits_per_day],
+    top: [...top],
   };
 }

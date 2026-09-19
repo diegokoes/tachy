@@ -85,3 +85,53 @@ export interface ResolvedFact {
   /** True when it came from somewhere above, not from the unit itself. */
   inherited: boolean;
 }
+
+export interface CustomerFactRow {
+  id: string;
+  kind: string;
+  label: string;
+  value: string;
+  notes: string | null;
+  source: string | null;
+  component_id: string | null;
+  component_slug: string | null;
+  updated_at: string;
+}
+
+export interface CustomerComponentRow {
+  id: string;
+  slug: string;
+  name: string;
+  product_id: string;
+  product_slug: string;
+  notes: string | null;
+}
+
+export interface CustomerProfile {
+  id: string;
+  slug: string;
+  name: string;
+  notes: string | null;
+  /** Present when the profile was read for one unit. */
+  unit?: { slug: string; name: string; kind: string };
+  facts: {
+    kind: string;
+    label: string;
+    value: string;
+    component: string | null;
+    /** Unit-resolved reads only: which level the fact came from. */
+    origin?: string | null;
+    origin_kind?: string | null;
+    inherited?: boolean;
+  }[];
+  units: {
+    slug: string;
+    name: string;
+    kind: string;
+    parent: string | null;
+    profile: string | null;
+  }[];
+  components: { slug: string; product_slug: string }[];
+  repos: { slug: string; component: string | null; index_status: string }[];
+  projects: { source_slug: string; external_key: string }[];
+}
