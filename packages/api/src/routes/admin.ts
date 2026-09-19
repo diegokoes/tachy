@@ -77,9 +77,12 @@ import {
   sourceCredentialName,
   badInput,
   AGENT_CREDENTIALS,
+  CATALOG_SLUG_RE,
+  CATALOG_SLUG_HINT,
+  SLUG_RE,
   type CredentialSource,
 } from "@tachy/core";
-import { getIdentity, requireAdmin } from "../auth";
+import { requireAdmin } from "../auth";
 import { runtimeSnapshot, systemIssues } from "../runtime";
 import { lifecycle } from "../lifecycle";
 import {
@@ -87,15 +90,11 @@ import {
   assertScopeEditor,
   assertTeamAdmin,
   callerScope,
+  isAdminIdentity,
   requireCaller,
 } from "../authz";
 
-const slugField = z
-  .string()
-  .regex(
-    /^[a-z0-9][a-z0-9._/-]*$/,
-    "slug must be lowercase (letters, digits, . _ / -)",
-  );
+const slugField = z.string().regex(CATALOG_SLUG_RE, CATALOG_SLUG_HINT);
 
 const patternSchema = z.object({ slug: slugField, description: z.string() });
 const componentSchema = z.object({
@@ -119,12 +118,11 @@ const productSchema = z.object({
   name: z.string(),
   aliases: z.array(z.string()).optional(),
 });
-// Stricter than the generic slug: a connection slug also becomes a credential
-// name (`freshdesk_token:<slug>`) and an env var (`FRESHDESK_TOKEN_<SLUG>`).
+/** Strict, because it becomes a credential name and an env var suffix. */
 const connSlugField = z
   .string()
   .regex(
-    /^[a-z0-9][a-z0-9-]*$/,
+    SLUG_RE,
     "connection slug must be lowercase letters, digits and hyphens",
   );
 
@@ -233,9 +231,8 @@ export const admin = new Hono()
         knowledgeCensus(),
         listSourceConnections(),
       ]);
-    /* Through the same resolver the connections list uses, not a join against
-       the vault: a token supplied by the environment is a token, and counting
-       rows would have flagged every one of those as missing. */
+    // Through the same resolver the connections list uses, not a join against
+    // the vault: a token supplied by the environment counts as a token.
     const untokened = (
       await Promise.all(
         conns.map((r) =>
@@ -256,18 +253,17 @@ export const admin = new Hono()
         customers: catalog.customers,
         users: users.users,
       },
-      /* Only what is actionable. A disabled user is a normal state; a
-         connection that cannot authenticate and a repo that stopped indexing
-         are not. */
+      // Only what is actionable. A disabled user is a normal state; a
+      // connection that cannot authenticate and a repo that stopped indexing
+      // are not.
       warn: {
         sources: untokened,
         repos: repos.failing,
       },
-      /* The same censuses unsummarised, for the three overview panels.
-         They are on the page beside every section they describe now, and the
-         numbers they want — labels with no description, teams with no admin —
-         are per-product or per-membership queries the browser would have had
-         to fan out one request per row to answer. */
+      // The censuses unsummarised, for the overview panels. What they show
+      // (labels with no description, teams with no admin) is per-product or
+      // per-membership, which the browser would otherwise fetch one row at a
+      // time.
       detail: {
         sources: { ...sources, untokened },
         repos,
@@ -294,7 +290,7 @@ export const admin = new Hono()
       sourceTrafficCensus(14),
       libraryEngagementCensus(30),
     ]);
-    if (getIdentity(c)?.role !== "admin") {
+    if (!isAdminIdentity(c)) {
       delete usage.top_users;
       delete tools.writers;
     }
@@ -322,7 +318,7 @@ export const admin = new Hono()
     ),
     async (c) => {
       const { page } = c.req.valid("query");
-      const admin = getIdentity(c)?.role === "admin";
+      const admin = isAdminIdentity(c);
       if ((page === "workers" || page === "system") && !admin)
         throw forbidden("app admins only");
       let issues: Record<string, IssueList> = {};
@@ -376,7 +372,7 @@ export const admin = new Hono()
         copilot_token:
           (await credentialSource(AGENT_CREDENTIALS.copilot, {})) ?? null,
       },
-      ...(getIdentity(c)?.role === "admin"
+      ...(isAdminIdentity(c)
         ? {
             env: {
               auth_mode: env.authMode,

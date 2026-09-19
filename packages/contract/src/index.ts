@@ -17,6 +17,8 @@ export {
   TEAM_ROLES,
   MIN_PASSWORD_LENGTH,
   SLUG_RE,
+  CATALOG_SLUG_RE,
+  CATALOG_SLUG_HINT,
   slugify,
 } from "./vocabulary";
 export type {

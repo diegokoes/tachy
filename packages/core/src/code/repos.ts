@@ -1,3 +1,4 @@
+import { SLUG_RE } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { badInput, notFound } from "../infra/errors";
@@ -55,7 +56,7 @@ export interface RepoRow {
 }
 
 export async function linkRepo(i: RepoInput) {
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(i.slug))
+  if (!SLUG_RE.test(i.slug))
     throw badInput(
       `invalid repo slug '${i.slug}' (lowercase letters, digits, hyphens)`,
     );
