@@ -185,6 +185,28 @@ export function clearGlow(node: Element) {
 }
 
 /**
+ * A few soft text-shadow pulses in the node's own colour, ending unlit. For a
+ * tag that opens something and has to say so once, not keep saying it.
+ */
+export function shadowPulse(node: HTMLElement) {
+  if (reducedMotion()) return;
+  const color = getComputedStyle(node).color;
+  const tween = gsap.fromTo(
+    node,
+    { textShadow: `0 0 0px ${color}` },
+    {
+      textShadow: `0 0 6px ${color}`,
+      duration: 1.1,
+      yoyo: true,
+      repeat: 5,
+      ease: "sine.inOut",
+      clearProps: "textShadow",
+    },
+  );
+  return { destroy: () => void tween.kill() };
+}
+
+/**
  * Half-period of the grow/shrink pulse: the icon is at its biggest at PULSE,
  * 3·PULSE, 5·PULSE… Anything that wants to land on a peak — the thread's bead —
  * schedules itself off this, so both must be started in the same frame.

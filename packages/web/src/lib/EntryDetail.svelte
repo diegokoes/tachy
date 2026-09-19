@@ -6,7 +6,8 @@
   import { api } from "./api";
   import type { KnowledgeRow, Feedback } from "./types";
   import type { ProductRow } from "@tachy/contract";
-  import History from "./library/History.svelte";
+  import Readership from "./library/Readership.svelte";
+  import DeprecatedMark from "./library/DeprecatedMark.svelte";
   import Backlinks from "./library/Backlinks.svelte";
   import { renderMarkdown, markBrokenLinks } from "./markdown";
   import { LinkTargets } from "./wikilinks.svelte";
@@ -20,7 +21,7 @@
   import { pushScope } from "./keys.svelte";
   import { setTopActions } from "./subnav.svelte";
   import { vimState } from "./vim.svelte";
-  import { Badge, Button, Chip, Icon, Modal } from "./tui";
+  import { Badge, Button, Chip, Icon } from "./tui";
 
   let { id, onClose, onOpen }: { id: string; onClose: () => void; onOpen?: (id: string) => void } = $props();
 
@@ -42,8 +43,6 @@
   let mutateError = $state<string | null>(null);
   let conflict = $state(false);
   let productTeamSlug = $state<string | null>(null);
-
-  let historyOpen = $state(false);
 
   let deprecating = $state(false);
   let deprecateReason = $state("");
@@ -238,7 +237,6 @@
     void id;
     editing = false;
     deprecating = false;
-    historyOpen = false;
     load();
   });
 </script>
@@ -256,9 +254,12 @@
 
 <!-- Rendered by App into the carved row beside the subnav, not here. -->
 {#snippet readActions()}
-  <Button icon="back" title="back (backspace)" onclick={onClose}>back</Button>
+  <Button size="sm" icon="back" title="back (backspace)" onclick={onClose}
+    >back</Button
+  >
   {#if canEdit}
     <Button
+      size="sm"
       tone="info"
       icon="edit"
       title="edit"
@@ -273,16 +274,6 @@
 <div class="detail">
   {#if error}<p class="error">{error}</p>{/if}
   {#if entry}
-    {#if entry.status === "deprecated"}
-      <div class="deprecated-banner">
-        <Icon name="alert" size="1em" weight={7} />
-        <strong>outdated</strong>: not current advice.
-        {#if entry.superseded_by && onOpen}
-          <Button size="sm" tone="warn" onclick={() => onOpen(entry!.superseded_by!)}>view replacement</Button>
-        {/if}
-      </div>
-    {/if}
-
     {#if editing}
       {#if conflict}
         <p class="error">{mutateError} <Button size="sm" onclick={load}>reload</Button></p>
@@ -315,19 +306,19 @@
 
             <div class="mid">
               <div class="band">
-                <span class="lifecycle"><Badge tone={statusTone(entry.status)}>{entry.status}</Badge></span>
+                <span class="lifecycle">
+                  {#if entry.status === "deprecated"}
+                    <DeprecatedMark
+                      onReplacement={entry.superseded_by && onOpen
+                        ? () => onOpen(entry!.superseded_by!)
+                        : undefined}
+                    />
+                  {:else}
+                    <Badge tone={statusTone(entry.status)}>{entry.status}</Badge>
+                  {/if}
+                </span>
                 <span class="when">
                   {#if entry.updated_at}<span class="muted">updated {fmtDate(entry.updated_at)}</span>{/if}
-                </span>
-                <span class="revisions">
-                  <Button
-                    square
-                    iconSize="1.1rem"
-                    icon="history"
-                    title="revisions and reads"
-                    aria-label="revisions and reads"
-                    onclick={() => (historyOpen = true)}
-                  />
                 </span>
               </div>
 
@@ -454,36 +445,25 @@
 
           <Backlinks base="knowledge" id={id} />
 
-          <section>
-            <h3>Feedback</h3>
-            {#if feedback.length}
+          {#if feedback.length}
+            <section>
+              <h3>Feedback</h3>
               <ul class="fb-list">
                 {#each feedback as f}
                   <li><strong>{f.kind}{f.rating ? ` · ${f.rating}★` : ""}</strong> {f.comment ?? ""}</li>
                 {/each}
               </ul>
-            {:else}
-              <p class="muted">No feedback recorded.</p>
-            {/if}
-          </section>
-        </div>
+            </section>
+          {/if}
 
-        {#if historyOpen}
-          <Modal
-            title="history"
-            cancelLabel="close"
-            width="46rem"
-            onCancel={() => (historyOpen = false)}
-          >
-            <History
-              base="knowledge"
-              {id}
-              version={entry.version}
-              {canEdit}
-              onReverted={load}
-            />
-          </Modal>
-        {/if}
+          <Readership
+            base="knowledge"
+            {id}
+            version={entry.version}
+            {canEdit}
+            onReverted={load}
+          />
+        </div>
       </div>
     {/if}
   {:else if !error}
@@ -499,7 +479,7 @@
      the measure holds its character count whichever one is picked. */
   .content {
     font-family: var(--font-prose);
-    max-width: 64ch;
+    max-width: 76ch;
     margin-inline: auto;
     padding: 0 var(--pad-4);
   }
@@ -527,11 +507,6 @@
   }
   section {
     margin-top: var(--pad-4);
-  }
-  section p {
-    margin: 0;
-    white-space: pre-wrap;
-    line-height: 1.6;
   }
   .chips {
     display: flex;
@@ -562,8 +537,8 @@
   }
 
   /* Three tracks, not a centred flex row: it is the date that has to sit on
-     the column's centre line, with the status behind it and the revisions
-     button ahead of it. Equal fr cheeks give it that whatever they hold. */
+     the column's centre line with the status behind it. Equal fr cheeks give
+     it that whatever they hold. */
   .band {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
@@ -572,10 +547,6 @@
   }
   .band .lifecycle {
     justify-self: end;
-  }
-  .band .revisions {
-    justify-self: start;
-    display: flex;
   }
   .versions {
     display: flex;
@@ -608,17 +579,6 @@
     }
   }
 
-  .deprecated-banner {
-    border: 1px solid var(--warn);
-    border-radius: var(--radius);
-    padding: var(--pad-2) var(--pad-3);
-    margin-bottom: var(--pad-3);
-    font-size: var(--fs-sm);
-    display: flex;
-    align-items: center;
-    gap: var(--pad-3);
-    flex-wrap: wrap;
-  }
   .deprecate-form {
     border: 1px solid var(--warn);
     border-radius: var(--radius);
