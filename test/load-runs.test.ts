@@ -132,7 +132,9 @@ describe("system checks", () => {
     const checks = await runSystemChecks();
     const byName = Object.fromEntries(checks.map((c) => [c.name, c]));
     expect(byName.database.state).toBe("pass");
-    expect(byName.embedding.state).toBe("pass");
+    // Over 2 s is a warn; under a loaded parallel suite that is timing, not
+    // a broken model. The dimension in the detail is what proves it answered.
+    expect(["pass", "warn"]).toContain(byName.embedding.state);
     expect(byName.embedding.detail).toMatch(/768-dim/);
     expect(byName["agent claude"]).toBeDefined();
     expect(
