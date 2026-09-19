@@ -1,5 +1,5 @@
 import { sql } from "../infra/db";
-import { log } from "../infra/log";
+import { inBackground } from "../infra/background";
 import { SERVICE_ACCOUNT } from "../analytics/tools";
 import type { LibraryTarget } from "./revisions";
 
@@ -55,9 +55,7 @@ export async function recordView(
  * to count is not a failure to read.
  */
 export function countView(target: LibraryTarget, userId: string | null): void {
-  void recordView(target, userId).catch((e) =>
-    log("warn", "library_view_failed", { error: String(e) }),
-  );
+  inBackground(recordView(target, userId), "library_view_failed");
 }
 
 export interface ViewStats {
