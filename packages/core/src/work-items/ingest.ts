@@ -1,4 +1,4 @@
-import { sql, toDate } from "../infra/db";
+import { sql, toDate, jsonb } from "../infra/db";
 import type { RawWorkItem } from "../sources/source";
 import { resolveCustomerByEmail } from "../catalog/customers";
 import { routeIngest } from "../sources/projects";
@@ -50,7 +50,7 @@ export async function ingestWorkItem(
       values
         (${connId}, ${raw.externalId}, ${raw.externalUrl ?? null}, ${raw.kind}, ${raw.title ?? null},
          ${raw.status ?? null}, ${raw.groupKey ?? null}, ${sourceProjectId}, ${productId}, ${teamId}, ${customerId}, ${raw.requester ?? null},
-         ${sql.json((raw.raw ?? {}) as any)}, ${toDate(raw.sourceCreatedAt)}, ${toDate(raw.sourceUpdatedAt)})
+         ${jsonb(raw.raw ?? {})}, ${toDate(raw.sourceCreatedAt)}, ${toDate(raw.sourceUpdatedAt)})
       on conflict (source_connection_id, external_id) do update set
         title = excluded.title,
         status = excluded.status,

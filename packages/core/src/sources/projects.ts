@@ -1,4 +1,4 @@
-import { sql } from "../infra/db";
+import { sql, jsonb } from "../infra/db";
 import { badInput, conflict, notFound } from "../infra/errors";
 import { getProductIdBySlug, getTeamIdBySlug } from "../catalog/products";
 import { getCustomerIdBySlug } from "../catalog/customers";
@@ -243,8 +243,8 @@ export async function addSourceProject(
       (source_connection_id, external_key, name, product_id, team_id, customer_id, role, wikis, config, notes)
     values
       (${conn.id}, ${i.externalKey}, ${i.name || i.externalKey}, ${scope.productId},
-       ${scope.teamId}, ${customerId}, ${i.role}, ${sql.json(wikis as any)},
-       ${sql.json((i.config ?? {}) as any)}, ${i.notes ?? null})
+       ${scope.teamId}, ${customerId}, ${i.role}, ${jsonb(wikis)},
+       ${jsonb(i.config ?? {})}, ${i.notes ?? null})
     on conflict (source_connection_id, external_key) do update set
       name       = excluded.name,
       product_id = excluded.product_id,
@@ -313,8 +313,8 @@ export async function updateSourceProject(
       product_id = ${scope.productId},
       team_id    = ${scope.teamId},
       customer_id = ${customerId},
-      wikis      = ${sql.json(wikis as any)},
-      config     = ${sql.json((patch.config ?? current.config) as any)},
+      wikis      = ${jsonb(wikis)},
+      config     = ${jsonb(patch.config ?? current.config)},
       notes      = ${patch.notes !== undefined ? patch.notes : current.notes}
     where id = ${id}
   `;

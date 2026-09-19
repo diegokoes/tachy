@@ -1,7 +1,7 @@
 import { SLUG_RE } from "@tachy/contract";
 import { z } from "zod";
 import { ARTIFACT_UTILITIES } from "@tachy/contract";
-import { sql } from "../infra/db";
+import { sql, jsonb } from "../infra/db";
 import { badInput, forbidden, notFound } from "../infra/errors";
 import { tableOutputSchema } from "../exports/table";
 import {
@@ -138,7 +138,7 @@ export async function upsertArtifact(
     title: values.title,
     description: values.description ?? null,
     body: values.body,
-    spec: values.spec ? sql.json(values.spec as never) : null,
+    spec: values.spec ? jsonb(values.spec) : null,
     created_by: actorUserId,
   });
 }

@@ -1,5 +1,5 @@
 import { SLUG_RE } from "@tachy/contract";
-import { sql } from "../infra/db";
+import { sql, jsonb } from "../infra/db";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { badInput, notFound } from "../infra/errors";
 import { getProductIdBySlug } from "../catalog/products";
@@ -108,7 +108,7 @@ export async function linkRepo(i: RepoInput) {
                        customer_id, default_branch, config)
     values (${i.slug}, ${i.url}, ${productId}, ${sourceSlug},
             ${i.sourceProjectId ?? null}, ${componentId}, ${customerId},
-            ${i.defaultBranch ?? "main"}, ${sql.json((i.config ?? {}) as any)})
+            ${i.defaultBranch ?? "main"}, ${jsonb(i.config ?? {})})
     on conflict (slug) do update set
       url = excluded.url,
       product_id = excluded.product_id,

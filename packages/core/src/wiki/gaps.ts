@@ -1,6 +1,6 @@
 import { MAIN_PAGE_SLUG, WIKI_GAP_KINDS } from "@tachy/contract";
 import type { WikiGapKind } from "@tachy/contract";
-import { sql } from "../infra/db";
+import { sql, jsonb } from "../infra/db";
 import type { Db } from "../infra/db";
 import { notFound } from "../infra/errors";
 import { log } from "../infra/log";
@@ -306,7 +306,7 @@ async function record(
     await db`
       insert into wiki_gaps (product_id, kind, key, subject, evidence, score)
       values (${productId}, ${g.kind}, ${g.key}, ${g.subject},
-              ${sql.json(g.evidence as any)}, ${g.score})
+              ${jsonb(g.evidence)}, ${g.score})
       on conflict (product_id, kind, key) do update set
         subject         = excluded.subject,
         evidence        = excluded.evidence,
