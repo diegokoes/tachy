@@ -146,7 +146,7 @@ describe("customer attribution precedence", () => {
     });
     expect(item.customerId).toBe(knaufId);
     expect(item.customerAmbiguity).toMatch(
-      /different customer than the project/,
+      /map to different customers/,
     );
   });
 

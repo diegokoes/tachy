@@ -44,7 +44,7 @@ export const sessionSecret: string =
     const s = randomBytes(32).toString("hex");
     log("warn", "session_secret_missing", {
       detail:
-        "TACHY_SESSION_SECRET is not set — using an ephemeral secret; sessions reset on restart",
+        "TACHY_SESSION_SECRET unset: using an ephemeral secret, sessions reset on restart",
     });
     return s;
   })();
@@ -253,7 +253,7 @@ export function installAuth(
       async (c) => {
         const { email, password } = c.req.valid("json");
         if (throttled(email))
-          return c.json({ error: "too many attempts — wait a minute" }, 429);
+          return c.json({ error: "too many attempts; wait a minute" }, 429);
         const user = await getUserByEmail(email);
         const ok =
           user &&

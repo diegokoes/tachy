@@ -83,7 +83,7 @@ export async function sourceFetch(
       // fetch rejects with the signal's reason: a DOMException named TimeoutError.
       if (e instanceof Error && e.name === "TimeoutError")
         throw new Error(
-          `${label} timed out after ${SOURCE_TIMEOUT_MS / 1000}s — the source system did not respond`,
+          `${label} timed out after ${SOURCE_TIMEOUT_MS / 1000}s; no response from the source`,
         );
       throw e;
     }

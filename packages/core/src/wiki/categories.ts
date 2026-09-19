@@ -34,7 +34,7 @@ export interface WikiCategoryPatch {
 function assertCategorySlug(slug: string): void {
   if (!SLUG_RE.test(slug))
     throw badInput(
-      `Invalid category slug '${slug}' — lowercase letters, digits and hyphens only.`,
+      `Invalid category slug '${slug}': lowercase letters, digits and hyphens only.`,
     );
 }
 
@@ -92,7 +92,7 @@ export async function addWikiCategory(i: WikiCategoryInput) {
       (await wouldCycle("wiki_categories", existing.id, parentId))
     )
       throw badInput(
-        `'${i.parentSlug}' sits under '${i.slug}' — that would make a cycle`,
+        `'${i.parentSlug}' sits under '${i.slug}' ; that would make a cycle`,
       );
   }
 
@@ -126,7 +126,7 @@ export async function updateWikiCategory(
     // branch detaches into a ring the table of contents never terminates on.
     if (await wouldCycle("wiki_categories", current.id, parentId))
       throw badInput(
-        `'${patch.parentSlug}' sits under '${slug}' — that would make a cycle`,
+        `'${patch.parentSlug}' sits under '${slug}' ; that would make a cycle`,
       );
   }
 

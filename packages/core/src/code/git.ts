@@ -33,7 +33,7 @@ const REPO_URL_RE = /^(?:https?:\/\/|ssh:\/\/|file:\/\/|git@)[A-Za-z0-9\/]/;
 export function assertRepoUrl(url: string): string {
   if (!REPO_URL_RE.test(url))
     throw badInput(
-      `'${url}' is not a repository URL — expected https://host/path, ssh://host/path or git@host:path`,
+      `'${url}' is not a repository URL; expected https://host/path, ssh://host/path or git@host:path`,
     );
   return url;
 }

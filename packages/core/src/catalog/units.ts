@@ -108,14 +108,14 @@ async function assertNoCycle(
 ): Promise<void> {
   if (await wouldCycle("customer_units", at, from, column))
     throw badInput(
-      `'${label}' already sits under this unit — that would cycle`,
+      `'${label}' already sits under this unit; that would cycle`,
     );
 }
 
 export async function addCustomerUnit(i: CustomerUnitInput) {
   if (!UNIT_SLUG_RE.test(i.slug))
     throw badInput(
-      `Invalid unit slug '${i.slug}' — letters, digits, dot, dash and underscore.`,
+      `Invalid unit slug '${i.slug}': letters, digits, dot, dash and underscore only.`,
     );
   const customerId = await customerIdOf(i.customerSlug);
   const parentId = i.parentSlug

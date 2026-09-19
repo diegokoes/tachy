@@ -39,7 +39,7 @@ export async function addComponent(i: AddComponentInput) {
     `;
     if (existing && (await wouldCycle("components", existing.id, parentId)))
       throw badInput(
-        `'${i.parentSlug}' sits under '${i.slug}' — that would make a cycle`,
+        `'${i.parentSlug}' sits under '${i.slug}' ; that would make a cycle`,
       );
   }
 
@@ -90,7 +90,7 @@ export async function updateComponent(
       // branch detaches into a ring that product_area paths never terminate on.
       if (await wouldCycle("components", current.id, parent.id))
         throw badInput(
-          `'${patch.parentSlug}' sits under '${slug}' — that would make a cycle`,
+          `'${patch.parentSlug}' sits under '${slug}' ; that would make a cycle`,
         );
       parentId = parent.id;
     }

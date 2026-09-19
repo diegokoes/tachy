@@ -106,7 +106,7 @@ export async function resolveCustomerByEmail(
         .map((r) => `'${r.slug}'`)
         .join(
           ", ",
-        )}) — it fronts for more than one, so the sender's domain cannot decide this`,
+        )}): it fronts for more than one, so the sender's domain cannot decide this`,
     };
   return { customerId: null };
 }
@@ -137,7 +137,7 @@ export async function resolveCustomer(
     return rows[0] as ResolvedCustomer;
   if (rows.length > 1)
     throw badInput(
-      `Ambiguous customer '${slugOrAlias}' — it is an alias of ${rows
+      `Ambiguous customer '${slugOrAlias}': alias of ${rows
         .map((r) => `'${r.slug}'`)
         .join(" and ")}. Use the slug itself.`,
     );
@@ -255,7 +255,7 @@ export async function setCustomerFact(i: CustomerFactInput) {
   if (i.componentSlug) {
     if (!i.productId)
       throw badInput(
-        "a component needs its product — pass product_slug alongside component",
+        "a component needs its product: pass product_slug with component",
       );
     componentId = (await resolveComponentStrict(i.productId, i.componentSlug))
       .id;
