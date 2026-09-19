@@ -11,7 +11,7 @@ import {
   ANTHROPIC_OAUTH_CREDENTIAL,
   validateCredential,
 } from "@tachy/core";
-import { mcpConfig } from "../packages/api/src/routes/agent";
+import { mcpConfig } from "../packages/api/src/turn-config";
 import { setInternalEndpoint } from "../packages/api/src/internal-endpoint";
 import { enableVault, resetData, sql } from "./helpers";
 

@@ -10,7 +10,7 @@ import {
   deleteArtifact,
 } from "@tachy/core";
 import { createApp } from "../packages/api/src/app";
-import { buildPrompt } from "../packages/api/src/routes/agent";
+import { buildPrompt } from "../packages/api/src/turn-config";
 import { loginCookie, resetData, sql } from "./helpers";
 
 afterAll(() => sql.end());
