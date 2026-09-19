@@ -17,6 +17,7 @@ import { tool } from "../server";
 import { out, outScrubbed } from "../results";
 import { knowledgeEntryScope, mcpActor, requireCanEdit } from "../permissions";
 import {
+  knowledgeFilterFields,
   signalsField,
   structuredField,
   symptomsField,
@@ -174,23 +175,13 @@ tool(
       "List knowledge entries (newest first), optionally filtered by status (e.g. 'draft' to find pending entries, 'deprecated' to review outdated ones), product_slug / team_slug (slug or alias), or tags. Useful for review and curation — not semantic search; use search_knowledge for consult.",
     inputSchema: {
       status: knowledgeStatusSchema.optional(),
-      product_slug: z.string().optional(),
-      team_slug: z.string().optional(),
-      tags: z.array(z.string()).optional(),
+      ...knowledgeFilterFields,
       component: z
         .string()
         .optional()
         .describe(
-          "Component slug/alias  matches the entry's linked component or its slug/aliases in tags. Needs product_slug.",
+          "Component slug/alias: matches the entry's linked component or its slug/aliases in tags. Needs product_slug.",
         ),
-      cloud: cloudSchema
-        .optional()
-        .describe(
-          "Environment slug filter, e.g. prod — see list_environments.",
-        ),
-      affected_version: z.string().optional(),
-      fixed_version: z.string().optional(),
-      limit: z.number().int().positive().max(100).optional(),
     },
     annotations: { readOnlyHint: true },
   },
