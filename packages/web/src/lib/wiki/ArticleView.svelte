@@ -174,8 +174,8 @@
       icon="doc"
       title={slug === MAIN_PAGE_SLUG ? "No main page yet." : `No article '${slug}' yet.`}
       detail={slug === MAIN_PAGE_SLUG
-        ? "A main page is what a reader lands on: what this product is, where to start, what matters."
-        : "Something links here, but nobody has written it."}
+        ? "Landing page: product summary, entry points."
+        : "Linked but not written."}
     >
       {#if isCurator()}
         <Button

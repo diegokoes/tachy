@@ -156,6 +156,9 @@ export type RuntimeInfo = {
     | { max: number; byProcess: { name: string; state: string; n: number }[] }
     | { error: string };
   status: Record<string, unknown> | null;
+  /** The host scripts' `*.jsonl` results, oldest first. Absent from an older API. */
+  history?: Record<string, Record<string, unknown>[]> | null;
+  uptimeSeconds?: number;
 };
 export type SystemInfo = {
   settings: {
@@ -290,7 +293,12 @@ export type Activity = {
     cost_usd: number;
     active_7d: number;
     active: number;
-    per_day: { day: string; turns: number; tokens: number }[];
+    per_day: {
+      day: string;
+      turns: number;
+      tokens: number;
+      models?: Record<string, number>;
+    }[];
     by_model: { model: string; turns: number; tokens: number }[];
     top_users?: {
       email: string;
@@ -311,6 +319,7 @@ export type Activity = {
       misuse: number;
     }[];
     writers?: { email: string; writes: number }[];
+    per_day: { day: string; reads: number; writes: number }[];
   };
   traffic: {
     days: number;
@@ -332,6 +341,12 @@ export type Activity = {
     readers: number;
     corrections: number;
     per_day: { day: string; reads: number }[];
+    edits_per_day: {
+      day: string;
+      people: number;
+      agent: number;
+      ingest: number;
+    }[];
     top: {
       id: string;
       kind: "entry" | "doc";
@@ -341,6 +356,43 @@ export type Activity = {
     }[];
   };
 };
+
+type JobStatus =
+  "queued" | "running" | "succeeded" | "failed" | "cancelled" | "timed_out";
+type JobClass = "light" | "heavy";
+
+/** `GET /jobs/census` — what the workers have been doing. */
+export type JobCensus = {
+  days: number;
+  runs: number;
+  by_status: Record<JobStatus, number>;
+  by_trigger: Record<"schedule" | "manual" | "event", number>;
+  by_class: Record<JobClass, number>;
+  per_day: ({ day: string } & Record<JobStatus, number>)[];
+  by_kind: {
+    kind: string;
+    runs: number;
+    succeeded: number;
+    failed: number;
+    avg_seconds: number | null;
+  }[];
+  success: Record<JobClass, { finished: number; succeeded: number }>;
+  now: Record<JobClass, { running: number; queued: number }>;
+  definitions: {
+    total: number;
+    enabled: number;
+    scheduled: number;
+    manual: number;
+    disabled: number;
+  };
+  upcoming: { id: string; name: string; kind: string; at: string[] }[];
+};
+
+/** `GET /overview/issues` — per issue key, how many and the first few by name. */
+export type Issues = Record<
+  string,
+  { n: number; items: { key: string; label: string }[] }
+>;
 
 export type JsonSchema = {
   type?: string;

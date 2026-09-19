@@ -279,7 +279,7 @@
         {#if doc.customer_slug}
           <Badge
             tone="accent"
-            title="documents this customer's install. Cite it as theirs, not as how the product works"
+            title="customer-specific; not general product behaviour"
             >{doc.customer_slug}</Badge
           >
         {/if}

@@ -1,4 +1,5 @@
 import { sql } from "../infra/db";
+import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { badInput, conflict, notFound } from "../infra/errors";
 import { clearPermissionCache } from "../access/permissions";
 
@@ -15,7 +16,7 @@ export async function getProductIdBySlug(slug: string): Promise<string> {
     );
   if (rows.length > 1)
     throw badInput(
-      `Ambiguous product '${slug}' — it exists in multiple teams; use a unique alias or rename one of the products.`,
+      `Ambiguous product '${slug}': exists in multiple teams; use a unique alias or rename one of the products.`,
     );
   return rows[0].id as string;
 }
@@ -337,4 +338,52 @@ export async function catalogCensus() {
       n: number;
     }[],
   };
+}
+
+/** The half-filled-in parts of the catalog, by name. */
+export async function catalogIssues(): Promise<Record<string, IssueList>> {
+  const lists = await Promise.all([
+    sql`
+      select t.slug as key, t.name as label, count(*) over () as total
+      from teams t
+      where not exists (select 1 from products p where p.team_id = t.id)
+      order by t.name limit ${ISSUE_ITEMS}
+    `,
+    sql`
+      select p.id as key, p.name as label, count(*) over () as total
+      from products p
+      where not exists (select 1 from components c where c.product_id = p.id)
+      order by p.name limit ${ISSUE_ITEMS}
+    `,
+    sql`
+      select c.id as key, p.name || ' › ' || c.name as label, count(*) over () as total
+      from components c join products p on p.id = c.product_id
+      where c.description is null or c.description = ''
+      order by p.name, c.name limit ${ISSUE_ITEMS}
+    `,
+    sql`
+      select id as key, slug as label, count(*) over () as total
+      from labels where description is null or description = ''
+      order by slug limit ${ISSUE_ITEMS}
+    `,
+    sql`
+      select slug as key, slug as label, count(*) over () as total
+      from resolution_patterns where description = ''
+      order by slug limit ${ISSUE_ITEMS}
+    `,
+    sql`
+      select slug as key, name as label, count(*) over () as total
+      from customers where cardinality(email_domains) = 0
+      order by name limit ${ISSUE_ITEMS}
+    `,
+  ]);
+  const keys = [
+    "teams.no_product",
+    "products.no_component",
+    "components.no_description",
+    "labels.no_description",
+    "patterns.no_description",
+    "customers.no_domains",
+  ];
+  return Object.fromEntries(keys.map((k, i) => [k, issueList(lists[i])]));
 }

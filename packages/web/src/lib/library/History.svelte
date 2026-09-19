@@ -92,9 +92,9 @@
 
   const show = (v: unknown): string =>
     v == null
-      ? "—"
+      ? "-"
       : Array.isArray(v)
-        ? v.join(", ") || "—"
+        ? v.join(", ") || "-"
         : typeof v === "object"
           ? JSON.stringify(v, null, 2)
           : String(v);

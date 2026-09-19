@@ -66,7 +66,7 @@
         <td>Release</td>
         <td>{system.env?.commit ?? "unknown"}{system.env?.env_badge ? ` (${system.env.env_badge})` : ""}</td>
         <td class="muted">
-          {#if release}last deploy {release.result} {release.at} · {release.image ?? ""}{:else}no deploy recorded on this host{/if}
+          {#if release}last deploy {release.result} {release.at} · {release.image ?? ""}{:else}no deploy recorded{/if}
         </td>
       </tr>
       <tr>
@@ -82,13 +82,13 @@
             onclick={() => setMaintenance(!r.refusingChats)}
             >{r.refusingChats ? "resume chats" : "pause new chats"}</Button
           >
-          <span class="muted">before a deploy: running turns finish, new ones are refused, the rest keeps serving</span>
+          <span class="muted">refuses new chats; running turns finish</span>
         </td>
       </tr>
     </tbody>
   </table>
 
-  <GroupHead label="runtime (refreshes every 10 s)" />
+  <GroupHead label="runtime · 10 s refresh" />
   <table>
     <thead><tr><th>what</th><th>now</th><th>detail</th></tr></thead>
     <tbody>
@@ -105,17 +105,17 @@
       <tr>
         <td>API memory</td>
         <td>{r.memory ? `${mib(r.memory.currentBytes)}${r.memory.maxBytes ? ` / ${mib(r.memory.maxBytes)}` : ""}` : "unknown"}</td>
-        <td class="muted">{r.memory?.percent != null ? `${r.memory.percent}% of the container limit (turns live here)` : "no cgroup limit visible"}</td>
+        <td class="muted">{r.memory?.percent != null ? `${r.memory.percent}% of container limit` : "no cgroup limit"}</td>
       </tr>
       <tr>
         <td>Event loop delay</td>
         <td>{r.eventLoopP99Ms} ms</td>
-        <td class="muted">p99 over the last minute</td>
+        <td class="muted">p99, last 60 s</td>
       </tr>
       <tr>
         <td>Embedding queue</td>
         <td>{r.embed ? `${r.embed.queries} queries · ${r.embed.passages} passages` : "unknown"}</td>
-        <td class="muted">{r.embed ? `${r.embed.callers} callers waiting · ${r.embed.running ? "busy" : "idle"}` : ""}</td>
+        <td class="muted">{r.embed ? `${r.embed.callers} waiting · ${r.embed.running ? "busy" : "idle"}` : ""}</td>
       </tr>
       {#if "error" in r.postgres}
         <tr><td>Postgres connections</td><td>unknown</td><td class="muted">{r.postgres.error}</td></tr>
@@ -132,7 +132,7 @@
   <GroupHead label="security" />
   <table>
     <tbody>
-      <tr><td>Single sign-on</td><td>{r.security.sso_configured ? "configured" : "not configured"}</td><td class="muted">{r.security.sso_configured ? `password login allowed for ${r.security.password_login_under_sso} account(s)` : "password login is the only login"}</td></tr>
+      <tr><td>Single sign-on</td><td>{r.security.sso_configured ? "configured" : "not configured"}</td><td class="muted">{r.security.sso_configured ? `password allowed: ${r.security.password_login_under_sso} account(s)` : "password only"}</td></tr>
       <tr>
         <td>Credential vault</td>
         <td>{r.security.vault.enabled ? (r.security.vault.current_key ?? "on") : "disabled"}</td>
@@ -140,9 +140,9 @@
           {#if r.security.vault.enabled}
             {r.security.vault.by_key.map((k) => `${k.key_id ?? "no key id"}: ${k.count}${k.current ? " (current)" : ""}`).join(" · ") || "nothing stored"}
             {#if r.security.vault.by_key.some((k) => !k.current)}
-              — run `npm run sync rotate-key` to move the rest over
+              · run npm run sync rotate-key
             {/if}
-          {:else}TACHY_SECRET_KEY is not set{/if}
+          {:else}TACHY_SECRET_KEY unset{/if}
         </td>
       </tr>
       <tr><td>Accounts with a password</td><td>{r.security.users_with_password}</td><td class="muted">{r.security.service_accounts} service account(s)</td></tr>
@@ -158,7 +158,7 @@
       {/each}
     </tbody>
   </table>
-  <Note>Chat uploads are kept {r.uploadTtlHours} h. Transcripts and usage counters follow the retention.sweep job's parameters (integrations › jobs).</Note>
+  <Note>uploads: {r.uploadTtlHours} h. transcripts, usage counters: retention.sweep (workers › jobs)</Note>
 {:else if !error}
   <p class="muted">Loading…</p>
 {/if}

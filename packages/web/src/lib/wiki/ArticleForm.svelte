@@ -375,7 +375,7 @@
         about
         <AsciiSelect
           bind:value={component}
-          title="The part of the product this article is about. It is what coverage and the gap sweep count it against."
+          title="Product part covered. Used by coverage and gap sweep."
           disabled={components.length === 0}
           options={[
             { value: "", label: "the whole product" },
@@ -421,7 +421,7 @@
             variant="ghost"
             size="sm"
             icon="attach"
-            title="add an image — or paste or drop one into the body"
+            title="add an image, or paste or drop one into the body"
             onclick={() => fileEl?.click()}>image</Button
           >
           <button type="button" class="toggle" onclick={() => (preview = !preview)}>

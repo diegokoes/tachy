@@ -30,9 +30,8 @@
     onsave,
     oncreate,
     ondelete,
-    expand,
-    expanded,
-    ontoggle,
+    onopen,
+    onadd,
     extraActions,
     rowClass,
     onform,
@@ -64,17 +63,20 @@
     onsave?: (row: T, draft: Draft) => Promise<void> | void;
     oncreate?: (draft: Draft) => Promise<void> | void;
     ondelete?: (row: T) => Promise<void> | void;
-    expand?: Snippet<[T]>;
-    expanded?: Set<string>;
-    ontoggle?: (key: string) => void;
+    /**
+     * Opens the row somewhere other than the record dialog — a page of its
+     * own. Given one, a row click calls it and the dialog never opens.
+     */
+    onopen?: (row: T) => void;
+    /** Starts a new record somewhere other than the dialog, as `onopen` does. */
+    onadd?: () => void;
     extraActions?: Snippet<[T]>;
     rowClass?: (row: T) => string | undefined;
     /** Fires as the record form opens and closes, for state `formExtra` needs. */
     onform?: (f: { mode: "create" | "edit"; row: T | null } | null) => void;
     /**
-     * Offers the add action to whoever is laying out the page, which then
-     * draws it somewhere with more standing than a bar under the table. Given
-     * one, the bar goes away rather than showing the same button twice.
+     * Offers the add action to whoever lays out the page, which draws it on
+     * the section heading. Given one, the bar under the table goes away.
      */
     hoist?: (a: { label: string; run: () => void } | null) => () => void;
   } = $props();
@@ -82,7 +84,9 @@
   $effect(() => {
     if (!hoist) return;
     const offer =
-      oncreate && canCreate ? { label: addLabel, run: startAdd } : null;
+      (onadd || oncreate) && canCreate
+        ? { label: addLabel, run: onadd ?? startAdd }
+        : null;
     // The store's own disposer, so releasing the row cannot clobber a claim
     // made by the panel replacing this one.
     return hoist(offer);
@@ -175,17 +179,19 @@
   {error}
   {emptyTitle}
   {emptyDetail}
-  {expand}
-  {expanded}
-  {ontoggle}
   {rowClass}
-  onrowclick={onsave ? startEdit : undefined}
+  onrowclick={onopen ?? (onsave ? startEdit : undefined)}
   canOpen={canEdit}
 />
 
-{#if oncreate && canCreate && !hoist}
+{#if (onadd || oncreate) && canCreate && !hoist}
   <div class="addbar">
-    <Button variant="ghost" tone="ok" size="sm" icon="plus" onclick={startAdd}
+    <Button
+      variant="ghost"
+      tone="ok"
+      size="sm"
+      icon="plus"
+      onclick={onadd ?? startAdd}
       >{addLabel}</Button
     >
   </div>

@@ -3,22 +3,11 @@
   import { api } from "../api";
   import { errText } from "../resource.svelte";
   import { Badge, Button, GroupHead, Note, Select } from "../tui";
+  import { endpointP95, type TestRun } from "./loadRuns";
 
   type Check = { name: string; state: string; detail: string };
   type Target = { name: string; url: string; dev: boolean };
   type ScriptRule = { script: string; any_time: boolean; dev_only: boolean };
-  type TestRun = {
-    id: string;
-    script: string;
-    profile: string | null;
-    target: string;
-    status: string;
-    image_sha: string | null;
-    summary: Record<string, any> | null;
-    output_tail: string;
-    created_at: string;
-    finished_at: string | null;
-  };
 
   let checks = $state<Check[] | null>(null);
   let checking = $state(false);
@@ -36,7 +25,7 @@
   const ACTIVE = new Set(["queued", "running"]);
   const tone = (s: string) =>
     s === "pass" || s === "passed" ? "ok" : s === "warn" ? "warn" : s === "skip" ? "muted" : s === "fail" || s === "failed" || s === "error" ? "danger" : "muted";
-  const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "—");
+  const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "-");
 
   async function loadRuns() {
     const res = await api.get<{
@@ -97,24 +86,20 @@
     open = next;
   }
 
-  /** p95 per endpoint from k6's summary, which is what a release is compared on. */
-  function latencies(run: TestRun): string {
-    const metrics = (run.summary?.metrics ?? {}) as Record<string, any>;
-    return Object.entries(metrics)
-      .filter(([name]) => name.startsWith("http_req_duration{endpoint:"))
-      .map(([name, m]) => `${name.slice(27, -1)} ${Math.round(m["p(95)"] ?? 0)} ms`)
+  const latencies = (run: TestRun) =>
+    endpointP95(run)
+      .map((e) => `${e.endpoint} ${e.ms} ms`)
       .join(" · ");
-  }
 
   const chosen = $derived(scripts.find((s) => s.script === script));
   const chosenTarget = $derived(targets.find((t) => t.name === target));
   const blocked = $derived.by(() => {
-    if (!chosenTarget) return "no target is configured (TACHY_LOAD_TARGETS)";
+    if (!chosenTarget) return "no target (TACHY_LOAD_TARGETS)";
     if (chosenTarget.dev) return null;
-    if (chosen?.dev_only) return `${script} runs only against a dev target`;
-    if (stress) return "stress runs only against a dev target";
+    if (chosen?.dev_only) return `${script}: dev targets only`;
+    if (stress) return "stress: dev targets only";
     if (!chosen?.any_time && !inWindow)
-      return `${script} may only run against ${target} outside working hours`;
+      return `${script} on ${target}: outside working hours only`;
     return null;
   });
 
@@ -139,7 +124,7 @@
 <GroupHead label="checks" />
 <div class="row">
   <Button variant="ghost" size="sm" icon="test" busy={checking} onclick={runChecks}>run checks</Button>
-  <span class="muted">what varies between environments; CI already ran the suite on this commit</span>
+  <span class="muted">environment-specific; suite already ran in CI</span>
 </div>
 {#if checks}
   <table>
@@ -192,7 +177,7 @@
         <tr><td colspan="5"><pre class="log">{r.output_tail}</pre></td></tr>
       {/if}
     {:else}
-      <tr><td colspan="5" class="muted">No load runs yet.</td></tr>
+      <tr><td colspan="5" class="muted">no load runs</td></tr>
     {/each}
   </tbody>
 </table>

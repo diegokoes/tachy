@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { onMount, tick, untrack, type Component } from "svelte";
+  import { tick, untrack, type Component } from "svelte";
   import { Rail } from "../tui";
   import { scrollport } from "../scrollport.svelte";
-  import { createSpy, setActiveSpy } from "./spy.svelte";
+  import { createSpy } from "./spy.svelte";
   import Section from "./Section.svelte";
 
   export type PageSection = {
@@ -12,8 +12,10 @@
     /** Shown on the rail row. null while it is still being counted. */
     count?: number | null;
     tone?: "warn" | "danger";
-    /** Mount without waiting to be scrolled near. Overviews open their page. */
+    /** Mount without waiting to be scrolled near. */
     eager?: boolean;
+    /** Drawn at the right end of the section's heading line. */
+    action?: { label: string; run: () => void };
   };
 
   let {
@@ -89,16 +91,6 @@
       spy.destroy();
     };
   });
-
-  /* Published for the overview figures, which scroll to the section that holds
-     whatever number they are showing. */
-  onMount(() => {
-    const drop = setActiveSpy(spy);
-    return () => {
-      drop();
-      spy.destroy();
-    };
-  });
 </script>
 
 <!-- The index and everything it points at, in one column. The rail's active row
@@ -115,6 +107,7 @@
         label={s.label}
         view={s.view}
         eager={s.eager}
+        action={s.action}
       />
     {/each}
 

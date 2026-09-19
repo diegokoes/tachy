@@ -8,6 +8,16 @@ export interface LibraryEngagement {
   corrections: number;
   /** Reads per day, oldest first, gaps filled. */
   per_day: { day: string; reads: number }[];
+  /**
+   * Revisions saved per day, by who made them: a person in the app or over the
+   * API, the agent (directly or over MCP), or an ingest.
+   */
+  edits_per_day: {
+    day: string;
+    people: number;
+    agent: number;
+    ingest: number;
+  }[];
   /** Most-read items, entries and docs together. */
   top: {
     id: string;
@@ -46,6 +56,16 @@ export async function libraryEngagementCensus(
     group by d.day
     order by d.day
   `;
+  const edits_per_day = await sql`
+    select to_char(d.day, 'YYYY-MM-DD') as day,
+      count(r.id) filter (where r.actor in ('web', 'api'))::int as people,
+      count(r.id) filter (where r.actor in ('agent', 'mcp'))::int as agent,
+      count(r.id) filter (where r.actor = 'ingest')::int as ingest
+    from generate_series(current_date - ${perDayWindow - 1}::int, current_date, interval '1 day') as d(day)
+    left join library_revisions r on r.created_at::date = d.day::date
+    group by d.day
+    order by d.day
+  `;
   const top = await sql`
     select * from (
       select e.id::text as id, 'entry' as kind,
@@ -72,6 +92,9 @@ export async function libraryEngagementCensus(
     readers: totals.readers as number,
     corrections: feedback.corrections as number,
     per_day: [...per_day] as unknown as LibraryEngagement["per_day"],
+    edits_per_day: [
+      ...edits_per_day,
+    ] as unknown as LibraryEngagement["edits_per_day"],
     top: [...top] as unknown as LibraryEngagement["top"],
   };
 }

@@ -13,6 +13,7 @@ import {
   enqueueRun,
   getJobDefinition,
   getJobRun,
+  jobCensus,
   jobDefinitionInput,
   listJobDefinitionChanges,
   listJobDefinitions,
@@ -44,6 +45,8 @@ export const jobs = new Hono()
       class_chat_slots: JOB_CLASS_CHAT_SLOTS,
     });
   })
+
+  .get("/census", async (c) => c.json(await jobCensus(14)))
 
   .post("/schedule-preview", zValidator("json", previewSchema), async (c) => {
     const { schedule, timezone } = c.req.valid("json");

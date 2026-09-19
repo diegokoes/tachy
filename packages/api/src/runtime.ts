@@ -1,7 +1,14 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { monitorEventLoopDelay } from "node:perf_hooks";
-import { env, sql, vaultState, type EmbedQueueDepth } from "@tachy/core";
+import {
+  env,
+  issueFlag,
+  sql,
+  vaultState,
+  type EmbedQueueDepth,
+  type IssueList,
+} from "@tachy/core";
 import { lifecycle, readiness } from "./lifecycle";
 import { turnStats } from "./routes/agent";
 
@@ -74,6 +81,34 @@ async function hostStatus() {
   return out;
 }
 
+/**
+ * The same scripts append each result to `<name>.jsonl` beside the status file,
+ * keeping the last few dozen, which is the only history a backup or a deploy
+ * has. A line cut short by a crash mid-write is skipped rather than failing the
+ * whole list.
+ */
+export async function hostHistory(dir = process.env.TACHY_STATUS_DIR) {
+  if (!dir) return null;
+  const out: Record<string, Record<string, unknown>[]> = {};
+  const names = await readdir(dir).catch(() => [] as string[]);
+  for (const name of names.filter((n) => n.endsWith(".jsonl")).sort()) {
+    const raw = await readFile(join(dir, name), "utf8").catch(() => "");
+    out[name.slice(0, -6)] = raw
+      .split("\n")
+      .flatMap((line) => {
+        if (!line.trim()) return [];
+        try {
+          const row = JSON.parse(line);
+          return row && typeof row === "object" ? [row] : [];
+        } catch {
+          return [];
+        }
+      })
+      .slice(-60);
+  }
+  return out;
+}
+
 async function externalDepth(): Promise<EmbedQueueDepth | null> {
   if (!lifecycle.embedderUrl) return null;
   return fetch(lifecycle.embedderUrl, { signal: AbortSignal.timeout(2_000) })
@@ -114,14 +149,17 @@ async function security() {
 
 /** Current values only; nothing here is stored. */
 export async function runtimeSnapshot() {
-  const [mem, postgres, status, ready, sizes, sec] = await Promise.all([
-    memory(),
-    postgresConnections(),
-    hostStatus(),
-    readiness(),
-    tableSizes(),
-    security(),
-  ]);
+  const [mem, postgres, status, history, ready, sizes, sec] = await Promise.all(
+    [
+      memory(),
+      postgresConnections(),
+      hostStatus(),
+      hostHistory(),
+      readiness(),
+      tableSizes(),
+      security(),
+    ],
+  );
   return {
     draining: lifecycle.draining,
     refusingChats: lifecycle.refusingChats,
@@ -135,5 +173,88 @@ export async function runtimeSnapshot() {
     embed: embedDepth?.() ?? (await externalDepth()),
     postgres,
     status,
+    history,
+    uptimeSeconds: Math.round(process.uptime()),
+  };
+}
+
+type Snapshot = Awaited<ReturnType<typeof runtimeSnapshot>>;
+type Result = {
+  ok?: boolean;
+  at?: string;
+  error?: string;
+  problems?: string;
+  file?: string;
+};
+
+const HOUR = 3_600_000;
+const olderThan = (at: string | undefined, ms: number, now: number) =>
+  !at || now - Date.parse(at) > ms;
+const named = (labels: string[]): IssueList => ({
+  n: labels.length,
+  items: labels.map((label) => ({ key: label, label })),
+});
+
+/**
+ * What an admin has to act on for the deployment itself. Backup and watch
+ * issues only exist where the host writes its status directory; without one
+ * there is nothing to say about them either way.
+ */
+export function systemIssues(
+  r: Snapshot,
+  now = Date.now(),
+): Record<string, IssueList> {
+  const ready = r.readiness;
+  const status = (r.status ?? null) as Record<string, unknown> | null;
+  const backup = status?.backup as Result | undefined;
+  const restore = status?.restore as Result | undefined;
+  const watch = status?.watch as
+    { checks?: Record<string, { state: string; value: string }> } | undefined;
+  const checks = Object.entries(watch?.checks ?? {});
+  const byState = (state: string) =>
+    named(
+      checks
+        .filter(([, c]) => c.state === state)
+        .map(([k, c]) => `${k}: ${c.value}`),
+    );
+  return {
+    "system.not_ready": named(
+      [
+        !ready.database && "database down",
+        ready.schema === "mismatch" && "schema does not match the image",
+        ready.model === "loading" && "embedding model still loading",
+        ready.model === "unreachable" && "embedder unreachable",
+        ready.draining && "draining for shutdown",
+      ].filter((x): x is string => Boolean(x)),
+    ),
+    "backups.failed": named(
+      backup && backup.ok === false
+        ? [backup.error ?? "no error recorded"]
+        : [],
+    ),
+    "backups.stale": issueFlag(
+      Boolean(status) &&
+        backup?.ok !== false &&
+        olderThan(backup?.at, 12 * HOUR, now),
+    ),
+    "restore.failed": named(
+      restore && restore.ok === false
+        ? [restore.problems || "no detail recorded"]
+        : [],
+    ),
+    "restore.stale": issueFlag(
+      Boolean(status) &&
+        restore?.ok !== false &&
+        olderThan(restore?.at, 8 * 24 * HOUR, now),
+    ),
+    "watch.fail": byState("fail"),
+    "watch.warn": byState("warn"),
+    "vault.old_keys": named(
+      r.security.vault.enabled
+        ? r.security.vault.by_key
+            .filter((k) => !k.current)
+            .map((k) => `${k.key_id ?? "no key id"}: ${k.count}`)
+        : [],
+    ),
   };
 }

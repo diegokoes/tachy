@@ -23,7 +23,7 @@
   import type { Component, Customer, Product, Repo, SourceProject } from "./rows";
 import { INFO } from "./help";
 import { csv } from "../fields";
-  import { sectionHoist } from "./topAction.svelte";
+  import { sectionHoist } from "./sectionAction.svelte";
 
   type FoundRepo = { name: string; url: string; default_branch: string };
 
@@ -254,14 +254,14 @@ import { csv } from "../fields";
       formOnly: true,
       edit: "text",
       required: true,
-      info: "The repo is cloned with the project connection's token.",
+      info: "Cloned with the project connection's token.",
     },
     {
       key: "source_project_id",
       label: "project",
       width: "13rem",
       edit: "select",
-      info: "Which registered project this repo belongs to. Its connection supplies the credentials that clone it.",
+      info: "Owning project. Its connection supplies clone credentials.",
       options: [
         { value: "", label: `(none, scope by ${t("product")})` },
         ...knowledgeProjects.map((p) => ({
@@ -279,7 +279,7 @@ import { csv } from "../fields";
       label: t("product"),
       formOnly: true,
       edit: "select",
-      info: "Only needed when the repo has no project. Ignored otherwise.",
+      info: "Only without a project.",
       options: [
         { value: "", label: "(from the project)" },
         ...myProducts.map((p) => ({ value: p.slug, label: p.name })),
@@ -290,7 +290,7 @@ import { csv } from "../fields";
       label: "customer",
       width: "10rem",
       edit: "select",
-      info: "Set this only for a customer's own addon repo. Left empty the repo is shared product code, and a customer-scoped search returns the shared ones too.",
+      info: "Customer addon repos only. Empty: shared code, included in customer-scoped search.",
       options: [
         { value: "", label: "(none, shared)" },
         ...customers.data.map((cu) => ({ value: cu.slug, label: cu.name })),
@@ -322,7 +322,7 @@ import { csv } from "../fields";
       label: "extensions",
       formOnly: true,
       edit: "text",
-      info: "Comma-separated. Empty uses the built-in allowlist.",
+      info: "Comma-separated. Empty: built-in allowlist.",
       value: (r) =>
         (Array.isArray(r.config?.include_extensions)
           ? (r.config.include_extensions as string[])
@@ -334,7 +334,7 @@ import { csv } from "../fields";
       label: "max file KB",
       formOnly: true,
       edit: "text",
-      info: "Files larger than this are skipped. Empty means 200.",
+      info: "Larger files skipped. Default 200.",
       value: (r) => r.config?.max_file_kb ?? "",
     },
     { key: "index_status", label: "index", width: "8rem", cell: indexCell },
@@ -413,7 +413,7 @@ import { csv } from "../fields";
 </script>
 
 {#snippet projectCell(r: Repo)}
-  <span class:dim={!r.project_key}>{r.project_key ?? "—"}</span>
+  <span class:dim={!r.project_key}>{r.project_key ?? "-"}</span>
 {/snippet}
 
 {#snippet repoCell(r: Repo)}
@@ -472,7 +472,7 @@ import { csv } from "../fields";
   {#if project}
     <Field
       label="discover"
-      info="Pick a repo instead of transcribing its clone URL."
+      info="Pick a repo instead of typing its URL."
     >
       <Button
         variant="ghost"

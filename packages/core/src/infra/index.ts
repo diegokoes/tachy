@@ -7,3 +7,4 @@ export * from "./hierarchy";
 export * from "./background";
 export * from "./schema-stamp";
 export * from "./uploads";
+export * from "./issues";

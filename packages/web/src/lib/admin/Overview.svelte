@@ -1,47 +1,80 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import Counts, { type Count } from "./Counts.svelte";
 
   let {
-    counts,
-    health,
-    detail,
-    attention,
+    figures,
+    loading = false,
+    error = null,
+    cols = 3,
+    rows = 2,
+    children,
   }: {
-    /** The headline figures, first because they are what a glance is for. */
-    counts?: Snippet;
-    /** Is it working — coverage rings, config checks. */
-    health?: Snippet;
-    /** The shape of what is in there, once you know it is working. */
-    detail?: Snippet;
-    /** What to go and fix, last because it is the thing you act on. */
-    attention?: Snippet;
+    /** The counters row, first because it is what a glance is for. */
+    figures: Count[];
+    loading?: boolean;
+    error?: string | null;
+    /** The tile grid under it, which always fills the rest of the window. */
+    cols?: number;
+    rows?: number;
+    children: Snippet;
   } = $props();
 </script>
 
-<!-- An overview is one section, so it is drawn as one thing: four bands in a
-     fixed order, separated by air. No frames around the parts and no rubric
-     over each band — the figures and chart titles already say what they are,
-     and a label reading "COUNTS" over five counts is ink that carries nothing. -->
-<div class="overview">
-  {#if counts}<div class="band">{@render counts()}</div>{/if}
-  {#if health}<div class="band">{@render health()}</div>{/if}
-  {#if detail}<div class="band">{@render detail()}</div>{/if}
-  {#if attention}<div class="band">{@render attention()}</div>{/if}
+<!-- Every overview is this and nothing else: a row of counters, then a grid of
+     charts that shares out the rest of the window, so the page never scrolls.
+     Air on every side rather than a frame — the window is the frame. -->
+<div class="overview" style="--cols: {cols}; --rows: {rows}">
+  {#if error}<p class="error">{error}</p>{/if}
+  <Counts items={figures} {loading} />
+  <div class="tiles">{@render children()}</div>
 </div>
 
 <style>
   .overview {
+    flex: 1 1 auto;
+    /* The floor under which charts stop shrinking and the window scrolls
+       instead, rather than drawing a dial the size of a letter. */
+    min-height: 24rem;
     display: flex;
     flex-direction: column;
-    /* Twice the gap anything inside a band uses, which is the whole of what
-       separates them now. */
-    gap: calc(var(--pad-4) * 2);
+    gap: calc(var(--pad-4) * 1.75);
+    padding: calc(var(--pad-4) * 1.25) calc(var(--pad-4) * 1.75)
+      var(--pad-4);
     min-width: 0;
+    container-type: inline-size;
   }
-  .band {
-    display: flex;
-    flex-direction: column;
-    gap: var(--pad-3);
-    min-width: 0;
+
+  .tiles {
+    flex: 1 1 0;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+    grid-template-rows: repeat(var(--rows), minmax(0, 1fr));
+    gap: calc(var(--pad-4) * 2) calc(var(--pad-4) * 2.25);
+  }
+
+  .error {
+    margin: 0;
+    font-size: var(--fs-xs);
+    color: var(--danger);
+  }
+
+  /* Narrow windows trade the one-screen rule for legible charts: two columns
+     of fixed-height tiles, then one, and the window scrolls. */
+  @container (max-width: 52rem) {
+    .tiles {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-rows: none;
+      grid-auto-rows: 14rem;
+    }
+  }
+  @container (max-width: 34rem) {
+    .tiles {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .tiles > :global(.tile) {
+      grid-column: auto;
+    }
   }
 </style>

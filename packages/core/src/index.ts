@@ -68,7 +68,7 @@ export type {
   MembershipRow,
 } from "./access";
 export { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from "./access";
-export { userCensus } from "./access";
+export { userCensus, userIssues } from "./access";
 export {
   AGENT_EFFORTS,
   AGENT_PROVIDERS,
@@ -131,6 +131,7 @@ export type {
   ArtifactSpec,
 } from "./config";
 export { secretsEnabled } from "./infra";
+export { ISSUE_ITEMS, issueList, issueFlag, type IssueList } from "./infra";
 
 export {
   saveKnowledgeEntry,
@@ -350,6 +351,7 @@ export {
   getCustomerName,
   getCustomerSlug,
   catalogCensus,
+  catalogIssues,
 } from "./catalog";
 export type {
   CustomerInput,
@@ -411,6 +413,7 @@ export {
   addSourceConnection,
   deleteSourceConnection,
   sourceCensus,
+  sourceIssues,
 } from "./sources";
 export type { SourceConnectionInput } from "./sources";
 export {

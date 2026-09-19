@@ -1,352 +1,128 @@
 <script lang="ts">
-  import {
-    Band,
-    Columns,
-    Dial,
-    Note,
-    compact,
-    dayOfMonth,
-    type Col,
-  } from "../tui";
+  import { Bars, Columns, compact, dayOfMonth, type Bar, type Col } from "../tui";
   import { census } from "./census.svelte";
   import { activity } from "./activity.svelte";
-  import Counts from "./Counts.svelte";
-  import Figure from "./Figure.svelte";
-  import Gaps from "./Gaps.svelte";
+  import { grade, pct, ratio } from "./overview";
+  import Dials from "./Dials.svelte";
   import Overview from "./Overview.svelte";
+  import Tile from "./Tile.svelte";
 
   const d = $derived(census.data.detail.sources);
   const r = $derived(census.data.detail.repos);
-  const loading = $derived(census.loading);
+  const traffic = $derived(activity.data.traffic);
 
-  /** Whole days since a timestamp, or null if there has never been one. */
-  const ago = (at: string | null) => {
-    const t = at ? Date.parse(at) : NaN;
-    if (!Number.isFinite(t)) return null;
-    const days = Math.floor((Date.now() - t) / 86_400_000);
-    return days < 1 ? "today" : `${days}d ago`;
-  };
+  /* Whose traffic it is — the agent reading on someone's behalf, sync, or the
+     app itself — is what a request-rate scrape cannot tell you. */
+  const ORIGINS = [
+    { key: "agent", label: "agent", tone: "accent" },
+    { key: "sync", label: "sync", tone: "info" },
+    { key: "app", label: "app", tone: "muted" },
+  ] as const;
 
-  const oldestIndex = $derived(ago(r.oldest_indexed_at));
+  const split = (x: { agent: number; sync: number; app: number }) =>
+    ORIGINS.map((o) => ({ key: o.key, value: x[o.key], tone: o.tone }));
 
-  const ratio = (n: number, of: number) => (of ? n / of : 0);
+  const perDay = $derived(
+    traffic.per_day.map(
+      (x): Col => ({
+        key: x.day,
+        label: dayOfMonth(x.day),
+        title: x.day,
+        value: x.agent + x.sync + x.app,
+        parts: split(x),
+      }),
+    ),
+  );
+  const calls = $derived(perDay.reduce((n, c) => n + c.value, 0));
 
-  /* One reading of readiness for all three rungs: the ring colours the part
-     that is done, so `failing` must not paint the ones that are ready red. All
-     of it, some of it, none of it — and muted when there is nothing to be
-     ready. */
-  const grade = (done: number, of: number) =>
-    !of
-      ? ("muted" as const)
-      : done === of
-        ? ("ok" as const)
-        : done
-          ? ("warn" as const)
-          : ("danger" as const);
+  const bySource = $derived(
+    traffic.connections
+      .map(
+        (c): Bar => ({
+          key: c.slug,
+          label: c.slug,
+          value: c.agent + c.sync + c.app,
+          parts: split(c),
+        }),
+      )
+      .sort((a, b) => b.value - a.value),
+  );
+
+  const tokened = $derived(d.connections - d.untokened);
+  const wikied = $derived(d.knowledge - d.projects_no_wiki);
+
+  const readiness = $derived([
+    {
+      key: "sources",
+      label: "sources",
+      title: "sources with a token",
+      value: ratio(tokened, d.connections),
+      tone: grade(tokened, d.connections),
+      center: pct(tokened, d.connections),
+      sub: `${tokened}/${d.connections}`,
+    },
+    {
+      key: "projects",
+      label: "projects",
+      title: "knowledge projects with a wiki",
+      value: ratio(wikied, d.knowledge),
+      tone: grade(wikied, d.knowledge),
+      center: pct(wikied, d.knowledge),
+      sub: `${wikied}/${d.knowledge}`,
+    },
+    {
+      key: "repos",
+      label: "repos",
+      title: "repos indexed",
+      value: ratio(r.ready, r.repos),
+      tone: grade(r.ready, r.repos),
+      center: pct(r.ready, r.repos),
+      sub: `${r.ready}/${r.repos}`,
+    },
+  ]);
+
+  /* index_status partitions the repos, so these four are the whole of them. */
+  const repoStates = $derived<Col[]>([
+    { key: "ready", label: "ready", value: r.ready, tone: "ok" },
+    { key: "working", label: "working", value: r.working, tone: "accent" },
+    { key: "idle", label: "idle", value: r.idle, tone: "muted" },
+    { key: "failing", label: "failing", value: r.failing, tone: "danger" },
+  ]);
+
+  const byType = $derived(
+    Object.entries(d.by_type)
+      .sort((a, b) => b[1] - a[1])
+      .map(([type, n]): Col => ({ key: type, label: type, value: n })),
+  );
 
   const figures = $derived([
     { key: "sources", label: "sources", value: d.connections, to: "sources" },
     { key: "projects", label: "projects", value: d.projects, to: "projects" },
     { key: "repos", label: "repos", value: r.repos, to: "repos" },
-    {
-      key: "files",
-      label: "files indexed",
-      value: r.files,
-      detail: `in ${r.ready} repos`,
-      to: "repos",
-    },
-    { key: "chunks", label: "code chunks", value: r.chunks, to: "repos" },
-  ]);
-
-  /* The repos rung carries what the deleted index-health band used to say:
-     every state a repo can be in that is not simply "indexed". Zero terms are
-     dropped rather than printed, so the note is only ever news. */
-  const repoNote = $derived(
-    r.repos
-      ? [
-          `${r.ready} of ${r.repos} indexed`,
-          r.working ? `${r.working} working` : null,
-          r.failing ? `${r.failing} failing` : null,
-        ]
-          .filter(Boolean)
-          .join(" · ")
-      : "none linked",
-  );
-
-  /* The pipeline in the order a deployment is wired up: a project comes from a
-     source, a repo hangs off a project. Each ring is that rung's readiness
-     against its own denominator, which is what `note` states — the figure in
-     the middle is the population, not the ratio. */
-  const rungs = $derived([
-    {
-      key: "sources",
-      n: d.connections,
-      value: ratio(d.connections - d.untokened, d.connections),
-      tone: grade(d.connections - d.untokened, d.connections),
-      note: d.connections
-        ? `${d.connections - d.untokened} of ${d.connections} with a token`
-        : "nothing connected yet",
-    },
-    {
-      key: "projects",
-      n: d.projects,
-      value: ratio(d.knowledge - d.projects_no_wiki, d.knowledge),
-      tone: grade(d.knowledge - d.projects_no_wiki, d.knowledge),
-      note: d.projects
-        ? `${d.knowledge - d.projects_no_wiki} of ${d.knowledge} knowledge projects have a wiki`
-        : "none registered",
-    },
-    {
-      key: "repos",
-      n: r.repos,
-      value: ratio(r.ready, r.repos),
-      tone: grade(r.ready, r.repos),
-      note: repoNote,
-    },
-  ]);
-
-  const indexCaption = $derived(
-    [
-      oldestIndex ? `oldest index ${oldestIndex}` : null,
-      r.never_indexed ? `${r.never_indexed} never cloned` : null,
-      r.idle ? `${r.idle} idle` : null,
-    ]
-      .filter(Boolean)
-      .join(" · "),
-  );
-
-  const traffic = $derived(activity.data.traffic);
-
-  const callsPerDay = $derived(
-    traffic.per_day.map(
-      (d): Col => ({
-        key: d.day,
-        label: dayOfMonth(d.day),
-        value: d.agent + d.sync + d.app,
-      }),
-    ),
-  );
-  const totalCalls = $derived(callsPerDay.reduce((n, c) => n + c.value, 0));
-
-  /* Whose traffic it is — the agent reading on someone's behalf, sync, or the
-     app itself — is the thing a request-rate scrape cannot tell you, so it is
-     the whole of each connection's bar. */
-  const byConnection = $derived(
-    traffic.connections.map((c) => ({
-      ...c,
-      total: c.agent + c.sync + c.app,
-      segments: [
-        { key: "agent", label: "agent", n: c.agent, tone: "accent" as const },
-        { key: "sync", label: "sync", n: c.sync, tone: "info" as const },
-        { key: "app", label: "app", n: c.app, tone: "muted" as const },
-      ],
-      refusals: [
-        c.rate_limited ? `${c.rate_limited} rate-limited` : null,
-        c.auth_failures
-          ? `credentials refused, last on ${c.last_auth_failure}`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-    })),
-  );
-
-  const refusingCredentials = $derived(
-    traffic.connections.filter((c) => c.auth_failures > 0).length,
-  );
-
-  const gaps = $derived([
-    {
-      n: refusingCredentials,
-      label: `sources that refused their credentials in the last ${traffic.days} days`,
-      tone: "danger" as const,
-      to: "sources",
-    },
-    {
-      n: d.untokened,
-      label: "sources without a token",
-      tone: "danger" as const,
-      to: "sources",
-    },
-    {
-      n: d.never_synced,
-      label: "sources never synced",
-      tone: "warn" as const,
-      to: "sources",
-    },
-    {
-      n: d.projects_no_wiki,
-      label: "knowledge projects without a wiki",
-      tone: "warn" as const,
-      to: "projects",
-    },
-    {
-      n: r.failing,
-      label: "repos failing to index",
-      tone: "danger" as const,
-      to: "repos",
-    },
-    {
-      n: r.never_indexed,
-      label: "repos never cloned",
-      tone: "warn" as const,
-      to: "repos",
-    },
-    {
-      n: r.no_component,
-      label: "repos without a component",
-      tone: "warn" as const,
-      to: "repos",
-    },
-    {
-      n: r.no_project,
-      label: "repos without a project",
-      tone: "warn" as const,
-      to: "repos",
-    },
+    { key: "files", label: "files", text: compact(r.files), title: `${r.files.toLocaleString()} files indexed`, to: "repos" },
+    { key: "chunks", label: "chunks", text: compact(r.chunks), title: `${r.chunks.toLocaleString()} code chunks`, to: "repos" },
+    { key: "calls", label: `calls ${traffic.days} d`, text: compact(calls), title: `source calls, last ${traffic.days} days` },
   ]);
 </script>
 
-<Overview>
-  {#snippet counts()}
-    <Counts items={figures} {loading} />
-  {/snippet}
+<Overview {figures} loading={census.loading} error={census.error ?? activity.error}>
+  <Tile title="readiness">
+    <Dials items={readiness} />
+  </Tile>
 
-  {#snippet health()}
-    <div class="pipe">
-      {#each rungs as rung, i (rung.key)}
-        {#if i}
-          <span class="link" aria-hidden="true"></span>
-        {/if}
-        <div class="rung">
-          <Dial value={rung.value} tone={rung.tone} label={rung.key}>
-            <Figure value={rung.n} size="sm" />
-          </Dial>
-          <span class="name">{rung.key}</span>
-          <span class="note">{rung.note}</span>
-        </div>
-      {/each}
-    </div>
-    {#if indexCaption}<span class="quiet">{indexCaption}</span>{/if}
-  {/snippet}
+  <Tile title="repo index" meta={`${r.repos}`} empty={!r.repos}>
+    <Columns rows={repoStates} fill />
+  </Tile>
 
-  {#snippet detail()}
-    <span class="title">
-      source calls · last {traffic.days} days · {compact(totalCalls)}
-    </span>
-    {#if totalCalls}
-      <Columns rows={callsPerDay} format={compact} height="5rem" />
-      <div class="connections">
-        {#each byConnection as c (c.slug)}
-          <div class="connection">
-            <span class="conn-name">
-              {c.slug}
-              <span class="conn-type">{c.source_type} · {compact(c.total)}</span>
-            </span>
-            <Band segments={c.segments} total={c.total} label="{c.slug} calls by origin" />
-            {#if c.refusals}
-              <span class="refused" class:danger={c.auth_failures > 0}>
-                {c.refusals}
-              </span>
-            {/if}
-          </div>
-        {/each}
-      </div>
-    {:else}
-      <span class="quiet">no calls to a source recorded yet</span>
-    {/if}
-  {/snippet}
+  <Tile title="sources by type" empty={!byType.length}>
+    <Columns rows={byType} fill />
+  </Tile>
 
-  {#snippet attention()}
-    <Gaps items={gaps} />
-  {/snippet}
+  <Tile title="source calls" meta="{traffic.days} d" span={2} empty={!calls}>
+    <Columns rows={perDay} format={compact} legend={[...ORIGINS]} fill />
+  </Tile>
+
+  <Tile title="calls by source" meta="{traffic.days} d" empty={!calls}>
+    <Bars rows={bySource} format={compact} fit />
+  </Tile>
 </Overview>
-
-{#if census.error}
-  <Note tone="danger">{census.error}</Note>
-{/if}
-
-<style>
-  .pipe {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--pad-2);
-    width: 100%;
-    min-width: 0;
-  }
-  .rung {
-    flex: 1 1 0;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--pad-1);
-    text-align: center;
-  }
-  .name {
-    font-size: var(--fs-sm);
-    letter-spacing: var(--label-spacing);
-  }
-  .note {
-    font-size: var(--fs-xs);
-    color: var(--muted);
-  }
-
-  /* Sits on the dials' centre line, so the three rungs read as one run. */
-  .link {
-    flex: 0 1 4rem;
-    min-width: 0;
-    height: 2px;
-    margin-top: 2.6rem;
-    background: color-mix(in srgb, var(--muted) 55%, transparent);
-  }
-
-  .title {
-    font-size: var(--fs-xs);
-    letter-spacing: var(--label-spacing);
-    color: var(--muted);
-  }
-  .quiet {
-    font-size: var(--fs-xs);
-    color: var(--muted);
-  }
-
-  .connections {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-    gap: var(--pad-3) var(--pad-4);
-    margin-top: var(--pad-3);
-  }
-  .connection {
-    display: flex;
-    flex-direction: column;
-    gap: var(--pad-1);
-    min-width: 0;
-  }
-  .conn-name {
-    font-size: var(--fs-sm);
-    letter-spacing: var(--label-spacing);
-  }
-  .conn-type {
-    margin-left: var(--pad-2);
-    font-size: var(--fs-xs);
-    color: var(--muted);
-  }
-  .refused {
-    font-size: var(--fs-xs);
-    color: var(--warn);
-  }
-  .refused.danger {
-    color: var(--danger);
-  }
-
-  @media (max-width: 34rem) {
-    .pipe {
-      flex-direction: column;
-      align-items: stretch;
-    }
-    .link {
-      display: none;
-    }
-  }
-</style>

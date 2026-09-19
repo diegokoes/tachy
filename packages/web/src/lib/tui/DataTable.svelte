@@ -1,9 +1,7 @@
 <script lang="ts" generics="T">
-  import type { Snippet } from "svelte";
   import { cellText, type Column } from "./table";
   import EmptyState from "./EmptyState.svelte";
   import Note from "./Note.svelte";
-  import { G } from "./glyphs";
 
   let {
     columns,
@@ -13,9 +11,6 @@
     error = null,
     emptyTitle = "nothing here yet",
     emptyDetail,
-    expand,
-    expanded = new Set<string>(),
-    ontoggle,
     rowClass,
     onrowclick,
     canOpen = () => true,
@@ -27,9 +22,6 @@
     error?: string | null;
     emptyTitle?: string;
     emptyDetail?: string;
-    expand?: Snippet<[T]>;
-    expanded?: Set<string>;
-    ontoggle?: (key: string) => void;
     rowClass?: (row: T) => string | undefined;
     /** Opening a row is the row's own job now, so the whole of it is the target. */
     onrowclick?: (row: T) => void;
@@ -46,8 +38,6 @@
     const sel = window.getSelection();
     return !sel || sel.isCollapsed;
   }
-
-  const span = $derived(columns.length + (expand ? 1 : 0));
 </script>
 
 {#if error}
@@ -57,13 +47,11 @@
 <div class="wrap">
   <table>
     <colgroup>
-      {#if expand}<col style="width: 2.2rem" />{/if}
       {#each columns as c}<col style={c.width ? `width: ${c.width}` : ""} />{/each}
     </colgroup>
 
     <thead>
       <tr>
-        {#if expand}<th aria-label="expand"></th>{/if}
         {#each columns as c}
           <th class={c.align === "end" ? "end" : ""}>{c.label}</th>
         {/each}
@@ -72,8 +60,6 @@
 
     <tbody>
       {#each rows as row (rowKey(row))}
-        {@const key = rowKey(row)}
-        {@const open = expanded.has(key)}
         {@const openRow = onrowclick && canOpen(row) ? onrowclick : undefined}
         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions, a11y_no_noninteractive_tabindex -->
         <tr
@@ -88,16 +74,6 @@
               openRow(row);
             })}
         >
-          {#if expand}
-            <td class="exp">
-              <button
-                type="button"
-                aria-expanded={open}
-                aria-label={open ? "collapse" : "expand"}
-                onclick={() => ontoggle?.(key)}>{open ? G.expanded : G.right}</button
-              >
-            </td>
-          {/if}
           {#each columns as c}
             <td class={c.align === "end" ? "end" : ""}>
               {#if c.cell}{@render c.cell(row)}
@@ -105,16 +81,11 @@
             </td>
           {/each}
         </tr>
-        {#if expand && open}
-          <tr class="detail">
-            <td colspan={span}>{@render expand(row)}</td>
-          </tr>
-        {/if}
       {/each}
 
       {#if !rows.length}
         <tr class="none">
-          <td colspan={span}>
+          <td colspan={columns.length}>
             {#if loading}
               <p class="loading">loading…</p>
             {:else}
@@ -169,7 +140,7 @@
   tbody tr {
     border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
   }
-  tbody tr:hover:not(.none):not(.detail) {
+  tbody tr:hover:not(.none) {
     background: var(--accent-dim);
   }
 
@@ -194,27 +165,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  /* Rows no longer carry a rank of action marks. Opening one is the row's own
-     click, and everything you can do to a record — delete, test, reindex — is
-     in the titlebar of the record you opened. */
-  .exp button {
-    font: inherit;
-    background: none;
-    border: none;
-    color: var(--muted);
-    cursor: pointer;
-    padding: 0;
-    line-height: 1;
-  }
-  .exp button:hover {
-    color: var(--accent);
-  }
-
-  tr.detail > td {
-    padding: var(--pad-3) var(--pad-4);
-    background: color-mix(in srgb, var(--muted) 7%, transparent);
   }
 
   tr.none > td {

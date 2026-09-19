@@ -305,7 +305,7 @@
     <label>{t("customer")}
       <AsciiSelect bind:value={customerSlug} options={customerOptions}
         onchange={(v) => loadUnits(String(v))}
-        title="whose install this was learned on; leave as none if it is true for everyone" />
+        title="customer this applies to; none if general" />
     </label>
     <label>unit
       <AsciiSelect bind:value={unitSlug} options={unitOptions}
@@ -367,6 +367,6 @@
   .structured { width: 100%; min-height: 20rem; height: 20rem; box-sizing: border-box; overflow: hidden; resize: none; color: #e2e2e2; background: #000; font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.5; }
   :global(:root[data-theme="light"]) .structured { color: #000; background: #fff; }
   .json-toggle { align-self: center; display: grid; place-items: center; color: var(--text); background: transparent; border: 0; padding: 0.25rem; cursor: pointer; }
-  .json-toggle:hover { color: var(--accent); }
+  .json-toggle:hover :global(svg) { stroke-width: var(--sw-hover, 9); }
   .error { color: var(--danger); margin: 0; }
 </style>

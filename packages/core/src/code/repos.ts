@@ -1,4 +1,5 @@
 import { sql } from "../infra/db";
+import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { badInput, notFound } from "../infra/errors";
 import { getProductIdBySlug } from "../catalog/products";
 import { getCustomerIdBySlug } from "../catalog/customers";
@@ -67,11 +68,11 @@ export async function linkRepo(i: RepoInput) {
     const project = await getSourceProject(i.sourceProjectId);
     if (!project.product_id)
       throw badInput(
-        `project '${project.external_key}' is a tracker — it holds no code, so a repo cannot belong to it`,
+        `project '${project.external_key}' is a tracker: it holds no code, so no repos`,
       );
     if (productId && productId !== project.product_id)
       throw badInput(
-        `repo product and project product disagree — project '${project.external_key}' belongs to '${project.product_slug}'`,
+        `repo product and project product disagree: project '${project.external_key}' belongs to '${project.product_slug}'`,
       );
     productId = project.product_id;
     sourceSlug = sourceSlug ?? project.source_slug;
@@ -87,7 +88,7 @@ export async function linkRepo(i: RepoInput) {
   if (i.componentSlug) {
     if (!productId)
       throw badInput(
-        "a repo needs a product before it can implement a component — pass product or a project",
+        "a repo needs a product to implement a component: pass product or a project",
       );
     componentId = (await resolveComponentStrict(productId, i.componentSlug)).id;
   }
@@ -255,4 +256,26 @@ export async function repoCensus() {
     chunks: number;
     oldest_indexed_at: Date | null;
   };
+}
+
+/** Repos that are not answering searches, or are filed nowhere, by slug. */
+export async function repoIssues(): Promise<Record<string, IssueList>> {
+  const where = {
+    "repos.failing": sql`index_status = 'error'`,
+    "repos.never_indexed": sql`last_indexed_at is null and index_status <> 'error'`,
+    "repos.no_component": sql`component_id is null`,
+    "repos.no_project": sql`source_project_id is null`,
+  };
+  const lists = await Promise.all(
+    Object.values(where).map(
+      (cond) => sql`
+        select slug as key, slug as label, count(*) over () as total
+        from repos where ${cond}
+        order by slug limit ${ISSUE_ITEMS}
+      `,
+    ),
+  );
+  return Object.fromEntries(
+    Object.keys(where).map((k, i) => [k, issueList(lists[i])]),
+  );
 }

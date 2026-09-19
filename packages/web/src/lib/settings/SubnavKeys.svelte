@@ -10,9 +10,7 @@
 </script>
 
 <p class="hint">
-  The keys that switch tabs inside a section, by position — slot 1 is the
-  leftmost tab wherever you are. Settings itself has no tabs, so they do nothing
-  here.
+  Tab keys by position: slot 1 is the leftmost tab. No effect in settings.
 </p>
 
 <ul class="binds">

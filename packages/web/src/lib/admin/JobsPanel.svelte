@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, untrack } from "svelte";
   import { JOB_NOTIFY, JOB_OVERLAP, JOB_RESOURCE_CLASSES } from "@tachy/contract";
   import { api } from "../api";
+  import { navigate } from "../router.svelte";
   import { createResource, errText } from "../resource.svelte";
   import {
     Badge,
@@ -24,7 +25,13 @@
     JsonSchema,
   } from "./rows";
   import SchedulePreview from "./SchedulePreview.svelte";
-  import { sectionHoist } from "./topAction.svelte";
+  import { sectionHoist } from "./sectionAction.svelte";
+  import { NEW_RECORD, recordPath } from "./records";
+  import RecordPage from "./RecordPage.svelte";
+  import type { StatusAction } from "../library/status";
+
+  /** Given, the panel is one job's page rather than the list of them. */
+  let { id }: { id?: string } = $props();
 
   type KindsInfo = {
     kinds: JobKindInfo[];
@@ -48,7 +55,6 @@
   let filter = $state("");
   let failuresOnly = $state(false);
   let params = $state<Record<string, unknown>>({});
-  let expanded = $state(new Set<string>());
   let runsFor = $state<Record<string, JobRunRow[]>>({});
   let changesFor = $state<Record<string, JobChange[]>>({});
   let logOpen = $state(new Set<string>());
@@ -59,7 +65,7 @@
   const tone = (s: string | undefined) =>
     s === "succeeded" ? "ok" : s === "failed" || s === "timed_out" ? "danger" : "muted";
   const when = (iso: string | null | undefined) =>
-    iso ? new Date(iso).toLocaleString() : "—";
+    iso ? new Date(iso).toLocaleString() : "-";
   const opt = (values: readonly string[], inherit: string) => [
     { value: "", label: inherit },
     ...values.map((v) => ({ value: v, label: v })),
@@ -84,7 +90,7 @@
       width: "14rem",
       edit: "text",
       required: true,
-      info: "What this job is, as the run history and Teams will name it.",
+      info: "Display name in run history and Teams.",
     },
     {
       key: "kind",
@@ -93,8 +99,8 @@
       edit: "select",
       required: true,
       editable: () => false,
-      options: info.data.kinds.map((k) => ({ value: k.kind, label: `${k.kind} — ${k.title}` })),
-      info: "What runs. Kinds are defined in code; a new one arrives in a release.",
+      options: info.data.kinds.map((k) => ({ value: k.kind, label: `${k.kind}: ${k.title}` })),
+      info: "Job kind. Defined in code.",
     },
     {
       key: "schedule",
@@ -104,7 +110,7 @@
       placeholder: "0 2 * * *",
       value: (d) => d.schedule ?? "",
       cell: scheduleCell,
-      info: "Cron, five fields. Blank: only runs when started by hand or by an event.",
+      info: "Cron, 5 fields. Blank: manual or event only.",
     },
     { key: "timezone", label: "timezone", formOnly: true, edit: "text", initial: "UTC" },
     {
@@ -115,7 +121,7 @@
       value: (d) => d.resource_class ?? "",
       options: (dr) => opt(JOB_RESOURCE_CLASSES, `kind default (${kindOf(dr.kind)?.resource_class ?? "?"})`),
       cell: classCell,
-      info: "Which worker pool runs it. Pool sizes and limits are set in Compose.",
+      info: "Worker pool. Sizes set in Compose.",
     },
     {
       key: "timeout",
@@ -133,7 +139,7 @@
       edit: "select",
       value: (d) => d.overlap ?? "",
       options: (dr) => opt(JOB_OVERLAP, `kind default (${kindOf(dr.kind)?.overlap ?? "?"})`),
-      info: "When a firing comes while the previous run still goes: skip it, or queue behind.",
+      info: "Overlap policy: skip or queue.",
     },
     {
       key: "notify",
@@ -142,7 +148,7 @@
       edit: "select",
       initial: "failure",
       options: JOB_NOTIFY.map((v) => ({ value: v, label: v })),
-      info: "Posts to the jobs Teams workflow (the teams_job_webhook credential).",
+      info: "Posts to Teams (teams_job_webhook).",
     },
     { key: "enabled", label: "on", width: "4rem", edit: "checkbox", initial: true, cell: enabledCell },
     { key: "last", label: "last run", width: "11rem", cell: lastCell },
@@ -183,23 +189,12 @@
     changesFor[id] = changes;
   }
 
-  async function toggle(id: string) {
-    const next = new Set(expanded);
-    if (next.has(id)) next.delete(id);
-    else {
-      next.add(id);
-      void loadDetail(id).catch((e) => (error = errText(e)));
-    }
-    expanded = next;
-  }
-
   async function runNow(d: JobDefinitionRow) {
     running = d.id;
     error = null;
     try {
       await api.post(`/jobs/definitions/${d.id}/run`, {});
-      if (!expanded.has(d.id)) await toggle(d.id);
-      else await loadDetail(d.id);
+      await loadDetail(d.id);
       await Promise.all([defs.reload(), recent.reload()]);
     } catch (e) {
       error = errText(e);
@@ -237,7 +232,7 @@
       poll = setInterval(() => {
         void recent.reload();
         void defs.reload();
-        for (const id of expanded) void loadDetail(id).catch(() => {});
+        if (record) void loadDetail(record.id).catch(() => {});
       }, 3000);
     if (!anyActive && poll) {
       clearInterval(poll);
@@ -254,6 +249,44 @@
     void recent.reload();
     void connections.reload();
   });
+
+  const creating = $derived(id === NEW_RECORD);
+  const record = $derived(
+    id && !creating ? (defs.data.find((d) => d.id === id) ?? null) : null,
+  );
+
+  $effect(() => {
+    if (!id || creating) return;
+    const open = id;
+    untrack(() => void loadDetail(open).catch((e) => (error = errText(e))));
+  });
+
+  const railActions = $derived<StatusAction[]>(
+    record
+      ? [
+          {
+            icon: "index",
+            label: running === record.id ? "running…" : "run now",
+            disabled: running === record.id,
+            onclick: () => record && runNow(record),
+          },
+        ]
+      : [],
+  );
+
+  const back = () => navigate(recordPath("jobs"));
+
+  async function createJob(d: Draft) {
+    let made: JobDefinitionRow | undefined;
+    await defs.mutate(async () => {
+      made = await api.post<JobDefinitionRow>("/jobs/definitions", {
+        kind: d.kind,
+        ...payload(d),
+        params: { ...defaultsFor(kindOf(d.kind)?.params_schema), ...params },
+      });
+    });
+    navigate(recordPath("jobs", made?.id), { replace: true });
+  }
 </script>
 
 {#snippet scheduleCell(d: JobDefinitionRow)}
@@ -266,7 +299,7 @@
 {/snippet}
 
 {#snippet classCell(d: JobDefinitionRow)}
-  {d.resource_class ?? kindOf(d.kind)?.resource_class ?? "—"}
+  {d.resource_class ?? kindOf(d.kind)?.resource_class ?? "-"}
 {/snippet}
 
 {#snippet enabledCell(d: JobDefinitionRow)}
@@ -284,17 +317,6 @@
   {:else}
     <span class="dim">never</span>
   {/if}
-{/snippet}
-
-{#snippet runAction(d: JobDefinitionRow)}
-  <Button
-    variant="ghost"
-    size="sm"
-    icon="index"
-    title="run now"
-    busy={running === d.id}
-    onclick={() => runNow(d)}>run</Button
-  >
 {/snippet}
 
 {#snippet runList(runs: JobRunRow[], showKind: boolean)}
@@ -433,51 +455,57 @@
 {#if error}<Note tone="danger">{error}</Note>{/if}
 {#if info.error}<Note tone="danger">{info.error}</Note>{/if}
 
-<div class="bar">
-  <FilterBar
-    bind:value={filter}
-    shown={filtered.length}
-    total={defs.data.length}
-    placeholder="filter jobs…"
-    label="filter jobs"
+{#if id}
+  <RecordPage
+    noun="job"
+    title={record?.name ?? ""}
+    {columns}
+    row={record}
+    {creating}
+    loading={defs.loading || info.loading}
+    loadError={defs.error}
+    actions={railActions}
+    body={detail}
+    {formExtra}
+    onform={(f) => {
+      openedForm(f);
+      if (f?.mode === "create") params = {};
+    }}
+    onclose={back}
+    oncreate={createJob}
+    onsave={(row, d) =>
+      defs.mutate(() => api.patch(`/jobs/definitions/${row.id}`, payload(d)))}
+    ondelete={(row) =>
+      defs.mutate(() => api.delete(`/jobs/definitions/${row.id}`))}
   />
-  <label class="only"><Checkbox bind:checked={failuresOnly} ariaLabel="failures only" /> failures only</label>
-</div>
+{:else}
+  <div class="bar">
+    <FilterBar
+      bind:value={filter}
+      shown={filtered.length}
+      total={defs.data.length}
+      placeholder="filter jobs…"
+      label="filter jobs"
+    />
+    <label class="only"><Checkbox bind:checked={failuresOnly} ariaLabel="failures only" /> failures only</label>
+  </div>
 
-<CrudTable
-  hoist={sectionHoist("jobs")}
-  {columns}
-  rows={filtered}
-  rowKey={(d) => d.id}
-  loading={defs.loading}
-  error={defs.error}
-  emptyTitle={defs.data.length ? "No jobs match." : "No job definitions yet."}
-  addLabel="add job"
-  noun="job"
-  editTitle={(d) => d.name}
-  extraActions={runAction}
-  expand={detail}
-  {expanded}
-  ontoggle={toggle}
-  onform={(f) => {
-    openedForm(f);
-    if (f?.mode === "create") params = {};
-  }}
-  {formExtra}
-  oncreate={(d) =>
-    defs.mutate(() =>
-      api.post("/jobs/definitions", {
-        kind: d.kind,
-        ...payload(d),
-        params: { ...defaultsFor(kindOf(d.kind)?.params_schema), ...params },
-      }),
-    )}
-  onsave={(row, d) => defs.mutate(() => api.patch(`/jobs/definitions/${row.id}`, payload(d)))}
-  ondelete={(row) => defs.mutate(() => api.delete(`/jobs/definitions/${row.id}`))}
-/>
+  <CrudTable
+    hoist={sectionHoist("jobs")}
+    {columns}
+    rows={filtered}
+    rowKey={(d) => d.id}
+    loading={defs.loading}
+    error={defs.error}
+    emptyTitle={defs.data.length ? "No jobs match." : "No job definitions yet."}
+    addLabel="add job"
+    onopen={(d) => navigate(recordPath("jobs", d.id))}
+    onadd={() => navigate(recordPath("jobs", NEW_RECORD))}
+  />
 
-<GroupHead label="recent runs, every job" />
-{@render runList(recent.data, true)}
+  <GroupHead label="recent runs, every job" />
+  {@render runList(recent.data, true)}
+{/if}
 
 <style>
   .bar { display: flex; align-items: center; gap: var(--pad-3); }

@@ -265,16 +265,15 @@
             <Field
               label="api key or token"
               info={agentProvider === "claude"
-                ? "An API key from console.anthropic.com, or a subscription token from 'claude setup-token'. Stored encrypted."
+                ? "API key (console.anthropic.com) or subscription token (claude setup-token). Stored encrypted."
                 : "Stored encrypted."}
             >
               <input type="password" autocomplete="off" bind:value={agentKey} />
             </Field>
             {#if agentKeyIsOAuth}
               <Note tone="accent">
-                Recognised as a Claude <strong>subscription token</strong> — saved as the
-                organisation-wide default. Chats will run on that account's usage limits
-                until individual users add their own under Settings › Keys.
+                Claude <strong>subscription token</strong>. Saved as the org default; chats
+                use that account's limits until a user sets their own in Settings › Keys.
               </Note>
             {/if}
             <Field label="effort">
