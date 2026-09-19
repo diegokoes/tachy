@@ -1,7 +1,9 @@
 import {
   badInput,
+  customerStandIn,
   githubToken,
-  scrubText,
+  scrubbableCopy,
+  scrubStrings,
   sourceFetch,
   TokenMap,
 } from "@tachy/core";
@@ -27,17 +29,15 @@ function redactGithubRaw(
   map: TokenMap,
   customerSlug: string | null,
 ): unknown {
-  if (raw == null || typeof raw !== "object") return {};
-  const issue = structuredClone(raw) as Record<string, any>;
-  const name = customerSlug || "[CUSTOMER]";
+  const issue = scrubbableCopy(raw);
+  if (!issue) return {};
+  const name = customerStandIn(customerSlug);
   scrubActor(issue.user, map, name);
   scrubActor(issue.closed_by, map, name);
   scrubActor(issue.assignee, map, name);
   if (Array.isArray(issue.assignees))
     for (const a of issue.assignees) scrubActor(a, map, name);
-  if (typeof issue.title === "string")
-    issue.title = scrubText(issue.title, map);
-  if (typeof issue.body === "string") issue.body = scrubText(issue.body, map);
+  scrubStrings(issue, ["title", "body"], map);
   return issue;
 }
 
@@ -57,6 +57,26 @@ function parseRef(externalId: string): { repo: string; number: string } {
   return { repo, number };
 }
 
+/** The parts of GitHub's payloads this adapter reads. */
+interface GithubIssue {
+  number: number;
+  html_url?: string;
+  title?: string;
+  state?: string;
+  body?: string | null;
+  user?: { login?: string } | null;
+  pull_request?: unknown;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface GithubComment {
+  id: number;
+  body?: string | null;
+  user?: { login?: string } | null;
+  created_at?: string;
+}
+
 /**
  * GitHub Issues adapter (PAT auth). config.repos lists repos to sync; base_url can be a GitHub Enterprise API URL.
  */
@@ -67,7 +87,7 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
     ? (cfg.config.repos as string[])
     : [];
 
-  async function get(path: string): Promise<any> {
+  async function get<T>(path: string): Promise<T> {
     const res = await sourceFetch(
       `GitHub GET ${path}`,
       api + path,
@@ -85,12 +105,12 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
       throw new Error(
         `GitHub GET ${path} -> ${res.status} ${await res.text()}`,
       );
-    return res.json();
+    return (await res.json()) as T;
   }
 
   function issueToItem(
     repo: string,
-    issue: any,
+    issue: GithubIssue,
     messages: RawMessage[],
   ): RawWorkItem {
     return {
@@ -108,7 +128,7 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
     };
   }
 
-  function commentToMessage(repo: string, c: any): RawMessage {
+  function commentToMessage(repo: string, c: GithubComment): RawMessage {
     return {
       externalId: `${repo}#c${c.id}`,
       author: c.user?.login,
@@ -135,7 +155,9 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
       direction: "asc",
     });
     if (opts.updatedSince) params.set("since", opts.updatedSince);
-    const batch = await get(`/repos/${repo}/issues?${params.toString()}`);
+    const batch = await get<GithubIssue[]>(
+      `/repos/${repo}/issues?${params.toString()}`,
+    );
     const arr = Array.isArray(batch) ? batch : [];
     const items: RawWorkItem[] = [];
     for (const issue of arr) {
@@ -151,14 +173,16 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
     redactRaw: redactGithubRaw,
 
     async verify() {
-      const me = await get("/user");
+      const me = await get<{ login?: string }>("/user");
       const identity = me?.login ?? undefined;
       // Repo listing needs a scope the ticket reads don't; treat it as a bonus.
       try {
-        const repos = await get("/user/repos?per_page=100&sort=updated");
+        const repos = await get<{ full_name: string }[]>(
+          "/user/repos?per_page=100&sort=updated",
+        );
         return {
           identity,
-          groups: (Array.isArray(repos) ? repos : []).map((r: any) => ({
+          groups: (Array.isArray(repos) ? repos : []).map((r) => ({
             key: r.full_name,
             name: r.full_name,
           })),
@@ -174,10 +198,10 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
 
     async fetchItem(externalId: string): Promise<RawWorkItem> {
       const { repo, number } = parseRef(externalId);
-      const issue = await get(`/repos/${repo}/issues/${number}`);
-      const comments: any[] = [];
+      const issue = await get<GithubIssue>(`/repos/${repo}/issues/${number}`);
+      const comments: GithubComment[] = [];
       for (let page = 1; ; page++) {
-        const batch = await get(
+        const batch = await get<GithubComment[]>(
           `/repos/${repo}/issues/${number}/comments?per_page=100&page=${page}`,
         );
         const arr = Array.isArray(batch) ? batch : [];

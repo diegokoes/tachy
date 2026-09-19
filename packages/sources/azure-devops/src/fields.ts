@@ -1,5 +1,5 @@
 import type { AdoFieldType, FieldSpec, WorkItemSchema } from "@tachy/core";
-import type { AdoClient } from "./client";
+import type { AdoClient, AdoField, AdoTypeField } from "./client";
 
 export type { AdoFieldType, FieldSpec, WorkItemSchema };
 
@@ -28,14 +28,14 @@ export const MAX_ALLOWED_VALUES = 50;
  * about have to be the same field.
  */
 export function projectFields(
-  typeFields: any[],
-  accountFields: any[] = [],
+  typeFields: AdoTypeField[],
+  accountFields: AdoField[] = [],
 ): FieldSpec[] {
-  const byRef = new Map<string, any>();
+  const byRef = new Map<string, AdoField>();
   for (const f of accountFields)
     if (f?.referenceName) byRef.set(f.referenceName, f);
 
-  return typeFields.map((f: any) => {
+  return typeFields.map((f) => {
     const values = Array.isArray(f.allowedValues) ? f.allowedValues : [];
     const account = byRef.get(f.referenceName);
     return {
@@ -73,7 +73,7 @@ export async function workItemSchema(
 ): Promise<WorkItemSchema> {
   const [typeFields, accountFields] = await Promise.all([
     client.getTypeFields(project, type),
-    client.listFields().catch(() => [] as any[]),
+    client.listFields().catch(() => [] as AdoField[]),
   ]);
   return {
     project,
@@ -81,4 +81,29 @@ export async function workItemSchema(
     fields: projectFields(typeFields, accountFields),
     config_defaults: configDefaults,
   };
+}
+
+const dig = (v: unknown, ...keys: string[]): unknown =>
+  keys.reduce<unknown>(
+    (at, k) =>
+      at && typeof at === "object"
+        ? (at as Record<string, unknown>)[k]
+        : undefined,
+    v,
+  );
+
+/**
+ * Field values a new work item of `type` starts from: the registered project's
+ * `defaults[type]` when it has one, else the connection's
+ * `defaults[project][type]`.
+ */
+export function workItemDefaults(
+  connectionConfig: unknown,
+  project: string,
+  type: string,
+  projectConfig?: unknown,
+): Record<string, unknown> {
+  return (dig(projectConfig, "defaults", type) ??
+    dig(connectionConfig, "defaults", project, type) ??
+    {}) as Record<string, unknown>;
 }

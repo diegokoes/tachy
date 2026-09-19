@@ -21,7 +21,11 @@ import {
   sql,
   updateSourceProject,
 } from "@tachy/core";
-import { createAdoClient, workItemSchema } from "@tachy/source-azure-devops";
+import {
+  createAdoClient,
+  workItemDefaults,
+  workItemSchema,
+} from "@tachy/source-azure-devops";
 import { assertScopeEditor, assertTeamAdmin, callerScope } from "../authz";
 import type { Context } from "hono";
 
@@ -245,9 +249,7 @@ export const projects = new Hono()
     `;
       if (!conn) throw notFound(`Unknown source connection`);
       const client = await adoClient(c, c.req.param("slug")!);
-      const defaults =
-        ((conn.config as any)?.defaults?.[project]?.[type] as
-          Record<string, unknown> | undefined) ?? {};
+      const defaults = workItemDefaults(conn.config, project, type);
       return c.json(await workItemSchema(client, project, type, defaults));
     },
   )
