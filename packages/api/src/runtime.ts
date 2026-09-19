@@ -8,6 +8,7 @@ import {
   vaultState,
   type EmbedQueueDepth,
   type IssueList,
+  uploadTtlMs,
 } from "@tachy/core";
 import { lifecycle, readiness } from "./lifecycle";
 import { turnStats } from "./turns";
@@ -166,7 +167,7 @@ export async function runtimeSnapshot() {
     readiness: ready,
     tableSizes: sizes,
     security: sec,
-    uploadTtlHours: Number(process.env.TACHY_UPLOAD_TTL_HOURS) || 24,
+    uploadTtlHours: uploadTtlMs() / 3_600_000,
     turns: turnStats(),
     memory: mem,
     eventLoopP99Ms: Math.round(loopP99Ms * 10) / 10,
