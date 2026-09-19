@@ -42,7 +42,7 @@ import { parseStructured } from "../knowledge/structured";
 export function assertArticleSlug(slug: string): void {
   if (!SLUG_RE.test(slug))
     throw badInput(
-      `Invalid article slug '${slug}' — lowercase letters, digits and hyphens only.`,
+      `Invalid article slug '${slug}': lowercase letters, digits and hyphens only.`,
     );
   if ((WIKI_RESERVED_SLUGS as readonly string[]).includes(slug))
     throw badInput(
@@ -195,7 +195,7 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
     : null;
   if (i.unit && !customerId)
     throw badInput(
-      "a unit needs its customer — pass customer_slug alongside unit",
+      "a unit needs its customer: pass customer_slug with unit",
     );
   const customerUnitId =
     i.unit && customerId ? (await resolveUnit(customerId, i.unit)).id : null;
@@ -388,7 +388,7 @@ export async function updateReferenceDoc(
   if ("unit" in patch) {
     if (patch.unit && !customerId)
       throw badInput(
-        "a unit needs its customer — set customerSlug alongside unit",
+        "a unit needs its customer: set customerSlug with unit",
       );
     customerUnitId =
       patch.unit && customerId

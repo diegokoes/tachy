@@ -143,7 +143,7 @@ async function resolveRoleScope(
   if (role === "knowledge") {
     if (!productSlug)
       throw badInput(
-        "a knowledge project needs a product — pass product_slug, or use role 'tracker' for a project we only create work items in",
+        "a knowledge project needs a product: pass product_slug, or use role 'tracker' for a create-only project",
       );
     const productId = await getProductIdBySlug(productSlug);
     const [prod] =
@@ -152,10 +152,10 @@ async function resolveRoleScope(
   }
   if (productSlug)
     throw badInput(
-      "a tracker project has no product — it is a create/reassign target only. Use role 'knowledge' to bind it to a product.",
+      "a tracker project has no product; it is a create/reassign target only. Use role 'knowledge' to bind a product.",
     );
   if (!teamSlug)
-    throw badInput("a tracker project needs a team — pass team_slug");
+    throw badInput("a tracker project needs a team: pass team_slug");
   return { productId: null, teamId: await getTeamIdBySlug(teamSlug) };
 }
 
@@ -217,7 +217,7 @@ function assertWikiAllowed(
 ): void {
   if (role === "tracker" && wikis?.length)
     throw badInput(
-      "a tracker project cannot own a wiki — its pages would have no product to be filed under",
+      "a tracker project cannot own a wiki: it has no product",
     );
 }
 
@@ -302,7 +302,7 @@ export async function updateSourceProject(
     ].filter(Boolean);
     if (parts.length)
       throw conflict(
-        `project '${current.external_key}' still has ${parts.join(", ")} — a tracker project holds none of those, so detach them first`,
+        `project '${current.external_key}' still has ${parts.join(", ")} ; a tracker project holds none, detach them first`,
       );
   }
 
@@ -334,7 +334,7 @@ export async function deleteSourceProject(id: string) {
   ].filter(Boolean);
   if (parts.length)
     throw conflict(
-      `project '${current.external_key}' is still referenced by ${parts.join(", ")} — re-point or delete those first`,
+      `project '${current.external_key}' is still referenced by ${parts.join(", ")} ; re-point or delete those first`,
     );
   await sql`delete from source_projects where id = ${id}`;
   return { deleted: true, id, external_key: current.external_key };
@@ -368,7 +368,7 @@ export async function setProjectAreaMap(i: AreaMapInput) {
   const project = await getSourceProject(i.sourceProjectId);
   if (!project.product_id)
     throw badInput(
-      `project '${project.external_key}' is a tracker — it has no product, so no components to map areas onto`,
+      `project '${project.external_key}' is a tracker: no product, no components to map areas onto`,
     );
   if (!i.areaPrefix.trim()) throw badInput("area_prefix is required");
   const component = await resolveComponentStrict(
@@ -574,13 +574,13 @@ export async function resolveProjectContextStrict(
   const found = await resolveProjectContext(q);
   if (!found.length)
     throw badInput(
-      "No registered project matches that — call list_source_projects, or register it in Admin > Org > projects.",
+      "No registered project matches. Call list_source_projects, or register it in Admin > integrations > projects.",
     );
   if (found.length > 1)
     throw badInput(
       `That matches ${found.length} projects (${found
         .map((c) => `'${c.project.external_key}'`)
-        .join(", ")}) — name the one you mean.`,
+        .join(", ")}); name one.`,
     );
   return found[0];
 }

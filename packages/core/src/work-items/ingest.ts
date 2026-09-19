@@ -38,7 +38,7 @@ export async function ingestWorkItem(
     route.customerId &&
     match.customerId &&
     route.customerId !== match.customerId
-      ? "the sender's email domain points at a different customer than the project this came from — the project won; check which is wrong"
+      ? "sender domain and project map to different customers; project won, check which is wrong"
       : undefined;
 
   return sql.begin(async (tx) => {

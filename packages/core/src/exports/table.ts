@@ -111,7 +111,7 @@ export function validateRows(
   rows: TableRow[],
 ): string[] {
   const problems: string[] = [];
-  if (!rows.length) problems.push("rows is empty — nothing to export");
+  if (!rows.length) problems.push("rows is empty; nothing to export");
   if (rows.length > MAX_TABLE_ROWS)
     problems.push(`too many rows: ${rows.length} (max ${MAX_TABLE_ROWS})`);
 
@@ -207,7 +207,7 @@ export function renderTable(i: {
 
   if (bytes.byteLength > MAX_OUTPUT_BYTES)
     throw badInput(
-      `generated file is ${bytes.byteLength} bytes, over the ${MAX_OUTPUT_BYTES} limit — export fewer rows`,
+      `generated file is ${bytes.byteLength} bytes, over the ${MAX_OUTPUT_BYTES} limit; export fewer rows`,
     );
   return { bytes, mime: MIME_BY_FORMAT[i.format], format: i.format };
 }

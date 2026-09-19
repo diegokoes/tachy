@@ -65,7 +65,7 @@ describe("column contract validation", () => {
 
   it("rejects an empty row set and caps a runaway problem list", () => {
     expect(validateRows(columns(), [])).toContain(
-      "rows is empty — nothing to export",
+      "rows is empty; nothing to export",
     );
     const many = Array.from({ length: 40 }, () => ({ nope: 1 }));
     const problems = validateRows(columns(), many);

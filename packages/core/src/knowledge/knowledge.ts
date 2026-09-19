@@ -171,7 +171,7 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
    */
   if (i.unit && !customerId)
     throw badInput(
-      "a unit needs its customer — pass customer_slug alongside unit",
+      "a unit needs its customer: pass customer_slug with unit",
     );
   let customerUnitId: string | null =
     i.unit && customerId ? (await resolveUnit(customerId, i.unit)).id : null;
@@ -608,7 +608,7 @@ export async function updateKnowledgeEntry(
   if ("unit" in patch) {
     if (patch.unit && !customerId)
       throw badInput(
-        "a unit needs its customer — set customerSlug alongside unit",
+        "a unit needs its customer: set customerSlug with unit",
       );
     customerUnitId =
       patch.unit && customerId
