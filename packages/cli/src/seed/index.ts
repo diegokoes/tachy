@@ -126,8 +126,8 @@ async function confirm(question: string): Promise<boolean> {
 
 /**
  * `seed` truncates, so the refusal has to be real. It will fill a virgin
- * database, and re-fill one it filled before, but it will not touch a
- * database holding rows it did not write.
+ * database, and re-fill one it filled before when given --reset, but it will
+ * not touch a database holding rows it did not write.
  */
 async function assertDevDatabase(opts: SeedOptions): Promise<void> {
   if (process.env.NODE_ENV === "production")
@@ -135,6 +135,12 @@ async function assertDevDatabase(opts: SeedOptions): Promise<void> {
 
   const [marker] =
     await sql`select key from settings where key = ${MARKER}`.catch(() => []);
+  // Every seeded id is deterministic, so a second pass without the truncate
+  // can only collide.
+  if (marker && !opts.reset)
+    throw new Error(
+      `${env.databaseUrl} is already seeded. Pass --reset to wipe and re-seed it.`,
+    );
   if (!marker) {
     const [{ count }] = await sql<{ count: string }[]>`
       select (
@@ -159,7 +165,12 @@ async function assertDevDatabase(opts: SeedOptions): Promise<void> {
     const ok = await confirm(
       `This DELETES everything in ${env.databaseUrl}. Type 'yes' to continue: `,
     );
-    if (!ok) throw new Error("aborted");
+    if (!ok)
+      throw new Error(
+        process.stdin.isTTY
+          ? "aborted"
+          : "aborted: no terminal to confirm --reset on. Pass --yes to skip the prompt.",
+      );
   }
 }
 
