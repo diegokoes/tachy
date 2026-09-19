@@ -1,8 +1,8 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import {
+  agentHome,
   badInput,
   envVarName,
   getUserByEmail,
@@ -55,8 +55,7 @@ export async function systemPrompt(): Promise<string> {
  * mints a new machine identity and orphans the transcripts `resume` needs.
  */
 async function userConfigDir(userId: string | undefined): Promise<string> {
-  const home = process.env.TACHY_AGENT_HOME || join(homedir(), ".claude");
-  const dir = join(home, "users", userId ?? "_default");
+  const dir = join(agentHome(), "users", userId ?? "_default");
   await mkdir(dir, { recursive: true, mode: 0o700 });
   return dir;
 }

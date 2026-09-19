@@ -9,6 +9,7 @@ import {
   secretsEnabled,
   credentialSource,
   AGENT_CREDENTIALS,
+  envCredential,
 } from "@tachy/core";
 import { requireAdmin } from "../../auth";
 import { isAdminIdentity } from "../../authz";
@@ -45,11 +46,11 @@ export const system = new Hono()
               oidc_configured: Boolean(env.oidc),
               api_token_set: Boolean(env.apiToken),
               session_secret_set: Boolean(env.sessionSecret),
-              anthropic_api_key_set: Boolean(process.env.ANTHROPIC_API_KEY),
+              anthropic_api_key_set: Boolean(
+                envCredential(AGENT_CREDENTIALS.claude),
+              ),
               copilot_token_set: Boolean(
-                process.env.COPILOT_GITHUB_TOKEN ||
-                process.env.GH_TOKEN ||
-                process.env.GITHUB_TOKEN,
+                envCredential(AGENT_CREDENTIALS.copilot),
               ),
               env_badge: env.envBadge ?? null,
               commit: env.commit ?? null,

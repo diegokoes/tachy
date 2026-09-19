@@ -3,6 +3,7 @@ export type { Db } from "./infra";
 export {
   env,
   envVarName,
+  agentHome,
   freshdeskToken,
   githubToken,
   azureDevopsToken,
@@ -13,6 +14,7 @@ export {
   readUpload,
   uploadRef,
   parseUploadRef,
+  uploadTtlMs,
 } from "./infra";
 export {
   AppError,
