@@ -25,7 +25,6 @@
     {#each actions as a (a.label)}
       <Button
         variant="ghost"
-        size="sm"
         icon={a.icon}
         tone={a.tone}
         title={a.title ?? a.label}
@@ -45,7 +44,7 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: var(--pad-1);
+    gap: var(--pad-2);
     width: max-content;
   }
   .rail.docked {
@@ -57,6 +56,21 @@
     justify-content: flex-start;
     text-transform: uppercase;
     letter-spacing: var(--label-spacing);
+    transform-origin: left center;
+    transition:
+      transform 0.18s ease-out,
+      font-weight 0.12s ease,
+      box-shadow 0.12s ease;
+  }
+  /* Grows by transform, which layout ignores: the neighbours hold still and
+     the gap above absorbs the extra height. */
+  .rail :global(.btn:hover:not(:disabled)) {
+    transform: scale(1.1);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rail :global(.btn) {
+      transition: none;
+    }
   }
 
   /* No margin left to sit in — the column rejoins the flow above the content
@@ -69,6 +83,10 @@
       justify-content: center;
       width: auto;
       margin-bottom: var(--pad-3);
+      column-gap: var(--pad-3);
+    }
+    .rail :global(.btn) {
+      transform-origin: center;
     }
   }
 </style>

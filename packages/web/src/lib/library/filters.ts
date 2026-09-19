@@ -147,7 +147,10 @@ export function pruneValues(
       else delete next[key];
     }
   }
-  return next;
+  const same =
+    Object.keys(next).length === Object.keys(values).length &&
+    Object.entries(next).every(([k, v]) => values[k] === v);
+  return same ? values : next;
 }
 
 /** Drop what a component was scoping, for when the component goes away. */

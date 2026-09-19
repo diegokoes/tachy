@@ -7,8 +7,8 @@
   import { outline, withAnchors } from "../outline";
   import { isCurator } from "../session.svelte";
   import { setTopActions } from "../subnav.svelte";
-  import { Badge, Button, EmptyState, Modal, Note } from "../tui";
-  import History from "../library/History.svelte";
+  import { Badge, Button, EmptyState, Note } from "../tui";
+  import Readership from "../library/Readership.svelte";
   import { patchLibraryItem } from "../library/edit";
   import { statusTone } from "../library/status";
   import { LinkTargets } from "../wikilinks.svelte";
@@ -23,7 +23,6 @@
   let article = $state<ReferenceRow | null>(null);
   let error = $state<string | null>(null);
   let missing = $state(false);
-  let historyOpen = $state(false);
   let mutating = $state(false);
   let mutateError = $state<string | null>(null);
   let conflict = $state(false);
@@ -59,7 +58,6 @@
     missing = false;
     mutateError = null;
     conflict = false;
-    historyOpen = false;
     article = null;
     try {
       const next = await api.get<ReferenceRow>(
@@ -133,24 +131,10 @@
       onclick={approve}
     />
   {/if}
-  <Button
-    square
-    iconSize="1.25rem"
-    icon="history"
-    title="revisions and reads"
-    aria-label="revisions and reads"
-    onclick={() => (historyOpen = true)}
-  />
   {#if isCurator()}
-    <Button
-      square
-      iconSize="1.25rem"
-      tone="info"
-      icon="edit"
-      title="edit"
-      aria-label="edit"
-      onclick={edit}
-    />
+    <Button size="sm" tone="info" icon="edit" title="edit" onclick={edit}
+      >edit</Button
+    >
   {/if}
 {/snippet}
 
@@ -241,24 +225,15 @@
           <span class="muted">Filed under no category yet.</span>
         {/if}
       </footer>
-    </article>
 
-    {#if historyOpen}
-      <Modal
-        title="history"
-        cancelLabel="close"
-        width="46rem"
-        onCancel={() => (historyOpen = false)}
-      >
-        <History
-          base="reference"
-          id={article.id}
-          version={article.version}
-          canEdit={isCurator()}
-          onReverted={load}
-        />
-      </Modal>
-    {/if}
+      <Readership
+        base="reference"
+        id={article.id}
+        version={article.version}
+        canEdit={isCurator()}
+        onReverted={load}
+      />
+    </article>
   {:else}
     <p class="muted">loading…</p>
   {/if}

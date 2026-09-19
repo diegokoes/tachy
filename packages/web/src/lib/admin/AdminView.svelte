@@ -179,21 +179,25 @@
     <Button
       variant="ghost"
       size="sm"
+      icon="overview"
       tone={showing ? "accent" : undefined}
       aria-pressed={showing}
       onclick={toggleOverview}>overview</Button
     >
   {/if}
-  <Button
-    variant="ghost"
-    size="sm"
-    tone={issueTone}
-    title={groups.length ? `${groups.length} open on this page` : "nothing open on this page"}
-    onclick={() => {
-      showIssues = true;
-      void loadIssues(page);
-    }}>issues{groups.length ? ` ${groups.length}` : ""}</Button
-  >
+  {#if groups.length}
+    <Button
+      variant="ghost"
+      size="sm"
+      icon="issues"
+      tone={issueTone}
+      title="{groups.length} open on this page"
+      onclick={() => {
+        showIssues = true;
+        void loadIssues(page);
+      }}>issues {groups.length}</Button
+    >
+  {/if}
 {/snippet}
 
 {#if showIssues}
