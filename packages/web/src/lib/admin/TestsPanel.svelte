@@ -2,7 +2,8 @@
   import { onDestroy, onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { Badge, Button, GroupHead, Note, Select } from "../tui";
+  import { Badge, Button, GroupHead, Note, Select, isActive, toneOf } from "../tui";
+  import { fmtDateTime } from "../dates";
   import { endpointP95, type TestRun } from "./loadRuns";
 
   type Check = { name: string; state: string; detail: string };
@@ -22,10 +23,6 @@
   let error = $state<string | null>(null);
   let open = $state(new Set<string>());
 
-  const ACTIVE = new Set(["queued", "running"]);
-  const tone = (s: string) =>
-    s === "pass" || s === "passed" ? "ok" : s === "warn" ? "warn" : s === "skip" ? "muted" : s === "fail" || s === "failed" || s === "error" ? "danger" : "muted";
-  const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "-");
 
   async function loadRuns() {
     const res = await api.get<{
@@ -105,7 +102,7 @@
 
   let poll: ReturnType<typeof setInterval> | undefined;
   $effect(() => {
-    const active = runs.some((r) => ACTIVE.has(r.status));
+    const active = runs.some((r) => isActive(r.status));
     if (active && !poll) poll = setInterval(() => void loadRuns(), 3000);
     if (!active && poll) {
       clearInterval(poll);
@@ -130,7 +127,7 @@
   <table>
     <tbody>
       {#each checks as c (c.name)}
-        <tr><td>{c.name}</td><td><Badge tone={tone(c.state)}>{c.state}</Badge></td><td class="muted">{c.detail}</td></tr>
+        <tr><td>{c.name}</td><td><Badge tone={toneOf(c.state)}>{c.state}</Badge></td><td class="muted">{c.detail}</td></tr>
       {/each}
     </tbody>
   </table>
@@ -160,15 +157,15 @@
   <tbody>
     {#each runs as r (r.id)}
       <tr>
-        <td>{r.script}{r.profile ? ` (${r.profile})` : ""}<span class="muted small">{when(r.created_at)}</span></td>
+        <td>{r.script}{r.profile ? ` (${r.profile})` : ""}<span class="muted small">{fmtDateTime(r.created_at)}</span></td>
         <td>{r.target}<span class="muted small">{r.image_sha ?? "unknown build"}</span></td>
-        <td><Badge tone={tone(r.status)}>{r.status}</Badge></td>
+        <td><Badge tone={toneOf(r.status)}>{r.status}</Badge></td>
         <td class="muted">{latencies(r)}</td>
         <td class="acts">
           {#if r.output_tail}
             <Button variant="ghost" size="sm" onclick={() => toggle(r.id)}>{open.has(r.id) ? "hide" : "output"}</Button>
           {/if}
-          {#if ACTIVE.has(r.status)}
+          {#if isActive(r.status)}
             <Button variant="ghost" size="sm" tone="danger" onclick={() => cancel(r)}>cancel</Button>
           {/if}
         </td>

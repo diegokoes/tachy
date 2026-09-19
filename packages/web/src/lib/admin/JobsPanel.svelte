@@ -14,9 +14,12 @@
     GroupHead,
     Note,
     Select,
+    isActive,
+    toneOf,
     type Column,
     type Draft,
   } from "../tui";
+  import { fmtDateTime } from "../dates";
   import type {
     JobChange,
     JobDefinitionRow,
@@ -61,11 +64,6 @@
   let running = $state<string | null>(null);
 
   const kindOf = (k: unknown) => info.data.kinds.find((x) => x.kind === k);
-  const ACTIVE = new Set(["queued", "running"]);
-  const tone = (s: string | undefined) =>
-    s === "succeeded" ? "ok" : s === "failed" || s === "timed_out" ? "danger" : "muted";
-  const when = (iso: string | null | undefined) =>
-    iso ? new Date(iso).toLocaleString() : "-";
   const opt = (values: readonly string[], inherit: string) => [
     { value: "", label: inherit },
     ...values.map((v) => ({ value: v, label: v })),
@@ -223,8 +221,8 @@
 
   /* Runs move on the server; while any shown run is active, follow it. */
   const anyActive = $derived(
-    recent.data.some((r) => ACTIVE.has(r.status)) ||
-      Object.values(runsFor).some((rs) => rs.some((r) => ACTIVE.has(r.status))),
+    recent.data.some((r) => isActive(r.status)) ||
+      Object.values(runsFor).some((rs) => rs.some((r) => isActive(r.status))),
   );
   let poll: ReturnType<typeof setInterval> | undefined;
   $effect(() => {
@@ -292,7 +290,7 @@
 {#snippet scheduleCell(d: JobDefinitionRow)}
   {#if d.schedule}
     <span class="sched">{d.schedule}<span class="dim">{d.timezone === "UTC" ? "" : ` ${d.timezone}`}</span></span>
-    {#if d.next_run}<span class="dim small">next {when(d.next_run)}</span>{/if}
+    {#if d.next_run}<span class="dim small">next {fmtDateTime(d.next_run)}</span>{/if}
   {:else}
     <span class="dim">by hand</span>
   {/if}
@@ -312,8 +310,8 @@
 
 {#snippet lastCell(d: JobDefinitionRow)}
   {#if d.last_run}
-    <Badge tone={tone(d.last_run.status)}>{d.last_run.status}</Badge>
-    <span class="dim small">{when(d.last_run.created_at)}</span>
+    <Badge tone={toneOf(d.last_run.status)}>{d.last_run.status}</Badge>
+    <span class="dim small">{fmtDateTime(d.last_run.created_at)}</span>
   {:else}
     <span class="dim">never</span>
   {/if}
@@ -327,10 +325,10 @@
       <tbody>
         {#each runs as r (r.id)}
           <tr>
-            <td><Badge tone={tone(r.status)}>{r.status}</Badge></td>
+            <td><Badge tone={toneOf(r.status)}>{r.status}</Badge></td>
             {#if showKind}<td>{r.kind}</td>{/if}
             <td class="dim">{r.trigger}</td>
-            <td class="dim">{when(r.created_at)}</td>
+            <td class="dim">{fmtDateTime(r.created_at)}</td>
             <td>
               {#if r.status === "running" && r.progress != null}
                 {Math.round(r.progress * 100)}%{r.progress_note ? ` · ${r.progress_note}` : ""}
@@ -346,7 +344,7 @@
                   >{logOpen.has(r.id) ? "hide log" : "log"}</Button
                 >
               {/if}
-              {#if ACTIVE.has(r.status)}
+              {#if isActive(r.status)}
                 <Button variant="ghost" size="sm" tone="danger" onclick={() => cancel(r)}>cancel</Button>
               {/if}
             </td>
@@ -367,7 +365,7 @@
     {@render runList(runsFor[d.id] ?? [], false)}
     <GroupHead label="changes" />
     {#each changesFor[d.id] ?? [] as c (c.id)}
-      <div class="dim small">{when(c.created_at)} · {c.action} by {c.changed_by ?? "the system"}</div>
+      <div class="dim small">{fmtDateTime(c.created_at)} · {c.action} by {c.changed_by ?? "the system"}</div>
     {:else}
       <span class="dim">none recorded</span>
     {/each}

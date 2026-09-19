@@ -1,8 +1,7 @@
 <script lang="ts">
   import { growBar } from "../motion";
   import { fitRows, fitted } from "./fit";
-
-  type Tone = "accent" | "ok" | "warn" | "danger" | "muted" | "info";
+  import type { Tone } from "./tone";
 
   export type Bar = {
     key: string;
