@@ -7,6 +7,7 @@ import {
   embedQueryLiteral,
   toVectorLiteral,
 } from "../search/embeddings";
+import { writeEmbeddings } from "../search/backfill";
 import {
   CANDIDATES,
   clampLimit,
@@ -565,23 +566,10 @@ export async function backfillReferenceEmbeddings(
     ${opts.all ? sql`` : sql`where embedding is null`}
     order by doc_id, ordinal
   `;
-  if (!rows.length) return 0;
-
-  let n = 0;
-  for (let i = 0; i < rows.length; i += 64) {
-    const batch = rows.slice(i, i + 64);
-    const vectors = await embedPassages(
-      batch.map((r) => r.chunk_text as string),
-    );
-    await sql`
-      update reference_doc_chunks c set embedding = v.vec::vector
-      from (select unnest(${batch.map((r) => r.id as string)}::uuid[]) as id,
-                   unnest(${vectors.map(toVectorLiteral)}::text[]) as vec) v
-      where c.id = v.id
-    `;
-    n += batch.length;
-  }
-  return n;
+  return writeEmbeddings(
+    "reference_doc_chunks",
+    rows.map((r) => ({ id: r.id, text: r.chunk_text })),
+  );
 }
 
 /** Restore a doc to a past revision. Same discipline as knowledge: a new edit. */

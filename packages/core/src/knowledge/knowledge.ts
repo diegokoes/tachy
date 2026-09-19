@@ -1,10 +1,10 @@
 import { sql } from "../infra/db";
 import {
   embedPassage,
-  embedPassages,
   embedQueryLiteral,
   toVectorLiteral,
 } from "../search/embeddings";
+import { writeEmbeddings } from "../search/backfill";
 import {
   CANDIDATES,
   clampLimit,
@@ -751,13 +751,10 @@ export async function updateKnowledgeEntry(
 }
 
 /**
- * Embed knowledge entries. `all: true` re-embeds every row — needed after a
- * model change, since vectors from different models are not comparable and a
+ * Embed knowledge entries. `all: true` re-embeds every row, which a model
+ * change requires: vectors from different models are not comparable, and a
  * half-migrated table ranks nonsense above matches.
  */
-/** Matches the reference and code backfills, which have always walked in 64s. */
-const EMBED_BATCH = 64;
-
 export async function backfillEmbeddings(
   opts: { all?: boolean } = {},
 ): Promise<number> {
@@ -768,8 +765,6 @@ export async function backfillEmbeddings(
     ${opts.all ? sql`` : sql`where embedding is null`}
   `;
 
-  // One lookup per distinct pattern, resolved up front rather than inside the
-  // walk, which awaited once per row.
   const patternDescriptions = new Map<string, string>();
   for (const key of new Set(rows.map((r) => r.resolution_pattern ?? "")))
     patternDescriptions.set(
@@ -777,10 +772,8 @@ export async function backfillEmbeddings(
       await resolvePatternDescription((key as string) || undefined),
     );
 
-  const texts: string[] = [];
-  const ids: string[] = [];
+  const texts: { id: string; text: string }[] = [];
   for (const r of rows) {
-    const key = r.resolution_pattern ?? "";
     const text = buildEmbedText(
       {
         issueSummary: r.issue_summary,
@@ -790,29 +783,12 @@ export async function backfillEmbeddings(
         signals: r.signals,
         tags: r.tags,
       },
-      patternDescriptions.get(key)!,
+      patternDescriptions.get(r.resolution_pattern ?? "")!,
       r.product_area,
     );
-    if (!text) continue;
-    texts.push(text);
-    ids.push(r.id);
+    if (text) texts.push({ id: r.id, text });
   }
-  if (!texts.length) return 0;
-
-  // In batches, as both siblings do: embedding the whole corpus in one call
-  // held every row and every vector in memory at once, which is a large table's
-  // worth on a `reembed`.
-  for (let i = 0; i < ids.length; i += EMBED_BATCH) {
-    const batchIds = ids.slice(i, i + EMBED_BATCH);
-    const vectors = await embedPassages(texts.slice(i, i + EMBED_BATCH));
-    await sql`
-      update knowledge_entries e set embedding = v.vec::vector
-      from (select unnest(${batchIds}::uuid[]) as id,
-                   unnest(${vectors.map(toVectorLiteral)}::text[]) as vec) v
-      where e.id = v.id
-    `;
-  }
-  return ids.length;
+  return writeEmbeddings("knowledge_entries", texts);
 }
 
 /**
