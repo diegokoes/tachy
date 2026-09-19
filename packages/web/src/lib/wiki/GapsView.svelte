@@ -32,16 +32,16 @@
     unwritten: {
       title: "Written about nowhere",
       detail:
-        "Lessons recorded under these parts of the product, and no article that covers them.",
+        "Lessons with no covering article.",
     },
     outgrown: {
       title: "Outgrown",
       detail:
-        "New lessons have arrived under these articles' components since they were last written, and they cite none of them.",
+        "Newer lessons on these components, not cited.",
     },
     stale: {
       title: "Stale sources",
-      detail: "Something these articles were built from has changed since.",
+      detail: "Sources changed since written.",
     },
     wanted: {
       title: "Wanted pages",
@@ -53,7 +53,7 @@
     },
     uncategorised: {
       title: "Uncategorised",
-      detail: "Filed under no category, so the contents never lead to them.",
+      detail: "No category; unreachable from contents.",
     },
   };
 
@@ -177,7 +177,7 @@
     variant="ghost"
     size="sm"
     icon="discover"
-    title="look for gaps again now, instead of waiting for the hourly sweep"
+    title="rescan now (hourly otherwise)"
     busy={rescanning}
     onclick={rescan}>rescan</Button
   >
@@ -260,7 +260,7 @@
                           size="sm"
                           variant="ghost"
                           icon="discard"
-                          title="not worth an article — it comes back if the evidence grows"
+                          title="not worth an article; returns if evidence grows"
                           busy={acting === g.id}
                           onclick={() => dismiss(g)}>dismiss</Button
                         >
@@ -276,7 +276,7 @@
         <EmptyState
           icon="check"
           title="Nothing missing that the sweep can see."
-          detail="It looks for recorded lessons with no article, articles the lessons have moved past, stale sources, wanted pages, drafts and uncategorised articles."
+          detail="Checks: uncovered lessons, outdated articles, stale sources, wanted pages, drafts, uncategorised."
         />
       {/if}
 

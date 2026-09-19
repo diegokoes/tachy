@@ -9,7 +9,7 @@
   import SlugRename from "./SlugRename.svelte";
   import type { Product, Team } from "./rows";
 import { INFO } from "./help";
-  import { sectionHoist } from "./topAction.svelte";
+  import { sectionHoist } from "./sectionAction.svelte";
 
   const teams = createResource(() => api.get<Team[]>("/teams"), []);
   const products = createResource(() => api.get<Product[]>("/products"), []);
@@ -61,7 +61,7 @@ import { INFO } from "./help";
   loading={teams.loading}
   error={teams.error}
   emptyTitle={`No ${t("teams")} yet.`}
-  emptyDetail={`A ${t("team")} owns ${t("products")}, projects and repos.`}
+  emptyDetail={`Owns ${t("products")}, projects, repos.`}
   canEdit={() => admin}
   canDelete={() => admin}
   canCreate={admin}
@@ -91,7 +91,7 @@ import { INFO } from "./help";
     title={`rename ${target.slug}`}
     current={target.slug}
     taken={slugs}
-    warning={`Anything that names this ${t("team")} by slug (saved filters, links, agent instructions) stops resolving.`}
+    warning={`References by slug (filters, links, agent instructions) break.`}
     onRename={(slug) => api.patch(`/teams/${target.slug}`, { slug })}
     onDone={() => {
       renaming = null;

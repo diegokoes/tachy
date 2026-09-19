@@ -210,7 +210,7 @@
     <textarea rows="14" bind:value={body} required></textarea>
   </label>
   {#if supersedes}
-    <p class="hint">Saving as a new version. The current doc will be archived and linked as the predecessor.</p>
+    <p class="hint">New version. Current doc is archived as predecessor.</p>
   {/if}
 
   {#if error}<p class="error">{error}</p>{/if}

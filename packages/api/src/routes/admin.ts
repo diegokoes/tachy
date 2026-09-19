@@ -43,6 +43,14 @@ import {
   toolUsageCensus,
   sourceTrafficCensus,
   libraryEngagementCensus,
+  sourceIssues,
+  repoIssues,
+  catalogIssues,
+  userIssues,
+  jobIssues,
+  forbidden,
+  ISSUE_ITEMS,
+  type IssueList,
   addTeam,
   updateTeam,
   deleteTeam,
@@ -72,7 +80,7 @@ import {
   type CredentialSource,
 } from "@tachy/core";
 import { getIdentity, requireAdmin } from "../auth";
-import { runtimeSnapshot } from "../runtime";
+import { runtimeSnapshot, systemIssues } from "../runtime";
 import { lifecycle } from "../lifecycle";
 import {
   assertAnyTeamAdminApi,
@@ -292,6 +300,62 @@ export const admin = new Hono()
     }
     return c.json({ usage, tools, traffic, library });
   })
+
+  /**
+   * What needs fixing on one admin page, by name: the census counts, with the
+   * offenders listed so each message can say which one. Wording lives in the
+   * SPA, which owns the deployment's terms for teams, products and customers.
+   */
+  .get(
+    "/overview/issues",
+    zValidator(
+      "query",
+      z.object({
+        page: z.enum([
+          "integrations",
+          "structure",
+          "access",
+          "workers",
+          "system",
+        ]),
+      }),
+    ),
+    async (c) => {
+      const { page } = c.req.valid("query");
+      const admin = getIdentity(c)?.role === "admin";
+      if ((page === "workers" || page === "system") && !admin)
+        throw forbidden("app admins only");
+      let issues: Record<string, IssueList> = {};
+      if (page === "integrations") {
+        const ctx = await callerScope(c);
+        const [sources, repos, conns] = await Promise.all([
+          sourceIssues(),
+          repoIssues(),
+          listSourceConnections(),
+        ]);
+        const untokened: string[] = [];
+        for (const r of conns)
+          if (
+            !(await tokenSource(r.source_type as string, r.slug as string, ctx))
+          )
+            untokened.push(r.slug as string);
+        issues = {
+          "sources.untokened": {
+            n: untokened.length,
+            items: untokened
+              .slice(0, ISSUE_ITEMS)
+              .map((slug) => ({ key: slug, label: slug })),
+          },
+          ...sources,
+          ...repos,
+        };
+      } else if (page === "structure") issues = await catalogIssues();
+      else if (page === "access") issues = await userIssues();
+      else if (page === "workers") issues = await jobIssues();
+      else issues = systemIssues(await runtimeSnapshot());
+      return c.json(issues);
+    },
+  )
 
   /*
    * Members read this: the settings and the global-credential availability are
@@ -743,9 +807,7 @@ export const admin = new Hono()
     async (c) => {
       const { token, ...conn } = c.req.valid("json");
       if (token && !secretsEnabled())
-        throw badInput(
-          "credential storage is disabled — set TACHY_SECRET_KEY on the server to store API tokens",
-        );
+        throw badInput("credential storage disabled: set TACHY_SECRET_KEY");
       const actor = token ? await requireCaller(c) : null;
       const row = await addSourceConnection(conn);
       if (token && actor)

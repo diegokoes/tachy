@@ -218,7 +218,7 @@
   a { color: var(--accent); word-break: break-all; }
   pre { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: var(--pad-3); overflow: auto; font-size: var(--fs-xs); margin: 0; }
   .json-toggle { align-self: center; display: grid; place-items: center; color: var(--text); background: transparent; border: 0; padding: var(--pad-1); cursor: pointer; }
-  .json-toggle:hover { color: var(--accent); }
+  .json-toggle:hover :global(svg) { stroke-width: var(--sw-hover, 9); }
   .json-view { color: #e2e2e2; background: #000; overflow: visible; white-space: pre-wrap; }
   :global(:root[data-theme="light"]) .json-view { color: #000; background: #fff; }
   :global(.json-key) { color: #9c36b5; }

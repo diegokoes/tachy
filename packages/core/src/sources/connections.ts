@@ -1,4 +1,5 @@
 import { sql } from "../infra/db";
+import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { badInput, notFound } from "../infra/errors";
 import { addSourceProject, deleteSourceProject } from "./projects";
 
@@ -40,7 +41,7 @@ export async function deleteSourceConnection(slug: string) {
   `;
   if (count > 0)
     throw badInput(
-      `Source connection '${slug}' still has ${count} ingested work item(s). Delete those first — removing the connection would cascade to them.`,
+      `Source connection '${slug}' still has ${count} ingested work item(s). Delete those first; removing the connection cascades to them.`,
     );
   await sql`delete from credentials where name = ${`${conn.source_type}_token:${slug}`}`;
   await sql`delete from source_connections where id = ${conn.id}`;
@@ -86,5 +87,43 @@ export async function sourceCensus() {
     by_type: Object.fromEntries(
       kinds.map((k) => [k.source_type as string, k.n as number]),
     ) as Record<string, number>,
+  };
+}
+
+/**
+ * Connections and projects that are not finished, by name. Missing tokens are
+ * not here: whether a token resolves depends on the caller's scope and the
+ * environment, so the route asks the resolver instead of the vault.
+ */
+export async function sourceIssues(
+  days = 14,
+): Promise<Record<string, IssueList>> {
+  const [neverSynced, refusing, noWiki] = await Promise.all([
+    sql`
+      select slug as key, slug as label, count(*) over () as total
+      from source_connections where last_synced_at is null
+      order by slug limit ${ISSUE_ITEMS}
+    `,
+    sql`
+      select c.slug as key, c.slug as label, count(*) over () as total
+      from source_connections c
+      where exists (
+        select 1 from source_calls s
+        where s.source_connection_id = c.id and s.auth_failures > 0
+          and s.day > current_date - ${days}::int
+      )
+      order by c.slug limit ${ISSUE_ITEMS}
+    `,
+    sql`
+      select id as key, name as label, count(*) over () as total
+      from source_projects
+      where role = 'knowledge' and jsonb_array_length(wikis) = 0
+      order by name limit ${ISSUE_ITEMS}
+    `,
+  ]);
+  return {
+    "sources.refusing": issueList(refusing),
+    "sources.never_synced": issueList(neverSynced),
+    "projects.no_wiki": issueList(noWiki),
   };
 }

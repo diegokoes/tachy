@@ -276,7 +276,7 @@
     {#if entry.status === "deprecated"}
       <div class="deprecated-banner">
         <Icon name="alert" size="1em" weight={7} />
-        This lesson is marked <strong>outdated</strong> - don't apply it as current advice.
+        <strong>outdated</strong>: not current advice.
         {#if entry.superseded_by && onOpen}
           <Button size="sm" tone="warn" onclick={() => onOpen(entry!.superseded_by!)}>view replacement</Button>
         {/if}
@@ -350,7 +350,7 @@
                   {#if entry.customer_slug}
                     <Badge
                       tone="accent"
-                      title="learned on this customer's install. Cite it as theirs, not as how the product behaves"
+                      title="customer-specific; not general product behaviour"
                       >{entry.customer_slug}</Badge
                     >
                   {/if}

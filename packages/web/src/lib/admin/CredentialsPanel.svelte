@@ -9,6 +9,7 @@
   import { session } from "../session.svelte";
   import AsciiSelect from "../AsciiSelect.svelte";
   import { errText } from "../resource.svelte";
+  import { Button } from "../tui";
   import type { Team, Connection } from "./rows";
 import { AGENT_KEY_LABELS } from "../credentials";
 
@@ -117,9 +118,8 @@ import { AGENT_KEY_LABELS } from "../credentials";
   </div>
 
   {#if list && !list.vault_enabled}
-    <p class="muted">Credential storage is disabled. Set <code>TACHY_SECRET_KEY</code>
-      (32 bytes base64, e.g. <code>openssl rand -base64 32</code>) in the server
-      environment and restart. Until then keys come from <code>.env</code>.</p>
+    <p class="muted">Credential storage disabled. Set <code>TACHY_SECRET_KEY</code>
+      (<code>openssl rand -base64 32</code>) and restart. Until then: <code>.env</code>.</p>
   {:else if list}
     <table>
       <thead><tr><th>credential</th><th>value</th><th>status</th><th></th></tr></thead>
@@ -132,12 +132,12 @@ import { AGENT_KEY_LABELS } from "../credentials";
                 placeholder={setNames.has(name) ? "(set, enter to replace)" : "(not set)"} autocomplete="off" />
               {#if drafts[name]?.trim()}
                 {@const bad = draftError(name)}
-                <button class="mini" disabled={!!bad} onclick={() => save(name)}>save</button>
+                <Button size="sm" disabled={!!bad} onclick={() => save(name)}>save</Button>
                 {#if bad}<p class="field-error">{bad}</p>{/if}
               {/if}
             </td>
             <td><span class="badge" class:on={setNames.has(name)}>{setNames.has(name) ? "set" : "unset"}</span></td>
-            <td>{#if setNames.has(name)}<button class="mini ghost" onclick={() => remove(name)}>remove</button>{/if}</td>
+            <td>{#if setNames.has(name)}<Button variant="ghost" size="sm" onclick={() => remove(name)}>remove</Button>{/if}</td>
           </tr>
         {/each}
       </tbody>

@@ -11,7 +11,8 @@
   let btn = $state<HTMLElement>();
   // The tip carries the field's actual rule, so the button has to point at it:
   // aria-expanded alone says something opened, not what it says.
-  const tipId = `infomark-${crypto.randomUUID().slice(0, 8)}`;
+  const uid = $props.id();
+  const tipId = `infomark-${uid}`;
   let hovered = $state(false);
   let focused = $state(false);
   let pinned = $state(false);

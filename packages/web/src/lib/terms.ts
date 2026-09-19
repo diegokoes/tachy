@@ -65,6 +65,6 @@ export function roleLabel(rung: "app" | "team", role: string): string {
 
 export function roleTip(rung: "app" | "team"): string {
   return rung === "app"
-    ? "app admin: manages users, org structure and system settings, app-wide. member: uses the app; curation rights come from a team role."
-    : `${t("team")} admin: curates this ${t("team")}'s knowledge, docs, taxonomy and members — nothing outside it. member: uses the app.`;
+    ? "app admin: users, org structure, system settings. member: app access; curation via team role."
+    : `${t("team")} admin: this ${t("team")}'s knowledge, docs, taxonomy, members. member: app access.`;
 }

@@ -40,6 +40,9 @@ describe("overview activity", () => {
       expect(u).toMatchObject({ turns: 0, input_tokens: 0, output_tokens: 0 });
       expect(u.per_day).toHaveLength(14);
       expect(u.per_day.every((d) => d.tokens === 0)).toBe(true);
+      expect(u.per_day.every((d) => Object.keys(d.models).length === 0)).toBe(
+        true,
+      );
     });
 
     it("sums chat turns only, and ranks people by tokens", async () => {
@@ -70,6 +73,10 @@ describe("overview activity", () => {
       expect(u.active).toBe(2);
       expect(u.cost_usd).toBeGreaterThan(0.5);
       expect(u.per_day.at(-1)?.turns).toBe(2);
+      expect(u.per_day.at(-1)?.models).toEqual({
+        "claude-sonnet-5": 1500,
+        "claude-haiku-4-5": 150,
+      });
       expect(u.by_model.map((m) => m.model)).toEqual([
         "claude-sonnet-5",
         "claude-haiku-4-5",
@@ -125,6 +132,11 @@ describe("overview activity", () => {
         t.tools.find((x) => x.tool === "save_knowledge_entry"),
       ).toMatchObject({ failures: 1, misuse: 1 });
       expect(t.writers).toEqual([{ email: "writer@test.local", writes: 1 }]);
+      expect(t.per_day).toHaveLength(14);
+      expect(t.per_day.at(-1)).toMatchObject({ reads: 2, writes: 1 });
+      expect(
+        t.per_day.slice(0, -1).every((d) => d.reads + d.writes === 0),
+      ).toBe(true);
     });
 
     it("still buckets calls nobody can be attributed to", async () => {
@@ -252,6 +264,48 @@ describe("overview activity", () => {
         title: "the popular one",
         reads: 2,
       });
+    });
+
+    it("splits the day's edits by who made them", async () => {
+      const productId = await tpdProductId();
+      const person = await createUser({ email: "editor@test.local" });
+      await saveKnowledgeEntry({
+        productId,
+        issueSummary: "typed in the app",
+        resolution: "r",
+        actor: { actor: "web", userId: person.id },
+      });
+      await saveKnowledgeEntry({
+        productId,
+        issueSummary: "saved by the agent",
+        resolution: "r",
+        actor: { actor: "agent", userId: person.id },
+      });
+      await saveKnowledgeEntry({
+        productId,
+        issueSummary: "saved over MCP",
+        resolution: "r",
+        actor: { actor: "mcp", userId: null },
+      });
+      await saveKnowledgeEntry({
+        productId,
+        issueSummary: "ingested",
+        resolution: "r",
+        actor: { actor: "ingest", userId: null },
+      });
+
+      const l = await libraryEngagementCensus(30);
+      expect(l.edits_per_day).toHaveLength(14);
+      expect(l.edits_per_day.at(-1)).toMatchObject({
+        people: 1,
+        agent: 2,
+        ingest: 1,
+      });
+      expect(
+        l.edits_per_day
+          .slice(0, -1)
+          .every((d) => d.people + d.agent + d.ingest === 0),
+      ).toBe(true);
     });
   });
 });

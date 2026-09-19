@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { api } from "../api";
+  import { navigate } from "../router.svelte";
   import { createResource, errText } from "../resource.svelte";
   import { t } from "../terms";
   import {
@@ -12,12 +13,18 @@
     Note,
     Select,
     type Column,
+    type Draft,
   } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
   import type { Component, Customer, Product } from "./rows";
 import { INFO } from "./help";
 import { csv } from "../fields";
-  import { sectionHoist } from "./topAction.svelte";
+  import { sectionHoist } from "./sectionAction.svelte";
+  import { NEW_RECORD, recordPath } from "./records";
+  import RecordPage from "./RecordPage.svelte";
+
+  /** Given, the panel is one customer's page rather than the list of them. */
+  let { id }: { id?: string } = $props();
 
   type CustomerUnit = {
     id: string;
@@ -57,7 +64,6 @@ import { csv } from "../fields";
   const customers = createResource(() => api.get<Customer[]>("/customers"), []);
   const products = createResource(() => api.get<Product[]>("/products"), []);
 
-  let expanded = $state(new Set<string>());
   let profiles = $state<Record<string, Profile>>({});
   let facts = $state<Record<string, FactRow[]>>({});
   let units = $state<Record<string, CustomerUnit[]>>({});
@@ -106,15 +112,7 @@ import { csv } from "../fields";
     }
   }
 
-  async function toggle(slug: string) {
-    const next = new Set(expanded);
-    if (next.has(slug)) {
-      next.delete(slug);
-      expanded = next;
-      return;
-    }
-    next.add(slug);
-    expanded = next;
+  async function openProfile(slug: string) {
     factForm = { kind: "", label: "", value: "", source: "", notes: "", product: "", component: "", unit: "" };
     compForm = { product: products.data[0]?.slug ?? "", component: "" };
     if (compForm.product) await loadComponents(compForm.product);
@@ -352,6 +350,47 @@ import { csv } from "../fields";
     products.reload();
   });
 
+  const creating = $derived(id === NEW_RECORD);
+  const record = $derived(
+    id && !creating ? (customers.data.find((c) => c.slug === id) ?? null) : null,
+  );
+
+  /* Everything hanging off the customer, once the products its forms offer
+     have arrived. */
+  $effect(() => {
+    if (!id || creating || products.loading) return;
+    const slug = id;
+    untrack(() => void openProfile(slug));
+  });
+
+  const back = () => navigate(recordPath("customers"));
+
+  async function createCustomer(d: Draft) {
+    await customers.mutate(() =>
+      api.post("/customers", {
+        slug: d.slug,
+        name: d.name,
+        aliases: csv(String(d.aliases ?? "")),
+        emailDomains: csv(String(d.email_domains ?? "")),
+        notes: d.notes || undefined,
+      }),
+    );
+    navigate(recordPath("customers", String(d.slug)), { replace: true });
+  }
+
+  const saveCustomer = (row: Customer, d: Draft) =>
+    customers.mutate(() =>
+      api.patch(`/customers/${row.slug}`, {
+        name: d.name,
+        aliases: csv(String(d.aliases ?? "")),
+        emailDomains: csv(String(d.email_domains ?? "")),
+        notes: d.notes || null,
+      }),
+    );
+
+  const deleteCustomer = (row: Customer) =>
+    customers.mutate(() => api.delete(`/customers/${row.slug}`));
+
   let filter = $state("");
   const filtered = $derived.by(() => {
     const q = filter.trim().toLowerCase();
@@ -372,11 +411,12 @@ import { csv } from "../fields";
 
 {#snippet detail(r: Customer)}
   {@const p = profiles[r.slug]}
+  {#if error}<Note tone="danger">{error}</Note>{/if}
   <div class="profile">
     <div class="block wide">
       <span
         class="dim"
-        title="The parts their estate divides into: sites, lines, tenants. A `profile` is a shared template a unit inherits from without being inside it."
+        title="Sites, lines, tenants. `profile`: shared template, inherited, not a parent."
         >estate</span
       >
       {#each unitTree(units[r.slug] ?? []) as { u, depth } (u.id)}
@@ -434,7 +474,7 @@ import { csv } from "../fields";
             <input
               aria-label="unit aliases"
               placeholder="aliases"
-              title="Other names the site calls it by. These resolve too."
+              title="Alternate names. Resolved like the slug."
               bind:value={editForm.aliases}
             />
             <Button size="sm" variant="primary" busy={busy === r.slug} onclick={() => saveUnit(r.slug)}>
@@ -493,7 +533,7 @@ import { csv } from "../fields";
     <div class="block wide">
       <span
         class="dim"
-        title="True of THIS install and nobody else: the version they run, their layout, an integration they depend on. A fact, not a problem and its fix."
+        title="Install-specific facts: version, layout, integrations. Not problems or fixes."
         >specifics</span
       >
       {#if (units[r.slug] ?? []).length}
@@ -709,52 +749,46 @@ import { csv } from "../fields";
   </div>
 {/snippet}
 
-{#if error}<Note tone="danger">{error}</Note>{/if}
+{#if id}
+  <RecordPage
+    noun={t("customer")}
+    title={record?.name ?? ""}
+    {columns}
+    row={record}
+    {creating}
+    loading={customers.loading}
+    loadError={customers.error}
+    body={detail}
+    onclose={back}
+    oncreate={createCustomer}
+    onsave={saveCustomer}
+    ondelete={deleteCustomer}
+  />
+{:else}
+  {#if error}<Note tone="danger">{error}</Note>{/if}
 
-<FilterBar
-  bind:value={filter}
-  shown={filtered.length}
-  total={customers.data.length}
-  placeholder="filter customers…"
-  label="filter customers"
-/>
+  <FilterBar
+    bind:value={filter}
+    shown={filtered.length}
+    total={customers.data.length}
+    placeholder="filter customers…"
+    label="filter customers"
+  />
 
-<CrudTable
-  hoist={sectionHoist("customers")}
-  {columns}
-  rows={filtered}
-  rowKey={(r) => r.slug}
-  expand={detail}
-  {expanded}
-  ontoggle={toggle}
-  loading={customers.loading}
-  error={customers.error}
-  emptyTitle={`No ${t("customers")} yet.`}
-  emptyDetail={`Attribution is by the requester's email domain, so a ${t("customer")} needs its domains listed.`}
-  addLabel={`add ${t("customer")}`}
-  noun={t("customer")}
-  editTitle={(r) => r.name}
-  oncreate={(d) =>
-    customers.mutate(() =>
-      api.post("/customers", {
-        slug: d.slug,
-        name: d.name,
-        aliases: csv(String(d.aliases ?? "")),
-        emailDomains: csv(String(d.email_domains ?? "")),
-        notes: d.notes || undefined,
-      }),
-    )}
-  onsave={(row, d) =>
-    customers.mutate(() =>
-      api.patch(`/customers/${row.slug}`, {
-        name: d.name,
-        aliases: csv(String(d.aliases ?? "")),
-        emailDomains: csv(String(d.email_domains ?? "")),
-        notes: d.notes || null,
-      }),
-    )}
-  ondelete={(row) => customers.mutate(() => api.delete(`/customers/${row.slug}`))}
-/>
+  <CrudTable
+    hoist={sectionHoist("customers")}
+    {columns}
+    rows={filtered}
+    rowKey={(r) => r.slug}
+    loading={customers.loading}
+    error={customers.error}
+    emptyTitle={`No ${t("customers")} yet.`}
+    emptyDetail={`Attributed by requester email domain. List domains.`}
+    addLabel={`add ${t("customer")}`}
+    onopen={(r) => navigate(recordPath("customers", r.slug))}
+    onadd={() => navigate(recordPath("customers", NEW_RECORD))}
+  />
+{/if}
 
 <style>
   .indent {

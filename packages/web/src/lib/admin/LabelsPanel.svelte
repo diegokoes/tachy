@@ -9,7 +9,7 @@
   import SlugRename from "./SlugRename.svelte";
   import type { Label, Product } from "./rows";
 import { INFO } from "./help";
-  import { sectionHoist } from "./topAction.svelte";
+  import { sectionHoist } from "./sectionAction.svelte";
 
   let product = $state("");
   let renaming = $state<Label | null>(null);

@@ -158,6 +158,10 @@
   /* Uppercase micro-labels: panel titles, field labels, hint rules. */
   --label-spacing: 0.08em;
 
+  /* A hovered button goes bold and its edge thickens; its colours never move. */
+  --btn-hover-weight: 600;
+  --btn-hover-edge: 0.5px;
+
   --z-drawer: 20;
   --z-dropdown: 40;
   --z-overlay: 100;

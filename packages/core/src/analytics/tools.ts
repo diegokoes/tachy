@@ -64,6 +64,8 @@ export interface ToolUsage {
    * for anyone who is not an app admin.
    */
   writers?: { email: string; writes: number }[];
+  /** Calls per day over the last 14 days at most, oldest first, gaps filled. */
+  per_day: { day: string; reads: number; writes: number }[];
 }
 
 /** Tool use over the last `days` days, for the access overview. */
@@ -94,10 +96,21 @@ export async function toolUsageCensus(days = 30): Promise<ToolUsage> {
     order by sum(t.calls) desc, u.email
     limit 5
   `;
+  const perDayWindow = Math.min(days, 14);
+  const per_day = await sql`
+    select to_char(d.day, 'YYYY-MM-DD') as day,
+      coalesce(sum(t.calls) filter (where not t.writes), 0)::int as reads,
+      coalesce(sum(t.calls) filter (where t.writes), 0)::int as writes
+    from generate_series(current_date - ${perDayWindow - 1}::int, current_date, interval '1 day') as d(day)
+    left join mcp_tool_calls t on t.day = d.day::date
+    group by d.day
+    order by d.day
+  `;
   return {
     days,
     reads: totals.reads as number,
     writes: totals.writes as number,
+    per_day: [...per_day] as unknown as ToolUsage["per_day"],
     tools: [...tools] as unknown as ToolUsage["tools"],
     writers: [...writers] as unknown as NonNullable<ToolUsage["writers"]>,
   };

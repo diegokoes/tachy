@@ -18,7 +18,7 @@
     type Column,
   } from "../tui";
   import type { Member, Team, UserRow } from "./rows";
-  import { sectionHoist } from "./topAction.svelte";
+  import { sectionHoist } from "./sectionAction.svelte";
 
   type Membership = {
     user_id: string;
@@ -93,7 +93,7 @@
       edit: "text",
       required: true,
       editable: () => false,
-      info: "The sign-in identity. It cannot be changed once the user exists.",
+      info: "Sign-in identity. Immutable.",
     },
     { key: "display_name", label: "name", width: "12rem", edit: "text" },
     {
@@ -116,7 +116,7 @@
       width: "8rem",
       formOnly: true,
       edit: "text",
-      info: "Ten characters or more. Blank leaves sign-in to SSO, or keeps the existing password.",
+      info: "Min 10 characters. Blank: SSO only, or keep current.",
     },
     {
       key: "disabled",
@@ -124,21 +124,21 @@
       formOnly: true,
       only: "edit",
       edit: "checkbox",
-      info: "A disabled user cannot sign in. Their past activity stays attributed to them.",
+      info: "Blocks sign-in. Activity stays attributed.",
     },
     {
       key: "password_login_allowed",
       label: "password under SSO",
       formOnly: true,
       edit: "checkbox",
-      info: "Once SSO is configured, only these accounts may still sign in with a password: a break-glass admin, the load-test user.",
+      info: "Password sign-in allowed under SSO. For break-glass and load-test accounts.",
     },
     {
       key: "service_account",
       label: "service account",
       formOnly: true,
       edit: "checkbox",
-      info: "Not a person. Its reads and tool calls are left out of engagement figures.",
+      info: "Non-human. Excluded from engagement figures.",
     },
     { key: "status", label: "status", width: "8rem", cell: statusCell },
   ]);
@@ -172,7 +172,7 @@
       {/each}
     </span>
   {:else}
-    <span class="none">—</span>
+    <span class="none">-</span>
   {/if}
 {/snippet}
 
@@ -258,7 +258,7 @@
     : "No users yet."}
   emptyDetail={users.data.length
     ? undefined
-    : "Run the setup wizard, or add the first one here."}
+    : "Run setup, or add one."}
   canEdit={() => admin}
   canDelete={() => false}
   canCreate={admin}
@@ -286,7 +286,7 @@
         (d.role !== row.role || Boolean(d.disabled) !== row.disabled)
       )
         throw new Error(
-          "that change would lock you out. Have another app admin make it",
+          "would lock you out; another app admin must make this change",
         );
       await api.patch(`/users/${row.id}`, {
         display_name: d.display_name || null,

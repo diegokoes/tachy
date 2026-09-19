@@ -203,7 +203,7 @@
           >
           <button
             class="tiny"
-            title="remove; its children move up rather than being deleted"
+            title="remove; children move up"
             onclick={() => remove(node.slug)}>remove</button
           >
         </span>
@@ -281,7 +281,7 @@
         <EmptyState
           icon="index"
           title="No categories yet."
-          detail="Categories are how a reader finds their way around this wiki. Add one from the top right, or let the agent propose them while it writes."
+          detail="Add one top right, or let the agent propose them."
         />
       {/if}
 

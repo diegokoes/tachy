@@ -802,8 +802,8 @@
             ? `No matches for “${q}”.`
             : "The library is empty."}
           detail={mode === "search"
-            ? "Search covers summaries, symptoms, signals (error codes), root causes, tags and doc bodies."
-            : "Analyze a ticket in chat, or add an entry by hand."}
+            ? "Searches summaries, symptoms, signals, root causes, tags, doc bodies."
+            : "Analyze a ticket in chat, or add an entry."}
         />
       </li>
     {/if}

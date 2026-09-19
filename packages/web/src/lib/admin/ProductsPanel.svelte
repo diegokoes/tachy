@@ -10,7 +10,7 @@
   import type { Product, Team } from "./rows";
 import { INFO } from "./help";
 import { csv } from "../fields";
-  import { sectionHoist } from "./topAction.svelte";
+  import { sectionHoist } from "./sectionAction.svelte";
 
   const products = createResource(() => api.get<Product[]>("/products"), []);
   const teams = createResource(() => api.get<Team[]>("/teams"), []);
@@ -54,7 +54,7 @@ import { csv } from "../fields";
       options: teamOptions,
       required: true,
       initial: teams.data[0]?.slug,
-      info: `Who owns this ${t("product")}. Moving it takes its source projects along.`,
+      info: `Owner. Source projects move with it.`,
     },
     {
       key: "aliases",
@@ -78,7 +78,7 @@ import { csv } from "../fields";
   loading={products.loading}
   error={products.error}
   emptyTitle={`No ${t("products")} yet.`}
-  emptyDetail={`A ${t("product")} scopes components, labels and knowledge entries.`}
+  emptyDetail={`Scopes components, labels, knowledge entries.`}
   canEdit={mayEdit}
   canDelete={mayEdit}
   canCreate={teams.data.length > 0}
@@ -111,7 +111,7 @@ import { csv } from "../fields";
     title={`rename ${target.slug}`}
     current={target.slug}
     taken={allSlugs}
-    warning={`Anything that names this ${t("product")} by slug (saved filters, links, agent instructions) stops resolving. Add the old name to aliases if it is in use.`}
+    warning={`References by slug (filters, links, agent instructions) break. Add the old slug to aliases to keep them.`}
     onRename={(slug) => api.patch(`/products/${target.slug}`, { slug })}
     onDone={() => {
       renaming = null;

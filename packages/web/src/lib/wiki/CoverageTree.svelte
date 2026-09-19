@@ -142,7 +142,7 @@
     Filed under no component: {coverage.unfiled.entries} entries ·
     {coverage.unfiled.docs} docs · {coverage.unfiled.articles} articles
     <span class="muted">
-      — if most of the corpus is here, the component tree is not describing it.
+      · a high count means the component tree is incomplete
     </span>
   </p>
 </section>
