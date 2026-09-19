@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 
@@ -135,3 +135,10 @@ export const freshdeskToken = (slug: string) => sourceToken("FRESHDESK", slug);
 export const githubToken = (slug: string) => sourceToken("GITHUB", slug);
 export const azureDevopsToken = (slug: string) =>
   sourceToken("AZURE_DEVOPS", slug);
+
+/**
+ * Where the agent CLI keeps per-user state and transcripts. Read on each call
+ * rather than fixed at import, so a process that changes it sees the change.
+ */
+export const agentHome = () =>
+  process.env.TACHY_AGENT_HOME || join(homedir(), ".claude");

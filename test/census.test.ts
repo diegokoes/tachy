@@ -11,6 +11,7 @@ import {
   linkRepo,
   saveKnowledgeEntry,
   repoCensus,
+  repoIssues,
   sourceCensus,
   userCensus,
 } from "@tachy/core";
@@ -198,6 +199,19 @@ describe("the admin census", () => {
       expect(r.no_component).toBe(2);
       expect(r.no_project).toBe(2);
       expect(r.oldest_indexed_at).toBeInstanceOf(Date);
+
+      /* The same conditions by name, for the issues list — a failing repo is
+         not also listed as never indexed. */
+      const issues = await repoIssues();
+      expect(issues["repos.failing"]).toEqual({
+        n: 1,
+        items: [{ key: "seed-broken", label: "seed-broken" }],
+      });
+      expect(issues["repos.never_indexed"].n).toBe(0);
+      expect(issues["repos.no_component"].items.map((i) => i.label)).toEqual([
+        "seed-broken",
+        "seed-ready",
+      ]);
     });
   });
 

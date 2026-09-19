@@ -51,7 +51,8 @@
    * on. That needs ids, and ids have to be unique per instance because this is
    * every dropdown in the product.
    */
-  const listId = `asel-${crypto.randomUUID().slice(0, 8)}`;
+  const uid = $props.id();
+  const listId = `asel-${uid}`;
   const optId = (i: number) => `${listId}-opt-${i}`;
 
   let root: HTMLDivElement;

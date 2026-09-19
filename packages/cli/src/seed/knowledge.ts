@@ -375,13 +375,10 @@ async function seedReference(
         Math.min(ROOT_CAUSES.length, RESOLUTIONS.length) - 1,
       );
       const parent = meta[d];
-      /*
-       * Anchored to its own document. The heading used to be drawn from
-       * DOC_TITLES independently of `docs[d]`, which both made a chunk read as
-       * if it belonged to a different page and capped the corpus at
-       * 20x4x28x8 combinations — below the birthday bound for the 16k chunks
-       * --scale=large asks for, so thousands were exact duplicates.
-       */
+      // Anchored to its own document, so a chunk reads as part of that page.
+      // Drawing the title independently of `docs[d]` caps the combinations
+      // below the birthday bound for the 16k chunks --scale=large asks for,
+      // which yields thousands of exact duplicates.
       const heading = SECTION_HEADINGS[k % SECTION_HEADINGS.length];
       const chunkText = [
         `${parent.fullTitle} — ${heading} (${parent.product.slug}${parent.component ? ` / ${parent.component.slug}` : ""}).`,

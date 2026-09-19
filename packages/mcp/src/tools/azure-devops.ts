@@ -11,7 +11,11 @@ import {
   addWorkItemLink,
   badInput,
 } from "@tachy/core";
-import { createAdoClient, workItemSchema } from "@tachy/source-azure-devops";
+import {
+  createAdoClient,
+  workItemDefaults,
+  workItemSchema,
+} from "@tachy/source-azure-devops";
 import type { AdoClient, JsonPatchOp } from "@tachy/source-azure-devops";
 import { tool } from "../server";
 import { out } from "../results";
@@ -70,12 +74,6 @@ async function resolveAdoTarget(a: {
     context,
   };
 }
-
-const projectDefaults = (
-  context: Awaited<ReturnType<typeof resolveProjectContextStrict>> | null,
-  type: string,
-): Record<string, unknown> | undefined =>
-  (context?.project.config as any)?.defaults?.[type];
 
 /**
  * A wiki argument is matched against the project's registered wikis first, so
@@ -146,7 +144,7 @@ tool(
     const { client } = await resolveAdoClient(sourceSlug);
     const wikis = await client.listWikis(project);
     return out(
-      wikis.map((w: any) => ({
+      wikis.map((w) => ({
         id: w.id,
         name: w.name,
         type: w.type,
@@ -284,7 +282,7 @@ tool(
     if (!type) {
       const types = await client.listWorkItemTypes(project);
       return out({
-        work_item_types: types.map((t: any) => ({
+        work_item_types: types.map((t) => ({
           name: t.name,
           reference_name: t.referenceName,
           description: t.description ?? null,
@@ -292,11 +290,12 @@ tool(
         next: "Call again with type to get its fields.",
       });
     }
-    const defaults =
-      projectDefaults(target.context, type) ??
-      ((conn.config as any)?.defaults?.[project]?.[type] as
-        Record<string, unknown> | undefined) ??
-      {};
+    const defaults = workItemDefaults(
+      conn.config,
+      project,
+      type,
+      target.context?.project.config,
+    );
     // Shared with GET /source-connections/:slug/work-item-schema, so what the
     // approval box renders and what the model is told are the same projection.
     return out(await workItemSchema(client, project, type, defaults));
@@ -329,11 +328,12 @@ tool(
     const target = await resolveAdoTarget(a);
     const project = target.project;
     const { conn, client } = await resolveAdoClient(target.sourceSlug);
-    const defaults =
-      projectDefaults(target.context, a.type) ??
-      ((conn.config as any)?.defaults?.[project]?.[a.type] as
-        Record<string, unknown> | undefined) ??
-      {};
+    const defaults = workItemDefaults(
+      conn.config,
+      project,
+      a.type,
+      target.context?.project.config,
+    );
     const merged: Record<string, unknown> = {
       ...defaults,
       ...(a.fields ?? {}),

@@ -41,7 +41,7 @@ export async function syncSource(
     opts.signal?.throwIfAborted();
     if (page >= MAX_SYNC_PAGES)
       throw new Error(
-        `${sourceSlug} did not finish within ${MAX_SYNC_PAGES} pages — stopping rather than looping`,
+        `${sourceSlug} did not finish within ${MAX_SYNC_PAGES} pages; stopped`,
       );
     const { items, nextCursor } = await source.listItems({
       updatedSince: since,
@@ -56,7 +56,7 @@ export async function syncSource(
     if (!nextCursor) break;
     if (seen.has(nextCursor))
       throw new Error(
-        `${sourceSlug} returned the cursor '${nextCursor}' twice — stopping rather than looping`,
+        `${sourceSlug} returned the cursor '${nextCursor}' twice; stopped`,
       );
     seen.add(nextCursor);
     cursor = nextCursor;

@@ -1,6 +1,9 @@
 import { SOURCE_CALL_ORIGINS, type SourceCallOrigin } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { inBackground } from "../infra/background";
+import type { SourceTraffic } from "@tachy/contract";
+
+export type { SourceTraffic };
 
 export { SOURCE_CALL_ORIGINS };
 export type { SourceCallOrigin };
@@ -57,24 +60,6 @@ export function countSourceCall(
     recordSourceCall(connection, outcome),
     "source_call_count_failed",
   );
-}
-
-export interface SourceTraffic {
-  days: number;
-  /** One row per connection that had any traffic in the window. */
-  connections: {
-    slug: string;
-    source_type: string;
-    agent: number;
-    sync: number;
-    app: number;
-    rate_limited: number;
-    auth_failures: number;
-    /** Most recent day the far end refused the credentials, if any. */
-    last_auth_failure: string | null;
-  }[];
-  /** Calls per day across every connection, oldest first, gaps filled. */
-  per_day: { day: string; agent: number; sync: number; app: number }[];
 }
 
 /** Traffic over the last `days` days, for the connect overview. */

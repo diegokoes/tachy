@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack, type Component } from "svelte";
-  import { G, RAMP } from "../tui";
+  import { Button, G, RAMP } from "../tui";
   import type { Spy } from "./spy.svelte";
 
   let {
@@ -9,13 +9,15 @@
     label,
     view,
     eager = false,
+    action,
   }: {
     spy: Spy;
     section: string;
     label: string;
     view: Component;
-    /** Mount without waiting to be scrolled near. The overviews open the page. */
+    /** Mount without waiting to be scrolled near. */
     eager?: boolean;
+    action?: { label: string; run: () => void };
   } = $props();
 
   let el = $state<HTMLElement>();
@@ -37,6 +39,11 @@
     <span class="mark" aria-hidden="true">{G.marker}</span>
     <span class="lbl">{label}</span>
     <span class="rule" aria-hidden="true"></span>
+    {#if action}
+      <Button variant="ghost" tone="ok" size="sm" icon="plus" onclick={action.run}
+        >{action.label}</Button
+      >
+    {/if}
   </h2>
 
   <div class="section-body">

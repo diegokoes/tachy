@@ -52,9 +52,8 @@
   const current = createSequence();
 
   async function load() {
-    // Navigating between articles used to leave the previous body on screen
-    // until whichever request finished last won, and `links` is shared state
-    // that a slower load would overwrite behind a faster one.
+    // Sequenced: a slower load for the previous article must not replace the
+    // body or the shared `links` state behind a faster one.
     const isCurrent = current();
     error = null;
     missing = false;
@@ -174,8 +173,8 @@
       icon="doc"
       title={slug === MAIN_PAGE_SLUG ? "No main page yet." : `No article '${slug}' yet.`}
       detail={slug === MAIN_PAGE_SLUG
-        ? "A main page is what a reader lands on: what this product is, where to start, what matters."
-        : "Something links here, but nobody has written it."}
+        ? "Landing page: product summary, entry points."
+        : "Linked but not written."}
     >
       {#if isCurator()}
         <Button

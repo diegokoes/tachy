@@ -47,7 +47,7 @@ export async function readUpload(
   const parsed = parseUploadRef(ref);
   if (!parsed)
     throw badInput(
-      `'${ref}' is not an uploaded file — only files attached to the chat can be read`,
+      `'${ref}' is not an uploaded file; only chat attachments can be read`,
     );
   const [row] = await sql`
     select filename, bytes from chat_uploads
@@ -56,7 +56,7 @@ export async function readUpload(
   `;
   if (!row)
     throw badInput(
-      `'${ref}' is not an uploaded file — only files attached to the chat can be read`,
+      `'${ref}' is not an uploaded file; only chat attachments can be read`,
     );
   return { filename: row.filename as string, bytes: Buffer.from(row.bytes) };
 }

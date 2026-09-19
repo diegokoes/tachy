@@ -1,6 +1,5 @@
 /**
- * User overrides for the two key sets the tabs used to advertise with
- * superscript digits. Everything else in the app keeps its fixed binding and is
+ * User overrides for the two digit key sets, section and subnav. Everything else in the app keeps its fixed binding and is
  * listed read-only in Settings › keybinds.
  *
  * Section keys are stored per nav item, not per slot: navItems() drops `admin`

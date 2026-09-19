@@ -21,6 +21,71 @@ async function cookieFor(email: string, role: "admin" | "member") {
 beforeEach(resetData);
 
 describe("Admin > System runtime", () => {
+  it("reads the host's result history and says what is overdue or failing", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "tachy-status-"));
+    process.env.TACHY_STATUS_DIR = dir;
+    await writeFile(
+      join(dir, "backup.jsonl"),
+      [
+        JSON.stringify({
+          ok: true,
+          at: "2026-09-16T00:15:00Z",
+          dump_bytes: 1024,
+        }),
+        "",
+        '{"ok": true, "at": "2026-09-16T06:1',
+        JSON.stringify({
+          ok: false,
+          at: "2026-09-16T12:15:00Z",
+          error: "pg_dump exited 1",
+        }),
+      ].join("\n"),
+    );
+    await writeFile(
+      join(dir, "backup.json"),
+      JSON.stringify({
+        ok: false,
+        at: "2026-09-16T12:15:00Z",
+        error: "pg_dump exited 1",
+      }),
+    );
+    await writeFile(
+      join(dir, "watch.json"),
+      JSON.stringify({
+        checks: {
+          disk_srv: { state: "fail", value: "96%" },
+          thermal: { state: "warn", value: "88 C" },
+          readyz: { state: "ok", value: "200" },
+        },
+      }),
+    );
+    const cookie = await cookieFor("ops3@example.com", "admin");
+
+    const { runtime } = await (
+      await app.request("/api/system", { headers: { Cookie: cookie } })
+    ).json();
+    expect(runtime.history.backup).toHaveLength(2);
+    expect(runtime.history.backup[1]).toMatchObject({ ok: false });
+    expect(runtime.uptimeSeconds).toBeGreaterThanOrEqual(0);
+
+    const issues = await (
+      await app.request("/api/overview/issues?page=system", {
+        headers: { Cookie: cookie },
+      })
+    ).json();
+    expect(issues["backups.failed"]).toEqual({
+      n: 1,
+      items: [{ key: "pg_dump exited 1", label: "pg_dump exited 1" }],
+    });
+    expect(issues["backups.stale"].n).toBe(0);
+    expect(issues["restore.stale"].n).toBe(1);
+    expect(
+      issues["watch.fail"].items.map((i: { label: string }) => i.label),
+    ).toEqual(["disk_srv: 96%"]);
+    expect(issues["watch.warn"].n).toBe(1);
+    expect(issues["system.not_ready"].n).toBe(0);
+  });
+
   it("shows admins the current turns, connections and host status files", async () => {
     const dir = await mkdtemp(join(tmpdir(), "tachy-status-"));
     process.env.TACHY_STATUS_DIR = dir;

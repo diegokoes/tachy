@@ -128,6 +128,7 @@ record() {
   mkdir -p "$(dirname "$DEPLOY_LOG")"
   printf '%s\n' "$line" >>"$DEPLOY_LOG"
   write_status release "$line"
+  append_history release "$line"
 }
 
 git_ fetch -q --all --prune

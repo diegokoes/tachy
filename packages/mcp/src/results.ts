@@ -16,13 +16,6 @@ export function out(obj: unknown) {
   };
 }
 
-/**
- * Tool results have a size ceiling; a whole transcript blows it, so turns ship
- * bounded. Skips what does not fit rather than stopping at it — one long turn
- * early in a ticket used to end the walk, and the model got `shown: 0` on a
- * transcript that had plenty of readable turns after it.
- */
-
 export function outScrubbed(obj: unknown) {
   return out(globalRedactionEnabled() ? scrubDeep(obj, new TokenMap()) : obj);
 }

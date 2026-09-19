@@ -10,7 +10,9 @@ over read-only SFTP by people's laptops. Nothing ever pushes them anywhere.
 | `tachy-backup-files.timer` | daily 02:30   | agent-home and Caddy CA archives                |
 
 Status: `jq . /srv/tachy/status/{backup,restore,downloads}.json`, or Admin ›
-System. Run one now: `sudo tachy-backup db --restore-test`.
+System. The last 60 results of each are in `backup.jsonl` / `restore.jsonl`
+beside them, which is what the system overview charts. Run one now:
+`sudo tachy-backup db --restore-test`.
 
 ## Adding a downloader
 

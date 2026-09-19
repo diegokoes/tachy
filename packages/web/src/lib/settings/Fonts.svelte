@@ -6,17 +6,17 @@
     {
       axis: "ui",
       title: "interface",
-      hint: "Nav, labels, buttons, panel titles and table cells.",
+      hint: "Nav, labels, buttons, titles, table cells.",
     },
     {
       axis: "prose",
       title: "reading",
-      hint: "Running text: entry bodies, docs and the chat transcript.",
+      hint: "Body text: entries, docs, chat.",
     },
     {
       axis: "mono",
       title: "monospace",
-      hint: "Code, ids, and anything drawn on a character grid.",
+      hint: "Code, ids, character-grid graphics.",
     },
   ];
 
@@ -35,7 +35,7 @@
       />
       <p class="hint">{a.hint}</p>
       <p class="sample" style="font-family: var(--font-{a.axis})">
-        The quick brown fox jumps over the lazy dog — 0123456789
+        The quick brown fox jumps over the lazy dog 0123456789
       </p>
     </div>
   {/each}

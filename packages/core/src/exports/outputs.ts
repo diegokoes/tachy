@@ -1,5 +1,5 @@
 import { safeFilename } from "@tachy/contract";
-import { sql } from "../infra/db";
+import { sql, jsonb } from "../infra/db";
 import { notFound } from "../infra/errors";
 
 export { safeFilename };
@@ -51,7 +51,7 @@ export async function createOutput(i: {
     values (
       ${i.userId ?? null}, ${i.artifactId ?? null}, ${i.utility},
       ${safeFilename(i.filename)}, ${i.mime}, ${Buffer.from(i.bytes)},
-      ${i.bytes.byteLength}, ${sql.json((i.meta ?? {}) as never)},
+      ${i.bytes.byteLength}, ${jsonb(i.meta ?? {})},
       now() + ${`${ttlHours()} hours`}::interval
     )
     returning ${META_COLUMNS}

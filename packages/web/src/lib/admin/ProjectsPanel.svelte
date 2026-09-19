@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { api } from "../api";
+  import { navigate } from "../router.svelte";
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
   import { createResource, errText } from "../resource.svelte";
@@ -14,14 +15,18 @@
     Field,
     GroupHead,
     Note,
-
     Select,
     type Column,
     type Draft,
   } from "../tui";
   import type { AreaRule, Component, Connection, Customer, Product, ProjectWiki, Repo, SourceProject, Team } from "./rows";
 import { INFO } from "./help";
-  import { sectionHoist } from "./topAction.svelte";
+  import { sectionHoist } from "./sectionAction.svelte";
+  import { NEW_RECORD, recordPath } from "./records";
+  import RecordPage from "./RecordPage.svelte";
+
+  /** Given, the panel is one project's page rather than the list of them. */
+  let { id }: { id?: string } = $props();
 
   type Found = { key: string; name: string };
   type Wiki = { identifier: string; name: string; type?: string };
@@ -43,7 +48,6 @@ import { INFO } from "./help";
   const customers = createResource(() => api.get<Customer[]>("/customers"), []);
 
   let error = $state<string | null>(null);
-  let expanded = $state(new Set<string>());
   let areas = $state<Record<string, AreaRule[]>>({});
   let components = $state<Record<string, Component[]>>({});
   let wikisFor = $state<Record<string, Wiki[]>>({});
@@ -118,19 +122,9 @@ import { INFO } from "./help";
     }
   }
 
-  async function toggle(id: string) {
-    const next = new Set(expanded);
-    if (next.has(id)) {
-      next.delete(id);
-      expanded = next;
-      return;
-    }
-    next.add(id);
-    expanded = next;
+  async function openProject(p: SourceProject) {
     areaForm = { prefix: "", component: "" };
-
-    const p = projects.data.find((x) => x.id === id);
-    if (!p || p.role !== "knowledge") return;
+    if (p.role !== "knowledge") return;
     try {
       areas[p.id] = await api.get<AreaRule[]>(`/source-projects/${p.id}/areas`);
       if (p.product_slug && !components[p.product_slug])
@@ -250,8 +244,8 @@ import { INFO } from "./help";
       required: true,
       info: (d) =>
         d.role === "tracker"
-          ? `The ${t("team")} raising work items here. Nothing is filed under a tracker.`
-          : `The ${t("product")} its items ingest into. It can also carry the wiki, repos and area rules.`,
+          ? `Team creating work items here. Trackers file nothing.`
+          : `Ingest target. Also scopes wiki, repos, area rules.`,
       options: (d) =>
         d.role === "tracker"
           ? myTeams.map((tm) => ({ value: tm.slug, label: tm.name }))
@@ -263,7 +257,7 @@ import { INFO } from "./help";
       label: "customer",
       width: "10rem",
       edit: "select",
-      info: "Set this only when the project serves one customer. Its items are then theirs by configuration, which beats guessing at the sender's email domain. Leave empty for a project serving many.",
+      info: "Single-customer projects only. Overrides email-domain attribution. Empty: many customers.",
       options: [
         { value: "", label: "(none, serves many)" },
         ...customers.data.map((cu) => ({ value: cu.slug, label: cu.name })),
@@ -332,6 +326,35 @@ import { INFO } from "./help";
 
   onMount(reload);
 
+  const creating = $derived(id === NEW_RECORD);
+  const record = $derived(
+    id && !creating ? (projects.data.find((p) => p.id === id) ?? null) : null,
+  );
+
+  /* What hangs off a knowledge project — its area rules, its product's
+     components, its wikis — reloaded when an edit changes what it hangs off. */
+  const hangs = $derived(
+    record ? `${record.id} ${record.role} ${record.product_slug ?? ""}` : "",
+  );
+  $effect(() => {
+    if (!hangs) return;
+    untrack(() => record && void openProject(record));
+  });
+
+  const back = () => navigate(recordPath("projects"));
+
+  async function createProject(d: Draft) {
+    let made: SourceProject | undefined;
+    await projects.mutate(async () => {
+      made = await api.post<SourceProject>("/source-projects", {
+        source_slug: d.source_slug,
+        external_key: String(d.external_key).trim(),
+        ...payload(d),
+      });
+    });
+    navigate(recordPath("projects", made?.id), { replace: true });
+  }
+
   let filter = $state("");
   const filtered = $derived.by(() => {
     const q = filter.trim().toLowerCase();
@@ -356,6 +379,7 @@ import { INFO } from "./help";
 {/snippet}
 
 {#snippet detail(p: SourceProject)}
+  {#if error}<Note tone="danger">{error}</Note>{/if}
   {#if p.role === "tracker"}
     <p class="dim">
       A tracker. Nothing is filed under it. Give it a {t("product")} to make it
@@ -364,7 +388,7 @@ import { INFO } from "./help";
   {:else}
     <div class="detail">
       <div class="block">
-        <span class="dim" title="An ADO project usually has several: one project wiki plus a code wiki per repo."
+        <span class="dim" title="ADO: one project wiki plus one code wiki per repo."
           >wikis</span
         >
         {#if p.source_type === "azure-devops"}
@@ -517,104 +541,102 @@ import { INFO } from "./help";
   {/if}
 {/snippet}
 
-{#if error}<Note tone="danger">{error}</Note>{/if}
+{#if id}
+  <RecordPage
+    noun="project"
+    title={record?.external_key ?? ""}
+    {columns}
+    row={record}
+    {creating}
+    loading={projects.loading}
+    loadError={projects.error}
+    canEdit={record ? canEditProject(record) : canAdd}
+    canDelete={record ? canEditProject(record) : false}
+    body={detail}
+    formExtra={discoverField}
+    onclose={back}
+    oncreate={createProject}
+    onsave={(row, d) =>
+      projects.mutate(() => api.patch(`/source-projects/${row.id}`, payload(d)))}
+    ondelete={(row) =>
+      projects.mutate(() => api.delete(`/source-projects/${row.id}`))}
+  />
+{:else}
+  {#if error}<Note tone="danger">{error}</Note>{/if}
 
-<FilterBar
-  bind:value={filter}
-  shown={filtered.length}
-  total={projects.data.length}
-  placeholder="filter projects…"
-  label="filter projects"
-/>
+  <FilterBar
+    bind:value={filter}
+    shown={filtered.length}
+    total={projects.data.length}
+    placeholder="filter projects…"
+    label="filter projects"
+  />
 
-<CrudTable
-  hoist={sectionHoist("projects")}
-  {columns}
-  rows={filtered}
-  rowKey={(p) => p.id}
-  loading={projects.loading}
-  error={projects.error}
-  emptyTitle="No projects registered yet."
-  canEdit={canEditProject}
-  canDelete={canEditProject}
-  canCreate={canAdd}
-  addLabel="register project"
-  noun="project"
-  editTitle={(p) => p.external_key}
-  expand={detail}
-  {expanded}
-  ontoggle={toggle}
-  formExtra={discoverField}
-  oncreate={(d) =>
-    projects.mutate(() =>
-      api.post("/source-projects", {
-        source_slug: d.source_slug,
-        external_key: String(d.external_key).trim(),
-        ...payload(d),
-      }),
-    )}
-  onsave={(row, d) =>
-    projects.mutate(() => api.patch(`/source-projects/${row.id}`, payload(d)))}
-  ondelete={(row) =>
-    projects.mutate(async () => {
-      await api.delete(`/source-projects/${row.id}`);
-      const next = new Set(expanded);
-      next.delete(row.id);
-      expanded = next;
-    })}
-/>
+  <CrudTable
+    hoist={sectionHoist("projects")}
+    {columns}
+    rows={filtered}
+    rowKey={(p) => p.id}
+    loading={projects.loading}
+    error={projects.error}
+    emptyTitle="No projects registered yet."
+    canCreate={canAdd}
+    addLabel="register project"
+    onopen={(p) => navigate(recordPath("projects", p.id))}
+    onadd={() => navigate(recordPath("projects", NEW_RECORD))}
+  />
 
-<div class="coverage">
-  <GroupHead label="coverage" />
-  <ul class="gaps">
-    {#if gaps.unregistered.length}
-      <li>
-        <span class="warn-dot">●</span>
-        {gaps.unregistered.length} discovered project(s) not registered:
-        <span class="dim">{gaps.unregistered.join(", ")}</span>
-      </li>
-    {/if}
-    {#if gaps.noWiki.length}
-      <li>
-        <span class="warn-dot">●</span> no wiki set:
-        <span class="dim">
-          {gaps.noWiki.map((p) => p.external_key).join(", ")}
-        </span>
-      </li>
-    {/if}
-    {#if gaps.noRepos.length}
-      <li>
-        <span class="warn-dot">●</span> no repos linked:
-        <span class="dim">
-          {gaps.noRepos.map((p) => p.external_key).join(", ")}
-        </span>
-      </li>
-    {/if}
-    {#if gaps.repoNoComponent.length}
-      <li>
-        <span class="warn-dot">●</span> repos with no component (code search
-        can't be narrowed):
-        <span class="dim">
-          {gaps.repoNoComponent.map((r) => r.slug).join(", ")}
-        </span>
-      </li>
-    {/if}
-    {#if gaps.brokenIndex.length}
-      <li>
-        <span class="err-dot">●</span> index failing:
-        <span class="dim">
-          {gaps.brokenIndex.map((r) => r.slug).join(", ")}
-        </span>
-      </li>
-    {/if}
-    {#if clean}
-      <li class="dim">
-        Nothing outstanding. Run “discover” when registering a project to check
-        for ones that were never picked up.
-      </li>
-    {/if}
-  </ul>
-</div>
+  <div class="coverage">
+    <GroupHead label="coverage" />
+    <ul class="gaps">
+      {#if gaps.unregistered.length}
+        <li>
+          <span class="warn-dot">●</span>
+          {gaps.unregistered.length} discovered project(s) not registered:
+          <span class="dim">{gaps.unregistered.join(", ")}</span>
+        </li>
+      {/if}
+      {#if gaps.noWiki.length}
+        <li>
+          <span class="warn-dot">●</span> no wiki set:
+          <span class="dim">
+            {gaps.noWiki.map((p) => p.external_key).join(", ")}
+          </span>
+        </li>
+      {/if}
+      {#if gaps.noRepos.length}
+        <li>
+          <span class="warn-dot">●</span> no repos linked:
+          <span class="dim">
+            {gaps.noRepos.map((p) => p.external_key).join(", ")}
+          </span>
+        </li>
+      {/if}
+      {#if gaps.repoNoComponent.length}
+        <li>
+          <span class="warn-dot">●</span> repos with no component:
+          <span class="dim">
+            {gaps.repoNoComponent.map((r) => r.slug).join(", ")}
+          </span>
+        </li>
+      {/if}
+      {#if gaps.brokenIndex.length}
+        <li>
+          <span class="err-dot">●</span> index failing:
+          <span class="dim">
+            {gaps.brokenIndex.map((r) => r.slug).join(", ")}
+          </span>
+        </li>
+      {/if}
+      {#if clean}
+        <li class="dim">
+          Nothing outstanding. Run “discover” when registering a project to check
+          for ones that were never picked up.
+        </li>
+      {/if}
+    </ul>
+  </div>
+{/if}
 
 <style>
   .dim {

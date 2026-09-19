@@ -2,7 +2,7 @@
   import { createSequence } from "../resource.svelte";
   import { api } from "../api";
   import { navigate } from "../router.svelte";
-  import type { NamedRow } from "../types";
+  import type { ProductRow } from "@tachy/contract";
   import { libraryItemPath, ORG_WIDE } from "../wiki/paths";
 
   interface Link {
@@ -23,7 +23,7 @@
   let { base, id }: { base: "knowledge" | "reference"; id: string } = $props();
 
   let inbound = $state<Link[]>([]);
-  let products = $state<NamedRow[]>([]);
+  let products = $state<ProductRow[]>([]);
 
   $effect(() => {
     void id;
@@ -37,7 +37,7 @@
     try {
       const [links, prods] = await Promise.all([
         api.get<{ inbound: Link[] }>(`/${base}/${id}/links`),
-        api.get<NamedRow[]>("/products").catch(() => [] as NamedRow[]),
+        api.get<ProductRow[]>("/products").catch(() => [] as ProductRow[]),
       ]);
       if (!isCurrent()) return;
       inbound = links.inbound;
@@ -55,8 +55,7 @@
       kind: l.from_kind,
       slug: l.from_slug,
       scope:
-        (products.find((p) => p.id === l.from_product_id)?.slug as string) ??
-        ORG_WIDE,
+        products.find((p) => p.id === l.from_product_id)?.slug ?? ORG_WIDE,
     });
     if (path) navigate(path);
   }

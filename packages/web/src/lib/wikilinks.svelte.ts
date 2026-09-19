@@ -1,6 +1,6 @@
 import { api } from "./api";
 import { navigate } from "./router.svelte";
-import type { NamedRow } from "./types";
+import type { ProductRow } from "@tachy/contract";
 import { libraryItemPath, ORG_WIDE } from "./wiki/paths";
 
 export interface OutboundLink {
@@ -14,8 +14,7 @@ export interface OutboundLink {
 
 /**
  * Where each `[[target]]` in one body actually points, and a click handler that
- * follows it. Shared by the article, doc and entry views — the third copy was
- * the point at which pasting it again stopped being defensible.
+ * follows it. Shared by the article, doc and entry views.
  *
  * Destinations come from what the SERVER resolved, not from re-deriving them in
  * the browser: link resolution is scoped (a product's wiki first, then the
@@ -31,10 +30,10 @@ export class LinkTargets {
     try {
       const [{ outbound }, products] = await Promise.all([
         api.get<{ outbound: OutboundLink[] }>(`/${base}/${id}/links`),
-        api.get<NamedRow[]>("/products").catch(() => [] as NamedRow[]),
+        api.get<ProductRow[]>("/products").catch(() => [] as ProductRow[]),
       ]);
       const scopeOf = (productId: string | null) =>
-        (products.find((p) => p.id === productId)?.slug as string) ?? ORG_WIDE;
+        products.find((p) => p.id === productId)?.slug ?? ORG_WIDE;
 
       const next = new Set<string>();
       this.to.clear();

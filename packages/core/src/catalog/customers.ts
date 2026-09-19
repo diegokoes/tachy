@@ -1,4 +1,13 @@
+import type {
+  CustomerComponentRow,
+  CustomerFactRow,
+  CustomerProfile,
+  CustomerRow,
+} from "@tachy/contract";
+
+export type { CustomerProfile };
 import { sql } from "../infra/db";
+import { nearestSlugsHint } from "./nearest";
 import { badInput, conflict, notFound } from "../infra/errors";
 import { resolveComponentStrict } from "./components";
 import { listCustomerUnits, resolveUnit, resolveUnitFacts } from "./units";
@@ -18,7 +27,9 @@ const normalizeDomains = (domains: string[] | undefined) =>
     .filter(Boolean);
 
 export async function listCustomers() {
-  return sql`select id, name, slug, aliases, email_domains, notes from customers order by name`;
+  return sql<
+    CustomerRow[]
+  >`select id, name, slug, aliases, email_domains, notes from customers order by name`;
 }
 
 export async function addCustomer(i: CustomerInput) {
@@ -106,7 +117,7 @@ export async function resolveCustomerByEmail(
         .map((r) => `'${r.slug}'`)
         .join(
           ", ",
-        )}) — it fronts for more than one, so the sender's domain cannot decide this`,
+        )}): it fronts for more than one, so the sender's domain cannot decide this`,
     };
   return { customerId: null };
 }
@@ -137,23 +148,12 @@ export async function resolveCustomer(
     return rows[0] as ResolvedCustomer;
   if (rows.length > 1)
     throw badInput(
-      `Ambiguous customer '${slugOrAlias}' — it is an alias of ${rows
+      `Ambiguous customer '${slugOrAlias}': alias of ${rows
         .map((r) => `'${r.slug}'`)
         .join(" and ")}. Use the slug itself.`,
     );
 
-  const nearest = await sql`
-    select slug from customers
-    order by greatest(
-      similarity(slug, ${slugOrAlias}),
-      similarity(name, ${slugOrAlias}),
-      coalesce((select max(similarity(a, ${slugOrAlias})) from unnest(aliases) a), 0)
-    ) desc
-    limit 5
-  `;
-  const hint = nearest.length
-    ? ` Nearest matches: ${nearest.map((r) => `'${r.slug}'`).join(", ")}.`
-    : "";
+  const hint = await nearestSlugsHint("customers", slugOrAlias);
   throw badInput(
     `Unknown customer '${slugOrAlias}'.${hint} Call list_customers, or add_customer first.`,
   );
@@ -175,10 +175,10 @@ export async function setWorkItemCustomer(
   unit?: string | null,
 ) {
   /*
-   * An absent `unit` is "leave it alone", an explicit null is "clear it". They
-   * used to be the same, so setting a ticket's customer with no unit in the
-   * body — the common call — silently dropped the line it had been narrowed to,
-   * and db/schema.sql says a wrong attribution there is not recoverable.
+   * An absent `unit` is "leave it alone", an explicit null is "clear it". The
+   * common call sets the customer with no unit and must keep the line the
+   * ticket was narrowed to: db/schema.sql notes a wrong attribution there is
+   * not recoverable.
    *
    * It survives only while the customer is unchanged. Moving the ticket to a
    * different customer, or clearing it, clears the unit with it: a unit belongs
@@ -235,8 +235,7 @@ export interface CustomerFactInput {
   productId?: string | null;
   /**
    * Which part of their estate this is true of, by unit slug or alias. Omit for
-   * a fact true of the whole customer — which is what every fact was before
-   * units existed, so leaving it off keeps the old behaviour exactly.
+   * a fact true of the whole customer.
    */
   unit?: string | null;
 }
@@ -255,7 +254,7 @@ export async function setCustomerFact(i: CustomerFactInput) {
   if (i.componentSlug) {
     if (!i.productId)
       throw badInput(
-        "a component needs its product — pass product_slug alongside component",
+        "a component needs its product: pass product_slug with component",
       );
     componentId = (await resolveComponentStrict(i.productId, i.componentSlug))
       .id;
@@ -283,7 +282,7 @@ export async function deleteCustomerFact(id: string) {
 }
 
 export async function listCustomerFacts(customerId: string) {
-  return sql`
+  return sql<CustomerFactRow[]>`
     select f.id, f.kind, f.label, f.value, f.notes, f.source,
            f.component_id, c.slug as component_slug, f.updated_at
     from customer_facts f
@@ -301,11 +300,10 @@ export async function listCustomerFacts(customerId: string) {
 export async function listCustomerFactKinds(): Promise<
   { kind: string; count: number }[]
 > {
-  const rows = await sql`
+  return sql<{ kind: string; count: number }[]>`
     select kind, count(*)::int as count from customer_facts
     group by kind order by count desc, kind
   `;
-  return rows as unknown as { kind: string; count: number }[];
 }
 
 /** Record that a customer runs a component. Idempotent. */
@@ -341,7 +339,7 @@ export async function unlinkCustomerComponent(
 }
 
 export async function listCustomerComponents(customerId: string) {
-  return sql`
+  return sql<CustomerComponentRow[]>`
     select c.id, c.slug, c.name, c.product_id, p.slug as product_slug,
            cc.notes
     from customer_components cc
@@ -350,35 +348,6 @@ export async function listCustomerComponents(customerId: string) {
     where cc.customer_id = ${customerId}
     order by p.slug, c.slug
   `;
-}
-
-export interface CustomerProfile {
-  id: string;
-  slug: string;
-  name: string;
-  notes: string | null;
-  /** Present when the profile was read for one unit. */
-  unit?: { slug: string; name: string; kind: string };
-  facts: {
-    kind: string;
-    label: string;
-    value: string;
-    component: string | null;
-    /** Unit-resolved reads only: which level the fact came from. */
-    origin?: string | null;
-    origin_kind?: string | null;
-    inherited?: boolean;
-  }[];
-  units: {
-    slug: string;
-    name: string;
-    kind: string;
-    parent: string | null;
-    profile: string | null;
-  }[];
-  components: { slug: string; product_slug: string }[];
-  repos: { slug: string; component: string | null; index_status: string }[];
-  projects: { source_slug: string; external_key: string }[];
 }
 
 /**
@@ -395,22 +364,43 @@ export async function getCustomerProfile(
   customerId: string,
   unit?: string | null,
 ): Promise<CustomerProfile | null> {
-  const [customer] = await sql`
+  const [customer] = await sql<
+    Pick<CustomerProfile, "id" | "slug" | "name" | "notes">[]
+  >`
     select id, slug, name, notes from customers where id = ${customerId}
   `;
   if (!customer) return null;
   const resolvedUnit = unit ? await resolveUnit(customerId, unit) : null;
   const [facts, components, repos, projects, units] = await Promise.all([
+    // Unit-resolved reads also say which level each fact came from, and
+    // whether it was inherited rather than stated here.
     resolvedUnit
-      ? resolveUnitFacts(resolvedUnit.id)
-      : listCustomerFacts(customerId),
+      ? resolveUnitFacts(resolvedUnit.id).then((rows) =>
+          rows.map((f) => ({
+            kind: f.kind,
+            label: f.label,
+            value: f.value,
+            component: null,
+            origin: f.origin_slug,
+            origin_kind: f.origin_kind,
+            inherited: f.inherited,
+          })),
+        )
+      : listCustomerFacts(customerId).then((rows) =>
+          rows.map((f) => ({
+            kind: f.kind,
+            label: f.label,
+            value: f.value,
+            component: f.component_slug,
+          })),
+        ),
     listCustomerComponents(customerId),
-    sql`
-      select r.slug, c.slug as component_slug, r.index_status
+    sql<CustomerProfile["repos"]>`
+      select r.slug, c.slug as component, r.index_status
       from repos r left join components c on c.id = r.component_id
       where r.customer_id = ${customerId} order by r.slug
     `,
-    sql`
+    sql<CustomerProfile["projects"]>`
       select sc.slug as source_slug, sp.external_key
       from source_projects sp
       join source_connections sc on sc.id = sp.source_connection_id
@@ -419,10 +409,7 @@ export async function getCustomerProfile(
     listCustomerUnits(customerId),
   ]);
   return {
-    id: customer.id as string,
-    slug: customer.slug as string,
-    name: customer.name as string,
-    notes: (customer.notes as string) ?? null,
+    ...customer,
     ...(resolvedUnit
       ? {
           unit: {
@@ -432,21 +419,7 @@ export async function getCustomerProfile(
           },
         }
       : {}),
-    facts: facts.map((f: any) => ({
-      kind: f.kind as string,
-      label: f.label as string,
-      value: f.value as string,
-      component: (f.component_slug as string) ?? null,
-      // Only present when resolved for a unit: which level it came from, and
-      // whether it was inherited rather than stated here.
-      ...(resolvedUnit
-        ? {
-            origin: (f.origin_slug as string) ?? null,
-            origin_kind: (f.origin_kind as string) ?? null,
-            inherited: f.inherited as boolean,
-          }
-        : {}),
-    })),
+    facts,
     units: units.map((u) => ({
       slug: u.slug,
       name: u.name,
@@ -455,17 +428,10 @@ export async function getCustomerProfile(
       profile: units.find((p) => p.id === u.profile_id)?.slug ?? null,
     })),
     components: components.map((c) => ({
-      slug: c.slug as string,
-      product_slug: c.product_slug as string,
+      slug: c.slug,
+      product_slug: c.product_slug,
     })),
-    repos: repos.map((r) => ({
-      slug: r.slug as string,
-      component: (r.component_slug as string) ?? null,
-      index_status: r.index_status as string,
-    })),
-    projects: projects.map((p) => ({
-      source_slug: p.source_slug as string,
-      external_key: p.external_key as string,
-    })),
+    repos: [...repos],
+    projects: [...projects],
   };
 }

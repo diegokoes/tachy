@@ -1,9 +1,12 @@
 import { MAIN_PAGE_SLUG, WIKI_GAP_KINDS } from "@tachy/contract";
 import type { WikiGapKind } from "@tachy/contract";
-import { sql } from "../infra/db";
+import { sql, jsonb } from "../infra/db";
 import type { Db } from "../infra/db";
 import { notFound } from "../infra/errors";
 import { log } from "../infra/log";
+import type { WikiGapItem } from "@tachy/contract";
+
+export type { WikiGapItem };
 
 /** Fewer lessons than this under one part of the product is not a topic yet. */
 export const GAP_THRESHOLD = 3;
@@ -13,12 +16,6 @@ const EVIDENCE_ITEMS = 10;
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export interface WikiGapItem {
-  kind: "entry" | "doc";
-  id: string;
-  title: string;
-}
 
 export interface WikiGapFinding {
   kind: WikiGapKind;
@@ -306,7 +303,7 @@ async function record(
     await db`
       insert into wiki_gaps (product_id, kind, key, subject, evidence, score)
       values (${productId}, ${g.kind}, ${g.key}, ${g.subject},
-              ${sql.json(g.evidence as any)}, ${g.score})
+              ${jsonb(g.evidence)}, ${g.score})
       on conflict (product_id, kind, key) do update set
         subject         = excluded.subject,
         evidence        = excluded.evidence,

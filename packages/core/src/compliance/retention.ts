@@ -1,5 +1,5 @@
 import { readdir, rm, stat } from "node:fs/promises";
-import { homedir } from "node:os";
+import { agentHome } from "../infra/env";
 import { join } from "node:path";
 import { z } from "zod";
 import { sweepExpiredOutputs } from "../exports/outputs";
@@ -19,10 +19,7 @@ export async function sweepTranscripts(
   days: number,
   now = Date.now(),
 ): Promise<number> {
-  const root = join(
-    process.env.TACHY_AGENT_HOME || join(homedir(), ".claude"),
-    "users",
-  );
+  const root = join(agentHome(), "users");
   let removed = 0;
   const walk = async (dir: string): Promise<void> => {
     for (const e of await readdir(dir, { withFileTypes: true }).catch(

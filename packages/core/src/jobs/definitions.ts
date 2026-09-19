@@ -4,29 +4,14 @@ import {
   JOB_OVERLAP,
   JOB_RESOURCE_CLASSES,
   parseDuration,
+  type JobDefinition,
 } from "@tachy/contract";
 import { z } from "zod";
-import { sql, type Db } from "../infra/db";
+import { sql, type Db, jsonb } from "../infra/db";
 import { badInput, notFound } from "../infra/errors";
 import { getJobKind, hasJobKind } from "./registry";
 
-export interface JobDefinition {
-  id: string;
-  kind: string;
-  name: string;
-  params: Record<string, unknown>;
-  enabled: boolean;
-  schedule: string | null;
-  timezone: string;
-  resource_class: (typeof JOB_RESOURCE_CLASSES)[number] | null;
-  timeout: string | null;
-  overlap: (typeof JOB_OVERLAP)[number] | null;
-  notify: (typeof JOB_NOTIFY)[number];
-  last_scheduled_for: string | null;
-  disabled_reason: string | null;
-  created_at: string;
-  updated_at: string;
-}
+export type { JobDefinition };
 
 export const jobDefinitionInput = z.object({
   kind: z.string().min(1),
@@ -113,8 +98,8 @@ async function recordChange(
   await db`
     insert into job_definition_changes (definition_id, changed_by, action, old_value, new_value)
     values (${definitionId}, ${by}, ${action},
-            ${oldValue === null ? null : sql.json(oldValue as never)},
-            ${newValue === null ? null : sql.json(newValue as never)})
+            ${oldValue === null ? null : jsonb(oldValue)},
+            ${newValue === null ? null : jsonb(newValue)})
   `;
 }
 
@@ -127,7 +112,7 @@ export async function createJobDefinition(
     const [row] = await tx`
       insert into job_definitions (kind, name, params, enabled, schedule, timezone,
         resource_class, timeout, overlap, notify, created_by, updated_by, last_scheduled_for)
-      values (${d.kind}, ${d.name}, ${sql.json(d.params as never)}, ${d.enabled}, ${d.schedule},
+      values (${d.kind}, ${d.name}, ${jsonb(d.params)}, ${d.enabled}, ${d.schedule},
         ${d.timezone}, ${d.resource_class}, ${d.timeout}, ${d.overlap}, ${d.notify}, ${by}, ${by}, now())
       on conflict (name) do nothing
       returning ${COLUMNS}
@@ -162,7 +147,7 @@ export async function updateJobDefinition(
       merged.timezone !== current.timezone;
     const [row] = await tx`
       update job_definitions set
-        kind = ${merged.kind}, name = ${merged.name}, params = ${sql.json(merged.params as never)},
+        kind = ${merged.kind}, name = ${merged.name}, params = ${jsonb(merged.params)},
         enabled = ${merged.enabled}, schedule = ${merged.schedule}, timezone = ${merged.timezone},
         resource_class = ${merged.resource_class}, timeout = ${merged.timeout},
         overlap = ${merged.overlap}, notify = ${merged.notify},

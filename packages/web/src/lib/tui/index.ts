@@ -17,7 +17,8 @@ export { default as Dial } from "./Dial.svelte";
 export { default as Columns, type Col } from "./Columns.svelte";
 export { default as Bars, type Bar } from "./Bars.svelte";
 export { default as Band, type Segment } from "./Band.svelte";
-export { default as Ranking, type Ranked } from "./Ranking.svelte";
+export { default as Cells, type Cell } from "./Cells.svelte";
+export { default as Timeline, type Lane } from "./Timeline.svelte";
 export { default as HintRule } from "./HintRule.svelte";
 export { default as Icon } from "./Icon.svelte";
 export { default as VimMark } from "./VimMark.svelte";
@@ -30,6 +31,8 @@ export { default as InfoMark } from "./InfoMark.svelte";
 export { default as DataTable } from "./DataTable.svelte";
 export { default as CrudTable } from "./CrudTable.svelte";
 export { default as RecordModal } from "./RecordModal.svelte";
+export { default as RecordForm } from "./RecordForm.svelte";
+export { default as FormActions } from "./FormActions.svelte";
 
 /* Kept where they are until their last legacy call site is migrated. */
 export { default as Select } from "../AsciiSelect.svelte";
@@ -38,6 +41,7 @@ export { default as Scrollbar } from "../Scrollbar.svelte";
 
 export { G, RAMP } from "./glyphs";
 export { compact, usd, dayOfMonth } from "./figures";
+export { toneOf, isActive, type Tone } from "./tone";
 export { ICONS, type IconName } from "./icons";
 export {
   blankDraft,

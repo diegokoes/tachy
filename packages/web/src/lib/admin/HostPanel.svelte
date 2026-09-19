@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { Badge, GroupHead, Note } from "../tui";
+  import { Badge, GroupHead, Note, toneOf } from "../tui";
   import type { SystemInfo } from "./rows";
 
   type Check = { state: string; value: string };
@@ -23,7 +23,6 @@
     const h = (Date.now() - new Date(iso).getTime()) / 3_600_000;
     return h < 1 ? `${Math.round(h * 60)} min ago` : h < 48 ? `${Math.round(h)} h ago` : `${Math.round(h / 24)} days ago`;
   };
-  const tone = (s: string) => (s === "ok" ? "ok" : s === "warn" ? "warn" : s === "fail" ? "danger" : "muted");
 
   onMount(async () => {
     try {
@@ -39,7 +38,7 @@
 {#if error}<Note tone="danger">{error}</Note>{/if}
 
 {#if !visible}
-  <Note>No host status directory is mounted (TACHY_STATUS_DIR). On the production host, tachy-backup and tachy-watch write it.</Note>
+  <Note>TACHY_STATUS_DIR not mounted. Written by tachy-backup, tachy-watch.</Note>
 {:else if status}
   <GroupHead label="backups" />
   <table>
@@ -62,18 +61,18 @@
     </tbody>
   </table>
 
-  <GroupHead label="monitoring (tachy-watch)" />
+  <GroupHead label="tachy-watch" />
   {#if status.watch}
     <table>
       <tbody>
         {#each Object.entries(status.watch.checks) as [name, c] (name)}
-          <tr><td>{name}</td><td><Badge tone={tone(c.state)}>{c.state}</Badge></td><td class="muted">{c.value}</td></tr>
+          <tr><td>{name}</td><td><Badge tone={toneOf(c.state)}>{c.state}</Badge></td><td class="muted">{c.value}</td></tr>
         {/each}
       </tbody>
     </table>
     <Note>last run {ago(status.watch.at)}{status.watch.posted_to_teams ? " · posted to Teams" : ""}</Note>
   {:else}
-    <Note>tachy-watch has not run on this host.</Note>
+    <Note>no tachy-watch run</Note>
   {/if}
 
   <GroupHead label="host" />
@@ -89,6 +88,6 @@
       </tbody>
     </table>
   {:else}
-    <Note>No host figures yet.</Note>
+    <Note>no host data</Note>
   {/if}
 {/if}

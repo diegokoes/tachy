@@ -1,9 +1,17 @@
+import type {
+  CatalogCensus,
+  LabelRow,
+  ProductRow,
+  TeamRow,
+} from "@tachy/contract";
 import { sql } from "../infra/db";
+import { productTagRenameImpact, renameProductTag } from "./product-tags";
+import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { badInput, conflict, notFound } from "../infra/errors";
 import { clearPermissionCache } from "../access/permissions";
 
 export async function getProductIdBySlug(slug: string): Promise<string> {
-  const rows = await sql`
+  const rows = await sql<{ id: string }[]>`
     select id from products
     where slug = ${slug}
        or exists (select 1 from unnest(aliases) a where lower(a) = lower(${slug}))
@@ -15,22 +23,24 @@ export async function getProductIdBySlug(slug: string): Promise<string> {
     );
   if (rows.length > 1)
     throw badInput(
-      `Ambiguous product '${slug}' — it exists in multiple teams; use a unique alias or rename one of the products.`,
+      `Ambiguous product '${slug}': exists in multiple teams; use a unique alias or rename one of the products.`,
     );
-  return rows[0].id as string;
+  return rows[0].id;
 }
 
 export async function listTeams() {
-  return sql`select id, slug, name from teams order by name`;
+  return sql<TeamRow[]>`select id, slug, name from teams order by name`;
 }
 
 export async function getTeamIdBySlug(slug: string): Promise<string> {
-  const [row] = await sql`select id from teams where slug = ${slug}`;
+  const [row] = await sql<{ id: string }[]>`
+    select id from teams where slug = ${slug}
+  `;
   if (!row)
     throw badInput(
       `Unknown team '${slug}'. Call list_teams or add_team first.`,
     );
-  return row.id as string;
+  return row.id;
 }
 
 export async function addTeam(slug: string, name: string) {
@@ -82,7 +92,7 @@ export async function deleteTeam(slug: string) {
 }
 
 export async function listProducts(teamSlug?: string) {
-  return sql`
+  return sql<ProductRow[]>`
     select p.id, p.slug, p.name, p.aliases, t.slug as team_slug, t.name as team_name
     from products p join teams t on t.id = p.team_id
     ${teamSlug ? sql`where t.slug = ${teamSlug}` : sql``}
@@ -188,7 +198,9 @@ export async function deleteProduct(productId: string) {
 }
 
 export async function listLabels(productId: string) {
-  return sql`select id, slug, description from labels where product_id = ${productId} order by slug`;
+  return sql<
+    LabelRow[]
+  >`select id, slug, description from labels where product_id = ${productId} order by slug`;
 }
 
 export async function addLabel(
@@ -218,50 +230,16 @@ export async function updateLabel(
   return row;
 }
 
-export async function labelRenameImpact(
-  productId: string,
-  slug: string,
-): Promise<{ entries: number; docs: number }> {
-  const [current] =
-    await sql`select id from labels where product_id = ${productId} and slug = ${slug}`;
-  if (!current) throw notFound(`Label '${slug}' not found for this product`);
-  const [e] =
-    await sql`select count(*)::int as n from knowledge_entries where product_id = ${productId} and ${slug} = any(tags)`;
-  const [d] =
-    await sql`select count(*)::int as n from reference_docs where product_id = ${productId} and ${slug} = any(tags)`;
-  return { entries: e.n, docs: d.n };
+export function labelRenameImpact(productId: string, slug: string) {
+  return productTagRenameImpact("labels", productId, slug);
 }
 
-export async function renameLabel(
+export function renameLabel(
   productId: string,
   oldSlug: string,
   newSlug: string,
 ) {
-  if (oldSlug === newSlug)
-    return { renamed: false, from: oldSlug, to: newSlug, entries: 0, docs: 0 };
-  const [current] =
-    await sql`select id from labels where product_id = ${productId} and slug = ${oldSlug}`;
-  if (!current) throw notFound(`Label '${oldSlug}' not found for this product`);
-  const [taken] =
-    await sql`select id from labels where product_id = ${productId} and slug = ${newSlug}`;
-  if (taken)
-    throw conflict(`label '${newSlug}' already exists for this product`);
-  return sql.begin(async (tx) => {
-    const e =
-      await tx`update knowledge_entries set tags = array_replace(tags, ${oldSlug}, ${newSlug})
-      where product_id = ${productId} and ${oldSlug} = any(tags)`;
-    const d =
-      await tx`update reference_docs set tags = array_replace(tags, ${oldSlug}, ${newSlug})
-      where product_id = ${productId} and ${oldSlug} = any(tags)`;
-    await tx`update labels set slug = ${newSlug} where id = ${current.id}`;
-    return {
-      renamed: true,
-      from: oldSlug,
-      to: newSlug,
-      entries: e.count,
-      docs: d.count,
-    };
-  });
+  return renameProductTag("labels", productId, oldSlug, newSlug);
 }
 
 export async function deleteLabel(productId: string, slug: string) {
@@ -280,8 +258,8 @@ export async function deleteLabel(productId: string, slug: string) {
  * description is one the agent has nothing to match a question against, so it
  * is dead weight in the taxonomy rather than an incomplete row.
  */
-export async function catalogCensus() {
-  const [row] = await sql`
+export async function catalogCensus(): Promise<CatalogCensus> {
+  const [row] = await sql<Omit<CatalogCensus, "components_by_product">[]>`
     select
       (select count(*)::int from teams) as teams,
       (select count(*)::int from products) as products,
@@ -307,34 +285,60 @@ export async function catalogCensus() {
   `;
   /* The shape of the tree, not just its size: which products carry it and
      which have a slug and nothing under it. */
-  const perProduct = await sql`
+  const perProduct = await sql<CatalogCensus["components_by_product"]>`
     select p.slug, p.name, count(c.id)::int as n
     from products p
     left join components c on c.product_id = p.id
     group by p.id, p.slug, p.name
     order by n desc, p.slug
   `;
-  return {
-    ...(row as {
-      teams: number;
-      products: number;
-      components: number;
-      labels: number;
-      patterns: number;
-      customers: number;
-      teams_no_product: number;
-      products_no_component: number;
-      components_root: number;
-      components_no_description: number;
-      labels_no_description: number;
-      patterns_no_description: number;
-      customers_no_domains: number;
-      customer_units: number;
-    }),
-    components_by_product: perProduct as unknown as {
-      slug: string;
-      name: string;
-      n: number;
-    }[],
-  };
+  return { ...row, components_by_product: [...perProduct] };
+}
+
+/** The half-filled-in parts of the catalog, by name. */
+export async function catalogIssues(): Promise<Record<string, IssueList>> {
+  const lists = await Promise.all([
+    sql`
+      select t.slug as key, t.name as label, count(*) over () as total
+      from teams t
+      where not exists (select 1 from products p where p.team_id = t.id)
+      order by t.name limit ${ISSUE_ITEMS}
+    `,
+    sql`
+      select p.id as key, p.name as label, count(*) over () as total
+      from products p
+      where not exists (select 1 from components c where c.product_id = p.id)
+      order by p.name limit ${ISSUE_ITEMS}
+    `,
+    sql`
+      select c.id as key, p.name || ' › ' || c.name as label, count(*) over () as total
+      from components c join products p on p.id = c.product_id
+      where c.description is null or c.description = ''
+      order by p.name, c.name limit ${ISSUE_ITEMS}
+    `,
+    sql`
+      select id as key, slug as label, count(*) over () as total
+      from labels where description is null or description = ''
+      order by slug limit ${ISSUE_ITEMS}
+    `,
+    sql`
+      select slug as key, slug as label, count(*) over () as total
+      from resolution_patterns where description = ''
+      order by slug limit ${ISSUE_ITEMS}
+    `,
+    sql`
+      select slug as key, name as label, count(*) over () as total
+      from customers where cardinality(email_domains) = 0
+      order by name limit ${ISSUE_ITEMS}
+    `,
+  ]);
+  const keys = [
+    "teams.no_product",
+    "products.no_component",
+    "components.no_description",
+    "labels.no_description",
+    "patterns.no_description",
+    "customers.no_domains",
+  ];
+  return Object.fromEntries(keys.map((k, i) => [k, issueList(lists[i])]));
 }

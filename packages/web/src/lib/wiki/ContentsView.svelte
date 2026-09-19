@@ -10,6 +10,7 @@
   import type { WikiToc, WikiTocNode, WikiArticleRef } from "../types";
   import WikiLayout from "./WikiLayout.svelte";
   import { wikiPath } from "./paths";
+  import { flattenTree, subtreeSlugs } from "./tree";
 
   let { scope }: { scope: string } = $props();
 
@@ -23,23 +24,7 @@
   /** Branches opened by hand. Subcategories start folded, as on the Arch Wiki. */
   let unfolded = $state<Record<string, boolean>>({});
 
-  /** Flat list of every category, for the parent picker. */
-  function flatten(
-    nodes: WikiTocNode[],
-    depth = 0,
-  ): { n: WikiTocNode; depth: number }[] {
-    return nodes.flatMap((n) => [
-      { n, depth },
-      ...flatten(n.children, depth + 1),
-    ]);
-  }
-  const all = $derived(toc ? flatten(toc.categories) : []);
-
-  /** A category cannot move under itself or its own descendant. */
-  const subtreeSlugs = (n: WikiTocNode): string[] => [
-    n.slug,
-    ...n.children.flatMap(subtreeSlugs),
-  ];
+  const all = $derived(toc ? flattenTree(toc.categories) : []);
 
   const parentOptions = $derived.by(() => {
     const moving = all.find((x) => x.n.slug === editing)?.n;
@@ -72,9 +57,8 @@
     };
   }
 
-  /* The routes take `parentSlug`. This form used to send `parent`, which zod
-     dropped without a word, so moving a category silently did nothing — and it
-     added with PUT, a route that does not exist. */
+  /** The routes take `parentSlug`. zod drops unknown keys without an error,
+   *  so a misnamed field makes a move silently do nothing. */
   async function save() {
     const slug = form.slug.trim();
     const name = form.name.trim();
@@ -203,7 +187,7 @@
           >
           <button
             class="tiny"
-            title="remove; its children move up rather than being deleted"
+            title="remove; children move up"
             onclick={() => remove(node.slug)}>remove</button
           >
         </span>
@@ -281,7 +265,7 @@
         <EmptyState
           icon="index"
           title="No categories yet."
-          detail="Categories are how a reader finds their way around this wiki. Add one from the top right, or let the agent propose them while it writes."
+          detail="Add one top right, or let the agent propose them."
         />
       {/if}
 

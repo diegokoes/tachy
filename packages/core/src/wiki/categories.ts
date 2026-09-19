@@ -3,16 +3,15 @@ import { sql } from "../infra/db";
 import { wouldCycle } from "../infra/hierarchy";
 import { badInput, conflict, notFound } from "../infra/errors";
 import { visibleGap } from "./gaps";
+import type {
+  WikiCategoryRow,
+  WikiArticleRef,
+  WikiTocNode,
+  WikiToc,
+  WikiListRow,
+} from "@tachy/contract";
 
-export interface WikiCategoryRow {
-  id: string;
-  product_id: string | null;
-  parent_id: string | null;
-  slug: string;
-  name: string;
-  description: string | null;
-  ordinal: number;
-}
+export type { WikiCategoryRow, WikiArticleRef, WikiTocNode, WikiToc };
 
 export interface WikiCategoryInput {
   productId?: string | null;
@@ -34,7 +33,7 @@ export interface WikiCategoryPatch {
 function assertCategorySlug(slug: string): void {
   if (!SLUG_RE.test(slug))
     throw badInput(
-      `Invalid category slug '${slug}' — lowercase letters, digits and hyphens only.`,
+      `Invalid category slug '${slug}': lowercase letters, digits and hyphens only.`,
     );
 }
 
@@ -92,7 +91,7 @@ export async function addWikiCategory(i: WikiCategoryInput) {
       (await wouldCycle("wiki_categories", existing.id, parentId))
     )
       throw badInput(
-        `'${i.parentSlug}' sits under '${i.slug}' — that would make a cycle`,
+        `'${i.parentSlug}' sits under '${i.slug}'; that would make a cycle`,
       );
   }
 
@@ -126,7 +125,7 @@ export async function updateWikiCategory(
     // branch detaches into a ring the table of contents never terminates on.
     if (await wouldCycle("wiki_categories", current.id, parentId))
       throw badInput(
-        `'${patch.parentSlug}' sits under '${slug}' — that would make a cycle`,
+        `'${patch.parentSlug}' sits under '${slug}'; that would make a cycle`,
       );
   }
 
@@ -164,28 +163,6 @@ export async function deleteWikiCategory(
     await tx`delete from wiki_categories where id = ${current.id}`;
     return { deleted: slug };
   });
-}
-
-export interface WikiArticleRef {
-  id: string;
-  slug: string | null;
-  title: string;
-  status: string;
-  ordinal: number;
-  updated_at: string;
-  /** Sources this was composed from that have changed since it was written. */
-  stale?: number;
-}
-
-export interface WikiTocNode extends WikiCategoryRow {
-  articles: WikiArticleRef[];
-  children: WikiTocNode[];
-}
-
-export interface WikiToc {
-  categories: WikiTocNode[];
-  /** Articles filed under nothing — the wiki's own measure of unfiled work. */
-  uncategorised: WikiArticleRef[];
 }
 
 /**
@@ -333,7 +310,7 @@ export async function findArticle(productId: string | null, slug: string) {
 
 /** Every wiki, with what it holds and what it is missing, for the switcher. */
 export async function listWikis() {
-  return sql`
+  return sql<WikiListRow[]>`
     select p.id as product_id, p.slug as product_slug, p.name as product_name,
            (select count(*)::int from reference_docs d
              where d.product_id = p.id and d.kind = 'wiki'

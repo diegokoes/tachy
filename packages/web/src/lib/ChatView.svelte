@@ -375,7 +375,7 @@
       {:else if e.kind === "running"}
         <div class="turn"><span class="who err">{G.marker}busy</span>
           <div class="body err">
-            {#if e.stopped}stopped. send your message again.{:else}{e.text} <button class="mini" onclick={() => stopRunning(e)}>stop it</button>{/if}
+            {#if e.stopped}stopped. send your message again.{:else}{e.text} <Button size="sm" onclick={() => stopRunning(e)}>stop it</Button>{/if}
           </div>
         </div>
       {:else if e.kind === "approval"}

@@ -4,7 +4,8 @@
   import { patchLibraryItem } from "./library/edit";
   import { createSequence } from "./resource.svelte";
   import { api } from "./api";
-  import type { KnowledgeRow, Feedback, NamedRow } from "./types";
+  import type { KnowledgeRow, Feedback } from "./types";
+  import type { ProductRow } from "@tachy/contract";
   import History from "./library/History.svelte";
   import Backlinks from "./library/Backlinks.svelte";
   import { renderMarkdown, markBrokenLinks } from "./markdown";
@@ -163,11 +164,10 @@
       if (!isCurrent()) return;
 
       if (isCurator() && next.product_id && !next.team_id) {
-        const products = await api.get<NamedRow[]>("/products");
+        const products = await api.get<ProductRow[]>("/products");
         if (!isCurrent()) return;
         productTeamSlug =
-          (products.find((p) => p.id === next.product_id)
-            ?.team_slug as string) ?? null;
+          products.find((p) => p.id === next.product_id)?.team_slug ?? null;
       }
     } catch (e) {
       if (!isCurrent()) return;
@@ -276,7 +276,7 @@
     {#if entry.status === "deprecated"}
       <div class="deprecated-banner">
         <Icon name="alert" size="1em" weight={7} />
-        This lesson is marked <strong>outdated</strong> - don't apply it as current advice.
+        <strong>outdated</strong>: not current advice.
         {#if entry.superseded_by && onOpen}
           <Button size="sm" tone="warn" onclick={() => onOpen(entry!.superseded_by!)}>view replacement</Button>
         {/if}
@@ -350,7 +350,7 @@
                   {#if entry.customer_slug}
                     <Badge
                       tone="accent"
-                      title="learned on this customer's install. Cite it as theirs, not as how the product behaves"
+                      title="customer-specific; not general product behaviour"
                       >{entry.customer_slug}</Badge
                     >
                   {/if}

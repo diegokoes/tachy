@@ -11,7 +11,7 @@
   import { INFO } from "./help";
 import { csv } from "../fields";
   import type { Component, Product, Repo } from "./rows";
-  import { sectionHoist } from "./topAction.svelte";
+  import { sectionHoist } from "./sectionAction.svelte";
 
   let productSlug = $state("");
   let renaming = $state<Component | null>(null);
@@ -144,7 +144,7 @@ import { csv } from "../fields";
       {/each}
     </span>
   {:else}
-    <span class="none">—</span>
+    <span class="none">-</span>
   {/if}
 {/snippet}
 
@@ -171,7 +171,7 @@ import { csv } from "../fields";
     loading={components.loading}
     error={components.error}
     emptyTitle="No components for this {t('product')} yet."
-    emptyDetail="Seed them from docs, or let ticket analysis propose them."
+    emptyDetail="Seed from docs or ticket analysis."
     canEdit={() => mayEdit}
     canDelete={() => mayEdit}
     canCreate={mayEdit}

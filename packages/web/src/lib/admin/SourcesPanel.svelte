@@ -1,12 +1,27 @@
+<script lang="ts" module>
+  type Probe = {
+    ok: boolean;
+    error?: string;
+    identity?: string;
+    groups?: { key: string; name: string }[];
+    groupsNote?: string;
+  };
+
+  /* Outlives the panel: saving a new connection tests it and then opens its
+     page, which is a fresh mount, and the result has to be there when it
+     lands. */
+  let probes = $state<Record<string, Probe>>({});
+</script>
+
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../api";
+  import { navigate } from "../router.svelte";
   import { session } from "../session.svelte";
   import { createResource, errText } from "../resource.svelte";
   import { slugify, uniqueSlug } from "../slug";
   import {
     Badge,
-    Button,
     Chip,
     CrudTable,
     Field,
@@ -23,16 +38,15 @@
   import type { Connection, Product, SourceProject, Team } from "./rows";
 import { INFO } from "./help";
 import { csv } from "../fields";
-  import { sectionHoist } from "./topAction.svelte";
+  import { sectionHoist } from "./sectionAction.svelte";
+  import { NEW_RECORD, recordPath } from "./records";
+  import RecordPage from "./RecordPage.svelte";
+  import type { StatusAction } from "../library/status";
+
+  /** Given, the panel is one connection's page rather than the list of them. */
+  let { id }: { id?: string } = $props();
 
   type SourceType = "freshdesk" | "azure-devops" | "github";
-  type Probe = {
-    ok: boolean;
-    error?: string;
-    identity?: string;
-    groups?: { key: string; name: string }[];
-    groupsNote?: string;
-  };
 
   const SPEC: Record<
     SourceType,
@@ -52,7 +66,7 @@ import { csv } from "../fields";
       hostShape: "the subdomain and freshdesk.com, not a full URL",
       tokenLabel: "API key",
       tokenInfo:
-        "Found under profile, API key. It is per-agent: tickets are read with that agent's permissions.",
+        "Profile › API key. Per agent: reads with that agent's permissions.",
       groupLabel: "group",
       configKey: null,
     },
@@ -62,7 +76,7 @@ import { csv } from "../fields";
       hostShape: "the organization on its own, or a dev.azure.com URL",
       tokenLabel: "PAT",
       tokenInfo:
-        "An org-scoped personal access token. It reaches every project you have permissions on. Scopes: Work Items (read, or read & write to create tickets), Wiki read, Code read.",
+        "Org-scoped PAT. Scopes: Work Items read (write to create), Wiki read, Code read.",
       groupLabel: "project",
       configKey: "projects",
     },
@@ -71,7 +85,7 @@ import { csv } from "../fields";
       hostLabel: "API base URL",
       hostShape: "https://api.github.com, or an Enterprise /api/v3 URL",
       tokenLabel: "token",
-      tokenInfo: "A personal access token with repo and issues read.",
+      tokenInfo: "PAT with repo and issues read.",
       groupLabel: "repo",
       configKey: "repos",
     },
@@ -92,9 +106,7 @@ import { csv } from "../fields";
   const products = createResource(() => api.get<Product[]>("/products"), []);
   const teams = createResource(() => api.get<Team[]>("/teams"), []);
 
-  let probes = $state<Record<string, Probe>>({});
   let testing = $state<string | null>(null);
-  let expanded = $state(new Set<string>());
 
   /* Registering from the probe list, where the projects are actually in front
      of you. Without this the discovered names are inert text and the only way
@@ -242,7 +254,7 @@ import { csv } from "../fields";
       width: "12rem",
       edit: "text",
       required: true,
-      info: `${INFO.slug} It also names this connection's stored credential, so it cannot change later.`,
+      info: `${INFO.slug} Names the stored credential; immutable.`,
       derive: (d) =>
         uniqueSlug(
           suggestSlug(typeOf(d), String(d.host ?? "")),
@@ -255,7 +267,7 @@ import { csv } from "../fields";
       edit: "text",
       required: true,
       info: (d) =>
-        `The ${SPEC[typeOf(d)].hostLabel} this connection talks to: ${SPEC[typeOf(d)].hostShape}.`,
+        `${SPEC[typeOf(d)].hostLabel}: ${SPEC[typeOf(d)].hostShape}.`,
       value: (r) => baseUrlToHost(r.source_type as SourceType, r.base_url),
     },
     {
@@ -273,7 +285,7 @@ import { csv } from "../fields";
       edit: "text",
       visible: (d) => Boolean(SPEC[typeOf(d)].configKey),
       info: (d) =>
-        `Optional, comma-separated. Limits sync and gives the agent a default set of ${SPEC[typeOf(d)].groupLabel}s to look in instead of the whole org.`,
+        `Optional, comma-separated. Limits sync and default agent scope to these ${SPEC[typeOf(d)].groupLabel}s.`,
       value: (r) => groupsOf(r).join(", "),
     },
     {
@@ -281,7 +293,7 @@ import { csv } from "../fields";
       label: "PII redaction",
       width: "8rem",
       edit: "checkbox",
-      info: "Strips PII out of this source's payloads before the model sees them.",
+      info: "Scrub PII from this source before the model.",
       value: (r) => redactionOn(r),
       cell: lockCell,
     },
@@ -311,18 +323,10 @@ import { csv } from "../fields";
     await test(slug);
   }
 
-  /** Which connection's probe result is on screen. */
-  let probeOpen = $state<string | null>(null);
-
   /**
-   * The result goes to a dialog, not to the row's drawer. A probe is something
-   * you asked for and are waiting on, and burying the answer — a failure most
-   * of all — behind an expander and a warning triangle's tooltip meant going
-   * looking for what you had just triggered. The drawer still keeps the last
-   * result, so it stays readable after the dialog is dismissed.
-   *
-   * `save` calls this too, so writing a connection's credentials shows you
-   * straight away whether they work and what they can see.
+   * The result lands on the connection's own page, where you are when you ask
+   * for it. `save` calls this too, so writing a connection's credentials shows
+   * you straight away whether they work and what they can see.
    */
   async function test(slug: string) {
     testing = slug;
@@ -335,7 +339,6 @@ import { csv } from "../fields";
       probes[slug] = { ok: false, error: errText(e) };
     } finally {
       testing = null;
-      probeOpen = slug;
     }
   }
 
@@ -344,7 +347,34 @@ import { csv } from "../fields";
     projects.reload();
     products.reload();
     teams.reload();
-  });</script>
+  });
+
+  const creating = $derived(id === NEW_RECORD);
+  const record = $derived(
+    id && !creating ? (connections.data.find((c) => c.slug === id) ?? null) : null,
+  );
+
+  const railActions = $derived<StatusAction[]>(
+    record && admin
+      ? [
+          {
+            icon: "test",
+            label: testing === record.slug ? "testing…" : "test",
+            title: "test connection",
+            disabled: testing === record.slug,
+            onclick: () => record && test(record.slug),
+          },
+        ]
+      : [],
+  );
+
+  const back = () => navigate(recordPath("sources"));
+
+  async function createConnection(d: Draft) {
+    await connections.mutate(() => save(null, d));
+    navigate(recordPath("sources", String(d.slug).trim()), { replace: true });
+  }
+</script>
 
 {#snippet typeCell(r: Connection)}
   {SPEC[r.source_type as SourceType]?.label ?? r.source_type}
@@ -356,8 +386,8 @@ import { csv } from "../fields";
     class="lock"
     class:on
     title={on
-      ? "PII is scrubbed from this source before the model sees it"
-      : "this source's payloads reach the model unscrubbed"}
+      ? "PII scrubbed before the model"
+      : "unscrubbed"}
   >
     <Icon
       name={on ? "lockOn" : "lockOff"}
@@ -376,7 +406,7 @@ import { csv } from "../fields";
 {#snippet probeRow(r: Connection)}
   {@const probe = probes[r.slug]}
   {#if !probe}
-    <p class="dim">Not tested yet. Hit <em>test</em> on this row.</p>
+    <p class="dim">Not tested yet. Hit <em>test</em>.</p>
   {:else if !probe.ok}
     <Note tone="danger">{probe.error ?? "failed"}</Note>
   {:else}
@@ -405,6 +435,7 @@ import { csv } from "../fields";
           {:else}
             <Chip
               tone="default"
+              title={g.key}
               onclick={admin ? () => openClaim(r.slug, g) : undefined}
               >{g.name}</Chip
             >
@@ -415,91 +446,43 @@ import { csv } from "../fields";
   {/if}
 {/snippet}
 
-{#snippet testAction(r: Connection)}
-  <Button
-    variant="ghost"
-    size="sm"
-    icon="test"
-    title="test connection"
-    busy={testing === r.slug}
-    onclick={() => test(r.slug)}>test</Button
-  >
-{/snippet}
-
-<CrudTable
-  hoist={sectionHoist("sources")}
-  {columns}
-  rows={connections.data}
-  rowKey={(r) => r.slug}
-  loading={connections.loading}
-  error={connections.error}
-  emptyTitle="No source connections yet."
-  canEdit={() => admin}
-  canDelete={() => admin}
-  canCreate={admin}
-  addLabel="add connection"
-  noun="connection"
-  editTitle={(r) => r.slug}
-  expand={probeRow}
-  {expanded}
-  ontoggle={(k) => {
-    const next = new Set(expanded);
-    if (next.has(k)) next.delete(k);
-    else next.add(k);
-    expanded = next;
-  }}
-  extraActions={testAction}
-  oncreate={(d) => connections.mutate(() => save(null, d))}
-  onsave={(row, d) => connections.mutate(() => save(row, d))}
-  ondelete={(row) =>
-    connections.mutate(async () => {
-      await api.delete(`/source-connections/${row.slug}`);
-      delete probes[row.slug];
-    })}
-/>
-
-{#if probeOpen}
-  {@const slug = probeOpen}
-  {@const probe = probes[slug]}
-  {@const type = connections.data.find((c) => c.slug === slug)
-    ?.source_type as SourceType | undefined}
-  <Modal
-    title={`connection test: ${slug}`}
-    width="38rem"
-    onCancel={() => (probeOpen = null)}
-  >
-    <Subject verb="tested" name={slug} />
-    {#if !probe}
-      <p class="dim">no result</p>
-    {:else if !probe.ok}
-      <Note tone="danger">{probe.error ?? "failed"}</Note>
-    {:else}
-      <Note tone="ok">
-        connected{probe.identity ? ` as ${probe.identity}` : ""}
-      </Note>
-      {#if probe.groupsNote}
-        <Note tone="warn">
-          Can't list {(type && SPEC[type]?.groupLabel) ?? "group"}s. Type the
-          key in yourself when registering.
-          <span class="reason">{probe.groupsNote}</span>
-        </Note>
-      {/if}
-      {#if probe.groups?.length}
-        <p class="dim">
-          {(type && SPEC[type]?.groupLabel) ?? "group"}s this token can see.
-          The key is what a project map is written against. Close this and
-          click one in the row's drawer to register it.
-        </p>
-        <ul class="groups">
-          {#each probe.groups as g (g.key)}
-            <li><code>{g.key}</code><span>{g.name}</span></li>
-          {/each}
-        </ul>
-      {:else if !probe.groupsNote}
-        <p class="dim">This token can see no groups.</p>
-      {/if}
-    {/if}
-  </Modal>
+{#if id}
+  <RecordPage
+    noun="connection"
+    title={record?.slug ?? ""}
+    {columns}
+    row={record}
+    {creating}
+    loading={connections.loading}
+    loadError={connections.error}
+    canEdit={admin}
+    canDelete={admin}
+    actions={railActions}
+    body={probeRow}
+    onclose={back}
+    oncreate={createConnection}
+    onsave={(row, d) => connections.mutate(() => save(row, d))}
+    ondelete={(row) =>
+      connections.mutate(async () => {
+        await api.delete(`/source-connections/${row.slug}`);
+        delete probes[row.slug];
+      })}
+  />
+{:else}
+  <CrudTable
+    hoist={sectionHoist("sources")}
+    {columns}
+    rows={connections.data}
+    rowKey={(r) => r.slug}
+    loading={connections.loading}
+    error={connections.error}
+    emptyTitle="No source connections yet."
+    canEdit={() => admin}
+    canCreate={admin}
+    addLabel="add connection"
+    onopen={(r) => navigate(recordPath("sources", r.slug))}
+    onadd={() => navigate(recordPath("sources", NEW_RECORD))}
+  />
 {/if}
 
 {#if claim}
@@ -523,8 +506,8 @@ import { csv } from "../fields";
         label="role"
         required
         info={c.role === "tracker"
-          ? "A create and reassign target. Nothing is filed under a tracker, and it holds no wiki, repos or area rules."
-          : `Its items ingest into a ${t("product")}, and it can carry the wikis, repos and area rules.`}
+          ? "Create and reassign target only. No wiki, repos or area rules."
+          : `Ingests into a product. Scopes wikis, repos, area rules.`}
       >
         <Select
           value={c.role}
@@ -589,33 +572,6 @@ import { csv } from "../fields";
     display: flex;
     flex-wrap: wrap;
     gap: var(--pad-1);
-  }
-  /* Keys stay selectable text rather than chips — they get pasted into a
-     project map, so they have to be copyable. */
-  .groups {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    max-height: 18rem;
-    overflow: auto;
-    font-size: var(--fs-sm);
-  }
-  .groups li {
-    display: flex;
-    gap: var(--pad-3);
-    align-items: baseline;
-    padding: var(--pad-1) 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
-  }
-  .groups code {
-    font-family: var(--font-mono);
-    user-select: all;
-  }
-  .groups span {
-    color: var(--muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .reason {
     opacity: 0.65;

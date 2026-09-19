@@ -167,11 +167,12 @@
     return () => ro.disconnect();
   });
 
-  /* The subnav bar outlives a section change: an incoming view registers its
-     tabs before the outgoing view's disposer runs — deliberately, so the row
-     never blanks mid-switch — so the same element is reused and its indicator
-     would slide from wherever the old section's tab happened to sit. Sliding
-     is for moving within a section; arriving in one should just be there.
+  /* The subnav bar outlives a section change: the outgoing view's disposer
+     clears it a microtask late (see setSubnav), so the incoming view's tabs
+     replace it without the row blanking mid-switch. The same element is
+     reused, and its indicator would slide from wherever the old section's
+     tab happened to sit. Sliding is for moving within a section; arriving in
+     one should just be there.
 
      Two frames, not one. The bar is centred, so the recess ResizeObserver
      writing a new width re-centres it a frame after the switch, and the
@@ -196,8 +197,8 @@
     wipeIn(navEl.querySelectorAll("button"), () => (navRevealed = true));
   });
 
-  // hidden: four more entries would crowd the hint rule, and Settings › keybinds
-  // is the discovery surface for these now that the tabs no longer show digits.
+  // Hidden: four more entries would crowd the hint rule. Settings › keybinds
+  // lists them.
   $effect(() => {
     const items = nav;
     return pushScope(
@@ -210,8 +211,8 @@
     );
   });
 
-  // Settings sits outside the tab bar now, so it keeps its own hidden binding
-  // rather than riding navItems()'s digit scope.
+  // Settings is not a tab, so navItems() assigns it no digit. It registers
+  // its own hidden binding.
   $effect(() =>
     pushScope([
       {
@@ -531,8 +532,9 @@
        strip left over it. See .bar in LibraryView. */
     --main-air: calc(var(--fs-xs) * 0.9);
     /* Right edge to recess wall: the corner the carved row keeps for its own
-       content. The recess takes everything else, out to the left edge. */
-    --sub-reserve: 15rem;
+       content. The recess takes everything else, out to the left edge. Sized
+       for the widest row it carries, cancel and save in capitals. */
+    --sub-reserve: 17rem;
     --sub-depth: calc(var(--sub-h-raw, 0px) + var(--sub-air));
   }
 
@@ -613,9 +615,13 @@
     gap: var(--pad-3);
     min-width: 0;
   }
-  /* Labels ellipsize rather than overrun the corner on a narrow window. */
+  /* Labels ellipsize rather than overrun the corner on a narrow window.
+     Capitals because lowercase words up here read as a caption, not as
+     something to press. */
   .top-acts :global(.btn) {
     min-width: 0;
+    text-transform: uppercase;
+    letter-spacing: var(--label-spacing);
   }
 
   /* The rule fills a full-width bar; a hugging pill has no edge to run to. */

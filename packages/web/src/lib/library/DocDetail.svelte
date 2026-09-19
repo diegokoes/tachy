@@ -3,7 +3,8 @@
   import { statusTone, type StatusAction } from "./status";
   import { patchLibraryItem } from "./edit";
   import { api } from "../api";
-  import type { NamedRow, ReferenceLineageRow, ReferenceRow } from "../types";
+  import type { ReferenceLineageRow, ReferenceRow } from "../types";
+  import type { ProductRow } from "@tachy/contract";
   import { canCurateScope, isCurator } from "../session.svelte";
   import History from "./History.svelte";
   import Backlinks from "./Backlinks.svelte";
@@ -137,11 +138,10 @@
       // Only for the permission check — the scope is displayed off product_area.
       if (next.product_id) {
         try {
-          const products = await api.get<NamedRow[]>("/products");
+          const products = await api.get<ProductRow[]>("/products");
           if (!isCurrent()) return;
           productTeamSlug =
-            (products.find((p) => p.id === next.product_id)
-              ?.team_slug as string) ?? null;
+            products.find((p) => p.id === next.product_id)?.team_slug ?? null;
         } catch {
           if (!isCurrent()) return;
           productTeamSlug = null;
@@ -279,7 +279,7 @@
         {#if doc.customer_slug}
           <Badge
             tone="accent"
-            title="documents this customer's install. Cite it as theirs, not as how the product works"
+            title="customer-specific; not general product behaviour"
             >{doc.customer_slug}</Badge
           >
         {/if}

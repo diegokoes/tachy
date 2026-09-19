@@ -5,7 +5,8 @@
   import { MAX_PAGE } from "@tachy/contract";
   import { onMount } from "svelte";
   import { api } from "../api";
-  import type { KnowledgeRow, NamedRow, ReferenceRow } from "../types";
+  import type { KnowledgeRow, ReferenceRow } from "../types";
+  import type { ComponentRow, ProductRow } from "@tachy/contract";
   import { navigate, segment, segments } from "../router.svelte";
   import { setSubnav, type SubnavItem } from "../subnav.svelte";
   import { pushScope } from "../keys.svelte";
@@ -51,9 +52,7 @@
     { key: "docs", label: "docs", icon: "clipboard" },
   ];
 
-  // From vocab.ts, which exists so these are written once: the hand-typed
-  // copies had drifted out of the order the contract documents as the order
-  // they should be offered in.
+  // From vocab.ts, so they are offered in the order the contract documents.
   const STATUSES = KNOWLEDGE_STATUSES;
   const DOC_STATUSES = REFERENCE_STATUSES;
 
@@ -66,7 +65,7 @@
   /** The tab a detail view was opened from, so "back" returns there. */
   let origin = $state("all");
 
-  // The wiki has its own section now; an old /library/wiki link follows it.
+  // Old /library/wiki links redirect to the wiki section.
   $effect(() => {
     if (kind === "wiki") navigate(movedWikiPath(segments()), { replace: true });
   });
@@ -90,8 +89,8 @@
   let component = $state("");
   let version = $state("");
 
-  let products = $state<NamedRow[]>([]);
-  let components = $state<NamedRow[]>([]);
+  let products = $state<ProductRow[]>([]);
+  let components = $state<ComponentRow[]>([]);
 
   /** Counts for every facet under whatever else is currently selected. */
   let facets = $state<Facets>({});
@@ -229,7 +228,7 @@
 
   async function loadCatalog() {
     try {
-      products = await api.get<NamedRow[]>("/products");
+      products = await api.get<ProductRow[]>("/products");
     } catch {
       products = [];
     }
@@ -245,9 +244,9 @@
   const currentFacets = createSequence();
 
   async function loadFacets() {
-    // Its own sequence, separate from `run`'s: changing two filters quickly
-    // fires two of these, and the slower one used to overwrite the newer
-    // options — leaving a filter offering values that no longer have rows.
+    // Its own sequence, separate from `run`'s: two quick filter changes fire
+    // two loads, and the slower must not overwrite the newer options with
+    // values that have no rows.
     const isCurrent = currentFacets();
     const p = new URLSearchParams();
     if (productId) p.set("product_id", productId);
@@ -309,7 +308,7 @@
     const slug = products.find((p) => p.id === id)?.slug;
     if (slug)
       try {
-        const next = await api.get<NamedRow[]>(`/products/${slug}/components`);
+        const next = await api.get<ComponentRow[]>(`/products/${slug}/components`);
         if (!isCurrent()) return;
         components = next;
       } catch {
@@ -351,8 +350,7 @@
     origin = kind;
     if (i.kind === "article" && i.slug) {
       const scope =
-        (products.find((p) => p.id === i.productId)?.slug as string) ??
-        ORG_WIDE;
+        products.find((p) => p.id === i.productId)?.slug ?? ORG_WIDE;
       navigate(wikiPath(scope, i.slug));
       return;
     }
@@ -364,31 +362,23 @@
     navigate(origin === "all" ? "/library" : `/library/${origin}`);
   }
 
-  async function createEntry(payload: Record<string, unknown>) {
-    createSaving = true;
-    createError = null;
-    try {
-      const created = await api.post<{ id: string }>("/knowledge", payload);
-      navigate(`/library/entries/${created.id}`);
-    } catch (e) {
-      createError = errText(e);
-    } finally {
-      createSaving = false;
-    }
-  }
-
-  async function createDoc(payload: Record<string, unknown>) {
-    createSaving = true;
-    createError = null;
-    try {
-      const created = await api.post<{ id: string }>("/reference", payload);
-      navigate(`/library/docs/${created.id}`);
-    } catch (e) {
-      createError = errText(e);
-    } finally {
-      createSaving = false;
-    }
-  }
+  /** Create through `endpoint`, then open what was made under `/library/<tab>`. */
+  const create =
+    (endpoint: string, tab: string) =>
+    async (payload: Record<string, unknown>) => {
+      createSaving = true;
+      createError = null;
+      try {
+        const created = await api.post<{ id: string }>(endpoint, payload);
+        navigate(`/library/${tab}/${created.id}`);
+      } catch (e) {
+        createError = errText(e);
+      } finally {
+        createSaving = false;
+      }
+    };
+  const createEntry = create("/knowledge", "entries");
+  const createDoc = create("/reference", "docs");
 
   /** Opens narrowed to what another page asked for; see `presetScope`. */
   async function applyPreset(p: ScopePreset) {
@@ -647,10 +637,7 @@
           title={t("product")}
           options={[
             { value: "", label: "any" },
-            ...products.map((p) => ({
-              value: p.id as string,
-              label: p.name as string,
-            })),
+            ...products.map((p) => ({ value: p.id, label: p.name })),
           ]}
           onchange={(v) => onProductChange(String(v))}
         />
@@ -802,8 +789,8 @@
             ? `No matches for “${q}”.`
             : "The library is empty."}
           detail={mode === "search"
-            ? "Search covers summaries, symptoms, signals (error codes), root causes, tags and doc bodies."
-            : "Analyze a ticket in chat, or add an entry by hand."}
+            ? "Searches summaries, symptoms, signals, root causes, tags, doc bodies."
+            : "Analyze a ticket in chat, or add an entry."}
         />
       </li>
     {/if}
@@ -858,9 +845,9 @@
     letter-spacing: var(--label-spacing);
   }
 
-  /* The caps fill the air that used to sit blank between the search bar and
-     the controls, so the controls land where they always did: the top margin
-     gives back exactly what a cap and its gap take. */
+  /* The caps occupy the space between the search bar and the controls. The
+     top margin subtracts a cap and its gap, so the controls keep their
+     offset. */
   .controls {
     position: relative;
     margin-top: calc(var(--pad-4) - var(--fs-xs) - var(--pad-1));

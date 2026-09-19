@@ -1,39 +1,15 @@
 import {
   JOB_FINISHED,
   parseDuration,
+  type JobRun,
   type JobStatus,
   type JobTrigger,
 } from "@tachy/contract";
-import { sql, type Db } from "../infra/db";
+import { sql, type Db, jsonb } from "../infra/db";
 import { badInput, notFound } from "../infra/errors";
 import { getJobKind } from "./registry";
 
-export interface JobRun {
-  id: string;
-  definition_id: string | null;
-  kind: string;
-  params: Record<string, unknown>;
-  resource_class: "light" | "heavy";
-  trigger: JobTrigger;
-  scheduled_for: string | null;
-  requested_by: string | null;
-  status: JobStatus;
-  attempts: number;
-  max_attempts: number;
-  timeout_ms: number;
-  run_after: string;
-  locked_by: string | null;
-  locked_until: string | null;
-  cancel_requested: boolean;
-  progress: number | null;
-  progress_note: string | null;
-  output: Record<string, unknown> | null;
-  error: string | null;
-  log_tail: string;
-  created_at: string;
-  started_at: string | null;
-  finished_at: string | null;
-}
+export type { JobRun };
 
 export const JOB_RUNS_CHANNEL = "job_runs";
 
@@ -83,7 +59,7 @@ export async function enqueueRun(opts: {
   const [row] = await db`
     insert into job_runs (definition_id, kind, params, resource_class, trigger, scheduled_for,
                           requested_by, max_attempts, timeout_ms)
-    values (${opts.definitionId ?? null}, ${opts.kind}, ${sql.json(parsed.data as never)},
+    values (${opts.definitionId ?? null}, ${opts.kind}, ${jsonb(parsed.data)},
             ${resourceClass}, ${opts.trigger}, ${opts.scheduledFor ?? null},
             ${opts.requestedBy ?? null}, ${kind.maxAttempts}, ${parseDuration(timeout)})
     on conflict (definition_id, scheduled_for) do nothing
@@ -170,7 +146,7 @@ export async function finishRun(
         when ${outcome.status} = 'failed' and attempts < max_attempts then null
         else now() end,
       locked_by = null, locked_until = null,
-      output = ${outcome.output ? sql.json(outcome.output as never) : null},
+      output = ${outcome.output ? jsonb(outcome.output) : null},
       error = ${outcome.error ?? null},
       log_tail = ${outcome.logTail},
       progress = case when ${outcome.status} = 'succeeded' then 1 else progress end

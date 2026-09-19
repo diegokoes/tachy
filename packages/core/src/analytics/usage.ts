@@ -1,31 +1,8 @@
 import { sql } from "../infra/db";
 import { estimateCostUsd } from "./runs";
+import type { AgentUsage } from "@tachy/contract";
 
-export interface AgentUsage {
-  days: number;
-  turns: number;
-  input_tokens: number;
-  output_tokens: number;
-  /**
-   * What the provider reported where it reported anything, list price for the
-   * rest. A subscription is not billed per token, so this measures consumption
-   * rather than an invoice.
-   */
-  cost_usd: number;
-  active_7d: number;
-  /** Distinct people with a turn anywhere in the window. */
-  active: number;
-  /** Tokens and turns per day, oldest first, gaps filled. */
-  per_day: { day: string; turns: number; tokens: number }[];
-  by_model: { model: string; turns: number; tokens: number }[];
-  /** Heaviest users first. Omitted by the route for anyone not an app admin. */
-  top_users?: {
-    email: string;
-    turns: number;
-    tokens: number;
-    cost_usd: number;
-  }[];
-}
+export type { AgentUsage };
 
 /**
  * Rows grouped by model with the tokens no provider priced split out. A backend
@@ -82,6 +59,21 @@ export async function agentUsageCensus(days = 30): Promise<AgentUsage> {
     group by d.day
     order by d.day
   `;
+  const perDayModel = await sql`
+    select to_char(created_at::date, 'YYYY-MM-DD') as day,
+      coalesce(model, 'unknown') as model,
+      coalesce(sum(coalesce(input_tokens, 0) + coalesce(output_tokens, 0)), 0)::bigint::float8
+        as tokens
+    from analysis_runs
+    where mode = 'chat' and created_at::date > current_date - ${perDayWindow}::int
+    group by 1, 2
+  `;
+  const models = new Map<string, Record<string, number>>();
+  for (const r of perDayModel) {
+    const day = models.get(r.day) ?? {};
+    day[r.model as string] = r.tokens as number;
+    models.set(r.day, day);
+  }
   const by_model = await sql`
     select coalesce(model, 'unknown') as model, count(*)::int as turns,
       coalesce(sum(coalesce(input_tokens, 0) + coalesce(output_tokens, 0)), 0)::bigint::float8
@@ -140,7 +132,12 @@ export async function agentUsageCensus(days = 30): Promise<AgentUsage> {
     cost_usd: costOf(rows),
     active_7d: totals.active_7d as number,
     active: totals.active as number,
-    per_day: [...per_day] as unknown as AgentUsage["per_day"],
+    per_day: per_day.map((d) => ({
+      day: d.day as string,
+      turns: d.turns as number,
+      tokens: d.tokens as number,
+      models: models.get(d.day) ?? {},
+    })),
     by_model: [...by_model] as unknown as AgentUsage["by_model"],
     top_users,
   };

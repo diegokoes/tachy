@@ -1,4 +1,7 @@
-import { sql } from "../infra/db";
+import { REPO_INDEX_STATUSES, SLUG_RE } from "@tachy/contract";
+import type { RepoCensus, RepoIndexStatus, RepoRow } from "@tachy/contract";
+import { sql, jsonb } from "../infra/db";
+import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { badInput, notFound } from "../infra/errors";
 import { getProductIdBySlug } from "../catalog/products";
 import { getCustomerIdBySlug } from "../catalog/customers";
@@ -7,14 +10,8 @@ import { getSourceProject } from "../sources/projects";
 import type { EntryScope } from "../access/permissions";
 import { assertBranchName, assertRepoUrl, removeClone } from "./git";
 
-export const REPO_INDEX_STATUSES = [
-  "idle",
-  "cloning",
-  "indexing",
-  "ready",
-  "error",
-] as const;
-export type RepoIndexStatus = (typeof REPO_INDEX_STATUSES)[number];
+export { REPO_INDEX_STATUSES };
+export type { RepoIndexStatus, RepoRow, RepoCensus };
 
 export interface RepoInput {
   slug: string;
@@ -29,32 +26,8 @@ export interface RepoInput {
   config?: Record<string, unknown>;
 }
 
-export interface RepoRow {
-  id: string;
-  slug: string;
-  url: string;
-  product_id: string | null;
-  product_slug: string | null;
-  source_slug: string | null;
-  source_project_id: string | null;
-  project_key: string | null;
-  component_id: string | null;
-  component_slug: string | null;
-  customer_id: string | null;
-  customer_slug: string | null;
-  default_branch: string;
-  config: Record<string, unknown>;
-  index_status: RepoIndexStatus;
-  indexed_commit: string | null;
-  index_error: string | null;
-  file_count: number;
-  chunk_count: number;
-  last_indexed_at: string | null;
-  created_at: string;
-}
-
 export async function linkRepo(i: RepoInput) {
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(i.slug))
+  if (!SLUG_RE.test(i.slug))
     throw badInput(
       `invalid repo slug '${i.slug}' (lowercase letters, digits, hyphens)`,
     );
@@ -67,11 +40,11 @@ export async function linkRepo(i: RepoInput) {
     const project = await getSourceProject(i.sourceProjectId);
     if (!project.product_id)
       throw badInput(
-        `project '${project.external_key}' is a tracker — it holds no code, so a repo cannot belong to it`,
+        `project '${project.external_key}' is a tracker: it holds no code, so no repos`,
       );
     if (productId && productId !== project.product_id)
       throw badInput(
-        `repo product and project product disagree — project '${project.external_key}' belongs to '${project.product_slug}'`,
+        `repo product and project product disagree: project '${project.external_key}' belongs to '${project.product_slug}'`,
       );
     productId = project.product_id;
     sourceSlug = sourceSlug ?? project.source_slug;
@@ -87,7 +60,7 @@ export async function linkRepo(i: RepoInput) {
   if (i.componentSlug) {
     if (!productId)
       throw badInput(
-        "a repo needs a product before it can implement a component — pass product or a project",
+        "a repo needs a product to implement a component: pass product or a project",
       );
     componentId = (await resolveComponentStrict(productId, i.componentSlug)).id;
   }
@@ -106,7 +79,7 @@ export async function linkRepo(i: RepoInput) {
                        customer_id, default_branch, config)
     values (${i.slug}, ${i.url}, ${productId}, ${sourceSlug},
             ${i.sourceProjectId ?? null}, ${componentId}, ${customerId},
-            ${i.defaultBranch ?? "main"}, ${sql.json((i.config ?? {}) as any)})
+            ${i.defaultBranch ?? "main"}, ${jsonb(i.config ?? {})})
     on conflict (slug) do update set
       url = excluded.url,
       product_id = excluded.product_id,
@@ -149,7 +122,7 @@ export async function listRepos(
   opts: ListReposOptions = {},
 ): Promise<RepoRow[]> {
   const shared = opts.includeShared !== false;
-  return (await sql`
+  return sql<RepoRow[]>`
     ${repoSelect()}
     where 1=1
       ${opts.productId ? sql`and r.product_id = ${opts.productId}` : sql``}
@@ -163,13 +136,13 @@ export async function listRepos(
           : sql``
       }
     order by r.slug
-  `) as unknown as RepoRow[];
+  `;
 }
 
 export async function getRepoBySlug(slug: string): Promise<RepoRow> {
-  const [row] = await sql`${repoSelect()} where r.slug = ${slug}`;
+  const [row] = await sql<RepoRow[]>`${repoSelect()} where r.slug = ${slug}`;
   if (!row) throw notFound(`Repo '${slug}' not found`);
-  return row as unknown as RepoRow;
+  return row;
 }
 
 /** The scope a caller must be able to edit to touch this repo. */
@@ -225,8 +198,13 @@ export async function sweepInterruptedIndexes(): Promise<number> {
   return rows.length;
 }
 
-/** For the admin index: repos, and how many are not answering searches. */
-export async function repoCensus() {
+/**
+ * For the admin index: repos, and how many are not answering searches.
+ * `oldest_indexed_at` is a Date here and an ISO string once serialised.
+ */
+export async function repoCensus(): Promise<
+  Omit<RepoCensus, "oldest_indexed_at"> & { oldest_indexed_at: Date | null }
+> {
   const [row] = await sql`
     select
       count(*)::int as repos,
@@ -242,17 +220,29 @@ export async function repoCensus() {
       min(last_indexed_at) as oldest_indexed_at
     from repos
   `;
-  return row as {
-    repos: number;
-    failing: number;
-    ready: number;
-    working: number;
-    idle: number;
-    no_component: number;
-    no_project: number;
-    never_indexed: number;
-    files: number;
-    chunks: number;
+  return row as Omit<RepoCensus, "oldest_indexed_at"> & {
     oldest_indexed_at: Date | null;
   };
+}
+
+/** Repos that are not answering searches, or are filed nowhere, by slug. */
+export async function repoIssues(): Promise<Record<string, IssueList>> {
+  const where = {
+    "repos.failing": sql`index_status = 'error'`,
+    "repos.never_indexed": sql`last_indexed_at is null and index_status <> 'error'`,
+    "repos.no_component": sql`component_id is null`,
+    "repos.no_project": sql`source_project_id is null`,
+  };
+  const lists = await Promise.all(
+    Object.values(where).map(
+      (cond) => sql`
+        select slug as key, slug as label, count(*) over () as total
+        from repos where ${cond}
+        order by slug limit ${ISSUE_ITEMS}
+      `,
+    ),
+  );
+  return Object.fromEntries(
+    Object.keys(where).map((k, i) => [k, issueList(lists[i])]),
+  );
 }

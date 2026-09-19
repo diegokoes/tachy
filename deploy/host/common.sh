@@ -39,6 +39,16 @@ write_status() {
   mv -f "$tmp" "$TACHY_STATUS_DIR/$1.json"
 }
 
+# append_history <name> <json>: adds one line to $TACHY_STATUS_DIR/<name>.jsonl,
+# keeping the newest 60, so the admin page can chart more than the last result
+append_history() {
+  mkdir -p "$TACHY_STATUS_DIR"
+  local file="$TACHY_STATUS_DIR/$1.jsonl" tmp="$TACHY_STATUS_DIR/.$1.jsonl.partial"
+  { [ -f "$file" ] && cat "$file"; jq -c . <<<"$2"; } | tail -n 60 >"$tmp"
+  chmod 0644 "$tmp"
+  mv -f "$tmp" "$file"
+}
+
 # ping <url> [suffix] [body]: healthchecks.io style; silent when unset
 ping() {
   local url=$1 suffix=${2:-} body=${3:-}

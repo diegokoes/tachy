@@ -277,11 +277,8 @@ async function seedMessages(
       const item = items[Math.floor(i / per)];
       const k = i % per;
       const rng = rngFor("message", i);
-      /*
-       * The follow-ups used to be `Update ${k}: checked the logs, ${one of
-       * four}` — 12 distinct strings across the 120k rows --scale=large writes.
-       * Composing a step with an outcome and a detail multiplies instead.
-       */
+      // A step, an outcome and a detail are composed per message so the
+      // follow-ups stay distinct across the 120k rows --scale=large writes.
       const symptom = pick(rng, SYMPTOMS);
       // The thread quotes its own ticket, the way a real one does. That is also
       // what keeps a body unique: the composed halves alone repeat at 160k rows.

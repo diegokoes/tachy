@@ -20,6 +20,7 @@
     onclick,
     children,
     "aria-label": ariaLabel,
+    "aria-pressed": ariaPressed,
   }: {
     variant?: "default" | "primary" | "ghost" | "danger" | "ok";
     /** Semantic action color, independent of the button's chrome. */
@@ -41,6 +42,7 @@
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
     "aria-label"?: string;
+    "aria-pressed"?: boolean;
   } = $props();
 </script>
 
@@ -52,6 +54,7 @@
   {form}
   {title}
   aria-label={ariaLabel}
+  aria-pressed={ariaPressed}
   aria-busy={busy || undefined}
   disabled={disabled || busy}
   {onclick}
@@ -63,11 +66,19 @@
   {:else if glyph}
     <span class="g" aria-hidden="true">{glyph}</span>
   {/if}
-  {#if children}<span class="l">{@render children()}</span>{/if}
+  {#if children}<span class="l"
+      ><span class="t">{@render children()}</span><span
+        class="t held"
+        aria-hidden="true">{@render children()}</span
+      ></span
+    >{/if}
 </button>
 
 <style>
+  /* --btn-edge is the border's colour, named so hover can thicken the edge in
+     the same colour without knowing which variant drew it. */
   .btn {
+    --btn-edge: var(--border);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -77,9 +88,12 @@
     white-space: nowrap;
     color: var(--text);
     background: transparent;
-    border: 1px solid var(--border);
+    border: 1px solid var(--btn-edge);
     border-radius: var(--radius-control);
     padding: var(--pad-2) var(--pad-4);
+    transition:
+      font-weight 0.12s ease,
+      box-shadow 0.12s ease;
   }
 
   .btn.sm {
@@ -107,128 +121,70 @@
     cursor: default;
   }
 
-  .btn:focus-visible {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: inset 0 0 0 1px var(--accent);
-  }
-
-  .btn.default:hover:not(:disabled) {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
-  /* Primary inverts to a solid accent block on hover — text-mode selection. */
   .btn.primary {
-    border-color: var(--accent);
+    --btn-edge: var(--accent);
     color: var(--accent);
     background: var(--accent-dim);
   }
-  .btn.primary:hover:not(:disabled) {
-    background: var(--accent);
-    color: var(--bg);
-  }
 
   .btn.ghost {
-    border-color: transparent;
+    --btn-edge: transparent;
     color: var(--muted);
-  }
-  .btn.ghost:hover:not(:disabled) {
-    color: var(--accent);
-    border-color: var(--accent-dim);
   }
 
   .btn.danger {
-    border-color: var(--danger);
+    --btn-edge: var(--danger);
     color: var(--danger);
-  }
-  .btn.danger:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--danger) 18%, transparent);
   }
 
   .btn.ok {
-    border-color: var(--ok);
+    --btn-edge: var(--ok);
     color: var(--ok);
   }
-  .btn.ok:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--ok) 18%, transparent);
-  }
 
-  /* Tone colors the glyph/label and the hover affordance; border and
-     background stay whatever the variant says. */
+  /* Tone colours the glyph and label; the border stays the variant's. */
   .btn.tone-danger { color: var(--danger); }
   .btn.tone-ok { color: var(--ok); }
   .btn.tone-info { color: var(--info); }
   .btn.tone-accent { color: var(--accent); }
   .btn.tone-warn { color: var(--warn); }
 
-  .btn.tone-danger:hover:not(:disabled) {
-    border-color: var(--danger);
-    background: color-mix(in srgb, var(--danger) 15%, transparent);
-  }
-  .btn.tone-ok:hover:not(:disabled) {
-    border-color: var(--ok);
-    background: color-mix(in srgb, var(--ok) 15%, transparent);
-  }
-  .btn.tone-info:hover:not(:disabled) {
-    border-color: var(--info);
-    background: color-mix(in srgb, var(--info) 15%, transparent);
-  }
-  .btn.tone-accent:hover:not(:disabled) {
-    border-color: var(--accent);
-    background: var(--accent-dim);
-  }
-  .btn.tone-warn:hover:not(:disabled) {
-    border-color: var(--warn);
-    background: color-mix(in srgb, var(--warn) 15%, transparent);
-  }
-
-
-  /* Icon buttons have no chrome — no border, no fill, in any state. The mark
-     brightens and thickens instead, which is the only thing that moves. */
-  .btn.square,
-  .btn.square:hover:not(:disabled),
-  .btn.square.default:hover:not(:disabled),
-  .btn.square.ghost:hover:not(:disabled),
-  .btn.square.tone-danger:hover:not(:disabled),
-  .btn.square.tone-ok:hover:not(:disabled),
-  .btn.square.tone-info:hover:not(:disabled),
-  .btn.square.tone-accent:hover:not(:disabled),
-  .btn.square.tone-warn:hover:not(:disabled) {
+  /* Icon buttons have no chrome — no border, no fill, in any state. */
+  .btn.square {
+    --btn-edge: transparent;
     background: transparent;
+  }
+
+  /* Hover changes weight, never colour: the label goes bold and the edge
+     thickens in the colour it already had. The edge is an inset shadow
+     rather than a wider border so the button's box does not move. */
+  .btn:hover:not(:disabled) {
+    font-weight: var(--btn-hover-weight);
+    box-shadow: inset 0 0 0 var(--btn-hover-edge) var(--btn-edge);
+  }
+
+  /* After hover, so a focused button under the pointer still shows it. */
+  .btn:focus-visible:not(:disabled) {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .btn.square:focus-visible:not(:disabled) {
     border-color: transparent;
-  }
-
-  /* The filled variants invert their text against a solid fill on hover — with
-     no fill to sit on, that paints the mark in the background color. Square
-     buttons keep their own color and brighten instead. */
-  .btn.square.primary:hover:not(:disabled) {
-    color: var(--accent);
-  }
-  .btn.square.danger:hover:not(:disabled) {
-    color: var(--danger);
-  }
-  .btn.square.ok:hover:not(:disabled) {
-    color: var(--ok);
-  }
-
-  .btn :global(svg) {
-    transition:
-      stroke-width 0.12s ease,
-      filter 0.12s ease;
-  }
-  .btn:hover:not(:disabled) :global(svg) {
-    stroke-width: var(--sw-hover, 9);
-    filter: brightness(1.35);
-  }
-  /* Keyboard focus still needs to be visible — that is not a hover effect. */
-  .btn.square:focus-visible {
     box-shadow: none;
     outline: 1px solid currentColor;
     outline-offset: 2px;
   }
 
+  .btn :global(svg) {
+    transition: stroke-width 0.12s ease;
+  }
+  .btn:hover:not(:disabled) :global(svg) {
+    stroke-width: var(--sw-hover, 9);
+  }
+
   @media (prefers-reduced-motion: reduce) {
+    .btn,
     .btn :global(svg) {
       transition: none;
     }
@@ -238,8 +194,23 @@
     flex: none;
     line-height: 1;
   }
+
+  /* The label is laid out twice in one cell: once to read, and once at the
+     hover weight, hidden, so the button is already as wide as its bold self
+     and going bold never nudges its neighbours. */
   .l {
+    display: grid;
+    min-width: 0;
+  }
+  .t {
+    grid-area: 1 / 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    text-align: center;
+  }
+  .held {
+    font-weight: var(--btn-hover-weight);
+    visibility: hidden;
   }
 </style>

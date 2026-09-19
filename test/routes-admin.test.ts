@@ -368,3 +368,67 @@ describe("customer component links", () => {
     expect((await res.json()).error).toMatch(/product_slug and component/);
   });
 });
+
+describe("overview issues", () => {
+  it("names what is unfinished in the catalog", async () => {
+    const productId = await tpdProductId();
+    await addLabel(productId, "undescribed");
+    await addLabel(productId, "regression", "Worked before.");
+
+    const res = await get("/api/overview/issues?page=structure");
+    expect(res.status).toBe(200);
+    const issues = await res.json();
+    expect(issues["labels.no_description"]).toEqual({
+      n: 1,
+      items: [{ key: expect.any(String), label: "undescribed" }],
+    });
+    for (const v of Object.values(issues) as { n: number; items: unknown[] }[])
+      expect(v.items.length).toBeLessThanOrEqual(Math.max(v.n, 0));
+  });
+
+  it("names people in no team, and says nothing of app admins when there is one", async () => {
+    await createUser({ email: "loner@example.com" });
+    const issues = await (await get("/api/overview/issues?page=access")).json();
+    expect(issues["users.no_app_admin"]).toEqual({ n: 0, items: [] });
+    expect(
+      issues["users.no_team"].items.map((i: { label: string }) => i.label),
+    ).toContain("loner@example.com");
+  });
+
+  it("answers the integrations page with a count and names per issue", async () => {
+    const issues = await (
+      await get("/api/overview/issues?page=integrations")
+    ).json();
+    for (const key of [
+      "sources.untokened",
+      "sources.never_synced",
+      "projects.no_wiki",
+      "repos.failing",
+      "repos.no_component",
+    ])
+      expect(issues[key]).toMatchObject({
+        n: expect.any(Number),
+        items: expect.any(Array),
+      });
+  });
+
+  it("keeps the workers and system pages to app admins", async () => {
+    await createUser({
+      email: "member@example.com",
+      password: "a-long-password",
+    });
+    const member = await loginCookie(
+      app,
+      "member@example.com",
+      "a-long-password",
+    );
+    for (const page of ["workers", "system"]) {
+      const res = await app.request(`/api/overview/issues?page=${page}`, {
+        headers: { Cookie: member },
+      });
+      expect(res.status).toBe(403);
+      expect((await get(`/api/overview/issues?page=${page}`)).status).toBe(200);
+    }
+    expect((await get("/api/overview/issues?page=nowhere")).status).toBe(400);
+  });
+});

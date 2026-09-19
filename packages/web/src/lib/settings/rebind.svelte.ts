@@ -17,7 +17,7 @@ export const SUBNAV_SLOTS = 3;
 
 /**
  * What is currently listening for a key, shared by the two rebind sections.
- * They are separate parts of one scrolling page now, and arming a row in one
+ * They are separate parts of one scrolling page, and arming a row in one
  * has to disarm whatever the other had armed — a second live listener would
  * record the same press into two bindings.
  */

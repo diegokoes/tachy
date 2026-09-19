@@ -9,11 +9,19 @@
    * archived drops two buttons and grows another, and in flow that walked the
    * title and the whole body up and down the page.
    */
-  let { actions }: { actions: StatusAction[] } = $props();
+  let {
+    actions,
+    docked = false,
+  }: {
+    actions: StatusAction[];
+    /** Takes a column of its own instead of floating in the margin, for a
+        page whose content runs the full width and leaves no margin to use. */
+    docked?: boolean;
+  } = $props();
 </script>
 
 {#if actions.length}
-  <div class="rail">
+  <div class="rail" class:docked>
     {#each actions as a (a.label)}
       <Button
         variant="ghost"
@@ -39,6 +47,9 @@
     align-items: stretch;
     gap: var(--pad-1);
     width: max-content;
+  }
+  .rail.docked {
+    position: static;
   }
   /* Marks in one column, labels in another: a ragged left edge on five ghost
      buttons reads as five unrelated controls. */
