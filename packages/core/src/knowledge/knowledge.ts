@@ -1,4 +1,4 @@
-import { sql } from "../infra/db";
+import { sql, jsonb } from "../infra/db";
 import {
   embedPassage,
   embedQueryLiteral,
@@ -14,19 +14,26 @@ import {
   withSearchSession,
 } from "../search/rank";
 import { SEM_FLOOR, withRelevance } from "../search/relevance";
-import { notFound, conflict, badInput } from "../infra/errors";
+import { notFound, badInput } from "../infra/errors";
 import { parseStructured } from "./structured";
-import { resolveComponentStrict } from "../catalog/components";
-import { getCustomerIdBySlug } from "../catalog/customers";
-import { resolveUnit } from "../catalog/units";
 import {
-  changedFields,
+  assertExpectedVersion,
+  assertUpdated,
   getRevision,
   recordRevision,
+  recordUpdate,
+  type RevisedRow,
   snapshotOf,
   UNKNOWN_ACTOR,
 } from "../library/revisions";
 import type { ActorRef } from "../library/revisions";
+import {
+  filingSlugs,
+  patchedFiling,
+  resolveFilingComponent,
+  statedCustomer,
+  type FiledRow,
+} from "../library/filing";
 import { syncLinks } from "../library/links";
 
 /**
@@ -104,14 +111,15 @@ async function resolvePatternDescription(
   slug: string | undefined,
 ): Promise<string> {
   if (!slug) return "";
-  const [pattern] =
-    await sql`select description from resolution_patterns where slug = ${slug}`;
+  const [pattern] = await sql<{ description: string }[]>`
+    select description from resolution_patterns where slug = ${slug}
+  `;
   if (!pattern) {
     throw badInput(
       `Unknown resolution_pattern '${slug}'. Call list_resolution_patterns to see existing ones, or add_resolution_pattern first.`,
     );
   }
-  return pattern.description as string;
+  return pattern.description;
 }
 
 /**
@@ -158,23 +166,16 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
    * and makes every future answer cite it as that customer's case. Whose ticket
    * it was is a fact; whose behaviour it describes is a judgement, so it has to
    * be stated.
-   */
-  const customerId = i.customerSlug
-    ? await getCustomerIdBySlug(i.customerSlug)
-    : null;
-  /*
+   *
    * The UNIT, by contrast, IS inherited — but only once the customer above has
    * been stated and matches the ticket's. That keeps the rule intact: the
    * judgement "this entry is about ITG" is still made by a person, and saying
    * "…on the line the ticket was already filed against" adds no claim the
    * ticket did not record. Without a stated customer, nothing is inherited.
    */
-  if (i.unit && !customerId)
-    throw badInput(
-      "a unit needs its customer: pass customer_slug with unit",
-    );
-  let customerUnitId: string | null =
-    i.unit && customerId ? (await resolveUnit(customerId, i.unit)).id : null;
+  const stated = await statedCustomer(i.customerSlug, i.unit);
+  const customerId = stated.customerId;
+  let customerUnitId = stated.customerUnitId;
   if (
     i.workItemId &&
     (productId == null ||
@@ -194,17 +195,11 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
     }
   }
 
-  let componentId: string | null = null;
-  let productArea: string | null = null;
-  if (i.component) {
-    if (!productId)
-      throw badInput(
-        "component requires a product (pass product_slug or a work item mapped to one)",
-      );
-    const resolved = await resolveComponentStrict(productId, i.component);
-    componentId = resolved.id;
-    productArea = resolved.path;
-  }
+  const { componentId, productArea } = await resolveFilingComponent(
+    productId,
+    i.component,
+    "component requires a product (pass product_slug or a work item mapped to one)",
+  );
 
   const confidence = i.confidence ? i.confidence.toLowerCase() : null;
   const structured = parseStructured(i.structured);
@@ -215,7 +210,7 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
   const embedding = text ? toVectorLiteral(await embedPassage(text)) : null;
 
   return sql.begin(async (tx) => {
-    const [row] = await tx`
+    const [row] = await tx<RevisedRow[]>`
       insert into knowledge_entries
         (work_item_id, product_id, team_id, customer_id, customer_unit_id, created_by, status,
          issue_summary, symptoms, signals, tags,
@@ -229,25 +224,25 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
          ${i.rootCause ?? null}, ${i.resolution ?? null}, ${i.resolutionPattern ?? null}, ${componentId}, ${productArea},
          ${confidence}, ${i.cloud ?? null}, ${i.resolutionClarity ?? null}, ${i.hiddenFix ?? null},
          ${affectedVersion}, ${i.fixedVersion ?? null},
-         ${sql.json(structured as any)}, ${embedding}::vector)
+         ${jsonb(structured)}, ${embedding}::vector)
       returning id, version, ${REVISION_COLUMNS}
     `;
     await syncLinks(
       tx,
-      { entryId: row.id as string },
+      { entryId: row.id },
       linkText(i.rootCause, i.resolution),
       productId,
     );
     // Version 1, so history is complete for everything created from here on.
     await recordRevision(
       tx,
-      { entryId: row.id as string },
-      row.version as number,
+      { entryId: row.id },
+      row.version,
       i.actor ?? { ...UNKNOWN_ACTOR, userId: i.createdById ?? null },
       snapshotOf(row),
       [],
     );
-    return { id: row.id as string, status: row.status as string };
+    return { id: row.id, status: row.status };
   });
 }
 
@@ -448,14 +443,13 @@ export async function listKnowledgeEntries(opts: KnowledgeListOptions = {}) {
 export async function listEnvironments(): Promise<
   { cloud: string; count: number }[]
 > {
-  const rows = await sql`
+  return sql<{ cloud: string; count: number }[]>`
     select cloud, count(*)::int as count
     from knowledge_entries
     where cloud is not null and status not in ('rejected', 'archived')
     group by cloud
     order by count desc, cloud
   `;
-  return rows as unknown as { cloud: string; count: number }[];
 }
 
 export type FacetCount = { value: string; count: number };
@@ -479,7 +473,7 @@ export async function listKnowledgeFacets(
 
   /** Every column facet counts the same way; only the column differs. */
   const column = async (key: FacetKey, col: string): Promise<FacetCount[]> => {
-    const rows = await sql`
+    return sql<FacetCount[]>`
       select ${sql.unsafe(col)}::text as value, count(*)::int as count
       from knowledge_entries
       ${scope(key)}
@@ -488,23 +482,21 @@ export async function listKnowledgeFacets(
       group by 1
       order by count desc, value
     `;
-    return rows as unknown as FacetCount[];
   };
 
   const tagRows = async (): Promise<FacetCount[]> => {
-    const rows = await sql`
+    return sql<FacetCount[]>`
       select tag as value, count(*)::int as count
       from knowledge_entries, unnest(tags) as tag
       ${scope("tags")}
       group by tag
       order by count desc, tag
     `;
-    return rows as unknown as FacetCount[];
   };
 
   /** Counted by slug, not id — that is what the filter and the URL carry. */
   const customerRows = async (): Promise<FacetCount[]> => {
-    const rows = await sql`
+    return sql<FacetCount[]>`
       select cu.slug as value, count(*)::int as count
       from knowledge_entries
       join customers cu on cu.id = knowledge_entries.customer_id
@@ -512,7 +504,6 @@ export async function listKnowledgeFacets(
       group by cu.slug
       order by count desc, value
     `;
-    return rows as unknown as FacetCount[];
   };
 
   const [
@@ -558,63 +549,18 @@ export async function updateKnowledgeEntry(
   patch: KnowledgeUpdateInput,
   actor: ActorRef = UNKNOWN_ACTOR,
 ) {
-  const [current] = await sql`
+  const [current] = await sql<(FiledRow & { version: number } & Record<string, any>)[]>`
     select ${REVISION_COLUMNS}, version from knowledge_entries where id = ${id}
   `;
   if (!current) throw notFound(`Knowledge entry '${id}' not found`);
+  assertExpectedVersion(current.version, patch.expectedVersion);
 
-  if (
-    patch.expectedVersion != null &&
-    current.version !== patch.expectedVersion
-  ) {
-    throw conflict(
-      `Version conflict: expected ${patch.expectedVersion}, found ${current.version}`,
+  const { componentId, productArea, customerId, customerUnitId } =
+    await patchedFiling(
+      current,
+      patch,
+      "component requires the entry to belong to a product",
     );
-  }
-
-  let componentId: string | null = current.component_id;
-  let productArea: string | null = current.product_area;
-  if ("component" in patch) {
-    if (patch.component == null) {
-      componentId = null;
-      productArea = null;
-    } else {
-      if (!current.product_id)
-        throw badInput("component requires the entry to belong to a product");
-      const resolved = await resolveComponentStrict(
-        current.product_id,
-        patch.component,
-      );
-      componentId = resolved.id;
-      productArea = resolved.path;
-    }
-  }
-
-  // Same rule as component: null makes the lesson general again.
-  const customerId =
-    "customerSlug" in patch
-      ? patch.customerSlug
-        ? await getCustomerIdBySlug(patch.customerSlug)
-        : null
-      : current.customer_id;
-
-  /*
-   * The unit follows the customer: re-filing an entry under a different customer
-   * (or clearing it) cannot leave behind a unit belonging to the old one, which
-   * would then resolve facts from an estate the entry is no longer about.
-   */
-  let customerUnitId: string | null =
-    customerId === current.customer_id ? current.customer_unit_id : null;
-  if ("unit" in patch) {
-    if (patch.unit && !customerId)
-      throw badInput(
-        "a unit needs its customer: set customerSlug with unit",
-      );
-    customerUnitId =
-      patch.unit && customerId
-        ? (await resolveUnit(customerId, patch.unit)).id
-        : null;
-  }
 
   let supersededBy: string | null = current.superseded_by;
   if ("supersededBy" in patch) {
@@ -696,7 +642,7 @@ export async function updateKnowledgeEntry(
   }
 
   return sql.begin(async (tx) => {
-    const [row] = await tx`
+    const [row] = await tx<RevisedRow[]>`
     update knowledge_entries set
       status             = ${merged.status},
       issue_summary      = ${merged.issueSummary ?? null},
@@ -717,36 +663,20 @@ export async function updateKnowledgeEntry(
       hidden_fix         = ${merged.hiddenFix ?? null},
       affected_version   = ${merged.affectedVersion ?? null},
       fixed_version      = ${merged.fixedVersion ?? null},
-      structured         = ${sql.json((merged.structured ?? {}) as any)},
+      structured         = ${jsonb(merged.structured ?? {})},
       version            = version + 1
       ${contentChanged ? (vec ? sql`, embedding = ${vec}::vector` : sql`, embedding = null`) : sql``}
     where id = ${id} and version = ${current.version}
     returning id, version, ${REVISION_COLUMNS}
   `;
-    if (!row)
-      throw conflict(
-        `Version conflict: knowledge entry '${id}' was updated concurrently`,
-      );
+    assertUpdated(row, `knowledge entry '${id}'`);
     await syncLinks(
       tx,
       { entryId: id },
       linkText(merged.rootCause, merged.resolution),
       current.product_id,
     );
-    const after = snapshotOf(row);
-    await recordRevision(
-      tx,
-      { entryId: id },
-      row.version as number,
-      actor,
-      after,
-      changedFields(snapshotOf(current), after),
-    );
-    return {
-      id: row.id as string,
-      status: row.status as string,
-      version: row.version as number,
-    };
+    return recordUpdate(tx, { entryId: id }, current, row, actor);
   });
 }
 
@@ -823,31 +753,9 @@ export async function revertKnowledgeEntry(
     affectedVersion: s.affected_version,
     fixedVersion: s.fixed_version,
     structured: s.structured,
-    // The snapshot holds ids; the patch speaks slugs, so all three are looked
-    // up. `unit` has to be here even when null: REVISION_COLUMNS records it, and
-    // omitting it left updateKnowledgeEntry to carry the live unit forward — so
-    // reverting to a revision filed against a different line kept the wrong one.
-    component: s.component_id ? await slugOfComponent(s.component_id) : null,
-    customerSlug: s.customer_id ? await slugOfCustomer(s.customer_id) : null,
-    unit: s.customer_unit_id ? await slugOfUnit(s.customer_unit_id) : null,
+    ...(await filingSlugs(s)),
   };
   return updateKnowledgeEntry(id, patch, actor);
-}
-
-async function slugOfComponent(componentId: string): Promise<string | null> {
-  const [row] =
-    await sql`select slug from components where id = ${componentId}`;
-  return (row?.slug as string) ?? null;
-}
-
-async function slugOfCustomer(customerId: string): Promise<string | null> {
-  const [row] = await sql`select slug from customers where id = ${customerId}`;
-  return (row?.slug as string) ?? null;
-}
-
-async function slugOfUnit(unitId: string): Promise<string | null> {
-  const [row] = await sql`select slug from customer_units where id = ${unitId}`;
-  return (row?.slug as string) ?? null;
 }
 
 /**

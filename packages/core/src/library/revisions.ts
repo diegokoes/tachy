@@ -1,8 +1,8 @@
 import { LIBRARY_ACTORS } from "@tachy/contract";
 import type { LibraryActor } from "@tachy/contract";
-import { sql } from "../infra/db";
+import { sql, jsonb } from "../infra/db";
 import type { Db } from "../infra/db";
-import { badInput, notFound } from "../infra/errors";
+import { badInput, conflict, notFound } from "../infra/errors";
 
 export { LIBRARY_ACTORS };
 export type { LibraryActor };
@@ -103,9 +103,60 @@ export async function recordRevision(
     values
       (${target.entryId ?? null}, ${target.docId ?? null}, ${version},
        ${actor.userId ?? null}, ${actor.actor}, ${actor.turnId ?? null},
-       ${changed}, ${sql.json(snapshot as any)})
+       ${changed}, ${jsonb(snapshot)})
     on conflict do nothing
   `;
+}
+
+/** A library row as an insert or update returns it with its revision columns. */
+export type RevisedRow = {
+  id: string;
+  version: number;
+  status: string;
+} & Record<string, unknown>;
+
+/** The optimistic lock an update checks before it reads anything else. */
+export function assertExpectedVersion(
+  current: number,
+  expected: number | null | undefined,
+): void {
+  if (expected != null && current !== expected)
+    throw conflict(`Version conflict: expected ${expected}, found ${current}`);
+}
+
+/**
+ * The row an `update ... where version = <read version> returning` gave back.
+ * None means another write landed between the read and the update.
+ */
+export function assertUpdated<T>(
+  row: T | undefined,
+  what: string,
+): asserts row is T {
+  if (!row)
+    throw conflict(`Version conflict: ${what} was updated concurrently`);
+}
+
+/**
+ * Append the revision for an update, inside its transaction, and answer with
+ * what every library update returns.
+ */
+export async function recordUpdate(
+  db: Db,
+  target: LibraryTarget,
+  before: Record<string, unknown>,
+  after: RevisedRow,
+  actor: ActorRef,
+): Promise<{ id: string; status: string; version: number }> {
+  const snapshot = snapshotOf(after);
+  await recordRevision(
+    db,
+    target,
+    after.version,
+    actor,
+    snapshot,
+    changedFields(snapshotOf(before), snapshot),
+  );
+  return { id: after.id, status: after.status, version: after.version };
 }
 
 export interface RevisionRow {
