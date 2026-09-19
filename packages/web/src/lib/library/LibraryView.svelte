@@ -3,7 +3,7 @@
   import { createSequence } from "../resource.svelte";
   import { KNOWLEDGE_STATUSES, REFERENCE_STATUSES } from "../vocab";
   import { MAX_PAGE } from "@tachy/contract";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { api } from "../api";
   import type { KnowledgeRow, ReferenceRow } from "../types";
   import type { ComponentRow, ProductRow } from "@tachy/contract";
@@ -422,7 +422,9 @@
 
   /**
    * Re-count the options whenever the narrowing changes — but not on `extras`,
-   * which loadFacets itself prunes; depending on it here would loop.
+   * which loadFacets itself prunes. loadFacets reads `extras` before its first
+   * await, so it runs untracked: tracked, every prune re-ran this effect, and
+   * each rerun restarted the list's debounce so the filtered list never loaded.
    */
   let facetsOnce = false;
   $effect(() => {
@@ -432,7 +434,7 @@
       facetsOnce = true;
       return;
     }
-    void loadFacets();
+    untrack(() => void loadFacets());
   });
 
   $effect(() => {
@@ -523,6 +525,7 @@
 <!-- Rendered by App into the carved row beside the subnav, not here. -->
 {#snippet newAction()}
   <Button
+    size="sm"
     tone="ok"
     icon="plus"
     title="new entry or doc"

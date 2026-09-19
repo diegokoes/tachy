@@ -6,7 +6,7 @@
   import type { ReferenceLineageRow, ReferenceRow } from "../types";
   import type { ProductRow } from "@tachy/contract";
   import { canCurateScope, isCurator } from "../session.svelte";
-  import History from "./History.svelte";
+  import Readership from "./Readership.svelte";
   import Backlinks from "./Backlinks.svelte";
   import { renderMarkdown, markBrokenLinks } from "../markdown";
   import { LinkTargets } from "../wikilinks.svelte";
@@ -14,7 +14,7 @@
   import { setTopActions } from "../subnav.svelte";
   import { vimState } from "../vim.svelte";
   import { createSequence, errText } from "../resource.svelte";
-  import { Badge, Button, Chip, Icon, Modal, Note, Select } from "../tui";
+  import { Badge, Button, Chip, Icon, Note, Select } from "../tui";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
   import ScopeCrumb from "./ScopeCrumb.svelte";
   import StatusActions from "./StatusActions.svelte";
@@ -31,7 +31,6 @@
   let mutateError = $state<string | null>(null);
   let conflict = $state(false);
   let productTeamSlug = $state<string | null>(null);
-  let historyOpen = $state(false);
   let createSaving = $state(false);
   let createError = $state<string | null>(null);
 
@@ -114,7 +113,6 @@
     error = null;
     editing = false;
     newVersion = false;
-    historyOpen = false;
     mutateError = null;
     conflict = false;
     productTeamSlug = null;
@@ -210,9 +208,12 @@
 
 <!-- Rendered by App into the carved row beside the subnav, not here. -->
 {#snippet readActions()}
-  <Button icon="back" title="back (backspace)" onclick={onClose}>back</Button>
+  <Button size="sm" icon="back" title="back (backspace)" onclick={onClose}
+    >back</Button
+  >
   {#if canEdit}
     <Button
+      size="sm"
       tone="info"
       icon="edit"
       title="edit"
@@ -287,16 +288,6 @@
       <span class="when">
         {#if doc.updated_at}<span class="muted">updated {fmtDate(doc.updated_at)}</span>{/if}
       </span>
-      <span class="revisions">
-        <Button
-          square
-          iconSize="1.1rem"
-          icon="history"
-          title="revisions and reads"
-          aria-label="revisions and reads"
-          onclick={() => (historyOpen = true)}
-        />
-      </span>
     </div>
 
     <div class="meta">
@@ -345,22 +336,13 @@
 
     <Backlinks base="reference" id={doc.id} />
 
-    {#if historyOpen}
-      <Modal
-        title="history"
-        cancelLabel="close"
-        width="46rem"
-        onCancel={() => (historyOpen = false)}
-      >
-        <History
-          base="reference"
-          id={doc.id}
-          version={doc.version}
-          {canEdit}
-          onReverted={() => load(doc!.id)}
-        />
-      </Modal>
-    {/if}
+    <Readership
+      base="reference"
+      id={doc.id}
+      version={doc.version}
+      {canEdit}
+      onReverted={() => load(doc!.id)}
+    />
   </div>
 {/if}
 
@@ -383,8 +365,8 @@
     font-size: var(--fs-sm);
   }
   /* Three tracks, not a centred flex row: it is the date that has to sit on
-     the column's centre line, with the badges behind it and the revisions
-     button ahead of it. Equal fr cheeks give it that whatever they hold. */
+     the column's centre line with the badges behind it. Equal fr cheeks give
+     it that whatever they hold. */
   .status-meta {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
@@ -396,10 +378,6 @@
     display: flex;
     align-items: center;
     gap: var(--pad-2);
-  }
-  .revisions {
-    justify-self: start;
-    display: flex;
   }
 
   /* The positioning context the lifecycle rail hangs off. */

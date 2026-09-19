@@ -20,7 +20,15 @@
   } = $props();
 </script>
 
-<Button icon="cancel" disabled={saving} onclick={oncancel}>cancel</Button>
-<Button variant="primary" icon="save" type="submit" {form} {title} busy={saving}
-  >save</Button
+<Button size="sm" icon="cancel" disabled={saving} onclick={oncancel}
+  >cancel</Button
+>
+<Button
+  size="sm"
+  variant="primary"
+  icon="save"
+  type="submit"
+  {form}
+  {title}
+  busy={saving}>save</Button
 >
