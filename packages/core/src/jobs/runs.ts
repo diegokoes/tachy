@@ -1,6 +1,7 @@
 import {
   JOB_FINISHED,
   parseDuration,
+  type JobRun,
   type JobStatus,
   type JobTrigger,
 } from "@tachy/contract";
@@ -8,32 +9,7 @@ import { sql, type Db, jsonb } from "../infra/db";
 import { badInput, notFound } from "../infra/errors";
 import { getJobKind } from "./registry";
 
-export interface JobRun {
-  id: string;
-  definition_id: string | null;
-  kind: string;
-  params: Record<string, unknown>;
-  resource_class: "light" | "heavy";
-  trigger: JobTrigger;
-  scheduled_for: string | null;
-  requested_by: string | null;
-  status: JobStatus;
-  attempts: number;
-  max_attempts: number;
-  timeout_ms: number;
-  run_after: string;
-  locked_by: string | null;
-  locked_until: string | null;
-  cancel_requested: boolean;
-  progress: number | null;
-  progress_note: string | null;
-  output: Record<string, unknown> | null;
-  error: string | null;
-  log_tail: string;
-  created_at: string;
-  started_at: string | null;
-  finished_at: string | null;
-}
+export type { JobRun };
 
 export const JOB_RUNS_CHANNEL = "job_runs";
 

@@ -1,7 +1,20 @@
 import type {
   AgentProvider,
+  AgentUsage,
+  CatalogCensus,
   DeploymentProfile,
+  JobCensus,
+  JobDefinition,
+  JobRun,
+  KnowledgeCensus,
+  LibraryEngagement,
+  RepoCensus,
+  RepoRow,
+  SourceCensus,
+  SourceTraffic,
   TeamRole,
+  ToolUsage,
+  UserCensus,
   UserRole,
 } from "@tachy/contract";
 
@@ -79,28 +92,7 @@ export type AreaRule = {
   component_slug: string;
   component_name: string;
 };
-export type Repo = {
-  id: string;
-  slug: string;
-  url: string;
-  product_id: string | null;
-  product_slug: string | null;
-  source_slug: string | null;
-  source_project_id: string | null;
-  project_key: string | null;
-  component_id: string | null;
-  component_slug: string | null;
-  customer_id: string | null;
-  customer_slug: string | null;
-  default_branch: string;
-  config: Record<string, unknown>;
-  index_status: "idle" | "cloning" | "indexing" | "ready" | "error";
-  indexed_commit: string | null;
-  index_error: string | null;
-  file_count: number;
-  chunk_count: number;
-  last_indexed_at: string | null;
-};
+export type Repo = RepoRow;
 export type Discovered<K extends string, T> = {
   ok: boolean;
   error?: string;
@@ -220,63 +212,11 @@ export type Census = {
   counts: Record<string, number>;
   warn: Record<string, number>;
   detail: {
-    sources: {
-      connections: number;
-      projects: number;
-      knowledge: number;
-      trackers: number;
-      projects_no_wiki: number;
-      projects_for_customer: number;
-      by_type: Record<string, number>;
-      untokened: number;
-      never_synced: number;
-    };
-    repos: {
-      repos: number;
-      failing: number;
-      ready: number;
-      working: number;
-      idle: number;
-      no_component: number;
-      no_project: number;
-      never_indexed: number;
-      files: number;
-      chunks: number;
-      oldest_indexed_at: string | null;
-    };
-    catalog: {
-      teams: number;
-      products: number;
-      components: number;
-      labels: number;
-      patterns: number;
-      customers: number;
-      teams_no_product: number;
-      products_no_component: number;
-      components_root: number;
-      components_no_description: number;
-      labels_no_description: number;
-      patterns_no_description: number;
-      customers_no_domains: number;
-      customer_units: number;
-      components_by_product: { slug: string; name: string; n: number }[];
-    };
-    users: {
-      users: number;
-      disabled: number;
-      admins: number;
-      team_admins: number;
-      with_password: number;
-      teams_with_admin: number;
-      teams_without_admin: { slug: string; name: string }[];
-      users_no_team: number;
-    };
-    knowledge: {
-      entries: number;
-      entries_no_component: number;
-      entries_no_product: number;
-      by_status: Record<string, number>;
-    };
+    sources: SourceCensus & { untokened: number };
+    repos: RepoCensus;
+    catalog: CatalogCensus;
+    users: UserCensus;
+    knowledge: KnowledgeCensus;
   };
 };
 
@@ -285,108 +225,14 @@ export type Census = {
  * what it holds. The two lists that name people arrive only for an app admin.
  */
 export type Activity = {
-  usage: {
-    days: number;
-    turns: number;
-    input_tokens: number;
-    output_tokens: number;
-    cost_usd: number;
-    active_7d: number;
-    active: number;
-    per_day: {
-      day: string;
-      turns: number;
-      tokens: number;
-      models?: Record<string, number>;
-    }[];
-    by_model: { model: string; turns: number; tokens: number }[];
-    top_users?: {
-      email: string;
-      turns: number;
-      tokens: number;
-      cost_usd: number;
-    }[];
-  };
-  tools: {
-    days: number;
-    reads: number;
-    writes: number;
-    tools: {
-      tool: string;
-      writes: boolean;
-      calls: number;
-      failures: number;
-      misuse: number;
-    }[];
-    writers?: { email: string; writes: number }[];
-    per_day: { day: string; reads: number; writes: number }[];
-  };
-  traffic: {
-    days: number;
-    connections: {
-      slug: string;
-      source_type: string;
-      agent: number;
-      sync: number;
-      app: number;
-      rate_limited: number;
-      auth_failures: number;
-      last_auth_failure: string | null;
-    }[];
-    per_day: { day: string; agent: number; sync: number; app: number }[];
-  };
-  library: {
-    days: number;
-    reads: number;
-    readers: number;
-    corrections: number;
-    per_day: { day: string; reads: number }[];
-    edits_per_day: {
-      day: string;
-      people: number;
-      agent: number;
-      ingest: number;
-    }[];
-    top: {
-      id: string;
-      kind: "entry" | "doc";
-      title: string;
-      reads: number;
-      readers: number;
-    }[];
-  };
+  usage: AgentUsage;
+  tools: ToolUsage;
+  traffic: SourceTraffic;
+  library: LibraryEngagement;
 };
-
-type JobStatus =
-  "queued" | "running" | "succeeded" | "failed" | "cancelled" | "timed_out";
-type JobClass = "light" | "heavy";
 
 /** `GET /jobs/census` — what the workers have been doing. */
-export type JobCensus = {
-  days: number;
-  runs: number;
-  by_status: Record<JobStatus, number>;
-  by_trigger: Record<"schedule" | "manual" | "event", number>;
-  by_class: Record<JobClass, number>;
-  per_day: ({ day: string } & Record<JobStatus, number>)[];
-  by_kind: {
-    kind: string;
-    runs: number;
-    succeeded: number;
-    failed: number;
-    avg_seconds: number | null;
-  }[];
-  success: Record<JobClass, { finished: number; succeeded: number }>;
-  now: Record<JobClass, { running: number; queued: number }>;
-  definitions: {
-    total: number;
-    enabled: number;
-    scheduled: number;
-    manual: number;
-    disabled: number;
-  };
-  upcoming: { id: string; name: string; kind: string; at: string[] }[];
-};
+export type { JobCensus };
 
 /** `GET /overview/issues` — per issue key, how many and the first few by name. */
 export type Issues = Record<
@@ -417,45 +263,10 @@ export type JobKindInfo = {
   max_attempts: number;
   params_schema: JsonSchema;
 };
-export type JobRunRow = {
-  id: string;
-  definition_id: string | null;
-  kind: string;
-  params: Record<string, unknown>;
-  resource_class: "light" | "heavy";
-  trigger: string;
-  status: string;
-  attempts: number;
-  max_attempts: number;
-  progress: number | null;
-  progress_note: string | null;
-  error: string | null;
-  log_tail: string;
-  output: Record<string, unknown> | null;
-  created_at: string;
-  started_at: string | null;
-  finished_at: string | null;
-};
-export type JobDefinitionRow = {
-  id: string;
-  kind: string;
-  name: string;
-  params: Record<string, unknown>;
-  enabled: boolean;
-  schedule: string | null;
-  timezone: string;
-  resource_class: "light" | "heavy" | null;
-  timeout: string | null;
-  overlap: "skip" | "queue" | null;
-  notify: "failure" | "always" | "never";
-  disabled_reason: string | null;
+export type JobRunRow = JobRun;
+export type JobDefinitionRow = JobDefinition & {
   next_run: string | null;
-  last_run: {
-    id: string;
-    status: string;
-    created_at: string;
-    error: string | null;
-  } | null;
+  last_run: Pick<JobRun, "id" | "status" | "created_at" | "error"> | null;
 };
 export type JobChange = {
   id: string;

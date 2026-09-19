@@ -1,30 +1,7 @@
 import { sql } from "../infra/db";
+import type { CoverageCounts, CoverageNode, Coverage } from "@tachy/contract";
 
-export interface CoverageCounts {
-  entries: number;
-  docs: number;
-  articles: number;
-  reads: number;
-}
-
-export interface CoverageNode extends CoverageCounts {
-  id: string;
-  parent_id: string | null;
-  slug: string;
-  name: string;
-  /** The same four counts summed over this node and everything beneath it. */
-  subtree: CoverageCounts;
-  children: CoverageNode[];
-}
-
-export interface Coverage {
-  nodes: CoverageNode[];
-  /**
-   * Items with no component at all. The honest measure of whether the component
-   * tree describes the corpus: if most of it lands here, the tree does not.
-   */
-  unfiled: { entries: number; docs: number; articles: number };
-}
+export type { CoverageCounts, CoverageNode, Coverage };
 
 const zero = (): CoverageCounts => ({
   entries: 0,

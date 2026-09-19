@@ -1,3 +1,4 @@
+import type { SourceCensus } from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { badInput, notFound } from "../infra/errors";
@@ -54,8 +55,8 @@ export async function deleteSourceConnection(slug: string) {
  * A knowledge project always has a product — source_projects carries a check
  * constraint saying so — which is why there is no count of productless ones.
  */
-export async function sourceCensus() {
-  const [row] = await sql`
+export async function sourceCensus(): Promise<SourceCensus> {
+  const [row] = await sql<Omit<SourceCensus, "by_type">[]>`
     select
       (select count(*)::int from source_connections) as connections,
       (select count(*)::int from source_projects) as projects,
@@ -68,25 +69,15 @@ export async function sourceCensus() {
       (select count(*)::int from source_connections where last_synced_at is null)
         as never_synced
   `;
-  const kinds = await sql`
+  const kinds = await sql<{ source_type: string; n: number }[]>`
     select source_type, count(*)::int as n
     from source_connections
     group by source_type
     order by n desc, source_type
   `;
   return {
-    ...(row as {
-      connections: number;
-      projects: number;
-      knowledge: number;
-      trackers: number;
-      projects_no_wiki: number;
-      projects_for_customer: number;
-      never_synced: number;
-    }),
-    by_type: Object.fromEntries(
-      kinds.map((k) => [k.source_type as string, k.n as number]),
-    ) as Record<string, number>,
+    ...row,
+    by_type: Object.fromEntries(kinds.map((k) => [k.source_type, k.n])),
   };
 }
 

@@ -10,36 +10,9 @@ import {
 } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
+import type { JobCensus } from "@tachy/contract";
 
-export interface JobCensus {
-  days: number;
-  runs: number;
-  by_status: Record<JobStatus, number>;
-  by_trigger: Record<JobTrigger, number>;
-  by_class: Record<JobResourceClass, number>;
-  /** Runs created per day, oldest first, gaps filled. */
-  per_day: ({ day: string } & Record<JobStatus, number>)[];
-  /** Busiest kinds first. `avg_seconds` covers runs that started and finished. */
-  by_kind: {
-    kind: string;
-    runs: number;
-    succeeded: number;
-    failed: number;
-    avg_seconds: number | null;
-  }[];
-  /** Finished runs and how many of them succeeded, per pool. */
-  success: Record<JobResourceClass, { finished: number; succeeded: number }>;
-  now: Record<JobResourceClass, { running: number; queued: number }>;
-  definitions: {
-    total: number;
-    enabled: number;
-    scheduled: number;
-    manual: number;
-    disabled: number;
-  };
-  /** Fire times in the next 24 hours, per enabled scheduled definition. */
-  upcoming: { id: string; name: string; kind: string; at: string[] }[];
-}
+export type { JobCensus };
 
 const zeroes = <K extends string>(keys: readonly K[]) =>
   Object.fromEntries(keys.map((k) => [k, 0])) as Record<K, number>;

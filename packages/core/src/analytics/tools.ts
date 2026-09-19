@@ -1,5 +1,8 @@
 import { sql } from "../infra/db";
 import { inBackground } from "../infra/background";
+import type { ToolUsage } from "@tachy/contract";
+
+export type { ToolUsage };
 
 export interface ToolCallOutcome {
   ok: boolean;
@@ -45,27 +48,6 @@ export function countToolCall(
     recordToolCall(tool, writes, userId, outcome),
     "tool_call_count_failed",
   );
-}
-
-export interface ToolUsage {
-  days: number;
-  reads: number;
-  writes: number;
-  /** Most-called tools first. */
-  tools: {
-    tool: string;
-    writes: boolean;
-    calls: number;
-    failures: number;
-    misuse: number;
-  }[];
-  /**
-   * Who has the agent change things, most writes first. Omitted by the route
-   * for anyone who is not an app admin.
-   */
-  writers?: { email: string; writes: number }[];
-  /** Calls per day over the last 14 days at most, oldest first, gaps filled. */
-  per_day: { day: string; reads: number; writes: number }[];
 }
 
 /** Tool use over the last `days` days, for the access overview. */

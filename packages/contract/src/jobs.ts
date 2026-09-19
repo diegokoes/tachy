@@ -50,3 +50,78 @@ export function parseDuration(text: string): number {
   ];
   return Number(m[1]) * unit;
 }
+
+export interface JobCensus {
+  days: number;
+  runs: number;
+  by_status: Record<JobStatus, number>;
+  by_trigger: Record<JobTrigger, number>;
+  by_class: Record<JobResourceClass, number>;
+  /** Runs created per day, oldest first, gaps filled. */
+  per_day: ({ day: string } & Record<JobStatus, number>)[];
+  /** Busiest kinds first. `avg_seconds` covers runs that started and finished. */
+  by_kind: {
+    kind: string;
+    runs: number;
+    succeeded: number;
+    failed: number;
+    avg_seconds: number | null;
+  }[];
+  /** Finished runs and how many of them succeeded, per pool. */
+  success: Record<JobResourceClass, { finished: number; succeeded: number }>;
+  now: Record<JobResourceClass, { running: number; queued: number }>;
+  definitions: {
+    total: number;
+    enabled: number;
+    scheduled: number;
+    manual: number;
+    disabled: number;
+  };
+  /** Fire times in the next 24 hours, per enabled scheduled definition. */
+  upcoming: { id: string; name: string; kind: string; at: string[] }[];
+}
+
+export interface JobRun {
+  id: string;
+  definition_id: string | null;
+  kind: string;
+  params: Record<string, unknown>;
+  resource_class: JobResourceClass;
+  trigger: JobTrigger;
+  scheduled_for: string | null;
+  requested_by: string | null;
+  status: JobStatus;
+  attempts: number;
+  max_attempts: number;
+  timeout_ms: number;
+  run_after: string;
+  locked_by: string | null;
+  locked_until: string | null;
+  cancel_requested: boolean;
+  progress: number | null;
+  progress_note: string | null;
+  output: Record<string, unknown> | null;
+  error: string | null;
+  log_tail: string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface JobDefinition {
+  id: string;
+  kind: string;
+  name: string;
+  params: Record<string, unknown>;
+  enabled: boolean;
+  schedule: string | null;
+  timezone: string;
+  resource_class: JobResourceClass | null;
+  timeout: string | null;
+  overlap: JobOverlap | null;
+  notify: JobNotify;
+  last_scheduled_for: string | null;
+  disabled_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}

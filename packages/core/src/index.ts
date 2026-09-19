@@ -539,7 +539,18 @@ export {
   assetPath,
   ASSET_SRC_RE,
 } from "@tachy/contract";
-export type { WikiGapKind, LibraryAssetType } from "@tachy/contract";
+export type {
+  WikiGapKind,
+  LibraryAssetType,
+  WikiListRow,
+  AdoFieldType,
+  FieldSpec,
+  WorkItemSchema,
+  CatalogCensus,
+  UserCensus,
+  SourceCensus,
+  KnowledgeCensus,
+} from "@tachy/contract";
 
 // Owned by the contract, because the admin jobs form offers them and the API
 // validates them.

@@ -42,7 +42,30 @@ export { WIKILINK_RE, parseWikilink, parseWikilinks } from "./wikilink";
 export type { Wikilink, WikilinkTargetKind } from "./wikilink";
 
 export { WIKI_RESERVED_SLUGS, MAIN_PAGE_SLUG, WIKI_GAP_KINDS } from "./wiki";
-export type { WikiGapKind } from "./wiki";
+export type {
+  WikiGapKind,
+  WikiCategoryRow,
+  WikiArticleRef,
+  WikiTocNode,
+  WikiToc,
+  WikiListRow,
+  WikiGapItem,
+} from "./wiki";
+
+export type {
+  Coverage,
+  CoverageCounts,
+  CoverageNode,
+  LibraryEngagement,
+} from "./library";
+export type { AdoFieldType, FieldSpec, WorkItemSchema } from "./ado";
+export { REPO_INDEX_STATUSES } from "./code";
+export type { RepoIndexStatus, RepoRow, RepoCensus } from "./code";
+export type { CatalogCensus } from "./catalog";
+export type { UserCensus } from "./access";
+export type { SourceCensus, SourceTraffic } from "./sources";
+export type { AgentUsage, ToolUsage } from "./analytics";
+export type { KnowledgeCensus } from "./knowledge";
 
 export {
   LIBRARY_ASSET_TYPES,
@@ -107,4 +130,7 @@ export type {
   JobOverlap,
   JobMissed,
   JobNotify,
+  JobCensus,
+  JobRun,
+  JobDefinition,
 } from "./jobs";

@@ -4,29 +4,14 @@ import {
   JOB_OVERLAP,
   JOB_RESOURCE_CLASSES,
   parseDuration,
+  type JobDefinition,
 } from "@tachy/contract";
 import { z } from "zod";
 import { sql, type Db, jsonb } from "../infra/db";
 import { badInput, notFound } from "../infra/errors";
 import { getJobKind, hasJobKind } from "./registry";
 
-export interface JobDefinition {
-  id: string;
-  kind: string;
-  name: string;
-  params: Record<string, unknown>;
-  enabled: boolean;
-  schedule: string | null;
-  timezone: string;
-  resource_class: (typeof JOB_RESOURCE_CLASSES)[number] | null;
-  timeout: string | null;
-  overlap: (typeof JOB_OVERLAP)[number] | null;
-  notify: (typeof JOB_NOTIFY)[number];
-  last_scheduled_for: string | null;
-  disabled_reason: string | null;
-  created_at: string;
-  updated_at: string;
-}
+export type { JobDefinition };
 
 export const jobDefinitionInput = z.object({
   kind: z.string().min(1),
