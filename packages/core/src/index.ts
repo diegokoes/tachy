@@ -522,6 +522,9 @@ export * from "./exports";
 export {
   TokenMap,
   scrubText,
+  scrubStrings,
+  scrubbableCopy,
+  customerStandIn,
   scrubKnownNames,
   scrubDeep,
   redactNormalized,

@@ -1,4 +1,11 @@
-import { freshdeskToken, scrubText, sourceFetch, TokenMap } from "@tachy/core";
+import {
+  customerStandIn,
+  freshdeskToken,
+  scrubbableCopy,
+  scrubStrings,
+  sourceFetch,
+  TokenMap,
+} from "@tachy/core";
 import type {
   WorkItemSource,
   RawWorkItem,
@@ -12,9 +19,9 @@ function redactFreshdeskRaw(
   map: TokenMap,
   customerSlug: string | null,
 ): unknown {
-  if (raw == null || typeof raw !== "object") return {};
-  const t = structuredClone(raw) as Record<string, any>;
-  const name = customerSlug || "[CUSTOMER]";
+  const t = scrubbableCopy(raw);
+  if (!t) return {};
+  const name = customerStandIn(customerSlug);
   const email = (v: unknown) =>
     typeof v === "string" && v ? map.token("EMAIL", v) : v;
   const emailList = (v: unknown) =>
@@ -45,18 +52,47 @@ function redactFreshdeskRaw(
     if (c.name != null) c.name = name;
   }
 
-  if (typeof t.subject === "string") t.subject = scrubText(t.subject, map);
-  if (typeof t.description === "string")
-    t.description = scrubText(t.description, map);
-  if (typeof t.description_text === "string")
-    t.description_text = scrubText(t.description_text, map);
-  if (t.custom_fields && typeof t.custom_fields === "object") {
-    const cf = t.custom_fields as Record<string, any>;
-    for (const k of Object.keys(cf)) {
-      if (typeof cf[k] === "string") cf[k] = scrubText(cf[k], map);
-    }
-  }
+  scrubStrings(t, ["subject", "description", "description_text"], map);
+  if (t.custom_fields && typeof t.custom_fields === "object")
+    scrubStrings(t.custom_fields, Object.keys(t.custom_fields), map);
   return t;
+}
+
+/** The parts of Freshdesk's payloads this adapter reads. */
+interface FreshdeskTicket {
+  id: number;
+  subject?: string;
+  status?: number | null;
+  group_id?: number | null;
+  requester_id?: number | null;
+  requester?: { email?: string; name?: string };
+  description_text?: string;
+  attachments?: unknown[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface FreshdeskConversation {
+  id: number;
+  user_id?: number | null;
+  automation_id?: number | null;
+  auto_response?: boolean;
+  incoming?: boolean;
+  private?: boolean;
+  from_email?: string;
+  body_text?: string;
+  attachments?: unknown[];
+  created_at?: string;
+}
+
+interface FreshdeskAgent {
+  id?: number;
+  contact?: { name?: string; email?: string };
+}
+
+interface FreshdeskGroup {
+  id: number;
+  name?: string;
 }
 
 /** Freshdesk adapter. Uses *_text fields, so no HTML stripping is needed. */
@@ -66,7 +102,7 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
   const base = cfg.baseUrl.replace(/\/$/, "");
   const api = base + "/api/v2";
 
-  async function get(path: string): Promise<any> {
+  async function get<T>(path: string): Promise<T> {
     const res = await sourceFetch(
       `Freshdesk GET ${path}`,
       api + path,
@@ -77,7 +113,7 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
       throw new Error(
         `Freshdesk GET ${path} -> ${res.status} ${await res.text()}`,
       );
-    return res.json();
+    return (await res.json()) as T;
   }
 
   let agentNames: Map<string, string> | null = null;
@@ -87,7 +123,9 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
     const names = new Map<string, string>();
     try {
       for (let page = 1; page <= 5; page++) {
-        const batch = await get(`/agents?per_page=100&page=${page}`);
+        const batch = await get<FreshdeskAgent[]>(
+          `/agents?per_page=100&page=${page}`,
+        );
         if (!Array.isArray(batch) || batch.length === 0) break;
         for (const a of batch) {
           const n = a?.contact?.name;
@@ -102,7 +140,10 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
     return names;
   }
 
-  function senderLabel(c: any, names: Map<string, string>): string | undefined {
+  function senderLabel(
+    c: FreshdeskConversation,
+    names: Map<string, string>,
+  ): string | undefined {
     if (c.automation_id != null) return "support (automated)";
     if (c.incoming) {
       const m = String(c.from_email ?? "").match(/[\w.+-]+@[\w.-]+/);
@@ -115,7 +156,10 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
     return undefined;
   }
 
-  function mapConversation(c: any, names: Map<string, string>): RawMessage {
+  function mapConversation(
+    c: FreshdeskConversation,
+    names: Map<string, string>,
+  ): RawMessage {
     return {
       externalId: String(c.id),
       author: c.user_id != null ? String(c.user_id) : undefined,
@@ -129,7 +173,10 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
     };
   }
 
-  function metadataToItem(t: any, messages: RawMessage[]): RawWorkItem {
+  function metadataToItem(
+    t: FreshdeskTicket,
+    messages: RawMessage[],
+  ): RawWorkItem {
     return {
       externalId: String(t.id),
       externalUrl: `${base}/a/tickets/${t.id}`,
@@ -153,15 +200,15 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
     redactRaw: redactFreshdeskRaw,
 
     async verify() {
-      const me = await get("/agents/me");
+      const me = await get<FreshdeskAgent>("/agents/me");
       const identity = me?.contact?.email ?? me?.contact?.name ?? undefined;
       // /groups is admin-only; a plain agent key 403s here and still reads
       // tickets fine, so the failure is reported, not thrown.
       try {
-        const groups = await get("/groups?per_page=100");
+        const groups = await get<FreshdeskGroup[]>("/groups?per_page=100");
         return {
           identity,
-          groups: (Array.isArray(groups) ? groups : []).map((g: any) => ({
+          groups: (Array.isArray(groups) ? groups : []).map((g) => ({
             key: String(g.id),
             name: g.name ?? String(g.id),
           })),
@@ -179,12 +226,14 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
       // The id arrives from a route parameter, so it is encoded rather than
       // pasted: unescaped it could carry its own query string into the path.
       const ticketId = encodeURIComponent(externalId);
-      const t = await get(`/tickets/${ticketId}?include=requester`);
+      const t = await get<FreshdeskTicket>(
+        `/tickets/${ticketId}?include=requester`,
+      );
       // Conversations page at 30 (the API default); per_page is unreliable on
       // some endpoints, so the loop keys on the observed default instead.
-      const convos: any[] = [];
+      const convos: FreshdeskConversation[] = [];
       for (let page = 1; page <= 500; page++) {
-        const batch = await get(
+        const batch = await get<FreshdeskConversation[]>(
           `/tickets/${ticketId}/conversations?page=${page}`,
         );
         if (!Array.isArray(batch) || batch.length === 0) break;
@@ -224,9 +273,11 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
       const page = opts.cursor ? Number(opts.cursor) : 1;
       params.set("page", String(page));
 
-      const list = await get(`/tickets?${params.toString()}`);
+      const list = await get<FreshdeskTicket[]>(
+        `/tickets?${params.toString()}`,
+      );
       const raw = Array.isArray(list) ? list : [];
-      let items = raw.map((t: any) => metadataToItem(t, []));
+      let items = raw.map((t) => metadataToItem(t, []));
       if (opts.groupKey)
         items = items.filter((i) => i.groupKey === opts.groupKey);
 

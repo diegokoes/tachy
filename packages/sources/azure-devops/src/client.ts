@@ -46,34 +46,145 @@ export interface JsonPatchOp {
   value?: unknown;
 }
 
+/** An identity as a field or a comment carries it, e.g. System.CreatedBy. */
+export interface AdoIdentity {
+  displayName?: string;
+  uniqueName?: string;
+}
+
+/** A work item's fields by reference name. Only the ones read here are named. */
+export type AdoFields = {
+  "System.Title"?: string;
+  "System.State"?: string;
+  "System.TeamProject"?: string;
+  "System.AreaPath"?: string;
+  "System.WorkItemType"?: string;
+  "System.CreatedBy"?: AdoIdentity;
+  "System.CreatedDate"?: string;
+  "System.ChangedDate"?: string;
+  "System.Description"?: string;
+  "Microsoft.VSTS.TCM.ReproSteps"?: string;
+} & Record<string, unknown>;
+
+export interface AdoRelation {
+  rel?: string;
+  url?: string;
+}
+
+export interface AdoWorkItem {
+  id: number;
+  fields?: AdoFields;
+  relations?: AdoRelation[];
+  _links?: { html?: { href?: string } };
+}
+
+export interface AdoComment {
+  id: number;
+  text?: string;
+  createdBy?: AdoIdentity;
+  createdDate?: string;
+}
+
+export interface AdoPullRequest {
+  pullRequestId: number;
+  title?: string;
+  status?: string;
+  repository?: { name?: string; project?: { name?: string } };
+}
+
+export interface AdoCommit {
+  commitId: string;
+  comment?: string;
+  author?: { name?: string };
+  remoteUrl?: string;
+}
+
+export interface AdoConnectionData {
+  authenticatedUser?: {
+    providerDisplayName?: string;
+    properties?: { Account?: { $value?: string } };
+  };
+}
+
+export interface AdoWorkItemType {
+  name: string;
+  referenceName?: string;
+  description?: string;
+}
+
+/** One field as `workitemtypes/{type}/fields?$expand=all` returns it. */
+export interface AdoTypeField {
+  referenceName: string;
+  name: string;
+  alwaysRequired?: boolean;
+  allowedValues?: unknown[];
+  defaultValue?: unknown;
+  helpText?: string;
+}
+
+/** One account-wide field definition, from `_apis/wit/fields`. */
+export interface AdoField {
+  referenceName?: string;
+  type?: string;
+  readOnly?: boolean;
+  isIdentity?: boolean;
+}
+
+export interface AdoWiki {
+  id: string;
+  name: string;
+  type?: string;
+  projectId?: string;
+}
+
+export interface AdoRepo {
+  name: string;
+  remoteUrl?: string;
+  webUrl?: string;
+  defaultBranch?: string;
+}
+
+interface AdoWikiPage {
+  path?: string;
+  content?: string;
+  remoteUrl?: string;
+  subPages?: AdoWikiPage[];
+}
+
+type AdoList<T> = { value?: T[] };
+
 export interface AdoClient {
   readonly orgUrl: string;
-  getConnectionData(): Promise<any>;
+  getConnectionData(): Promise<AdoConnectionData>;
   listProjects(): Promise<{ id: string; name: string }[]>;
-  getWorkItem(id: string): Promise<any>;
-  getWorkItemsBatch(ids: number[], fields?: string[]): Promise<any[]>;
-  getComments(project: string, id: string): Promise<any[]>;
+  getWorkItem(id: string): Promise<AdoWorkItem>;
+  getWorkItemsBatch(ids: number[], fields?: string[]): Promise<AdoWorkItem[]>;
+  getComments(project: string, id: string): Promise<AdoComment[]>;
   queryWorkItemIds(
     project: string,
     since?: string,
     top?: number,
   ): Promise<number[]>;
-  getPullRequest(project: string, repoId: string, prId: string): Promise<any>;
-  getCommit(project: string, repoId: string, sha: string): Promise<any>;
-  listWorkItemTypes(project: string): Promise<any[]>;
-  getTypeFields(project: string, type: string): Promise<any[]>;
+  getPullRequest(
+    project: string,
+    repoId: string,
+    prId: string,
+  ): Promise<AdoPullRequest>;
+  getCommit(project: string, repoId: string, sha: string): Promise<AdoCommit>;
+  listWorkItemTypes(project: string): Promise<AdoWorkItemType[]>;
+  getTypeFields(project: string, type: string): Promise<AdoTypeField[]>;
   /**
    * Account-wide field definitions. The per-type endpoint above returns what a
    * type requires and allows but carries NO data type, so the widget a field
    * deserves is only knowable by joining these two on referenceName.
    */
-  listFields(): Promise<any[]>;
+  listFields(): Promise<AdoField[]>;
   createWorkItem(
     project: string,
     type: string,
     patch: JsonPatchOp[],
-  ): Promise<any>;
-  listWikis(project?: string): Promise<any[]>;
+  ): Promise<AdoWorkItem>;
+  listWikis(project?: string): Promise<AdoWiki[]>;
   listWikiPages(project: string, wiki: string): Promise<string[]>;
   getWikiPage(
     project: string,
@@ -85,7 +196,7 @@ export interface AdoClient {
     wiki: string,
     id: string | number,
   ): Promise<{ path: string; content: string; remoteUrl?: string }>;
-  listRepos(project: string): Promise<any[]>;
+  listRepos(project: string): Promise<AdoRepo[]>;
 }
 
 export function createAdoClient(cfg: AdoCfg): AdoClient {
@@ -97,7 +208,7 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
   const token = cfg.token || azureDevopsToken(cfg.slug);
   const auth = "Basic " + Buffer.from(`:${token}`).toString("base64");
 
-  async function req(path: string, init?: RequestInit): Promise<any> {
+  async function req<T>(path: string, init?: RequestInit): Promise<T> {
     const method = init?.method ?? "GET";
     const res = await sourceFetch(
       `Azure DevOps ${method} ${path}`,
@@ -123,13 +234,13 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
         `Azure DevOps ${method} ${path} -> ${res.status} ${trimmed.slice(0, 2000)}${hint}`,
       );
     }
-    if (!trimmed) return {};
+    if (!trimmed) return {} as T;
     if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
       throw new Error(
         `Azure DevOps ${method} ${path} -> ${res.status} returned non-JSON — check that the PAT is valid and has the required scopes (Work Items, Wiki, Code)`,
       );
     }
-    return JSON.parse(text);
+    return JSON.parse(text) as T;
   }
 
   const proj = (project: string) => `/${encodeURIComponent(project)}`;
@@ -138,22 +249,26 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     orgUrl,
 
     async getConnectionData() {
-      return req(`/_apis/connectionData?api-version=${API_CONNECTION_DATA}`);
+      return req<AdoConnectionData>(
+        `/_apis/connectionData?api-version=${API_CONNECTION_DATA}`,
+      );
     },
 
     async listProjects() {
-      const res = await req("/_apis/projects?$top=500");
-      return (res.value ?? []).map((p: any) => ({ id: p.id, name: p.name }));
+      const res = await req<AdoList<{ id: string; name: string }>>(
+        "/_apis/projects?$top=500",
+      );
+      return (res.value ?? []).map((p) => ({ id: p.id, name: p.name }));
     },
 
     async getWorkItem(id) {
-      return req(
+      return req<AdoWorkItem>(
         `/_apis/wit/workitems/${encodeURIComponent(String(id))}?$expand=all`,
       );
     },
 
     async getWorkItemsBatch(ids, fields) {
-      const out: any[] = [];
+      const out: AdoWorkItem[] = [];
       for (let i = 0; i < ids.length; i += 200) {
         const chunk = ids.slice(i, i + 200);
         const params = new URLSearchParams({
@@ -161,14 +276,16 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
           errorPolicy: "omit",
         });
         if (fields?.length) params.set("fields", fields.join(","));
-        const res = await req(`/_apis/wit/workitems?${params.toString()}`);
+        const res = await req<AdoList<AdoWorkItem>>(
+          `/_apis/wit/workitems?${params.toString()}`,
+        );
         out.push(...(res.value ?? []));
       }
       return out;
     },
 
     async getComments(project, id) {
-      const comments: any[] = [];
+      const comments: AdoComment[] = [];
       let continuation: string | undefined;
       // A server that echoes the same continuation token would otherwise spin
       // here for as long as the process runs.
@@ -178,7 +295,10 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
           $top: "200",
         });
         if (continuation) params.set("continuationToken", continuation);
-        const res = await req(
+        const res = await req<{
+          comments?: AdoComment[];
+          continuationToken?: string;
+        }>(
           `${proj(project)}/_apis/wit/workItems/${encodeURIComponent(String(id))}/comments?${params.toString()}`,
         );
         comments.push(...(res.comments ?? []));
@@ -201,7 +321,7 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
         timePrecision: "true",
         $top: String(top ?? 200),
       });
-      const res = await req(
+      const res = await req<{ workItems?: { id: number }[] }>(
         `${proj(project)}/_apis/wit/wiql?${params.toString()}`,
         {
           method: "POST",
@@ -209,40 +329,42 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
           body: JSON.stringify({ query }),
         },
       );
-      return (res.workItems ?? []).map((w: any) => Number(w.id));
+      return (res.workItems ?? []).map((w) => Number(w.id));
     },
 
     async getPullRequest(project, repoId, prId) {
-      return req(
+      return req<AdoPullRequest>(
         `${proj(project)}/_apis/git/repositories/${encodeURIComponent(repoId)}/pullrequests/${encodeURIComponent(String(prId))}`,
       );
     },
 
     async getCommit(project, repoId, sha) {
-      return req(
+      return req<AdoCommit>(
         `${proj(project)}/_apis/git/repositories/${encodeURIComponent(repoId)}/commits/${encodeURIComponent(sha)}`,
       );
     },
 
     async listWorkItemTypes(project) {
-      const res = await req(`${proj(project)}/_apis/wit/workitemtypes`);
+      const res = await req<AdoList<AdoWorkItemType>>(
+        `${proj(project)}/_apis/wit/workitemtypes`,
+      );
       return res.value ?? [];
     },
 
     async listFields() {
-      const res = await req(`/_apis/wit/fields`);
+      const res = await req<AdoList<AdoField>>(`/_apis/wit/fields`);
       return res.value ?? [];
     },
 
     async getTypeFields(project, type) {
-      const res = await req(
+      const res = await req<AdoList<AdoTypeField>>(
         `${proj(project)}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/fields?$expand=all`,
       );
       return res.value ?? [];
     },
 
     async createWorkItem(project, type, patch) {
-      return req(
+      return req<AdoWorkItem>(
         `${proj(project)}/_apis/wit/workitems/$${encodeURIComponent(type)}`,
         {
           method: "POST",
@@ -254,7 +376,7 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
 
     async listWikis(project) {
       const scope = project ? proj(project) : "";
-      const res = await req(`${scope}/_apis/wiki/wikis`);
+      const res = await req<AdoList<AdoWiki>>(`${scope}/_apis/wiki/wikis`);
       return res.value ?? [];
     },
 
@@ -263,11 +385,11 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
         path: "/",
         recursionLevel: "full",
       });
-      const res = await req(
+      const res = await req<AdoWikiPage>(
         `${proj(project)}/_apis/wiki/wikis/${encodeURIComponent(wiki)}/pages?${params.toString()}`,
       );
       const paths: string[] = [];
-      const walk = (page: any) => {
+      const walk = (page: AdoWikiPage | undefined) => {
         if (!page) return;
         if (page.path) paths.push(page.path);
         for (const sub of page.subPages ?? []) walk(sub);
@@ -281,7 +403,7 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
         path,
         includeContent: "true",
       });
-      const res = await req(
+      const res = await req<AdoWikiPage>(
         `${proj(project)}/_apis/wiki/wikis/${encodeURIComponent(wiki)}/pages?${params.toString()}`,
       );
       return {
@@ -298,7 +420,7 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
      * through the path endpoint.
      */
     async getWikiPageById(project, wiki, id) {
-      const res = await req(
+      const res = await req<AdoWikiPage>(
         `${proj(project)}/_apis/wiki/wikis/${encodeURIComponent(wiki)}/pages/${encodeURIComponent(String(id))}?includeContent=true`,
       );
       return {
@@ -309,7 +431,9 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     },
 
     async listRepos(project) {
-      const res = await req(`${proj(project)}/_apis/git/repositories`);
+      const res = await req<AdoList<AdoRepo>>(
+        `${proj(project)}/_apis/git/repositories`,
+      );
       return res.value ?? [];
     },
   };
