@@ -14,8 +14,7 @@ export interface OutboundLink {
 
 /**
  * Where each `[[target]]` in one body actually points, and a click handler that
- * follows it. Shared by the article, doc and entry views — the third copy was
- * the point at which pasting it again stopped being defensible.
+ * follows it. Shared by the article, doc and entry views.
  *
  * Destinations come from what the SERVER resolved, not from re-deriving them in
  * the browser: link resolution is scoped (a product's wiki first, then the

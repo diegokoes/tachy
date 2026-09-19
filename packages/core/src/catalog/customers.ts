@@ -175,10 +175,10 @@ export async function setWorkItemCustomer(
   unit?: string | null,
 ) {
   /*
-   * An absent `unit` is "leave it alone", an explicit null is "clear it". They
-   * used to be the same, so setting a ticket's customer with no unit in the
-   * body — the common call — silently dropped the line it had been narrowed to,
-   * and db/schema.sql says a wrong attribution there is not recoverable.
+   * An absent `unit` is "leave it alone", an explicit null is "clear it". The
+   * common call sets the customer with no unit and must keep the line the
+   * ticket was narrowed to: db/schema.sql notes a wrong attribution there is
+   * not recoverable.
    *
    * It survives only while the customer is unchanged. Moving the ticket to a
    * different customer, or clearing it, clears the unit with it: a unit belongs
@@ -235,8 +235,7 @@ export interface CustomerFactInput {
   productId?: string | null;
   /**
    * Which part of their estate this is true of, by unit slug or alias. Omit for
-   * a fact true of the whole customer — which is what every fact was before
-   * units existed, so leaving it off keeps the old behaviour exactly.
+   * a fact true of the whole customer.
    */
   unit?: string | null;
 }

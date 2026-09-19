@@ -302,7 +302,7 @@ export async function updateSourceProject(
     ].filter(Boolean);
     if (parts.length)
       throw conflict(
-        `project '${current.external_key}' still has ${parts.join(", ")} ; a tracker project holds none, detach them first`,
+        `project '${current.external_key}' still has ${parts.join(", ")}; a tracker project holds none, detach them first`,
       );
   }
 
@@ -334,7 +334,7 @@ export async function deleteSourceProject(id: string) {
   ].filter(Boolean);
   if (parts.length)
     throw conflict(
-      `project '${current.external_key}' is still referenced by ${parts.join(", ")} ; re-point or delete those first`,
+      `project '${current.external_key}' is still referenced by ${parts.join(", ")}; re-point or delete those first`,
     );
   await sql`delete from source_projects where id = ${id}`;
   return { deleted: true, id, external_key: current.external_key };

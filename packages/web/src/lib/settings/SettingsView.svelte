@@ -26,9 +26,8 @@
     { key: "reference", label: "fixed keys", view: FixedKeys },
   ];
 
-  /* Settings used to be three subnav tabs. Their URLs still exist in bookmarks
-     and in the browser's history, so each one lands on the section that took
-     its content over. */
+  /** Legacy tab URLs survive in bookmarks and history; each lands on the
+   *  section that holds its content. */
   const MOVED: Record<string, string> = {
     ui: "appearance",
     theme: "appearance",

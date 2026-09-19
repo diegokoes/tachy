@@ -93,9 +93,9 @@ export function renderMarkdown(src: string): string {
  * silently dead. `resolved` is the set of targets the server found a row for.
  */
 export function markBrokenLinks(html: string, resolved: Set<string>): string {
-  // Rewrites only the class, leaving the a11y attributes between it and
-  // data-wikilink alone — matching the whole opening tag by shape instead meant
-  // this silently stopped marking anything the moment one was added.
+  // Rewrites only the class and leaves the a11y attributes between it and
+  // data-wikilink alone. A pattern for the whole opening tag stops matching as
+  // soon as an attribute is added.
   return html.replace(
     /<a class="wikilink"((?:\s+[a-z-]+="[^"]*")*?\s+data-wikilink="([^"]*)")/g,
     (match, rest: string, target: string) =>

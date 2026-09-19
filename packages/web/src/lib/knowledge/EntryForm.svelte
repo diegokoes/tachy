@@ -48,9 +48,8 @@
   let tags = $state(csvJoin(seed.tags));
   let confidence = $state(seed.confidence ?? "");
   let cloud = $state(seed.cloud ?? "");
-  // The rule and its wording both come from the contract, which is where the
-  // API's own zod schema gets them: an environment typed as "Prod EU" used to
-  // submit the whole form and come back as a server error.
+  // Same rule and wording as the API's zod schema, both from the contract, so
+  // an invalid environment is caught in the field rather than on submit.
   const cloudErr = $derived(
     cloud && !CLOUD_RE.test(cloud) ? CLOUD_HINT : null,
   );

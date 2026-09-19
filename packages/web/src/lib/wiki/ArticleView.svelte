@@ -52,9 +52,8 @@
   const current = createSequence();
 
   async function load() {
-    // Navigating between articles used to leave the previous body on screen
-    // until whichever request finished last won, and `links` is shared state
-    // that a slower load would overwrite behind a faster one.
+    // Sequenced: a slower load for the previous article must not replace the
+    // body or the shared `links` state behind a faster one.
     const isCurrent = current();
     error = null;
     missing = false;
