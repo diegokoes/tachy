@@ -103,9 +103,15 @@ export const MIN_PASSWORD_LENGTH = 10;
 
 /**
  * What a slug may look like. `SLUG_RE` is the strict form most things use;
- * environments and customer units are looser, and say so where they differ.
+ * environments, customer units and catalog entries are looser, and say so
+ * where they differ.
  */
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
+
+/** Teams, products, components, labels and resolution patterns. */
+export const CATALOG_SLUG_RE = /^[a-z0-9][a-z0-9._/-]*$/;
+export const CATALOG_SLUG_HINT =
+  "slug must be lowercase (letters, digits, . _ / -)";
 
 /** Lowercases and hyphenates a typed name into something SLUG_RE accepts. */
 export function slugify(input: string): string {

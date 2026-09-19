@@ -3,14 +3,14 @@ import { promisify } from "node:util";
 import { existsSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { SLUG_RE } from "@tachy/contract";
 import { badInput, notFound } from "../infra/errors";
 
 const run = promisify(execFile);
 const MAX_BUFFER = 256 * 1024 * 1024;
 
 export function repoDir(slug: string): string {
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(slug))
-    throw badInput(`invalid repo slug '${slug}'`);
+  if (!SLUG_RE.test(slug)) throw badInput(`invalid repo slug '${slug}'`);
   return join(
     process.env.TACHY_REPO_DIR ?? join(process.cwd(), "data", "repos"),
     slug,

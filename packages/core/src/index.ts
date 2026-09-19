@@ -519,6 +519,8 @@ export {
   CLOUD_HINT,
   MAX_PAGE,
   SLUG_RE,
+  CATALOG_SLUG_RE,
+  CATALOG_SLUG_HINT,
   slugify,
   WIKILINK_RE,
   parseWikilink,
