@@ -169,12 +169,3 @@ export interface ReferenceLineageRow {
   created_at?: string;
   updated_at?: string;
 }
-
-export interface NamedRow {
-  id?: string;
-  slug?: string;
-  name?: string;
-  description?: string | null;
-  aliases?: string[] | null;
-  [k: string]: unknown;
-}

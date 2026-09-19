@@ -5,7 +5,8 @@
   import { MAX_PAGE } from "@tachy/contract";
   import { onMount } from "svelte";
   import { api } from "../api";
-  import type { KnowledgeRow, NamedRow, ReferenceRow } from "../types";
+  import type { KnowledgeRow, ReferenceRow } from "../types";
+  import type { ComponentRow, ProductRow } from "@tachy/contract";
   import { navigate, segment, segments } from "../router.svelte";
   import { setSubnav, type SubnavItem } from "../subnav.svelte";
   import { pushScope } from "../keys.svelte";
@@ -90,8 +91,8 @@
   let component = $state("");
   let version = $state("");
 
-  let products = $state<NamedRow[]>([]);
-  let components = $state<NamedRow[]>([]);
+  let products = $state<ProductRow[]>([]);
+  let components = $state<ComponentRow[]>([]);
 
   /** Counts for every facet under whatever else is currently selected. */
   let facets = $state<Facets>({});
@@ -229,7 +230,7 @@
 
   async function loadCatalog() {
     try {
-      products = await api.get<NamedRow[]>("/products");
+      products = await api.get<ProductRow[]>("/products");
     } catch {
       products = [];
     }
@@ -309,7 +310,7 @@
     const slug = products.find((p) => p.id === id)?.slug;
     if (slug)
       try {
-        const next = await api.get<NamedRow[]>(`/products/${slug}/components`);
+        const next = await api.get<ComponentRow[]>(`/products/${slug}/components`);
         if (!isCurrent()) return;
         components = next;
       } catch {
@@ -351,8 +352,7 @@
     origin = kind;
     if (i.kind === "article" && i.slug) {
       const scope =
-        (products.find((p) => p.id === i.productId)?.slug as string) ??
-        ORG_WIDE;
+        products.find((p) => p.id === i.productId)?.slug ?? ORG_WIDE;
       navigate(wikiPath(scope, i.slug));
       return;
     }
@@ -647,10 +647,7 @@
           title={t("product")}
           options={[
             { value: "", label: "any" },
-            ...products.map((p) => ({
-              value: p.id as string,
-              label: p.name as string,
-            })),
+            ...products.map((p) => ({ value: p.id, label: p.name })),
           ]}
           onchange={(v) => onProductChange(String(v))}
         />

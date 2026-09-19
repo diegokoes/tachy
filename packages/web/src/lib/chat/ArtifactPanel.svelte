@@ -3,7 +3,7 @@
   import { api } from "../api";
   import { chat } from "../chatState.svelte";
   import { session } from "../session.svelte";
-  import type { NamedRow } from "../types";
+  import type { TeamRow } from "@tachy/contract";
   import {
     ArtifactMark,
     Button,
@@ -85,10 +85,8 @@
   async function loadTeams() {
     if (session.me?.role === "admin") {
       try {
-        const rows = await api.get<NamedRow[]>("/teams");
-        teams = rows
-          .filter((t) => t.id && t.slug)
-          .map((t) => ({ id: t.id as string, slug: t.slug as string }));
+        const rows = await api.get<TeamRow[]>("/teams");
+        teams = rows.map((t) => ({ id: t.id, slug: t.slug }));
         return;
       } catch {}
     }

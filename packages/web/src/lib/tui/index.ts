@@ -32,6 +32,7 @@ export { default as DataTable } from "./DataTable.svelte";
 export { default as CrudTable } from "./CrudTable.svelte";
 export { default as RecordModal } from "./RecordModal.svelte";
 export { default as RecordForm } from "./RecordForm.svelte";
+export { default as FormActions } from "./FormActions.svelte";
 
 /* Kept where they are until their last legacy call site is migrated. */
 export { default as Select } from "../AsciiSelect.svelte";
