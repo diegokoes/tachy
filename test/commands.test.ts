@@ -4,7 +4,7 @@ import {
   findCommand,
   commandAutoApprove,
 } from "../packages/api/src/commands";
-import { buildPrompt } from "../packages/api/src/routes/agent";
+import { buildPrompt } from "../packages/api/src/turn-config";
 
 describe("slash command registry", () => {
   it("exposes the built-in workflow commands", () => {

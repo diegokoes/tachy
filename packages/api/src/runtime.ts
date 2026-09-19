@@ -10,7 +10,7 @@ import {
   type IssueList,
 } from "@tachy/core";
 import { lifecycle, readiness } from "./lifecycle";
-import { turnStats } from "./routes/agent";
+import { turnStats } from "./turns";
 
 const loopDelay = monitorEventLoopDelay({ resolution: 20 });
 loopDelay.enable();
