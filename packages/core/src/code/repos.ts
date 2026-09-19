@@ -122,7 +122,7 @@ export async function listRepos(
   opts: ListReposOptions = {},
 ): Promise<RepoRow[]> {
   const shared = opts.includeShared !== false;
-  return (await sql`
+  return sql<RepoRow[]>`
     ${repoSelect()}
     where 1=1
       ${opts.productId ? sql`and r.product_id = ${opts.productId}` : sql``}
@@ -136,13 +136,13 @@ export async function listRepos(
           : sql``
       }
     order by r.slug
-  `) as unknown as RepoRow[];
+  `;
 }
 
 export async function getRepoBySlug(slug: string): Promise<RepoRow> {
-  const [row] = await sql`${repoSelect()} where r.slug = ${slug}`;
+  const [row] = await sql<RepoRow[]>`${repoSelect()} where r.slug = ${slug}`;
   if (!row) throw notFound(`Repo '${slug}' not found`);
-  return row as unknown as RepoRow;
+  return row;
 }
 
 /** The scope a caller must be able to edit to touch this repo. */

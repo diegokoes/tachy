@@ -18,7 +18,12 @@
   import { slugify, uniqueSlug } from "../slug";
   import { ComponentCache } from "../filing.svelte";
   import type { Customer, Product } from "./rows";
-  import type { CustomerUnitRow, ResolvedFact } from "@tachy/contract";
+  import type {
+    CustomerFactRow,
+    CustomerProfile,
+    CustomerUnitRow,
+    ResolvedFact,
+  } from "@tachy/contract";
 import { INFO } from "./help";
 import { csv } from "../fields";
   import { sectionHoist } from "./sectionAction.svelte";
@@ -28,26 +33,12 @@ import { csv } from "../fields";
   /** Given, the panel is one customer's page rather than the list of them. */
   let { id }: { id?: string } = $props();
 
-  type Profile = {
-    slug: string;
-    facts: {
-      id?: string;
-      kind: string;
-      label: string;
-      value: string;
-      component: string | null;
-    }[];
-    components: { slug: string; product_slug: string }[];
-    repos: { slug: string; component: string | null }[];
-    projects: { source_slug: string; external_key: string }[];
-  };
-  type FactRow = Profile["facts"][number] & { id: string };
 
   const customers = createResource(() => api.get<Customer[]>("/customers"), []);
   const products = createResource(() => api.get<Product[]>("/products"), []);
 
-  let profiles = $state<Record<string, Profile>>({});
-  let facts = $state<Record<string, FactRow[]>>({});
+  let profiles = $state<Record<string, CustomerProfile>>({});
+  let facts = $state<Record<string, CustomerFactRow[]>>({});
   let units = $state<Record<string, CustomerUnitRow[]>>({});
   /** Which unit's resolved ladder is being shown, per customer. "" = the flat set. */
   let viewUnit = $state<Record<string, string>>({});
@@ -71,8 +62,8 @@ import { csv } from "../fields";
   async function loadProfile(slug: string) {
     try {
       const [p, f, u] = await Promise.all([
-        api.get<Profile>(`/customers/${slug}/profile`),
-        api.get<FactRow[]>(`/customers/${slug}/facts`),
+        api.get<CustomerProfile>(`/customers/${slug}/profile`),
+        api.get<CustomerFactRow[]>(`/customers/${slug}/facts`),
         api.get<CustomerUnitRow[]>(`/customers/${slug}/units`).catch(() => []),
       ]);
       units[slug] = u;

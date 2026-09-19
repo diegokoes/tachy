@@ -1,4 +1,11 @@
-import type { CustomerRow } from "@tachy/contract";
+import type {
+  CustomerComponentRow,
+  CustomerFactRow,
+  CustomerProfile,
+  CustomerRow,
+} from "@tachy/contract";
+
+export type { CustomerProfile };
 import { sql } from "../infra/db";
 import { nearestSlugsHint } from "./nearest";
 import { badInput, conflict, notFound } from "../infra/errors";
@@ -275,7 +282,7 @@ export async function deleteCustomerFact(id: string) {
 }
 
 export async function listCustomerFacts(customerId: string) {
-  return sql`
+  return sql<CustomerFactRow[]>`
     select f.id, f.kind, f.label, f.value, f.notes, f.source,
            f.component_id, c.slug as component_slug, f.updated_at
     from customer_facts f
@@ -332,7 +339,7 @@ export async function unlinkCustomerComponent(
 }
 
 export async function listCustomerComponents(customerId: string) {
-  return sql`
+  return sql<CustomerComponentRow[]>`
     select c.id, c.slug, c.name, c.product_id, p.slug as product_slug,
            cc.notes
     from customer_components cc
@@ -341,35 +348,6 @@ export async function listCustomerComponents(customerId: string) {
     where cc.customer_id = ${customerId}
     order by p.slug, c.slug
   `;
-}
-
-export interface CustomerProfile {
-  id: string;
-  slug: string;
-  name: string;
-  notes: string | null;
-  /** Present when the profile was read for one unit. */
-  unit?: { slug: string; name: string; kind: string };
-  facts: {
-    kind: string;
-    label: string;
-    value: string;
-    component: string | null;
-    /** Unit-resolved reads only: which level the fact came from. */
-    origin?: string | null;
-    origin_kind?: string | null;
-    inherited?: boolean;
-  }[];
-  units: {
-    slug: string;
-    name: string;
-    kind: string;
-    parent: string | null;
-    profile: string | null;
-  }[];
-  components: { slug: string; product_slug: string }[];
-  repos: { slug: string; component: string | null; index_status: string }[];
-  projects: { source_slug: string; external_key: string }[];
 }
 
 /**
@@ -386,22 +364,43 @@ export async function getCustomerProfile(
   customerId: string,
   unit?: string | null,
 ): Promise<CustomerProfile | null> {
-  const [customer] = await sql`
+  const [customer] = await sql<
+    Pick<CustomerProfile, "id" | "slug" | "name" | "notes">[]
+  >`
     select id, slug, name, notes from customers where id = ${customerId}
   `;
   if (!customer) return null;
   const resolvedUnit = unit ? await resolveUnit(customerId, unit) : null;
   const [facts, components, repos, projects, units] = await Promise.all([
+    // Unit-resolved reads also say which level each fact came from, and
+    // whether it was inherited rather than stated here.
     resolvedUnit
-      ? resolveUnitFacts(resolvedUnit.id)
-      : listCustomerFacts(customerId),
+      ? resolveUnitFacts(resolvedUnit.id).then((rows) =>
+          rows.map((f) => ({
+            kind: f.kind,
+            label: f.label,
+            value: f.value,
+            component: null,
+            origin: f.origin_slug,
+            origin_kind: f.origin_kind,
+            inherited: f.inherited,
+          })),
+        )
+      : listCustomerFacts(customerId).then((rows) =>
+          rows.map((f) => ({
+            kind: f.kind,
+            label: f.label,
+            value: f.value,
+            component: f.component_slug,
+          })),
+        ),
     listCustomerComponents(customerId),
-    sql`
-      select r.slug, c.slug as component_slug, r.index_status
+    sql<CustomerProfile["repos"]>`
+      select r.slug, c.slug as component, r.index_status
       from repos r left join components c on c.id = r.component_id
       where r.customer_id = ${customerId} order by r.slug
     `,
-    sql`
+    sql<CustomerProfile["projects"]>`
       select sc.slug as source_slug, sp.external_key
       from source_projects sp
       join source_connections sc on sc.id = sp.source_connection_id
@@ -410,10 +409,7 @@ export async function getCustomerProfile(
     listCustomerUnits(customerId),
   ]);
   return {
-    id: customer.id as string,
-    slug: customer.slug as string,
-    name: customer.name as string,
-    notes: (customer.notes as string) ?? null,
+    ...customer,
     ...(resolvedUnit
       ? {
           unit: {
@@ -423,21 +419,7 @@ export async function getCustomerProfile(
           },
         }
       : {}),
-    facts: facts.map((f: any) => ({
-      kind: f.kind as string,
-      label: f.label as string,
-      value: f.value as string,
-      component: (f.component_slug as string) ?? null,
-      // Only present when resolved for a unit: which level it came from, and
-      // whether it was inherited rather than stated here.
-      ...(resolvedUnit
-        ? {
-            origin: (f.origin_slug as string) ?? null,
-            origin_kind: (f.origin_kind as string) ?? null,
-            inherited: f.inherited as boolean,
-          }
-        : {}),
-    })),
+    facts,
     units: units.map((u) => ({
       slug: u.slug,
       name: u.name,
@@ -446,17 +428,10 @@ export async function getCustomerProfile(
       profile: units.find((p) => p.id === u.profile_id)?.slug ?? null,
     })),
     components: components.map((c) => ({
-      slug: c.slug as string,
-      product_slug: c.product_slug as string,
+      slug: c.slug,
+      product_slug: c.product_slug,
     })),
-    repos: repos.map((r) => ({
-      slug: r.slug as string,
-      component: (r.component_slug as string) ?? null,
-      index_status: r.index_status as string,
-    })),
-    projects: projects.map((p) => ({
-      source_slug: p.source_slug as string,
-      external_key: p.external_key as string,
-    })),
+    repos: [...repos],
+    projects: [...projects],
   };
 }
