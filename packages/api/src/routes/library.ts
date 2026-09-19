@@ -44,7 +44,7 @@ async function scopeProductId(scope: string): Promise<string | null> {
   const [row] = await sql`select id from products where slug = ${scope}`;
   if (row) return row.id as string;
   if (scope === ORG_WIDE) return null;
-  throw notFound(`No wiki for '${scope}' : unknown product`);
+  throw notFound(`No wiki for '${scope}': unknown product`);
 }
 
 /** Writes are gated on the product the wiki belongs to; org-wide has no scope. */

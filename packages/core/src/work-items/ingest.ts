@@ -102,12 +102,9 @@ export async function ingestWorkItem(
       teamId: item.team_id,
       customerId: item.customer_id,
       customerUnitId: item.customer_unit_id ?? null,
-      /*
-       * Only when the routing actually decided the stored value. The upsert
-       * leaves an existing attribution alone, so on a re-fetch this used to
-       * report "the project won; check which is wrong" beside a customer_id
-       * that nothing had touched.
-       */
+      // Only when routing decided the stored value. The upsert leaves an
+      // existing attribution alone, so on a re-fetch the stored customer_id
+      // did not come from this routing and there is no conflict to report.
       ...(item.customer_id !== customerId
         ? {}
         : conflict

@@ -366,13 +366,10 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
           .map((wi) => Date.parse(wi.fields?.["System.ChangedDate"] ?? ""))
           .filter(Number.isFinite);
         const prev = cursor.since ? Date.parse(cursor.since) : Number.NaN;
-        /*
-         * A full page means there is more of this project to walk, so the
-         * cursor stays on it. Advancing to the next project instead — which is
-         * what an unreadable page used to fall through to — silently dropped the
-         * rest of this one's backlog. The 1ms bump handles a page whose items
-         * all carry the same timestamp.
-         */
+        // A full page means this project has more to walk, so the cursor
+        // stays on it; advancing to the next project would drop the rest of
+        // this one's backlog. The 1ms bump handles a page whose items all
+        // carry the same timestamp.
         let mark = changed.length ? Math.max(...changed) : prev;
         if (Number.isFinite(prev) && !(mark > prev)) mark = prev + 1;
         if (!Number.isFinite(mark))

@@ -245,9 +245,9 @@
   const currentFacets = createSequence();
 
   async function loadFacets() {
-    // Its own sequence, separate from `run`'s: changing two filters quickly
-    // fires two of these, and the slower one used to overwrite the newer
-    // options — leaving a filter offering values that no longer have rows.
+    // Its own sequence, separate from `run`'s: two quick filter changes fire
+    // two loads, and the slower must not overwrite the newer options with
+    // values that have no rows.
     const isCurrent = currentFacets();
     const p = new URLSearchParams();
     if (productId) p.set("product_id", productId);
@@ -858,9 +858,9 @@
     letter-spacing: var(--label-spacing);
   }
 
-  /* The caps fill the air that used to sit blank between the search bar and
-     the controls, so the controls land where they always did: the top margin
-     gives back exactly what a cap and its gap take. */
+  /* The caps occupy the space between the search bar and the controls. The
+     top margin subtracts a cap and its gap, so the controls keep their
+     offset. */
   .controls {
     position: relative;
     margin-top: calc(var(--pad-4) - var(--fs-xs) - var(--pad-1));

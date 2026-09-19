@@ -53,8 +53,7 @@
     if (activeMatches) stickyKey = active;
   });
 
-  // hidden: there is no longer a digit rendered to repeat, and Settings ›
-  // keybinds is where these are listed now.
+  // Hidden: no digit is rendered on the tab. Settings › keybinds lists these.
   $effect(() => {
     if (hotkeys !== "shift") return;
     const pick = onpick;

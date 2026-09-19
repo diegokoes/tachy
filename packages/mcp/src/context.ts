@@ -1,3 +1,8 @@
+/**
+ * What a work item comes back with: its transcript compacted, its customer's
+ * profile inline, the Azure DevOps items it references already fetched, and
+ * whatever freeform sources were handed in alongside it.
+ */
 import {
   resolveSource,
   ingestWorkItem,
@@ -23,9 +28,10 @@ import type { RawWorkItem } from "@tachy/core";
 import { extractSource } from "./extract";
 
 /**
- * What a work item comes back with: its transcript compacted, its customer's
- * profile inline, the Azure DevOps items it references already fetched, and
- * whatever freeform sources were handed in alongside it.
+ * Tool results have a size ceiling that a whole transcript exceeds, so turns
+ * are capped at `maxChars`. A turn that does not fit is skipped, not treated as
+ * the end: one long turn early in a ticket must not hide the readable turns
+ * after it.
  */
 export function capTurns<T extends { text: string }>(
   turns: T[],

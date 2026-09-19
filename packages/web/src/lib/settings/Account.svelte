@@ -5,9 +5,6 @@
   import Rows from "./Rows.svelte";
 </script>
 
-<!-- Who you are signed in as used to ride in the carved row beside the subnav.
-     Settings has no subnav any more, so it comes home to the page it always
-     belonged to. -->
 <Rows>
   <Row label="signed in as">
     <span class="who">{session.me?.email ?? "-"}</span>

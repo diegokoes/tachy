@@ -1,10 +1,9 @@
 /**
  * Everything a field has to say, shown on the info mark beside its label.
  *
- * These carry rules, not sample values. A placeholder standing in as a made-up
- * name reads as data the record already holds, and one of ours was worse than
- * that: it showed a quoted multi-word alias, which `csv` below would have
- * stored with the quote marks still on it.
+ * These carry rules, not sample values. A placeholder that looks like a name
+ * reads as data the record already holds, and a quoted example invites input
+ * that `csv` below stores with the quote marks on.
  */
 export const INFO = {
   slug: "Lowercase id derived from the name. Used by filters, URLs, the agent.",

@@ -24,9 +24,8 @@
    * One admin record on a page of its own, the way the library opens an entry:
    * back and edit in the carved row while reading, delete, cancel and save
    * there while editing, and what can be done to the record (run, test) in a
-   * rail down the left. What used to hide behind a row's expand arrow is the
-   * page's body, so the record and everything hanging off it read as one
-   * thing.
+   * rail down the left. Everything hanging off the record is the page's body,
+   * so the two read as one thing.
    */
   let {
     noun,

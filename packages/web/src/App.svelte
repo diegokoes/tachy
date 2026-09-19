@@ -197,8 +197,8 @@
     wipeIn(navEl.querySelectorAll("button"), () => (navRevealed = true));
   });
 
-  // hidden: four more entries would crowd the hint rule, and Settings › keybinds
-  // is the discovery surface for these now that the tabs no longer show digits.
+  // Hidden: four more entries would crowd the hint rule. Settings › keybinds
+  // lists them.
   $effect(() => {
     const items = nav;
     return pushScope(
@@ -211,8 +211,8 @@
     );
   });
 
-  // Settings sits outside the tab bar now, so it keeps its own hidden binding
-  // rather than riding navItems()'s digit scope.
+  // Settings is not a tab, so navItems() assigns it no digit. It registers
+  // its own hidden binding.
   $effect(() =>
     pushScope([
       {

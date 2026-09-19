@@ -2,14 +2,12 @@
   import { onMount } from "svelte";
   import { gsap, reducedMotion } from "./gsap";
 
-  /* The wallpaper used to be one <pre> holding a ~650-column ASCII starfield.
-     It read well but it was a single text node, so nothing in it could move
-     independently. These are the same glyphs, one span each, scattered on a
-     jittered grid so the field still looks hand-placed rather than tiled. */
+  /** One span per glyph, so each can move on its own, scattered on a jittered
+   *  grid so the field looks hand-placed rather than tiled. */
   const GLYPHS = ["·", "·", "·", "*", "+", "'"];
-  /* Density is the whole difference between "a sky" and "a few specks". At 220
-     over a 1920-wide viewport the mean spacing was ~97px, so the ~160px gutter
-     either side of the app window held one sparse column and read as empty. */
+  /** Density decides whether this reads as a sky or a few specks. At 220 on a
+   *  1920px viewport the mean spacing is ~97px, and the ~160px gutter beside
+   *  the app window holds one sparse column, which reads as empty. */
   const COUNT = 460;
   const MOTES = 22;
   /** Cursor influence, px. Also the bucket size, so a move tests ~9 buckets. */

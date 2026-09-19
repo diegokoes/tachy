@@ -200,10 +200,9 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
     },
 
     /**
-     * One page per call, like the other adapters: this used to walk every page
-     * of every configured repo into one array before returning, so a real org's
-     * backlog was an out-of-memory rather than a slow sync. The cursor is
-     * "<repo index>:<page>" — which repo the walk has reached, and where in it.
+     * One page per call, like the other adapters, so a large backlog costs
+     * sync time rather than memory. The cursor is "<repo index>:<page>": which
+     * repo the walk has reached, and where in it.
      */
     async listItems(opts: ListOptions) {
       const repos = opts.groupKey ? [opts.groupKey] : configuredRepos;
