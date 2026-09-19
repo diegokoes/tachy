@@ -1,4 +1,5 @@
 import { sql } from "../infra/db";
+import { nearestSlugsHint } from "./nearest";
 import { wouldCycle, type ParentColumn } from "../infra/hierarchy";
 import { badInput, notFound } from "../infra/errors";
 
@@ -7,9 +8,11 @@ import { badInput, notFound } from "../infra/errors";
  * resolveUnit from here, and one-way is worth a two-line query.
  */
 async function customerIdOf(slug: string): Promise<string> {
-  const [row] = await sql`select id from customers where slug = ${slug}`;
+  const [row] = await sql<{ id: string }[]>`
+    select id from customers where slug = ${slug}
+  `;
   if (!row) throw badInput(`Unknown customer '${slug}'.`);
-  return row.id as string;
+  return row.id;
 }
 
 export interface CustomerUnitRow {
@@ -61,6 +64,16 @@ export async function listCustomerUnits(
   ` as Promise<CustomerUnitRow[]>;
 }
 
+export async function getUnitSlug(
+  unitId: string | null,
+): Promise<string | null> {
+  if (!unitId) return null;
+  const [row] = await sql<{ slug: string }[]>`
+    select slug from customer_units where id = ${unitId}
+  `;
+  return row?.slug ?? null;
+}
+
 /**
  * Slug, then alias, then a trigram-ranked hint — the same ladder
  * resolveComponentStrict and resolveCustomer offer, because a line is referred
@@ -81,19 +94,10 @@ export async function resolveUnit(
   `;
   if (row) return row as CustomerUnitRow;
 
-  const nearest = await sql`
-    select slug from customer_units
-    where customer_id = ${customerId}
-    order by greatest(
-      similarity(slug, ${slugOrAlias}),
-      similarity(name, ${slugOrAlias}),
-      coalesce((select max(similarity(a, ${slugOrAlias})) from unnest(aliases) a), 0)
-    ) desc
-    limit 5
-  `;
-  const hint = nearest.length
-    ? ` Nearest matches: ${nearest.map((r) => `'${r.slug}'`).join(", ")}.`
-    : "";
+  const hint = await nearestSlugsHint("customer_units", slugOrAlias, {
+    column: "customer_id",
+    id: customerId,
+  });
   throw badInput(
     `Unknown unit '${slugOrAlias}' for this customer.${hint} Call list_customer_units, or add_customer_unit first.`,
   );

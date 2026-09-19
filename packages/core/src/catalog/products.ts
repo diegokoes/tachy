@@ -1,10 +1,11 @@
 import { sql } from "../infra/db";
+import { productTagRenameImpact, renameProductTag } from "./product-tags";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { badInput, conflict, notFound } from "../infra/errors";
 import { clearPermissionCache } from "../access/permissions";
 
 export async function getProductIdBySlug(slug: string): Promise<string> {
-  const rows = await sql`
+  const rows = await sql<{ id: string }[]>`
     select id from products
     where slug = ${slug}
        or exists (select 1 from unnest(aliases) a where lower(a) = lower(${slug}))
@@ -18,7 +19,7 @@ export async function getProductIdBySlug(slug: string): Promise<string> {
     throw badInput(
       `Ambiguous product '${slug}': exists in multiple teams; use a unique alias or rename one of the products.`,
     );
-  return rows[0].id as string;
+  return rows[0].id;
 }
 
 export async function listTeams() {
@@ -26,12 +27,14 @@ export async function listTeams() {
 }
 
 export async function getTeamIdBySlug(slug: string): Promise<string> {
-  const [row] = await sql`select id from teams where slug = ${slug}`;
+  const [row] = await sql<{ id: string }[]>`
+    select id from teams where slug = ${slug}
+  `;
   if (!row)
     throw badInput(
       `Unknown team '${slug}'. Call list_teams or add_team first.`,
     );
-  return row.id as string;
+  return row.id;
 }
 
 export async function addTeam(slug: string, name: string) {
@@ -219,50 +222,16 @@ export async function updateLabel(
   return row;
 }
 
-export async function labelRenameImpact(
-  productId: string,
-  slug: string,
-): Promise<{ entries: number; docs: number }> {
-  const [current] =
-    await sql`select id from labels where product_id = ${productId} and slug = ${slug}`;
-  if (!current) throw notFound(`Label '${slug}' not found for this product`);
-  const [e] =
-    await sql`select count(*)::int as n from knowledge_entries where product_id = ${productId} and ${slug} = any(tags)`;
-  const [d] =
-    await sql`select count(*)::int as n from reference_docs where product_id = ${productId} and ${slug} = any(tags)`;
-  return { entries: e.n, docs: d.n };
+export function labelRenameImpact(productId: string, slug: string) {
+  return productTagRenameImpact("labels", productId, slug);
 }
 
-export async function renameLabel(
+export function renameLabel(
   productId: string,
   oldSlug: string,
   newSlug: string,
 ) {
-  if (oldSlug === newSlug)
-    return { renamed: false, from: oldSlug, to: newSlug, entries: 0, docs: 0 };
-  const [current] =
-    await sql`select id from labels where product_id = ${productId} and slug = ${oldSlug}`;
-  if (!current) throw notFound(`Label '${oldSlug}' not found for this product`);
-  const [taken] =
-    await sql`select id from labels where product_id = ${productId} and slug = ${newSlug}`;
-  if (taken)
-    throw conflict(`label '${newSlug}' already exists for this product`);
-  return sql.begin(async (tx) => {
-    const e =
-      await tx`update knowledge_entries set tags = array_replace(tags, ${oldSlug}, ${newSlug})
-      where product_id = ${productId} and ${oldSlug} = any(tags)`;
-    const d =
-      await tx`update reference_docs set tags = array_replace(tags, ${oldSlug}, ${newSlug})
-      where product_id = ${productId} and ${oldSlug} = any(tags)`;
-    await tx`update labels set slug = ${newSlug} where id = ${current.id}`;
-    return {
-      renamed: true,
-      from: oldSlug,
-      to: newSlug,
-      entries: e.count,
-      docs: d.count,
-    };
-  });
+  return renameProductTag("labels", productId, oldSlug, newSlug);
 }
 
 export async function deleteLabel(productId: string, slug: string) {

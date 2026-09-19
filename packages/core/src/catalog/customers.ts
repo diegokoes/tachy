@@ -1,4 +1,5 @@
 import { sql } from "../infra/db";
+import { nearestSlugsHint } from "./nearest";
 import { badInput, conflict, notFound } from "../infra/errors";
 import { resolveComponentStrict } from "./components";
 import { listCustomerUnits, resolveUnit, resolveUnitFacts } from "./units";
@@ -142,18 +143,7 @@ export async function resolveCustomer(
         .join(" and ")}. Use the slug itself.`,
     );
 
-  const nearest = await sql`
-    select slug from customers
-    order by greatest(
-      similarity(slug, ${slugOrAlias}),
-      similarity(name, ${slugOrAlias}),
-      coalesce((select max(similarity(a, ${slugOrAlias})) from unnest(aliases) a), 0)
-    ) desc
-    limit 5
-  `;
-  const hint = nearest.length
-    ? ` Nearest matches: ${nearest.map((r) => `'${r.slug}'`).join(", ")}.`
-    : "";
+  const hint = await nearestSlugsHint("customers", slugOrAlias);
   throw badInput(
     `Unknown customer '${slugOrAlias}'.${hint} Call list_customers, or add_customer first.`,
   );
@@ -300,11 +290,10 @@ export async function listCustomerFacts(customerId: string) {
 export async function listCustomerFactKinds(): Promise<
   { kind: string; count: number }[]
 > {
-  const rows = await sql`
+  return sql<{ kind: string; count: number }[]>`
     select kind, count(*)::int as count from customer_facts
     group by kind order by count desc, kind
   `;
-  return rows as unknown as { kind: string; count: number }[];
 }
 
 /** Record that a customer runs a component. Idempotent. */
