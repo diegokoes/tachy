@@ -134,7 +134,7 @@ export const agent = new Hono()
     if (requestId) base.mcpEnv.TACHY_REQUEST_ID = requestId;
     const cfg: AgentConfig = {
       ...base,
-      systemPromptAppend: await systemPrompt(),
+      systemPrompt: await systemPrompt(),
       ...(autoApprove.length ? { autoApprove } : {}),
     };
     const user = userEmail ? await getUserByEmail(userEmail) : null;

@@ -1,5 +1,6 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   agentHome,
@@ -54,6 +55,16 @@ export async function systemPrompt(): Promise<string> {
  * pool of session transcripts. Created once and reused: a fresh directory
  * mints a new machine identity and orphans the transcripts `resume` needs.
  */
+/**
+ * Kept empty: the Copilot runtime reads instruction files from the directory
+ * its session runs in, and nothing in the repo root is written for the agent.
+ */
+async function emptySessionDir(): Promise<string> {
+  const dir = join(tmpdir(), "tachy-agent-empty");
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  return dir;
+}
+
 async function userConfigDir(userId: string | undefined): Promise<string> {
   const dir = join(agentHome(), "users", userId ?? "_default");
   await mkdir(dir, { recursive: true, mode: 0o700 });
@@ -89,7 +100,7 @@ export async function mcpConfig(
   userEmail: string | undefined,
   settings: EffectiveSettings,
   turnId?: string,
-): Promise<Omit<AgentConfig, "systemPromptAppend">> {
+): Promise<Omit<AgentConfig, "systemPrompt">> {
   const mcpEnv: Record<string, string> = {};
   for (const k of INHERITED_ENV) {
     const v = process.env[k];
@@ -161,6 +172,7 @@ export async function mcpConfig(
     mcpArgs: args,
     mcpEnv,
     cwd: process.cwd(),
+    sessionCwd: await emptySessionDir(),
     configDir,
     model: prefs.agent_model.value,
     effort: prefs.agent_effort.value as AgentConfig["effort"],

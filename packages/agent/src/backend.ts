@@ -26,7 +26,19 @@ export interface AgentConfig {
   mcpCommand: string;
   mcpArgs: string[];
   mcpEnv: Record<string, string>;
+  /**
+   * Where the MCP server runs, so its relative entry point resolves, and where
+   * the Claude session runs. Claude Code files transcripts under this path, so
+   * changing it orphans every session `resume` needs.
+   */
   cwd: string;
+
+  /**
+   * An empty directory the Copilot session runs from. The Copilot runtime reads
+   * CLAUDE.md, AGENTS.md and .github/copilot-instructions.md from its working
+   * directory into the system prompt, and none of them are written for the agent.
+   */
+  sessionCwd: string;
 
   model?: string;
 
@@ -34,7 +46,8 @@ export interface AgentConfig {
 
   effort?: AgentEffort;
 
-  systemPromptAppend: string;
+  /** The whole system prompt on Claude; appended to the runtime's own on Copilot. */
+  systemPrompt: string;
 
   /**
    * Per-user Claude Code state directory (credentials, session transcripts).

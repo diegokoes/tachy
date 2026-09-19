@@ -63,24 +63,6 @@ export const WRITE_TOOLS = [
   "create_ado_work_item",
 ] as const;
 
-export const DISALLOWED_BUILTINS = [
-  "Bash",
-  "BashOutput",
-  "KillBash",
-  "Read",
-  "Write",
-  "Edit",
-  "MultiEdit",
-  "NotebookEdit",
-  "Glob",
-  "Grep",
-  "WebFetch",
-  "WebSearch",
-  "Task",
-  "TodoWrite",
-  "SlashCommand",
-];
-
 export const qualify = (base: string) => `mcp__${MCP_SERVER}__${base}`;
 
 const READ = new Set<string>(READ_TOOLS);
