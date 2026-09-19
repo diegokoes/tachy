@@ -4,7 +4,8 @@
   import { patchLibraryItem } from "./library/edit";
   import { createSequence } from "./resource.svelte";
   import { api } from "./api";
-  import type { KnowledgeRow, Feedback, NamedRow } from "./types";
+  import type { KnowledgeRow, Feedback } from "./types";
+  import type { ProductRow } from "@tachy/contract";
   import History from "./library/History.svelte";
   import Backlinks from "./library/Backlinks.svelte";
   import { renderMarkdown, markBrokenLinks } from "./markdown";
@@ -163,11 +164,10 @@
       if (!isCurrent()) return;
 
       if (isCurator() && next.product_id && !next.team_id) {
-        const products = await api.get<NamedRow[]>("/products");
+        const products = await api.get<ProductRow[]>("/products");
         if (!isCurrent()) return;
         productTeamSlug =
-          (products.find((p) => p.id === next.product_id)
-            ?.team_slug as string) ?? null;
+          products.find((p) => p.id === next.product_id)?.team_slug ?? null;
       }
     } catch (e) {
       if (!isCurrent()) return;

@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { CLOUD_HINT, CLOUD_RE } from "@tachy/contract";
+  import { CLOUD_HINT, CLOUD_RE, type PatternRow } from "@tachy/contract";
   import { CONFIDENCES, RESOLUTION_CLARITIES } from "../vocab";
   import type { Snippet } from "svelte";
-  import { Button, Checkbox } from "../tui";
+  import { Checkbox, FormActions } from "../tui";
   import { onMount, tick, untrack } from "svelte";
   import { gsap } from "../gsap";
   import { api } from "../api";
-  import { canCurateScope } from "../session.svelte";
-  import type { KnowledgeRow, NamedRow } from "../types";
+  import { errText } from "../resource.svelte";
+  import type { KnowledgeRow } from "../types";
   import AsciiSelect from "../AsciiSelect.svelte";
   import { t } from "../terms";
   import { csv } from "../fields";
   import { setTopActions } from "../subnav.svelte";
-  import { componentOptions } from "../catalog";
+  import { Filing } from "../filing.svelte";
   import Icon from "../tui/Icon.svelte";
   import { asStructured } from "./structured";
 
@@ -59,11 +59,10 @@
   let affectedVersion = $state(seed.affected_version ?? "");
   let fixedVersion = $state(seed.fixed_version ?? "");
   let status = $state(seed.status ?? "approved");
-  let component = $state("");
-  let customerSlug = $state(seed.customer_slug ?? "");
-  let unitSlug = $state(seed.customer_unit_slug ?? "");
-  /** Units belong to one customer, so the list is reloaded when it changes. */
-  let units = $state<NamedRow[]>([]);
+  const filing = new Filing({
+    ...seed,
+    product_id: untrack(() => mode) === "edit" ? seed.product_id : null,
+  });
 
   let showStructured = $state(false);
   let structuredField = $state<HTMLTextAreaElement>();
@@ -74,67 +73,19 @@
   );
   let structuredError = $state<string | null>(null);
 
-  
-  let products = $state<NamedRow[]>([]);
-  let components = $state<NamedRow[]>([]);
-  let patterns = $state<NamedRow[]>([]);
+  let patterns = $state<PatternRow[]>([]);
   let environments = $state<{ cloud: string; count: number }[]>([]);
-  let customers = $state<NamedRow[]>([]);
-  let productSlug = $state("");
-
-  async function loadUnits(slug: string) {
-    units = slug
-      ? await api.get<NamedRow[]>(`/customers/${slug}/units`).catch(() => [])
-      : [];
-    if (unitSlug && !units.some((u) => u.slug === unitSlug)) unitSlug = "";
-  }
-
-  const unitOptions = $derived([
-    { value: "", label: "the whole account" },
-    ...units.map((u) => ({
-      value: u.slug as string,
-      label: `${u.name} (${u.kind})`,
-    })),
-  ]);
-
-  const customerOptions = $derived([
-    { value: "", label: "none (general)" },
-    ...customers.map((c) => ({ value: c.slug as string, label: c.name as string })),
-  ]);
-
-  const productOptions = $derived([
-    { value: "", label: `no ${t("product")}` },
-    ...products
-      .filter((p) => canCurateScope({ team_slug: (p.team_slug as string) ?? null }))
-      .map((p) => ({ value: p.slug as string, label: `${p.name} (${p.team_slug})` })),
-  ]);
-
-  async function loadComponents(slug: string) {
-    components = slug ? await api.get<NamedRow[]>(`/products/${slug}/components`) : [];
-    if (component && !components.some((c) => c.slug === component)) component = "";
-    if (!component && initial.component_id) {
-      component = (components.find((c) => c.id === initial.component_id)?.slug as string) ?? "";
-    }
-  }
+  let loadError = $state<string | null>(null);
 
   onMount(async () => {
     try {
-      const [prods, pats, envs, custs] = await Promise.all([
-        api.get<NamedRow[]>("/products"),
-        api.get<NamedRow[]>("/resolution-patterns"),
+      [patterns, environments] = await Promise.all([
+        api.get<PatternRow[]>("/resolution-patterns"),
         api.get<{ cloud: string; count: number }[]>("/knowledge/environments"),
-        api.get<NamedRow[]>("/customers"),
+        filing.load(),
       ]);
-      products = prods;
-      patterns = pats;
-      environments = envs;
-      customers = custs;
-      if (customerSlug) await loadUnits(customerSlug);
-      if (mode === "edit" && initial.product_id) {
-        productSlug = (prods.find((p) => p.id === initial.product_id)?.slug as string) ?? "";
-      }
-      if (productSlug) await loadComponents(productSlug);
-    } catch {
+    } catch (e) {
+      loadError = errText(e);
     }
   });
 
@@ -166,16 +117,10 @@
       resolutionPattern: resolutionPattern || (mode === "edit" ? null : undefined),
       affectedVersion: affectedVersion.trim() || (mode === "edit" ? null : undefined),
       fixedVersion: fixedVersion.trim() || (mode === "edit" ? null : undefined),
-      component: component || (mode === "edit" ? null : undefined),
-      customerSlug: customerSlug || (mode === "edit" ? null : undefined),
-      unit: unitSlug || (mode === "edit" ? null : undefined),
+      ...filing.payload(mode),
     };
     if (structured !== undefined) payload.structured = structured;
-    if (mode === "create") {
-      payload.status = status;
-      const prod = products.find((p) => p.slug === productSlug);
-      if (prod?.id) payload.productId = prod.id;
-    }
+    if (mode === "create") payload.status = status;
     return Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined));
   }
 
@@ -215,19 +160,8 @@
   }
 </script>
 
-<!-- Rendered by App into the carved row beside the subnav, not here. The save
-     button is outside the <form> in the DOM, so it carries `form` — that keeps
-     native required-field validation, which calling submit() directly loses. -->
 {#snippet formActions()}
-  <Button icon="cancel" disabled={saving} onclick={onCancel}>cancel</Button>
-  <Button
-    variant="primary"
-    icon="save"
-    type="submit"
-    form="entry-form"
-    title={SUBMIT_LABEL}
-    busy={saving}>save</Button
-  >
+  <FormActions form="entry-form" {saving} title={SUBMIT_LABEL} oncancel={onCancel} />
 {/snippet}
 
 <form id="entry-form" class="entry-form" onsubmit={submit}>
@@ -289,27 +223,28 @@
   <div class="row">
     {#if mode === "create"}
       <label>{t("product")}
-        <AsciiSelect bind:value={productSlug} options={productOptions}
-          onchange={(v) => loadComponents(String(v))} />
+        <AsciiSelect bind:value={filing.productSlug} options={filing.productOptions}
+          onchange={() => filing.productChanged()} />
       </label>
       <label>status
         <AsciiSelect bind:value={status} options={["approved", "draft"]} />
       </label>
     {/if}
     <label>component
-      <AsciiSelect bind:value={component} disabled={!productSlug || components.length === 0}
-        title={productSlug ? undefined : `pick a ${t("product")} first`}
-        options={[{ value: "", label: "none" }, ...componentOptions(components)]} />
+      <AsciiSelect bind:value={filing.component}
+        disabled={!filing.productSlug || filing.components.length === 0}
+        title={filing.productSlug ? undefined : `pick a ${t("product")} first`}
+        options={[{ value: "", label: "none" }, ...filing.componentChoices]} />
     </label>
     <label>{t("customer")}
-      <AsciiSelect bind:value={customerSlug} options={customerOptions}
-        onchange={(v) => loadUnits(String(v))}
+      <AsciiSelect bind:value={filing.customerSlug} options={filing.customerOptions}
+        onchange={() => filing.customerChanged()}
         title="customer this applies to; none if general" />
     </label>
     <label>unit
-      <AsciiSelect bind:value={unitSlug} options={unitOptions}
-        disabled={!customerSlug || units.length === 0}
-        title={customerSlug
+      <AsciiSelect bind:value={filing.unitSlug} options={filing.unitOptions}
+        disabled={!filing.customerSlug || filing.units.length === 0}
+        title={filing.customerSlug
           ? "which part of their estate: a site or line"
           : `pick a ${t("customer")} first`} />
     </label>
@@ -337,14 +272,16 @@
     {#if structuredError}<p class="error">{structuredError}</p>{/if}
   {/if}
 
-  {#if error}<p class="error">{error}</p>{/if}
+  {#if error ?? loadError ?? filing.error}
+    <p class="error">{error ?? loadError ?? filing.error}</p>
+  {/if}
 
 </form>
 
 <style>
   .field-error { color: var(--danger); margin: 0.2rem 0 0; font-size: 0.9em; }
-  /* Cancel and save moved to the carved row, so this holds only whatever the
-     caller passes as `extra` — centred, and gone entirely when there is none. */
+  /* Holds only what the caller passes as `extra`, centred; absent when there
+     is none. */
   .formbar {
     display: flex;
     align-items: center;

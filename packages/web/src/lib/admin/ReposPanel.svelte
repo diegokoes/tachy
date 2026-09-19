@@ -5,6 +5,7 @@
   import { t } from "../terms";
   import { createResource, errText } from "../resource.svelte";
   import { slugify, uniqueSlug } from "../slug";
+  import { ComponentCache } from "../filing.svelte";
   import {
     Badge,
     Button,
@@ -20,7 +21,7 @@
     type Column,
     type Draft,
   } from "../tui";
-  import type { Component, Customer, Product, Repo, SourceProject } from "./rows";
+  import type { Customer, Product, Repo, SourceProject } from "./rows";
 import { INFO } from "./help";
 import { csv } from "../fields";
   import { sectionHoist } from "./sectionAction.svelte";
@@ -41,7 +42,7 @@ import { csv } from "../fields";
     [],
   );
 
-  let components = $state<Record<string, Component[]>>({});
+  const components = new ComponentCache();
   let error = $state<string | null>(null);
   let indexing = $state<string | null>(null);
   let found = $state<Record<string, FoundRepo[]>>({});
@@ -92,17 +93,6 @@ import { csv } from "../fields";
       products.reload(),
       customers.reload(),
     ]);
-  }
-
-  async function loadComponents(productSlug: string) {
-    if (!productSlug || components[productSlug]) return;
-    try {
-      components[productSlug] = await api.get<Component[]>(
-        `/products/${productSlug}/components`,
-      );
-    } catch {
-      components[productSlug] = [];
-    }
   }
 
   /* Bulk linking, because an Azure DevOps project routinely holds fifty repos
@@ -304,7 +294,7 @@ import { csv } from "../fields";
       info: INFO.repoComponent,
       options: (d) => [
         { value: "", label: "(none)" },
-        ...(components[productOfDraft(d)] ?? []).map((c) => ({
+        ...components.of(productOfDraft(d)).map((c) => ({
           value: c.slug,
           label: `${c.name} (${c.slug})`,
         })),
@@ -387,7 +377,7 @@ import { csv } from "../fields";
   // The component picker switches product as the form's project changes, so
   // every curatable product's components are on hand before the form opens.
   $effect(() => {
-    for (const p of myProducts) void loadComponents(p.slug);
+    for (const p of myProducts) void components.load(p.slug);
   });
 
   onDestroy(() => poll && clearInterval(poll));

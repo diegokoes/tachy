@@ -9,15 +9,15 @@
   import { api } from "../api";
   import { errText } from "../resource.svelte";
   import { setTopActions } from "../subnav.svelte";
-  import { Button, Checkbox, Note } from "../tui";
+  import { Button, Checkbox, FormActions, Note } from "../tui";
   import AsciiSelect from "../AsciiSelect.svelte";
   import { componentOptions } from "../catalog";
+  import type { ComponentRow } from "@tachy/contract";
   import { renderMarkdown } from "../markdown";
   import { outline, withAnchors } from "../outline";
   import { REFERENCE_STATUSES } from "../vocab";
   import type {
     KnowledgeRow,
-    NamedRow,
     ReferenceRow,
     WikiArticleRef,
     WikiCategory,
@@ -66,7 +66,7 @@
   let chosen = $state<string[]>((seed?.categories ?? []).map((c) => c.slug));
   /** Component slug; the row carries an id, so it is resolved once they load. */
   let component = $state(handed?.component ?? "");
-  let components = $state<NamedRow[]>([]);
+  let components = $state<ComponentRow[]>([]);
 
   let categories = $state<WikiCategory[]>([]);
   let preview = $state(true);
@@ -277,15 +277,15 @@
         .catch(() => [] as WikiCategory[]),
       hasComponents
         ? api
-            .get<NamedRow[]>(`/products/${scope}/components`)
-            .catch(() => [] as NamedRow[])
-        : Promise.resolve([] as NamedRow[]),
+            .get<ComponentRow[]>(`/products/${scope}/components`)
+            .catch(() => [] as ComponentRow[])
+        : Promise.resolve([] as ComponentRow[]),
     ]);
     categories = cats;
     components = comps;
     if (seed?.component_id)
       component =
-        (comps.find((c) => c.id === seed.component_id)?.slug as string) ?? "";
+        comps.find((c) => c.id === seed.component_id)?.slug ?? "";
     await loadArticles();
   });
 
@@ -337,19 +337,8 @@
   }
 </script>
 
-<!-- Rendered by App into the carved row beside the subnav, not here. The save
-     button is outside the <form> in the DOM, so it carries `form` — that keeps
-     native required-field validation, which calling submit() directly loses. -->
 {#snippet formActions()}
-  <Button icon="cancel" disabled={saving} onclick={onCancel}>cancel</Button>
-  <Button
-    variant="primary"
-    icon="save"
-    type="submit"
-    form="wiki-form"
-    title={editing ? "save changes" : "create article"}
-    busy={saving}>save</Button
-  >
+  <FormActions form="wiki-form" {saving} title={editing ? "save changes" : "create article"} oncancel={onCancel} />
 {/snippet}
 
 <form id="wiki-form" class="article-form" onsubmit={submit}>

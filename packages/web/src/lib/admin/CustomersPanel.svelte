@@ -16,7 +16,9 @@
     type Draft,
   } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
-  import type { Component, Customer, Product } from "./rows";
+  import { ComponentCache } from "../filing.svelte";
+  import type { Customer, Product } from "./rows";
+  import type { CustomerUnitRow, ResolvedFact } from "@tachy/contract";
 import { INFO } from "./help";
 import { csv } from "../fields";
   import { sectionHoist } from "./sectionAction.svelte";
@@ -25,26 +27,6 @@ import { csv } from "../fields";
 
   /** Given, the panel is one customer's page rather than the list of them. */
   let { id }: { id?: string } = $props();
-
-  type CustomerUnit = {
-    id: string;
-    parent_id: string | null;
-    profile_id: string | null;
-    kind: string;
-    slug: string;
-    name: string;
-    aliases: string[];
-    notes: string | null;
-  };
-
-  type ResolvedFact = {
-    kind: string;
-    label: string;
-    value: string;
-    origin_slug: string | null;
-    origin_kind: string | null;
-    inherited: boolean;
-  };
 
   type Profile = {
     slug: string;
@@ -66,7 +48,7 @@ import { csv } from "../fields";
 
   let profiles = $state<Record<string, Profile>>({});
   let facts = $state<Record<string, FactRow[]>>({});
-  let units = $state<Record<string, CustomerUnit[]>>({});
+  let units = $state<Record<string, CustomerUnitRow[]>>({});
   /** Which unit's resolved ladder is being shown, per customer. "" = the flat set. */
   let viewUnit = $state<Record<string, string>>({});
   let resolved = $state<Record<string, ResolvedFact[]>>({});
@@ -77,7 +59,7 @@ import { csv } from "../fields";
     parent: "",
     profile: "",
   });
-  let components = $state<Record<string, Component[]>>({});
+  const components = new ComponentCache();
   let kinds = $state<{ kind: string; count: number }[]>([]);
   let error = $state<string | null>(null);
   let busy = $state<string | null>(null);
@@ -91,7 +73,7 @@ import { csv } from "../fields";
       const [p, f, u] = await Promise.all([
         api.get<Profile>(`/customers/${slug}/profile`),
         api.get<FactRow[]>(`/customers/${slug}/facts`),
-        api.get<CustomerUnit[]>(`/customers/${slug}/units`).catch(() => []),
+        api.get<CustomerUnitRow[]>(`/customers/${slug}/units`).catch(() => []),
       ]);
       units[slug] = u;
       profiles[slug] = p;
@@ -101,21 +83,10 @@ import { csv } from "../fields";
     }
   }
 
-  async function loadComponents(productSlug: string) {
-    if (!productSlug || components[productSlug]) return;
-    try {
-      components[productSlug] = await api.get<Component[]>(
-        `/products/${productSlug}/components`,
-      );
-    } catch {
-      components[productSlug] = [];
-    }
-  }
-
   async function openProfile(slug: string) {
     factForm = { kind: "", label: "", value: "", source: "", notes: "", product: "", component: "", unit: "" };
     compForm = { product: products.data[0]?.slug ?? "", component: "" };
-    if (compForm.product) await loadComponents(compForm.product);
+    if (compForm.product) await components.load(compForm.product);
     kinds = await api
       .get<{ kind: string; count: number }[]>("/customer-fact-kinds")
       .catch(() => []);
@@ -183,7 +154,7 @@ import { csv } from "../fields";
     aliases: "",
   });
 
-  function startEditUnit(slug: string, u: CustomerUnit) {
+  function startEditUnit(slug: string, u: CustomerUnitRow) {
     editUnit[slug] = u.slug;
     const rows = units[slug] ?? [];
     editForm = {
@@ -218,7 +189,7 @@ import { csv } from "../fields";
   }
 
   /** A unit cannot sit under, or conform to, its own descendant. */
-  function unitSubtree(rows: CustomerUnit[], root: CustomerUnit): string[] {
+  function unitSubtree(rows: CustomerUnitRow[], root: CustomerUnitRow): string[] {
     const kids = rows.filter((u) => u.parent_id === root.id);
     return [root.slug, ...kids.flatMap((k) => unitSubtree(rows, k))];
   }
@@ -248,11 +219,11 @@ import { csv } from "../fields";
   }
 
   /** Depth-first with a depth, so the tree reads as a tree in a flat list. */
-  function unitTree(rows: CustomerUnit[]) {
-    const byParent = new Map<string | null, CustomerUnit[]>();
+  function unitTree(rows: CustomerUnitRow[]) {
+    const byParent = new Map<string | null, CustomerUnitRow[]>();
     for (const u of rows)
       byParent.set(u.parent_id, [...(byParent.get(u.parent_id) ?? []), u]);
-    const out: { u: CustomerUnit; depth: number }[] = [];
+    const out: { u: CustomerUnitRow; depth: number }[] = [];
     const walk = (parent: string | null, depth: number) => {
       for (const u of byParent.get(parent) ?? []) {
         out.push({ u, depth });
@@ -263,7 +234,7 @@ import { csv } from "../fields";
     return out;
   }
 
-  const unitName = (rows: CustomerUnit[], id: string | null) =>
+  const unitName = (rows: CustomerUnitRow[], id: string | null) =>
     rows.find((u) => u.id === id)?.slug ?? null;
 
   async function delFact(slug: string, id: string) {
@@ -642,7 +613,7 @@ import { csv } from "../fields";
           ]}
           onchange={(v) => {
             factForm.component = "";
-            loadComponents(String(v));
+            components.load(String(v));
           }}
         />
         {#if (units[r.slug] ?? []).length}
@@ -664,7 +635,7 @@ import { csv } from "../fields";
           disabled={!factForm.product}
           options={[
             { value: "", label: "whole product" },
-            ...(components[factForm.product] ?? []).map((c) => ({
+            ...components.of(factForm.product).map((c) => ({
               value: c.slug,
               label: c.name,
             })),
@@ -703,14 +674,14 @@ import { csv } from "../fields";
             value: pr.slug,
             label: pr.name,
           }))}
-          onchange={(v) => loadComponents(String(v))}
+          onchange={(v) => components.load(String(v))}
         />
         <Select
           bind:value={compForm.component}
           aria-label="component"
           options={[
             { value: "", label: "component…" },
-            ...(components[compForm.product] ?? []).map((c) => ({
+            ...components.of(compForm.product).map((c) => ({
               value: c.slug,
               label: c.name,
             })),

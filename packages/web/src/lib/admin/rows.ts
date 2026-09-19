@@ -2,17 +2,23 @@ import type {
   AgentProvider,
   AgentUsage,
   CatalogCensus,
+  ComponentRow,
+  CustomerRow,
   DeploymentProfile,
   JobCensus,
   JobDefinition,
   JobRun,
   KnowledgeCensus,
+  LabelRow,
   LibraryEngagement,
+  PatternRow,
+  ProductRow,
   RepoCensus,
   RepoRow,
   SourceCensus,
   SourceTraffic,
   TeamRole,
+  TeamRow,
   ToolUsage,
   UserCensus,
   UserRole,
@@ -22,33 +28,12 @@ import type {
  * The shapes the admin panels render — one per table they administer, as the
  * API returns them.
  */
-export type Team = { id: string; slug: string; name: string };
-export type Product = {
-  id: string;
-  slug: string;
-  name: string;
-  aliases: string[] | null;
-  team_slug: string;
-  team_name: string;
-};
-export type Component = {
-  id: string;
-  parent_id: string | null;
-  slug: string;
-  name: string;
-  description: string | null;
-  aliases: string[] | null;
-};
-export type Label = { id: string; slug: string; description: string | null };
-export type Customer = {
-  id: string;
-  slug: string;
-  name: string;
-  aliases: string[] | null;
-  email_domains: string[] | null;
-  notes: string | null;
-};
-export type Pattern = { slug: string; description: string };
+export type Team = TeamRow;
+export type Product = ProductRow;
+export type Component = ComponentRow;
+export type Label = LabelRow;
+export type Customer = CustomerRow;
+export type Pattern = PatternRow;
 export type Connection = {
   id: string;
   source_type: string;

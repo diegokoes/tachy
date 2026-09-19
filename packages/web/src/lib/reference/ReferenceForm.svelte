@@ -1,18 +1,14 @@
 <script lang="ts">
   import { REFERENCE_STATUSES } from "../vocab";
   import type { Snippet } from "svelte";
-  import { Button } from "../tui";
-  
-  
+  import { FormActions } from "../tui";
   import { onMount, untrack } from "svelte";
-  import { api } from "../api";
-  import { canCurateScope } from "../session.svelte";
-  import type { ReferenceRow, NamedRow } from "../types";
+  import type { ReferenceRow } from "../types";
   import AsciiSelect from "../AsciiSelect.svelte";
   import { t } from "../terms";
   import { csv } from "../fields";
   import { setTopActions } from "../subnav.svelte";
-  import { componentOptions } from "../catalog";
+  import { Filing } from "../filing.svelte";
 
   let {
     mode,
@@ -36,8 +32,6 @@
 
   const SUBMIT_LABEL = $derived(mode === "create" ? "create doc" : "save changes");
 
-  
-  
   const seed = untrack(() => initial);
 
   let title = $state(seed.title ?? "");
@@ -46,80 +40,12 @@
   let status = $state(seed.status ?? "approved");
   let source = $state(seed.source ?? "");
   let docVersion = $state(seed.doc_version ?? "");
-  let productSlug = $state("");
-  let products = $state<NamedRow[]>([]);
-  // Component slugs resolve within a product, so the list is loaded per product
-  // and the control stays disabled until one is picked.
-  let component = $state("");
-  let components = $state<NamedRow[]>([]);
-  let customerSlug = $state(seed.customer_slug ?? "");
-  let customers = $state<NamedRow[]>([]);
-  let unitSlug = $state(seed.customer_unit_slug ?? "");
-  /** Units belong to one customer, so the list is reloaded when it changes. */
-  let units = $state<NamedRow[]>([]);
-
-  async function loadUnits(slug: string) {
-    units = slug
-      ? await api.get<NamedRow[]>(`/customers/${slug}/units`).catch(() => [])
-      : [];
-    if (unitSlug && !units.some((u) => u.slug === unitSlug)) unitSlug = "";
-  }
-
-  const unitOptions = $derived([
-    { value: "", label: "the whole account" },
-    ...units.map((u) => ({
-      value: u.slug as string,
-      label: `${u.name} (${u.kind})`,
-    })),
-  ]);
-
-  const customerOptions = $derived([
-    { value: "", label: "none (general)" },
-    ...customers.map((c) => ({ value: c.slug as string, label: c.name as string })),
-  ]);
-
-  const productOptions = $derived([
-    { value: "", label: `no ${t("product")}` },
-    ...products
-      .filter((p) => canCurateScope({ team_slug: (p.team_slug as string) ?? null }))
-      .map((p) => ({ value: p.slug as string, label: `${p.name} (${p.team_slug})` })),
-  ]);
-
-  onMount(async () => {
-    try {
-      products = await api.get<NamedRow[]>("/products");
-    } catch {
-      products = [];
-    }
-    try {
-      customers = await api.get<NamedRow[]>("/customers");
-    } catch {
-      customers = [];
-    }
-    if (customerSlug) await loadUnits(customerSlug);
-    if (mode === "edit" && seed.product_id) {
-      productSlug =
-        (products.find((p) => p.id === seed.product_id)?.slug as string) ?? "";
-      await loadComponents();
-      // Same as EntryForm: the row carries component_id, the control speaks slugs.
-      component =
-        (components.find((c) => c.id === seed.component_id)?.slug as string) ??
-        "";
-    }
+  const filing = new Filing({
+    ...seed,
+    product_id: untrack(() => mode) === "edit" ? seed.product_id : null,
   });
 
-  async function loadComponents() {
-    component = "";
-    components = [];
-    if (!productSlug) return;
-    try {
-      components = await api.get<NamedRow[]>(
-        `/products/${productSlug}/components`,
-      );
-    } catch {
-      components = [];
-    }
-  }
+  onMount(() => filing.load());
 
   $effect(() => setTopActions(formActions));
 
@@ -132,32 +58,15 @@
       status,
       source: source.trim() || (mode === "edit" ? null : undefined),
       docVersion: docVersion.trim() || (mode === "edit" ? null : undefined),
-      component: component || (mode === "edit" ? null : undefined),
-      customerSlug: customerSlug || (mode === "edit" ? null : undefined),
-      unit: unitSlug || (mode === "edit" ? null : undefined),
+      ...filing.payload(mode),
     };
-    if (mode === "create") {
-      const prod = products.find((p) => p.slug === productSlug);
-      if (prod?.id) payload.productId = prod.id;
-      if (supersedes) payload.supersedes = supersedes;
-    }
+    if (mode === "create" && supersedes) payload.supersedes = supersedes;
     onSubmit(Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined)));
   }
 </script>
 
-<!-- Rendered by App into the carved row beside the subnav, not here. The save
-     button is outside the <form> in the DOM, so it carries `form` — that keeps
-     native required-field validation, which calling submit() directly loses. -->
 {#snippet formActions()}
-  <Button icon="cancel" disabled={saving} onclick={onCancel}>cancel</Button>
-  <Button
-    variant="primary"
-    icon="save"
-    type="submit"
-    form="ref-form"
-    title={SUBMIT_LABEL}
-    busy={saving}>save</Button
-  >
+  <FormActions form="ref-form" {saving} title={SUBMIT_LABEL} oncancel={onCancel} />
 {/snippet}
 
 <form id="ref-form" class="ref-form" onsubmit={submit}>
@@ -172,29 +81,26 @@
     {#if mode === "create"}
       <label>{t("product")}
         <AsciiSelect
-          bind:value={productSlug}
-          options={productOptions}
-          onchange={() => loadComponents()}
+          bind:value={filing.productSlug}
+          options={filing.productOptions}
+          onchange={() => filing.productChanged()}
         />
       </label>
     {/if}
     <label>component <span class="hint">optional</span>
       <AsciiSelect
-        bind:value={component}
-        disabled={!productSlug || components.length === 0}
-        options={[
-          { value: "", label: "whole product" },
-          ...componentOptions(components),
-        ]}
+        bind:value={filing.component}
+        disabled={!filing.productSlug || filing.components.length === 0}
+        options={[{ value: "", label: "whole product" }, ...filing.componentChoices]}
       />
     </label>
     <label>{t("customer")} <span class="hint">optional</span>
-      <AsciiSelect bind:value={customerSlug} options={customerOptions}
-        onchange={(v) => loadUnits(String(v))} />
+      <AsciiSelect bind:value={filing.customerSlug} options={filing.customerOptions}
+        onchange={() => filing.customerChanged()} />
     </label>
     <label>unit <span class="hint">optional</span>
-      <AsciiSelect bind:value={unitSlug} options={unitOptions}
-        disabled={!customerSlug || units.length === 0} />
+      <AsciiSelect bind:value={filing.unitSlug} options={filing.unitOptions}
+        disabled={!filing.customerSlug || filing.units.length === 0} />
     </label>
     <label>doc version
       <input bind:value={docVersion} class="short" />
@@ -213,13 +119,13 @@
     <p class="hint">New version. Current doc is archived as predecessor.</p>
   {/if}
 
-  {#if error}<p class="error">{error}</p>{/if}
+  {#if error ?? filing.error}<p class="error">{error ?? filing.error}</p>{/if}
 
 </form>
 
 <style>
-  /* Cancel and save moved to the carved row, so this holds only whatever the
-     caller passes as `extra` — centred, and gone entirely when there is none. */
+  /* Holds only what the caller passes as `extra`, centred; absent when there
+     is none. */
   .formbar {
     display: flex;
     align-items: center;
