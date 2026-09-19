@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { Badge, GroupHead, Note } from "../tui";
+  import { Badge, GroupHead, Note, toneOf } from "../tui";
   import type { SystemInfo } from "./rows";
 
   type Check = { state: string; value: string };
@@ -23,7 +23,6 @@
     const h = (Date.now() - new Date(iso).getTime()) / 3_600_000;
     return h < 1 ? `${Math.round(h * 60)} min ago` : h < 48 ? `${Math.round(h)} h ago` : `${Math.round(h / 24)} days ago`;
   };
-  const tone = (s: string) => (s === "ok" ? "ok" : s === "warn" ? "warn" : s === "fail" ? "danger" : "muted");
 
   onMount(async () => {
     try {
@@ -67,7 +66,7 @@
     <table>
       <tbody>
         {#each Object.entries(status.watch.checks) as [name, c] (name)}
-          <tr><td>{name}</td><td><Badge tone={tone(c.state)}>{c.state}</Badge></td><td class="muted">{c.value}</td></tr>
+          <tr><td>{name}</td><td><Badge tone={toneOf(c.state)}>{c.state}</Badge></td><td class="muted">{c.value}</td></tr>
         {/each}
       </tbody>
     </table>

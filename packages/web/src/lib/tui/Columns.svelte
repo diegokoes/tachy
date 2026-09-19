@@ -1,7 +1,6 @@
 <script lang="ts">
   import { growBar } from "../motion";
-
-  type Tone = "accent" | "ok" | "warn" | "danger" | "muted" | "info";
+  import type { Tone } from "./tone";
 
   /** `Col`, not `Column` — the tui barrel already exports a table Column. */
   export type Col = {
