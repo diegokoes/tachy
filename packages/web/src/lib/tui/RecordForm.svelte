@@ -203,7 +203,7 @@
     margin-top: var(--pad-2);
   }
 
-  /* Fills its track, which is now half a dialog rather than all of one. Left
+  /* Fills its track, which is half a dialog rather than all of one. Left
      to size itself a select would also change width with its own value. */
   .form :global(.asel) {
     width: 100%;

@@ -23,7 +23,7 @@ export type MyCreds = {
 /**
  * One load for the whole agent area. A module singleton rather than state
  * inside a component, for the same reason as the admin census: the preferences
- * and the keys are two sections of the same scrolling page now, they are served
+ * and the keys are two sections of the same scrolling page, they are served
  * by two requests that always travel together, and a write to either one
  * re-reads both.
  */
