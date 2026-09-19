@@ -2,12 +2,12 @@
   import { onMount } from "svelte";
   import { api } from "../api";
   import { Badge, Button, Chip } from "../tui";
-  import type { Revision, ViewSummary } from "../types";
+  import type { Revision } from "../types";
   import { fmtDateTime } from "../dates";
 
   /**
-   * Edit history and read counts for one library item. `base` is the collection
-   * route ("knowledge" or "reference") — both expose the same three endpoints,
+   * Edit history for one library item. `base` is the collection route
+   * ("knowledge" or "reference"): both expose the same revision endpoints,
    * because a revision is a revision whichever shelf it sits on.
    */
   let {
@@ -25,7 +25,6 @@
   } = $props();
 
   let revisions = $state<Revision[]>([]);
-  let views = $state<ViewSummary | null>(null);
   let openVersion = $state<number | null>(null);
   let snapshots = $state<Record<number, Record<string, unknown>>>({});
   let error = $state<string | null>(null);
@@ -42,10 +41,7 @@
 
   async function load() {
     try {
-      [revisions, views] = await Promise.all([
-        api.get<Revision[]>(`/${base}/${id}/revisions`),
-        api.get<ViewSummary>(`/${base}/${id}/views`),
-      ]);
+      revisions = await api.get<Revision[]>(`/${base}/${id}/revisions`);
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
@@ -100,22 +96,6 @@
 </script>
 
 <section class="history">
-  <h3>History</h3>
-
-  {#if views}
-    <p class="reads">
-      <strong>{views.views}</strong>
-      {views.views === 1 ? "read" : "reads"}
-      {#if views.viewers}
-        by <strong>{views.viewers}</strong>
-        {views.viewers === 1 ? "person" : "people"}
-      {/if}
-      {#if views.last_viewed_at}
-        · last {fmtDateTime(views.last_viewed_at)}
-      {/if}
-    </p>
-  {/if}
-
   {#if error}
     <p class="err">{error}</p>
   {/if}
@@ -173,14 +153,6 @@
 </section>
 
 <style>
-  .history h3 {
-    margin: 0 0 0.4rem;
-  }
-  .reads {
-    margin: 0 0 0.6rem;
-    font-size: 0.9em;
-    opacity: 0.85;
-  }
   .revs {
     list-style: none;
     margin: 0;
