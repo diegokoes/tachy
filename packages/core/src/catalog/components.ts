@@ -1,4 +1,6 @@
 import { sql } from "../infra/db";
+import { productTagRenameImpact, renameProductTag } from "./product-tags";
+import { nearestSlugsHint } from "./nearest";
 import { wouldCycle } from "../infra/hierarchy";
 import { badInput, conflict, notFound } from "../infra/errors";
 
@@ -108,52 +110,16 @@ export async function updateComponent(
   return row;
 }
 
-export async function componentRenameImpact(
-  productId: string,
-  slug: string,
-): Promise<{ entries: number; docs: number }> {
-  const [current] =
-    await sql`select id from components where product_id = ${productId} and slug = ${slug}`;
-  if (!current)
-    throw notFound(`Component '${slug}' not found for this product`);
-  const [e] =
-    await sql`select count(*)::int as n from knowledge_entries where product_id = ${productId} and ${slug} = any(tags)`;
-  const [d] =
-    await sql`select count(*)::int as n from reference_docs where product_id = ${productId} and ${slug} = any(tags)`;
-  return { entries: e.n, docs: d.n };
+export function componentRenameImpact(productId: string, slug: string) {
+  return productTagRenameImpact("components", productId, slug);
 }
 
-export async function renameComponent(
+export function renameComponent(
   productId: string,
   oldSlug: string,
   newSlug: string,
 ) {
-  if (oldSlug === newSlug)
-    return { renamed: false, from: oldSlug, to: newSlug, entries: 0, docs: 0 };
-  const [current] =
-    await sql`select id from components where product_id = ${productId} and slug = ${oldSlug}`;
-  if (!current)
-    throw notFound(`Component '${oldSlug}' not found for this product`);
-  const [taken] =
-    await sql`select id from components where product_id = ${productId} and slug = ${newSlug}`;
-  if (taken)
-    throw conflict(`component '${newSlug}' already exists for this product`);
-  return sql.begin(async (tx) => {
-    const e =
-      await tx`update knowledge_entries set tags = array_replace(tags, ${oldSlug}, ${newSlug})
-      where product_id = ${productId} and ${oldSlug} = any(tags)`;
-    const d =
-      await tx`update reference_docs set tags = array_replace(tags, ${oldSlug}, ${newSlug})
-      where product_id = ${productId} and ${oldSlug} = any(tags)`;
-    await tx`update components set slug = ${newSlug} where id = ${current.id}`;
-    return {
-      renamed: true,
-      from: oldSlug,
-      to: newSlug,
-      entries: e.count,
-      docs: d.count,
-    };
-  });
+  return renameProductTag("components", productId, oldSlug, newSlug);
 }
 
 export async function deleteComponent(productId: string, slug: string) {
@@ -187,40 +153,37 @@ export async function resolveComponentStrict(
   productId: string,
   slugOrAlias: string,
 ): Promise<ResolvedComponent> {
-  const [row] = await sql`
+  const [row] = await sql<{ id: string; slug: string }[]>`
     select id, slug from components
     where product_id = ${productId}
       and (slug = ${slugOrAlias} or exists (select 1 from unnest(aliases) a where lower(a) = lower(${slugOrAlias})))
     limit 1
   `;
   if (row) {
-    return {
-      id: row.id as string,
-      slug: row.slug as string,
-      path: await getComponentPath(row.id as string),
-    };
+    return { id: row.id, slug: row.slug, path: await getComponentPath(row.id) };
   }
 
-  const nearest = await sql`
-    select slug from components
-    where product_id = ${productId}
-    order by greatest(
-      similarity(slug, ${slugOrAlias}),
-      similarity(name, ${slugOrAlias}),
-      coalesce((select max(similarity(a, ${slugOrAlias})) from unnest(aliases) a), 0)
-    ) desc
-    limit 5
-  `;
-  const hint = nearest.length
-    ? ` Nearest matches: ${nearest.map((r) => `'${r.slug}'`).join(", ")}.`
-    : "";
+  const hint = await nearestSlugsHint("components", slugOrAlias, {
+    column: "product_id",
+    id: productId,
+  });
   throw badInput(
     `Unknown component '${slugOrAlias}' for this product.${hint} Pick an existing slug/alias from list_components, or propose add_component in the review step and call it after user approval.`,
   );
 }
 
+export async function getComponentSlug(
+  componentId: string | null,
+): Promise<string | null> {
+  if (!componentId) return null;
+  const [row] = await sql<{ slug: string }[]>`
+    select slug from components where id = ${componentId}
+  `;
+  return row?.slug ?? null;
+}
+
 export async function getComponentPath(componentId: string): Promise<string> {
-  const [row] = await sql`
+  const [row] = await sql<{ path: string | null }[]>`
     with recursive chain as (
       select id, parent_id, product_id, name, 1 as depth from components where id = ${componentId}
       union all
@@ -233,21 +196,21 @@ export async function getComponentPath(componentId: string): Promise<string> {
     from chain
   `;
   if (!row?.path) throw badInput(`Unknown component id '${componentId}'`);
-  return row.path as string;
+  return row.path;
 }
 
 export async function resolveComponentTags(
   productId: string,
   slugOrAlias: string,
 ): Promise<string[]> {
-  const [row] = await sql`
+  const [row] = await sql<{ slug: string; aliases: string[] | null }[]>`
     select slug, aliases from components
     where product_id = ${productId}
       and (slug = ${slugOrAlias} or exists (select 1 from unnest(aliases) a where lower(a) = lower(${slugOrAlias})))
     limit 1
   `;
   if (!row) return [slugOrAlias];
-  return [row.slug as string, ...((row.aliases as string[]) ?? [])];
+  return [row.slug, ...(row.aliases ?? [])];
 }
 
 export async function resolveComponentFilter(
