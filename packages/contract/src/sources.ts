@@ -1,3 +1,11 @@
+export interface SourceConnectionRow {
+  id: string;
+  source_type: string;
+  slug: string;
+  base_url: string | null;
+  config: Record<string, unknown> | null;
+}
+
 export interface SourceCensus {
   connections: number;
   projects: number;

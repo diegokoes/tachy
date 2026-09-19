@@ -73,7 +73,11 @@ export type {
   ResolvedFact,
 } from "./catalog";
 export type { UserCensus } from "./access";
-export type { SourceCensus, SourceTraffic } from "./sources";
+export type {
+  SourceCensus,
+  SourceConnectionRow,
+  SourceTraffic,
+} from "./sources";
 export type { AgentUsage, ToolUsage } from "./analytics";
 export type { KnowledgeCensus } from "./knowledge";
 
