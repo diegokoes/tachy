@@ -1,4 +1,9 @@
-import type { CatalogCensus } from "@tachy/contract";
+import type {
+  CatalogCensus,
+  LabelRow,
+  ProductRow,
+  TeamRow,
+} from "@tachy/contract";
 import { sql } from "../infra/db";
 import { productTagRenameImpact, renameProductTag } from "./product-tags";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
@@ -24,7 +29,7 @@ export async function getProductIdBySlug(slug: string): Promise<string> {
 }
 
 export async function listTeams() {
-  return sql`select id, slug, name from teams order by name`;
+  return sql<TeamRow[]>`select id, slug, name from teams order by name`;
 }
 
 export async function getTeamIdBySlug(slug: string): Promise<string> {
@@ -87,7 +92,7 @@ export async function deleteTeam(slug: string) {
 }
 
 export async function listProducts(teamSlug?: string) {
-  return sql`
+  return sql<ProductRow[]>`
     select p.id, p.slug, p.name, p.aliases, t.slug as team_slug, t.name as team_name
     from products p join teams t on t.id = p.team_id
     ${teamSlug ? sql`where t.slug = ${teamSlug}` : sql``}
@@ -193,7 +198,9 @@ export async function deleteProduct(productId: string) {
 }
 
 export async function listLabels(productId: string) {
-  return sql`select id, slug, description from labels where product_id = ${productId} order by slug`;
+  return sql<
+    LabelRow[]
+  >`select id, slug, description from labels where product_id = ${productId} order by slug`;
 }
 
 export async function addLabel(

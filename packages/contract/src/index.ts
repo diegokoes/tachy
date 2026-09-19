@@ -61,7 +61,17 @@ export type {
 export type { AdoFieldType, FieldSpec, WorkItemSchema } from "./ado";
 export { REPO_INDEX_STATUSES } from "./code";
 export type { RepoIndexStatus, RepoRow, RepoCensus } from "./code";
-export type { CatalogCensus } from "./catalog";
+export type {
+  CatalogCensus,
+  TeamRow,
+  ProductRow,
+  ComponentRow,
+  LabelRow,
+  PatternRow,
+  CustomerRow,
+  CustomerUnitRow,
+  ResolvedFact,
+} from "./catalog";
 export type { UserCensus } from "./access";
 export type { SourceCensus, SourceTraffic } from "./sources";
 export type { AgentUsage, ToolUsage } from "./analytics";
