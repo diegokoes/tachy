@@ -270,22 +270,24 @@
     withAnchors(renderMarkdown(body), items, { numbered: true }),
   );
 
+  let loadError = $state<string | null>(null);
+
   onMount(async () => {
-    const [cats, comps] = await Promise.all([
-      api
-        .get<WikiCategory[]>(`/library/wiki/${scope}/categories`)
-        .catch(() => [] as WikiCategory[]),
-      hasComponents
-        ? api
-            .get<ComponentRow[]>(`/products/${scope}/components`)
-            .catch(() => [] as ComponentRow[])
-        : Promise.resolve([] as ComponentRow[]),
-    ]);
-    categories = cats;
-    components = comps;
-    if (seed?.component_id)
-      component =
-        comps.find((c) => c.id === seed.component_id)?.slug ?? "";
+    try {
+      const [cats, comps] = await Promise.all([
+        api.get<WikiCategory[]>(`/library/wiki/${scope}/categories`),
+        hasComponents
+          ? api.get<ComponentRow[]>(`/products/${scope}/components`)
+          : Promise.resolve([] as ComponentRow[]),
+      ]);
+      categories = cats;
+      components = comps;
+      if (seed?.component_id)
+        component =
+          comps.find((c) => c.id === seed.component_id)?.slug ?? "";
+    } catch (e) {
+      loadError = errText(e);
+    }
     await loadArticles();
   });
 
@@ -396,7 +398,7 @@
     {/if}
   </div>
 
-  {#if error}<Note tone="danger">{error}</Note>{/if}
+  {#if error ?? loadError}<Note tone="danger">{error ?? loadError}</Note>{/if}
   {#if uploadError}<Note tone="warn">{uploadError}</Note>{/if}
 
   <div class="split" class:solo={!preview}>

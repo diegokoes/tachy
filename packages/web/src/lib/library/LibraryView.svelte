@@ -52,9 +52,7 @@
     { key: "docs", label: "docs", icon: "clipboard" },
   ];
 
-  // From vocab.ts, which exists so these are written once: the hand-typed
-  // copies had drifted out of the order the contract documents as the order
-  // they should be offered in.
+  // From vocab.ts, so they are offered in the order the contract documents.
   const STATUSES = KNOWLEDGE_STATUSES;
   const DOC_STATUSES = REFERENCE_STATUSES;
 
@@ -67,7 +65,7 @@
   /** The tab a detail view was opened from, so "back" returns there. */
   let origin = $state("all");
 
-  // The wiki has its own section now; an old /library/wiki link follows it.
+  // Old /library/wiki links redirect to the wiki section.
   $effect(() => {
     if (kind === "wiki") navigate(movedWikiPath(segments()), { replace: true });
   });
@@ -364,31 +362,23 @@
     navigate(origin === "all" ? "/library" : `/library/${origin}`);
   }
 
-  async function createEntry(payload: Record<string, unknown>) {
-    createSaving = true;
-    createError = null;
-    try {
-      const created = await api.post<{ id: string }>("/knowledge", payload);
-      navigate(`/library/entries/${created.id}`);
-    } catch (e) {
-      createError = errText(e);
-    } finally {
-      createSaving = false;
-    }
-  }
-
-  async function createDoc(payload: Record<string, unknown>) {
-    createSaving = true;
-    createError = null;
-    try {
-      const created = await api.post<{ id: string }>("/reference", payload);
-      navigate(`/library/docs/${created.id}`);
-    } catch (e) {
-      createError = errText(e);
-    } finally {
-      createSaving = false;
-    }
-  }
+  /** Create through `endpoint`, then open what was made under `/library/<tab>`. */
+  const create =
+    (endpoint: string, tab: string) =>
+    async (payload: Record<string, unknown>) => {
+      createSaving = true;
+      createError = null;
+      try {
+        const created = await api.post<{ id: string }>(endpoint, payload);
+        navigate(`/library/${tab}/${created.id}`);
+      } catch (e) {
+        createError = errText(e);
+      } finally {
+        createSaving = false;
+      }
+    };
+  const createEntry = create("/knowledge", "entries");
+  const createDoc = create("/reference", "docs");
 
   /** Opens narrowed to what another page asked for; see `presetScope`. */
   async function applyPreset(p: ScopePreset) {
