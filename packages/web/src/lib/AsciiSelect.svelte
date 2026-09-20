@@ -13,6 +13,8 @@
     disabled = false,
     active = false,
     keepOpen = false,
+    searchable = false,
+    filterPlaceholder = "filter…",
     onchange,
     "aria-label": ariaLabel,
   }: {
@@ -29,6 +31,10 @@
      * is trying values quickly rather than committing to one.
      */
     keepOpen?: boolean;
+    /** Offer the filter box however short the list, for lists that grow with
+     *  the catalog rather than staying a fixed vocabulary. */
+    searchable?: boolean;
+    filterPlaceholder?: string;
     onchange?: (v: Val) => void;
     "aria-label"?: string;
   } = $props();
@@ -61,7 +67,7 @@
   let scrollEl = $state<HTMLElement>();
   let queryEl = $state<HTMLInputElement>();
 
-  const filterable = $derived(opts.length > FILTERABLE);
+  const filterable = $derived(searchable || opts.length > FILTERABLE);
   const shown = $derived.by(() => {
     const q = query.trim().toLowerCase();
     if (!q) return opts;
@@ -206,7 +212,7 @@
           type="text"
           bind:this={queryEl}
           bind:value={query}
-          placeholder="filter…"
+          placeholder={filterPlaceholder}
           aria-label="filter options"
           autocomplete="off"
           onkeydown={onKeydown}

@@ -103,8 +103,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
     background: var(--panel);
-    padding: 0 var(--pad-2);
-    min-height: var(--row-h);
+    padding: var(--pad-2) var(--pad-3);
   }
   .tags.active .row {
     border-color: var(--accent);
@@ -116,7 +115,6 @@
     background: transparent;
     padding: 0;
     font: inherit;
-    font-size: var(--fs-sm);
   }
   input:focus {
     outline: none;

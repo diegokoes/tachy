@@ -2,12 +2,12 @@
   import { api } from "../api";
   import { fmtDateTime } from "../dates";
   import { Icon, Modal } from "../tui";
-  import type { ViewSummary } from "../types";
-  import History from "./History.svelte";
+  import type { Revision, ViewSummary } from "../types";
+  import History, { revisionAuthor } from "./History.svelte";
 
   /**
-   * Read counts for one library item, drawn as a line under its content. The
-   * line opens the item's versions.
+   * Who has read one library item and who last changed it, as two lines in
+   * the bottom-left corner of the page. Either line opens the item's versions.
    */
   let {
     base,
@@ -24,16 +24,21 @@
   } = $props();
 
   let views = $state<ViewSummary | null>(null);
+  let latest = $state<Revision | null>(null);
   let open = $state(false);
 
   $effect(() => {
-    const url = `/${base}/${id}/views`;
+    const root = `/${base}/${id}`;
     void version;
     let live = true;
     api
-      .get<ViewSummary>(url)
+      .get<ViewSummary>(`${root}/views`)
       .then((v) => live && (views = v))
       .catch(() => live && (views = null));
+    api
+      .get<Revision[]>(`${root}/revisions`)
+      .then((r) => live && (latest = r[0] ?? null))
+      .catch(() => live && (latest = null));
     return () => {
       live = false;
     };
@@ -42,7 +47,7 @@
   const plural = (n: number, one: string, many: string) =>
     `${n} ${n === 1 ? one : many}`;
 
-  const line = $derived(
+  const readLine = $derived(
     views
       ? [
           plural(views.views, "read", "reads") +
@@ -51,19 +56,36 @@
         ]
           .filter(Boolean)
           .join(" · ")
+      : "no reads yet",
+  );
+
+  const modifiedLine = $derived(
+    latest
+      ? `last modified ${fmtDateTime(latest.created_at)} by ${revisionAuthor(latest)}`
       : "versions",
   );
 </script>
 
-<button
-  class="reads"
-  title="versions"
-  aria-haspopup="dialog"
-  onclick={() => (open = true)}
->
-  <Icon name="history" size="1.1em" weight={7} />
-  <span>{line}</span>
-</button>
+<div class="readership">
+  <button
+    class="line"
+    title="versions"
+    aria-haspopup="dialog"
+    onclick={() => (open = true)}
+  >
+    <Icon name="reads" size="1.1em" weight={7} />
+    <span>{readLine}</span>
+  </button>
+  <button
+    class="line"
+    title="versions"
+    aria-haspopup="dialog"
+    onclick={() => (open = true)}
+  >
+    <Icon name="history" size="1.1em" weight={7} />
+    <span>{modifiedLine}</span>
+  </button>
+</div>
 
 {#if open}
   <Modal
@@ -77,13 +99,21 @@
 {/if}
 
 <style>
-  .reads {
+  /* margin-top: auto drops it to the foot of a page that fills its frame; a
+     page taller than the frame just ends with it. */
+  .readership {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--pad-1);
+    margin-top: auto;
+    padding: var(--pad-4) 0 var(--pad-2) var(--pad-4);
+  }
+  .line {
     display: inline-flex;
     align-items: center;
     gap: var(--pad-2);
-    align-self: flex-start;
-    margin-top: var(--pad-4);
-    padding: var(--pad-1) 0;
+    padding: 0;
     background: none;
     border: none;
     font: inherit;
@@ -91,10 +121,10 @@
     color: var(--muted);
     cursor: pointer;
   }
-  .reads:hover {
+  .line:hover {
     color: var(--text);
   }
-  .reads:focus-visible {
+  .line:focus-visible {
     outline: 1px solid currentColor;
     outline-offset: 2px;
   }
