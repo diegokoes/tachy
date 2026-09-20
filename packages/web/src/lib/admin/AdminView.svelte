@@ -26,7 +26,6 @@
   import CustomersPanel from "./CustomersPanel.svelte";
   import AccessPanel from "./AccessPanel.svelte";
   import SystemPanel from "./SystemPanel.svelte";
-  import CredentialsPanel from "./CredentialsPanel.svelte";
   import JobsPanel from "./JobsPanel.svelte";
   import RuntimePanel from "./RuntimePanel.svelte";
   import JobsOverview from "./JobsOverview.svelte";
@@ -48,7 +47,7 @@
   const PAGES: SubnavItem[] = $derived([
     { key: "integrations", label: "integrations", icon: "link" },
     { key: "structure", label: "structure", icon: "layers" },
-    { key: "access", label: "access", icon: "key" },
+    { key: "access", label: "users", icon: "people" },
     ...(isGlobalAdmin()
       ? [
           { key: "workers", label: "workers", icon: "terminal" as const },
@@ -75,7 +74,6 @@
     ],
     access: [
       { key: "users", label: "users & roles", view: AccessPanel, n: "users" },
-      { key: "credentials", label: "shared credentials", view: CredentialsPanel },
     ],
     workers: [{ key: "jobs", label: "jobs", view: JobsPanel, record: JobsPanel, show: admin }],
     system: [
@@ -240,8 +238,8 @@
     flex-direction: column;
   }
 
-  /* Chrome for the two panels still on hand-rolled markup: system settings
-     and shared credentials. Deleted as each one moves over. */
+  /* Chrome for the one panel still on hand-rolled markup: system settings.
+     Deleted once it moves over. */
   .admin-root :global(table) {
     width: 100%;
     border-collapse: collapse;
