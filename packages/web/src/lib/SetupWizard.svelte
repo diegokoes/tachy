@@ -272,8 +272,8 @@
             </Field>
             {#if agentKeyIsOAuth}
               <Note tone="accent">
-                Claude <strong>subscription token</strong>. Saved as the org default; chats
-                use that account's limits until a user sets their own in Settings › Keys.
+                Claude <strong>subscription token</strong>. Saved as your own key, under
+                this admin account; everyone else sets theirs in Settings › Keys.
               </Note>
             {/if}
             <Field label="effort">

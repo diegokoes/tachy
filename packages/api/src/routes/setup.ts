@@ -69,9 +69,7 @@ export const setup = new Hono()
     if (env.oidc) {
       verified = await sessionEmail(c);
       if (!verified)
-        throw forbidden(
-          "SSO deployment: sign in first, then run setup",
-        );
+        throw forbidden("SSO deployment: sign in first, then run setup");
       if (verified.toLowerCase() !== body.email.toLowerCase())
         throw forbidden(
           `signed in as ${verified}; setup only promotes the signed-in account`,
@@ -120,13 +118,9 @@ export const setup = new Hono()
           provider === "claude" && body.agent_key.startsWith(OAUTH_PREFIX)
             ? ANTHROPIC_OAUTH_CREDENTIAL
             : AGENT_CREDENTIALS[provider];
-        await setCredential(
-          admin.id,
-          "global",
-          undefined,
-          name,
-          body.agent_key,
-        );
+        // The wizard's key is the first admin's own, not the deployment's:
+        // every other user brings theirs under Settings > keys.
+        await setCredential(admin.id, "user", admin.id, name, body.agent_key);
       }
     }
 

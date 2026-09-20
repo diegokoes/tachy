@@ -19,19 +19,19 @@ import { lifecycle } from "../../lifecycle";
 /** Deployment settings and the maintenance switch. */
 export const system = new Hono()
   /*
-   * Members read this: the settings and the global-credential availability are
-   * what the app renders its own chrome from. The `env` block is different —
-   * which secrets are configured, where uploads land, what the API port is — and
-   * only Admin > System renders it, so it travels only to an admin. `upload_dir`
-   * in particular is a path the ingest tools read from.
+   * Members read this: the settings and whether the environment supplies a
+   * fallback agent key are what the app renders its own chrome from. The `env`
+   * block is different — which secrets are configured, where uploads land, what
+   * the API port is — and only Admin > System renders it, so it travels only to
+   * an admin. `upload_dir` in particular is a path the ingest tools read from.
    */
   .get("/system", async (c) =>
     c.json({
       settings: await effectiveSettings(),
       credentials: {
         vault_enabled: secretsEnabled(),
-        // Global-scope availability (source: global | env | null) — the
-        // per-user view lives under /me/credentials.
+        // Availability with no user to be, so: the environment's fallback, or
+        // null. Each person's own keys are under /me/credentials.
         anthropic_api_key:
           (await credentialSource(AGENT_CREDENTIALS.claude, {})) ?? null,
         copilot_token:

@@ -5,6 +5,7 @@ import {
   setTeamMember,
   getTeamIdBySlug,
   resolveScoped,
+  upsertScoped,
   resolveCredential,
   credentialSource,
   setCredential,
@@ -89,7 +90,7 @@ describe("secrets (AES-256-GCM)", () => {
   });
 });
 
-describe("scoped credential resolution (user > team > global > env)", () => {
+describe("scoped credential resolution (user > global > env)", () => {
   it("walks the scopes most-specific first and falls back rung by rung", async () => {
     const { admin, alice, teamId } = await seedPeople();
     const ctx = { userId: alice.id, teamId };
@@ -111,17 +112,6 @@ describe("scoped credential resolution (user > team > global > env)", () => {
 
       await setCredential(
         alice.id,
-        "team",
-        teamId,
-        "anthropic_api_key",
-        "sk-ant-api03-team",
-      );
-      expect(await resolveCredential("anthropic_api_key", ctx)).toBe(
-        "sk-ant-api03-team",
-      );
-
-      await setCredential(
-        alice.id,
         "user",
         alice.id,
         "anthropic_api_key",
@@ -133,11 +123,6 @@ describe("scoped credential resolution (user > team > global > env)", () => {
       expect(await credentialSource("anthropic_api_key", ctx)).toBe("user");
 
       await deleteCredential(alice.id, "user", alice.id, "anthropic_api_key");
-      expect(await resolveCredential("anthropic_api_key", ctx)).toBe(
-        "sk-ant-api03-team",
-      );
-
-      await deleteCredential(alice.id, "team", teamId, "anthropic_api_key");
       expect(await resolveCredential("anthropic_api_key", ctx)).toBe(
         "sk-ant-api03-global",
       );
@@ -178,17 +163,8 @@ describe("scoped credential resolution (user > team > global > env)", () => {
 });
 
 describe("write authorization matrix", () => {
-  it("a plain member cannot write team or global credentials", async () => {
-    const { bob, teamId } = await seedPeople();
-    await expect(
-      setCredential(
-        bob.id,
-        "team",
-        teamId,
-        "anthropic_api_key",
-        "sk-ant-api03-x",
-      ),
-    ).rejects.toThrow(/admin rights/);
+  it("a plain member cannot write global credentials", async () => {
+    const { bob } = await seedPeople();
     await expect(
       setCredential(
         bob.id,
@@ -200,15 +176,8 @@ describe("write authorization matrix", () => {
     ).rejects.toThrow(/app admin/);
   });
 
-  it("a team admin can write team but not global", async () => {
-    const { alice, teamId } = await seedPeople();
-    await setCredential(
-      alice.id,
-      "team",
-      teamId,
-      "anthropic_api_key",
-      "sk-ant-api03-x",
-    );
+  it("a team admin cannot write global either", async () => {
+    const { alice } = await seedPeople();
     await expect(
       setCredential(
         alice.id,
@@ -233,25 +202,15 @@ describe("write authorization matrix", () => {
     ).rejects.toThrow(/your own/);
   });
 
-  it("a demoted team admin loses write rights immediately (no 60s window)", async () => {
+  it("has no team scope to write at all", async () => {
     const { alice, teamId } = await seedPeople();
-    await setCredential(
-      alice.id,
-      "team",
-      teamId,
-      "anthropic_api_key",
-      "sk-ant-api03-x",
-    );
-    await setTeamMember("hw", "alice@example.com", "member");
     await expect(
-      setCredential(
-        alice.id,
-        "team",
-        teamId,
-        "anthropic_api_key",
-        "sk-ant-api03-y",
-      ),
-    ).rejects.toThrow(/admin rights/);
+      upsertScoped("credentials", "team", teamId, "anthropic_api_key", {
+        value_ciphertext: Buffer.from([0]),
+        nonce: Buffer.from([0]),
+        created_by: alice.id,
+      }),
+    ).rejects.toThrow(/no team scope/);
   });
 });
 
@@ -260,6 +219,10 @@ describe("schema constraints", () => {
     await expect(
       sql`insert into credentials (scope, name, value_ciphertext, nonce)
           values ('team', 'x', '\\x00'::bytea, '\\x00'::bytea)`,
+    ).rejects.toThrow(/check/i);
+    await expect(
+      sql`insert into credentials (scope, name, value_ciphertext, nonce)
+          values ('user', 'x', '\\x00'::bytea, '\\x00'::bytea)`,
     ).rejects.toThrow(/check/i);
     const { alice } = await seedPeople();
     await expect(
@@ -351,9 +314,8 @@ describe("API never leaks plaintext or ciphertext", () => {
 
   const login = (email: string) => loginCookie(app, email, "a-long-password");
 
-  it("stores via /me and /credentials, lists only metadata", async () => {
+  it("stores via /me, lists only metadata", async () => {
     const { admin, alice } = await seedPeople();
-    void admin;
     const cookie = await login("alice@example.com");
     const adminCookie = await login("root@example.com");
 
@@ -364,21 +326,19 @@ describe("API never leaks plaintext or ciphertext", () => {
     });
     expect(put.status).toBe(200);
 
-    const putGlobal = await app.request("/api/credentials", {
-      method: "PUT",
-      body: JSON.stringify({
-        scope: "global",
-        name: "copilot_token",
-        value: "super-secret-global-token",
-      }),
-      headers: { "Content-Type": "application/json", cookie: adminCookie },
-    });
-    expect(putGlobal.status).toBe(200);
+    // The global scope holds machine tokens, written from inside the server —
+    // no route offers it, so this is the only way in.
+    await setCredential(
+      admin.id,
+      "global",
+      undefined,
+      "copilot_token",
+      "super-secret-global-token",
+    );
 
     for (const [path, c] of [
       ["/api/me/credentials", cookie],
       ["/api/me/preferences", cookie],
-      ["/api/credentials?scope=global", adminCookie],
       ["/api/system", adminCookie],
     ] as const) {
       const res = await app.request(path, { headers: { cookie: c } });
@@ -400,13 +360,25 @@ describe("API never leaks plaintext or ciphertext", () => {
     expect(body.effective.copilot_token).toBe("global");
   });
 
-  it("a member cannot use the admin credentials routes", async () => {
+  it("offers no route for writing anyone else's credential", async () => {
     await seedPeople();
-    const cookie = await login("bob@example.com");
-    const res = await app.request("/api/credentials?scope=global", {
-      headers: { cookie },
-    });
-    expect(res.status).toBe(403);
+    const adminCookie = await login("root@example.com");
+    for (const method of ["GET", "PUT", "DELETE"] as const) {
+      const res = await app.request("/api/credentials", {
+        method,
+        ...(method === "GET"
+          ? {}
+          : {
+              body: JSON.stringify({
+                scope: "global",
+                name: "copilot_token",
+                value: "x",
+              }),
+            }),
+        headers: { "Content-Type": "application/json", cookie: adminCookie },
+      });
+      expect(res.status).toBe(404);
+    }
   });
 
   it("me preferences round-trip: PUT overrides, DELETE falls back", async () => {

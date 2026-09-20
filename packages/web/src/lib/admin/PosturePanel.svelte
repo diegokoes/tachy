@@ -112,10 +112,10 @@
       {
         key: "agent",
         label: "agent key",
-        tone: creds[key] ? "ok" : "danger",
+        tone: creds[key] ? "ok" : "muted",
         title: creds[key]
-          ? `${s.agent_provider.value} · ${s.agent_model.value}, key from ${creds[key]}`
-          : `no ${key}: the agent cannot run`,
+          ? `${s.agent_provider.value} · ${s.agent_model.value}, fallback key from ${creds[key]}`
+          : `no ${key} in the environment: each user brings their own in Settings › Keys`,
       },
     ];
     if (admin)

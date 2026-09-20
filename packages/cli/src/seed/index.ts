@@ -375,7 +375,7 @@ async function seedCredentials(): Promise<number> {
   let n = 0;
   for (const [name, value] of values) {
     try {
-      await setCredential(admin.id, "global", undefined, name, value);
+      await setCredential(admin.id, "user", admin.id, name, value);
       n++;
     } catch {
       // A provider may tighten its format rules; a dev credential is not
