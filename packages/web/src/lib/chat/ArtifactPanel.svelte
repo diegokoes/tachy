@@ -440,7 +440,7 @@
      until the thread has finished retracting, and a tab that dropped under it
      on the first frame of the close would blink out while the wire was still
      travelling towards it. openT is 0 again only once the hexagon has shut. -->
-<div class="edge-slot" class:lifted={open || openT > 0}>
+<div class="edge-slot" class:lifted={(open || openT > 0) && !editorOpen}>
   <button
     bind:this={tabBtn}
     class="edge-tab"
@@ -552,7 +552,12 @@
         </div>
   </Modal>
 
-  <ArtifactThread bind:this={thread} from={pickerEl} to={tabFrame} />
+  <ArtifactThread
+    bind:this={thread}
+    from={pickerEl}
+    to={tabFrame}
+    buried={editorOpen}
+  />
 {/if}
 
 {#if editorOpen}
