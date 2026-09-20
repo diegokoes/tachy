@@ -6,7 +6,16 @@
   /* Element, not HTMLElement: `to` is the tab's frame <svg>, and everything
      done with these ends is getBoundingClientRect and ResizeObserver.observe,
      both of which are defined on Element. */
-  let { from, to }: { from?: Element; to?: Element } = $props();
+  let {
+    from,
+    to,
+    buried = false,
+  }: {
+    from?: Element;
+    to?: Element;
+    /** A dialog opened over the picker: sink to its level so it covers the wire. */
+    buried?: boolean;
+  } = $props();
 
   let svg = $state<SVGSVGElement>();
   let core = $state<SVGPathElement>();
@@ -289,6 +298,7 @@
 <svg
   bind:this={svg}
   class="thread"
+  class:buried
   aria-hidden="true"
   in:strike
   out:strike={{ retract: true }}
@@ -317,6 +327,9 @@
     height: 100%;
     pointer-events: none;
     overflow: visible;
+  }
+  .thread.buried {
+    z-index: var(--z-overlay);
   }
 
   .halo {
