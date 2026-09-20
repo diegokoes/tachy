@@ -1,8 +1,15 @@
+<script lang="ts" module>
+  import type { Revision } from "../types";
+
+  /** Who made a revision, as far as the record can say. */
+  export const revisionAuthor = (r: Revision) =>
+    r.user_name || r.user_email || (r.user_id ? "someone" : "unattributed");
+</script>
+
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../api";
   import { Badge, Button, Chip } from "../tui";
-  import type { Revision } from "../types";
   import { fmtDateTime } from "../dates";
 
   /**
@@ -78,9 +85,6 @@
     }
   }
 
-  const who = (r: Revision) =>
-    r.user_name || r.user_email || (r.user_id ? "someone" : "unattributed");
-
   /** The door, not the person — an agent edit is still made by a human. */
   const doorTone = (actor: string) =>
     actor === "agent" ? "warn" : actor === "web" ? "ok" : "muted";
@@ -107,7 +111,7 @@
           <button class="rev-head" onclick={() => toggle(r.version)}>
             <span class="v">v{r.version}</span>
             <Badge tone={doorTone(r.actor)}>{r.actor}</Badge>
-            <span class="who">{who(r)}</span>
+            <span class="who">{revisionAuthor(r)}</span>
             <span class="at">{fmtDateTime(r.created_at)}</span>
             {#if r.changed_fields.length}
               <span class="fields">

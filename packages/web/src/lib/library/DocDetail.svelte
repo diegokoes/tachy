@@ -335,15 +335,14 @@
     </div>
 
     <Backlinks base="reference" id={doc.id} />
-
-    <Readership
-      base="reference"
-      id={doc.id}
-      version={doc.version}
-      {canEdit}
-      onReverted={() => load(doc!.id)}
-    />
   </div>
+  <Readership
+    base="reference"
+    id={doc.id}
+    version={doc.version}
+    {canEdit}
+    onReverted={() => load(doc!.id)}
+  />
 {/if}
 
 <style>
@@ -381,8 +380,11 @@
   }
 
   /* The positioning context the lifecycle rail hangs off. */
+  /* Grows to fill the frame so the readership lines after it land in the
+     bottom-left corner. */
   .read {
     position: relative;
+    flex-grow: 1;
   }
   .source {
     display: inline-flex;
