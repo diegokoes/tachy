@@ -7,11 +7,7 @@
   import Select from "../AsciiSelect.svelte";
   import type { Column, Draft } from "./table";
 
-  /**
-   * The fields of one record, laid out from its columns. Drawn inside a dialog
-   * by RecordModal and on a page by the admin record page, so the two never
-   * disagree about what a column's `edit` means.
-   */
+  /** The fields of one record, laid out from its columns. Drawn by RecordModal. */
   let {
     columns,
     draft,

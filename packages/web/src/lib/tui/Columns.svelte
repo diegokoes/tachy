@@ -1,20 +1,9 @@
 <script lang="ts">
-  import { growBar } from "../motion";
+  import Axis from "./Axis.svelte";
+  import Plot from "./Plot.svelte";
+  import type { Col } from "./marks";
+  import { stackParts, toneVar } from "./scale";
   import type { Tone } from "./tone";
-
-  /** `Col`, not `Column` — the tui barrel already exports a table Column. */
-  export type Col = {
-    key: string;
-    label: string;
-    value: number;
-    tone?: Tone;
-    /** Stacks the column, bottom first. Their sum is `value`. */
-    parts?: { key: string; value: number; tone: Tone }[];
-    /** Spelled out on hover, where the label is only a day of the month. */
-    title?: string;
-    /** Printed on top instead of the value — "fail" on a run that has none. */
-    text?: string;
-  };
 
   let {
     rows,
@@ -36,11 +25,22 @@
     legend?: { key: string; label: string; tone: Tone }[];
   } = $props();
 
+  /* Capped rather than stretched: three categories across a full-width panel
+     would otherwise be three slabs, and a saturated fill that big reads as a
+     colour field rather than a measurement. */
+  const CAP_REM = 3.25;
+  /* Cut between stacked slices. The ground showing through is the separator:
+     a stroke around each would add ink that is not data. */
+  const CUT = 2;
+
   const peak = $derived(Math.max(0, ...rows.map((r) => r.value)));
-  const top = $derived(max ?? Math.max(1, peak));
-  /* A long run gets a number on its peak and its latest column only; every
-     other value is on hover. Fourteen numbers over fourteen bars is a row of
-     text, not a chart. */
+  const top = $derived(max ?? peak);
+  const keys = $derived(rows.map((r) => r.key));
+  const labels = $derived(new Map(rows.map((r) => [r.key, r.label])));
+
+  /* The axis carries the scale, so a number over every column would be
+     saying it twice. The peak and the latest still get one: those are the two
+     a reader looks for by name rather than off the axis. */
   const dense = $derived(rows.length > 8);
   const count = (r: Col, i: number) =>
     r.text ??
@@ -49,33 +49,69 @@
       : null);
 </script>
 
-<!-- The count rides on top of each column and the name below it, so every value
-     is readable without hovering and the plot needs no gridlines to be scaled. -->
 <div class="chart" class:fill>
-  <div class="columns" class:dense style="--plot: {height}">
-    {#each rows as r, i (r.key)}
-      {@const n = count(r, i)}
-      <div class="col {r.tone ?? 'accent'}" title="{r.title ?? r.label}: {r.text ?? format(r.value)}">
-        <span class="plot">
-          <span
-            class="bar"
-            class:stacked={Boolean(r.parts)}
-            use:growBar={{ pct: (r.value / top) * 100, delay: i * 0.04 }}
-          >
-            {#if n}<span class="n">{n}</span>{/if}
-            {#each (r.parts ?? []).filter((p) => p.value > 0) as p (p.key)}
-              <span class="part {p.tone}" style="flex-grow: {p.value}"></span>
+  <Plot
+    categories={keys}
+    max={top}
+    {format}
+    height={fill ? undefined : height}
+    padding={dense ? 0.16 : 0.34}
+  >
+    {#snippet children(f)}
+      {@const cap = Math.min(f.band, CAP_REM * f.rem)}
+      <Axis side="left" grid format={(v) => format(Number(v))} />
+      <Axis
+        side="bottom"
+        categories={keys}
+        format={(k) => labels.get(String(k)) ?? String(k)}
+      />
+
+      {#each rows as r, i (r.key)}
+        {@const x = f.bandAt(r.key) + (f.band - cap) / 2}
+        {@const parts = stackParts(r.parts)}
+        {@const n = count(r, i)}
+        <g>
+          <title>{r.title ?? r.label}: {r.text ?? format(r.value)}</title>
+          {#if parts.length}
+            {#each parts as p (p.key)}
+              <rect
+                {x}
+                y={f.at(p.offset + p.size)}
+                width={cap}
+                height={Math.max(1, f.up(p.size) - CUT)}
+                rx="2"
+                style="fill: {toneVar(p.tone)}"
+              />
             {/each}
-          </span>
-        </span>
-        <span class="lbl">{r.label}</span>
-      </div>
-    {/each}
-  </div>
+          {:else}
+            <rect
+              {x}
+              y={f.at(r.value)}
+              width={cap}
+              height={Math.max(1, f.up(r.value))}
+              rx="2"
+              style="fill: {toneVar(r.tone)}"
+            />
+          {/if}
+          {#if n}
+            <text
+              class="n"
+              x={x + cap / 2}
+              y={f.at(r.value) - f.fs * 0.45}
+              text-anchor="middle">{n}</text
+            >
+          {/if}
+        </g>
+      {/each}
+    {/snippet}
+  </Plot>
+
   {#if legend?.length}
     <div class="legend">
       {#each legend as l (l.key)}
-        <span class="key {l.tone}">{l.label}</span>
+        <span class="key" style="--tone-color: {toneVar(l.tone)}"
+          >{l.label}</span
+        >
       {/each}
     </div>
   {/if}
@@ -94,103 +130,11 @@
     min-height: 0;
   }
 
-  .columns {
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    gap: var(--pad-2);
-    width: 100%;
-    min-width: 0;
-    /* The label band is inside the box on purpose: a container sized to the
-       plot alone crops its own axis and grows a nested scrollbar. */
-    padding-bottom: var(--pad-1);
-    border-bottom: 1px solid var(--border);
-  }
-  .columns.dense {
-    gap: 3px;
-  }
-  /* Stretched, so each column has a definite height for its plot to take the
-     rest of — a column sized to its content has no height for a percentage. */
-  .fill .columns {
-    flex: 1 1 0;
-    min-height: 0;
-    align-items: stretch;
-  }
-
-  .col {
-    flex: 1 1 0;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-end;
-    gap: var(--pad-1);
-  }
-
-  /* Hung off the top of the bar, so it rides the column up as it grows. */
   .n {
-    position: absolute;
-    bottom: calc(100% + var(--pad-1));
-    left: 50%;
-    transform: translateX(-50%);
-    white-space: nowrap;
+    fill: var(--text);
     font-family: var(--font-mono);
+    font-size: var(--fs-xs);
     font-variant-numeric: tabular-nums;
-    font-size: var(--fs-xs);
-    color: var(--text);
-  }
-
-  /* The top padding is headroom for the count, so the tallest column's count
-     stays inside the plot rather than riding up over whatever is above it. */
-  .plot {
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    width: 100%;
-    height: var(--plot);
-    padding-top: calc(var(--fs-xs) * 1.6 + var(--pad-2));
-  }
-  .fill .plot {
-    flex: 1 1 0;
-    height: auto;
-    min-height: 0;
-  }
-  /* Height is written by growBar, never by CSS — a transition here would race
-     the tween and leave the column short. */
-  /* Capped, not stretched: three categories across a full-width panel would
-     otherwise be three slabs, and a saturated fill that big reads as a colour
-     field rather than a measurement. The label under it keeps the full slot. */
-  .bar {
-    position: relative;
-    flex: none;
-    width: 100%;
-    max-width: 3.25rem;
-    min-height: 1px;
-    border-radius: 2px 2px 0 0;
-    background: var(--tone-color);
-  }
-  .bar.stacked {
-    display: flex;
-    flex-direction: column-reverse;
-    gap: 2px;
-    background: none;
-  }
-  .part {
-    flex-basis: 0;
-    min-height: 1px;
-    background: var(--tone-color);
-  }
-  .part:last-child {
-    border-radius: 2px 2px 0 0;
-  }
-
-  .lbl {
-    max-width: 100%;
-    font-size: var(--fs-xs);
-    color: var(--muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .legend {
@@ -210,24 +154,5 @@
     vertical-align: middle;
     border-radius: 1px;
     background: var(--tone-color);
-  }
-
-  .accent {
-    --tone-color: var(--accent);
-  }
-  .ok {
-    --tone-color: var(--ok);
-  }
-  .warn {
-    --tone-color: var(--warn);
-  }
-  .danger {
-    --tone-color: var(--danger);
-  }
-  .muted {
-    --tone-color: var(--muted);
-  }
-  .info {
-    --tone-color: var(--info);
   }
 </style>

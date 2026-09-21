@@ -8,10 +8,10 @@
 
 <script lang="ts">
   import { onMount, type Snippet } from "svelte";
-  import { gsap, reducedMotion } from "../gsap";
   import Scrollbar from "../Scrollbar.svelte";
   import { scrollport } from "../scrollport.svelte";
   import Scrim from "./Scrim.svelte";
+  import { portal } from "./portal";
   import Button from "./Button.svelte";
   import type { IconName } from "./icons";
 
@@ -85,36 +85,7 @@
     if (port) port.style.overflow = "hidden";
     win?.focus();
 
-    const tl =
-      win && !reducedMotion()
-        ? gsap
-            .timeline()
-            /* clearProps is load-bearing, not tidiness: GSAP leaves the
-               transform inline when the tween lands, and a transformed
-               ancestor is a containing block — which would quietly turn every
-               `position: fixed` popup inside the dialog back into an absolute
-               one, cropped by the scrolling body. */
-            .from(win, {
-              scaleY: 0.06,
-              autoAlpha: 0,
-              duration: 0.17,
-              ease: "power3.out",
-              clearProps: "transform,opacity,visibility",
-            })
-            .from(
-              win.querySelectorAll<HTMLElement>(".reveal"),
-              {
-                autoAlpha: 0,
-                duration: 0.13,
-                ease: "none",
-                clearProps: "opacity,visibility",
-              },
-              "<0.06",
-            )
-        : null;
-
     return () => {
-      tl?.kill();
       depth--;
       if (depth === 0) {
         document.body.style.overflow = locked;
@@ -164,7 +135,7 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-<div class="over">
+<div class="over" use:portal>
   <Scrim onclick={onCancel} soft={!top} />
 
   <div class="stage" role="presentation" onclick={onCancel}>
@@ -180,7 +151,7 @@
       style="width: min({width}, 100%)"
       onclick={(e) => e.stopPropagation()}
     >
-      <div class="bar reveal">
+      <div class="bar">
         <div class="side">
           {#if destructive}
             <Button
@@ -227,7 +198,7 @@
         </div>
       </div>
 
-      <div class="content reveal">
+      <div class="content">
         <div class="body" bind:this={bodyEl}>{@render children?.()}</div>
         <Scrollbar target={bodyEl} />
       </div>
@@ -255,14 +226,13 @@
      different material laid over the first. One width, always — a dialog that
      shrink-wrapped its content changed shape whenever a section unfolded. */
   .win {
-    transform-origin: center;
     display: flex;
     flex-direction: column;
     min-width: 0;
     min-height: 0;
     /* dvh, not vh: a mobile URL bar must not be able to crop the titlebar. */
     max-height: min(calc(100dvh - 2 * var(--pad-4)), 46rem);
-    background: var(--window-bg);
+    background: var(--dialog-bg);
     border: var(--panel-line);
     border-radius: var(--radius);
     box-shadow: 0 8px 30px var(--drop);
