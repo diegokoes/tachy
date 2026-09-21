@@ -16,12 +16,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../api";
-  import { navigate } from "../router.svelte";
   import { session } from "../session.svelte";
   import { createResource, errText } from "../resource.svelte";
   import { slugify, uniqueSlug } from "../slug";
   import {
     Badge,
+    Button,
     Chip,
     CrudTable,
     Field,
@@ -39,12 +39,6 @@
 import { INFO } from "./help";
 import { csv } from "../fields";
   import { sectionHoist } from "./sectionAction.svelte";
-  import { NEW_RECORD, recordPath } from "./records";
-  import RecordPage from "./RecordPage.svelte";
-  import type { StatusAction } from "../library/status";
-
-  /** Given, the panel is one connection's page rather than the list of them. */
-  let { id }: { id?: string } = $props();
 
   type SourceType = "freshdesk" | "azure-devops" | "github";
 
@@ -250,7 +244,8 @@ import { csv } from "../fields";
     },
     {
       key: "slug",
-      label: "slug",
+      /* A connection has no name of its own; this is what people read it by. */
+      label: "name",
       width: "12rem",
       edit: "text",
       required: true,
@@ -297,6 +292,9 @@ import { csv } from "../fields";
       value: (r) => redactionOn(r),
       cell: lockCell,
     },
+    /* Testing is per connection but reading the results is a sweep down the
+       list, so the action belongs on the row as well as in the dialog. */
+    { key: "probe", label: "", width: "7rem", align: "end", cell: testCell },
   ]);
 
   async function save(row: Connection | null, d: Draft) {
@@ -349,31 +347,12 @@ import { csv } from "../fields";
     teams.reload();
   });
 
-  const creating = $derived(id === NEW_RECORD);
-  const record = $derived(
-    id && !creating ? (connections.data.find((c) => c.slug === id) ?? null) : null,
-  );
-
-  const railActions = $derived<StatusAction[]>(
-    record && admin
-      ? [
-          {
-            icon: "test",
-            label: testing === record.slug ? "testing…" : "test",
-            title: "test connection",
-            disabled: testing === record.slug,
-            onclick: () => record && test(record.slug),
-          },
-        ]
-      : [],
-  );
-
-  const back = () => navigate(recordPath("sources"));
-
-  async function createConnection(d: Draft) {
-    await connections.mutate(() => save(null, d));
-    navigate(recordPath("sources", String(d.slug).trim()), { replace: true });
-  }
+  const probeTone = (c: Connection) =>
+    probes[c.slug] === undefined
+      ? undefined
+      : probes[c.slug].ok
+        ? ("ok" as const)
+        : ("danger" as const);
 </script>
 
 {#snippet typeCell(r: Connection)}
@@ -401,6 +380,29 @@ import { csv } from "../fields";
 {#snippet tokenCell(r: Connection)}
   <Badge tone={r.token_source ? "ok" : "warn"}>{r.token_source ?? "unset"}</Badge
   >
+{/snippet}
+
+{#snippet testButton(r: Connection, label: boolean)}
+  <Button
+    variant="ghost"
+    size="sm"
+    square={!label}
+    icon="test"
+    tone={probeTone(r)}
+    title={probes[r.slug]
+      ? probes[r.slug].ok
+        ? "connected, test again"
+        : (probes[r.slug].error ?? "failed, test again")
+      : "test connection"}
+    aria-label="test connection"
+    busy={testing === r.slug}
+    disabled={testing === r.slug}
+    onclick={() => test(r.slug)}>{label ? "test" : ""}</Button
+  >
+{/snippet}
+
+{#snippet testCell(r: Connection)}
+  {#if admin}{@render testButton(r, true)}{/if}
 {/snippet}
 
 {#snippet probeRow(r: Connection)}
@@ -446,44 +448,42 @@ import { csv } from "../fields";
   {/if}
 {/snippet}
 
-{#if id}
-  <RecordPage
-    noun="connection"
-    title={record?.slug ?? ""}
-    {columns}
-    row={record}
-    {creating}
-    loading={connections.loading}
-    loadError={connections.error}
-    canEdit={admin}
-    canDelete={admin}
-    actions={railActions}
-    body={probeRow}
-    onclose={back}
-    oncreate={createConnection}
-    onsave={(row, d) => connections.mutate(() => save(row, d))}
-    ondelete={(row) =>
-      connections.mutate(async () => {
-        await api.delete(`/source-connections/${row.slug}`);
-        delete probes[row.slug];
-      })}
-  />
-{:else}
-  <CrudTable
-    hoist={sectionHoist("sources")}
-    {columns}
-    rows={connections.data}
-    rowKey={(r) => r.slug}
-    loading={connections.loading}
-    error={connections.error}
-    emptyTitle="No source connections yet."
-    canEdit={() => admin}
-    canCreate={admin}
-    addLabel="add connection"
-    onopen={(r) => navigate(recordPath("sources", r.slug))}
-    onadd={() => navigate(recordPath("sources", NEW_RECORD))}
-  />
-{/if}
+{#snippet testAction(r: Connection)}
+  {#if admin}{@render testButton(r, false)}{/if}
+{/snippet}
+
+<!-- The probe belongs under the fields that produced it: saving a connection
+     tests it, so the answer to "did that work" is already on screen. -->
+{#snippet probeExtra(f: { mode: "create" | "edit"; row: Connection | null })}
+  {#if f.row}
+    <div class="probe">{@render probeRow(f.row)}</div>
+  {/if}
+{/snippet}
+
+<CrudTable
+  hoist={sectionHoist("sources")}
+  {columns}
+  rows={connections.data}
+  rowKey={(r) => r.slug}
+  loading={connections.loading}
+  error={connections.error}
+  emptyTitle="No source connections yet."
+  canEdit={() => admin}
+  canDelete={() => admin}
+  canCreate={admin}
+  addLabel="add connection"
+  noun="connection"
+  editTitle={(r) => r.slug}
+  extraActions={testAction}
+  formExtra={probeExtra}
+  oncreate={(d) => connections.mutate(() => save(null, d))}
+  onsave={(row, d) => connections.mutate(() => save(row, d))}
+  ondelete={(row) =>
+    connections.mutate(async () => {
+      await api.delete(`/source-connections/${row.slug}`);
+      delete probes[row.slug];
+    })}
+/>
 
 {#if claim}
   {@const c = claim}
@@ -550,6 +550,13 @@ import { csv } from "../fields";
     flex-direction: column;
     gap: var(--pad-2);
     min-width: 22rem;
+  }
+  /* Ruled off, because it is a reading about the record rather than another
+     field of it. */
+  .probe {
+    margin-top: var(--pad-3);
+    padding-top: var(--pad-3);
+    border-top: 1px dashed var(--border);
   }
   .ok-text {
     margin: 0;

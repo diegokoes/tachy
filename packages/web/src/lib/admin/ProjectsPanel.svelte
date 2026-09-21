@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import { api } from "../api";
-  import { navigate } from "../router.svelte";
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
   import { createResource, errText } from "../resource.svelte";
@@ -22,11 +21,6 @@
   import type { AreaRule, Component, Connection, Customer, Product, ProjectWiki, Repo, SourceProject, Team } from "./rows";
 import { INFO } from "./help";
   import { sectionHoist } from "./sectionAction.svelte";
-  import { NEW_RECORD, recordPath } from "./records";
-  import RecordPage from "./RecordPage.svelte";
-
-  /** Given, the panel is one project's page rather than the list of them. */
-  let { id }: { id?: string } = $props();
 
   type Found = { key: string; name: string };
   type Wiki = { identifier: string; name: string; type?: string };
@@ -326,34 +320,19 @@ import { INFO } from "./help";
 
   onMount(reload);
 
-  const creating = $derived(id === NEW_RECORD);
-  const record = $derived(
-    id && !creating ? (projects.data.find((p) => p.id === id) ?? null) : null,
-  );
+  /** The project whose record dialog is open, if one is. */
+  let opened = $state<SourceProject | null>(null);
 
   /* What hangs off a knowledge project — its area rules, its product's
-     components, its wikis — reloaded when an edit changes what it hangs off. */
+     components, its wikis, fetched when the dialog opens on it, and again
+     when an edit changes what it hangs off. */
   const hangs = $derived(
-    record ? `${record.id} ${record.role} ${record.product_slug ?? ""}` : "",
+    opened ? `${opened.id} ${opened.role} ${opened.product_slug ?? ""}` : "",
   );
   $effect(() => {
     if (!hangs) return;
-    untrack(() => record && void openProject(record));
+    untrack(() => opened && void openProject(opened));
   });
-
-  const back = () => navigate(recordPath("projects"));
-
-  async function createProject(d: Draft) {
-    let made: SourceProject | undefined;
-    await projects.mutate(async () => {
-      made = await api.post<SourceProject>("/source-projects", {
-        source_slug: d.source_slug,
-        external_key: String(d.external_key).trim(),
-        ...payload(d),
-      });
-    });
-    navigate(recordPath("projects", made?.id), { replace: true });
-  }
 
   let filter = $state("");
   const filtered = $derived.by(() => {
@@ -505,7 +484,7 @@ import { INFO } from "./help";
   {/if}
 {/snippet}
 
-{#snippet discoverField(f: {
+{#snippet formExtra(f: {
   mode: "create" | "edit";
   row: SourceProject | null;
   draft: Draft;
@@ -513,56 +492,47 @@ import { INFO } from "./help";
   {#if f.mode === "create"}
     {@const slug = String(f.draft.source_slug ?? "")}
     {@const hits = found[slug] ?? []}
-    <Field label="discover" info="Pick a project instead of typing its key.">
-      <Button
-        variant="ghost"
-        square
-        icon="analyze"
-        busy={discovering === slug}
-        disabled={!slug}
-        aria-label="discover"
-        title="discover"
-        onclick={() => discover(slug)}
-      />
-    </Field>
-    {#if hits.length}
-      <div class="chips">
-        {#each hits as g (g.key)}
-          <Chip
-            tone={f.draft.external_key === g.key ? "accent" : "default"}
-            onclick={() => {
-              f.draft.external_key = g.key;
-              if (!f.draft.name) f.draft.name = g.name;
-            }}>{g.name}</Chip
-          >
-        {/each}
-      </div>
-    {/if}
+    <!-- Full width, and a button that says what it does: the picker is the
+         point of the field, not an ornament beside a key you typed. -->
+    <div class="find">
+      <Field
+        label="find a project"
+        info="Ask the connection what it can see, instead of typing a key."
+        plain
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          icon="discover"
+          busy={discovering === slug}
+          disabled={!slug}
+          onclick={() => discover(slug)}
+          >{slug ? `ask ${slug}` : "pick a connection first"}</Button
+        >
+      </Field>
+      {#if hits.length}
+        <div class="chips">
+          {#each hits as g (g.key)}
+            <Chip
+              tone={f.draft.external_key === g.key ? "accent" : "default"}
+              title={g.key}
+              onclick={() => {
+                f.draft.external_key = g.key;
+                if (!f.draft.name) f.draft.name = g.name;
+              }}>{g.name}</Chip
+            >
+          {/each}
+        </div>
+      {:else if discovering !== slug && slug}
+        <span class="dim sm">nothing found yet</span>
+      {/if}
+    </div>
+  {:else if f.row}
+    <div class="probe">{@render detail(f.row)}</div>
   {/if}
 {/snippet}
 
-{#if id}
-  <RecordPage
-    noun="project"
-    title={record?.external_key ?? ""}
-    {columns}
-    row={record}
-    {creating}
-    loading={projects.loading}
-    loadError={projects.error}
-    canEdit={record ? canEditProject(record) : canAdd}
-    canDelete={record ? canEditProject(record) : false}
-    body={detail}
-    formExtra={discoverField}
-    onclose={back}
-    oncreate={createProject}
-    onsave={(row, d) =>
-      projects.mutate(() => api.patch(`/source-projects/${row.id}`, payload(d)))}
-    ondelete={(row) =>
-      projects.mutate(() => api.delete(`/source-projects/${row.id}`))}
-  />
-{:else}
-  {#if error}<Note tone="danger">{error}</Note>{/if}
+{#if error}<Note tone="danger">{error}</Note>{/if}
 
   <FilterBar
     bind:value={filter}
@@ -580,10 +550,27 @@ import { INFO } from "./help";
     loading={projects.loading}
     error={projects.error}
     emptyTitle="No projects registered yet."
+    canEdit={canEditProject}
+    canDelete={canEditProject}
     canCreate={canAdd}
     addLabel="register project"
-    onopen={(p) => navigate(recordPath("projects", p.id))}
-    onadd={() => navigate(recordPath("projects", NEW_RECORD))}
+    noun="project"
+    editTitle={(p) => p.name || p.external_key}
+    width="52rem"
+    {formExtra}
+    onform={(f) => (opened = f?.row ?? null)}
+    oncreate={(d) =>
+      projects.mutate(() =>
+        api.post("/source-projects", {
+          source_slug: d.source_slug,
+          external_key: String(d.external_key).trim(),
+          ...payload(d),
+        }),
+      )}
+    onsave={(row, d) =>
+      projects.mutate(() => api.patch(`/source-projects/${row.id}`, payload(d)))}
+    ondelete={(row) =>
+      projects.mutate(() => api.delete(`/source-projects/${row.id}`))}
   />
 
   <div class="coverage">
@@ -636,7 +623,6 @@ import { INFO } from "./help";
       {/if}
     </ul>
   </div>
-{/if}
 
 <style>
   .dim {

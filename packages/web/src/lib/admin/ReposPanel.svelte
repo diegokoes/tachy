@@ -24,6 +24,7 @@
   import type { Customer, Product, Repo, SourceProject } from "./rows";
 import { INFO } from "./help";
 import { csv } from "../fields";
+import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
   import { sectionHoist } from "./sectionAction.svelte";
 
   type FoundRepo = { name: string; url: string; default_branch: string };
@@ -77,6 +78,11 @@ import { csv } from "../fields";
       (r) => r.index_status === "cloning" || r.index_status === "indexing",
     ),
   );
+
+  const extensionsOf = (r: Repo): string[] =>
+    Array.isArray(r.config?.include_extensions)
+      ? (r.config.include_extensions as string[])
+      : [];
 
   const freshness = (r: Repo) => {
     if (!r.last_indexed_at) return "never";
@@ -296,7 +302,7 @@ import { csv } from "../fields";
         { value: "", label: "(none)" },
         ...components.of(productOfDraft(d)).map((c) => ({
           value: c.slug,
-          label: `${c.name} (${c.slug})`,
+          label: c.name,
         })),
       ],
     },
@@ -306,18 +312,19 @@ import { csv } from "../fields";
       width: "8rem",
       edit: "text",
       initial: "main",
+      /* One row, one branch: the clone is --single-branch and repo_files is
+         unique on (repo, path). Two branches means linking the repo twice. */
+      info: "The one branch indexed. To index a second, link the repo again under another name.",
     },
     {
       key: "extensions",
-      label: "extensions",
+      label: "file types",
       formOnly: true,
       edit: "text",
-      info: "Comma-separated. Empty: built-in allowlist.",
-      value: (r) =>
-        (Array.isArray(r.config?.include_extensions)
-          ? (r.config.include_extensions as string[])
-          : []
-        ).join(", "),
+      /* The draft still carries it (`visible` only hides the input) because
+         the chip picker below the form is what edits this one. */
+      visible: () => false,
+      value: (r) => extensionsOf(r).join(", "),
     },
     {
       key: "max_file_kb",
@@ -438,7 +445,7 @@ import { csv } from "../fields";
       variant="ghost"
       size="sm"
       icon="index"
-      title="reindex"
+      title="clone this repo and re-read its files into the code index"
       busy={indexing === r.slug}
       disabled={r.index_status === "cloning" || r.index_status === "indexing"}
       onclick={() => reindex(r)}>index</Button
@@ -452,40 +459,79 @@ import { csv } from "../fields";
   {/each}
 {/snippet}
 
-{#snippet discoverField(f: {
+<!-- Two different verbs, kept apart on purpose. Finding asks the source what
+     repos exist and writes nothing; indexing clones one we already linked and
+     reads its files. They used to share a magnifier and a vocabulary. -->
+{#snippet formExtra(f: {
   mode: "create" | "edit";
   row: Repo | null;
   draft: Draft;
 })}
   {@const project = projectOf(String(f.draft.source_project_id ?? ""))}
   {@const hits = project ? (found[project.id] ?? []) : []}
-  {#if project}
-    <Field
-      label="discover"
-      info="Pick a repo instead of typing its URL."
-    >
-      <Button
-        variant="ghost"
-        size="sm"
-        icon="discover"
-        busy={discovering}
-        onclick={() => discover(f.draft)}>discover</Button
+  {#if project && f.mode === "create"}
+    <div class="find">
+      <Field
+        label="find a repo"
+        info="Ask the project's connection what it holds, instead of pasting a clone URL."
+        plain
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          icon="discover"
+          busy={discovering}
+          onclick={() => discover(f.draft)}
+          >ask {project.external_key}</Button
+        >
+      </Field>
+      {#if hits.length}
+        <div class="chips">
+          {#each hits as r (r.name)}
+            <Chip
+              tone={f.draft.url === r.url ? "accent" : "default"}
+              title={r.url}
+              onclick={() => {
+                f.draft.url = r.url;
+                if (r.default_branch) f.draft.default_branch = r.default_branch;
+              }}>{r.name}</Chip
+            >
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+  <!-- The allowlist is long and nobody remembers it, so it is offered rather
+       than described. Ticked chips are exactly what the field holds. -->
+  {@const picked = new Set(csv(String(f.draft.extensions ?? "")))}
+  <div class="find">
+    <Field label="file types" info="Empty indexes the built-in set." plain>
+      <span class="dim sm"
+        >{picked.size
+          ? `${picked.size} chosen`
+          : `all ${DEFAULT_CODE_EXTENSIONS.length} built-in types`}</span
       >
     </Field>
-    {#if hits.length}
-      <div class="chips">
-        {#each hits as r (r.name)}
-          <Chip
-            tone={f.draft.url === r.url ? "accent" : "default"}
-            onclick={() => {
-              f.draft.url = r.url;
-              if (r.default_branch) f.draft.default_branch = r.default_branch;
-            }}>{r.name}</Chip
-          >
-        {/each}
-      </div>
-    {/if}
-  {/if}
+    <div class="chips">
+      {#each DEFAULT_CODE_EXTENSIONS as ext (ext)}
+        <Chip
+          tone={picked.has(ext) ? "accent" : "default"}
+          onclick={() => {
+            const next = new Set(picked);
+            if (next.has(ext)) next.delete(ext);
+            else next.add(ext);
+            f.draft.extensions = [...next].join(", ");
+          }}>{ext}</Chip
+        >
+      {/each}
+      {#if picked.size}
+        <Chip tone="warn" onclick={() => (f.draft.extensions = "")}
+          >clear</Chip
+        >
+      {/if}
+    </div>
+  </div>
 {/snippet}
 
 {#if error}<Note tone="danger">{error}</Note>{/if}
@@ -493,14 +539,14 @@ import { csv } from "../fields";
 
 {#if knowledgeProjects.length}
   <div class="bulkbar">
-    <span class="dim">link many at once from</span>
+    <span class="dim">link many at once:</span>
     {#each knowledgeProjects as p (p.id)}
       <Button
         variant="ghost"
         size="sm"
         icon="discover"
         disabled={!canCurateScope({ team_slug: p.team_slug })}
-        onclick={() => openBulk(p)}>{p.external_key}</Button
+        onclick={() => openBulk(p)}>browse {p.external_key}</Button
       >
     {/each}
   </div>
@@ -529,7 +575,7 @@ import { csv } from "../fields";
   noun="repo"
   editTitle={(r) => r.slug}
   extraActions={reindexAction}
-  formExtra={discoverField}
+  formExtra={formExtra}
   oncreate={(d) => repos.mutate(() => save(d))}
   onsave={(_row, d) => repos.mutate(() => save(d))}
   ondelete={(r) => repos.mutate(() => api.delete(`/repos/${r.slug}`))}
@@ -658,6 +704,16 @@ import { csv } from "../fields";
     flex-wrap: wrap;
     gap: var(--pad-1);
     margin-bottom: var(--pad-2);
+  }
+
+  /* Spans the form grid: a row of forty chips inside one 15rem column is a
+     column of forty chips. */
+  .find {
+    grid-column: 1 / -1;
+    margin-top: var(--pad-2);
+  }
+  .sm {
+    font-size: var(--fs-xs);
   }
   .repo,
   .fresh {

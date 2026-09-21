@@ -10,6 +10,7 @@
     type PageSection,
   } from "../sections/SectionedPage.svelte";
   import { sectionAction } from "./sectionAction.svelte";
+  import FillSection from "./FillSection.svelte";
   import { census } from "./census.svelte";
   import { activity } from "./activity.svelte";
   import PipelinePanel from "./PipelinePanel.svelte";
@@ -25,23 +26,34 @@
   import PatternsPanel from "./PatternsPanel.svelte";
   import CustomersPanel from "./CustomersPanel.svelte";
   import AccessPanel from "./AccessPanel.svelte";
+  import TeamRosterPanel from "./TeamRosterPanel.svelte";
+  import AppAdminsPanel from "./AppAdminsPanel.svelte";
   import SystemPanel from "./SystemPanel.svelte";
   import JobsPanel from "./JobsPanel.svelte";
+  import JobFailuresPanel from "./JobFailuresPanel.svelte";
   import RuntimePanel from "./RuntimePanel.svelte";
   import JobsOverview from "./JobsOverview.svelte";
   import SystemOverview from "./SystemOverview.svelte";
   import IssuesModal from "./IssuesModal.svelte";
+  import SectionModal from "./SectionModal.svelte";
   import { issues, loadIssues } from "./issues.svelte";
   import { issueGroups } from "./issueMessages";
   import HostPanel from "./HostPanel.svelte";
-  import TestsPanel from "./TestsPanel.svelte";
+  import ChecksPanel from "./ChecksPanel.svelte";
+  import LoadsPanel from "./LoadsPanel.svelte";
 
   type Section = Omit<PageSection, "count" | "tone"> & {
     /** Which census key counts this section. Omitted for a section with nothing to count. */
     n?: string;
     show?: boolean;
-    /** The section's panel again, opened on one record at /<section>/<key>. */
-    record?: Component<{ id: string }>;
+    /**
+     * Where the section opens. A handful of rows belongs over the overview,
+     * where the counters stay readable behind it; a list that runs to fifty
+     * wants the window. Defaults to the window.
+     */
+    present?: "modal" | "page";
+    /** A page section that takes the whole window, edge to edge, and never scrolls. */
+    fill?: boolean;
   };
 
   const PAGES: SubnavItem[] = $derived([
@@ -60,27 +72,35 @@
 
   const SECTIONS: Record<string, Section[]> = $derived({
     integrations: [
-      { key: "sources", label: "sources", view: SourcesPanel, record: SourcesPanel, n: "sources", show: admin },
-      { key: "projects", label: "projects", view: ProjectsPanel, record: ProjectsPanel, n: "projects" },
+      { key: "sources", label: "sources", view: SourcesPanel, n: "sources", show: admin, present: "modal" },
+      { key: "projects", label: "projects", view: ProjectsPanel, n: "projects", present: "modal" },
       { key: "repos", label: "repos", view: ReposPanel, n: "repos" },
     ],
     structure: [
-      { key: "teams", label: t("teams"), view: TeamsPanel, n: "teams" },
-      { key: "products", label: t("products"), view: ProductsPanel, n: "products" },
-      { key: "components", label: "components", view: ComponentsPanel, n: "components" },
-      { key: "labels", label: "labels", view: LabelsPanel, n: "labels" },
-      { key: "patterns", label: "resolution patterns", view: PatternsPanel, n: "patterns" },
-      { key: "customers", label: t("customers"), view: CustomersPanel, record: CustomersPanel, n: "customers", show: showCustomer() },
+      { key: "teams", label: t("teams"), view: TeamsPanel, n: "teams", present: "modal" },
+      { key: "products", label: t("products"), view: ProductsPanel, n: "products", present: "modal" },
+      { key: "components", label: "components", view: ComponentsPanel, n: "components", fill: true },
+      { key: "labels", label: "labels", view: LabelsPanel, n: "labels", present: "modal" },
+      { key: "patterns", label: "resolution patterns", view: PatternsPanel, n: "patterns", present: "modal" },
+      { key: "customers", label: t("customers"), view: CustomersPanel, n: "customers", show: showCustomer() },
     ],
     access: [
-      { key: "users", label: "users & roles", view: AccessPanel, n: "users" },
+      { key: "users", label: "users", view: AccessPanel, n: "users" },
+      { key: "teams", label: t("teams"), view: TeamRosterPanel, n: "teams", present: "modal" },
+      { key: "admins", label: "app admins", view: AppAdminsPanel, present: "modal" },
     ],
-    workers: [{ key: "jobs", label: "jobs", view: JobsPanel, record: JobsPanel, show: admin }],
+    workers: [
+      { key: "jobs", label: "jobs", view: JobsPanel, show: admin },
+      { key: "failures", label: "failed jobs", view: JobFailuresPanel, show: admin, present: "modal" },
+    ],
+    /* All dialogs: the overview carries the summary of each, which is the
+       page, and a counter or tile opens the full detail behind it. */
     system: [
-      { key: "runtime", label: "runtime", view: RuntimePanel, show: admin },
-      { key: "host", label: "backups & host", view: HostPanel, show: admin },
-      { key: "tests", label: "checks & load", view: TestsPanel, show: admin },
-      { key: "settings", label: "settings", view: SystemPanel, show: admin },
+      { key: "runtime", label: "runtime", view: RuntimePanel, show: admin, present: "modal" },
+      { key: "host", label: "backups & host", view: HostPanel, show: admin, present: "modal" },
+      { key: "checks", label: "checks", view: ChecksPanel, show: admin, present: "modal" },
+      { key: "loads", label: "load tests", view: LoadsPanel, show: admin, present: "modal" },
+      { key: "settings", label: "runtime settings", view: SystemPanel, show: admin, present: "modal" },
     ],
   });
 
@@ -97,11 +117,20 @@
     segment(1) === "connect" ? "integrations" : (segment(1) ?? "integrations"),
   );
 
+  const live = $derived(
+    (SECTIONS[page] ?? SECTIONS.integrations).filter((s) => s.show !== false),
+  );
+
+  /**
+   * The one section open in the window, when the route names one that opens
+   * there. Only that one is rendered: a page section is a destination reached
+   * from a counter, not one stop in a long scroll.
+   */
   const sections = $derived(
-    (SECTIONS[page] ?? SECTIONS.integrations)
-      .filter((s) => s.show !== false)
+    live
+      .filter((s) => s.present !== "modal" && s.key === segment(2))
       .map(
-        ({ n, show: _show, record: _record, ...s }): PageSection => ({
+        ({ n, show: _show, present: _present, fill: _fill, ...s }): PageSection => ({
           ...s,
           count: n ? (census.loading ? null : (census.data.counts[n] ?? 0)) : undefined,
           tone: n && census.data.warn[n] ? ("warn" as const) : undefined,
@@ -128,27 +157,26 @@
   });
 
   const overview = $derived(OVERVIEWS[page]);
-  const showing = $derived(Boolean(overview) && segment(2) === "overview");
+  const at = $derived(segment(2));
 
-  /* One record, on the page its section's rows open onto. It replaces the
-     sections rather than sitting among them: the scroll-spy would otherwise
-     rewrite the URL out from under it as the page scrolled. */
-  const opened = $derived(segment(3));
-  const Record = $derived.by(() => {
-    if (!opened) return undefined;
-    const s = (SECTIONS[page] ?? []).find((x) => x.key === segment(2));
-    return s && s.show !== false ? s.record : undefined;
-  });
+  /** The section open over the overview, if the one named opens that way. */
+  const modal = $derived(live.find((s) => s.key === at && s.present === "modal"));
 
-  const toggleOverview = () =>
-    navigate(`/admin/${page}${showing ? "" : "/overview"}`, { replace: true });
+  /* Anything that is not a window section lands on the overview: nothing
+     named, /overview, a dialog section, or a key no section has. */
+  const showing = $derived(Boolean(overview) && !sections.length);
 
-  /* A record claims the carved row for its own back and edit, and this takes
-     it back once the record closes. */
+  const filled = $derived(live.find((s) => s.fill && s.key === at));
+
+  /* Settle the explicit form back on the short one. This cannot loop: after
+     the replace, segment(2) is undefined and the condition stops holding. */
   $effect(() => {
-    if (Record) return;
-    return setTopActions(topActions);
+    if (segment(2) === "overview") navigate(`/admin/${page}`, { replace: true });
   });
+
+  const backToOverview = () => navigate(`/admin/${page}`);
+
+  $effect(() => setTopActions(topActions));
 
   let showIssues = $state(false);
   const groups = $derived(issueGroups(issues.data));
@@ -166,21 +194,18 @@
   }
 
   $effect(() => {
-    if (!showing && !opened) return;
+    if (!showing) return;
     const port = scrollport();
     if (port) port.scrollTop = 0;
   });
 </script>
 
 {#snippet topActions()}
-  {#if overview}
-    <Button
-      variant="ghost"
-      size="sm"
-      icon="overview"
-      tone={showing ? "accent" : undefined}
-      aria-pressed={showing}
-      onclick={toggleOverview}>overview</Button
+  <!-- Only on the way back. Going in is the counter you clicked, and a modal
+       section carries its own close. -->
+  {#if overview && !showing}
+    <Button variant="ghost" size="sm" icon="back" onclick={backToOverview}
+      >overview</Button
     >
   {/if}
   {#if groups.length}
@@ -209,14 +234,20 @@
   />
 {/if}
 
-<div class="admin-root" class:fit={showing && Boolean(overview)}>
-  {#if Record && opened}
-    {#key opened}
-      <Record id={opened} />
-    {/key}
-  {:else if showing && overview}
+<div class="admin-root admin-tables" class:fit={(showing && Boolean(overview)) || Boolean(filled)}>
+  {#if showing && overview}
     {@const View = overview}
     <View />
+    {#if modal}
+      <SectionModal
+        section={modal.key}
+        label={modal.label}
+        view={modal.view}
+        onclose={backToOverview}
+      />
+    {/if}
+  {:else if filled}
+    <FillSection view={filled.view} />
   {:else}
     <SectionedPage
       {sections}
@@ -238,34 +269,36 @@
     flex-direction: column;
   }
 
-  /* Chrome for the one panel still on hand-rolled markup: system settings.
-     Deleted once it moves over. */
-  .admin-root :global(table) {
+  /* Chrome for the panels still on hand-rolled tables: runtime, host and
+     settings. Keyed on a class rather than on .admin-root because those
+     panels open in dialogs, and a dialog is mounted on <body>, outside
+     .admin-root entirely. SectionModal wears the same class. */
+  :global(.admin-tables table) {
     width: 100%;
     border-collapse: collapse;
     font-size: var(--fs-sm);
     margin-bottom: var(--pad-3);
   }
-  .admin-root :global(th),
-  .admin-root :global(td) {
+  :global(.admin-tables th),
+  :global(.admin-tables td) {
     text-align: left;
     padding: var(--pad-2) var(--pad-3);
     border-bottom: 1px solid var(--border);
     vertical-align: top;
   }
-  .admin-root :global(th) {
+  :global(.admin-tables th) {
     color: var(--muted);
     font-weight: 500;
   }
-  .admin-root :global(.tip) {
+  :global(.admin-tables .tip) {
     text-decoration: underline dotted;
     text-underline-offset: 3px;
     cursor: help;
   }
-  .admin-root :global(.muted) {
+  :global(.admin-tables .muted) {
     color: var(--muted);
   }
-  .admin-root :global(.error) {
+  :global(.admin-tables .error) {
     color: var(--danger);
   }
 </style>

@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import { api } from "../api";
-  import { navigate } from "../router.svelte";
   import { createResource, errText } from "../resource.svelte";
   import { t } from "../terms";
   import {
@@ -27,11 +26,7 @@
 import { INFO } from "./help";
 import { csv } from "../fields";
   import { sectionHoist } from "./sectionAction.svelte";
-  import { NEW_RECORD, recordPath } from "./records";
-  import RecordPage from "./RecordPage.svelte";
 
-  /** Given, the panel is one customer's page rather than the list of them. */
-  let { id }: { id?: string } = $props();
 
 
   const customers = createResource(() => api.get<Customer[]>("/customers"), []);
@@ -278,8 +273,8 @@ import { csv } from "../fields";
     },
     {
       key: "slug",
-      label: "slug",
-      width: "12rem",
+      label: "id",
+      formOnly: true,
       edit: "text",
       required: true,
       info: INFO.slug,
@@ -312,20 +307,17 @@ import { csv } from "../fields";
     products.reload();
   });
 
-  const creating = $derived(id === NEW_RECORD);
-  const record = $derived(
-    id && !creating ? (customers.data.find((c) => c.slug === id) ?? null) : null,
-  );
+  /** The customer whose record dialog is open, if one is. */
+  let opened = $state<string | null>(null);
 
-  /* Everything hanging off the customer, once the products its forms offer
-     have arrived. */
+  /* Everything hanging off the customer (units, facts, component rules)
+     fetched when its dialog opens, once the products its forms offer have
+     arrived. */
   $effect(() => {
-    if (!id || creating || products.loading) return;
-    const slug = id;
+    if (!opened || products.loading) return;
+    const slug = opened;
     untrack(() => void openProfile(slug));
   });
-
-  const back = () => navigate(recordPath("customers"));
 
   async function createCustomer(d: Draft) {
     await customers.mutate(() =>
@@ -337,7 +329,6 @@ import { csv } from "../fields";
         notes: d.notes || undefined,
       }),
     );
-    navigate(recordPath("customers", String(d.slug)), { replace: true });
   }
 
   const saveCustomer = (row: Customer, d: Draft) =>
@@ -711,48 +702,48 @@ import { csv } from "../fields";
   </div>
 {/snippet}
 
-{#if id}
-  <RecordPage
-    noun={t("customer")}
-    title={record?.name ?? ""}
-    {columns}
-    row={record}
-    {creating}
-    loading={customers.loading}
-    loadError={customers.error}
-    body={detail}
-    onclose={back}
-    oncreate={createCustomer}
-    onsave={saveCustomer}
-    ondelete={deleteCustomer}
-  />
-{:else}
-  {#if error}<Note tone="danger">{error}</Note>{/if}
+{#if error}<Note tone="danger">{error}</Note>{/if}
 
-  <FilterBar
-    bind:value={filter}
-    shown={filtered.length}
-    total={customers.data.length}
-    placeholder="filter customers…"
-    label="filter customers"
-  />
+<FilterBar
+  bind:value={filter}
+  shown={filtered.length}
+  total={customers.data.length}
+  placeholder="filter customers…"
+  label="filter customers"
+/>
 
-  <CrudTable
-    hoist={sectionHoist("customers")}
-    {columns}
-    rows={filtered}
-    rowKey={(r) => r.slug}
-    loading={customers.loading}
-    error={customers.error}
-    emptyTitle={`No ${t("customers")} yet.`}
-    emptyDetail={`Attributed by requester email domain. List domains.`}
-    addLabel={`add ${t("customer")}`}
-    onopen={(r) => navigate(recordPath("customers", r.slug))}
-    onadd={() => navigate(recordPath("customers", NEW_RECORD))}
-  />
-{/if}
+<!-- Units, facts and component rules ride under the fields in the same
+     dialog, so it is wider than the others. -->
+{#snippet profileExtra(f: { mode: "create" | "edit"; row: Customer | null })}
+  {#if f.row}<div class="profile">{@render detail(f.row)}</div>{/if}
+{/snippet}
+
+<CrudTable
+  hoist={sectionHoist("customers")}
+  {columns}
+  rows={filtered}
+  rowKey={(r) => r.slug}
+  loading={customers.loading}
+  error={customers.error}
+  emptyTitle={`No ${t("customers")} yet.`}
+  emptyDetail={`Attributed by requester email domain. List domains.`}
+  addLabel={`add ${t("customer")}`}
+  noun={t("customer")}
+  editTitle={(r) => r.name}
+  width="60rem"
+  formExtra={profileExtra}
+  onform={(f) => (opened = f?.row?.slug ?? null)}
+  oncreate={createCustomer}
+  onsave={saveCustomer}
+  ondelete={deleteCustomer}
+/>
 
 <style>
+  .profile {
+    margin-top: var(--pad-3);
+    padding-top: var(--pad-3);
+    border-top: 1px dashed var(--border);
+  }
   .indent {
     display: inline-block;
     width: calc(var(--depth, 0) * 1rem);

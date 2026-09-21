@@ -1,49 +1,48 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api } from "../api";
-  import { createResource } from "../resource.svelte";
   import { Bars, Columns, Timeline, compact, dayOfMonth, type Bar, type Col } from "../tui";
   import { duration, pct, ratio, type Tone } from "./overview";
-  import type { JobCensus } from "./rows";
+  import { jobs as census } from "./jobCensus.svelte";
   import Dials from "./Dials.svelte";
   import Overview from "./Overview.svelte";
   import Tile from "./Tile.svelte";
 
-  const zero = { light: 0, heavy: 0 };
-  const EMPTY: JobCensus = {
-    days: 14,
-    runs: 0,
-    by_status: { queued: 0, running: 0, succeeded: 0, failed: 0, cancelled: 0, timed_out: 0 },
-    by_trigger: { schedule: 0, manual: 0, event: 0 },
-    by_class: { ...zero },
-    per_day: [],
-    by_kind: [],
-    success: { light: { finished: 0, succeeded: 0 }, heavy: { finished: 0, succeeded: 0 } },
-    now: { light: { running: 0, queued: 0 }, heavy: { running: 0, queued: 0 } },
-    definitions: { total: 0, enabled: 0, scheduled: 0, manual: 0, disabled: 0 },
-    upcoming: [],
-  };
-
   let from = $state(new Date());
-  const census = createResource(async () => {
-    const got = await api.get<JobCensus>("/jobs/census");
+  onMount(async () => {
+    await census.reload();
     from = new Date();
-    return { ...EMPTY, ...got };
-  }, EMPTY);
-  onMount(() => census.reload());
+  });
 
   const j = $derived(census.data);
   const failed = $derived(j.by_status.failed + j.by_status.timed_out);
   const running = $derived(j.now.light.running + j.now.heavy.running);
 
+  /* Jobs, not runs, where the two differ. The success rings already carry the
+     run totals per pool, so a "runs 14 d" counter and a "light: 46 runs"
+     counter were saying the rings' numbers a second time. */
   const figures = $derived([
-    { key: "runs", label: `runs ${j.days} d`, value: j.runs },
-    { key: "succeeded", label: "succeeded", value: j.by_status.succeeded, tone: "ok" as const },
-    { key: "failed", label: "failed", value: failed, tone: failed ? ("danger" as const) : ("muted" as const), title: "failed or timed out" },
-    { key: "light", label: "light", value: j.by_class.light, title: "runs on the light pool" },
-    { key: "heavy", label: "heavy", value: j.by_class.heavy, title: "runs on the heavy pool" },
-    { key: "scheduled", label: "scheduled", value: j.by_trigger.schedule, title: "runs the scheduler started" },
-    { key: "manual", label: "manual", value: j.by_trigger.manual, title: "runs someone started" },
+    {
+      key: "jobs",
+      label: "jobs",
+      value: j.definitions.total,
+      title: `${j.definitions.enabled} enabled · ${j.definitions.disabled} paused`,
+      to: "jobs",
+    },
+    { key: "succeeded", label: `succeeded ${j.days} d`, value: j.by_status.succeeded, tone: "ok" as const },
+    {
+      key: "failed",
+      label: `failed ${j.days} d`,
+      value: failed,
+      tone: failed ? ("danger" as const) : ("muted" as const),
+      title: failed
+        ? `${j.failures.length} ${j.failures.length === 1 ? "job" : "jobs"} failed. Open to see which`
+        : "failed or timed out",
+      to: failed ? "failures" : undefined,
+    },
+    { key: "light", label: "light", value: j.definitions.by_class.light, title: "jobs that run on the light pool" },
+    { key: "heavy", label: "heavy", value: j.definitions.by_class.heavy, title: "jobs that run on the heavy pool, holding chat slots while they do" },
+    { key: "scheduled", label: "scheduled", value: j.definitions.scheduled, title: `enabled jobs on a schedule · ${j.by_trigger.schedule} scheduled runs in ${j.days} d` },
+    { key: "manual", label: "manual", value: j.definitions.manual, title: `enabled jobs run only by hand · ${j.by_trigger.manual} manual runs in ${j.days} d` },
     {
       key: "running",
       label: "running",

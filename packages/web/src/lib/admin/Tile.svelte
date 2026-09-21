@@ -6,6 +6,7 @@
     meta,
     span = 1,
     empty = false,
+    actions,
     children,
   }: {
     title: string;
@@ -15,6 +16,8 @@
     span?: number;
     /** Nothing to draw: the body says so once instead of an empty chart. */
     empty?: boolean;
+    /** Controls at the right of the title: open the detail, run the thing. */
+    actions?: Snippet;
     children: Snippet;
   } = $props();
 </script>
@@ -22,7 +25,10 @@
 <section class="tile" style="--span: {span}">
   <header>
     <h3>{title}</h3>
-    {#if meta}<span class="meta">{meta}</span>{/if}
+    <span class="side">
+      {#if meta}<span class="meta">{meta}</span>{/if}
+      {#if actions}{@render actions()}{/if}
+    </span>
   </header>
   <div class="body">
     {#if empty}
@@ -64,6 +70,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .side {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--pad-2);
+    flex: none;
   }
   .meta {
     flex: none;

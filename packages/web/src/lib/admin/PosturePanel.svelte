@@ -34,13 +34,13 @@
 
   const figures = $derived([
     { key: "users", label: "users", value: u.users, to: "users" },
-    { key: "teams", label: t("teams"), value: teams },
+    { key: "teams", label: t("teams"), value: teams, to: "teams" },
     {
       key: "admins",
       label: "app admins",
       value: u.admins,
       tone: u.admins ? ("accent" as const) : ("danger" as const),
-      to: "users",
+      to: "admins",
     },
     { key: "active", label: "active 7 d", value: usage.active_7d, title: "people with an agent turn in the last 7 days" },
     { key: "turns", label: `turns ${usage.days} d`, text: compact(usage.turns), title: `agent turns, last ${usage.days} days` },

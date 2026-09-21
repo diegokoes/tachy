@@ -9,6 +9,7 @@
   import Icon from "../tui/Icon.svelte";
   import { errText } from "../resource.svelte";
   import type { SystemInfo } from "./rows";
+  import { system as shared } from "./systemState.svelte";
 import { csv } from "../fields";
   import { Button, GroupHead } from "../tui";
 
@@ -49,6 +50,9 @@ import { csv } from "../fields";
       const res = await api.put<{ settings: SystemInfo["settings"] }>(`/settings/${key}`, { value });
       if (system) system = { ...system, settings: res.settings };
       syncDraft();
+      /* The overview behind this dialog reads its own copy; refresh it so the
+         setting shows there the moment the dialog closes. */
+      void shared.reload();
       
       if (key === "deployment_profile") await initSession();
     } catch (e) {
@@ -63,7 +67,6 @@ import { csv } from "../fields";
 {#if loading}<p class="muted">Loading…</p>{/if}
 
 {#if system}
-  <GroupHead label="runtime settings" />
   <table>
     <thead><tr><th>setting</th><th>value</th>
       <th class="tip" title="db: set here. env: environment variable. default: built-in.">source</th>
@@ -183,32 +186,6 @@ import { csv } from "../fields";
     </tbody>
   </table>
 
-  <!-- The server sends `env` to admins only, so this whole table is theirs. -->
-  {#if system.env}
-    {@const e = system.env}
-    <GroupHead label="environment · read-only, .env" />
-    <table>
-      <thead><tr><th>setting</th><th>value</th><th>env var</th></tr></thead>
-      <tbody>
-        <tr>
-          <td>Auth</td>
-          <td>{e.auth_mode}{e.auth_mode === "open" ? " (until setup)" : ""}</td>
-          <td class="muted">OIDC_* {e.oidc_configured ? "(set)" : "(unset)"} · TACHY_API_TOKEN {e.api_token_set ? "(set)" : "(unset)"}</td>
-        </tr>
-        <tr>
-          <td>Session secret</td>
-          <td>{e.session_secret_set ? "set" : "unset: ephemeral, reset on restart"}</td>
-          <td class="muted">TACHY_SESSION_SECRET</td>
-        </tr>
-        <tr><td>Anthropic API key</td><td>{e.anthropic_api_key_set ? "set" : "unset: server Claude Code login"}</td><td class="muted">ANTHROPIC_API_KEY</td></tr>
-        <tr><td>Copilot GitHub token</td><td>{e.copilot_token_set ? "set" : "unset: server copilot CLI login"}</td><td class="muted">COPILOT_GITHUB_TOKEN</td></tr>
-        <tr><td>Attribution email (standalone MCP)</td><td>{e.user_email ?? "(anonymous)"}</td><td class="muted">TACHY_USER_EMAIL</td></tr>
-        <tr><td>API port</td><td>{e.port}</td><td class="muted">PORT</td></tr>
-        <tr><td>Environment badge</td><td>{e.env_badge ?? "none (production)"}</td><td class="muted">TACHY_ENV_BADGE</td></tr>
-        <tr><td>Commit</td><td>{e.commit ?? "unknown (not a CI build)"}</td><td class="muted">TACHY_COMMIT (build arg)</td></tr>
-      </tbody>
-    </table>
-  {/if}
 {/if}
 
 <style>
