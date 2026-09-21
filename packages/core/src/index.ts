@@ -379,6 +379,7 @@ export {
 } from "./catalog";
 export {
   listComponents,
+  listComponentTree,
   addComponent,
   updateComponent,
   deleteComponent,

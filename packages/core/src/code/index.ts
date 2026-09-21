@@ -9,6 +9,7 @@ export {
 } from "./git";
 export type { TreeEntry } from "./git";
 export {
+  DEFAULT_CODE_EXTENSIONS,
   REPO_INDEX_STATUSES,
   linkRepo,
   listRepos,
