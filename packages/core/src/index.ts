@@ -94,7 +94,9 @@ export type {
 } from "./config";
 export {
   SCOPES,
+  scopesOf,
   resolveScoped,
+  upsertScoped,
   assertCanWriteScope,
   AGENT_CREDENTIALS,
   ANTHROPIC_OAUTH_CREDENTIAL,
@@ -125,6 +127,7 @@ export {
 export type {
   Scope,
   ScopeContext,
+  CredentialScope,
   CredentialSource,
   CredentialMeta,
   AgentAuth,
@@ -376,6 +379,7 @@ export {
 } from "./catalog";
 export {
   listComponents,
+  listComponentTree,
   addComponent,
   updateComponent,
   deleteComponent,

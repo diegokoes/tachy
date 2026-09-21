@@ -35,12 +35,11 @@ export type ExtraFilter = {
 
 /**
  * Everything the `+` menu can add. The default controls — product, component,
- * affected version, status — stay hard-wired in the view; these are the ones
- * that were reachable from no filter at all before.
+ * status — stay hard-wired in the view.
  *
- * All of them are entry-only, like affected version already is:
- * `/knowledge/facets` counts knowledge entries, so offering them while
- * browsing docs would show counts that do not describe the list.
+ * All of them are entry-only: `/knowledge/facets` counts knowledge entries, so
+ * offering them while browsing docs would show counts that do not describe the
+ * list.
  */
 export const EXTRA_FILTERS: ExtraFilter[] = [
   {
@@ -81,6 +80,13 @@ export const EXTRA_FILTERS: ExtraFilter[] = [
     param: "hidden_fix",
     kind: "enum",
     options: ["true", "false"],
+  },
+  {
+    key: "affected_version",
+    label: "affected version",
+    param: "affected_version",
+    kind: "facet",
+    needsComponent: true,
   },
   {
     key: "fixed_version",

@@ -409,6 +409,57 @@ describe("the job census", () => {
     });
   });
 
+  /* The light and heavy counters on the overview are jobs, not runs. A
+     definition with no class of its own runs on its kind's default, which
+     lives in code, so this is the one count the SQL alone cannot make. */
+  it("counts definitions per pool by the class each actually runs on", async () => {
+    await createJobDefinition(
+      { kind: "test.echo", name: "light by kind" },
+      null,
+    );
+    await createJobDefinition(
+      { kind: "test.slow", name: "heavy by kind" },
+      null,
+    );
+    await createJobDefinition(
+      { kind: "test.echo", name: "moved to heavy", resource_class: "heavy" },
+      null,
+    );
+
+    const j = await jobCensus(14);
+    expect(j.definitions.by_class).toEqual({ light: 1, heavy: 2 });
+  });
+
+  /* What the failed counter opens: which jobs failed, not a count of runs. */
+  it("groups failed and timed-out runs by the job they belong to", async () => {
+    const nightly = await createJobDefinition(
+      { kind: "test.echo", name: "nightly" },
+      null,
+    );
+    await run({
+      status: "failed",
+      definitionId: nightly.id,
+      createdMinutesAgo: 30,
+    });
+    await run({
+      status: "timed_out",
+      definitionId: nightly.id,
+      createdMinutesAgo: 10,
+    });
+    await run({ status: "succeeded", definitionId: nightly.id });
+    await run({ kind: "test.slow", cls: "heavy", status: "failed" });
+    await run({ status: "failed", createdMinutesAgo: 60 * 24 * 20 });
+
+    const j = await jobCensus(14);
+    expect(j.failures.map((f) => [f.name, f.runs])).toEqual([
+      ["nightly", 2],
+      ["test.slow", 1],
+    ]);
+    expect(j.failures[0].definition_id).toBe(nightly.id);
+    // An ad-hoc run has no definition, so it is named by its kind.
+    expect(j.failures[1].definition_id).toBeNull();
+  });
+
   it("lists the next day's firings of each scheduled definition", async () => {
     await createJobDefinition(
       { kind: "test.echo", name: "hourly", schedule: "0 * * * *" },
@@ -432,6 +483,7 @@ describe("the job census", () => {
       scheduled: 2,
       manual: 1,
       disabled: 1,
+      by_class: { light: 4, heavy: 0 },
     });
     expect(j.upcoming.map((u) => u.name)).toEqual(["daily", "hourly"]);
     expect(j.upcoming.find((u) => u.name === "hourly")?.at).toHaveLength(24);

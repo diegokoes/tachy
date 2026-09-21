@@ -18,10 +18,16 @@ import {
 } from "../../packages/web/src/lib/admin/overview";
 import {
   endpointP95,
+  loadSummary,
   runP95,
   type TestRun,
 } from "../../packages/web/src/lib/admin/loadRuns";
-import { fitRows, fitted } from "../../packages/web/src/lib/tui/fit";
+import {
+  fitRows,
+  fitted,
+  measureBox,
+} from "../../packages/web/src/lib/tui/fit";
+import { portal } from "../../packages/web/src/lib/tui/portal";
 
 describe("issue groups", () => {
   it("words each open issue, worst first, and drops what is clear or unknown", () => {
@@ -149,6 +155,57 @@ describe("overview figures", () => {
     expect(disconnected).toBe(true);
   });
 
+  it("measures the box on mount and again only when it changes", () => {
+    let observed: (() => void) | undefined;
+    let disconnected = false;
+    globalThis.ResizeObserver = class {
+      constructor(cb: () => void) {
+        observed = cb;
+      }
+      observe() {}
+      disconnect() {
+        disconnected = true;
+      }
+    } as unknown as typeof ResizeObserver;
+    const node = document.createElement("div");
+    let box = { w: 300, h: 150 };
+    Object.defineProperty(node, "clientWidth", { get: () => box.w });
+    Object.defineProperty(node, "clientHeight", { get: () => box.h });
+    const seen: string[] = [];
+    const action = measureBox(node, (w, h) => seen.push(`${w}x${h}`));
+    /* Synchronously, before any frame: a plot in a tab nobody is looking at
+       still has to know how wide it is. */
+    expect(seen).toEqual(["300x150"]);
+    observed?.();
+    expect(seen).toEqual(["300x150"]);
+    box = { w: 300, h: 80 };
+    observed?.();
+    expect(seen).toEqual(["300x150", "300x80"]);
+    action.update((w, h) => seen.push(`next ${w}x${h}`));
+    box = { w: 200, h: 80 };
+    observed?.();
+    expect(seen).toEqual(["300x150", "300x80", "next 200x80"]);
+    action.destroy();
+    expect(disconnected).toBe(true);
+  });
+
+  /* A dialog has to escape the app's stacking context, or the top nav paints
+     over any dialog tall enough to reach it. */
+  it("lifts a node out to the body and takes it away again", () => {
+    const host = document.createElement("div");
+    const node = document.createElement("div");
+    host.appendChild(node);
+    document.body.appendChild(host);
+
+    const action = portal(node);
+    expect(node.parentElement).toBe(document.body);
+    expect(host.contains(node)).toBe(false);
+
+    action.destroy();
+    expect(document.body.contains(node)).toBe(false);
+    host.remove();
+  });
+
   it("folds what does not fit into one more row", () => {
     expect(fitted([1, 2, 3], 3)).toEqual({ shown: [1, 2, 3], rest: [] });
     expect(fitted([1, 2, 3, 4], 3)).toEqual({ shown: [1, 2], rest: [3, 4] });
@@ -178,5 +235,49 @@ describe("load runs", () => {
     expect(runP95(r)).toBe(212);
     expect(endpointP95(r)).toEqual([{ endpoint: "search", ms: 99 }]);
     expect(runP95(run({}))).toBeNull();
+  });
+
+  const ran = (
+    script: string,
+    status: string,
+    profile: string | null = null,
+  ) => ({
+    ...run({}),
+    script,
+    status,
+    profile,
+  });
+
+  it("rates only the runs that reached a verdict", () => {
+    const s = loadSummary([
+      ran("smoke.js", "passed"),
+      ran("smoke.js", "failed"),
+      ran("search.js", "error"),
+      ran("search.js", "running"),
+      ran("smoke.js", "cancelled"),
+    ]);
+    expect(s).toMatchObject({ runs: 5, judged: 3, passed: 1 });
+    expect(s.passRate).toBeCloseTo(1 / 3);
+  });
+
+  it("has no pass rate rather than a zero one when nothing finished", () => {
+    expect(loadSummary([ran("smoke.js", "queued")]).passRate).toBeNull();
+    expect(loadSummary([]).passRate).toBeNull();
+  });
+
+  it("ranks scripts by use and counts the stress runs among them", () => {
+    const s = loadSummary([
+      ran("search.js", "passed", "stress"),
+      ran("smoke.js", "passed"),
+      ran("smoke.js", "passed"),
+      ran("search.js", "failed"),
+      ran("browse.js", "passed"),
+    ]);
+    expect(s.stress).toBe(1);
+    expect(s.byScript).toEqual([
+      { script: "search.js", runs: 2, passed: 1, stress: 1 },
+      { script: "smoke.js", runs: 2, passed: 2, stress: 0 },
+      { script: "browse.js", runs: 1, passed: 1, stress: 0 },
+    ]);
   });
 });

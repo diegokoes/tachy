@@ -4,7 +4,7 @@
   import { createResource } from "../resource.svelte";
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
-  import { CrudTable, type Column } from "../tui";
+  import { CrudTable, Select, type Column } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
   import SlugRename from "./SlugRename.svelte";
   import type { Product, Team } from "./rows";
@@ -16,6 +16,12 @@ import { csv } from "../fields";
   const teams = createResource(() => api.get<Team[]>("/teams"), []);
 
   let renaming = $state<Product | null>(null);
+  /** Which team's products are listed. Empty is all of them. */
+  let team = $state("");
+
+  const shown = $derived(
+    team ? products.data.filter((p) => p.team_slug === team) : products.data,
+  );
 
   const teamOptions = $derived(
     teams.data.map((x) => ({ value: x.slug, label: x.name })),
@@ -38,8 +44,8 @@ import { csv } from "../fields";
     },
     {
       key: "slug",
-      label: "slug",
-      width: "12rem",
+      label: "id",
+      formOnly: true,
       edit: "text",
       required: true,
       info: INFO.slug,
@@ -70,10 +76,26 @@ import { csv } from "../fields";
     teams.reload();
   });</script>
 
+<!-- A team picker rather than a text filter: a product belongs to exactly one
+     team, so the question is always "whose", never "matching what". -->
+<div class="bar">
+  <Select
+    bind:value={team}
+    options={teamOptions}
+    placeholder={`any ${t("team")}`}
+    clearable
+    searchable
+    keepOpen
+    active={!!team}
+    aria-label={`filter by ${t("team")}`}
+  />
+  <span class="dim">{shown.length} of {products.data.length}</span>
+</div>
+
 <CrudTable
   hoist={sectionHoist("products")}
   {columns}
-  rows={products.data}
+  rows={shown}
   rowKey={(r) => r.slug}
   loading={products.loading}
   error={products.error}
@@ -120,3 +142,16 @@ import { csv } from "../fields";
     onCancel={() => (renaming = null)}
   />
 {/if}
+
+<style>
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+    margin-bottom: var(--pad-2);
+  }
+  .dim {
+    font-size: var(--fs-xs);
+    color: var(--muted);
+  }
+</style>

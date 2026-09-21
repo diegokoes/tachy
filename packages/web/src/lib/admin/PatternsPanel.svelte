@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { api } from "../api";
   import { createResource } from "../resource.svelte";
-  import { CrudTable, type Column } from "../tui";
+  import { CrudTable, FilterBar, type Column } from "../tui";
   import { slugify } from "../slug";
   import SlugRename from "./SlugRename.svelte";
   import type { Pattern } from "./rows";
@@ -15,6 +15,15 @@ import { INFO } from "./help";
   );
 
   let renaming = $state<Pattern | null>(null);
+  let filter = $state("");
+
+  const shown = $derived.by(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return patterns.data;
+    return patterns.data.filter((p) =>
+      `${p.slug} ${p.description ?? ""}`.toLowerCase().includes(q),
+    );
+  });
 
   const columns: Column<Pattern>[] = [
     {
@@ -38,10 +47,18 @@ import { INFO } from "./help";
 
   onMount(patterns.reload);</script>
 
+<FilterBar
+  bind:value={filter}
+  shown={shown.length}
+  total={patterns.data.length}
+  placeholder="filter patterns…"
+  label="filter resolution patterns"
+/>
+
 <CrudTable
   hoist={sectionHoist("patterns")}
   {columns}
-  rows={patterns.data}
+  rows={shown}
   rowKey={(r) => r.slug}
   loading={patterns.loading}
   error={patterns.error}

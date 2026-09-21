@@ -1,3 +1,45 @@
+/**
+ * What the indexer reads when a repo names no extensions of its own.
+ *
+ * Here rather than in the indexer because both sides have to agree on it: the
+ * admin form offers this list, and the indexer applies it. A repo's
+ * `config.include_extensions` replaces this wholesale rather than adding to it.
+ */
+export const DEFAULT_CODE_EXTENSIONS = [
+  "ts",
+  "tsx",
+  "js",
+  "jsx",
+  "mjs",
+  "cjs",
+  "py",
+  "cs",
+  "java",
+  "kt",
+  "go",
+  "rs",
+  "rb",
+  "php",
+  "c",
+  "h",
+  "cpp",
+  "hpp",
+  "cc",
+  "swift",
+  "scala",
+  "sql",
+  "sh",
+  "ps1",
+  "yaml",
+  "yml",
+  "json",
+  "svelte",
+  "vue",
+  "md",
+  "graphql",
+  "proto",
+] as const;
+
 export const REPO_INDEX_STATUSES = [
   "idle",
   "cloning",

@@ -59,15 +59,25 @@
   /* Cut into a filled gauge, so the tier marks read as gaps in the bar. */
   --gauge-tick: #0a0a0a;
 
+  /* Chart ink. Fixed rather than derived from --accent, so a user's accent
+     choice never recolours data, and quieter than the status tokens because a
+     chart is a field of colour where a badge is a spot of it. */
+  --series: #8ea4ba;
+  --series-2: #b39d7c;
+  --series-ok: color-mix(in srgb, var(--ok) 70%, var(--panel-solid));
+  --series-warn: color-mix(in srgb, var(--warn) 70%, var(--panel-solid));
+  --series-danger: color-mix(in srgb, var(--danger) 70%, var(--panel-solid));
+
   /* Raised/recessed edge pair, for anything that needs text-mode 3D. */
   --edge-hi: rgba(255, 255, 255, 0.22);
   --edge-lo: rgba(0, 0, 0, 0.55);
   --drop: rgba(0, 0, 0, 0.9);
 
-  /* The window's own surface. The wallpaper reads through it, just barely, and
-     dialogs wear it too: a modal is another window, not a different material
-     laid over the app. */
+  /* The window's own surface. The wallpaper reads through it, just barely. */
   --window-bg: color-mix(in srgb, var(--panel-solid) 93%, transparent);
+  /* Opaque: a dialog sits over rows of text, and anything showing through it
+     competes with its own. */
+  --dialog-bg: var(--panel-solid);
 
   /* Behind anything modal. The blur is what separates the two planes; ink alone
      leaves the text underneath legible through the gap and reads as dirt.
@@ -80,12 +90,12 @@
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f2efe7;
-  --panel: rgba(252, 251, 247, 0.88);
-  --panel-solid: #faf8f2;
-  --border: rgba(30, 28, 20, 0.14);
+  --bg: #e2ded3;
+  --panel: rgba(243, 240, 232, 0.88);
+  --panel-solid: #f3f0e8;
+  --border: rgba(30, 28, 20, 0.17);
   --text: #21201c;
-  --muted: #857f72;
+  --muted: #635e53;
   /* Higher than the dark theme's, not equal to it. A dark glyph on a light
      ground has less perceptual contrast at this size than a light glyph on a
      dark one, so matching the alpha would leave the light theme's sky nearly
@@ -97,7 +107,12 @@
   --danger: #cf222e;
   --info: #2472c8;
   --doc: #8a6520;
-  --gauge-tick: #fbfaf6;
+  --gauge-tick: #f3f0e8;
+  --series: #4b6580;
+  --series-2: #8a6a3a;
+  --series-ok: color-mix(in srgb, var(--ok) 85%, var(--panel-solid));
+  --series-warn: color-mix(in srgb, var(--warn) 85%, var(--panel-solid));
+  --series-danger: color-mix(in srgb, var(--danger) 85%, var(--panel-solid));
 
   --edge-hi: rgba(30, 28, 20, 0.3);
   --edge-lo: rgba(255, 255, 255, 0.8);
@@ -130,6 +145,19 @@
   --pad-4: 1rem;
   --gap: 0.5rem;
   --row-h: 1.9rem;
+
+  /* One height for every form control. Padding alone does not give it: a
+     select's trigger is an inline-flex whose caret sets line-height 1, so it
+     computes shorter than a text input on identical padding. */
+  --control-h: calc(var(--row-h) + var(--pad-2));
+}
+
+/* ── View padding ─────────────────────────────────────────────────────────
+   The air a full view sits in. Multiples of the scale above, not new steps,
+   named so the overview and the section views cannot drift apart. */
+:root {
+  --view-pad-x: calc(var(--pad-4) * 1.75);
+  --view-pad-y: calc(var(--pad-4) * 1.25);
 }
 
 /* ── Panel border ─────────────────────────────────────────────────────────

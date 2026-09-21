@@ -200,13 +200,13 @@ describe("Claude credential selection (API key vs subscription token)", () => {
     );
   });
 
-  it("prefers a user's token over an org-wide API key", async () => {
+  it("prefers a user's token over the deployment fallback key", async () => {
     await setCredential(
       admin.id,
       "global",
       undefined,
       "anthropic_api_key",
-      "sk-ant-api03-org-wide",
+      "sk-ant-api03-fallback",
     );
     expect(await resolveAgentAuth("claude", { userId: dana.id })).toMatchObject(
       {
@@ -216,14 +216,14 @@ describe("Claude credential selection (API key vs subscription token)", () => {
     );
   });
 
-  it("falls back to the org key for a user with nothing of their own", async () => {
+  it("falls back to the deployment key for a user with nothing of their own", async () => {
     const eve = await createUser({
       email: "eve@example.com",
       password: "a-long-password",
     });
     expect(await resolveAgentAuth("claude", { userId: eve.id })).toMatchObject({
       kind: "anthropic_api_key",
-      value: "sk-ant-api03-org-wide",
+      value: "sk-ant-api03-fallback",
       source: "global",
     });
   });

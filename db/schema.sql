@@ -73,14 +73,17 @@ create table team_members (
     primary key (team_id, user_id)
 );
 
--- Encrypted secrets (agent API keys, source tokens) at three scopes with
--- most-specific-wins resolution: user > team > global > env fallback.
+-- Encrypted secrets (agent API keys, source tokens) at two scopes with
+-- most-specific-wins resolution: user > global > env fallback.
 -- Values are AES-256-GCM ciphertext keyed by TACHY_SECRET_KEY; plaintext
 -- never leaves the server process.
+--
+-- A credential belongs to one person. The global scope is not a way to share
+-- one: it holds the deployment's own machine tokens — a source connection's
+-- token, the job webhook — which the worker resolves with no user to be.
 create table credentials (
     id               uuid primary key default gen_random_uuid(),
-    scope            text not null check (scope in ('global','team','user')),
-    team_id          uuid references teams(id) on delete cascade,
+    scope            text not null check (scope in ('global','user')),
     user_id          uuid references users(id) on delete cascade,
     -- e.g. 'anthropic_api_key', 'copilot_token', 'freshdesk_token:<slug>'
     name             text not null,
@@ -92,17 +95,15 @@ create table credentials (
     created_by       uuid references users(id) on delete set null,
     created_at       timestamptz not null default now(),
     updated_at       timestamptz not null default now(),
-    -- scope and its FK must agree, or a scope='team' row with a null team_id
+    -- scope and its FK must agree, or a scope='user' row with a null user_id
     -- slips past the partial unique indexes and can be inserted repeatedly
-    check ((scope = 'team') = (team_id is not null)),
     check ((scope = 'user') = (user_id is not null))
 );
 create unique index credentials_global_idx on credentials(name)          where scope = 'global';
-create unique index credentials_team_idx   on credentials(team_id, name) where scope = 'team';
 create unique index credentials_user_idx   on credentials(user_id, name) where scope = 'user';
 
 -- Non-secret per-user/per-team preferences (agent provider/model/effort),
--- same scope layout as credentials; global defaults live in `settings`.
+-- resolved user > team > global; global defaults live in `settings`.
 create table preferences (
     id          uuid primary key default gen_random_uuid(),
     scope       text not null check (scope in ('global','team','user')),
@@ -119,7 +120,7 @@ create unique index preferences_team_idx   on preferences(team_id, key) where sc
 create unique index preferences_user_idx   on preferences(user_id, key) where scope = 'user';
 
 -- Reusable chat prompt templates ("artifacts"), same scope layout as
--- credentials/preferences; the picker unions user + team + global rows.
+-- preferences; the picker unions user + team + global rows.
 create table artifacts (
     id          uuid primary key default gen_random_uuid(),
     scope       text not null check (scope in ('global','team','user')),

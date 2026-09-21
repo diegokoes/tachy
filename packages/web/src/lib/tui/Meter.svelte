@@ -64,16 +64,16 @@
   }
 
   .meter.accent {
-    --tone-color: var(--accent);
+    --tone-color: var(--series);
   }
   .meter.ok {
-    --tone-color: var(--ok);
+    --tone-color: var(--series-ok);
   }
   .meter.warn {
-    --tone-color: var(--warn);
+    --tone-color: var(--series-warn);
   }
   .meter.danger {
-    --tone-color: var(--danger);
+    --tone-color: var(--series-danger);
   }
   .meter.muted {
     --tone-color: var(--muted);

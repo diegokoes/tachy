@@ -1,16 +1,7 @@
 <script lang="ts">
-  import { growBar } from "../motion";
   import { fitRows, fitted } from "./fit";
-  import type { Tone } from "./tone";
-
-  export type Bar = {
-    key: string;
-    label: string;
-    value: number;
-    tone?: Tone;
-    /** Stacks the bar, left first. Their sum is `value`. */
-    parts?: { key: string; value: number; tone: Tone }[];
-  };
+  import type { Bar } from "./marks";
+  import { toneVar } from "./scale";
 
   const ROW_REM = 1.25;
   const GAP_REM = 0.2;
@@ -22,6 +13,7 @@
     unit = "",
     format = (n: number) => n.toLocaleString(),
     sum = true,
+    onpick,
   }: {
     /** Drawn in the order given; the caller sorts. */
     rows: Bar[];
@@ -33,6 +25,8 @@
     format?: (n: number) => string;
     /** Whether the "more" row totals the rows it folds; not for averages. */
     sum?: boolean;
+    /** Given, each row's label is a link to what the row counts. */
+    onpick?: (bar: Bar) => void;
   } = $props();
 
   let room = $state(0);
@@ -50,17 +44,26 @@
   style="--row: {ROW_REM}rem; --gap: {GAP_REM}rem"
   use:fitRows={{ row: ROW_REM, gap: GAP_REM, onfit: (n) => (room = n) }}
 >
-  {#each cut.shown as r, i (r.key)}
-    <div class="row {r.tone ?? 'accent'}">
-      <span class="lbl" title={r.label}>{r.label}</span>
+  {#each cut.shown as r (r.key)}
+    <div class="row" style="--tone-color: {toneVar(r.tone)}">
+      {#if onpick}
+        <button class="lbl pick" title={r.label} onclick={() => onpick(r)}
+          >{r.label}</button
+        >
+      {:else}
+        <span class="lbl" title={r.label}>{r.label}</span>
+      {/if}
       <span class="track">
         <span
           class="fill"
           class:stacked={Boolean(r.parts)}
-          use:growBar={{ pct: (r.value / top) * 100, delay: i * 0.04, along: "width" }}
+          style="width: {(r.value / top) * 100}%"
         >
           {#each (r.parts ?? []).filter((p) => p.value > 0) as p (p.key)}
-            <span class="part {p.tone}" style="flex-grow: {p.value}"></span>
+            <span
+              class="part"
+              style="flex-grow: {p.value}; --tone-color: {toneVar(p.tone)}"
+            ></span>
           {/each}
         </span>
       </span>
@@ -103,12 +106,25 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .pick {
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .pick:hover,
+  .pick:focus-visible {
+    color: var(--text);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
   .track {
     position: relative;
     height: 0.5rem;
     min-width: 0;
   }
-  /* Width is written by growBar, never by CSS — a transition would race the tween. */
   .fill {
     position: absolute;
     inset: 0 auto 0 0;
@@ -139,24 +155,5 @@
   }
   .more .n {
     color: var(--muted);
-  }
-
-  .accent {
-    --tone-color: var(--accent);
-  }
-  .ok {
-    --tone-color: var(--ok);
-  }
-  .warn {
-    --tone-color: var(--warn);
-  }
-  .danger {
-    --tone-color: var(--danger);
-  }
-  .muted {
-    --tone-color: var(--muted);
-  }
-  .info {
-    --tone-color: var(--info);
   }
 </style>

@@ -1,4 +1,8 @@
-import { AGENT_CREDENTIALS, resolveAgentAuth } from "../config/credentials";
+import {
+  AGENT_CREDENTIALS,
+  ANTHROPIC_OAUTH_CREDENTIAL,
+  resolveAgentAuth,
+} from "../config/credentials";
 import { effectiveSettings } from "../config/settings";
 import { sql } from "../infra/db";
 import { secretsEnabled } from "../infra/secrets";
@@ -96,18 +100,31 @@ export async function runSystemChecks(): Promise<Check[]> {
 
   const settings = await effectiveSettings();
   for (const provider of ["claude", "copilot"] as const) {
+    // Agent keys are each user's own, so there is no key to resolve without a
+    // user to be. The environment's fallback counts for everyone; otherwise
+    // the question is whether anyone has brought one.
     const auth = await resolveAgentAuth(provider, {});
+    const names =
+      provider === "claude"
+        ? [AGENT_CREDENTIALS.claude, ANTHROPIC_OAUTH_CREDENTIAL]
+        : [AGENT_CREDENTIALS.copilot];
+    const [{ n: byUser }] = await sql<{ n: number }[]>`
+      select count(*)::int as n from credentials
+      where scope = 'user' and name = any(${names})
+    `;
     const inUse = settings.agent_provider.value === provider;
+    const have = Boolean(auth) || byUser > 0;
     add(
       `agent ${provider}`,
-      auth ? "pass" : inUse ? "fail" : "skip",
+      have ? "pass" : inUse ? "fail" : "skip",
       auth
         ? `credential available (${auth.kind})`
-        : inUse
-          ? `no credential, and ${provider} is the configured backend`
-          : "no credential; not the configured backend",
+        : byUser > 0
+          ? `${byUser} user(s) hold their own credential`
+          : inUse
+            ? `no credential, and ${provider} is the configured backend`
+            : "no credential; not the configured backend",
     );
-    void AGENT_CREDENTIALS;
   }
 
   return checks;

@@ -127,23 +127,23 @@
   }
 
   .accent {
-    --tone-color: var(--accent);
+    --tone-color: var(--series);
   }
   .ok {
-    --tone-color: var(--ok);
+    --tone-color: var(--series-ok);
   }
   .warn {
-    --tone-color: var(--warn);
+    --tone-color: var(--series-warn);
   }
   .danger {
-    --tone-color: var(--danger);
+    --tone-color: var(--series-danger);
   }
   .muted {
     --tone-color: var(--muted);
     --track: color-mix(in srgb, var(--muted) 26%, transparent);
   }
   .info {
-    --tone-color: var(--info);
+    --tone-color: var(--series-2);
   }
   /* After the tone classes, so it wins over their track. */
   .dial.split {

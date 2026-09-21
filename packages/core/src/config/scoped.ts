@@ -10,41 +10,63 @@ export interface ScopeContext {
   teamId?: string;
 }
 
-/** The tables that share the user → team → global layout. */
+/**
+ * The tables resolved most-specific-wins, and the scopes each one has rows at.
+ * `credentials` has no team scope: a secret belongs to one person, and its
+ * global rows are the deployment's own machine tokens rather than a share.
+ */
 const SCOPED_TABLES = {
-  credentials: "name",
-  preferences: "key",
-  artifacts: "slug",
-} as const;
+  credentials: { key: "name", scopes: ["user", "global"] },
+  preferences: { key: "key", scopes: ["user", "team", "global"] },
+  artifacts: { key: "slug", scopes: ["user", "team", "global"] },
+} as const satisfies Record<string, { key: string; scopes: readonly Scope[] }>;
 export type ScopedTable = keyof typeof SCOPED_TABLES;
 
-export interface ScopedHit {
+export const scopesOf = (table: ScopedTable): readonly Scope[] =>
+  SCOPED_TABLES[table].scopes;
+
+/** The scopes one table has rows at, as a type. */
+export type ScopeOf<T extends ScopedTable> =
+  (typeof SCOPED_TABLES)[T]["scopes"][number];
+
+export interface ScopedHit<S extends Scope = Scope> {
   row: Record<string, unknown>;
-  scope: Scope;
+  scope: S;
 }
 
 /**
  * Most-specific-wins walk over a scoped table: user row, then team row, then
- * global row. Returns the winning row and which scope it came from.
+ * global row. Returns the winning row and which scope it came from. A table
+ * that has no team scope never gets the team branch — its column is not there.
  */
-export async function resolveScoped(
-  table: ScopedTable,
+export async function resolveScoped<T extends ScopedTable>(
+  table: T,
   key: string,
   { userId, teamId }: ScopeContext,
-): Promise<ScopedHit | undefined> {
-  const keyColumn = SCOPED_TABLES[table];
-  const rows = await sql`
-    select * from ${sql(table)}
-    where ${sql(keyColumn)} = ${key} and (
-      (scope = 'user' and user_id = ${userId ?? null})
-      or (scope = 'team' and team_id = ${teamId ?? null})
-      or scope = 'global'
-    )
-    order by case scope when 'user' then 0 when 'team' then 1 else 2 end
-    limit 1
-  `;
+): Promise<ScopedHit<ScopeOf<T>> | undefined> {
+  const { key: keyColumn, scopes } = SCOPED_TABLES[table];
+  const name: ScopedTable = table;
+  const order = sql`order by case scope when 'user' then 0 when 'team' then 1 else 2 end limit 1`;
+  const rows = (scopes as readonly Scope[]).includes("team")
+    ? await sql`
+        select * from ${sql(name)}
+        where ${sql(keyColumn)} = ${key} and (
+          (scope = 'user' and user_id = ${userId ?? null})
+          or (scope = 'team' and team_id = ${teamId ?? null})
+          or scope = 'global'
+        )
+        ${order}
+      `
+    : await sql`
+        select * from ${sql(name)}
+        where ${sql(keyColumn)} = ${key} and (
+          (scope = 'user' and user_id = ${userId ?? null})
+          or scope = 'global'
+        )
+        ${order}
+      `;
   const row = rows[0];
-  return row ? { row, scope: row.scope as Scope } : undefined;
+  return row ? { row, scope: row.scope as ScopeOf<T> } : undefined;
 }
 
 /**
@@ -89,7 +111,9 @@ export async function upsertScoped(
   key: string,
   values: Record<string, unknown>,
 ): Promise<void> {
-  const keyColumn = SCOPED_TABLES[table];
+  const { key: keyColumn, scopes } = SCOPED_TABLES[table];
+  if (!(scopes as readonly Scope[]).includes(scope))
+    throw badInput(`${table} has no ${scope} scope`);
   const row = {
     scope,
     ...(scope === "team" ? { team_id: scopeId! } : {}),

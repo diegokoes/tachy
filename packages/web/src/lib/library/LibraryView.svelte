@@ -87,7 +87,6 @@
   let status = $state("");
   let productId = $state("");
   let component = $state("");
-  let version = $state("");
 
   let products = $state<ProductRow[]>([]);
   let components = $state<ComponentRow[]>([]);
@@ -97,7 +96,6 @@
   /** Which extra filters the user added, and to what — persisted per browser. */
   let shown = $state<FacetKey[]>([]);
   let extras = $state<Record<string, string>>({});
-  const versions = $derived(facets.affected_version ?? []);
 
   let items = $state<Item[]>([]);
   /**
@@ -145,7 +143,7 @@
    * silently narrowed with no way out.
    */
   const activeFilters = $derived(
-    [productId, component, version, status].filter(Boolean).length +
+    [productId, component, status].filter(Boolean).length +
       shown.filter((k) => extras[k]).length,
   );
 
@@ -158,12 +156,8 @@
     return p;
   }
 
-  function entryQs() {
-    const p = scopeQs(new URLSearchParams());
-    if (version) p.set("affected_version", version);
-    return applyExtras(p, shown, extras).toString();
-  }
-
+  const entryQs = () =>
+    applyExtras(scopeQs(new URLSearchParams()), shown, extras).toString();
   const docQs = () => scopeQs(new URLSearchParams()).toString();
 
   let seq = 0;
@@ -252,7 +246,6 @@
     if (productId) p.set("product_id", productId);
     if (productId && component) p.set("component", component);
     if (status) p.set("status", status);
-    if (version) p.set("affected_version", version);
     applyExtras(p, shown, extras);
     try {
       const next = await api.get<Facets>(`/knowledge/facets?${p}`);
@@ -262,7 +255,6 @@
       if (!isCurrent()) return;
       facets = {};
     }
-    if (version && !versions.some((v) => v.value === version)) version = "";
     extras = pruneValues(shown, extras, facets);
   }
 
@@ -283,6 +275,7 @@
   function setExtra(key: FacetKey, value: string) {
     extras = { ...extras, [key]: value };
     persist();
+    void loadFacets();
   }
 
   const persist = () => saveFilters({ shown, values: extras });
@@ -295,7 +288,6 @@
    * mean — carrying it over would narrow the list by a build from elsewhere.
    */
   function dropComponentScoped() {
-    version = "";
     extras = clearScoped(extras);
     persist();
   }
@@ -340,7 +332,6 @@
     component = "";
     components = [];
     status = "";
-    version = "";
     extras = {};
     persist();
     void loadFacets();
@@ -410,7 +401,6 @@
     void status;
     void productId;
     void component;
-    void version;
     void shown;
     void extras;
     clearTimeout(timer);
@@ -429,7 +419,6 @@
   let facetsOnce = false;
   $effect(() => {
     void status;
-    void version;
     if (!facetsOnce) {
       facetsOnce = true;
       return;
@@ -626,22 +615,23 @@
 
   <!-- The default row stays deliberately short. Everything else the schema can
        be narrowed by — environment, confidence, clarity, pattern, hidden fix,
-       fixed version, tags — is one `+` away and remembered per browser. -->
+       versions, tags — is one `+` away and remembered per browser. -->
   <div class="controls">
     <div class="filters">
       <!-- product and component scope entries AND docs, so they stay visible in
-           every mode; version and value exist only on entries. -->
+           every mode. -->
       <span class="field" use:capFloor>
         <span class="cap">{t("product")}</span>
         <Select
           bind:value={productId}
           active={!!productId}
           keepOpen
+          filterPlaceholder=""
+          searchable
           title={t("product")}
-          options={[
-            { value: "", label: "any" },
-            ...products.map((p) => ({ value: p.id, label: p.name })),
-          ]}
+          placeholder="any"
+          clearable
+          options={products.map((p) => ({ value: p.id, label: p.name }))}
           onchange={(v) => onProductChange(String(v))}
         />
       </span>
@@ -651,9 +641,13 @@
           bind:value={component}
           active={!!component}
           keepOpen
+          filterPlaceholder=""
+          searchable
           title={`Component (within the chosen ${t("product")})`}
           disabled={!productId || components.length === 0}
-          options={[{ value: "", label: "any" }, ...componentOptions(components)]}
+          placeholder="any"
+          clearable
+          options={componentOptions(components)}
           onchange={(v) => {
             if (!v) dropComponentScoped();
             void loadFacets();
@@ -661,37 +655,17 @@
         />
       </span>
 
-      {#if showEntryFilters}
-        <span class="field" use:capFloor>
-          <span class="cap">version</span>
-          <Select
-            bind:value={version}
-            active={!!version}
-            keepOpen
-            title="Affected version (within the chosen component)"
-            disabled={!component || versions.length === 0}
-            options={[
-              { value: "", label: "any" },
-              ...versions.map((v) => ({
-                value: v.value,
-                label: `${v.value} (${v.count})`,
-              })),
-            ]}
-          />
-        </span>
-      {/if}
-
       <span class="field" use:capFloor>
         <span class="cap">status</span>
         <Select
           bind:value={status}
           active={!!status}
           keepOpen
+          filterPlaceholder=""
           title="Status"
-          options={[
-            { value: "", label: "any" },
-            ...(showDocFilters ? DOC_STATUSES : STATUSES),
-          ]}
+          placeholder="any"
+          clearable
+          options={showDocFilters ? DOC_STATUSES : STATUSES}
         />
       </span>
 
@@ -713,12 +687,14 @@
                     value={extras[key] ?? ""}
                     active={!!extras[key]}
                     keepOpen
+                    filterPlaceholder=""
                     title={def.needsComponent
                       ? `${def.label} (within the chosen component)`
                       : def.label}
                     disabled={def.needsComponent && !component}
+                    placeholder="any"
+                    clearable
                     options={[
-                      { value: "", label: "any" },
                       ...(def.kind === "enum"
                         ? (def.options ?? []).map((o) => ({ value: o, label: o }))
                         : (facets[key] ?? []).map((o) => ({
@@ -775,7 +751,6 @@
         <ResultRow
           item={it}
           selected={i === cursor}
-          delay={Math.min(i * 0.06, 0.6)}
           bind:el={rowEls[i]}
           onopen={() => openItem(it)}
           onfocus={() => (cursor = i)}
