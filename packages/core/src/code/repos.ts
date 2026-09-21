@@ -1,4 +1,8 @@
-import { REPO_INDEX_STATUSES, SLUG_RE } from "@tachy/contract";
+import {
+  DEFAULT_CODE_EXTENSIONS,
+  REPO_INDEX_STATUSES,
+  SLUG_RE,
+} from "@tachy/contract";
 import type { RepoCensus, RepoIndexStatus, RepoRow } from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
@@ -10,7 +14,7 @@ import { getSourceProject } from "../sources/projects";
 import type { EntryScope } from "../access/permissions";
 import { assertBranchName, assertRepoUrl, removeClone } from "./git";
 
-export { REPO_INDEX_STATUSES };
+export { DEFAULT_CODE_EXTENSIONS, REPO_INDEX_STATUSES };
 export type { RepoIndexStatus, RepoRow, RepoCensus };
 
 export interface RepoInput {

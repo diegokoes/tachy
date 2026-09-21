@@ -78,6 +78,37 @@ describe("component routes", () => {
     expect((await res.json()).error).toMatch(/no-such-product/);
   });
 
+  /* The architecture view draws the whole catalogue, so it needs every
+     component in one answer, each carrying the branch it hangs off. */
+  it("lists every component with its product and team", async () => {
+    const productId = await tpdProductId();
+    await addComponent({ productId, slug: "spooler", name: "Spooler" });
+    await addComponent({
+      productId,
+      slug: "spool-queue",
+      name: "Spool queue",
+      parentSlug: "spooler",
+    });
+
+    const res = await get("/api/components");
+    expect(res.status).toBe(200);
+    const rows: {
+      id: string;
+      slug: string;
+      parent_id: string | null;
+      product_slug: string;
+      team_slug: string;
+    }[] = await res.json();
+
+    const spooler = rows.find((r) => r.slug === "spooler")!;
+    const child = rows.find((r) => r.slug === "spool-queue")!;
+    expect(spooler.product_slug).toBe("tpd");
+    expect(spooler.team_slug).toBeTruthy();
+    expect(spooler.parent_id).toBeNull();
+    // parent_id alone carries the nesting; nothing else in the row says it.
+    expect(child.parent_id).toBe(spooler.id);
+  });
+
   it("rejects a slug with spaces in it", async () => {
     const res = await as("/api/products/tpd/components", "POST", {
       slug: "Label Renderer",

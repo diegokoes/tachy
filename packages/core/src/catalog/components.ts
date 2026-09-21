@@ -1,4 +1,4 @@
-import type { ComponentRow } from "@tachy/contract";
+import type { ComponentNode, ComponentRow } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { productTagRenameImpact, renameProductTag } from "./product-tags";
 import { nearestSlugsHint } from "./nearest";
@@ -10,6 +10,25 @@ export async function listComponents(productId: string) {
     select id, parent_id, slug, name, description, aliases
     from components where product_id = ${productId}
     order by slug
+  `;
+}
+
+/**
+ * Every component, with the product and team it hangs off.
+ *
+ * One query rather than one per product: the architecture view draws the whole
+ * catalogue and narrows it in the browser, and twenty-five round trips to
+ * assemble one picture is twenty-four too many.
+ */
+export async function listComponentTree() {
+  return sql<ComponentNode[]>`
+    select c.id, c.parent_id, c.slug, c.name, c.description, c.aliases,
+           p.slug as product_slug, p.name as product_name,
+           t.slug as team_slug, t.name as team_name
+    from components c
+      join products p on p.id = c.product_id
+      join teams t on t.id = p.team_id
+    order by t.name, p.name, c.slug
   `;
 }
 

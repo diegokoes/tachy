@@ -10,6 +10,7 @@ import {
 } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
+import { hasJobKind, getJobKind } from "./registry";
 import type { JobCensus } from "@tachy/contract";
 
 export type { JobCensus };
@@ -101,6 +102,34 @@ export async function jobCensus(
     from job_definitions
   `;
 
+  /* The effective class lives half in the row and half in code: a null
+     resource_class means "whatever the kind defaults to", and that default is
+     in the registry, not the database. A definition for a kind this process
+     does not know counts under light, which is what defineJob defaults to. */
+  const classes = await sql`select kind, resource_class from job_definitions`;
+  const defsByClass = zeroes(JOB_RESOURCE_CLASSES);
+  for (const d of classes) {
+    const cls = (d.resource_class ??
+      (hasJobKind(d.kind)
+        ? getJobKind(d.kind).resourceClass
+        : "light")) as JobResourceClass;
+    defsByClass[cls] += 1;
+  }
+
+  const failures = await sql`
+    select r.definition_id, coalesce(d.name, r.kind) as name, r.kind,
+      count(*)::int as runs,
+      max(r.created_at) as last_at,
+      (array_agg(r.error order by r.created_at desc))[1] as last_error,
+      (array_agg(r.id order by r.created_at desc))[1] as last_run
+    from job_runs r
+      left join job_definitions d on d.id = r.definition_id
+    where r.created_at > now() - make_interval(days => ${days})
+      and r.status = any(${FAILED})
+    group by r.definition_id, coalesce(d.name, r.kind), r.kind
+    order by runs desc, last_at desc
+  `;
+
   const scheduled = await sql`
     select id, name, kind, schedule, timezone from job_definitions
     where enabled and schedule is not null
@@ -133,7 +162,19 @@ export async function jobCensus(
     by_kind: [...by_kind] as unknown as JobCensus["by_kind"],
     success,
     now: current,
-    definitions: definitions as JobCensus["definitions"],
+    definitions: {
+      ...(definitions as Omit<JobCensus["definitions"], "by_class">),
+      by_class: defsByClass,
+    },
+    failures: failures.map((f) => ({
+      definition_id: f.definition_id,
+      name: f.name,
+      kind: f.kind,
+      runs: f.runs,
+      last_at: new Date(f.last_at).toISOString(),
+      last_error: f.last_error,
+      last_run: f.last_run,
+    })),
     upcoming,
   };
 }

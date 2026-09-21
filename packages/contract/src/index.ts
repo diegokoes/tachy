@@ -59,13 +59,14 @@ export type {
   LibraryEngagement,
 } from "./library";
 export type { AdoFieldType, FieldSpec, WorkItemSchema } from "./ado";
-export { REPO_INDEX_STATUSES } from "./code";
+export { DEFAULT_CODE_EXTENSIONS, REPO_INDEX_STATUSES } from "./code";
 export type { RepoIndexStatus, RepoRow, RepoCensus } from "./code";
 export type {
   CatalogCensus,
   TeamRow,
   ProductRow,
   ComponentRow,
+  ComponentNode,
   LabelRow,
   PatternRow,
   CustomerRow,

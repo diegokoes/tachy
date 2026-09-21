@@ -5,41 +5,7 @@ import { writeEmbeddings } from "../search/backfill";
 import { chunkCode } from "./chunk-code";
 import { cloneOrFetch, listTree, readFileAt, type TreeEntry } from "./git";
 import { getRepoBySlug, updateRepoStatus } from "./repos";
-
-const DEFAULT_EXTENSIONS = [
-  "ts",
-  "tsx",
-  "js",
-  "jsx",
-  "mjs",
-  "cjs",
-  "py",
-  "cs",
-  "java",
-  "kt",
-  "go",
-  "rs",
-  "rb",
-  "php",
-  "c",
-  "h",
-  "cpp",
-  "hpp",
-  "cc",
-  "swift",
-  "scala",
-  "sql",
-  "sh",
-  "ps1",
-  "yaml",
-  "yml",
-  "json",
-  "svelte",
-  "vue",
-  "md",
-  "graphql",
-  "proto",
-];
+import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
 
 const EXCLUDED_DIR_RE =
   /(^|\/)(node_modules|vendor|dist|build|out|target|bin|obj|third_party|\.git|coverage|__pycache__|packages\/generated)(\/|$)/;
@@ -94,7 +60,7 @@ function indexableFiles(
       ? (config.include_extensions as string[]).map((e) =>
           e.replace(/^\./, "").toLowerCase(),
         )
-      : DEFAULT_EXTENSIONS,
+      : DEFAULT_CODE_EXTENSIONS,
   );
   const maxBytes =
     (typeof config.max_file_kb === "number"
