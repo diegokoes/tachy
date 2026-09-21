@@ -629,10 +629,9 @@
           filterPlaceholder=""
           searchable
           title={t("product")}
-          options={[
-            { value: "", label: "any" },
-            ...products.map((p) => ({ value: p.id, label: p.name })),
-          ]}
+          placeholder="any"
+          clearable
+          options={products.map((p) => ({ value: p.id, label: p.name }))}
           onchange={(v) => onProductChange(String(v))}
         />
       </span>
@@ -646,7 +645,9 @@
           searchable
           title={`Component (within the chosen ${t("product")})`}
           disabled={!productId || components.length === 0}
-          options={[{ value: "", label: "any" }, ...componentOptions(components)]}
+          placeholder="any"
+          clearable
+          options={componentOptions(components)}
           onchange={(v) => {
             if (!v) dropComponentScoped();
             void loadFacets();
@@ -662,10 +663,9 @@
           keepOpen
           filterPlaceholder=""
           title="Status"
-          options={[
-            { value: "", label: "any" },
-            ...(showDocFilters ? DOC_STATUSES : STATUSES),
-          ]}
+          placeholder="any"
+          clearable
+          options={showDocFilters ? DOC_STATUSES : STATUSES}
         />
       </span>
 
@@ -692,8 +692,9 @@
                       ? `${def.label} (within the chosen component)`
                       : def.label}
                     disabled={def.needsComponent && !component}
+                    placeholder="any"
+                    clearable
                     options={[
-                      { value: "", label: "any" },
                       ...(def.kind === "enum"
                         ? (def.options ?? []).map((o) => ({ value: o, label: o }))
                         : (facets[key] ?? []).map((o) => ({
@@ -750,7 +751,6 @@
         <ResultRow
           item={it}
           selected={i === cursor}
-          delay={Math.min(i * 0.06, 0.6)}
           bind:el={rowEls[i]}
           onopen={() => openItem(it)}
           onfocus={() => (cursor = i)}

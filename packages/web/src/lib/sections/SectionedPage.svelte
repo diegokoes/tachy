@@ -125,10 +125,15 @@
 </div>
 
 <style>
+  /* Horizontal only. The vertical air is `main`'s --main-air, which the
+     sticky section heading already compensates for with its ::before strip;
+     top padding here would move that strip's containing block down and let
+     rows scroll through an unpainted gap. */
   .page {
     display: grid;
     grid-template-columns: 1fr;
     gap: var(--pad-4);
+    padding-inline: var(--view-pad-x);
     align-items: start;
     min-width: 0;
   }

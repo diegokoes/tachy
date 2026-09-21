@@ -1,10 +1,6 @@
 <script lang="ts">
-  export type Segment = {
-    key: string;
-    label: string;
-    n: number;
-    tone: "accent" | "ok" | "warn" | "danger" | "muted" | "info";
-  };
+  import type { Segment } from "./marks";
+  import { toneVar } from "./scale";
 
   let {
     segments,
@@ -29,15 +25,17 @@
   <div class="band" role="img" aria-label="{label}: {caption ?? ''}">
     {#each shown as s (s.key)}
       <span
-        class="seg {s.tone}"
-        style="--w: {(s.n / total) * 100}%"
+        class="seg"
+        style="--w: {(s.n / total) * 100}%; --tone-color: {toneVar(s.tone)}"
         title="{s.n} {s.label}"
       ></span>
     {/each}
   </div>
   <div class="legend">
     {#each shown as s (s.key)}
-      <span class="key {s.tone}">{s.n.toLocaleString()} {s.label}</span>
+      <span class="key" style="--tone-color: {toneVar(s.tone)}"
+        >{s.n.toLocaleString()} {s.label}</span
+      >
     {/each}
   </div>
   {#if caption}<span class="caption">{caption}</span>{/if}
@@ -90,24 +88,5 @@
   .caption {
     font-size: var(--fs-xs);
     color: var(--muted);
-  }
-
-  .accent {
-    --tone-color: var(--accent);
-  }
-  .ok {
-    --tone-color: var(--ok);
-  }
-  .warn {
-    --tone-color: var(--warn);
-  }
-  .danger {
-    --tone-color: var(--danger);
-  }
-  .muted {
-    --tone-color: var(--muted);
-  }
-  .info {
-    --tone-color: var(--info);
   }
 </style>

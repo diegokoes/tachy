@@ -15,11 +15,14 @@
     keepOpen = false,
     searchable = false,
     filterPlaceholder = "filter…",
+    placeholder,
+    clearable,
     onchange,
     "aria-label": ariaLabel,
   }: {
     value: Val;
-    options: OptIn[];
+    /** readonly, so a vocabulary declared `as const` can be passed as it is. */
+    options: readonly OptIn[];
     title?: string;
     disabled?: boolean;
     /** Holds a non-default value — worn as an accent border, so a narrowed
@@ -35,6 +38,17 @@
      *  the catalog rather than staying a fixed vocabulary. */
     searchable?: boolean;
     filterPlaceholder?: string;
+    /**
+     * What the trigger says while nothing is picked. A filter row wants the
+     * unfiltered state named ("any") without spending a list row on an
+     * option that means "no option".
+     */
+    placeholder?: string;
+    /**
+     * Whether a second click on the picked option clears it. Defaults to
+     * whether the list carries an empty option.
+     */
+    clearable?: boolean;
     onchange?: (v: Val) => void;
     "aria-label"?: string;
   } = $props();
@@ -74,9 +88,11 @@
     return opts.filter((o) => o.label.toLowerCase().includes(q));
   });
 
-  const clearable = $derived(opts.some((o) => o.value === ""));
+  const canClear = $derived(clearable ?? opts.some((o) => o.value === ""));
   const selectedIndex = $derived(opts.findIndex((o) => o.value === value));
-  const label = $derived(selectedIndex >= 0 ? opts[selectedIndex].label : "");
+  const label = $derived(
+    selectedIndex >= 0 ? opts[selectedIndex].label : (placeholder ?? ""),
+  );
 
   function openPanel() {
     if (disabled) return;
@@ -94,7 +110,7 @@
   function choose(i: number) {
     const o = shown[i];
     if (!o || o.disabled) return;
-    const next = keepOpen && clearable && o.value === value ? "" : o.value;
+    const next = keepOpen && canClear && o.value === value ? "" : o.value;
     value = next;
     onchange?.(next);
     if (!keepOpen) close();
@@ -273,6 +289,7 @@
     align-items: center;
     gap: 0.5rem;
     width: 100%;
+    min-height: var(--control-h);
     padding: var(--pad-2) var(--pad-3);
     font: inherit;
     color: var(--text);
