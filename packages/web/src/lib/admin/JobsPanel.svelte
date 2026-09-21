@@ -2,7 +2,6 @@
   import { onDestroy, onMount, untrack } from "svelte";
   import { JOB_NOTIFY, JOB_OVERLAP, JOB_RESOURCE_CLASSES } from "@tachy/contract";
   import { api } from "../api";
-  import { navigate } from "../router.svelte";
   import { createResource, errText } from "../resource.svelte";
   import {
     Badge,
@@ -12,6 +11,7 @@
     Field,
     FilterBar,
     GroupHead,
+    Modal,
     Note,
     Select,
     isActive,
@@ -29,12 +29,7 @@
   } from "./rows";
   import SchedulePreview from "./SchedulePreview.svelte";
   import { sectionHoist } from "./sectionAction.svelte";
-  import { NEW_RECORD, recordPath } from "./records";
-  import RecordPage from "./RecordPage.svelte";
-  import type { StatusAction } from "../library/status";
-
-  /** Given, the panel is one job's page rather than the list of them. */
-  let { id }: { id?: string } = $props();
+  import { jobs as census } from "./jobCensus.svelte";
 
   type KindsInfo = {
     kinds: JobKindInfo[];
@@ -56,12 +51,17 @@
 
   let error = $state<string | null>(null);
   let filter = $state("");
-  let failuresOnly = $state(false);
   let params = $state<Record<string, unknown>>({});
   let runsFor = $state<Record<string, JobRunRow[]>>({});
   let changesFor = $state<Record<string, JobChange[]>>({});
   let logOpen = $state(new Set<string>());
   let running = $state<string | null>(null);
+  let pausing = $state<string | null>(null);
+  /** The job whose record dialog is open, if one is. */
+  let opened = $state<JobDefinitionRow | null>(null);
+  /** The job whose full run history is open, and what was fetched for it. */
+  let history = $state<JobDefinitionRow | null>(null);
+  let historyRuns = $state<JobRunRow[] | null>(null);
 
   const kindOf = (k: unknown) => info.data.kinds.find((x) => x.kind === k);
   const opt = (values: readonly string[], inherit: string) => [
@@ -69,15 +69,13 @@
     ...values.map((v) => ({ value: v, label: v })),
   ];
 
+  /* No "failures only" toggle: the recent-runs list below and each job's own
+     history already answer "what broke", and the overview's failed counter
+     opens straight onto the jobs that did. */
   const filtered = $derived.by(() => {
     const q = filter.trim().toLowerCase();
     return defs.data.filter(
-      (d) =>
-        (!failuresOnly ||
-          d.last_run?.status === "failed" ||
-          d.last_run?.status === "timed_out" ||
-          d.disabled_reason) &&
-        (!q || `${d.name} ${d.kind}`.toLowerCase().includes(q)),
+      (d) => !q || `${d.name} ${d.kind}`.toLowerCase().includes(q),
     );
   });
 
@@ -150,6 +148,9 @@
     },
     { key: "enabled", label: "on", width: "4rem", edit: "checkbox", initial: true, cell: enabledCell },
     { key: "last", label: "last run", width: "11rem", cell: lastCell },
+    /* Running and pausing are what people come to this list to do, so they
+       sit on the row rather than one dialog away. */
+    { key: "acts", label: "", width: "8rem", align: "end", cell: actsCell },
   ]);
 
   function defaultsFor(schema: JsonSchema | undefined) {
@@ -194,10 +195,40 @@
       await api.post(`/jobs/definitions/${d.id}/run`, {});
       await loadDetail(d.id);
       await Promise.all([defs.reload(), recent.reload()]);
+      void census.reload();
     } catch (e) {
       error = errText(e);
     } finally {
       running = null;
+    }
+  }
+
+  /* Pausing is disabling: there is no separate verb on the server, and a
+     paused schedule is exactly a definition that is not enabled. */
+  async function pause(d: JobDefinitionRow) {
+    pausing = d.id;
+    error = null;
+    try {
+      await api.patch(`/jobs/definitions/${d.id}`, { enabled: !d.enabled });
+      await defs.reload();
+      void census.reload();
+    } catch (e) {
+      error = errText(e);
+    } finally {
+      pausing = null;
+    }
+  }
+
+  async function openHistory(d: JobDefinitionRow) {
+    history = d;
+    historyRuns = null;
+    try {
+      historyRuns = await api.get<JobRunRow[]>(
+        `/jobs/runs?definition_id=${d.id}&limit=200`,
+      );
+    } catch (e) {
+      error = errText(e);
+      history = null;
     }
   }
 
@@ -230,7 +261,7 @@
       poll = setInterval(() => {
         void recent.reload();
         void defs.reload();
-        if (record) void loadDetail(record.id).catch(() => {});
+        if (opened) void loadDetail(opened.id).catch(() => {});
       }, 3000);
     if (!anyActive && poll) {
       clearInterval(poll);
@@ -248,42 +279,23 @@
     void connections.reload();
   });
 
-  const creating = $derived(id === NEW_RECORD);
-  const record = $derived(
-    id && !creating ? (defs.data.find((d) => d.id === id) ?? null) : null,
-  );
-
+  /* What hangs off a job (its recent runs and its change log) is fetched when
+     its dialog opens. */
   $effect(() => {
-    if (!id || creating) return;
-    const open = id;
-    untrack(() => void loadDetail(open).catch((e) => (error = errText(e))));
+    const id = opened?.id;
+    if (!id) return;
+    untrack(() => void loadDetail(id).catch((e) => (error = errText(e))));
   });
 
-  const railActions = $derived<StatusAction[]>(
-    record
-      ? [
-          {
-            icon: "index",
-            label: running === record.id ? "running…" : "run now",
-            disabled: running === record.id,
-            onclick: () => record && runNow(record),
-          },
-        ]
-      : [],
-  );
-
-  const back = () => navigate(recordPath("jobs"));
-
   async function createJob(d: Draft) {
-    let made: JobDefinitionRow | undefined;
-    await defs.mutate(async () => {
-      made = await api.post<JobDefinitionRow>("/jobs/definitions", {
+    await defs.mutate(() =>
+      api.post<JobDefinitionRow>("/jobs/definitions", {
         kind: d.kind,
         ...payload(d),
         params: { ...defaultsFor(kindOf(d.kind)?.params_schema), ...params },
-      });
-    });
-    navigate(recordPath("jobs", made?.id), { replace: true });
+      }),
+    );
+    void census.reload();
   }
 </script>
 
@@ -345,7 +357,14 @@
                 >
               {/if}
               {#if isActive(r.status)}
-                <Button variant="ghost" size="sm" tone="danger" onclick={() => cancel(r)}>cancel</Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  tone="danger"
+                  icon="stop"
+                  title="stop this run; it finishes its current step first"
+                  onclick={() => cancel(r)}>stop</Button
+                >
               {/if}
             </td>
           </tr>
@@ -448,67 +467,127 @@
       </Note>
     {/if}
   {/if}
+  {#if f.row}{@render detail(f.row)}{/if}
+{/snippet}
+
+<!-- The controls a job is opened for, on the row and in its dialog alike.
+     Pause stays lit while a job is paused, so the state is on the button
+     that changes it. -->
+{#snippet controls(d: JobDefinitionRow)}
+  <Button
+    variant="ghost"
+    square
+    iconSize="1.4em"
+    icon="run"
+    tone="ok"
+    title="run now"
+    aria-label={`run ${d.name} now`}
+    busy={running === d.id}
+    disabled={running === d.id}
+    onclick={() => runNow(d)}
+  />
+  <Button
+    variant="ghost"
+    square
+    iconSize="1.4em"
+    icon="pause"
+    tone={d.enabled ? undefined : "warn"}
+    aria-pressed={!d.enabled}
+    title={d.enabled
+      ? d.schedule
+        ? "pause the schedule"
+        : "pause"
+      : "paused, click to resume"}
+    aria-label={d.enabled ? `pause ${d.name}` : `resume ${d.name}`}
+    busy={pausing === d.id}
+    disabled={pausing === d.id}
+    onclick={() => pause(d)}
+  />
+  <Button
+    variant="ghost"
+    square
+    iconSize="1.4em"
+    icon="history"
+    title="every run of this job"
+    aria-label={`history of ${d.name}`}
+    onclick={() => openHistory(d)}
+  />
+{/snippet}
+
+{#snippet actsCell(d: JobDefinitionRow)}
+  <span class="acts">{@render controls(d)}</span>
 {/snippet}
 
 {#if error}<Note tone="danger">{error}</Note>{/if}
 {#if info.error}<Note tone="danger">{info.error}</Note>{/if}
 
-{#if id}
-  <RecordPage
-    noun="job"
-    title={record?.name ?? ""}
-    {columns}
-    row={record}
-    {creating}
-    loading={defs.loading || info.loading}
-    loadError={defs.error}
-    actions={railActions}
-    body={detail}
-    {formExtra}
-    onform={(f) => {
-      openedForm(f);
-      if (f?.mode === "create") params = {};
+<FilterBar
+  bind:value={filter}
+  shown={filtered.length}
+  total={defs.data.length}
+  placeholder="filter jobs…"
+  label="filter jobs"
+/>
+
+<CrudTable
+  hoist={sectionHoist("jobs")}
+  {columns}
+  rows={filtered}
+  rowKey={(d) => d.id}
+  loading={defs.loading || info.loading}
+  error={defs.error}
+  emptyTitle={defs.data.length ? "No jobs match." : "No job definitions yet."}
+  addLabel="add job"
+  noun="job"
+  editTitle={(d) => d.name}
+  width="48rem"
+  extraActions={controls}
+  {formExtra}
+  onform={(f) => {
+    openedForm(f);
+    opened = f?.row ?? null;
+    if (f?.mode === "create") params = {};
+  }}
+  oncreate={createJob}
+  onsave={(row, d) =>
+    defs.mutate(() => api.patch(`/jobs/definitions/${row.id}`, payload(d)))}
+  ondelete={(row) =>
+    defs.mutate(async () => {
+      await api.delete(`/jobs/definitions/${row.id}`);
+      void census.reload();
+    })}
+/>
+
+<GroupHead label="recent runs, every job" />
+{@render runList(recent.data, true)}
+
+{#if history}
+  {@const h = history}
+  <Modal
+    title={`${h.name}: every run`}
+    width="56rem"
+    cancelLabel="close"
+    onCancel={() => {
+      history = null;
+      historyRuns = null;
     }}
-    onclose={back}
-    oncreate={createJob}
-    onsave={(row, d) =>
-      defs.mutate(() => api.patch(`/jobs/definitions/${row.id}`, payload(d)))}
-    ondelete={(row) =>
-      defs.mutate(() => api.delete(`/jobs/definitions/${row.id}`))}
-  />
-{:else}
-  <div class="bar">
-    <FilterBar
-      bind:value={filter}
-      shown={filtered.length}
-      total={defs.data.length}
-      placeholder="filter jobs…"
-      label="filter jobs"
-    />
-    <label class="only"><Checkbox bind:checked={failuresOnly} ariaLabel="failures only" /> failures only</label>
-  </div>
-
-  <CrudTable
-    hoist={sectionHoist("jobs")}
-    {columns}
-    rows={filtered}
-    rowKey={(d) => d.id}
-    loading={defs.loading}
-    error={defs.error}
-    emptyTitle={defs.data.length ? "No jobs match." : "No job definitions yet."}
-    addLabel="add job"
-    onopen={(d) => navigate(recordPath("jobs", d.id))}
-    onadd={() => navigate(recordPath("jobs", NEW_RECORD))}
-  />
-
-  <GroupHead label="recent runs, every job" />
-  {@render runList(recent.data, true)}
+  >
+    {#if !historyRuns}
+      <p class="dim">loading…</p>
+    {:else}
+      <p class="dim small">
+        {historyRuns.length}
+        {historyRuns.length === 1 ? "run" : "runs"}{historyRuns.length === 200
+          ? ", the newest 200"
+          : ""}. Kept 90 days, failures 180.
+      </p>
+      {@render runList(historyRuns, false)}
+    {/if}
+  </Modal>
 {/if}
 
 <style>
-  .bar { display: flex; align-items: center; gap: var(--pad-3); }
-  .bar :global(> :first-child) { flex: 1; }
-  .only { display: inline-flex; align-items: center; gap: var(--pad-1); color: var(--muted); white-space: nowrap; }
+  .acts { display: inline-flex; gap: var(--pad-1); }
   .dim { color: var(--muted); }
   .small { display: block; font-size: 0.85em; }
   .sched { font-family: var(--font-mono); }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { navigate } from "../router.svelte";
   import { Bars, Columns, compact, dayOfMonth, type Bar, type Col } from "../tui";
   import { showCustomer, t } from "../terms";
   import { activity } from "./activity.svelte";
@@ -93,6 +94,11 @@
   );
   const editTotal = $derived(edits.reduce((n, d) => n + d.value, 0));
 
+  const openRead = (b: Bar) => {
+    const item = library.top.find((x) => x.id === b.key);
+    if (item) navigate(`/library/${item.kind === "doc" ? "docs" : "entries"}/${item.id}`);
+  };
+
   const mostRead = $derived(
     library.top.map((item): Bar => ({ key: item.id, label: item.title, value: item.reads })),
   );
@@ -120,6 +126,6 @@
   </Tile>
 
   <Tile title="most read" meta="{library.days} d" empty={!mostRead.length}>
-    <Bars rows={mostRead} format={compact} fit />
+    <Bars rows={mostRead} format={compact} fit onpick={openRead} />
   </Tile>
 </Overview>
