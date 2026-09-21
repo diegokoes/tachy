@@ -1,221 +1,409 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import type { ComponentNode } from "@tachy/contract";
   import { api } from "../api";
-  import { createResource } from "../resource.svelte";
+  import { createResource, errText } from "../resource.svelte";
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
-  import { Chip, CrudTable, FilterBar, type Column } from "../tui";
+  import {
+    Button,
+    Chip,
+    Modal,
+    Note,
+    RecordModal,
+    Select,
+    blankDraft,
+    draftFrom,
+    missingRequired,
+    type Column,
+    type Draft,
+  } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
-  import SlugRename from "./SlugRename.svelte";
-  import ScopeBar from "./ScopeBar.svelte";
+  import { csv } from "../fields";
   import { INFO } from "./help";
-import { csv } from "../fields";
-  import type { Component, Product, Repo } from "./rows";
-  import { sectionHoist } from "./sectionAction.svelte";
+  import type { Repo } from "./rows";
+  import { pushScope } from "../keys.svelte";
+  import ArchitectureMap from "./ArchitectureMap.svelte";
+  import SlugRename from "./SlugRename.svelte";
+  import {
+    EMPTY_FILTERS,
+    options,
+    pick,
+    type Filters,
+    type GraphNode,
+  } from "./architecture";
 
-  let productSlug = $state("");
-  let renaming = $state<Component | null>(null);
-
-  const products = createResource(() => api.get<Product[]>("/products"), []);
-  const components = createResource(
-    () =>
-      productSlug
-        ? api.get<Component[]>(`/products/${productSlug}/components`)
-        : Promise.resolve([]),
+  const tree = createResource(
+    () => api.get<ComponentNode[]>("/components"),
     [],
   );
   const repos = createResource(
-    () =>
-      productSlug
-        ? api
-            .get<{ repos: Repo[] }>(`/repos?product_slug=${productSlug}`)
-            .then((r) => r.repos)
-        : Promise.resolve([]),
+    () => api.get<{ repos: Repo[] }>("/repos").then((r) => r.repos),
     [],
   );
 
-  const parentSlug = (c: Component) =>
-    components.data.find((p) => p.id === c.parent_id)?.slug ?? "";
-  const reposOf = (c: Component) =>
-    repos.data.filter((r) => r.component_id === c.id);
+  let filters = $state<Filters>({ ...EMPTY_FILTERS });
+  let renaming = $state<ComponentNode | null>(null);
+  let error = $state<string | null>(null);
 
-  const mayEdit = $derived(
-    canCurateScope({
-      team_slug:
-        products.data.find((p) => p.slug === productSlug)?.team_slug ?? null,
-    }),
+  /* Create and edit are the same form, as everywhere else in admin; only the
+     commit differs. The map replaces the table, so this panel drives the
+     record dialog itself rather than through CrudTable. */
+  let form = $state<{ mode: "create" | "edit"; row: ComponentNode | null } | null>(
+    null,
+  );
+  let draft = $state<Draft>({});
+  let busy = $state(false);
+  let armed = $state(false);
+
+  const picked = $derived(options(tree.data, filters.team));
+  const shown = $derived(pick(tree.data, filters));
+  const narrowed = $derived(
+    Boolean(filters.team || filters.product || filters.query.trim()),
   );
 
+  /** Which product a new or edited component belongs to. */
+  const productOf = (d: Draft) =>
+    String(d.product_slug ?? form?.row?.product_slug ?? filters.product ?? "");
+
+  const siblings = (productSlug: string) =>
+    tree.data.filter((c) => c.product_slug === productSlug);
+
+  const mayEdit = (c: ComponentNode | null) =>
+    canCurateScope({ team_slug: c?.team_slug ?? null });
+
   /** A component may not be re-parented under itself or anything beneath it. */
-  function subtree(slug: string): Set<string> {
-    const start = components.data.find((c) => c.slug === slug);
-    if (!start) return new Set();
-    const ids = new Set([start.id]);
+  function subtree(row: ComponentNode | null): Set<string> {
+    if (!row) return new Set();
+    const ids = new Set([row.id]);
     for (let grew = true; grew; ) {
       grew = false;
-      for (const c of components.data) {
+      for (const c of tree.data)
         if (c.parent_id && ids.has(c.parent_id) && !ids.has(c.id)) {
           ids.add(c.id);
           grew = true;
         }
-      }
     }
     return ids;
   }
 
-  const columns: Column<Component>[] = $derived([
-    { key: "name", label: "name", width: "13rem", edit: "text", required: true },
+  const reposOf = (c: ComponentNode) =>
+    repos.data.filter((r) => r.component_id === c.id);
+
+  const columns: Column<ComponentNode>[] = $derived([
+    {
+      key: "product_slug",
+      label: t("product"),
+      edit: "select",
+      required: true,
+      only: "create",
+      info: "Which product this component belongs to. Fixed once created.",
+      options: picked.products,
+      initial: filters.product || undefined,
+    },
+    { key: "name", label: "name", edit: "text", required: true },
     {
       key: "slug",
-      label: "component",
-      width: "12rem",
+      label: "id",
+      formOnly: true,
       edit: "text",
       required: true,
       info: INFO.slug,
       derive: (d) =>
         uniqueSlug(
           slugify(String(d.name ?? "")),
-          components.data.map((c) => c.slug),
+          siblings(productOf(d)).map((c) => c.slug),
         ),
       action: { label: "rename…", onclick: (r) => (renaming = r) },
     },
     {
       key: "parent",
       label: "parent",
-      width: "9rem",
       edit: "select",
       info: INFO.parent,
       options: (d) => {
-        const blocked = subtree(String(d.slug ?? ""));
+        const blocked = subtree(form?.row ?? null);
         return [
           { value: "", label: "(top level)" },
-          ...components.data
+          ...siblings(productOf(d))
             .filter((c) => !blocked.has(c.id))
-            .map((c) => ({ value: c.slug, label: c.slug })),
+            .map((c) => ({ value: c.slug, label: c.name })),
         ];
       },
-      value: parentSlug,
+      value: (r) =>
+        tree.data.find((p) => p.id === r.parent_id)?.slug ?? "",
     },
     {
       key: "aliases",
       label: "aliases",
-      width: "9rem",
       edit: "text",
       info: INFO.aliases.component,
       value: (r) => (r.aliases ?? []).join(", "),
     },
-    { key: "description", label: "description", edit: "textarea" },
-    { key: "code", label: "code", width: "9rem", cell: codeCell },
+    { key: "description", label: "description", edit: "textarea", span: "full" },
   ]);
 
-  onMount(async () => {
-    await products.reload();
-    productSlug = products.data[0]?.slug ?? "";
-  });
+  function startEdit(row: ComponentNode) {
+    draft = draftFrom(columns, row);
+    form = { mode: "edit", row };
+    armed = false;
+    error = null;
+  }
+
+  function startAdd() {
+    draft = blankDraft(columns);
+    form = { mode: "create", row: null };
+    armed = false;
+    error = null;
+  }
+
+  function close() {
+    form = null;
+    draft = {};
+    armed = false;
+  }
+
+  async function run(fn: () => Promise<unknown>) {
+    busy = true;
+    error = null;
+    try {
+      await fn();
+      await tree.reload();
+      return true;
+    } catch (e) {
+      error = errText(e);
+      return false;
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function commit() {
+    if (!form) return;
+    const missing = missingRequired(columns, draft);
+    if (missing.length) {
+      error = `required: ${missing.join(", ")}`;
+      return;
+    }
+    const product = productOf(draft);
+    const body = {
+      name: draft.name,
+      parentSlug: draft.parent || null,
+      description: draft.description || null,
+      aliases: csv(String(draft.aliases ?? "")),
+    };
+    const ok = await run(() =>
+      form!.row
+        ? api.patch(
+            `/products/${product}/components/${form!.row.slug}`,
+            body,
+          )
+        : api.post(`/products/${product}/components`, {
+            ...body,
+            slug: draft.slug,
+            parentSlug: draft.parent || undefined,
+            description: draft.description || undefined,
+          }),
+    );
+    if (ok) close();
+  }
+
+  async function remove() {
+    const row = form?.row;
+    if (!row) return;
+    if (!armed) {
+      armed = true;
+      return;
+    }
+    armed = false;
+    if (
+      await run(() =>
+        api.delete(`/products/${row.product_slug}/components/${row.slug}`),
+      )
+    )
+      close();
+  }
+
+  const open = (n: GraphNode) => {
+    const row = tree.data.find((c) => c.id === n.key);
+    if (row && mayEdit(row)) startEdit(row);
+  };
+
+  /* The map takes the whole window, so the filters and the add button wait
+     behind ctrl+k instead of holding a strip of it. */
+  let finding = $state(false);
+  let findEl = $state<HTMLInputElement>();
+
+  $effect(() =>
+    pushScope([
+      {
+        key: "ctrl+k",
+        label: "find",
+        inFields: true,
+        run: () => (finding = true),
+      },
+    ]),
+  );
 
   $effect(() => {
-    void productSlug;
-    components.reload();
-    repos.reload();
+    if (finding) findEl?.focus();
   });
 
-  let filter = $state("");
-  const filtered = $derived.by(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return components.data;
-    return components.data.filter((c) =>
-      [c.slug, c.name, (c.aliases ?? []).join(" ")]
-        .join(" ")
-        .toLowerCase()
-        .includes(q),
-    );
+  onMount(() => {
+    void tree.reload();
+    void repos.reload();
   });
 </script>
 
-{#snippet codeCell(c: Component)}
-  {@const rs = reposOf(c)}
-  {#if rs.length}
-    <span class="chips">
-      {#each rs as r}
-        <Chip
-          tone={r.index_status === "ready" ? "default" : "warn"}
-          title={`${r.slug} · ${r.index_status}`}>{r.slug}</Chip
-        >
-      {/each}
-    </span>
-  {:else}
-    <span class="none">-</span>
+{#snippet whereExtra()}
+  {#if form?.row}
+    {@const row = form.row}
+    {@const rs = reposOf(row)}
+    <div class="where">
+      <span class="dim">
+        {row.team_name} › {row.product_name}
+      </span>
+      {#if rs.length}
+        <span class="chips">
+          {#each rs as r (r.id)}
+            <Chip
+              tone={r.index_status === "ready" ? "default" : "warn"}
+              title={`${r.url} · ${r.index_status}`}>{r.slug}</Chip
+            >
+          {/each}
+        </span>
+      {:else}
+        <span class="dim sm">no repo implements this yet</span>
+      {/if}
+    </div>
   {/if}
 {/snippet}
 
-<ScopeBar
-  label={t("product")}
-  bind:value={productSlug}
-  options={products.data.map((p) => ({ value: p.slug, label: p.name }))}
-/>
+{#if error && !form}<Note tone="danger">{error}</Note>{/if}
+{#if tree.error}<Note tone="danger">{tree.error}</Note>{/if}
 
-{#if productSlug}
-  <FilterBar
-    bind:value={filter}
-    shown={filtered.length}
-    total={components.data.length}
-    placeholder="filter components…"
-    label="filter components"
-  />
+<div class="stage">
+  <ArchitectureMap rows={tree.data} {filters} onpick={open} />
+  {#if narrowed}
+    <button
+      class="scope"
+      type="button"
+      title="change the filter (ctrl+k)"
+      onclick={() => (finding = true)}
+    >
+      {[
+        picked.teams.find((o) => o.value === filters.team)?.label,
+        picked.products.find((o) => o.value === filters.product)?.label,
+        filters.query.trim() && `"${filters.query.trim()}"`,
+      ]
+        .filter(Boolean)
+        .join(" › ")}
+      <span class="dim">· {shown.length} of {tree.data.length}</span>
+    </button>
+  {/if}
+</div>
 
-  <CrudTable
-    hoist={sectionHoist("components")}
+{#if finding}
+  <Modal title="find" width="46rem" onCancel={() => (finding = false)}>
+    {#snippet barExtra()}
+      {#if picked.products.length}
+        <Button
+          variant="ghost"
+          tone="ok"
+          size="sm"
+          icon="plus"
+          onclick={() => {
+            finding = false;
+            startAdd();
+          }}>add component</Button
+        >
+      {/if}
+    {/snippet}
+    <div class="bar">
+      <Select
+        bind:value={filters.team}
+        options={picked.teams}
+        placeholder="any {t('team')}"
+        clearable
+        searchable
+        active={!!filters.team}
+        keepOpen
+        aria-label={t("team")}
+        onchange={() => (filters.product = "")}
+      />
+      <Select
+        bind:value={filters.product}
+        options={picked.products}
+        placeholder="any {t('product')}"
+        clearable
+        searchable
+        active={!!filters.product}
+        keepOpen
+        aria-label={t("product")}
+      />
+      <input
+        class="q"
+        bind:this={findEl}
+        bind:value={filters.query}
+        placeholder="find a component…"
+        aria-label="find a component"
+        onkeydown={(e) => e.key === "Enter" && (finding = false)}
+      />
+      <span class="dim sm">{shown.length} of {tree.data.length}</span>
+      {#if narrowed}
+        <Button
+          variant="ghost"
+          size="sm"
+          icon="cancel"
+          title="whole catalogue"
+          aria-label="whole catalogue"
+          onclick={() => (filters = { ...EMPTY_FILTERS })}
+        />
+      {/if}
+    </div>
+  </Modal>
+{/if}
+
+{#if form}
+  {@const f = form}
+  <RecordModal
+    title={f.row ? `component: ${f.row.name}` : "add component"}
     {columns}
-    rows={filtered}
-    rowKey={(r) => r.slug}
-    loading={components.loading}
-    error={components.error}
-    emptyTitle="No components for this {t('product')} yet."
-    emptyDetail="Seed from docs or ticket analysis."
-    canEdit={() => mayEdit}
-    canDelete={() => mayEdit}
-    canCreate={mayEdit}
-    addLabel="add component"
-    noun="component"
-    editTitle={(r) => r.name}
-    oncreate={(d) =>
-      components.mutate(() =>
-        api.post(`/products/${productSlug}/components`, {
-          slug: d.slug,
-          name: d.name,
-          parentSlug: d.parent || undefined,
-          description: d.description || undefined,
-          aliases: csv(String(d.aliases ?? "")),
-        }),
-      )}
-    onsave={(row, d) =>
-      components.mutate(() =>
-        api.patch(`/products/${productSlug}/components/${row.slug}`, {
-          name: d.name,
-          parentSlug: d.parent || null,
-          description: d.description || null,
-          aliases: csv(String(d.aliases ?? "")),
-        }),
-      )}
-    ondelete={(row) =>
-      components.mutate(() =>
-        api.delete(`/products/${productSlug}/components/${row.slug}`),
-      )}
+    {draft}
+    mode={f.mode}
+    row={f.row ?? undefined}
+    {busy}
+    {error}
+    width="44rem"
+    extra={whereExtra}
+    destructive={f.row && mayEdit(f.row)
+      ? {
+          label: armed ? "click again to confirm" : "delete",
+          icon: armed ? "check" : "del",
+          busy,
+          onclick: remove,
+        }
+      : undefined}
+    onConfirm={commit}
+    onCancel={close}
   />
 {/if}
 
 {#if renaming}
   {@const r = renaming}
   <SlugRename
-    title={`rename ${r.slug}`}
+    title={`rename ${r.name}`}
     current={r.slug}
-    taken={components.data.map((c) => c.slug)}
-    impact={`/products/${productSlug}/components/${r.slug}`}
+    taken={siblings(r.product_slug).map((c) => c.slug)}
+    impact={`/products/${r.product_slug}/components/${r.slug}`}
     onRename={(to) =>
-      api.post(`/products/${productSlug}/components/${r.slug}/rename`, { to })}
+      api.post(`/products/${r.product_slug}/components/${r.slug}/rename`, {
+        to,
+      })}
     onDone={async () => {
       renaming = null;
-      await components.reload();
+      close();
+      await tree.reload();
     }}
     onCancel={() => (renaming = null)}
   >
@@ -229,12 +417,53 @@ import { csv } from "../fields";
 {/if}
 
 <style>
+  .stage {
+    position: relative;
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .scope {
+    position: absolute;
+    top: var(--pad-3);
+    left: var(--pad-4);
+    padding: var(--pad-1) var(--pad-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-chip);
+    background: var(--panel-solid);
+    color: var(--text);
+    font: inherit;
+    font-size: var(--fs-xs);
+    cursor: pointer;
+  }
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+  }
+  .q {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+  .dim {
+    color: var(--muted);
+  }
+  .sm {
+    font-size: var(--fs-xs);
+  }
+  .where {
+    display: flex;
+    align-items: center;
+    gap: var(--gap);
+    flex-wrap: wrap;
+    margin-top: var(--pad-3);
+    padding-top: var(--pad-3);
+    border-top: 1px dashed var(--border);
+  }
   .chips {
     display: flex;
     gap: var(--pad-1);
     flex-wrap: wrap;
-  }
-  .none {
-    color: var(--muted);
   }
 </style>
