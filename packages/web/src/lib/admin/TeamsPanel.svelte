@@ -36,8 +36,8 @@ import { INFO } from "./help";
     },
     {
       key: "slug",
-      label: "slug",
-      width: "12rem",
+      label: "id",
+      formOnly: true,
       edit: "text",
       required: true,
       info: INFO.slug,

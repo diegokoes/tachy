@@ -705,6 +705,18 @@
     display: none;
   }
 
+  :global(.panel.grow:has(.bleed)) {
+    padding-inline: 0;
+    padding-bottom: 0;
+  }
+  main:has(:global(.bleed)) {
+    overflow: hidden;
+    padding: 0;
+  }
+  .content:has(:global(.bleed)) > :global(.scrollbar) {
+    display: none;
+  }
+
   main > :global(*) {
     flex-shrink: 0;
   }

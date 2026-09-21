@@ -40,6 +40,18 @@ export interface ComponentRow {
   aliases: string[] | null;
 }
 
+/**
+ * A component with the branch it hangs off, for drawing the whole catalogue
+ * at once. `parent_id` is only ever another component of the same product, so
+ * team → product → component → subcomponent is a tree, never a graph.
+ */
+export interface ComponentNode extends ComponentRow {
+  product_slug: string;
+  product_name: string;
+  team_slug: string;
+  team_name: string;
+}
+
 export interface LabelRow {
   id: string;
   slug: string;

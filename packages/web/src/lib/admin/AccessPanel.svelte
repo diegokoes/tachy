@@ -2,40 +2,40 @@
   import { onMount } from "svelte";
   import type { TeamRole } from "@tachy/contract";
   import { api } from "../api";
-  import { createResource } from "../resource.svelte";
   import { session, isGlobalAdmin, canCurateScope } from "../session.svelte";
   import { roleLabel, roleTip, t } from "../terms";
   import {
     Badge,
     Button,
+    Checkbox,
     Chip,
     CrudTable,
     Field,
     FilterBar,
     GroupHead,
+    Icon,
     Select,
-
     type Column,
   } from "../tui";
-  import type { Member, Team, UserRow } from "./rows";
+  import type { UserRow } from "./rows";
   import { sectionHoist } from "./sectionAction.svelte";
-
-  type Membership = {
-    user_id: string;
-    team_slug: string;
-    team_name: string;
-    team_role: TeamRole;
-  };
+  import {
+    memberships,
+    reloadRoster,
+    signIn,
+    ssoConfigured,
+    system,
+    teams,
+    users,
+  } from "./roster.svelte";
 
   const ROLE_TIP = $derived(roleTip("app"));
   const TEAM_ROLE_TIP = $derived(roleTip("team"));
 
-  const users = createResource(() => api.get<UserRow[]>("/users"), []);
-  const teams = createResource(() => api.get<Team[]>("/teams"), []);
-  const memberships = createResource(
-    () => api.get<Membership[]>("/users/memberships"),
-    [],
-  );
+  const sso = $derived(ssoConfigured());
+
+  /** The toggle holds a boolean; the API takes the two role words. */
+  const roleOf = (d: { role?: unknown }) => (d.role ? "admin" : "member");
 
   const admin = $derived(isGlobalAdmin());
   /** A team admin manages their own team's roster but not the user records. */
@@ -44,19 +44,20 @@
   );
 
   let filter = $state("");
+  let team = $state("");
 
   const teamsOf = (u: UserRow) =>
     memberships.data.filter((m) => m.user_id === u.id);
 
-  const filtered = $derived(
-    filter.trim()
-      ? users.data.filter((u) =>
-          `${u.email} ${u.display_name ?? ""}`
-            .toLowerCase()
-            .includes(filter.trim().toLowerCase()),
-        )
-      : users.data,
-  );
+  const filtered = $derived.by(() => {
+    const q = filter.trim().toLowerCase();
+    return users.data.filter(
+      (u) =>
+        (!q ||
+          `${u.email} ${u.display_name ?? ""}`.toLowerCase().includes(q)) &&
+        (!team || teamsOf(u).some((m) => m.team_slug === team)),
+    );
+  });
 
   /* Membership lives on its own endpoint, so the form edits a copy and the
      save fans the differences out afterwards. */
@@ -96,17 +97,16 @@
       info: "Sign-in identity. Immutable.",
     },
     { key: "display_name", label: "name", width: "12rem", edit: "text" },
+    /* A toggle, not a two-option select: the question is whether this person
+       is an app admin, and a list of two is a longer way to ask it. The draft
+       carries the role string the API wants; `value` and the commit convert. */
     {
       key: "role",
-      label: "app role",
-      width: "11rem",
+      label: roleLabel("app", "admin"),
+      width: "9rem",
       cell: roleCell,
-      edit: "select",
-      options: [
-        { value: "member", label: "member" },
-        { value: "admin", label: roleLabel("app", "admin") },
-      ],
-      initial: "member",
+      edit: "checkbox",
+      value: (r) => r.role === "admin",
       info: ROLE_TIP,
     },
     { key: "teams", label: t("teams"), cell: teamsCell },
@@ -140,13 +140,14 @@
       edit: "checkbox",
       info: "Non-human. Excluded from engagement figures.",
     },
-    { key: "status", label: "status", width: "8rem", cell: statusCell },
+    { key: "signin", label: "password", width: "7rem", cell: passwordCell },
+    { key: "sso", label: "SSO", width: "6rem", cell: ssoCell },
+    { key: "state", label: "", width: "7rem", cell: stateCell },
   ]);
 
   onMount(() => {
-    users.reload();
-    teams.reload();
-    memberships.reload();
+    void reloadRoster();
+    void system.reload();
   });</script>
 
 {#snippet roleCell(u: UserRow)}
@@ -176,15 +177,46 @@
   {/if}
 {/snippet}
 
-{#snippet statusCell(u: UserRow)}
+<!-- Yes or no, drawn rather than worded: a column of "yes"/"no" reads as text
+     to be parsed, where a column of marks reads as a pattern to be scanned. -->
+{#snippet mark(on: boolean, why: string)}
+  <span class="mark" class:on>
+    <Icon name={on ? "yes" : "no"} size="1.05em" weight={7} label={why} />
+  </span>
+{/snippet}
+
+{#snippet passwordCell(u: UserRow)}
+  {@const can = signIn(u, sso).password}
+  {@render mark(
+    can,
+    can
+      ? "can sign in with a password"
+      : u.has_password
+        ? "has a password, but SSO is on and this account is not allowed one"
+        : "no password set",
+  )}
+{/snippet}
+
+{#snippet ssoCell(u: UserRow)}
+  {@const can = signIn(u, sso).sso}
+  {@render mark(
+    can,
+    can
+      ? "can sign in with SSO"
+      : u.service_account
+        ? "service account, authenticates with a token"
+        : sso === null
+          ? "SSO setting not visible to you"
+          : "SSO is not configured",
+  )}
+{/snippet}
+
+<!-- Neither state is the common case, so neither gets a column of its own. -->
+{#snippet stateCell(u: UserRow)}
   {#if u.disabled}
     <Badge tone="danger">disabled</Badge>
   {:else if u.service_account}
     <Badge>service</Badge>
-  {:else if u.has_password}
-    <Badge tone="ok">password</Badge>
-  {:else}
-    <Badge>SSO only</Badge>
   {/if}
 {/snippet}
 
@@ -195,16 +227,16 @@
       {#each myTeams.filter((tm) => tm.slug in roster) as tm (tm.slug)}
         <div class="rrow">
           <span class="rn">{tm.name}</span>
-          <Select
-            value={roster[tm.slug]}
-            options={[
-              { value: "member", label: "member" },
-              { value: "admin", label: roleLabel("team", "admin") },
-            ]}
-            title={TEAM_ROLE_TIP}
-            aria-label={`${tm.name} role`}
-            onchange={(v) => (roster[tm.slug] = v as TeamRole)}
-          />
+          <!-- Membership is the row existing at all; the toggle only asks
+               whether they also run the team. -->
+          <label class="opt" title={TEAM_ROLE_TIP}>
+            <Checkbox
+              checked={roster[tm.slug] === "admin"}
+              ariaLabel={`${tm.name}: ${roleLabel("team", "admin")}`}
+              onchange={(on) => (roster[tm.slug] = on ? "admin" : "member")}
+            />
+            <span class="dim">{roleLabel("team", "admin")}</span>
+          </label>
           <Button
             variant="ghost"
             tone="danger"
@@ -219,32 +251,40 @@
 
       {#if myTeams.some((tm) => !(tm.slug in roster))}
         {@const free = myTeams.filter((tm) => !(tm.slug in roster))}
-        <div class="rrow">
-          <Select
-            value={addTeam}
-            options={[
-              { value: "", label: `add to a ${t("team")}…` },
-              ...free.map((tm) => ({ value: tm.slug, label: tm.name })),
-            ]}
-            aria-label={`add to ${t("team")}`}
-            onchange={(v) => {
-              if (v) roster[String(v)] = "member";
-              addTeam = "";
-            }}
-          />
+        <div class="rrow add">
+          {#each free as tm (tm.slug)}
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="plus"
+              onclick={() => (roster[tm.slug] = "member")}>{tm.name}</Button
+            >
+          {/each}
         </div>
       {/if}
     </div>
   {/if}
 {/snippet}
 
-<FilterBar
-  bind:value={filter}
-  shown={filtered.length}
-  total={users.data.length}
-  placeholder="filter by email or name…"
-  label="filter users"
-/>
+<div class="bar">
+  <FilterBar
+    bind:value={filter}
+    shown={filtered.length}
+    total={users.data.length}
+    placeholder="filter by email or name…"
+    label="filter users"
+  />
+  <Select
+    bind:value={team}
+    options={teams.data.map((tm) => ({ value: tm.slug, label: tm.name }))}
+    placeholder={`any ${t("team")}`}
+    clearable
+    searchable
+    keepOpen
+    active={!!team}
+    aria-label={`filter by ${t("team")}`}
+  />
+</div>
 
 <CrudTable
   hoist={sectionHoist("users")}
@@ -273,7 +313,7 @@
         email: d.email,
         display_name: d.display_name || undefined,
         password: d.password || undefined,
-        role: d.role,
+        role: roleOf(d),
         service_account: Boolean(d.service_account),
         password_login_allowed: Boolean(d.password_login_allowed),
       });
@@ -283,14 +323,14 @@
     users.mutate(async () => {
       if (
         row.email === session.me?.email &&
-        (d.role !== row.role || Boolean(d.disabled) !== row.disabled)
+        (roleOf(d) !== row.role || Boolean(d.disabled) !== row.disabled)
       )
         throw new Error(
           "would lock you out; another app admin must make this change",
         );
       await api.patch(`/users/${row.id}`, {
         display_name: d.display_name || null,
-        role: d.role,
+        role: roleOf(d),
         disabled: Boolean(d.disabled),
         service_account: Boolean(d.service_account),
         password_login_allowed: Boolean(d.password_login_allowed),
@@ -302,6 +342,14 @@
 />
 
 <style>
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-3);
+  }
+  .bar > :global(:first-child) {
+    flex: 1;
+  }
   .chips {
     display: flex;
     gap: var(--pad-1);
@@ -329,7 +377,25 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .rrow :global(.asel) {
-    width: 11rem;
+  .opt {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pad-2);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .dim {
+    font-size: var(--fs-xs);
+    color: var(--muted);
+  }
+  .rrow.add {
+    flex-wrap: wrap;
+    gap: var(--pad-1);
+  }
+  .mark {
+    color: var(--muted);
+  }
+  .mark.on {
+    color: var(--ok);
   }
 </style>

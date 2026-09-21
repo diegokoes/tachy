@@ -76,7 +76,26 @@ export interface JobCensus {
     scheduled: number;
     manual: number;
     disabled: number;
+    /**
+     * Definitions per worker pool, by the class each actually runs on: its
+     * own override, else its kind's default. Counts jobs, not runs; the runs
+     * per pool are already in `success`.
+     */
+    by_class: Record<JobResourceClass, number>;
   };
+  /**
+   * Failed and timed-out runs in the window, one row per job that failed.
+   * A run with no definition (an ad-hoc run) is grouped under its kind.
+   */
+  failures: {
+    definition_id: string | null;
+    name: string;
+    kind: string;
+    runs: number;
+    last_at: string;
+    last_error: string | null;
+    last_run: string;
+  }[];
   /** Fire times in the next 24 hours, per enabled scheduled definition. */
   upcoming: { id: string; name: string; kind: string; at: string[] }[];
 }

@@ -52,6 +52,7 @@ select {
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
   padding: var(--pad-2) var(--pad-3);
+  min-height: var(--control-h);
   /* Terminal caret everywhere: accent-colored; block shape where supported. */
   caret-color: var(--accent);
   caret-shape: block;

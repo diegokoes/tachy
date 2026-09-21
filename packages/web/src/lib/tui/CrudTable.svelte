@@ -26,6 +26,7 @@
     addLabel = "add",
     noun,
     editTitle,
+    width,
     formExtra,
     onsave,
     oncreate,
@@ -56,6 +57,8 @@
     noun?: string;
     /** Names the row in the dialog title; defaults to the row's key. */
     editTitle?: (row: T) => string;
+    /** Widens the record dialog, for a record that carries more than fields. */
+    width?: string;
     /** Extra controls inside the record form, below the columns. */
     formExtra?: Snippet<
       [{ mode: "create" | "edit"; row: T | null; draft: Draft }]
@@ -209,6 +212,7 @@
       : addLabel}
     {columns}
     {draft}
+    {width}
     mode={f.mode}
     row={f.row ?? undefined}
     busy={busy === formKey}

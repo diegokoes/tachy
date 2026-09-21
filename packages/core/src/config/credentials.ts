@@ -12,7 +12,6 @@ import {
   assertCanWriteScope,
   scopeCondition,
   upsertScoped,
-  type Scope,
   type ScopeContext,
 } from "./scoped";
 import type { AgentProvider } from "./settings";
@@ -40,8 +39,16 @@ export {
   validateCredential,
 };
 
+/**
+ * The scopes a credential can be stored at. There is no team scope: a secret
+ * belongs to one person, and the global rows are the deployment's own machine
+ * tokens — a source connection's token, the job webhook — which background
+ * work resolves with no user to be.
+ */
+export type CredentialScope = "user" | "global";
+
 /** Where a resolved/available credential came from. */
-export type CredentialSource = Scope | "env";
+export type CredentialSource = CredentialScope | "env";
 
 export const sourceCredentialName = (sourceType: string, slug: string) =>
   `${sourceType}_token:${slug}`;
@@ -78,13 +85,13 @@ export function envCredential(name: string): string | undefined {
  * share one. Moving a value to another row changes this, and the open fails.
  */
 function credentialAad(row: Record<string, unknown>): string {
-  return [row.scope, row.user_id ?? "", row.team_id ?? "", row.name].join(
-    "\u0000",
-  );
+  // The empty field is where team_id used to sit. Keep it: dropping it would
+  // change the AAD of every row already written and none would open again.
+  return [row.scope, row.user_id ?? "", "", row.name].join("\u0000");
 }
 
 /**
- * Most-specific-wins credential lookup: user > team > global > env var.
+ * Most-specific-wins credential lookup: user > global > env var.
  * Returns plaintext — never expose the result through an API response.
  */
 export async function resolveCredential(
@@ -129,16 +136,15 @@ export interface AgentAuth {
 
 const SOURCE_RANK: Record<CredentialSource, number> = {
   user: 0,
-  team: 1,
-  global: 2,
-  env: 3,
+  global: 1,
+  env: 2,
 };
 
 /**
  * The credential a turn should authenticate with, and where it came from.
  * Claude accepts either an API key or a subscription token; the more specific
- * scope wins so a user's own token beats an org-wide key, and an API key wins
- * an exact tie.
+ * scope wins so a user's own token beats one supplied by the environment, and
+ * an API key wins an exact tie.
  */
 export async function resolveAgentAuth(
   provider: AgentProvider,
@@ -172,7 +178,7 @@ export async function resolveAgentAuth(
 
 export async function setCredential(
   actorUserId: string,
-  scope: Scope,
+  scope: CredentialScope,
   scopeId: string | undefined,
   name: string,
   value: string,
@@ -187,7 +193,6 @@ export async function setCredential(
     credentialAad({
       scope,
       user_id: scope === "user" ? scopeId : null,
-      team_id: scope === "team" ? scopeId : null,
       name,
     }),
   );
@@ -201,7 +206,7 @@ export async function setCredential(
 
 export async function deleteCredential(
   actorUserId: string,
-  scope: Scope,
+  scope: CredentialScope,
   scopeId: string | undefined,
   name: string,
 ): Promise<boolean> {
@@ -217,13 +222,13 @@ export async function deleteCredential(
 
 export interface CredentialMeta {
   name: string;
-  scope: Scope;
+  scope: CredentialScope;
   updated_at: string;
 }
 
 /** Metadata only — never the value. Route callers enforce read authz. */
 export async function listCredentials(
-  scope: Scope,
+  scope: CredentialScope,
   scopeId?: string,
 ): Promise<CredentialMeta[]> {
   const rows = await sql`
@@ -233,7 +238,7 @@ export async function listCredentials(
   `;
   return rows.map((r) => ({
     name: r.name as string,
-    scope: r.scope as Scope,
+    scope: r.scope as CredentialScope,
     updated_at: String(r.updated_at),
   }));
 }

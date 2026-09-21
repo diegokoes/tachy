@@ -64,6 +64,10 @@
     })),
   );
 
+  /* A rail of one row indexes nothing. The section itself still renders, so it
+     keeps its heading and its add button. */
+  const railed = $derived(sections.length > 1);
+
   /* Rebuilt per page, because the whole column of sections is replaced. `at` is
      read here and nowhere else — as a place to open at, not as a thing to
      render from. */
@@ -96,8 +100,10 @@
 <!-- The index and everything it points at, in one column. The rail's active row
      is still the heading of the part you are in — it just tracks the scroll
      instead of choosing what gets rendered at all. -->
-<div class="page">
-  <Rail {items} {active} {label} onpick={(k) => spy.goto(k)} />
+<div class="page" class:railed>
+  {#if railed}
+    <Rail {items} {active} {label} onpick={(k) => spy.goto(k)} />
+  {/if}
 
   <div class="content">
     {#each sections as s (s.key)}
@@ -119,12 +125,20 @@
 </div>
 
 <style>
+  /* Horizontal only. The vertical air is `main`'s --main-air, which the
+     sticky section heading already compensates for with its ::before strip;
+     top padding here would move that strip's containing block down and let
+     rows scroll through an unpainted gap. */
   .page {
     display: grid;
-    grid-template-columns: minmax(9rem, 12rem) 1fr;
+    grid-template-columns: 1fr;
     gap: var(--pad-4);
+    padding-inline: var(--view-pad-x);
     align-items: start;
     min-width: 0;
+  }
+  .page.railed {
+    grid-template-columns: minmax(9rem, 12rem) 1fr;
   }
   .content {
     display: flex;
@@ -137,8 +151,10 @@
   }
 
   @media (max-width: 52rem) {
-    .page {
+    .page.railed {
       grid-template-columns: 1fr;
+    }
+    .page {
       gap: var(--pad-3);
     }
   }

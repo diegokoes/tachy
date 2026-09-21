@@ -3,18 +3,29 @@
   import { api } from "../api";
   import { createResource } from "../resource.svelte";
   import { t } from "../terms";
-  import { CrudTable, type Column } from "../tui";
+  import { CrudTable, Note, Select, type Column } from "../tui";
   import { slugify } from "../slug";
-  import ScopeBar from "./ScopeBar.svelte";
   import SlugRename from "./SlugRename.svelte";
   import type { Label, Product } from "./rows";
 import { INFO } from "./help";
   import { sectionHoist } from "./sectionAction.svelte";
 
+  let team = $state("");
   let product = $state("");
   let renaming = $state<Label | null>(null);
 
   const products = createResource(() => api.get<Product[]>("/products"), []);
+
+  const teamOptions = $derived(
+    [...new Map(products.data.map((p) => [p.team_slug, p.team_name])).entries()]
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([value, label]) => ({ value, label })),
+  );
+  const productOptions = $derived(
+    products.data
+      .filter((p) => !team || p.team_slug === team)
+      .map((p) => ({ value: p.slug, label: p.name })),
+  );
   const labels = createResource(
     () =>
       product
@@ -49,13 +60,35 @@ import { INFO } from "./help";
     labels.reload();
   });</script>
 
-<ScopeBar
-  label={t("product")}
-  bind:value={product}
-  options={products.data.map((p) => ({ value: p.slug, label: p.name }))}
-/>
+<!-- Team narrows the product list; the product itself is not optional,
+     because a label only exists inside one. -->
+<div class="bar">
+  <Select
+    bind:value={team}
+    options={teamOptions}
+    placeholder={`any ${t("team")}`}
+    clearable
+    searchable
+    keepOpen
+    active={!!team}
+    aria-label={`filter by ${t("team")}`}
+    onchange={() => {
+      if (team && !productOptions.some((o) => o.value === product))
+        product = productOptions[0]?.value ?? "";
+    }}
+  />
+  <Select
+    bind:value={product}
+    options={productOptions}
+    placeholder={`pick a ${t("product")}`}
+    searchable
+    aria-label={t("product")}
+  />
+</div>
 
-{#if product}
+{#if !product}
+  <Note>Pick a {t("product")} to see its labels.</Note>
+{:else}
   <CrudTable
   hoist={sectionHoist("labels")}
     {columns}
@@ -109,3 +142,13 @@ import { INFO } from "./help";
     {/snippet}
   </SlugRename>
 {/if}
+
+<style>
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+    flex-wrap: wrap;
+    margin-bottom: var(--pad-2);
+  }
+</style>

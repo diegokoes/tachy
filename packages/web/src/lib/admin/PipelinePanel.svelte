@@ -81,20 +81,6 @@
     },
   ]);
 
-  /* index_status partitions the repos, so these four are the whole of them. */
-  const repoStates = $derived<Col[]>([
-    { key: "ready", label: "ready", value: r.ready, tone: "ok" },
-    { key: "working", label: "working", value: r.working, tone: "accent" },
-    { key: "idle", label: "idle", value: r.idle, tone: "muted" },
-    { key: "failing", label: "failing", value: r.failing, tone: "danger" },
-  ]);
-
-  const byType = $derived(
-    Object.entries(d.by_type)
-      .sort((a, b) => b[1] - a[1])
-      .map(([type, n]): Col => ({ key: type, label: type, value: n })),
-  );
-
   const figures = $derived([
     { key: "sources", label: "sources", value: d.connections, to: "sources" },
     { key: "projects", label: "projects", value: d.projects, to: "projects" },
@@ -105,24 +91,22 @@
   ]);
 </script>
 
-<Overview {figures} loading={census.loading} error={census.error ?? activity.error}>
+<Overview
+  {figures}
+  cols={2}
+  rows={2}
+  loading={census.loading}
+  error={census.error ?? activity.error}
+>
   <Tile title="readiness">
     <Dials items={readiness} />
   </Tile>
 
-  <Tile title="repo index" meta={`${r.repos}`} empty={!r.repos}>
-    <Columns rows={repoStates} fill />
-  </Tile>
-
-  <Tile title="sources by type" empty={!byType.length}>
-    <Columns rows={byType} fill />
+  <Tile title="calls by source" meta="{traffic.days} d" empty={!calls}>
+    <Bars rows={bySource} format={compact} fit />
   </Tile>
 
   <Tile title="source calls" meta="{traffic.days} d" span={2} empty={!calls}>
     <Columns rows={perDay} format={compact} legend={[...ORIGINS]} fill />
-  </Tile>
-
-  <Tile title="calls by source" meta="{traffic.days} d" empty={!calls}>
-    <Bars rows={bySource} format={compact} fit />
   </Tile>
 </Overview>

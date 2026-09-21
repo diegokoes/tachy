@@ -38,9 +38,8 @@
     min-height: 24rem;
     display: flex;
     flex-direction: column;
-    gap: calc(var(--pad-4) * 1.75);
-    padding: calc(var(--pad-4) * 1.25) calc(var(--pad-4) * 1.75)
-      var(--pad-4);
+    gap: var(--view-pad-x);
+    padding: var(--view-pad-y) var(--view-pad-x) var(--pad-4);
     min-width: 0;
     container-type: inline-size;
   }

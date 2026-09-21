@@ -4,6 +4,7 @@
   import { errText } from "../resource.svelte";
   import { Badge, Button, GroupHead, Note } from "../tui";
   import type { SystemInfo } from "./rows";
+  import { system as shared } from "./systemState.svelte";
 
   let system = $state<SystemInfo | null>(null);
   let error = $state<string | null>(null);
@@ -23,6 +24,7 @@
     try {
       await api.post("/system/maintenance", { refuse_chats: refuse });
       await load();
+      void shared.reload();
     } catch (e) {
       error = errText(e);
     } finally {

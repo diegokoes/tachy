@@ -455,16 +455,15 @@
               </ul>
             </section>
           {/if}
-
-          <Readership
-            base="knowledge"
-            {id}
-            version={entry.version}
-            {canEdit}
-            onReverted={load}
-          />
         </div>
       </div>
+      <Readership
+        base="knowledge"
+        {id}
+        version={entry.version}
+        {canEdit}
+        onReverted={load}
+      />
     {/if}
   {:else if !error}
     <p class="muted">Loading…</p>
@@ -482,6 +481,14 @@
     max-width: 76ch;
     margin-inline: auto;
     padding: 0 var(--pad-4);
+  }
+
+  /* Fills the frame, so the readership lines settle in its bottom-left corner
+     however short the entry is. */
+  .detail {
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
   }
 
   /* The positioning context the lifecycle rail hangs off. It wraps the crumb

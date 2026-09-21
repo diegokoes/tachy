@@ -54,6 +54,7 @@
      buttons reads as five unrelated controls. */
   .rail :global(.btn) {
     justify-content: flex-start;
+    font-size: var(--fs-xs);
     text-transform: uppercase;
     letter-spacing: var(--label-spacing);
     transform-origin: left center;

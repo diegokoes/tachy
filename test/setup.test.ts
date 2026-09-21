@@ -125,14 +125,14 @@ describe("first-run setup wizard", () => {
   });
 });
 
-describe("first-run setup with a shared agent key", () => {
+describe("first-run setup with an agent key", () => {
   beforeAll(async () => {
     await resetData();
     await sql`truncate credentials cascade`;
     enableVault();
   });
 
-  it("stores the agent key encrypted as the global credential", async () => {
+  it("stores the agent key encrypted, as the first admin's own", async () => {
     const res = await app.request(
       "/api/setup",
       json({
@@ -144,10 +144,18 @@ describe("first-run setup with a shared agent key", () => {
     );
     expect(res.status).toBe(200);
 
-    expect(await credentialSource("anthropic_api_key", {})).toBe("global");
-    expect(await resolveCredential("anthropic_api_key", {})).toBe(
+    const [admin] = await sql<{ id: string }[]>`
+      select id from users where email = 'keyed@example.com'
+    `;
+    const ctx = { userId: admin.id };
+    expect(await credentialSource("anthropic_api_key", ctx)).toBe("user");
+    expect(await resolveCredential("anthropic_api_key", ctx)).toBe(
       "sk-ant-from-wizard",
     );
+
+    // Nobody else inherits it.
+    expect(await credentialSource("anthropic_api_key", {})).toBeUndefined();
+
     const [row] = await sql`select value_ciphertext from credentials`;
     expect(row.value_ciphertext.toString("utf8")).not.toContain("sk-ant");
   });
