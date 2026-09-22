@@ -26,15 +26,6 @@
   <span class="detail" title={p.detail}>{p.detail}</span>
 {/snippet}
 
-<!-- What a check is, said once where people ask. The CI suite proves the code
-     works; these prove this deployment can reach what the code needs. -->
-<Note>
-  Probes this deployment's own dependencies: the database, the embedding
-  model, the credential vault, every source connection and each agent
-  backend. The test suite already ran in CI; this is whether it all works
-  <em>here</em>, now.
-</Note>
-
 <div class="bar">
   <Button
     variant="ghost"
