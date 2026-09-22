@@ -282,34 +282,35 @@
           />
         </Panel>
       </div>
-      <!-- Balances the wordmark's track so the pill sits on the true centre,
-           and carries the one nav entry that isn't a section: settings has no
-           subnav of its own to swap tabs with, so it doesn't belong in the
-           bar that does that. -->
-      <div class="mark mark-end">
-        <button
-          class="settings-btn"
-          class:on={view === "settings"}
-          aria-current={view === "settings" ? "page" : undefined}
-          aria-label={settingsBare ? "settings" : undefined}
-          title={settingsBare ? "settings" : undefined}
-          onclick={(e) => {
-            navigate("/settings");
-            if (e.detail !== 0) e.currentTarget.blur();
-          }}
-          use:jellyPress
-        >
-          <span class="lbl"
-            ><span class="br" aria-hidden="true">[</span
-            >{#if settingsIcon}<span class="ico"
-                ><Icon name={settingsIcon} weight={7} /></span
-              >{/if}{#if !settingsBare}<span class="txt">settings</span
-              >{/if}<span class="br" aria-hidden="true">]</span
-            ></span
-          >
-        </button>
-      </div>
+      <!-- Empty: balances the wordmark's track so the pill sits on the true
+           centre. -->
+      <div class="mark"></div>
     </div>
+
+    <!-- Out of flow, so nothing about it can shift the window: settings has no
+         subnav of its own to swap tabs with, so it doesn't belong in the bar
+         that does that. -->
+    <button
+      class="settings-btn"
+      class:on={view === "settings"}
+      aria-current={view === "settings" ? "page" : undefined}
+      aria-label={settingsBare ? "settings" : undefined}
+      title={settingsBare ? "settings" : undefined}
+      onclick={(e) => {
+        navigate("/settings");
+        if (e.detail !== 0) e.currentTarget.blur();
+      }}
+      use:jellyPress
+    >
+      <span class="lbl"
+        ><span class="br" aria-hidden="true">[</span
+        >{#if settingsIcon}<span class="ico"
+            ><Icon name={settingsIcon} weight={7} /></span
+          >{/if}{#if !settingsBare}<span class="txt">settings</span
+          >{/if}<span class="br" aria-hidden="true">]</span
+        ></span
+      >
+    </button>
 
     <div
       class="window"
@@ -441,15 +442,18 @@
     align-items: center;
     min-width: 0;
   }
-  .mark-end {
-    justify-content: flex-end;
-  }
 
   /* A lone tab, styled like one of Tabs.svelte's own — same bracketed label,
      same hover/focus behaviour — but with none of the machinery that only
      makes sense among siblings: no anchor-positioned indicator to slide
-     between entries, since there is only ever this one. */
+     between entries, since there is only ever this one. Pinned to the
+     viewport's lower-left corner with its line box on the window's bottom
+     edge. */
   .settings-btn {
+    position: absolute;
+    left: var(--pad-2);
+    bottom: var(--pad-4);
+    z-index: 2;
     display: inline-flex;
     align-items: baseline;
     gap: 0.1em;
@@ -458,7 +462,8 @@
     background: transparent;
     border: none;
     color: var(--muted);
-    padding: var(--pad-1) var(--pad-3);
+    padding: 0 var(--pad-1);
+    line-height: 1;
     white-space: nowrap;
   }
   .settings-btn:hover {

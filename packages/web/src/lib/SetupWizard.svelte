@@ -251,7 +251,7 @@
             </div>
           </div>
         {:else if STEPS[step] === "agent"}
-          <h2>The agent</h2>
+          <h2>Global agent config</h2>
           <div class="grid">
             <Field label="provider">
               <Select
