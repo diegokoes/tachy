@@ -3,8 +3,10 @@
   import { createSequence, errText } from "../resource.svelte";
   import { api, ApiError } from "../api";
   import { navigate } from "../router.svelte";
+  import { gsap, reducedMotion } from "../gsap";
   import { renderMarkdown, markBrokenLinks } from "../markdown";
   import { outline, withAnchors } from "../outline";
+  import { scrollport } from "../scrollport.svelte";
   import { isCurator } from "../session.svelte";
   import { setTopActions } from "../subnav.svelte";
   import { Badge, Button, EmptyState, Note } from "../tui";
@@ -39,6 +41,63 @@
         )
       : "",
   );
+
+  let titleEl = $state<HTMLElement>();
+  let pinnedEl = $state<HTMLElement>();
+
+  /* Once the title scrolls off the top it carries on in the left column, above
+     the switcher, travelling from where it was so the eye can follow it. The
+     move is scaled by font size alone: Flip would match the two boxes, and a
+     title that wraps differently in the narrow column would stretch. */
+  $effect(() => {
+    const port = scrollport();
+    const from = titleEl;
+    const to = pinnedEl;
+    if (!port || !from || !to) return;
+    gsap.set(to, { autoAlpha: 0 });
+    let pinned = false;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        const next =
+          !e.isIntersecting &&
+          e.boundingClientRect.bottom <= (e.rootBounds?.top ?? 0);
+        if (next === pinned) return;
+        pinned = next;
+        gsap.killTweensOf(to);
+        if (!pinned) {
+          gsap.to(to, { autoAlpha: 0, duration: 0.15 });
+          return;
+        }
+        if (reducedMotion()) {
+          gsap.set(to, { autoAlpha: 1, x: 0, y: 0, scale: 1 });
+          return;
+        }
+        const a = from.getBoundingClientRect();
+        const b = to.getBoundingClientRect();
+        const scale =
+          parseFloat(getComputedStyle(from).fontSize) /
+          parseFloat(getComputedStyle(to).fontSize);
+        gsap.fromTo(
+          to,
+          { x: a.left - b.left, y: a.top - b.top, scale, autoAlpha: 1 },
+          {
+            x: 0,
+            y: 0,
+            scale: 1,
+            duration: 0.45,
+            ease: "power3.out",
+            transformOrigin: "0 0",
+          },
+        );
+      },
+      { root: port },
+    );
+    io.observe(from);
+    return () => {
+      io.disconnect();
+      gsap.killTweensOf(to);
+    };
+  });
 
   const edit = () => navigate(wikiPath(scope, slug, "edit"));
 
@@ -147,6 +206,14 @@
   {/if}
 {/snippet}
 
+{#snippet lead()}
+  <div class="pin-slot">
+    <p class="pinned" bind:this={pinnedEl} aria-hidden="true">
+      {article?.title ?? ""}
+    </p>
+  </div>
+{/snippet}
+
 {#snippet aside()}
   {#if items.length}<ArticleContents {items} />{/if}
   {#if article?.built?.sources}
@@ -158,7 +225,7 @@
   {/if}
 {/snippet}
 
-<WikiLayout {scope} {aside}>
+<WikiLayout {scope} {lead} {aside}>
   {#if error}
     <Note tone="danger">{error}</Note>
   {:else if missing}
@@ -180,7 +247,7 @@
   {:else if article}
     <article class="wiki">
       <header>
-        <h2>{article.title}</h2>
+        <h2 bind:this={titleEl}>{article.title}</h2>
         {#if article.status !== "approved"}
           <Badge tone={statusTone(article.status)}>{article.status}</Badge>
         {/if}
@@ -251,6 +318,7 @@
 <style>
   .wiki {
     max-width: 78ch;
+    padding-left: calc(var(--pad-4) * 2);
     display: flex;
     flex-direction: column;
     gap: var(--pad-3);
@@ -265,6 +333,25 @@
   h2 {
     font-size: var(--fs-lg);
     margin: 0;
+  }
+  /* Held open for the title that arrives on scroll, so the switcher below it
+     never moves. Two lines; a longer title is cut rather than let grow. */
+  .pin-slot {
+    display: flex;
+    align-items: flex-end;
+    height: calc(2 * 1.3em + var(--pad-2));
+    font-size: var(--fs-md);
+  }
+  .pinned {
+    margin: 0 0 var(--pad-2);
+    font-weight: 700;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    visibility: hidden;
   }
   .wiki-body {
     line-height: 1.6;
@@ -288,6 +375,24 @@
   .wiki-body :global(img) {
     max-width: 100%;
     height: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .wiki-body :global(pre) {
+    overflow-x: auto;
+    margin: 0.8em 0;
+    padding: var(--pad-2) var(--pad-3);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .wiki-body :global(code) {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+  }
+  .wiki-body :global(:not(pre) > code) {
+    padding: 0.05em 0.3em;
+    background: var(--panel);
     border: 1px solid var(--border);
     border-radius: var(--radius);
   }
@@ -332,5 +437,11 @@
   }
   .muted {
     color: var(--muted);
+  }
+
+  @media (max-width: 52rem) {
+    .wiki {
+      padding-left: 0;
+    }
   }
 </style>
