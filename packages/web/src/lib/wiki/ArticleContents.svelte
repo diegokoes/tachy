@@ -7,9 +7,8 @@
 
   /**
    * An article's contents, in the left column the way the Arch Wiki keeps it:
-   * numbered, top-level sections always shown, anything beneath them folded
-   * until asked for. The branch you are reading opens itself as you scroll,
-   * so the index says where you are without being told.
+   * numbered and fully unfolded, with the section being read marked as you
+   * scroll. Only the arrows fold a branch; following a link just scrolls.
    *
    * Headings are looked up inside `.wiki-body` rather than by bare id: a
    * heading's id is derived from its text, and "Main content" would otherwise
@@ -19,28 +18,30 @@
 
   const tree = $derived(outlineTree(items));
 
-  /** Branches opened or shut by hand. Everything else follows the scroll. */
-  let toggled = $state<Record<string, boolean>>({});
+  /** Branches folded by hand; everything else stays open. */
+  let folded = $state<Record<string, boolean>>({});
   let active = $state<string | null>(null);
+  let nav = $state<HTMLElement>();
 
-  /** The section being read and everything above it: the branch that opens. */
-  const trail = $derived.by(() => {
-    const open = new Set<string>();
-    const walk = (nodes: OutlineNode[], above: string[]): boolean => {
-      for (const n of nodes) {
-        if (n.id === active) {
-          for (const id of [...above, n.id]) open.add(id);
-          return true;
-        }
-        if (walk(n.children, [...above, n.id])) return true;
-      }
-      return false;
-    };
-    walk(tree, []);
-    return open;
+  /* While a click's smooth scroll is under way, the headings it passes are not
+     where the reader is going: the section they picked holds until it lands. */
+  let settling = 0;
+  function settle() {
+    clearTimeout(settling);
+    settling = window.setTimeout(() => (settling = 0), 150);
+  }
+
+  const isOpen = (n: OutlineNode) => !folded[n.id];
+
+  /* A long index scrolls in its own column, so the section being read has to be
+     brought along; the page it belongs to is already in view, so "nearest"
+     moves this column and nothing else. */
+  $effect(() => {
+    if (!active || !nav) return;
+    nav
+      .querySelector(`[data-row="${CSS.escape(active)}"]`)
+      ?.scrollIntoView({ block: "nearest" });
   });
-
-  const isOpen = (n: OutlineNode) => toggled[n.id] ?? trail.has(n.id);
 
   const heading = (id: string) =>
     document.querySelector<HTMLElement>(`.wiki-body #${CSS.escape(id)}`);
@@ -55,6 +56,7 @@
     });
     history.replaceState(history.state, "", `#${id}`);
     active = id;
+    settle();
   }
 
   function toTop(e: MouseEvent) {
@@ -64,6 +66,8 @@
       behavior: reducedMotion() ? "auto" : "smooth",
     });
     history.replaceState(history.state, "", location.pathname);
+    active = null;
+    settle();
   }
 
   /* The section in view is the last heading that has scrolled past a line a
@@ -90,6 +94,7 @@
       active = current;
     };
     const onScroll = () => {
+      if (settling) return settle();
       if (!frame) frame = requestAnimationFrame(read);
     };
     frame = requestAnimationFrame(read);
@@ -97,6 +102,7 @@
     return () => {
       port.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(frame);
+      clearTimeout(settling);
     };
   });
 
@@ -113,13 +119,13 @@
     {#each nodes as n (n.id)}
       {@const open = isOpen(n)}
       <li>
-        <div class="row" class:on={n.id === active}>
+        <div class="row" class:on={n.id === active} data-row={n.id}>
           {#if n.children.length}
             <button
               class="fold"
               aria-expanded={open}
               aria-label="{open ? 'fold' : 'unfold'} {n.text}"
-              onclick={() => (toggled = { ...toggled, [n.id]: !open })}
+              onclick={() => (folded = { ...folded, [n.id]: open })}
               >{open ? G.expanded : G.right}</button
             >
           {:else}
@@ -136,12 +142,10 @@
   </ol>
 {/snippet}
 
-<nav class="contents" aria-label="Contents">
-  <span class="cap">contents</span>
-  <div class="row" class:on={active === null}>
-    <span class="fold" aria-hidden="true"></span>
-    <a href={location.pathname} onclick={toTop}>(top)</a>
-  </div>
+<nav class="contents" aria-label="Contents" bind:this={nav}>
+  <a class="cap" href={location.pathname} title="back to the top" onclick={toTop}
+    >contents</a
+  >
   {@render branch(tree)}
 </nav>
 
@@ -151,6 +155,7 @@
     flex-direction: column;
     gap: 1px;
     font-size: var(--fs-sm);
+    margin-top: var(--pad-3);
   }
   .cap {
     font-size: var(--fs-xs);
@@ -158,6 +163,12 @@
     text-transform: uppercase;
     color: var(--muted);
     margin-bottom: var(--pad-1);
+    text-decoration: none;
+    align-self: flex-start;
+  }
+  .cap:hover {
+    color: var(--accent);
+    text-decoration: none;
   }
   ol {
     list-style: none;
@@ -181,7 +192,7 @@
     border-left-color: var(--accent);
   }
   .row.on a {
-    color: var(--text);
+    font-weight: 700;
   }
   .fold {
     flex: none;
@@ -202,7 +213,7 @@
     display: flex;
     gap: 0.5em;
     min-width: 0;
-    color: var(--muted);
+    color: var(--text);
     text-decoration: none;
   }
   a:hover {

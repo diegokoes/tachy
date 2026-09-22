@@ -1,28 +1,31 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import { navigate, segment } from "../router.svelte";
+  import { scrollport } from "../scrollport.svelte";
   import { Select } from "../tui";
   import { scopeOf, wikiLabel, wikiPath } from "./paths";
   import { wikis } from "./wikis.svelte";
 
   /**
    * Every reading page of the wiki: the switcher and whatever the page adds to
-   * the left column, beside the page itself. The editor does not use it — it
+   * the left column, beside the page itself. `lead` sits above the switcher and
+   * stays put with it; `aside` scrolls beneath. The editor does not use it — it
    * needs the width more than the reader needs the index.
    */
   let {
     scope,
+    lead,
     aside,
     children,
-  }: { scope: string; aside?: Snippet; children: Snippet } = $props();
+  }: {
+    scope: string;
+    lead?: Snippet;
+    aside?: Snippet;
+    children: Snippet;
+  } = $props();
 
   const options = $derived(
-    wikis.rows.map((w) => ({
-      value: scopeOf(w),
-      label: w.open_gaps
-        ? `${wikiLabel(w)} · ${w.open_gaps} ${w.open_gaps === 1 ? "gap" : "gaps"}`
-        : wikiLabel(w),
-    })),
+    wikis.rows.map((w) => ({ value: scopeOf(w), label: wikiLabel(w) })),
   );
 
   /**
@@ -30,6 +33,22 @@
    * article or a category is particular to one wiki, so switching from either
    * lands on the other wiki's main page.
    */
+  let rootEl = $state<HTMLDivElement>();
+
+  /* The column is as tall as what scrolls beside it. A viewport-height guess
+     would stop short of the page's last line, by however much chrome sits
+     above the scroller. */
+  $effect(() => {
+    const port = scrollport();
+    const root = rootEl;
+    if (!port || !root) return;
+    const ro = new ResizeObserver(() =>
+      root.style.setProperty("--port-h", `${port.clientHeight}px`),
+    );
+    ro.observe(port);
+    return () => ro.disconnect();
+  });
+
   function switchTo(next: string) {
     if (next === scope) return;
     const place = segment(2);
@@ -41,19 +60,21 @@
   }
 </script>
 
-<div class="wiki-root">
+<div class="wiki-root" bind:this={rootEl}>
   <aside class="side">
+    {#if lead}{@render lead()}{/if}
     <div class="switch">
-      <span class="cap">wiki</span>
       <Select
         value={scope}
         {options}
         title="switch wiki"
         aria-label="wiki"
+        searchable
+        filterPlaceholder="filter wikis…"
         onchange={(v) => switchTo(String(v))}
       />
     </div>
-    {#if aside}{@render aside()}{/if}
+    {#if aside}<div class="rest">{@render aside()}</div>{/if}
   </aside>
 
   <div class="page">{@render children()}</div>
@@ -76,21 +97,22 @@
     flex-direction: column;
     gap: var(--pad-3);
     min-width: 0;
-    max-height: calc(100vh - 12rem);
-    overflow-y: auto;
-    scrollbar-width: thin;
+    height: calc(var(--port-h, 100vh) - var(--main-air, 0px) * 2);
     padding-block: var(--pad-2);
   }
   .switch {
     display: flex;
     flex-direction: column;
-    gap: var(--pad-1);
   }
-  .cap {
-    font-size: var(--fs-xs);
-    letter-spacing: var(--label-spacing);
-    text-transform: uppercase;
-    color: var(--muted);
+  /* Only the index scrolls, so the column's head can carry something that
+     arrives from outside it without being clipped on the way in. */
+  .rest {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pad-3);
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
   }
   .page {
     min-width: 0;
@@ -103,7 +125,10 @@
     }
     .side {
       position: static;
-      max-height: none;
+      height: auto;
+    }
+    .rest {
+      overflow: visible;
       border-bottom: 1px solid var(--border);
       padding-bottom: var(--pad-3);
     }

@@ -13,7 +13,7 @@
   import AsciiSelect from "../AsciiSelect.svelte";
   import { componentOptions } from "../catalog";
   import type { ComponentRow } from "@tachy/contract";
-  import { renderMarkdown } from "../markdown";
+  import { CALLOUT_TYPES, renderMarkdown } from "../markdown";
   import { outline, withAnchors } from "../outline";
   import { REFERENCE_STATUSES } from "../vocab";
   import type {
@@ -86,10 +86,14 @@
   }
 
   let bodyEl = $state<HTMLTextAreaElement>();
-  let fileEl = $state<HTMLInputElement>();
   let picking = $state(false);
-  /** Where the `[[` that opened the picker starts, so it can be replaced. */
+  /** Where the `[[` or the `>` that opened the picker starts. */
   let openAt = $state(-1);
+  let mode = $state<"link" | "callout">("link");
+  /** Whether Enter belongs to the picker. A bare `>` is also the start of an
+   *  ordinary blockquote, and Enter there is a newline until a type is asked
+   *  for — by opening the marker, or by arrowing into the list. */
+  let armed = $state(true);
   let queryText = $state("");
   let suggestions = $state<Suggestion[]>([]);
   let highlighted = $state(0);
@@ -145,11 +149,34 @@
     highlighted = 0;
   }
 
-  /** Re-reads the caret on every keystroke; `[[` with no `]]` after it is open. */
+  /**
+   * Re-reads the caret on every keystroke. Two openings: `[[` with no `]]`
+   * after it, and a line begun with `>`, which offers the callouts so their
+   * types need not be remembered either.
+   */
   function syncPicker() {
     const el = bodyEl;
     if (!el) return;
-    const before = body.slice(0, el.selectionStart ?? 0);
+    const caret = el.selectionStart ?? 0;
+    const before = body.slice(0, caret);
+    const line = before.slice(before.lastIndexOf("\n") + 1);
+    const callout = /^>[ \t]*(?:\[!?([\w-]*))?$/.exec(line);
+    if (callout) {
+      const q = (callout[1] ?? "").toLowerCase();
+      mode = "callout";
+      armed = line.includes("[");
+      picking = true;
+      openAt = caret - line.length;
+      suggestions = CALLOUT_TYPES.filter((t) => t.startsWith(q)).map((t) => ({
+        insert: t,
+        label: t,
+        what: "callout",
+      }));
+      highlighted = 0;
+      return;
+    }
+    mode = "link";
+    armed = true;
     const start = before.lastIndexOf("[[");
     if (start < 0 || before.slice(start).includes("]]")) {
       picking = false;
@@ -165,6 +192,17 @@
     const el = bodyEl;
     if (!el || openAt < 0) return;
     const caret = el.selectionStart ?? 0;
+    if (mode === "callout") {
+      const head = `> [!${s.insert}] `;
+      body = body.slice(0, openAt) + head + body.slice(caret);
+      picking = false;
+      const at = openAt + head.length;
+      queueMicrotask(() => {
+        el.focus();
+        el.setSelectionRange(at, at);
+      });
+      return;
+    }
     const text = s.what === "entry" ? `${s.insert}|${s.label}` : s.insert;
     body = body.slice(0, openAt) + `[[${text}]]` + body.slice(caret);
     picking = false;
@@ -179,10 +217,14 @@
     if (!picking || !suggestions.length) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
+      armed = true;
       highlighted = (highlighted + 1) % suggestions.length;
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
+      armed = true;
       highlighted = (highlighted - 1 + suggestions.length) % suggestions.length;
+    } else if (e.key === "Enter" && !armed) {
+      picking = false;
     } else if (e.key === "Enter" || e.key === "Tab") {
       e.preventDefault();
       choose(suggestions[highlighted]);
@@ -349,7 +391,11 @@
       title
       <input bind:value={title} required />
     </label>
-    <label>
+    <label
+      title={editing
+        ? "The article's address. Renaming it rewrites [[links]] to it, and the old address keeps working."
+        : "The article's address, and what [[links]] to it use."}
+    >
       slug
       <input
         bind:value={slug}
@@ -402,74 +448,53 @@
   {#if uploadError}<Note tone="warn">{uploadError}</Note>{/if}
 
   <div class="split" class:solo={!preview}>
+    <div class="bar">
+      <Button
+        variant="ghost"
+        size="sm"
+        icon={preview ? "eyeSlash" : "eye"}
+        title={preview ? "hide preview" : "show preview"}
+        aria-label={preview ? "hide preview" : "show preview"}
+        onclick={() => (preview = !preview)}
+      />
+    </div>
     <!-- svelte-ignore a11y_no_static_element_interactions -- a drop target
          for images, beside the textarea that is the real control -->
-    <div class="editor" ondragover={(e) => e.preventDefault()} ondrop={onDrop}>
-      <span class="lbl">
-        body
-        <span class="tools">
-          <Button
-            variant="ghost"
-            size="sm"
-            icon="attach"
-            title="add an image, or paste or drop one into the body"
-            onclick={() => fileEl?.click()}>image</Button
-          >
-          <button type="button" class="toggle" onclick={() => (preview = !preview)}>
-            {preview ? "hide preview" : "show preview"}
-          </button>
-        </span>
-      </span>
-      <input
-        bind:this={fileEl}
-        class="file"
-        type="file"
-        accept={LIBRARY_ASSET_TYPES.join(",")}
-        multiple
-        onchange={(e) => {
-          void attach(imagesIn(e.currentTarget.files));
-          e.currentTarget.value = "";
-        }}
-      />
-      <div class="editwrap">
-        <textarea
-          bind:this={bodyEl}
-          bind:value={body}
-          aria-label="body"
-          spellcheck="false"
-          oninput={syncPicker}
-          onkeydown={onBodyKeydown}
-          onclick={syncPicker}
-          onpaste={onPaste}
-          onblur={() => setTimeout(() => (picking = false), 150)}
-        ></textarea>
-        {#if picking && suggestions.length}
-          <ul class="picker-pop">
-            {#each suggestions as s, i (s.insert)}
-              <li>
-                <button
-                  type="button"
-                  class:on={i === highlighted}
-                  onmousedown={(e) => {
-                    e.preventDefault();
-                    choose(s);
-                  }}
-                >
-                  <span class="what">{s.what}</span>
-                  {s.label}
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </div>
+    <div class="editwrap" ondragover={(e) => e.preventDefault()} ondrop={onDrop}>
+      <textarea
+        bind:this={bodyEl}
+        bind:value={body}
+        aria-label="body"
+        spellcheck="false"
+        oninput={syncPicker}
+        onkeydown={onBodyKeydown}
+        onclick={syncPicker}
+        onpaste={onPaste}
+        onblur={() => setTimeout(() => (picking = false), 150)}
+      ></textarea>
+      {#if picking && suggestions.length}
+        <ul class="picker-pop">
+          {#each suggestions as s, i (s.insert)}
+            <li>
+              <button
+                type="button"
+                class:on={i === highlighted}
+                onmousedown={(e) => {
+                  e.preventDefault();
+                  choose(s);
+                }}
+              >
+                <span class="what">{s.what}</span>
+                {s.label}
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
     </div>
 
     {#if preview}
-      <div class="preview">
-        <span class="lbl">preview</span>
-        <div class="pane md">{@html rendered}</div>
-      </div>
+      <div class="pane md" aria-label="preview">{@html rendered}</div>
     {/if}
   </div>
 </form>
@@ -504,55 +529,46 @@
     color: var(--muted);
     font-size: 0.85em;
   }
-  .tools {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--pad-2);
-  }
-  .toggle {
-    background: none;
-    border: none;
-    font: inherit;
-    color: inherit;
-    cursor: pointer;
-    text-decoration: underline;
-  }
-  .file {
-    display: none;
-  }
   .cats .picker {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.2rem 1rem;
+    gap: 0.15rem 0.8rem;
     margin-top: 0.2rem;
+    font-size: var(--fs-xs);
   }
   .cat {
     flex-direction: row;
     align-items: center;
-    gap: 0.35rem;
-    margin-left: calc(var(--depth) * 1rem);
+    gap: 0.3rem;
+    margin-left: calc(var(--depth) * 0.8rem);
   }
-  /* The editor is the point of this form, so it takes the height. */
+  /* The editor is the point of this form, so it takes the height. Body and
+     preview share the second row so they are always the same height; the
+     toggle sits over the preview, or over the body's right edge without one. */
   .split {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--pad-2);
+    grid-template-rows: auto 1fr;
+    gap: var(--pad-1) var(--pad-2);
     flex: 1;
     min-height: 24rem;
   }
   .split.solo {
     grid-template-columns: 1fr;
   }
-  .editor {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    min-height: 0;
+  .bar {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .split.solo .bar {
+    grid-column: 1;
+    justify-self: end;
   }
   .editwrap {
+    grid-row: 2;
+    grid-column: 1;
     position: relative;
     display: flex;
-    flex: 1;
     min-height: 0;
   }
   /* Anchored to the editor rather than the caret: a terminal-styled textarea
@@ -596,14 +612,10 @@
     font-family: inherit;
     min-height: 22rem;
   }
-  .preview {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    min-height: 0;
-  }
   .pane {
-    flex: 1;
+    grid-row: 2;
+    grid-column: 2;
+    min-height: 0;
     overflow: auto;
     border: 1px solid var(--border);
     padding: 0.6rem 0.8rem;
@@ -626,6 +638,16 @@
   @media (max-width: 60rem) {
     .split {
       grid-template-columns: 1fr;
+      grid-template-rows: auto;
+      grid-auto-rows: minmax(22rem, 1fr);
+    }
+    .split .bar {
+      grid-column: 1;
+      justify-self: end;
+    }
+    .pane {
+      grid-row: 3;
+      grid-column: 1;
     }
   }
 </style>
