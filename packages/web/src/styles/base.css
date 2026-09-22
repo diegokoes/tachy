@@ -78,3 +78,118 @@ button:focus-visible {
   font-family: var(--font-prose);
   max-width: 60ch;
 }
+
+/* Obsidian-style callouts, emitted by the markdown renderer wherever a body
+   is shown, so they are styled here rather than in any one view. */
+.callout {
+  --c: var(--info);
+  margin: 0.8em 0;
+  padding: var(--pad-2) var(--pad-3);
+  border-left: 3px solid var(--c);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--c) 9%, transparent);
+}
+.callout-ok {
+  --c: var(--ok);
+}
+.callout-warn {
+  --c: var(--warn);
+}
+.callout-danger {
+  --c: var(--danger);
+}
+.callout-accent {
+  --c: var(--accent);
+}
+.callout-muted {
+  --c: var(--muted);
+}
+.callout-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-weight: 600;
+  color: var(--c);
+}
+.callout-icon {
+  flex: none;
+}
+summary.callout-title {
+  cursor: pointer;
+  list-style: none;
+}
+summary.callout-title::-webkit-details-marker {
+  display: none;
+}
+summary.callout-title::after {
+  content: "▸";
+  margin-left: auto;
+  transition: transform 0.12s;
+}
+details.callout[open] > summary.callout-title::after {
+  transform: rotate(90deg);
+}
+.callout-body > :first-child {
+  margin-top: 0.4em;
+}
+.callout-body > :last-child {
+  margin-bottom: 0;
+}
+
+/* highlight.js token colours, drawn from the app's own palette rather than a
+   vendor theme: code sits inside the product's surfaces, not on its own. */
+.hljs-comment,
+.hljs-quote {
+  color: var(--muted);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-section,
+.hljs-name,
+.hljs-attr,
+.hljs-meta .hljs-keyword {
+  color: var(--accent);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-char.escape_,
+.hljs-addition {
+  color: var(--ok);
+}
+.hljs-number,
+.hljs-literal,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-type,
+.hljs-built_in,
+.hljs-class .hljs-title {
+  color: var(--series-2);
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-title.class_,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: var(--warn);
+}
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-property {
+  color: var(--series);
+}
+.hljs-meta,
+.hljs-doctag,
+.hljs-punctuation {
+  color: var(--muted);
+}
+.hljs-deletion {
+  color: var(--danger);
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 700;
+}

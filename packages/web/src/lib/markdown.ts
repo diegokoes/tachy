@@ -2,6 +2,8 @@ import { marked } from "marked";
 import type { Tokens } from "marked";
 import DOMPurify from "dompurify";
 import { ASSET_SRC_RE, parseWikilink, WIKILINK_RE } from "@tachy/contract";
+import { ICONS, type IconName } from "./tui/icons";
+import { highlight } from "./code";
 
 marked.setOptions({ gfm: true, breaks: true });
 
@@ -46,16 +48,117 @@ export const wikilinkExtension = {
 /**
  * A markdown image renders only when it is one of ours; anything else is shown
  * as its alt text. See ASSET_SRC_RE for why an outside image is never fetched.
+ *
+ * `![alt|300](src)` and `![alt|300x200](src)` size it, the way Obsidian does.
  */
 export const imageRenderer = {
   image({ href, title, text }: Tokens.Image): string {
-    if (!ASSET_SRC_RE.test(href)) return esc(text);
+    const sized = /^(.*?)\|(\d+)(?:x(\d+))?$/.exec(text);
+    const alt = sized ? sized[1].trim() : text;
+    if (!ASSET_SRC_RE.test(href)) return esc(alt);
     const titled = title ? ` title="${esc(title)}"` : "";
-    return `<img src="${esc(href)}" alt="${esc(text)}"${titled} loading="lazy">`;
+    const size = sized
+      ? ` width="${sized[2]}"${sized[3] ? ` height="${sized[3]}"` : ""}`
+      : "";
+    return `<img src="${esc(href)}" alt="${esc(alt)}"${titled}${size} loading="lazy">`;
   },
 };
 
-marked.use({ extensions: [wikilinkExtension], renderer: imageRenderer });
+/** The types the editor offers; CALLOUTS below also answers to their aliases. */
+export const CALLOUT_TYPES = [
+  "note",
+  "info",
+  "tip",
+  "success",
+  "question",
+  "warning",
+  "failure",
+  "danger",
+  "bug",
+  "example",
+  "quote",
+  "abstract",
+] as const;
+
+type CalloutTone = "info" | "ok" | "warn" | "danger" | "accent" | "muted";
+
+/** Obsidian's callout types and aliases, onto the app's tones and icons. */
+const CALLOUTS: Record<string, [CalloutTone, IconName]> = {
+  note: ["info", "edit"],
+  abstract: ["info", "clipboard"],
+  summary: ["info", "clipboard"],
+  tldr: ["info", "clipboard"],
+  info: ["info", "info"],
+  todo: ["info", "check"],
+  tip: ["ok", "bulb"],
+  hint: ["ok", "bulb"],
+  important: ["ok", "bulb"],
+  success: ["ok", "check"],
+  check: ["ok", "check"],
+  done: ["ok", "check"],
+  question: ["warn", "question"],
+  help: ["warn", "question"],
+  faq: ["warn", "question"],
+  warning: ["warn", "alert"],
+  caution: ["warn", "alert"],
+  attention: ["warn", "alert"],
+  failure: ["danger", "cancel"],
+  fail: ["danger", "cancel"],
+  missing: ["danger", "cancel"],
+  danger: ["danger", "bolt"],
+  error: ["danger", "bolt"],
+  bug: ["danger", "alert"],
+  example: ["accent", "doc"],
+  quote: ["muted", "chat"],
+  cite: ["muted", "chat"],
+};
+
+const iconSvg = (name: IconName) => {
+  const def = ICONS[name];
+  const grid = def.grid ?? 100;
+  return `<svg class="callout-icon" viewBox="0 0 ${grid} ${grid}" width="1.1em" height="1.1em" fill="none" stroke="currentColor" stroke-width="${(6 * grid) / 100}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${def.path}</svg>`;
+};
+
+/**
+ * `> [!tip] Title` blockquotes as Obsidian callouts. A `-` or `+` after the
+ * type makes it foldable, shut or open. Unknown types keep their name as the
+ * title and take the note's look, as Obsidian does.
+ */
+export const calloutRenderer = {
+  blockquote({ text }: Tokens.Blockquote): string | false {
+    const m = /^\[!([\w-]+)\]([+-]?)[ \t]*([^\n]*)\n?([\s\S]*)$/.exec(text);
+    if (!m) return false;
+    const [, type, fold, title, body] = m;
+    const [tone, icon] = CALLOUTS[type.toLowerCase()] ?? CALLOUTS.note;
+    const name = title.trim()
+      ? marked.parseInline(title, { async: false })
+      : esc(type.charAt(0).toUpperCase() + type.slice(1).toLowerCase());
+    const inner = body.trim()
+      ? `<div class="callout-body">${marked.parse(body, { async: false })}</div>`
+      : "";
+    const head = `${iconSvg(icon)}<span>${name}</span>`;
+    return fold
+      ? `<details class="callout callout-${tone}"${fold === "+" ? " open" : ""}><summary class="callout-title">${head}</summary>${inner}</details>`
+      : `<div class="callout callout-${tone}"><div class="callout-title">${head}</div>${inner}</div>`;
+  },
+};
+
+/** Fenced code, coloured for the languages `./code` carries. */
+export const codeRenderer = {
+  code({ text, lang }: Tokens.Code): string {
+    const name = (lang ?? "").trim().split(/\s+/)[0].toLowerCase();
+    const lit = highlight(text, name);
+    const cls = lit.language
+      ? ` class="hljs language-${esc(lit.language)}"`
+      : "";
+    return `<pre><code${cls}>${lit.html}</code></pre>`;
+  },
+};
+
+marked.use({
+  extensions: [wikilinkExtension],
+  renderer: { ...imageRenderer, ...calloutRenderer, ...codeRenderer },
+});
 
 /**
  * The renderer above only sees markdown images. A body can also carry a raw
