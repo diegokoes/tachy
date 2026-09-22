@@ -38,7 +38,12 @@ export type {
   TeamRole,
 } from "./vocabulary";
 
-export { WIKILINK_RE, parseWikilink, parseWikilinks } from "./wikilink";
+export {
+  WIKILINK_RE,
+  parseWikilink,
+  parseWikilinks,
+  renameWikilinks,
+} from "./wikilink";
 export type { Wikilink, WikilinkTargetKind } from "./wikilink";
 
 export { WIKI_RESERVED_SLUGS, MAIN_PAGE_SLUG, WIKI_GAP_KINDS } from "./wiki";

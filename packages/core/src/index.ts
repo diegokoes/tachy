@@ -184,6 +184,7 @@ export {
   articleStaleness,
   coverage,
   parseWikilinks,
+  renameWikilinks,
   LINK_KINDS,
   sniffImage,
   saveAsset,

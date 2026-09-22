@@ -734,6 +734,20 @@ create table wiki_article_categories (
 create index wiki_article_categories_category_idx
     on wiki_article_categories(category_id, ordinal);
 
+-- Slugs an article answered to before a rename, so addresses shared outside the
+-- wiki keep working. A live article at the same slug always wins over an alias,
+-- which is why taking a slug deletes the alias rather than failing.
+create table wiki_slug_aliases (
+    product_id  uuid references products(id) on delete cascade,
+    slug        text not null,
+    doc_id      uuid not null references reference_docs(id) on delete cascade,
+    created_at  timestamptz not null default now()
+);
+
+create unique index wiki_slug_aliases_slug_idx
+    on wiki_slug_aliases(product_id, slug) nulls not distinct;
+create index wiki_slug_aliases_doc_idx on wiki_slug_aliases(doc_id);
+
 -- A link from one library item to another: an article citing a knowledge entry,
 -- an article pointing at another article. Polymorphic on both ends, the same
 -- two-nullable-targets shape work_item_links and library_revisions use.

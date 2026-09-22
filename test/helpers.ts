@@ -56,7 +56,7 @@ export async function resetData() {
              credentials, preferences,
              -- wiki_categories hangs off products, which survive resetData, so
              -- it has to be named or a category outlives the test that made it.
-             wiki_categories, wiki_article_categories, library_links,
+             wiki_categories, wiki_article_categories, wiki_slug_aliases, library_links,
              wiki_gaps, library_assets,
              -- repos would be swept in anyway by the cascade from components;
              -- naming it keeps that visible. source_connections stays.

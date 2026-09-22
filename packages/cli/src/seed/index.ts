@@ -61,6 +61,7 @@ const TABLES = [
   "mcp_tool_calls",
   "source_calls",
   "wiki_article_categories",
+  "wiki_slug_aliases",
   "wiki_categories",
   "wiki_gaps",
   "library_assets",

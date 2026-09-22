@@ -113,7 +113,11 @@
     loadError = null;
     api
       .get<ReferenceRow>(`/library/wiki/${scope}/articles/${at}`)
-      .then((a) => (editing = a))
+      .then((a) => {
+        if (a.slug && a.slug !== at)
+          navigate(wikiPath(scope, a.slug, "edit"), { replace: true });
+        else editing = a;
+      })
       .catch((e) => {
         if (e instanceof ApiError && e.status === 404)
           navigate(wikiPath(scope, "new", at), { replace: true });
