@@ -289,7 +289,8 @@ export async function setArticleCategories(
 /**
  * An article by its slug within one wiki. One article per slug: there is no
  * per-version forking, and `doc_version` on the row is a label carried by
- * imported docs rather than something resolution keys on.
+ * imported docs rather than something resolution keys on. A slug the article
+ * had before a rename still finds it; the row's own `slug` says where it lives.
  */
 export async function findArticle(productId: string | null, slug: string) {
   const [row] = await sql`
@@ -301,7 +302,10 @@ export async function findArticle(productId: string | null, slug: string) {
     left join customers cu on cu.id = d.customer_id
     where d.kind = 'wiki' and d.status <> 'archived'
       and d.product_id is not distinct from ${productId}
-      and d.slug = ${slug}
+      and (d.slug = ${slug} or d.id in (
+        select a.doc_id from wiki_slug_aliases a
+        where a.product_id is not distinct from ${productId} and a.slug = ${slug}))
+    order by d.slug = ${slug} desc
     limit 1
   `;
   if (!row) throw notFound(`No wiki article '${slug}' in this wiki`);

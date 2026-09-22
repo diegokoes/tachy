@@ -64,6 +64,15 @@
         `/library/wiki/${scope}/articles/${slug}`,
       );
       if (!isCurrent()) return;
+      if (next.slug && next.slug !== slug) {
+        navigate(
+          next.slug === MAIN_PAGE_SLUG
+            ? wikiPath(scope)
+            : wikiPath(scope, next.slug),
+          { replace: true },
+        );
+        return;
+      }
       article = next;
       await links.load("reference", next.id);
     } catch (e) {

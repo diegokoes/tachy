@@ -44,3 +44,19 @@ export function parseWikilinks(body: string): Wikilink[] {
     out.push(parseWikilink(m[1], m[2]));
   return out;
 }
+
+/**
+ * Point every `[[from]]` / `[[from|label]]` in a body at `to`, keeping labels,
+ * so renaming an article carries the links written against it.
+ */
+export function renameWikilinks(
+  body: string,
+  from: string,
+  to: string,
+): string {
+  return body.replace(WIKILINK_RE, (raw, target: string, label?: string) =>
+    target.trim() === from
+      ? `[[${to}${label === undefined ? "" : `|${label}`}]]`
+      : raw,
+  );
+}

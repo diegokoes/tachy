@@ -1,9 +1,9 @@
-import { LINK_KINDS, parseWikilinks } from "@tachy/contract";
+import { LINK_KINDS, parseWikilinks, renameWikilinks } from "@tachy/contract";
 import type { LinkKind, Wikilink } from "@tachy/contract";
 import { sql } from "../infra/db";
 import type { Db } from "../infra/db";
 
-export { LINK_KINDS, parseWikilinks };
+export { LINK_KINDS, parseWikilinks, renameWikilinks };
 export type { LinkKind };
 
 /** Which item a link runs from; exactly one is set. */
@@ -49,10 +49,14 @@ async function resolveTarget(
   }
 
   const [row] = await sql`
-    select id from reference_docs
-    where kind = 'wiki' and status <> 'archived' and slug = ${link.ref}
-      and (product_id is not distinct from ${productId} or product_id is null)
-    order by case when product_id is not distinct from ${productId} then 0 else 1 end
+    select d.id from reference_docs d
+    where d.kind = 'wiki' and d.status <> 'archived'
+      and (d.product_id is not distinct from ${productId} or d.product_id is null)
+      and (d.slug = ${link.ref} or d.id in (
+        select a.doc_id from wiki_slug_aliases a
+        where a.product_id is not distinct from d.product_id and a.slug = ${link.ref}))
+    order by case when d.product_id is not distinct from ${productId} then 0 else 1 end,
+             d.slug = ${link.ref} desc
     limit 1
   `;
   return row ? { toDocId: row.id as string, toEntryId: null } : none;

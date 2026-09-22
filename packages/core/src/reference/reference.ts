@@ -1,4 +1,4 @@
-import { SLUG_RE, WIKI_RESERVED_SLUGS } from "@tachy/contract";
+import { renameWikilinks, SLUG_RE, WIKI_RESERVED_SLUGS } from "@tachy/contract";
 import type { TransactionSql } from "postgres";
 import { sql, jsonb } from "../infra/db";
 import { chunkText } from "../search/chunk";
@@ -37,6 +37,8 @@ import {
   type FiledRow,
 } from "../library/filing";
 import { relinkBySlug, syncLinks } from "../library/links";
+import { log } from "../infra/log";
+import { linkersBySlug, releaseSlug, rememberOldSlug } from "../wiki/aliases";
 
 /** Shared by the read and the RETURNING so before/after snapshots line up. */
 const REVISION_COLUMNS = sql`
@@ -229,8 +231,10 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
     await syncLinks(tx, { docId: row.id }, i.body, productId);
     // Links written before this article existed were stored unresolved; now
     // that the slug is real, they stop being broken without another edit.
-    if (kind === "wiki" && i.slug)
+    if (kind === "wiki" && i.slug) {
+      await releaseSlug(tx, productId, i.slug);
       await relinkBySlug(tx, i.slug, row.id, productId);
+    }
     const n = await insertChunks(tx, row.id, vectors);
     return { doc: row, chunks: n };
   });
@@ -327,7 +331,9 @@ export async function updateReferenceDoc(
   patch: ReferenceDocUpdate,
   actor: ActorRef = UNKNOWN_ACTOR,
 ) {
-  const [current] = await sql<(FiledRow & { version: number } & Record<string, any>)[]>`
+  const [current] = await sql<
+    (FiledRow & { version: number } & Record<string, any>)[]
+  >`
     select ${REVISION_COLUMNS}, version from reference_docs where id = ${id}
   `;
   if (!current) throw notFound(`Reference doc '${id}' not found`);
@@ -349,12 +355,18 @@ export async function updateReferenceDoc(
     slug: "slug" in patch && patch.slug ? patch.slug : current.slug,
   };
   if (current.kind === "wiki" && merged.slug) assertArticleSlug(merged.slug);
+  const renamedFrom =
+    current.kind === "wiki" && current.slug && merged.slug !== current.slug
+      ? (current.slug as string)
+      : null;
+  if (renamedFrom)
+    merged.body = renameWikilinks(merged.body, renamedFrom, merged.slug!);
   const { componentId, productArea, customerId, customerUnitId } =
     await patchedFiling(current, patch, DOC_NO_PRODUCT);
   const bodyChanged = merged.body !== current.body;
   const vectors = bodyChanged ? await chunkVectors(merged.body) : undefined;
 
-  return sql.begin(async (tx) => {
+  const result = await sql.begin(async (tx) => {
     const [row] = await tx<RevisedRow[]>`
       update reference_docs set
         title       = ${merged.title},
@@ -379,10 +391,53 @@ export async function updateReferenceDoc(
       await insertChunks(tx, id, vectors);
     }
     await syncLinks(tx, { docId: id }, merged.body, current.product_id);
+    if (renamedFrom)
+      await rememberOldSlug(
+        tx,
+        current.product_id,
+        renamedFrom,
+        merged.slug!,
+        id,
+      );
     if (current.kind === "wiki" && merged.slug)
       await relinkBySlug(tx, merged.slug, id, current.product_id);
     return recordUpdate(tx, { docId: id }, current, row, actor);
   });
+  if (renamedFrom) await carryLinks(id, renamedFrom, merged.slug!, actor);
+  return result;
+}
+
+/**
+ * Rewrite `[[from]]` to `[[to]]` in every doc that links to a renamed article,
+ * each as an ordinary edit so it is re-embedded and has a revision. A doc that
+ * cannot be rewritten keeps working through the alias, so the rename still
+ * stands; it is logged rather than failed.
+ */
+async function carryLinks(
+  docId: string,
+  from: string,
+  to: string,
+  actor: ActorRef,
+): Promise<void> {
+  for (const d of await linkersBySlug(docId, from)) {
+    try {
+      await updateReferenceDoc(
+        d.id,
+        {
+          body: renameWikilinks(d.body, from, to),
+          expectedVersion: d.version,
+        },
+        actor,
+      );
+    } catch (err) {
+      log("warn", "wiki_rename_relink_failed", {
+        docId: d.id,
+        from,
+        to,
+        error: String(err),
+      });
+    }
+  }
 }
 
 export interface ReferenceSearchOptions {

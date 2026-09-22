@@ -96,6 +96,46 @@ describe("wiki API", () => {
     expect(doc.categories.map((c: any) => c.slug)).toEqual(["printing"]);
   });
 
+  it("renames an article, rewriting links to it and keeping the old address", async () => {
+    const created = await (await article("tpd", "vpn-setup")).json();
+    await article("tpd", "remote-work", {
+      body: "See [[vpn-setup]] and [[vpn-setup|the VPN page]].",
+    });
+
+    const res = await patch("/api/library/wiki/tpd/articles/vpn-setup", {
+      slug: "vpn-configuration",
+    });
+    expect(res.status).toBe(200);
+
+    const linker = await (
+      await get("/api/library/wiki/tpd/articles/remote-work")
+    ).json();
+    expect(linker.body).toBe(
+      "See [[vpn-configuration]] and [[vpn-configuration|the VPN page]].",
+    );
+
+    const old = await (
+      await get("/api/library/wiki/tpd/articles/vpn-setup")
+    ).json();
+    expect(old.id).toBe(created.id);
+    expect(old.slug).toBe("vpn-configuration");
+  });
+
+  it("gives an old address to a new article that takes it", async () => {
+    await article("tpd", "vpn-setup");
+    await patch("/api/library/wiki/tpd/articles/vpn-setup", {
+      slug: "vpn-configuration",
+    });
+    const fresh = await (
+      await article("tpd", "vpn-setup", { title: "Fresh" })
+    ).json();
+
+    const doc = await (
+      await get("/api/library/wiki/tpd/articles/vpn-setup")
+    ).json();
+    expect(doc.id).toBe(fresh.id);
+  });
+
   it("reports no main page for a new wiki instead of 404ing", async () => {
     const res = await get("/api/library/wiki/tpd/main");
     expect(res.status).toBe(200);

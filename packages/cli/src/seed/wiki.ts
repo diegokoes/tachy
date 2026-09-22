@@ -316,6 +316,20 @@ export async function seedWiki(
     membershipRows,
   );
 
+  // An address each wiki's spooler article answered to before a rename.
+  await insertRows(
+    tx,
+    "wiki_slug_aliases",
+    ["product_id", "slug", "doc_id"],
+    articleRows
+      .filter((a) => a.slug === "spooler-stalls")
+      .map((a) => ({
+        product_id: a.product_id,
+        slug: "spooler-hangs",
+        doc_id: a.id,
+      })),
+  );
+
   // Edges are derived from the bodies above rather than invented, so the seeded
   // graph is the same shape syncLinks would have produced on a real save.
   const bySlug = new Map<string, string>();
