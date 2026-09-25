@@ -21,6 +21,7 @@
     flex: none;
     font-size: var(--fs-xs);
     letter-spacing: var(--label-spacing);
+    text-transform: uppercase;
     color: var(--muted);
   }
   .rule {

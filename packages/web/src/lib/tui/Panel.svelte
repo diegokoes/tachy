@@ -121,6 +121,9 @@
     white-space: nowrap;
     pointer-events: auto;
   }
+  .title {
+    text-transform: uppercase;
+  }
   .meta {
     margin-left: auto;
     overflow: hidden;

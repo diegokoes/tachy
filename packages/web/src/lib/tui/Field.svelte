@@ -84,9 +84,11 @@
     gap: var(--pad-1);
     min-width: 0;
   }
+  /* Cased in CSS, not in the copy — a screen reader still hears a word. */
   .lbl {
-    font-size: var(--fs-sm);
+    font-size: var(--fs-xs);
     letter-spacing: var(--label-spacing);
+    text-transform: uppercase;
     color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;

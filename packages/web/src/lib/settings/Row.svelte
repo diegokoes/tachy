@@ -47,9 +47,10 @@
     align-items: center;
     min-height: var(--row-h);
     min-width: 0;
-    font-size: var(--fs-sm);
+    font-size: var(--fs-xs);
     color: var(--muted);
     letter-spacing: var(--label-spacing);
+    text-transform: uppercase;
     line-height: 1.3;
     overflow-wrap: anywhere;
   }
