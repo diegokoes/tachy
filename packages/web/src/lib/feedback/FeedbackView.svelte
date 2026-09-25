@@ -18,7 +18,9 @@
   let error = $state<string | null>(null);
   let headingEl = $state<HTMLElement>();
 
-  const canSend = $derived(type !== null && body.trim().length > 0 && !busy);
+  const canSend = $derived(
+    type !== null && title.trim().length > 0 && body.trim().length > 0 && !busy,
+  );
 
   $effect(() => {
     if (headingEl && !reducedMotion())
@@ -34,30 +36,35 @@
     openSection(key);
   }
 
-  async function runReview() {
-    if (type === null || !body.trim()) return;
-    reviewing = true;
-    error = null;
-    try {
-      review = await api.post<ReportReview>("/reports/review", {
-        type,
-        body: body.trim(),
-      });
-    } catch (e) {
-      error = errText(e);
-    } finally {
-      reviewing = false;
-    }
-  }
+  const held = $derived(
+    !!review && review.available && review.suggestions.length > 0,
+  );
+
+  // Every draft is reviewed before it goes. Suggestions hold the first send so
+  // the person can act on them; sending again with the draft unchanged files it
+  // as is. Editing the draft drops the review, so the next send asks afresh.
+  $effect(() => {
+    void type;
+    void title;
+    void body;
+    review = null;
+  });
 
   async function send() {
-    if (type === null || !body.trim()) return;
+    if (type === null || !title.trim() || !body.trim()) return;
     busy = true;
     error = null;
     try {
+      if (!review) {
+        reviewing = true;
+        const draft = { type, title: title.trim(), body: body.trim() };
+        review = await api.post<ReportReview>("/reports/review", draft);
+        reviewing = false;
+        if (held) return;
+      }
       await api.post("/reports", {
         type,
-        title: title.trim() || undefined,
+        title: title.trim(),
         body: body.trim(),
         context: {
           from: sessionStorage.getItem("tachy-feedback-from") ?? null,
@@ -79,6 +86,7 @@
       error = errText(e);
     } finally {
       busy = false;
+      reviewing = false;
     }
   }
 
@@ -101,16 +109,13 @@
       REPORT&nbsp;A
     </h1>
 
-    <BugIdeaToggle bind:value={type} onpick={() => (review = null)} />
+    <BugIdeaToggle bind:value={type} />
 
     <div class="form" class:dimmed={type === null}>
-      <Field label="one line (optional)">
+      <Field label="title" required>
         <input
           type="text"
           maxlength="200"
-          placeholder={type === "bug"
-            ? "e.g. export button does nothing on Safari"
-            : "e.g. bulk-tag knowledge entries"}
           bind:value={title}
           disabled={type === null}
         />
@@ -124,25 +129,21 @@
       >
         <textarea
           rows="7"
-          placeholder={type === "bug"
-            ? "Steps you took, what you expected, and what actually happened."
-            : "Describe the feature and the problem it would solve for you."}
           bind:value={body}
           disabled={type === null}
         ></textarea>
       </Field>
 
-      {#if review && review.available && review.suggestions.length > 0}
+      {#if review && held}
         <Note tone="warn">
-          A few things that would help whoever picks this up:
+          A few things that would help whoever picks this up — add them, or send
+          as it is:
           <ul class="tips">
             {#each review.suggestions as s}
               <li>{s}</li>
             {/each}
           </ul>
         </Note>
-      {:else if review && review.available && review.ok}
-        <Note tone="ok">Looks clear — good to send.</Note>
       {/if}
 
       {#if error}
@@ -151,22 +152,13 @@
 
       <div class="actions">
         <Button
-          variant="ghost"
-          icon="analyze"
-          busy={reviewing}
-          disabled={!canSend || reviewing}
-          onclick={runReview}
-        >
-          ask AI to review
-        </Button>
-        <Button
           variant="primary"
           icon="send"
           {busy}
           disabled={!canSend}
           onclick={send}
         >
-          send report
+          {reviewing ? "reviewing…" : held ? "send anyway" : "send report"}
         </Button>
       </div>
     </div>

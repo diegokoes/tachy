@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Icon } from "../tui";
-  import { gsap, reducedMotion } from "../gsap";
-  import { waveIn } from "../motion";
+  import { gsap, SplitText, reducedMotion } from "../gsap";
+  import { ripple } from "../motion";
   import type { ReportType } from "@tachy/contract";
 
   let {
@@ -28,23 +28,44 @@
     onpick?.(v);
   }
 
+  // The knob keeps the same inset from the ends as it does from the top and
+  // bottom, so it sits in the track the same way at rest and at either side.
   function knobX(v: ReportType | null): number {
-    const track = trackEl!;
-    const knob = knobEl!;
-    const pad = 5;
-    const span = track.clientWidth - knob.offsetWidth - pad;
-    if (v === "bug") return pad;
-    if (v === "feature") return span;
-    return span / 2;
+    const track = trackEl!.getBoundingClientRect();
+    const knob = knobEl!.getBoundingClientRect();
+    const border = trackEl!.clientLeft;
+    const inner = { w: track.width - 2 * border, h: track.height - 2 * border };
+    const inset = (inner.h - knob.height) / 2;
+    if (v === "bug") return inset;
+    if (v === "feature") return inner.w - knob.width - inset;
+    return (inner.w - knob.width) / 2;
   }
 
-  // Position the knob, crossfade the face, and wash the chosen label — all
+  let bugChars: Element[] = [];
+  let ideaChars: Element[] = [];
+
+  $effect(() => {
+    if (!bugLabel || !ideaLabel) return;
+    const splits = [
+      new SplitText(bugLabel, { type: "chars" }),
+      new SplitText(ideaLabel, { type: "chars" }),
+    ];
+    [bugChars, ideaChars] = splits.map((s) => s.chars);
+    return () => splits.forEach((s) => s.revert());
+  });
+
+  const KNOB_SECONDS = 0.5;
+  // back.out(1.6) first reaches its end value at ~38% of the tween; that is the
+  // moment the knob meets the side, before the overshoot settles.
+  const KNOB_ARRIVES = KNOB_SECONDS * 0.38;
+
+  // Position the knob, crossfade the face, and ripple the chosen label — all
   // driven off `value`, so a keyboard pick animates the same as a click.
   $effect(() => {
     const v = value;
     if (!trackEl || !knobEl) return;
     const animate = ready && !reducedMotion();
-    const dur = animate ? 0.5 : 0;
+    const dur = animate ? KNOB_SECONDS : 0;
     gsap.to(knobEl, { x: knobX(v), duration: dur, ease: "back.out(1.6)" });
 
     const faces: [SVGSVGElement | HTMLElement | undefined, boolean][] = [
@@ -62,9 +83,11 @@
           ease: "back.out(2)",
         });
 
-    if (ready && v === "bug" && bugLabel) waveIn(bugLabel, "var(--danger)");
-    if (ready && v === "feature" && ideaLabel)
-      waveIn(ideaLabel, "var(--report-idea)");
+    // The wave starts at the letter nearest the track, where the knob lands.
+    if (ready && v === "bug")
+      ripple(bugChars, { from: "end", delay: KNOB_ARRIVES });
+    if (ready && v === "feature")
+      ripple(ideaChars, { from: "start", delay: KNOB_ARRIVES });
     ready = true;
   });
 </script>
@@ -123,6 +146,13 @@
     letter-spacing: var(--label-spacing);
     font-weight: 600;
     color: var(--muted);
+    transition: color 0.3s ease 0.15s;
+  }
+  .toggle[data-value="bug"] .side.bug {
+    color: var(--danger);
+  }
+  .toggle[data-value="feature"] .side.idea {
+    color: var(--report-idea);
   }
 
   .track {
@@ -167,14 +197,16 @@
     border-radius: 3.2rem;
   }
 
+  /* Auto block margins centre it between the track's top and bottom; the 3px
+     inset matches what knobX leaves at either end. */
   .knob {
     position: absolute;
-    top: 50%;
+    top: 0;
+    bottom: 0;
     left: 0;
-    transform: translateY(-50%);
-    margin: 0.3rem;
-    width: 2.6rem;
-    height: 2.6rem;
+    margin: auto 0;
+    width: calc(3.2rem - 2 * var(--panel-line-w) - 6px);
+    height: calc(3.2rem - 2 * var(--panel-line-w) - 6px);
     border-radius: 50%;
     display: grid;
     place-items: center;

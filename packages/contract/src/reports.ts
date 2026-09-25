@@ -8,7 +8,7 @@ import type {
 /** What the feedback form sends when a person files a report. */
 export interface ReportInput {
   type: ReportType;
-  title?: string;
+  title: string;
   body: string;
   /** Where the person was and what they were running when they filed. */
   context?: Record<string, unknown>;

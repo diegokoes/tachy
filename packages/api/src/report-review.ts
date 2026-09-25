@@ -30,9 +30,9 @@ Reply with ONLY a JSON object, no prose and no code fences:
 {"ok": boolean, "suggestions": string[]}
 "ok" is true when the draft is already actionable. "suggestions" is at most three short, concrete things to add or clarify (empty when ok).`;
 
-function reviewPrompt(text: string, type: ReportType): string {
+function reviewPrompt(title: string, text: string, type: ReportType): string {
   const label = type === "bug" ? "BUG REPORT" : "FEATURE REQUEST";
-  return `Draft ${label}:\n\n${text}`;
+  return `Draft ${label}\n\nTitle: ${title}\n\n${text}`;
 }
 
 async function emptySessionDir(): Promise<string> {
@@ -80,7 +80,7 @@ const advisoryPass = (): ReportReview => ({
  * trapping the person behind a model they never set up.
  */
 export async function reviewReport(
-  body: string,
+  draft: { title: string; body: string },
   type: ReportType,
   ctx: ScopeContext,
   userId: string | null,
@@ -93,16 +93,16 @@ export async function reviewReport(
   const agentAuth = await resolveAgentAuth(provider, ctx);
   if (!agentAuth) return { available: false, ok: true, suggestions: [] };
 
-  const text = settings.redaction_global.value
-    ? scrubText(body, new TokenMap())
-    : body;
+  const tokens = new TokenMap();
+  const scrub = (s: string) =>
+    settings.redaction_global.value ? scrubText(s, tokens) : s;
   const model =
     provider === "claude" ? VALIDATION_MODEL_CLAUDE : prefs.agent_model.value;
   const allowedModels = settings.allowed_models.value;
 
   try {
     const res = await completeOnce(
-      reviewPrompt(text, type),
+      reviewPrompt(scrub(draft.title), scrub(draft.body), type),
       {
         provider,
         model,
