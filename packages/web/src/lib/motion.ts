@@ -242,6 +242,62 @@ export function jellyPress(node: HTMLElement) {
 }
 
 /**
+ * Lifts the node towards the pointer while it hovers, its edge lit in the
+ * accent as it goes up. `held` leaves a fainter edge lit once the pointer has
+ * gone, for as long as whatever the click opened stays open.
+ *
+ * drop-shadow, not box-shadow, for the same reason as in `jolt`: a box-shadow
+ * would trace the border box of a shape that is drawn rather than boxed. The
+ * blur stays at a pixel or two so the light hugs the outline instead of
+ * pooling around it.
+ */
+export function hoverRise(node: HTMLElement, held = false) {
+  const [r, g, b] = gsap.utils.splitColor(
+    getComputedStyle(document.documentElement).getPropertyValue("--accent").trim(),
+  );
+  const lit = (blur: number, alpha: number) =>
+    `drop-shadow(0 0 ${blur}px rgba(${r}, ${g}, ${b}, ${alpha}))`;
+  const REST = lit(0, 0);
+  const HELD = lit(1, 0.4);
+  const RISEN = lit(1.5, 0.75);
+
+  let over = false;
+  const shine = (to: string, duration: number) =>
+    gsap.to(node, {
+      filter: to,
+      duration: reducedMotion() ? 0 : duration,
+      ease: "sine.out",
+      clearProps: to === REST ? "filter" : "",
+    });
+
+  const rise = () => {
+    over = true;
+    if (!reducedMotion())
+      gsap.to(node, { y: -8, scale: 1.02, duration: 0.3, overwrite: "auto" });
+    shine(RISEN, 0.45);
+  };
+  const fall = () => {
+    over = false;
+    gsap.to(node, { y: 0, scale: 1, duration: 0.3, overwrite: "auto" });
+    shine(held ? HELD : REST, 0.4);
+  };
+  node.addEventListener("mouseenter", rise);
+  node.addEventListener("mouseleave", fall);
+  if (held) shine(HELD, 0);
+  return {
+    update(now: boolean) {
+      if (now === held) return;
+      held = now;
+      if (!over) shine(held ? HELD : REST, 0.4);
+    },
+    destroy: () => {
+      node.removeEventListener("mouseenter", rise);
+      node.removeEventListener("mouseleave", fall);
+    },
+  };
+}
+
+/**
  * Tweens a plain number, for state a component renders from rather than a
  * style GSAP can write directly. Returns the tween so a caller can kill it.
  *

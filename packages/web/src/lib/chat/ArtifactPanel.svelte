@@ -22,7 +22,15 @@
     type OutputSpec,
   } from "./OutputSpecEditor.svelte";
   import ArtifactThread from "./ArtifactThread.svelte";
-  import { clearGlow, glow, jolt, settle, spin, tweenValue } from "../motion";
+  import {
+    clearGlow,
+    glow,
+    hoverRise,
+    jolt,
+    settle,
+    spin,
+    tweenValue,
+  } from "../motion";
   import { nextNavKey } from "../nav";
   import { pushScope } from "../keys.svelte";
 
@@ -216,10 +224,57 @@
     return session.me?.role === "admin";
   }
 
+  /**
+   * Carries the tab up to the body while `on`, pinned where it sat, and back
+   * home after. The picker is portaled to the body, and nothing left inside
+   * `.app`'s stacking context can rank above its scrim, however high its
+   * z-index. Only while lifted: at rest it has to stay under whatever the app
+   * draws over the transcript.
+   *
+   * Moving the button drops its focus, so the tab never comes home from a
+   * close still holding it. That is deliberate: the picker handed focus back
+   * on Escape, and the keyboard-driven close rang the tab with its focus ring.
+   */
+  function raise(node: HTMLElement, on: boolean) {
+    const home = node.parentElement!;
+    const edge = node.offsetParent ?? home;
+    const pin = () => {
+      const box = edge.getBoundingClientRect();
+      node.style.top = `${box.top + box.height / 2}px`;
+      node.style.left = `${box.right - node.offsetWidth}px`;
+    };
+    const set = (up: boolean) => {
+      if (up === (node.parentElement !== home)) return;
+      if (up) {
+        document.body.appendChild(node);
+        node.style.position = "fixed";
+        node.style.right = "auto";
+        pin();
+        window.addEventListener("resize", pin);
+      } else {
+        window.removeEventListener("resize", pin);
+        node.style.removeProperty("position");
+        node.style.removeProperty("right");
+        node.style.removeProperty("top");
+        node.style.removeProperty("left");
+        home.appendChild(node);
+      }
+    };
+    set(on);
+    return {
+      update: set,
+      destroy() {
+        window.removeEventListener("resize", pin);
+        node.remove();
+      },
+    };
+  }
+
   const teamSlugFor = (teamId: string | null) =>
     teams.find((t) => t.id === teamId)?.slug;
 
   let editorOpen = $state(false);
+  const lifted = $derived((open || openT > 0) && !editorOpen);
   let fetching = $state<string | null>(null);
   let editorMode = $state<"create" | "edit">("create");
   let editorBusy = $state(false);
@@ -440,9 +495,15 @@
      until the thread has finished retracting, and a tab that dropped under it
      on the first frame of the close would blink out while the wire was still
      travelling towards it. openT is 0 again only once the hexagon has shut. -->
-<div class="edge-slot" class:lifted={(open || openT > 0) && !editorOpen}>
+<div class="edge-home">
+<div
+  class="edge-slot"
+  class:lifted
+  use:raise={lifted}
+>
   <button
     bind:this={tabBtn}
+    use:hoverRise={open}
     class="edge-tab"
     class:active={open || !!chat.artifact}
     onclick={toggle}
@@ -466,6 +527,7 @@
       ><ArtifactMark size="1em" {spread} /></span
     >
   </button>
+</div>
 </div>
 
 {#if open}
@@ -608,6 +670,12 @@
 {/if}
 
 <style>
+  /* A box of its own would become the tab's containing block; without one,
+     the tab still pins to the transcript's edge. The wrapper is only a place
+     to come home to. */
+  .edge-home {
+    display: contents;
+  }
   .edge-slot {
     position: absolute;
     right: 0;

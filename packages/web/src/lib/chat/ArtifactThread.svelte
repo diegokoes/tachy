@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { gsap, reducedMotion } from "../gsap";
   import { PULSE } from "../motion";
+  import { portal } from "../tui/portal";
 
   /* Element, not HTMLElement: `to` is the tab's frame <svg>, and everything
      done with these ends is getBoundingClientRect and ResizeObserver.observe,
@@ -295,32 +296,48 @@
   }
 </script>
 
-<svg
-  bind:this={svg}
-  class="thread"
-  class:buried
-  aria-hidden="true"
-  in:strike
-  out:strike={{ retract: true }}
-  onintroend={settleStroke}
-  onoutrostart={() => (frozen = true)}
->
-  <path bind:this={halo} class="halo" {d} />
-  <path bind:this={core} class="core" {d} />
-  {#if !still}
-    <path bind:this={comet} class="comet" {d} opacity="0" />
-    <circle bind:this={sparkEl} class="spark" r="1" opacity="0" />
-    <rect bind:this={bead} class="bead" width="4" height="4" opacity="0" />
-  {/if}
-</svg>
+<!-- The host stays where the component was mounted and only the wire leaves
+     for the body. Svelte removes a block by walking siblings from its first
+     node to its last, and a last node living somewhere else sends that walk
+     through whatever follows it in the body. -->
+<div class="host">
+  <svg
+    bind:this={svg}
+    use:portal
+    class="thread"
+    class:buried
+    aria-hidden="true"
+    in:strike
+    out:strike={{ retract: true }}
+    onintroend={settleStroke}
+    onoutrostart={() => (frozen = true)}
+  >
+    <path bind:this={halo} class="halo" {d} />
+    <path bind:this={core} class="core" {d} />
+    {#if !still}
+      <path bind:this={comet} class="comet" {d} opacity="0" />
+      <circle bind:this={sparkEl} class="spark" r="1" opacity="0" />
+      <rect bind:this={bead} class="bead" width="4" height="4" opacity="0" />
+    {/if}
+  </svg>
+</div>
 
 <style>
+  .host {
+    display: none;
+  }
+
   /* Above the picker's scrim, not under it: the scrim's blur is what puts the
      app on a plane behind the dialog, and a wire drawn into that plane reads
      as part of what was pushed back. It has to arrive on top of the blur for
-     the dialog and the tab to look connected. */
+     the dialog and the tab to look connected.
+
+     Portaled to the body for the same reason the dialog is: `.app` opens a
+     stacking context, and no z-index inside it can rank above the scrim. At
+     the dialog's own level, a dialog opened later still covers it by coming
+     later in the body. */
   .thread {
-    position: absolute;
+    position: fixed;
     inset: 0;
     z-index: calc(var(--z-overlay) + 1);
     width: 100%;
