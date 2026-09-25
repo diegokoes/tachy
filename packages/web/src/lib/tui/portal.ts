@@ -9,7 +9,7 @@
  * Moving the node does not detach it from its component: handlers, bindings
  * and scoped styles all travel with the element.
  */
-export function portal(node: HTMLElement, target: HTMLElement = document.body) {
+export function portal(node: Element, target: Element = document.body) {
   target.appendChild(node);
   return {
     destroy() {
