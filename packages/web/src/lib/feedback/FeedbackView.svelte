@@ -255,6 +255,22 @@
     gap: var(--pad-3);
   }
 
+  /* Elsewhere fields sit inside a panel, so a faint border and a see-through
+     fill are enough; here they sit straight on the stars, and need a solid
+     fill, a drawn rule and brighter labels to read at all. */
+  .form input,
+  .form textarea {
+    background: var(--panel-solid);
+    border-color: var(--muted);
+  }
+  .form input:focus-visible,
+  .form textarea:focus-visible {
+    border-color: var(--accent);
+  }
+  .form :global(.lbl) {
+    color: color-mix(in srgb, var(--text) 75%, var(--muted));
+  }
+
   .tips {
     margin: var(--pad-1) 0 0;
     padding-left: 1.1rem;
