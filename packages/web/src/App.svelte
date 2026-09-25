@@ -14,7 +14,7 @@
   import Wordmark from "./lib/Wordmark.svelte";
   import { loadThemeFromStorage, themeState } from "./lib/theme.svelte";
   import { loadFonts } from "./lib/fonts.svelte";
-  import { navigate, section, startRouter } from "./lib/router.svelte";
+  import { openSection, section, startRouter } from "./lib/router.svelte";
   import { hints, pushScope, startKeys } from "./lib/keys.svelte";
   import { navKey, settingsKey } from "./lib/keys/bindings.svelte";
   import { loadVim, vimState, scrollBindings } from "./lib/vim.svelte";
@@ -206,7 +206,7 @@
         key: navKey(n.key, i),
         label: n.label,
         hidden: true,
-        run: () => navigate(`/${n.key}`),
+        run: () => openSection(n.key),
       })),
     );
   });
@@ -220,7 +220,7 @@
         label: "",
         hidden: true,
         inFields: true,
-        run: () => navigate("/settings"),
+        run: () => openSection("settings"),
       },
     ]),
   );
@@ -232,7 +232,7 @@
     const at = items.findIndex((n) => n.key === view);
     const go = (delta: number) => () => {
       const next = items[Math.min(items.length - 1, Math.max(0, at + delta))];
-      if (next && next.key !== view) navigate(`/${next.key}`);
+      if (next && next.key !== view) openSection(next.key);
     };
     return pushScope([
       { key: "h", label: "", hidden: true, run: go(-1) },
@@ -278,7 +278,7 @@
             active={view}
             anchor="--tab-nav"
             labels={themeState.navLabels}
-            onpick={(k) => navigate(`/${k}`)}
+            onpick={openSection}
           />
         </Panel>
       </div>
@@ -297,7 +297,7 @@
       aria-label={settingsBare ? "settings" : undefined}
       title={settingsBare ? "settings" : undefined}
       onclick={(e) => {
-        navigate("/settings");
+        openSection("settings");
         if (e.detail !== 0) e.currentTarget.blur();
       }}
       use:jellyPress

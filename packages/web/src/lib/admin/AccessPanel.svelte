@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { keep, recall } from "../kept";
   import type { TeamRole } from "@tachy/contract";
   import { api } from "../api";
   import { session, isGlobalAdmin, canCurateScope } from "../session.svelte";
@@ -43,7 +44,8 @@
     admin ? teams.data : teams.data.filter((tm) => canCurateScope({ team_slug: tm.slug })),
   );
 
-  let filter = $state("");
+  let filter = $state(recall("admin.access.filter", ""));
+  $effect(() => keep("admin.access.filter", filter));
   let team = $state("");
 
   const teamsOf = (u: UserRow) =>

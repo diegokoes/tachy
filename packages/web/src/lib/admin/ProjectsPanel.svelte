@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
+  import { keep, recall } from "../kept";
   import { api } from "../api";
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
@@ -334,7 +335,8 @@ import { INFO } from "./help";
     untrack(() => opened && void openProject(opened));
   });
 
-  let filter = $state("");
+  let filter = $state(recall("admin.projects.filter", ""));
+  $effect(() => keep("admin.projects.filter", filter));
   const filtered = $derived.by(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return projects.data;
