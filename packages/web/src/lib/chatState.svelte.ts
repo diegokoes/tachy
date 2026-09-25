@@ -41,6 +41,6 @@ export const chat = $state({
   turnId: undefined as string | undefined,
   /** Place in the server's queue while every chat slot is taken. */
   queuePosition: null as number | null,
-  uploads: [] as { path: string; filename: string }[],
+  uploads: [] as { path: string; filename: string; image: boolean }[],
   artifact: undefined as { id: string; title: string } | undefined,
 });
