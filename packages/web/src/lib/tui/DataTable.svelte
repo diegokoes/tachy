@@ -128,6 +128,7 @@
     font-weight: normal;
     font-size: var(--fs-xs);
     letter-spacing: var(--label-spacing);
+    text-transform: uppercase;
     color: var(--muted);
     border-bottom: 1px solid var(--border);
     /* Headers truncate like cells — a fixed layout squeezes the auto column,
