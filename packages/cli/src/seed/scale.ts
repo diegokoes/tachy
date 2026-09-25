@@ -26,6 +26,7 @@ export interface Volumes {
   analysisRuns: number;
   artifacts: number;
   generatedOutputs: number;
+  reports: number;
 }
 
 /**
@@ -59,6 +60,7 @@ export const SCALES: Record<ScaleName, Volumes> = {
     analysisRuns: 200,
     artifacts: 6,
     generatedOutputs: 10,
+    reports: 12,
   },
   medium: {
     teams: 4,
@@ -85,6 +87,7 @@ export const SCALES: Record<ScaleName, Volumes> = {
     analysisRuns: 3_000,
     artifacts: 20,
     generatedOutputs: 100,
+    reports: 120,
   },
   large: {
     teams: 8,
@@ -111,6 +114,7 @@ export const SCALES: Record<ScaleName, Volumes> = {
     analysisRuns: 20_000,
     artifacts: 60,
     generatedOutputs: 500,
+    reports: 600,
   },
 };
 

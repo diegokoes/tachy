@@ -19,6 +19,12 @@ const hero = (d: string): IconDef => ({ path: `<path d="${d}"/>`, grid: 24 });
 /** A Hola mark: a fragment of primitives on the default 100-unit grid. */
 const hola = (path: string): IconDef => ({ path });
 
+/** A Lucide mark: several paths on the same 24-unit grid Heroicons uses. */
+const lucide = (paths: string[]): IconDef => ({
+  path: paths.map((d) => `<path d="${d}"/>`).join(""),
+  grid: 24,
+});
+
 /**
  * Heroicons' no-symbol, wanted under two names: `reject` for an action someone
  * took, `no` for a column saying a thing is not so. Named once because ICONS
@@ -220,6 +226,31 @@ export const ICONS = {
   library: hola(
     '<rect x="10" y="15" width="80" height="15"/><rect x="15" y="30" width="70" height="55"/><line x1="35" y1="52" x2="65" y2="52"/>',
   ),
+
+  /* ── Feedback ─────────────────────────────────────────────────────────────
+     Lucide marks: the flag opens the feedback view, the bug and lightbulb are
+     the two sides of the report toggle. */
+  flag: lucide([
+    "M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528",
+  ]),
+  bug: lucide([
+    "M12 20v-9",
+    "M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z",
+    "M14.12 3.88 16 2",
+    "M21 21a4 4 0 0 0-3.81-4",
+    "M21 5a4 4 0 0 1-3.55 3.97",
+    "M22 13h-4",
+    "M3 21a4 4 0 0 1 3.81-4",
+    "M3 5a4 4 0 0 0 3.55 3.97",
+    "M6 13H2",
+    "m8 2 1.88 1.88",
+    "M9 7.13V6a3 3 0 1 1 6 0v1.13",
+  ]),
+  lightbulb: lucide([
+    "M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5",
+    "M9 18h6",
+    "M10 22h4",
+  ]),
 } satisfies Record<string, IconDef>;
 
 export type IconName = keyof typeof ICONS;

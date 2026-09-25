@@ -33,6 +33,23 @@ export const FEEDBACK_KINDS = [
   "note",
   "deprecation",
 ] as const;
+/** What a person is filing from the feedback view: a defect or a wish. */
+export const REPORT_TYPES = ["bug", "feature"] as const;
+/** A report's life: newly filed, being worked, done, or shelved. */
+export const REPORT_STATUSES = [
+  "open",
+  "in_progress",
+  "resolved",
+  "closed",
+] as const;
+/**
+ * The in-app notifications a person can receive. One kind today; the list is
+ * the seam future kinds are added along, and `test/schema-drift.test.ts` holds
+ * it against the notifications.kind CHECK.
+ */
+export const NOTIFICATION_KINDS = ["report_reply"] as const;
+/** Who a report_messages row came from: the admin working it or the reporter. */
+export const REPORT_DIRECTIONS = ["admin", "reporter"] as const;
 /**
  * How an edit to a library item reached the database. `user_id` alone cannot
  * separate these: an agent edit is already attributed to the person whose turn
@@ -46,6 +63,7 @@ export const RUN_MODES = [
   "create",
   "code",
   "chat",
+  "review",
 ] as const;
 
 export type ResolutionClarity = (typeof RESOLUTION_CLARITIES)[number];
@@ -55,6 +73,10 @@ export type ReferenceKind = (typeof REFERENCE_KINDS)[number];
 export type LinkKind = (typeof LINK_KINDS)[number];
 export type Confidence = (typeof CONFIDENCES)[number];
 export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
+export type ReportType = (typeof REPORT_TYPES)[number];
+export type ReportStatus = (typeof REPORT_STATUSES)[number];
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+export type ReportDirection = (typeof REPORT_DIRECTIONS)[number];
 export type RunMode = (typeof RUN_MODES)[number];
 
 /**

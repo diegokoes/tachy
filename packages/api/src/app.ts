@@ -21,6 +21,7 @@ import { agent } from "./routes/agent";
 import { setup } from "./routes/setup";
 import { users } from "./routes/users";
 import { me } from "./routes/me";
+import { reports } from "./routes/reports";
 import { preferences } from "./routes/preferences";
 import { artifacts } from "./routes/artifacts";
 import { outputs } from "./routes/outputs";
@@ -56,6 +57,7 @@ function apiRoutes() {
     .route("/agent", agent)
     .route("/users", users)
     .route("/me", me)
+    .route("/reports", reports)
     .route("/preferences", preferences)
     .route("/artifacts", artifacts)
     .route("/outputs", outputs)

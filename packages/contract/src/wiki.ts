@@ -32,6 +32,12 @@ export const WIKI_GAP_KINDS = [
 ] as const;
 export type WikiGapKind = (typeof WIKI_GAP_KINDS)[number];
 
+/** A component a section covers, for per-section coverage. */
+export interface WikiCategoryComponent {
+  slug: string;
+  name: string;
+}
+
 export interface WikiCategoryRow {
   id: string;
   product_id: string | null;
@@ -40,6 +46,26 @@ export interface WikiCategoryRow {
   name: string;
   description: string | null;
   ordinal: number;
+  /** The section's lead article, if one is set. */
+  lead_slug: string | null;
+  lead_title: string | null;
+  /** Components this section covers; empty for a purely editorial section. */
+  components: WikiCategoryComponent[];
+}
+
+/** Per-section coverage rolled up from the section's linked components. */
+export interface WikiSectionCoverage {
+  articles: number;
+  gaps: number;
+}
+
+/** One hit from the in-wiki quick search (Ctrl+K), drafts included. */
+export interface WikiSearchHit {
+  id: string;
+  slug: string | null;
+  title: string;
+  status: string;
+  snippet: string;
 }
 
 export interface WikiArticleRef {

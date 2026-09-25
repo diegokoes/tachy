@@ -218,6 +218,9 @@ export {
   addWikiCategory,
   updateWikiCategory,
   deleteWikiCategory,
+  setCategoryComponents,
+  seedSectionsFromComponents,
+  searchWikiArticles,
   wikiToc,
   articleCategories,
   setArticleCategories,
@@ -610,3 +613,17 @@ export type {
 } from "@tachy/contract";
 export * from "./jobs";
 export * from "./testing";
+export * from "./reports";
+export * from "./notifications";
+export type {
+  ReportInput,
+  ReportReview,
+  ReportRow,
+  ReportMessageRow,
+  ReportsCensus,
+  NotificationRow,
+  ReportType,
+  ReportStatus,
+  ReportDirection,
+  NotificationKind,
+} from "@tachy/contract";

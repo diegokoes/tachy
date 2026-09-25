@@ -23,6 +23,7 @@
   import Facts, { type Fact } from "./Facts.svelte";
   import Overview from "./Overview.svelte";
   import Tile from "./Tile.svelte";
+  import { census } from "./census.svelte";
   import { loads, probes, probeTally, runProbes, system } from "./systemState.svelte";
 
   type Result = { ok?: boolean; at?: string; error?: string; problems?: string; dump_bytes?: number };
@@ -91,8 +92,23 @@
     const rt = result(restore, 8 * 24 * HOUR);
     /* A skipped probe ran nothing, so it is out of the denominator too. */
     const counted = tally ? tally.total - tally.skipped : 0;
+    const openReports = census.data.warn.reports ?? 0;
     return [
       { key: "status", label: "status", ...state, to: "runtime" },
+      {
+        key: "reports",
+        label: "reports",
+        value: census.data.counts.reports ?? 0,
+        tone: openReports
+          ? ("warn" as Tone)
+          : census.data.counts.reports
+            ? ("accent" as Tone)
+            : ("muted" as Tone),
+        title: openReports
+          ? `${openReports} open`
+          : "user bug reports & feature requests",
+        to: "reports",
+      },
       {
         key: "release",
         label: "release",
