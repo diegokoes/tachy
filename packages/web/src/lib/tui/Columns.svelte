@@ -126,8 +126,17 @@
     min-width: 0;
   }
   .chart.fill {
+    position: relative;
     height: 100%;
     min-height: 0;
+  }
+  /* Hung below the tile rather than taken out of it, so the axis lines up
+     with a neighbour that has no legend. The grid gap has room for it. */
+  .chart.fill .legend {
+    position: absolute;
+    top: calc(100% + var(--pad-2));
+    left: 0;
+    right: 0;
   }
 
   .n {
