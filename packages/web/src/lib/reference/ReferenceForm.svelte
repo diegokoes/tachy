@@ -1,7 +1,7 @@
 <script lang="ts">
   import { REFERENCE_STATUSES } from "../vocab";
   import type { Snippet } from "svelte";
-  import { FormActions } from "../tui";
+  import { Field, FormActions } from "../tui";
   import { onMount, untrack } from "svelte";
   import type { ReferenceRow } from "../types";
   import AsciiSelect from "../AsciiSelect.svelte";
@@ -71,50 +71,50 @@
 
 <form id="ref-form" class="ref-form" onsubmit={submit}>
   {#if extra}<div class="formbar">{@render extra()}</div>{/if}
-  <label>title
+  <Field label="title" required>
     <input bind:value={title} required />
-  </label>
+  </Field>
   <div class="row">
-    <label>status
+    <Field label="status">
       <AsciiSelect bind:value={status} options={[...REFERENCE_STATUSES]} />
-    </label>
+    </Field>
     {#if mode === "create"}
-      <label>{t("product")}
+      <Field label={t("product")}>
         <AsciiSelect
           bind:value={filing.productSlug}
           options={filing.productOptions}
           onchange={() => filing.productChanged()}
         />
-      </label>
+      </Field>
     {/if}
-    <label>component <span class="hint">optional</span>
+    <Field label="component">
       <AsciiSelect
         bind:value={filing.component}
         disabled={!filing.productSlug || filing.components.length === 0}
         options={[{ value: "", label: "whole product" }, ...filing.componentChoices]}
       />
-    </label>
-    <label>{t("customer")} <span class="hint">optional</span>
+    </Field>
+    <Field label={t("customer")}>
       <AsciiSelect bind:value={filing.customerSlug} options={filing.customerOptions}
         onchange={() => filing.customerChanged()} />
-    </label>
-    <label>unit <span class="hint">optional</span>
+    </Field>
+    <Field label="unit">
       <AsciiSelect bind:value={filing.unitSlug} options={filing.unitOptions}
         disabled={!filing.customerSlug || filing.units.length === 0} />
-    </label>
-    <label>doc version
+    </Field>
+    <Field label="doc version">
       <input bind:value={docVersion} class="short" />
-    </label>
-    <label>source
+    </Field>
+    <Field label="source">
       <input bind:value={source} />
-    </label>
+    </Field>
   </div>
-  <label>tags <span class="hint">comma-separated</span>
+  <Field label="tags" info="Comma-separated.">
     <input bind:value={tags} />
-  </label>
-  <label>body
+  </Field>
+  <Field label="body" required>
     <textarea rows="14" bind:value={body} required></textarea>
-  </label>
+  </Field>
   {#if supersedes}
     <p class="hint">New version. Current doc is archived as predecessor.</p>
   {/if}
@@ -136,8 +136,6 @@
     border-bottom: var(--panel-line);
   }
   .ref-form { display: flex; flex-direction: column; gap: 0.6rem; }
-  label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.82rem; color: var(--muted); }
-  .hint { font-size: 0.72rem; opacity: 0.8; }
   input, textarea { font: inherit; color: var(--text); }
   textarea { resize: vertical; }
   .row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end; }
