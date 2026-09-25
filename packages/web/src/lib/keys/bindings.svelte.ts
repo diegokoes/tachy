@@ -37,6 +37,8 @@ export const defaultNavKey = (i: number) => String(i + 1);
 export const defaultSubnavKey = (i: number) => `shift+${i + 1}`;
 /** Settings lives outside the tab bar, so it keeps a chord rather than a digit. */
 export const defaultSettingsKey = "ctrl+,";
+/** Feedback sits beside settings and keeps a chord for the same reason. */
+export const defaultFeedbackKey = "ctrl+.";
 
 export function navKey(item: string, i: number): string {
   return keymap.nav[item] ?? defaultNavKey(i);
@@ -51,6 +53,12 @@ export function subnavKey(i: number): string {
  *  digit fallback the way a real slot's key could. */
 export function settingsKey(): string {
   return keymap.nav.settings ?? defaultSettingsKey;
+}
+
+/** Same bucket and reasoning as settings: not a tab-bar slot, so it can't
+ *  collide with a digit fallback. */
+export function feedbackKey(): string {
+  return keymap.nav.feedback ?? defaultFeedbackKey;
 }
 
 export function setNavKey(item: string, key: string | null) {

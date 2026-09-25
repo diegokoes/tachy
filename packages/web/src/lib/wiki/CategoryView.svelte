@@ -45,6 +45,13 @@
 
   const node = $derived(toc ? find(toc.categories) : null);
 
+  /* A section with a lead page IS that page: land the reader on it rather than a
+     bare list. Sections without one keep the list below. */
+  $effect(() => {
+    if (node?.lead_slug)
+      navigate(wikiPath(scope, node.lead_slug), { replace: true });
+  });
+
   const go = (e: MouseEvent, path: string) => {
     e.preventDefault();
     navigate(path);
@@ -56,12 +63,11 @@
 <WikiLayout {scope}>
   <div class="cat">
     <nav class="crumb">
-      <a
-        href={wikiPath(scope, "contents")}
-        onclick={(e) => go(e, wikiPath(scope, "contents"))}>contents</a
+      <a href={wikiPath(scope)} onclick={(e) => go(e, wikiPath(scope))}
+        >overview</a
       >
       <span class="sep">/</span>
-      <span>category</span>
+      <span>section</span>
     </nav>
 
     {#if error}

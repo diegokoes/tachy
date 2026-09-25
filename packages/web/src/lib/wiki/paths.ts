@@ -15,8 +15,16 @@ export const wikiLabel = (w: WikiListRow) =>
 export const wikiPath = (scope: string, ...rest: string[]) =>
   ["/wiki", scope, ...rest].join("/");
 
-/** The two pages that were renamed when the wiki left the library. */
-const RENAMED: Record<string, string> = { toc: "contents", coverage: "gaps" };
+/**
+ * Pages that no longer exist under their old address. `contents` and its older
+ * name `toc` folded into the wiki's landing, so both send a reader to the root;
+ * `coverage` became `gaps`. Returned as a page segment, or "" for the root.
+ */
+const RENAMED: Record<string, string> = {
+  toc: "",
+  contents: "",
+  coverage: "gaps",
+};
 
 export const renamedPage = (page: string): string | undefined => RENAMED[page];
 
@@ -28,7 +36,10 @@ export function movedWikiPath(segments: string[]): string {
   const [scope, page, ...rest] = segments.slice(2);
   if (!scope) return "/wiki";
   if (!page) return wikiPath(scope);
-  return wikiPath(scope, renamedPage(page) ?? page, ...rest);
+  const moved = renamedPage(page);
+  if (moved !== undefined)
+    return moved ? wikiPath(scope, moved) : wikiPath(scope);
+  return wikiPath(scope, page, ...rest);
 }
 
 /**

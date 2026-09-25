@@ -253,7 +253,9 @@ export function jellyPress(node: HTMLElement) {
  */
 export function hoverRise(node: HTMLElement, held = false) {
   const [r, g, b] = gsap.utils.splitColor(
-    getComputedStyle(document.documentElement).getPropertyValue("--accent").trim(),
+    getComputedStyle(document.documentElement)
+      .getPropertyValue("--accent")
+      .trim(),
   );
   const lit = (blur: number, alpha: number) =>
     `drop-shadow(0 0 ${blur}px rgba(${r}, ${g}, ${b}, ${alpha}))`;
@@ -322,6 +324,85 @@ export function tweenValue(
     ease: o.ease ?? "power2.out",
     onUpdate: () => set(box.v),
   });
+}
+
+/** GSAP cannot interpolate a CSS custom property, so resolve `var(--x)` to the
+ *  concrete colour it holds before handing it to a tween. */
+function resolveColor(c: string): string {
+  const m = /^var\((--[\w-]+)\)$/.exec(c.trim());
+  if (!m) return c;
+  return (
+    getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim() ||
+    c
+  );
+}
+
+/**
+ * Per-character rise with a colour shift, from the body text colour into
+ * `color`. The label reads plainly until something lands on it, then washes over
+ * left to right. Accepts a `var(--x)` token or a literal colour.
+ */
+export function waveIn(node: HTMLElement, color: string) {
+  const to = resolveColor(color);
+  if (reducedMotion()) {
+    node.style.color = to;
+    return null;
+  }
+  const split = new SplitText(node, { type: "chars" });
+  gsap.fromTo(
+    split.chars,
+    { yPercent: 60, opacity: 0, color: resolveColor("var(--text)") },
+    {
+      yPercent: 0,
+      opacity: 1,
+      color: to,
+      duration: 0.5,
+      ease: "sine.out",
+      stagger: { each: 0.045, from: "start" },
+      onComplete: () => {
+        split.revert();
+        node.style.color = to;
+      },
+    },
+  );
+  return split;
+}
+
+/**
+ * A burst of confetti fired upward from the bottom of `container`, arcing out
+ * and falling under gravity (Physics2DPlugin). The pieces mount into the
+ * container and remove themselves once spent, so the caller owns nothing.
+ */
+export function confetti(container: HTMLElement, count = 36) {
+  if (reducedMotion()) return;
+  const colors = [
+    "#f43f5e",
+    "#f59e0b",
+    "#fde047",
+    "#22c55e",
+    "#38bdf8",
+    "#6366f1",
+    "#d946ef",
+  ];
+  const { width, height } = container.getBoundingClientRect();
+  for (let i = 0; i < count; i++) {
+    const piece = document.createElement("span");
+    const size = gsap.utils.random(6, 12);
+    piece.style.cssText = `position:absolute;top:${height}px;left:${width / 2}px;width:${size}px;height:${size * gsap.utils.random(0.4, 1)}px;background:${colors[i % colors.length]};border-radius:1px;pointer-events:none;will-change:transform;`;
+    container.appendChild(piece);
+    gsap.to(piece, {
+      duration: gsap.utils.random(1.4, 2.4),
+      physics2D: {
+        velocity: gsap.utils.random(350, 650),
+        angle: gsap.utils.random(250, 290),
+        gravity: 500,
+      },
+      rotation: gsap.utils.random(-540, 540),
+      opacity: 0,
+      ease: "none",
+      onComplete: () => piece.remove(),
+    });
+  }
 }
 
 /** Horizontal clip-path wipe, staggered — the nav reveal. */

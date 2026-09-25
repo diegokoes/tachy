@@ -18,6 +18,8 @@ export {
   explainFailure,
 } from "./claude";
 export { copilotPermission, copilotSessionConfig } from "./copilot";
+export { completeOnce } from "./complete";
+export type { CompletionConfig, CompletionResult } from "./complete";
 export type { ApprovalGate } from "./turn";
 export {
   AGENT_PROVIDERS,

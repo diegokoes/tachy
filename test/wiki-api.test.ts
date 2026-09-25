@@ -244,6 +244,62 @@ describe("wiki coverage API", () => {
   });
 });
 
+describe("wiki sections & search API", () => {
+  beforeEach(resetData);
+
+  it("round-trips a section's lead article and covered components", async () => {
+    const productId = await tpdProductId();
+    await addComponent({ productId, slug: "portal", name: "Portal" });
+    await addComponent({ productId, slug: "hub", name: "HUB" });
+    await article("tpd", "portal-home", { title: "Portal home" });
+    const res = await category("tpd", "portal", {
+      name: "Portal",
+      leadSlug: "portal-home",
+      componentSlugs: ["portal", "hub"],
+    });
+    expect(res.status).toBe(200);
+
+    const toc = await (await get("/api/library/wiki/tpd/toc")).json();
+    const sec = toc.categories.find((c: any) => c.slug === "portal");
+    expect(sec.lead_slug).toBe("portal-home");
+    expect(sec.components.map((c: any) => c.slug).sort()).toEqual([
+      "hub",
+      "portal",
+    ]);
+  });
+
+  it("seeds sections from the product's top-level components", async () => {
+    const productId = await tpdProductId();
+    await addComponent({ productId, slug: "portal", name: "Portal" });
+    await addComponent({ productId, slug: "backend", name: "Backend" });
+    const res = await post("/api/library/wiki/tpd/sections/seed", {});
+    expect(res.status).toBe(200);
+    expect((await res.json()).created).toHaveLength(2);
+    const toc = await (await get("/api/library/wiki/tpd/toc")).json();
+    expect(toc.categories.map((c: any) => c.slug).sort()).toEqual([
+      "backend",
+      "portal",
+    ]);
+  });
+
+  it("refuses to seed the org-wide wiki, which has no components", async () => {
+    const res = await post("/api/library/wiki/general/sections/seed", {});
+    expect(res.status).toBe(400);
+  });
+
+  it("searches this wiki's articles, drafts included", async () => {
+    await article("tpd", "spooler-stalls", {
+      title: "Spooler stalls",
+      body: "the print spooler stops",
+      status: "draft",
+    });
+    const res = await get("/api/library/wiki/tpd/search?q=spooler");
+    expect(res.status).toBe(200);
+    const hits = await res.json();
+    expect(hits.map((h: any) => h.slug)).toEqual(["spooler-stalls"]);
+  });
+});
+
 /** A 1×1 PNG. */
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",

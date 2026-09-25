@@ -43,6 +43,7 @@ export const WRITE_TOOLS = [
   "update_reference_doc",
   "save_wiki_article",
   "add_wiki_category",
+  "seed_wiki_sections",
   "add_knowledge_feedback",
   "add_resolution_pattern",
   "add_component",

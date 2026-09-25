@@ -24,6 +24,10 @@
     yTo?: (v: number) => void;
   };
 
+  /** The feedback view mounts its own field with this on, so entering it reads
+   *  as crossing into a new space: the stars twinkle faster and dip harder. */
+  let { intense = false }: { intense?: boolean } = $props();
+
   const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
   // Percentages, so the field reflows with the viewport without re-laying out.
@@ -76,10 +80,11 @@
         if (!s.el) continue;
         gsap.to(s.el, {
           // A twinkle, not a blink: dipping to a quarter made half the field
-          // read as flickering out rather than breathing.
-          opacity: s.dim * rand(0.5, 0.75),
-          duration: rand(3, 7),
-          delay: rand(0, 6),
+          // read as flickering out rather than breathing. Intense dips further
+          // and cycles faster, so the sky is visibly more alive.
+          opacity: s.dim * (intense ? rand(0.3, 0.7) : rand(0.5, 0.75)),
+          duration: intense ? rand(1.1, 3) : rand(3, 7),
+          delay: intense ? rand(0, 2.5) : rand(0, 6),
           repeat: -1,
           yoyo: true,
           ease: "sine.inOut",

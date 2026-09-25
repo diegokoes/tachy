@@ -17,11 +17,7 @@ import { setInternalEndpoint } from "./internal-endpoint";
 import type { InternalOptions } from "./routes/internal";
 import { lifecycle } from "./lifecycle";
 import { setEmbedDepth } from "./runtime";
-import {
-  abortAllTurns,
-  activeTurnCount,
-  startTurnHousekeeping,
-} from "./turns";
+import { abortAllTurns, activeTurnCount, startTurnHousekeeping } from "./turns";
 
 export { createApp } from "./app";
 export type { AppType } from "./app";

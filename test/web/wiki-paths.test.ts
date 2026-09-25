@@ -25,10 +25,10 @@ describe("wiki paths", () => {
     );
   });
 
-  it("follows the two pages that were renamed on the way", () => {
-    expect(movedWikiPath(seg("/library/wiki/tpd/toc"))).toBe(
-      "/wiki/tpd/contents",
-    );
+  it("folds the old pages into where they live now", () => {
+    // contents and its older name toc both became the wiki's landing.
+    expect(movedWikiPath(seg("/library/wiki/tpd/toc"))).toBe("/wiki/tpd");
+    expect(movedWikiPath(seg("/library/wiki/tpd/contents"))).toBe("/wiki/tpd");
     expect(movedWikiPath(seg("/library/wiki/tpd/coverage"))).toBe(
       "/wiki/tpd/gaps",
     );

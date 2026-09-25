@@ -189,6 +189,9 @@ export async function seedWiki(
   const categoryRows: Record<string, unknown>[] = [];
   const articleRows: Record<string, unknown>[] = [];
   const membershipRows: Record<string, unknown>[] = [];
+  const categoryComponentRows: Record<string, unknown>[] = [];
+
+  const allSlugs = ["main", ...ARTICLES.map((a) => a.slug)];
 
   // uuidFor keys on (kind, index), so the scope index is folded into the kind
   // to keep every wiki's categories distinct.
@@ -199,6 +202,8 @@ export async function seedWiki(
     ];
     const catId = (slug: string) =>
       uuidFor(`wiki_category_${s}`, catSlugs.indexOf(slug));
+    const articleId = (slug: string) =>
+      uuidFor(`wiki_article_${s}`, allSlugs.indexOf(slug));
 
     const own = scope.productId ? (byProduct.get(scope.productId) ?? []) : [];
     const anchorable = own.slice(0, Math.ceil(own.length / 2));
@@ -212,7 +217,18 @@ export async function seedWiki(
         name: c.name,
         description: `${c.name} for this product.`,
         ordinal: ci,
+        // A section with a lead page, so the dev database exercises the
+        // land-on-the-article behaviour rather than only the plain list.
+        lead_doc_id: c.slug === "about" ? articleId("overview") : null,
       });
+      // Sections that map to part of the product cover its components, so the
+      // per-section coverage badge and the join table are both non-empty.
+      if (c.slug === "troubleshooting")
+        for (const componentId of own)
+          categoryComponentRows.push({
+            category_id: catId(c.slug),
+            component_id: componentId,
+          });
       c.children.forEach((child, cj) => {
         categoryRows.push({
           id: catId(child),
@@ -275,13 +291,8 @@ export async function seedWiki(
     });
   });
 
-  await insertRows(
-    tx,
-    "wiki_categories",
-    ["id", "product_id", "parent_id", "slug", "name", "description", "ordinal"],
-    categoryRows,
-  );
-
+  // Articles first: a section's lead_doc_id points at one, so the article rows
+  // have to exist before the categories that reference them.
   await insertRows(
     tx,
     "reference_docs",
@@ -307,6 +318,29 @@ export async function seedWiki(
       "updated_at",
     ],
     articleRows,
+  );
+
+  await insertRows(
+    tx,
+    "wiki_categories",
+    [
+      "id",
+      "product_id",
+      "parent_id",
+      "slug",
+      "name",
+      "description",
+      "ordinal",
+      "lead_doc_id",
+    ],
+    categoryRows,
+  );
+
+  await insertRows(
+    tx,
+    "wiki_category_components",
+    ["category_id", "component_id"],
+    categoryComponentRows,
   );
 
   await insertRows(

@@ -35,6 +35,7 @@
   import RuntimePanel from "./RuntimePanel.svelte";
   import JobsOverview from "./JobsOverview.svelte";
   import SystemOverview from "./SystemOverview.svelte";
+  import ReportsPanel from "./ReportsPanel.svelte";
   import IssuesModal from "./IssuesModal.svelte";
   import SectionModal from "./SectionModal.svelte";
   import { issues, loadIssues } from "./issues.svelte";
@@ -97,6 +98,7 @@
     /* All dialogs: the overview carries the summary of each, which is the
        page, and a counter or tile opens the full detail behind it. */
     system: [
+      { key: "reports", label: "reports", view: ReportsPanel, n: "reports", show: admin },
       { key: "runtime", label: "runtime", view: RuntimePanel, show: admin, present: "modal" },
       { key: "host", label: "backups & host", view: HostPanel, show: admin, present: "modal" },
       { key: "checks", label: "checks", view: ChecksPanel, show: admin, present: "modal" },

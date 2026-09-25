@@ -22,6 +22,7 @@ import {
   setArticleCategories,
   setComposedFrom,
   addWikiCategory,
+  seedSectionsFromComponents,
   listWikiGaps,
 } from "@tachy/core";
 import type { ReferenceDocUpdate } from "@tachy/core";
@@ -189,6 +190,18 @@ tool(
         .optional()
         .describe("Slug of the category to nest this one under."),
       description: z.string().optional(),
+      lead: z
+        .string()
+        .optional()
+        .describe(
+          "Slug of the article that is this section's lead page — the all-encompassing page a reader lands on, whose headings enumerate the sub-topics. Omit to leave the section as a plain list of its articles.",
+        ),
+      components: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Component slugs this section covers, for per-section coverage and gaps. A section may bundle several. Omit to leave the section purely editorial.",
+        ),
     },
   },
   async (a) => {
@@ -203,8 +216,34 @@ tool(
         name: a.name,
         parentSlug: a.parent ?? null,
         description: a.description ?? null,
+        leadSlug: a.lead ?? null,
+        componentSlugs: a.components,
       }),
     );
+  },
+);
+
+tool(
+  "seed_wiki_sections",
+  {
+    description:
+      "Bootstrap a product wiki's top-level sections from its component tree: one section per top-level component, linked to it so per-section coverage works out of the box. The starting point for a new wiki — run it once, then rename, merge or add sections freely. Re-runnable: a section whose slug already exists is left untouched, so it never clobbers curation. No effect on the org-wide wiki, which has no components.",
+    inputSchema: {
+      product_slug: z
+        .string()
+        .describe("The product whose components seed the sections."),
+    },
+  },
+  async (a) => {
+    const productId = await getProductIdBySlug(a.product_slug);
+    await requireCanEdit({ productId });
+    const { created } = await seedSectionsFromComponents(productId);
+    return out({
+      created,
+      note: created.length
+        ? `Seeded ${created.length} section(s). Give each a lead article and refine as needed.`
+        : "Every top-level component already has a section; nothing to add.",
+    });
   },
 );
 

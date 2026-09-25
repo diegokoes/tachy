@@ -10,7 +10,7 @@
   import ArticleView from "./ArticleView.svelte";
   import ArticleForm from "./ArticleForm.svelte";
   import CategoryView from "./CategoryView.svelte";
-  import ContentsView from "./ContentsView.svelte";
+  import OverviewView from "./OverviewView.svelte";
   import GapsView from "./GapsView.svelte";
   import { renamedPage, wikiPath } from "./paths";
   import {
@@ -23,13 +23,13 @@
   /**
    * Routes under /wiki:
    *   (none)              the wiki you were last in
-   *   :scope              its main page
-   *   :scope/contents     the category tree
+   *   :scope              its landing: intro, sections and coverage in one page
    *   :scope/gaps         what the sweep found missing, over the coverage tree
-   *   :scope/c/:slug      a category
+   *   :scope/c/:slug      a section — its lead article, or its article list
    *   :scope/new[/:slug]  a new article, at a slug something asked for
    *   :scope/:slug        an article — WIKI_RESERVED_SLUGS are never one
    *   :scope/:slug/edit
+   * Old addresses (contents, toc, coverage) redirect via renamedPage below.
    */
   /* /wiki resolves to its landing scope in place, before the redirect below
      rewrites the address — otherwise re-picking the wiki tab from a main page
@@ -42,31 +42,31 @@
 
   const page = $derived(
     !second
-      ? "main"
-      : second === "contents" || second === "gaps" || second === "new"
-        ? second
-        : second === "c"
-          ? "category"
-          : third === "edit"
-            ? "edit"
-            : "article",
+      ? "overview"
+      : renamedPage(second) !== undefined
+        ? "redirect"
+        : second === "gaps" || second === "new"
+          ? second
+          : second === "c"
+            ? "category"
+            : third === "edit"
+              ? "edit"
+              : "article",
   );
 
   const PLACES: SubnavItem[] = [
-    { key: "main", label: "main page", icon: "doc" },
-    { key: "contents", label: "contents", icon: "index" },
+    { key: "overview", label: "overview", icon: "index" },
     { key: "gaps", label: "gaps", icon: "alert" },
   ];
 
-  /* An article is none of the three places, so no tab claims it; the aside is
+  /* An article or a section is neither place, so no tab claims it; the aside is
      what says where you are. */
   $effect(() =>
     setSubnav({
       items: PLACES,
-      active:
-        page === "main" || page === "contents" || page === "gaps" ? page : "",
+      active: page === "overview" || page === "gaps" ? page : "",
       onpick: (k) =>
-        navigate(k === "main" ? wikiPath(scope) : wikiPath(scope, k)),
+        navigate(k === "overview" ? wikiPath(scope) : wikiPath(scope, k)),
     }),
   );
 
@@ -85,10 +85,14 @@
     if (scope) rememberScope(scope);
   });
 
-  /* The pages renamed on the way out of the library still resolve. */
+  /* Old addresses (contents/toc → the landing, coverage → gaps) still resolve. */
   $effect(() => {
-    const moved = second && renamedPage(second);
-    if (moved) navigate(wikiPath(scope, moved), { replace: true });
+    if (!second) return;
+    const moved = renamedPage(second);
+    if (moved === undefined) return;
+    navigate(moved ? wikiPath(scope, moved) : wikiPath(scope), {
+      replace: true,
+    });
   });
 
   let saving = $state(false);
@@ -161,8 +165,10 @@
 
 {#if !scope}
   <p class="muted">loading…</p>
-{:else if page === "contents"}
-  <ContentsView {scope} />
+{:else if page === "redirect"}
+  <p class="muted">loading…</p>
+{:else if page === "overview"}
+  <OverviewView {scope} />
 {:else if page === "gaps"}
   <GapsView {scope} />
 {:else if page === "category"}
@@ -195,7 +201,7 @@
     <p class="muted">loading…</p>
   {/if}
 {:else}
-  <ArticleView {scope} slug={page === "main" ? MAIN_PAGE_SLUG : second!} />
+  <ArticleView {scope} slug={second!} />
 {/if}
 
 <style>
