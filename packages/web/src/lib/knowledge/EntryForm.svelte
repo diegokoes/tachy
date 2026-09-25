@@ -2,7 +2,7 @@
   import { CLOUD_HINT, CLOUD_RE, type PatternRow } from "@tachy/contract";
   import { CONFIDENCES, RESOLUTION_CLARITIES } from "../vocab";
   import type { Snippet } from "svelte";
-  import { Checkbox, FormActions } from "../tui";
+  import { Checkbox, Field, FormActions } from "../tui";
   import { onMount, tick, untrack } from "svelte";
   import { gsap } from "../gsap";
   import { api } from "../api";
@@ -166,55 +166,54 @@
 
 <form id="entry-form" class="entry-form" onsubmit={submit}>
   {#if extra}<div class="formbar">{@render extra()}</div>{/if}
-  <label class="wide">issue summary
+  <Field label="issue summary" required>
     <input bind:value={issueSummary} required />
-  </label>
+  </Field>
 
-  <label class="wide">root cause
+  <Field label="root cause">
     <textarea rows="3" bind:value={rootCause}></textarea>
-  </label>
-  <label class="wide">resolution
+  </Field>
+  <Field label="resolution">
     <textarea rows="3" bind:value={resolution}></textarea>
-  </label>
+  </Field>
 
-  <label class="wide">symptoms <span class="hint">comma-separated</span>
+  <Field label="symptoms" info="Comma-separated.">
     <input bind:value={symptoms} />
-  </label>
-  <label class="wide">signals <span class="hint">error codes / log patterns, comma-separated</span>
+  </Field>
+  <Field label="signals" info="Error codes and log patterns, comma-separated.">
     <input bind:value={signals} />
-  </label>
-  <label class="wide">tags <span class="hint">comma-separated</span>
+  </Field>
+  <Field label="tags" info="Comma-separated.">
     <input bind:value={tags} />
-  </label>
+  </Field>
 
   <div class="row">
-    <label>confidence
+    <Field label="confidence">
       <AsciiSelect bind:value={confidence} options={[{ value: "", label: "unset" }, ...CONFIDENCES]} />
-    </label>
-    <label>clarity
+    </Field>
+    <Field label="clarity">
       <AsciiSelect bind:value={resolutionClarity} options={[{ value: "", label: "unset" }, ...RESOLUTION_CLARITIES]} />
-    </label>
-    <label>{t("cloud")}
+    </Field>
+    <Field label={t("cloud")} error={cloudErr ?? undefined}>
       <input class="short" bind:value={cloud} list="entry-form-envs"
         aria-invalid={cloudErr ? "true" : undefined} />
-      {#if cloudErr}<p class="field-error">{cloudErr}</p>{/if}
       <datalist id="entry-form-envs">
         {#each environments as e}<option value={e.cloud}></option>{/each}
       </datalist>
-    </label>
+    </Field>
   </div>
 
   <div class="row">
-    <label>resolution pattern
+    <Field label="resolution pattern">
       <AsciiSelect bind:value={resolutionPattern}
         options={[{ value: "", label: "none" }, ...patterns.map((p) => p.slug as string)]} />
-    </label>
-    <label>affected version
+    </Field>
+    <Field label="affected version">
       <input class="short" bind:value={affectedVersion} />
-    </label>
-    <label>fixed version
+    </Field>
+    <Field label="fixed version">
       <input class="short" bind:value={fixedVersion} />
-    </label>
+    </Field>
     <label class="check">
       <Checkbox bind:checked={hiddenFix} ariaLabel="hidden fix" /> hidden fix
     </label>
@@ -222,32 +221,32 @@
 
   <div class="row">
     {#if mode === "create"}
-      <label>{t("product")}
+      <Field label={t("product")}>
         <AsciiSelect bind:value={filing.productSlug} options={filing.productOptions}
           onchange={() => filing.productChanged()} />
-      </label>
-      <label>status
+      </Field>
+      <Field label="status">
         <AsciiSelect bind:value={status} options={["approved", "draft"]} />
-      </label>
+      </Field>
     {/if}
-    <label>component
+    <Field label="component">
       <AsciiSelect bind:value={filing.component}
         disabled={!filing.productSlug || filing.components.length === 0}
         title={filing.productSlug ? undefined : `pick a ${t("product")} first`}
         options={[{ value: "", label: "none" }, ...filing.componentChoices]} />
-    </label>
-    <label>{t("customer")}
+    </Field>
+    <Field label={t("customer")}>
       <AsciiSelect bind:value={filing.customerSlug} options={filing.customerOptions}
         onchange={() => filing.customerChanged()}
         title="customer this applies to; none if general" />
-    </label>
-    <label>unit
+    </Field>
+    <Field label="unit">
       <AsciiSelect bind:value={filing.unitSlug} options={filing.unitOptions}
         disabled={!filing.customerSlug || filing.units.length === 0}
         title={filing.customerSlug
           ? "which part of their estate: a site or line"
           : `pick a ${t("customer")} first`} />
-    </label>
+    </Field>
   </div>
 
   <button
@@ -279,7 +278,6 @@
 </form>
 
 <style>
-  .field-error { color: var(--danger); margin: 0.2rem 0 0; font-size: 0.9em; }
   /* Holds only what the caller passes as `extra`, centred; absent when there
      is none. */
   .formbar {
@@ -292,14 +290,11 @@
     border-bottom: var(--panel-line);
   }
   .entry-form { display: flex; flex-direction: column; gap: 0.6rem; }
-  label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.82rem; color: var(--muted); }
-  label.wide { width: 100%; }
-  .hint { font-size: 0.72rem; opacity: 0.8; }
   input, textarea { font: inherit; color: var(--text); }
   textarea { resize: vertical; }
   .short { max-width: 10rem; }
   .row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end; }
-  .check { flex-direction: row; align-items: center; gap: 0.4rem; padding-bottom: 0.4rem; }
+  .check { display: flex; align-items: center; gap: 0.4rem; padding-bottom: 0.4rem; font-size: var(--fs-sm); color: var(--muted); }
   .structured { width: 100%; min-height: 20rem; height: 20rem; box-sizing: border-box; overflow: hidden; resize: none; color: #e2e2e2; background: #000; font-family: var(--font-mono); font-size: 0.82rem; line-height: 1.5; }
   :global(:root[data-theme="light"]) .structured { color: #000; background: #fff; }
   .json-toggle { align-self: center; display: grid; place-items: center; color: var(--text); background: transparent; border: 0; padding: 0.25rem; cursor: pointer; }

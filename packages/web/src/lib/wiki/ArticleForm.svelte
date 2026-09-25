@@ -9,7 +9,7 @@
   import { api } from "../api";
   import { errText } from "../resource.svelte";
   import { setTopActions } from "../subnav.svelte";
-  import { Button, Checkbox, FormActions, Note } from "../tui";
+  import { Button, Checkbox, Field, FormActions, Note } from "../tui";
   import AsciiSelect from "../AsciiSelect.svelte";
   import { componentOptions } from "../catalog";
   import type { ComponentRow } from "@tachy/contract";
@@ -387,39 +387,41 @@
 
 <form id="wiki-form" class="article-form" onsubmit={submit}>
   <div class="head">
-    <label class="grow">
-      title
-      <input bind:value={title} required />
-    </label>
-    <label
-      title={editing
+    <div class="grow">
+      <Field label="title" required>
+        <input bind:value={title} required />
+      </Field>
+    </div>
+    <Field
+      label="slug"
+      required
+      info={editing
         ? "The article's address. Renaming it rewrites [[links]] to it, and the old address keeps working."
         : "The article's address, and what [[links]] to it use."}
     >
-      slug
       <input
         bind:value={slug}
         oninput={() => (slugTouched = true)}
         required
       />
-    </label>
-    <label>
-      status
+    </Field>
+    <Field label="status">
       <AsciiSelect bind:value={status} options={[...REFERENCE_STATUSES]} />
-    </label>
+    </Field>
     {#if hasComponents}
-      <label>
-        about
+      <Field
+        label="about"
+        info="Product part covered. Used by coverage and gap sweep."
+      >
         <AsciiSelect
           bind:value={component}
-          title="Product part covered. Used by coverage and gap sweep."
           disabled={components.length === 0}
           options={[
             { value: "", label: "the whole product" },
             ...componentOptions(components),
           ]}
         />
-      </label>
+      </Field>
     {/if}
   </div>
 
@@ -516,18 +518,15 @@
     flex: 1;
     min-width: 14rem;
   }
-  label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-  }
   .lbl {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 0.5rem;
     color: var(--muted);
-    font-size: 0.85em;
+    font-size: var(--fs-xs);
+    letter-spacing: var(--label-spacing);
+    text-transform: uppercase;
   }
   .cats .picker {
     display: flex;
@@ -537,6 +536,7 @@
     font-size: var(--fs-xs);
   }
   .cat {
+    display: flex;
     flex-direction: row;
     align-items: center;
     gap: 0.3rem;

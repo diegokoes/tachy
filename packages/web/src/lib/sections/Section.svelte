@@ -104,6 +104,8 @@
   .lbl {
     flex: none;
     min-width: 0;
+    font-weight: 600;
+    text-transform: uppercase;
   }
   .rule {
     flex: 1;

@@ -94,6 +94,11 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* The mark's hit area is taller than a label line; it overhangs rather than
+     heightening the row, so a field with one lines up with its neighbours. */
+  .lblrow > :global(.mark) {
+    margin-block: -0.25rem;
+  }
   .req {
     color: var(--accent);
     margin-left: 0.15em;
