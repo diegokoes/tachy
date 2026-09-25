@@ -326,46 +326,24 @@ export function tweenValue(
   });
 }
 
-/** GSAP cannot interpolate a CSS custom property, so resolve `var(--x)` to the
- *  concrete colour it holds before handing it to a tween. */
-function resolveColor(c: string): string {
-  const m = /^var\((--[\w-]+)\)$/.exec(c.trim());
-  if (!m) return c;
-  return (
-    getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim() ||
-    c
-  );
-}
-
 /**
- * Per-character rise with a colour shift, from the body text colour into
- * `color`. The label reads plainly until something lands on it, then washes over
- * left to right. Accepts a `var(--x)` token or a literal colour.
+ * One ripple through a line of split characters: each lifts and settles in
+ * turn, the stagger overlapping so the rise travels as a single wave rather than
+ * a letter at a time. `from` is the end the wave starts at.
  */
-export function waveIn(node: HTMLElement, color: string) {
-  const to = resolveColor(color);
-  if (reducedMotion()) {
-    node.style.color = to;
-    return null;
-  }
-  const split = new SplitText(node, { type: "chars" });
-  gsap.fromTo(
-    split.chars,
-    { yPercent: 60, opacity: 0, color: resolveColor("var(--text)") },
-    {
-      yPercent: 0,
-      opacity: 1,
-      color: to,
-      duration: 0.5,
-      ease: "sine.out",
-      stagger: { each: 0.045, from: "start" },
-      onComplete: () => {
-        split.revert();
-        node.style.color = to;
-      },
-    },
-  );
-  return split;
+export function ripple(
+  chars: Element[],
+  o: { from?: "start" | "end"; delay?: number } = {},
+) {
+  if (reducedMotion() || !chars.length) return null;
+  gsap.killTweensOf(chars);
+  gsap.set(chars, { yPercent: 0 });
+  return gsap.to(chars, {
+    keyframes: { yPercent: [0, -28, 0], easeEach: "sine.inOut" },
+    duration: 0.42,
+    delay: o.delay ?? 0,
+    stagger: { each: 0.05, from: o.from ?? "start" },
+  });
 }
 
 /**

@@ -19,6 +19,7 @@ import { reviewReport } from "../report-review";
 
 const reviewSchema = z.object({
   type: z.enum(REPORT_TYPES),
+  title: z.string().trim().min(1).max(200),
   body: z.string().min(1),
 });
 
@@ -30,7 +31,7 @@ const reviewResultSchema = z.object({
 
 const submitSchema = z.object({
   type: z.enum(REPORT_TYPES),
-  title: z.string().max(200).optional(),
+  title: z.string().trim().min(1).max(200),
   body: z.string().min(1).max(20_000),
   context: z.record(z.string(), z.unknown()).optional(),
   review: reviewResultSchema.optional(),
@@ -43,12 +44,12 @@ const submitSchema = z.object({
  */
 export const reports = new Hono()
 
-  /** The advisory the form asks for before submitting. */
+  /** The advisory the form runs on every draft before submitting it. */
   .post("/review", zValidator("json", reviewSchema), async (c) => {
     const userId = await requireCaller(c);
     const ctx = await callerScope(c);
-    const { type, body } = c.req.valid("json");
-    return c.json(await reviewReport(body, type, ctx, userId));
+    const { type, title, body } = c.req.valid("json");
+    return c.json(await reviewReport({ title, body }, type, ctx, userId));
   })
 
   .post("/", zValidator("json", submitSchema), async (c) => {
@@ -57,7 +58,7 @@ export const reports = new Hono()
     const row = await createReport({
       reporterId: userId,
       type,
-      title: title ?? null,
+      title,
       body,
       context,
       aiReview: (review as ReportReview | undefined) ?? null,
