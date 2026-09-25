@@ -39,7 +39,8 @@
     display: flex;
     flex-direction: column;
     gap: var(--view-pad-x);
-    padding: var(--view-pad-y) var(--view-pad-x) var(--pad-4);
+    /* The bottom row's legends hang below their tiles, into this. */
+    padding: var(--view-pad-y) var(--view-pad-x) calc(var(--pad-4) * 1.5);
     min-width: 0;
     container-type: inline-size;
   }
