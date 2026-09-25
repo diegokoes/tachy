@@ -164,11 +164,15 @@ export async function stopTurn(turnId: string): Promise<void> {
 
 export async function uploadDoc(
   file: File,
-): Promise<{ path: string; filename: string }> {
+): Promise<{ path: string; filename: string; image: boolean }> {
   const fd = new FormData();
   fd.append("file", file);
   const res = await fetch("/api/agent/uploads", { method: "POST", body: fd });
   if (res.status === 401) onUnauthorized();
-  if (!res.ok) throw new Error(`upload failed: ${res.status}`);
-  return res.json();
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok)
+    throw new Error(
+      `could not attach ${file.name}: ${body?.error ?? `upload failed (${res.status} ${res.statusText})`}`,
+    );
+  return { ...body, image: file.type.startsWith("image/") };
 }

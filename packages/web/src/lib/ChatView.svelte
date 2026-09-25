@@ -406,6 +406,7 @@
       {#each chat.uploads as u, i (u.path)}
         {#if i > 0}<span class="sep" aria-hidden="true">~~</span>{/if}
         <span class="attach">
+          <Icon name={u.image ? "image" : "doc"} size="1.1em" />
           {u.filename}
           <button class="chip-x" title="Remove attachment" onclick={() => chat.uploads.splice(i, 1)}>{G.del}</button>
         </span>
@@ -458,7 +459,14 @@
 </div>
 
 <style>
-  .chat { display: flex; flex-direction: column; height: 100%; position: relative; }
+  .chat {
+    --upload-w: 1.375rem;
+    --composer-gap: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    position: relative;
+  }
 
   .dropzone {
     position: absolute;
@@ -609,23 +617,25 @@
   .turn.user .mk { display: inline-block; transform: scaleX(-1); }
   .turn.user .body { padding-left: 0; padding-right: 1ch; }
 
-  .attachments { display: flex; gap: var(--pad-2); padding: var(--pad-2) 0; flex-wrap: wrap; align-items: center; }
-  .attach { display: inline-flex; align-items: center; gap: var(--pad-1); font-size: var(--fs-xs); color: var(--muted); }
-  .sep { color: var(--muted); opacity: 0.55; user-select: none; }
-  .artifact-chip {
-    gap: var(--pad-2);
-    border: 1px solid var(--accent);
-    border-radius: var(--radius-chip);
-    padding: 0 var(--pad-3);
-    color: var(--accent);
+  /* Indented past the upload mark so the row starts where the textarea does. */
+  .attachments {
+    display: flex;
+    gap: var(--pad-3);
+    padding: var(--pad-2) 0 var(--pad-2) calc(var(--upload-w) + var(--composer-gap));
+    flex-wrap: wrap;
+    align-items: center;
   }
+  .attach { display: inline-flex; align-items: center; gap: var(--pad-2); font-size: var(--fs-sm); color: var(--muted); }
+  .sep { color: var(--muted); opacity: 0.55; user-select: none; }
+  .artifact-chip { color: var(--accent); }
   .chip-x { border: none; background: none; padding: 0 var(--pad-1); color: inherit; font: inherit; cursor: pointer; }
   .chip-x:hover { color: var(--danger); }
-  .composer { position: relative; display: flex; gap: 0.5rem; align-items: stretch; padding-top: 0.6rem; border-top: 1px solid var(--border); }
+  .composer { position: relative; display: flex; gap: var(--composer-gap); align-items: stretch; padding-top: 0.6rem; border-top: 1px solid var(--border); }
   .composer textarea { flex: 1; resize: none; }
   /* A <label>, not a <button> — it has to wrap the file input — so it borrows
      the mark's hover language rather than inheriting it from Button. */
   .upload {
+    width: var(--upload-w);
     cursor: pointer;
     align-self: center;
     font-size: 1.1rem;

@@ -45,6 +45,13 @@ const KEEPALIVE_MS = 20_000;
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
+const megabytes = (bytes: number) => (bytes / 1024 / 1024).toFixed(1);
+
+const tooLarge = (bytes: number) =>
+  badInput(
+    `file is ${megabytes(bytes)} MB, over the ${MAX_UPLOAD_BYTES / 1024 / 1024} MB upload limit`,
+  );
+
 const chatSchema = z.object({
   message: z.string().min(1),
   sessionId: z.string().optional(),
@@ -294,13 +301,11 @@ export const agent = new Hono()
     // Checked before parseBody, which buffers the whole request first: past
     // that point the limit has already been paid for in memory.
     const declared = Number(c.req.header("content-length") ?? 0);
-    if (declared > MAX_UPLOAD_BYTES)
-      throw badInput("file too large (max 25 MB)");
+    if (declared > MAX_UPLOAD_BYTES) throw tooLarge(declared);
     const body = await c.req.parseBody();
     const file = body.file;
     if (!(file instanceof File)) throw badInput("expected a 'file' field");
-    if (file.size > MAX_UPLOAD_BYTES)
-      throw badInput("file too large (max 25 MB)");
+    if (file.size > MAX_UPLOAD_BYTES) throw tooLarge(file.size);
     const filename = basename(file.name || "upload");
     const { ref } = await saveUpload({
       userId: owner,
