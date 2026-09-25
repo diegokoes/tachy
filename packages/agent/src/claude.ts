@@ -74,7 +74,9 @@ export function explainFailure(raw: string): {
  * environment wholesale, so the inherited one is copied for PATH and friends,
  * then every credential source is stripped before the caller's own is set.
  */
-export function claudeEnv(cfg: AgentConfig): Record<string, string> {
+export function claudeEnv(
+  cfg: Pick<AgentConfig, "agentAuth" | "configDir">,
+): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env))
     if (typeof v === "string") env[k] = v;

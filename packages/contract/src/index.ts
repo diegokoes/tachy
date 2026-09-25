@@ -6,6 +6,10 @@ export {
   LINK_KINDS,
   CONFIDENCES,
   FEEDBACK_KINDS,
+  REPORT_TYPES,
+  REPORT_STATUSES,
+  REPORT_DIRECTIONS,
+  NOTIFICATION_KINDS,
   RUN_MODES,
   SOURCE_CALL_ORIGINS,
   LIBRARY_ACTORS,
@@ -29,6 +33,10 @@ export type {
   LinkKind,
   Confidence,
   FeedbackKind,
+  ReportType,
+  ReportStatus,
+  ReportDirection,
+  NotificationKind,
   RunMode,
   SourceCallOrigin,
   LibraryActor,
@@ -50,6 +58,9 @@ export { WIKI_RESERVED_SLUGS, MAIN_PAGE_SLUG, WIKI_GAP_KINDS } from "./wiki";
 export type {
   WikiGapKind,
   WikiCategoryRow,
+  WikiCategoryComponent,
+  WikiSectionCoverage,
+  WikiSearchHit,
   WikiArticleRef,
   WikiTocNode,
   WikiToc,
@@ -89,6 +100,14 @@ export type {
 } from "./sources";
 export type { AgentUsage, ToolUsage } from "./analytics";
 export type { KnowledgeCensus } from "./knowledge";
+export type {
+  ReportInput,
+  ReportReview,
+  ReportRow,
+  ReportMessageRow,
+  ReportsCensus,
+  NotificationRow,
+} from "./reports";
 
 export {
   LIBRARY_ASSET_TYPES,

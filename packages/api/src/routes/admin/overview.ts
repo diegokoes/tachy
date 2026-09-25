@@ -7,6 +7,7 @@ import {
   sourceCensus,
   repoCensus,
   knowledgeCensus,
+  reportsCensus,
   agentUsageCensus,
   toolUsageCensus,
   sourceTrafficCensus,
@@ -34,13 +35,14 @@ export const overview = new Hono()
    */
   .get("/overview", async (c) => {
     const ctx = await callerScope(c);
-    const [catalog, users, sources, repos, knowledge, untokened] =
+    const [catalog, users, sources, repos, knowledge, reports, untokened] =
       await Promise.all([
         catalogCensus(),
         userCensus(),
         sourceCensus(),
         repoCensus(),
         knowledgeCensus(),
+        reportsCensus(),
         untokenedConnections(ctx).then((slugs) => slugs.length),
       ]);
     return c.json({
@@ -55,6 +57,7 @@ export const overview = new Hono()
         patterns: catalog.patterns,
         customers: catalog.customers,
         users: users.users,
+        reports: reports.reports,
       },
       // Only what is actionable. A disabled user is a normal state; a
       // connection that cannot authenticate and a repo that stopped indexing
@@ -62,6 +65,7 @@ export const overview = new Hono()
       warn: {
         sources: untokened,
         repos: repos.failing,
+        reports: reports.open,
       },
       // The censuses unsummarised, for the overview panels. What they show
       // (labels with no description, teams with no admin) is per-product or
@@ -73,6 +77,7 @@ export const overview = new Hono()
         catalog,
         users,
         knowledge,
+        reports,
       },
     });
   })

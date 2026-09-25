@@ -9,7 +9,7 @@
   import { isCurator } from "../session.svelte";
   import { setTopActions } from "../subnav.svelte";
   import { Button, EmptyState, Note } from "../tui";
-  import type { WikiGap, WikiGaps } from "../types";
+  import type { CoverageNode, WikiGap, WikiGaps, WikiToc } from "../types";
   import CoverageTree from "./CoverageTree.svelte";
   import WikiLayout from "./WikiLayout.svelte";
   import { ORG_WIDE, wikiPath } from "./paths";
@@ -24,9 +24,53 @@
   let { scope }: { scope: string } = $props();
 
   let data = $state<WikiGaps | null>(null);
+  let toc = $state<WikiToc | null>(null);
   let error = $state<string | null>(null);
   let rescanning = $state(false);
   let acting = $state<string | null>(null);
+
+  /**
+   * Which section each component belongs to, so a coverage gap reads as
+   * "Portal is missing X" rather than a bare component. A section covers the
+   * whole subtree of every component it links.
+   */
+  const sectionByComponent = $derived.by(() => {
+    const m = new Map<string, string>();
+    if (!toc || !data?.coverage) return m;
+    const bySlug = new Map<string, CoverageNode>();
+    const index = (ns: CoverageNode[]) => {
+      for (const n of ns) {
+        bySlug.set(n.slug, n);
+        index(n.children);
+      }
+    };
+    index(data.coverage.nodes);
+    const mark = (compSlugs: string[], name: string) => {
+      const seen = new Set<string>();
+      const dfs = (n: CoverageNode) => {
+        if (seen.has(n.slug)) return;
+        seen.add(n.slug);
+        if (!m.has(n.slug)) m.set(n.slug, name);
+        n.children.forEach(dfs);
+      };
+      for (const s of compSlugs) {
+        const n = bySlug.get(s);
+        if (n) dfs(n);
+      }
+    };
+    for (const sec of toc.categories)
+      if (sec.components?.length)
+        mark(
+          sec.components.map((c) => c.slug),
+          sec.name,
+        );
+    return m;
+  });
+
+  const sectionOf = (g: WikiGap): string | null =>
+    g.evidence.component
+      ? (sectionByComponent.get(String(g.evidence.component)) ?? null)
+      : null;
 
   const HEADS: Record<WikiGapKind, { title: string; detail: string }> = {
     unwritten: {
@@ -75,9 +119,13 @@
     const isCurrent = current();
     error = null;
     try {
-      const next = await api.get<WikiGaps>(`/library/wiki/${scope}/gaps`);
+      const [next, nextToc] = await Promise.all([
+        api.get<WikiGaps>(`/library/wiki/${scope}/gaps`),
+        api.get<WikiToc>(`/library/wiki/${scope}/toc`),
+      ]);
       if (!isCurrent()) return;
       data = next;
+      toc = nextToc;
     } catch (e) {
       if (!isCurrent()) return;
       error = errText(e);
@@ -189,6 +237,14 @@
 
     {#if error}<Note tone="danger">{error}</Note>{/if}
 
+    {#if scope === ORG_WIDE}
+      <Note tone="muted">
+        The org-wide wiki has no components, so coverage-based gaps (uncovered
+        lessons and outgrown articles) are not computed here — only stale
+        sources, wanted pages, drafts and uncategorised articles.
+      </Note>
+    {/if}
+
     {#if data}
       {#if groups.length}
         {#each groups as { kind, gaps } (kind)}
@@ -209,6 +265,9 @@
                       >
                     {:else}
                       <strong>{g.subject}</strong>
+                    {/if}
+                    {#if sectionOf(g)}
+                      <span class="sec">in {sectionOf(g)}</span>
                     {/if}
                     <span class="line">{evidenceLine(g)}</span>
                     {#if g.evidence.items?.length}
@@ -345,6 +404,12 @@
   }
   .line {
     font-size: var(--fs-sm);
+  }
+  .sec {
+    font-size: var(--fs-xs);
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: var(--label-spacing);
   }
   .items {
     display: flex;

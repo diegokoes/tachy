@@ -74,10 +74,7 @@ export function encryptSecret(
   aad?: string,
 ): EncryptedSecret {
   const k = key();
-  if (!k)
-    throw badInput(
-      "credential storage disabled: set TACHY_SECRET_KEY",
-    );
+  if (!k) throw badInput("credential storage disabled: set TACHY_SECRET_KEY");
   const nonce = randomBytes(NONCE_BYTES);
   const cipher = createCipheriv(ALGO, k, nonce);
   if (aad) cipher.setAAD(Buffer.from(aad, "utf8"));
@@ -121,9 +118,7 @@ export function decryptSecret(
 ): string {
   const keys = vaultKeys();
   if (!keys.length)
-    throw badInput(
-      "credential storage disabled: set TACHY_SECRET_KEY",
-    );
+    throw badInput("credential storage disabled: set TACHY_SECRET_KEY");
   // A row names its key; one written before key ids is tried with each.
   const candidates = row.key_id
     ? keys.filter((k) => k.id === row.key_id)

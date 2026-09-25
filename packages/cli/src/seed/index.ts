@@ -32,6 +32,7 @@ import { seedCode } from "./code";
 import { seedActivity, seedTelemetry } from "./activity";
 import { seedLibrary } from "./library";
 import { seedWiki } from "./wiki";
+import { seedReports } from "./reports";
 
 export { SCALE_NAMES, type ScaleName } from "./scale";
 export { ADMIN_EMAIL, MEMBER_EMAIL, DEV_PASSWORD } from "./org";
@@ -55,6 +56,9 @@ const MARKER = "dev_seed";
 /** Everything the seeder writes, in an order the FKs tolerate. */
 const TABLES = [
   "generated_outputs",
+  "notifications",
+  "report_messages",
+  "reports",
   "library_links",
   "library_views",
   "library_revisions",
@@ -322,6 +326,7 @@ export async function seed(opts: SeedOptions): Promise<void> {
     });
     await phases.run("library", () => seedLibrary(tx, v, knowledge, org.users));
     await phases.run("wiki", () => seedWiki(tx, org.products, org.users));
+    await phases.run("reports", () => seedReports(tx, v, org.users));
   });
 
   if (mode !== "none") process.stderr.write("\n");

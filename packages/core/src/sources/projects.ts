@@ -216,9 +216,7 @@ function assertWikiAllowed(
   wikis: ProjectWiki[] | null | undefined,
 ): void {
   if (role === "tracker" && wikis?.length)
-    throw badInput(
-      "a tracker project cannot own a wiki: it has no product",
-    );
+    throw badInput("a tracker project cannot own a wiki: it has no product");
 }
 
 export async function addSourceProject(

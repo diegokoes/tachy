@@ -5,7 +5,9 @@ import {
   addWikiCategory,
   updateWikiCategory,
   deleteWikiCategory,
+  seedSectionsFromComponents,
   listWikiCategories,
+  searchWikiArticles,
   wikiToc,
   articleCategories,
   setArticleCategories,
@@ -72,6 +74,8 @@ const categorySchema = z.object({
   parentSlug: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   ordinal: z.number().int().optional(),
+  leadSlug: z.string().nullable().optional(),
+  componentSlugs: z.array(z.string()).optional(),
 });
 
 const categoryPatchSchema = z.object({
@@ -80,6 +84,8 @@ const categoryPatchSchema = z.object({
   parentSlug: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   ordinal: z.number().int().optional(),
+  leadSlug: z.string().nullable().optional(),
+  componentSlugs: z.array(z.string()).optional(),
 });
 
 const componentPatchSchema = z.object({
@@ -215,6 +221,28 @@ export const library = new Hono()
   .get("/wiki/:scope/main", async (c) =>
     c.json(await findMainPage(await scopeProductId(c.req.param("scope")))),
   )
+
+  // In-wiki quick search (Ctrl+K). Scoped to this wiki and includes drafts, so it
+  // is not the same corpus as the library's cross-wiki reference search.
+  .get("/wiki/:scope/search", async (c) =>
+    c.json(
+      await searchWikiArticles(
+        await scopeProductId(c.req.param("scope")),
+        c.req.query("q") ?? "",
+      ),
+    ),
+  )
+
+  // One click from a new wiki to its sections: a category per top-level component.
+  .post("/wiki/:scope/sections/seed", async (c) => {
+    const productId = await scopeProductId(c.req.param("scope"));
+    if (!productId)
+      throw badInput("sections are seeded from components; org-wide has none");
+    await assertScopeEditor(c, wikiScope(productId));
+    const result = await seedSectionsFromComponents(productId);
+    await rescan(productId);
+    return c.json(result);
+  })
 
   .get("/wiki/:scope/categories", async (c) =>
     c.json(

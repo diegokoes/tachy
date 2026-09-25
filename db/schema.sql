@@ -597,7 +597,7 @@ create table analysis_runs (
     id              uuid primary key default gen_random_uuid(),
     work_item_id    uuid references work_items(id) on delete set null,
     user_id         uuid references users(id) on delete set null,
-    mode            text not null check (mode in ('ingest','consult','sync','create','code','chat')),
+    mode            text not null check (mode in ('ingest','consult','sync','create','code','chat','review')),
     model           text,
     input_tokens    integer,
     output_tokens   integer,
@@ -713,6 +713,10 @@ create table wiki_categories (
     name        text not null,
     description text,
     ordinal     integer not null default 0,
+    -- The section's lead article: the all-encompassing page a reader lands on,
+    -- whose own heading outline is the section's sub-topic list. Set null on
+    -- delete so a section degrades to its plain article list rather than breaking.
+    lead_doc_id uuid references reference_docs(id) on delete set null,
     created_at  timestamptz not null default now(),
     updated_at  timestamptz not null default now(),
     constraint wiki_categories_no_self_parent check (parent_id is null or parent_id <> id)
@@ -721,6 +725,19 @@ create table wiki_categories (
 create unique index wiki_categories_slug_idx
     on wiki_categories(product_id, slug) nulls not distinct;
 create index wiki_categories_parent_idx on wiki_categories(parent_id);
+
+-- Which components a section covers, for per-section coverage and gaps. A section
+-- like "Backend" bundles several components (business objects, worker, queues);
+-- coverage is the union of their subtrees. Seeded from the component tree but
+-- edited freely afterwards, so it is a link, never a live mirror.
+create table wiki_category_components (
+    category_id  uuid not null references wiki_categories(id) on delete cascade,
+    component_id uuid not null references components(id) on delete cascade,
+    primary key (category_id, component_id)
+);
+
+create index wiki_category_components_component_idx
+    on wiki_category_components(component_id);
 
 -- Many-to-many on purpose: "Spooler stalls" belongs under both
 -- Troubleshooting/Printing and Hardware/Printers without being duplicated.
@@ -1114,3 +1131,54 @@ create index test_runs_created_idx on test_runs(created_at desc);
 -- One at a time: a second run would measure the first one's load.
 create unique index test_runs_active_idx on test_runs((status in ('queued','running')))
     where status in ('queued','running');
+
+-- A bug or feature request filed from the feedback view. The reporter survives
+-- their own account being removed (set null) so the admin queue keeps the item.
+create table reports (
+    id            uuid primary key default gen_random_uuid(),
+    reporter_id   uuid references users(id) on delete set null,
+    type          text not null check (type in ('bug','feature')),
+    status        text not null default 'open'
+                  check (status in ('open','in_progress','resolved','closed')),
+    title         text,
+    body_text     text not null,
+    -- Route, app build and agent the person was on when they filed, so an admin
+    -- reads the report without a round-trip asking where they were.
+    context       jsonb not null default '{}'::jsonb,
+    -- The advisory the model gave the draft, kept for the admin's context.
+    ai_review     jsonb,
+    created_at    timestamptz not null default now(),
+    updated_at    timestamptz not null default now()
+);
+
+create index reports_status_idx  on reports(status, created_at desc);
+create index reports_reporter_idx on reports(reporter_id, created_at desc);
+
+-- The thread on a report: the reporter's follow-ups and the admin's replies.
+create table report_messages (
+    id          uuid primary key default gen_random_uuid(),
+    report_id   uuid not null references reports(id) on delete cascade,
+    author_id   uuid references users(id) on delete set null,
+    direction   text not null check (direction in ('admin','reporter')),
+    body_text   text not null,
+    created_at  timestamptz not null default now()
+);
+
+create index report_messages_report_idx on report_messages(report_id, created_at);
+
+-- In-app notifications, per person. General on purpose: `kind` names the event
+-- and `ref` carries whatever that kind needs to link back (e.g. a report id).
+create table notifications (
+    id          uuid primary key default gen_random_uuid(),
+    user_id     uuid not null references users(id) on delete cascade,
+    kind        text not null check (kind in ('report_reply')),
+    title       text,
+    body_text   text,
+    ref         jsonb not null default '{}'::jsonb,
+    -- seen_at silences the unread badge; read_at is set when the person opens it.
+    seen_at     timestamptz,
+    read_at     timestamptz,
+    created_at  timestamptz not null default now()
+);
+
+create index notifications_user_idx on notifications(user_id, created_at desc);
