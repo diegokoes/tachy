@@ -54,8 +54,12 @@
      edit=info, save=accent. `info` is its own token rather than --accent so
      edit stays blue when the user picks a different accent. */
   --info: #3b8eea;
-  /* Kind marks in the library: an entry is accent, a doc is manila. */
+  /* Kind marks in the library. Fixed rather than --accent, and off the blue and
+     green the match gauge beside them uses, so a stripe never reads as a
+     grade. */
+  --entry: #5fb3b3;
   --doc: #c49a4a;
+  --article: #b48ead;
   /* Cut into a filled gauge, so the tier marks read as gaps in the bar. */
   --gauge-tick: #0a0a0a;
 
@@ -106,7 +110,9 @@
   --warn: #9a6700;
   --danger: #cf222e;
   --info: #2472c8;
+  --entry: #1f7a7a;
   --doc: #8a6520;
+  --article: #7a4f86;
   --gauge-tick: #f3f0e8;
   --series: #4b6580;
   --series-2: #8a6a3a;
