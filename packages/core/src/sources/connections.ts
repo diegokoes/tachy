@@ -12,7 +12,9 @@ export interface SourceConnectionInput {
 }
 
 export async function listSourceConnections() {
-  return sql<SourceConnectionRow[]>`select id, source_type, slug, base_url, config from source_connections order by slug`;
+  return sql<
+    SourceConnectionRow[]
+  >`select id, source_type, slug, base_url, config from source_connections order by slug`;
 }
 
 export async function addSourceConnection(i: SourceConnectionInput) {

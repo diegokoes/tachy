@@ -145,9 +145,7 @@ describe("customer attribution precedence", () => {
       requesterEmail: "buyer@losvane.example",
     });
     expect(item.customerId).toBe(knaufId);
-    expect(item.customerAmbiguity).toMatch(
-      /map to different customers/,
-    );
+    expect(item.customerAmbiguity).toMatch(/map to different customers/);
   });
 
   it("with no project customer, the sender's domain still decides", async () => {

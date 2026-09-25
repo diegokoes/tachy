@@ -44,8 +44,7 @@ export async function saveAsset(i: {
   if (i.bytes.byteLength > MAX_ASSET_BYTES)
     throw badInput(`image too large (max ${MAX_ASSET_BYTES / 1024 / 1024} MB)`);
   const type = sniffImage(i.bytes);
-  if (!type)
-    throw badInput("unsupported image; use PNG, JPEG, GIF or WebP");
+  if (!type) throw badInput("unsupported image; use PNG, JPEG, GIF or WebP");
 
   const sha256 = createHash("sha256").update(i.bytes).digest("hex");
   // The no-op update is what makes RETURNING hand back the existing row on a

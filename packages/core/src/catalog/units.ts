@@ -102,9 +102,7 @@ async function assertNoCycle(
   label: string,
 ): Promise<void> {
   if (await wouldCycle("customer_units", at, from, column))
-    throw badInput(
-      `'${label}' already sits under this unit; that would cycle`,
-    );
+    throw badInput(`'${label}' already sits under this unit; that would cycle`);
 }
 
 export async function addCustomerUnit(i: CustomerUnitInput) {

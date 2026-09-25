@@ -5,8 +5,10 @@
   import WikiView from "./lib/wiki/WikiView.svelte";
   import AdminView from "./lib/admin/AdminView.svelte";
   import SettingsView from "./lib/settings/SettingsView.svelte";
+  import FeedbackView from "./lib/feedback/FeedbackView.svelte";
   import SetupWizard from "./lib/SetupWizard.svelte";
   import LoginView from "./lib/LoginView.svelte";
+  import NotificationHost from "./lib/NotificationHost.svelte";
   import { session, initSession } from "./lib/session.svelte";
   import { navItems } from "./lib/nav";
   import { wipeIn, jellyPress } from "./lib/motion";
@@ -14,9 +16,10 @@
   import Wordmark from "./lib/Wordmark.svelte";
   import { loadThemeFromStorage, themeState } from "./lib/theme.svelte";
   import { loadFonts } from "./lib/fonts.svelte";
-  import { openSection, section, startRouter } from "./lib/router.svelte";
+  import { router, openSection, section, startRouter } from "./lib/router.svelte";
+  import { startNotifications } from "./lib/notify.svelte";
   import { hints, pushScope, startKeys } from "./lib/keys.svelte";
-  import { navKey, settingsKey } from "./lib/keys/bindings.svelte";
+  import { navKey, settingsKey, feedbackKey } from "./lib/keys/bindings.svelte";
   import { loadVim, vimState, scrollBindings } from "./lib/vim.svelte";
   import { subnav, topActions } from "./lib/subnav.svelte";
   import { setScrollport } from "./lib/scrollport.svelte";
@@ -32,6 +35,11 @@
     themeState.navLabels === "text" ? undefined : ("cog" as const),
   );
   const settingsBare = $derived(themeState.navLabels === "icons");
+
+  const feedbackIcon = $derived(
+    themeState.navLabels === "text" ? undefined : ("flag" as const),
+  );
+  const feedbackBare = $derived(themeState.navLabels === "icons");
 
   let wizardSkipped = $state(localStorage.getItem("tachy-skip-wizard") === "1");
   const showWizard = $derived(session.bootstrapped === false && !wizardSkipped);
@@ -222,6 +230,16 @@
         inFields: true,
         run: () => openSection("settings"),
       },
+      {
+        key: feedbackKey(),
+        label: "",
+        hidden: true,
+        inFields: true,
+        run: () => {
+          sessionStorage.setItem("tachy-feedback-from", router.path);
+          openSection("feedback");
+        },
+      },
     ]),
   );
 
@@ -248,9 +266,11 @@
     initSession();
     const stopRouter = startRouter();
     const stopKeys = startKeys();
+    const stopNotify = startNotifications();
     return () => {
       stopRouter();
       stopKeys();
+      stopNotify();
     };
   });
 </script>
@@ -267,6 +287,8 @@
   <SetupWizard onDone={() => {}} onSkip={skipWizard} />
 {:else if showLogin}
   <LoginView />
+{:else if view === "feedback"}
+  <FeedbackView />
 {:else}
   <div class="app">
     <div class="topbar">
@@ -307,6 +329,30 @@
         >{#if settingsIcon}<span class="ico"
             ><Icon name={settingsIcon} weight={7} /></span
           >{/if}{#if !settingsBare}<span class="txt">settings</span
+          >{/if}<span class="br" aria-hidden="true">]</span
+        ></span
+      >
+    </button>
+
+    <!-- Stacked above settings: the pair of lone corner controls. -->
+    <button
+      class="settings-btn feedback-btn"
+      class:on={view === "feedback"}
+      aria-current={view === "feedback" ? "page" : undefined}
+      aria-label={feedbackBare ? "feedback" : undefined}
+      title={feedbackBare ? "feedback" : undefined}
+      onclick={(e) => {
+        sessionStorage.setItem("tachy-feedback-from", router.path);
+        openSection("feedback");
+        if (e.detail !== 0) e.currentTarget.blur();
+      }}
+      use:jellyPress
+    >
+      <span class="lbl"
+        ><span class="br" aria-hidden="true">[</span
+        >{#if feedbackIcon}<span class="ico"
+            ><Icon name={feedbackIcon} weight={7} /></span
+          >{/if}{#if !feedbackBare}<span class="txt">feedback</span
           >{/if}<span class="br" aria-hidden="true">]</span
         ></span
       >
@@ -372,6 +418,8 @@
         </div>
       </Panel>
     </div>
+
+    <NotificationHost />
   </div>
 {/if}
 
@@ -465,6 +513,10 @@
     padding: 0 var(--pad-1);
     line-height: 1;
     white-space: nowrap;
+  }
+  /* Sits one line above settings, sharing its lone-control styling. */
+  .feedback-btn {
+    bottom: calc(var(--pad-4) + var(--row-h));
   }
   .settings-btn:hover {
     color: var(--text);

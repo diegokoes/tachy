@@ -25,10 +25,10 @@ describe("wiki paths", () => {
     );
   });
 
-  it("follows the two pages that were renamed on the way", () => {
-    expect(movedWikiPath(seg("/library/wiki/tqx/toc"))).toBe(
-      "/wiki/tqx/contents",
-    );
+  it("folds the old pages into where they live now", () => {
+    // contents and its older name toc both became the wiki's landing.
+    expect(movedWikiPath(seg("/library/wiki/tqx/toc"))).toBe("/wiki/tqx");
+    expect(movedWikiPath(seg("/library/wiki/tqx/contents"))).toBe("/wiki/tqx");
     expect(movedWikiPath(seg("/library/wiki/tqx/coverage"))).toBe(
       "/wiki/tqx/gaps",
     );

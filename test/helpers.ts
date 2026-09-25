@@ -45,6 +45,7 @@ export async function resetData() {
   await backgroundSettled();
   await sql`
     truncate work_item_messages, work_items, work_item_links, knowledge_feedback,
+             reports, report_messages, notifications,
              knowledge_entries, analysis_runs, team_members, users,
              customers, customer_facts, customer_components, customer_units,
              resolution_patterns, components, project_area_map, labels,

@@ -550,7 +550,9 @@ export async function updateKnowledgeEntry(
   patch: KnowledgeUpdateInput,
   actor: ActorRef = UNKNOWN_ACTOR,
 ) {
-  const [current] = await sql<(FiledRow & { version: number } & Record<string, any>)[]>`
+  const [current] = await sql<
+    (FiledRow & { version: number } & Record<string, any>)[]
+  >`
     select ${REVISION_COLUMNS}, version from knowledge_entries where id = ${id}
   `;
   if (!current) throw notFound(`Knowledge entry '${id}' not found`);

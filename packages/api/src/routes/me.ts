@@ -16,6 +16,9 @@ import {
   AGENT_CREDENTIALS,
   ANTHROPIC_OAUTH_CREDENTIAL,
   sourceCredentialName,
+  listNotifications,
+  markRead,
+  markSeen,
 } from "@tachy/core";
 import { requireCaller } from "../authz";
 
@@ -114,4 +117,25 @@ export const me = new Hono()
       c.req.param("key"),
     );
     return c.json({ ok: true, deleted });
-  });
+  })
+
+  .get("/notifications", async (c) => {
+    const userId = await requireCaller(c);
+    return c.json(await listNotifications(userId));
+  })
+
+  .post("/notifications/seen", async (c) => {
+    const userId = await requireCaller(c);
+    await markSeen(userId);
+    return c.json({ ok: true });
+  })
+
+  .post(
+    "/notifications/read",
+    zValidator("json", z.object({ ids: z.array(z.string().uuid()).min(1) })),
+    async (c) => {
+      const userId = await requireCaller(c);
+      await markRead(userId, c.req.valid("json").ids);
+      return c.json({ ok: true });
+    },
+  );
