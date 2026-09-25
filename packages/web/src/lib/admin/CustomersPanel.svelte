@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
+  import { keep, recall } from "../kept";
   import { api } from "../api";
   import { createResource, errText } from "../resource.svelte";
   import { t } from "../terms";
@@ -344,7 +345,8 @@ import { csv } from "../fields";
   const deleteCustomer = (row: Customer) =>
     customers.mutate(() => api.delete(`/customers/${row.slug}`));
 
-  let filter = $state("");
+  let filter = $state(recall("admin.customers.filter", ""));
+  $effect(() => keep("admin.customers.filter", filter));
   const filtered = $derived.by(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return customers.data;

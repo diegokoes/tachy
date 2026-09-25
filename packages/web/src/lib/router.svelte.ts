@@ -7,6 +7,24 @@ function clean(path: string): string {
 
 export const router = $state({ path: clean(window.location.pathname) });
 
+/** The path each section was last on, so going back to one resumes there. */
+const lastIn = new Map<string, string>();
+let at = "";
+
+function visit(path: string) {
+  at = path.slice(1).split("/")[0] ?? "";
+  if (at) lastIn.set(at, path);
+}
+
+/**
+ * The section open right now, from outside the reactive graph. A teardown
+ * reads state as it was before the change that tore it down, so `segments()`
+ * there names the section being left, never the one being entered.
+ */
+export const sectionNow = () => at;
+
+visit(router.path);
+
 export const segments = () => {
   const p = router.path;
   return p === "/" ? [] : p.slice(1).split("/");
@@ -27,6 +45,15 @@ export function navigate(to: string, { replace = false } = {}) {
   if (path === router.path) return;
   history[replace ? "replaceState" : "pushState"]({}, "", path);
   router.path = path;
+  visit(path);
+}
+
+/**
+ * Opens a section where it was left. Picking the section already open goes to
+ * its landing instead, which is the way back to the top of one.
+ */
+export function openSection(key: string) {
+  navigate(segments()[0] === key ? `/${key}` : (lastIn.get(key) ?? `/${key}`));
 }
 
 export function isActive(prefix: string): boolean {
@@ -35,7 +62,10 @@ export function isActive(prefix: string): boolean {
 }
 
 export function startRouter() {
-  const onPop = () => (router.path = clean(window.location.pathname));
+  const onPop = () => {
+    router.path = clean(window.location.pathname);
+    visit(router.path);
+  };
   window.addEventListener("popstate", onPop);
   return () => window.removeEventListener("popstate", onPop);
 }

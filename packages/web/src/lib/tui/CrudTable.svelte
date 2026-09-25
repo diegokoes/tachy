@@ -1,5 +1,7 @@
 <script lang="ts" generics="T">
-  import type { Snippet } from "svelte";
+  import { onDestroy, untrack, type Snippet } from "svelte";
+  import { forget, keep, recall } from "../kept";
+  import { router, sectionNow } from "../router.svelte";
   import DataTable from "./DataTable.svelte";
   import Button from "./Button.svelte";
   import Note from "./Note.svelte";
@@ -107,7 +109,38 @@
     form ? (form.row ? rowKey(form.row) : NEW) : null,
   );
 
+  /* An open record, draft and all, survives leaving the section, so coming
+     back finds it as it was. Closing it, or moving elsewhere inside the
+     section, forgets it as before. */
+  const memo = untrack(() => `crud:${router.path}:${noun ?? addLabel}`);
+  const home = sectionNow();
+  let resume = $state(recall<{ key: string; draft: Draft } | null>(memo, null));
+
+  $effect(() => {
+    if (!resume || loading) return;
+    const { key, draft: left } = resume;
+    const row = key === NEW ? null : rows.find((r) => rowKey(r) === key);
+    if (row === undefined) {
+      if (rows.length) resume = null;
+      return;
+    }
+    if (row) startEdit(row);
+    else startAdd();
+    draft = left;
+  });
+
+  $effect(() => {
+    if (resume) return;
+    if (formKey) keep(memo, { key: formKey, draft: $state.snapshot(draft) });
+    else forget(memo);
+  });
+
+  onDestroy(() => {
+    if (sectionNow() === home) forget(memo);
+  });
+
   function startEdit(row: T) {
+    resume = null;
     draft = draftFrom(columns, row);
     form = { mode: "edit", row };
     armed = null;
@@ -116,6 +149,7 @@
   }
 
   function startAdd() {
+    resume = null;
     draft = blankDraft(columns);
     form = { mode: "create", row: null };
     armed = null;

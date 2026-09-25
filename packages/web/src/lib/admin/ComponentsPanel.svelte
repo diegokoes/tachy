@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { keep, recall } from "../kept";
   import type { ComponentNode } from "@tachy/contract";
   import { api } from "../api";
   import { createResource, errText } from "../resource.svelte";
@@ -42,7 +43,12 @@
     [],
   );
 
-  let filters = $state<Filters>({ ...EMPTY_FILTERS });
+  let filters = $state<Filters>(
+    recall("admin.components.filters", { ...EMPTY_FILTERS }),
+  );
+  $effect(() =>
+    keep("admin.components.filters", $state.snapshot(filters)),
+  );
   let renaming = $state<ComponentNode | null>(null);
   let error = $state<string | null>(null);
 

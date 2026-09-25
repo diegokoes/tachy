@@ -8,6 +8,7 @@
   import type { KnowledgeRow, ReferenceRow } from "../types";
   import type { ComponentRow, ProductRow } from "@tachy/contract";
   import { navigate, segment, segments } from "../router.svelte";
+  import { keep, recall } from "../kept";
   import { setSubnav, type SubnavItem } from "../subnav.svelte";
   import { pushScope } from "../keys.svelte";
   import { vimState } from "../vim.svelte";
@@ -63,7 +64,7 @@
   );
 
   /** The tab a detail view was opened from, so "back" returns there. */
-  let origin = $state("all");
+  let origin = $state(recall("library.origin", "all"));
 
   // Old /library/wiki links redirect to the wiki section.
   $effect(() => {
@@ -83,10 +84,20 @@
   /** Which form the create screen shows — in the URL, so it deep-links. */
   const newKind = $derived(param === "doc" ? "doc" : "entry");
 
-  let q = $state("");
-  let status = $state("");
-  let productId = $state("");
-  let component = $state("");
+  /** The search and its scope, as the library was left. */
+  const left = recall("library.search", {
+    q: "",
+    status: "",
+    productId: "",
+    component: "",
+  });
+  let q = $state(left.q);
+  let status = $state(left.status);
+  let productId = $state(left.productId);
+  let component = $state(left.component);
+
+  $effect(() => keep("library.search", { q, status, productId, component }));
+  $effect(() => keep("library.origin", origin));
 
   let products = $state<ProductRow[]>([]);
   let components = $state<ComponentRow[]>([]);
@@ -226,6 +237,7 @@
     } catch {
       products = [];
     }
+    if (productId) await loadComponents(productId);
     await loadFacets();
   }
 
@@ -293,10 +305,15 @@
   }
 
   async function onProductChange(id: string) {
-    const isCurrent = currentComponents();
     component = "";
-    components = [];
     dropComponentScoped();
+    await loadComponents(id);
+    await loadFacets();
+  }
+
+  async function loadComponents(id: string) {
+    const isCurrent = currentComponents();
+    components = [];
     const slug = products.find((p) => p.id === id)?.slug;
     if (slug)
       try {
@@ -307,7 +324,6 @@
         if (!isCurrent()) return;
         components = [];
       }
-    await loadFacets();
   }
 
   /**

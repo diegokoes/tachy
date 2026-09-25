@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Component } from "svelte";
   import { navigate, segment } from "../router.svelte";
+  import { keep, recall } from "../kept";
   import { scrollport } from "../scrollport.svelte";
   import { isGlobalAdmin } from "../session.svelte";
   import { t, showCustomer } from "../terms";
@@ -178,7 +179,8 @@
 
   $effect(() => setTopActions(topActions));
 
-  let showIssues = $state(false);
+  let showIssues = $state(recall("admin.issues", false));
+  $effect(() => keep("admin.issues", showIssues));
   const groups = $derived(issueGroups(issues.data));
   const issueTone = $derived(
     groups.some((g) => g.tone === "danger")

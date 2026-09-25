@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { keep, recall } from "../kept";
   import { api } from "../api";
   import { createResource } from "../resource.svelte";
   import { CrudTable, FilterBar, type Column } from "../tui";
@@ -15,7 +16,8 @@ import { INFO } from "./help";
   );
 
   let renaming = $state<Pattern | null>(null);
-  let filter = $state("");
+  let filter = $state(recall("admin.patterns.filter", ""));
+  $effect(() => keep("admin.patterns.filter", filter));
 
   const shown = $derived.by(() => {
     const q = filter.trim().toLowerCase();

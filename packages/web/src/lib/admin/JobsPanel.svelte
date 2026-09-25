@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount, untrack } from "svelte";
+  import { keep, recall } from "../kept";
   import { JOB_NOTIFY, JOB_OVERLAP, JOB_RESOURCE_CLASSES } from "@tachy/contract";
   import { api } from "../api";
   import { createResource, errText } from "../resource.svelte";
@@ -50,7 +51,8 @@
   );
 
   let error = $state<string | null>(null);
-  let filter = $state("");
+  let filter = $state(recall("admin.jobs.filter", ""));
+  $effect(() => keep("admin.jobs.filter", filter));
   let params = $state<Record<string, unknown>>({});
   let runsFor = $state<Record<string, JobRunRow[]>>({});
   let changesFor = $state<Record<string, JobChange[]>>({});

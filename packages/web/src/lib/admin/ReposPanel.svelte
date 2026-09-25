@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { keep, recall } from "../kept";
   import { api } from "../api";
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
@@ -390,7 +391,8 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
   onDestroy(() => poll && clearInterval(poll));
   onMount(reload);
 
-  let filter = $state("");
+  let filter = $state(recall("admin.repos.filter", ""));
+  $effect(() => keep("admin.repos.filter", filter));
   const filtered = $derived.by(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return repos.data;
