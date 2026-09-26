@@ -17,6 +17,7 @@
     GroupHead,
     Icon,
     Select,
+    tip,
     type Column,
   } from "../tui";
   import type { UserRow } from "./rows";
@@ -183,7 +184,7 @@
 <!-- Yes or no, drawn rather than worded: a column of "yes"/"no" reads as text
      to be parsed, where a column of marks reads as a pattern to be scanned. -->
 {#snippet mark(on: boolean, why: string)}
-  <span class="mark" class:on>
+  <span class="mark" class:on use:tip={why}>
     <Icon name={on ? "success" : "reject"} size="1.05em" weight={7} label={why} />
   </span>
 {/snippet}
