@@ -5,6 +5,7 @@
   import { jellyPress } from "../motion";
   import Icon from "./Icon.svelte";
   import type { IconName } from "./icons";
+  import { tip } from "./tip.svelte";
 
   type Item = { key: string; label: string; icon?: IconName };
 
@@ -87,7 +88,7 @@
       class:anchor-host={anchorHost}
       aria-current={on ? "page" : undefined}
       aria-label={bare ? it.label : undefined}
-      title={bare ? it.label : undefined}
+      use:tip={bare ? it.label : undefined}
       onclick={(e) => {
         onpick(it.key);
         // A pointer click (detail > 0) leaves the button focused but not

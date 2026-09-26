@@ -13,7 +13,7 @@
   import OutputCard, { type OutputFile } from "./chat/OutputCard.svelte";
   import Approval from "./chat/Approval.svelte";
   import Launcher from "./chat/Launcher.svelte";
-  import { ArtifactMark, Button, G, Icon } from "./tui";
+  import { ArtifactMark, Button, G, Icon, tip } from "./tui";
   import { pushScope } from "./keys.svelte";
 
   const short = (tool: string) => tool.replace(/^mcp__tachy__/, "");
@@ -400,7 +400,7 @@
       {#if chat.artifact}
         <span class="attach artifact-chip">
           <ArtifactMark size="1em" /> {chat.artifact.title}
-          <button class="chip-x" title="Detach artifact" onclick={() => (chat.artifact = undefined)}><Icon name="close" size="1em" weight={7} /></button>
+          <button class="chip-x" aria-label="Detach artifact" use:tip={"Detach artifact"} onclick={() => (chat.artifact = undefined)}><Icon name="close" size="1em" weight={7} /></button>
         </span>
       {/if}
       {#each chat.uploads as u, i (u.path)}
@@ -408,7 +408,7 @@
         <span class="attach">
           <Icon name={u.image ? "image" : "file"} size="1.1em" />
           {u.filename}
-          <button class="chip-x" title="Remove attachment" onclick={() => chat.uploads.splice(i, 1)}><Icon name="close" size="1em" weight={7} /></button>
+          <button class="chip-x" aria-label="Remove attachment" use:tip={"Remove attachment"} onclick={() => chat.uploads.splice(i, 1)}><Icon name="close" size="1em" weight={7} /></button>
         </span>
       {/each}
     </div>
@@ -425,7 +425,7 @@
         onpick={pickCommand}
       />
     {/if}
-    <label class="upload" title="Attach a document">
+    <label class="upload" use:tip={"Attach a document"}>
       <Icon name="attach" label="Attach a document" />
       <input type="file" onchange={onFile} hidden />
     </label>
