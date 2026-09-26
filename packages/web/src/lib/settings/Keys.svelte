@@ -1,7 +1,7 @@
 <script lang="ts">
   import { AGENT_KEY_LABELS, agentKeyError } from "../credentials";
   import { API_KEY_EXAMPLE, OAUTH_PREFIX } from "@tachy/contract";
-  import { Button, InfoMark, Note } from "../tui";
+  import { Button, DeleteButton, InfoMark, Note } from "../tui";
   import { agentPrefs, heldBy, removeKey, saveKey } from "./prefs.svelte";
   import Row from "./Row.svelte";
   import Rows from "./Rows.svelte";
@@ -78,13 +78,8 @@
                 onclick={() => save(name)}
               />
             {:else if mine.has(name)}
-              <Button
-                variant="ghost"
-                square
-                tone="danger"
-                icon="cancel"
-                title="remove"
-                aria-label={`remove ${keyLabel(name)}`}
+              <DeleteButton
+                label={`remove ${keyLabel(name)}`}
                 onclick={() => removeKey(name)}
               />
             {/if}

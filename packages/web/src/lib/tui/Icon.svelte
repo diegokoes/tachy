@@ -1,30 +1,55 @@
 <script lang="ts">
-  import { ICONS, type IconName } from "./icons";
+  import { gsap, reducedMotion } from "../gsap";
+  import { GRID, ICONS, iconPath, type IconName } from "./icons";
 
   let {
     name,
     size = "1.25em",
     weight = 6,
     label,
+    morph = false,
     el = $bindable(),
   }: {
     name: IconName;
     size?: string;
-    /** Stroke thickness as a percentage of the grid, so it reads the same on both. */
+    /** Stroke thickness as a percentage of the grid. */
     weight?: number;
     label?: string;
+    /**
+     * Tween the outline from one mark to the next when `name` changes — trash
+     * into the check that confirms it, an eye opening and shutting.
+     */
+    morph?: boolean;
     el?: SVGSVGElement;
   } = $props();
 
-  const def = $derived(ICONS[name]);
-  const grid = $derived(def.grid ?? 100);
-  const scale = $derived(grid / 100);
+  const scale = GRID / 100;
+
+  let shape: SVGPathElement | undefined = $state();
+
+  /* The path's `d` is owned here rather than by the template, so a tween in
+     flight is not overwritten by Svelte on the next render. */
+  $effect(() => {
+    if (!shape) return;
+    const d = iconPath(name);
+    if (!shape.getAttribute("d") || reducedMotion()) {
+      gsap.killTweensOf(shape);
+      shape.setAttribute("d", d);
+      return;
+    }
+    gsap.to(shape, {
+      morphSVG: d,
+      duration: 0.32,
+      ease: "power2.inOut",
+      overwrite: true,
+    });
+  });
 </script>
 
 <svg
   bind:this={el}
   class="icon"
-  viewBox="0 0 {grid} {grid}"
+  viewBox="0 0 {GRID} {GRID}"
   width={size}
   height={size}
   fill="none"
@@ -37,7 +62,11 @@
   aria-hidden={label ? undefined : "true"}
   style="--sw-hover: {9 * scale}"
 >
-  {@html def.path}
+  {#if morph}
+    <path bind:this={shape} />
+  {:else}
+    {@html ICONS[name].path}
+  {/if}
 </svg>
 
 <style>

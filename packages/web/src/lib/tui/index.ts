@@ -1,6 +1,7 @@
 export { default as Panel } from "./Panel.svelte";
 export { default as GroupHead } from "./GroupHead.svelte";
 export { default as Button } from "./Button.svelte";
+export { default as DeleteButton } from "./DeleteButton.svelte";
 export { default as Actions } from "./Actions.svelte";
 export { default as Field } from "./Field.svelte";
 export { default as Modal } from "./Modal.svelte";
@@ -23,6 +24,7 @@ export { default as Cells } from "./Cells.svelte";
 export { default as Timeline, type Lane } from "./Timeline.svelte";
 export { default as HintRule } from "./HintRule.svelte";
 export { default as Icon } from "./Icon.svelte";
+export { default as Chevron } from "./Chevron.svelte";
 export { default as VimMark } from "./VimMark.svelte";
 export { default as ArtifactMark } from "./ArtifactMark.svelte";
 export { default as Checkbox } from "./Checkbox.svelte";

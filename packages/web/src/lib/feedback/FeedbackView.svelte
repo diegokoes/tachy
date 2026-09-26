@@ -127,7 +127,7 @@
 
 <div class="feedback">
   <button class="close" onclick={leave} title="close" aria-label="close">
-    <Icon name="cancel" size="1.4em" weight={6} />
+    <Icon name="close" size="1.4em" weight={6} />
   </button>
 
   <div class="sheet">

@@ -382,7 +382,7 @@
 </script>
 
 {#snippet formActions()}
-  <FormActions form="wiki-form" {saving} title={editing ? "save changes" : "create article"} oncancel={onCancel} />
+  <FormActions form="wiki-form" {saving} title={editing ? "save changes" : "create article"} create={!editing} oncancel={onCancel} />
 {/snippet}
 
 <form id="wiki-form" class="article-form" onsubmit={submit}>
@@ -454,7 +454,8 @@
       <Button
         variant="ghost"
         size="sm"
-        icon={preview ? "eyeSlash" : "eye"}
+        icon={preview ? "eyeClosed" : "eye"}
+      morph
         title={preview ? "hide preview" : "show preview"}
         aria-label={preview ? "hide preview" : "show preview"}
         onclick={() => (preview = !preview)}

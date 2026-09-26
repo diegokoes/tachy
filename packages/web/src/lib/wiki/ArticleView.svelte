@@ -192,7 +192,7 @@
       square
       iconSize="1.25rem"
       tone="ok"
-      icon="check"
+      icon="approve"
       title="approve this draft"
       aria-label="approve"
       busy={mutating}
@@ -230,7 +230,7 @@
     <Note tone="danger">{error}</Note>
   {:else if missing}
     <EmptyState
-      icon="doc"
+      icon="file"
       title={slug === MAIN_PAGE_SLUG ? "No main page yet." : `No article '${slug}' yet.`}
       detail={slug === MAIN_PAGE_SLUG
         ? "Landing page: product summary, entry points."

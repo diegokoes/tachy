@@ -52,7 +52,7 @@
               variant="ghost"
               square
               tone="danger"
-              icon="cancel"
+              icon="reset"
               title="reset"
               aria-label="reset provider"
               onclick={() => resetPref("agent_provider")}
@@ -89,7 +89,7 @@
               variant="ghost"
               square
               tone="danger"
-              icon="cancel"
+              icon="reset"
               title="reset"
               aria-label="reset model"
               onclick={() => {
@@ -116,7 +116,7 @@
               variant="ghost"
               square
               tone="danger"
-              icon="cancel"
+              icon="reset"
               title="reset"
               aria-label="reset effort"
               onclick={() => resetPref("agent_effort")}

@@ -9,6 +9,7 @@
     Button,
     Chip,
     CrudTable,
+    DeleteButton,
     FilterBar,
     Note,
     Select,
@@ -391,13 +392,8 @@ import { csv } from "../fields";
             class="tiny"
             title="rename, move, or add an alias"
             onclick={() => startEditUnit(r.slug, u)}>edit</button>
-          <Button
-            variant="ghost"
-            tone="danger"
-            square
-            icon="cancel"
-            title="remove unit"
-            aria-label="remove unit"
+          <DeleteButton
+            label="remove unit"
             onclick={() => delUnit(r.slug, u.slug)}
           />
         </div>
@@ -533,13 +529,8 @@ import { csv } from "../fields";
           <Badge tone="muted">{f.kind}</Badge>
           {#if f.label}<span class="lbl">{f.label}</span>{/if}
           <code>{f.value}</code>
-          <Button
-            variant="ghost"
-            tone="danger"
-            square
-            icon="cancel"
-            title="remove"
-            aria-label="remove specific"
+          <DeleteButton
+            label="remove specific"
             onclick={() => delFact(r.slug, f.id)}
           />
         </div>

@@ -89,7 +89,7 @@
 </script>
 
 <script lang="ts">
-  import { Button, Checkbox, Field, Select, G } from "../tui";
+  import { Button, Checkbox, DeleteButton, Field, Select, G } from "../tui";
 
   let {
     enabled = $bindable(),
@@ -229,13 +229,9 @@
           </label>
 
           <span class="acts">
-            <Button
-              variant="ghost"
-              tone="danger"
-              square
-              icon="cancel"
-              title="remove column"
-              aria-label="remove column"
+            <DeleteButton
+              label="remove column"
+              confirm={false}
               onclick={() => remove(i)}
             />
             <Button

@@ -2,7 +2,7 @@ import { marked } from "marked";
 import type { Tokens } from "marked";
 import DOMPurify from "dompurify";
 import { ASSET_SRC_RE, parseWikilink, WIKILINK_RE } from "@tachy/contract";
-import { ICONS, type IconName } from "./tui/icons";
+import { GRID, ICONS, type IconName } from "./tui/icons";
 import { highlight } from "./code";
 
 marked.setOptions({ gfm: true, breaks: true });
@@ -85,39 +85,36 @@ type CalloutTone = "info" | "ok" | "warn" | "danger" | "accent" | "muted";
 /** Obsidian's callout types and aliases, onto the app's tones and icons. */
 const CALLOUTS: Record<string, [CalloutTone, IconName]> = {
   note: ["info", "edit"],
-  abstract: ["info", "clipboard"],
-  summary: ["info", "clipboard"],
-  tldr: ["info", "clipboard"],
+  abstract: ["info", "file"],
+  summary: ["info", "file"],
+  tldr: ["info", "file"],
   info: ["info", "info"],
-  todo: ["info", "check"],
-  tip: ["ok", "bulb"],
-  hint: ["ok", "bulb"],
-  important: ["ok", "bulb"],
-  success: ["ok", "check"],
-  check: ["ok", "check"],
-  done: ["ok", "check"],
+  todo: ["info", "success"],
+  tip: ["ok", "lightbulb"],
+  hint: ["ok", "lightbulb"],
+  important: ["ok", "lightbulb"],
+  success: ["ok", "success"],
+  check: ["ok", "success"],
+  done: ["ok", "success"],
   question: ["warn", "question"],
   help: ["warn", "question"],
   faq: ["warn", "question"],
   warning: ["warn", "alert"],
   caution: ["warn", "alert"],
   attention: ["warn", "alert"],
-  failure: ["danger", "cancel"],
-  fail: ["danger", "cancel"],
-  missing: ["danger", "cancel"],
-  danger: ["danger", "bolt"],
-  error: ["danger", "bolt"],
-  bug: ["danger", "alert"],
-  example: ["accent", "doc"],
-  quote: ["muted", "chat"],
-  cite: ["muted", "chat"],
+  failure: ["danger", "close"],
+  fail: ["danger", "close"],
+  missing: ["danger", "close"],
+  danger: ["danger", "error"],
+  error: ["danger", "error"],
+  bug: ["danger", "bug"],
+  example: ["accent", "file"],
+  quote: ["muted", "quote"],
+  cite: ["muted", "quote"],
 };
 
-const iconSvg = (name: IconName) => {
-  const def = ICONS[name];
-  const grid = def.grid ?? 100;
-  return `<svg class="callout-icon" viewBox="0 0 ${grid} ${grid}" width="1.1em" height="1.1em" fill="none" stroke="currentColor" stroke-width="${(6 * grid) / 100}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${def.path}</svg>`;
-};
+const iconSvg = (name: IconName) =>
+  `<svg class="callout-icon" viewBox="0 0 ${GRID} ${GRID}" width="1.1em" height="1.1em" fill="none" stroke="currentColor" stroke-width="${(6 * GRID) / 100}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name].path}</svg>`;
 
 /**
  * `> [!tip] Title` blockquotes as Obsidian callouts. A `-` or `+` after the

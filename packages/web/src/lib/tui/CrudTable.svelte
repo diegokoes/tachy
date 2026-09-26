@@ -255,7 +255,7 @@
     destructive={f.row && ondelete && canDelete(f.row)
       ? {
           label: armed === key ? "click again to confirm" : "delete",
-          icon: armed === key ? "check" : "del",
+          icon: armed === key ? "confirm" : "delete",
           busy: busy === key,
           onclick: () => f.row && confirmDelete(f.row),
         }

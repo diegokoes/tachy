@@ -51,7 +51,7 @@
   {@const on = !u.disabled && (how.password || how.sso)}
   <span class="mark" class:on>
     <Icon
-      name={on ? "yes" : "no"}
+      name={on ? "success" : "reject"}
       size="1.05em"
       weight={7}
       label={on

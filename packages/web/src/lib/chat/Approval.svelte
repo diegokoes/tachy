@@ -210,7 +210,7 @@
           variant="ghost"
           square
           tone="ok"
-          icon="check"
+          icon="approve"
           disabled={rawBad}
           title={rawBad ? "fix the JSON first" : "approve"}
           aria-label="approve"
@@ -220,7 +220,7 @@
           variant="ghost"
           square
           tone="danger"
-          icon="cancel"
+          icon="reject"
           title={denying ? "confirm deny" : "deny"}
           aria-label="deny"
           onclick={deny}

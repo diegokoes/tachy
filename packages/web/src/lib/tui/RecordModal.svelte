@@ -54,7 +54,7 @@
   {width}
   {busy}
   {confirmLabel}
-  confirmIcon="save"
+  confirmIcon={mode === "create" ? "create" : "save"}
   {destructive}
   {barExtra}
   {onConfirm}

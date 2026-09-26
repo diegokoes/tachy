@@ -55,8 +55,8 @@
   );
 
   const PLACES: SubnavItem[] = [
-    { key: "overview", label: "overview", icon: "index" },
-    { key: "gaps", label: "gaps", icon: "alert" },
+    { key: "overview", label: "overview", icon: "overview" },
+    { key: "gaps", label: "gaps", icon: "gaps" },
   ];
 
   /* An article or a section is neither place, so no tab claims it; the aside is

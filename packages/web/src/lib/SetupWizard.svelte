@@ -13,7 +13,7 @@
   import { slugify } from "./slug";
   import AuthShell from "./AuthShell.svelte";
   import TypeLine from "./TypeLine.svelte";
-  import { Actions, Button, Checkbox, Field, Meter, Note, Panel, Select } from "./tui";
+  import { Actions, Button, Checkbox, DeleteButton, Field, Meter, Note, Panel, Select } from "./tui";
 
   let { onDone, onSkip }: { onDone: () => void; onSkip: () => void } = $props();
 
@@ -225,12 +225,9 @@
                 />
                 <span class="slug">{p.name ? slugify(p.name) : ""}</span>
                 {#if products.length > 1}
-                  <Button
-                    variant="ghost"
-                    tone="danger"
-                    square
-                    icon="cancel"
-                    aria-label="remove"
+                  <DeleteButton
+                    label="remove"
+                    confirm={false}
                     onclick={() => products.splice(i, 1)}
                   />
                 {/if}
@@ -305,7 +302,7 @@
           back={step > 0 ? { label: "back", onclick: back } : undefined}
           primary={{
             label: STEPS[step] === "agent" ? "finish" : "next",
-            icon: STEPS[step] === "agent" ? ("save" as const) : ("next" as const),
+            icon: STEPS[step] === "agent" ? ("create" as const) : ("next" as const),
             onclick: next,
             busy,
           }}

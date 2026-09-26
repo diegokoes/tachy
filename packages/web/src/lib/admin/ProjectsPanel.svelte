@@ -11,8 +11,9 @@
     Checkbox,
     Chip,
     CrudTable,
-    FilterBar,
+    DeleteButton,
     Field,
+    FilterBar,
     GroupHead,
     Note,
     Select,
@@ -433,13 +434,8 @@ import { INFO } from "./help";
             <code>{a.area_prefix}</code>
             <span>→ {a.component_slug}</span>
             {#if canEditProject(p)}
-              <Button
-                variant="ghost"
-                tone="danger"
-                square
-                icon="del"
-                title="remove rule"
-                aria-label="remove rule"
+              <DeleteButton
+                label="remove rule"
                 onclick={() => delArea(p, a.id)}
               />
             {/if}

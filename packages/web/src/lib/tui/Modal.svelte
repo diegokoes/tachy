@@ -158,7 +158,8 @@
               variant="ghost"
               tone="danger"
               square
-              icon={destructive.icon ?? "del"}
+              icon={destructive.icon ?? "delete"}
+              morph
               title={destructive.label}
               aria-label={destructive.label}
               busy={destructive.busy}
@@ -178,7 +179,7 @@
           <Button
             variant="ghost"
             square
-            icon="cancel"
+            icon="close"
             title={cancelLabel}
             aria-label={cancelLabel}
             onclick={onCancel}

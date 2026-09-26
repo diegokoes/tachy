@@ -65,7 +65,7 @@
     const acts: StatusAction[] = [];
     if (d.status !== "draft")
       acts.push({
-        icon: "doc",
+        icon: "draft",
         label: "draft",
         title: "back to draft",
         tone: "info",
@@ -74,7 +74,7 @@
       });
     if (d.status !== "approved")
       acts.push({
-        icon: "check",
+        icon: "approve",
         label: "approve",
         tone: "ok",
         disabled: mutating,
@@ -292,7 +292,7 @@
 
     <div class="meta">
       <span class="source" title="source">
-        <Icon name="consult" size="1em" weight={7} />
+        <Icon name="search" size="1em" weight={7} />
         <span class:muted={!doc.source}>{doc.source || "n/a"}</span>
       </span>
     </div>

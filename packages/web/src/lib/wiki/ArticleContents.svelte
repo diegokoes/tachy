@@ -3,7 +3,7 @@
   import { reducedMotion } from "../gsap";
   import { outlineTree, type OutlineItem, type OutlineNode } from "../outline";
   import { scrollport } from "../scrollport.svelte";
-  import { G } from "../tui/glyphs";
+  import Chevron from "../tui/Chevron.svelte";
 
   /**
    * An article's contents, in the left column the way the Arch Wiki keeps it:
@@ -126,7 +126,7 @@
               aria-expanded={open}
               aria-label="{open ? 'fold' : 'unfold'} {n.text}"
               onclick={() => (folded = { ...folded, [n.id]: open })}
-              >{open ? G.expanded : G.right}</button
+              ><Chevron {open} /></button
             >
           {:else}
             <span class="fold" aria-hidden="true"></span>

@@ -425,7 +425,7 @@
     variant="ghost"
     size="sm"
     square
-    icon="go"
+    icon="next"
     title={label}
     aria-label={label}
     onclick={() => showSection(section)}
@@ -484,7 +484,7 @@
         variant="ghost"
         size="sm"
         square
-        icon="go"
+        icon="next"
         title="who holds app admin"
         aria-label="app admins"
         onclick={() => navigate("/admin/access/admins")}
