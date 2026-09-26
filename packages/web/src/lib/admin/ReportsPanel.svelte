@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { toast } from "../notify.svelte";
+  import { refreshNotifications, toast } from "../notify.svelte";
   import { Badge, Button, Note, Icon, EmptyState } from "../tui";
   import { age } from "./overview";
   import { census } from "./census.svelte";
@@ -61,6 +61,8 @@
       await api.post(`/reports/${selected.id}/reply`, { body: reply.trim() });
       await open(selected.id);
       toast("reply sent — the reporter will be notified", "ok");
+      // An admin answering their own report is the reporter it notifies.
+      void refreshNotifications();
     } catch (e) {
       error = errText(e);
     } finally {

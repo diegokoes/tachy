@@ -17,7 +17,10 @@
   import { loadThemeFromStorage, themeState } from "./lib/theme.svelte";
   import { loadFonts } from "./lib/fonts.svelte";
   import { router, openSection, section, startRouter } from "./lib/router.svelte";
-  import { startNotifications } from "./lib/notify.svelte";
+  import {
+    refreshNotifications,
+    startNotifications,
+  } from "./lib/notify.svelte";
   import { hints, pushScope, startKeys } from "./lib/keys.svelte";
   import { navKey, settingsKey, feedbackKey } from "./lib/keys/bindings.svelte";
   import { loadVim, vimState, scrollBindings } from "./lib/vim.svelte";
@@ -257,6 +260,10 @@
       { key: "l", label: "", hidden: true, run: go(1) },
       ...scrollBindings(() => mainEl),
     ]);
+  });
+
+  $effect(() => {
+    if (session.me) void refreshNotifications();
   });
 
   onMount(() => {
