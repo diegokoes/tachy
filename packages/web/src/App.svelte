@@ -34,16 +34,6 @@
 
   const sub = $derived(subnav());
 
-  const settingsIcon = $derived(
-    themeState.navLabels === "text" ? undefined : ("settings" as const),
-  );
-  const settingsBare = $derived(themeState.navLabels === "icons");
-
-  const feedbackIcon = $derived(
-    themeState.navLabels === "text" ? undefined : ("flag" as const),
-  );
-  const feedbackBare = $derived(themeState.navLabels === "icons");
-
   let wizardSkipped = $state(localStorage.getItem("tachy-skip-wizard") === "1");
   const showWizard = $derived(session.bootstrapped === false && !wizardSkipped);
   const showLogin = $derived(
@@ -323,8 +313,8 @@
       class="settings-btn"
       class:on={view === "settings"}
       aria-current={view === "settings" ? "page" : undefined}
-      aria-label={settingsBare ? "settings" : undefined}
-      title={settingsBare ? "settings" : undefined}
+      aria-label="settings"
+      title="settings"
       onclick={(e) => {
         openSection("settings");
         if (e.detail !== 0) e.currentTarget.blur();
@@ -333,10 +323,8 @@
     >
       <span class="lbl"
         ><span class="br" aria-hidden="true">[</span
-        >{#if settingsIcon}<span class="ico"
-            ><Icon name={settingsIcon} weight={7} /></span
-          >{/if}{#if !settingsBare}<span class="txt">settings</span
-          >{/if}<span class="br" aria-hidden="true">]</span
+        ><span class="ico"><Icon name="settings" weight={7} /></span
+        ><span class="br" aria-hidden="true">]</span
         ></span
       >
     </button>
@@ -346,8 +334,8 @@
       class="settings-btn feedback-btn"
       class:on={view === "feedback"}
       aria-current={view === "feedback" ? "page" : undefined}
-      aria-label={feedbackBare ? "feedback" : undefined}
-      title={feedbackBare ? "feedback" : undefined}
+      aria-label="feedback"
+      title="feedback"
       onclick={(e) => {
         sessionStorage.setItem("tachy-feedback-from", router.path);
         openSection("feedback");
@@ -357,10 +345,8 @@
     >
       <span class="lbl"
         ><span class="br" aria-hidden="true">[</span
-        >{#if feedbackIcon}<span class="ico"
-            ><Icon name={feedbackIcon} weight={7} /></span
-          >{/if}{#if !feedbackBare}<span class="txt">feedback</span
-          >{/if}<span class="br" aria-hidden="true">]</span
+        ><span class="ico"><Icon name="flag" weight={7} /></span
+        ><span class="br" aria-hidden="true">]</span
         ></span
       >
     </button>
@@ -545,9 +531,6 @@
   .settings-btn .ico {
     display: inline-block;
     vertical-align: middle;
-  }
-  .settings-btn .ico + .txt {
-    margin-left: 0.4em;
   }
 
   /* Hugs its content rather than the frame, so it reads as a separate object
