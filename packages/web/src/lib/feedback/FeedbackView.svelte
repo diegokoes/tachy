@@ -1,6 +1,6 @@
 <script lang="ts">
   import StarField from "../StarField.svelte";
-  import { Field, Note, Button, Icon } from "../tui";
+  import { Field, Note, Button, Icon, tip } from "../tui";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
   import { openSection } from "../router.svelte";
@@ -126,7 +126,7 @@
 <StarField intense />
 
 <div class="feedback">
-  <button class="close" onclick={leave} title="close" aria-label="close">
+  <button class="close" onclick={leave} aria-label="close" use:tip={"close"}>
     <Icon name="close" size="1.4em" weight={6} />
   </button>
 

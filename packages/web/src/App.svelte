@@ -26,7 +26,7 @@
   import { loadVim, vimState, scrollBindings } from "./lib/vim.svelte";
   import { subnav, topActions } from "./lib/subnav.svelte";
   import { setScrollport } from "./lib/scrollport.svelte";
-  import { HintRule, Icon, Panel, Scrollbar, Tabs } from "./lib/tui";
+  import { HintRule, Icon, Panel, Scrollbar, Tabs, TipHost, tip } from "./lib/tui";
 
   const nav = $derived(navItems());
 
@@ -314,7 +314,7 @@
       class:on={view === "settings"}
       aria-current={view === "settings" ? "page" : undefined}
       aria-label="settings"
-      title="settings"
+      use:tip={"settings"}
       onclick={(e) => {
         openSection("settings");
         if (e.detail !== 0) e.currentTarget.blur();
@@ -335,7 +335,7 @@
       class:on={view === "feedback"}
       aria-current={view === "feedback" ? "page" : undefined}
       aria-label="feedback"
-      title="feedback"
+      use:tip={"feedback"}
       onclick={(e) => {
         sessionStorage.setItem("tachy-feedback-from", router.path);
         openSection("feedback");
@@ -415,6 +415,8 @@
     <NotificationHost />
   </div>
 {/if}
+
+<TipHost />
 
 <style>
   /* Two objects on one centre line: a top row carrying the wordmark and the

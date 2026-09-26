@@ -6,6 +6,8 @@ export { default as Actions } from "./Actions.svelte";
 export { default as Field } from "./Field.svelte";
 export { default as Modal } from "./Modal.svelte";
 export { float, type FloatOptions } from "./float";
+export { tip } from "./tip.svelte";
+export { default as TipHost } from "./TipHost.svelte";
 export { default as Scrim } from "./Scrim.svelte";
 export { default as Subject } from "./Subject.svelte";
 export { default as Tabs } from "./Tabs.svelte";
