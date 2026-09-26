@@ -27,6 +27,9 @@ export interface Volumes {
   artifacts: number;
   generatedOutputs: number;
   reports: number;
+  /** Days of scheduled job history, and manual runs on top of it. */
+  jobHistoryDays: number;
+  jobManualRuns: number;
 }
 
 /**
@@ -60,7 +63,9 @@ export const SCALES: Record<ScaleName, Volumes> = {
     analysisRuns: 200,
     artifacts: 6,
     generatedOutputs: 10,
-    reports: 12,
+    reports: 40,
+    jobHistoryDays: 14,
+    jobManualRuns: 16,
   },
   medium: {
     teams: 4,
@@ -87,7 +92,9 @@ export const SCALES: Record<ScaleName, Volumes> = {
     analysisRuns: 3_000,
     artifacts: 20,
     generatedOutputs: 100,
-    reports: 120,
+    reports: 300,
+    jobHistoryDays: 30,
+    jobManualRuns: 80,
   },
   large: {
     teams: 8,
@@ -114,7 +121,9 @@ export const SCALES: Record<ScaleName, Volumes> = {
     analysisRuns: 20_000,
     artifacts: 60,
     generatedOutputs: 500,
-    reports: 600,
+    reports: 1_500,
+    jobHistoryDays: 60,
+    jobManualRuns: 300,
   },
 };
 
