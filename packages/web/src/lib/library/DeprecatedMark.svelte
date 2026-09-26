@@ -25,7 +25,7 @@
   <Modal title="deprecated" cancelLabel="close" onCancel={() => (open = false)}>
     <div class="warning">
       <p>
-        <Icon name="alert" size="1.1em" weight={7} />
+        <Icon name="deprecate" size="1.1em" weight={7} />
         <span><strong>Outdated</strong>: not current advice.</span>
       </p>
       {#if onReplacement}

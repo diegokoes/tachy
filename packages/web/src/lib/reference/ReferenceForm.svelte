@@ -66,7 +66,7 @@
 </script>
 
 {#snippet formActions()}
-  <FormActions form="ref-form" {saving} title={SUBMIT_LABEL} oncancel={onCancel} />
+  <FormActions form="ref-form" {saving} title={SUBMIT_LABEL} create={mode === "create"} oncancel={onCancel} />
 {/snippet}
 
 <form id="ref-form" class="ref-form" onsubmit={submit}>

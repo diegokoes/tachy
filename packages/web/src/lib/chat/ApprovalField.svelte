@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Checkbox, Chip, Select } from "../tui";
+  import { Checkbox, Chevron, Chip, Select } from "../tui";
   import { ENUM_FIELDS } from "../vocab";
   import type { FieldSpec } from "../types";
 
@@ -196,7 +196,7 @@
     </div>
   {:else}
     <button class="disclose" type="button" onclick={() => (open = !open)}>
-      <span class="arrow">{open ? "▾" : "▸"}</span>
+      <Chevron {open} />
       {summary}
     </button>
     {#if open}

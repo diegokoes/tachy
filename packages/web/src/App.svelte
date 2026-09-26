@@ -32,7 +32,7 @@
   const sub = $derived(subnav());
 
   const settingsIcon = $derived(
-    themeState.navLabels === "text" ? undefined : ("cog" as const),
+    themeState.navLabels === "text" ? undefined : ("settings" as const),
   );
   const settingsBare = $derived(themeState.navLabels === "icons");
 

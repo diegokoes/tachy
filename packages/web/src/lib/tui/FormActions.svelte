@@ -11,22 +11,25 @@
     form,
     saving = false,
     title,
+    create = false,
     oncancel,
   }: {
     form: string;
     saving?: boolean;
     title?: string;
+    /** The record does not exist yet: save wears its plus. */
+    create?: boolean;
     oncancel: () => void;
   } = $props();
 </script>
 
-<Button size="sm" icon="cancel" disabled={saving} onclick={oncancel}
+<Button size="sm" variant="ghost" icon="close" disabled={saving} onclick={oncancel}
   >cancel</Button
 >
 <Button
   size="sm"
   variant="primary"
-  icon="save"
+  icon={create ? "create" : "save"}
   type="submit"
   {form}
   {title}

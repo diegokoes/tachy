@@ -49,8 +49,8 @@
   // have to pass to see anything.
   const KINDS: SubnavItem[] = [
     { key: "all", label: "all" },
-    { key: "entries", label: "knowledge", icon: "cap" },
-    { key: "docs", label: "docs", icon: "clipboard" },
+    { key: "entries", label: "knowledge", icon: "knowledge" },
+    { key: "docs", label: "docs", icon: "refDoc" },
   ];
 
   // From vocab.ts, so they are offered in the order the contract documents.
@@ -543,7 +543,7 @@
     <Button
       variant={newKind === "entry" ? "primary" : "ghost"}
       square
-      icon="analyze"
+      icon="knowledge"
       title="knowledge entry"
       aria-label="knowledge entry"
       onclick={() => navigate("/library/new/entry")}
@@ -551,7 +551,7 @@
     <Button
       variant={newKind === "doc" ? "primary" : "ghost"}
       square
-      icon="doc"
+      icon="refDoc"
       title="reference doc"
       aria-label="reference doc"
       onclick={() => navigate("/library/new/doc")}
@@ -619,7 +619,7 @@
         <Button
           variant="ghost"
           tone="danger"
-          icon="discard"
+          icon="reset"
           title="reset every filter"
           onclick={clearFilters}
         >
@@ -726,7 +726,7 @@
                 variant="ghost"
                 size="sm"
                 square
-                icon="cancel"
+                icon="close"
                 title="remove the {def.label} filter"
                 aria-label="remove the {def.label} filter"
                 onclick={() => removeFilter(key)}
@@ -778,7 +778,7 @@
     {#if !loading && !error && items.length === 0}
       <li>
         <EmptyState
-          icon={kind === "docs" ? "doc" : "library"}
+          icon={kind === "docs" ? "refDoc" : kind === "entries" ? "knowledge" : "library"}
           title={mode === "search"
             ? `No matches for “${q}”.`
             : "The library is empty."}

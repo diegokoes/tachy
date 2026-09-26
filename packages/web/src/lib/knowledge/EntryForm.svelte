@@ -161,7 +161,7 @@
 </script>
 
 {#snippet formActions()}
-  <FormActions form="entry-form" {saving} title={SUBMIT_LABEL} oncancel={onCancel} />
+  <FormActions form="entry-form" {saving} title={SUBMIT_LABEL} create={mode === "create"} oncancel={onCancel} />
 {/snippet}
 
 <form id="entry-form" class="entry-form" onsubmit={submit}>

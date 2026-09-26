@@ -5,9 +5,9 @@ export type NavItem = { key: string; label: string; icon?: IconName };
 
 const ALL: NavItem[] = [
   { key: "chat", label: "chat", icon: "chat" },
-  { key: "library", label: "library", icon: "book" },
-  { key: "wiki", label: "wiki", icon: "globe" },
-  { key: "admin", label: "admin", icon: "lockOn" },
+  { key: "library", label: "library", icon: "library" },
+  { key: "wiki", label: "wiki", icon: "wiki" },
+  { key: "admin", label: "admin", icon: "admin" },
 ];
 
 /** The tab bar, in hotkey order — 1..n. */

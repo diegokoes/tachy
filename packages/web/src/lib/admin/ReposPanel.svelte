@@ -590,7 +590,7 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
     width="56rem"
     busy={bulkBusy}
     confirmLabel={`link ${b.picked.size}`}
-    confirmIcon="save"
+    confirmIcon="create"
     onConfirm={saveBulk}
     onCancel={() => (bulk = null)}
   >

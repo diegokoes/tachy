@@ -10,7 +10,6 @@
     Field,
     Modal,
     Select,
-    G,
     Icon,
     type IconName,
   } from "../tui";
@@ -68,9 +67,9 @@
     global: "global",
   };
   const SCOPE_ICONS: Record<ArtifactScope, IconName> = {
-    user: "person",
-    team: "people",
-    global: "globe",
+    user: "user",
+    team: "team",
+    global: "global",
   };
   const grouped = $derived(
     (["user", "team", "global"] as ArtifactScope[])
@@ -574,7 +573,7 @@
                 >
                   <button class="art-pick" onclick={() => select(a)}>
                     <span class="art-title">
-                      {chat.artifact?.id === a.id ? `${G.selected} ` : ""}{a.title}
+                      {#if chat.artifact?.id === a.id}<span class="sel"><Icon name="selected" size="0.7em" weight={10} /></span>{/if}{a.title}
                       {#if a.spec?.output}<span
                           class="art-out"
                           title="produces a {a.spec.output.format} file"
@@ -599,7 +598,8 @@
                         variant="ghost"
                         tone="danger"
                         square
-                        icon={armedDelete === a.id ? "check" : "cancel"}
+                        icon={armedDelete === a.id ? "confirm" : "delete"}
+                        morph
                         iconSize="1.5em"
                         title={armedDelete === a.id ? "click again to delete" : "delete"}
                         aria-label="delete"
@@ -627,6 +627,7 @@
     title={editorMode === "create" ? "new artifact" : "edit artifact"}
     width="60rem"
     confirmLabel="save"
+    confirmIcon={editorMode === "create" ? "create" : "save"}
     busy={editorBusy}
     onConfirm={save}
     onCancel={() => (editorOpen = false)}
@@ -806,6 +807,12 @@
     background: var(--panel);
   }
   .art-title { font-size: var(--fs-sm); }
+  .sel {
+    display: inline-flex;
+    vertical-align: middle;
+    margin-right: 0.5ch;
+    color: var(--accent);
+  }
   .art-out {
     margin-left: var(--pad-1);
     padding: 0 var(--pad-1);

@@ -492,7 +492,7 @@ import { csv } from "../fields";
     width="34rem"
     busy={claiming}
     confirmLabel="register"
-    confirmIcon="save"
+    confirmIcon="create"
     onConfirm={saveClaim}
     onCancel={() => (claim = null)}
   >

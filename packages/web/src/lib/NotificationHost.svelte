@@ -37,7 +37,7 @@
     onConfirm={acknowledge}
     onCancel={acknowledge}
     confirmLabel="thank you"
-    confirmIcon="check"
+    confirmIcon="success"
     cancelLabel="close"
     width="30rem"
   >
@@ -45,7 +45,7 @@
       {#if celebration.body_text}
         <p class="reply">{celebration.body_text}</p>
       {/if}
-      <Button variant="primary" full icon="check" onclick={acknowledge}>
+      <Button variant="primary" full icon="success" onclick={acknowledge}>
         thank you for reporting it
       </Button>
     </div>

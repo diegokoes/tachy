@@ -59,13 +59,13 @@
   };
 
   const PAGES: SubnavItem[] = $derived([
-    { key: "integrations", label: "integrations", icon: "link" },
-    { key: "structure", label: "structure", icon: "layers" },
-    { key: "access", label: "users", icon: "people" },
+    { key: "integrations", label: "integrations", icon: "integrations" },
+    { key: "structure", label: "structure", icon: "structure" },
+    { key: "access", label: "users", icon: "users" },
     ...(isGlobalAdmin()
       ? [
-          { key: "workers", label: "workers", icon: "terminal" as const },
-          { key: "system", label: "system", icon: "cog" as const },
+          { key: "workers", label: "workers", icon: "workers" as const },
+          { key: "system", label: "system", icon: "system" as const },
         ]
       : []),
   ]);

@@ -224,7 +224,7 @@
   <Button
     variant="ghost"
     size="sm"
-    icon="discover"
+    icon="refresh"
     title="rescan now (hourly otherwise)"
     busy={rescanning}
     onclick={rescan}>rescan</Button
@@ -299,7 +299,7 @@
                           size="sm"
                           variant="ghost"
                           tone="accent"
-                          icon="sparkles"
+                          icon="ai"
                           title="open chat with a /wiki-draft command for this"
                           onclick={() => draftWithAgent(g)}
                           >{g.kind === "unwritten" ? "draft" : "refresh"}</Button
@@ -318,7 +318,7 @@
                         <Button
                           size="sm"
                           variant="ghost"
-                          icon="discard"
+                          icon="close"
                           title="not worth an article; returns if evidence grows"
                           busy={acting === g.id}
                           onclick={() => dismiss(g)}>dismiss</Button
@@ -333,7 +333,7 @@
         {/each}
       {:else}
         <EmptyState
-          icon="check"
+          icon="success"
           title="Nothing missing that the sweep can see."
           detail="Checks: uncovered lessons, outdated articles, stale sources, wanted pages, drafts, uncategorised."
         />

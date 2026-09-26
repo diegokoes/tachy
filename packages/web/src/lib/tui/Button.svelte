@@ -10,6 +10,7 @@
     square = false,
     icon,
     iconSize = "1.05em",
+    morph = false,
     glyph,
     busy = false,
     disabled = false,
@@ -31,6 +32,8 @@
     /** Inline SVG icon; takes precedence over `glyph`. */
     icon?: IconName;
     iconSize?: string;
+    /** Tween the icon into its next shape instead of swapping it. */
+    morph?: boolean;
     glyph?: string;
     busy?: boolean;
     disabled?: boolean;
@@ -62,7 +65,7 @@
   {#if busy}
     <span class="g" aria-hidden="true">…</span>
   {:else if icon}
-    <Icon name={icon} size={iconSize} weight={7} />
+    <Icon name={icon} size={iconSize} weight={7} {morph} />
   {:else if glyph}
     <span class="g" aria-hidden="true">{glyph}</span>
   {/if}

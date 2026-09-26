@@ -64,7 +64,7 @@
     const acts: StatusAction[] = [];
     if (e.status !== "draft")
       acts.push({
-        icon: "doc",
+        icon: "draft",
         label: "draft",
         title: "back to draft",
         tone: "info",
@@ -73,7 +73,7 @@
       });
     if (e.status !== "approved")
       acts.push({
-        icon: "check",
+        icon: "approve",
         label: e.status === "deprecated" ? "re-approve" : "approve",
         tone: "ok",
         disabled: mutating,
@@ -103,7 +103,7 @@
       });
     if (e.status === "approved")
       acts.push({
-        icon: "alert",
+        icon: "deprecate",
         label: "deprecate",
         title: "deprecate\u2026",
         tone: "warn",
@@ -395,13 +395,13 @@
                 {/if}
                 <div class="actions">
                   <Button
-                    variant="ghost" square tone="warn" icon="check"
+                    variant="ghost" square tone="warn" icon="deprecate"
                     aria-label="deprecate" title="deprecate"
                     busy={mutating}
                     onclick={deprecate}
                   />
                   <Button
-                    variant="ghost" square icon="cancel"
+                    variant="ghost" square icon="close"
                     aria-label="cancel" title="cancel"
                     disabled={mutating}
                     onclick={() => (deprecating = false)}

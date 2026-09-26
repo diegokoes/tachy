@@ -360,7 +360,7 @@
         <Button
           variant="ghost"
           size="sm"
-          icon="cancel"
+          icon="close"
           title="whole catalogue"
           aria-label="whole catalogue"
           onclick={() => (filters = { ...EMPTY_FILTERS })}
@@ -385,7 +385,7 @@
     destructive={f.row && mayEdit(f.row)
       ? {
           label: armed ? "click again to confirm" : "delete",
-          icon: armed ? "check" : "del",
+          icon: armed ? "confirm" : "delete",
           busy,
           onclick: remove,
         }

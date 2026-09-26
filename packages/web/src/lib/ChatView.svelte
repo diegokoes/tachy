@@ -365,7 +365,7 @@
           <div class="body md" class:streaming={chat.busy && i === chat.entries.length - 1}>{@html renderMarkdown(e.text)}</div>
         </div>
       {:else if e.kind === "tool"}
-        <div class="tool">{G.tool} {e.tool}</div>
+        <div class="tool"><Icon name="tool" size="1em" weight={7} /> {e.tool}</div>
       {:else if e.kind === "compact"}
         <CompactPanel title={e.title} stats={e.stats} />
       {:else if e.kind === "output"}
@@ -400,15 +400,15 @@
       {#if chat.artifact}
         <span class="attach artifact-chip">
           <ArtifactMark size="1em" /> {chat.artifact.title}
-          <button class="chip-x" title="Detach artifact" onclick={() => (chat.artifact = undefined)}>{G.del}</button>
+          <button class="chip-x" title="Detach artifact" onclick={() => (chat.artifact = undefined)}><Icon name="close" size="1em" weight={7} /></button>
         </span>
       {/if}
       {#each chat.uploads as u, i (u.path)}
         {#if i > 0}<span class="sep" aria-hidden="true">~~</span>{/if}
         <span class="attach">
-          <Icon name={u.image ? "image" : "doc"} size="1.1em" />
+          <Icon name={u.image ? "image" : "file"} size="1.1em" />
           {u.filename}
-          <button class="chip-x" title="Remove attachment" onclick={() => chat.uploads.splice(i, 1)}>{G.del}</button>
+          <button class="chip-x" title="Remove attachment" onclick={() => chat.uploads.splice(i, 1)}><Icon name="close" size="1em" weight={7} /></button>
         </span>
       {/each}
     </div>
@@ -439,8 +439,8 @@
     <div class="send-col">
       <Button
         variant={clearArmed ? "danger" : "ghost"}
-        icon={clearArmed ? undefined : "erase"}
-        glyph={clearArmed ? "?" : undefined}
+        icon={clearArmed ? "confirm" : "clear"}
+        morph
         disabled={chat.busy || !chat.entries.length}
         aria-label="Clear the conversation"
         title={clearArmed ? "click again to clear" : "Clear the conversation"}
@@ -598,7 +598,7 @@
   .turn .body.err { color: var(--danger); }
   .turn .body.waiting { min-height: 1.5em; }
   /* A tool line is a trace, not prose — it keeps the terminal face. */
-  .tool { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--muted); padding-left: 1ch; }
+  .tool { display: flex; align-items: center; gap: 0.5ch; font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--muted); padding-left: 1ch; }
 
   /* The user's turn is positioned right; its text stays left-aligned. Reading
      returns to the left edge on every line, so ragged-left costs a re-scan —
@@ -628,8 +628,8 @@
   .attach { display: inline-flex; align-items: center; gap: var(--pad-2); font-size: var(--fs-sm); color: var(--muted); }
   .sep { color: var(--muted); opacity: 0.55; user-select: none; }
   .artifact-chip { color: var(--accent); }
-  .chip-x { border: none; background: none; padding: 0 var(--pad-1); color: inherit; font: inherit; cursor: pointer; }
-  .chip-x:hover { color: var(--danger); }
+  .chip-x { display: inline-flex; align-items: center; border: none; background: none; padding: 0 var(--pad-1); color: inherit; font: inherit; cursor: pointer; }
+  .chip-x:hover { color: var(--text); }
   .composer { position: relative; display: flex; gap: var(--composer-gap); align-items: stretch; padding-top: 0.6rem; border-top: 1px solid var(--border); }
   .composer textarea { flex: 1; resize: none; }
   /* A <label>, not a <button> — it has to wrap the file input — so it borrows

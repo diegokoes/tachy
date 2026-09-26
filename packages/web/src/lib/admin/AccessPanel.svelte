@@ -11,6 +11,7 @@
     Checkbox,
     Chip,
     CrudTable,
+    DeleteButton,
     Field,
     FilterBar,
     GroupHead,
@@ -183,7 +184,7 @@
      to be parsed, where a column of marks reads as a pattern to be scanned. -->
 {#snippet mark(on: boolean, why: string)}
   <span class="mark" class:on>
-    <Icon name={on ? "yes" : "no"} size="1.05em" weight={7} label={why} />
+    <Icon name={on ? "success" : "reject"} size="1.05em" weight={7} label={why} />
   </span>
 {/snippet}
 
@@ -239,13 +240,9 @@
             />
             <span class="dim">{roleLabel("team", "admin")}</span>
           </label>
-          <Button
-            variant="ghost"
-            tone="danger"
-            square
-            icon="cancel"
-            title="remove"
-            aria-label={`remove from ${tm.name}`}
+          <DeleteButton
+            label={`remove from ${tm.name}`}
+            confirm={false}
             onclick={() => delete roster[tm.slug]}
           />
         </div>

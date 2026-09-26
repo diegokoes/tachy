@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { G } from "./glyphs";
+  import Icon from "./Icon.svelte";
 
   let {
     tone = "default",
@@ -29,7 +29,7 @@
   {/if}
   {#if onremove}
     <button class="x" type="button" aria-label="remove" onclick={onremove}
-      >{G.del}</button
+      ><Icon name="close" size="1em" weight={7} /></button
     >
   {/if}
 </span>
@@ -83,6 +83,8 @@
   }
 
   .x {
+    display: inline-flex;
+    align-items: center;
     font: inherit;
     font-size: 0.9em;
     line-height: 1;
@@ -93,6 +95,6 @@
     padding: 0 0 0 var(--pad-2);
   }
   .x:hover {
-    color: var(--danger);
+    color: var(--text);
   }
 </style>

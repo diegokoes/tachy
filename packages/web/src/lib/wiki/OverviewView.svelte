@@ -7,8 +7,7 @@
   import { setTopActions } from "../subnav.svelte";
   import { renderMarkdown, markBrokenLinks } from "../markdown";
   import { LinkTargets } from "../wikilinks.svelte";
-  import { Badge, Button, Checkbox, EmptyState, Note, Select } from "../tui";
-  import { G } from "../tui/glyphs";
+  import { Badge, Button, Checkbox, Chevron, EmptyState, Note, Select } from "../tui";
   import type {
     Coverage,
     CoverageNode,
@@ -286,7 +285,7 @@
       variant="ghost"
       tone="ok"
       size="sm"
-      icon="discover"
+      icon="seed"
       title="one section per top-level component"
       {busy}
       onclick={seed}>seed from components</Button
@@ -332,7 +331,7 @@
           aria-label="{unfolded[node.id] ? 'fold' : 'unfold'} {node.name}"
           onclick={() =>
             (unfolded = { ...unfolded, [node.id]: !unfolded[node.id] })}
-          >{unfolded[node.id] ? G.expanded : G.right}</button
+          ><Chevron open={!!unfolded[node.id]} /></button
         >
       {:else if depth > 0}
         <span class="fold" aria-hidden="true"></span>
@@ -416,7 +415,7 @@
         </div>
       {:else if toc}
         <EmptyState
-          icon="doc"
+          icon="file"
           title="No intro yet."
           detail="A short landing: what this product is, and where to start."
         >
@@ -516,7 +515,7 @@
           </ul>
         {:else}
           <EmptyState
-            icon="index"
+            icon="overview"
             title="No sections yet."
             detail={hasComponents
               ? "Seed them from the components, top right, or add one by hand."

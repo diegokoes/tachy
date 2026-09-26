@@ -73,7 +73,7 @@
     aria-haspopup="dialog"
     onclick={() => (open = true)}
   >
-    <Icon name="reads" size="1.1em" weight={7} />
+    <Icon name="eye" size="1.1em" weight={7} />
     <span>{readLine}</span>
   </button>
   <button
