@@ -1,6 +1,6 @@
 import { insertRows, type Tx } from "./batches";
 import { chance, pastDate, pick, rngFor, uuidFor } from "./deterministic";
-import type { SeededUser } from "./org";
+import { ADMIN_EMAIL, type SeededUser } from "./org";
 import type { Volumes } from "./scale";
 
 const STATUSES = ["open", "in_progress", "resolved", "closed"] as const;
@@ -196,7 +196,8 @@ const FOLLOW_UPS = [
  * on, fixed, and turned down — with the threads and notifications each stage
  * leaves behind. Every report carries the AI review the form now always runs.
  * The first is forced resolved so the message and notification tables are
- * never empty at any scale.
+ * never empty at any scale. The second is an open one filed by the dev admin,
+ * so replying to it from the same login raises the reply notification there.
  */
 export async function seedReports(
   tx: Tx,
@@ -211,10 +212,15 @@ export async function seedReports(
 
   for (let i = 0; i < v.reports; i++) {
     const rng = rngFor("report", i);
-    const reporter = pick(rng, members.length ? members : users);
+    const devAdmin = users.find((u) => u.email === ADMIN_EMAIL);
+    const reporter =
+      i === 1 && devAdmin
+        ? devAdmin
+        : pick(rng, members.length ? members : users);
     const type = chance(rng, 0.55) ? "bug" : "feature";
     const draft = pick(rng, type === "bug" ? BUGS : FEATURES);
-    const status: Status = i === 0 ? "resolved" : pick(rng, STATUSES);
+    const status: Status =
+      i === 0 ? "resolved" : i === 1 ? "open" : pick(rng, STATUSES);
     const id = uuidFor("report", i);
     // A thread runs up to about five days, so anything past 'open' was filed
     // early enough for its replies to have happened already.
