@@ -2,7 +2,7 @@ import { marked } from "marked";
 import type { Tokens } from "marked";
 import DOMPurify from "dompurify";
 import { ASSET_SRC_RE, parseWikilink, WIKILINK_RE } from "@tachy/contract";
-import { GRID, ICONS, type IconName } from "./tui/icons";
+import { GRID, iconMarkup, type IconName } from "./tui/icons";
 import { highlight } from "./code";
 
 marked.setOptions({ gfm: true, breaks: true });
@@ -114,7 +114,7 @@ const CALLOUTS: Record<string, [CalloutTone, IconName]> = {
 };
 
 const iconSvg = (name: IconName) =>
-  `<svg class="callout-icon" viewBox="0 0 ${GRID} ${GRID}" width="1.1em" height="1.1em" fill="none" stroke="currentColor" stroke-width="${(6 * GRID) / 100}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name].path}</svg>`;
+  `<svg class="callout-icon" viewBox="0 0 ${GRID} ${GRID}" width="1.1em" height="1.1em" fill="none" stroke="currentColor" stroke-width="${(6 * GRID) / 100}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${iconMarkup(name)}</svg>`;
 
 /**
  * `> [!tip] Title` blockquotes as Obsidian callouts. A `-` or `+` after the
