@@ -2,6 +2,7 @@
   import type { Snippet } from "svelte";
   import Icon from "./Icon.svelte";
   import type { IconName } from "./icons";
+  import { tip } from "./tip.svelte";
 
   let {
     variant = "default",
@@ -47,6 +48,10 @@
     "aria-label"?: string;
     "aria-pressed"?: boolean;
   } = $props();
+
+  /* A mark with no words beside it shows its title as a tip, which hover,
+     focus and touch all reach, and takes it as its name if it has none. */
+  const bare = $derived(!children);
 </script>
 
 <button
@@ -55,12 +60,13 @@
   class:full
   {type}
   {form}
-  {title}
-  aria-label={ariaLabel}
+  title={bare ? undefined : title}
+  aria-label={ariaLabel ?? (bare ? title : undefined)}
   aria-pressed={ariaPressed}
   aria-busy={busy || undefined}
   disabled={disabled || busy}
   {onclick}
+  use:tip={bare ? title : undefined}
 >
   {#if busy}
     <span class="g" aria-hidden="true">…</span>

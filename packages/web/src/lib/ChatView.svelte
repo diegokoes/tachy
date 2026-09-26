@@ -13,7 +13,7 @@
   import OutputCard, { type OutputFile } from "./chat/OutputCard.svelte";
   import Approval from "./chat/Approval.svelte";
   import Launcher from "./chat/Launcher.svelte";
-  import { ArtifactMark, Button, G, Icon } from "./tui";
+  import { ArtifactMark, Button, G, Icon, tip } from "./tui";
   import { pushScope } from "./keys.svelte";
 
   const short = (tool: string) => tool.replace(/^mcp__tachy__/, "");
@@ -400,7 +400,7 @@
       {#if chat.artifact}
         <span class="attach artifact-chip">
           <ArtifactMark size="1em" /> {chat.artifact.title}
-          <button class="chip-x" title="Detach artifact" onclick={() => (chat.artifact = undefined)}><Icon name="close" size="1em" weight={7} /></button>
+          <button class="chip-x" aria-label="Detach artifact" use:tip={"Detach artifact"} onclick={() => (chat.artifact = undefined)}><Icon name="close" size="1em" weight={7} /></button>
         </span>
       {/if}
       {#each chat.uploads as u, i (u.path)}
@@ -408,7 +408,7 @@
         <span class="attach">
           <Icon name={u.image ? "image" : "file"} size="1.1em" />
           {u.filename}
-          <button class="chip-x" title="Remove attachment" onclick={() => chat.uploads.splice(i, 1)}><Icon name="close" size="1em" weight={7} /></button>
+          <button class="chip-x" aria-label="Remove attachment" use:tip={"Remove attachment"} onclick={() => chat.uploads.splice(i, 1)}><Icon name="close" size="1em" weight={7} /></button>
         </span>
       {/each}
     </div>
@@ -425,9 +425,9 @@
         onpick={pickCommand}
       />
     {/if}
-    <label class="upload" title="Attach a document">
+    <label class="upload" use:tip={"Attach a document"}>
       <Icon name="attach" label="Attach a document" />
-      <input type="file" onchange={onFile} hidden />
+      <input type="file" onchange={onFile} />
     </label>
     <textarea
       bind:this={composerEl}
@@ -641,15 +641,34 @@
     font-size: 1.1rem;
     color: var(--muted);
   }
+  /* Hidden from sight only: a `hidden` input leaves the tab order, and the
+     keyboard has no other way to attach. */
+  .upload input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .upload:has(input:focus-visible) {
+    outline: 1px solid currentColor;
+    outline-offset: 2px;
+  }
   .upload :global(svg) {
     transition:
       stroke-width 0.12s ease,
       filter 0.12s ease;
   }
-  .upload:hover {
+  .upload:hover,
+  .upload:has(input:focus-visible) {
     color: var(--accent);
   }
-  .upload:hover :global(svg) {
+  .upload:hover :global(svg),
+  .upload:has(input:focus-visible) :global(svg) {
     stroke-width: var(--sw-hover, 9);
     filter: brightness(1.35);
   }

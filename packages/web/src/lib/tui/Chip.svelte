@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import Icon from "./Icon.svelte";
+  import { tip } from "./tip.svelte";
 
   let {
     tone = "default",
@@ -28,7 +29,7 @@
     <span class="hit" {title}>{@render children()}</span>
   {/if}
   {#if onremove}
-    <button class="x" type="button" aria-label="remove" onclick={onremove}
+    <button class="x" type="button" aria-label="remove" use:tip={"remove"} onclick={onremove}
       ><Icon name="close" size="1em" weight={7} /></button
     >
   {/if}
