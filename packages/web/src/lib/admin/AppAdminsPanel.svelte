@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { roleLabel } from "../terms";
-  import { Badge, DataTable, Icon, Note, type Column } from "../tui";
+  import { Badge, DataTable, Icon, Note, tip, type Column } from "../tui";
   import { fmtDate } from "../dates";
   import {
     reloadRoster,
@@ -49,19 +49,15 @@
 {#snippet signInCell(u: UserRow)}
   {@const how = signIn(u, sso)}
   {@const on = !u.disabled && (how.password || how.sso)}
-  <span class="mark" class:on>
-    <Icon
-      name={on ? "success" : "reject"}
-      size="1.05em"
-      weight={7}
-      label={on
-        ? [how.password ? "password" : "", how.sso ? "SSO" : ""]
-            .filter(Boolean)
-            .join(" · ")
-        : u.disabled
-          ? "disabled"
-          : "no way in"}
-    />
+  {@const why = on
+    ? [how.password ? "password" : "", how.sso ? "SSO" : ""]
+        .filter(Boolean)
+        .join(" · ")
+    : u.disabled
+      ? "disabled"
+      : "no way in"}
+  <span class="mark" class:on use:tip={why}>
+    <Icon name={on ? "success" : "reject"} size="1.05em" weight={7} label={why} />
   </span>
 {/snippet}
 
