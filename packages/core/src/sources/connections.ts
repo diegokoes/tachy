@@ -54,18 +54,18 @@ export async function deleteSourceConnection(slug: string) {
 /**
  * For the admin index: how much this domain holds, and what is not finished.
  *
- * A knowledge project always has a product — source_projects carries a check
- * constraint saying so — which is why there is no count of productless ones.
+ * Only a project with a product can own a wiki, so the missing-wiki count is
+ * taken over those alone.
  */
 export async function sourceCensus(): Promise<SourceCensus> {
   const [row] = await sql<Omit<SourceCensus, "by_type">[]>`
     select
       (select count(*)::int from source_connections) as connections,
       (select count(*)::int from source_projects) as projects,
-      (select count(*)::int from source_projects where role = 'knowledge') as knowledge,
-      (select count(*)::int from source_projects where role = 'tracker') as trackers,
+      (select count(*)::int from source_projects where product_id is not null) as with_product,
+      (select count(*)::int from source_projects where product_id is null) as without_product,
       (select count(*)::int from source_projects
-        where role = 'knowledge' and jsonb_array_length(wikis) = 0) as projects_no_wiki,
+        where product_id is not null and jsonb_array_length(wikis) = 0) as projects_no_wiki,
       (select count(*)::int from source_projects where customer_id is not null)
         as projects_for_customer,
       (select count(*)::int from source_connections where last_synced_at is null)
@@ -110,7 +110,7 @@ export async function sourceIssues(
     sql`
       select id as key, name as label, count(*) over () as total
       from source_projects
-      where role = 'knowledge' and jsonb_array_length(wikis) = 0
+      where product_id is not null and jsonb_array_length(wikis) = 0
       order by name limit ${ISSUE_ITEMS}
     `,
   ]);

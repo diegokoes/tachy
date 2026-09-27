@@ -5,9 +5,6 @@ import { getCustomerIdBySlug } from "../catalog/customers";
 import { resolveComponentStrict } from "../catalog/components";
 import type { EntryScope } from "../access/permissions";
 
-export const SOURCE_PROJECT_ROLES = ["knowledge", "tracker"] as const;
-export type SourceProjectRole = (typeof SOURCE_PROJECT_ROLES)[number];
-
 export interface ProjectWiki {
   identifier: string;
   name?: string;
@@ -21,7 +18,7 @@ export interface SourceProjectInput {
   sourceSlug: string;
   externalKey: string;
   name?: string;
-  role: SourceProjectRole;
+  /** Binds the project to a product, which is what lets it hold knowledge. */
   productSlug?: string | null;
   teamSlug?: string | null;
   /** Set when the whole project exists for one customer; null when it serves many. */
@@ -33,7 +30,7 @@ export interface SourceProjectInput {
 
 export interface SourceProjectPatch {
   name?: string;
-  role?: SourceProjectRole;
+  /** Undefined keeps the current product; null unbinds it. */
   productSlug?: string | null;
   teamSlug?: string | null;
   customerSlug?: string | null;
@@ -49,7 +46,6 @@ export interface SourceProjectRow {
   source_type: string;
   external_key: string;
   name: string;
-  role: SourceProjectRole;
   product_id: string | null;
   product_slug: string | null;
   team_id: string;
@@ -64,7 +60,7 @@ export interface SourceProjectRow {
 
 const projectColumns = () => sql`
   sp.id, sp.source_connection_id, sc.slug as source_slug, sc.source_type,
-  sp.external_key, sp.name, sp.role, sp.product_id, p.slug as product_slug,
+  sp.external_key, sp.name, sp.product_id, p.slug as product_slug,
   sp.team_id, t.slug as team_slug, sp.customer_id, cu.slug as customer_slug,
   sp.wikis, sp.config, sp.notes, sp.created_at
 `;
@@ -77,12 +73,20 @@ const projectJoins = () => sql`
   left join customers cu on cu.id = sp.customer_id
 `;
 
+const hasProductFilter = (hasProduct: boolean | undefined) =>
+  hasProduct === undefined
+    ? sql``
+    : hasProduct
+      ? sql`and sp.product_id is not null`
+      : sql`and sp.product_id is null`;
+
 export async function listSourceProjects(
   opts: {
     sourceSlug?: string;
     productId?: string;
     teamId?: string;
-    role?: SourceProjectRole;
+    /** true: only projects bound to a product; false: only those without one. */
+    hasProduct?: boolean;
   } = {},
 ): Promise<SourceProjectRow[]> {
   return sql`
@@ -91,7 +95,7 @@ export async function listSourceProjects(
       ${opts.sourceSlug ? sql`and sc.slug = ${opts.sourceSlug}` : sql``}
       ${opts.productId ? sql`and sp.product_id = ${opts.productId}` : sql``}
       ${opts.teamId ? sql`and sp.team_id = ${opts.teamId}` : sql``}
-      ${opts.role ? sql`and sp.role = ${opts.role}` : sql``}
+      ${hasProductFilter(opts.hasProduct)}
     order by sc.slug, sp.name
   ` as Promise<SourceProjectRow[]>;
 }
@@ -135,27 +139,21 @@ interface ResolvedScope {
   teamId: string;
 }
 
-async function resolveRoleScope(
-  role: SourceProjectRole,
+/** A product brings its own team; a project without one names its team directly. */
+async function resolveScope(
   productSlug: string | null | undefined,
   teamSlug: string | null | undefined,
 ): Promise<ResolvedScope> {
-  if (role === "knowledge") {
-    if (!productSlug)
-      throw badInput(
-        "a knowledge project needs a product: pass product_slug, or use role 'tracker' for a create-only project",
-      );
+  if (productSlug) {
     const productId = await getProductIdBySlug(productSlug);
     const [prod] =
       await sql`select team_id from products where id = ${productId}`;
     return { productId, teamId: prod.team_id as string };
   }
-  if (productSlug)
-    throw badInput(
-      "a tracker project has no product; it is a create/reassign target only. Use role 'knowledge' to bind a product.",
-    );
   if (!teamSlug)
-    throw badInput("a tracker project needs a team: pass team_slug");
+    throw badInput(
+      "a project needs an owner: pass product_slug, or team_slug for a project with no product",
+    );
   return { productId: null, teamId: await getTeamIdBySlug(teamSlug) };
 }
 
@@ -212,11 +210,11 @@ export const matchWiki = (
 };
 
 function assertWikiAllowed(
-  role: SourceProjectRole,
+  productId: string | null,
   wikis: ProjectWiki[] | null | undefined,
 ): void {
-  if (role === "tracker" && wikis?.length)
-    throw badInput("a tracker project cannot own a wiki: it has no product");
+  if (!productId && wikis?.length)
+    throw badInput("a project without a product cannot own a wiki");
 }
 
 export async function addSourceProject(
@@ -229,26 +227,25 @@ export async function addSourceProject(
       `Unknown source connection '${i.sourceSlug}'. Call list_source_connections first.`,
     );
   if (!i.externalKey.trim()) throw badInput("external_key is required");
-  const scope = await resolveRoleScope(i.role, i.productSlug, i.teamSlug);
+  const scope = await resolveScope(i.productSlug, i.teamSlug);
   const wikis = normalizeWikis(i.wikis);
-  assertWikiAllowed(i.role, wikis);
+  assertWikiAllowed(scope.productId, wikis);
   const customerId = i.customerSlug
     ? await getCustomerIdBySlug(i.customerSlug)
     : null;
 
   const [row] = await sql`
     insert into source_projects
-      (source_connection_id, external_key, name, product_id, team_id, customer_id, role, wikis, config, notes)
+      (source_connection_id, external_key, name, product_id, team_id, customer_id, wikis, config, notes)
     values
       (${conn.id}, ${i.externalKey}, ${i.name || i.externalKey}, ${scope.productId},
-       ${scope.teamId}, ${customerId}, ${i.role}, ${jsonb(wikis)},
+       ${scope.teamId}, ${customerId}, ${jsonb(wikis)},
        ${jsonb(i.config ?? {})}, ${i.notes ?? null})
     on conflict (source_connection_id, external_key) do update set
       name       = excluded.name,
       product_id = excluded.product_id,
       team_id    = excluded.team_id,
       customer_id = excluded.customer_id,
-      role       = excluded.role,
       wikis      = excluded.wikis,
       config     = excluded.config,
       notes      = coalesce(excluded.notes, source_projects.notes)
@@ -262,23 +259,16 @@ export async function updateSourceProject(
   patch: SourceProjectPatch,
 ): Promise<SourceProjectRow> {
   const current = await getSourceProject(id);
-  const role = patch.role ?? current.role;
   const teamSlug = patch.teamSlug ?? current.team_slug;
   // An unchanged product is kept by id: its slug may be ambiguous across teams.
   const scope =
-    role === "knowledge" &&
-    patch.productSlug === undefined &&
-    current.product_id
+    patch.productSlug === undefined && current.product_id
       ? { productId: current.product_id, teamId: current.team_id }
-      : await resolveRoleScope(
-          role,
-          role === "knowledge" ? patch.productSlug : null,
-          teamSlug,
-        );
+      : await resolveScope(patch.productSlug, teamSlug);
   const wikis = normalizeWikis(
     patch.wikis !== undefined ? patch.wikis : current.wikis,
   );
-  assertWikiAllowed(role, wikis);
+  assertWikiAllowed(scope.productId, wikis);
   const customerId =
     patch.customerSlug === undefined
       ? current.customer_id
@@ -286,7 +276,7 @@ export async function updateSourceProject(
         ? await getCustomerIdBySlug(patch.customerSlug)
         : null;
 
-  if (role === "tracker" && current.role === "knowledge") {
+  if (!scope.productId && current.product_id) {
     const [refs] = await sql`
       select
         (select count(*)::int from project_area_map where source_project_id = ${id}) as areas,
@@ -300,14 +290,13 @@ export async function updateSourceProject(
     ].filter(Boolean);
     if (parts.length)
       throw conflict(
-        `project '${current.external_key}' still has ${parts.join(", ")}; a tracker project holds none, detach them first`,
+        `project '${current.external_key}' still has ${parts.join(", ")}; a project without a product holds none, detach them first`,
       );
   }
 
   await sql`
     update source_projects set
       name       = ${patch.name ?? current.name},
-      role       = ${role},
       product_id = ${scope.productId},
       team_id    = ${scope.teamId},
       customer_id = ${customerId},
@@ -366,7 +355,7 @@ export async function setProjectAreaMap(i: AreaMapInput) {
   const project = await getSourceProject(i.sourceProjectId);
   if (!project.product_id)
     throw badInput(
-      `project '${project.external_key}' is a tracker: no product, no components to map areas onto`,
+      `project '${project.external_key}' has no product, so no components to map areas onto`,
     );
   if (!i.areaPrefix.trim()) throw badInput("area_prefix is required");
   const component = await resolveComponentStrict(
@@ -428,7 +417,6 @@ export interface ProjectContext {
     id: string;
     external_key: string;
     name: string;
-    role: SourceProjectRole;
     notes: string | null;
     config: Record<string, unknown>;
   };
@@ -455,7 +443,7 @@ export interface ProjectContextQuery {
   productId?: string;
   productSlug?: string;
   workItemId?: string;
-  role?: SourceProjectRole;
+  hasProduct?: boolean;
 }
 
 /**
@@ -487,8 +475,8 @@ export async function resolveProjectContext(
       ${productId ? sql`and sp.product_id = ${productId}` : sql``}
       ${q.sourceSlug ? sql`and sc.slug = ${q.sourceSlug}` : sql``}
       ${q.externalKey ? sql`and sp.external_key = ${q.externalKey}` : sql``}
-      ${q.role ? sql`and sp.role = ${q.role}` : sql``}
-    order by sp.role, sp.name
+      ${hasProductFilter(q.hasProduct)}
+    order by sp.product_id is null, sp.name
   `) as SourceProjectRow[];
   if (!rows.length) return [];
 
@@ -521,7 +509,6 @@ export async function resolveProjectContext(
       id: r.id,
       external_key: r.external_key,
       name: r.name,
-      role: r.role,
       notes: r.notes,
       config: r.config ?? {},
     },

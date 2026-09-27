@@ -300,8 +300,8 @@ describe("taxonomy edit/delete with reference guards", () => {
     const [conn] =
       await sql`select id from source_connections where slug = 'test-freshdesk'`;
     const [proj] = await sql`
-      insert into source_projects (source_connection_id, external_key, name, role, product_id, team_id)
-      values (${conn.id}, 'move-me', 'Move Me', 'knowledge', ${prod.id},
+      insert into source_projects (source_connection_id, external_key, name, product_id, team_id)
+      values (${conn.id}, 'move-me', 'Move Me', ${prod.id},
               (select id from teams where slug = 'from-team'))
       returning id
     `;

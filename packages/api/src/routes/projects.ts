@@ -3,7 +3,6 @@ import { requireAdmin } from "../auth";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
-  SOURCE_PROJECT_ROLES,
   badInput,
   notFound,
   addSourceProject,
@@ -43,8 +42,7 @@ const projectSchema = z.object({
   source_slug: z.string(),
   external_key: z.string().min(1),
   name: z.string().optional(),
-  role: z.enum(SOURCE_PROJECT_ROLES),
-  product_slug: z.string().optional(),
+  product_slug: z.string().nullable().optional(),
   team_slug: z.string().optional(),
   customer_slug: z.string().nullable().optional(),
   wikis: wikiSchema.nullable().optional(),
@@ -54,7 +52,6 @@ const projectSchema = z.object({
 
 const projectPatchSchema = z.object({
   name: z.string().optional(),
-  role: z.enum(SOURCE_PROJECT_ROLES).optional(),
   product_slug: z.string().nullable().optional(),
   team_slug: z.string().optional(),
   customer_slug: z.string().nullable().optional(),
@@ -68,15 +65,13 @@ const areaSchema = z.object({
   component_slug: z.string().min(1),
 });
 
-/** A knowledge project is scoped by its product, a tracker by its team. */
+/** A project with a product is scoped by it; one without, by its team. */
 async function assertCanWriteProject(
   c: Context,
-  role: string,
   productSlug?: string | null,
   teamSlug?: string,
 ): Promise<void> {
-  if (role === "knowledge") {
-    if (!productSlug) return;
+  if (productSlug) {
     await assertScopeEditor(c, {
       productId: await getProductIdBySlug(productSlug),
     });
@@ -123,7 +118,7 @@ export const projects = new Hono()
   .get("/source-projects", async (c) => {
     const productSlug = c.req.query("product_slug");
     const teamSlug = c.req.query("team_slug");
-    const role = c.req.query("role");
+    const hasProduct = c.req.query("has_product");
     return c.json(
       await listSourceProjects({
         sourceSlug: c.req.query("source"),
@@ -131,7 +126,12 @@ export const projects = new Hono()
           ? await getProductIdBySlug(productSlug)
           : undefined,
         teamId: teamSlug ? await getTeamIdBySlug(teamSlug) : undefined,
-        role: role === "knowledge" || role === "tracker" ? role : undefined,
+        hasProduct:
+          hasProduct === "true"
+            ? true
+            : hasProduct === "false"
+              ? false
+              : undefined,
       }),
     );
   })
@@ -150,13 +150,12 @@ export const projects = new Hono()
 
   .post("/source-projects", zValidator("json", projectSchema), async (c) => {
     const b = c.req.valid("json");
-    await assertCanWriteProject(c, b.role, b.product_slug, b.team_slug);
+    await assertCanWriteProject(c, b.product_slug, b.team_slug);
     return c.json(
       await addSourceProject({
         sourceSlug: b.source_slug,
         externalKey: b.external_key,
         name: b.name,
-        role: b.role,
         productSlug: b.product_slug,
         teamSlug: b.team_slug,
         customerSlug: b.customer_slug,
@@ -175,17 +174,11 @@ export const projects = new Hono()
       await assertScopeEditor(c, await sourceProjectScope(id));
       const b = c.req.valid("json");
       // Re-pointing a project needs rights on where it lands, too.
-      if (b.role || b.product_slug !== undefined || b.team_slug)
-        await assertCanWriteProject(
-          c,
-          b.role ?? "knowledge",
-          b.product_slug,
-          b.team_slug,
-        );
+      if (b.product_slug !== undefined || b.team_slug)
+        await assertCanWriteProject(c, b.product_slug, b.team_slug);
       return c.json(
         await updateSourceProject(id, {
           name: b.name,
-          role: b.role,
           productSlug: b.product_slug,
           teamSlug: b.team_slug,
           customerSlug: b.customer_slug,

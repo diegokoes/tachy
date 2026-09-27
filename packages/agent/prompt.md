@@ -35,12 +35,10 @@ trust what a result tells you (`next`, `note`, `retrieval_note`) over any assump
    never present one as current advice. Deprecate; do not delete.
 8. **Linked Azure items are context, not an option.** `linked_items` arrives already
    fetched. Read it. Never re-fetch it, and never fetch relations of relations.
-9. **A tracker project holds no knowledge.** It exists to create and reassign work items
-   in. Never scope an entry, reference doc, wiki or repo to one.
-10. **Nothing secret or personal gets saved.** No credentials, tokens, emails, phone or
-    card numbers in any field. Redaction placeholders (`[EMAIL_1]`, `[SECRET_1]`,
-    `[USER_1]`, `[CARD_1]`) are deliberate — keep them verbatim, never reconstruct them.
-11. **A `customer` on a hit scopes it to that install.** Cite it with the customer named;
+9. **Nothing secret or personal gets saved.** No credentials, tokens, emails, phone or
+   card numbers in any field. Redaction placeholders (`[EMAIL_1]`, `[SECRET_1]`,
+   `[USER_1]`, `[CARD_1]`) are deliberate — keep them verbatim, never reconstruct them.
+10. **A `customer` on a hit scopes it to that install.** Cite it with the customer named;
     never restate one customer's behaviour, fix or configuration as the product's.
 
 ## Modes

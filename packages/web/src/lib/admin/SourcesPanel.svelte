@@ -109,8 +109,9 @@ import { csv } from "../fields";
     slug: string;
     key: string;
     name: string;
-    role: "knowledge" | "tracker";
-    scope: string;
+    /** "" registers it without a product: a ticket target for `team` only. */
+    product: string;
+    team: string;
   } | null>(null);
   let claiming = $state(false);
   let claimError = $state<string | null>(null);
@@ -121,11 +122,14 @@ import { csv } from "../fields";
   const myTeams = $derived(
     teams.data.filter((tm) => canCurateScope({ team_slug: tm.slug })),
   );
-  const scopeOptions = $derived(
-    claim?.role === "tracker"
-      ? myTeams.map((tm) => ({ value: tm.slug, label: tm.name }))
-      : myProducts.map((p) => ({ value: p.slug, label: p.name })),
+  const productOptions = $derived([
+    { value: "", label: "none" },
+    ...myProducts.map((p) => ({ value: p.slug, label: p.name })),
+  ]);
+  const teamOptions = $derived(
+    myTeams.map((tm) => ({ value: tm.slug, label: tm.name })),
   );
+  const claimReady = $derived(!!claim && !!(claim.product || claim.team));
 
   const projectFor = (slug: string, key: string) =>
     projects.data.find((p) => p.source_slug === slug && p.external_key === key);
@@ -136,25 +140,13 @@ import { csv } from "../fields";
       slug,
       key: g.key,
       name: g.name,
-      role: "knowledge",
-      scope: myProducts[0]?.slug ?? "",
-    };
-  }
-
-  /* The scope means a different thing per role, so switching role must not
-     carry the previous answer over — a product slug sent as a team_slug is
-     rejected by the server with an error the user cannot act on. */
-  function setRole(role: "knowledge" | "tracker") {
-    if (!claim) return;
-    claim = {
-      ...claim,
-      role,
-      scope: (role === "tracker" ? myTeams[0]?.slug : myProducts[0]?.slug) ?? "",
+      product: myProducts[0]?.slug ?? "",
+      team: myTeams[0]?.slug ?? "",
     };
   }
 
   async function saveClaim() {
-    if (!claim || !claim.scope) return;
+    if (!claim || !claimReady) return;
     claiming = true;
     claimError = null;
     try {
@@ -162,10 +154,9 @@ import { csv } from "../fields";
         source_slug: claim.slug,
         external_key: claim.key,
         name: claim.name,
-        role: claim.role,
-        ...(claim.role === "knowledge"
-          ? { product_slug: claim.scope }
-          : { team_slug: claim.scope }),
+        ...(claim.product
+          ? { product_slug: claim.product }
+          : { team_slug: claim.team }),
       });
       await projects.reload();
       claim = null;
@@ -431,8 +422,8 @@ import { csv } from "../fields";
         {#each probe.groups as g (g.key)}
           {@const known = projectFor(r.slug, g.key)}
           {#if known}
-            <Chip tone={known.role === "knowledge" ? "accent" : "muted"}>
-              {g.name} · {known.role}
+            <Chip tone={known.product_id ? "accent" : "muted"}>
+              {g.name} · {known.product_slug ?? known.team_slug}
             </Chip>
           {:else}
             <Chip
@@ -491,6 +482,7 @@ import { csv } from "../fields";
     title={`register ${c.key}`}
     width="34rem"
     busy={claiming}
+    disabled={!claimReady}
     confirmLabel="register"
     confirmIcon="create"
     onConfirm={saveClaim}
@@ -503,42 +495,34 @@ import { csv } from "../fields";
         <input aria-label="name" bind:value={c.name} />
       </Field>
       <Field
-        label="role"
-        required
-        info={c.role === "tracker"
-          ? "Create and reassign target only. No wiki, repos or area rules."
-          : `Ingests into a product. Scopes wikis, repos, area rules.`}
+        label={t("product")}
+        info={`The ${t("product")} its items ingest into, which also lets it own wikis, repos and area rules. None makes it a ticket target only.`}
       >
         <Select
-          value={c.role}
-          aria-label="role"
-          options={[
-            { value: "knowledge", label: "knowledge" },
-            { value: "tracker", label: "tracker" },
-          ]}
-          onchange={(v) => setRole(v as "knowledge" | "tracker")}
+          value={c.product}
+          aria-label={t("product")}
+          options={productOptions}
+          onchange={(v) => (c.product = String(v))}
         />
       </Field>
-      <Field
-        label={c.role === "tracker" ? t("team") : t("product")}
-        required
-        info={c.role === "tracker"
-          ? `The ${t("team")} raising work items here.`
-          : `The ${t("product")} its items ingest into.`}
-      >
-        <Select
-          value={c.scope}
-          aria-label="scope"
-          options={scopeOptions}
-          onchange={(v) => (c.scope = String(v))}
-        />
-      </Field>
-      {#if !scopeOptions.length}
-        <Note tone="warn">
-          You can't curate any {c.role === "tracker"
-            ? `${t("team")}s`
-            : `${t("product")}s`} yet. Create one under Org first.
-        </Note>
+      {#if !c.product}
+        <Field
+          label={t("team")}
+          required
+          info={`The ${t("team")} whose members create work items here.`}
+        >
+          <Select
+            value={c.team}
+            aria-label={t("team")}
+            options={teamOptions}
+            onchange={(v) => (c.team = String(v))}
+          />
+        </Field>
+        {#if !teamOptions.length}
+          <Note tone="warn">
+            You can't curate any {t("team")}s yet. Create one under Org first.
+          </Note>
+        {/if}
       {/if}
     </div>
   </Modal>
