@@ -66,6 +66,18 @@
   let mine = 0;
   const top = $derived(mine === depth);
 
+  /* A click is dismissal only when the press also began on the stage. A select
+     option that hangs past the dialog's edge closes its panel on pointerdown, so
+     the release lands on the stage and the browser fires the click there. */
+  let pressedStage = false;
+  function onStageDown(e: PointerEvent) {
+    pressedStage = e.target === e.currentTarget;
+  }
+  function onStageClick(e: MouseEvent) {
+    if (pressedStage && e.target === e.currentTarget) onCancel();
+    pressedStage = false;
+  }
+
   const FOCUSABLE =
     'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
@@ -138,7 +150,12 @@
 <div class="over" use:portal>
   <Scrim onclick={onCancel} soft={!top} />
 
-  <div class="stage" role="presentation" onclick={onCancel}>
+  <div
+    class="stage"
+    role="presentation"
+    onpointerdown={onStageDown}
+    onclick={onStageClick}
+  >
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <div
       class="win"
