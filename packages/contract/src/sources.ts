@@ -9,8 +9,8 @@ export interface SourceConnectionRow {
 export interface SourceCensus {
   connections: number;
   projects: number;
-  knowledge: number;
-  trackers: number;
+  with_product: number;
+  without_product: number;
   projects_no_wiki: number;
   projects_for_customer: number;
   never_synced: number;

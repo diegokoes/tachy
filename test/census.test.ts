@@ -118,8 +118,8 @@ describe("the admin census", () => {
   describe("sources", () => {
     it("splits projects by role and finds the ones with no wiki", async () => {
       const s = await sourceCensus();
-      expect(s.knowledge).toBe(1);
-      expect(s.trackers).toBe(0);
+      expect(s.with_product).toBe(1);
+      expect(s.without_product).toBe(0);
       expect(s.projects_no_wiki).toBe(1);
       expect(s.projects_for_customer).toBe(0);
     });

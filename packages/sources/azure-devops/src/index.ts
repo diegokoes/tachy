@@ -29,6 +29,22 @@ export {
 } from "./fields";
 export type { FieldSpec, WorkItemSchema, AdoFieldType } from "./fields";
 export type { AdoClient, AdoCfg, JsonPatchOp } from "./client";
+export {
+  creatableTypes,
+  composerForm,
+  templateValues,
+  fieldPath,
+  flattenTree,
+} from "./composer";
+export {
+  createWorkItem,
+  validateWorkItem,
+  buildPatch,
+  asHtml,
+  referencedKeys,
+  rewriteAttachments,
+} from "./create";
+export type { NewWorkItem, PastedImage, CreateContext } from "./create";
 
 const RELATED_CAP = 15;
 const ARTIFACT_CAP = 10;
@@ -107,8 +123,8 @@ function redactAdoRaw(
 
 /**
  * Azure DevOps work item adapter (PAT auth, org-wide ids). base_url is
- * https://dev.azure.com/<org>; the projects to sync are the knowledge-role
- * `source_projects` registered against this connection.
+ * https://dev.azure.com/<org>; the projects to sync are the `source_projects`
+ * registered against this connection with a product.
  * Read-only: ADO comments have no private flag, so postNote is unsupported.
  */
 export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
@@ -125,7 +141,7 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
   async function syncProjects(): Promise<string[]> {
     const registered = await listSourceProjects({
       sourceSlug: cfg.slug,
-      role: "knowledge",
+      hasProduct: true,
     });
     return registered.length
       ? [...new Set(registered.map((r) => r.external_key))]

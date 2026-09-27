@@ -238,10 +238,10 @@ create index customer_units_profile_idx  on customer_units(profile_id);
 create index customer_units_aliases_idx  on customer_units using gin (aliases);
 
 -- A project as its source system knows it: an Azure DevOps project, a Freshdesk
--- group, a GitHub owner/repo. role='knowledge' binds it to a product — its items
--- ingest there, and it may own a wiki, repos and area mappings. role='tracker' is
--- a productless target we only create or reassign work items in, so team_id is
--- its sole owner for authorization.
+-- group, a GitHub owner/repo. A product binds it to knowledge: its items ingest
+-- there, and it may own a wiki, repos and area mappings. Without one it is only a
+-- place work items are created or reassigned in, and team_id alone decides who
+-- may use it. Either way its team's members see it as a ticket target.
 create table source_projects (
     id                    uuid primary key default gen_random_uuid(),
     source_connection_id  uuid not null references source_connections(id) on delete cascade,
@@ -255,7 +255,6 @@ create table source_projects (
     -- guessing at the sender's domain, which partners and freemail defeat. Null
     -- means the project serves many, and each ticket is resolved on its own.
     customer_id           uuid references customers(id) on delete set null,
-    role                  text not null check (role in ('knowledge','tracker')),
     -- [{identifier, name, type, root_path, default}] — an ADO project routinely
     -- has several wikis (one project wiki plus a code wiki per repo). Exactly one
     -- carries default:true; that is the one every tool uses with no wiki argument.
@@ -265,9 +264,6 @@ create table source_projects (
     config                jsonb not null default '{}'::jsonb,
     notes                 text,
     created_at            timestamptz not null default now(),
-    -- role and product must agree, or a 'knowledge' row with no product silently
-    -- routes every ingested item nowhere
-    check ((role = 'knowledge') = (product_id is not null)),
     unique (source_connection_id, external_key)
 );
 

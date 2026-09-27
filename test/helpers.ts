@@ -69,8 +69,8 @@ export async function resetData() {
   // delete rule. Re-seed the routing fixture rather than fight that.
   await sql`
     insert into source_projects
-        (source_connection_id, external_key, name, product_id, team_id, role)
-    select sc.id, '48000641379', 'Test Group', p.id, t.id, 'knowledge'
+        (source_connection_id, external_key, name, product_id, team_id)
+    select sc.id, '48000641379', 'Test Group', p.id, t.id
     from source_connections sc
     join products p on p.slug = 'tpd'
     join teams t on t.id = p.team_id and t.slug = 'test-team'

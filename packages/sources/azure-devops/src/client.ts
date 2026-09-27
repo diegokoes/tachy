@@ -110,6 +110,90 @@ export interface AdoWorkItemType {
   name: string;
   referenceName?: string;
   description?: string;
+  /** Hex without the '#', e.g. "CC293D". */
+  color?: string;
+  /** `id` names one of ADO's stock glyphs; `url` needs the PAT to load. */
+  icon?: { id?: string; url?: string };
+  isDisabled?: boolean;
+}
+
+export interface AdoTypeCategory {
+  name?: string;
+  referenceName?: string;
+  workItemTypes?: { name: string }[];
+}
+
+export interface AdoTeamRef {
+  id: string;
+  name: string;
+}
+
+export interface AdoIterationRef {
+  id?: string;
+  name?: string;
+  path?: string;
+}
+
+export interface AdoTeamSettings {
+  /** The iteration a new work item gets when the team is the creator's. */
+  defaultIteration?: AdoIterationRef;
+  /** e.g. "@currentIteration": when set it wins over `defaultIteration`. */
+  defaultIterationMacro?: string;
+  backlogIteration?: AdoIterationRef;
+}
+
+export interface AdoTeamIteration {
+  id: string;
+  name: string;
+  path?: string;
+  attributes?: {
+    startDate?: string | null;
+    finishDate?: string | null;
+    timeFrame?: "past" | "current" | "future";
+  };
+}
+
+export interface AdoTeamFieldValues {
+  /** The team's default area path. */
+  defaultValue?: string;
+  field?: { referenceName?: string };
+  values?: { value: string; includeChildren?: boolean }[];
+}
+
+export interface AdoClassificationNode {
+  name: string;
+  path?: string;
+  structureType?: "area" | "iteration";
+  hasChildren?: boolean;
+  children?: AdoClassificationNode[];
+  attributes?: Record<string, unknown>;
+}
+
+export interface AdoTemplateRef {
+  id: string;
+  name: string;
+  description?: string;
+  workItemTypeName?: string;
+}
+
+export interface AdoTemplate extends AdoTemplateRef {
+  fields?: Record<string, unknown>;
+}
+
+export interface AdoTeamMember {
+  isTeamAdmin?: boolean;
+  identity?: {
+    id?: string;
+    displayName?: string;
+    uniqueName?: string;
+    isContainer?: boolean;
+    inactive?: boolean;
+  };
+}
+
+export interface AdoAttachmentRef {
+  id: string;
+  url: string;
 }
 
 /** One field as `workitemtypes/{type}/fields?$expand=all` returns it. */
@@ -179,11 +263,49 @@ export interface AdoClient {
    * deserves is only knowable by joining these two on referenceName.
    */
   listFields(): Promise<AdoField[]>;
+  /**
+   * `validateOnly` runs the type's rules without saving, which is the only way
+   * to learn about requirements that depend on other fields' values.
+   */
   createWorkItem(
     project: string,
     type: string,
     patch: JsonPatchOp[],
+    opts?: { validateOnly?: boolean },
   ): Promise<AdoWorkItem>;
+  listTypeCategories(project: string): Promise<AdoTypeCategory[]>;
+  getProject(project: string): Promise<{
+    id: string;
+    name: string;
+    defaultTeam?: AdoTeamRef;
+  }>;
+  getTeamSettings(project: string, team: string): Promise<AdoTeamSettings>;
+  listTeamIterations(
+    project: string,
+    team: string,
+    timeframe?: "current",
+  ): Promise<AdoTeamIteration[]>;
+  getTeamFieldValues(
+    project: string,
+    team: string,
+  ): Promise<AdoTeamFieldValues>;
+  getClassificationTree(
+    project: string,
+    group: "Areas" | "Iterations",
+    depth: number,
+  ): Promise<AdoClassificationNode>;
+  listTemplates(
+    project: string,
+    team: string,
+    type?: string,
+  ): Promise<AdoTemplateRef[]>;
+  getTemplate(project: string, team: string, id: string): Promise<AdoTemplate>;
+  listTeamMembers(project: string, team: string): Promise<AdoTeamMember[]>;
+  uploadAttachment(
+    project: string,
+    fileName: string,
+    bytes: Uint8Array,
+  ): Promise<AdoAttachmentRef>;
   listWikis(project?: string): Promise<AdoWiki[]>;
   listWikiPages(project: string, wiki: string): Promise<string[]>;
   getWikiPage(
@@ -244,6 +366,8 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
   }
 
   const proj = (project: string) => `/${encodeURIComponent(project)}`;
+  const teamIn = (project: string, team: string) =>
+    `${proj(project)}/${encodeURIComponent(team)}`;
 
   return {
     orgUrl,
@@ -363,13 +487,82 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
       return res.value ?? [];
     },
 
-    async createWorkItem(project, type, patch) {
+    async createWorkItem(project, type, patch, opts) {
       return req<AdoWorkItem>(
-        `${proj(project)}/_apis/wit/workitems/$${encodeURIComponent(type)}`,
+        `${proj(project)}/_apis/wit/workitems/$${encodeURIComponent(type)}${opts?.validateOnly ? "?validateOnly=true" : ""}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json-patch+json" },
           body: JSON.stringify(patch),
+        },
+      );
+    },
+
+    async listTypeCategories(project) {
+      const res = await req<AdoList<AdoTypeCategory>>(
+        `${proj(project)}/_apis/wit/workitemtypecategories`,
+      );
+      return res.value ?? [];
+    },
+
+    async getProject(project) {
+      return req<{ id: string; name: string; defaultTeam?: AdoTeamRef }>(
+        `/_apis/projects/${encodeURIComponent(project)}`,
+      );
+    },
+
+    async getTeamSettings(project, team) {
+      return req<AdoTeamSettings>(
+        `${teamIn(project, team)}/_apis/work/teamsettings`,
+      );
+    },
+
+    async listTeamIterations(project, team, timeframe) {
+      const res = await req<AdoList<AdoTeamIteration>>(
+        `${teamIn(project, team)}/_apis/work/teamsettings/iterations${timeframe ? `?$timeframe=${timeframe}` : ""}`,
+      );
+      return res.value ?? [];
+    },
+
+    async getTeamFieldValues(project, team) {
+      return req<AdoTeamFieldValues>(
+        `${teamIn(project, team)}/_apis/work/teamsettings/teamfieldvalues`,
+      );
+    },
+
+    async getClassificationTree(project, group, depth) {
+      return req<AdoClassificationNode>(
+        `${proj(project)}/_apis/wit/classificationnodes/${group}?$depth=${depth}`,
+      );
+    },
+
+    async listTemplates(project, team, type) {
+      const res = await req<AdoList<AdoTemplateRef>>(
+        `${teamIn(project, team)}/_apis/wit/templates${type ? `?workitemtypename=${encodeURIComponent(type)}` : ""}`,
+      );
+      return res.value ?? [];
+    },
+
+    async getTemplate(project, team, id) {
+      return req<AdoTemplate>(
+        `${teamIn(project, team)}/_apis/wit/templates/${encodeURIComponent(id)}`,
+      );
+    },
+
+    async listTeamMembers(project, team) {
+      const res = await req<AdoList<AdoTeamMember>>(
+        `/_apis/projects/${encodeURIComponent(project)}/teams/${encodeURIComponent(team)}/members?$top=500`,
+      );
+      return res.value ?? [];
+    },
+
+    async uploadAttachment(project, fileName, bytes) {
+      return req<AdoAttachmentRef>(
+        `${proj(project)}/_apis/wit/attachments?fileName=${encodeURIComponent(fileName)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: bytes,
         },
       );
     },

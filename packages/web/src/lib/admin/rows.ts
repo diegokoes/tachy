@@ -39,7 +39,6 @@ export type Connection = SourceConnectionRow & {
   /** Scope the caller's API token resolves from; null when none is set. */
   token_source?: "user" | "team" | "global" | "env" | null;
 };
-export type ProjectRole = "knowledge" | "tracker";
 export type ProjectWiki = {
   identifier: string;
   name?: string;
@@ -55,7 +54,6 @@ export type SourceProject = {
   source_type: string;
   external_key: string;
   name: string;
-  role: ProjectRole;
   product_id: string | null;
   product_slug: string | null;
   team_id: string;

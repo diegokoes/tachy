@@ -9,8 +9,8 @@ const EMPTY: Census = {
     sources: {
       connections: 0,
       projects: 0,
-      knowledge: 0,
-      trackers: 0,
+      with_product: 0,
+      without_product: 0,
       projects_no_wiki: 0,
       projects_for_customer: 0,
       by_type: {},

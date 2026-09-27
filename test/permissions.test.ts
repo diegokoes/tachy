@@ -430,7 +430,6 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     const own = await req(leadCookie, "/source-projects", "POST", {
       source_slug: "test-freshdesk",
       external_key: "LeadProj",
-      role: "knowledge",
       product_slug: "tpd",
     });
     expect(own.status).toBe(200);
@@ -445,7 +444,6 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     const crossTeam = await req(leadCookie, "/source-projects", "POST", {
       source_slug: "test-freshdesk",
       external_key: "TheirProj",
-      role: "knowledge",
       product_slug: "otherp",
     });
     expect(crossTeam.status).toBe(403);
@@ -453,14 +451,12 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     const tracker = await req(leadCookie, "/source-projects", "POST", {
       source_slug: "test-freshdesk",
       external_key: "LeadTracker",
-      role: "tracker",
       team_slug: "test-team",
     });
     expect(tracker.status).toBe(200);
     const crossTracker = await req(leadCookie, "/source-projects", "POST", {
       source_slug: "test-freshdesk",
       external_key: "TheirTracker",
-      role: "tracker",
       team_slug: "other-team",
     });
     expect(crossTracker.status).toBe(403);
@@ -481,7 +477,6 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
         await req(devCookie, "/source-projects", "POST", {
           source_slug: "test-freshdesk",
           external_key: "DevProj",
-          role: "knowledge",
           product_slug: "tpd",
         })
       ).status,

@@ -120,7 +120,7 @@ import { INFO } from "./help";
 
   async function openProject(p: SourceProject) {
     areaForm = { prefix: "", component: "" };
-    if (p.role !== "knowledge") return;
+    if (!p.product_id) return;
     try {
       areas[p.id] = await api.get<AreaRule[]>(`/source-projects/${p.id}/areas`);
       if (p.product_slug && !components[p.product_slug])
@@ -189,10 +189,6 @@ import { INFO } from "./help";
     }
   }
 
-  /* One column for both, because a project is scoped by exactly one of them:
-     a knowledge project belongs to a product, a tracker to a team. */
-  const scopeOf = (p: SourceProject) => p.product_slug ?? p.team_slug;
-
   const columns: Column<SourceProject>[] = $derived([
     {
       key: "source_slug",
@@ -220,33 +216,26 @@ import { INFO } from "./help";
       info: "How it reads in lists here.",
     },
     {
-      key: "role",
-      label: "role",
-      width: "9rem",
+      key: "product_slug",
+      label: t("product"),
+      width: "11rem",
       edit: "select",
-      required: true,
-      initial: "knowledge",
+      initial: myProducts[0]?.slug ?? "",
+      info: `Ingest target. Also scopes wiki, repos, area rules. None: a ticket target only.`,
       options: [
-        { value: "knowledge", label: "knowledge" },
-        { value: "tracker", label: "tracker" },
+        { value: "", label: "(none)" },
+        ...myProducts.map((p) => ({ value: p.slug, label: p.name })),
       ],
-      cell: roleCell,
+      cell: productCell,
+      value: (p) => p.product_slug ?? "",
     },
     {
-      key: "scope",
+      key: "team_slug",
       label: t("team"),
-      width: "12rem",
+      width: "11rem",
       edit: "select",
-      required: true,
-      info: (d) =>
-        d.role === "tracker"
-          ? `Team creating work items here. Trackers file nothing.`
-          : `Ingest target. Also scopes wiki, repos, area rules.`,
-      options: (d) =>
-        d.role === "tracker"
-          ? myTeams.map((tm) => ({ value: tm.slug, label: tm.name }))
-          : myProducts.map((p) => ({ value: p.slug, label: p.name })),
-      value: scopeOf,
+      info: `Whose members create work items here. A ${t("product")} brings its own ${t("team")}, so this only applies without one.`,
+      options: myTeams.map((tm) => ({ value: tm.slug, label: tm.name })),
     },
     {
       key: "customer_slug",
@@ -275,19 +264,18 @@ import { INFO } from "./help";
       label: "repos",
       width: "6rem",
       align: "end",
-      value: (p) => (p.role === "knowledge" ? reposOf(p).length : ""),
+      value: (p) => (p.product_id ? reposOf(p).length : ""),
     },
   ]);
 
   function payload(d: Draft) {
-    const role = String(d.role);
+    const product = d.product_slug ? String(d.product_slug) : "";
     return {
-      role,
       name: String(d.name ?? "").trim() || String(d.external_key).trim(),
       customer_slug: d.customer_slug ? String(d.customer_slug) : null,
-      ...(role === "knowledge"
-        ? { product_slug: String(d.scope) }
-        : { team_slug: String(d.scope) }),
+      ...(product
+        ? { product_slug: product }
+        : { product_slug: null, team_slug: String(d.team_slug ?? "") }),
     };
   }
 
@@ -300,7 +288,7 @@ import { INFO } from "./help";
     for (const [slug, list] of Object.entries(found))
       for (const g of list)
         if (!registered.has(`${slug} ${g.key}`)) unregistered.push(g.key);
-    const knowledge = projects.data.filter((p) => p.role === "knowledge");
+    const knowledge = projects.data.filter((p) => p.product_id);
     return {
       unregistered,
       noWiki: knowledge.filter(
@@ -325,11 +313,11 @@ import { INFO } from "./help";
   /** The project whose record dialog is open, if one is. */
   let opened = $state<SourceProject | null>(null);
 
-  /* What hangs off a knowledge project — its area rules, its product's
+  /* What hangs off a project with a product — its area rules, its product's
      components, its wikis, fetched when the dialog opens on it, and again
      when an edit changes what it hangs off. */
   const hangs = $derived(
-    opened ? `${opened.id} ${opened.role} ${opened.product_slug ?? ""}` : "",
+    opened ? `${opened.id} ${opened.product_slug ?? ""}` : "",
   );
   $effect(() => {
     if (!hangs) return;
@@ -356,16 +344,20 @@ import { INFO } from "./help";
   });
 </script>
 
-{#snippet roleCell(p: SourceProject)}
-  <Badge tone={p.role === "knowledge" ? "accent" : "muted"}>{p.role}</Badge>
+{#snippet productCell(p: SourceProject)}
+  {#if p.product_slug}
+    <Badge tone="accent">{p.product_slug}</Badge>
+  {:else}
+    <span class="dim">none</span>
+  {/if}
 {/snippet}
 
 {#snippet detail(p: SourceProject)}
   {#if error}<Note tone="danger">{error}</Note>{/if}
-  {#if p.role === "tracker"}
+  {#if !p.product_id}
     <p class="dim">
-      A tracker. Nothing is filed under it. Give it a {t("product")} to make it
-      a knowledge project.
+      A ticket target only. Nothing is filed under it. Give it a {t("product")}
+      to ingest its items and attach wikis, repos and area rules.
     </p>
   {:else}
     <div class="detail">
