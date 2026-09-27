@@ -45,7 +45,7 @@ const MESSAGES: Record<string, Message> = {
     tone: "warn",
     section: "projects",
     head: (n) =>
-      `${plural(n, "knowledge project", "knowledge projects")} without a wiki`,
+      `${plural(n, "project", "projects")} with a product but no wiki`,
     item: (l) => `${l} has no wiki`,
   },
   "repos.failing": {

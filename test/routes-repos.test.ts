@@ -147,7 +147,6 @@ describe("PUT /api/repos/bulk", () => {
     const project = await addSourceProject({
       sourceSlug: "test-freshdesk",
       externalKey: "bulk-proj",
-      role: "knowledge",
       productSlug: "tpd",
     });
 
@@ -185,7 +184,6 @@ describe("PUT /api/repos/bulk", () => {
     const project = await addSourceProject({
       sourceSlug: "test-freshdesk",
       externalKey: "bulk-empty",
-      role: "knowledge",
       productSlug: "tpd",
     });
     const res = await app.request("/api/repos/bulk", {

@@ -4,7 +4,6 @@ import {
   getTeamIdBySlug,
   listSourceConnections,
   addSourceConnection,
-  SOURCE_PROJECT_ROLES,
   listSourceProjects,
   addSourceProject,
   setProjectAreaMap,
@@ -63,11 +62,10 @@ tool(
   "list_source_projects",
   {
     description:
-      "List the registered projects of one or all source connections. A project is the source's own grouping — an Azure DevOps project, a Freshdesk group (numeric id as text), a GitHub 'owner/repo'. role 'knowledge' means it maps to a product and can own wikis, repos and area→component rules; role 'tracker' means it is a productless target we only create or reassign work items in.",
+      "List the registered projects of one or all source connections. A project is the source's own grouping — an Azure DevOps project, a Freshdesk group (numeric id as text), a GitHub 'owner/repo'. One with a product_slug holds knowledge and can own wikis, repos and area→component rules; one without is only a place work items are created or reassigned in. Any registered project is a valid create_ado_work_item target.",
     inputSchema: {
       source_slug: z.string().optional(),
       product_slug: z.string().optional(),
-      role: z.enum(SOURCE_PROJECT_ROLES).optional(),
     },
     annotations: { readOnlyHint: true },
   },
@@ -78,7 +76,6 @@ tool(
         productId: a.product_slug
           ? await getProductIdBySlug(a.product_slug)
           : undefined,
-        role: a.role,
       }),
     ),
 );
@@ -111,12 +108,11 @@ tool(
   "add_source_project",
   {
     description:
-      "Register a source-native project. role 'knowledge' binds it to a product (product_slug required) so its items ingest there and it can own a wiki, repos and area rules. role 'tracker' is a productless create/reassign target and needs team_slug instead. For Azure DevOps external_key is the project name (a fetched item's groupKey); for Freshdesk the group_id; for GitHub 'owner/repo'. Call list_source_connections and list_products first.",
+      "Register a source-native project. product_slug binds it to a product so its items ingest there and it can own a wiki, repos and area rules. Without a product it needs team_slug, and is only a create/reassign target. Registering is never needed just to create a work item. For Azure DevOps external_key is the project name (a fetched item's groupKey); for Freshdesk the group_id; for GitHub 'owner/repo'. Call list_source_connections and list_products first.",
     inputSchema: {
       source_slug: z.string(),
       external_key: z.string(),
       name: z.string().optional(),
-      role: z.enum(SOURCE_PROJECT_ROLES),
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
       customer_slug: z
@@ -137,17 +133,15 @@ tool(
         )
         .optional()
         .describe(
-          "The project's wikis, from list_ado_wikis — an ADO project usually has several (one project wiki plus a code wiki per repo). Flag one 'default': that is the one every wiki tool uses when no wiki is named, and the first is taken if you flag none. Knowledge projects only.",
+          "The project's wikis, from list_ado_wikis — an ADO project usually has several (one project wiki plus a code wiki per repo). Flag one 'default': that is the one every wiki tool uses when no wiki is named, and the first is taken if you flag none. Needs a product_slug.",
         ),
       notes: z.string().optional(),
     },
   },
   async (a) => {
-    if (a.role === "knowledge")
+    if (a.product_slug)
       await requireCanEdit({
-        productId: a.product_slug
-          ? await getProductIdBySlug(a.product_slug)
-          : undefined,
+        productId: await getProductIdBySlug(a.product_slug),
       });
     else
       await requireCanManageTeam(
@@ -158,7 +152,6 @@ tool(
         sourceSlug: a.source_slug,
         externalKey: a.external_key,
         name: a.name,
-        role: a.role,
         productSlug: a.product_slug,
         teamSlug: a.team_slug,
         customerSlug: a.customer_slug,

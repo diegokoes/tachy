@@ -448,7 +448,6 @@ export {
 } from "./sources";
 export type { SourceConnectionInput } from "./sources";
 export {
-  SOURCE_PROJECT_ROLES,
   listSourceProjects,
   getSourceProject,
   resolveSourceProject,
@@ -468,7 +467,6 @@ export {
   matchWiki,
 } from "./sources";
 export type {
-  SourceProjectRole,
   SourceProjectInput,
   SourceProjectPatch,
   SourceProjectRow,
