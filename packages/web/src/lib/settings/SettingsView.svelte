@@ -1,51 +1,138 @@
 <script lang="ts">
+  import type { Component } from "svelte";
   import { navigate, segment } from "../router.svelte";
-  import SectionedPage, {
-    type PageSection,
-  } from "../sections/SectionedPage.svelte";
-  import { capture, rebind } from "./rebind.svelte";
-  import Account from "./Account.svelte";
+  import { session, logout } from "../session.svelte";
+  import { setSubnav, type SubnavItem } from "../subnav.svelte";
+  import { Button, tip } from "../tui";
+  import { close, rebind } from "./rebind.svelte";
+  import RebindModal from "./RebindModal.svelte";
   import Agent from "./Agent.svelte";
-  import Keys from "./Keys.svelte";
+  import Credentials from "./Credentials.svelte";
   import Appearance from "./Appearance.svelte";
   import Fonts from "./Fonts.svelte";
-  import NavKeys from "./NavKeys.svelte";
-  import SubnavKeys from "./SubnavKeys.svelte";
-  import VimKeys from "./VimKeys.svelte";
-  import FixedKeys from "./FixedKeys.svelte";
+  import Keybinds from "./Keybinds.svelte";
+  import Columns from "./Columns.svelte";
+  import Group from "./Group.svelte";
 
-  const SECTIONS: PageSection[] = [
-    { key: "account", label: "account", view: Account, eager: true },
-    { key: "agent", label: "agent", view: Agent },
-    { key: "keys", label: "keys", view: Keys },
-    { key: "appearance", label: "appearance", view: Appearance },
-    { key: "fonts", label: "fonts", view: Fonts },
-    { key: "section-keys", label: "section keys", view: NavKeys },
-    { key: "subnav-keys", label: "subnav keys", view: SubnavKeys },
-    { key: "vim", label: "vim controls", view: VimKeys },
-    { key: "reference", label: "fixed keys", view: FixedKeys },
+  type Section = { label: string; hint?: string; view: Component };
+
+  /** A tab is a pair of groups, one per column, or one view that lays itself
+   *  out. */
+  type Tab = SubnavItem &
+    ({ left: Section; right: Section } | { view: Component });
+
+  const TABS: Tab[] = [
+    {
+      key: "theme",
+      label: "theme",
+      icon: "theme",
+      left: { label: "appearance", view: Appearance },
+      right: { label: "fonts", view: Fonts },
+    },
+    {
+      key: "keybinds",
+      label: "keybinds",
+      icon: "keybinds",
+      view: Keybinds,
+    },
+    {
+      key: "agent",
+      label: "agent",
+      icon: "agent",
+      left: { label: "model", view: Agent },
+      right: { label: "keys", view: Credentials },
+    },
   ];
 
-  /** Legacy tab URLs survive in bookmarks and history; each lands on the
-   *  section that holds its content. */
+  /** Section URLs from before the tabs survive in bookmarks and history; each
+   *  lands on the tab that holds its content. */
   const MOVED: Record<string, string> = {
-    ui: "appearance",
-    theme: "appearance",
-    keybinds: "section-keys",
+    ui: "theme",
+    appearance: "theme",
+    fonts: "theme",
+    "section-keys": "keybinds",
+    "subnav-keys": "keybinds",
+    vim: "keybinds",
+    reference: "keybinds",
+    account: "agent",
+    keys: "agent",
   };
 
-  const at = $derived.by(() => {
-    const seg = segment(1);
-    if (!seg) return undefined;
-    return MOVED[seg] ?? seg;
+  const seg = $derived(segment(1));
+  const tab = $derived(
+    TABS.find((t) => t.key === (seg && (MOVED[seg] ?? seg))) ?? TABS[0],
+  );
+
+  $effect(() => {
+    if (seg && seg !== tab.key) navigate(`/settings/${tab.key}`, { replace: true });
   });
 
-  /* One listener for the whole page. The two rebind sections mount and unmount
-     with the scroll, and a listener per section would record the same press
-     into both of them. */
+  $effect(() =>
+    setSubnav({
+      items: TABS,
+      active: tab.key,
+      onpick: (k) => navigate(`/settings/${k}`),
+      actions: account,
+    }),
+  );
+
+  /* A rebind open on one tab must not outlive the reader leaving it. */
+  $effect(() => {
+    tab;
+    close();
+  });
 </script>
 
-<svelte:window onkeydown={rebind.target ? capture : undefined} />
+{#snippet account()}
+  {#if session.me}
+    <span class="who" use:tip={`signed in as ${session.me.email}`}>{session.me.email}</span>
+    <Button
+      variant="ghost"
+      square
+      icon="logout"
+      title="log out"
+      aria-label="log out"
+      onclick={logout}
+    />
+  {/if}
+{/snippet}
 
-<SectionedPage sections={SECTIONS} label="settings sections" {at}
-  onactive={(key) => navigate(`/settings/${key}`, { replace: true })} />
+{#snippet section(s: Section)}
+  {@const View = s.view}
+  <Group label={s.label} hint={s.hint}><View /></Group>
+{/snippet}
+
+<div class="tab">
+  {#if "view" in tab}
+    {@const View = tab.view}
+    <View />
+  {:else}
+    <Columns width="30rem">
+      {#snippet left()}{@render section(tab.left)}{/snippet}
+      {#snippet right()}{@render section(tab.right)}{/snippet}
+    </Columns>
+  {/if}
+</div>
+
+{#if rebind.target}
+  {#key rebind.target}<RebindModal target={rebind.target} />{/key}
+{/if}
+
+<style>
+  .tab {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--pad-4) * 1.5);
+    padding: 0 var(--view-pad-x) var(--view-pad-y);
+    min-width: 0;
+  }
+  .who {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--muted);
+  }
+</style>

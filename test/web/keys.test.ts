@@ -100,7 +100,7 @@ describe("conflicts", () => {
   });
 
   it("names the subnav slot already holding the key", () => {
-    expect(conflicts("shift+2", [], 3)).toEqual(["subnav tab 2"]);
+    expect(conflicts("shift+2", [], 3)).toEqual(["sub tab 2"]);
   });
 
   /** Rebinding a key to itself is not a conflict with itself. */
@@ -117,8 +117,15 @@ describe("conflicts", () => {
     setNavKey("chat", "shift+1");
     expect(conflicts("shift+1", NAV, 2)).toEqual([
       "section “Chat”",
-      "subnav tab 1",
+      "sub tab 1",
     ]);
+  });
+
+  it("names an action outside the tab bar holding the key", () => {
+    expect(conflicts("ctrl+.", NAV, 0)).toEqual(["feedback"]);
+    expect(
+      conflicts("ctrl+.", NAV, 0, { kind: "action", item: "feedback" }),
+    ).toEqual([]);
   });
 
   it("respects an override when deciding what collides", () => {

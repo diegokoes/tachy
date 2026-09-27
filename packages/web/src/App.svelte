@@ -22,7 +22,7 @@
     startNotifications,
   } from "./lib/notify.svelte";
   import { hints, pushScope, startKeys } from "./lib/keys.svelte";
-  import { navKey, settingsKey, feedbackKey } from "./lib/keys/bindings.svelte";
+  import { navKey, actionKey } from "./lib/keys/bindings.svelte";
   import { loadVim, vimState, scrollBindings } from "./lib/vim.svelte";
   import { subnav, topActions } from "./lib/subnav.svelte";
   import { setScrollport } from "./lib/scrollport.svelte";
@@ -217,14 +217,14 @@
   $effect(() =>
     pushScope([
       {
-        key: settingsKey(),
+        key: actionKey("settings"),
         label: "",
         hidden: true,
         inFields: true,
         run: () => openSection("settings"),
       },
       {
-        key: feedbackKey(),
+        key: actionKey("feedback"),
         label: "",
         hidden: true,
         inFields: true,
@@ -306,9 +306,8 @@
       <div class="mark"></div>
     </div>
 
-    <!-- Out of flow, so nothing about it can shift the window: settings has no
-         subnav of its own to swap tabs with, so it doesn't belong in the bar
-         that does that. -->
+    <!-- Out of flow, so nothing about it can shift the window: settings is
+         not a place work happens, so it takes no slot in the bar. -->
     <button
       class="settings-btn"
       class:on={view === "settings"}

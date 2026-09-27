@@ -11,6 +11,7 @@
     TEXT_SIZES,
   } from "../theme.svelte";
   import { Button } from "../tui";
+  import Choice from "./Choice.svelte";
   import Row from "./Row.svelte";
   import Rows from "./Rows.svelte";
 
@@ -22,56 +23,48 @@
       (c) => !(th.theme === "dark" ? DARK_HIDDEN : LIGHT_HIDDEN).has(c.hex),
     ),
   );
+
+  const MODES = [
+    { value: "dark", label: "dark" },
+    { value: "light", label: "light" },
+  ] as const;
+  const SIZES = TEXT_SIZES.map((t) => ({ value: t.scale, label: t.key }));
+  const LABELS = NAV_LABELS.map((l) => ({ value: l, label: l }));
 </script>
 
 <Rows>
   <Row label="mode">
-    <div class="pick">
-      <Button
-        variant={th.theme === "dark" ? "primary" : "default"}
-        size="sm"
-        onclick={() => setTheme("dark")}>dark</Button
-      >
-      <Button
-        variant={th.theme === "light" ? "primary" : "default"}
-        size="sm"
-        onclick={() => setTheme("light")}>light</Button
-      >
-    </div>
+    <Choice label="mode" options={MODES} value={th.theme} onpick={setTheme} />
   </Row>
 
   <!-- Three steps, not a slider. Dragging one re-laid out the whole app on
        every frame, which reads as the UI tearing rather than resizing. -->
-  <Row label="text size" hint="{Math.round(th.fontScale * 100)}% of the base size.">
-    <div class="pick">
-      {#each TEXT_SIZES as t}
-        <Button
-          variant={th.fontScale === t.scale ? "primary" : "default"}
-          size="sm"
-          onclick={() => setFontScale(t.scale)}>{t.key}</Button
-        >
-      {/each}
-    </div>
+  <Row label="text size">
+    <Choice
+      label="text size"
+      options={SIZES}
+      value={th.fontScale}
+      onpick={setFontScale}
+    />
   </Row>
 
   <Row label="nav labels">
-    <div class="pick">
-      {#each NAV_LABELS as l}
-        <Button
-          variant={th.navLabels === l ? "primary" : "default"}
-          size="sm"
-          onclick={() => setNavLabels(l)}>{l}</Button
-        >
-      {/each}
-    </div>
+    <Choice
+      label="nav labels"
+      options={LABELS}
+      value={th.navLabels}
+      onpick={setNavLabels}
+    />
   </Row>
 
   <Row label="accent">
-    <div class="swatches">
+    <div class="swatches" role="radiogroup" aria-label="accent">
       {#each accents as c}
         <button
           class="sw"
           class:on={th.accentColor.toLowerCase() === c.hex}
+          role="radio"
+          aria-checked={th.accentColor.toLowerCase() === c.hex}
           style="background: {c.hex}"
           title="{c.name} · {c.hex}"
           aria-label={c.name}
@@ -81,27 +74,31 @@
     </div>
     {#snippet actions()}
       <span class="hex">{th.accentColor}</span>
-      {#if th.accentCustomized}
-        <Button variant="ghost" size="sm" onclick={resetAccent}>reset</Button>
-      {/if}
+      <span class="slot">
+        {#if th.accentCustomized}
+          <Button
+            variant="ghost"
+            square
+            icon="reset"
+            title="reset"
+            aria-label="reset accent"
+            onclick={resetAccent}
+          />
+        {/if}
+      </span>
     {/snippet}
   </Row>
 </Rows>
 
 <style>
-  .pick {
-    display: flex;
-    gap: var(--pad-2);
-    flex-wrap: wrap;
-  }
-
   .swatches {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(1.6rem, 1fr));
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: var(--pad-1);
-    width: 100%;
   }
   .sw {
+    width: 1.6rem;
     aspect-ratio: 1;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);
@@ -118,5 +115,12 @@
     font-size: var(--fs-xs);
     color: var(--muted);
     white-space: nowrap;
+  }
+  .slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: var(--row-h);
   }
 </style>

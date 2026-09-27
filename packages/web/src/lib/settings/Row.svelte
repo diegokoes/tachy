@@ -74,12 +74,38 @@
     color: var(--muted);
   }
 
-  @media (max-width: 40rem) {
+  /* By the column's width, not the window's: in a two-column tab a wide
+     window still leaves each row too narrow for a label column. */
+  @container (max-width: 36rem) {
     .row {
-      grid-template-columns: 1fr auto;
+      grid-template-columns: 1fr auto 1fr;
+      grid-template-areas: ". k a" "v v v";
+      row-gap: var(--pad-1);
+      padding: var(--pad-3) 0;
     }
+    .k {
+      grid-area: k;
+      justify-content: center;
+      text-align: center;
+    }
+    .a {
+      grid-area: a;
+      justify-self: end;
+    }
+    /* Controls keep a form's width under their centred label; stretched to
+       the column, a font menu ran twice the length of any name in it. */
     .v {
-      grid-column: 1 / -1;
+      grid-area: v;
+      align-items: center;
+      text-align: center;
+    }
+    .v > :global(input),
+    .v > :global(.asel) {
+      width: 100%;
+      max-width: 20rem;
+    }
+    .row > span:last-child {
+      display: none;
     }
   }
 </style>
