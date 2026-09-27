@@ -1,4 +1,4 @@
-import type { AdoTypeOption, ComposerProject } from "@tachy/contract";
+import type { WorkItemTypeOption, ComposerProject } from "@tachy/contract";
 import { api } from "../api";
 
 /**
@@ -8,18 +8,18 @@ import { api } from "../api";
 export const az = $state({
   projects: null as ComposerProject[] | null,
   projectsError: null as string | null,
-  types: {} as Record<string, AdoTypeOption[] | "loading" | { error: string }>,
+  types: {} as Record<string, WorkItemTypeOption[] | "loading" | { error: string }>,
 });
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 let projectsCall: Promise<ComposerProject[]> | null = null;
-const typeCalls = new Map<string, Promise<AdoTypeOption[]>>();
+const typeCalls = new Map<string, Promise<WorkItemTypeOption[]>>();
 
 export function ensureProjects(): Promise<ComposerProject[]> {
   if (az.projects) return Promise.resolve(az.projects);
   projectsCall ??= api
-    .get<ComposerProject[]>("/az/projects")
+    .get<ComposerProject[]>("/compose/projects?source_type=azure-devops")
     .then((p) => (az.projects = p))
     .catch((e) => {
       az.projectsError = errText(e);
@@ -29,14 +29,14 @@ export function ensureProjects(): Promise<ComposerProject[]> {
   return projectsCall;
 }
 
-export function ensureTypes(projectId: string): Promise<AdoTypeOption[]> {
+export function ensureTypes(projectId: string): Promise<WorkItemTypeOption[]> {
   const known = az.types[projectId];
   if (Array.isArray(known)) return Promise.resolve(known);
   let call = typeCalls.get(projectId);
   if (!call) {
     az.types[projectId] = "loading";
     call = api
-      .get<AdoTypeOption[]>(`/az/projects/${projectId}/types`)
+      .get<WorkItemTypeOption[]>(`/compose/projects/${projectId}/types`)
       .then((t) => (az.types[projectId] = t))
       .catch((e) => {
         az.types[projectId] = { error: errText(e) };
@@ -48,7 +48,7 @@ export function ensureTypes(projectId: string): Promise<AdoTypeOption[]> {
   return call;
 }
 
-export const typesOf = (projectId: string): AdoTypeOption[] => {
+export const typesOf = (projectId: string): WorkItemTypeOption[] => {
   const t = az.types[projectId];
   return Array.isArray(t) ? t : [];
 };
