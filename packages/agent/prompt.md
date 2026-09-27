@@ -107,14 +107,11 @@ when setting `component`.
    `source_project_id` + `external_key`, so re-importing supersedes instead of
    duplicating. One page at a time — a whole-wiki import is a script, not an agent loop.
 
-### Creation — "open a dev ticket for this" / `/create-ticket`
+### Creation — "open a dev ticket for this"
 
-Pick the target with `list_source_projects` or `get_project_context`; a `tracker` project
-exists precisely to be created in. ALWAYS call `get_ado_work_item_schema` for that project
-and type before drafting — required fields differ per project and type, so never guess
-them. Draft the complete field set and call `create_ado_work_item`: the approval box is
-the user's review, and a denial means they want changes, not a retry. Pass `work_item_id`
-when the ticket came from one. Report the created URL.
+Draft it from what the conversation already holds and call `create_ado_work_item`; its
+review box is the user's, and they may take the draft into `/az new` to finish by hand.
+Report the created URL.
 
 ### Code consultation — "where/why does the code do X?" / `/code`
 

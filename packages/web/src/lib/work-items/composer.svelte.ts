@@ -10,6 +10,7 @@ import type {
   TicketValidation,
 } from "@tachy/contract";
 import { api, ApiError } from "../api";
+import { ensureProjects, ensureTypes } from "./az.svelte";
 import { onUnauthorized } from "../session.svelte";
 import { isBody, isEmpty, TAGS, TITLE } from "./layout";
 import { toHtml } from "./ticketMarkdown";
@@ -37,6 +38,8 @@ const blank = () => ({
   /** Values the form put there and the person has not touched since. */
   origins: {} as Record<string, PrefillOrigin>,
   context: [] as ContextItem[],
+  /** Tachy work items a draft handed over by the agent was raised from. */
+  raisedFrom: [] as string[],
 });
 
 export const composer = $state({
@@ -78,6 +81,7 @@ function persist() {
         values: composer.values,
         origins: composer.origins,
         context: composer.context,
+        raisedFrom: composer.raisedFrom,
       }),
     );
   } catch {
@@ -97,6 +101,7 @@ function restore() {
       values: d.values ?? {},
       origins: d.origins ?? {},
       context: d.context ?? [],
+      raisedFrom: d.raisedFrom ?? [],
     });
   } catch {
     /* a draft from an older shape is not worth an error */
@@ -227,9 +232,14 @@ export function draft(): TicketDraft {
     .filter(Boolean);
   const fields = fieldsOut();
   delete fields[TAGS];
-  const workItemIds = composer.context
-    .map((c) => c.work_item_id)
-    .filter((id): id is string => !!id);
+  const workItemIds = [
+    ...new Set([
+      ...composer.raisedFrom,
+      ...composer.context
+        .map((c) => c.work_item_id)
+        .filter((id): id is string => !!id),
+    ]),
+  ];
   return {
     type: composer.type!.name,
     title: composer.title.trim(),
@@ -328,4 +338,46 @@ export async function askReview() {
   } finally {
     composer.reviewing = false;
   }
+}
+
+/**
+ * The agent's create_ado_work_item call, moved into the composer for the person
+ * to finish. False when its project is not one of the caller's team's.
+ */
+export async function adoptAgentDraft(
+  input: Record<string, unknown>,
+): Promise<boolean> {
+  const str = (k: string) =>
+    typeof input[k] === "string" ? (input[k] as string) : undefined;
+  const projects = await ensureProjects();
+  const project = projects.find(
+    (p) =>
+      (str("project") &&
+        p.external_key === str("project") &&
+        (!str("source") || p.source_slug === str("source"))) ||
+      (!str("project") &&
+        str("product_slug") &&
+        p.product_slug === str("product_slug")),
+  );
+  if (!project) return false;
+  const types = await ensureTypes(project.id);
+  const type = types.find(
+    (t) => t.name.toLowerCase() === (str("type") ?? "").toLowerCase(),
+  );
+
+  discardDraft();
+  setProject(project);
+  composer.title = str("title") ?? "";
+  const fields =
+    input.fields && typeof input.fields === "object"
+      ? (input.fields as Record<string, unknown>)
+      : {};
+  for (const [ref, v] of Object.entries(fields)) composer.values[ref] = v;
+  if (str("description"))
+    composer.values["System.Description"] = str("description");
+  if (Array.isArray(input.tags)) composer.values[TAGS] = input.tags.join("; ");
+  if (str("work_item_id")) composer.raisedFrom = [str("work_item_id")!];
+  composer.open = true;
+  if (type) await setType(type);
+  return true;
 }
