@@ -28,7 +28,7 @@ services:
       retries: 20
 
   mock-llm:
-    image: node:24-slim
+    image: node:26-slim
     command: ["node", "/mock/server.mjs"]
     environment:
       MOCK_PORT: "4010"
