@@ -107,6 +107,7 @@ describe("report routes", () => {
     const filed = await (
       await as(userCookie, "/api/reports", "POST", {
         type: "feature",
+        title: "x",
         body: "x",
       })
     ).json();
