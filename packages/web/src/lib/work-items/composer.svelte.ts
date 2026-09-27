@@ -309,7 +309,7 @@ function reviewFields(): { ref: string; name: string; value: string }[] {
     )
     .map((f) => ({
       ref: f.reference_name,
-      name: f.name,
+      name: composer.form?.labels[f.reference_name] ?? f.name,
       value: String(composer.values[f.reference_name]),
     }));
 }

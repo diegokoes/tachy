@@ -111,6 +111,21 @@ import {
 /** The side of the square every mark is drawn on. */
 export const GRID = 24;
 
+/**
+ * The Markdown mark, which Lucide does not carry: an M and a down arrow in a
+ * rounded frame, drawn on the same grid and strokes so it morphs like the rest.
+ */
+const MarkdownMark: LucideIconData = {
+  name: "markdown",
+  size: 24,
+  node: [
+    ["rect", { x: "2", y: "5", width: "20", height: "14", rx: "2", key: "f" }],
+    ["path", { d: "M6 15V9l3 3 3-3v6", key: "m" }],
+    ["path", { d: "M17.5 9v6", key: "s" }],
+    ["path", { d: "m15 12.5 2.5 2.5 2.5-2.5", key: "a" }],
+  ],
+};
+
 export const ICONS = {
   /* ── Leaving: grey, nothing is lost ───────────────────────────────────── */
   close: X,
@@ -223,6 +238,8 @@ export const ICONS = {
   /* ── Work items ───────────────────────────────────────────────────────── */
   /** Ask tachy to review a draft someone wrote. */
   review: PencilSparkles,
+  /** A field written as markdown; morphs into `eye` for its preview. */
+  markdown: MarkdownMark,
   /** ADO's stock type glyphs, by the meaning each carries there. */
   wiTask: ClipboardList,
   wiStory: BookText,
