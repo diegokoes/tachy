@@ -28,8 +28,23 @@ const MARGIN = 8;
 /** Below this a flipped popup is no better than a cropped one. */
 const FLOOR = 96;
 
+/**
+ * The nearest ancestor that masks its content. Fixed positioning escapes
+ * overflow, but not a mask: the app window is drawn with one, and a popup
+ * placed past its edge by viewport arithmetic alone was cut in half.
+ */
+function maskingAncestor(node: HTMLElement): HTMLElement | null {
+  for (let el = node.parentElement; el; el = el.parentElement) {
+    const cs = getComputedStyle(el);
+    const mask = cs.maskImage || cs.getPropertyValue("-webkit-mask-image");
+    if (mask && mask !== "none") return el;
+  }
+  return null;
+}
+
 export function float(node: HTMLElement, options: FloatOptions) {
   let opts = options;
+  const clip = maskingAncestor(node);
 
   function place() {
     const anchor = opts.anchor;
@@ -37,8 +52,17 @@ export function float(node: HTMLElement, options: FloatOptions) {
     const a = anchor.getBoundingClientRect();
     const gap = opts.gap ?? 2;
     const placement = opts.placement ?? "below-start";
-    const vw = document.documentElement.clientWidth;
-    const vh = document.documentElement.clientHeight;
+    const c = clip?.getBoundingClientRect();
+    const top = Math.max(0, c?.top ?? 0);
+    const left = Math.max(0, c?.left ?? 0);
+    const vh = Math.min(
+      document.documentElement.clientHeight,
+      c?.bottom ?? Infinity,
+    );
+    const vw = Math.min(
+      document.documentElement.clientWidth,
+      c?.right ?? Infinity,
+    );
 
     if (opts.matchWidth) node.style.minWidth = `${a.width}px`;
 
@@ -59,7 +83,7 @@ export function float(node: HTMLElement, options: FloatOptions) {
     const wants = Math.ceil(node.getBoundingClientRect().height);
 
     const below = vh - a.bottom - gap - MARGIN;
-    const above = a.top - gap - MARGIN;
+    const above = a.top - top - gap - MARGIN;
     let up = placement.startsWith("above");
     if (up && wants > above && below > above) up = false;
     else if (!up && wants > below && above > below) up = true;
@@ -73,8 +97,8 @@ export function float(node: HTMLElement, options: FloatOptions) {
     const y = up ? a.top - gap - h : a.bottom + gap;
     const x = placement.endsWith("end") ? a.right - w : a.left;
 
-    node.style.top = `${clamp(y, MARGIN, vh - h - MARGIN)}px`;
-    node.style.left = `${clamp(x, MARGIN, vw - w - MARGIN)}px`;
+    node.style.top = `${clamp(y, top + MARGIN, vh - h - MARGIN)}px`;
+    node.style.left = `${clamp(x, left + MARGIN, vw - w - MARGIN)}px`;
   }
 
   node.style.position = "fixed";

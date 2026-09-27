@@ -162,7 +162,12 @@
       ...effective.groups.map((g, i) => ({
         key: `g${i}`,
         title: g.label ?? "header",
-        hint: i === 0 && !g.label ? "right column" : undefined,
+        hint:
+          i === 0 && !g.label
+            ? "right column"
+            : g.label === "also required"
+              ? "nothing fills them, so they stay on screen whatever is set"
+              : undefined,
         fields: g.fields,
       })),
       { key: "folded", title: "folded away", hint: "under “more fields”", fields: effective.hidden },
@@ -191,11 +196,34 @@
     setTc({ ...tc, order });
   }
 
-  const SHOW = [
-    { value: "", label: "as the source's form" },
-    { value: "form", label: "on the form" },
-    { value: "fold", label: "folded away" },
-    { value: "hidden", label: "left out" },
+  const SOURCE_NAMES: Record<string, string> = {
+    "azure-devops": "ADO",
+    github: "GitHub",
+    freshdesk: "Freshdesk",
+  };
+  const sourceName = $derived(
+    project ? (SOURCE_NAMES[project.source_type] ?? project.source_type) : "",
+  );
+
+  /** What the source's own form does with each field, before any config. */
+  const sourceShows = $derived.by(() => {
+    if (!raw) return new Set<string>();
+    const a = arrange(raw);
+    return new Set(
+      [...a.body, ...a.groups.flatMap((g) => g.fields)].map((f) => f.reference_name),
+    );
+  });
+
+  /* The first choice names what "no choice" means for this field, which is
+     what the source does with it; the rest are the team overriding that. */
+  const showOptions = (ref: string) => [
+    {
+      value: "",
+      label: `like ${sourceName} · ${sourceShows.has(ref) ? "shown" : "hidden"}`,
+    },
+    { value: "form", label: "always show" },
+    { value: "fold", label: "fold away", hint: "under more fields" },
+    { value: "hidden", label: "leave out", hint: "default still sent" },
   ];
 
   const isPerson = (f: FieldSpec) => !!f.is_identity || f.type === "identity";
@@ -203,11 +231,12 @@
   function personOptions(current: string) {
     const people = (raw?.people ?? []).map((p) => ({
       value: p.unique_name,
-      label: `${p.name}  ${p.unique_name}`,
+      label: p.name,
+      hint: p.unique_name,
     }));
     return [
       { value: "", label: "(no default)" },
-      { value: ME, label: "@me · whoever creates it" },
+      { value: ME, label: "me", hint: "whoever creates it" },
       ...(current && current !== ME && !people.some((p) => p.value === current)
         ? [{ value: current, label: current }]
         : []),
@@ -325,7 +354,7 @@
         <div class="table" role="table" aria-label={`${type} fields`}>
           <div class="row headrow" role="row">
             <span role="columnheader">field</span>
-            <span role="columnheader">shown</span>
+            <span role="columnheader">where it shows</span>
             <span role="columnheader">starts as</span>
             <span role="columnheader"><span class="sr">order</span></span>
           </div>
@@ -346,7 +375,7 @@
                   <span role="cell">
                     <Select
                       value={fc?.show ?? ""}
-                      options={SHOW}
+                      options={showOptions(f.reference_name)}
                       aria-label={`Where ${labelOf(raw, f)} shows`}
                       onchange={(v) => setField(f.reference_name, { show: (v || undefined) as FieldFormConfig["show"] })}
                     />
@@ -354,13 +383,23 @@
                   <span class="def" role="cell">
                     {#if isPerson(f)}
                       {@const cur = defaultOf(f.reference_name)}
-                      <Select
-                        value={cur}
-                        options={personOptions(cur)}
-                        searchable
-                        aria-label={`Default for ${labelOf(raw, f)}`}
-                        onchange={(v) => setDefault(f.reference_name, v)}
-                      />
+                      <span class="person">
+                        <Select
+                          value={cur}
+                          options={personOptions(cur)}
+                          searchable
+                          aria-label={`Default for ${labelOf(raw, f)}`}
+                          onchange={(v) => setDefault(f.reference_name, v)}
+                        />
+                        <button
+                          class="me"
+                          class:on={cur === ME}
+                          aria-pressed={cur === ME}
+                          title="whoever creates the ticket, each person themselves"
+                          onclick={() => setDefault(f.reference_name, cur === ME ? null : ME)}
+                          >me</button
+                        >
+                      </span>
                     {:else}
                       <FieldInput
                         id={`def-${f.reference_name}`}
@@ -562,7 +601,7 @@
   }
   .row {
     display: grid;
-    grid-template-columns: minmax(12rem, 1.3fr) minmax(9rem, 0.8fr) minmax(12rem, 1.4fr) 3.5rem;
+    grid-template-columns: minmax(12rem, 1.3fr) minmax(11rem, 0.9fr) minmax(12rem, 1.4fr) 3.5rem;
     align-items: center;
     gap: var(--pad-2);
     padding: 0.2rem 0;
@@ -601,6 +640,36 @@
   }
   .src {
     font-size: var(--fs-xs);
+  }
+  .person {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-1);
+  }
+  .person > :global(:first-child) {
+    flex: 1;
+    min-width: 0;
+  }
+  .me {
+    flex: none;
+    padding: 0.1rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-chip);
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: var(--fs-sm);
+    cursor: pointer;
+  }
+  .me:hover,
+  .me:focus-visible {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .me.on {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+    color: var(--text);
   }
   .order {
     display: inline-flex;
