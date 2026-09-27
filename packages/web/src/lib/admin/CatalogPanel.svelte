@@ -1,10 +1,24 @@
 <script lang="ts">
+  import { onMount } from "svelte";
+  import { api } from "../api";
+  import { createResource } from "../resource.svelte";
   import { navigate } from "../router.svelte";
-  import { Bars, Columns, compact, dayOfMonth, type Bar, type Col } from "../tui";
+  import {
+    Bars,
+    Columns,
+    Icon,
+    Treemap,
+    compact,
+    dayOfMonth,
+    type Bar,
+    type Col,
+  } from "../tui";
   import { showCustomer, t } from "../terms";
   import { activity } from "./activity.svelte";
   import { census } from "./census.svelte";
-  import { grade, pct, ratio } from "./overview";
+  import { coverageTree } from "./coverage";
+  import { grade, pct, ratio, showSection } from "./overview";
+  import type { ComponentCoverage } from "./rows";
   import Dials, { type DialItem } from "./Dials.svelte";
   import Overview from "./Overview.svelte";
   import Tile from "./Tile.svelte";
@@ -46,11 +60,12 @@
       : []),
   ]);
 
-  const perProduct = $derived(
-    [...c.components_by_product]
-      .sort((a, b) => b.n - a.n)
-      .map((p): Bar => ({ key: p.slug, label: p.name, value: p.n })),
+  const coverage = createResource(
+    () => api.get<ComponentCoverage[]>("/overview/components"),
+    [],
   );
+  onMount(() => void coverage.reload());
+  const map = $derived(coverageTree(coverage.data, t("products")));
 
   /* Ordered as an entry moves through its life, not by size, so the chart
      reads the same on every deployment. */
@@ -109,8 +124,17 @@
     <Dials items={described} />
   </Tile>
 
-  <Tile title="components per {t('product')}" empty={!perProduct.length}>
-    <Bars rows={perProduct} unit="components" fit />
+  <Tile title="entries per component" empty={!coverage.data.length}>
+    <button
+      type="button"
+      class="preview"
+      aria-label="enlarge the map"
+      onclick={() => showSection("map")}
+    >
+      <span class="shapes"><Treemap root={map} bare /></span>
+      <span class="shapes edges"><Treemap root={map} bare edges /></span>
+      <span class="cue"><Icon name="enlarge" size="1.1rem" weight={8} /></span>
+    </button>
   </Tile>
 
   <Tile title="entries by status" meta={`${k.entries}`} empty={!k.entries}>
@@ -129,3 +153,79 @@
     <Bars rows={mostRead} format={compact} fit onpick={openRead} />
   </Tile>
 </Overview>
+
+<style>
+  .preview {
+    position: relative;
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    cursor: zoom-in;
+  }
+  .shapes {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    filter: blur(1.5px) saturate(0.7);
+    opacity: 0.55;
+    transition:
+      filter 0.2s ease,
+      opacity 0.2s ease;
+  }
+  .shapes.edges {
+    position: absolute;
+    inset: 0;
+    filter: none;
+    opacity: 0.7;
+  }
+  .cue {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    transition:
+      color 0.2s ease,
+      transform 0.2s ease;
+  }
+  .cue :global(.icon) {
+    color: color-mix(in srgb, var(--text) 85%, transparent);
+    padding: 0.45rem;
+    transition:
+      color 0.2s ease,
+      stroke-width 0.2s ease;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--bg) 70%, transparent);
+    box-sizing: content-box;
+  }
+  .preview:hover .shapes,
+  .preview:focus-visible .shapes {
+    filter: none;
+    opacity: 0.8;
+  }
+  .preview:hover .cue,
+  .preview:focus-visible .cue {
+    transform: scale(1.7);
+  }
+  .preview:hover .cue :global(.icon),
+  .preview:focus-visible .cue :global(.icon) {
+    color: var(--text);
+    stroke-width: 2.75;
+  }
+  .preview:focus-visible {
+    outline: 1px solid var(--text);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .shapes,
+    .cue,
+    .cue :global(.icon) {
+      transition: none;
+    }
+  }
+</style>

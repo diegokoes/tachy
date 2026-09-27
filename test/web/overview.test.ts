@@ -17,6 +17,12 @@ import {
   span,
 } from "../../packages/web/src/lib/admin/overview";
 import {
+  OWN,
+  coverageTree,
+  trailTo,
+} from "../../packages/web/src/lib/admin/coverage";
+import type { ComponentCoverage } from "../../packages/web/src/lib/admin/rows";
+import {
   endpointP95,
   loadSummary,
   runP95,
@@ -279,5 +285,81 @@ describe("load runs", () => {
       { script: "smoke.js", runs: 2, passed: 2, stress: 0 },
       { script: "browse.js", runs: 1, passed: 1, stress: 0 },
     ]);
+  });
+});
+
+describe("coverage map", () => {
+  const comp = (
+    id: string,
+    product: string,
+    slug: string,
+    parent_id: string | null,
+    searchable: number,
+    entries = searchable,
+  ): ComponentCoverage => ({
+    id,
+    parent_id,
+    slug,
+    name: slug,
+    product_slug: product,
+    product_name: product.toUpperCase(),
+    entries,
+    searchable,
+  });
+
+  const rows = [
+    comp("a", "tpd", "printer", null, 4, 10),
+    comp("b", "tpd", "label", "a", 2, 3),
+    comp("c", "tpd", "scanner", "a", 0),
+    comp("d", "ink", "printer", null, 7, 9),
+  ];
+  const keys = (bs: { key: string }[] | undefined) => bs?.map((b) => b.key);
+
+  it("gives every component one leaf, a parent's own entries included", () => {
+    const root = coverageTree(rows, "all");
+    expect(keys(root.children)).toEqual(["tpd", "ink"]);
+    expect(root.value).toBe(13);
+
+    const printer = root.children![0].children![0];
+    expect(printer).toMatchObject({
+      key: "tpd/printer",
+      value: 6,
+      title: "TPD › printer: 6 searchable of 13 entries across 3 components",
+    });
+    expect(printer.children?.map((c) => [c.key, c.value])).toEqual([
+      [`tpd/printer/${OWN}`, 4],
+      ["tpd/label", 2],
+      ["tpd/scanner", 0],
+    ]);
+    expect(printer.children![0].title).toBe(
+      "TPD › printer itself: 4 searchable of 10 entries",
+    );
+  });
+
+  it("keys a shared slug apart by its product", () => {
+    const root = coverageTree(rows, "all");
+    expect(keys(root.children![1].children)).toEqual(["ink/printer"]);
+  });
+
+  it("files a component whose parent it was not sent under its product", () => {
+    const root = coverageTree([comp("x", "tpd", "orphan", "gone", 1)], "all");
+    expect(keys(root.children![0].children)).toEqual(["tpd/orphan"]);
+  });
+
+  it("zooms only into groups, and lands a stale key on the root", () => {
+    const root = coverageTree(rows, "all");
+    expect(keys(trailTo(root, "tpd/printer"))).toEqual([
+      "",
+      "tpd",
+      "tpd/printer",
+    ]);
+    expect(keys(trailTo(root, "tpd/label"))).toEqual([
+      "",
+      "tpd",
+      "tpd/printer",
+    ]);
+    expect(keys(trailTo(root, "ink/printer"))).toEqual(["", "ink"]);
+    expect(keys(trailTo(root, "nowhere"))).toEqual([""]);
+    expect(keys(trailTo(coverageTree([], "all"), ""))).toEqual([""]);
   });
 });

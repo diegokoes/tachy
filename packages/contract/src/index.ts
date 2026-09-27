@@ -120,7 +120,7 @@ export type {
   SourceTraffic,
 } from "./sources";
 export type { AgentUsage, ToolUsage } from "./analytics";
-export type { KnowledgeCensus } from "./knowledge";
+export type { ComponentKnowledge, KnowledgeCensus } from "./knowledge";
 export type {
   ReportInput,
   ReportReview,

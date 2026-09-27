@@ -54,3 +54,19 @@ export type Day = {
   value: number;
   title?: string;
 };
+
+/**
+ * A block of a treemap, and the blocks nested in it. A leaf's area is its
+ * `size`, one unless given, so a group's area counts the leaves under it.
+ */
+export type Block = {
+  /** Unique across the whole tree, not only among siblings. */
+  key: string;
+  label: string;
+  /** A leaf's heat; a group's figure, printed in its header. */
+  value: number;
+  size?: number;
+  /** Spelled out on hover. */
+  title?: string;
+  children?: Block[];
+};

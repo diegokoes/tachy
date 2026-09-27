@@ -7,6 +7,7 @@ import {
   addTeam,
   catalogCensus,
   createUser,
+  knowledgeByComponent,
   knowledgeCensus,
   linkRepo,
   saveKnowledgeEntry,
@@ -261,6 +262,29 @@ describe("the admin census", () => {
       const k = await knowledgeCensus();
       expect(k.entries).toBe(1);
       expect(k.entries_no_component).toBe(0);
+    });
+
+    it("counts each component's entries, and the ones search returns", async () => {
+      const tpd = await tpdProductId();
+      await addComponent({ productId: tpd, slug: "export", name: "Export" });
+      await addComponent({ productId: tpd, slug: "import", name: "Import" });
+      for (const status of ["approved", "deprecated", "draft", "rejected"])
+        await saveKnowledgeEntry({
+          status,
+          productId: tpd,
+          component: "export",
+          issueSummary: `An export lesson, ${status}`,
+        });
+      await saveKnowledgeEntry({
+        status: "approved",
+        productId: tpd,
+        issueSummary: "A lesson about the product as a whole",
+      });
+
+      /* Only the component with something filed has a row. */
+      expect(await knowledgeByComponent()).toEqual([
+        { component_id: expect.any(String), entries: 4, searchable: 2 },
+      ]);
     });
   });
 

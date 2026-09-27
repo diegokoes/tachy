@@ -24,6 +24,7 @@ export { default as Bars } from "./Bars.svelte";
 export { default as Band } from "./Band.svelte";
 export { default as Cells } from "./Cells.svelte";
 export { default as Timeline, type Lane } from "./Timeline.svelte";
+export { default as Treemap } from "./Treemap.svelte";
 export { default as HintRule } from "./HintRule.svelte";
 export { default as Icon } from "./Icon.svelte";
 export { default as Chevron } from "./Chevron.svelte";
@@ -45,8 +46,15 @@ export { default as Select } from "../AsciiSelect.svelte";
 export { default as Spinner } from "../Spinner.svelte";
 export { default as Scrollbar } from "../Scrollbar.svelte";
 
-export type { Bar, Cell, Col, Day, Part, Segment } from "./marks";
-export { heatFill, stackParts, toneMix, toneVar, type Stacked } from "./scale";
+export type { Bar, Block, Cell, Col, Day, Part, Segment } from "./marks";
+export {
+  heatFill,
+  hottest,
+  stackParts,
+  toneMix,
+  toneVar,
+  type Stacked,
+} from "./scale";
 export { G, RAMP } from "./glyphs";
 export { compact, usd, dayOfMonth } from "./figures";
 export { toneOf, isActive, type Tone } from "./tone";

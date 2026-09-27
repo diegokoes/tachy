@@ -400,6 +400,44 @@ describe("customer component links", () => {
   });
 });
 
+describe("overview components", () => {
+  it("lays each component's entries over the tree", async () => {
+    const productId = await tpdProductId();
+    await addComponent({ productId, slug: "engine", name: "Engine" });
+    await addComponent({
+      productId,
+      slug: "engine-timer",
+      name: "Timer",
+      parentSlug: "engine",
+    });
+    await saveKnowledgeEntry({
+      status: "approved",
+      productId,
+      component: "engine-timer",
+      issueSummary: "The timer drifts after a DST change",
+    });
+
+    const res = await get("/api/overview/components");
+    expect(res.status).toBe(200);
+    const rows = await res.json();
+    const engine = rows.find((r: { slug: string }) => r.slug === "engine");
+    expect(
+      rows.find((r: { slug: string }) => r.slug === "engine-timer"),
+    ).toMatchObject({
+      parent_id: engine.id,
+      product_slug: "tpd",
+      entries: 1,
+      searchable: 1,
+    });
+    expect(engine).toMatchObject({
+      parent_id: null,
+      entries: 0,
+      searchable: 0,
+    });
+    expect(engine).not.toHaveProperty("description");
+  });
+});
+
 describe("overview issues", () => {
   it("names what is unfinished in the catalog", async () => {
     const productId = await tpdProductId();

@@ -48,7 +48,7 @@
 
 <script lang="ts">
   import { setContext, type Snippet } from "svelte";
-  import { measureBox } from "./fit";
+  import { measureBox, typeSize } from "./fit";
   import { gutterPx, niceDomain, tickCount, tickValues, TICK_LEN } from "./scale";
 
   let {
@@ -79,24 +79,14 @@
   let h = $state(0);
 
   /**
-   * The px value of --fs-xs.
-   *
-   * Custom properties are not resolved by the cascade, so the token comes back
-   * as the string it was authored in ("0.72rem") and has to be multiplied by
-   * the root size by hand. Keyed on the measured box, which is not as indirect
-   * as it looks: the root size is itself a `clamp()` on vw, and the font-scale
-   * setting rewrites it, so anything that changes it reflows this box too.
+   * Keyed on the measured box, which is not as indirect as it looks: the root
+   * size is itself a `clamp()` on vw, and the font-scale setting rewrites it,
+   * so anything that changes it reflows this box too.
    */
   const type = $derived.by(() => {
     void w;
     void h;
-    if (typeof window === "undefined") return { fs: 12, rem: 16 };
-    const root = getComputedStyle(document.documentElement);
-    const rem = parseFloat(root.fontSize) || 16;
-    const token = root.getPropertyValue("--fs-xs").trim();
-    const n = parseFloat(token);
-    if (!Number.isFinite(n)) return { fs: rem * 0.72, rem };
-    return { fs: token.endsWith("px") ? n : n * rem, rem };
+    return typeSize();
   });
   const fs = $derived(type.fs);
 

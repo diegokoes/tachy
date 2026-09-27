@@ -23,6 +23,7 @@
   import TeamsPanel from "./TeamsPanel.svelte";
   import ProductsPanel from "./ProductsPanel.svelte";
   import ComponentsPanel from "./ComponentsPanel.svelte";
+  import CoverageMap from "./CoverageMap.svelte";
   import LabelsPanel from "./LabelsPanel.svelte";
   import PatternsPanel from "./PatternsPanel.svelte";
   import CustomersPanel from "./CustomersPanel.svelte";
@@ -82,6 +83,7 @@
       { key: "teams", label: t("teams"), view: TeamsPanel, n: "teams", present: "modal" },
       { key: "products", label: t("products"), view: ProductsPanel, n: "products", present: "modal" },
       { key: "components", label: "components", view: ComponentsPanel, n: "components", fill: true },
+      { key: "map", label: "entries per component", view: CoverageMap, fill: true },
       { key: "labels", label: "labels", view: LabelsPanel, n: "labels", present: "modal" },
       { key: "patterns", label: "resolution patterns", view: PatternsPanel, n: "patterns", present: "modal" },
       { key: "customers", label: t("customers"), view: CustomersPanel, n: "customers", show: showCustomer() },
