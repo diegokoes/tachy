@@ -1,4 +1,4 @@
-FROM node:24.21.0-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553 AS base
+FROM node:26.10.0-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 AS base
 
 # postgresql-client-16: needed by `npm run sync backup`/`restore`
 # (pg_dump/pg_restore). Debian bookworm's own repo only has client v15, and
@@ -20,10 +20,10 @@ WORKDIR /app
 RUN npm i -g npm@12.0.2
 
 # k6, for the load runs an admin starts from the tests page (§11.3).
-FROM grafana/k6:2.2.0 AS k6
+FROM grafana/k6:2.3.0 AS k6
 
 # The schema diff tool tachy-deploy runs from the new image (§5.10).
-FROM golang:1.25 AS schema-diff
+FROM golang:1.27 AS schema-diff
 RUN CGO_ENABLED=0 go install github.com/stripe/pg-schema-diff/cmd/pg-schema-diff@v1.0.9
 
 # Build stage: devDependencies, the model download, the SPA and the bundles.
