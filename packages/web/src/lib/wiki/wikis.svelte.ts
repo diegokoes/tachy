@@ -1,6 +1,7 @@
 import { api } from "../api";
 import type { WikiListRow } from "../types";
-import { ORG_WIDE, scopeOf } from "./paths";
+import { setLanding } from "../router.svelte";
+import { ORG_WIDE, scopeOf, wikiPath } from "./paths";
 
 /**
  * Every wiki, for the switcher. Shared by the section and whichever page is
@@ -46,6 +47,8 @@ export function landingScope(): string {
   const fullest = [...wikis.rows].sort((a, b) => b.articles - a.articles)[0];
   return fullest?.articles ? scopeOf(fullest) : ORG_WIDE;
 }
+
+setLanding("wiki", () => (wikis.loaded ? wikiPath(landingScope()) : "/wiki"));
 
 export interface ArticleSeed {
   title?: string;

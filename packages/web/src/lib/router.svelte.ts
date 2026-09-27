@@ -48,12 +48,26 @@ export function navigate(to: string, { replace = false } = {}) {
   visit(path);
 }
 
+const landings = new Map<string, () => string>();
+
+/**
+ * Where a section's landing really is, for one whose bare path only redirects
+ * onward. Going straight there keeps the address bar from passing through it.
+ */
+export function setLanding(key: string, to: () => string) {
+  landings.set(key, to);
+}
+
+const landing = (key: string) => landings.get(key)?.() ?? `/${key}`;
+
 /**
  * Opens a section where it was left. Picking the section already open goes to
  * its landing instead, which is the way back to the top of one.
  */
 export function openSection(key: string) {
-  navigate(segments()[0] === key ? `/${key}` : (lastIn.get(key) ?? `/${key}`));
+  navigate(
+    segments()[0] === key ? landing(key) : (lastIn.get(key) ?? landing(key)),
+  );
 }
 
 export function isActive(prefix: string): boolean {
