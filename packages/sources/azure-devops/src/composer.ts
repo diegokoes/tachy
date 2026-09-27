@@ -1,5 +1,5 @@
 import type {
-  AdoTypeOption,
+  WorkItemTypeOption,
   ComposerForm,
   ComposerLayout,
   FieldSpec,
@@ -17,7 +17,7 @@ import type {
 } from "./client";
 import { workItemSchema } from "./fields";
 
-export type { AdoTypeOption, ComposerForm };
+export type { WorkItemTypeOption, ComposerForm };
 
 /** ADO keeps these out of its own "New work item" menu. */
 const HIDDEN_CATEGORY = "Microsoft.HiddenCategory";
@@ -37,7 +37,7 @@ const ITERATION = "System.IterationPath";
 export async function creatableTypes(
   client: AdoClient,
   project: string,
-): Promise<AdoTypeOption[]> {
+): Promise<WorkItemTypeOption[]> {
   const [types, categories] = await Promise.all([
     client.listWorkItemTypes(project),
     client.listTypeCategories(project).catch(() => []),
