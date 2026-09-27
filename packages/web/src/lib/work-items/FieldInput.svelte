@@ -63,18 +63,29 @@
 
   const current = $derived(value == null ? "" : String(value));
 
+  type Opt = { value: string; label: string; hint?: string };
+
   /** A prefilled or templated value the lists do not carry still has to show. */
-  const withCurrent = (opts: { value: string; label: string }[]) =>
+  const withCurrent = (opts: Opt[]): Opt[] =>
     current && !opts.some((o) => o.value === current)
       ? [{ value: current, label: current }, ...opts]
       : opts;
+
+  /** Every path starts with the project; saying it on each row is noise. */
+  const shortPath = (path: string) =>
+    path === form.project
+      ? `${form.project} (root)`
+      : path.startsWith(`${form.project}\\`)
+        ? path.slice(form.project.length + 1)
+        : path;
 
   const pathOptions = $derived(
     withCurrent(
       (spec.reference_name === ITERATION ? form.iterations : form.areas).map(
         (p) => ({
           value: p.path,
-          label: `${p.path}${p.current ? "  · current" : p.team ? "  · team" : ""}`,
+          label: shortPath(p.path),
+          hint: p.current ? "current" : p.team ? "team" : undefined,
         }),
       ),
     ),
@@ -89,7 +100,8 @@
     ...withCurrent(
       form.people.map((p) => ({
         value: p.unique_name,
-        label: isMe(p.unique_name) ? `me · ${p.name}` : `${p.name}  ${p.unique_name}`,
+        label: isMe(p.unique_name) ? `me · ${p.name}` : p.name,
+        hint: p.unique_name,
       })),
     ),
     { value: OTHER, label: "someone else: type their email…" },

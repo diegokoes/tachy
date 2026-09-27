@@ -3,7 +3,8 @@
   import { float } from "./tui/float";
 
   type Val = string | number;
-  type Opt = { value: Val; label: string; disabled?: boolean };
+  /** `hint` is said quietly after the label, and searched with it. */
+  type Opt = { value: Val; label: string; hint?: string; disabled?: boolean };
   type OptIn = Opt | string | number;
 
   let {
@@ -85,7 +86,9 @@
   const shown = $derived.by(() => {
     const q = query.trim().toLowerCase();
     if (!q) return opts;
-    return opts.filter((o) => o.label.toLowerCase().includes(q));
+    return opts.filter((o) =>
+      `${o.label} ${o.hint ?? ""}`.toLowerCase().includes(q),
+    );
   });
 
   const canClear = $derived(clearable ?? opts.some((o) => o.value === ""));
@@ -264,6 +267,7 @@
                   >{o.value === value ? "›" : " "}</span
                 >
                 <span class="txt">{o.label}</span>
+                {#if o.hint}<span class="hint">{o.hint}</span>{/if}
               </div>
             {/each}
             {#if !shown.length}
@@ -385,6 +389,23 @@
     white-space: nowrap;
     cursor: pointer;
     color: var(--text);
+  }
+  /* The label keeps its room; the hint gives way first. */
+  .opt .txt {
+    flex: none;
+    max-width: 70%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .opt .hint {
+    flex: 0 10 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: auto;
+    padding-left: var(--pad-3);
+    font-size: var(--fs-xs);
+    color: var(--muted);
   }
   .opt .mark {
     flex: none;
