@@ -113,23 +113,35 @@ export function decode(node: HTMLElement, text: string) {
   return { update: run, destroy: () => gsap.killTweensOf(state) };
 }
 
-/** Reads --accent live, so the pulse follows the accent picker. */
+/**
+ * Reads --accent live, so the pulse follows the accent picker.
+ *
+ * The shadow's alpha falls with its blur. A drop-shadow at 0px blur and full
+ * alpha is a hard silhouette of the node, so tweening only the blur flashed a
+ * sharp copy at the bottom of every cycle.
+ */
 export function glow(node: Element) {
   if (reducedMotion()) return null;
   const accent = getComputedStyle(document.documentElement)
     .getPropertyValue("--accent")
     .trim();
-  return gsap.fromTo(
-    node,
-    { filter: `drop-shadow(0 0 0px ${accent})` },
-    {
-      filter: `drop-shadow(0 0 5px ${accent}) drop-shadow(0 0 9px ${accent})`,
-      duration: 1.6,
-      yoyo: true,
-      repeat: -1,
-      ease: "sine.inOut",
-    },
-  );
+  const [r, g, b] = gsap.utils.splitColor(accent) as number[];
+  const state = { t: 0 };
+  const paint = () => {
+    const c = `rgba(${r}, ${g}, ${b}, ${state.t})`;
+    gsap.set(node, {
+      filter: `drop-shadow(0 0 ${5 * state.t}px ${c}) drop-shadow(0 0 ${9 * state.t}px ${c})`,
+    });
+  };
+  paint();
+  return gsap.to(state, {
+    t: 1,
+    duration: 1.6,
+    yoyo: true,
+    repeat: -1,
+    ease: "sine.inOut",
+    onUpdate: paint,
+  });
 }
 
 export function clearGlow(node: Element) {
