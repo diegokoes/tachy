@@ -585,6 +585,7 @@ export {
   MAX_ASSET_BYTES,
   assetPath,
   ASSET_SRC_RE,
+  FIELD_SHOWS,
 } from "@tachy/contract";
 export type {
   WikiGapKind,

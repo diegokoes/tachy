@@ -5,6 +5,7 @@ import { zValidator } from "@hono/zod-validator";
 import {
   applyFormConfig,
   badInput,
+  FIELD_SHOWS,
   forbidden,
   getComposeConfig,
   getSourceProject,
@@ -84,7 +85,7 @@ const configSchema = z
                 z.string(),
                 z
                   .object({
-                    show: z.enum(["form", "fold", "hidden"]).optional(),
+                    show: z.enum(FIELD_SHOWS).optional(),
                     default: fieldDefault.optional(),
                   })
                   .strict(),
