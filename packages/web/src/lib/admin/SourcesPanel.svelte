@@ -185,8 +185,13 @@ import { csv } from "../fields";
   function hostToBaseUrl(type: SourceType, host: string): string {
     const v = host.trim().replace(/\/+$/, "");
     if (!v) return type === "github" ? "https://api.github.com" : "";
-    if (type === "azure-devops")
-      return /^https?:\/\//i.test(v) ? v : `https://dev.azure.com/${v}`;
+    if (type === "azure-devops") {
+      const org = v.replace(/^(https?:\/\/)?dev\.azure\.com\//i, "");
+      if (/^https?:\/\//i.test(org)) return org;
+      return org.includes(".")
+        ? `https://${org}`
+        : `https://dev.azure.com/${org}`;
+    }
     const withScheme = /^https?:\/\//i.test(v) ? v : `https://${v}`;
     return withScheme.replace(/\/api\/v2$/, "");
   }
