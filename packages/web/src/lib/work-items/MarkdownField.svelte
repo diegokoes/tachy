@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button, Icon, tip } from "../tui";
+  import { Icon, tip } from "../tui";
   import { ATTACHMENT_RE, imageMarkdown, toPreview } from "./ticketMarkdown";
   import type { PastedImage } from "./composer.svelte";
 
@@ -83,17 +83,18 @@
 </script>
 
 <div class="md-field" class:invalid>
-  <div class="bar">
-    <span class="hint">markdown · paste or drop images</span>
-    <Button
-      size="sm"
-      variant="ghost"
-      icon={preview ? "edit" : "eye"}
-      aria-label={preview ? `Edit ${label}` : `Preview ${label}`}
-      title={preview ? "edit" : "preview"}
-      onclick={() => (preview = !preview)}
-    />
-  </div>
+  <!-- Written as markdown: the mark stands bold. Previewing, it turns into the
+       eye and steps back, since nothing is being written. -->
+  <button
+    class="md-toggle"
+    class:on={!preview}
+    aria-pressed={!preview}
+    aria-label={preview ? `Write ${label} as markdown` : `Preview ${label}`}
+    use:tip={preview ? "back to markdown" : "preview"}
+    onclick={() => (preview = !preview)}
+  >
+    <Icon name={preview ? "eye" : "markdown"} size="1.15em" morph />
+  </button>
   {#if preview}
     <div class="preview md">
       {#if value.trim()}
@@ -147,12 +148,40 @@
   .md-field:focus-within {
     border-color: var(--accent);
   }
-  .bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 var(--pad-1) 0 var(--pad-2);
-    border-bottom: 1px dashed var(--border);
+  .md-field {
+    position: relative;
+  }
+  .md-toggle {
+    position: absolute;
+    top: var(--pad-1);
+    right: var(--pad-1);
+    z-index: 1;
+    display: inline-flex;
+    padding: 0.15rem;
+    border: none;
+    border-radius: var(--radius);
+    background: var(--panel-solid);
+    color: var(--muted);
+    opacity: 0.55;
+    cursor: pointer;
+    transition:
+      color 0.3s ease,
+      opacity 0.3s ease;
+  }
+  .md-toggle :global(svg) {
+    stroke-width: 1.1;
+    transition: stroke-width 0.35s ease;
+  }
+  .md-toggle.on {
+    color: var(--accent);
+    opacity: 1;
+  }
+  .md-toggle.on :global(svg) {
+    stroke-width: 1.9;
+  }
+  .md-toggle:hover,
+  .md-toggle:focus-visible {
+    opacity: 1;
   }
   .hint {
     font-size: var(--fs-xs);
@@ -163,14 +192,14 @@
     background: transparent;
     resize: vertical;
     min-height: 7rem;
-    padding: var(--pad-2);
+    padding: var(--pad-2) calc(var(--pad-2) + 1.6rem) var(--pad-2) var(--pad-2);
     font: inherit;
     color: var(--text);
     outline: none;
   }
   .preview {
     min-height: 7rem;
-    padding: var(--pad-2);
+    padding: var(--pad-2) calc(var(--pad-2) + 1.6rem) var(--pad-2) var(--pad-2);
     font-family: var(--font-prose);
   }
   .preview :global(img) {

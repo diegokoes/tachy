@@ -1,4 +1,4 @@
-import type { FieldSpec } from "@tachy/contract";
+import type { ComposerForm, FieldSpec } from "@tachy/contract";
 
 export const TITLE = "System.Title";
 export const AREA = "System.AreaPath";
@@ -132,3 +132,62 @@ export function fieldForName(
     )?.reference_name ?? null
   );
 }
+
+export interface Arranged {
+  /** Written: title's companions, on the left. */
+  body: FieldSpec[];
+  /** Set: everything else, in ADO's groups, on the right. */
+  groups: { label: string | null; fields: FieldSpec[] }[];
+  /** On the type but not on ADO's form; kept out of the way. */
+  hidden: FieldSpec[];
+}
+
+/**
+ * The form as ADO lays it out when the layout could be read, else the local
+ * guess. A field ADO requires but its form hides, with nothing to fill it,
+ * is still shown: leaving it off would only move the failure to create.
+ */
+export function arrange(form: ComposerForm): Arranged {
+  if (!form.layout) {
+    const l = layoutFields(form.fields);
+    return {
+      body: l.body,
+      groups: [
+        { label: null, fields: l.core },
+        { label: "required", fields: l.required },
+      ].filter((g) => g.fields.length),
+      hidden: l.more,
+    };
+  }
+  const specs = new Map(form.fields.map((f) => [f.reference_name, f]));
+  const usable = (ref: string) => {
+    const f = specs.get(ref);
+    return f && f.reference_name !== TITLE && editable(f) ? [f] : [];
+  };
+  const body = form.layout.body.flatMap(usable);
+  const groups = form.layout.groups
+    .map((g) => ({ label: g.label, fields: g.fields.flatMap(usable) }))
+    .filter((g) => g.fields.length);
+  const placed = new Set(
+    [...body, ...groups.flatMap((g) => g.fields)].map((f) => f.reference_name),
+  );
+  const rest = form.fields.filter(
+    (f) =>
+      f.reference_name !== TITLE &&
+      editable(f) &&
+      !placed.has(f.reference_name),
+  );
+  const unfilled = rest.filter(
+    (f) =>
+      f.required &&
+      f.default_value == null &&
+      !(f.reference_name in form.prefill),
+  );
+  if (unfilled.length)
+    groups.push({ label: "also required by Azure DevOps", fields: unfilled });
+  return { body, groups, hidden: rest.filter((f) => !unfilled.includes(f)) };
+}
+
+/** The label ADO's form uses, falling back to the field's own name. */
+export const labelOf = (form: ComposerForm | null, f: FieldSpec) =>
+  form?.labels[f.reference_name] ?? f.name;

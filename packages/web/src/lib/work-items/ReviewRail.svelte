@@ -109,10 +109,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--pad-2);
-    padding: var(--pad-3);
-    border-left: 1px dashed var(--border);
     min-width: 0;
-    overflow-y: auto;
   }
   header {
     display: flex;

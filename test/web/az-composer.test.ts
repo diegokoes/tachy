@@ -2,13 +2,14 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it } from "vitest";
-import type { ComposerProject, FieldSpec } from "@tachy/contract";
+import type { ComposerForm, ComposerProject, FieldSpec } from "@tachy/contract";
 import {
   isAzNew,
   matchProject,
   parseAz,
 } from "../../packages/web/src/lib/work-items/azCommand";
 import {
+  arrange,
   fieldForName,
   layoutFields,
   missingRequired,
@@ -174,5 +175,67 @@ describe("ticket markdown", () => {
     expect(
       toPreview("![s](attachment:k1)", new Map([["k1", "blob:abc"]])),
     ).toContain('src="blob:abc"');
+  });
+});
+
+describe("arrange", () => {
+  const form = (over: Partial<ComposerForm>): ComposerForm => ({
+    project: "P",
+    type: "Bug",
+    team: null,
+    fields: [],
+    prefill: {},
+    areas: [],
+    iterations: [],
+    people: [],
+    me: null,
+    templates: [],
+    layout: null,
+    labels: {},
+    widgets: {},
+    ...over,
+  });
+  const fields = [
+    f("System.Title", { required: true }),
+    f("System.Description", { type: "html" }),
+    f("Microsoft.VSTS.Common.Severity"),
+    f("Microsoft.VSTS.Common.Priority", { default_value: 2 }),
+    f("Microsoft.VSTS.Common.ValueArea", {
+      required: true,
+      default_value: "Business",
+    }),
+    f("Custom.Secret", { required: true }),
+    f("System.State", { required: true }),
+  ];
+
+  it("follows ADO's layout and keeps its hidden fields out of the way", () => {
+    const a = arrange(
+      form({
+        fields,
+        layout: {
+          body: ["System.Description"],
+          groups: [
+            { label: "Planning", fields: ["Microsoft.VSTS.Common.Severity"] },
+          ],
+        },
+      }),
+    );
+    expect(a.body.map((x) => x.reference_name)).toEqual(["System.Description"]);
+    expect(a.groups).toEqual([
+      { label: "Planning", fields: [fields[2]] },
+      { label: "also required by Azure DevOps", fields: [fields[5]] },
+    ]);
+    expect(a.hidden.map((x) => x.reference_name)).toEqual([
+      "Microsoft.VSTS.Common.Priority",
+      "Microsoft.VSTS.Common.ValueArea",
+    ]);
+  });
+
+  it("falls back to its own guess when the layout could not be read", () => {
+    const a = arrange(form({ fields }));
+    expect(a.body.map((x) => x.reference_name)).toEqual(["System.Description"]);
+    expect(a.groups[0].fields.map((x) => x.reference_name)).toContain(
+      "Microsoft.VSTS.Common.Priority",
+    );
   });
 });
