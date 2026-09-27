@@ -3,7 +3,6 @@ import { requireAdmin } from "../auth";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
-  SOURCE_PROJECT_ROLES,
   badInput,
   notFound,
   addSourceProject,
@@ -13,16 +12,15 @@ import {
   getTeamIdBySlug,
   listProjectAreaMap,
   listSourceProjects,
-  resolveCredential,
   resolveProjectContext,
   setProjectAreaMap,
-  sourceCredentialName,
   sourceProjectScope,
   sql,
   updateSourceProject,
 } from "@tachy/core";
-import { createAdoClient, workItemSchema } from "@tachy/source-azure-devops";
-import { assertScopeEditor, assertTeamAdmin, callerScope } from "../authz";
+import { workItemDefaults, workItemSchema } from "@tachy/source-azure-devops";
+import { assertScopeEditor, assertTeamAdmin } from "../authz";
+import { adoClientFor } from "../azure-devops";
 import type { Context } from "hono";
 
 const wikiSchema = z.array(
@@ -39,8 +37,7 @@ const projectSchema = z.object({
   source_slug: z.string(),
   external_key: z.string().min(1),
   name: z.string().optional(),
-  role: z.enum(SOURCE_PROJECT_ROLES),
-  product_slug: z.string().optional(),
+  product_slug: z.string().nullable().optional(),
   team_slug: z.string().optional(),
   customer_slug: z.string().nullable().optional(),
   wikis: wikiSchema.nullable().optional(),
@@ -50,7 +47,6 @@ const projectSchema = z.object({
 
 const projectPatchSchema = z.object({
   name: z.string().optional(),
-  role: z.enum(SOURCE_PROJECT_ROLES).optional(),
   product_slug: z.string().nullable().optional(),
   team_slug: z.string().optional(),
   customer_slug: z.string().nullable().optional(),
@@ -64,42 +60,19 @@ const areaSchema = z.object({
   component_slug: z.string().min(1),
 });
 
-/** A knowledge project is scoped by its product, a tracker by its team. */
+/** A project with a product is scoped by it; one without, by its team. */
 async function assertCanWriteProject(
   c: Context,
-  role: string,
   productSlug?: string | null,
   teamSlug?: string,
 ): Promise<void> {
-  if (role === "knowledge") {
-    if (!productSlug) return;
+  if (productSlug) {
     await assertScopeEditor(c, {
       productId: await getProductIdBySlug(productSlug),
     });
     return;
   }
   if (teamSlug) await assertTeamAdmin(c, teamSlug);
-}
-
-/** ADO client for a connection, using the caller's own PAT. */
-async function adoClient(c: Context, slug: string) {
-  const [conn] = await sql`
-    select id, source_type, slug, base_url, config
-    from source_connections where slug = ${slug}
-  `;
-  if (!conn) throw new Error(`Unknown source connection: ${slug}`);
-  if (conn.source_type !== "azure-devops")
-    throw new Error(`'${slug}' is a ${conn.source_type} connection`);
-  const token = await resolveCredential(
-    sourceCredentialName(conn.source_type, conn.slug),
-    await callerScope(c),
-  );
-  return createAdoClient({
-    baseUrl: conn.base_url ?? "",
-    slug: conn.slug,
-    config: conn.config ?? {},
-    ...(token ? { token } : {}),
-  });
 }
 
 /** Remote calls answer with {ok:false} so the setup UI can render the reason. */
@@ -119,7 +92,7 @@ export const projects = new Hono()
   .get("/source-projects", async (c) => {
     const productSlug = c.req.query("product_slug");
     const teamSlug = c.req.query("team_slug");
-    const role = c.req.query("role");
+    const hasProduct = c.req.query("has_product");
     return c.json(
       await listSourceProjects({
         sourceSlug: c.req.query("source"),
@@ -127,7 +100,12 @@ export const projects = new Hono()
           ? await getProductIdBySlug(productSlug)
           : undefined,
         teamId: teamSlug ? await getTeamIdBySlug(teamSlug) : undefined,
-        role: role === "knowledge" || role === "tracker" ? role : undefined,
+        hasProduct:
+          hasProduct === "true"
+            ? true
+            : hasProduct === "false"
+              ? false
+              : undefined,
       }),
     );
   })
@@ -146,13 +124,12 @@ export const projects = new Hono()
 
   .post("/source-projects", zValidator("json", projectSchema), async (c) => {
     const b = c.req.valid("json");
-    await assertCanWriteProject(c, b.role, b.product_slug, b.team_slug);
+    await assertCanWriteProject(c, b.product_slug, b.team_slug);
     return c.json(
       await addSourceProject({
         sourceSlug: b.source_slug,
         externalKey: b.external_key,
         name: b.name,
-        role: b.role,
         productSlug: b.product_slug,
         teamSlug: b.team_slug,
         customerSlug: b.customer_slug,
@@ -171,17 +148,11 @@ export const projects = new Hono()
       await assertScopeEditor(c, await sourceProjectScope(id));
       const b = c.req.valid("json");
       // Re-pointing a project needs rights on where it lands, too.
-      if (b.role || b.product_slug !== undefined || b.team_slug)
-        await assertCanWriteProject(
-          c,
-          b.role ?? "knowledge",
-          b.product_slug,
-          b.team_slug,
-        );
+      if (b.product_slug !== undefined || b.team_slug)
+        await assertCanWriteProject(c, b.product_slug, b.team_slug);
       return c.json(
         await updateSourceProject(id, {
           name: b.name,
-          role: b.role,
           productSlug: b.product_slug,
           teamSlug: b.team_slug,
           customerSlug: b.customer_slug,
@@ -244,10 +215,8 @@ export const projects = new Hono()
       select config from source_connections where slug = ${c.req.param("slug")!}
     `;
       if (!conn) throw notFound(`Unknown source connection`);
-      const client = await adoClient(c, c.req.param("slug")!);
-      const defaults =
-        ((conn.config as any)?.defaults?.[project]?.[type] as
-          Record<string, unknown> | undefined) ?? {};
+      const { client } = await adoClientFor(c, c.req.param("slug")!);
+      const defaults = workItemDefaults(conn.config, project, type);
       return c.json(await workItemSchema(client, project, type, defaults));
     },
   )
@@ -263,7 +232,7 @@ export const projects = new Hono()
   .get("/source-connections/:slug/discover/projects", requireAdmin, async (c) =>
     c.json(
       await probe(async () => {
-        const client = await adoClient(c, c.req.param("slug")!);
+        const { client } = await adoClientFor(c, c.req.param("slug")!);
         const found = await client.listProjects();
         return { projects: found.map((p) => ({ key: p.name, name: p.name })) };
       }),
@@ -273,7 +242,7 @@ export const projects = new Hono()
   .get("/source-connections/:slug/discover/wikis", requireAdmin, async (c) =>
     c.json(
       await probe(async () => {
-        const client = await adoClient(c, c.req.param("slug")!);
+        const { client } = await adoClientFor(c, c.req.param("slug")!);
         const found = await client.listWikis(c.req.query("project"));
         return {
           wikis: found.map((w) => ({
@@ -291,7 +260,7 @@ export const projects = new Hono()
       await probe(async () => {
         const project = c.req.query("project");
         if (!project) throw new Error("project is required");
-        const client = await adoClient(c, c.req.param("slug")!);
+        const { client } = await adoClientFor(c, c.req.param("slug")!);
         const found = await client.listRepos(project);
         return {
           repos: found.map((r) => ({

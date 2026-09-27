@@ -1,12 +1,20 @@
+<script lang="ts" module>
+  import type { Revision } from "../types";
+
+  /** Who made a revision, as far as the record can say. */
+  export const revisionAuthor = (r: Revision) =>
+    r.user_name || r.user_email || (r.user_id ? "someone" : "unattributed");
+</script>
+
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../api";
   import { Badge, Button, Chip } from "../tui";
-  import type { Revision, ViewSummary } from "../types";
+  import { fmtDateTime } from "../dates";
 
   /**
-   * Edit history and read counts for one library item. `base` is the collection
-   * route ("knowledge" or "reference") — both expose the same three endpoints,
+   * Edit history for one library item. `base` is the collection route
+   * ("knowledge" or "reference"): both expose the same revision endpoints,
    * because a revision is a revision whichever shelf it sits on.
    */
   let {
@@ -24,7 +32,6 @@
   } = $props();
 
   let revisions = $state<Revision[]>([]);
-  let views = $state<ViewSummary | null>(null);
   let openVersion = $state<number | null>(null);
   let snapshots = $state<Record<number, Record<string, unknown>>>({});
   let error = $state<string | null>(null);
@@ -41,10 +48,7 @@
 
   async function load() {
     try {
-      [revisions, views] = await Promise.all([
-        api.get<Revision[]>(`/${base}/${id}/revisions`),
-        api.get<ViewSummary>(`/${base}/${id}/views`),
-      ]);
+      revisions = await api.get<Revision[]>(`/${base}/${id}/revisions`);
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
@@ -81,42 +85,21 @@
     }
   }
 
-  const who = (r: Revision) =>
-    r.user_name || r.user_email || (r.user_id ? "someone" : "unattributed");
-
   /** The door, not the person — an agent edit is still made by a human. */
   const doorTone = (actor: string) =>
     actor === "agent" ? "warn" : actor === "web" ? "ok" : "muted";
 
-  const when = (ts: string) => new Date(ts).toLocaleString();
-
   const show = (v: unknown): string =>
     v == null
-      ? "—"
+      ? "-"
       : Array.isArray(v)
-        ? v.join(", ") || "—"
+        ? v.join(", ") || "-"
         : typeof v === "object"
           ? JSON.stringify(v, null, 2)
           : String(v);
 </script>
 
 <section class="history">
-  <h3>History</h3>
-
-  {#if views}
-    <p class="reads">
-      <strong>{views.views}</strong>
-      {views.views === 1 ? "read" : "reads"}
-      {#if views.viewers}
-        by <strong>{views.viewers}</strong>
-        {views.viewers === 1 ? "person" : "people"}
-      {/if}
-      {#if views.last_viewed_at}
-        · last {when(views.last_viewed_at)}
-      {/if}
-    </p>
-  {/if}
-
   {#if error}
     <p class="err">{error}</p>
   {/if}
@@ -128,8 +111,8 @@
           <button class="rev-head" onclick={() => toggle(r.version)}>
             <span class="v">v{r.version}</span>
             <Badge tone={doorTone(r.actor)}>{r.actor}</Badge>
-            <span class="who">{who(r)}</span>
-            <span class="at">{when(r.created_at)}</span>
+            <span class="who">{revisionAuthor(r)}</span>
+            <span class="at">{fmtDateTime(r.created_at)}</span>
             {#if r.changed_fields.length}
               <span class="fields">
                 {#each r.changed_fields as f}<Chip>{f}</Chip>{/each}
@@ -174,14 +157,6 @@
 </section>
 
 <style>
-  .history h3 {
-    margin: 0 0 0.4rem;
-  }
-  .reads {
-    margin: 0 0 0.6rem;
-    font-size: 0.9em;
-    opacity: 0.85;
-  }
   .revs {
     list-style: none;
     margin: 0;

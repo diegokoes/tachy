@@ -2,12 +2,22 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
+
+permissions:
+  contents: read
+
+# A new push to a pull request cancels its older run. Pushes to dev and main
+# each get their own group, since every one of them publishes an image.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -23,6 +33,10 @@ jobs:
       # `typecheck` excludes packages/web, which has its own tsconfig — this is
       # what holds the SPA to the shapes in @tachy/contract.
       - run: npm run web:check
+
+      # The image runs these bundles; a bundling error should fail here, not in
+      # production.
+      - run: npm run build:server
 
       # Every fork that touches knowledge or reference loads the embedding
       # model. Cached and warmed once here, they share the download instead of
@@ -40,17 +54,68 @@ jobs:
       # running both would pay for the suite twice.
       - run: npm run coverage
 
-  # The k6 scenarios need a live, seeded server, so they cannot run here. This
-  # only bundles them: it catches a syntax error or a bad import in seconds.
-  load-scripts:
+  # Built once per commit that passed the tests, and pulled by digest on the
+  # host; the host never builds. `dev` and `main` are convenience tags only.
+  image:
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    timeout-minutes: 20
+    needs: build
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate k6 scripts
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: name
         run: |
-          for f in load/*.js; do
-            docker run --rm -v "$PWD/load:/load:ro" grafana/k6:latest \
-              archive "/load/$(basename "$f")" -O /dev/null
-          done
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "image=ghcr.io/${owner}/tachy" >> "$GITHUB_OUTPUT"
+          echo "short=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - id: push
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          push: true
+          build-args: TACHY_COMMIT=${{ steps.name.outputs.short }}
+          tags: |
+            ${{ steps.name.outputs.image }}:sha-${{ steps.name.outputs.short }}
+            ${{ steps.name.outputs.image }}:${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Record the digest
+        run: |
+          ref="${{ steps.name.outputs.image }}@${{ steps.push.outputs.digest }}"
+          echo "$ref" > image-ref.txt
+          echo "Image: \`$ref\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-ref
+          path: image-ref.txt
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        run: |
+          range="HEAD"
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            range="origin/${{ github.base_ref }}..HEAD"
+          fi
+          docker run --rm -v "$PWD:/repo" -w /repo ghcr.io/gitleaks/gitleaks:v8.30.1 \
+            git --redact --no-banner --log-opts="$range" .

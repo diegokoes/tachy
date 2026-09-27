@@ -60,7 +60,8 @@
     <Button
       variant="danger"
       size="sm"
-      icon={destructive.icon ?? "cancel"}
+      icon={destructive.icon ?? "delete"}
+      morph
       disabled={destructive.disabled}
       busy={destructive.busy}
       onclick={destructive.onclick}>{destructive.label}</Button
@@ -96,7 +97,7 @@
       <Button
         variant="ghost"
         square
-        icon={cancel.icon ?? "cancel"}
+        icon={cancel.icon ?? "close"}
         {iconSize}
         disabled={cancel.disabled}
         title={cancel.label}
@@ -107,7 +108,7 @@
       <Button
         variant="ghost"
         size="sm"
-        icon={cancel.icon ?? "cancel"}
+        icon={cancel.icon ?? "close"}
         disabled={cancel.disabled}
         onclick={cancel.onclick}>{cancel.label}</Button
       >

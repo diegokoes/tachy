@@ -1,0 +1,21 @@
+#!/bin/sh
+# Managed by deploy/host/playbook.yml. Only the LAN{% if tailscale_enabled %} and the tailnet{% endif %} may open
+# connections to published container ports (Caddy's 80 and 443). Replies to the
+# containers' own outbound connections are established, so they pass.
+set -eu
+iptables -N TACHY-EDGE 2>/dev/null || iptables -F TACHY-EDGE
+iptables -A TACHY-EDGE -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
+{% for c in lan_cidrs %}
+iptables -A TACHY-EDGE -s {{ c }} -j RETURN
+{% endfor %}
+{% if tailscale_enabled %}
+iptables -A TACHY-EDGE -s {{ tailscale_cidr }} -j RETURN
+{% endif %}
+iptables -A TACHY-EDGE -j DROP
+iptables -N DOCKER-USER 2>/dev/null || true
+iptables -D DOCKER-USER -i {{ lan_interface }} -j TACHY-EDGE 2>/dev/null || true
+iptables -I DOCKER-USER -i {{ lan_interface }} -j TACHY-EDGE
+{% if tailscale_enabled %}
+iptables -D DOCKER-USER -i tailscale0 -j TACHY-EDGE 2>/dev/null || true
+iptables -I DOCKER-USER -i tailscale0 -j TACHY-EDGE
+{% endif %}

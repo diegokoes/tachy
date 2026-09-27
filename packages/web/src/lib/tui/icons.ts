@@ -1,119 +1,369 @@
 /**
- * Icon geometry, from two MIT sets.
+ * The app's marks, drawn from Lucide (https://lucide.dev, ISC licence) through
+ * `@lucide/icons`, which ships each icon as data on Lucide's 24-unit grid.
+ * Every shape is stroke-only, so it takes its colour from `currentColor` and
+ * its weight from Icon.svelte.
  *
- * Heroicons by Tailwind Labs (https://heroicons.com) carries the vocabulary —
- * outline marks authored on a 24-unit grid at stroke 1.5. Hola SVG Icons by
- * Mariana Beldi (https://icons.holasvg.com, https://github.com/marianabeldi/holasvg-icons)
- * keeps the four marks Heroicons has no equivalent for.
- *
- * Every shape is stroke-only, so it takes its color from `currentColor` and its
- * weight from Icon.svelte. `grid` is the side of the square it is drawn on;
- * Icon.svelte scales the stroke by it, so one `weight` reads the same whichever
- * set a mark came from — 6 is 6% of the grid either way.
+ * Names are meanings, not pictures: `delete` is the trash can, `close` the X.
+ * One meaning, one icon, everywhere. A meaning that wants the same picture as
+ * another still gets its own name, so the two can part later without a hunt
+ * through every call site.
  */
-export type IconDef = { path: string; grid?: number };
+import {
+  Archive,
+  ArrowLeft,
+  ArrowRight,
+  ArrowRightToLine,
+  ArrowUpFromLine,
+  Asterisk,
+  BookDashed,
+  BookOpen,
+  BookText,
+  Bot,
+  Braces,
+  Bug,
+  Car,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  CircleCheckBig,
+  CircleDashedCheck,
+  CircleOff,
+  CircleQuestionMark,
+  CircleSmall,
+  ClipboardList,
+  Code,
+  Crown,
+  Database,
+  Delete,
+  Diamond,
+  Download,
+  Eye,
+  EyeClosed,
+  FileExclamationPoint,
+  FileText,
+  FileUp,
+  Flag,
+  Flame,
+  FlaskConical,
+  Gavel,
+  Gift,
+  GitCompareArrows,
+  Globe,
+  GraduationCap,
+  Headphones,
+  ImageIcon,
+  Info,
+  Key,
+  Keyboard,
+  KeyRound,
+  Landmark,
+  Layers,
+  Lightbulb,
+  ListTodo,
+  LockKeyhole,
+  LockKeyholeOpen,
+  LogIn,
+  LogOut,
+  Maximize2,
+  Megaphone,
+  MessageSquare,
+  MessageSquareQuote,
+  MonitorCog,
+  OctagonAlert,
+  Palette,
+  Pause,
+  PencilSparkles,
+  Plane,
+  Play,
+  Plug,
+  Plus,
+  Pyramid,
+  Radar,
+  RotateCcw,
+  RotateCcwClock,
+  RotateCw,
+  Save,
+  SavePlus,
+  ScrollText,
+  Search,
+  SendHorizontal,
+  Settings,
+  Shield,
+  ShieldAlert,
+  Sprout,
+  Square,
+  SquareCheck,
+  SquareDashed,
+  SquarePen,
+  Star,
+  StickyNote,
+  Terminal,
+  TrafficCone,
+  Trash,
+  TriangleAlert,
+  Trophy,
+  UserRound,
+  UserRoundGroup,
+  Wallpaper,
+  Workflow,
+  Wrench,
+  X,
+  type LucideIconData,
+  type LucideIconNode,
+} from "@lucide/icons";
 
-/** A Heroicons outline mark: one path on the 24-unit grid. */
-const hero = (d: string): IconDef => ({ path: `<path d="${d}"/>`, grid: 24 });
+/** The side of the square every mark is drawn on. */
+export const GRID = 24;
 
-/** A Hola mark: a fragment of primitives on the default 100-unit grid. */
-const hola = (path: string): IconDef => ({ path });
+/**
+ * The Markdown mark, which Lucide does not carry: an M and a down arrow in a
+ * rounded frame, drawn on the same grid and strokes so it morphs like the rest.
+ */
+const MarkdownMark: LucideIconData = {
+  name: "markdown",
+  size: 24,
+  node: [
+    ["rect", { x: "2", y: "5", width: "20", height: "14", rx: "2", key: "f" }],
+    ["path", { d: "M6 15V9l3 3 3-3v6", key: "m" }],
+    ["path", { d: "M17.5 9v6", key: "s" }],
+    ["path", { d: "m15 12.5 2.5 2.5 2.5-2.5", key: "a" }],
+  ],
+};
 
 export const ICONS = {
-  /* ── Chat ─────────────────────────────────────────────────────────────── */
-  send: hero(
-    "M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5",
-  ),
-  erase: hero(
-    "M12 9.75 14.25 12m0 0 2.25 2.25M14.25 12l2.25-2.25M14.25 12 12 14.25m-2.58 4.92-6.374-6.375a1.125 1.125 0 0 1 0-1.59L9.42 4.83c.21-.211.497-.33.795-.33H19.5a2.25 2.25 0 0 1 2.25 2.25v10.5a2.25 2.25 0 0 1-2.25 2.25h-9.284c-.298 0-.585-.119-.795-.33Z",
-  ),
-  attach: hero(
-    "M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m6.75 12-3-3m0 0-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z",
-  ),
+  /* ── Leaving: grey, nothing is lost ───────────────────────────────────── */
+  close: X,
 
-  /* ── Editing ──────────────────────────────────────────────────────────── */
-  plus: hero("M12 4.5v15m7.5-7.5h-15"),
-  edit: hero(
-    "m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10",
-  ),
-  cancel: hero("M6 18 18 6M6 6l12 12"),
-  check: hero("m4.5 12.75 6 6 9-13.5"),
-  /** Hola: no floppy in Heroicons, and save has to read as save. */
-  save: hola(
-    '<rect x="10" y="10" width="80" height="80"/><rect x="30" y="10" width="40" height="20"/><rect x="25" y="55" width="50" height="35"/>',
-  ),
-  del: hero(
-    "m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0",
-  ),
+  /* ── Changing records ─────────────────────────────────────────────────── */
+  /** Remove or delete. Arms into `confirm` where the loss is real. */
+  delete: Trash,
+  /** The armed second click of a destructive action. */
+  confirm: Check,
+  save: Save,
+  /** Saving something that did not exist before. */
+  create: SavePlus,
+  /** Add a row, or open a form for something new. */
+  plus: Plus,
+  edit: SquarePen,
+  reset: RotateCcw,
+  clear: Delete,
+
+  /* ── Lifecycle ────────────────────────────────────────────────────────── */
+  approve: CircleDashedCheck,
+  /** Reject an entry, deny a tool call, and the "no" of a yes/no column. */
+  reject: CircleOff,
+  draft: BookDashed,
+  archive: Archive,
+  deprecate: FileExclamationPoint,
+  newVersion: ArrowUpFromLine,
+  history: RotateCcwClock,
+  /** The affected → fixed version arrow. */
+  versionArrow: ArrowRightToLine,
 
   /* ── Navigation ───────────────────────────────────────────────────────── */
-  back: hero(
-    "M21 16.811c0 .864-.933 1.406-1.683.977l-7.108-4.061a1.125 1.125 0 0 1 0-1.954l7.108-4.061A1.125 1.125 0 0 1 21 8.689v8.122ZM11.25 16.811c0 .864-.933 1.406-1.683.977l-7.108-4.061a1.125 1.125 0 0 1 0-1.954l7.108-4.061a1.125 1.125 0 0 1 1.683.977v8.122Z",
-  ),
-  next: hero("M17.25 8.25 21 12m0 0-3.75 3.75M21 12H3"),
-  go: hero("M17.25 8.25 21 12m0 0-3.75 3.75M21 12H3"),
-  moveUp: hero("M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18"),
-  moveDown: hero("M15.75 17.25 12 21m0 0-3.75-3.75M12 21V3"),
-  download: hero("M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3"),
+  back: ArrowLeft,
+  next: ArrowRight,
+  /** A chart taken out of its tile to the whole window. */
+  enlarge: Maximize2,
+  login: LogIn,
+  logout: LogOut,
+  moveUp: ChevronUp,
+  moveDown: ChevronDown,
+  /** Expand and collapse: drawn open, turned a quarter to read as shut. */
+  chevron: ChevronDown,
+  selected: CircleSmall,
+  download: Download,
 
-  /* ── Documents and lifecycle ──────────────────────────────────────────── */
-  doc: hero(
-    "M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z",
-  ),
-  newVersion: hero(
-    "M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z",
-  ),
-  archive: hero(
-    "m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z",
-  ),
-  reject: hero(
-    "M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636",
-  ),
-  /** Hola: the affected → fixed version arrow, which has no Heroicons analogue. */
-  versionArrow: hola(
-    '<line x1="80" y1="20" x2="80" y2="80"/><line x1="15" y1="50" x2="65" y2="50"/><polyline points="50,30 65,50 50,70"/>',
-  ),
+  /* ── Running things ───────────────────────────────────────────────────── */
+  run: Play,
+  pause: Pause,
+  stop: Square,
+  test: FlaskConical,
+
+  /* ── Finding things ───────────────────────────────────────────────────── */
+  /** Searching what we already hold. */
+  search: Search,
+  /** Asking a source what it holds. */
+  discover: Radar,
+  refresh: RotateCw,
+  seed: Sprout,
+  index: Database,
+  /** Anything that hands work to the model. */
+  ai: Bot,
+
+  /* ── Chat ─────────────────────────────────────────────────────────────── */
+  send: SendHorizontal,
+  attach: FileUp,
+  image: ImageIcon,
+  file: FileText,
+  tool: Wrench,
+
+  /* ── Sections: the nav and subnav tabs ────────────────────────────────── */
+  chat: Bot,
+  library: BookOpen,
+  wiki: Globe,
+  admin: Shield,
+  settings: Settings,
+  system: MonitorCog,
+  integrations: Plug,
+  /** Admin's home for how people's commands behave. */
+  flows: Workflow,
+  structure: Layers,
+  users: UserRoundGroup,
+  workers: Terminal,
+  knowledge: GraduationCap,
+  refDoc: ScrollText,
+  overview: Pyramid,
+  gaps: GitCompareArrows,
+  theme: Wallpaper,
+  keybinds: Keyboard,
+  agent: KeyRound,
+
+  /* ── Reach ────────────────────────────────────────────────────────────── */
+  user: UserRound,
+  team: UserRoundGroup,
+  global: Globe,
 
   /* ── Marks ────────────────────────────────────────────────────────────── */
-  alert: hero(
-    "M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z",
-  ),
-  info: hero(
-    "m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z",
-  ),
-  lockOn: hero(
-    "M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z",
-  ),
-  lockOff: hero(
-    "M13.5 10.5V6.75a4.5 4.5 0 1 1 9 0v3.75M3.75 21.75h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H3.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z",
-  ),
-  json: hero(
-    "M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5",
-  ),
+  alert: TriangleAlert,
+  error: OctagonAlert,
+  info: Info,
+  question: CircleQuestionMark,
+  /** Done, all clear, and the "yes" of a yes/no column. */
+  success: CircleCheckBig,
+  quote: MessageSquareQuote,
+  issues: ShieldAlert,
+  json: Braces,
+  eye: Eye,
+  eyeClosed: EyeClosed,
+  lockOn: LockKeyhole,
+  lockOff: LockKeyholeOpen,
 
-  /* ── Sources, repos, search ───────────────────────────────────────────── */
-  consult: hero(
-    "m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z",
-  ),
-  discover: hero(
-    "m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z",
-  ),
-  test: hero(
-    "M9.348 14.652a3.75 3.75 0 0 1 0-5.304m5.304 0a3.75 3.75 0 0 1 0 5.304m-7.425 2.121a6.75 6.75 0 0 1 0-9.546m9.546 0a6.75 6.75 0 0 1 0 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.807 3.808 9.98 0 13.788M12 12h.008v.008H12V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z",
-  ),
-  index: hero(
-    "M5.25 14.25h13.5m-13.5 0a3 3 0 0 1-3-3m3 3a3 3 0 1 0 0 6h13.5a3 3 0 1 0 0-6m-16.5-3a3 3 0 0 1 3-3h13.5a3 3 0 0 1 3 3m-19.5 0a4.5 4.5 0 0 1 .9-2.7L5.737 5.1a3.375 3.375 0 0 1 2.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 0 1 .9 2.7m0 0a3 3 0 0 1-3 3m0 3h.008v.008h-.008v-.008Zm0-6h.008v.008h-.008v-.008Zm-3 6h.008v.008h-.008v-.008Zm0-6h.008v.008h-.008v-.008Z",
-  ),
+  /* ── Feedback ─────────────────────────────────────────────────────────── */
+  flag: Flag,
+  bug: Bug,
+  /** The idea side of the report toggle, and the tip callout. */
+  lightbulb: Lightbulb,
 
-  /* ── Empty states ─────────────────────────────────────────────────────── */
-  /** Hola: the knowledge-entry mark, a target rather than a page. */
-  analyze: hola(
-    '<circle cx="50" cy="50" r="40"/><circle cx="50" cy="50" r="22"/><circle cx="50" cy="50" r="4"/>',
-  ),
-  /** Hola: a book on a shelf — Heroicons' book marks read as a doc, not a shelf. */
-  library: hola(
-    '<rect x="10" y="15" width="80" height="15"/><rect x="15" y="30" width="70" height="55"/><line x1="35" y1="52" x2="65" y2="52"/>',
-  ),
-} satisfies Record<string, IconDef>;
+  /* ── Work items ───────────────────────────────────────────────────────── */
+  /** Ask tachy to review a draft someone wrote. */
+  review: PencilSparkles,
+  /** A field written as markdown; morphs into `eye` for its preview. */
+  markdown: MarkdownMark,
+  /** ADO's stock type glyphs, by the meaning each carries there. */
+  wiTask: ClipboardList,
+  wiStory: BookText,
+  wiEpic: Crown,
+  wiFeature: Trophy,
+  wiBacklog: ListTodo,
+  wiCheck: SquareCheck,
+  wiStar: Star,
+  wiDiamond: Diamond,
+  wiGift: Gift,
+  wiGavel: Gavel,
+  wiChat: MessageSquare,
+  wiFlame: Flame,
+  wiCone: TrafficCone,
+  wiCar: Car,
+  wiPlane: Plane,
+  wiKey: Key,
+  wiMegaphone: Megaphone,
+  wiPalette: Palette,
+  wiLandmark: Landmark,
+  wiAsterisk: Asterisk,
+  wiHeadphones: Headphones,
+  wiNote: StickyNote,
+  wiCode: Code,
+  wiDatabase: Database,
+  wiTest: FlaskConical,
+  /** A type whose glyph has no counterpart here. */
+  wiGeneric: SquareDashed,
+} satisfies Record<string, LucideIconData>;
 
 export type IconName = keyof typeof ICONS;
+
+/** A shape's attributes, minus the `key` Lucide carries for React. */
+export const shapes = (name: IconName) =>
+  ICONS[name].node.map(([tag, { key: _, ...attrs }]) => [tag, attrs] as const);
+
+/** The inner markup of a mark, for HTML built as a string. */
+export const iconMarkup = (name: IconName) =>
+  shapes(name)
+    .map(
+      ([tag, attrs]) =>
+        `<${tag} ${Object.entries(attrs)
+          .map(([k, v]) => `${k}="${v}"`)
+          .join(" ")}/>`,
+    )
+    .join("");
+
+/** An ellipse as two arcs, starting from its left edge. */
+const ellipseD = (cx: number, cy: number, rx: number, ry: number) =>
+  `M${cx - rx} ${cy}a${rx} ${ry} 0 1 0 ${2 * rx} 0a${rx} ${ry} 0 1 0 ${-2 * rx} 0`;
+
+const rectD = (x: number, y: number, w: number, h: number, r: number) =>
+  r
+    ? `M${x + r} ${y}h${w - 2 * r}a${r} ${r} 0 0 1 ${r} ${r}v${h - 2 * r}a${r} ${r} 0 0 1 ${-r} ${r}h${2 * r - w}a${r} ${r} 0 0 1 ${-r} ${-r}v${2 * r - h}a${r} ${r} 0 0 1 ${r} ${-r}z`
+    : `M${x} ${y}h${w}v${h}h${-w}z`;
+
+const pointsD = (points: string, closed: boolean) =>
+  `M${points
+    .trim()
+    .split(/[\s,]+/)
+    .join(" ")}${closed ? "z" : ""}`;
+
+const NUM = String.raw`-?(?:\d+\.?\d*|\.\d+)`;
+const LEADING_MOVE = new RegExp(
+  String.raw`^\s*m\s*(${NUM})[\s,]*(${NUM})[\s,]*`,
+);
+
+/**
+ * A path's opening `m` is absolute on its own but relative once it follows
+ * another subpath, so it is spelled `M`, and the pairs it implies after it,
+ * which are relative line-tos, get their `l` said out loud.
+ */
+const absolute = (d: string) => {
+  const m = LEADING_MOVE.exec(d);
+  if (!m) return d;
+  const rest = d.slice(m[0].length);
+  return `M${m[1]} ${m[2]}${rest && !/^[a-zA-Z]/.test(rest) ? "l" : ""}${rest}`;
+};
+
+const shapeD = ([tag, a]: LucideIconNode): string => {
+  const n = (attr: string) => Number(a[attr] ?? 0);
+  switch (tag) {
+    case "path":
+      return absolute(String(a.d ?? ""));
+    case "circle":
+      return ellipseD(n("cx"), n("cy"), n("r"), n("r"));
+    case "ellipse":
+      return ellipseD(n("cx"), n("cy"), n("rx"), n("ry"));
+    case "rect":
+      return rectD(n("x"), n("y"), n("width"), n("height"), n("rx"));
+    case "line":
+      return `M${n("x1")} ${n("y1")}L${n("x2")} ${n("y2")}`;
+    case "polyline":
+    case "polygon":
+      return pointsD(String(a.points ?? ""), tag === "polygon");
+    default:
+      return "";
+  }
+};
+
+/**
+ * Shapes as one compound path, which is the only shape a morph can tween.
+ * Every other shape is rewritten as arcs and lines; the stroke draws the same
+ * either way.
+ */
+export const outline = (node: LucideIconNode[]) => node.map(shapeD).join("");
+
+const pathCache = new Map<IconName, string>();
+
+export function iconPath(name: IconName): string {
+  const hit = pathCache.get(name);
+  if (hit) return hit;
+  const d = outline(ICONS[name].node);
+  pathCache.set(name, d);
+  return d;
+}

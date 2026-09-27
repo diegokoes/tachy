@@ -181,7 +181,7 @@
     text-decoration: none;
   }
   .get:hover {
-    border-color: var(--accent);
-    color: var(--accent);
+    font-weight: var(--btn-hover-weight);
+    box-shadow: inset 0 0 0 var(--btn-hover-edge) var(--border);
   }
 </style>

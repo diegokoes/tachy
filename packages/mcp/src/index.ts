@@ -1,6 +1,10 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { pathToFileURL } from "node:url";
-import { loadSettingsIntoEnv, registerSource } from "@tachy/core";
+import {
+  loadSettingsIntoEnv,
+  registerSource,
+  setSourceOrigin,
+} from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 import { createAzureDevopsSource } from "@tachy/source-azure-devops";
@@ -12,6 +16,10 @@ import { server } from "./server";
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
 registerSource("azure-devops", createAzureDevopsSource);
+
+/* Every source call this process makes is the agent reading or writing on
+   somebody's behalf. */
+setSourceOrigin("agent");
 
 /*
  * Imported for the registrations they perform, in the order the tools were

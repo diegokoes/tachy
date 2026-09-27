@@ -16,7 +16,7 @@
   const GLYPH = {
     muted: "",
     accent: G.dot,
-    ok: G.save,
+    ok: "",
     warn: "",
     danger: "",
   } as const;
@@ -26,6 +26,7 @@
 
 <p class="note {tone}" role={tone === "danger" ? "alert" : undefined}>
   {#if alerting}<span class="g"><Icon name="alert" size="1em" weight={7} /></span>
+  {:else if tone === "ok"}<span class="g"><Icon name="success" size="1em" weight={7} /></span>
   {:else if GLYPH[tone]}<span class="g" aria-hidden="true">{GLYPH[tone]}</span>{/if}
   <span class="txt">{@render children()}</span>
   {#if action}<span class="act">{@render action()}</span>{/if}

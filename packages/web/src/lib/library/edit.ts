@@ -25,7 +25,7 @@ export async function patchLibraryItem(
       return {
         ok: false,
         conflict: true,
-        message: `someone else edited this ${noun} in the meantime — reload to get the latest version`,
+        message: `someone else edited this ${noun} meanwhile; reload for the latest version`,
       };
     return { ok: false, conflict: false, message: errText(e) };
   }

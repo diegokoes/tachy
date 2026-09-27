@@ -1,4 +1,4 @@
-FROM node:24-slim
+FROM node:24.21.0-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553 AS base
 
 # postgresql-client-16: needed by `npm run sync backup`/`restore`
 # (pg_dump/pg_restore). Debian bookworm's own repo only has client v15, and
@@ -19,9 +19,17 @@ WORKDIR /app
 # with locally.
 RUN npm i -g npm@12.0.2
 
-# Copy just the package.jsons first so `npm ci` is cached unless a dependency
-# actually changed (everything here runs straight off the source via tsx, no
-# build step, so the workspace symlinks npm ci creates are all that's needed).
+# k6, for the load runs an admin starts from the tests page (§11.3).
+FROM grafana/k6:2.2.0 AS k6
+
+# The schema diff tool tachy-deploy runs from the new image (§5.10).
+FROM golang:1.25 AS schema-diff
+RUN CGO_ENABLED=0 go install github.com/stripe/pg-schema-diff/cmd/pg-schema-diff@v1.0.9
+
+# Build stage: devDependencies, the model download, the SPA and the bundles.
+FROM base AS build
+
+# The package.jsons alone first, so `npm ci` is cached unless a dependency changed.
 COPY package.json package-lock.json ./
 COPY packages/contract/package.json packages/contract/package.json
 COPY packages/core/package.json packages/core/package.json
@@ -32,6 +40,7 @@ COPY packages/mcp/package.json packages/mcp/package.json
 COPY packages/agent/package.json packages/agent/package.json
 COPY packages/api/package.json packages/api/package.json
 COPY packages/cli/package.json packages/cli/package.json
+COPY packages/worker/package.json packages/worker/package.json
 COPY packages/web/package.json packages/web/package.json
 RUN npm ci
 
@@ -46,10 +55,45 @@ RUN npx tsx scripts/warmup-embeddings.ts
 
 COPY . .
 
-# Build the Svelte SPA to packages/web/dist so the API serves it (single origin).
-ARG VITE_DEV_BADGE
-ENV VITE_DEV_BADGE=$VITE_DEV_BADGE
-RUN npm run web:build
+# The environment badge is not baked into the SPA: the API reads
+# TACHY_ENV_BADGE at runtime, so the same image serves dev and production.
+RUN npm run web:build \
+ && npm run build:server
+
+# Runtime stage: production dependencies, the bundles, and the three files the
+# server reads from disk. No TypeScript, no tsx, no test tooling.
+FROM base AS runtime
+
+COPY package.json package-lock.json ./
+COPY packages/contract/package.json packages/contract/package.json
+COPY packages/core/package.json packages/core/package.json
+COPY packages/sources/freshdesk/package.json packages/sources/freshdesk/package.json
+COPY packages/sources/github/package.json packages/sources/github/package.json
+COPY packages/sources/azure-devops/package.json packages/sources/azure-devops/package.json
+COPY packages/mcp/package.json packages/mcp/package.json
+COPY packages/agent/package.json packages/agent/package.json
+COPY packages/api/package.json packages/api/package.json
+COPY packages/cli/package.json packages/cli/package.json
+COPY packages/worker/package.json packages/worker/package.json
+COPY packages/web/package.json packages/web/package.json
+RUN npm ci --omit=dev \
+ && npm cache clean --force
+
+COPY --from=schema-diff /go/bin/pg-schema-diff /usr/local/bin/pg-schema-diff
+COPY --from=k6 /usr/bin/k6 /usr/local/bin/k6
+COPY --from=build /app/.model-cache /app/.model-cache
+COPY --from=build /app/dist /app/dist
+COPY --from=build /app/packages/web/dist /app/packages/web/dist
+COPY packages/agent/prompt.md packages/agent/prompt.md
+COPY load load
+COPY db db
+
+# `npm run api` / `npm run sync …` keep working inside the image, against the
+# bundles; a source checkout keeps its tsx scripts.
+RUN npm pkg set scripts.api="node dist/api.js" scripts.sync="node dist/cli.js" scripts.mcp="node dist/mcp.js" scripts.worker="node dist/worker.js"
+
+ENV TACHY_MODEL_CACHE=/app/.model-cache
+ENV TACHY_MCP_ARGS=dist/mcp.js
 
 # Linked-repo clones for code search live here — mount a volume to keep them
 # across redeploys (otherwise the first reindex re-clones, which is fine too).
@@ -69,6 +113,10 @@ USER node
 EXPOSE 8787
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-  CMD node -e "fetch('http://localhost:8787/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://localhost:8787/livez').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-CMD ["npm", "run", "api"]
+ARG TACHY_COMMIT
+ENV TACHY_COMMIT=$TACHY_COMMIT
+
+# node directly, not `npm run api`: SIGTERM has to reach the server's drain.
+CMD ["node", "dist/api.js"]

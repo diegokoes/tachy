@@ -33,6 +33,23 @@ export const FEEDBACK_KINDS = [
   "note",
   "deprecation",
 ] as const;
+/** What a person is filing from the feedback view: a defect or a wish. */
+export const REPORT_TYPES = ["bug", "feature"] as const;
+/** A report's life: newly filed, being worked, done, or shelved. */
+export const REPORT_STATUSES = [
+  "open",
+  "in_progress",
+  "resolved",
+  "closed",
+] as const;
+/**
+ * The in-app notifications a person can receive. One kind today; the list is
+ * the seam future kinds are added along, and `test/schema-drift.test.ts` holds
+ * it against the notifications.kind CHECK.
+ */
+export const NOTIFICATION_KINDS = ["report_reply"] as const;
+/** Who a report_messages row came from: the admin working it or the reporter. */
+export const REPORT_DIRECTIONS = ["admin", "reporter"] as const;
 /**
  * How an edit to a library item reached the database. `user_id` alone cannot
  * separate these: an agent edit is already attributed to the person whose turn
@@ -46,6 +63,7 @@ export const RUN_MODES = [
   "create",
   "code",
   "chat",
+  "review",
 ] as const;
 
 export type ResolutionClarity = (typeof RESOLUTION_CLARITIES)[number];
@@ -55,7 +73,18 @@ export type ReferenceKind = (typeof REFERENCE_KINDS)[number];
 export type LinkKind = (typeof LINK_KINDS)[number];
 export type Confidence = (typeof CONFIDENCES)[number];
 export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
+export type ReportType = (typeof REPORT_TYPES)[number];
+export type ReportStatus = (typeof REPORT_STATUSES)[number];
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+export type ReportDirection = (typeof REPORT_DIRECTIONS)[number];
 export type RunMode = (typeof RUN_MODES)[number];
+
+/**
+ * Who spent a call against a source system: the agent reading through MCP, a
+ * sync walking a project, or the app itself (discovery, creating a work item).
+ */
+export const SOURCE_CALL_ORIGINS = ["agent", "sync", "app"] as const;
+export type SourceCallOrigin = (typeof SOURCE_CALL_ORIGINS)[number];
 export type LibraryActor = (typeof LIBRARY_ACTORS)[number];
 
 /** Environments are open-ended, so the rule is a shape rather than a list. */
@@ -75,6 +104,20 @@ export const DEPLOYMENT_PROFILES = ["support", "engineering"] as const;
 export type DeploymentProfile = (typeof DEPLOYMENT_PROFILES)[number];
 
 /**
+ * Two independent rungs, stored as the same two words in different tables:
+ * `users.role` is the app-wide role, `team_members.role` the per-team one. An
+ * app admin manages users, org structure and system settings; a team admin
+ * curates one team's library and roster. Nothing in the stored value says
+ * which rung it came from, so every surface that shows one has to name the
+ * rung with it — see `roleLabel` in packages/web/src/lib/terms.ts.
+ */
+export const USER_ROLES = ["admin", "member"] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
+export const TEAM_ROLES = ["admin", "member"] as const;
+export type TeamRole = (typeof TEAM_ROLES)[number];
+
+/**
  * The wizard refuses a shorter one in the field, and hashPassword refuses it
  * again on the way in. Two enforcement points, so one number.
  */
@@ -82,9 +125,15 @@ export const MIN_PASSWORD_LENGTH = 10;
 
 /**
  * What a slug may look like. `SLUG_RE` is the strict form most things use;
- * environments and customer units are looser, and say so where they differ.
+ * environments, customer units and catalog entries are looser, and say so
+ * where they differ.
  */
 export const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
+
+/** Teams, products, components, labels and resolution patterns. */
+export const CATALOG_SLUG_RE = /^[a-z0-9][a-z0-9._/-]*$/;
+export const CATALOG_SLUG_HINT =
+  "slug must be lowercase (letters, digits, . _ / -)";
 
 /** Lowercases and hyphenates a typed name into something SLUG_RE accepts. */
 export function slugify(input: string): string {

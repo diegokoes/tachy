@@ -134,7 +134,7 @@ describe("settings API gating", () => {
     });
     const body = await read.json();
     expect(body.env.auth_mode).toBeDefined();
-    expect(body.env).toHaveProperty("upload_dir");
+    expect(body.env).toHaveProperty("env_badge");
   });
 
   it("admins write settings; /system reflects the db source", async () => {

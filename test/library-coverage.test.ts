@@ -62,6 +62,31 @@ describe("wiki coverage", () => {
     expect(printing).toMatchObject({ entries: 1, docs: 1, articles: 1 });
   });
 
+  /** Entries and docs used to be joined onto the same component together, which
+      multiplied them; each count has to come out as itself. */
+  it("counts several of each on one component without multiplying them", async () => {
+    const productId = await tree();
+    for (const summary of ["a", "b", "c"])
+      await saveKnowledgeEntry({
+        productId,
+        component: "coding",
+        issueSummary: summary,
+      });
+    for (const title of ["one", "two"])
+      await saveReferenceDoc({
+        productId,
+        component: "coding",
+        title,
+        body: "b",
+      });
+
+    expect(find((await coverage(productId)).nodes, "coding")).toMatchObject({
+      entries: 3,
+      docs: 2,
+      articles: 0,
+    });
+  });
+
   it("rolls a subtree up into its parent, counting each item once", async () => {
     const productId = await tree();
     for (const summary of ["a", "b", "c"])

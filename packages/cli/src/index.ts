@@ -4,10 +4,9 @@ import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import {
   registerSource,
-  resolveSource,
-  ingestWorkItem,
-  recordRun,
-  resolveCurrentUserId,
+  syncSource,
+  repoToken,
+  setSourceOrigin,
   backfillEmbeddings,
   backfillReferenceEmbeddings,
   backfillCodeEmbeddings,
@@ -15,10 +14,9 @@ import {
   env,
   sql,
   loadSettingsIntoEnv,
+  rotateVaultKey,
   getRepoBySlug,
   indexRepo,
-  resolveCredential,
-  sourceCredentialName,
 } from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
@@ -28,69 +26,20 @@ registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
 registerSource("azure-devops", createAzureDevopsSource);
 
-/**
- * Enough pages for any real backlog. An adapter that keeps handing back the same
- * cursor would otherwise walk one page for as long as the process runs.
- */
-const MAX_SYNC_PAGES = 10_000;
+/* The CLI's only source traffic is `sync`. */
+setSourceOrigin("sync");
 
 async function sync(
   sourceSlug: string,
   opts: { since?: string; group?: string },
 ) {
-  const { conn, source } = await resolveSource(sourceSlug);
-  // An explicit --since wins; otherwise pick up where the last good run stopped.
-  const [row] =
-    await sql`select last_synced_at from source_connections where id = ${conn.id}`;
-  const since =
-    opts.since ??
-    (row?.last_synced_at
-      ? new Date(row.last_synced_at as string).toISOString()
-      : undefined);
-  if (!opts.since && since) console.log(`resuming from ${since}`);
-
-  // Taken before the walk, not after: anything changed while it runs must be
-  // picked up next time rather than stepped over.
-  const startedAt = new Date();
-
-  let cursor: string | undefined;
-  let total = 0;
-  const seen = new Set<string>();
-  for (let page = 0; ; page++) {
-    if (page >= MAX_SYNC_PAGES)
-      throw new Error(
-        `${sourceSlug} did not finish within ${MAX_SYNC_PAGES} pages — stopping rather than looping`,
-      );
-    const { items, nextCursor } = await source.listItems({
-      updatedSince: since,
-      groupKey: opts.group,
-      cursor,
-    });
-    for (const it of items) {
-      await ingestWorkItem(conn.id, it);
-      total++;
-    }
-    if (!nextCursor) break;
-    if (seen.has(nextCursor))
-      throw new Error(
-        `${sourceSlug} returned the cursor '${nextCursor}' twice — stopping rather than looping`,
-      );
-    seen.add(nextCursor);
-    cursor = nextCursor;
-  }
-
-  // Only on a clean walk. A run that threw has committed part of its items, and
-  // moving the watermark would step over the rest on the next attempt.
-  if (!opts.group)
-    await sql`
-      update source_connections set last_synced_at = ${startedAt} where id = ${conn.id}
-    `;
-
-  await recordRun({
-    userId: await resolveCurrentUserId(),
-    mode: "sync",
-    meta: { source: sourceSlug, total },
+  const { total, since } = await syncSource(sourceSlug, {
+    ...opts,
+    onPage: (n, from) => {
+      if (n === 0 && from && !opts.since) console.log(`resuming from ${from}`);
+    },
   });
+  if (!opts.since && since) console.log(`resumed from ${since}`);
   console.log(`synced ${total} item(s) from ${sourceSlug}`);
 }
 
@@ -118,17 +67,7 @@ async function embedBackfill(all: boolean) {
 
 async function indexRepoCmd(slug: string) {
   const repo = await getRepoBySlug(slug);
-  let token: string | undefined;
-  if (repo.source_slug) {
-    const [conn] = await sql`
-      select source_type from source_connections where slug = ${repo.source_slug}
-    `;
-    if (conn)
-      token = await resolveCredential(
-        sourceCredentialName(conn.source_type, repo.source_slug),
-        {},
-      );
-  }
+  const token = await repoToken(slug);
   console.log(`indexing ${slug} (${repo.url})...`);
   const res = await indexRepo(slug, { token });
   console.log(
@@ -242,6 +181,16 @@ async function main() {
         /* settings table may not exist yet */
       }
       return sync(positional[0], { since: args.since, group: args.group });
+    }
+    case "rotate-key": {
+      const { moved, already } = await rotateVaultKey();
+      console.log(
+        `re-encrypted ${moved} credential(s) with the current key; ${already} were already on it`,
+      );
+      console.log(
+        "once every row is on it, remove TACHY_SECRET_KEY_PREVIOUS from .env",
+      );
+      return;
     }
     case "embed-backfill":
       return embedBackfill(false);

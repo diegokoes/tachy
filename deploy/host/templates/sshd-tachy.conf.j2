@@ -1,0 +1,14 @@
+# Managed by deploy/host/playbook.yml.
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+AllowGroups tachy-admins tachy-backup
+
+# Backup downloaders: read-only SFTP in a chroot, and nothing else
+# (DEPLOYMENT-ARCHITECTURE.md §6.2).
+Match Group tachy-backup
+    ChrootDirectory {{ tachy_srv }}/backup-export
+    ForceCommand internal-sftp -R -l INFO
+    AuthenticationMethods publickey
+    DisableForwarding yes
+    PermitTTY no

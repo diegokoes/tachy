@@ -2,9 +2,8 @@
   import { onMount } from "svelte";
   import { reducedMotion } from "./gsap";
 
-  /* The wordmark used to be the app Panel's title. It now sits at the left of
-     the top row as a field of particles sampled from the text itself: present,
-     but at wallpaper weight, so it never competes with the nav beside it. */
+  /** A field of particles sampled from the text itself, at the left of the top
+   *  row. Wallpaper weight, so it does not compete with the nav beside it. */
   const TEXT = "TACHY";
   /**
    * Samples per cap height. This, not an absolute pixel step, is what decides
@@ -151,12 +150,9 @@
     build();
     draw();
 
-    /*
-     * Resize and theme still have to redraw under reduced motion — the mark is
-     * painted to a canvas, so nothing repaints it on its own. Returning here,
-     * as this used to, left those viewers with a wordmark stuck in the previous
-     * theme's colours at the previous size. Only the pointer chase is motion.
-     */
+    // Resize and theme changes redraw even under reduced motion: the mark is
+    // painted to a canvas, so nothing else repaints it. Only the pointer chase
+    // counts as motion.
     const reduced = reducedMotion();
 
     const onMove = (e: PointerEvent) => {

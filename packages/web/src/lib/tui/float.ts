@@ -28,8 +28,23 @@ const MARGIN = 8;
 /** Below this a flipped popup is no better than a cropped one. */
 const FLOOR = 96;
 
+/**
+ * The nearest ancestor that masks its content. Fixed positioning escapes
+ * overflow, but not a mask: the app window is drawn with one, and a popup
+ * placed past its edge by viewport arithmetic alone was cut in half.
+ */
+function maskingAncestor(node: HTMLElement): HTMLElement | null {
+  for (let el = node.parentElement; el; el = el.parentElement) {
+    const cs = getComputedStyle(el);
+    const mask = cs.maskImage || cs.getPropertyValue("-webkit-mask-image");
+    if (mask && mask !== "none") return el;
+  }
+  return null;
+}
+
 export function float(node: HTMLElement, options: FloatOptions) {
   let opts = options;
+  const clip = maskingAncestor(node);
 
   function place() {
     const anchor = opts.anchor;
@@ -37,8 +52,17 @@ export function float(node: HTMLElement, options: FloatOptions) {
     const a = anchor.getBoundingClientRect();
     const gap = opts.gap ?? 2;
     const placement = opts.placement ?? "below-start";
-    const vw = document.documentElement.clientWidth;
-    const vh = document.documentElement.clientHeight;
+    const c = clip?.getBoundingClientRect();
+    const top = Math.max(0, c?.top ?? 0);
+    const left = Math.max(0, c?.left ?? 0);
+    const vh = Math.min(
+      document.documentElement.clientHeight,
+      c?.bottom ?? Infinity,
+    );
+    const vw = Math.min(
+      document.documentElement.clientWidth,
+      c?.right ?? Infinity,
+    );
 
     if (opts.matchWidth) node.style.minWidth = `${a.width}px`;
 
@@ -46,26 +70,35 @@ export function float(node: HTMLElement, options: FloatOptions) {
        content's answer and not the last frame's. The border box is what the
        cap is then set against — `scrollHeight` stops at the padding box, so
        capping with it left every bordered popup two pixels short of its own
-       content and permanently scrolling. */
+       content and permanently scrolling.
+
+       Taking the cap off also makes the popup's own scrollers briefly
+       non-overflowing, and the browser clamps their scrollTop to 0 on the way
+       past — so what the user had scrolled to is put back once it is on. */
+    const scrolled: [Element, number][] = [];
+    for (const el of node.querySelectorAll("*"))
+      if (el.scrollTop) scrolled.push([el, el.scrollTop]);
+
     node.style.maxHeight = "";
     const wants = Math.ceil(node.getBoundingClientRect().height);
 
     const below = vh - a.bottom - gap - MARGIN;
-    const above = a.top - gap - MARGIN;
+    const above = a.top - top - gap - MARGIN;
     let up = placement.startsWith("above");
     if (up && wants > above && below > above) up = false;
     else if (!up && wants > below && above > below) up = true;
 
     const room = up ? above : below;
     node.style.maxHeight = `${Math.min(wants, Math.max(room, FLOOR))}px`;
+    for (const [el, top] of scrolled) el.scrollTop = top;
 
     const h = node.offsetHeight;
     const w = node.offsetWidth;
     const y = up ? a.top - gap - h : a.bottom + gap;
     const x = placement.endsWith("end") ? a.right - w : a.left;
 
-    node.style.top = `${clamp(y, MARGIN, vh - h - MARGIN)}px`;
-    node.style.left = `${clamp(x, MARGIN, vw - w - MARGIN)}px`;
+    node.style.top = `${clamp(y, top + MARGIN, vh - h - MARGIN)}px`;
+    node.style.left = `${clamp(x, left + MARGIN, vw - w - MARGIN)}px`;
   }
 
   node.style.position = "fixed";
@@ -74,8 +107,13 @@ export function float(node: HTMLElement, options: FloatOptions) {
   place();
 
   /* Capture, so an ancestor scrolling under the popup moves it too — the
-     bubbling phase never sees a scroll on anything but the document. */
-  const onScroll = () => place();
+     bubbling phase never sees a scroll on anything but the document. The
+     popup's own list is the exception: it has not moved, and re-placing on it
+     re-measures, which is the one thing that disturbs the scroll being made. */
+  const onScroll = (e: Event) => {
+    if (node.contains(e.target as Node)) return;
+    place();
+  };
   window.addEventListener("scroll", onScroll, true);
   window.addEventListener("resize", onScroll);
   const ro = new ResizeObserver(place);

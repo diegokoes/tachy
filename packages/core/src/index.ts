@@ -3,17 +3,34 @@ export type { Db } from "./infra";
 export {
   env,
   envVarName,
+  agentHome,
   freshdeskToken,
   githubToken,
   azureDevopsToken,
   sourceToken,
   sourceTokenOptional,
-  uploadDir,
+  sweepUploads,
+  saveUpload,
+  readUpload,
+  uploadRef,
+  parseUploadRef,
+  uploadTtlMs,
 } from "./infra";
-export { AppError, notFound, conflict, badInput, forbidden } from "./infra";
+export {
+  AppError,
+  notFound,
+  conflict,
+  badInput,
+  forbidden,
+  unavailable,
+} from "./infra";
+export { schemaStampStatus, type SchemaStampStatus } from "./infra";
+export { inBackground, backgroundSettled } from "./infra";
 export type { AppErrorCode } from "./infra";
-export { log, runWithLogContext } from "./infra";
+export { log, logContext, runWithLogContext } from "./infra";
 export type { LogLevel } from "./infra";
+export { secretsEnabled, vaultKeys, keyId } from "./infra";
+export { ISSUE_ITEMS, issueList, issueFlag, type IssueList } from "./infra";
 export {
   isGlobalAdmin,
   teamAdminTeams,
@@ -39,6 +56,7 @@ export {
   setUserRole,
   setUserPassword,
   setUserDisabled,
+  setUserFlags,
   setUserDisplayName,
   listTeamMembers,
   listMemberships,
@@ -54,7 +72,7 @@ export type {
   MembershipRow,
 } from "./access";
 export { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from "./access";
-export { userCensus } from "./access";
+export { userCensus, userIssues } from "./access";
 export {
   AGENT_EFFORTS,
   AGENT_PROVIDERS,
@@ -76,7 +94,9 @@ export type {
 } from "./config";
 export {
   SCOPES,
+  scopesOf,
   resolveScoped,
+  upsertScoped,
   assertCanWriteScope,
   AGENT_CREDENTIALS,
   ANTHROPIC_OAUTH_CREDENTIAL,
@@ -107,6 +127,7 @@ export {
 export type {
   Scope,
   ScopeContext,
+  CredentialScope,
   CredentialSource,
   CredentialMeta,
   AgentAuth,
@@ -116,7 +137,7 @@ export type {
   ArtifactRow,
   ArtifactSpec,
 } from "./config";
-export { secretsEnabled } from "./infra";
+export { vaultState, rotateVaultKey } from "./config";
 
 export {
   saveKnowledgeEntry,
@@ -128,6 +149,8 @@ export {
   revertKnowledgeEntry,
   listEnvironments,
   listKnowledgeFacets,
+  knowledgeCensus,
+  knowledgeByComponent,
 } from "./knowledge";
 export type {
   KnowledgeInput,
@@ -139,6 +162,7 @@ export type {
   FacetCount,
 } from "./knowledge";
 export { addFeedback, listFeedback } from "./knowledge";
+export type { FeedbackInput } from "./knowledge";
 export {
   LIBRARY_ACTORS,
   UNKNOWN_ACTOR,
@@ -161,7 +185,12 @@ export {
   articleStaleness,
   coverage,
   parseWikilinks,
+  renameWikilinks,
   LINK_KINDS,
+  sniffImage,
+  saveAsset,
+  getAsset,
+  libraryEngagementCensus,
 } from "./library";
 export type {
   LibraryActor,
@@ -179,8 +208,9 @@ export type {
   Coverage,
   CoverageNode,
   CoverageCounts,
+  SavedAsset,
+  LibraryEngagement,
 } from "./library";
-export type { FeedbackInput } from "./knowledge";
 
 export {
   MAIN_PAGE_SLUG,
@@ -189,6 +219,9 @@ export {
   addWikiCategory,
   updateWikiCategory,
   deleteWikiCategory,
+  setCategoryComponents,
+  seedSectionsFromComponents,
+  searchWikiArticles,
   wikiToc,
   articleCategories,
   setArticleCategories,
@@ -196,6 +229,11 @@ export {
   findMainPage,
   listWikis,
   draftSources,
+  GAP_THRESHOLD,
+  findWikiGaps,
+  sweepWikiGaps,
+  listWikiGaps,
+  dismissWikiGap,
 } from "./wiki";
 export type {
   WikiCategoryRow,
@@ -205,6 +243,10 @@ export type {
   WikiTocNode,
   WikiToc,
   DraftSource,
+  WikiGapItem,
+  WikiGapFinding,
+  WikiGapRow,
+  SweepResult,
 } from "./wiki";
 export {
   structuredSchema,
@@ -282,7 +324,15 @@ export type {
   CompactMeta,
   CompactAttachment,
 } from "./work-items";
-export { recordRun, estimateCostUsd } from "./analytics";
+export {
+  recordRun,
+  estimateCostUsd,
+  agentUsageCensus,
+  toolUsageCensus,
+  countToolCall,
+  recordToolCall,
+} from "./analytics";
+export type { AgentUsage, ToolUsage, ToolCallOutcome } from "./analytics";
 export type { RunInput } from "./analytics";
 
 export {
@@ -312,6 +362,7 @@ export {
   getCustomerName,
   getCustomerSlug,
   catalogCensus,
+  catalogIssues,
 } from "./catalog";
 export type {
   CustomerInput,
@@ -333,6 +384,7 @@ export {
 } from "./catalog";
 export {
   listComponents,
+  listComponentTree,
   addComponent,
   updateComponent,
   deleteComponent,
@@ -362,20 +414,52 @@ export {
   renameLabel,
 } from "./catalog";
 
-export * from "./sources/source";
-export * from "./sources/fetch";
-export { stripHtml } from "./sources/html";
+export {
+  SOURCE_TIMEOUT_MS,
+  sourceFetch,
+  fetchUntrustedUrl,
+  stripHtml,
+  SOURCE_CALL_ORIGINS,
+  setSourceOrigin,
+  recordSourceCall,
+  countSourceCall,
+  sourceTrafficCensus,
+  syncSource,
+} from "./sources";
+export type {
+  RawMessage,
+  RawWorkItem,
+  SourceCapabilities,
+  ListOptions,
+  SourceProbe,
+  WorkItemSource,
+  SourceFactory,
+  WorkItemComposer,
+  NewWorkItem,
+  PastedImage,
+  CreateContext,
+  SourceCallOrigin,
+  SourceCallOutcome,
+  SourceTraffic,
+} from "./sources";
 export { registerSource, resolveSource } from "./sources";
+export {
+  getComposeConfig,
+  setComposeConfig,
+  offeredTypes,
+  typeConfig,
+  applyFormConfig,
+} from "./flows";
 export type { ResolvedSource } from "./sources";
 export {
   listSourceConnections,
   addSourceConnection,
   deleteSourceConnection,
   sourceCensus,
+  sourceIssues,
 } from "./sources";
 export type { SourceConnectionInput } from "./sources";
 export {
-  SOURCE_PROJECT_ROLES,
   listSourceProjects,
   getSourceProject,
   resolveSourceProject,
@@ -395,7 +479,6 @@ export {
   matchWiki,
 } from "./sources";
 export type {
-  SourceProjectRole,
   SourceProjectInput,
   SourceProjectPatch,
   SourceProjectRow,
@@ -412,6 +495,10 @@ export {
   embedPassages,
   embedQuery,
   embedQueryLiteral,
+  setEmbedBackend,
+  startEmbedHost,
+  EmbedQueue,
+  EmbedderUnavailable,
   toVectorLiteral,
   EMBEDDING_DIM,
   EMBEDDING_MODEL,
@@ -419,6 +506,13 @@ export {
   EMBEDDING_MODELS,
 } from "./search";
 export { chunkText } from "./search";
+export type {
+  EmbedBackend,
+  EmbedHost,
+  EmbedKind,
+  EmbedPriority,
+  EmbedQueueDepth,
+} from "./search";
 export {
   relevance,
   grade,
@@ -446,12 +540,18 @@ export * from "./exports";
 export {
   TokenMap,
   scrubText,
+  scrubStrings,
+  scrubbableCopy,
+  customerStandIn,
   scrubKnownNames,
   scrubDeep,
   redactNormalized,
   redactForLlm,
   resolveRedactionPolicy,
   globalRedactionEnabled,
+  sweepTranscripts,
+  rollUpUsage,
+  sweepOrphanAssets,
 } from "./compliance";
 export type { RedactOptions, RedactionPolicy } from "./compliance";
 
@@ -464,7 +564,10 @@ export type { RedactOptions, RedactionPolicy } from "./compliance";
 export {
   CLOUD_RE,
   CLOUD_HINT,
+  MAX_PAGE,
   SLUG_RE,
+  CATALOG_SLUG_RE,
+  CATALOG_SLUG_HINT,
   slugify,
   WIKILINK_RE,
   parseWikilink,
@@ -476,4 +579,85 @@ export {
   fieldName,
   columnKeys,
   ARTIFACT_UTILITIES,
+  WIKI_RESERVED_SLUGS,
+  WIKI_GAP_KINDS,
+  LIBRARY_ASSET_TYPES,
+  MAX_ASSET_BYTES,
+  assetPath,
+  ASSET_SRC_RE,
+  FIELD_SHOWS,
+} from "@tachy/contract";
+export type {
+  WikiGapKind,
+  LibraryAssetType,
+  WikiListRow,
+  AdoFieldType,
+  FieldSpec,
+  WorkItemSchema,
+  WorkItemTypeOption,
+  ComposerProject,
+  PrefillOrigin,
+  PathOption,
+  PersonOption,
+  ComposerForm,
+  ComposeConfig,
+  TypeFormConfig,
+  FieldFormConfig,
+  FieldDefault,
+  FieldShow,
+  FormDisplay,
+  ComposerLayout,
+  FormGroup,
+  FieldWidget,
+  TicketDraft,
+  TicketValidation,
+  CreatedTicket,
+  TicketContextItem,
+  ReviewReadiness,
+  ReviewFindingKind,
+  ReviewFinding,
+  TicketReview,
+  CatalogCensus,
+  UserCensus,
+  SourceCensus,
+  SourceConnectionRow,
+  KnowledgeCensus,
+} from "@tachy/contract";
+
+// Owned by the contract, because the admin jobs form offers them and the API
+// validates them.
+export {
+  JOB_TRIGGERS,
+  JOB_STATUSES,
+  JOB_RESOURCE_CLASSES,
+  JOB_OVERLAP,
+  JOB_MISSED,
+  JOB_NOTIFY,
+  JOB_CLASS_CHAT_SLOTS,
+  JOB_FINISHED,
+  parseDuration,
+} from "@tachy/contract";
+export type {
+  JobTrigger,
+  JobStatus,
+  JobResourceClass,
+  JobOverlap,
+  JobMissed,
+  JobNotify,
+} from "@tachy/contract";
+export * from "./jobs";
+export * from "./testing";
+export * from "./reports";
+export * from "./notifications";
+export type {
+  ReportInput,
+  ReportReview,
+  ReportRow,
+  ReportMessageRow,
+  ReportsCensus,
+  NotificationRow,
+  ReportType,
+  ReportStatus,
+  ReportDirection,
+  NotificationKind,
 } from "@tachy/contract";

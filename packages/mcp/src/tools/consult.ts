@@ -8,7 +8,6 @@ import {
   addFeedback,
   recordRun,
   getCustomerIdBySlug,
-  getCustomerName,
   getCustomerSlug,
   resolveRedactionPolicy,
   redactForLlm,
@@ -38,6 +37,8 @@ import {
   requireCanEdit,
 } from "../permissions";
 import {
+  knowledgeFilterFields,
+  limitField,
   signalsField,
   sourceSlug,
   structuredField,
@@ -48,11 +49,9 @@ import {
   capTurns,
   componentIntoFilter,
   resolveScopeIds,
-  unresolvedCustomer,
-  unresolvedUnit,
   withCompaction,
-  withCustomerProfile,
   withLinkedAdoItems,
+  workItemFacts,
 } from "../context";
 
 /**
@@ -79,8 +78,6 @@ tool(
       userId: await resolveCurrentUserId(),
       mode: "ingest",
     });
-    const customerName = await getCustomerName(item.customerId);
-
     const forLlm = resolveRedactionPolicy(conn.config).enabled
       ? redactForLlm(raw, src.redactRaw, await getCustomerSlug(item.customerId))
       : raw;
@@ -89,20 +86,7 @@ tool(
       source_project_id: item.sourceProjectId,
       product_id: item.productId,
       team_id: item.teamId,
-      customer_id: item.customerId,
-      customer_name: customerName,
-      ...unresolvedCustomer(item.customerId, item.customerAmbiguity),
-      ...(await unresolvedUnit(
-        item.customerId,
-        item.customerUnitId,
-        `${raw.title ?? ""} ${raw.messages
-          .map((m) => m.bodyText ?? "")
-          .join(" ")
-          .slice(0, 4000)}`,
-      )),
-      ...(await withCustomerProfile(item.customerId)),
-      observed_version: item.observedVersion,
-      ...(item.componentSlug ? { component: item.componentSlug } : {}),
+      ...(await workItemFacts(item, raw)),
       ...withCompaction(forLlm),
       ...(await withLinkedAdoItems(raw, item.id)),
     });
@@ -195,9 +179,7 @@ tool(
     description: `Search prior knowledge entries by keyword / symptom / error code. Use for consult mode. Results may include status 'deprecated' entries (possibly with superseded_by pointing at their replacement) — warn that those are outdated, never present them as current advice. Filter with product_slug / team_slug (slugs or aliases — not UUIDs), tags (entry must carry at least one), and/or component (matches the entry's linked component or its slug/aliases in tags). ${GRADE_NOTE}`,
     inputSchema: {
       query: z.string(),
-      product_slug: z.string().optional(),
-      team_slug: z.string().optional(),
-      tags: z.array(z.string()).optional(),
+      ...knowledgeFilterFields,
       component: z.string().optional(),
       customer: z
         .string()
@@ -205,14 +187,6 @@ tool(
         .describe(
           "Customer slug from list_customers. Ranks that customer's own material first WITHOUT hiding the rest — a fix found on one install is often the answer for the next.",
         ),
-      cloud: cloudSchema
-        .optional()
-        .describe(
-          "Environment slug filter, e.g. prod — see list_environments.",
-        ),
-      affected_version: z.string().optional(),
-      fixed_version: z.string().optional(),
-      limit: z.number().int().positive().max(100).optional(),
     },
     annotations: { readOnlyHint: true },
   },
@@ -257,7 +231,7 @@ tool(
     inputSchema: {
       source: sourceSlug,
       external_id: z.string(),
-      limit: z.number().int().positive().max(100).optional(),
+      limit: limitField,
     },
   },
   async ({ source, external_id, limit }) => {
@@ -277,7 +251,7 @@ tool(
     ).slice(0, 1000);
     const query = [raw.title, firstIncoming].filter(Boolean).join(" ");
     const productId = item.productId ?? undefined;
-    // One embedding, two searches — the same string was being embedded twice.
+    // Embedded once for both searches.
     const queryVector = query.trim()
       ? await embedQueryLiteral(query)
       : undefined;
@@ -302,8 +276,6 @@ tool(
         boostCustomerId,
       }),
     ]);
-    const customerName = await getCustomerName(item.customerId);
-
     const redact = resolveRedactionPolicy(conn.config).enabled;
     const forLlm = redact
       ? redactForLlm(raw, src.redactRaw, await getCustomerSlug(item.customerId))
@@ -323,20 +295,7 @@ tool(
       ...(similar.length || reference.length
         ? {}
         : { retrieval_note: NO_MATCHES }),
-      customer_id: item.customerId,
-      customer_name: customerName,
-      ...unresolvedCustomer(item.customerId, item.customerAmbiguity),
-      ...(await unresolvedUnit(
-        item.customerId,
-        item.customerUnitId,
-        `${raw.title ?? ""} ${raw.messages
-          .map((m) => m.bodyText ?? "")
-          .join(" ")
-          .slice(0, 4000)}`,
-      )),
-      ...(await withCustomerProfile(item.customerId)),
-      observed_version: item.observedVersion,
-      ...(item.componentSlug ? { component: item.componentSlug } : {}),
+      ...(await workItemFacts(item, raw)),
       ...(context.length ? { project_context: context } : {}),
       ...(await withLinkedAdoItems(raw, item.id)),
     });

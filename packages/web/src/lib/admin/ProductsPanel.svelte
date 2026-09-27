@@ -4,18 +4,24 @@
   import { createResource } from "../resource.svelte";
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
-  import { CrudTable, type Column } from "../tui";
+  import { CrudTable, Select, type Column } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
   import SlugRename from "./SlugRename.svelte";
   import type { Product, Team } from "./rows";
 import { INFO } from "./help";
 import { csv } from "../fields";
-  import { claimTopAction } from "./topAction.svelte";
+  import { sectionHoist } from "./sectionAction.svelte";
 
   const products = createResource(() => api.get<Product[]>("/products"), []);
   const teams = createResource(() => api.get<Team[]>("/teams"), []);
 
   let renaming = $state<Product | null>(null);
+  /** Which team's products are listed. Empty is all of them. */
+  let team = $state("");
+
+  const shown = $derived(
+    team ? products.data.filter((p) => p.team_slug === team) : products.data,
+  );
 
   const teamOptions = $derived(
     teams.data.map((x) => ({ value: x.slug, label: x.name })),
@@ -38,8 +44,8 @@ import { csv } from "../fields";
     },
     {
       key: "slug",
-      label: "slug",
-      width: "12rem",
+      label: "id",
+      formOnly: true,
       edit: "text",
       required: true,
       info: INFO.slug,
@@ -54,7 +60,7 @@ import { csv } from "../fields";
       options: teamOptions,
       required: true,
       initial: teams.data[0]?.slug,
-      info: `Who owns this ${t("product")}. Moving it takes its source projects along.`,
+      info: `Owner. Source projects move with it.`,
     },
     {
       key: "aliases",
@@ -70,19 +76,36 @@ import { csv } from "../fields";
     teams.reload();
   });</script>
 
+<!-- A team picker rather than a text filter: a product belongs to exactly one
+     team, so the question is always "whose", never "matching what". -->
+<div class="bar">
+  <Select
+    bind:value={team}
+    options={teamOptions}
+    placeholder={`any ${t("team")}`}
+    clearable
+    searchable
+    keepOpen
+    active={!!team}
+    aria-label={`filter by ${t("team")}`}
+  />
+  <span class="dim">{shown.length} of {products.data.length}</span>
+</div>
+
 <CrudTable
-  hoist={claimTopAction}
+  hoist={sectionHoist("products")}
   {columns}
-  rows={products.data}
+  rows={shown}
   rowKey={(r) => r.slug}
   loading={products.loading}
   error={products.error}
   emptyTitle={`No ${t("products")} yet.`}
-  emptyDetail={`A ${t("product")} scopes components, labels and knowledge entries.`}
+  emptyDetail={`Scopes components, labels, knowledge entries.`}
   canEdit={mayEdit}
   canDelete={mayEdit}
   canCreate={teams.data.length > 0}
   addLabel={`add ${t("product")}`}
+  noun={t("product")}
   editTitle={(r) => r.name}
   oncreate={(d) =>
     products.mutate(() =>
@@ -110,7 +133,7 @@ import { csv } from "../fields";
     title={`rename ${target.slug}`}
     current={target.slug}
     taken={allSlugs}
-    warning={`Anything that names this ${t("product")} by slug (saved filters, links, agent instructions) stops resolving. Add the old name to aliases if it is in use.`}
+    warning={`References by slug (filters, links, agent instructions) break. Add the old slug to aliases to keep them.`}
     onRename={(slug) => api.patch(`/products/${target.slug}`, { slug })}
     onDone={() => {
       renaming = null;
@@ -119,3 +142,16 @@ import { csv } from "../fields";
     onCancel={() => (renaming = null)}
   />
 {/if}
+
+<style>
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+    margin-bottom: var(--pad-2);
+  }
+  .dim {
+    font-size: var(--fs-xs);
+    color: var(--muted);
+  }
+</style>

@@ -7,19 +7,29 @@ services:
     # pg_trgm/pgcrypto/vector are all already present in this image -- no
     # postgresql-contrib needed (verified directly; see test/global-setup.ts,
     # which relies on the same fact for the test suite's Testcontainers DB).
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:0.8.6-pg16
     container_name: ${COMPOSE_PROJECT_NAME:-tachy}-postgres
     restart: unless-stopped
+    # Docker's default /dev/shm is 64MB. A parallel index build allocates its
+    # whole maintenance_work_mem there, so rebuilding the HNSW/GIN indexes
+    # (a large seed, a reembed) failed with "could not resize shared memory
+    # segment ... No space left on device".
+    shm_size: 1gb
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-tachy}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tachy}
       POSTGRES_DB: ${POSTGRES_DB:-tachy}
+      TACHY_APP_DB_PASSWORD: ${TACHY_APP_DB_PASSWORD:-}
+      TACHY_BACKUP_DB_PASSWORD: ${TACHY_BACKUP_DB_PASSWORD:-}
     ports:
       # localhost-only: nothing on the office LAN needs raw Postgres access
       - "127.0.0.1:${TACHY_PG_PORT:-5433}:5432"
     volumes:
       - tachy-postgres-data:/var/lib/postgresql/data
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/10-schema.sql:ro
+      - ./db/roles.sql:/docker-entrypoint-initdb.d/20-roles.sql:ro
+      - ./deploy/postgres/role-passwords.sh:/docker-entrypoint-initdb.d/30-role-passwords.sh:ro
+      - ./deploy/postgres/schema-stamp.sh:/docker-entrypoint-initdb.d/40-schema-stamp.sh:ro
     healthcheck:
       test:
         [
@@ -31,11 +41,11 @@ services:
       retries: 5
 
   api:
-    image: ${TACHY_IMAGE:-diegokoes/tachy:latest}
+    image: ${TACHY_IMAGE:-ghcr.io/diegokoes/tachy:main}
     build:
       context: .
       args:
-        VITE_DEV_BADGE: ${VITE_DEV_BADGE:-}
+        TACHY_COMMIT: ${TACHY_COMMIT:-}
     container_name: ${COMPOSE_PROJECT_NAME:-tachy}-api
     restart: unless-stopped
     env_file: .env
@@ -44,6 +54,8 @@ services:
       # `npm run sync seed` truncates. Its last-ditch refusal is this variable,
       # so the deployed database must always carry it.
       NODE_ENV: production
+      TACHY_DB_APP_NAME: tachy-api
+      TACHY_DB_POOL_MAX: "15"
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,9 +81,8 @@ services:
   #   docker compose run --rm cli npm run sync embed-backfill
   cli:
     # No `build:` — a second build definition for the same tag would race the
-    # api's, and drop VITE_DEV_BADGE from the SPA the api serves. `up -d --build`
-    # produces the image this runs on.
-    image: ${TACHY_IMAGE:-diegokoes/tachy:latest}
+    # api's. `up -d --build` produces the image this runs on.
+    image: ${TACHY_IMAGE:-ghcr.io/diegokoes/tachy:main}
     profiles: ["tools"]
     env_file: .env
     environment:
@@ -80,6 +91,8 @@ services:
       # is meant to be seeded. The dev .env sets NODE_ENV=development; a stack
       # that says nothing gets the refusal.
       NODE_ENV: ${NODE_ENV:-production}
+      TACHY_DB_APP_NAME: tachy-cli
+      TACHY_DB_POOL_MAX: "5"
     depends_on:
       postgres:
         condition: service_healthy

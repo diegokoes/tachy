@@ -1,12 +1,10 @@
 <script lang="ts">
   import { Chip } from "../tui";
-  import { growBar } from "../motion";
   import { fill, type Item } from "./items";
 
   let {
     item,
     selected = false,
-    delay = 0,
     el = $bindable(),
     onopen,
     onfocus,
@@ -15,8 +13,6 @@
     item: Item;
     /** Whether the list cursor is on this row. */
     selected?: boolean;
-    /** Stagger for the relevance gauge, from the row's position. */
-    delay?: number;
     /** The button itself, so the list can scroll the cursor into view. */
     el?: HTMLElement;
     onopen: () => void;
@@ -45,13 +41,7 @@
             item.relevance * 100,
           )}%"
         >
-          <span
-            class="fill"
-            use:growBar={{
-              pct: fill(item.relevance),
-              delay,
-            }}
-          ></span>
+          <span class="fill" style="height: {fill(item.relevance)}%"></span>
         </span>
       {/if}
 
@@ -72,7 +62,7 @@
             {#if item.customer}
               <Chip
                 tone="accent"
-                title="specific to this customer's install, not general product behaviour"
+                title="customer-specific; not general product behaviour"
                 >{item.customer}</Chip
               >
             {/if}
@@ -103,14 +93,14 @@
     padding: var(--pad-3);
   }
   .row.entry {
-    --kind: var(--accent);
+    --kind: var(--entry);
   }
   .row.doc {
     --kind: var(--doc);
   }
   /* An article is curated rather than imported, so it reads as its own shelf. */
   .row.article {
-    --kind: var(--ok, var(--accent));
+    --kind: var(--article);
   }
   /* Only `.cursor` paints — hovering MOVES the cursor rather than lighting a
      second card, so there is exactly one highlight and the pointer and the

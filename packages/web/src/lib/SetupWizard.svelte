@@ -13,7 +13,7 @@
   import { slugify } from "./slug";
   import AuthShell from "./AuthShell.svelte";
   import TypeLine from "./TypeLine.svelte";
-  import { Actions, Button, Checkbox, Field, Meter, Note, Panel, Select } from "./tui";
+  import { Actions, Button, Checkbox, DeleteButton, Field, Meter, Note, Panel, Select } from "./tui";
 
   let { onDone, onSkip }: { onDone: () => void; onSkip: () => void } = $props();
 
@@ -153,7 +153,7 @@
 
       <div class="body">
         {#if STEPS[step] === "account"}
-          <h2>Your admin account</h2>
+          <h2>Your app admin account</h2>
           <div class="grid">
             <Field label="email" required error={emailErr}>
               <input type="email" autocomplete="username" bind:value={email} />
@@ -225,12 +225,9 @@
                 />
                 <span class="slug">{p.name ? slugify(p.name) : ""}</span>
                 {#if products.length > 1}
-                  <Button
-                    variant="ghost"
-                    tone="danger"
-                    square
-                    icon="cancel"
-                    aria-label="remove"
+                  <DeleteButton
+                    label="remove"
+                    confirm={false}
                     onclick={() => products.splice(i, 1)}
                   />
                 {/if}
@@ -251,7 +248,7 @@
             </div>
           </div>
         {:else if STEPS[step] === "agent"}
-          <h2>The agent</h2>
+          <h2>Global agent config</h2>
           <div class="grid">
             <Field label="provider">
               <Select
@@ -265,16 +262,15 @@
             <Field
               label="api key or token"
               info={agentProvider === "claude"
-                ? "An API key from console.anthropic.com, or a subscription token from 'claude setup-token'. Stored encrypted."
+                ? "API key (console.anthropic.com) or subscription token (claude setup-token). Stored encrypted."
                 : "Stored encrypted."}
             >
               <input type="password" autocomplete="off" bind:value={agentKey} />
             </Field>
             {#if agentKeyIsOAuth}
               <Note tone="accent">
-                Recognised as a Claude <strong>subscription token</strong> — saved as the
-                organisation-wide default. Chats will run on that account's usage limits
-                until individual users add their own under Settings › Keys.
+                Claude <strong>subscription token</strong>. Saved as your own key, under
+                this admin account; everyone else sets theirs in Settings › Keys.
               </Note>
             {/if}
             <Field label="effort">
@@ -306,7 +302,7 @@
           back={step > 0 ? { label: "back", onclick: back } : undefined}
           primary={{
             label: STEPS[step] === "agent" ? "finish" : "next",
-            icon: STEPS[step] === "agent" ? ("save" as const) : ("next" as const),
+            icon: STEPS[step] === "agent" ? ("create" as const) : ("next" as const),
             onclick: next,
             busy,
           }}

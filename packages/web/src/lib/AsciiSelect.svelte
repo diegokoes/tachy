@@ -3,7 +3,8 @@
   import { float } from "./tui/float";
 
   type Val = string | number;
-  type Opt = { value: Val; label: string; disabled?: boolean };
+  /** `hint` is said quietly after the label, and searched with it. */
+  type Opt = { value: Val; label: string; hint?: string; disabled?: boolean };
   type OptIn = Opt | string | number;
 
   let {
@@ -12,16 +13,43 @@
     title,
     disabled = false,
     active = false,
+    keepOpen = false,
+    searchable = false,
+    filterPlaceholder = "filter…",
+    placeholder,
+    clearable,
     onchange,
     "aria-label": ariaLabel,
   }: {
     value: Val;
-    options: OptIn[];
+    /** readonly, so a vocabulary declared `as const` can be passed as it is. */
+    options: readonly OptIn[];
     title?: string;
     disabled?: boolean;
     /** Holds a non-default value — worn as an accent border, so a narrowed
      *  list is visible without a separate "N active" counter. */
     active?: boolean;
+    /**
+     * Leave the panel up after a pick, and let a second click on the picked
+     * option fall back to the empty one. For rows of filters, where the point
+     * is trying values quickly rather than committing to one.
+     */
+    keepOpen?: boolean;
+    /** Offer the filter box however short the list, for lists that grow with
+     *  the catalog rather than staying a fixed vocabulary. */
+    searchable?: boolean;
+    filterPlaceholder?: string;
+    /**
+     * What the trigger says while nothing is picked. A filter row wants the
+     * unfiltered state named ("any") without spending a list row on an
+     * option that means "no option".
+     */
+    placeholder?: string;
+    /**
+     * Whether a second click on the picked option clears it. Defaults to
+     * whether the list carries an empty option.
+     */
+    clearable?: boolean;
     onchange?: (v: Val) => void;
     "aria-label"?: string;
   } = $props();
@@ -44,7 +72,8 @@
    * on. That needs ids, and ids have to be unique per instance because this is
    * every dropdown in the product.
    */
-  const listId = `asel-${crypto.randomUUID().slice(0, 8)}`;
+  const uid = $props.id();
+  const listId = `asel-${uid}`;
   const optId = (i: number) => `${listId}-opt-${i}`;
 
   let root: HTMLDivElement;
@@ -53,15 +82,20 @@
   let scrollEl = $state<HTMLElement>();
   let queryEl = $state<HTMLInputElement>();
 
-  const filterable = $derived(opts.length > FILTERABLE);
+  const filterable = $derived(searchable || opts.length > FILTERABLE);
   const shown = $derived.by(() => {
     const q = query.trim().toLowerCase();
     if (!q) return opts;
-    return opts.filter((o) => o.label.toLowerCase().includes(q));
+    return opts.filter((o) =>
+      `${o.label} ${o.hint ?? ""}`.toLowerCase().includes(q),
+    );
   });
 
+  const canClear = $derived(clearable ?? opts.some((o) => o.value === ""));
   const selectedIndex = $derived(opts.findIndex((o) => o.value === value));
-  const label = $derived(selectedIndex >= 0 ? opts[selectedIndex].label : "");
+  const label = $derived(
+    selectedIndex >= 0 ? opts[selectedIndex].label : (placeholder ?? ""),
+  );
 
   function openPanel() {
     if (disabled) return;
@@ -79,9 +113,10 @@
   function choose(i: number) {
     const o = shown[i];
     if (!o || o.disabled) return;
-    value = o.value;
-    onchange?.(o.value);
-    close();
+    const next = keepOpen && canClear && o.value === value ? "" : o.value;
+    value = next;
+    onchange?.(next);
+    if (!keepOpen) close();
   }
   function step(dir: number) {
     const n = shown.length;
@@ -196,7 +231,7 @@
           type="text"
           bind:this={queryEl}
           bind:value={query}
-          placeholder="filter…"
+          placeholder={filterPlaceholder}
           aria-label="filter options"
           autocomplete="off"
           onkeydown={onKeydown}
@@ -232,6 +267,7 @@
                   >{o.value === value ? "›" : " "}</span
                 >
                 <span class="txt">{o.label}</span>
+                {#if o.hint}<span class="hint">{o.hint}</span>{/if}
               </div>
             {/each}
             {#if !shown.length}
@@ -257,6 +293,7 @@
     align-items: center;
     gap: 0.5rem;
     width: 100%;
+    min-height: var(--control-h);
     padding: var(--pad-2) var(--pad-3);
     font: inherit;
     color: var(--text);
@@ -352,6 +389,23 @@
     white-space: nowrap;
     cursor: pointer;
     color: var(--text);
+  }
+  /* The label keeps its room; the hint gives way first. */
+  .opt .txt {
+    flex: none;
+    max-width: 70%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .opt .hint {
+    flex: 0 10 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: auto;
+    padding-left: var(--pad-3);
+    font-size: var(--fs-xs);
+    color: var(--muted);
   }
   .opt .mark {
     flex: none;

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Marked } from "marked";
 import {
   wikilinkExtension,
+  imageRenderer,
   markBrokenLinks,
 } from "../packages/web/src/lib/markdown";
 
@@ -80,5 +81,42 @@ describe("wikilinks are reachable without a pointer", () => {
     );
     expect(out).toMatch(/class="wikilink broken"[^>]*data-wikilink="missing"/);
     expect(out).toMatch(/class="wikilink broken"[^>]*tabindex="0"/);
+  });
+});
+
+describe("markdown images", () => {
+  const withImages = new Marked({ gfm: true }).use({ renderer: imageRenderer });
+  const img = (src: string) =>
+    withImages.parse(src, { async: false }) as string;
+  const asset = "/api/library/assets/0b6a8f5e-3c1d-4e2f-9a7b-1c2d3e4f5a6b";
+
+  it("renders one of the library's own images", () => {
+    const out = img(`![the spooler](${asset} "queue")`);
+    expect(out).toContain(`<img src="${asset}"`);
+    expect(out).toContain('alt="the spooler"');
+    expect(out).toContain('title="queue"');
+    expect(out).toContain('loading="lazy"');
+  });
+
+  /** An outside image is a request every reader's browser would make. */
+  it("shows an outside image as its alt text and never loads it", () => {
+    const out = img("![leak](https://example.invalid/p.png?d=secret)");
+    expect(out).not.toContain("<img");
+    expect(out).not.toContain("example.invalid");
+    expect(out).toContain("leak");
+  });
+
+  it("refuses a path that only starts like an asset", () => {
+    expect(img(`![x](${asset}/../../users)`)).not.toContain("<img");
+    expect(img("![x](/api/library/assets/not-a-uuid)")).not.toContain("<img");
+  });
+
+  it("escapes the alt text either way", () => {
+    expect(img(`![<b>"x"</b>](${asset})`)).toContain(
+      'alt="&lt;b>&quot;x&quot;&lt;/b>"',
+    );
+    expect(img("![<b>x</b>](https://example.invalid/a.png)")).not.toContain(
+      "<b>",
+    );
   });
 });

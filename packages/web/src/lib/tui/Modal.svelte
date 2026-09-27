@@ -8,9 +8,10 @@
 
 <script lang="ts">
   import { onMount, type Snippet } from "svelte";
-  import { gsap, reducedMotion } from "../gsap";
   import Scrollbar from "../Scrollbar.svelte";
+  import { scrollport } from "../scrollport.svelte";
   import Scrim from "./Scrim.svelte";
+  import { portal } from "./portal";
   import Button from "./Button.svelte";
   import type { IconName } from "./icons";
 
@@ -30,7 +31,7 @@
     barExtra,
     children,
   }: {
-    /** The dialog's accessible name. Never drawn — the chrome carries no title. */
+    /** The dialog's accessible name, and the label drawn in the titlebar. */
     title?: string;
     confirmLabel?: string;
     /** The bar is icon-only, so a confirm that isn't a save must say so. */
@@ -65,6 +66,18 @@
   let mine = 0;
   const top = $derived(mine === depth);
 
+  /* A click is dismissal only when the press also began on the stage. A select
+     option that hangs past the dialog's edge closes its panel on pointerdown, so
+     the release lands on the stage and the browser fires the click there. */
+  let pressedStage = false;
+  function onStageDown(e: PointerEvent) {
+    pressedStage = e.target === e.currentTarget;
+  }
+  function onStageClick(e: MouseEvent) {
+    if (pressedStage && e.target === e.currentTarget) onCancel();
+    pressedStage = false;
+  }
+
   const FOCUSABLE =
     'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
@@ -72,43 +85,24 @@
     mine = take();
     const restore = document.activeElement as HTMLElement | null;
     /* One lock for the whole stack: the innermost dialog must not release it
-       on the way out while an outer one is still open. */
+       on the way out while an outer one is still open.
+
+       Both boxes, because the body is not what scrolls here — the view scrolls
+       inside `main`, so locking the body alone left the page running under the
+       dialog. Locking it anyway still matters on the surfaces that do. */
+    const port = scrollport();
     const locked = document.body.style.overflow;
+    const lockedPort = port?.style.overflow ?? "";
     document.body.style.overflow = "hidden";
+    if (port) port.style.overflow = "hidden";
     win?.focus();
 
-    const tl =
-      win && !reducedMotion()
-        ? gsap
-            .timeline()
-            /* clearProps is load-bearing, not tidiness: GSAP leaves the
-               transform inline when the tween lands, and a transformed
-               ancestor is a containing block — which would quietly turn every
-               `position: fixed` popup inside the dialog back into an absolute
-               one, cropped by the scrolling body. */
-            .from(win, {
-              scaleY: 0.06,
-              autoAlpha: 0,
-              duration: 0.17,
-              ease: "power3.out",
-              clearProps: "transform,opacity,visibility",
-            })
-            .from(
-              win.querySelectorAll<HTMLElement>(".reveal"),
-              {
-                autoAlpha: 0,
-                duration: 0.13,
-                ease: "none",
-                clearProps: "opacity,visibility",
-              },
-              "<0.06",
-            )
-        : null;
-
     return () => {
-      tl?.kill();
       depth--;
-      if (depth === 0) document.body.style.overflow = locked;
+      if (depth === 0) {
+        document.body.style.overflow = locked;
+        if (port) port.style.overflow = lockedPort;
+      }
       restore?.focus?.();
     };
   });
@@ -153,10 +147,15 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-<div class="over">
+<div class="over" use:portal>
   <Scrim onclick={onCancel} soft={!top} />
 
-  <div class="stage" role="presentation" onclick={onCancel}>
+  <div
+    class="stage"
+    role="presentation"
+    onpointerdown={onStageDown}
+    onclick={onStageClick}
+  >
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <div
       class="win"
@@ -169,48 +168,55 @@
       style="width: min({width}, 100%)"
       onclick={(e) => e.stopPropagation()}
     >
-      <div class="bar reveal">
-        {#if destructive}
+      <div class="bar">
+        <div class="side">
+          {#if destructive}
+            <Button
+              variant="ghost"
+              tone="danger"
+              square
+              icon={destructive.icon ?? "delete"}
+              morph
+              title={destructive.label}
+              aria-label={destructive.label}
+              busy={destructive.busy}
+              disabled={destructive.disabled}
+              onclick={destructive.onclick}
+            />
+          {/if}
+        </div>
+
+        <!-- aria-hidden: the window already carries this string as its
+             accessible name, and a screen reader should not hear it twice. -->
+        <div class="title" aria-hidden="true">{title}</div>
+
+        <div class="side end">
+          {#if barExtra}{@render barExtra()}{/if}
+
           <Button
             variant="ghost"
-            tone="danger"
             square
-            icon={destructive.icon ?? "del"}
-            title={destructive.label}
-            aria-label={destructive.label}
-            busy={destructive.busy}
-            disabled={destructive.disabled}
-            onclick={destructive.onclick}
+            icon="close"
+            title={cancelLabel}
+            aria-label={cancelLabel}
+            onclick={onCancel}
           />
-        {/if}
-
-        <span class="gap"></span>
-
-        {#if barExtra}{@render barExtra()}{/if}
-
-        <Button
-          variant="ghost"
-          square
-          icon="cancel"
-          title={cancelLabel}
-          aria-label={cancelLabel}
-          onclick={onCancel}
-        />
-        {#if onConfirm}
-          <Button
-            variant={danger ? "danger" : "primary"}
-            square
-            icon={confirmIcon}
-            title={confirmLabel}
-            aria-label={confirmLabel}
-            {busy}
-            {disabled}
-            onclick={onConfirm}
-          />
-        {/if}
+          {#if onConfirm}
+            <Button
+              variant={danger ? "danger" : "primary"}
+              square
+              icon={confirmIcon}
+              title={confirmLabel}
+              aria-label={confirmLabel}
+              {busy}
+              {disabled}
+              onclick={onConfirm}
+            />
+          {/if}
+        </div>
       </div>
 
-      <div class="content reveal">
+      <div class="content">
         <div class="body" bind:this={bodyEl}>{@render children?.()}</div>
         <Scrollbar target={bodyEl} />
       </div>
@@ -238,14 +244,13 @@
      different material laid over the first. One width, always — a dialog that
      shrink-wrapped its content changed shape whenever a section unfolded. */
   .win {
-    transform-origin: center;
     display: flex;
     flex-direction: column;
     min-width: 0;
     min-height: 0;
     /* dvh, not vh: a mobile URL bar must not be able to crop the titlebar. */
     max-height: min(calc(100dvh - 2 * var(--pad-4)), 46rem);
-    background: var(--window-bg);
+    background: var(--dialog-bg);
     border: var(--panel-line);
     border-radius: var(--radius);
     box-shadow: 0 8px 30px var(--drop);
@@ -257,11 +262,14 @@
     border-color: var(--danger);
   }
 
-  /* The titlebar. Empty on the left by design: the dialog's name is carried by
-     what opened it, and a heading here only ever repeated that. */
+  /* The titlebar: what you are doing, between the buttons that end it. Three
+     columns rather than a flex row with a spacer, so the name sits at the
+     centre of the window and not at the centre of whatever is left over — the
+     two 1fr flanks are equal whether or not a destructive action is present. */
   .bar {
     flex: none;
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr minmax(0, auto) 1fr;
     align-items: center;
     gap: var(--pad-2);
     min-height: calc(var(--row-h) + var(--pad-2));
@@ -271,8 +279,26 @@
   .win.danger .bar {
     border-bottom-color: var(--danger);
   }
-  .gap {
-    flex: 1;
+  .side {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+    min-width: 0;
+  }
+  .side.end {
+    justify-content: flex-end;
+  }
+  /* A long name gives up its width before the buttons do. */
+  .title {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: var(--label-spacing);
+    user-select: none;
   }
 
   /* The scroll lives on .body alone, so the bar stays put while a long form

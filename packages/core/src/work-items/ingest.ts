@@ -1,4 +1,4 @@
-import { sql, toDate } from "../infra/db";
+import { sql, toDate, jsonb } from "../infra/db";
 import type { RawWorkItem } from "../sources/source";
 import { resolveCustomerByEmail } from "../catalog/customers";
 import { routeIngest } from "../sources/projects";
@@ -38,7 +38,7 @@ export async function ingestWorkItem(
     route.customerId &&
     match.customerId &&
     route.customerId !== match.customerId
-      ? "the sender's email domain points at a different customer than the project this came from — the project won; check which is wrong"
+      ? "sender domain and project map to different customers; project won, check which is wrong"
       : undefined;
 
   return sql.begin(async (tx) => {
@@ -50,7 +50,7 @@ export async function ingestWorkItem(
       values
         (${connId}, ${raw.externalId}, ${raw.externalUrl ?? null}, ${raw.kind}, ${raw.title ?? null},
          ${raw.status ?? null}, ${raw.groupKey ?? null}, ${sourceProjectId}, ${productId}, ${teamId}, ${customerId}, ${raw.requester ?? null},
-         ${sql.json((raw.raw ?? {}) as any)}, ${toDate(raw.sourceCreatedAt)}, ${toDate(raw.sourceUpdatedAt)})
+         ${jsonb(raw.raw ?? {})}, ${toDate(raw.sourceCreatedAt)}, ${toDate(raw.sourceUpdatedAt)})
       on conflict (source_connection_id, external_id) do update set
         title = excluded.title,
         status = excluded.status,
@@ -102,12 +102,9 @@ export async function ingestWorkItem(
       teamId: item.team_id,
       customerId: item.customer_id,
       customerUnitId: item.customer_unit_id ?? null,
-      /*
-       * Only when the routing actually decided the stored value. The upsert
-       * leaves an existing attribution alone, so on a re-fetch this used to
-       * report "the project won; check which is wrong" beside a customer_id
-       * that nothing had touched.
-       */
+      // Only when routing decided the stored value. The upsert leaves an
+      // existing attribution alone, so on a re-fetch the stored customer_id
+      // did not come from this routing and there is no conflict to report.
       ...(item.customer_id !== customerId
         ? {}
         : conflict

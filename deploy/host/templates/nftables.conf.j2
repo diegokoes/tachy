@@ -1,0 +1,21 @@
+#!/usr/sbin/nft -f
+# Managed by deploy/host/playbook.yml. Only this table is touched: Docker keeps
+# its own rules in the same ruleset, so there is no `flush ruleset` here.
+table inet tachy_host
+delete table inet tachy_host
+
+table inet tachy_host {
+  set ssh_allowed {
+    type ipv4_addr
+    flags interval
+    elements = { 127.0.0.1{% for c in (ssh_allowed_cidrs + (backup_downloaders | selectattr('from', 'defined') | map(attribute='from') | list)) | unique %}, {{ c }}{% endfor %}{% if tailscale_enabled %}, {{ tailscale_cidr }}{% endif %} }
+  }
+
+  chain input {
+    type filter hook input priority filter; policy accept;
+    ct state established,related accept
+    iif lo accept
+    tcp dport 22 ip saddr @ssh_allowed accept
+    tcp dport 22 drop
+  }
+}

@@ -524,19 +524,16 @@ describe("azure-devops sync project list", () => {
     await sql`delete from source_connections where slug = 'ado'`;
   });
 
-  const register = (externalKey: string, role: "knowledge" | "tracker") =>
+  const register = (externalKey: string, withProduct: boolean) =>
     addSourceProject({
       sourceSlug: "ado",
       externalKey,
-      role,
-      ...(role === "knowledge"
-        ? { productSlug: "tpd" }
-        : { teamSlug: "test-team" }),
+      ...(withProduct ? { productSlug: "tpd" } : { teamSlug: "test-team" }),
     });
 
   it("syncs the projects registered against the connection, not config.projects", async () => {
-    await register("RegA", "knowledge");
-    await register("RegB", "knowledge");
+    await register("RegA", true);
+    await register("RegB", true);
     const { calls } = mockFetch({
       "/RegA/_apis/wit/wiql": { workItems: [] },
       "/RegB/_apis/wit/wiql": { workItems: [] },
@@ -546,9 +543,9 @@ describe("azure-devops sync project list", () => {
     expect(calls.every((c) => !c.includes("/ProjA/"))).toBe(true);
   });
 
-  it("ignores tracker-role projects — those receive created items, not synced ones", async () => {
-    await register("RegA", "knowledge");
-    await register("TrackerOnly", "tracker");
+  it("ignores projects without a product — those receive created items, not synced ones", async () => {
+    await register("RegA", true);
+    await register("TrackerOnly", false);
     const { calls } = mockFetch({ "/RegA/_apis/wit/wiql": { workItems: [] } });
     await source().listItems({});
     expect(calls.some((c) => c.includes("/RegA/"))).toBe(true);

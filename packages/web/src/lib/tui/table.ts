@@ -66,7 +66,7 @@ export type Draft = Record<string, string | number | boolean | null>;
 
 export function cellText<T>(c: Column<T>, row: T): string {
   const v = c.value ? c.value(row) : (row as Record<string, unknown>)[c.key];
-  return v == null || v === "" ? "—" : String(v);
+  return v == null || v === "" ? "-" : String(v);
 }
 
 /** Seeds the record form from a row. See the note on `Column.value`. */

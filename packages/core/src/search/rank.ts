@@ -1,4 +1,5 @@
 import { sql } from "../infra/db";
+import { MAX_PAGE } from "@tachy/contract";
 
 /**
  * One ranking definition for all three search surfaces.
@@ -169,5 +170,5 @@ export interface RankedRow {
 /** Reject a limit that is NaN, negative, or large enough to be a mistake. */
 export const clampLimit = (limit: number | undefined, fallback: number) =>
   Number.isFinite(limit) && (limit as number) > 0
-    ? Math.min(Math.floor(limit as number), 100)
+    ? Math.min(Math.floor(limit as number), MAX_PAGE)
     : fallback;

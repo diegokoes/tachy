@@ -53,7 +53,7 @@
               type="submit"
               variant="primary"
               square
-              icon="go"
+              icon="login"
               aria-label="sign in"
               title="sign in"
               {busy}

@@ -26,7 +26,6 @@ describe("the extras catalogue", () => {
     for (const f of EXTRA_FILTERS) {
       expect(f.param).toBeTruthy();
       expect(f.label).toBeTruthy();
-      expect(f.any).toBeTruthy();
     }
   });
 

@@ -50,39 +50,45 @@
     white-space: nowrap;
   }
 
+  /* The outline is an inset shadow so it stays inside the box: a dialog body
+     scrolls, and anything painted outside the element is clipped at its edge. */
   .track {
     box-sizing: border-box;
     display: block;
-    width: 2.4em;
-    height: 1.2em;
-    padding: var(--panel-line-w);
-    border: var(--panel-line-w) solid var(--border);
+    width: 2.1em;
+    height: 1.1em;
+    padding: 0.18em;
     border-radius: var(--radius-chip);
     background: var(--panel-solid);
-    transition: border-color 0.2s ease;
+    box-shadow: inset 0 0 0 1px var(--muted);
+    transition:
+      box-shadow 0.2s ease,
+      background 0.2s ease;
   }
   .knob {
     display: block;
     width: 50%;
     height: 100%;
     border-radius: var(--radius-chip);
-    background: var(--border);
+    background: var(--muted);
     transition:
       transform 0.2s ease,
       background 0.2s ease;
   }
 
   .tgl input:checked + .track {
-    border-color: var(--accent);
+    background: color-mix(in srgb, var(--ok) 16%, var(--panel-solid));
+    box-shadow: inset 0 0 0 1px var(--ok);
   }
   .tgl input:checked + .track .knob {
     transform: translateX(100%);
-    background: var(--accent);
+    background: var(--ok);
   }
 
   .tgl input:focus-visible + .track {
-    outline: 1px solid currentColor;
-    outline-offset: 2px;
+    box-shadow:
+      inset 0 0 0 1px var(--accent),
+      inset 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
   }
 
   @media (prefers-reduced-motion: reduce) {

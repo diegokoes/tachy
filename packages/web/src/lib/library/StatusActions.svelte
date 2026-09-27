@@ -1,0 +1,93 @@
+<script lang="ts">
+  import { Button } from "../tui";
+  import type { StatusAction } from "./status";
+
+  /**
+   * An item's lifecycle actions, drawn as a labelled column in the margin left
+   * of the reading measure. Which of them apply depends on the current status,
+   * so the column is taken out of flow: an entry moving from approved to
+   * archived drops two buttons and grows another, and in flow that walked the
+   * title and the whole body up and down the page.
+   */
+  let {
+    actions,
+    docked = false,
+  }: {
+    actions: StatusAction[];
+    /** Takes a column of its own instead of floating in the margin, for a
+        page whose content runs the full width and leaves no margin to use. */
+    docked?: boolean;
+  } = $props();
+</script>
+
+{#if actions.length}
+  <div class="rail" class:docked>
+    {#each actions as a (a.label)}
+      <Button
+        variant="ghost"
+        icon={a.icon}
+        tone={a.tone}
+        title={a.title ?? a.label}
+        disabled={a.disabled}
+        onclick={a.onclick}>{a.label}</Button
+      >
+    {/each}
+  </div>
+{/if}
+
+<style>
+  .rail {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--pad-2);
+    width: max-content;
+  }
+  .rail.docked {
+    position: static;
+  }
+  /* Marks in one column, labels in another: a ragged left edge on five ghost
+     buttons reads as five unrelated controls. */
+  .rail :global(.btn) {
+    justify-content: flex-start;
+    font-size: var(--fs-xs);
+    text-transform: uppercase;
+    letter-spacing: var(--label-spacing);
+    transform-origin: left center;
+    transition:
+      transform 0.18s ease-out,
+      font-weight 0.12s ease,
+      box-shadow 0.12s ease;
+  }
+  /* Grows by transform, which layout ignores: the neighbours hold still and
+     the gap above absorbs the extra height. */
+  .rail :global(.btn:hover:not(:disabled)) {
+    transform: scale(1.1);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rail :global(.btn) {
+      transition: none;
+    }
+  }
+
+  /* No margin left to sit in — the column rejoins the flow above the content
+     rather than printing itself over the first paragraph. */
+  @media (max-width: 68rem) {
+    .rail {
+      position: static;
+      flex-direction: row;
+      flex-wrap: wrap;
+      justify-content: center;
+      width: auto;
+      margin-bottom: var(--pad-3);
+      column-gap: var(--pad-3);
+    }
+    .rail :global(.btn) {
+      transform-origin: center;
+    }
+  }
+</style>

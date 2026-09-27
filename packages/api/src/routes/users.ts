@@ -7,6 +7,7 @@ import {
   setUserRole,
   setUserPassword,
   setUserDisabled,
+  setUserFlags,
   setUserDisplayName,
   listTeamMembers,
   listMemberships,
@@ -23,6 +24,8 @@ const createSchema = z.object({
   display_name: z.string().optional(),
   password: z.string().min(MIN_PASSWORD_LENGTH).optional(),
   role: z.enum(USER_ROLES).optional(),
+  service_account: z.boolean().optional(),
+  password_login_allowed: z.boolean().optional(),
 });
 
 const patchSchema = z.object({
@@ -30,6 +33,8 @@ const patchSchema = z.object({
   role: z.enum(USER_ROLES).optional(),
   password: z.string().min(MIN_PASSWORD_LENGTH).optional(),
   disabled: z.boolean().optional(),
+  service_account: z.boolean().optional(),
+  password_login_allowed: z.boolean().optional(),
 });
 
 const memberSchema = z.object({
@@ -52,6 +57,8 @@ export const users = new Hono()
         displayName: body.display_name,
         password: body.password,
         role: body.role,
+        serviceAccount: body.service_account,
+        passwordLoginAllowed: body.password_login_allowed,
       }),
     );
   })
@@ -64,6 +71,10 @@ export const users = new Hono()
     if (body.role !== undefined) await setUserRole(id, body.role);
     if (body.password !== undefined) await setUserPassword(id, body.password);
     if (body.disabled !== undefined) await setUserDisabled(id, body.disabled);
+    await setUserFlags(id, {
+      serviceAccount: body.service_account,
+      passwordLoginAllowed: body.password_login_allowed,
+    });
     return c.json({ ok: true });
   })
 

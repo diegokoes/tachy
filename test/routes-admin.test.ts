@@ -78,6 +78,37 @@ describe("component routes", () => {
     expect((await res.json()).error).toMatch(/no-such-product/);
   });
 
+  /* The architecture view draws the whole catalogue, so it needs every
+     component in one answer, each carrying the branch it hangs off. */
+  it("lists every component with its product and team", async () => {
+    const productId = await tpdProductId();
+    await addComponent({ productId, slug: "spooler", name: "Spooler" });
+    await addComponent({
+      productId,
+      slug: "spool-queue",
+      name: "Spool queue",
+      parentSlug: "spooler",
+    });
+
+    const res = await get("/api/components");
+    expect(res.status).toBe(200);
+    const rows: {
+      id: string;
+      slug: string;
+      parent_id: string | null;
+      product_slug: string;
+      team_slug: string;
+    }[] = await res.json();
+
+    const spooler = rows.find((r) => r.slug === "spooler")!;
+    const child = rows.find((r) => r.slug === "spool-queue")!;
+    expect(spooler.product_slug).toBe("tpd");
+    expect(spooler.team_slug).toBeTruthy();
+    expect(spooler.parent_id).toBeNull();
+    // parent_id alone carries the nesting; nothing else in the row says it.
+    expect(child.parent_id).toBe(spooler.id);
+  });
+
   it("rejects a slug with spaces in it", async () => {
     const res = await as("/api/products/tpd/components", "POST", {
       slug: "Label Renderer",
@@ -366,5 +397,107 @@ describe("customer component links", () => {
     const res = await as("/api/customers/northwind/components", "DELETE");
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/product_slug and component/);
+  });
+});
+
+describe("overview components", () => {
+  it("lays each component's entries over the tree", async () => {
+    const productId = await tpdProductId();
+    await addComponent({ productId, slug: "engine", name: "Engine" });
+    await addComponent({
+      productId,
+      slug: "engine-timer",
+      name: "Timer",
+      parentSlug: "engine",
+    });
+    await saveKnowledgeEntry({
+      status: "approved",
+      productId,
+      component: "engine-timer",
+      issueSummary: "The timer drifts after a DST change",
+    });
+
+    const res = await get("/api/overview/components");
+    expect(res.status).toBe(200);
+    const rows = await res.json();
+    const engine = rows.find((r: { slug: string }) => r.slug === "engine");
+    expect(
+      rows.find((r: { slug: string }) => r.slug === "engine-timer"),
+    ).toMatchObject({
+      parent_id: engine.id,
+      product_slug: "tpd",
+      entries: 1,
+      searchable: 1,
+    });
+    expect(engine).toMatchObject({
+      parent_id: null,
+      entries: 0,
+      searchable: 0,
+    });
+    expect(engine).not.toHaveProperty("description");
+  });
+});
+
+describe("overview issues", () => {
+  it("names what is unfinished in the catalog", async () => {
+    const productId = await tpdProductId();
+    await addLabel(productId, "undescribed");
+    await addLabel(productId, "regression", "Worked before.");
+
+    const res = await get("/api/overview/issues?page=structure");
+    expect(res.status).toBe(200);
+    const issues = await res.json();
+    expect(issues["labels.no_description"]).toEqual({
+      n: 1,
+      items: [{ key: expect.any(String), label: "undescribed" }],
+    });
+    for (const v of Object.values(issues) as { n: number; items: unknown[] }[])
+      expect(v.items.length).toBeLessThanOrEqual(Math.max(v.n, 0));
+  });
+
+  it("names people in no team, and says nothing of app admins when there is one", async () => {
+    await createUser({ email: "loner@example.com" });
+    const issues = await (await get("/api/overview/issues?page=access")).json();
+    expect(issues["users.no_app_admin"]).toEqual({ n: 0, items: [] });
+    expect(
+      issues["users.no_team"].items.map((i: { label: string }) => i.label),
+    ).toContain("loner@example.com");
+  });
+
+  it("answers the integrations page with a count and names per issue", async () => {
+    const issues = await (
+      await get("/api/overview/issues?page=integrations")
+    ).json();
+    for (const key of [
+      "sources.untokened",
+      "sources.never_synced",
+      "projects.no_wiki",
+      "repos.failing",
+      "repos.no_component",
+    ])
+      expect(issues[key]).toMatchObject({
+        n: expect.any(Number),
+        items: expect.any(Array),
+      });
+  });
+
+  it("keeps the workers and system pages to app admins", async () => {
+    await createUser({
+      email: "member@example.com",
+      password: "a-long-password",
+    });
+    const member = await loginCookie(
+      app,
+      "member@example.com",
+      "a-long-password",
+    );
+    for (const page of ["workers", "system"]) {
+      const res = await app.request(`/api/overview/issues?page=${page}`, {
+        headers: { Cookie: member },
+      });
+      expect(res.status).toBe(403);
+      expect((await get(`/api/overview/issues?page=${page}`)).status).toBe(200);
+    }
+    expect((await get("/api/overview/issues?page=nowhere")).status).toBe(400);
   });
 });

@@ -329,7 +329,6 @@ describe("registering projects on a connection", () => {
       ...json({
         source_slug: "ui-conn",
         external_key: groups[0].key,
-        role: "knowledge",
         product_slug: "tpd",
       }),
       headers,
@@ -340,11 +339,15 @@ describe("registering projects on a connection", () => {
       await app.request("/api/source-projects?source=ui-conn", {
         headers: { cookie },
       })
-    ).json()) as { external_key: string; role: string; team_slug: string }[];
+    ).json()) as {
+      external_key: string;
+      product_slug: string;
+      team_slug: string;
+    }[];
     expect(list).toEqual([
       expect.objectContaining({
         external_key: "Proj A",
-        role: "knowledge",
+        product_slug: "tpd",
         team_slug: "test-team",
       }),
     ]);

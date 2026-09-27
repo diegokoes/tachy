@@ -34,15 +34,15 @@ Codex CLI) or the built-in web chat agent.
 
 ## Install
 
-Postgres initializes from `db/schema.sql`, so clone the repo first. There is no
-published image; the stack builds locally.
+Postgres initializes from `db/schema.sql`, so clone the repo first. The stack
+builds locally; the published image is private.
 
 ```bash
 git clone https://github.com/diegokoes/tachy.git
 cd tachy
 cp .env.example .env      # set TACHY_SECRET_KEY and TACHY_SESSION_SECRET
 docker compose up -d --build
-curl localhost:8787/health
+curl localhost:8787/readyz
 ```
 
 On first boot with an empty database, open the web UI and the one-time setup
@@ -71,42 +71,39 @@ Code, `.vscode/mcp.json` for VS Code Copilot. Other clients point at
 
 ## Deployment
 
-Two stacks on one host, both driven by `Jenkinsfile`:
+Production runs on one host with `docker-compose.yml` plus
+`deploy/compose.prod.yml`: Caddy is the only published service (TLS on 443),
+the api connects to Postgres as the least-privilege `tachy_app` role, and every
+container has memory, CPU and process limits. The dev stack deploys the same
+way on its own machine, with `TACHY_ENV_BADGE=dev`.
 
-| Branch | Stack      | Image tag | Path             | Ports       |
-| ------ | ---------- | --------- | ---------------- | ----------- |
-| `main` | production | `latest`  | `/opt/tachy`     | 8787 / 5433 |
-| `dev`  | dev        | `dev`     | `/opt/tachy-dev` | 8788 / 5434 |
+- **Build once.** GitHub Actions runs `typecheck`, `web:check` and `coverage`
+  on every pull request and push to `dev` and `main`, then pushes
+  `ghcr.io/diegokoes/tachy:sha-<commit>`. Hosts never build.
+- **Deploy.** `ssh tachy@<host> tachy-deploy <commit|branch>` pins the image
+  digest, checks out the same commit, takes an encrypted backup, drains running
+  chat turns, waits for `/readyz`, runs `load/smoke.js`, and rolls itself back
+  on failure. A changed `db/schema.sql` is applied as a diff
+  ([pg-schema-diff](https://github.com/stripe/pg-schema-diff)); a plan that
+  would lose data needs `--allow-destructive`.
+- **Host.** `deploy/host/playbook.yml` (Ansible) sets up users, SSH, the
+  firewall, Docker, read-only SFTP for backup downloads, and the systemd timers
+  for `tachy-backup` (encrypted dumps every 6 hours, a weekly restore test) and
+  `tachy-watch` (alerts in Teams, a healthchecks.io heartbeat).
+- **Backups** leave the host only as age ciphertext, pulled to laptops by
+  `deploy/backup/Get-TachyBackup.ps1`.
 
-Every branch runs `npm ci`, `typecheck`, `web:check` and `coverage`, then builds
-an image. Only `main` and `dev` push and deploy; a feature branch gets its own
-`branch-*` tag that nothing pulls. Deploying is an SSH to the host followed by
-`docker compose pull api && docker compose up -d api`. The dev stage first
-resets its checkout to `origin/dev`, because `docker-compose.yml` is itself
-versioned and has to match the image being pulled.
+Procedures are in [deploy/runbooks](deploy/runbooks/README.md); the reasoning is
+in [DEPLOYMENT-ARCHITECTURE.md](DEPLOYMENT-ARCHITECTURE.md).
 
-The two stacks share nothing. `docker-compose.yml` takes its project name, ports
-and image tag from the environment, so dev is just a second checkout with its
-own `.env` (see `.env.dev.example`), its own network, containers, volumes and
-database. The image the servers pull is private and exists for these two stacks
-only, which is why a fresh install builds instead.
-
-A restart drops in-flight chat turns. Logins survive it when
-`TACHY_SESSION_SECRET` is set, and past chats resume from the agent-home volume.
-
-**Backups.** `docker compose run --rm cli npm run sync backup` writes a
-`pg_dump -Fc` into `./backups/`. Schedule it and prune old dumps:
-
-```
-0 3 * * * cd /opt/tachy && docker compose run --rm cli npm run sync backup && find backups -name '*.dump' -mtime +14 -delete
-```
-
-Dumps hold real ticket data. Restoring vault credentials also needs the original
+A redeploy drains chat turns for up to three minutes before stopping the api.
+Logins survive it when `TACHY_SESSION_SECRET` is set, and past chats resume
+from the agent-home volume. Restoring vault credentials needs the original
 `TACHY_SECRET_KEY`, so keep the `.env` secrets in a password manager.
 
-There is deliberately no migrations directory, so upgrading an existing
-deployment is a backup, a fresh database from the current `db/schema.sql`, and a
-restore of the data tables. See [CONTRIBUTING.md](CONTRIBUTING.md).
+There is deliberately no migrations directory. See
+[CONTRIBUTING.md](CONTRIBUTING.md) and
+[deploy/runbooks/schema-change.md](deploy/runbooks/schema-change.md).
 
 ## License
 

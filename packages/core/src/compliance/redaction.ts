@@ -94,6 +94,30 @@ export function scrubText(text: string | undefined, map: TokenMap): string {
   return out;
 }
 
+/** What stands in for the customer's own name in redacted text. */
+export const customerStandIn = (customerSlug: string | null | undefined) =>
+  customerSlug || "[CUSTOMER]";
+
+/**
+ * A deep copy of a source's raw payload for its adapter's `redactRaw` to scrub
+ * in place, or null when there is no object to copy.
+ */
+export function scrubbableCopy(raw: unknown): Record<string, any> | null {
+  return raw != null && typeof raw === "object"
+    ? (structuredClone(raw) as Record<string, any>)
+    : null;
+}
+
+/** Scrub each of `keys` on `obj` whose value is a string. */
+export function scrubStrings(
+  obj: Record<string, any>,
+  keys: Iterable<string>,
+  map: TokenMap,
+): void {
+  for (const k of keys)
+    if (typeof obj[k] === "string") obj[k] = scrubText(obj[k], map);
+}
+
 const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Collapses the whitespace a name is stored with onto what the text uses. */
@@ -208,7 +232,7 @@ export function redactNormalized(
   opts: RedactOptions,
 ): RawWorkItem {
   const { customerSlug, map } = opts;
-  const customerToken = customerSlug || "[CUSTOMER]";
+  const customerToken = customerStandIn(customerSlug);
 
   // authorLabel is where the display names actually live: `requester` and
   // `author` are account ids on most sources (a Freshdesk user id, an ADO

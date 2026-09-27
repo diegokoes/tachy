@@ -4,7 +4,10 @@ import {
   findCommand,
   commandAutoApprove,
 } from "../packages/api/src/commands";
-import { buildPrompt } from "../packages/api/src/routes/agent";
+import { buildPrompt } from "../packages/api/src/turn-config";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 describe("slash command registry", () => {
   it("exposes the built-in workflow commands", () => {
@@ -14,9 +17,10 @@ describe("slash command registry", () => {
         "analyze",
         "consult",
         "compact",
-        "create-ticket",
+        "az",
         "code",
         "ingest-wiki",
+        "wiki-draft",
       ]),
     );
   });
@@ -36,6 +40,75 @@ describe("slash command registry", () => {
       if (c.name !== "compact") expect(commandAutoApprove(c.name)).toEqual([]);
     expect(commandAutoApprove("save_knowledge_entry")).toEqual([]);
     expect(commandAutoApprove("")).toEqual([]);
+  });
+
+  /** Written by the wiki's gap list, so both arguments name themselves. */
+  it("wiki-draft names its arguments and falls back to the gap list", () => {
+    const t = findCommand("wiki-draft")!.expand(
+      "tpd component=printing article=spooler-stalls",
+    );
+    expect(t).toContain("list_wiki_gaps");
+    expect(t).toContain("article=<slug>");
+    expect(t).toContain("never from general knowledge");
+    expect(t).toContain(
+      "User arguments: tpd component=printing article=spooler-stalls",
+    );
+  });
+
+  /**
+   * An expansion points at a mode by name and the steps live in prompt.md.
+   * Renaming a heading there would leave the command naming a mode the model
+   * has never been told about.
+   */
+  it("names only modes the agent prompt defines", () => {
+    const prompt = readFileSync(
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        "..",
+        "packages/agent/prompt.md",
+      ),
+      "utf8",
+    );
+    const headings = new Set(
+      [...prompt.matchAll(/^### (.+?)(?: —|$)/gm)].map((m) =>
+        m[1].trim().toLowerCase(),
+      ),
+    );
+    const named = BUILTIN_COMMANDS.flatMap((c) =>
+      [...c.expand("").matchAll(/\b([A-Z][A-Z ]*[A-Z]) MODE\b/g)].map((m) =>
+        m[1].toLowerCase(),
+      ),
+    );
+    expect(named.length).toBeGreaterThan(4);
+    expect(named.filter((m) => !headings.has(m))).toEqual([]);
+  });
+
+  it("retires /create-ticket for the /az group", () => {
+    expect(findCommand("create-ticket")).toBeUndefined();
+    expect(findCommand("az")!.subcommands!.map((s) => s.name)).toEqual([
+      "new",
+      "explain",
+    ]);
+  });
+
+  it("/az new is the web app's own and never becomes an agent mode", () => {
+    const az = findCommand("az")!;
+    expect(az.subcommands!.find((s) => s.name === "new")).toMatchObject({
+      client: true,
+    });
+    expect(az.expand("new ProjA Bug")).toMatch(/web app/);
+    expect(az.expand("new ProjA Bug")).not.toMatch(/MODE/);
+  });
+
+  it("/az explain carries its own instructions and the id", () => {
+    const t = findCommand("az")!.expand("explain 4312");
+    expect(t).toContain("fetch_work_item");
+    expect(t).toContain("save nothing");
+    expect(t).toContain("User arguments: 4312");
+  });
+
+  it("/az with an unknown subcommand lists the real ones", () => {
+    expect(findCommand("az")!.expand("delete 1")).toContain("new, explain");
   });
 
   it("expands args into the command block", () => {

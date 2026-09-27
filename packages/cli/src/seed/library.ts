@@ -60,7 +60,7 @@ export async function seedLibrary(
                 ]),
           // The live row is the current version; a snapshot of it is what a
           // revision holds. Seeded ones only need to be shaped like one.
-          snapshot: JSON.stringify({ seeded: true, version }),
+          snapshot: tx.json({ seeded: true, version }),
           created_at: pastDate(rng, 90),
         });
       }

@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { keep, recall } from "../kept";
   import { api } from "../api";
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
   import { createResource, errText } from "../resource.svelte";
   import { slugify, uniqueSlug } from "../slug";
+  import { ComponentCache } from "../filing.svelte";
   import {
     Badge,
     Button,
@@ -20,10 +22,11 @@
     type Column,
     type Draft,
   } from "../tui";
-  import type { Component, Customer, Product, Repo, SourceProject } from "./rows";
+  import type { Customer, Product, Repo, SourceProject } from "./rows";
 import { INFO } from "./help";
 import { csv } from "../fields";
-  import { claimTopAction } from "./topAction.svelte";
+import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
+  import { sectionHoist } from "./sectionAction.svelte";
 
   type FoundRepo = { name: string; url: string; default_branch: string };
 
@@ -41,7 +44,7 @@ import { csv } from "../fields";
     [],
   );
 
-  let components = $state<Record<string, Component[]>>({});
+  const components = new ComponentCache();
   let error = $state<string | null>(null);
   let indexing = $state<string | null>(null);
   let found = $state<Record<string, FoundRepo[]>>({});
@@ -49,7 +52,7 @@ import { csv } from "../fields";
   let poll: ReturnType<typeof setInterval> | undefined;
 
   const knowledgeProjects = $derived(
-    projects.data.filter((p) => p.role === "knowledge"),
+    projects.data.filter((p) => p.product_id),
   );
   const projectOf = (id: string) =>
     knowledgeProjects.find((p) => p.id === id) ?? null;
@@ -77,6 +80,11 @@ import { csv } from "../fields";
     ),
   );
 
+  const extensionsOf = (r: Repo): string[] =>
+    Array.isArray(r.config?.include_extensions)
+      ? (r.config.include_extensions as string[])
+      : [];
+
   const freshness = (r: Repo) => {
     if (!r.last_indexed_at) return "never";
     const days = Math.floor(
@@ -92,17 +100,6 @@ import { csv } from "../fields";
       products.reload(),
       customers.reload(),
     ]);
-  }
-
-  async function loadComponents(productSlug: string) {
-    if (!productSlug || components[productSlug]) return;
-    try {
-      components[productSlug] = await api.get<Component[]>(
-        `/products/${productSlug}/components`,
-      );
-    } catch {
-      components[productSlug] = [];
-    }
   }
 
   /* Bulk linking, because an Azure DevOps project routinely holds fifty repos
@@ -254,14 +251,14 @@ import { csv } from "../fields";
       formOnly: true,
       edit: "text",
       required: true,
-      info: "The repo is cloned with the project connection's token.",
+      info: "Cloned with the project connection's token.",
     },
     {
       key: "source_project_id",
       label: "project",
       width: "13rem",
       edit: "select",
-      info: "Which registered project this repo belongs to. Its connection supplies the credentials that clone it.",
+      info: "Owning project. Its connection supplies clone credentials.",
       options: [
         { value: "", label: `(none, scope by ${t("product")})` },
         ...knowledgeProjects.map((p) => ({
@@ -279,7 +276,7 @@ import { csv } from "../fields";
       label: t("product"),
       formOnly: true,
       edit: "select",
-      info: "Only needed when the repo has no project. Ignored otherwise.",
+      info: "Only without a project.",
       options: [
         { value: "", label: "(from the project)" },
         ...myProducts.map((p) => ({ value: p.slug, label: p.name })),
@@ -290,7 +287,7 @@ import { csv } from "../fields";
       label: "customer",
       width: "10rem",
       edit: "select",
-      info: "Set this only for a customer's own addon repo. Left empty the repo is shared product code, and a customer-scoped search returns the shared ones too.",
+      info: "Customer addon repos only. Empty: shared code, included in customer-scoped search.",
       options: [
         { value: "", label: "(none, shared)" },
         ...customers.data.map((cu) => ({ value: cu.slug, label: cu.name })),
@@ -304,9 +301,9 @@ import { csv } from "../fields";
       info: INFO.repoComponent,
       options: (d) => [
         { value: "", label: "(none)" },
-        ...(components[productOfDraft(d)] ?? []).map((c) => ({
+        ...components.of(productOfDraft(d)).map((c) => ({
           value: c.slug,
-          label: `${c.name} (${c.slug})`,
+          label: c.name,
         })),
       ],
     },
@@ -316,25 +313,26 @@ import { csv } from "../fields";
       width: "8rem",
       edit: "text",
       initial: "main",
+      /* One row, one branch: the clone is --single-branch and repo_files is
+         unique on (repo, path). Two branches means linking the repo twice. */
+      info: "The one branch indexed. To index a second, link the repo again under another name.",
     },
     {
       key: "extensions",
-      label: "extensions",
+      label: "file types",
       formOnly: true,
       edit: "text",
-      info: "Comma-separated. Empty uses the built-in allowlist.",
-      value: (r) =>
-        (Array.isArray(r.config?.include_extensions)
-          ? (r.config.include_extensions as string[])
-          : []
-        ).join(", "),
+      /* The draft still carries it (`visible` only hides the input) because
+         the chip picker below the form is what edits this one. */
+      visible: () => false,
+      value: (r) => extensionsOf(r).join(", "),
     },
     {
       key: "max_file_kb",
       label: "max file KB",
       formOnly: true,
       edit: "text",
-      info: "Files larger than this are skipped. Empty means 200.",
+      info: "Larger files skipped. Default 200.",
       value: (r) => r.config?.max_file_kb ?? "",
     },
     { key: "index_status", label: "index", width: "8rem", cell: indexCell },
@@ -387,13 +385,14 @@ import { csv } from "../fields";
   // The component picker switches product as the form's project changes, so
   // every curatable product's components are on hand before the form opens.
   $effect(() => {
-    for (const p of myProducts) void loadComponents(p.slug);
+    for (const p of myProducts) void components.load(p.slug);
   });
 
   onDestroy(() => poll && clearInterval(poll));
   onMount(reload);
 
-  let filter = $state("");
+  let filter = $state(recall("admin.repos.filter", ""));
+  $effect(() => keep("admin.repos.filter", filter));
   const filtered = $derived.by(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return repos.data;
@@ -413,7 +412,7 @@ import { csv } from "../fields";
 </script>
 
 {#snippet projectCell(r: Repo)}
-  <span class:dim={!r.project_key}>{r.project_key ?? "—"}</span>
+  <span class:dim={!r.project_key}>{r.project_key ?? "-"}</span>
 {/snippet}
 
 {#snippet repoCell(r: Repo)}
@@ -448,7 +447,7 @@ import { csv } from "../fields";
       variant="ghost"
       size="sm"
       icon="index"
-      title="reindex"
+      title="clone this repo and re-read its files into the code index"
       busy={indexing === r.slug}
       disabled={r.index_status === "cloning" || r.index_status === "indexing"}
       onclick={() => reindex(r)}>index</Button
@@ -462,40 +461,79 @@ import { csv } from "../fields";
   {/each}
 {/snippet}
 
-{#snippet discoverField(f: {
+<!-- Two different verbs, kept apart on purpose. Finding asks the source what
+     repos exist and writes nothing; indexing clones one we already linked and
+     reads its files. They used to share a magnifier and a vocabulary. -->
+{#snippet formExtra(f: {
   mode: "create" | "edit";
   row: Repo | null;
   draft: Draft;
 })}
   {@const project = projectOf(String(f.draft.source_project_id ?? ""))}
   {@const hits = project ? (found[project.id] ?? []) : []}
-  {#if project}
-    <Field
-      label="discover"
-      info="Pick a repo instead of transcribing its clone URL."
-    >
-      <Button
-        variant="ghost"
-        size="sm"
-        icon="discover"
-        busy={discovering}
-        onclick={() => discover(f.draft)}>discover</Button
+  {#if project && f.mode === "create"}
+    <div class="find">
+      <Field
+        label="find a repo"
+        info="Ask the project's connection what it holds, instead of pasting a clone URL."
+        plain
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          icon="discover"
+          busy={discovering}
+          onclick={() => discover(f.draft)}
+          >ask {project.external_key}</Button
+        >
+      </Field>
+      {#if hits.length}
+        <div class="chips">
+          {#each hits as r (r.name)}
+            <Chip
+              tone={f.draft.url === r.url ? "accent" : "default"}
+              title={r.url}
+              onclick={() => {
+                f.draft.url = r.url;
+                if (r.default_branch) f.draft.default_branch = r.default_branch;
+              }}>{r.name}</Chip
+            >
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+  <!-- The allowlist is long and nobody remembers it, so it is offered rather
+       than described. Ticked chips are exactly what the field holds. -->
+  {@const picked = new Set(csv(String(f.draft.extensions ?? "")))}
+  <div class="find">
+    <Field label="file types" info="Empty indexes the built-in set." plain>
+      <span class="dim sm"
+        >{picked.size
+          ? `${picked.size} chosen`
+          : `all ${DEFAULT_CODE_EXTENSIONS.length} built-in types`}</span
       >
     </Field>
-    {#if hits.length}
-      <div class="chips">
-        {#each hits as r (r.name)}
-          <Chip
-            tone={f.draft.url === r.url ? "accent" : "default"}
-            onclick={() => {
-              f.draft.url = r.url;
-              if (r.default_branch) f.draft.default_branch = r.default_branch;
-            }}>{r.name}</Chip
-          >
-        {/each}
-      </div>
-    {/if}
-  {/if}
+    <div class="chips">
+      {#each DEFAULT_CODE_EXTENSIONS as ext (ext)}
+        <Chip
+          tone={picked.has(ext) ? "accent" : "default"}
+          onclick={() => {
+            const next = new Set(picked);
+            if (next.has(ext)) next.delete(ext);
+            else next.add(ext);
+            f.draft.extensions = [...next].join(", ");
+          }}>{ext}</Chip
+        >
+      {/each}
+      {#if picked.size}
+        <Chip tone="warn" onclick={() => (f.draft.extensions = "")}
+          >clear</Chip
+        >
+      {/if}
+    </div>
+  </div>
 {/snippet}
 
 {#if error}<Note tone="danger">{error}</Note>{/if}
@@ -503,14 +541,14 @@ import { csv } from "../fields";
 
 {#if knowledgeProjects.length}
   <div class="bulkbar">
-    <span class="dim">link many at once from</span>
+    <span class="dim">link many at once:</span>
     {#each knowledgeProjects as p (p.id)}
       <Button
         variant="ghost"
         size="sm"
         icon="discover"
         disabled={!canCurateScope({ team_slug: p.team_slug })}
-        onclick={() => openBulk(p)}>{p.external_key}</Button
+        onclick={() => openBulk(p)}>browse {p.external_key}</Button
       >
     {/each}
   </div>
@@ -525,7 +563,7 @@ import { csv } from "../fields";
 />
 
 <CrudTable
-  hoist={claimTopAction}
+  hoist={sectionHoist("repos")}
   {columns}
   rows={filtered}
   rowKey={(r) => r.slug}
@@ -536,9 +574,10 @@ import { csv } from "../fields";
   canDelete={canEditRepo}
   canCreate={canAdd}
   addLabel="link repository"
+  noun="repo"
   editTitle={(r) => r.slug}
   extraActions={reindexAction}
-  formExtra={discoverField}
+  formExtra={formExtra}
   oncreate={(d) => repos.mutate(() => save(d))}
   onsave={(_row, d) => repos.mutate(() => save(d))}
   ondelete={(r) => repos.mutate(() => api.delete(`/repos/${r.slug}`))}
@@ -551,7 +590,7 @@ import { csv } from "../fields";
     width="56rem"
     busy={bulkBusy}
     confirmLabel={`link ${b.picked.size}`}
-    confirmIcon="save"
+    confirmIcon="create"
     onConfirm={saveBulk}
     onCancel={() => (bulk = null)}
   >
@@ -667,6 +706,16 @@ import { csv } from "../fields";
     flex-wrap: wrap;
     gap: var(--pad-1);
     margin-bottom: var(--pad-2);
+  }
+
+  /* Spans the form grid: a row of forty chips inside one 15rem column is a
+     column of forty chips. */
+  .find {
+    grid-column: 1 / -1;
+    margin-top: var(--pad-2);
+  }
+  .sm {
+    font-size: var(--fs-xs);
   }
   .repo,
   .fresh {

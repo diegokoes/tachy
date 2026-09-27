@@ -69,12 +69,10 @@ export const setup = new Hono()
     if (env.oidc) {
       verified = await sessionEmail(c);
       if (!verified)
-        throw forbidden(
-          "this deployment uses SSO — sign in first, then run setup",
-        );
+        throw forbidden("SSO deployment: sign in first, then run setup");
       if (verified.toLowerCase() !== body.email.toLowerCase())
         throw forbidden(
-          `signed in as ${verified} — setup can only promote the account you are signed in as`,
+          `signed in as ${verified}; setup only promotes the signed-in account`,
         );
     }
 
@@ -83,7 +81,7 @@ export const setup = new Hono()
       const [row] =
         await tx`select count(*)::int as n from users where role = 'admin' and not disabled`;
       if ((row.n as number) > 0)
-        throw conflict("already set up — log in as an admin instead");
+        throw conflict("already set up; log in as an admin");
 
       /*
        * Taking over an existing row means resetting its password and handing
@@ -95,7 +93,7 @@ export const setup = new Hono()
         await tx`select id from users where email = ${body.email}`;
       if (existing && !verified)
         throw conflict(
-          `an account for ${body.email} already exists — sign in with it instead`,
+          `an account for ${body.email} already exists; sign in with it`,
         );
 
       await tx`
@@ -120,13 +118,9 @@ export const setup = new Hono()
           provider === "claude" && body.agent_key.startsWith(OAUTH_PREFIX)
             ? ANTHROPIC_OAUTH_CREDENTIAL
             : AGENT_CREDENTIALS[provider];
-        await setCredential(
-          admin.id,
-          "global",
-          undefined,
-          name,
-          body.agent_key,
-        );
+        // The wizard's key is the first admin's own, not the deployment's:
+        // every other user brings theirs under Settings > keys.
+        await setCredential(admin.id, "user", admin.id, name, body.agent_key);
       }
     }
 

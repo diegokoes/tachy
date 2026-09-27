@@ -1,9 +1,13 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
+  addComponent,
   addWikiCategory,
   updateWikiCategory,
   deleteWikiCategory,
   listWikiCategories,
+  setCategoryComponents,
+  seedSectionsFromComponents,
+  searchWikiArticles,
   wikiToc,
   articleCategories,
   setArticleCategories,
@@ -315,5 +319,105 @@ describe("the general table of contents", () => {
     await sql`delete from reference_docs where id = ${doc.id}`;
     const toc = await wikiToc(p);
     expect(toc.categories[0].articles).toEqual([]);
+  });
+});
+
+describe("wiki sections (categories that cooperate with components)", () => {
+  beforeEach(resetData);
+
+  it("carries a lead article and covered components through the toc", async () => {
+    const p = await tpdProductId();
+    await addComponent({ productId: p, slug: "portal", name: "Portal" });
+    await addComponent({ productId: p, slug: "hub", name: "HUB" });
+    await article("portal");
+    await addWikiCategory({
+      productId: p,
+      slug: "portal",
+      name: "Portal",
+      leadSlug: "portal",
+      componentSlugs: ["portal", "hub"],
+    });
+    const [row] = await listWikiCategories(p);
+    expect(row.lead_slug).toBe("portal");
+    expect(row.lead_title).toBe("portal");
+    expect(row.components.map((c) => c.slug).sort()).toEqual(["hub", "portal"]);
+
+    const toc = await wikiToc(p);
+    expect(toc.categories[0].lead_slug).toBe("portal");
+    expect(toc.categories[0].components).toHaveLength(2);
+  });
+
+  it("replaces the covered set whole and clears the lead when asked", async () => {
+    const p = await tpdProductId();
+    await addComponent({ productId: p, slug: "portal", name: "Portal" });
+    await addComponent({ productId: p, slug: "backend", name: "Backend" });
+    await article("backend");
+    const cat = await addWikiCategory({
+      productId: p,
+      slug: "s",
+      name: "S",
+      leadSlug: "backend",
+      componentSlugs: ["portal"],
+    });
+    await setCategoryComponents(p, cat.id, ["backend"]);
+    let [row] = await listWikiCategories(p);
+    expect(row.components.map((c) => c.slug)).toEqual(["backend"]);
+
+    await updateWikiCategory(p, "s", { leadSlug: null, componentSlugs: [] });
+    [row] = await listWikiCategories(p);
+    expect(row.lead_slug).toBeNull();
+    expect(row.components).toEqual([]);
+  });
+
+  it("seeds one section per top-level component and is re-runnable", async () => {
+    const p = await tpdProductId();
+    await addComponent({ productId: p, slug: "portal", name: "Portal" });
+    await addComponent({ productId: p, slug: "backend", name: "Backend" });
+    await addComponent({
+      productId: p,
+      slug: "worker",
+      name: "Worker",
+      parentSlug: "backend",
+    });
+
+    const first = await seedSectionsFromComponents(p);
+    expect(first.created.map((c) => c.slug).sort()).toEqual([
+      "backend",
+      "portal",
+    ]);
+    const rows = await listWikiCategories(p);
+    // The child component does not seed its own section.
+    expect(rows.map((r) => r.slug).sort()).toEqual(["backend", "portal"]);
+    // Each section is linked to the component it came from.
+    const backend = rows.find((r) => r.slug === "backend")!;
+    expect(backend.components.map((c) => c.slug)).toEqual(["backend"]);
+
+    // Re-running leaves the curated set untouched.
+    const again = await seedSectionsFromComponents(p);
+    expect(again.created).toEqual([]);
+    expect(await listWikiCategories(p)).toHaveLength(2);
+  });
+
+  it("searches this wiki's articles, drafts included, scoped to the wiki", async () => {
+    const p = await tpdProductId();
+    await article("spooler-stalls", {
+      title: "Spooler stalls",
+      body: "the print spooler stops responding",
+      status: "draft",
+    });
+    await article("other", { title: "Something else", body: "unrelated" });
+    // An article in a different wiki must not leak in.
+    await saveReferenceDoc({
+      productId: null,
+      kind: "wiki",
+      slug: "spooler-note",
+      title: "Spooler note",
+      body: "org-wide spooler note",
+    });
+
+    const hits = await searchWikiArticles(p, "spooler");
+    expect(hits.map((h) => h.slug)).toEqual(["spooler-stalls"]);
+    expect(hits[0].status).toBe("draft");
+    expect(await searchWikiArticles(p, "")).toEqual([]);
   });
 });

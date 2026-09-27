@@ -113,53 +113,61 @@ export function decode(node: HTMLElement, text: string) {
   return { update: run, destroy: () => gsap.killTweensOf(state) };
 }
 
-/** Fills a gauge upwards to `pct` (0-100), staggered by list position. */
-export function growBar(node: HTMLElement, p: { pct: number; delay?: number }) {
-  const set = (v: number) => {
-    node.style.height = `${v}%`;
-  };
-  if (reducedMotion()) {
-    set(p.pct);
-    return { update: (n: typeof p) => set(n.pct) };
-  }
-  gsap.fromTo(
-    node,
-    { height: "0%" },
-    {
-      height: `${p.pct}%`,
-      duration: 0.8,
-      delay: p.delay ?? 0,
-      ease: "power2.out",
-    },
-  );
-  return {
-    update: (n: typeof p) =>
-      gsap.to(node, { height: `${n.pct}%`, duration: 0.4, ease: "power2.out" }),
-    destroy: () => gsap.killTweensOf(node),
-  };
-}
-
-/** Reads --accent live, so the pulse follows the accent picker. */
+/**
+ * Reads --accent live, so the pulse follows the accent picker.
+ *
+ * The shadow's alpha falls with its blur. A drop-shadow at 0px blur and full
+ * alpha is a hard silhouette of the node, so tweening only the blur flashed a
+ * sharp copy at the bottom of every cycle.
+ */
 export function glow(node: Element) {
   if (reducedMotion()) return null;
   const accent = getComputedStyle(document.documentElement)
     .getPropertyValue("--accent")
     .trim();
-  return gsap.fromTo(
-    node,
-    { filter: `drop-shadow(0 0 0px ${accent})` },
-    {
-      filter: `drop-shadow(0 0 5px ${accent}) drop-shadow(0 0 9px ${accent})`,
-      duration: 1.6,
-      yoyo: true,
-      repeat: -1,
-      ease: "sine.inOut",
-    },
-  );
+  const [r, g, b] = gsap.utils.splitColor(accent) as number[];
+  const state = { t: 0 };
+  const paint = () => {
+    const c = `rgba(${r}, ${g}, ${b}, ${state.t})`;
+    gsap.set(node, {
+      filter: `drop-shadow(0 0 ${5 * state.t}px ${c}) drop-shadow(0 0 ${9 * state.t}px ${c})`,
+    });
+  };
+  paint();
+  return gsap.to(state, {
+    t: 1,
+    duration: 1.6,
+    yoyo: true,
+    repeat: -1,
+    ease: "sine.inOut",
+    onUpdate: paint,
+  });
 }
 
 export function clearGlow(node: Element) {
   gsap.set(node, { filter: "none" });
+}
+
+/**
+ * A few soft text-shadow pulses in the node's own colour, ending unlit. For a
+ * tag that opens something and has to say so once, not keep saying it.
+ */
+export function shadowPulse(node: HTMLElement) {
+  if (reducedMotion()) return;
+  const color = getComputedStyle(node).color;
+  const tween = gsap.fromTo(
+    node,
+    { textShadow: `0 0 0px ${color}` },
+    {
+      textShadow: `0 0 6px ${color}`,
+      duration: 1.1,
+      yoyo: true,
+      repeat: 5,
+      ease: "sine.inOut",
+      clearProps: "textShadow",
+    },
+  );
+  return { destroy: () => void tween.kill() };
 }
 
 /**
@@ -246,6 +254,64 @@ export function jellyPress(node: HTMLElement) {
 }
 
 /**
+ * Lifts the node towards the pointer while it hovers, its edge lit in the
+ * accent as it goes up. `held` leaves a fainter edge lit once the pointer has
+ * gone, for as long as whatever the click opened stays open.
+ *
+ * drop-shadow, not box-shadow, for the same reason as in `jolt`: a box-shadow
+ * would trace the border box of a shape that is drawn rather than boxed. The
+ * blur stays at a pixel or two so the light hugs the outline instead of
+ * pooling around it.
+ */
+export function hoverRise(node: HTMLElement, held = false) {
+  const [r, g, b] = gsap.utils.splitColor(
+    getComputedStyle(document.documentElement)
+      .getPropertyValue("--accent")
+      .trim(),
+  );
+  const lit = (blur: number, alpha: number) =>
+    `drop-shadow(0 0 ${blur}px rgba(${r}, ${g}, ${b}, ${alpha}))`;
+  const REST = lit(0, 0);
+  const HELD = lit(1, 0.4);
+  const RISEN = lit(1.5, 0.75);
+
+  let over = false;
+  const shine = (to: string, duration: number) =>
+    gsap.to(node, {
+      filter: to,
+      duration: reducedMotion() ? 0 : duration,
+      ease: "sine.out",
+      clearProps: to === REST ? "filter" : "",
+    });
+
+  const rise = () => {
+    over = true;
+    if (!reducedMotion())
+      gsap.to(node, { y: -8, scale: 1.02, duration: 0.3, overwrite: "auto" });
+    shine(RISEN, 0.45);
+  };
+  const fall = () => {
+    over = false;
+    gsap.to(node, { y: 0, scale: 1, duration: 0.3, overwrite: "auto" });
+    shine(held ? HELD : REST, 0.4);
+  };
+  node.addEventListener("mouseenter", rise);
+  node.addEventListener("mouseleave", fall);
+  if (held) shine(HELD, 0);
+  return {
+    update(now: boolean) {
+      if (now === held) return;
+      held = now;
+      if (!over) shine(held ? HELD : REST, 0.4);
+    },
+    destroy: () => {
+      node.removeEventListener("mouseenter", rise);
+      node.removeEventListener("mouseleave", fall);
+    },
+  };
+}
+
+/**
  * Tweens a plain number, for state a component renders from rather than a
  * style GSAP can write directly. Returns the tween so a caller can kill it.
  *
@@ -270,6 +336,63 @@ export function tweenValue(
     ease: o.ease ?? "power2.out",
     onUpdate: () => set(box.v),
   });
+}
+
+/**
+ * One ripple through a line of split characters: each lifts and settles in
+ * turn, the stagger overlapping so the rise travels as a single wave rather than
+ * a letter at a time. `from` is the end the wave starts at.
+ */
+export function ripple(
+  chars: Element[],
+  o: { from?: "start" | "end"; delay?: number } = {},
+) {
+  if (reducedMotion() || !chars.length) return null;
+  gsap.killTweensOf(chars);
+  gsap.set(chars, { yPercent: 0 });
+  return gsap.to(chars, {
+    keyframes: { yPercent: [0, -28, 0], easeEach: "sine.inOut" },
+    duration: 0.42,
+    delay: o.delay ?? 0,
+    stagger: { each: 0.05, from: o.from ?? "start" },
+  });
+}
+
+/**
+ * A burst of confetti fired upward from the bottom of `container`, arcing out
+ * and falling under gravity (Physics2DPlugin). The pieces mount into the
+ * container and remove themselves once spent, so the caller owns nothing.
+ */
+export function confetti(container: HTMLElement, count = 36) {
+  if (reducedMotion()) return;
+  const colors = [
+    "#f43f5e",
+    "#f59e0b",
+    "#fde047",
+    "#22c55e",
+    "#38bdf8",
+    "#6366f1",
+    "#d946ef",
+  ];
+  const { width, height } = container.getBoundingClientRect();
+  for (let i = 0; i < count; i++) {
+    const piece = document.createElement("span");
+    const size = gsap.utils.random(6, 12);
+    piece.style.cssText = `position:absolute;top:${height}px;left:${width / 2}px;width:${size}px;height:${size * gsap.utils.random(0.4, 1)}px;background:${colors[i % colors.length]};border-radius:1px;pointer-events:none;will-change:transform;`;
+    container.appendChild(piece);
+    gsap.to(piece, {
+      duration: gsap.utils.random(1.4, 2.4),
+      physics2D: {
+        velocity: gsap.utils.random(350, 650),
+        angle: gsap.utils.random(250, 290),
+        gravity: 500,
+      },
+      rotation: gsap.utils.random(-540, 540),
+      opacity: 0,
+      ease: "none",
+      onComplete: () => piece.remove(),
+    });
+  }
 }
 
 /** Horizontal clip-path wipe, staggered — the nav reveal. */

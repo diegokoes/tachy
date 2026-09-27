@@ -1,0 +1,34 @@
+name: Image cleanup
+
+# Keeps the 30 newest sha-* images, which is how far back tachy-deploy can roll
+# back. Whatever dev and main currently point at is never deleted.
+on:
+  schedule:
+    - cron: "30 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Only log what would be deleted
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      packages: write
+    steps:
+      - uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          package: tachy
+          keep-n-tagged: 30
+          exclude-tags: dev,main
+          dry-run: ${{ inputs.dry-run == true }}

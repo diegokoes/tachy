@@ -1,0 +1,11 @@
+{
+  "name": "@tachy/worker",
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@tachy/core": "*",
+    "@tachy/source-freshdesk": "*",
+    "@tachy/source-github": "*",
+    "@tachy/source-azure-devops": "*"
+  }
+}

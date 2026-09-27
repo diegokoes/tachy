@@ -11,7 +11,8 @@ import {
   ANTHROPIC_OAUTH_CREDENTIAL,
   validateCredential,
 } from "@tachy/core";
-import { mcpConfig } from "../packages/api/src/routes/agent";
+import { mcpConfig } from "../packages/api/src/turn-config";
+import { setInternalEndpoint } from "../packages/api/src/internal-endpoint";
 import { enableVault, resetData, sql } from "./helpers";
 
 const agentHome = mkdtempSync(join(tmpdir(), "tachy-agent-home-"));
@@ -82,6 +83,10 @@ describe("per-turn agent config isolation (cross-user token safety)", () => {
       expect(cfg.mcpEnv.OIDC_CLIENT_SECRET).toBeUndefined();
       // What it does still need in order to work at all.
       expect(cfg.mcpEnv.DATABASE_URL).toBe(process.env.DATABASE_URL);
+      expect(cfg.mcpEnv.TACHY_DB_POOL_MAX).toBe("2");
+      expect(cfg.mcpEnv.TACHY_DB_APP_NAME).toBe("tachy-mcp");
+      expect(cfg.mcpEnv.TACHY_EMBED_URL).toBeUndefined();
+      expect(cfg.mcpEnv.NODE_OPTIONS).toBe("--max-old-space-size=256");
     } finally {
       delete process.env.TACHY_API_TOKEN;
       delete process.env.OIDC_CLIENT_SECRET;
@@ -195,13 +200,13 @@ describe("Claude credential selection (API key vs subscription token)", () => {
     );
   });
 
-  it("prefers a user's token over an org-wide API key", async () => {
+  it("prefers a user's token over the deployment fallback key", async () => {
     await setCredential(
       admin.id,
       "global",
       undefined,
       "anthropic_api_key",
-      "sk-ant-api03-org-wide",
+      "sk-ant-api03-fallback",
     );
     expect(await resolveAgentAuth("claude", { userId: dana.id })).toMatchObject(
       {
@@ -211,14 +216,14 @@ describe("Claude credential selection (API key vs subscription token)", () => {
     );
   });
 
-  it("falls back to the org key for a user with nothing of their own", async () => {
+  it("falls back to the deployment key for a user with nothing of their own", async () => {
     const eve = await createUser({
       email: "eve@example.com",
       password: "a-long-password",
     });
     expect(await resolveAgentAuth("claude", { userId: eve.id })).toMatchObject({
       kind: "anthropic_api_key",
-      value: "sk-ant-api03-org-wide",
+      value: "sk-ant-api03-fallback",
       source: "global",
     });
   });
@@ -339,5 +344,27 @@ describe("server-env credential is the lowest rung (deployment-wide fallback)", 
         source: "user",
       },
     );
+  });
+
+  it("points the MCP child at the server's internal endpoints", async () => {
+    setInternalEndpoint({
+      baseUrl: "http://127.0.0.1:8787/internal",
+      secret: "per-boot",
+    });
+    try {
+      const cfg = await mcpConfig(
+        "alice@example.com",
+        await effectiveSettings(),
+      );
+      expect(cfg.mcpEnv.TACHY_EMBED_URL).toBe(
+        "http://127.0.0.1:8787/internal/embed",
+      );
+      expect(cfg.mcpEnv.TACHY_LOG_URL).toBe(
+        "http://127.0.0.1:8787/internal/log",
+      );
+      expect(cfg.mcpEnv.TACHY_INTERNAL_SECRET).toBe("per-boot");
+    } finally {
+      setInternalEndpoint(undefined);
+    }
   });
 });

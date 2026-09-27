@@ -1,0 +1,39 @@
+# Copy to inventory.yml (not committed) and fill in. Run from the operator's
+# machine:
+#   ansible-playbook -i deploy/host/inventory.yml deploy/host/playbook.yml --ask-become-pass
+all:
+  hosts:
+    tachy-office:
+      ansible_host: tachy.office.lan
+      ansible_user: diego
+
+      # Admins: key-only SSH and sudo. Not in the docker group, which is
+      # root-equivalent; deploys run as the tachy user.
+      admin_users:
+        - name: diego
+          ssh_pubkey: "ssh-ed25519 AAAA… diego@workstation"
+
+      # The office LAN, and what may reach 443 and 22.
+      lan_interface: enp0s31f6
+      lan_cidrs: ["192.168.1.0/24"]
+      ssh_allowed_cidrs: ["192.168.1.0/24"]
+      # Added to both once Tailscale is joined (DEPLOYMENT-ARCHITECTURE.md §15.1).
+      tailscale_enabled: false
+
+      # One read-only SFTP login per person who downloads backups (§6.2).
+      backup_downloaders:
+        - name: alice
+          ssh_pubkey: "ssh-ed25519 AAAA… alice-tachy-backup"
+        - name: bob
+          ssh_pubkey: "ssh-ed25519 AAAA… bob-tachy-backup"
+          from: "192.168.1.0/24"
+
+      # Public halves of the team backup key and the break-glass key. The
+      # private halves live only in the password manager.
+      backup_recipients:
+        - "age1… team"
+        - "age1… break-glass"
+
+      # Checkout to deploy from.
+      tachy_repo: "https://github.com/diegokoes/tachy.git"
+      docker_major: "29"

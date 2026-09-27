@@ -28,15 +28,15 @@ export const API_KEY_EXAMPLE = "sk-ant-api03-";
 export function validateCredential(name: string, value: string): string | null {
   if (name === AGENT_CREDENTIALS.claude) {
     if (value.startsWith(OAUTH_PREFIX))
-      return `${OAUTH_PREFIX} is a Claude Code OAuth token, not an API key — save it under 'Claude subscription token', or get a key (${API_KEY_EXAMPLE}…) from console.anthropic.com`;
+      return `${OAUTH_PREFIX} is a Claude Code OAuth token, not an API key. Save it under 'Claude subscription token', or get a key (${API_KEY_EXAMPLE}…) from console.anthropic.com`;
     if (!value.startsWith(API_KEY_PREFIX) || /\s/.test(value))
-      return `an Anthropic API key starts with ${API_KEY_EXAMPLE} — get one from console.anthropic.com`;
+      return `an Anthropic API key starts with ${API_KEY_EXAMPLE}; get one from console.anthropic.com`;
   }
   if (
     name === ANTHROPIC_OAUTH_CREDENTIAL &&
     (!value.startsWith(OAUTH_PREFIX) || /\s/.test(value))
   )
-    return `a Claude subscription token starts with ${OAUTH_PREFIX} — run 'claude setup-token' to mint one, or save an API key under 'Anthropic API key' instead`;
+    return `a Claude subscription token starts with ${OAUTH_PREFIX}. Run 'claude setup-token' to mint one, or save an API key under 'Anthropic API key' instead`;
   /*
    * GitHub mints several prefixes and keeps adding them, so there is no shape
    * here worth asserting — only that a credential is one value. Anything
@@ -44,6 +44,6 @@ export function validateCredential(name: string, value: string): string | null {
    * checking.
    */
   if (name === AGENT_CREDENTIALS.copilot && /\s/.test(value))
-    return "a GitHub token is a single value with no spaces — copy the whole of it, e.g. from 'gh auth token'";
+    return "a GitHub token is a single value with no spaces; copy all of it, e.g. from 'gh auth token'";
   return null;
 }

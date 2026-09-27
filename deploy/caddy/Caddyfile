@@ -1,0 +1,40 @@
+# The only published service (DEPLOYMENT-ARCHITECTURE.md §5.7).
+#
+# TACHY_HOSTNAME  the internal DNS name clients use, e.g. tachy.office.lan.
+#                 Never an IP: the certificate and the OIDC redirect bind to it.
+# TACHY_TLS       `internal` (default): Caddy's own CA signs the certificate and
+#                 renews it; clients install its root once (deploy/runbooks).
+#                 `/certs/tachy.crt /certs/tachy.key`: a certificate issued
+#                 elsewhere, e.g. by IT, mounted read-only at /certs.
+{
+	admin off
+	skip_install_trust
+}
+
+{$TACHY_HOSTNAME} {
+	tls {$TACHY_TLS:internal}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+
+	# For the MCP children inside the api container only.
+	@internal path /internal /internal/*
+	respond @internal 404
+
+	# 25 MB chat uploads plus multipart overhead.
+	request_body {
+		max_size 26MB
+	}
+
+	reverse_proxy api:8787 {
+		flush_interval -1
+		health_uri /readyz
+		health_interval 10s
+		health_timeout 5s
+	}
+}

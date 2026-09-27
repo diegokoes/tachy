@@ -53,6 +53,39 @@ export async function copilotPermission(
   return { kind: "approve-once" };
 }
 
+/**
+ * The session runs from `cfg.sessionCwd`, an empty directory, because the
+ * runtime reads instruction files from its working directory; the MCP server
+ * keeps `cfg.cwd` so its relative entry point still resolves.
+ */
+export function copilotSessionConfig(
+  cfg: AgentConfig,
+  gate: ApprovalGate,
+): SessionConfig {
+  return {
+    // per-user token for multitenancy; falls back to server's gh CLI login
+    ...(cfg.agentAuth ? { gitHubToken: cfg.agentAuth.value } : {}),
+    model: effectiveModel(cfg),
+    workingDirectory: cfg.sessionCwd,
+    systemMessage: { mode: "append", content: cfg.systemPrompt },
+    skipCustomInstructions: true,
+    availableTools: ["mcp:*"],
+    mcpServers: {
+      [MCP_SERVER]: {
+        type: "stdio",
+        command: cfg.mcpCommand,
+        args: cfg.mcpArgs,
+        env: cfg.mcpEnv,
+        workingDirectory: cfg.cwd,
+        // Typed as optional, but the runtime skips a server that omits it.
+        tools: ["*"],
+      },
+    },
+    onPermissionRequest: (request) =>
+      copilotPermission(request, gate, cfg.autoApprove),
+  };
+}
+
 export class CopilotTurn extends TurnBase {
   constructor(
     prompt: string,
@@ -77,29 +110,13 @@ export class CopilotTurn extends TurnBase {
     let client: CopilotClient | undefined;
     try {
       client = new CopilotClient({
-        workingDirectory: cfg.cwd,
+        workingDirectory: cfg.sessionCwd,
         logLevel: "error",
       });
       this.client = client;
       await client.start();
 
-      const sessionConfig: SessionConfig = {
-        // per-user token for multitenancy; falls back to server's gh CLI login
-        ...(cfg.agentAuth ? { gitHubToken: cfg.agentAuth.value } : {}),
-        model: effectiveModel(cfg),
-        systemMessage: { mode: "append", content: cfg.systemPromptAppend },
-        availableTools: ["mcp:*"],
-        mcpServers: {
-          [MCP_SERVER]: {
-            type: "stdio",
-            command: cfg.mcpCommand,
-            args: cfg.mcpArgs,
-            env: cfg.mcpEnv,
-          },
-        },
-        onPermissionRequest: (request) =>
-          copilotPermission(request, this.requestApproval, cfg.autoApprove),
-      };
+      const sessionConfig = copilotSessionConfig(cfg, this.requestApproval);
 
       const session = opts.resume
         ? await client.resumeSession(opts.resume, sessionConfig)

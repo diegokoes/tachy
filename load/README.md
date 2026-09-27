@@ -1,42 +1,78 @@
 # Load tests
 
-k6 scenarios for the dev stack. They are read-only: nothing here writes to the
-database, so a run is repeatable and a failure is never a data problem.
+k6 scenarios for the dev stack. They change no content: the only rows they
+write are read counters (`library_views`, bucketed per person per day, so a
+rerun does not grow the table), and a service account's reads are not counted
+at all. Run them as one (`service_account` in Admin > access) so load never
+shows up in "most read".
+
+`smoke.js` is the post-deploy gate and reaches every route family once: the
+library, search, outputs, the wiki, the overview and `/api/system`. It checks a
+library image only when the first wiki article embeds one.
 
 ## Running
 
-The dev stack must be up and seeded:
+The dev stack must be up and seeded, with `NODE_ENV=development` in `.env` or
+the seed refuses:
 
 ```sh
-docker compose -p tachy-dev up -d
-docker compose -p tachy-dev run --rm cli npm run sync -- seed --scale=medium --reset --yes
+docker compose up -d
+docker compose run --rm cli npm run sync -- seed --scale=medium --reset --yes
 npm run load -- /load/smoke.js
 ```
 
-`npm run load` runs k6 as a container on the dev project's network, so the API
-is reachable as `http://api:8787` (the host-side 8788 mapping is only for a
-browser). To point it somewhere else:
+`npm run load` runs k6 as a container on the network of the project `.env`
+names (`COMPOSE_PROJECT_NAME`), so the API is reachable as `http://api:8787`
+whatever `TACHY_API_PORT` publishes it on. To point it somewhere else:
 
 ```sh
-BASE_URL=http://localhost:8788 npm run load -- /load/smoke.js
+BASE_URL=https://tachy-dev.office.lan npm run load -- /load/smoke.js
 ```
 
 For k6's live TUI, install it locally instead (`apt install k6` from the Grafana
-repo) and run `BASE_URL=http://localhost:8788 k6 run load/smoke.js`.
+repo) and run `BASE_URL=http://localhost:8787 k6 run load/smoke.js`.
 
 ## The scenarios
 
-| Script      | Shape             | What it is for                                                                                     |
-| ----------- | ----------------- | -------------------------------------------------------------------------------------------------- |
-| `smoke.js`  | 1 VU, 1 iteration | One call to every endpoint. Run it after every deploy; it takes seconds and every check must pass. |
-| `browse.js` | 20 rps for 2 min  | The read paths a person clicks through: list, detail, facets, download.                            |
-| `search.js` | 1 → 5 → 10 rps    | The two embedding-backed endpoints. This is the one that finds the ceiling.                        |
-| `soak.js`   | 2 rps for 30 min  | Memory and pool behaviour over time, not latency.                                                  |
+| Script          | Shape                          | What it is for                                                                                         |
+| --------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `smoke.js`      | 1 VU, 1 iteration              | One call to every endpoint. Run it after every deploy; it takes seconds and every check must pass.     |
+| `browse.js`     | 20 rps for 2 min               | The read paths a person clicks through: list, detail, facets, download.                                |
+| `search.js`     | 1 → 5 → 10 rps                 | The two embedding-backed endpoints. This is the one that finds the ceiling.                            |
+| `soak.js`       | 2 rps for 30 min               | Memory and pool behaviour over time, not latency.                                                      |
+| `contention.js` | 5 rps search during a backfill | Search p95 must stay within 1.5x `BASELINE_P95_MS`; `ADMIN_TOKEN` starts `embeddings.backfill` itself. |
+| `mixed.js`      | 10 rps, weighted               | A day's traffic; replace the `W_*` placeholder weights with a week of real shares.                     |
+| `spike.js`      | 0 → 30 rps in 10 s             | The morning burst: no 5xx, and it recovers. Dev stack only.                                            |
+| `breakpoint.js` | ramps to `MAX_RATE`            | Stops when search misses 1.5 s; the rate it reached is the release's knee. Dev stack only.             |
 
 `PROFILE=stress npm run load -- /load/search.js` swaps search to 5 → 25 → 50 rps
 and drops the latency bar. Stress is for finding the knee, not for passing.
 
 Overridable: `RATE`, `DURATION`, `BASE_URL`, `LOGIN_EMAIL`, `LOGIN_PASSWORD`.
+
+## Chat turns
+
+`turns.mjs` is a Node driver, not a k6 script: k6 reads an SSE response whole,
+and the numbers that matter here are time to the first event and memory while
+the turns run. It creates `load-turn-NN` members, starts `LEVELS` (default
+`1,5,10`) concurrent turns per step, and polls the admin runtime block for
+peak memory, slots, queue and Postgres connections.
+
+The agent must talk to `mock-llm/server.mjs`, a stand-in for the Anthropic
+Messages API that scripts tool calls (`MOCK_TOOL_ROUNDS`, `MOCK_TOOLS`) with a
+fixed delay (`MOCK_DELAY_MS`), through `ANTHROPIC_BASE_URL`. Real Claude Code,
+the real MCP child and the real database run; only the model is fake, so it
+costs nothing. Never point it at a server using a real provider key.
+
+`turns.compose.yml` is the load window: a scratch Postgres, the mock, and an
+`api-load` container from the production image with no published port. Run the
+driver inside `api-load` so it reads that container's cgroup memory:
+
+```sh
+docker compose -f load/turns.compose.yml up -d
+docker compose -f load/turns.compose.yml exec api-load node load/turns.mjs
+docker compose -f load/turns.compose.yml down -v
+```
 
 ## Reading the results
 
@@ -50,7 +86,7 @@ To chase a slow request, take its `x-request-id` response header and grep the
 API log — every request logs one JSON line carrying the same id:
 
 ```sh
-docker compose -p tachy-dev logs api | grep <request-id>
+docker compose logs api | grep <request-id>
 ```
 
 ### Measured baseline
@@ -67,9 +103,6 @@ the shape of the curve, not to grade the hardware.
 
 ## What is deliberately not tested
 
-- **`POST /api/agent/chat`** — spawns a Claude Code or Copilot subprocess per
-  turn, costs real money, and its latency is dominated by a third-party API.
-  Load-testing it measures Anthropic, not tachý.
 - **Uploads and `work-items/:source/:id/fetch`** — both call third-party APIs.
 - **All writes.** `POST /api/knowledge` runs another embedding and grows the
   database, so a second run would not measure the same thing as the first.
@@ -101,7 +134,7 @@ you see came from the lexical and trigram legs. Concretely:
 For numbers that reflect real vector search, seed with `--embed`:
 
 ```sh
-docker compose -p tachy-dev run --rm cli npm run sync -- seed --scale=medium --reset --yes --embed=search
+docker compose run --rm cli npm run sync -- seed --scale=medium --reset --yes --embed=search
 ```
 
 `--embed=search` embeds what a search reads: knowledge entries and reference

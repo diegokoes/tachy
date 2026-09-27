@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   addComponent,
+  addTeam,
   addSourceProject,
   deleteProjectAreaMap,
   deleteSourceProject,
@@ -28,7 +29,6 @@ const seedFixtureProject = () =>
     sourceSlug: SOURCE,
     externalKey: FIXTURE_KEY,
     name: "Test Group",
-    role: "knowledge",
     productSlug: "tpd",
   });
 
@@ -49,7 +49,6 @@ async function register(externalKey: string, over: Record<string, any> = {}) {
   return addSourceProject({
     sourceSlug: SOURCE,
     externalKey,
-    role: "knowledge",
     productSlug: "tpd",
     ...over,
   });
@@ -58,9 +57,8 @@ async function register(externalKey: string, over: Record<string, any> = {}) {
 describe("source projects", () => {
   beforeEach(freshProjects);
 
-  it("registers a knowledge project and takes its team from the product", async () => {
+  it("registers a project with a product and takes its team from it", async () => {
     const row = await register("ProjA", { name: "Project A" });
-    expect(row.role).toBe("knowledge");
     expect(row.product_slug).toBe("tpd");
     expect(row.team_slug).toBe("test-team");
     expect(row.source_slug).toBe(SOURCE);
@@ -78,53 +76,48 @@ describe("source projects", () => {
     ).toHaveLength(1);
   });
 
-  it("registers a tracker against a team, with no product", async () => {
+  it("registers a project against a team, with no product", async () => {
     const row = await addSourceProject({
       sourceSlug: SOURCE,
       externalKey: "DocsOnly",
-      role: "tracker",
       teamSlug: "test-team",
     });
     expect(row.product_id).toBeNull();
     expect(row.team_slug).toBe("test-team");
   });
 
-  it("refuses a knowledge project with no product, and a tracker with one", async () => {
+  it("refuses a project with neither a product nor a team", async () => {
     await expect(
-      addSourceProject({
-        sourceSlug: SOURCE,
-        externalKey: "X",
-        role: "knowledge",
-        teamSlug: "test-team",
-      }),
-    ).rejects.toThrow(/needs a product/);
-    await expect(
-      addSourceProject({
-        sourceSlug: SOURCE,
-        externalKey: "X",
-        role: "tracker",
-        productSlug: "tpd",
-      }),
-    ).rejects.toThrow(/no product/);
+      addSourceProject({ sourceSlug: SOURCE, externalKey: "X" }),
+    ).rejects.toThrow(/needs an owner/);
   });
 
-  it("keeps role and product in step at the database level", async () => {
-    const conn = await seededFreshdeskConnId();
-    const [team] = await sql`select id from teams where slug = 'test-team'`;
-    await expect(
-      sql`
-        insert into source_projects (source_connection_id, external_key, name, team_id, role)
-        values (${conn}, 'Broken', 'Broken', ${team.id}, 'knowledge')
-      `,
-    ).rejects.toThrow(/source_projects_check/);
+  it("takes the team from the product even when a team is also named", async () => {
+    await addTeam("other-team", "Other");
+    const row = await register("ProjA", { teamSlug: "other-team" });
+    expect(row.team_slug).toBe("test-team");
   });
 
-  it("refuses a wiki on a tracker project", async () => {
+  it("filters by whether a project has a product", async () => {
+    await register("ProjA");
+    await addSourceProject({
+      sourceSlug: SOURCE,
+      externalKey: "DocsOnly",
+      teamSlug: "test-team",
+    });
+    const keys = async (hasProduct: boolean) =>
+      (await listSourceProjects({ sourceSlug: SOURCE, hasProduct })).map(
+        (p) => p.external_key,
+      );
+    expect(await keys(true)).not.toContain("DocsOnly");
+    expect(await keys(false)).toEqual(["DocsOnly"]);
+  });
+
+  it("refuses a wiki on a project without a product", async () => {
     await expect(
       addSourceProject({
         sourceSlug: SOURCE,
         externalKey: "DocsOnly",
-        role: "tracker",
         teamSlug: "test-team",
         wikis: [{ identifier: "DocsOnly.wiki" }],
       }),
@@ -138,7 +131,7 @@ describe("source projects", () => {
     );
   });
 
-  it("refuses to become a tracker while repos or rules hang off it", async () => {
+  it("refuses to drop its product while repos or rules hang off it", async () => {
     const project = await register("ProjA");
     const tpd = await tpdProductId();
     await addComponent({ productId: tpd, slug: "portal", name: "Portal" });
@@ -149,10 +142,20 @@ describe("source projects", () => {
     });
     await expect(
       updateSourceProject(project.id, {
-        role: "tracker",
+        productSlug: null,
         teamSlug: "test-team",
       }),
     ).rejects.toThrow(/area rule/);
+  });
+
+  it("drops its product cleanly when nothing hangs off it", async () => {
+    const project = await register("ProjA");
+    const row = await updateSourceProject(project.id, {
+      productSlug: null,
+      teamSlug: "test-team",
+    });
+    expect(row.product_id).toBeNull();
+    expect(row.team_slug).toBe("test-team");
   });
 
   it("refuses deletion while a repo points at it", async () => {
@@ -217,7 +220,7 @@ describe("area path mapping", () => {
     ).toBe("web-portal");
   });
 
-  it("rejects an unknown component with nearest matches, and trackers outright", async () => {
+  it("rejects an unknown component with nearest matches, and productless projects outright", async () => {
     const project = await withComponents();
     await expect(
       setProjectAreaMap({
@@ -227,19 +230,18 @@ describe("area path mapping", () => {
       }),
     ).rejects.toThrow(/portal/);
 
-    const tracker = await addSourceProject({
+    const bare = await addSourceProject({
       sourceSlug: SOURCE,
       externalKey: "DocsOnly",
-      role: "tracker",
       teamSlug: "test-team",
     });
     await expect(
       setProjectAreaMap({
-        sourceProjectId: tracker.id,
+        sourceProjectId: bare.id,
         areaPrefix: "X",
         componentSlug: "portal",
       }),
-    ).rejects.toThrow(/tracker/);
+    ).rejects.toThrow(/no product/);
   });
 
   it("replaces the component on an existing prefix, and deletes rules", async () => {

@@ -1,54 +1,72 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { requestId } from "hono/request-id";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { z } from "zod";
-import { sql, AppError, registerSource, effectiveSettings } from "@tachy/core";
+import {
+  env,
+  AppError,
+  registerSource,
+  registerCoreJobs,
+  effectiveSettings,
+} from "@tachy/core";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 import { createAzureDevopsSource } from "@tachy/source-azure-devops";
 import { knowledge, analysisRuns } from "./routes/knowledge";
 import { workItems } from "./routes/work-items";
+import { compose } from "./routes/compose";
 import { admin } from "./routes/admin";
 import { reference } from "./routes/reference";
 import { agent } from "./routes/agent";
 import { setup } from "./routes/setup";
 import { users } from "./routes/users";
 import { me } from "./routes/me";
-import { credentials } from "./routes/credentials";
+import { reports } from "./routes/reports";
+import { preferences } from "./routes/preferences";
 import { artifacts } from "./routes/artifacts";
 import { outputs } from "./routes/outputs";
 import { repos } from "./routes/repos";
 import { library } from "./routes/library";
+import { jobs } from "./routes/jobs";
+import { tests } from "./routes/tests";
 import { projects } from "./routes/projects";
 import { initOidc, installAuth, isBootstrapped, type OidcConfig } from "./auth";
 import { httpLogger, noteError } from "./logging";
+import { readiness } from "./lifecycle";
+import { internalRoutes, type InternalOptions } from "./routes/internal";
 
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
 registerSource("azure-devops", createAzureDevopsSource);
+registerCoreJobs();
 
 const STATUS_BY_CODE = {
   not_found: 404,
   conflict: 409,
   bad_input: 400,
   forbidden: 403,
+  unavailable: 503,
 } as const;
 
 function apiRoutes() {
   return new Hono()
     .route("/work-items", workItems)
+    .route("/compose", compose)
     .route("/knowledge", knowledge)
     .route("/analysis-runs", analysisRuns)
     .route("/reference", reference)
     .route("/agent", agent)
     .route("/users", users)
     .route("/me", me)
-    .route("/credentials", credentials)
+    .route("/reports", reports)
+    .route("/preferences", preferences)
     .route("/artifacts", artifacts)
     .route("/outputs", outputs)
     .route("/repos", repos)
     .route("/library", library)
+    .route("/jobs", jobs)
+    .route("/tests", tests)
     .route("/", projects)
     .route("/", admin);
 }
@@ -59,19 +77,20 @@ export function createApp(
     webRoot?: string;
     oidc?: OidcConfig;
     passwordAuth?: boolean;
+    internal?: InternalOptions;
   } = {},
 ) {
   const base = new Hono();
   base.use("*", requestId());
   base.use("*", httpLogger);
 
-  base.get("/health", async (c) => {
-    try {
-      await sql`select 1`;
-      return c.json({ ok: true });
-    } catch {
-      return c.json({ ok: false }, 503);
-    }
+  const livez = (c: Context) => c.json({ ok: true });
+  base.get("/livez", livez);
+  base.get("/health", livez);
+  if (opts.internal) base.route("/internal", internalRoutes(opts.internal));
+  base.get("/readyz", async (c) => {
+    const r = await readiness();
+    return c.json(r, r.ready ? 200 : 503);
   });
 
   const authMode = opts.oidc ? "sso" : opts.apiToken ? "token" : "open";
@@ -84,6 +103,7 @@ export function createApp(
       authMode,
       sso: Boolean(opts.oidc),
       passwordLogin: Boolean(opts.passwordAuth) && (await isBootstrapped()),
+      envBadge: env.envBadge ?? null,
       profile,
     });
   });

@@ -1,176 +1,112 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { api } from "../api";
-  import { createResource } from "../resource.svelte";
-  import { Badge, Meter, Note, G, RAMP } from "../tui";
-  import type { Connection, Repo, SourceProject } from "./rows";
+  import { Bars, Columns, compact, dayOfMonth, type Bar, type Col } from "../tui";
+  import { census } from "./census.svelte";
+  import { activity } from "./activity.svelte";
+  import { grade, pct, ratio } from "./overview";
+  import Dials from "./Dials.svelte";
+  import Overview from "./Overview.svelte";
+  import Tile from "./Tile.svelte";
 
-  const conns = createResource(
-    () => api.get<Connection[]>("/source-connections"),
-    [],
+  const d = $derived(census.data.detail.sources);
+  const r = $derived(census.data.detail.repos);
+  const traffic = $derived(activity.data.traffic);
+
+  /* Whose traffic it is — the agent reading on someone's behalf, sync, or the
+     app itself — is what a request-rate scrape cannot tell you. */
+  const ORIGINS = [
+    { key: "agent", label: "agent", tone: "accent" },
+    { key: "sync", label: "sync", tone: "info" },
+    { key: "app", label: "app", tone: "muted" },
+  ] as const;
+
+  const split = (x: { agent: number; sync: number; app: number }) =>
+    ORIGINS.map((o) => ({ key: o.key, value: x[o.key], tone: o.tone }));
+
+  const perDay = $derived(
+    traffic.per_day.map(
+      (x): Col => ({
+        key: x.day,
+        label: dayOfMonth(x.day),
+        title: x.day,
+        value: x.agent + x.sync + x.app,
+        parts: split(x),
+      }),
+    ),
   );
-  const projects = createResource(
-    () => api.get<SourceProject[]>("/source-projects"),
-    [],
-  );
-  const repos = createResource(
-    () => api.get<{ repos: Repo[] }>("/repos").then((r) => r.repos),
-    [],
+  const calls = $derived(perDay.reduce((n, c) => n + c.value, 0));
+
+  const bySource = $derived(
+    traffic.connections
+      .map(
+        (c): Bar => ({
+          key: c.slug,
+          label: c.slug,
+          value: c.agent + c.sync + c.app,
+          parts: split(c),
+        }),
+      )
+      .sort((a, b) => b.value - a.value),
   );
 
-  const knowledge = $derived(
-    projects.data.filter((p) => p.role === "knowledge"),
-  );
-  const noWiki = $derived(
-    knowledge.filter(
-      (p) => p.source_type === "azure-devops" && !(p.wikis ?? []).length,
-    ).length,
-  );
-  const ready = $derived(
-    repos.data.filter((r) => r.index_status === "ready").length,
-  );
-  const failing = $derived(
-    repos.data.filter((r) => r.index_status === "error").length,
-  );
-  const unmapped = $derived(repos.data.filter((r) => !r.component_id).length);
-  const noToken = $derived(conns.data.filter((c) => !c.token_source).length);
+  const tokened = $derived(d.connections - d.untokened);
+  const wikied = $derived(d.with_product - d.projects_no_wiki);
 
-  /** Connections grouped by kind — "2 azure-devops · 1 freshdesk". */
-  const byType = $derived(
-    Object.entries(
-      conns.data.reduce<Record<string, number>>((acc, c) => {
-        acc[c.source_type] = (acc[c.source_type] ?? 0) + 1;
-        return acc;
-      }, {}),
-    )
-      .map(([k, n]) => `${n} ${k}`)
-      .join(" · "),
-  );
+  const readiness = $derived([
+    {
+      key: "sources",
+      label: "sources",
+      title: "sources with a token",
+      value: ratio(tokened, d.connections),
+      tone: grade(tokened, d.connections),
+      center: pct(tokened, d.connections),
+      sub: `${tokened}/${d.connections}`,
+    },
+    {
+      key: "projects",
+      label: "projects",
+      title: "projects with a product that have a wiki",
+      value: ratio(wikied, d.with_product),
+      tone: grade(wikied, d.with_product),
+      center: pct(wikied, d.with_product),
+      sub: `${wikied}/${d.with_product}`,
+    },
+    {
+      key: "repos",
+      label: "repos",
+      title: "repos indexed",
+      value: ratio(r.ready, r.repos),
+      tone: grade(r.ready, r.repos),
+      center: pct(r.ready, r.repos),
+      sub: `${r.ready}/${r.repos}`,
+    },
+  ]);
 
-  const trackers = $derived(projects.data.filter((p) => p.role === "tracker").length);
-
-  const chunks = $derived(repos.data.reduce((n, r) => n + (r.chunk_count ?? 0), 0));
-  const files = $derived(repos.data.reduce((n, r) => n + (r.file_count ?? 0), 0));
-
-  /** Oldest successful index — the number that tells you if code answers are stale. */
-  const oldest = $derived.by(() => {
-    const times = repos.data
-      .map((r) => (r.last_indexed_at ? Date.parse(r.last_indexed_at) : NaN))
-      .filter((n) => Number.isFinite(n));
-    if (!times.length) return null;
-    const days = (Date.now() - Math.min(...times)) / 86_400_000;
-    return days < 1 ? "today" : `${Math.floor(days)}d ago`;
-  });
-
-  onMount(() => {
-    conns.reload();
-    projects.reload();
-    repos.reload();
-  });
+  const figures = $derived([
+    { key: "sources", label: "sources", value: d.connections, to: "sources" },
+    { key: "projects", label: "projects", value: d.projects, to: "projects" },
+    { key: "repos", label: "repos", value: r.repos, to: "repos" },
+    { key: "files", label: "files", text: compact(r.files), title: `${r.files.toLocaleString()} files indexed`, to: "repos" },
+    { key: "chunks", label: "chunks", text: compact(r.chunks), title: `${r.chunks.toLocaleString()} code chunks`, to: "repos" },
+    { key: "calls", label: `calls ${traffic.days} d`, text: compact(calls), title: `source calls, last ${traffic.days} days` },
+  ]);
 </script>
 
-{#snippet pending()}
-  <span class="stat pending" aria-label="loading">{RAMP[0].repeat(12)}</span>
-{/snippet}
-<ol class="spine">
-  <li>
-    <span class="rank">{G.marker}</span>
-    <span class="name">sources</span>
-    {#if conns.loading}
-      {@render pending()}
-    {:else}
-      <span class="stat">
-        {conns.data.length} connected{byType ? ` · ${byType}` : ""}
-      </span>
-      {#if noToken}
-        <Badge tone="warn">{noToken} without a token</Badge>
-      {/if}
-    {/if}
-  </li>
-  <li>
-    <span class="rank">{G.marker}</span>
-    <span class="name">projects</span>
-    {#if projects.loading}
-      {@render pending()}
-    {:else}
-      <span class="stat">
-        {projects.data.length} registered · {knowledge.length} knowledge · {trackers}
-        tracker
-      </span>
-      {#if noWiki}<Badge tone="warn">{noWiki} without a wiki</Badge>{/if}
-      {#if !conns.loading && !conns.data.length}
-        <Badge tone="muted">needs a source</Badge>
-      {/if}
-    {/if}
-  </li>
-  <li>
-    <span class="rank">{G.marker}</span>
-    <span class="name">repos</span>
-    {#if repos.loading}
-      {@render pending()}
-    {:else}
-      <span class="stat">
-        {#if repos.data.length}
-          <Meter
-            value={ready / repos.data.length}
-            width={8}
-            tone={failing ? "warn" : "ok"}
-            label="indexed"
-          />
-          {ready}/{repos.data.length} indexed · {chunks.toLocaleString()} chunks from {files.toLocaleString()} files{oldest
-            ? ` · oldest ${oldest}`
-            : ""}
-        {:else}
-          none linked
-        {/if}
-      </span>
-      {#if failing}<Badge tone="danger">{failing} failing</Badge>{/if}
-      {#if unmapped}
-        <Badge tone="warn">{unmapped} without a component</Badge>
-      {/if}
-    {/if}
-  </li>
-</ol>
+<Overview
+  {figures}
+  cols={2}
+  rows={2}
+  loading={census.loading}
+  error={census.error ?? activity.error}
+>
+  <Tile title="readiness">
+    <Dials items={readiness} />
+  </Tile>
 
-{#if conns.error || projects.error || repos.error}
-  <Note tone="danger"
-    >{conns.error ?? projects.error ?? repos.error}</Note
-  >
-{/if}
+  <Tile title="calls by source" meta="{traffic.days} d" empty={!calls}>
+    <Bars rows={bySource} format={compact} fit />
+  </Tile>
 
-<style>
-  .spine {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--pad-2);
-  }
-  .spine li {
-    display: flex;
-    align-items: center;
-    gap: var(--gap);
-    flex-wrap: wrap;
-    font-size: var(--fs-sm);
-  }
-  .rank {
-    color: var(--accent);
-  }
-  .name {
-    min-width: 6rem;
-    letter-spacing: var(--label-spacing);
-  }
-  .stat {
-    color: var(--muted);
-    display: inline-flex;
-    align-items: center;
-    gap: var(--pad-2);
-  }
-  .pending {
-    font-family: var(--font-mono);
-    color: var(--border);
-    letter-spacing: 0.35em;
-    user-select: none;
-  }
-</style>
+  <Tile title="source calls" meta="{traffic.days} d" span={2} empty={!calls}>
+    <Columns rows={perDay} format={compact} legend={[...ORIGINS]} fill />
+  </Tile>
+</Overview>

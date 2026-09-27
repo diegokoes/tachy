@@ -1,21 +1,6 @@
 import { Hono } from "hono";
-import {
-  getOutput,
-  listOutputs,
-  deleteOutput,
-  sweepExpiredOutputs,
-  log,
-} from "@tachy/core";
+import { getOutput, listOutputs, deleteOutput } from "@tachy/core";
 import { requireCaller } from "../authz";
-
-const SWEEP_INTERVAL_MS = 60 * 60_000;
-
-const sweep = setInterval(() => {
-  sweepExpiredOutputs().catch((err) =>
-    log("error", "outputs_sweep", { error: String(err) }),
-  );
-}, SWEEP_INTERVAL_MS);
-sweep.unref?.();
 
 /** RFC 5987, so a filename with non-ASCII survives the header. */
 function contentDisposition(filename: string): string {

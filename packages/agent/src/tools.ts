@@ -10,6 +10,7 @@ export const READ_TOOLS = [
   "list_reference_docs",
   "get_reference_doc",
   "list_wiki_articles",
+  "list_wiki_gaps",
   "draft_wiki_page",
   "ingest_context",
   "list_resolution_patterns",
@@ -41,6 +42,8 @@ export const WRITE_TOOLS = [
   "save_reference_doc",
   "update_reference_doc",
   "save_wiki_article",
+  "add_wiki_category",
+  "seed_wiki_sections",
   "add_knowledge_feedback",
   "add_resolution_pattern",
   "add_component",
@@ -61,39 +64,18 @@ export const WRITE_TOOLS = [
   "create_ado_work_item",
 ] as const;
 
-export const DISALLOWED_BUILTINS = [
-  "Bash",
-  "BashOutput",
-  "KillBash",
-  "Read",
-  "Write",
-  "Edit",
-  "MultiEdit",
-  "NotebookEdit",
-  "Glob",
-  "Grep",
-  "WebFetch",
-  "WebSearch",
-  "Task",
-  "TodoWrite",
-  "SlashCommand",
-];
-
 export const qualify = (base: string) => `mcp__${MCP_SERVER}__${base}`;
 
 const READ = new Set<string>(READ_TOOLS);
-const WRITE = new Set<string>(WRITE_TOOLS);
 
 export type ToolClass = "read" | "write" | "denied";
 
+/** A tachy tool not listed as a read is a write, so an unlisted tool still gets the review box. */
 export function classify(toolName: string): { cls: ToolClass; base: string } {
   const prefix = `mcp__${MCP_SERVER}__`;
   if (!toolName.startsWith(prefix)) return { cls: "denied", base: toolName };
   const base = toolName.slice(prefix.length);
-  if (READ.has(base)) return { cls: "read", base };
-  if (WRITE.has(base)) return { cls: "write", base };
-
-  return { cls: "write", base };
+  return { cls: READ.has(base) ? "read" : "write", base };
 }
 
 /**

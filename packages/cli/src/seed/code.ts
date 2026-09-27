@@ -140,12 +140,10 @@ export async function seedCode(
       const f = Math.floor(i / perFile);
       const k = i % perFile;
       const start = 1 + k * 40;
-      /*
-       * Every chunk used to hold one shared snippet constant: 60k identical
-       * rows at --scale=large, and under --embed 60k identical vectors, which
-       * makes the HNSW graph degenerate and the trigram index useless. The
-       * template is drawn per chunk and interpolates the file's own names.
-       */
+      // The template is drawn per chunk and interpolates the file's own
+      // names. A shared snippet gives 60k identical rows at --scale=large, and
+      // under --embed 60k identical vectors, which degenerates the HNSW graph
+      // and makes the trigram index useless.
       const { names, path } = fileIdentity(f);
       const template =
         CODE_TEMPLATES[

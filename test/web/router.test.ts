@@ -5,10 +5,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   isActive,
   navigate,
+  openSection,
   router,
   section,
   segment,
   segments,
+  setLanding,
   startRouter,
 } from "../../packages/web/src/lib/router.svelte";
 
@@ -90,6 +92,36 @@ describe("navigate", () => {
     navigate("/library");
     navigate("/api/knowledge");
     expect(router.path).toBe("/library");
+  });
+});
+
+describe("openSection", () => {
+  it("resumes where the section was left, and re-picking it goes to the landing", () => {
+    navigate("/library/docs/7");
+    navigate("/chat");
+    openSection("library");
+    expect(router.path).toBe("/library/docs/7");
+    openSection("library");
+    expect(router.path).toBe("/library");
+  });
+
+  /** A bare /wiki only redirects, so passing through it flashes the address bar. */
+  it("goes straight to a declared landing", () => {
+    setLanding("wiki", () => "/wiki/general");
+    navigate("/wiki/general/gaps");
+    const pushed: string[] = [];
+    const push = history.pushState.bind(history);
+    history.pushState = (s, t, url) => {
+      pushed.push(String(url));
+      push(s, t, url);
+    };
+    try {
+      openSection("wiki");
+      openSection("wiki");
+    } finally {
+      history.pushState = push;
+    }
+    expect(pushed).toEqual(["/wiki/general"]);
   });
 });
 
