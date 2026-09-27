@@ -8,13 +8,20 @@
   import { shatterAll } from "./motion";
   import Scrollbar from "./Scrollbar.svelte";
   import ArtifactPanel from "./chat/ArtifactPanel.svelte";
-  import CommandMenu, { matchArtifacts, type CommandPick } from "./chat/CommandMenu.svelte";
+  import CommandMenu, { matchArtifacts, type CommandPick, type MenuCrumb, type MenuOption } from "./chat/CommandMenu.svelte";
   import CompactPanel from "./chat/CompactPanel.svelte";
   import OutputCard, { type OutputFile } from "./chat/OutputCard.svelte";
   import Approval from "./chat/Approval.svelte";
   import Launcher from "./chat/Launcher.svelte";
   import { ArtifactMark, Button, G, Icon, tip } from "./tui";
   import { pushScope } from "./keys.svelte";
+  import type { AdoTypeOption, CreatedTicket } from "@tachy/contract";
+  import TicketComposer from "./work-items/TicketComposer.svelte";
+  import TicketCard from "./work-items/TicketCard.svelte";
+  import { composer, hasDraft, openComposer } from "./work-items/composer.svelte";
+  import { az, ensureProjects, ensureTypes, typesNote, typesOf } from "./work-items/az.svelte";
+  import { isAzNew, matches, matchProject, parseAz } from "./work-items/azCommand";
+  import { typeColor, typeIcon } from "./work-items/ado-icons";
 
   const short = (tool: string) => tool.replace(/^mcp__tachy__/, "");
 
@@ -85,13 +92,68 @@
   let cmdMenu = $state<CommandMenu>();
   let cmdDismissed = $state(false);
 
-  /** `/name` picks a command; `/artifact <query>` picks that command's argument. */
+  const azCommand = $derived(commands?.builtins.find((b) => b.name === "az"));
+  const azCtx = $derived(azCommand ? parseAz(chat.input, az.projects ?? []) : null);
+
+  /** `/name` picks a command; `/artifact <query>` and `/az …` pick arguments. */
   const cmdCtx = $derived.by(() => {
     const name = chat.input.match(/^\/([a-z0-9-]*)$/);
     if (name) return { mode: "command" as const, query: name[1] };
     const arg = chat.input.match(/^\/artifact[ \t]+([^\n]*)$/);
     if (arg) return { mode: "artifact" as const, query: arg[1] };
+    if (azCtx) return { mode: "options" as const, query: azCtx.query };
     return null;
+  });
+
+  $effect(() => {
+    if (azCtx && azCtx.stage !== "sub") ensureProjects();
+    if (azCtx?.stage === "type") ensureTypes(azCtx.project.id);
+  });
+
+  const azMenu = $derived.by((): { options: MenuOption[]; crumb: MenuCrumb } | null => {
+    if (!azCtx) return null;
+    if (azCtx.stage === "sub")
+      return {
+        crumb: { cmd: "/az", param: "subcommand", desc: azCommand?.description },
+        options: (azCommand?.subcommands ?? [])
+          .filter((s) => s.name.startsWith(azCtx.query))
+          .map((s) => ({ value: s.name, label: s.name, hint: s.args, desc: s.description })),
+      };
+    if (azCtx.stage === "project")
+      return {
+        crumb: {
+          cmd: "/az new",
+          param: "project",
+          desc: "your team's Azure DevOps projects",
+          empty:
+            az.projectsError ??
+            (az.projects
+              ? az.projects.length
+                ? "no project matches"
+                : "none of your teams has an Azure DevOps project registered"
+              : "loading projects…"),
+        },
+        options: (az.projects ?? [])
+          .filter((p) => matches(azCtx.query, p.name, p.external_key))
+          .map((p) => ({
+            value: p.id,
+            label: p.name,
+            hint: p.name === p.external_key ? p.source_slug : p.external_key,
+            desc: p.product_slug ?? p.team_slug,
+          })),
+      };
+    return {
+      crumb: { cmd: `/az new ${azCtx.project.name}`, param: "type", desc: "what you are raising", empty: typesNote(azCtx.project.id) },
+      options: typesOf(azCtx.project.id)
+        .filter((t) => matches(azCtx.query, t.name))
+        .map((t) => ({
+          value: t.name,
+          label: t.name,
+          desc: t.description ?? "",
+          icon: typeIcon(t.icon),
+          color: typeColor(t.color),
+        })),
+    };
   });
   const menuOpen = $derived(cmdCtx !== null && !cmdDismissed && !chat.busy && commands !== null);
 
@@ -111,11 +173,44 @@
 
   function pickCommand(pick: CommandPick) {
     if (pick.kind === "builtin") chat.input = `/${pick.builtin.name} `;
+    else if (pick.kind === "option") pickAz(pick.value);
     else {
       chat.artifact = { id: pick.artifact.id, title: pick.artifact.title };
       chat.input = "";
     }
   }
+
+  function pickAz(value: string) {
+    if (!azCtx) return;
+    if (azCtx.stage === "sub") chat.input = `/az ${value} `;
+    else if (azCtx.stage === "project") {
+      const p = az.projects?.find((x) => x.id === value);
+      if (p) chat.input = `/az new ${p.name} `;
+    } else {
+      const t = typesOf(azCtx.project.id).find((x) => x.name === value);
+      chat.input = "";
+      openComposer(azCtx.project, t);
+    }
+  }
+
+  /** `/az new [project] [type]` sent as a line: whatever it names is preselected. */
+  async function openFromLine(message: string) {
+    chat.input = "";
+    const rest = message.replace(/^\/az[ \t]+new[ \t]*/, "");
+    const hit = rest ? matchProject(`${rest} `, await ensureProjects()) : null;
+    if (!hit) return openComposer();
+    const types = await ensureTypes(hit.project.id);
+    const type = types.find((t) => t.name.toLowerCase() === hit.rest.toLowerCase());
+    openComposer(hit.project, type);
+  }
+
+  function ticketMade(ticket: CreatedTicket, type: AdoTypeOption) {
+    addEntry({ kind: "ticket", ticket, icon: type.icon, color: type.color });
+    snap(true);
+  }
+
+  /** A draft set aside with the X: the chat says so and offers it back. */
+  const draftWaiting = $derived(!composer.open && hasDraft());
 
   function composerKeydown(e: KeyboardEvent) {
     if (menuOpen && cmdMenu && (!cmdMenu.empty() || cmdCtx?.mode === "artifact")) {
@@ -149,6 +244,7 @@
   async function send() {
     const message = chat.input.trim();
     if (!message || chat.busy) return;
+    if (isAzNew(message)) return openFromLine(message);
     if (cmdCtx?.mode === "artifact") {
       const hits = matchArtifacts(commands?.artifacts ?? [], cmdCtx.query);
       if (hits.length === 1) pickCommand({ kind: "artifact", artifact: hits[0] });
@@ -337,6 +433,11 @@
   }
 </script>
 
+{#if composer.open}
+  <div class="chat">
+    <TicketComposer oncreated={ticketMade} />
+  </div>
+{:else}
 <div
   class="chat"
   role="region"
@@ -370,6 +471,8 @@
         <CompactPanel title={e.title} stats={e.stats} />
       {:else if e.kind === "output"}
         <OutputCard file={e.file} />
+      {:else if e.kind === "ticket"}
+        <TicketCard ticket={e.ticket} icon={e.icon} color={e.color} />
       {:else if e.kind === "error"}
         <div class="turn"><span class="who err">{G.marker}error</span><div class="body err">{e.text}</div></div>
       {:else if e.kind === "running"}
@@ -395,8 +498,14 @@
   <ArtifactPanel />
   </div>
 
-  {#if chat.uploads.length || chat.artifact}
+  {#if chat.uploads.length || chat.artifact || draftWaiting}
     <div class="attachments">
+      {#if draftWaiting}
+        <button class="attach draft-chip" use:tip={"Reopen the work item you were writing"} onclick={() => openComposer()}>
+          <Icon name="review" size="1em" />
+          draft {composer.type?.name ?? "work item"}{composer.title.trim() ? `: ${composer.title.trim()}` : ""}
+        </button>
+      {/if}
       {#if chat.artifact}
         <span class="attach artifact-chip">
           <ArtifactMark size="1em" /> {chat.artifact.title}
@@ -422,6 +531,8 @@
         query={cmdCtx?.query ?? ""}
         builtins={commands.builtins}
         artifacts={commands.artifacts}
+        options={azMenu?.options}
+        crumb={azMenu?.crumb}
         onpick={pickCommand}
       />
     {/if}
@@ -457,6 +568,7 @@
     </div>
   </div>
 </div>
+{/if}
 
 <style>
   .chat {
@@ -625,6 +737,8 @@
     flex-wrap: wrap;
     align-items: center;
   }
+  .draft-chip { background: none; border: 1px dashed var(--accent); border-radius: var(--radius-chip); padding: 0 var(--pad-2); cursor: pointer; }
+  .draft-chip:hover, .draft-chip:focus-visible { color: var(--accent); }
   .attach { display: inline-flex; align-items: center; gap: var(--pad-2); font-size: var(--fs-sm); color: var(--muted); }
   .sep { color: var(--muted); opacity: 0.55; user-select: none; }
   .artifact-chip { color: var(--accent); }

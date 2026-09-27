@@ -1,5 +1,6 @@
 import type { CompactStats } from "./chat/CompactPanel.svelte";
 import type { OutputFile } from "./chat/OutputCard.svelte";
+import type { CreatedTicket } from "@tachy/contract";
 
 export type EntryData =
   | { kind: "user"; text: string }
@@ -17,6 +18,13 @@ export type EntryData =
           can be invalid without destroying the parsed fields behind it. */
       raw?: string;
       status: "pending" | "approved" | "denied";
+    }
+  /** Made from the composer, with no turn behind it. */
+  | {
+      kind: "ticket";
+      ticket: CreatedTicket;
+      icon: string | null;
+      color: string | null;
     }
   | { kind: "error"; text: string }
   | { kind: "running"; turnId: string; text: string; stopped: boolean };
