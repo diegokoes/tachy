@@ -8,10 +8,19 @@ export interface ChatBody {
   command?: { name: string; args: string };
 }
 
+export interface SubcommandMeta {
+  name: string;
+  args: string;
+  description: string;
+  /** Handled in the browser; sending it would start no turn. */
+  client?: boolean;
+}
+
 export interface BuiltinCommandMeta {
   name: string;
   args: string;
   description: string;
+  subcommands?: SubcommandMeta[];
 }
 
 export interface CommandArtifactMeta {
