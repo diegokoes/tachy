@@ -39,3 +39,116 @@ export interface WorkItemSchema {
   fields: FieldSpec[];
   config_defaults: Record<string, unknown>;
 }
+
+/** A work item type the composer offers: what ADO's own "New" menu would list. */
+export interface AdoTypeOption {
+  name: string;
+  description: string | null;
+  /** Hex without the '#'. */
+  color: string | null;
+  /** ADO's stock glyph id, e.g. "icon_insect"; the browser draws its own. */
+  icon: string | null;
+}
+
+/** A registered project the caller's team creates work items in. */
+export interface ComposerProject {
+  /** source_projects.id */
+  id: string;
+  name: string;
+  /** The ADO project name. */
+  external_key: string;
+  source_slug: string;
+  team_slug: string;
+  product_slug: string | null;
+}
+
+/** Where a prefilled value came from, lowest precedence first. */
+export type PrefillOrigin = "process" | "team" | "config" | "template";
+
+export interface PathOption {
+  /** As System.AreaPath / System.IterationPath take it: `Project\Child`. */
+  path: string;
+  /** The team works in it; listed first. */
+  team?: true;
+  /** The iteration running today. */
+  current?: true;
+}
+
+export interface PersonOption {
+  name: string;
+  /** What an identity field is sent: ADO resolves it unambiguously. */
+  unique_name: string;
+}
+
+export interface ComposerForm {
+  project: string;
+  type: string;
+  /** The ADO team the area, iteration, people and templates come from. */
+  team: string | null;
+  fields: FieldSpec[];
+  prefill: Record<string, { value: unknown; origin: PrefillOrigin }>;
+  areas: PathOption[];
+  iterations: PathOption[];
+  people: PersonOption[];
+  templates: { id: string; name: string; description: string | null }[];
+}
+
+/**
+ * What the composer submits. HTML fields reference pasted images as
+ * `attachment:<key>`; the server uploads them and rewrites the src.
+ */
+export interface TicketDraft {
+  type: string;
+  title: string;
+  fields: Record<string, unknown>;
+  tags?: string[];
+  parent_id?: string;
+  related_ids?: string[];
+  /** Tachy work items this ticket is raised from; each records it as tracked_by. */
+  work_item_ids?: string[];
+}
+
+export interface TicketValidation {
+  ok: boolean;
+  message?: string;
+  /** Fields ADO's error names, by display or reference name as it wrote them. */
+  fields?: string[];
+}
+
+export interface CreatedTicket {
+  id: number;
+  url: string;
+  title: string;
+  type: string;
+  project: string;
+}
+
+/** A source item attached to the composer as context for the review. */
+export interface TicketContextItem {
+  source: string;
+  external_id: string;
+  title: string;
+  /** Plain text, already trimmed by the browser. */
+  text: string;
+}
+
+export type ReviewReadiness = "ready" | "almost" | "needs-work";
+export type ReviewFindingKind = "gap" | "unclear" | "improve";
+
+export interface ReviewFinding {
+  id: string;
+  /** A field's reference name, "System.Title", or "general". */
+  field: string;
+  kind: ReviewFindingKind;
+  message: string;
+  /** Text the user can insert as-is. Never a rewrite of the whole ticket. */
+  suggestion?: string;
+}
+
+export interface TicketReview {
+  /** False when no model credential resolves for the caller. */
+  available: boolean;
+  readiness: ReviewReadiness;
+  summary: string;
+  findings: ReviewFinding[];
+}
