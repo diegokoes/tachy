@@ -7,6 +7,14 @@ create or replace function tachy_join(arr text[]) returns text
     language sql immutable parallel safe
     as $$ select array_to_string(arr, ' ') $$;
 
+-- One row: the sha256 of the schema.sql this database was built from, written by
+-- whatever applied it. /readyz compares it with the schema.sql in the image.
+create table schema_meta (
+    id             boolean primary key default true check (id),
+    schema_sha256  text not null,
+    applied_at     timestamptz not null default now()
+);
+
 create table teams (
     id          uuid primary key default gen_random_uuid(),
     slug        text not null unique,
@@ -31,11 +39,19 @@ create table users (
     id            uuid primary key default gen_random_uuid(),
     email         text not null unique,
     display_name  text,
-    -- Global role: admins manage users, org structure and settings.
+    -- App-wide role. 'admin' is the app admin: manages users, org structure
+    -- and system settings. Team curation rights come from team_members.role
+    -- instead, which stores the same two words for a different rung.
     role          text not null default 'member' check (role in ('admin','member')),
     -- Scrypt hash for password login; null = SSO-only or attribution-only user.
     password_hash text,
     disabled      boolean not null default false,
+    -- A non-person account (the load-test user, later a scheduler identity):
+    -- its reads and tool calls are not counted as engagement.
+    service_account boolean not null default false,
+    -- Honoured only while SSO is configured: then password login works for
+    -- these accounts alone (break-glass admin, load-test user).
+    password_login_allowed boolean not null default false,
     created_at    timestamptz not null default now()
 );
 
@@ -51,39 +67,43 @@ create table settings (
 create table team_members (
     team_id   uuid not null references teams(id) on delete cascade,
     user_id   uuid not null references users(id) on delete cascade,
-    -- 'admin' = team mini-admin: curates this team's knowledge/docs/taxonomy
-    -- and membership without org-wide admin rights.
+    -- Per-team role. 'admin' is the team admin: curates this team's
+    -- knowledge/docs/taxonomy and membership, with no rights outside it.
     role      text not null default 'member' check (role in ('admin','member')),
     primary key (team_id, user_id)
 );
 
--- Encrypted secrets (agent API keys, source tokens) at three scopes with
--- most-specific-wins resolution: user > team > global > env fallback.
+-- Encrypted secrets (agent API keys, source tokens) at two scopes with
+-- most-specific-wins resolution: user > global > env fallback.
 -- Values are AES-256-GCM ciphertext keyed by TACHY_SECRET_KEY; plaintext
 -- never leaves the server process.
+--
+-- A credential belongs to one person. The global scope is not a way to share
+-- one: it holds the deployment's own machine tokens — a source connection's
+-- token, the job webhook — which the worker resolves with no user to be.
 create table credentials (
     id               uuid primary key default gen_random_uuid(),
-    scope            text not null check (scope in ('global','team','user')),
-    team_id          uuid references teams(id) on delete cascade,
+    scope            text not null check (scope in ('global','user')),
     user_id          uuid references users(id) on delete cascade,
     -- e.g. 'anthropic_api_key', 'copilot_token', 'freshdesk_token:<slug>'
     name             text not null,
     value_ciphertext bytea not null,
     nonce            bytea not null,
+    -- Which key opens this row (the first 8 hex of sha256 over the key). Null
+    -- for rows written before key ids; those are tried with every known key.
+    key_id           text,
     created_by       uuid references users(id) on delete set null,
     created_at       timestamptz not null default now(),
     updated_at       timestamptz not null default now(),
-    -- scope and its FK must agree, or a scope='team' row with a null team_id
+    -- scope and its FK must agree, or a scope='user' row with a null user_id
     -- slips past the partial unique indexes and can be inserted repeatedly
-    check ((scope = 'team') = (team_id is not null)),
     check ((scope = 'user') = (user_id is not null))
 );
 create unique index credentials_global_idx on credentials(name)          where scope = 'global';
-create unique index credentials_team_idx   on credentials(team_id, name) where scope = 'team';
 create unique index credentials_user_idx   on credentials(user_id, name) where scope = 'user';
 
 -- Non-secret per-user/per-team preferences (agent provider/model/effort),
--- same scope layout as credentials; global defaults live in `settings`.
+-- resolved user > team > global; global defaults live in `settings`.
 create table preferences (
     id          uuid primary key default gen_random_uuid(),
     scope       text not null check (scope in ('global','team','user')),
@@ -100,7 +120,7 @@ create unique index preferences_team_idx   on preferences(team_id, key) where sc
 create unique index preferences_user_idx   on preferences(user_id, key) where scope = 'user';
 
 -- Reusable chat prompt templates ("artifacts"), same scope layout as
--- credentials/preferences; the picker unions user + team + global rows.
+-- preferences; the picker unions user + team + global rows.
 create table artifacts (
     id          uuid primary key default gen_random_uuid(),
     scope       text not null check (scope in ('global','team','user')),
@@ -137,6 +157,19 @@ create table generated_outputs (
 );
 create index generated_outputs_user_idx   on generated_outputs(user_id, created_at desc);
 create index generated_outputs_expiry_idx on generated_outputs(expires_at);
+
+-- Files attached to a chat, read by that turn's tools. Short-lived like
+-- generated_outputs, and in the database so any api replica can serve them.
+create table chat_uploads (
+    id           uuid primary key default gen_random_uuid(),
+    user_id      uuid references users(id) on delete cascade,
+    filename     text not null,
+    byte_size    integer not null,
+    bytes        bytea not null,
+    created_at   timestamptz not null default now(),
+    expires_at   timestamptz not null
+);
+create index chat_uploads_expiry_idx on chat_uploads(expires_at);
 
 create table source_connections (
     id            uuid primary key default gen_random_uuid(),
@@ -205,10 +238,10 @@ create index customer_units_profile_idx  on customer_units(profile_id);
 create index customer_units_aliases_idx  on customer_units using gin (aliases);
 
 -- A project as its source system knows it: an Azure DevOps project, a Freshdesk
--- group, a GitHub owner/repo. role='knowledge' binds it to a product — its items
--- ingest there, and it may own a wiki, repos and area mappings. role='tracker' is
--- a productless target we only create or reassign work items in, so team_id is
--- its sole owner for authorization.
+-- group, a GitHub owner/repo. A product binds it to knowledge: its items ingest
+-- there, and it may own a wiki, repos and area mappings. Without one it is only a
+-- place work items are created or reassigned in, and team_id alone decides who
+-- may use it. Either way its team's members see it as a ticket target.
 create table source_projects (
     id                    uuid primary key default gen_random_uuid(),
     source_connection_id  uuid not null references source_connections(id) on delete cascade,
@@ -222,7 +255,6 @@ create table source_projects (
     -- guessing at the sender's domain, which partners and freemail defeat. Null
     -- means the project serves many, and each ticket is resolved on its own.
     customer_id           uuid references customers(id) on delete set null,
-    role                  text not null check (role in ('knowledge','tracker')),
     -- [{identifier, name, type, root_path, default}] — an ADO project routinely
     -- has several wikis (one project wiki plus a code wiki per repo). Exactly one
     -- carries default:true; that is the one every tool uses with no wiki argument.
@@ -232,9 +264,6 @@ create table source_projects (
     config                jsonb not null default '{}'::jsonb,
     notes                 text,
     created_at            timestamptz not null default now(),
-    -- role and product must agree, or a 'knowledge' row with no product silently
-    -- routes every ingested item nowhere
-    check ((role = 'knowledge') = (product_id is not null)),
     unique (source_connection_id, external_key)
 );
 
@@ -564,7 +593,7 @@ create table analysis_runs (
     id              uuid primary key default gen_random_uuid(),
     work_item_id    uuid references work_items(id) on delete set null,
     user_id         uuid references users(id) on delete set null,
-    mode            text not null check (mode in ('ingest','consult','sync','create','code','chat')),
+    mode            text not null check (mode in ('ingest','consult','sync','create','code','chat','review')),
     model           text,
     input_tokens    integer,
     output_tokens   integer,
@@ -572,7 +601,8 @@ create table analysis_runs (
     created_at      timestamptz not null default now()
 );
 
-create index analysis_runs_item_idx on analysis_runs(work_item_id);
+create index analysis_runs_item_idx    on analysis_runs(work_item_id);
+create index analysis_runs_created_idx on analysis_runs(created_at);
 
 create table labels (
     id          uuid primary key default gen_random_uuid(),
@@ -679,6 +709,10 @@ create table wiki_categories (
     name        text not null,
     description text,
     ordinal     integer not null default 0,
+    -- The section's lead article: the all-encompassing page a reader lands on,
+    -- whose own heading outline is the section's sub-topic list. Set null on
+    -- delete so a section degrades to its plain article list rather than breaking.
+    lead_doc_id uuid references reference_docs(id) on delete set null,
     created_at  timestamptz not null default now(),
     updated_at  timestamptz not null default now(),
     constraint wiki_categories_no_self_parent check (parent_id is null or parent_id <> id)
@@ -687,6 +721,19 @@ create table wiki_categories (
 create unique index wiki_categories_slug_idx
     on wiki_categories(product_id, slug) nulls not distinct;
 create index wiki_categories_parent_idx on wiki_categories(parent_id);
+
+-- Which components a section covers, for per-section coverage and gaps. A section
+-- like "Backend" bundles several components (business objects, worker, queues);
+-- coverage is the union of their subtrees. Seeded from the component tree but
+-- edited freely afterwards, so it is a link, never a live mirror.
+create table wiki_category_components (
+    category_id  uuid not null references wiki_categories(id) on delete cascade,
+    component_id uuid not null references components(id) on delete cascade,
+    primary key (category_id, component_id)
+);
+
+create index wiki_category_components_component_idx
+    on wiki_category_components(component_id);
 
 -- Many-to-many on purpose: "Spooler stalls" belongs under both
 -- Troubleshooting/Printing and Hardware/Printers without being duplicated.
@@ -699,6 +746,20 @@ create table wiki_article_categories (
 
 create index wiki_article_categories_category_idx
     on wiki_article_categories(category_id, ordinal);
+
+-- Slugs an article answered to before a rename, so addresses shared outside the
+-- wiki keep working. A live article at the same slug always wins over an alias,
+-- which is why taking a slug deletes the alias rather than failing.
+create table wiki_slug_aliases (
+    product_id  uuid references products(id) on delete cascade,
+    slug        text not null,
+    doc_id      uuid not null references reference_docs(id) on delete cascade,
+    created_at  timestamptz not null default now()
+);
+
+create unique index wiki_slug_aliases_slug_idx
+    on wiki_slug_aliases(product_id, slug) nulls not distinct;
+create index wiki_slug_aliases_doc_idx on wiki_slug_aliases(doc_id);
 
 -- A link from one library item to another: an article citing a knowledge entry,
 -- an article pointing at another article. Polymorphic on both ends, the same
@@ -729,6 +790,55 @@ create index library_links_from_doc_idx   on library_links(from_doc_id);
 create index library_links_from_entry_idx on library_links(from_entry_id);
 create index library_links_to_doc_idx     on library_links(to_doc_id);
 create index library_links_to_entry_idx   on library_links(to_entry_id);
+
+-- Images placed in library bodies, addressed as /api/library/assets/<id>. In
+-- the database rather than on disk so the pg_dump backup carries them with no
+-- second volume to remember. sha256 is unique so pasting the same screenshot
+-- twice stores it once. No SVG: it is a document that can carry script.
+create table library_assets (
+    id           uuid primary key default gen_random_uuid(),
+    product_id   uuid references products(id) on delete set null,
+    created_by   uuid references users(id) on delete set null,
+    sha256       text not null unique,
+    content_type text not null
+                     check (content_type in ('image/png','image/jpeg','image/gif','image/webp')),
+    byte_size    integer not null,
+    filename     text,
+    bytes        bytea not null,
+    created_at   timestamptz not null default now()
+);
+
+-- What a wiki is missing, as the scheduled sweep last found it. One row per
+-- (wiki, kind, subject), so a gap that persists across sweeps keeps the date it
+-- was first seen, one that goes away gets resolved_at, and one that comes back
+-- later is reopened rather than duplicated. product_id null is the org-wide
+-- wiki, hence `nulls not distinct` on the key.
+--
+-- A dismissed gap stays hidden until its score grows well past dismissed_score:
+-- "not worth an article" is a judgement about the evidence at the time, not a
+-- promise to ignore however much more of it arrives.
+create table wiki_gaps (
+    id              uuid primary key default gen_random_uuid(),
+    product_id      uuid references products(id) on delete cascade,
+    kind            text not null
+                        check (kind in ('unwritten','outgrown','stale','wanted','draft','uncategorised')),
+    -- What the gap is about, stable across sweeps: a component id, an article
+    -- id, or the slug a broken link asked for.
+    key             text not null,
+    subject         text not null,
+    evidence        jsonb not null default '{}'::jsonb,
+    score           integer not null default 0,
+    first_seen_at   timestamptz not null default now(),
+    last_seen_at    timestamptz not null default now(),
+    resolved_at     timestamptz,
+    dismissed_by    uuid references users(id) on delete set null,
+    dismissed_at    timestamptz,
+    dismissed_score integer
+);
+
+create unique index wiki_gaps_key_idx
+    on wiki_gaps(product_id, kind, key) nulls not distinct;
+create index wiki_gaps_open_idx on wiki_gaps(product_id) where resolved_at is null;
 
 create trigger wiki_categories_updated_at
     before update on wiki_categories
@@ -826,6 +936,40 @@ create unique index library_views_doc_idx
     on library_views(reference_doc_id, user_id, day)
     nulls not distinct where reference_doc_id is not null;
 
+-- Traffic to source systems, bucketed per connection, day and origin. Counts,
+-- never timings: latency and error rates are what the metrics stack is for.
+-- What this answers and a scrape cannot is whose traffic it is -- the agent
+-- reading on somebody's behalf, a sync, or the app itself -- and how often the
+-- far end refused it for quota or for credentials.
+create table source_calls (
+    source_connection_id uuid not null references source_connections(id) on delete cascade,
+    day            date not null,
+    origin         text not null check (origin in ('agent','sync','app')),
+    calls          integer not null default 0,
+    rate_limited   integer not null default 0,
+    auth_failures  integer not null default 0,
+    primary key (source_connection_id, day, origin)
+);
+
+-- The agent's tool use, bucketed per tool, person and day for the same reason as
+-- library_views. `writes` is fixed per tool (its MCP readOnlyHint) and stored so
+-- the overview can split reads from writes without a copy of the tool list.
+-- `misuse` counts calls refused as bad input: the agent holding a tool wrong,
+-- which is feedback on that tool's description rather than an outage.
+create table mcp_tool_calls (
+    id         uuid primary key default gen_random_uuid(),
+    tool       text not null,
+    writes     boolean not null,
+    user_id    uuid references users(id) on delete set null,
+    day        date not null,
+    calls      integer not null default 0,
+    failures   integer not null default 0,
+    misuse     integer not null default 0
+);
+
+create unique index mcp_tool_calls_bucket_idx
+    on mcp_tool_calls(tool, user_id, day) nulls not distinct;
+
 -- Linked git repositories for code consultation. Clones live on disk under
 -- TACHY_REPO_DIR; only chunk text + embeddings are stored here. Indexing is
 -- on-demand (API route / CLI), diff-only by blob sha; indexed_commit advances
@@ -888,3 +1032,149 @@ create index code_chunks_repo_idx      on code_chunks(repo_id);
 create index code_chunks_embedding_idx on code_chunks using hnsw (embedding vector_cosine_ops)
     with (m = 16, ef_construction = 64);
 create index code_chunks_trgm_idx      on code_chunks using gin (chunk_text gin_trgm_ops);
+
+-- The job layer (DEPLOYMENT-ARCHITECTURE.md §5.3). A kind is code; a definition
+-- is an admin's configuration of a kind; a run is one execution.
+create table job_definitions (
+    id                 uuid primary key default gen_random_uuid(),
+    kind               text not null,
+    name               text not null unique,
+    params             jsonb not null default '{}'::jsonb,
+    enabled            boolean not null default true,
+    schedule           text,
+    timezone           text not null default 'UTC',
+    resource_class     text check (resource_class in ('light','heavy')),
+    timeout            text,
+    overlap            text check (overlap in ('skip','queue')),
+    notify             text not null default 'failure' check (notify in ('failure','always','never')),
+    -- The last slot the scheduler has dealt with, so a firing is decided once.
+    last_scheduled_for timestamptz,
+    -- Set at worker start when stored params no longer validate against the kind.
+    disabled_reason    text,
+    created_by         uuid references users(id) on delete set null,
+    updated_by         uuid references users(id) on delete set null,
+    created_at         timestamptz not null default now(),
+    updated_at         timestamptz not null default now()
+);
+
+create table job_runs (
+    id               uuid primary key default gen_random_uuid(),
+    definition_id    uuid references job_definitions(id) on delete set null,
+    kind             text not null,
+    params           jsonb not null default '{}'::jsonb,
+    resource_class   text not null check (resource_class in ('light','heavy')),
+    trigger          text not null check (trigger in ('schedule','manual','event')),
+    scheduled_for    timestamptz,
+    requested_by     uuid references users(id) on delete set null,
+    status           text not null default 'queued'
+                     check (status in ('queued','running','succeeded','failed','cancelled','timed_out')),
+    attempts         integer not null default 0,
+    max_attempts     integer not null default 1,
+    timeout_ms       bigint not null,
+    run_after        timestamptz not null default now(),
+    locked_by        text,
+    locked_until     timestamptz,
+    cancel_requested boolean not null default false,
+    progress         real,
+    progress_note    text,
+    output           jsonb,
+    error            text,
+    log_tail         text not null default '',
+    created_at       timestamptz not null default now(),
+    started_at       timestamptz,
+    finished_at      timestamptz,
+    unique (definition_id, scheduled_for)
+);
+
+create index job_runs_claim_idx on job_runs(resource_class, run_after) where status = 'queued';
+create index job_runs_running_idx on job_runs(locked_until) where status = 'running';
+create index job_runs_definition_idx on job_runs(definition_id, created_at desc);
+create index job_runs_created_idx on job_runs(created_at);
+
+-- Who changed a definition and how: a schedule edit can silently stop a sync.
+create table job_definition_changes (
+    id             uuid primary key default gen_random_uuid(),
+    definition_id  uuid references job_definitions(id) on delete set null,
+    changed_by     uuid references users(id) on delete set null,
+    action         text not null check (action in ('created','updated','deleted','disabled')),
+    old_value      jsonb,
+    new_value      jsonb,
+    created_at     timestamptz not null default now()
+);
+
+create index job_definition_changes_def_idx on job_definition_changes(definition_id, created_at desc);
+
+-- Load runs started from the admin page (DEPLOYMENT-ARCHITECTURE.md §11.3).
+-- Their history is the latency record per release.
+create table test_runs (
+    id            uuid primary key default gen_random_uuid(),
+    script        text not null,
+    profile       text,
+    target        text not null,
+    status        text not null default 'queued'
+                  check (status in ('queued','running','passed','failed','cancelled','error')),
+    requested_by  uuid references users(id) on delete set null,
+    image_sha     text,
+    job_run_id    uuid references job_runs(id) on delete set null,
+    summary       jsonb,
+    output_tail   text not null default '',
+    created_at    timestamptz not null default now(),
+    started_at    timestamptz,
+    finished_at   timestamptz
+);
+
+create index test_runs_created_idx on test_runs(created_at desc);
+-- One at a time: a second run would measure the first one's load.
+create unique index test_runs_active_idx on test_runs((status in ('queued','running')))
+    where status in ('queued','running');
+
+-- A bug or feature request filed from the feedback view. The reporter survives
+-- their own account being removed (set null) so the admin queue keeps the item.
+create table reports (
+    id            uuid primary key default gen_random_uuid(),
+    reporter_id   uuid references users(id) on delete set null,
+    type          text not null check (type in ('bug','feature')),
+    status        text not null default 'open'
+                  check (status in ('open','in_progress','resolved','closed')),
+    title         text,
+    body_text     text not null,
+    -- Route, app build and agent the person was on when they filed, so an admin
+    -- reads the report without a round-trip asking where they were.
+    context       jsonb not null default '{}'::jsonb,
+    -- The advisory the model gave the draft, kept for the admin's context.
+    ai_review     jsonb,
+    created_at    timestamptz not null default now(),
+    updated_at    timestamptz not null default now()
+);
+
+create index reports_status_idx  on reports(status, created_at desc);
+create index reports_reporter_idx on reports(reporter_id, created_at desc);
+
+-- The thread on a report: the reporter's follow-ups and the admin's replies.
+create table report_messages (
+    id          uuid primary key default gen_random_uuid(),
+    report_id   uuid not null references reports(id) on delete cascade,
+    author_id   uuid references users(id) on delete set null,
+    direction   text not null check (direction in ('admin','reporter')),
+    body_text   text not null,
+    created_at  timestamptz not null default now()
+);
+
+create index report_messages_report_idx on report_messages(report_id, created_at);
+
+-- In-app notifications, per person. General on purpose: `kind` names the event
+-- and `ref` carries whatever that kind needs to link back (e.g. a report id).
+create table notifications (
+    id          uuid primary key default gen_random_uuid(),
+    user_id     uuid not null references users(id) on delete cascade,
+    kind        text not null check (kind in ('report_reply')),
+    title       text,
+    body_text   text,
+    ref         jsonb not null default '{}'::jsonb,
+    -- seen_at silences the unread badge; read_at is set when the person opens it.
+    seen_at     timestamptz,
+    read_at     timestamptz,
+    created_at  timestamptz not null default now()
+);
+
+create index notifications_user_idx on notifications(user_id, created_at desc);

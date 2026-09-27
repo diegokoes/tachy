@@ -8,8 +8,9 @@
  * sibling of the window, against an edge that does not move.
  */
 import type { Snippet } from "svelte";
+import type { IconName } from "./tui/icons";
 
-export type SubnavItem = { key: string; label: string };
+export type SubnavItem = { key: string; label: string; icon?: IconName };
 
 export type Subnav = {
   items: SubnavItem[];
@@ -39,11 +40,21 @@ export const subnav = () => current;
  * Call from a view's `$effect` and return the result, so the bar clears when
  * the view unmounts. The identity check means a view being replaced by another
  * cannot wipe the incoming view's bar on the way out.
+ *
+ * The clear waits for a microtask. The disposer runs inside the flush that
+ * tears the view down, while App's `{#if sub}` branch is still mounted, and in
+ * a production build the tab bar's effect could read `sub.items` through the
+ * null before that branch was destroyed. The throw aborted the flush and left
+ * every later navigation rendering nothing. Deferred, an incoming view's bar
+ * simply replaces this one, and a view with no bar clears it in a flush of its
+ * own.
  */
 export function setSubnav(next: Subnav) {
   current = next;
   return () => {
-    if (current === next) current = null;
+    queueMicrotask(() => {
+      if (current === next) current = null;
+    });
   };
 }
 

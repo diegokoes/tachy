@@ -10,7 +10,7 @@ export const options = {
   thresholds: {
     http_req_failed: ["rate==0"],
     checks: ["rate==1"],
-    "http_req_duration{endpoint:health}": ["p(95)<200"],
+    "http_req_duration{endpoint:readyz}": ["p(95)<200"],
   },
 };
 
@@ -22,8 +22,8 @@ export default function (data) {
     check(res, { [`${name} is 200`]: (r) => r.status === 200 });
 
   ok(
-    "health",
-    http.get(`${BASE_URL}/health`, { tags: { endpoint: "health" } }),
+    "readyz",
+    http.get(`${BASE_URL}/readyz`, { tags: { endpoint: "readyz" } }),
   );
   ok(
     "knowledge list",
@@ -85,4 +85,75 @@ export default function (data) {
         tags: { endpoint: "output_download" },
       }),
     );
+
+  ok(
+    "system",
+    http.get(`${BASE_URL}/api/system`, {
+      headers: h,
+      tags: { endpoint: "system" },
+    }),
+  );
+  ok(
+    "overview",
+    http.get(`${BASE_URL}/api/overview`, {
+      headers: h,
+      tags: { endpoint: "overview" },
+    }),
+  );
+  ok(
+    "overview activity",
+    http.get(`${BASE_URL}/api/overview/activity`, {
+      headers: h,
+      tags: { endpoint: "overview_activity" },
+    }),
+  );
+
+  const wikis = http.get(`${BASE_URL}/api/library/wiki`, {
+    headers: h,
+    tags: { endpoint: "wiki_list" },
+  });
+  ok("wiki list", wikis);
+  const withArticles = (wikis.json() || []).find((w) => w.articles > 0);
+  const scope = withArticles
+    ? withArticles.product_slug || "general"
+    : "general";
+  for (const [name, path] of [
+    ["wiki toc", "toc"],
+    ["wiki main", "main"],
+    ["wiki categories", "categories"],
+    ["wiki gaps", "gaps"],
+  ])
+    ok(
+      name,
+      http.get(`${BASE_URL}/api/library/wiki/${scope}/${path}`, {
+        headers: h,
+        tags: { endpoint: `wiki_${path}` },
+      }),
+    );
+
+  const toc = http.get(`${BASE_URL}/api/library/wiki/${scope}/toc`, {
+    headers: h,
+    tags: { endpoint: "wiki_toc" },
+  });
+  const article = /"articles":\[\{"id":"[^"]+","slug":"([^"]+)"/.exec(
+    toc.body || "",
+  );
+  if (article) {
+    const res = http.get(
+      `${BASE_URL}/api/library/wiki/${scope}/articles/${article[1]}`,
+      { headers: h, tags: { endpoint: "wiki_article" } },
+    );
+    ok("wiki article", res);
+    const asset = /\/api\/library\/assets\/([0-9a-f-]{36})/.exec(
+      res.body || "",
+    );
+    if (asset)
+      ok(
+        "library image",
+        http.get(`${BASE_URL}/api/library/assets/${asset[1]}`, {
+          headers: h,
+          tags: { endpoint: "library_asset" },
+        }),
+      );
+  }
 }

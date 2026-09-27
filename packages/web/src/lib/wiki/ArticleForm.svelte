@@ -1,10 +1,20 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
+  import {
+    LIBRARY_ASSET_TYPES,
+    MAIN_PAGE_SLUG,
+    MAX_ASSET_BYTES,
+    slugify,
+  } from "@tachy/contract";
   import { api } from "../api";
-  import { Button, Checkbox } from "../tui";
+  import { errText } from "../resource.svelte";
+  import { setTopActions } from "../subnav.svelte";
+  import { Button, Checkbox, Field, FormActions, Note } from "../tui";
   import AsciiSelect from "../AsciiSelect.svelte";
-  import { renderMarkdown } from "../markdown";
-  import { outline } from "../outline";
+  import { componentOptions } from "../catalog";
+  import type { ComponentRow } from "@tachy/contract";
+  import { CALLOUT_TYPES, renderMarkdown } from "../markdown";
+  import { outline, withAnchors } from "../outline";
   import { REFERENCE_STATUSES } from "../vocab";
   import type {
     KnowledgeRow,
@@ -14,10 +24,14 @@
     WikiToc,
     WikiTocNode,
   } from "../types";
+  import { uploadImage } from "./images";
+  import { ORG_WIDE } from "./paths";
+  import { takeSeed } from "./wikis.svelte";
 
   let {
     scope,
     initial = null,
+    presetSlug = null,
     saving = false,
     error = null,
     onSubmit,
@@ -25,6 +39,8 @@
   }: {
     scope: string;
     initial?: ReferenceRow | null;
+    /** A new article at an address something already asked for. */
+    presetSlug?: string | null;
     saving?: boolean;
     error?: string | null;
     onSubmit: (payload: Record<string, unknown>) => void;
@@ -32,16 +48,31 @@
   } = $props();
 
   const seed = untrack(() => initial);
+  const preset = untrack(() => presetSlug);
   const editing = !!seed;
+  const handed = editing ? null : takeSeed();
 
-  let title = $state(seed?.title ?? "");
-  let slug = $state(seed?.slug ?? "");
+  const humanize = (s: string) =>
+    s === MAIN_PAGE_SLUG
+      ? "Main page"
+      : s.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+
+  let title = $state(
+    seed?.title ?? handed?.title ?? (preset ? humanize(preset) : ""),
+  );
+  let slug = $state(seed?.slug ?? preset ?? "");
   let body = $state(seed?.body ?? "");
   let status = $state(seed?.status ?? "approved");
   let chosen = $state<string[]>((seed?.categories ?? []).map((c) => c.slug));
+  /** Component slug; the row carries an id, so it is resolved once they load. */
+  let component = $state(handed?.component ?? "");
+  let components = $state<ComponentRow[]>([]);
 
   let categories = $state<WikiCategory[]>([]);
   let preview = $state(true);
+
+  /** Components belong to a product, and the org-wide wiki has none. */
+  const hasComponents = $derived(scope !== ORG_WIDE);
 
   /* ---- [[ autocomplete ---------------------------------------------------
      Typing `[[` opens a picker over this wiki's articles and the knowledge
@@ -56,8 +87,13 @@
 
   let bodyEl = $state<HTMLTextAreaElement>();
   let picking = $state(false);
-  /** Where the `[[` that opened the picker starts, so it can be replaced. */
+  /** Where the `[[` or the `>` that opened the picker starts. */
   let openAt = $state(-1);
+  let mode = $state<"link" | "callout">("link");
+  /** Whether Enter belongs to the picker. A bare `>` is also the start of an
+   *  ordinary blockquote, and Enter there is a newline until a type is asked
+   *  for — by opening the marker, or by arrowing into the list. */
+  let armed = $state(true);
   let queryText = $state("");
   let suggestions = $state<Suggestion[]>([]);
   let highlighted = $state(0);
@@ -113,11 +149,34 @@
     highlighted = 0;
   }
 
-  /** Re-reads the caret on every keystroke; `[[` with no `]]` after it is open. */
+  /**
+   * Re-reads the caret on every keystroke. Two openings: `[[` with no `]]`
+   * after it, and a line begun with `>`, which offers the callouts so their
+   * types need not be remembered either.
+   */
   function syncPicker() {
     const el = bodyEl;
     if (!el) return;
-    const before = body.slice(0, el.selectionStart ?? 0);
+    const caret = el.selectionStart ?? 0;
+    const before = body.slice(0, caret);
+    const line = before.slice(before.lastIndexOf("\n") + 1);
+    const callout = /^>[ \t]*(?:\[!?([\w-]*))?$/.exec(line);
+    if (callout) {
+      const q = (callout[1] ?? "").toLowerCase();
+      mode = "callout";
+      armed = line.includes("[");
+      picking = true;
+      openAt = caret - line.length;
+      suggestions = CALLOUT_TYPES.filter((t) => t.startsWith(q)).map((t) => ({
+        insert: t,
+        label: t,
+        what: "callout",
+      }));
+      highlighted = 0;
+      return;
+    }
+    mode = "link";
+    armed = true;
     const start = before.lastIndexOf("[[");
     if (start < 0 || before.slice(start).includes("]]")) {
       picking = false;
@@ -133,6 +192,17 @@
     const el = bodyEl;
     if (!el || openAt < 0) return;
     const caret = el.selectionStart ?? 0;
+    if (mode === "callout") {
+      const head = `> [!${s.insert}] `;
+      body = body.slice(0, openAt) + head + body.slice(caret);
+      picking = false;
+      const at = openAt + head.length;
+      queueMicrotask(() => {
+        el.focus();
+        el.setSelectionRange(at, at);
+      });
+      return;
+    }
     const text = s.what === "entry" ? `${s.insert}|${s.label}` : s.insert;
     body = body.slice(0, openAt) + `[[${text}]]` + body.slice(caret);
     picking = false;
@@ -147,10 +217,14 @@
     if (!picking || !suggestions.length) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
+      armed = true;
       highlighted = (highlighted + 1) % suggestions.length;
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
+      armed = true;
       highlighted = (highlighted - 1 + suggestions.length) % suggestions.length;
+    } else if (e.key === "Enter" && !armed) {
+      picking = false;
     } else if (e.key === "Enter" || e.key === "Tab") {
       e.preventDefault();
       choose(suggestions[highlighted]);
@@ -159,31 +233,111 @@
     }
   }
 
-  /** The outline the reader will get, shown live so structure is visible. */
+  /* ---- images -------------------------------------------------------------
+     Pasted, dropped or picked, each goes up on its own and lands in the body
+     as ordinary markdown pointing at the stored copy. A placeholder holds its
+     place meanwhile, so typing on while it uploads does not lose the spot. */
+  let uploadError = $state<string | null>(null);
+  let uploads = 0;
+
+  /**
+   * An image is a paragraph of its own, figure-like, whatever line the caret
+   * happened to be in the middle of — so it is padded with just enough blank
+   * lines to stand apart from the text either side of it.
+   */
+  function insertBlock(text: string) {
+    const el = bodyEl;
+    const from = el?.selectionStart ?? body.length;
+    const to = el?.selectionEnd ?? from;
+    const before = body.slice(0, from);
+    const after = body.slice(to);
+    const gap = (edge: string, full: boolean) =>
+      !edge || full ? "" : edge === "\n" ? "\n" : "\n\n";
+    const lead = gap(before.slice(-1), !before || before.endsWith("\n\n"));
+    const trail = gap(after.slice(0, 1), !after || after.startsWith("\n\n"));
+    body = before + lead + text + trail + after;
+    const pos = from + lead.length + text.length;
+    queueMicrotask(() => {
+      el?.focus();
+      el?.setSelectionRange(pos, pos);
+    });
+  }
+
+  const altFrom = (name: string) =>
+    name.replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").trim() || "image";
+
+  async function attach(files: File[]) {
+    uploadError = null;
+    for (const file of files) {
+      if (!(LIBRARY_ASSET_TYPES as readonly string[]).includes(file.type)) {
+        uploadError = `${file.name}: only PNG, JPEG, GIF or WebP`;
+        continue;
+      }
+      if (file.size > MAX_ASSET_BYTES) {
+        uploadError = `${file.name}: larger than ${MAX_ASSET_BYTES / 1024 / 1024} MB`;
+        continue;
+      }
+      const marker = `![uploading ${++uploads}…]()`;
+      insertBlock(marker);
+      try {
+        const { url } = await uploadImage(scope, file);
+        body = body.replace(marker, `![${altFrom(file.name)}](${url})`);
+      } catch (e) {
+        body = body.replace(marker, "");
+        uploadError = `${file.name}: ${errText(e)}`;
+      }
+    }
+  }
+
+  const imagesIn = (list: FileList | null | undefined) =>
+    [...(list ?? [])].filter((f) => f.type.startsWith("image/"));
+
+  function onPaste(e: ClipboardEvent) {
+    const files = imagesIn(e.clipboardData?.files);
+    if (!files.length) return;
+    e.preventDefault();
+    void attach(files);
+  }
+
+  function onDrop(e: DragEvent) {
+    const files = imagesIn(e.dataTransfer?.files);
+    if (!files.length) return;
+    e.preventDefault();
+    void attach(files);
+  }
+
+  /** What the reader will get, numbered as they will see it. */
   const items = $derived(outline(body));
+  const rendered = $derived(
+    withAnchors(renderMarkdown(body), items, { numbered: true }),
+  );
+
+  let loadError = $state<string | null>(null);
 
   onMount(async () => {
     try {
-      categories = await api.get<WikiCategory[]>(
-        `/library/wiki/${scope}/categories`,
-      );
-    } catch {
-      categories = [];
+      const [cats, comps] = await Promise.all([
+        api.get<WikiCategory[]>(`/library/wiki/${scope}/categories`),
+        hasComponents
+          ? api.get<ComponentRow[]>(`/products/${scope}/components`)
+          : Promise.resolve([] as ComponentRow[]),
+      ]);
+      categories = cats;
+      components = comps;
+      if (seed?.component_id)
+        component =
+          comps.find((c) => c.id === seed.component_id)?.slug ?? "";
+    } catch (e) {
+      loadError = errText(e);
     }
     await loadArticles();
   });
 
   /** Suggest a slug from the title, but only while creating and untouched. */
-  let slugTouched = $state(false);
+  let slugTouched = $state(!!preset);
   $effect(() => {
     if (editing || slugTouched) return;
-    const t = title;
-    slug = t
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .trim()
-      .replace(/\s+/g, "-")
-      .slice(0, 60);
+    slug = slugify(title).slice(0, 60);
   });
 
   function toggle(catSlug: string) {
@@ -208,6 +362,8 @@
     return out;
   });
 
+  $effect(() => setTopActions(formActions));
+
   function submit(e: SubmitEvent) {
     e.preventDefault();
     if (!title.trim() || !slug.trim()) return;
@@ -217,29 +373,56 @@
       body,
       status,
       categories: chosen,
+      ...(hasComponents
+        ? { component: component || (editing ? null : undefined) }
+        : {}),
       ...(editing ? { expectedVersion: seed!.version } : {}),
     });
   }
 </script>
 
-<form class="article-form" onsubmit={submit}>
+{#snippet formActions()}
+  <FormActions form="wiki-form" {saving} title={editing ? "save changes" : "create article"} create={!editing} oncancel={onCancel} />
+{/snippet}
+
+<form id="wiki-form" class="article-form" onsubmit={submit}>
   <div class="head">
-    <label class="grow">
-      title
-      <input bind:value={title} required />
-    </label>
-    <label>
-      slug
+    <div class="grow">
+      <Field label="title" required>
+        <input bind:value={title} required />
+      </Field>
+    </div>
+    <Field
+      label="slug"
+      required
+      info={editing
+        ? "The article's address. Renaming it rewrites [[links]] to it, and the old address keeps working."
+        : "The article's address, and what [[links]] to it use."}
+    >
       <input
         bind:value={slug}
         oninput={() => (slugTouched = true)}
         required
       />
-    </label>
-    <label>
-      status
+    </Field>
+    <Field label="status">
       <AsciiSelect bind:value={status} options={[...REFERENCE_STATUSES]} />
-    </label>
+    </Field>
+    {#if hasComponents}
+      <Field
+        label="about"
+        info="Product part covered. Used by coverage and gap sweep."
+      >
+        <AsciiSelect
+          bind:value={component}
+          disabled={components.length === 0}
+          options={[
+            { value: "", label: "the whole product" },
+            ...componentOptions(components),
+          ]}
+        />
+      </Field>
+    {/if}
   </div>
 
   <div class="cats">
@@ -263,73 +446,59 @@
     {/if}
   </div>
 
+  {#if error ?? loadError}<Note tone="danger">{error ?? loadError}</Note>{/if}
+  {#if uploadError}<Note tone="warn">{uploadError}</Note>{/if}
+
   <div class="split" class:solo={!preview}>
-    <label class="editor">
-      <span class="lbl">
-        body
-        <button type="button" class="toggle" onclick={() => (preview = !preview)}>
-          {preview ? "hide preview" : "show preview"}
-        </button>
-      </span>
-      <div class="editwrap">
-        <textarea
-          bind:this={bodyEl}
-          bind:value={body}
-          spellcheck="false"
-          oninput={syncPicker}
-          onkeydown={onBodyKeydown}
-          onclick={syncPicker}
-          onblur={() => setTimeout(() => (picking = false), 150)}
-        ></textarea>
-        {#if picking && suggestions.length}
-          <ul class="picker-pop">
-            {#each suggestions as s, i (s.insert)}
-              <li>
-                <button
-                  type="button"
-                  class:on={i === highlighted}
-                  onmousedown={(e) => {
-                    e.preventDefault();
-                    choose(s);
-                  }}
-                >
-                  <span class="what">{s.what}</span>
-                  {s.label}
-                </button>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </div>
-    </label>
+    <div class="bar">
+      <Button
+        variant="ghost"
+        size="sm"
+        icon={preview ? "eyeClosed" : "eye"}
+      morph
+        title={preview ? "hide preview" : "show preview"}
+        aria-label={preview ? "hide preview" : "show preview"}
+        onclick={() => (preview = !preview)}
+      />
+    </div>
+    <!-- svelte-ignore a11y_no_static_element_interactions -- a drop target
+         for images, beside the textarea that is the real control -->
+    <div class="editwrap" ondragover={(e) => e.preventDefault()} ondrop={onDrop}>
+      <textarea
+        bind:this={bodyEl}
+        bind:value={body}
+        aria-label="body"
+        spellcheck="false"
+        oninput={syncPicker}
+        onkeydown={onBodyKeydown}
+        onclick={syncPicker}
+        onpaste={onPaste}
+        onblur={() => setTimeout(() => (picking = false), 150)}
+      ></textarea>
+      {#if picking && suggestions.length}
+        <ul class="picker-pop">
+          {#each suggestions as s, i (s.insert)}
+            <li>
+              <button
+                type="button"
+                class:on={i === highlighted}
+                onmousedown={(e) => {
+                  e.preventDefault();
+                  choose(s);
+                }}
+              >
+                <span class="what">{s.what}</span>
+                {s.label}
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+    </div>
 
     {#if preview}
-      <div class="preview">
-        <span class="lbl">preview</span>
-        <div class="pane">
-          {#if items.length > 1}
-            <nav class="contents">
-              <strong>Contents</strong>
-              <ol>
-                {#each items as it}
-                  <li style="--depth: {Math.max(0, it.depth - 1)}">{it.text}</li>
-                {/each}
-              </ol>
-            </nav>
-          {/if}
-          <div class="md">{@html renderMarkdown(body)}</div>
-        </div>
-      </div>
+      <div class="pane md" aria-label="preview">{@html rendered}</div>
     {/if}
-  </div>
-
-  {#if error}<p class="err">{error}</p>{/if}
-
-  <div class="acts">
-    <Button variant="ghost" onclick={onCancel} type="button">cancel</Button>
-    <Button variant="primary" type="submit" busy={saving}>
-      {editing ? "save changes" : "create article"}
-    </Button>
   </div>
 </form>
 
@@ -342,64 +511,65 @@
   }
   .head {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--pad-2);
     align-items: flex-end;
   }
   .grow {
     flex: 1;
-  }
-  label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
+    min-width: 14rem;
   }
   .lbl {
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
+    align-items: center;
     gap: 0.5rem;
-    opacity: 0.7;
-    font-size: 0.85em;
-  }
-  .toggle {
-    background: none;
-    border: none;
-    font: inherit;
-    color: inherit;
-    opacity: 0.8;
-    cursor: pointer;
-    text-decoration: underline;
+    color: var(--muted);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--label-spacing);
+    text-transform: uppercase;
   }
   .cats .picker {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.2rem 1rem;
+    gap: 0.15rem 0.8rem;
     margin-top: 0.2rem;
+    font-size: var(--fs-xs);
   }
   .cat {
+    display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 0.35rem;
-    margin-left: calc(var(--depth) * 1rem);
+    gap: 0.3rem;
+    margin-left: calc(var(--depth) * 0.8rem);
   }
-  /* The editor is the point of this form, so it takes the height. */
+  /* The editor is the point of this form, so it takes the height. Body and
+     preview share the second row so they are always the same height; the
+     toggle sits over the preview, or over the body's right edge without one. */
   .split {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--pad-2);
+    grid-template-rows: auto 1fr;
+    gap: var(--pad-1) var(--pad-2);
     flex: 1;
     min-height: 24rem;
   }
   .split.solo {
     grid-template-columns: 1fr;
   }
-  .editor {
-    min-height: 0;
+  .bar {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .split.solo .bar {
+    grid-column: 1;
+    justify-self: end;
   }
   .editwrap {
+    grid-row: 2;
+    grid-column: 1;
     position: relative;
     display: flex;
-    flex: 1;
     min-height: 0;
   }
   /* Anchored to the editor rather than the caret: a terminal-styled textarea
@@ -443,50 +613,42 @@
     font-family: inherit;
     min-height: 22rem;
   }
-  .preview {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    min-height: 0;
-  }
   .pane {
-    flex: 1;
+    grid-row: 2;
+    grid-column: 2;
+    min-height: 0;
     overflow: auto;
-    border: 1px solid var(--line, currentColor);
+    border: 1px solid var(--border);
     padding: 0.6rem 0.8rem;
   }
-  .contents {
-    border: 1px solid var(--line, currentColor);
-    padding: 0.4rem 0.8rem;
-    margin-bottom: 0.8rem;
-    font-size: 0.9em;
+  .pane :global(.secno) {
+    color: var(--muted);
+    margin-right: 0.35em;
   }
-  .contents ol {
-    margin: 0.2rem 0 0;
-    padding: 0;
-    list-style: none;
-  }
-  .contents li {
-    padding-left: calc(var(--depth) * 1.2rem);
-  }
-  .acts {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
+  .pane :global(img) {
+    max-width: 100%;
+    height: auto;
   }
   .muted {
-    opacity: 0.6;
+    color: var(--muted);
   }
   .sm {
     font-size: 0.85em;
-  }
-  .err {
-    color: var(--bad, crimson);
   }
 
   @media (max-width: 60rem) {
     .split {
       grid-template-columns: 1fr;
+      grid-template-rows: auto;
+      grid-auto-rows: minmax(22rem, 1fr);
+    }
+    .split .bar {
+      grid-column: 1;
+      justify-self: end;
+    }
+    .pane {
+      grid-row: 3;
+      grid-column: 1;
     }
   }
 </style>

@@ -216,7 +216,7 @@ async function seedPreferences(
       id: uuidFor("preference", rows.length),
       ...scopedRow(scope, teamId, userId),
       key,
-      value: JSON.stringify(value),
+      value: tx.json(value as never),
     });
 
   push("global", "", "", "agent_provider", "claude");

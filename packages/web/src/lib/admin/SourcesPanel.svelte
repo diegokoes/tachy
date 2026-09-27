@@ -1,3 +1,18 @@
+<script lang="ts" module>
+  type Probe = {
+    ok: boolean;
+    error?: string;
+    identity?: string;
+    groups?: { key: string; name: string }[];
+    groupsNote?: string;
+  };
+
+  /* Outlives the panel: saving a new connection tests it and then opens its
+     page, which is a fresh mount, and the result has to be there when it
+     lands. */
+  let probes = $state<Record<string, Probe>>({});
+</script>
+
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../api";
@@ -23,16 +38,9 @@
   import type { Connection, Product, SourceProject, Team } from "./rows";
 import { INFO } from "./help";
 import { csv } from "../fields";
-  import { claimTopAction } from "./topAction.svelte";
+  import { sectionHoist } from "./sectionAction.svelte";
 
   type SourceType = "freshdesk" | "azure-devops" | "github";
-  type Probe = {
-    ok: boolean;
-    error?: string;
-    identity?: string;
-    groups?: { key: string; name: string }[];
-    groupsNote?: string;
-  };
 
   const SPEC: Record<
     SourceType,
@@ -52,7 +60,7 @@ import { csv } from "../fields";
       hostShape: "the subdomain and freshdesk.com, not a full URL",
       tokenLabel: "API key",
       tokenInfo:
-        "Found under profile, API key. It is per-agent: tickets are read with that agent's permissions.",
+        "Profile › API key. Per agent: reads with that agent's permissions.",
       groupLabel: "group",
       configKey: null,
     },
@@ -62,7 +70,7 @@ import { csv } from "../fields";
       hostShape: "the organization on its own, or a dev.azure.com URL",
       tokenLabel: "PAT",
       tokenInfo:
-        "An org-scoped personal access token. It reaches every project you have permissions on. Scopes: Work Items (read, or read & write to create tickets), Wiki read, Code read.",
+        "Org-scoped PAT. Scopes: Work Items read (write to create), Wiki read, Code read.",
       groupLabel: "project",
       configKey: "projects",
     },
@@ -71,7 +79,7 @@ import { csv } from "../fields";
       hostLabel: "API base URL",
       hostShape: "https://api.github.com, or an Enterprise /api/v3 URL",
       tokenLabel: "token",
-      tokenInfo: "A personal access token with repo and issues read.",
+      tokenInfo: "PAT with repo and issues read.",
       groupLabel: "repo",
       configKey: "repos",
     },
@@ -92,9 +100,7 @@ import { csv } from "../fields";
   const products = createResource(() => api.get<Product[]>("/products"), []);
   const teams = createResource(() => api.get<Team[]>("/teams"), []);
 
-  let probes = $state<Record<string, Probe>>({});
   let testing = $state<string | null>(null);
-  let expanded = $state(new Set<string>());
 
   /* Registering from the probe list, where the projects are actually in front
      of you. Without this the discovered names are inert text and the only way
@@ -103,8 +109,9 @@ import { csv } from "../fields";
     slug: string;
     key: string;
     name: string;
-    role: "knowledge" | "tracker";
-    scope: string;
+    /** "" registers it without a product: a ticket target for `team` only. */
+    product: string;
+    team: string;
   } | null>(null);
   let claiming = $state(false);
   let claimError = $state<string | null>(null);
@@ -115,11 +122,14 @@ import { csv } from "../fields";
   const myTeams = $derived(
     teams.data.filter((tm) => canCurateScope({ team_slug: tm.slug })),
   );
-  const scopeOptions = $derived(
-    claim?.role === "tracker"
-      ? myTeams.map((tm) => ({ value: tm.slug, label: tm.name }))
-      : myProducts.map((p) => ({ value: p.slug, label: p.name })),
+  const productOptions = $derived([
+    { value: "", label: "none" },
+    ...myProducts.map((p) => ({ value: p.slug, label: p.name })),
+  ]);
+  const teamOptions = $derived(
+    myTeams.map((tm) => ({ value: tm.slug, label: tm.name })),
   );
+  const claimReady = $derived(!!claim && !!(claim.product || claim.team));
 
   const projectFor = (slug: string, key: string) =>
     projects.data.find((p) => p.source_slug === slug && p.external_key === key);
@@ -130,25 +140,13 @@ import { csv } from "../fields";
       slug,
       key: g.key,
       name: g.name,
-      role: "knowledge",
-      scope: myProducts[0]?.slug ?? "",
-    };
-  }
-
-  /* The scope means a different thing per role, so switching role must not
-     carry the previous answer over — a product slug sent as a team_slug is
-     rejected by the server with an error the user cannot act on. */
-  function setRole(role: "knowledge" | "tracker") {
-    if (!claim) return;
-    claim = {
-      ...claim,
-      role,
-      scope: (role === "tracker" ? myTeams[0]?.slug : myProducts[0]?.slug) ?? "",
+      product: myProducts[0]?.slug ?? "",
+      team: myTeams[0]?.slug ?? "",
     };
   }
 
   async function saveClaim() {
-    if (!claim || !claim.scope) return;
+    if (!claim || !claimReady) return;
     claiming = true;
     claimError = null;
     try {
@@ -156,10 +154,9 @@ import { csv } from "../fields";
         source_slug: claim.slug,
         external_key: claim.key,
         name: claim.name,
-        role: claim.role,
-        ...(claim.role === "knowledge"
-          ? { product_slug: claim.scope }
-          : { team_slug: claim.scope }),
+        ...(claim.product
+          ? { product_slug: claim.product }
+          : { team_slug: claim.team }),
       });
       await projects.reload();
       claim = null;
@@ -188,8 +185,13 @@ import { csv } from "../fields";
   function hostToBaseUrl(type: SourceType, host: string): string {
     const v = host.trim().replace(/\/+$/, "");
     if (!v) return type === "github" ? "https://api.github.com" : "";
-    if (type === "azure-devops")
-      return /^https?:\/\//i.test(v) ? v : `https://dev.azure.com/${v}`;
+    if (type === "azure-devops") {
+      const org = v.replace(/^(https?:\/\/)?dev\.azure\.com\//i, "");
+      if (/^https?:\/\//i.test(org)) return org;
+      return org.includes(".")
+        ? `https://${org}`
+        : `https://dev.azure.com/${org}`;
+    }
     const withScheme = /^https?:\/\//i.test(v) ? v : `https://${v}`;
     return withScheme.replace(/\/api\/v2$/, "");
   }
@@ -238,11 +240,12 @@ import { csv } from "../fields";
     },
     {
       key: "slug",
-      label: "slug",
+      /* A connection has no name of its own; this is what people read it by. */
+      label: "name",
       width: "12rem",
       edit: "text",
       required: true,
-      info: `${INFO.slug} It also names this connection's stored credential, so it cannot change later.`,
+      info: `${INFO.slug} Names the stored credential; immutable.`,
       derive: (d) =>
         uniqueSlug(
           suggestSlug(typeOf(d), String(d.host ?? "")),
@@ -255,7 +258,7 @@ import { csv } from "../fields";
       edit: "text",
       required: true,
       info: (d) =>
-        `The ${SPEC[typeOf(d)].hostLabel} this connection talks to: ${SPEC[typeOf(d)].hostShape}.`,
+        `${SPEC[typeOf(d)].hostLabel}: ${SPEC[typeOf(d)].hostShape}.`,
       value: (r) => baseUrlToHost(r.source_type as SourceType, r.base_url),
     },
     {
@@ -273,7 +276,7 @@ import { csv } from "../fields";
       edit: "text",
       visible: (d) => Boolean(SPEC[typeOf(d)].configKey),
       info: (d) =>
-        `Optional, comma-separated. Limits sync and gives the agent a default set of ${SPEC[typeOf(d)].groupLabel}s to look in instead of the whole org.`,
+        `Optional, comma-separated. Limits sync and default agent scope to these ${SPEC[typeOf(d)].groupLabel}s.`,
       value: (r) => groupsOf(r).join(", "),
     },
     {
@@ -281,10 +284,13 @@ import { csv } from "../fields";
       label: "PII redaction",
       width: "8rem",
       edit: "checkbox",
-      info: "Strips PII out of this source's payloads before the model sees them.",
+      info: "Scrub PII from this source before the model.",
       value: (r) => redactionOn(r),
       cell: lockCell,
     },
+    /* Testing is per connection but reading the results is a sweep down the
+       list, so the action belongs on the row as well as in the dialog. */
+    { key: "probe", label: "", width: "7rem", align: "end", cell: testCell },
   ]);
 
   async function save(row: Connection | null, d: Draft) {
@@ -311,18 +317,10 @@ import { csv } from "../fields";
     await test(slug);
   }
 
-  /** Which connection's probe result is on screen. */
-  let probeOpen = $state<string | null>(null);
-
   /**
-   * The result goes to a dialog, not to the row's drawer. A probe is something
-   * you asked for and are waiting on, and burying the answer — a failure most
-   * of all — behind an expander and a warning triangle's tooltip meant going
-   * looking for what you had just triggered. The drawer still keeps the last
-   * result, so it stays readable after the dialog is dismissed.
-   *
-   * `save` calls this too, so writing a connection's credentials shows you
-   * straight away whether they work and what they can see.
+   * The result lands on the connection's own page, where you are when you ask
+   * for it. `save` calls this too, so writing a connection's credentials shows
+   * you straight away whether they work and what they can see.
    */
   async function test(slug: string) {
     testing = slug;
@@ -335,7 +333,6 @@ import { csv } from "../fields";
       probes[slug] = { ok: false, error: errText(e) };
     } finally {
       testing = null;
-      probeOpen = slug;
     }
   }
 
@@ -344,7 +341,15 @@ import { csv } from "../fields";
     projects.reload();
     products.reload();
     teams.reload();
-  });</script>
+  });
+
+  const probeTone = (c: Connection) =>
+    probes[c.slug] === undefined
+      ? undefined
+      : probes[c.slug].ok
+        ? ("ok" as const)
+        : ("danger" as const);
+</script>
 
 {#snippet typeCell(r: Connection)}
   {SPEC[r.source_type as SourceType]?.label ?? r.source_type}
@@ -356,8 +361,8 @@ import { csv } from "../fields";
     class="lock"
     class:on
     title={on
-      ? "PII is scrubbed from this source before the model sees it"
-      : "this source's payloads reach the model unscrubbed"}
+      ? "PII scrubbed before the model"
+      : "unscrubbed"}
   >
     <Icon
       name={on ? "lockOn" : "lockOff"}
@@ -373,10 +378,33 @@ import { csv } from "../fields";
   >
 {/snippet}
 
+{#snippet testButton(r: Connection, label: boolean)}
+  <Button
+    variant="ghost"
+    size="sm"
+    square={!label}
+    icon="test"
+    tone={probeTone(r)}
+    title={probes[r.slug]
+      ? probes[r.slug].ok
+        ? "connected, test again"
+        : (probes[r.slug].error ?? "failed, test again")
+      : "test connection"}
+    aria-label="test connection"
+    busy={testing === r.slug}
+    disabled={testing === r.slug}
+    onclick={() => test(r.slug)}>{label ? "test" : ""}</Button
+  >
+{/snippet}
+
+{#snippet testCell(r: Connection)}
+  {#if admin}{@render testButton(r, true)}{/if}
+{/snippet}
+
 {#snippet probeRow(r: Connection)}
   {@const probe = probes[r.slug]}
   {#if !probe}
-    <p class="dim">Not tested yet. Hit <em>test</em> on this row.</p>
+    <p class="dim">Not tested yet. Hit <em>test</em>.</p>
   {:else if !probe.ok}
     <Note tone="danger">{probe.error ?? "failed"}</Note>
   {:else}
@@ -399,12 +427,13 @@ import { csv } from "../fields";
         {#each probe.groups as g (g.key)}
           {@const known = projectFor(r.slug, g.key)}
           {#if known}
-            <Chip tone={known.role === "knowledge" ? "accent" : "muted"}>
-              {g.name} · {known.role}
+            <Chip tone={known.product_id ? "accent" : "muted"}>
+              {g.name} · {known.product_slug ?? known.team_slug}
             </Chip>
           {:else}
             <Chip
               tone="default"
+              title={g.key}
               onclick={admin ? () => openClaim(r.slug, g) : undefined}
               >{g.name}</Chip
             >
@@ -416,18 +445,19 @@ import { csv } from "../fields";
 {/snippet}
 
 {#snippet testAction(r: Connection)}
-  <Button
-    variant="ghost"
-    size="sm"
-    icon="test"
-    title="test connection"
-    busy={testing === r.slug}
-    onclick={() => test(r.slug)}>test</Button
-  >
+  {#if admin}{@render testButton(r, false)}{/if}
+{/snippet}
+
+<!-- The probe belongs under the fields that produced it: saving a connection
+     tests it, so the answer to "did that work" is already on screen. -->
+{#snippet probeExtra(f: { mode: "create" | "edit"; row: Connection | null })}
+  {#if f.row}
+    <div class="probe">{@render probeRow(f.row)}</div>
+  {/if}
 {/snippet}
 
 <CrudTable
-  hoist={claimTopAction}
+  hoist={sectionHoist("sources")}
   {columns}
   rows={connections.data}
   rowKey={(r) => r.slug}
@@ -438,16 +468,10 @@ import { csv } from "../fields";
   canDelete={() => admin}
   canCreate={admin}
   addLabel="add connection"
+  noun="connection"
   editTitle={(r) => r.slug}
-  expand={probeRow}
-  {expanded}
-  ontoggle={(k) => {
-    const next = new Set(expanded);
-    if (next.has(k)) next.delete(k);
-    else next.add(k);
-    expanded = next;
-  }}
   extraActions={testAction}
+  formExtra={probeExtra}
   oncreate={(d) => connections.mutate(() => save(null, d))}
   onsave={(row, d) => connections.mutate(() => save(row, d))}
   ondelete={(row) =>
@@ -457,58 +481,15 @@ import { csv } from "../fields";
     })}
 />
 
-{#if probeOpen}
-  {@const slug = probeOpen}
-  {@const probe = probes[slug]}
-  {@const type = connections.data.find((c) => c.slug === slug)
-    ?.source_type as SourceType | undefined}
-  <Modal
-    title={`connection test: ${slug}`}
-    width="38rem"
-    onCancel={() => (probeOpen = null)}
-  >
-    <Subject verb="tested" name={slug} />
-    {#if !probe}
-      <p class="dim">no result</p>
-    {:else if !probe.ok}
-      <Note tone="danger">{probe.error ?? "failed"}</Note>
-    {:else}
-      <Note tone="ok">
-        connected{probe.identity ? ` as ${probe.identity}` : ""}
-      </Note>
-      {#if probe.groupsNote}
-        <Note tone="warn">
-          Can't list {(type && SPEC[type]?.groupLabel) ?? "group"}s. Type the
-          key in yourself when registering.
-          <span class="reason">{probe.groupsNote}</span>
-        </Note>
-      {/if}
-      {#if probe.groups?.length}
-        <p class="dim">
-          {(type && SPEC[type]?.groupLabel) ?? "group"}s this token can see.
-          The key is what a project map is written against. Close this and
-          click one in the row's drawer to register it.
-        </p>
-        <ul class="groups">
-          {#each probe.groups as g (g.key)}
-            <li><code>{g.key}</code><span>{g.name}</span></li>
-          {/each}
-        </ul>
-      {:else if !probe.groupsNote}
-        <p class="dim">This token can see no groups.</p>
-      {/if}
-    {/if}
-  </Modal>
-{/if}
-
 {#if claim}
   {@const c = claim}
   <Modal
     title={`register ${c.key}`}
     width="34rem"
     busy={claiming}
+    disabled={!claimReady}
     confirmLabel="register"
-    confirmIcon="save"
+    confirmIcon="create"
     onConfirm={saveClaim}
     onCancel={() => (claim = null)}
   >
@@ -519,42 +500,34 @@ import { csv } from "../fields";
         <input aria-label="name" bind:value={c.name} />
       </Field>
       <Field
-        label="role"
-        required
-        info={c.role === "tracker"
-          ? "A create and reassign target. Nothing is filed under a tracker, and it holds no wiki, repos or area rules."
-          : `Its items ingest into a ${t("product")}, and it can carry the wikis, repos and area rules.`}
+        label={t("product")}
+        info={`The ${t("product")} its items ingest into, which also lets it own wikis, repos and area rules. None makes it a ticket target only.`}
       >
         <Select
-          value={c.role}
-          aria-label="role"
-          options={[
-            { value: "knowledge", label: "knowledge" },
-            { value: "tracker", label: "tracker" },
-          ]}
-          onchange={(v) => setRole(v as "knowledge" | "tracker")}
+          value={c.product}
+          aria-label={t("product")}
+          options={productOptions}
+          onchange={(v) => (c.product = String(v))}
         />
       </Field>
-      <Field
-        label={c.role === "tracker" ? t("team") : t("product")}
-        required
-        info={c.role === "tracker"
-          ? `The ${t("team")} raising work items here.`
-          : `The ${t("product")} its items ingest into.`}
-      >
-        <Select
-          value={c.scope}
-          aria-label="scope"
-          options={scopeOptions}
-          onchange={(v) => (c.scope = String(v))}
-        />
-      </Field>
-      {#if !scopeOptions.length}
-        <Note tone="warn">
-          You can't curate any {c.role === "tracker"
-            ? `${t("team")}s`
-            : `${t("product")}s`} yet. Create one under Org first.
-        </Note>
+      {#if !c.product}
+        <Field
+          label={t("team")}
+          required
+          info={`The ${t("team")} whose members create work items here.`}
+        >
+          <Select
+            value={c.team}
+            aria-label={t("team")}
+            options={teamOptions}
+            onchange={(v) => (c.team = String(v))}
+          />
+        </Field>
+        {#if !teamOptions.length}
+          <Note tone="warn">
+            You can't curate any {t("team")}s yet. Create one under Org first.
+          </Note>
+        {/if}
       {/if}
     </div>
   </Modal>
@@ -566,6 +539,13 @@ import { csv } from "../fields";
     flex-direction: column;
     gap: var(--pad-2);
     min-width: 22rem;
+  }
+  /* Ruled off, because it is a reading about the record rather than another
+     field of it. */
+  .probe {
+    margin-top: var(--pad-3);
+    padding-top: var(--pad-3);
+    border-top: 1px dashed var(--border);
   }
   .ok-text {
     margin: 0;
@@ -588,33 +568,6 @@ import { csv } from "../fields";
     display: flex;
     flex-wrap: wrap;
     gap: var(--pad-1);
-  }
-  /* Keys stay selectable text rather than chips — they get pasted into a
-     project map, so they have to be copyable. */
-  .groups {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    max-height: 18rem;
-    overflow: auto;
-    font-size: var(--fs-sm);
-  }
-  .groups li {
-    display: flex;
-    gap: var(--pad-3);
-    align-items: baseline;
-    padding: var(--pad-1) 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
-  }
-  .groups code {
-    font-family: var(--font-mono);
-    user-select: all;
-  }
-  .groups span {
-    color: var(--muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
   .reason {
     opacity: 0.65;

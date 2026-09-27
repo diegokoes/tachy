@@ -1,9 +1,9 @@
-import type { DeploymentProfile } from "@tachy/contract";
+import type { DeploymentProfile, UserRole } from "@tachy/contract";
 
 export interface Me {
   email: string | null;
   name: string | null;
-  role: "admin" | "member";
+  role: UserRole;
   via: "password" | "sso" | "open";
 
   team_admin?: { team_id: string; team_slug: string }[];
@@ -14,6 +14,7 @@ export interface AuthConfig {
   authMode: string;
   sso: boolean;
   passwordLogin: boolean;
+  envBadge: string | null;
 
   profile?: DeploymentProfile;
 }

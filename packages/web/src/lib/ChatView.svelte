@@ -1,20 +1,27 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import { tick } from "svelte";
-  import { chatStream, approve, uploadDoc, getCommands, type BuiltinCommandMeta, type CommandArtifactMeta } from "./agent";
+  import { chatStream, approve, uploadDoc, getCommands, stopTurn, ChatRefused, type BuiltinCommandMeta, type CommandArtifactMeta } from "./agent";
   import { addEntry, chat, type Entry } from "./chatState.svelte";
   import { renderMarkdown } from "./markdown";
   import { gsap, reducedMotion } from "./gsap";
   import { shatterAll } from "./motion";
   import Scrollbar from "./Scrollbar.svelte";
   import ArtifactPanel from "./chat/ArtifactPanel.svelte";
-  import CommandMenu, { matchArtifacts, type CommandPick } from "./chat/CommandMenu.svelte";
+  import CommandMenu, { matchArtifacts, type CommandPick, type MenuCrumb, type MenuOption } from "./chat/CommandMenu.svelte";
   import CompactPanel from "./chat/CompactPanel.svelte";
   import OutputCard, { type OutputFile } from "./chat/OutputCard.svelte";
   import Approval from "./chat/Approval.svelte";
   import Launcher from "./chat/Launcher.svelte";
-  import { ArtifactMark, Button, G, Icon } from "./tui";
+  import { ArtifactMark, Button, G, Icon, tip } from "./tui";
   import { pushScope } from "./keys.svelte";
+  import type { WorkItemTypeOption, CreatedTicket } from "@tachy/contract";
+  import TicketComposer from "./work-items/TicketComposer.svelte";
+  import TicketCard from "./work-items/TicketCard.svelte";
+  import { composer, hasDraft, openComposer } from "./work-items/composer.svelte";
+  import { az, ensureProjects, ensureTypes, typesNote, typesOf } from "./work-items/az.svelte";
+  import { isAzNew, matches, matchProject, parseAz } from "./work-items/azCommand";
+  import { typeColor, typeIcon } from "./work-items/ado-icons";
 
   const short = (tool: string) => tool.replace(/^mcp__tachy__/, "");
 
@@ -85,13 +92,68 @@
   let cmdMenu = $state<CommandMenu>();
   let cmdDismissed = $state(false);
 
-  /** `/name` picks a command; `/artifact <query>` picks that command's argument. */
+  const azCommand = $derived(commands?.builtins.find((b) => b.name === "az"));
+  const azCtx = $derived(azCommand ? parseAz(chat.input, az.projects ?? []) : null);
+
+  /** `/name` picks a command; `/artifact <query>` and `/az …` pick arguments. */
   const cmdCtx = $derived.by(() => {
     const name = chat.input.match(/^\/([a-z0-9-]*)$/);
     if (name) return { mode: "command" as const, query: name[1] };
     const arg = chat.input.match(/^\/artifact[ \t]+([^\n]*)$/);
     if (arg) return { mode: "artifact" as const, query: arg[1] };
+    if (azCtx) return { mode: "options" as const, query: azCtx.query };
     return null;
+  });
+
+  $effect(() => {
+    if (azCtx && azCtx.stage !== "sub") ensureProjects();
+    if (azCtx?.stage === "type") ensureTypes(azCtx.project.id);
+  });
+
+  const azMenu = $derived.by((): { options: MenuOption[]; crumb: MenuCrumb } | null => {
+    if (!azCtx) return null;
+    if (azCtx.stage === "sub")
+      return {
+        crumb: { cmd: "/az", param: "subcommand", desc: azCommand?.description },
+        options: (azCommand?.subcommands ?? [])
+          .filter((s) => s.name.startsWith(azCtx.query))
+          .map((s) => ({ value: s.name, label: s.name, hint: s.args, desc: s.description })),
+      };
+    if (azCtx.stage === "project")
+      return {
+        crumb: {
+          cmd: "/az new",
+          param: "project",
+          desc: "your team's Azure DevOps projects",
+          empty:
+            az.projectsError ??
+            (az.projects
+              ? az.projects.length
+                ? "no project matches"
+                : "none of your teams has an Azure DevOps project registered"
+              : "loading projects…"),
+        },
+        options: (az.projects ?? [])
+          .filter((p) => matches(azCtx.query, p.name, p.external_key))
+          .map((p) => ({
+            value: p.id,
+            label: p.name,
+            hint: p.name === p.external_key ? p.source_slug : p.external_key,
+            desc: p.product_slug ?? p.team_slug,
+          })),
+      };
+    return {
+      crumb: { cmd: `/az new ${azCtx.project.name}`, param: "type", desc: "what you are raising", empty: typesNote(azCtx.project.id) },
+      options: typesOf(azCtx.project.id)
+        .filter((t) => matches(azCtx.query, t.name))
+        .map((t) => ({
+          value: t.name,
+          label: t.name,
+          desc: t.description ?? "",
+          icon: typeIcon(t.icon),
+          color: typeColor(t.color),
+        })),
+    };
   });
   const menuOpen = $derived(cmdCtx !== null && !cmdDismissed && !chat.busy && commands !== null);
 
@@ -111,11 +173,47 @@
 
   function pickCommand(pick: CommandPick) {
     if (pick.kind === "builtin") chat.input = `/${pick.builtin.name} `;
+    else if (pick.kind === "option") pickAz(pick.value);
     else {
       chat.artifact = { id: pick.artifact.id, title: pick.artifact.title };
       chat.input = "";
     }
   }
+
+  function pickAz(value: string) {
+    // Held in a local: azCtx derives from the input, so clearing the input
+    // below would null it before the composer opens.
+    const ctx = azCtx;
+    if (!ctx) return;
+    if (ctx.stage === "sub") chat.input = `/az ${value} `;
+    else if (ctx.stage === "project") {
+      const p = az.projects?.find((x) => x.id === value);
+      if (p) chat.input = `/az new ${p.name} `;
+    } else {
+      const t = typesOf(ctx.project.id).find((x) => x.name === value);
+      chat.input = "";
+      openComposer(ctx.project, t);
+    }
+  }
+
+  /** `/az new [project] [type]` sent as a line: whatever it names is preselected. */
+  async function openFromLine(message: string) {
+    chat.input = "";
+    const rest = message.replace(/^\/az[ \t]+new[ \t]*/, "");
+    const hit = rest ? matchProject(`${rest} `, await ensureProjects()) : null;
+    if (!hit) return openComposer();
+    const types = await ensureTypes(hit.project.id);
+    const type = types.find((t) => t.name.toLowerCase() === hit.rest.toLowerCase());
+    openComposer(hit.project, type);
+  }
+
+  function ticketMade(ticket: CreatedTicket, type: WorkItemTypeOption) {
+    addEntry({ kind: "ticket", ticket, icon: type.icon, color: type.color });
+    snap(true);
+  }
+
+  /** A draft set aside with the X: the chat says so and offers it back. */
+  const draftWaiting = $derived(!composer.open && hasDraft());
 
   function composerKeydown(e: KeyboardEvent) {
     if (menuOpen && cmdMenu && (!cmdMenu.empty() || cmdCtx?.mode === "artifact")) {
@@ -149,11 +247,17 @@
   async function send() {
     const message = chat.input.trim();
     if (!message || chat.busy) return;
+    if (isAzNew(message)) return openFromLine(message);
     if (cmdCtx?.mode === "artifact") {
       const hits = matchArtifacts(commands?.artifacts ?? [], cmdCtx.query);
       if (hits.length === 1) pickCommand({ kind: "artifact", artifact: hits[0] });
       return;
     }
+    // The list is otherwise only fetched while a bare `/name` is being typed, so
+    // a command that arrived already written — the wiki's "draft with agent"
+    // puts one in the composer — would go out as plain text without this.
+    if (message.startsWith("/") && !commands)
+      commands = await getCommands().catch(() => null);
     const command = parseCommand(message);
     addEntry({ kind: "user", text: message });
     const uploadPaths = chat.uploads.map((u) => u.path);
@@ -168,6 +272,7 @@
     turnAbort = new AbortController();
     try {
       for await (const { event, data } of chatStream({ message, sessionId: chat.sessionId, uploadPaths: uploadPaths.length ? uploadPaths : undefined, artifactId: chat.artifact?.id, command }, turnAbort.signal)) {
+        chat.queuePosition = event === "queued" ? (data.position as number) : null;
         if (event === "start") chat.turnId = data.turnId as string;
         else if (event === "text") appendAssistant(data.text as string);
         else if (event === "tool_use") {
@@ -220,11 +325,24 @@
       }
     } catch (e) {
       // An abort is this component going away, not something to report.
-      if (!(e instanceof DOMException && e.name === "AbortError"))
+      if (e instanceof ChatRefused && e.status === 409 && e.turnId) {
+        addEntry({ kind: "running", turnId: e.turnId, text: e.message, stopped: false });
+        chat.input = message;
+      } else if (!(e instanceof DOMException && e.name === "AbortError"))
         addEntry({ kind: "error", text: e instanceof Error ? e.message : String(e) });
       snap();
     } finally {
       chat.busy = false;
+      chat.queuePosition = null;
+    }
+  }
+
+  async function stopRunning(entry: Extract<Entry, { kind: "running" }>) {
+    try {
+      await stopTurn(entry.turnId);
+      entry.stopped = true;
+    } catch (e) {
+      addEntry({ kind: "error", text: e instanceof Error ? e.message : String(e) });
     }
   }
 
@@ -318,6 +436,11 @@
   }
 </script>
 
+{#if composer.open}
+  <div class="chat">
+    <TicketComposer oncreated={ticketMade} />
+  </div>
+{:else}
 <div
   class="chat"
   role="region"
@@ -346,20 +469,28 @@
           <div class="body md" class:streaming={chat.busy && i === chat.entries.length - 1}>{@html renderMarkdown(e.text)}</div>
         </div>
       {:else if e.kind === "tool"}
-        <div class="tool">{G.tool} {e.tool}</div>
+        <div class="tool"><Icon name="tool" size="1em" weight={7} /> {e.tool}</div>
       {:else if e.kind === "compact"}
         <CompactPanel title={e.title} stats={e.stats} />
       {:else if e.kind === "output"}
         <OutputCard file={e.file} />
+      {:else if e.kind === "ticket"}
+        <TicketCard ticket={e.ticket} icon={e.icon} color={e.color} />
       {:else if e.kind === "error"}
         <div class="turn"><span class="who err">{G.marker}error</span><div class="body err">{e.text}</div></div>
+      {:else if e.kind === "running"}
+        <div class="turn"><span class="who err">{G.marker}busy</span>
+          <div class="body err">
+            {#if e.stopped}stopped. send your message again.{:else}{e.text} <Button size="sm" onclick={() => stopRunning(e)}>stop it</Button>{/if}
+          </div>
+        </div>
       {:else if e.kind === "approval"}
         <Approval entry={e} ondecide={(ok, reason) => decide(e, ok, reason)} />
       {/if}
     {/each}
     {#if chat.busy && chat.entries[chat.entries.length - 1]?.kind !== "assistant"}
       <div class="turn"><span class="who">{G.marker}tachy</span>
-        <div class="body waiting"><span class="caret" aria-hidden="true"></span></div>
+        <div class="body waiting">{#if chat.queuePosition}<span class="muted">waiting for a free chat slot · #{chat.queuePosition} </span>{/if}<span class="caret" aria-hidden="true"></span></div>
       </div>
     {/if}
     {#if chat.entries.length === 0}
@@ -370,19 +501,26 @@
   <ArtifactPanel />
   </div>
 
-  {#if chat.uploads.length || chat.artifact}
+  {#if chat.uploads.length || chat.artifact || draftWaiting}
     <div class="attachments">
+      {#if draftWaiting}
+        <button class="attach draft-chip" use:tip={"Reopen the work item you were writing"} onclick={() => openComposer()}>
+          <Icon name="review" size="1em" />
+          draft {composer.type?.name ?? "work item"}{composer.title.trim() ? `: ${composer.title.trim()}` : ""}
+        </button>
+      {/if}
       {#if chat.artifact}
         <span class="attach artifact-chip">
           <ArtifactMark size="1em" /> {chat.artifact.title}
-          <button class="chip-x" title="Detach artifact" onclick={() => (chat.artifact = undefined)}>{G.del}</button>
+          <button class="chip-x" aria-label="Detach artifact" use:tip={"Detach artifact"} onclick={() => (chat.artifact = undefined)}><Icon name="close" size="1em" weight={7} /></button>
         </span>
       {/if}
       {#each chat.uploads as u, i (u.path)}
         {#if i > 0}<span class="sep" aria-hidden="true">~~</span>{/if}
         <span class="attach">
+          <Icon name={u.image ? "image" : "file"} size="1.1em" />
           {u.filename}
-          <button class="chip-x" title="Remove attachment" onclick={() => chat.uploads.splice(i, 1)}>{G.del}</button>
+          <button class="chip-x" aria-label="Remove attachment" use:tip={"Remove attachment"} onclick={() => chat.uploads.splice(i, 1)}><Icon name="close" size="1em" weight={7} /></button>
         </span>
       {/each}
     </div>
@@ -396,12 +534,14 @@
         query={cmdCtx?.query ?? ""}
         builtins={commands.builtins}
         artifacts={commands.artifacts}
+        options={azMenu?.options}
+        crumb={azMenu?.crumb}
         onpick={pickCommand}
       />
     {/if}
-    <label class="upload" title="Attach a document">
+    <label class="upload" use:tip={"Attach a document"}>
       <Icon name="attach" label="Attach a document" />
-      <input type="file" onchange={onFile} hidden />
+      <input type="file" onchange={onFile} />
     </label>
     <textarea
       bind:this={composerEl}
@@ -413,8 +553,8 @@
     <div class="send-col">
       <Button
         variant={clearArmed ? "danger" : "ghost"}
-        icon={clearArmed ? undefined : "erase"}
-        glyph={clearArmed ? "?" : undefined}
+        icon={clearArmed ? "confirm" : "clear"}
+        morph
         disabled={chat.busy || !chat.entries.length}
         aria-label="Clear the conversation"
         title={clearArmed ? "click again to clear" : "Clear the conversation"}
@@ -431,9 +571,17 @@
     </div>
   </div>
 </div>
+{/if}
 
 <style>
-  .chat { display: flex; flex-direction: column; height: 100%; position: relative; }
+  .chat {
+    --upload-w: 1.375rem;
+    --composer-gap: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    position: relative;
+  }
 
   .dropzone {
     position: absolute;
@@ -565,7 +713,7 @@
   .turn .body.err { color: var(--danger); }
   .turn .body.waiting { min-height: 1.5em; }
   /* A tool line is a trace, not prose — it keeps the terminal face. */
-  .tool { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--muted); padding-left: 1ch; }
+  .tool { display: flex; align-items: center; gap: 0.5ch; font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--muted); padding-left: 1ch; }
 
   /* The user's turn is positioned right; its text stays left-aligned. Reading
      returns to the left edge on every line, so ragged-left costs a re-scan —
@@ -584,37 +732,60 @@
   .turn.user .mk { display: inline-block; transform: scaleX(-1); }
   .turn.user .body { padding-left: 0; padding-right: 1ch; }
 
-  .attachments { display: flex; gap: var(--pad-2); padding: var(--pad-2) 0; flex-wrap: wrap; align-items: center; }
-  .attach { display: inline-flex; align-items: center; gap: var(--pad-1); font-size: var(--fs-xs); color: var(--muted); }
-  .sep { color: var(--muted); opacity: 0.55; user-select: none; }
-  .artifact-chip {
-    gap: var(--pad-2);
-    border: 1px solid var(--accent);
-    border-radius: var(--radius-chip);
-    padding: 0 var(--pad-3);
-    color: var(--accent);
+  /* Indented past the upload mark so the row starts where the textarea does. */
+  .attachments {
+    display: flex;
+    gap: var(--pad-3);
+    padding: var(--pad-2) 0 var(--pad-2) calc(var(--upload-w) + var(--composer-gap));
+    flex-wrap: wrap;
+    align-items: center;
   }
-  .chip-x { border: none; background: none; padding: 0 var(--pad-1); color: inherit; font: inherit; cursor: pointer; }
-  .chip-x:hover { color: var(--danger); }
-  .composer { position: relative; display: flex; gap: 0.5rem; align-items: stretch; padding-top: 0.6rem; border-top: 1px solid var(--border); }
+  .draft-chip { background: none; border: 1px dashed var(--accent); border-radius: var(--radius-chip); padding: 0 var(--pad-2); cursor: pointer; }
+  .draft-chip:hover, .draft-chip:focus-visible { color: var(--accent); }
+  .attach { display: inline-flex; align-items: center; gap: var(--pad-2); font-size: var(--fs-sm); color: var(--muted); }
+  .sep { color: var(--muted); opacity: 0.55; user-select: none; }
+  .artifact-chip { color: var(--accent); }
+  .chip-x { display: inline-flex; align-items: center; border: none; background: none; padding: 0 var(--pad-1); color: inherit; font: inherit; cursor: pointer; }
+  .chip-x:hover { color: var(--text); }
+  .composer { position: relative; display: flex; gap: var(--composer-gap); align-items: stretch; padding-top: 0.6rem; border-top: 1px solid var(--border); }
   .composer textarea { flex: 1; resize: none; }
   /* A <label>, not a <button> — it has to wrap the file input — so it borrows
      the mark's hover language rather than inheriting it from Button. */
   .upload {
+    width: var(--upload-w);
     cursor: pointer;
     align-self: center;
     font-size: 1.1rem;
     color: var(--muted);
+  }
+  /* Hidden from sight only: a `hidden` input leaves the tab order, and the
+     keyboard has no other way to attach. */
+  .upload input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .upload:has(input:focus-visible) {
+    outline: 1px solid currentColor;
+    outline-offset: 2px;
   }
   .upload :global(svg) {
     transition:
       stroke-width 0.12s ease,
       filter 0.12s ease;
   }
-  .upload:hover {
+  .upload:hover,
+  .upload:has(input:focus-visible) {
     color: var(--accent);
   }
-  .upload:hover :global(svg) {
+  .upload:hover :global(svg),
+  .upload:has(input:focus-visible) :global(svg) {
     stroke-width: var(--sw-hover, 9);
     filter: brightness(1.35);
   }

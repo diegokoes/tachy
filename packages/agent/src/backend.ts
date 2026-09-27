@@ -1,7 +1,6 @@
-// A second list here meant adding a backend updated half the system: core
-// re-exports the contract's, and this package used to define its own because
-// it had no dependency on the contract. The contract has none of its own, so
-// taking it costs nothing.
+// One list of providers and efforts, the contract's: a second copy here makes
+// adding a backend a two-place change. The contract has no dependencies, so
+// importing it costs nothing.
 import type { AgentProvider, AgentEffort } from "@tachy/contract";
 
 export {
@@ -27,7 +26,19 @@ export interface AgentConfig {
   mcpCommand: string;
   mcpArgs: string[];
   mcpEnv: Record<string, string>;
+  /**
+   * Where the MCP server runs, so its relative entry point resolves, and where
+   * the Claude session runs. Claude Code files transcripts under this path, so
+   * changing it orphans every session `resume` needs.
+   */
   cwd: string;
+
+  /**
+   * An empty directory the Copilot session runs from. The Copilot runtime reads
+   * CLAUDE.md, AGENTS.md and .github/copilot-instructions.md from its working
+   * directory into the system prompt, and none of them are written for the agent.
+   */
+  sessionCwd: string;
 
   model?: string;
 
@@ -35,7 +46,8 @@ export interface AgentConfig {
 
   effort?: AgentEffort;
 
-  systemPromptAppend: string;
+  /** The whole system prompt on Claude; appended to the runtime's own on Copilot. */
+  systemPrompt: string;
 
   /**
    * Per-user Claude Code state directory (credentials, session transcripts).
@@ -93,6 +105,10 @@ export interface Decision {
 
 export interface AgentTurn {
   readonly finished: boolean;
+  /** Approval requests still waiting on the user. */
+  readonly pendingApprovals: number;
+  /** When the longest-waiting approval was requested (ms epoch), or null. */
+  readonly oldestPendingApprovalAt: number | null;
   events(): AsyncGenerator<AgentEvent>;
   approve(id: string, decision: Decision): void;
   abort(): void;

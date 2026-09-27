@@ -2,7 +2,7 @@
 #   npm run load -- /load/smoke.js
 services:
   k6:
-    image: grafana/k6:latest
+    image: grafana/k6:2.2.0
     profiles: ["load"]
     environment:
       BASE_URL: ${BASE_URL:-http://api:8787}

@@ -1,14 +1,18 @@
+import type { TeamRole, UserCensus, UserRole } from "@tachy/contract";
 import { sql } from "../infra/db";
+import {
+  ISSUE_ITEMS,
+  issueFlag,
+  issueList,
+  type IssueList,
+} from "../infra/issues";
 import { env } from "../infra/env";
 import { badInput, notFound } from "../infra/errors";
 import { hashPassword } from "./passwords";
 import { clearPermissionCache } from "./permissions";
 
-export const USER_ROLES = ["admin", "member"] as const;
-export type UserRole = (typeof USER_ROLES)[number];
-
-export const TEAM_ROLES = ["admin", "member"] as const;
-export type TeamRole = (typeof TEAM_ROLES)[number];
+export { USER_ROLES, TEAM_ROLES } from "@tachy/contract";
+export type { UserRole, TeamRole } from "@tachy/contract";
 
 export interface UserRow {
   id: string;
@@ -17,6 +21,8 @@ export interface UserRow {
   role: UserRole;
   disabled: boolean;
   has_password: boolean;
+  service_account: boolean;
+  password_login_allowed: boolean;
   created_at: string;
 }
 
@@ -51,7 +57,8 @@ export async function countAdmins(): Promise<number> {
 export async function listUsers(): Promise<UserRow[]> {
   const rows = await sql`
     select id, email, display_name, role, disabled,
-           (password_hash is not null) as has_password, created_at
+           (password_hash is not null) as has_password,
+           service_account, password_login_allowed, created_at
     from users order by created_at
   `;
   return rows as unknown as UserRow[];
@@ -62,13 +69,19 @@ export async function createUser(input: {
   displayName?: string;
   password?: string;
   role?: UserRole;
+  serviceAccount?: boolean;
+  passwordLoginAllowed?: boolean;
 }): Promise<UserRow> {
   const hash = input.password ? await hashPassword(input.password) : null;
   const rows = await sql`
-    insert into users (email, display_name, role, password_hash)
-    values (${input.email}, ${input.displayName ?? null}, ${input.role ?? "member"}, ${hash})
+    insert into users (email, display_name, role, password_hash,
+                       service_account, password_login_allowed)
+    values (${input.email}, ${input.displayName ?? null}, ${input.role ?? "member"}, ${hash},
+            ${input.serviceAccount ?? false}, ${input.passwordLoginAllowed ?? false})
     on conflict (email) do nothing
-    returning id, email, display_name, role, disabled, (password_hash is not null) as has_password, created_at
+    returning id, email, display_name, role, disabled,
+              (password_hash is not null) as has_password,
+              service_account, password_login_allowed, created_at
   `;
   if (rows.length === 0)
     throw badInput(`a user with email '${input.email}' already exists`);
@@ -82,9 +95,11 @@ export async function getUserByEmail(email: string): Promise<{
   role: UserRole;
   disabled: boolean;
   password_hash: string | null;
+  password_login_allowed: boolean;
 } | null> {
   const [row] = await sql`
-    select id, email, display_name, role, disabled, password_hash
+    select id, email, display_name, role, disabled, password_hash,
+           password_login_allowed
     from users where email = ${email}
   `;
   return (row as never) ?? null;
@@ -127,6 +142,17 @@ export async function setUserPassword(
   await requireUser(id);
   const hash = await hashPassword(password);
   await sql`update users set password_hash = ${hash} where id = ${id}`;
+}
+
+export async function setUserFlags(
+  id: string,
+  flags: { serviceAccount?: boolean; passwordLoginAllowed?: boolean },
+): Promise<void> {
+  await requireUser(id);
+  if (flags.serviceAccount !== undefined)
+    await sql`update users set service_account = ${flags.serviceAccount} where id = ${id}`;
+  if (flags.passwordLoginAllowed !== undefined)
+    await sql`update users set password_login_allowed = ${flags.passwordLoginAllowed} where id = ${id}`;
 }
 
 export async function setUserDisabled(
@@ -227,13 +253,72 @@ export async function setTeamMember(
   clearPermissionCache();
 }
 
-/** For the admin index: users, and how many of them cannot sign in. */
-export async function userCensus() {
-  const [row] = await sql`
+/**
+ * For the admin index: users, how many of them cannot sign in, and who can
+ * curate. `teams_with_admin` counts teams from this domain's own membership
+ * table rather than joining the catalog's — the caller compares it against the
+ * team count it already has.
+ *
+ * `admins` and `team_admins` are both taken among the enabled, and an app admin
+ * is never also counted as a team admin. That is what lets the overview draw
+ * app admins / team admins / members / disabled as four parts of one roll
+ * rather than four independent tallies.
+ */
+export async function userCensus(): Promise<UserCensus> {
+  const [row] = await sql<Omit<UserCensus, "teams_without_admin">[]>`
     select
       count(*)::int as users,
-      count(*) filter (where disabled)::int as disabled
+      count(*) filter (where disabled)::int as disabled,
+      count(*) filter (where role = 'admin' and not disabled)::int as admins,
+      count(*) filter (
+        where not disabled and role <> 'admin'
+          and exists (select 1 from team_members m
+                        where m.user_id = users.id and m.role = 'admin')
+      )::int as team_admins,
+      count(*) filter (where password_hash is not null)::int as with_password,
+      (select count(distinct team_id)::int from team_members where role = 'admin')
+        as teams_with_admin,
+      (select count(*)::int from users u
+        where not exists (select 1 from team_members m where m.user_id = u.id))
+        as users_no_team
     from users
   `;
-  return row as { users: number; disabled: number };
+  /* Named, not just counted: the overview opens this list when the ring is
+     clicked, and "3 teams have no admin" is only actionable once you know
+     which three. */
+  const teams_without_admin = await sql<{ slug: string; name: string }[]>`
+    select t.slug, t.name from teams t
+    where not exists (
+      select 1 from team_members m where m.team_id = t.id and m.role = 'admin'
+    )
+    order by t.name
+  `;
+  return { ...row, teams_without_admin: [...teams_without_admin] };
+}
+
+/** Who can curate what, and the gaps in it, by name. */
+export async function userIssues(): Promise<Record<string, IssueList>> {
+  const [[admins], noAdmin, noTeam] = await Promise.all([
+    sql`select count(*)::int as n from users where role = 'admin' and not disabled`,
+    sql`
+      select t.slug as key, t.name as label, count(*) over () as total
+      from teams t
+      where not exists (
+        select 1 from team_members m where m.team_id = t.id and m.role = 'admin'
+      )
+      order by t.name limit ${ISSUE_ITEMS}
+    `,
+    sql`
+      select u.id as key, u.email as label, count(*) over () as total
+      from users u
+      where not u.disabled
+        and not exists (select 1 from team_members m where m.user_id = u.id)
+      order by u.email limit ${ISSUE_ITEMS}
+    `,
+  ]);
+  return {
+    "users.no_app_admin": issueFlag(admins.n === 0),
+    "teams.no_admin": issueList(noAdmin),
+    "users.no_team": issueList(noTeam),
+  };
 }

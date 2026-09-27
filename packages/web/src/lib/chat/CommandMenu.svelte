@@ -1,11 +1,33 @@
 <script module lang="ts">
   import type { BuiltinCommandMeta, CommandArtifactMeta } from "../agent";
+  import type { IconName } from "../tui/icons";
 
-  export type CommandMode = "command" | "artifact";
+  export type CommandMode = "command" | "artifact" | "options";
+
+  /** One row of an argument the caller completes itself, e.g. `/az new <project>`. */
+  export interface MenuOption {
+    value: string;
+    label: string;
+    hint?: string;
+    desc?: string;
+    icon?: IconName;
+    /** A small swatch beside the icon, e.g. a work item type's own colour. */
+    color?: string | null;
+  }
+
+  /** What an options menu is completing, drawn above the rows. */
+  export interface MenuCrumb {
+    cmd: string;
+    param: string;
+    desc?: string;
+    /** Said instead of rows when there are none: loading, or why not. */
+    empty?: string;
+  }
 
   export type CommandPick =
     | { kind: "builtin"; builtin: BuiltinCommandMeta }
-    | { kind: "artifact"; artifact: CommandArtifactMeta };
+    | { kind: "artifact"; artifact: CommandArtifactMeta }
+    | { kind: "option"; value: string };
 
   /** Client-side command: it attaches an artifact instead of prompting the agent. */
   export const ARTIFACT_COMMAND: BuiltinCommandMeta = {
@@ -26,22 +48,48 @@
 </script>
 
 <script lang="ts">
+  import { Icon } from "../tui";
+
   let {
     mode = "command",
     query,
     builtins,
     artifacts,
+    options = [],
+    crumb,
     onpick,
   }: {
     mode?: CommandMode;
     query: string;
     builtins: BuiltinCommandMeta[];
     artifacts: CommandArtifactMeta[];
+    options?: MenuOption[];
+    crumb?: MenuCrumb;
     onpick: (pick: CommandPick) => void;
   } = $props();
 
-  const items = $derived(
-    mode === "artifact"
+  type Item = {
+    key: string;
+    label: string;
+    hint?: string;
+    desc: string;
+    icon?: IconName;
+    color?: string | null;
+    pick: CommandPick;
+  };
+
+  const items = $derived<Item[]>(
+    mode === "options"
+      ? options.map((o) => ({
+          key: `o:${o.value}`,
+          label: o.label,
+          hint: o.hint,
+          desc: o.desc ?? "",
+          icon: o.icon,
+          color: o.color,
+          pick: { kind: "option", value: o.value } as CommandPick,
+        }))
+      : mode === "artifact"
       ? matchArtifacts(artifacts, query).map((a) => ({
           key: `a:${a.id}`,
           label: `⛬ ${a.title}`,
@@ -83,13 +131,19 @@
   }
 </script>
 
-{#if items.length || mode === "artifact"}
+{#if items.length || mode !== "command"}
   <div class="cmd-menu" role="listbox" aria-label="Commands">
     {#if mode === "artifact"}
       <div class="cmd-crumb">
         <span class="cmd-cmd">/{ARTIFACT_COMMAND.name}</span>
         <span class="cmd-param">artifact</span>
         <span class="cmd-desc">{ARTIFACT_COMMAND.description}</span>
+      </div>
+    {:else if mode === "options" && crumb}
+      <div class="cmd-crumb">
+        <span class="cmd-cmd">{crumb.cmd}</span>
+        <span class="cmd-param">{crumb.param}</span>
+        {#if crumb.desc}<span class="cmd-desc">{crumb.desc}</span>{/if}
       </div>
     {/if}
     {#each items as item, i (item.key)}
@@ -101,13 +155,20 @@
         onmouseenter={() => (idx = i)}
         onclick={() => onpick(item.pick)}
       >
+        {#if item.icon}
+          <span class="cmd-icon" style:color={item.color ?? undefined}>
+            <Icon name={item.icon} size="1em" />
+          </span>
+        {/if}
         <span class="cmd-label">{item.label}</span>
         {#if item.hint}<span class="cmd-hint">{item.hint}</span>{/if}
         {#if item.desc}<span class="cmd-desc">{item.desc}</span>{/if}
       </button>
     {/each}
     {#if !items.length}
-      <div class="cmd-none">no artifact matches</div>
+      <div class="cmd-none">
+        {mode === "options" ? (crumb?.empty ?? "nothing matches") : "no artifact matches"}
+      </div>
     {/if}
   </div>
 {/if}
@@ -169,6 +230,12 @@
   }
   .cmd-row.active {
     background: var(--accent-dim);
+  }
+  .cmd-icon {
+    flex: none;
+    align-self: center;
+    display: inline-flex;
+    color: var(--muted);
   }
   .cmd-label {
     flex: none;

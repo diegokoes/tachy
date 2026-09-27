@@ -1,7 +1,7 @@
 /*
  * The machine id behind a display name. From the contract, not reimplemented
- * here: the server validates what this produces, and the two had already
- * drifted — a unit slug the API would have accepted was rewritten on the way in.
+ * here: the server validates what this produces, so a local copy can only
+ * drift from the rule it is checked against.
  */
 export { slugify } from "@tachy/contract";
 

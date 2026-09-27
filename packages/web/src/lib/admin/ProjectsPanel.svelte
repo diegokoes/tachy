@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
+  import { keep, recall } from "../kept";
   import { api } from "../api";
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
@@ -10,18 +11,18 @@
     Checkbox,
     Chip,
     CrudTable,
-    FilterBar,
+    DeleteButton,
     Field,
+    FilterBar,
     GroupHead,
     Note,
-
     Select,
     type Column,
     type Draft,
   } from "../tui";
   import type { AreaRule, Component, Connection, Customer, Product, ProjectWiki, Repo, SourceProject, Team } from "./rows";
 import { INFO } from "./help";
-  import { claimTopAction } from "./topAction.svelte";
+  import { sectionHoist } from "./sectionAction.svelte";
 
   type Found = { key: string; name: string };
   type Wiki = { identifier: string; name: string; type?: string };
@@ -43,7 +44,6 @@ import { INFO } from "./help";
   const customers = createResource(() => api.get<Customer[]>("/customers"), []);
 
   let error = $state<string | null>(null);
-  let expanded = $state(new Set<string>());
   let areas = $state<Record<string, AreaRule[]>>({});
   let components = $state<Record<string, Component[]>>({});
   let wikisFor = $state<Record<string, Wiki[]>>({});
@@ -118,19 +118,9 @@ import { INFO } from "./help";
     }
   }
 
-  async function toggle(id: string) {
-    const next = new Set(expanded);
-    if (next.has(id)) {
-      next.delete(id);
-      expanded = next;
-      return;
-    }
-    next.add(id);
-    expanded = next;
+  async function openProject(p: SourceProject) {
     areaForm = { prefix: "", component: "" };
-
-    const p = projects.data.find((x) => x.id === id);
-    if (!p || p.role !== "knowledge") return;
+    if (!p.product_id) return;
     try {
       areas[p.id] = await api.get<AreaRule[]>(`/source-projects/${p.id}/areas`);
       if (p.product_slug && !components[p.product_slug])
@@ -199,10 +189,6 @@ import { INFO } from "./help";
     }
   }
 
-  /* One column for both, because a project is scoped by exactly one of them:
-     a knowledge project belongs to a product, a tracker to a team. */
-  const scopeOf = (p: SourceProject) => p.product_slug ?? p.team_slug;
-
   const columns: Column<SourceProject>[] = $derived([
     {
       key: "source_slug",
@@ -230,40 +216,33 @@ import { INFO } from "./help";
       info: "How it reads in lists here.",
     },
     {
-      key: "role",
-      label: "role",
-      width: "9rem",
+      key: "product_slug",
+      label: t("product"),
+      width: "11rem",
       edit: "select",
-      required: true,
-      initial: "knowledge",
+      initial: myProducts[0]?.slug ?? "",
+      info: `Ingest target. Also scopes wiki, repos, area rules. None: a ticket target only.`,
       options: [
-        { value: "knowledge", label: "knowledge" },
-        { value: "tracker", label: "tracker" },
+        { value: "", label: "(none)" },
+        ...myProducts.map((p) => ({ value: p.slug, label: p.name })),
       ],
-      cell: roleCell,
+      cell: productCell,
+      value: (p) => p.product_slug ?? "",
     },
     {
-      key: "scope",
+      key: "team_slug",
       label: t("team"),
-      width: "12rem",
+      width: "11rem",
       edit: "select",
-      required: true,
-      info: (d) =>
-        d.role === "tracker"
-          ? `The ${t("team")} raising work items here. Nothing is filed under a tracker.`
-          : `The ${t("product")} its items ingest into. It can also carry the wiki, repos and area rules.`,
-      options: (d) =>
-        d.role === "tracker"
-          ? myTeams.map((tm) => ({ value: tm.slug, label: tm.name }))
-          : myProducts.map((p) => ({ value: p.slug, label: p.name })),
-      value: scopeOf,
+      info: `Whose members create work items here. A ${t("product")} brings its own ${t("team")}, so this only applies without one.`,
+      options: myTeams.map((tm) => ({ value: tm.slug, label: tm.name })),
     },
     {
       key: "customer_slug",
       label: "customer",
       width: "10rem",
       edit: "select",
-      info: "Set this only when the project serves one customer. Its items are then theirs by configuration, which beats guessing at the sender's email domain. Leave empty for a project serving many.",
+      info: "Single-customer projects only. Overrides email-domain attribution. Empty: many customers.",
       options: [
         { value: "", label: "(none, serves many)" },
         ...customers.data.map((cu) => ({ value: cu.slug, label: cu.name })),
@@ -285,19 +264,18 @@ import { INFO } from "./help";
       label: "repos",
       width: "6rem",
       align: "end",
-      value: (p) => (p.role === "knowledge" ? reposOf(p).length : ""),
+      value: (p) => (p.product_id ? reposOf(p).length : ""),
     },
   ]);
 
   function payload(d: Draft) {
-    const role = String(d.role);
+    const product = d.product_slug ? String(d.product_slug) : "";
     return {
-      role,
       name: String(d.name ?? "").trim() || String(d.external_key).trim(),
       customer_slug: d.customer_slug ? String(d.customer_slug) : null,
-      ...(role === "knowledge"
-        ? { product_slug: String(d.scope) }
-        : { team_slug: String(d.scope) }),
+      ...(product
+        ? { product_slug: product }
+        : { product_slug: null, team_slug: String(d.team_slug ?? "") }),
     };
   }
 
@@ -310,7 +288,7 @@ import { INFO } from "./help";
     for (const [slug, list] of Object.entries(found))
       for (const g of list)
         if (!registered.has(`${slug} ${g.key}`)) unregistered.push(g.key);
-    const knowledge = projects.data.filter((p) => p.role === "knowledge");
+    const knowledge = projects.data.filter((p) => p.product_id);
     return {
       unregistered,
       noWiki: knowledge.filter(
@@ -332,7 +310,22 @@ import { INFO } from "./help";
 
   onMount(reload);
 
-  let filter = $state("");
+  /** The project whose record dialog is open, if one is. */
+  let opened = $state<SourceProject | null>(null);
+
+  /* What hangs off a project with a product — its area rules, its product's
+     components, its wikis, fetched when the dialog opens on it, and again
+     when an edit changes what it hangs off. */
+  const hangs = $derived(
+    opened ? `${opened.id} ${opened.product_slug ?? ""}` : "",
+  );
+  $effect(() => {
+    if (!hangs) return;
+    untrack(() => opened && void openProject(opened));
+  });
+
+  let filter = $state(recall("admin.projects.filter", ""));
+  $effect(() => keep("admin.projects.filter", filter));
   const filtered = $derived.by(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return projects.data;
@@ -351,20 +344,25 @@ import { INFO } from "./help";
   });
 </script>
 
-{#snippet roleCell(p: SourceProject)}
-  <Badge tone={p.role === "knowledge" ? "accent" : "muted"}>{p.role}</Badge>
+{#snippet productCell(p: SourceProject)}
+  {#if p.product_slug}
+    <Badge tone="accent">{p.product_slug}</Badge>
+  {:else}
+    <span class="dim">none</span>
+  {/if}
 {/snippet}
 
 {#snippet detail(p: SourceProject)}
-  {#if p.role === "tracker"}
+  {#if error}<Note tone="danger">{error}</Note>{/if}
+  {#if !p.product_id}
     <p class="dim">
-      A tracker. Nothing is filed under it. Give it a {t("product")} to make it
-      a knowledge project.
+      A ticket target only. Nothing is filed under it. Give it a {t("product")}
+      to ingest its items and attach wikis, repos and area rules.
     </p>
   {:else}
     <div class="detail">
       <div class="block">
-        <span class="dim" title="An ADO project usually has several: one project wiki plus a code wiki per repo."
+        <span class="dim" title="ADO: one project wiki plus one code wiki per repo."
           >wikis</span
         >
         {#if p.source_type === "azure-devops"}
@@ -428,13 +426,8 @@ import { INFO } from "./help";
             <code>{a.area_prefix}</code>
             <span>→ {a.component_slug}</span>
             {#if canEditProject(p)}
-              <Button
-                variant="ghost"
-                tone="danger"
-                square
-                icon="del"
-                title="remove rule"
-                aria-label="remove rule"
+              <DeleteButton
+                label="remove rule"
                 onclick={() => delArea(p, a.id)}
               />
             {/if}
@@ -481,7 +474,7 @@ import { INFO } from "./help";
   {/if}
 {/snippet}
 
-{#snippet discoverField(f: {
+{#snippet formExtra(f: {
   mode: "create" | "edit";
   row: SourceProject | null;
   draft: Draft;
@@ -489,131 +482,137 @@ import { INFO } from "./help";
   {#if f.mode === "create"}
     {@const slug = String(f.draft.source_slug ?? "")}
     {@const hits = found[slug] ?? []}
-    <Field label="discover" info="Pick a project instead of typing its key.">
-      <Button
-        variant="ghost"
-        square
-        icon="analyze"
-        busy={discovering === slug}
-        disabled={!slug}
-        aria-label="discover"
-        title="discover"
-        onclick={() => discover(slug)}
-      />
-    </Field>
-    {#if hits.length}
-      <div class="chips">
-        {#each hits as g (g.key)}
-          <Chip
-            tone={f.draft.external_key === g.key ? "accent" : "default"}
-            onclick={() => {
-              f.draft.external_key = g.key;
-              if (!f.draft.name) f.draft.name = g.name;
-            }}>{g.name}</Chip
-          >
-        {/each}
-      </div>
-    {/if}
+    <!-- Full width, and a button that says what it does: the picker is the
+         point of the field, not an ornament beside a key you typed. -->
+    <div class="find">
+      <Field
+        label="find a project"
+        info="Ask the connection what it can see, instead of typing a key."
+        plain
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          icon="discover"
+          busy={discovering === slug}
+          disabled={!slug}
+          onclick={() => discover(slug)}
+          >{slug ? `ask ${slug}` : "pick a connection first"}</Button
+        >
+      </Field>
+      {#if hits.length}
+        <div class="chips">
+          {#each hits as g (g.key)}
+            <Chip
+              tone={f.draft.external_key === g.key ? "accent" : "default"}
+              title={g.key}
+              onclick={() => {
+                f.draft.external_key = g.key;
+                if (!f.draft.name) f.draft.name = g.name;
+              }}>{g.name}</Chip
+            >
+          {/each}
+        </div>
+      {:else if discovering !== slug && slug}
+        <span class="dim sm">nothing found yet</span>
+      {/if}
+    </div>
+  {:else if f.row}
+    <div class="probe">{@render detail(f.row)}</div>
   {/if}
 {/snippet}
 
 {#if error}<Note tone="danger">{error}</Note>{/if}
 
-<FilterBar
-  bind:value={filter}
-  shown={filtered.length}
-  total={projects.data.length}
-  placeholder="filter projects…"
-  label="filter projects"
-/>
+  <FilterBar
+    bind:value={filter}
+    shown={filtered.length}
+    total={projects.data.length}
+    placeholder="filter projects…"
+    label="filter projects"
+  />
 
-<CrudTable
-  hoist={claimTopAction}
-  {columns}
-  rows={filtered}
-  rowKey={(p) => p.id}
-  loading={projects.loading}
-  error={projects.error}
-  emptyTitle="No projects registered yet."
-  canEdit={canEditProject}
-  canDelete={canEditProject}
-  canCreate={canAdd}
-  addLabel="register project"
-  editTitle={(p) => p.external_key}
-  expand={detail}
-  {expanded}
-  ontoggle={toggle}
-  formExtra={discoverField}
-  oncreate={(d) =>
-    projects.mutate(() =>
-      api.post("/source-projects", {
-        source_slug: d.source_slug,
-        external_key: String(d.external_key).trim(),
-        ...payload(d),
-      }),
-    )}
-  onsave={(row, d) =>
-    projects.mutate(() => api.patch(`/source-projects/${row.id}`, payload(d)))}
-  ondelete={(row) =>
-    projects.mutate(async () => {
-      await api.delete(`/source-projects/${row.id}`);
-      const next = new Set(expanded);
-      next.delete(row.id);
-      expanded = next;
-    })}
-/>
+  <CrudTable
+    hoist={sectionHoist("projects")}
+    {columns}
+    rows={filtered}
+    rowKey={(p) => p.id}
+    loading={projects.loading}
+    error={projects.error}
+    emptyTitle="No projects registered yet."
+    canEdit={canEditProject}
+    canDelete={canEditProject}
+    canCreate={canAdd}
+    addLabel="register project"
+    noun="project"
+    editTitle={(p) => p.name || p.external_key}
+    width="52rem"
+    {formExtra}
+    onform={(f) => (opened = f?.row ?? null)}
+    oncreate={(d) =>
+      projects.mutate(() =>
+        api.post("/source-projects", {
+          source_slug: d.source_slug,
+          external_key: String(d.external_key).trim(),
+          ...payload(d),
+        }),
+      )}
+    onsave={(row, d) =>
+      projects.mutate(() => api.patch(`/source-projects/${row.id}`, payload(d)))}
+    ondelete={(row) =>
+      projects.mutate(() => api.delete(`/source-projects/${row.id}`))}
+  />
 
-<div class="coverage">
-  <GroupHead label="coverage" />
-  <ul class="gaps">
-    {#if gaps.unregistered.length}
-      <li>
-        <span class="warn-dot">●</span>
-        {gaps.unregistered.length} discovered project(s) not registered:
-        <span class="dim">{gaps.unregistered.join(", ")}</span>
-      </li>
-    {/if}
-    {#if gaps.noWiki.length}
-      <li>
-        <span class="warn-dot">●</span> no wiki set:
-        <span class="dim">
-          {gaps.noWiki.map((p) => p.external_key).join(", ")}
-        </span>
-      </li>
-    {/if}
-    {#if gaps.noRepos.length}
-      <li>
-        <span class="warn-dot">●</span> no repos linked:
-        <span class="dim">
-          {gaps.noRepos.map((p) => p.external_key).join(", ")}
-        </span>
-      </li>
-    {/if}
-    {#if gaps.repoNoComponent.length}
-      <li>
-        <span class="warn-dot">●</span> repos with no component (code search
-        can't be narrowed):
-        <span class="dim">
-          {gaps.repoNoComponent.map((r) => r.slug).join(", ")}
-        </span>
-      </li>
-    {/if}
-    {#if gaps.brokenIndex.length}
-      <li>
-        <span class="err-dot">●</span> index failing:
-        <span class="dim">
-          {gaps.brokenIndex.map((r) => r.slug).join(", ")}
-        </span>
-      </li>
-    {/if}
-    {#if clean}
-      <li class="dim">
-        Nothing outstanding. Run “discover” when registering a project to check
-        for ones that were never picked up.
-      </li>
-    {/if}
-  </ul>
-</div>
+  <div class="coverage">
+    <GroupHead label="coverage" />
+    <ul class="gaps">
+      {#if gaps.unregistered.length}
+        <li>
+          <span class="warn-dot">●</span>
+          {gaps.unregistered.length} discovered project(s) not registered:
+          <span class="dim">{gaps.unregistered.join(", ")}</span>
+        </li>
+      {/if}
+      {#if gaps.noWiki.length}
+        <li>
+          <span class="warn-dot">●</span> no wiki set:
+          <span class="dim">
+            {gaps.noWiki.map((p) => p.external_key).join(", ")}
+          </span>
+        </li>
+      {/if}
+      {#if gaps.noRepos.length}
+        <li>
+          <span class="warn-dot">●</span> no repos linked:
+          <span class="dim">
+            {gaps.noRepos.map((p) => p.external_key).join(", ")}
+          </span>
+        </li>
+      {/if}
+      {#if gaps.repoNoComponent.length}
+        <li>
+          <span class="warn-dot">●</span> repos with no component:
+          <span class="dim">
+            {gaps.repoNoComponent.map((r) => r.slug).join(", ")}
+          </span>
+        </li>
+      {/if}
+      {#if gaps.brokenIndex.length}
+        <li>
+          <span class="err-dot">●</span> index failing:
+          <span class="dim">
+            {gaps.brokenIndex.map((r) => r.slug).join(", ")}
+          </span>
+        </li>
+      {/if}
+      {#if clean}
+        <li class="dim">
+          Nothing outstanding. Run “discover” when registering a project to check
+          for ones that were never picked up.
+        </li>
+      {/if}
+    </ul>
+  </div>
 
 <style>
   .dim {

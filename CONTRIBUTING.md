@@ -13,8 +13,7 @@ you ran, what you expected, and what actually happened.
 
 `dev` is the integration branch and `main` is what production runs. Work
 branches off `dev`, and pull requests target `dev`. `main` only ever receives a
-merge from `dev`, and that merge is the deploy: Jenkins pushes an image and
-restarts the production stack. See the table in
+merge from `dev`, and production is deployed from it. See the table in
 [README.md](README.md#deployment).
 
 There are no version tags and no releases. Only the latest commit on `main` is
@@ -24,10 +23,9 @@ supported, which is what [SECURITY.md](SECURITY.md) says too.
 
 - Branch off `dev`, target `dev`, keep the diff focused on one thing.
 - Run `npm run typecheck && npm run web:check && npm run coverage` before
-  opening it. GitHub Actions runs the same three on every pull request and
-  Jenkins runs them again before it builds an image, so a failure blocks the
-  merge either way. `coverage` rather than `test` because that is what applies
-  the thresholds.
+  opening it. GitHub Actions runs the same three on every pull request and on
+  pushes to `dev` and `main`, so a failure blocks the merge. `coverage` rather
+  than `test` because that is what applies the thresholds.
 - tachý is AGPL-3.0-or-later; your contribution will be licensed the same way
   once merged.
 
@@ -37,6 +35,11 @@ supported, which is what [SECURITY.md](SECURITY.md) says too.
 applies it on every run, and `test/schema-drift.test.ts` checks its CHECK
 constraints against the core enums, so drift fails CI.
 
+`db/roles.sql` holds the least-privilege roles (`tachy_app` for the API and MCP
+children, `tachy_backup` for dumps) and their grants. It is idempotent and runs
+after `schema.sql`, so a new table needs no grant of its own: re-applying
+`roles.sql` covers it.
+
 There is deliberately no migrations directory. The previous one held three files
 that were already fully mirrored in `schema.sql`, no-ops on a fresh database,
 while re-running them silently rewrote `analysis_runs.mode` for every `create` /
@@ -44,12 +47,25 @@ while re-running them silently rewrote `analysis_runs.mode` for every `create` /
 beside it. There was no applied-migrations table, so every run re-applied every
 file.
 
-Upgrading an existing deployment is therefore a dump, a fresh schema, and a
-restore of the data tables, plus `npm run sync reembed` whenever the embedding
-model or vector dimension changed, since vectors from two models share no space.
-If incremental migrations come back, they need an applied-migrations table and a
-test that diffs `schema.sql` against schema-plus-migrations; without both, the
-two drift apart silently.
+Upgrading an existing deployment is a declarative diff instead:
+[pg-schema-diff](https://github.com/stripe/pg-schema-diff) compares the live
+database with `db/schema.sql` and applies the difference, and `tachy-deploy`
+runs it from the new image. A pull request that changes `schema.sql` gets a
+`schema-plan` CI job (`scripts/schema-plan.sh`): the base branch's schema and
+fixtures are migrated to yours, a second plan must be empty, and a fresh
+database from your schema must plan empty too. Hazards that can lose data or
+change behaviour (`deploy/postgres/schema-hazards.sh`) fail the job unless the
+pull request carries the `schema-destructive` label, and then need
+`tachy-deploy --allow-destructive`.
+
+What a diff cannot see still needs care:
+
+- A rename looks like a drop plus an add. Ship it as expand and contract: add
+  the new column, backfill, move the code, drop the old one in a later release.
+- A release should run against the previous release's schema too, so it can be
+  rolled back without a restore.
+- Changing the embedding model or vector dimension still needs
+  `npm run sync reembed`, since vectors from two models share no space.
 
 ## Commit messages
 

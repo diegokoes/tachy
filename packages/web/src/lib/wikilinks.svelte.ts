@@ -1,6 +1,7 @@
 import { api } from "./api";
 import { navigate } from "./router.svelte";
-import type { NamedRow } from "./types";
+import type { ProductRow } from "@tachy/contract";
+import { libraryItemPath, ORG_WIDE } from "./wiki/paths";
 
 export interface OutboundLink {
   target: string;
@@ -13,8 +14,7 @@ export interface OutboundLink {
 
 /**
  * Where each `[[target]]` in one body actually points, and a click handler that
- * follows it. Shared by the article, doc and entry views — the third copy was
- * the point at which pasting it again stopped being defensible.
+ * follows it. Shared by the article, doc and entry views.
  *
  * Destinations come from what the SERVER resolved, not from re-deriving them in
  * the browser: link resolution is scoped (a product's wiki first, then the
@@ -30,26 +30,24 @@ export class LinkTargets {
     try {
       const [{ outbound }, products] = await Promise.all([
         api.get<{ outbound: OutboundLink[] }>(`/${base}/${id}/links`),
-        api.get<NamedRow[]>("/products").catch(() => [] as NamedRow[]),
+        api.get<ProductRow[]>("/products").catch(() => [] as ProductRow[]),
       ]);
       const scopeOf = (productId: string | null) =>
-        products.find((p) => p.id === productId)?.slug ?? "general";
+        products.find((p) => p.id === productId)?.slug ?? ORG_WIDE;
 
       const next = new Set<string>();
       this.to.clear();
       for (const l of outbound) {
-        if (l.to_entry_id) {
-          next.add(l.target);
-          this.to.set(l.target, `/library/entries/${l.to_entry_id}`);
-        } else if (l.to_doc_id) {
-          next.add(l.target);
-          this.to.set(
-            l.target,
-            l.to_kind === "wiki" && l.to_slug
-              ? `/library/wiki/${scopeOf(l.to_product_id)}/${l.to_slug}`
-              : `/library/docs/${l.to_doc_id}`,
-          );
-        }
+        const path = libraryItemPath({
+          entryId: l.to_entry_id,
+          docId: l.to_doc_id,
+          kind: l.to_kind,
+          slug: l.to_slug,
+          scope: scopeOf(l.to_product_id),
+        });
+        if (!path) continue;
+        next.add(l.target);
+        this.to.set(l.target, path);
       }
       this.resolved = next;
     } catch {

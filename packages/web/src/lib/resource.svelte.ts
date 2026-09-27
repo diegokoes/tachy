@@ -55,10 +55,9 @@ export function createResource<T>(load: () => Promise<T>, initial: T) {
     }
   }
 
-  /* A failed write is rethrown, never stored: `error` stays the *load* error,
-     which is what the list's own error slot reports. Storing it here too made
-     a rejected delete print its message twice — once from the slot, once from
-     whoever caught the throw. */
+  // A failed write is rethrown, never stored: `error` stays the load error
+  // the list's error slot reports. Storing it too prints a rejected write's
+  // message twice, once from the slot and once from whoever caught the throw.
   async function mutate(fn: () => Promise<unknown>) {
     await fn();
     await reload();

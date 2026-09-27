@@ -97,7 +97,9 @@ export async function assertCanEditScope(
   scope: EntryScope,
 ): Promise<void> {
   if (!(await canEditScope(userId, scope)))
-    throw forbidden("you don't have curation rights for this team/product");
+    throw forbidden(
+      "you don't have curation rights for this team/product: it needs team admin there, or app admin",
+    );
 }
 
 export async function assertCanManageTeamBySlug(
@@ -105,15 +107,15 @@ export async function assertCanManageTeamBySlug(
   teamSlug: string,
 ): Promise<void> {
   if (!(await canManageTeamBySlug(userId, teamSlug)))
-    throw forbidden(`you don't have admin rights for team '${teamSlug}'`);
+    throw forbidden(`you don't have team admin rights for team '${teamSlug}'`);
 }
 
 export async function assertAnyTeamAdmin(userId: string): Promise<void> {
   if (!(await isAnyTeamAdmin(userId)))
-    throw forbidden("this action requires team-admin or admin rights");
+    throw forbidden("this action requires team admin or app admin rights");
 }
 
 export async function assertGlobalAdmin(userId: string): Promise<void> {
   if (!(await isGlobalAdmin(userId)))
-    throw forbidden("this action requires global admin rights");
+    throw forbidden("this action requires app admin rights");
 }

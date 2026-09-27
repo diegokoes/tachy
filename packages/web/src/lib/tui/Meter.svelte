@@ -40,9 +40,8 @@
 </span>
 
 <style>
-  /* Drawn, not typed. The bar used to be a string of █░▒▓ on --font-mono, and
-     neither bundled face carries those glyphs — every cell came from whatever
-     fallback the OS supplied, at whatever width it happened to be. */
+  /* Drawn, not typed: neither bundled face carries █░▒▓, so typed cells fall
+     back to whatever OS font is available, at whatever width. */
   .meter {
     display: inline-flex;
     gap: 0.1em;
@@ -65,16 +64,16 @@
   }
 
   .meter.accent {
-    --tone-color: var(--accent);
+    --tone-color: var(--series);
   }
   .meter.ok {
-    --tone-color: var(--ok);
+    --tone-color: var(--series-ok);
   }
   .meter.warn {
-    --tone-color: var(--warn);
+    --tone-color: var(--series-warn);
   }
   .meter.danger {
-    --tone-color: var(--danger);
+    --tone-color: var(--series-danger);
   }
   .meter.muted {
     --tone-color: var(--muted);

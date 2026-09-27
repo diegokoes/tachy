@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Checkbox, Chip, Select } from "../tui";
+  import { Checkbox, Chevron, Chip, Select } from "../tui";
   import { ENUM_FIELDS } from "../vocab";
   import type { FieldSpec } from "../types";
 
@@ -75,7 +75,7 @@
 
   const hint = $derived(
     spec?.is_identity
-      ? "a person. Use their email or unique name; a display name alone is ambiguous"
+      ? "person: email or unique name, not display name"
       : (spec?.help_text ?? undefined),
   );
 
@@ -196,7 +196,7 @@
     </div>
   {:else}
     <button class="disclose" type="button" onclick={() => (open = !open)}>
-      <span class="arrow">{open ? "▾" : "▸"}</span>
+      <Chevron {open} />
       {summary}
     </button>
     {#if open}
@@ -242,6 +242,7 @@
   .label {
     font-size: var(--fs-xs);
     letter-spacing: var(--label-spacing);
+    text-transform: uppercase;
     color: var(--muted);
   }
   input,

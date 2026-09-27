@@ -1,13 +1,17 @@
 import { sql } from "../infra/db";
 import { badInput } from "../infra/errors";
 import { sourceTokenOptional } from "../infra/env";
-import { secretsEnabled, encryptSecret, decryptSecret } from "../infra/secrets";
+import {
+  secretsEnabled,
+  encryptSecret,
+  decryptSecret,
+  vaultKeys,
+} from "../infra/secrets";
 import {
   resolveScoped,
   assertCanWriteScope,
   scopeCondition,
   upsertScoped,
-  type Scope,
   type ScopeContext,
 } from "./scoped";
 import type { AgentProvider } from "./settings";
@@ -35,8 +39,16 @@ export {
   validateCredential,
 };
 
+/**
+ * The scopes a credential can be stored at. There is no team scope: a secret
+ * belongs to one person, and the global rows are the deployment's own machine
+ * tokens — a source connection's token, the job webhook — which background
+ * work resolves with no user to be.
+ */
+export type CredentialScope = "user" | "global";
+
 /** Where a resolved/available credential came from. */
-export type CredentialSource = Scope | "env";
+export type CredentialSource = CredentialScope | "env";
 
 export const sourceCredentialName = (sourceType: string, slug: string) =>
   `${sourceType}_token:${slug}`;
@@ -68,20 +80,20 @@ export function envCredential(name: string): string | undefined {
 }
 
 /**
- * Most-specific-wins credential lookup: user > team > global > env var.
- * Returns plaintext — never expose the result through an API response.
- */
-/**
  * Which row a ciphertext belongs to: its scope, whose it is, and what it is
  * called — exactly the columns the unique indexes are built on, so no two rows
  * share one. Moving a value to another row changes this, and the open fails.
  */
 function credentialAad(row: Record<string, unknown>): string {
-  return [row.scope, row.user_id ?? "", row.team_id ?? "", row.name].join(
-    "\u0000",
-  );
+  // The empty field is where team_id used to sit. Keep it: dropping it would
+  // change the AAD of every row already written and none would open again.
+  return [row.scope, row.user_id ?? "", "", row.name].join("\u0000");
 }
 
+/**
+ * Most-specific-wins credential lookup: user > global > env var.
+ * Returns plaintext — never expose the result through an API response.
+ */
 export async function resolveCredential(
   name: string,
   ctx: ScopeContext,
@@ -91,7 +103,11 @@ export async function resolveCredential(
     const hit = await resolveScoped("credentials", name, ctx);
     if (hit)
       return decryptSecret(
-        hit.row as { value_ciphertext: Buffer; nonce: Buffer },
+        hit.row as {
+          value_ciphertext: Buffer;
+          nonce: Buffer;
+          key_id: string | null;
+        },
         credentialAad(hit.row),
       );
   }
@@ -120,16 +136,15 @@ export interface AgentAuth {
 
 const SOURCE_RANK: Record<CredentialSource, number> = {
   user: 0,
-  team: 1,
-  global: 2,
-  env: 3,
+  global: 1,
+  env: 2,
 };
 
 /**
  * The credential a turn should authenticate with, and where it came from.
  * Claude accepts either an API key or a subscription token; the more specific
- * scope wins so a user's own token beats an org-wide key, and an API key wins
- * an exact tie.
+ * scope wins so a user's own token beats one supplied by the environment, and
+ * an API key wins an exact tie.
  */
 export async function resolveAgentAuth(
   provider: AgentProvider,
@@ -163,7 +178,7 @@ export async function resolveAgentAuth(
 
 export async function setCredential(
   actorUserId: string,
-  scope: Scope,
+  scope: CredentialScope,
   scopeId: string | undefined,
   name: string,
   value: string,
@@ -173,25 +188,25 @@ export async function setCredential(
   const invalid = validateCredential(name, value);
   if (invalid) throw badInput(invalid);
   await assertCanWriteScope(actorUserId, scope, scopeId);
-  const { ciphertext, nonce } = encryptSecret(
+  const { ciphertext, nonce, keyId } = encryptSecret(
     value,
     credentialAad({
       scope,
       user_id: scope === "user" ? scopeId : null,
-      team_id: scope === "team" ? scopeId : null,
       name,
     }),
   );
   await upsertScoped("credentials", scope, scopeId, name, {
     value_ciphertext: ciphertext,
     nonce,
+    key_id: keyId,
     created_by: actorUserId,
   });
 }
 
 export async function deleteCredential(
   actorUserId: string,
-  scope: Scope,
+  scope: CredentialScope,
   scopeId: string | undefined,
   name: string,
 ): Promise<boolean> {
@@ -207,13 +222,13 @@ export async function deleteCredential(
 
 export interface CredentialMeta {
   name: string;
-  scope: Scope;
+  scope: CredentialScope;
   updated_at: string;
 }
 
 /** Metadata only — never the value. Route callers enforce read authz. */
 export async function listCredentials(
-  scope: Scope,
+  scope: CredentialScope,
   scopeId?: string,
 ): Promise<CredentialMeta[]> {
   const rows = await sql`
@@ -223,7 +238,68 @@ export async function listCredentials(
   `;
   return rows.map((r) => ({
     name: r.name as string,
-    scope: r.scope as Scope,
+    scope: r.scope as CredentialScope,
     updated_at: String(r.updated_at),
   }));
+}
+
+export interface VaultState {
+  enabled: boolean;
+  /** The key new secrets are written with. */
+  current_key: string | null;
+  /** How many stored credentials each key holds, oldest first. */
+  by_key: { key_id: string | null; count: number; current: boolean }[];
+}
+
+/** What Admin > system shows about the vault, without decrypting anything. */
+export async function vaultState(): Promise<VaultState> {
+  const keys = vaultKeys();
+  const rows = await sql<{ key_id: string | null; n: number }[]>`
+    select key_id, count(*)::int as n from credentials group by key_id order by key_id nulls first
+  `;
+  return {
+    enabled: keys.length > 0,
+    current_key: keys[0]?.id ?? null,
+    by_key: rows.map((r) => ({
+      key_id: r.key_id,
+      count: r.n,
+      current: Boolean(keys[0] && r.key_id === keys[0].id),
+    })),
+  };
+}
+
+/**
+ * Re-encrypts every stored credential with the current key. Run it after
+ * putting the old key in TACHY_SECRET_KEY_PREVIOUS and the new one in
+ * TACHY_SECRET_KEY; afterwards the old key can be dropped.
+ */
+export async function rotateVaultKey(): Promise<{
+  moved: number;
+  already: number;
+}> {
+  const keys = vaultKeys();
+  if (!keys.length) throw badInput("TACHY_SECRET_KEY is not set");
+  const current = keys[0];
+  let moved = 0;
+  let already = 0;
+  const rows = await sql`select * from credentials order by created_at`;
+  for (const row of rows) {
+    if (row.key_id === current.id) {
+      already++;
+      continue;
+    }
+    const aad = credentialAad(row);
+    const value = decryptSecret(
+      row as { value_ciphertext: Buffer; nonce: Buffer; key_id: string | null },
+      aad,
+    );
+    const { ciphertext, nonce, keyId } = encryptSecret(value, aad);
+    await sql`
+      update credentials
+      set value_ciphertext = ${ciphertext}, nonce = ${nonce}, key_id = ${keyId}, updated_at = now()
+      where id = ${row.id}
+    `;
+    moved++;
+  }
+  return { moved, already };
 }

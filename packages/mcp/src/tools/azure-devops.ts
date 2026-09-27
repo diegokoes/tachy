@@ -2,17 +2,20 @@ import { z } from "zod";
 import {
   resolveSource,
   resolveCurrentUserId,
-  recordRun,
   resolveRedactionPolicy,
   scrubText,
   TokenMap,
   resolveProjectContextStrict,
   matchWiki,
-  addWorkItemLink,
   badInput,
 } from "@tachy/core";
-import { createAdoClient, workItemSchema } from "@tachy/source-azure-devops";
-import type { AdoClient, JsonPatchOp } from "@tachy/source-azure-devops";
+import {
+  createAdoClient,
+  createWorkItem,
+  workItemDefaults,
+  workItemSchema,
+} from "@tachy/source-azure-devops";
+import type { AdoClient } from "@tachy/source-azure-devops";
 import { tool } from "../server";
 import { out } from "../results";
 import { sourceSlug } from "../fields";
@@ -70,12 +73,6 @@ async function resolveAdoTarget(a: {
     context,
   };
 }
-
-const projectDefaults = (
-  context: Awaited<ReturnType<typeof resolveProjectContextStrict>> | null,
-  type: string,
-): Record<string, unknown> | undefined =>
-  (context?.project.config as any)?.defaults?.[type];
 
 /**
  * A wiki argument is matched against the project's registered wikis first, so
@@ -146,7 +143,7 @@ tool(
     const { client } = await resolveAdoClient(sourceSlug);
     const wikis = await client.listWikis(project);
     return out(
-      wikis.map((w: any) => ({
+      wikis.map((w) => ({
         id: w.id,
         name: w.name,
         type: w.type,
@@ -284,7 +281,7 @@ tool(
     if (!type) {
       const types = await client.listWorkItemTypes(project);
       return out({
-        work_item_types: types.map((t: any) => ({
+        work_item_types: types.map((t) => ({
           name: t.name,
           reference_name: t.referenceName,
           description: t.description ?? null,
@@ -292,11 +289,12 @@ tool(
         next: "Call again with type to get its fields.",
       });
     }
-    const defaults =
-      projectDefaults(target.context, type) ??
-      ((conn.config as any)?.defaults?.[project]?.[type] as
-        Record<string, unknown> | undefined) ??
-      {};
+    const defaults = workItemDefaults(
+      conn.config,
+      project,
+      type,
+      target.context?.project.config,
+    );
     // Shared with GET /source-connections/:slug/work-item-schema, so what the
     // approval box renders and what the model is told are the same projection.
     return out(await workItemSchema(client, project, type, defaults));
@@ -307,7 +305,7 @@ tool(
   "create_ado_work_item",
   {
     description:
-      "Create a work item (Bug, Task, User Story, ...) in an Azure DevOps project. Call get_ado_work_item_schema FIRST and fill every required field — requirements differ per project/type; never guess. Pass either source + project, or product_slug (or the project's external key) to use a registered project — a 'tracker' project is exactly a create target like this. fields is keyed by ADO reference names (e.g. 'System.AreaPath', 'Microsoft.VSTS.Common.Severity'); the project's configured defaults are applied underneath. description is plain text/HTML — ADO renders System.Description as HTML, markdown will NOT render. Pass work_item_id when raising this from a ticket, so the ticket records what tracks it. The review box shows the full field set for the user to edit, so draft it and call; a denial means they want changes, not a retry. Requires a PAT with Work Items Read & Write.",
+      "Create a work item (Bug, Task, User Story, ...) in an Azure DevOps project. Call get_ado_work_item_schema FIRST and fill every required field — requirements differ per project/type; never guess. Pass either source + project (any project the PAT can see; registering it is not required), or product_slug to use a registered project and its defaults. fields is keyed by ADO reference names (e.g. 'System.AreaPath', 'Microsoft.VSTS.Common.Severity'); the project's configured defaults are applied underneath. description is plain text/HTML — ADO renders System.Description as HTML, markdown will NOT render. Pass work_item_id when raising this from a ticket, so the ticket records what tracks it. The review box shows the full field set for the user to edit, so draft it and call; a denial means they want changes, not a retry. Requires a PAT with Work Items Read & Write.",
     inputSchema: {
       source: sourceSlug.optional(),
       project: z.string().optional(),
@@ -329,70 +327,36 @@ tool(
     const target = await resolveAdoTarget(a);
     const project = target.project;
     const { conn, client } = await resolveAdoClient(target.sourceSlug);
-    const defaults =
-      projectDefaults(target.context, a.type) ??
-      ((conn.config as any)?.defaults?.[project]?.[a.type] as
-        Record<string, unknown> | undefined) ??
-      {};
-    const merged: Record<string, unknown> = {
-      ...defaults,
-      ...(a.fields ?? {}),
-    };
-    merged["System.Title"] = a.title;
-    if (a.description != null)
-      merged["System.Description"] =
-        /<\/?(p|div|br|ul|ol|li|b|i|em|strong|a|span|h[1-6]|table|tr|td)\b/i.test(
-          a.description,
-        )
-          ? a.description
-          : `<div>${a.description.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>")}</div>`;
-    if (a.tags?.length) merged["System.Tags"] = a.tags.join("; ");
-
-    const patch: JsonPatchOp[] = Object.entries(merged).map(([k, v]) => ({
-      op: "add",
-      path: `/fields/${k}`,
-      value: v,
-    }));
-    const relation = (rel: string, id: string): JsonPatchOp => ({
-      op: "add",
-      path: "/relations/-",
-      value: {
-        rel,
-        url: `${client.orgUrl}/_apis/wit/workItems/${id}`,
-      },
-    });
-    if (a.parent_id)
-      patch.push(relation("System.LinkTypes.Hierarchy-Reverse", a.parent_id));
-    for (const id of a.related_ids ?? [])
-      patch.push(relation("System.LinkTypes.Related", id));
-
-    const created = await client.createWorkItem(project, a.type, patch);
-    const userId = await resolveCurrentUserId();
-    await recordRun({
-      userId,
-      mode: "create",
-      meta: {
-        source: target.sourceSlug,
+    const created = await createWorkItem(
+      client,
+      {
         project,
         type: a.type,
-        ado_id: created.id,
+        title: a.title,
+        description: a.description,
+        fields: a.fields,
+        defaults: workItemDefaults(
+          conn.config,
+          project,
+          a.type,
+          target.context?.project.config,
+        ),
+        parentId: a.parent_id,
+        relatedIds: a.related_ids,
+        tags: a.tags,
       },
-    });
-    if (a.work_item_id)
-      await addWorkItemLink({
-        fromWorkItemId: a.work_item_id,
-        toSourceProjectId: target.context?.project.id ?? null,
-        toExternalId: String(created.id),
-        kind: "tracked_by",
-        createdById: userId,
-      });
+      {
+        sourceSlug: target.sourceSlug,
+        userId: await resolveCurrentUserId(),
+        sourceProjectId: target.context?.project.id ?? null,
+        workItemIds: a.work_item_id ? [a.work_item_id] : [],
+      },
+    );
     return out({
       created: true,
       id: created.id,
       ...(a.work_item_id ? { linked_to_work_item: a.work_item_id } : {}),
-      url:
-        created._links?.html?.href ??
-        `${client.orgUrl}/${encodeURIComponent(project)}/_workitems/edit/${created.id}`,
+      url: created.url,
     });
   },
 );

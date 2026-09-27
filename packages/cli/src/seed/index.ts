@@ -8,6 +8,7 @@ import {
   setCredential,
   setSetting,
   sql,
+  sweepWikiGaps,
 } from "@tachy/core";
 import type { Tx } from "./batches";
 import { SCALES, type ScaleName } from "./scale";
@@ -28,9 +29,11 @@ import {
   type EmbedMode,
 } from "./embed";
 import { seedCode } from "./code";
-import { seedActivity } from "./activity";
+import { seedActivity, seedTelemetry } from "./activity";
 import { seedLibrary } from "./library";
 import { seedWiki } from "./wiki";
+import { seedReports } from "./reports";
+import { seedJobs } from "./jobs";
 
 export { SCALE_NAMES, type ScaleName } from "./scale";
 export { ADMIN_EMAIL, MEMBER_EMAIL, DEV_PASSWORD } from "./org";
@@ -53,12 +56,23 @@ const MARKER = "dev_seed";
 
 /** Everything the seeder writes, in an order the FKs tolerate. */
 const TABLES = [
+  "job_definition_changes",
+  "job_runs",
+  "job_definitions",
   "generated_outputs",
+  "notifications",
+  "report_messages",
+  "reports",
   "library_links",
   "library_views",
   "library_revisions",
+  "mcp_tool_calls",
+  "source_calls",
   "wiki_article_categories",
+  "wiki_slug_aliases",
   "wiki_categories",
+  "wiki_gaps",
+  "library_assets",
   "analysis_runs",
   "code_chunks",
   "repo_files",
@@ -121,8 +135,8 @@ async function confirm(question: string): Promise<boolean> {
 
 /**
  * `seed` truncates, so the refusal has to be real. It will fill a virgin
- * database, and re-fill one it filled before, but it will not touch a
- * database holding rows it did not write.
+ * database, and re-fill one it filled before when given --reset, but it will
+ * not touch a database holding rows it did not write.
  */
 async function assertDevDatabase(opts: SeedOptions): Promise<void> {
   if (process.env.NODE_ENV === "production")
@@ -130,6 +144,12 @@ async function assertDevDatabase(opts: SeedOptions): Promise<void> {
 
   const [marker] =
     await sql`select key from settings where key = ${MARKER}`.catch(() => []);
+  // Every seeded id is deterministic, so a second pass without the truncate
+  // can only collide.
+  if (marker && !opts.reset)
+    throw new Error(
+      `${env.databaseUrl} is already seeded. Pass --reset to wipe and re-seed it.`,
+    );
   if (!marker) {
     const [{ count }] = await sql<{ count: string }[]>`
       select (
@@ -154,7 +174,12 @@ async function assertDevDatabase(opts: SeedOptions): Promise<void> {
     const ok = await confirm(
       `This DELETES everything in ${env.databaseUrl}. Type 'yes' to continue: `,
     );
-    if (!ok) throw new Error("aborted");
+    if (!ok)
+      throw new Error(
+        process.stdin.isTTY
+          ? "aborted"
+          : "aborted: no terminal to confirm --reset on. Pass --yes to skip the prompt.",
+      );
   }
 }
 
@@ -299,11 +324,16 @@ export async function seed(opts: SeedOptions): Promise<void> {
       await deriveProductAreas(tx);
       await supersede(tx);
     });
-    await phases.run("activity", () =>
-      seedActivity(tx, v, org.users, sources.workItems, org.artifacts),
-    );
+    await phases.run("activity", async () => {
+      await seedActivity(tx, v, org.users, sources.workItems, org.artifacts);
+      await seedTelemetry(tx, org.users, sources.connections);
+    });
     await phases.run("library", () => seedLibrary(tx, v, knowledge, org.users));
     await phases.run("wiki", () => seedWiki(tx, org.products, org.users));
+    await phases.run("reports", () => seedReports(tx, v, org.users));
+    await phases.run("jobs", () =>
+      seedJobs(tx, v, org.users, sources.connections),
+    );
   });
 
   if (mode !== "none") process.stderr.write("\n");
@@ -316,6 +346,11 @@ export async function seed(opts: SeedOptions): Promise<void> {
     insert into settings (key, value) values (${MARKER}, ${sql.json({ scale: opts.scale, at: new Date().toISOString() })})
     on conflict (key) do update set value = excluded.value, updated_at = now()
   `;
+
+  // After the bulk transaction, like the other core calls: the gaps page reads
+  // what a sweep wrote, so a fresh dev database would otherwise show none until
+  // the API's first run.
+  await phases.run("gaps", () => sweepWikiGaps());
 
   await phases.run("count", () => report(opts, credentials));
   phases.report();
@@ -353,7 +388,7 @@ async function seedCredentials(): Promise<number> {
   let n = 0;
   for (const [name, value] of values) {
     try {
-      await setCredential(admin.id, "global", undefined, name, value);
+      await setCredential(admin.id, "user", admin.id, name, value);
       n++;
     } catch {
       // A provider may tighten its format rules; a dev credential is not

@@ -1,5 +1,7 @@
 <script lang="ts" generics="T">
-  import type { Snippet } from "svelte";
+  import { onDestroy, untrack, type Snippet } from "svelte";
+  import { forget, keep, recall } from "../kept";
+  import { router, sectionNow } from "../router.svelte";
   import DataTable from "./DataTable.svelte";
   import Button from "./Button.svelte";
   import Note from "./Note.svelte";
@@ -24,14 +26,15 @@
     canDelete = () => true,
     canCreate = true,
     addLabel = "add",
+    noun,
     editTitle,
+    width,
     formExtra,
     onsave,
     oncreate,
     ondelete,
-    expand,
-    expanded,
-    ontoggle,
+    onopen,
+    onadd,
     extraActions,
     rowClass,
     onform,
@@ -48,8 +51,16 @@
     canDelete?: (row: T) => boolean;
     canCreate?: boolean;
     addLabel?: string;
-    /** Modal heading when editing; defaults to the row's key. */
+    /**
+     * What one row is, singular — "project", "repo". It prefixes the record
+     * dialog's name, because a dialog titled with a bare slug says what you
+     * are editing but never what kind of thing it is.
+     */
+    noun?: string;
+    /** Names the row in the dialog title; defaults to the row's key. */
     editTitle?: (row: T) => string;
+    /** Widens the record dialog, for a record that carries more than fields. */
+    width?: string;
     /** Extra controls inside the record form, below the columns. */
     formExtra?: Snippet<
       [{ mode: "create" | "edit"; row: T | null; draft: Draft }]
@@ -57,17 +68,20 @@
     onsave?: (row: T, draft: Draft) => Promise<void> | void;
     oncreate?: (draft: Draft) => Promise<void> | void;
     ondelete?: (row: T) => Promise<void> | void;
-    expand?: Snippet<[T]>;
-    expanded?: Set<string>;
-    ontoggle?: (key: string) => void;
+    /**
+     * Opens the row somewhere other than the record dialog — a page of its
+     * own. Given one, a row click calls it and the dialog never opens.
+     */
+    onopen?: (row: T) => void;
+    /** Starts a new record somewhere other than the dialog, as `onopen` does. */
+    onadd?: () => void;
     extraActions?: Snippet<[T]>;
     rowClass?: (row: T) => string | undefined;
     /** Fires as the record form opens and closes, for state `formExtra` needs. */
     onform?: (f: { mode: "create" | "edit"; row: T | null } | null) => void;
     /**
-     * Offers the add action to whoever is laying out the page, which then
-     * draws it somewhere with more standing than a bar under the table. Given
-     * one, the bar goes away rather than showing the same button twice.
+     * Offers the add action to whoever lays out the page, which draws it on
+     * the section heading. Given one, the bar under the table goes away.
      */
     hoist?: (a: { label: string; run: () => void } | null) => () => void;
   } = $props();
@@ -75,7 +89,9 @@
   $effect(() => {
     if (!hoist) return;
     const offer =
-      oncreate && canCreate ? { label: addLabel, run: startAdd } : null;
+      (onadd || oncreate) && canCreate
+        ? { label: addLabel, run: onadd ?? startAdd }
+        : null;
     // The store's own disposer, so releasing the row cannot clobber a claim
     // made by the panel replacing this one.
     return hoist(offer);
@@ -93,7 +109,38 @@
     form ? (form.row ? rowKey(form.row) : NEW) : null,
   );
 
+  /* An open record, draft and all, survives leaving the section, so coming
+     back finds it as it was. Closing it, or moving elsewhere inside the
+     section, forgets it as before. */
+  const memo = untrack(() => `crud:${router.path}:${noun ?? addLabel}`);
+  const home = sectionNow();
+  let resume = $state(recall<{ key: string; draft: Draft } | null>(memo, null));
+
+  $effect(() => {
+    if (!resume || loading) return;
+    const { key, draft: left } = resume;
+    const row = key === NEW ? null : rows.find((r) => rowKey(r) === key);
+    if (row === undefined) {
+      if (rows.length) resume = null;
+      return;
+    }
+    if (row) startEdit(row);
+    else startAdd();
+    draft = left;
+  });
+
+  $effect(() => {
+    if (resume) return;
+    if (formKey) keep(memo, { key: formKey, draft: $state.snapshot(draft) });
+    else forget(memo);
+  });
+
+  onDestroy(() => {
+    if (sectionNow() === home) forget(memo);
+  });
+
   function startEdit(row: T) {
+    resume = null;
     draft = draftFrom(columns, row);
     form = { mode: "edit", row };
     armed = null;
@@ -102,6 +149,7 @@
   }
 
   function startAdd() {
+    resume = null;
     draft = blankDraft(columns);
     form = { mode: "create", row: null };
     armed = null;
@@ -152,36 +200,9 @@
       return;
     }
     armed = null;
-    await run(key, () => ondelete?.(row));
+    if (await run(key, () => ondelete?.(row))) close();
   }
 </script>
-
-{#snippet actions(row: T)}
-  {@const key = rowKey(row)}
-  {#if extraActions}{@render extraActions(row)}{/if}
-  {#if onsave && canEdit(row)}
-    <Button
-      variant="ghost"
-      tone="info"
-      size="sm"
-      icon="edit"
-      title="edit"
-      onclick={() => startEdit(row)}>edit</Button
-    >
-  {/if}
-  {#if ondelete && canDelete(row)}
-    <Button
-      variant="ghost"
-      tone="danger"
-      size="sm"
-      icon={armed === key ? "check" : "del"}
-      title={armed === key ? "click again to confirm" : "delete"}
-      busy={busy === key}
-      onclick={() => confirmDelete(row)}
-      >{armed === key ? "confirm" : "delete"}</Button
-    >
-  {/if}
-{/snippet}
 
 {#if opError && !form}
   <Note tone="danger">{opError}</Note>
@@ -195,16 +216,19 @@
   {error}
   {emptyTitle}
   {emptyDetail}
-  {expand}
-  {expanded}
-  {ontoggle}
   {rowClass}
-  actions={onsave || ondelete || extraActions ? actions : undefined}
+  onrowclick={onopen ?? (onsave ? startEdit : undefined)}
+  canOpen={canEdit}
 />
 
-{#if oncreate && canCreate && !hoist}
+{#if (onadd || oncreate) && canCreate && !hoist}
   <div class="addbar">
-    <Button variant="ghost" tone="ok" size="sm" icon="plus" onclick={startAdd}
+    <Button
+      variant="ghost"
+      tone="ok"
+      size="sm"
+      icon="plus"
+      onclick={onadd ?? startAdd}
       >{addLabel}</Button
     >
   </div>
@@ -212,17 +236,35 @@
 
 {#if form}
   {@const f = form}
+  {@const named = f.row ? (editTitle?.(f.row) ?? rowKey(f.row)) : null}
+  {@const key = f.row ? rowKey(f.row) : NEW}
   <RecordModal
-    title={f.row ? (editTitle?.(f.row) ?? `edit ${rowKey(f.row)}`) : addLabel}
+    title={named
+      ? noun
+        ? `${noun}: ${named}`
+        : named
+      : addLabel}
     {columns}
     {draft}
+    {width}
     mode={f.mode}
     row={f.row ?? undefined}
     busy={busy === formKey}
     error={opError}
     onConfirm={commit}
+    destructive={f.row && ondelete && canDelete(f.row)
+      ? {
+          label: armed === key ? "click again to confirm" : "delete",
+          icon: armed === key ? "confirm" : "delete",
+          busy: busy === key,
+          onclick: () => f.row && confirmDelete(f.row),
+        }
+      : undefined}
     onCancel={close}
   >
+    {#snippet barExtra()}
+      {#if extraActions && f.row}{@render extraActions(f.row)}{/if}
+    {/snippet}
     {#snippet extra()}
       {#if formExtra}{@render formExtra({
           mode: f.mode,

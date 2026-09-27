@@ -14,19 +14,22 @@
     "packages/agent",
     "packages/api",
     "packages/cli",
+    "packages/worker",
     "packages/web"
   ],
   "scripts": {
     "mcp": "tsx packages/mcp/src/index.ts",
+    "build:server": "node scripts/build-server.mjs",
     "api": "tsx packages/api/src/index.ts",
     "sync": "tsx packages/cli/src/index.ts",
+    "worker": "tsx packages/worker/src/index.ts",
     "web:dev": "npm run dev --workspace @tachy/web",
     "web:build": "npm run build --workspace @tachy/web",
     "web:check": "node scripts/check-runes.mjs && npm run check --workspace @tachy/web",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
-    "load": "docker compose -p tachy-dev -f docker-compose.yml -f load/k6.compose.yml run --rm k6 run",
+    "load": "docker compose -f docker-compose.yml -f load/k6.compose.yml run --rm k6 run",
     "format": "prettier --write ."
   },
   "engines": {
@@ -40,6 +43,7 @@
     "@testcontainers/postgresql": "^12.0.3",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^4.1.11",
+    "esbuild": "^0.28.2",
     "jsdom": "^30.0.1",
     "prettier": "^3.9.5",
     "tsx": "^4.19.2",

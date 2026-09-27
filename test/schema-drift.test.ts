@@ -9,15 +9,26 @@ import {
   LINK_KINDS,
   CONFIDENCES,
   FEEDBACK_KINDS,
+  REPORT_TYPES,
+  REPORT_STATUSES,
+  REPORT_DIRECTIONS,
+  NOTIFICATION_KINDS,
   RUN_MODES,
+  SOURCE_CALL_ORIGINS,
   RESOLUTION_CLARITIES,
   LIBRARY_ACTORS,
   USER_ROLES,
   TEAM_ROLES,
-  SOURCE_PROJECT_ROLES,
   WORK_ITEM_LINK_KINDS,
   REPO_INDEX_STATUSES,
-  SCOPES,
+  scopesOf,
+  WIKI_GAP_KINDS,
+  LIBRARY_ASSET_TYPES,
+  JOB_RESOURCE_CLASSES,
+  JOB_OVERLAP,
+  JOB_NOTIFY,
+  JOB_TRIGGERS,
+  JOB_STATUSES,
 } from "@tachy/core";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -47,27 +58,40 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     ["knowledge_entries", "confidence", CONFIDENCES],
     ["knowledge_entries", "resolution_clarity", RESOLUTION_CLARITIES],
     ["knowledge_feedback", "kind", FEEDBACK_KINDS],
+    ["reports", "type", REPORT_TYPES],
+    ["reports", "status", REPORT_STATUSES],
+    ["report_messages", "direction", REPORT_DIRECTIONS],
+    ["notifications", "kind", NOTIFICATION_KINDS],
     ["analysis_runs", "mode", RUN_MODES],
+    ["source_calls", "origin", SOURCE_CALL_ORIGINS],
     ["library_revisions", "actor", LIBRARY_ACTORS],
     ["reference_docs", "status", REFERENCE_STATUSES],
     ["reference_docs", "kind", REFERENCE_KINDS],
     ["library_links", "kind", LINK_KINDS],
+    ["wiki_gaps", "kind", WIKI_GAP_KINDS],
+    ["library_assets", "content_type", LIBRARY_ASSET_TYPES],
     ["users", "role", USER_ROLES],
     ["team_members", "role", TEAM_ROLES],
-    ["source_projects", "role", SOURCE_PROJECT_ROLES],
     ["work_item_links", "kind", WORK_ITEM_LINK_KINDS],
     ["repos", "index_status", REPO_INDEX_STATUSES],
-    ["credentials", "scope", SCOPES],
-    ["preferences", "scope", SCOPES],
-    ["artifacts", "scope", SCOPES],
+    ["credentials", "scope", scopesOf("credentials")],
+    ["preferences", "scope", scopesOf("preferences")],
+    ["artifacts", "scope", scopesOf("artifacts")],
+    ["job_definitions", "resource_class", JOB_RESOURCE_CLASSES],
+    ["job_definitions", "overlap", JOB_OVERLAP],
+    ["job_definitions", "notify", JOB_NOTIFY],
+    ["job_runs", "resource_class", JOB_RESOURCE_CLASSES],
+    ["job_runs", "trigger", JOB_TRIGGERS],
+    ["job_runs", "status", JOB_STATUSES],
   ] as const)("%s.%s", (table, col, values) => {
     expect(checkValues(table, col).sort()).toEqual([...values].sort());
   });
 
-  it("source_projects ties its role to having a product", () => {
-    expect(tableBlock("source_projects")).toContain(
-      "check ((role = 'knowledge') = (product_id is not null))",
-    );
+  it("source_projects always has a team, and a product only optionally", () => {
+    const block = tableBlock("source_projects");
+    expect(block).toMatch(/team_id\s+uuid not null/);
+    expect(block).toMatch(/product_id\s+uuid references/);
+    expect(block).not.toMatch(/\brole\b/);
   });
 
   it("repos carry their project and component", () => {

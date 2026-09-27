@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 
@@ -37,6 +37,12 @@ const envSchema = z
     actor: z.enum(["agent", "mcp"]).optional(),
     turnId: z.string().optional(),
     apiToken: z.string().min(1).optional(),
+    /**
+     * Which stack answered, set per stack in `.env` rather than baked into the
+     * image, so one image can be promoted from dev to production unchanged.
+     */
+    envBadge: z.string().max(16).optional(),
+    commit: z.string().optional(),
 
     authMode: z.enum(["sso", "token", "open"]),
     sessionSecret: z
@@ -81,6 +87,8 @@ const parsed = envSchema.safeParse({
   actor: process.env.TACHY_ACTOR === "agent" ? "agent" : undefined,
   turnId: process.env.TACHY_TURN_ID || undefined,
   apiToken: apiTokenRaw,
+  envBadge: process.env.TACHY_ENV_BADGE || undefined,
+  commit: process.env.TACHY_COMMIT || undefined,
   authMode:
     (process.env.TACHY_AUTH_MODE as "sso" | "token" | "open" | undefined) ??
     (oidcRaw ? "sso" : apiTokenRaw ? "token" : "open"),
@@ -96,16 +104,6 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
-
-/**
- * Where a chat upload lands, and the only directory the ingest tools may read
- * back. Defined here because the API writes into it and the MCP subprocess
- * reads out of it — two packages that must not disagree about which directory
- * "an uploaded file" means.
- */
-export function uploadDir(): string {
-  return process.env.TACHY_UPLOAD_DIR || join(tmpdir(), "tachy-uploads");
-}
 
 /**
  * Resolve a source token from env by provider + connection slug, e.g.
@@ -137,3 +135,10 @@ export const freshdeskToken = (slug: string) => sourceToken("FRESHDESK", slug);
 export const githubToken = (slug: string) => sourceToken("GITHUB", slug);
 export const azureDevopsToken = (slug: string) =>
   sourceToken("AZURE_DEVOPS", slug);
+
+/**
+ * Where the agent CLI keeps per-user state and transcripts. Read on each call
+ * rather than fixed at import, so a process that changes it sees the change.
+ */
+export const agentHome = () =>
+  process.env.TACHY_AGENT_HOME || join(homedir(), ".claude");

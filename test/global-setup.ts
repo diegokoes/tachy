@@ -7,10 +7,13 @@ import { MAX_WORKERS, schemaFor } from "./parallel";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const schemaPath = join(here, "..", "db", "schema.sql");
+const rolesPath = join(here, "..", "db", "roles.sql");
 const fixturesPath = join(here, "fixtures.sql");
 
 export default async function setup() {
-  const container = await new PostgreSqlContainer("pgvector/pgvector:pg16")
+  const container = await new PostgreSqlContainer(
+    "pgvector/pgvector:0.8.6-pg16",
+  )
     // Durability buys nothing for a throwaway container, and every fork holds
     // its own pool against this one server.
     .withCommand([
@@ -29,6 +32,7 @@ export default async function setup() {
   process.env.DATABASE_URL = url;
 
   const schemaSql = readFileSync(schemaPath, "utf8");
+  const rolesSql = readFileSync(rolesPath, "utf8");
   const fixtureSql = readFileSync(fixturesPath, "utf8");
 
   const admin = postgres(url, { onnotice: () => {} });
@@ -53,6 +57,13 @@ export default async function setup() {
       await sql.end();
     }),
   );
+  // One schema at a time: concurrent grants on the shared roles collide.
+  for (let i = 1; i <= MAX_WORKERS; i++) {
+    await admin.begin(async (tx) => {
+      await tx.unsafe(`set local search_path = ${schemaFor(i)}, public`);
+      await tx.unsafe(rolesSql);
+    });
+  }
   await admin.end();
 
   return async () => {

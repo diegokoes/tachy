@@ -39,7 +39,7 @@ export async function callerScope(c: Context): Promise<ScopeContext> {
   return { userId, teamId: (await userSoleTeamId(userId)) ?? undefined };
 }
 
-function isAdminIdentity(c: Context): boolean {
+export function isAdminIdentity(c: Context): boolean {
   return getIdentity(c)?.role === "admin";
 }
 

@@ -1,17 +1,18 @@
-import { SLUG_RE } from "@tachy/contract";
+import { MAIN_PAGE_SLUG, SLUG_RE } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { wouldCycle } from "../infra/hierarchy";
 import { badInput, conflict, notFound } from "../infra/errors";
+import { visibleGap } from "./gaps";
+import type {
+  WikiCategoryRow,
+  WikiArticleRef,
+  WikiTocNode,
+  WikiToc,
+  WikiListRow,
+  WikiSearchHit,
+} from "@tachy/contract";
 
-export interface WikiCategoryRow {
-  id: string;
-  product_id: string | null;
-  parent_id: string | null;
-  slug: string;
-  name: string;
-  description: string | null;
-  ordinal: number;
-}
+export type { WikiCategoryRow, WikiArticleRef, WikiTocNode, WikiToc };
 
 export interface WikiCategoryInput {
   productId?: string | null;
@@ -20,6 +21,10 @@ export interface WikiCategoryInput {
   parentSlug?: string | null;
   description?: string | null;
   ordinal?: number;
+  /** The section's lead article, by slug. */
+  leadSlug?: string | null;
+  /** Components this section covers, by slug. */
+  componentSlugs?: string[];
 }
 
 export interface WikiCategoryPatch {
@@ -28,12 +33,14 @@ export interface WikiCategoryPatch {
   parentSlug?: string | null;
   description?: string | null;
   ordinal?: number;
+  leadSlug?: string | null;
+  componentSlugs?: string[];
 }
 
 function assertCategorySlug(slug: string): void {
   if (!SLUG_RE.test(slug))
     throw badInput(
-      `Invalid category slug '${slug}' — lowercase letters, digits and hyphens only.`,
+      `Invalid category slug '${slug}': lowercase letters, digits and hyphens only.`,
     );
 }
 
@@ -45,28 +52,54 @@ function assertCategorySlug(slug: string): void {
 const inScope = (productId: string | null) =>
   sql`product_id is not distinct from ${productId}`;
 
+/**
+ * One category shape everywhere: the row plus its lead article's slug/title and
+ * the components it covers. The lateral aggregate keeps components as a single
+ * jsonb array so a category is one row rather than a join to fan out and regroup.
+ */
+function categoryRows(productId: string | null, slug?: string) {
+  return sql<WikiCategoryRow[]>`
+    select c.id, c.product_id, c.parent_id, c.slug, c.name, c.description, c.ordinal,
+           lead.slug as lead_slug, lead.title as lead_title,
+           coalesce(comp.components, '[]'::jsonb) as components
+    from wiki_categories c
+    left join reference_docs lead
+      on lead.id = c.lead_doc_id and lead.status <> 'archived'
+    left join lateral (
+      select jsonb_agg(jsonb_build_object('slug', cm.slug, 'name', cm.name)
+                       order by cm.name) as components
+      from wiki_category_components cc
+      join components cm on cm.id = cc.component_id
+      where cc.category_id = c.id
+    ) comp on true
+    where c.product_id is not distinct from ${productId}
+      ${slug ? sql`and c.slug = ${slug}` : sql``}
+    order by c.ordinal, c.name
+  `;
+}
+
 export async function listWikiCategories(
   productId: string | null,
 ): Promise<WikiCategoryRow[]> {
-  return sql`
-    select id, product_id, parent_id, slug, name, description, ordinal
-    from wiki_categories
-    where ${inScope(productId)}
-    order by ordinal, name
-  ` as Promise<WikiCategoryRow[]>;
+  return categoryRows(productId);
 }
 
 export async function getWikiCategory(
   productId: string | null,
   slug: string,
 ): Promise<WikiCategoryRow> {
-  const [row] = await sql`
-    select id, product_id, parent_id, slug, name, description, ordinal
-    from wiki_categories
-    where ${inScope(productId)} and slug = ${slug}
-  `;
+  const [row] = await categoryRows(productId, slug);
   if (!row) throw notFound(`No wiki category '${slug}' in this wiki`);
-  return row as WikiCategoryRow;
+  return row;
+}
+
+/** The lead article's doc id, or null; throws if the slug names no article. */
+async function leadDocId(
+  productId: string | null,
+  leadSlug: string | null | undefined,
+): Promise<string | null> {
+  if (!leadSlug) return null;
+  return (await findArticle(productId, leadSlug)).id;
 }
 
 async function parentIdOf(
@@ -91,21 +124,27 @@ export async function addWikiCategory(i: WikiCategoryInput) {
       (await wouldCycle("wiki_categories", existing.id, parentId))
     )
       throw badInput(
-        `'${i.parentSlug}' sits under '${i.slug}' — that would make a cycle`,
+        `'${i.parentSlug}' sits under '${i.slug}'; that would make a cycle`,
       );
   }
 
+  const lead = await leadDocId(productId, i.leadSlug);
   const [row] = await sql`
-    insert into wiki_categories (product_id, parent_id, slug, name, description, ordinal)
+    insert into wiki_categories (product_id, parent_id, slug, name, description, ordinal, lead_doc_id)
     values (${productId}, ${parentId}, ${i.slug}, ${i.name},
-            ${i.description ?? null}, ${i.ordinal ?? 0})
+            ${i.description ?? null}, ${i.ordinal ?? 0}, ${lead})
     on conflict (product_id, slug) do update set
       name        = excluded.name,
       description = excluded.description,
       parent_id   = excluded.parent_id,
-      ordinal     = excluded.ordinal
+      ordinal     = excluded.ordinal,
+      -- On a re-add, only replace the lead when one was named; omitting it keeps
+      -- what is there rather than clearing it.
+      lead_doc_id = coalesce(excluded.lead_doc_id, wiki_categories.lead_doc_id)
     returning id, slug, name
   `;
+  if (i.componentSlugs !== undefined)
+    await setCategoryComponents(productId, row.id, i.componentSlugs);
   return row;
 }
 
@@ -125,11 +164,16 @@ export async function updateWikiCategory(
     // branch detaches into a ring the table of contents never terminates on.
     if (await wouldCycle("wiki_categories", current.id, parentId))
       throw badInput(
-        `'${patch.parentSlug}' sits under '${slug}' — that would make a cycle`,
+        `'${patch.parentSlug}' sits under '${slug}'; that would make a cycle`,
       );
   }
 
   if (patch.slug && patch.slug !== slug) assertCategorySlug(patch.slug);
+
+  const lead =
+    "leadSlug" in patch
+      ? await leadDocId(productId, patch.leadSlug)
+      : undefined;
 
   const [row] = await sql`
     update wiki_categories set
@@ -137,11 +181,80 @@ export async function updateWikiCategory(
       name        = ${patch.name ?? current.name},
       description = ${"description" in patch ? (patch.description ?? null) : current.description},
       parent_id   = ${parentId},
-      ordinal     = ${patch.ordinal ?? current.ordinal}
+      ordinal     = ${patch.ordinal ?? current.ordinal},
+      lead_doc_id = ${lead === undefined ? sql`lead_doc_id` : lead}
     where id = ${current.id}
     returning id, slug, name
   `;
+  if (patch.componentSlugs !== undefined)
+    await setCategoryComponents(productId, current.id, patch.componentSlugs);
   return row;
+}
+
+/**
+ * Replace a section's covered components. Whole-set, like article categories: the
+ * editor sends the list it wants. Components belong to a product, so the org-wide
+ * wiki has none to link and an empty list is the only valid input there.
+ */
+export async function setCategoryComponents(
+  productId: string | null,
+  categoryId: string,
+  componentSlugs: string[],
+): Promise<void> {
+  const ids: string[] = [];
+  for (const slug of componentSlugs) {
+    const [c] = await sql`
+      select id from components
+      where product_id = ${productId} and slug = ${slug}
+    `;
+    if (!c) throw notFound(`No component '${slug}' in this product`);
+    ids.push(c.id);
+  }
+  await sql.begin(async (tx) => {
+    await tx`delete from wiki_category_components where category_id = ${categoryId}`;
+    if (!ids.length) return;
+    await tx`
+      insert into wiki_category_components (category_id, component_id)
+      select ${categoryId}, id from unnest(${ids}::uuid[]) as u(id)
+      on conflict do nothing
+    `;
+  });
+}
+
+/**
+ * Seed sections from the product's top-level components — the one-click start for
+ * a new wiki. One section per top-level component, linked to it, appended after
+ * any sections already there. Re-runnable: a slug that already exists is skipped,
+ * so it never clobbers curation.
+ */
+export async function seedSectionsFromComponents(productId: string) {
+  const tops = await sql<{ slug: string; name: string }[]>`
+    select slug, name from components
+    where product_id = ${productId} and parent_id is null
+    order by name
+  `;
+  const [{ n }] = await sql<{ n: number }[]>`
+    select count(*)::int as n from wiki_categories
+    where product_id is not distinct from ${productId} and parent_id is null
+  `;
+  let ordinal = n;
+  const created: { slug: string; name: string }[] = [];
+  for (const c of tops) {
+    const [existing] = await sql`
+      select 1 from wiki_categories
+      where product_id is not distinct from ${productId} and slug = ${c.slug}
+    `;
+    if (existing) continue;
+    await addWikiCategory({
+      productId,
+      slug: c.slug,
+      name: c.name,
+      ordinal: ordinal++,
+      componentSlugs: [c.slug],
+    });
+    created.push({ slug: c.slug, name: c.name });
+  }
+  return { created };
 }
 
 /**
@@ -163,28 +276,6 @@ export async function deleteWikiCategory(
     await tx`delete from wiki_categories where id = ${current.id}`;
     return { deleted: slug };
   });
-}
-
-export interface WikiArticleRef {
-  id: string;
-  slug: string | null;
-  title: string;
-  status: string;
-  ordinal: number;
-  updated_at: string;
-  /** Sources this was composed from that have changed since it was written. */
-  stale?: number;
-}
-
-export interface WikiTocNode extends WikiCategoryRow {
-  articles: WikiArticleRef[];
-  children: WikiTocNode[];
-}
-
-export interface WikiToc {
-  categories: WikiTocNode[];
-  /** Articles filed under nothing — the wiki's own measure of unfiled work. */
-  uncategorised: WikiArticleRef[];
 }
 
 /**
@@ -311,7 +402,8 @@ export async function setArticleCategories(
 /**
  * An article by its slug within one wiki. One article per slug: there is no
  * per-version forking, and `doc_version` on the row is a label carried by
- * imported docs rather than something resolution keys on.
+ * imported docs rather than something resolution keys on. A slug the article
+ * had before a rename still finds it; the row's own `slug` says where it lives.
  */
 export async function findArticle(productId: string | null, slug: string) {
   const [row] = await sql`
@@ -323,37 +415,70 @@ export async function findArticle(productId: string | null, slug: string) {
     left join customers cu on cu.id = d.customer_id
     where d.kind = 'wiki' and d.status <> 'archived'
       and d.product_id is not distinct from ${productId}
-      and d.slug = ${slug}
+      and (d.slug = ${slug} or d.id in (
+        select a.doc_id from wiki_slug_aliases a
+        where a.product_id is not distinct from ${productId} and a.slug = ${slug}))
+    order by d.slug = ${slug} desc
     limit 1
   `;
   if (!row) throw notFound(`No wiki article '${slug}' in this wiki`);
   return row;
 }
 
-/** Every wiki that has anything in it, for the wiki index page. */
+/**
+ * In-wiki quick search for the Ctrl+K palette. Scoped to this one wiki and,
+ * unlike the library's reference search, it includes drafts — a curator navigates
+ * their own unfinished pages — and stays lightweight (title/slug/body match) since
+ * it answers keystroke by keystroke.
+ */
+export async function searchWikiArticles(
+  productId: string | null,
+  q: string,
+  limit = 20,
+): Promise<WikiSearchHit[]> {
+  const term = q.trim();
+  if (!term) return [];
+  const like = `%${term}%`;
+  return sql<WikiSearchHit[]>`
+    select d.id, d.slug, d.title, d.status,
+           left(regexp_replace(coalesce(d.body, ''), '\s+', ' ', 'g'), 200) as snippet
+    from reference_docs d
+    where d.kind = 'wiki' and d.status <> 'archived'
+      and d.product_id is not distinct from ${productId}
+      and (d.search_tsv_en @@ plainto_tsquery('english', ${term})
+           or d.title ilike ${like} or d.slug ilike ${like})
+    order by ts_rank(d.search_tsv_en, plainto_tsquery('english', ${term})) desc,
+             d.updated_at desc
+    limit ${limit}
+  `;
+}
+
+/** Every wiki, with what it holds and what it is missing, for the switcher. */
 export async function listWikis() {
-  return sql`
+  return sql<WikiListRow[]>`
     select p.id as product_id, p.slug as product_slug, p.name as product_name,
-           count(d.id)::int as articles
+           (select count(*)::int from reference_docs d
+             where d.product_id = p.id and d.kind = 'wiki'
+               and d.status <> 'archived') as articles,
+           (select count(*)::int from wiki_gaps g
+             where g.product_id = p.id and ${visibleGap()}) as open_gaps
     from products p
-    left join reference_docs d
-      on d.product_id = p.id and d.kind = 'wiki' and d.status <> 'archived'
-    group by p.id, p.slug, p.name
     union all
     select null, null, null,
            (select count(*)::int from reference_docs
-            where kind = 'wiki' and status <> 'archived' and product_id is null)
+            where kind = 'wiki' and status <> 'archived' and product_id is null),
+           (select count(*)::int from wiki_gaps g
+             where g.product_id is null and ${visibleGap()})
     order by product_name nulls first
   `;
 }
 
-/**
- * The main page is a real article at a reserved slug, written like any other.
- * Returns null rather than throwing when it does not exist yet, so the route can
- * offer to create one instead of 404ing a wiki that is simply new.
- */
-export const MAIN_PAGE_SLUG = "main";
+export { MAIN_PAGE_SLUG };
 
+/**
+ * Null rather than throwing when the main page does not exist yet, so the route
+ * can offer to create one instead of 404ing a wiki that is simply new.
+ */
 export async function findMainPage(productId: string | null) {
   try {
     return await findArticle(productId, MAIN_PAGE_SLUG);

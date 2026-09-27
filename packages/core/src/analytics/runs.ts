@@ -1,4 +1,4 @@
-import { sql } from "../infra/db";
+import { sql, jsonb } from "../infra/db";
 
 export interface RunInput {
   workItemId?: string | null;
@@ -41,7 +41,7 @@ export async function recordRun(i: RunInput) {
       (work_item_id, user_id, mode, model, input_tokens, output_tokens, meta)
     values
       (${i.workItemId ?? null}, ${i.userId ?? null}, ${i.mode}, ${i.model ?? null},
-       ${i.inputTokens ?? null}, ${i.outputTokens ?? null}, ${sql.json(meta as any)})
+       ${i.inputTokens ?? null}, ${i.outputTokens ?? null}, ${jsonb(meta)})
     returning id, mode, created_at
   `;
   return row;

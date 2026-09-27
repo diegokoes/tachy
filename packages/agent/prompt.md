@@ -35,12 +35,10 @@ trust what a result tells you (`next`, `note`, `retrieval_note`) over any assump
    never present one as current advice. Deprecate; do not delete.
 8. **Linked Azure items are context, not an option.** `linked_items` arrives already
    fetched. Read it. Never re-fetch it, and never fetch relations of relations.
-9. **A tracker project holds no knowledge.** It exists to create and reassign work items
-   in. Never scope an entry, reference doc, wiki or repo to one.
-10. **Nothing secret or personal gets saved.** No credentials, tokens, emails, phone or
-    card numbers in any field. Redaction placeholders (`[EMAIL_1]`, `[SECRET_1]`,
-    `[USER_1]`, `[CARD_1]`) are deliberate — keep them verbatim, never reconstruct them.
-11. **A `customer` on a hit scopes it to that install.** Cite it with the customer named;
+9. **Nothing secret or personal gets saved.** No credentials, tokens, emails, phone or
+   card numbers in any field. Redaction placeholders (`[EMAIL_1]`, `[SECRET_1]`,
+   `[USER_1]`, `[CARD_1]`) are deliberate — keep them verbatim, never reconstruct them.
+10. **A `customer` on a hit scopes it to that install.** Cite it with the customer named;
     never restate one customer's behaviour, fix or configuration as the product's.
 
 ## Modes
@@ -109,14 +107,11 @@ when setting `component`.
    `source_project_id` + `external_key`, so re-importing supersedes instead of
    duplicating. One page at a time — a whole-wiki import is a script, not an agent loop.
 
-### Creation — "open a dev ticket for this" / `/create-ticket`
+### Creation — "open a dev ticket for this"
 
-Pick the target with `list_source_projects` or `get_project_context`; a `tracker` project
-exists precisely to be created in. ALWAYS call `get_ado_work_item_schema` for that project
-and type before drafting — required fields differ per project and type, so never guess
-them. Draft the complete field set and call `create_ado_work_item`: the approval box is
-the user's review, and a denial means they want changes, not a retry. Pass `work_item_id`
-when the ticket came from one. Report the created URL.
+Draft it from what the conversation already holds and call `create_ado_work_item`; its
+review box is the user's, and they may take the draft into `/az new` to finish by hand.
+Report the created URL.
 
 ### Code consultation — "where/why does the code do X?" / `/code`
 

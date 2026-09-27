@@ -2,25 +2,31 @@
   import { onMount } from "svelte";
   import ChatView from "./lib/ChatView.svelte";
   import LibraryView from "./lib/library/LibraryView.svelte";
+  import WikiView from "./lib/wiki/WikiView.svelte";
   import AdminView from "./lib/admin/AdminView.svelte";
   import SettingsView from "./lib/settings/SettingsView.svelte";
-  import IntroSplash from "./lib/IntroSplash.svelte";
+  import FeedbackView from "./lib/feedback/FeedbackView.svelte";
   import SetupWizard from "./lib/SetupWizard.svelte";
   import LoginView from "./lib/LoginView.svelte";
+  import NotificationHost from "./lib/NotificationHost.svelte";
   import { session, initSession } from "./lib/session.svelte";
   import { navItems } from "./lib/nav";
-  import { reducedMotion } from "./lib/gsap";
-  import { wipeIn } from "./lib/motion";
+  import { wipeIn, jellyPress } from "./lib/motion";
   import StarField from "./lib/StarField.svelte";
   import Wordmark from "./lib/Wordmark.svelte";
-  import { loadThemeFromStorage } from "./lib/theme.svelte";
+  import { loadThemeFromStorage, themeState } from "./lib/theme.svelte";
   import { loadFonts } from "./lib/fonts.svelte";
-  import { navigate, section, startRouter } from "./lib/router.svelte";
+  import { router, openSection, section, startRouter } from "./lib/router.svelte";
+  import {
+    refreshNotifications,
+    startNotifications,
+  } from "./lib/notify.svelte";
   import { hints, pushScope, startKeys } from "./lib/keys.svelte";
-  import { navKey } from "./lib/keys/bindings.svelte";
+  import { navKey, actionKey } from "./lib/keys/bindings.svelte";
   import { loadVim, vimState, scrollBindings } from "./lib/vim.svelte";
   import { subnav, topActions } from "./lib/subnav.svelte";
-  import { HintRule, Panel, Scrollbar, Tabs } from "./lib/tui";
+  import { setScrollport } from "./lib/scrollport.svelte";
+  import { HintRule, Icon, Panel, Scrollbar, Tabs, TipHost, tip } from "./lib/tui";
 
   const nav = $derived(navItems());
 
@@ -41,7 +47,6 @@
     localStorage.setItem("tachy-skip-wizard", "1");
   }
 
-  let splash = $state(!reducedMotion());
   let navEl = $state<HTMLElement>();
   let mainEl = $state<HTMLElement>();
   let navRevealed = $state(false);
@@ -163,11 +168,12 @@
     return () => ro.disconnect();
   });
 
-  /* The subnav bar outlives a section change: an incoming view registers its
-     tabs before the outgoing view's disposer runs — deliberately, so the row
-     never blanks mid-switch — so the same element is reused and its indicator
-     would slide from wherever the old section's tab happened to sit. Sliding
-     is for moving within a section; arriving in one should just be there.
+  /* The subnav bar outlives a section change: the outgoing view's disposer
+     clears it a microtask late (see setSubnav), so the incoming view's tabs
+     replace it without the row blanking mid-switch. The same element is
+     reused, and its indicator would slide from wherever the old section's
+     tab happened to sit. Sliding is for moving within a section; arriving in
+     one should just be there.
 
      Two frames, not one. The bar is centred, so the recess ResizeObserver
      writing a new width re-centres it a frame after the switch, and the
@@ -185,13 +191,15 @@
     };
   });
 
+  $effect(() => setScrollport(mainEl ?? null));
+
   $effect(() => {
-    if (!navEl || splash || navRevealed) return;
+    if (!navEl || navRevealed) return;
     wipeIn(navEl.querySelectorAll("button"), () => (navRevealed = true));
   });
 
-  // hidden: four more entries would crowd the hint rule, and Settings › keybinds
-  // is the discovery surface for these now that the tabs no longer show digits.
+  // Hidden: four more entries would crowd the hint rule. Settings › keybinds
+  // lists them.
   $effect(() => {
     const items = nav;
     return pushScope(
@@ -199,10 +207,34 @@
         key: navKey(n.key, i),
         label: n.label,
         hidden: true,
-        run: () => navigate(`/${n.key}`),
+        run: () => openSection(n.key),
       })),
     );
   });
+
+  // Settings is not a tab, so navItems() assigns it no digit. It registers
+  // its own hidden binding.
+  $effect(() =>
+    pushScope([
+      {
+        key: actionKey("settings"),
+        label: "",
+        hidden: true,
+        inFields: true,
+        run: () => openSection("settings"),
+      },
+      {
+        key: actionKey("feedback"),
+        label: "",
+        hidden: true,
+        inFields: true,
+        run: () => {
+          sessionStorage.setItem("tachy-feedback-from", router.path);
+          openSection("feedback");
+        },
+      },
+    ]),
+  );
 
   // h/l walk the sections the digits jump to; ^d/^u page the main column.
   $effect(() => {
@@ -211,13 +243,17 @@
     const at = items.findIndex((n) => n.key === view);
     const go = (delta: number) => () => {
       const next = items[Math.min(items.length - 1, Math.max(0, at + delta))];
-      if (next && next.key !== view) navigate(`/${next.key}`);
+      if (next && next.key !== view) openSection(next.key);
     };
     return pushScope([
       { key: "h", label: "", hidden: true, run: go(-1) },
       { key: "l", label: "", hidden: true, run: go(1) },
       ...scrollBindings(() => mainEl),
     ]);
+  });
+
+  $effect(() => {
+    if (session.me) void refreshNotifications();
   });
 
   onMount(() => {
@@ -227,29 +263,29 @@
     initSession();
     const stopRouter = startRouter();
     const stopKeys = startKeys();
+    const stopNotify = startNotifications();
     return () => {
       stopRouter();
       stopKeys();
+      stopNotify();
     };
   });
 </script>
 
-{#if splash}
-  <IntroSplash onDone={() => (splash = false)} />
-{/if}
-
 <StarField />
 
-{#if import.meta.env.VITE_DEV_BADGE}
-  <div class="dev-badge">DEV</div>
+{#if session.config?.envBadge}
+  <div class="dev-badge">{session.config.envBadge.toUpperCase()}</div>
 {/if}
 
 {#if session.loading}
-  <!-- background only while the session resolves; the splash covers cold loads -->
+  <!-- background only while the session resolves -->
 {:else if showWizard}
   <SetupWizard onDone={() => {}} onSkip={skipWizard} />
 {:else if showLogin}
   <LoginView />
+{:else if view === "feedback"}
+  <FeedbackView />
 {:else}
   <div class="app">
     <div class="topbar">
@@ -260,13 +296,59 @@
             items={nav}
             active={view}
             anchor="--tab-nav"
-            onpick={(k) => navigate(`/${k}`)}
+            labels={themeState.navLabels}
+            onpick={openSection}
           />
         </Panel>
       </div>
-      <!-- Balances the wordmark's track so the pill sits on the true centre. -->
-      <div class="mark" aria-hidden="true"></div>
+      <!-- Empty: balances the wordmark's track so the pill sits on the true
+           centre. -->
+      <div class="mark"></div>
     </div>
+
+    <!-- Out of flow, so nothing about it can shift the window: settings is
+         not a place work happens, so it takes no slot in the bar. -->
+    <button
+      class="settings-btn"
+      class:on={view === "settings"}
+      aria-current={view === "settings" ? "page" : undefined}
+      aria-label="settings"
+      use:tip={"settings"}
+      onclick={(e) => {
+        openSection("settings");
+        if (e.detail !== 0) e.currentTarget.blur();
+      }}
+      use:jellyPress
+    >
+      <span class="lbl"
+        ><span class="br" aria-hidden="true">[</span
+        ><span class="ico"><Icon name="settings" weight={7} /></span
+        ><span class="br" aria-hidden="true">]</span
+        ></span
+      >
+    </button>
+
+    <!-- Stacked above settings: the pair of lone corner controls. -->
+    <button
+      class="settings-btn feedback-btn"
+      class:on={view === "feedback"}
+      aria-current={view === "feedback" ? "page" : undefined}
+      aria-label="feedback"
+      use:tip={"feedback"}
+      onclick={(e) => {
+        sessionStorage.setItem("tachy-feedback-from", router.path);
+        openSection("feedback");
+        if (e.detail !== 0) e.currentTarget.blur();
+      }}
+      use:jellyPress
+    >
+      <span class="lbl"
+        ><span class="br" aria-hidden="true">[</span
+        ><span class="ico"><Icon name="flag" weight={7} /></span
+        ><span class="br" aria-hidden="true">]</span
+        ></span
+      >
+    </button>
 
     <div
       class="window"
@@ -293,6 +375,7 @@
             active={sub.active}
             hotkeys="shift"
             anchor="--tab-sub"
+            labels={themeState.navLabels}
             onpick={sub.onpick}
           />
         </div>
@@ -308,6 +391,8 @@
           <main id="main-content" bind:this={mainEl}>
             {#if view === "library"}
               <LibraryView />
+            {:else if view === "wiki"}
+              <WikiView />
             {:else if view === "admin"}
               <AdminView />
             {:else if view === "settings"}
@@ -325,8 +410,12 @@
         </div>
       </Panel>
     </div>
+
+    <NotificationHost />
   </div>
 {/if}
+
+<TipHost />
 
 <style>
   /* Two objects on one centre line: a top row carrying the wordmark and the
@@ -396,6 +485,55 @@
     min-width: 0;
   }
 
+  /* A lone tab, styled like one of Tabs.svelte's own — same bracketed label,
+     same hover/focus behaviour — but with none of the machinery that only
+     makes sense among siblings: no anchor-positioned indicator to slide
+     between entries, since there is only ever this one. Pinned to the
+     viewport's lower-left corner with its line box on the window's bottom
+     edge. */
+  .settings-btn {
+    position: absolute;
+    left: var(--pad-2);
+    bottom: var(--pad-4);
+    z-index: 2;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.1em;
+    font: inherit;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    padding: 0 var(--pad-1);
+    line-height: 1;
+    white-space: nowrap;
+  }
+  /* Sits one line above settings, sharing its lone-control styling. */
+  .feedback-btn {
+    bottom: calc(var(--pad-4) + var(--row-h));
+  }
+  .settings-btn:hover {
+    color: var(--text);
+  }
+  .settings-btn.on {
+    color: var(--accent);
+  }
+  .settings-btn:focus-visible {
+    outline: none;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .settings-btn .br {
+    visibility: hidden;
+  }
+  .settings-btn.on .br {
+    visibility: visible;
+  }
+  .settings-btn .ico {
+    display: inline-block;
+    vertical-align: middle;
+  }
+
   /* Hugs its content rather than the frame, so it reads as a separate object
      floating above the window instead of a bar attached to it. */
   .navbar {
@@ -442,8 +580,9 @@
        strip left over it. See .bar in LibraryView. */
     --main-air: calc(var(--fs-xs) * 0.9);
     /* Right edge to recess wall: the corner the carved row keeps for its own
-       content. The recess takes everything else, out to the left edge. */
-    --sub-reserve: 15rem;
+       content. The recess takes everything else, out to the left edge. Sized
+       for the widest row it carries, cancel and save in capitals. */
+    --sub-reserve: 17rem;
     --sub-depth: calc(var(--sub-h-raw, 0px) + var(--sub-air));
   }
 
@@ -524,9 +663,13 @@
     gap: var(--pad-3);
     min-width: 0;
   }
-  /* Labels ellipsize rather than overrun the corner on a narrow window. */
+  /* Labels ellipsize rather than overrun the corner on a narrow window.
+     Capitals because lowercase words up here read as a caption, not as
+     something to press. */
   .top-acts :global(.btn) {
     min-width: 0;
+    text-transform: uppercase;
+    letter-spacing: var(--label-spacing);
   }
 
   /* The rule fills a full-width bar; a hugging pill has no edge to run to. */
@@ -607,6 +750,18 @@
     padding-block: var(--main-air);
   }
   main::-webkit-scrollbar {
+    display: none;
+  }
+
+  :global(.panel.grow:has(.bleed)) {
+    padding-inline: 0;
+    padding-bottom: 0;
+  }
+  main:has(:global(.bleed)) {
+    overflow: hidden;
+    padding: 0;
+  }
+  .content:has(:global(.bleed)) > :global(.scrollbar) {
     display: none;
   }
 

@@ -9,6 +9,7 @@ export {
 } from "./git";
 export type { TreeEntry } from "./git";
 export {
+  DEFAULT_CODE_EXTENSIONS,
   REPO_INDEX_STATUSES,
   linkRepo,
   listRepos,
@@ -18,9 +19,11 @@ export {
   deleteRepo,
   sweepInterruptedIndexes,
   repoCensus,
+  repoIssues,
 } from "./repos";
 export type { RepoInput, RepoRow, RepoIndexStatus } from "./repos";
 export { indexRepo, backfillCodeEmbeddings } from "./indexer";
 export type { IndexResult } from "./indexer";
 export { searchCode, readCodeFile } from "./search";
+export { repoToken } from "./jobs";
 export type { CodeSearchOptions } from "./search";

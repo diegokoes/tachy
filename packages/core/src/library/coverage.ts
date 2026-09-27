@@ -1,30 +1,7 @@
 import { sql } from "../infra/db";
+import type { CoverageCounts, CoverageNode, Coverage } from "@tachy/contract";
 
-export interface CoverageCounts {
-  entries: number;
-  docs: number;
-  articles: number;
-  reads: number;
-}
-
-export interface CoverageNode extends CoverageCounts {
-  id: string;
-  parent_id: string | null;
-  slug: string;
-  name: string;
-  /** The same four counts summed over this node and everything beneath it. */
-  subtree: CoverageCounts;
-  children: CoverageNode[];
-}
-
-export interface Coverage {
-  nodes: CoverageNode[];
-  /**
-   * Items with no component at all. The honest measure of whether the component
-   * tree describes the corpus: if most of it lands here, the tree does not.
-   */
-  unfiled: { entries: number; docs: number; articles: number };
-}
+export type { CoverageCounts, CoverageNode, Coverage };
 
 const zero = (): CoverageCounts => ({
   entries: 0,
@@ -44,26 +21,29 @@ const zero = (): CoverageCounts => ({
  */
 export async function coverage(productId: string): Promise<Coverage> {
   const [components, counts, reads, unfiled] = await Promise.all([
-    sql`
+    sql<Pick<CoverageNode, "id" | "parent_id" | "slug" | "name">[]>`
       select id, parent_id, slug, name
       from components where product_id = ${productId}
       order by slug
     `,
-    sql`
+    // One subquery per count rather than two left joins: joining entries and
+    // docs onto the same component multiplies them, entries × docs rows per
+    // component, for count(distinct) to throw away again.
+    sql<({ id: string } & Omit<CoverageCounts, "reads">)[]>`
       select c.id,
-             count(distinct e.id)::int as entries,
-             count(distinct d.id) filter (where d.kind = 'reference')::int as docs,
-             count(distinct d.id) filter (where d.kind = 'wiki')::int as articles
+             (select count(*)::int from knowledge_entries e
+               where e.component_id = c.id and e.status <> 'archived') as entries,
+             (select count(*)::int from reference_docs d
+               where d.component_id = c.id and d.status <> 'archived'
+                 and d.kind = 'reference') as docs,
+             (select count(*)::int from reference_docs d
+               where d.component_id = c.id and d.status <> 'archived'
+                 and d.kind = 'wiki') as articles
       from components c
-      left join knowledge_entries e
-        on e.component_id = c.id and e.status <> 'archived'
-      left join reference_docs d
-        on d.component_id = c.id and d.status <> 'archived'
       where c.product_id = ${productId}
-      group by c.id
     `,
     // Read volume follows the item to whichever component it is anchored to.
-    sql`
+    sql<{ component_id: string; reads: number }[]>`
       select coalesce(e.component_id, d.component_id) as component_id,
              coalesce(sum(v.views), 0)::int as reads
       from library_views v
@@ -73,7 +53,7 @@ export async function coverage(productId: string): Promise<Coverage> {
         and coalesce(e.product_id, d.product_id) = ${productId}
       group by 1
     `,
-    sql`
+    sql<Coverage["unfiled"][]>`
       select
         (select count(*)::int from knowledge_entries
           where product_id = ${productId} and component_id is null
@@ -88,20 +68,20 @@ export async function coverage(productId: string): Promise<Coverage> {
   ]);
 
   const countBy = new Map<string, CoverageCounts>();
-  for (const r of counts as any[])
+  for (const r of counts)
     countBy.set(r.id, {
       entries: r.entries,
       docs: r.docs,
       articles: r.articles,
       reads: 0,
     });
-  for (const r of reads as any[]) {
+  for (const r of reads) {
     const c = countBy.get(r.component_id);
     if (c) c.reads = r.reads;
   }
 
   const nodes = new Map<string, CoverageNode>();
-  for (const c of components as any[])
+  for (const c of components)
     nodes.set(c.id, {
       id: c.id,
       parent_id: c.parent_id,
@@ -139,5 +119,5 @@ export async function coverage(productId: string): Promise<Coverage> {
   };
   for (const r of roots) roll(r);
 
-  return { nodes: roots, unfiled: (unfiled as any[])[0] };
+  return { nodes: roots, unfiled: unfiled[0] };
 }

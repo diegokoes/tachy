@@ -7,7 +7,7 @@ import {
   type ArtifactSpec,
 } from "@tachy/core";
 import { createApp } from "../packages/api/src/app";
-import { buildPrompt } from "../packages/api/src/routes/agent";
+import { buildPrompt } from "../packages/api/src/turn-config";
 import { server } from "../packages/mcp/src/index";
 import { loginCookie, resetData, sql } from "./helpers";
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { sql } from "../infra/db";
+import { sql, jsonb } from "../infra/db";
 import { badInput } from "../infra/errors";
 import {
   AGENT_EFFORTS,
@@ -87,7 +87,7 @@ export async function setPref(
   const parsed = parsePref(key, value);
   await assertCanWriteScope(actorUserId, scope, scopeId);
   await upsertScoped("preferences", scope, scopeId, key, {
-    value: sql.json(parsed as never),
+    value: jsonb(parsed),
   });
 }
 

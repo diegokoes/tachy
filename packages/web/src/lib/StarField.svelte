@@ -2,14 +2,12 @@
   import { onMount } from "svelte";
   import { gsap, reducedMotion } from "./gsap";
 
-  /* The wallpaper used to be one <pre> holding a ~650-column ASCII starfield.
-     It read well but it was a single text node, so nothing in it could move
-     independently. These are the same glyphs, one span each, scattered on a
-     jittered grid so the field still looks hand-placed rather than tiled. */
+  /** One span per glyph, so each can move on its own, scattered on a jittered
+   *  grid so the field looks hand-placed rather than tiled. */
   const GLYPHS = ["·", "·", "·", "*", "+", "'"];
-  /* Density is the whole difference between "a sky" and "a few specks". At 220
-     over a 1920-wide viewport the mean spacing was ~97px, so the ~160px gutter
-     either side of the app window held one sparse column and read as empty. */
+  /** Density decides whether this reads as a sky or a few specks. At 220 on a
+   *  1920px viewport the mean spacing is ~97px, and the ~160px gutter beside
+   *  the app window holds one sparse column, which reads as empty. */
   const COUNT = 460;
   const MOTES = 22;
   /** Cursor influence, px. Also the bucket size, so a move tests ~9 buckets. */
@@ -25,6 +23,10 @@
     xTo?: (v: number) => void;
     yTo?: (v: number) => void;
   };
+
+  /** The feedback view mounts its own field with this on, so entering it reads
+   *  as crossing into a new space: the stars twinkle faster and dip harder. */
+  let { intense = false }: { intense?: boolean } = $props();
 
   const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
@@ -78,10 +80,11 @@
         if (!s.el) continue;
         gsap.to(s.el, {
           // A twinkle, not a blink: dipping to a quarter made half the field
-          // read as flickering out rather than breathing.
-          opacity: s.dim * rand(0.5, 0.75),
-          duration: rand(3, 7),
-          delay: rand(0, 6),
+          // read as flickering out rather than breathing. Intense dips further
+          // and cycles faster, so the sky is visibly more alive.
+          opacity: s.dim * (intense ? rand(0.3, 0.7) : rand(0.5, 0.75)),
+          duration: intense ? rand(1.1, 3) : rand(3, 7),
+          delay: intense ? rand(0, 2.5) : rand(0, 6),
           repeat: -1,
           yoyo: true,
           ease: "sine.inOut",

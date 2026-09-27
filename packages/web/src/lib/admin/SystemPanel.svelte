@@ -9,8 +9,9 @@
   import Icon from "../tui/Icon.svelte";
   import { errText } from "../resource.svelte";
   import type { SystemInfo } from "./rows";
+  import { system as shared } from "./systemState.svelte";
 import { csv } from "../fields";
-  import { GroupHead } from "../tui";
+  import { Button, GroupHead } from "../tui";
 
   let system = $state<SystemInfo | null>(null);
   let loading = $state(true);
@@ -24,6 +25,9 @@ import { csv } from "../fields";
       agent_model: system.settings.agent_model.value,
       allowed_models: system.settings.allowed_models.value.join(", "),
       org_name: system.settings.org_name.value ?? "",
+      agent_slot_cap: String(system.settings.agent_slot_cap.value),
+      copilot_slot_weight: String(system.settings.copilot_slot_weight.value),
+      agent_queue_max: String(system.settings.agent_queue_max.value),
     };
   }
 
@@ -46,6 +50,9 @@ import { csv } from "../fields";
       const res = await api.put<{ settings: SystemInfo["settings"] }>(`/settings/${key}`, { value });
       if (system) system = { ...system, settings: res.settings };
       syncDraft();
+      /* The overview behind this dialog reads its own copy; refresh it so the
+         setting shows there the moment the dialog closes. */
+      void shared.reload();
       
       if (key === "deployment_profile") await initSession();
     } catch (e) {
@@ -60,14 +67,13 @@ import { csv } from "../fields";
 {#if loading}<p class="muted">Loading…</p>{/if}
 
 {#if system}
-  <GroupHead label="runtime settings" />
   <table>
     <thead><tr><th>setting</th><th>value</th>
-      <th class="tip" title="db: set here. env: falling back to the environment variable. default: built-in.">source</th>
+      <th class="tip" title="db: set here. env: environment variable. default: built-in.">source</th>
     </tr></thead>
     <tbody>
       <tr>
-        <td class="tip" title="Engineering/repositories reads product→repository, team→organization and hides customers. Display only: slugs and the agent contract never change.">Deployment profile</td>
+        <td class="tip" title="engineering: product→repository, team→organization, customers hidden. Labels only.">Deployment profile</td>
         <td>
           <AsciiSelect value={system.settings.deployment_profile.value}
             options={[
@@ -79,7 +85,7 @@ import { csv } from "../fields";
         <td><span class="badge src-{system.settings.deployment_profile.source}">{system.settings.deployment_profile.source}</span></td>
       </tr>
       <tr>
-        <td class="tip" title="Scrubs PII/secrets from everything sent to the LLM: all connections, pasted context and retrieved results. The database keeps raw data.">PII / secret redaction</td>
+        <td class="tip" title="Scrubs PII and secrets from all LLM input. Database keeps raw data.">PII / secret redaction</td>
         <td>
           <label class="check">
             <Checkbox
@@ -93,14 +99,14 @@ import { csv } from "../fields";
                 size="1em"
                 weight={7}
               />
-              {system.settings.redaction_global.value ? "on, at the LLM boundary" : "off, per-connection opt-in only"}
+              {system.settings.redaction_global.value ? "on: LLM boundary" : "off: per-connection opt-in"}
             </span>
           </label>
         </td>
         <td><span class="badge src-{system.settings.redaction_global.source}">{system.settings.redaction_global.source}</span></td>
       </tr>
       <tr>
-        <td class="tip" title="Which backend runs the chat. Claude: Anthropic API key or Claude Code login. Copilot: token or copilot CLI login.">Agent provider</td>
+        <td class="tip" title="Chat backend. claude: API key or Claude Code login. copilot: token or CLI login.">Agent provider</td>
         <td>
           <AsciiSelect value={system.settings.agent_provider.value}
             options={PROVIDER_OPTIONS}
@@ -113,7 +119,7 @@ import { csv } from "../fields";
         <td class="edit-cell">
           <input bind:value={draft.agent_model} />
           {#if draft.agent_model !== system.settings.agent_model.value}
-            <button class="mini" onclick={() => saveSetting("agent_model", draft.agent_model.trim())}>apply</button>
+            <Button size="sm" onclick={() => saveSetting("agent_model", draft.agent_model.trim())}>apply</Button>
           {/if}
         </td>
         <td><span class="badge src-{system.settings.agent_model.source}">{system.settings.agent_model.source}</span></td>
@@ -128,11 +134,11 @@ import { csv } from "../fields";
         <td><span class="badge src-{system.settings.agent_effort.source}">{system.settings.agent_effort.source}</span></td>
       </tr>
       <tr>
-        <td class="tip" title="Comma-separated; empty = unrestricted.">Model allowlist</td>
+        <td class="tip" title="Comma-separated. Empty: unrestricted.">Model allowlist</td>
         <td class="edit-cell">
           <input bind:value={draft.allowed_models} placeholder="unrestricted" />
           {#if draft.allowed_models !== system.settings.allowed_models.value.join(", ")}
-            <button class="mini" onclick={() => saveSetting("allowed_models", csv(draft.allowed_models))}>apply</button>
+            <Button size="sm" onclick={() => saveSetting("allowed_models", csv(draft.allowed_models))}>apply</Button>
           {/if}
         </td>
         <td><span class="badge src-{system.settings.allowed_models.source}">{system.settings.allowed_models.source}</span></td>
@@ -142,39 +148,44 @@ import { csv } from "../fields";
         <td class="edit-cell">
           <input bind:value={draft.org_name} />
           {#if draft.org_name !== (system.settings.org_name.value ?? "") && draft.org_name.trim()}
-            <button class="mini" onclick={() => saveSetting("org_name", draft.org_name.trim())}>apply</button>
+            <Button size="sm" onclick={() => saveSetting("org_name", draft.org_name.trim())}>apply</Button>
           {/if}
         </td>
         <td><span class="badge src-{system.settings.org_name.source}">{system.settings.org_name.source}</span></td>
       </tr>
+      <tr>
+        <td class="tip" title="Total slots across running turns. Claude turn: 1 slot. Over cap: queued.">Chat slot cap</td>
+        <td class="edit-cell">
+          <input inputmode="numeric" bind:value={draft.agent_slot_cap} />
+          {#if draft.agent_slot_cap !== String(system.settings.agent_slot_cap.value) && draft.agent_slot_cap !== ""}
+            <Button size="sm" onclick={() => saveSetting("agent_slot_cap", Number(draft.agent_slot_cap))}>apply</Button>
+          {/if}
+        </td>
+        <td><span class="badge src-{system.settings.agent_slot_cap.source}">{system.settings.agent_slot_cap.source}</span></td>
+      </tr>
+      <tr>
+        <td class="tip" title="Slots per Copilot turn.">Copilot turn weight</td>
+        <td class="edit-cell">
+          <input inputmode="numeric" bind:value={draft.copilot_slot_weight} />
+          {#if draft.copilot_slot_weight !== String(system.settings.copilot_slot_weight.value) && draft.copilot_slot_weight !== ""}
+            <Button size="sm" onclick={() => saveSetting("copilot_slot_weight", Number(draft.copilot_slot_weight))}>apply</Button>
+          {/if}
+        </td>
+        <td><span class="badge src-{system.settings.copilot_slot_weight.source}">{system.settings.copilot_slot_weight.source}</span></td>
+      </tr>
+      <tr>
+        <td class="tip" title="Max queued turns. Over max: busy.">Chat queue length</td>
+        <td class="edit-cell">
+          <input inputmode="numeric" bind:value={draft.agent_queue_max} />
+          {#if draft.agent_queue_max !== String(system.settings.agent_queue_max.value) && draft.agent_queue_max !== ""}
+            <Button size="sm" onclick={() => saveSetting("agent_queue_max", Number(draft.agent_queue_max))}>apply</Button>
+          {/if}
+        </td>
+        <td><span class="badge src-{system.settings.agent_queue_max.source}">{system.settings.agent_queue_max.source}</span></td>
+      </tr>
     </tbody>
   </table>
 
-  <!-- The server sends `env` to admins only, so this whole table is theirs. -->
-  {#if system.env}
-    {@const e = system.env}
-    <GroupHead label="environment (read-only, set in .env)" />
-    <table>
-      <thead><tr><th>setting</th><th>value</th><th>env var</th></tr></thead>
-      <tbody>
-        <tr>
-          <td>Auth</td>
-          <td>{e.auth_mode}{e.auth_mode === "open" ? " (wizard/password login takes over once set up)" : ""}</td>
-          <td class="muted">OIDC_* {e.oidc_configured ? "(set)" : "(unset)"} · TACHY_API_TOKEN {e.api_token_set ? "(set)" : "(unset)"}</td>
-        </tr>
-        <tr>
-          <td>Session secret</td>
-          <td>{e.session_secret_set ? "set" : "not set - ephemeral; sessions reset on restart"}</td>
-          <td class="muted">TACHY_SESSION_SECRET</td>
-        </tr>
-        <tr><td>Anthropic API key</td><td>{e.anthropic_api_key_set ? "set" : "not set (falls back to the server's Claude Code login)"}</td><td class="muted">ANTHROPIC_API_KEY</td></tr>
-        <tr><td>Copilot GitHub token</td><td>{e.copilot_token_set ? "set" : "not set (falls back to the server's copilot CLI login)"}</td><td class="muted">COPILOT_GITHUB_TOKEN</td></tr>
-        <tr><td>Attribution email (standalone MCP)</td><td>{e.user_email ?? "(anonymous)"}</td><td class="muted">TACHY_USER_EMAIL</td></tr>
-        <tr><td>Upload dir</td><td>{e.upload_dir ?? "(OS tmp dir)"}</td><td class="muted">TACHY_UPLOAD_DIR</td></tr>
-        <tr><td>API port</td><td>{e.port}</td><td class="muted">PORT</td></tr>
-      </tbody>
-    </table>
-  {/if}
 {/if}
 
 <style>

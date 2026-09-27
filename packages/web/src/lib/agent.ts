@@ -8,10 +8,19 @@ export interface ChatBody {
   command?: { name: string; args: string };
 }
 
+export interface SubcommandMeta {
+  name: string;
+  args: string;
+  description: string;
+  /** Handled in the browser; sending it would start no turn. */
+  client?: boolean;
+}
+
 export interface BuiltinCommandMeta {
   name: string;
   args: string;
   description: string;
+  subcommands?: SubcommandMeta[];
 }
 
 export interface CommandArtifactMeta {
@@ -35,6 +44,17 @@ export async function getCommands(): Promise<{
   return res.json();
 }
 
+/** The server declined to start a turn: 409 carries the turn already running. */
+export class ChatRefused extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+    readonly turnId?: string,
+  ) {
+    super(message);
+  }
+}
+
 export interface SseFrame {
   event: string;
   data: Record<string, unknown>;
@@ -54,7 +74,20 @@ export async function* chatStream(
     onUnauthorized();
     return;
   }
-  if (!res.ok || !res.body) throw new Error(`agent chat failed: ${res.status}`);
+  if (!res.ok) {
+    const body = (await Promise.resolve()
+      .then(() => res.json())
+      .catch(() => ({}))) as {
+      error?: string;
+      turnId?: string;
+    };
+    throw new ChatRefused(
+      res.status,
+      body.error ?? `agent chat failed: ${res.status}`,
+      body.turnId,
+    );
+  }
+  if (!res.body) throw new Error(`agent chat failed: ${res.status}`);
 
   const reader = res.body.getReader();
   const dec = new TextDecoder();
@@ -124,13 +157,31 @@ export async function approve(
     );
 }
 
+export async function stopTurn(turnId: string): Promise<void> {
+  const res = await fetch("/api/agent/stop", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ turnId }),
+  });
+  if (res.status === 401) {
+    onUnauthorized();
+    return;
+  }
+  if (!res.ok && res.status !== 404)
+    throw new Error(`could not stop the turn (${res.status})`);
+}
+
 export async function uploadDoc(
   file: File,
-): Promise<{ path: string; filename: string }> {
+): Promise<{ path: string; filename: string; image: boolean }> {
   const fd = new FormData();
   fd.append("file", file);
   const res = await fetch("/api/agent/uploads", { method: "POST", body: fd });
   if (res.status === 401) onUnauthorized();
-  if (!res.ok) throw new Error(`upload failed: ${res.status}`);
-  return res.json();
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok)
+    throw new Error(
+      `could not attach ${file.name}: ${body?.error ?? `upload failed (${res.status} ${res.statusText})`}`,
+    );
+  return { ...body, image: file.type.startsWith("image/") };
 }

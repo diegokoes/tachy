@@ -26,11 +26,17 @@ export type TextSize = (typeof TEXT_SIZES)[number]["key"];
 
 const DEFAULT_SCALE = 1;
 
+/** How the nav and subnav tabs are labelled. One setting covers both bars. */
+export const NAV_LABELS = ["text", "both", "icons"] as const;
+
+export type NavLabels = (typeof NAV_LABELS)[number];
+
 export const themeState = $state({
   theme: "dark" as Theme,
   accentColor: ACCENT_DEFAULTS.dark,
   accentCustomized: false,
   fontScale: DEFAULT_SCALE as number,
+  navLabels: "text" as NavLabels,
 });
 
 function applyAccent(v: string) {
@@ -72,6 +78,11 @@ export function setFontScale(v: number) {
   localStorage.setItem("tachy-font-scale", String(s));
 }
 
+export function setNavLabels(v: NavLabels) {
+  themeState.navLabels = v;
+  localStorage.setItem("tachy-nav-labels", v);
+}
+
 export function loadThemeFromStorage() {
   const savedTheme = localStorage.getItem("tachy-theme") as Theme | null;
   if (savedTheme === "light" || savedTheme === "dark") {
@@ -96,4 +107,8 @@ export function loadThemeFromStorage() {
         ).scale
       : DEFAULT_SCALE;
   setFontScale(nearest);
+
+  const labels = localStorage.getItem("tachy-nav-labels");
+  if (NAV_LABELS.includes(labels as NavLabels))
+    themeState.navLabels = labels as NavLabels;
 }

@@ -84,13 +84,20 @@
     gap: var(--pad-1);
     min-width: 0;
   }
+  /* Cased in CSS, not in the copy — a screen reader still hears a word. */
   .lbl {
-    font-size: var(--fs-sm);
+    font-size: var(--fs-xs);
     letter-spacing: var(--label-spacing);
+    text-transform: uppercase;
     color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  /* The mark's hit area is taller than a label line; it overhangs rather than
+     heightening the row, so a field with one lines up with its neighbours. */
+  .lblrow > :global(.mark) {
+    margin-block: -0.25rem;
   }
   .req {
     color: var(--accent);

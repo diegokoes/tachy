@@ -1,5 +1,6 @@
 import type { CompactStats } from "./chat/CompactPanel.svelte";
 import type { OutputFile } from "./chat/OutputCard.svelte";
+import type { CreatedTicket } from "@tachy/contract";
 
 export type EntryData =
   | { kind: "user"; text: string }
@@ -18,7 +19,15 @@ export type EntryData =
       raw?: string;
       status: "pending" | "approved" | "denied";
     }
-  | { kind: "error"; text: string };
+  /** Made from the composer, with no turn behind it. */
+  | {
+      kind: "ticket";
+      ticket: CreatedTicket;
+      icon: string | null;
+      color: string | null;
+    }
+  | { kind: "error"; text: string }
+  | { kind: "running"; turnId: string; text: string; stopped: boolean };
 
 /** Stable per-entry key — index keys break on the export_table splice. */
 export type Entry = EntryData & { key: number };
@@ -38,6 +47,8 @@ export const chat = $state({
   busy: false,
   sessionId: undefined as string | undefined,
   turnId: undefined as string | undefined,
-  uploads: [] as { path: string; filename: string }[],
+  /** Place in the server's queue while every chat slot is taken. */
+  queuePosition: null as number | null,
+  uploads: [] as { path: string; filename: string; image: boolean }[],
   artifact: undefined as { id: string; title: string } | undefined,
 });

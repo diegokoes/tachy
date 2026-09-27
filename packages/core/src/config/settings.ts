@@ -9,7 +9,7 @@ import type {
   AgentEffort,
   DeploymentProfile,
 } from "@tachy/contract";
-import { sql } from "../infra/db";
+import { sql, jsonb } from "../infra/db";
 import { badInput } from "../infra/errors";
 
 // Owned by the contract, because the SPA offers them and the API validates
@@ -25,6 +25,9 @@ const SETTING_SCHEMAS = {
   allowed_models: z.array(z.string().min(1)),
   org_name: z.string().min(1),
   deployment_profile: z.enum(DEPLOYMENT_PROFILES),
+  agent_slot_cap: z.number().int().min(1).max(500),
+  copilot_slot_weight: z.number().int().min(1).max(32),
+  agent_queue_max: z.number().int().min(0).max(500),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;
@@ -62,7 +65,7 @@ export async function setSetting(key: string, value: unknown): Promise<void> {
       `invalid value for '${key}': ${parsed.error.issues.map((i) => i.message).join("; ")}`,
     );
   await sql`
-    insert into settings (key, value) values (${key}, ${sql.json(parsed.data as never)})
+    insert into settings (key, value) values (${key}, ${jsonb(parsed.data)})
     on conflict (key) do update set value = excluded.value, updated_at = now()
   `;
   cache = undefined;
@@ -81,6 +84,9 @@ export interface EffectiveSettings {
   allowed_models: { value: string[]; source: SettingSource };
   org_name: { value: string | null; source: SettingSource };
   deployment_profile: { value: DeploymentProfile; source: SettingSource };
+  agent_slot_cap: { value: number; source: SettingSource };
+  copilot_slot_weight: { value: number; source: SettingSource };
+  agent_queue_max: { value: number; source: SettingSource };
 }
 
 export async function effectiveSettings(): Promise<EffectiveSettings> {
@@ -133,6 +139,9 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
       undefined,
       "support",
     ),
+    agent_slot_cap: pick(db.agent_slot_cap, undefined, 15),
+    copilot_slot_weight: pick(db.copilot_slot_weight, undefined, 4),
+    agent_queue_max: pick(db.agent_queue_max, undefined, 10),
   };
 }
 

@@ -1,3 +1,26 @@
+import type {
+  Coverage,
+  WikiCategoryRow,
+  WikiGapItem,
+  WikiGapKind,
+} from "@tachy/contract";
+
+export type {
+  Coverage,
+  CoverageCounts,
+  CoverageNode,
+  FieldSpec,
+  WikiArticleRef,
+  WikiCategoryComponent,
+  WikiGapItem,
+  WikiListRow,
+  WikiSearchHit,
+  WikiToc,
+  WikiTocNode,
+  WorkItemSchema,
+} from "@tachy/contract";
+export type WikiCategory = WikiCategoryRow;
+
 export interface KnowledgeRow {
   id: string;
   work_item_id: string | null;
@@ -68,87 +91,33 @@ export interface ViewSummary {
   history: { day: string; views: number }[];
 }
 
-export interface WikiCategory {
+export interface WikiGap {
   id: string;
   product_id: string | null;
-  parent_id: string | null;
-  slug: string;
-  name: string;
-  description: string | null;
-  ordinal: number;
+  kind: WikiGapKind;
+  key: string;
+  subject: string;
+  score: number;
+  evidence: {
+    component?: string | null;
+    slug?: string;
+    entries?: number;
+    docs?: number;
+    items?: WikiGapItem[];
+    titles?: string[];
+    pages?: number;
+    since?: string;
+    updated_at?: string;
+  };
+  first_seen_at: string;
+  last_seen_at: string;
+  dismissed_at: string | null;
+  dismissed_score: number | null;
 }
 
-export interface WikiArticleRef {
-  id: string;
-  slug: string | null;
-  title: string;
-  status: string;
-  ordinal: number;
-  updated_at: string;
-  stale?: number;
-}
-
-export interface WikiTocNode extends WikiCategory {
-  articles: WikiArticleRef[];
-  children: WikiTocNode[];
-}
-
-export interface WikiToc {
-  categories: WikiTocNode[];
-  uncategorised: WikiArticleRef[];
-}
-
-/**
- * One work-item field, as the server projects it. Mirrors the shape in
- * `@tachy/source-azure-devops`; the SPA cannot import that package, which pulls
- * in core.
- */
-export interface FieldSpec {
-  reference_name: string;
-  name: string;
-  required: boolean;
-  allowed_values?: unknown[];
-  allowed_values_truncated?: true;
-  default_value?: unknown;
-  type?: string;
-  read_only?: true;
-  is_identity?: true;
-  help_text?: string;
-}
-
-export interface WorkItemSchema {
-  project: string;
-  type: string;
-  fields: FieldSpec[];
-  config_defaults: Record<string, unknown>;
-}
-
-export interface CoverageCounts {
-  entries: number;
-  docs: number;
-  articles: number;
-  reads: number;
-}
-
-export interface CoverageNode extends CoverageCounts {
-  id: string;
-  parent_id: string | null;
-  slug: string;
-  name: string;
-  subtree: CoverageCounts;
-  children: CoverageNode[];
-}
-
-export interface Coverage {
-  nodes: CoverageNode[];
-  unfiled: { entries: number; docs: number; articles: number };
-}
-
-export interface WikiListRow {
-  product_id: string | null;
-  product_slug: string | null;
-  product_name: string | null;
-  articles: number;
+export interface WikiGaps {
+  gaps: WikiGap[];
+  coverage: Coverage | null;
 }
 
 export interface ReferenceRow {
@@ -201,13 +170,4 @@ export interface ReferenceLineageRow {
   superseded_by?: string | null;
   created_at?: string;
   updated_at?: string;
-}
-
-export interface NamedRow {
-  id?: string;
-  slug?: string;
-  name?: string;
-  description?: string | null;
-  aliases?: string[] | null;
-  [k: string]: unknown;
 }

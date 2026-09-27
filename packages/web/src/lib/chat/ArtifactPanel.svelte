@@ -3,15 +3,15 @@
   import { api } from "../api";
   import { chat } from "../chatState.svelte";
   import { session } from "../session.svelte";
-  import type { NamedRow } from "../types";
+  import type { TeamRow } from "@tachy/contract";
   import {
     ArtifactMark,
     Button,
     Field,
     Modal,
     Select,
-    G,
     Icon,
+    type IconName,
   } from "../tui";
   import OutputSpecEditor, {
     emptyColumn,
@@ -21,8 +21,16 @@
     type OutputSpec,
   } from "./OutputSpecEditor.svelte";
   import ArtifactThread from "./ArtifactThread.svelte";
-  import { clearGlow, glow, jolt, settle, spin, tweenValue } from "../motion";
-  import { nextNavKey } from "../nav";
+  import {
+    clearGlow,
+    glow,
+    hoverRise,
+    jolt,
+    settle,
+    spin,
+    tweenValue,
+  } from "../motion";
+  import { actionKey, keyLabel } from "../keys/bindings.svelte";
   import { pushScope } from "../keys.svelte";
 
   let tabBtn = $state<HTMLButtonElement>();
@@ -58,6 +66,11 @@
     team: "team",
     global: "global",
   };
+  const SCOPE_ICONS: Record<ArtifactScope, IconName> = {
+    user: "user",
+    team: "team",
+    global: "global",
+  };
   const grouped = $derived(
     (["user", "team", "global"] as ArtifactScope[])
       .map((scope) => ({ scope, rows: items.filter((a) => a.scope === scope) }))
@@ -79,10 +92,8 @@
   async function loadTeams() {
     if (session.me?.role === "admin") {
       try {
-        const rows = await api.get<NamedRow[]>("/teams");
-        teams = rows
-          .filter((t) => t.id && t.slug)
-          .map((t) => ({ id: t.id as string, slug: t.slug as string }));
+        const rows = await api.get<TeamRow[]>("/teams");
+        teams = rows.map((t) => ({ id: t.id, slug: t.slug }));
         return;
       } catch {}
     }
@@ -101,15 +112,12 @@
     }
   }
 
-  // Picks up where the tab bar's digits stop, so the row reads 1..n, artifacts.
-  const hotkey = $derived(nextNavKey());
+  const hotkey = $derived(actionKey("artifacts"));
 
-  // hidden: the tab carries the digit itself, same as the nav bar.
   $effect(() => {
-    const key = String(hotkey);
     return pushScope([
       {
-        key,
+        key: hotkey,
         label: "artifacts",
         hidden: true,
         run: () => {
@@ -212,10 +220,57 @@
     return session.me?.role === "admin";
   }
 
+  /**
+   * Carries the tab up to the body while `on`, pinned where it sat, and back
+   * home after. The picker is portaled to the body, and nothing left inside
+   * `.app`'s stacking context can rank above its scrim, however high its
+   * z-index. Only while lifted: at rest it has to stay under whatever the app
+   * draws over the transcript.
+   *
+   * Moving the button drops its focus, so the tab never comes home from a
+   * close still holding it. That is deliberate: the picker handed focus back
+   * on Escape, and the keyboard-driven close rang the tab with its focus ring.
+   */
+  function raise(node: HTMLElement, on: boolean) {
+    const home = node.parentElement!;
+    const edge = node.offsetParent ?? home;
+    const pin = () => {
+      const box = edge.getBoundingClientRect();
+      node.style.top = `${box.top + box.height / 2}px`;
+      node.style.left = `${box.right - node.offsetWidth}px`;
+    };
+    const set = (up: boolean) => {
+      if (up === (node.parentElement !== home)) return;
+      if (up) {
+        document.body.appendChild(node);
+        node.style.position = "fixed";
+        node.style.right = "auto";
+        pin();
+        window.addEventListener("resize", pin);
+      } else {
+        window.removeEventListener("resize", pin);
+        node.style.removeProperty("position");
+        node.style.removeProperty("right");
+        node.style.removeProperty("top");
+        node.style.removeProperty("left");
+        home.appendChild(node);
+      }
+    };
+    set(on);
+    return {
+      update: set,
+      destroy() {
+        window.removeEventListener("resize", pin);
+        node.remove();
+      },
+    };
+  }
+
   const teamSlugFor = (teamId: string | null) =>
     teams.find((t) => t.id === teamId)?.slug;
 
   let editorOpen = $state(false);
+  const lifted = $derived((open || openT > 0) && !editorOpen);
   let fetching = $state<string | null>(null);
   let editorMode = $state<"create" | "edit">("create");
   let editorBusy = $state(false);
@@ -436,13 +491,19 @@
      until the thread has finished retracting, and a tab that dropped under it
      on the first frame of the close would blink out while the wire was still
      travelling towards it. openT is 0 again only once the hexagon has shut. -->
-<div class="edge-slot" class:lifted={open || openT > 0}>
+<div class="edge-home">
+<div
+  class="edge-slot"
+  class:lifted
+  use:raise={lifted}
+>
   <button
     bind:this={tabBtn}
+    use:hoverRise={open}
     class="edge-tab"
     class:active={open || !!chat.artifact}
     onclick={toggle}
-    title="Artifacts: reusable prompt templates to attach as context ({hotkey})"
+    title="Artifacts: reusable prompt templates to attach as context ({keyLabel(hotkey)})"
     aria-label="Artifacts"
     aria-expanded={open}
   >
@@ -462,6 +523,7 @@
       ><ArtifactMark size="1em" {spread} /></span
     >
   </button>
+</div>
 </div>
 
 {#if open}
@@ -495,7 +557,10 @@
             <p class="muted empty">No artifacts yet</p>
           {/if}
           {#each grouped as g (g.scope)}
-            <div class="scope-head">{SCOPE_LABELS[g.scope]}</div>
+            <div class="scope-head">
+              <Icon name={SCOPE_ICONS[g.scope]} size="0.95em" />
+              {SCOPE_LABELS[g.scope]}
+            </div>
             <ul class="art-list">
               {#each g.rows as a (a.id)}
                 <li
@@ -505,7 +570,7 @@
                 >
                   <button class="art-pick" onclick={() => select(a)}>
                     <span class="art-title">
-                      {chat.artifact?.id === a.id ? `${G.selected} ` : ""}{a.title}
+                      {#if chat.artifact?.id === a.id}<span class="sel"><Icon name="selected" size="0.7em" weight={10} /></span>{/if}{a.title}
                       {#if a.spec?.output}<span
                           class="art-out"
                           title="produces a {a.spec.output.format} file"
@@ -520,6 +585,7 @@
                         tone="info"
                         square
                         icon="edit"
+                        iconSize="1.5em"
                         title="edit"
                         aria-label="edit"
                         busy={fetching === a.id}
@@ -529,7 +595,9 @@
                         variant="ghost"
                         tone="danger"
                         square
-                        icon={armedDelete === a.id ? "check" : "cancel"}
+                        icon={armedDelete === a.id ? "confirm" : "delete"}
+                        morph
+                        iconSize="1.5em"
                         title={armedDelete === a.id ? "click again to delete" : "delete"}
                         aria-label="delete"
                         onclick={() => remove(a)}
@@ -543,7 +611,12 @@
         </div>
   </Modal>
 
-  <ArtifactThread bind:this={thread} from={pickerEl} to={tabFrame} />
+  <ArtifactThread
+    bind:this={thread}
+    from={pickerEl}
+    to={tabFrame}
+    buried={editorOpen}
+  />
 {/if}
 
 {#if editorOpen}
@@ -551,6 +624,7 @@
     title={editorMode === "create" ? "new artifact" : "edit artifact"}
     width="60rem"
     confirmLabel="save"
+    confirmIcon={editorMode === "create" ? "create" : "save"}
     busy={editorBusy}
     onConfirm={save}
     onCancel={() => (editorOpen = false)}
@@ -594,6 +668,12 @@
 {/if}
 
 <style>
+  /* A box of its own would become the tab's containing block; without one,
+     the tab still pins to the transcript's edge. The wrapper is only a place
+     to come home to. */
+  .edge-home {
+    display: contents;
+  }
   .edge-slot {
     position: absolute;
     right: 0;
@@ -687,6 +767,9 @@
   }
 
   .scope-head {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-1);
     margin-top: var(--pad-2);
     color: var(--muted);
     font-size: var(--fs-xs);
@@ -720,7 +803,13 @@
     padding: var(--pad-2) var(--pad-3);
     background: var(--panel);
   }
-  .art-title { font-size: var(--fs-sm); padding-right: var(--pad-4); }
+  .art-title { font-size: var(--fs-sm); }
+  .sel {
+    display: inline-flex;
+    vertical-align: middle;
+    margin-right: 0.5ch;
+    color: var(--accent);
+  }
   .art-out {
     margin-left: var(--pad-1);
     padding: 0 var(--pad-1);
@@ -737,19 +826,26 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  /* Edit and delete belong to the row under the pointer, not to all of them at
-     once — a grid of cards each wearing two buttons reads as a toolbar. Hidden
-     by opacity rather than display so they keep their place in the tab order,
-     and :focus-within brings them back for anyone arriving by keyboard.
-     `armed` keeps a delete waiting for its second click visible after the
-     pointer has moved on. */
+  /* The same overlay the admin tables raise over a row: edit and delete belong
+     to the card under the pointer, not to all of them at once, so they fade in
+     across the whole card over a scrim rather than perching in its corner.
+
+     opacity, not display, so the buttons keep their place in the tab order and
+     :focus-within raises them for anyone arriving by keyboard. `armed` keeps a
+     delete waiting for its second click visible after the pointer has left.
+
+     The overlay takes no pointer events, only the marks on it do — the card
+     underneath stays clickable everywhere else, which is how attaching an
+     artifact still works while its actions are showing. */
   .art-actions {
     position: absolute;
-    top: var(--pad-1);
-    right: var(--pad-1);
+    inset: 0;
     display: flex;
-    gap: var(--pad-1);
+    align-items: center;
+    justify-content: center;
+    gap: var(--pad-4);
     opacity: 0;
+    pointer-events: none;
     transition: opacity 120ms ease;
   }
   .art-row:hover .art-actions,
@@ -757,8 +853,46 @@
   .art-row.armed .art-actions {
     opacity: 1;
   }
+  /* The wash is a layer on the card's own background, not a scrim spanning the
+     row: an overlay wide enough to hold the marks also covers the card's
+     border, and the entry lost its outline for as long as you pointed at it.
+     Painted inside the button, the gradient stops at the border. */
+  .art-row:hover .art-pick,
+  .art-row:focus-within .art-pick,
+  .art-row.armed .art-pick {
+    background:
+      linear-gradient(
+        90deg,
+        transparent 0%,
+        var(--accent-dim) 28%,
+        var(--accent-dim) 72%,
+        transparent 100%
+      ),
+      var(--panel);
+  }
+  .art-title,
+  .art-desc {
+    transition: opacity 120ms ease;
+  }
+  .art-row:hover .art-title,
+  .art-row:hover .art-desc,
+  .art-row:focus-within .art-title,
+  .art-row:focus-within .art-desc,
+  .art-row.armed .art-title,
+  .art-row.armed .art-desc {
+    opacity: 0.45;
+  }
+  .art-actions :global(.btn) {
+    pointer-events: auto;
+  }
+  .art-actions :global(.btn.square) {
+    width: 2.4rem;
+    height: 2.4rem;
+  }
   @media (prefers-reduced-motion: reduce) {
-    .art-actions { transition: none; }
+    .art-actions,
+    .art-title,
+    .art-desc { transition: none; }
   }
 
   .ed-form {

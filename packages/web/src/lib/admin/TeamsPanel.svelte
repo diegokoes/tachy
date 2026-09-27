@@ -9,7 +9,7 @@
   import SlugRename from "./SlugRename.svelte";
   import type { Product, Team } from "./rows";
 import { INFO } from "./help";
-  import { claimTopAction } from "./topAction.svelte";
+  import { sectionHoist } from "./sectionAction.svelte";
 
   const teams = createResource(() => api.get<Team[]>("/teams"), []);
   const products = createResource(() => api.get<Product[]>("/products"), []);
@@ -36,8 +36,8 @@ import { INFO } from "./help";
     },
     {
       key: "slug",
-      label: "slug",
-      width: "12rem",
+      label: "id",
+      formOnly: true,
       edit: "text",
       required: true,
       info: INFO.slug,
@@ -54,18 +54,19 @@ import { INFO } from "./help";
   onMount(reloadBoth);</script>
 
 <CrudTable
-  hoist={claimTopAction}
+  hoist={sectionHoist("teams")}
   {columns}
   rows={teams.data}
   rowKey={(r) => r.slug}
   loading={teams.loading}
   error={teams.error}
   emptyTitle={`No ${t("teams")} yet.`}
-  emptyDetail={`A ${t("team")} owns ${t("products")}, projects and repos.`}
+  emptyDetail={`Owns ${t("products")}, projects, repos.`}
   canEdit={() => admin}
   canDelete={() => admin}
   canCreate={admin}
   addLabel={`add ${t("team")}`}
+  noun={t("team")}
   editTitle={(r) => r.name}
   oncreate={(d) =>
     teams.mutate(async () => {
@@ -90,7 +91,7 @@ import { INFO } from "./help";
     title={`rename ${target.slug}`}
     current={target.slug}
     taken={slugs}
-    warning={`Anything that names this ${t("team")} by slug (saved filters, links, agent instructions) stops resolving.`}
+    warning={`References by slug (filters, links, agent instructions) break.`}
     onRename={(slug) => api.patch(`/teams/${target.slug}`, { slug })}
     onDone={() => {
       renaming = null;

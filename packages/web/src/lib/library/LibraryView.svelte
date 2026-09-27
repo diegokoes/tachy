@@ -2,14 +2,16 @@
   import { fmtDate } from "../dates";
   import { createSequence } from "../resource.svelte";
   import { KNOWLEDGE_STATUSES, REFERENCE_STATUSES } from "../vocab";
-  import { onMount } from "svelte";
+  import { MAX_PAGE } from "@tachy/contract";
+  import { onMount, untrack } from "svelte";
   import { api } from "../api";
-  import type { KnowledgeRow, NamedRow, ReferenceRow } from "../types";
-  import { navigate, segment } from "../router.svelte";
-  import { setSubnav } from "../subnav.svelte";
+  import type { KnowledgeRow, ReferenceRow } from "../types";
+  import type { ComponentRow, ProductRow } from "@tachy/contract";
+  import { navigate, segment, segments } from "../router.svelte";
+  import { keep, recall } from "../kept";
+  import { setSubnav, type SubnavItem } from "../subnav.svelte";
   import { pushScope } from "../keys.svelte";
   import { vimState } from "../vim.svelte";
-  import { growBar } from "../motion";
   import { excerpt, type Seg } from "./matching";
   import ResultRow from "./ResultRow.svelte";
   import { fill, toDoc, toEntry, type Item } from "./items";
@@ -17,21 +19,24 @@
   import { t } from "../terms";
   import { errText } from "../resource.svelte";
   import { componentOptions } from "../catalog";
-  import { Button, Chip, EmptyState, Note, Select, Spinner } from "../tui";
+  import { Button, EmptyState, Note, Select, Spinner } from "../tui";
   import FilterMenu from "./FilterMenu.svelte";
   import TagFilter from "./TagFilter.svelte";
   import {
     applyExtras,
     byKey,
+    clearScoped,
     loadFilters,
     pruneValues,
     saveFilters,
+    takePreset,
     type FacetKey,
     type Facets,
+    type ScopePreset,
   } from "./filters";
   import EntryDetail from "../EntryDetail.svelte";
   import DocDetail from "./DocDetail.svelte";
-  import WikiView from "../wiki/WikiView.svelte";
+  import { movedWikiPath, ORG_WIDE, wikiPath } from "../wiki/paths";
   import EntryForm from "../knowledge/EntryForm.svelte";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
 
@@ -41,19 +46,14 @@
   //
   // 'all' is the landing on purpose. Entries and docs are one corpus that
   // search spans; splitting them is an optional narrowing, never a gate you
-  // have to pass to see anything. The wiki is the odd one out — a place rather
-  // than a search scope, so picking it leaves the result list entirely and its
-  // own pages take over.
-  const KINDS = [
+  // have to pass to see anything.
+  const KINDS: SubnavItem[] = [
     { key: "all", label: "all" },
-    { key: "entries", label: "knowledge" },
-    { key: "docs", label: "docs" },
-    { key: "wiki", label: "wiki" },
+    { key: "entries", label: "knowledge", icon: "knowledge" },
+    { key: "docs", label: "docs", icon: "refDoc" },
   ];
 
-  // From vocab.ts, which exists so these are written once: the hand-typed
-  // copies had drifted out of the order the contract documents as the order
-  // they should be offered in.
+  // From vocab.ts, so they are offered in the order the contract documents.
   const STATUSES = KNOWLEDGE_STATUSES;
   const DOC_STATUSES = REFERENCE_STATUSES;
 
@@ -64,7 +64,12 @@
   );
 
   /** The tab a detail view was opened from, so "back" returns there. */
-  let origin = $state("all");
+  let origin = $state(recall("library.origin", "all"));
+
+  // Old /library/wiki links redirect to the wiki section.
+  $effect(() => {
+    if (kind === "wiki") navigate(movedWikiPath(segments()), { replace: true });
+  });
 
   $effect(() =>
     setSubnav({
@@ -79,23 +84,37 @@
   /** Which form the create screen shows — in the URL, so it deep-links. */
   const newKind = $derived(param === "doc" ? "doc" : "entry");
 
-  let q = $state("");
-  let status = $state("");
-  let productId = $state("");
-  let component = $state("");
-  let version = $state("");
+  /** The search and its scope, as the library was left. */
+  const left = recall("library.search", {
+    q: "",
+    status: "",
+    productId: "",
+    component: "",
+  });
+  let q = $state(left.q);
+  let status = $state(left.status);
+  let productId = $state(left.productId);
+  let component = $state(left.component);
 
-  let products = $state<NamedRow[]>([]);
-  let components = $state<NamedRow[]>([]);
+  $effect(() => keep("library.search", { q, status, productId, component }));
+  $effect(() => keep("library.origin", origin));
+
+  let products = $state<ProductRow[]>([]);
+  let components = $state<ComponentRow[]>([]);
 
   /** Counts for every facet under whatever else is currently selected. */
   let facets = $state<Facets>({});
   /** Which extra filters the user added, and to what — persisted per browser. */
   let shown = $state<FacetKey[]>([]);
   let extras = $state<Record<string, string>>({});
-  const versions = $derived(facets.affected_version ?? []);
 
   let items = $state<Item[]>([]);
+  /**
+   * A leg came back full, so the server had more it would not send. There is no
+   * cursor to follow it with yet — what this buys is the tally saying "first",
+   * instead of counting a truncated list as though it were the whole answer.
+   */
+  let capped = $state(false);
   // Starts true so the first paint shows nothing rather than the empty state.
   let loading = $state(true);
   let slow = $state(false);
@@ -135,11 +154,12 @@
    * silently narrowed with no way out.
    */
   const activeFilters = $derived(
-    [productId, component, version, status].filter(Boolean).length +
+    [productId, component, status].filter(Boolean).length +
       shown.filter((k) => extras[k]).length,
   );
 
   function scopeQs(p: URLSearchParams) {
+    p.set("limit", String(MAX_PAGE));
     if (q.trim()) p.set("q", q.trim());
     if (productId) p.set("product_id", productId);
     if (productId && component) p.set("component", component);
@@ -147,12 +167,8 @@
     return p;
   }
 
-  function entryQs() {
-    const p = scopeQs(new URLSearchParams());
-    if (version) p.set("affected_version", version);
-    return applyExtras(p, shown, extras).toString();
-  }
-
+  const entryQs = () =>
+    applyExtras(scopeQs(new URLSearchParams()), shown, extras).toString();
   const docQs = () => scopeQs(new URLSearchParams()).toString();
 
   let seq = 0;
@@ -187,6 +203,7 @@
           : Promise.resolve([]),
       ]);
       if (mine !== seq) return;
+      capped = ents.length >= MAX_PAGE || docs.length >= MAX_PAGE;
 
       const query = searching ? q.trim() : "";
       let merged = [
@@ -216,10 +233,11 @@
 
   async function loadCatalog() {
     try {
-      products = await api.get<NamedRow[]>("/products");
+      products = await api.get<ProductRow[]>("/products");
     } catch {
       products = [];
     }
+    if (productId) await loadComponents(productId);
     await loadFacets();
   }
 
@@ -232,15 +250,14 @@
   const currentFacets = createSequence();
 
   async function loadFacets() {
-    // Its own sequence, separate from `run`'s: changing two filters quickly
-    // fires two of these, and the slower one used to overwrite the newer
-    // options — leaving a filter offering values that no longer have rows.
+    // Its own sequence, separate from `run`'s: two quick filter changes fire
+    // two loads, and the slower must not overwrite the newer options with
+    // values that have no rows.
     const isCurrent = currentFacets();
     const p = new URLSearchParams();
     if (productId) p.set("product_id", productId);
     if (productId && component) p.set("component", component);
     if (status) p.set("status", status);
-    if (version) p.set("affected_version", version);
     applyExtras(p, shown, extras);
     try {
       const next = await api.get<Facets>(`/knowledge/facets?${p}`);
@@ -250,7 +267,6 @@
       if (!isCurrent()) return;
       facets = {};
     }
-    if (version && !versions.some((v) => v.value === version)) version = "";
     extras = pruneValues(shown, extras, facets);
   }
 
@@ -265,32 +281,66 @@
     const { [key]: _dropped, ...rest } = extras;
     extras = rest;
     persist();
+    void loadFacets();
   }
 
   function setExtra(key: FacetKey, value: string) {
     extras = { ...extras, [key]: value };
     persist();
+    void loadFacets();
   }
 
   const persist = () => saveFilters({ shown, values: extras });
 
   const currentComponents = createSequence();
 
+  /**
+   * product › component › version. A version names a release of one component,
+   * so once there is no component under it there is nothing for the number to
+   * mean — carrying it over would narrow the list by a build from elsewhere.
+   */
+  function dropComponentScoped() {
+    extras = clearScoped(extras);
+    persist();
+  }
+
   async function onProductChange(id: string) {
-    const isCurrent = currentComponents();
     component = "";
+    dropComponentScoped();
+    await loadComponents(id);
+    await loadFacets();
+  }
+
+  async function loadComponents(id: string) {
+    const isCurrent = currentComponents();
     components = [];
     const slug = products.find((p) => p.id === id)?.slug;
     if (slug)
       try {
-        const next = await api.get<NamedRow[]>(`/products/${slug}/components`);
+        const next = await api.get<ComponentRow[]>(`/products/${slug}/components`);
         if (!isCurrent()) return;
         components = next;
       } catch {
         if (!isCurrent()) return;
         components = [];
       }
-    await loadFacets();
+  }
+
+  /**
+   * A control never reads narrower than the cap naming it — the caps are what
+   * the row is scanned by. Measured rather than guessed at in `ch`: the cap is
+   * a different size and tracking from the control under it.
+   */
+  function capFloor(node: HTMLElement) {
+    const cap = node.querySelector<HTMLElement>(".cap");
+    if (!cap) return;
+    const apply = () => {
+      node.style.minWidth = `${Math.ceil(cap.offsetWidth * 1.25)}px`;
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(cap);
+    return { destroy: () => ro.disconnect() };
   }
 
   function clearFilters() {
@@ -298,7 +348,6 @@
     component = "";
     components = [];
     status = "";
-    version = "";
     extras = {};
     persist();
     void loadFacets();
@@ -308,8 +357,8 @@
     origin = kind;
     if (i.kind === "article" && i.slug) {
       const scope =
-        products.find((p) => p.id === i.productId)?.slug ?? "general";
-      navigate(`/library/wiki/${scope}/${i.slug}`);
+        products.find((p) => p.id === i.productId)?.slug ?? ORG_WIDE;
+      navigate(wikiPath(scope, i.slug));
       return;
     }
     navigate(`/library/${i.kind === "entry" ? "entries" : "docs"}/${i.id}`);
@@ -320,29 +369,35 @@
     navigate(origin === "all" ? "/library" : `/library/${origin}`);
   }
 
-  async function createEntry(payload: Record<string, unknown>) {
-    createSaving = true;
-    createError = null;
-    try {
-      const created = await api.post<{ id: string }>("/knowledge", payload);
-      navigate(`/library/entries/${created.id}`);
-    } catch (e) {
-      createError = errText(e);
-    } finally {
-      createSaving = false;
-    }
-  }
+  /** Create through `endpoint`, then open what was made under `/library/<tab>`. */
+  const create =
+    (endpoint: string, tab: string) =>
+    async (payload: Record<string, unknown>) => {
+      createSaving = true;
+      createError = null;
+      try {
+        const created = await api.post<{ id: string }>(endpoint, payload);
+        navigate(`/library/${tab}/${created.id}`);
+      } catch (e) {
+        createError = errText(e);
+      } finally {
+        createSaving = false;
+      }
+    };
+  const createEntry = create("/knowledge", "entries");
+  const createDoc = create("/reference", "docs");
 
-  async function createDoc(payload: Record<string, unknown>) {
-    createSaving = true;
-    createError = null;
-    try {
-      const created = await api.post<{ id: string }>("/reference", payload);
-      navigate(`/library/docs/${created.id}`);
-    } catch (e) {
-      createError = errText(e);
-    } finally {
-      createSaving = false;
+  /** Opens narrowed to what another page asked for; see `presetScope`. */
+  async function applyPreset(p: ScopePreset) {
+    const id = products.find((x) => x.slug === p.product)?.id as
+      | string
+      | undefined;
+    if (!id) return;
+    productId = id;
+    await onProductChange(id);
+    if (p.component && components.some((c) => c.slug === p.component)) {
+      component = p.component;
+      await loadFacets();
     }
   }
 
@@ -350,7 +405,8 @@
     const stored = loadFilters();
     shown = stored.shown;
     extras = stored.values;
-    void loadCatalog();
+    const scoped = takePreset();
+    void loadCatalog().then(() => scoped && applyPreset(scoped));
   });
 
   let ranOnce = false;
@@ -361,7 +417,6 @@
     void status;
     void productId;
     void component;
-    void version;
     void shown;
     void extras;
     clearTimeout(timer);
@@ -373,17 +428,18 @@
 
   /**
    * Re-count the options whenever the narrowing changes — but not on `extras`,
-   * which loadFacets itself prunes; depending on it here would loop.
+   * which loadFacets itself prunes. loadFacets reads `extras` before its first
+   * await, so it runs untracked: tracked, every prune re-ran this effect, and
+   * each rerun restarted the list's debounce so the filtered list never loaded.
    */
   let facetsOnce = false;
   $effect(() => {
     void status;
-    void version;
     if (!facetsOnce) {
       facetsOnce = true;
       return;
     }
-    void loadFacets();
+    untrack(() => void loadFacets());
   });
 
   $effect(() => {
@@ -474,6 +530,7 @@
 <!-- Rendered by App into the carved row beside the subnav, not here. -->
 {#snippet newAction()}
   <Button
+    size="sm"
     tone="ok"
     icon="plus"
     title="new entry or doc"
@@ -486,7 +543,7 @@
     <Button
       variant={newKind === "entry" ? "primary" : "ghost"}
       square
-      icon="analyze"
+      icon="knowledge"
       title="knowledge entry"
       aria-label="knowledge entry"
       onclick={() => navigate("/library/new/entry")}
@@ -494,7 +551,7 @@
     <Button
       variant={newKind === "doc" ? "primary" : "ghost"}
       square
-      icon="doc"
+      icon="refDoc"
       title="reference doc"
       aria-label="reference doc"
       onclick={() => navigate("/library/new/doc")}
@@ -503,7 +560,7 @@
 {/snippet}
 
 {#if kind === "wiki"}
-  <WikiView />
+  <!-- Redirecting to /wiki; see the effect above. -->
 {:else if kind === "entries" && param}
   <EntryDetail
     id={param}
@@ -546,120 +603,149 @@
         }
       }}
     />
+    <!-- Both act on the row below rather than being filters themselves, so
+         they follow the search box instead of joining that row. -->
+    <span class="tools">
+      {#if showEntryFilters}
+        <FilterMenu
+          {shown}
+          {facets}
+          {component}
+          onadd={addFilter}
+          onremove={removeFilter}
+        />
+      {/if}
+      {#if activeFilters}
+        <Button
+          variant="ghost"
+          tone="danger"
+          icon="reset"
+          title="reset every filter"
+          onclick={clearFilters}
+        >
+          <span class="lbl">reset filters</span>
+        </Button>
+      {/if}
+    </span>
   </div>
 
   <!-- The default row stays deliberately short. Everything else the schema can
        be narrowed by — environment, confidence, clarity, pattern, hidden fix,
-       fixed version, tags — is one `+` away and remembered per browser. -->
-  <div class="filters">
-    <!-- product and component scope entries AND docs, so they stay visible in
-         every mode; version and value exist only on entries. -->
-    <Select
-      bind:value={productId}
-      active={!!productId}
-      title={t("product")}
-      options={[
-        { value: "", label: `any ${t("product")}` },
-        ...products.map((p) => ({
-          value: p.id as string,
-          label: p.name as string,
-        })),
-      ]}
-      onchange={(v) => onProductChange(String(v))}
-    />
-    <Select
-      bind:value={component}
-      active={!!component}
-      title={`Component (within the chosen ${t("product")})`}
-      disabled={!productId || components.length === 0}
-      options={[
-        { value: "", label: "any component" },
-        ...componentOptions(components),
-      ]}
-      onchange={() => loadFacets()}
-    />
+       versions, tags — is one `+` away and remembered per browser. -->
+  <div class="controls">
+    <div class="filters">
+      <!-- product and component scope entries AND docs, so they stay visible in
+           every mode. -->
+      <span class="field" use:capFloor>
+        <span class="cap">{t("product")}</span>
+        <Select
+          bind:value={productId}
+          active={!!productId}
+          keepOpen
+          filterPlaceholder=""
+          searchable
+          title={t("product")}
+          placeholder="any"
+          clearable
+          options={products.map((p) => ({ value: p.id, label: p.name }))}
+          onchange={(v) => onProductChange(String(v))}
+        />
+      </span>
+      <span class="field" use:capFloor>
+        <span class="cap">component</span>
+        <Select
+          bind:value={component}
+          active={!!component}
+          keepOpen
+          filterPlaceholder=""
+          searchable
+          title={`Component (within the chosen ${t("product")})`}
+          disabled={!productId || components.length === 0}
+          placeholder="any"
+          clearable
+          options={componentOptions(components)}
+          onchange={(v) => {
+            if (!v) dropComponentScoped();
+            void loadFacets();
+          }}
+        />
+      </span>
 
-    {#if showEntryFilters}
-      <Select
-        bind:value={version}
-        active={!!version}
-        title="Affected version"
-        disabled={versions.length === 0}
-        options={[
-          { value: "", label: "any version" },
-          ...versions.map((v) => ({
-            value: v.value,
-            label: `${v.value} (${v.count})`,
-          })),
-        ]}
-      />
-    {/if}
+      <span class="field" use:capFloor>
+        <span class="cap">status</span>
+        <Select
+          bind:value={status}
+          active={!!status}
+          keepOpen
+          filterPlaceholder=""
+          title="Status"
+          placeholder="any"
+          clearable
+          options={showDocFilters ? DOC_STATUSES : STATUSES}
+        />
+      </span>
 
-    <Select
-      bind:value={status}
-      active={!!status}
-      title="Status"
-      options={[
-        { value: "", label: "any status" },
-        ...(showDocFilters ? DOC_STATUSES : STATUSES),
-      ]}
-    />
-
-    {#if showEntryFilters}
-      {#each shown as key (key)}
-        {@const def = byKey(key)}
-        {#if def}
-          <span class="extra">
-            {#if def.kind === "tags"}
-              <TagFilter
-                value={extras[key] ?? ""}
-                options={facets.tags ?? []}
-                onchange={(v) => setExtra(key, v)}
+      {#if showEntryFilters}
+        {#each shown as key (key)}
+          {@const def = byKey(key)}
+          {#if def}
+            <span class="extra">
+              <span class="field" use:capFloor>
+                <span class="cap">{def.label}</span>
+                {#if def.kind === "tags"}
+                  <TagFilter
+                    value={extras[key] ?? ""}
+                    options={facets.tags ?? []}
+                    onchange={(v) => setExtra(key, v)}
+                  />
+                {:else}
+                  <Select
+                    value={extras[key] ?? ""}
+                    active={!!extras[key]}
+                    keepOpen
+                    filterPlaceholder=""
+                    title={def.needsComponent
+                      ? `${def.label} (within the chosen component)`
+                      : def.label}
+                    disabled={def.needsComponent && !component}
+                    placeholder="any"
+                    clearable
+                    options={[
+                      ...(def.kind === "enum"
+                        ? (def.options ?? []).map((o) => ({ value: o, label: o }))
+                        : (facets[key] ?? []).map((o) => ({
+                            value: o.value,
+                            label: `${o.value} (${o.count})`,
+                          }))),
+                    ]}
+                    onchange={(v) => setExtra(key, String(v))}
+                  />
+                {/if}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                square
+                icon="close"
+                title="remove the {def.label} filter"
+                aria-label="remove the {def.label} filter"
+                onclick={() => removeFilter(key)}
               />
-            {:else}
-              <Select
-                value={extras[key] ?? ""}
-                active={!!extras[key]}
-                title={def.label}
-                options={[
-                  { value: "", label: def.any },
-                  ...(def.kind === "enum"
-                    ? (def.options ?? []).map((o) => ({ value: o, label: o }))
-                    : (facets[key] ?? []).map((o) => ({
-                        value: o.value,
-                        label: `${o.value} (${o.count})`,
-                      }))),
-                ]}
-                onchange={(v) => setExtra(key, String(v))}
-              />
-            {/if}
-            <Button
-              variant="ghost"
-              size="sm"
-              square
-              icon="cancel"
-              title="remove the {def.label} filter"
-              aria-label="remove the {def.label} filter"
-              onclick={() => removeFilter(key)}
-            />
-          </span>
-        {/if}
-      {/each}
+            </span>
+          {/if}
+        {/each}
+      {/if}
+    </div>
 
-      <FilterMenu {shown} {facets} onadd={addFilter} />
-    {/if}
-
-    {#if activeFilters}
-      <Button
-        variant="ghost"
-        size="sm"
-        square
-        tone="danger"
-        icon="erase"
-        title="clear filters"
-        aria-label="clear filters"
-        onclick={clearFilters}
-      />
+    <!-- Never a "0 items" line above an empty state — the empty state says it.
+         It rides in the left margin the centred filter row leaves empty, so it
+         costs the list no height of its own. -->
+    {#if items.length}
+      <p class="tally">
+        {#if capped}first{/if}
+        <span class="count">{items.length.toLocaleString()}</span>
+        {mode === "search" ? "matches" : "items"}
+      </p>
     {/if}
   </div>
 
@@ -668,11 +754,6 @@
     <Spinner
       label={mode === "search" ? "searching the archive" : "loading the library"}
     />
-  {/if}
-
-  <!-- Never a "0 items" line above an empty state — the empty state says it. -->
-  {#if items.length}
-    <p class="tally">{items.length} {mode === "search" ? "matches" : "items"}</p>
   {/if}
 
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -686,7 +767,6 @@
         <ResultRow
           item={it}
           selected={i === cursor}
-          delay={Math.min(i * 0.06, 0.6)}
           bind:el={rowEls[i]}
           onopen={() => openItem(it)}
           onfocus={() => (cursor = i)}
@@ -698,13 +778,13 @@
     {#if !loading && !error && items.length === 0}
       <li>
         <EmptyState
-          icon={kind === "docs" ? "doc" : "library"}
+          icon={kind === "docs" ? "refDoc" : kind === "entries" ? "knowledge" : "library"}
           title={mode === "search"
             ? `No matches for “${q}”.`
             : "The library is empty."}
           detail={mode === "search"
-            ? "Search covers summaries, symptoms, signals (error codes), root causes, tags and doc bodies."
-            : "Analyze a ticket in chat, or add an entry by hand."}
+            ? "Searches summaries, symptoms, signals, root causes, tags, doc bodies."
+            : "Analyze a ticket in chat, or add an entry."}
         />
       </li>
     {/if}
@@ -744,34 +824,87 @@
     background: var(--panel-bg);
   }
   .search {
-    flex: 1;
+    flex: 0 1 75%;
     min-width: 12rem;
   }
-
-  /* Sits well clear of the search bar and centred, so the controls read as a
-     row of their own rather than a second line of the input. */
-  .filters {
-    display: flex;
-    gap: var(--pad-2);
-    align-items: center;
-    justify-content: center;
-    flex-wrap: wrap;
-    margin-top: var(--pad-4);
-    margin-bottom: var(--pad-3);
-  }
-
-  /* An added filter travels with its own remove button, so the pair must wrap
-     as one unit however wide the row gets. */
-  .extra {
+  .tools {
+    flex: none;
     display: inline-flex;
     align-items: center;
     gap: var(--pad-1);
   }
+  /* Cased in CSS, not in the copy — a screen reader still hears a word. */
+  .lbl {
+    text-transform: uppercase;
+    letter-spacing: var(--label-spacing);
+  }
+
+  /* The caps occupy the space between the search bar and the controls. The
+     top margin subtracts a cap and its gap, so the controls keep their
+     offset. */
+  .controls {
+    position: relative;
+    margin-top: calc(var(--pad-4) - var(--fs-xs) - var(--pad-1));
+    margin-bottom: var(--pad-2);
+  }
+
+  /* Centred, so the controls read as a row of their own rather than a second
+     line of the input. Bottom-aligned: a cap is one line, a tag box is not. */
+  .filters {
+    display: flex;
+    gap: var(--pad-2);
+    align-items: end;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .field {
+    display: inline-flex;
+    flex-direction: column;
+    gap: var(--pad-1);
+  }
+  /* Its own width, not the column's, so `capFloor` can measure the text and
+     the auto margins can centre it over the control. */
+  .cap {
+    width: max-content;
+    max-width: 100%;
+    margin-inline: auto;
+    font-size: var(--fs-xs);
+    line-height: 1;
+    letter-spacing: var(--label-spacing);
+    text-transform: uppercase;
+    text-align: center;
+    color: var(--muted);
+  }
+
+  /* An added filter travels with its own remove button, so the pair must wrap
+     as one unit however wide the row gets. The button hangs off the side of the
+     column rather than sitting in it, so the cap still centres on the control
+     and the control alone answers to the cap's width floor. */
+  .extra {
+    display: inline-flex;
+    align-items: end;
+    gap: var(--pad-1);
+  }
 
   .tally {
-    margin: var(--pad-1) 0;
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    margin: 0;
     font-size: var(--fs-sm);
     color: var(--muted);
+    pointer-events: none;
+  }
+  /* Tabular figures and a fixed slot: the count runs through every digit on
+     its way to the total, and proportional ones make the words either side of
+     it jitter for the whole tween. */
+  .count {
+    display: inline-block;
+    min-width: 3ch;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: var(--text);
   }
 
   .results {

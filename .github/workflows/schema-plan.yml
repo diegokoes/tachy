@@ -1,0 +1,69 @@
+name: Schema plan
+
+# A schema.sql change must ship as a diff: planned from the base branch's schema
+# and fixtures, applied, converged, and round-tripped (scripts/schema-plan.sh).
+# Destructive hazards fail unless the pull request is labelled
+# schema-destructive; adding or removing the label runs the plan again, since a
+# re-run replays the original event and its labels.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - db/schema.sql
+      - db/roles.sql
+      - scripts/schema-plan.sh
+      - .github/workflows/schema-plan.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  schema-plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.6-pg16
+        env:
+          POSTGRES_USER: tachy
+          POSTGRES_PASSWORD: tachy
+          POSTGRES_DB: tachy
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U tachy" --health-interval 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - run: go install github.com/stripe/pg-schema-diff/cmd/pg-schema-diff@v1.0.9
+
+      - env:
+          PGHOST: localhost
+          PGUSER: tachy
+          PGPASSWORD: tachy
+          ALLOW_DESTRUCTIVE: ${{ contains(github.event.pull_request.labels.*.name, 'schema-destructive') && '1' || '0' }}
+        run: |
+          mkdir -p /tmp/base /tmp/new
+          base="origin/${{ github.base_ref }}"
+          git show "$base:db/schema.sql" > /tmp/base/10-schema.sql
+          git show "$base:db/roles.sql" > /tmp/base/20-roles.sql 2>/dev/null || rm -f /tmp/base/20-roles.sql
+          git show "$base:test/fixtures.sql" > /tmp/base/fixtures.sql
+          cp db/schema.sql /tmp/new/10-schema.sql
+          cp db/roles.sql /tmp/new/20-roles.sql
+          scripts/schema-plan.sh /tmp/base /tmp/new
+
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-plan
+          path: schema-plan.txt
+          if-no-files-found: ignore
