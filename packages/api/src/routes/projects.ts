@@ -12,20 +12,15 @@ import {
   getTeamIdBySlug,
   listProjectAreaMap,
   listSourceProjects,
-  resolveCredential,
   resolveProjectContext,
   setProjectAreaMap,
-  sourceCredentialName,
   sourceProjectScope,
   sql,
   updateSourceProject,
 } from "@tachy/core";
-import {
-  createAdoClient,
-  workItemDefaults,
-  workItemSchema,
-} from "@tachy/source-azure-devops";
-import { assertScopeEditor, assertTeamAdmin, callerScope } from "../authz";
+import { workItemDefaults, workItemSchema } from "@tachy/source-azure-devops";
+import { assertScopeEditor, assertTeamAdmin } from "../authz";
+import { adoClientFor } from "../azure-devops";
 import type { Context } from "hono";
 
 const wikiSchema = z.array(
@@ -78,27 +73,6 @@ async function assertCanWriteProject(
     return;
   }
   if (teamSlug) await assertTeamAdmin(c, teamSlug);
-}
-
-/** ADO client for a connection, using the caller's own PAT. */
-async function adoClient(c: Context, slug: string) {
-  const [conn] = await sql`
-    select id, source_type, slug, base_url, config
-    from source_connections where slug = ${slug}
-  `;
-  if (!conn) throw new Error(`Unknown source connection: ${slug}`);
-  if (conn.source_type !== "azure-devops")
-    throw new Error(`'${slug}' is a ${conn.source_type} connection`);
-  const token = await resolveCredential(
-    sourceCredentialName(conn.source_type, conn.slug),
-    await callerScope(c),
-  );
-  return createAdoClient({
-    baseUrl: conn.base_url ?? "",
-    slug: conn.slug,
-    config: conn.config ?? {},
-    ...(token ? { token } : {}),
-  });
 }
 
 /** Remote calls answer with {ok:false} so the setup UI can render the reason. */
@@ -241,7 +215,7 @@ export const projects = new Hono()
       select config from source_connections where slug = ${c.req.param("slug")!}
     `;
       if (!conn) throw notFound(`Unknown source connection`);
-      const client = await adoClient(c, c.req.param("slug")!);
+      const { client } = await adoClientFor(c, c.req.param("slug")!);
       const defaults = workItemDefaults(conn.config, project, type);
       return c.json(await workItemSchema(client, project, type, defaults));
     },
@@ -258,7 +232,7 @@ export const projects = new Hono()
   .get("/source-connections/:slug/discover/projects", requireAdmin, async (c) =>
     c.json(
       await probe(async () => {
-        const client = await adoClient(c, c.req.param("slug")!);
+        const { client } = await adoClientFor(c, c.req.param("slug")!);
         const found = await client.listProjects();
         return { projects: found.map((p) => ({ key: p.name, name: p.name })) };
       }),
@@ -268,7 +242,7 @@ export const projects = new Hono()
   .get("/source-connections/:slug/discover/wikis", requireAdmin, async (c) =>
     c.json(
       await probe(async () => {
-        const client = await adoClient(c, c.req.param("slug")!);
+        const { client } = await adoClientFor(c, c.req.param("slug")!);
         const found = await client.listWikis(c.req.query("project"));
         return {
           wikis: found.map((w) => ({
@@ -286,7 +260,7 @@ export const projects = new Hono()
       await probe(async () => {
         const project = c.req.query("project");
         if (!project) throw new Error("project is required");
-        const client = await adoClient(c, c.req.param("slug")!);
+        const { client } = await adoClientFor(c, c.req.param("slug")!);
         const found = await client.listRepos(project);
         return {
           repos: found.map((r) => ({

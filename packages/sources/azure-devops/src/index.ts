@@ -29,6 +29,22 @@ export {
 } from "./fields";
 export type { FieldSpec, WorkItemSchema, AdoFieldType } from "./fields";
 export type { AdoClient, AdoCfg, JsonPatchOp } from "./client";
+export {
+  creatableTypes,
+  composerForm,
+  templateValues,
+  fieldPath,
+  flattenTree,
+} from "./composer";
+export {
+  createWorkItem,
+  validateWorkItem,
+  buildPatch,
+  asHtml,
+  referencedKeys,
+  rewriteAttachments,
+} from "./create";
+export type { NewWorkItem, PastedImage, CreateContext } from "./create";
 
 const RELATED_CAP = 15;
 const ARTIFACT_CAP = 10;

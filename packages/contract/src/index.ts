@@ -74,7 +74,25 @@ export type {
   CoverageNode,
   LibraryEngagement,
 } from "./library";
-export type { AdoFieldType, FieldSpec, WorkItemSchema } from "./ado";
+export type {
+  AdoFieldType,
+  FieldSpec,
+  WorkItemSchema,
+  AdoTypeOption,
+  ComposerProject,
+  PrefillOrigin,
+  PathOption,
+  PersonOption,
+  ComposerForm,
+  TicketDraft,
+  TicketValidation,
+  CreatedTicket,
+  TicketContextItem,
+  ReviewReadiness,
+  ReviewFindingKind,
+  ReviewFinding,
+  TicketReview,
+} from "./ado";
 export { DEFAULT_CODE_EXTENSIONS, REPO_INDEX_STATUSES } from "./code";
 export type { RepoIndexStatus, RepoRow, RepoCensus } from "./code";
 export type {

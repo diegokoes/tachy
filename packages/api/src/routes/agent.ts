@@ -26,6 +26,7 @@ import { lifecycle } from "../lifecycle";
 import { requestIdOf } from "../logging";
 import { AdmissionCancelled, QueueFull } from "../admission";
 import { BUILTIN_COMMANDS } from "../commands";
+import { MAX_UPLOAD_BYTES, tooLarge } from "../upload-limit";
 import {
   activeByUser,
   admission,
@@ -42,15 +43,6 @@ import {
 
 const ABANDONED_MS = 30_000;
 const KEEPALIVE_MS = 20_000;
-
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
-
-const megabytes = (bytes: number) => (bytes / 1024 / 1024).toFixed(1);
-
-const tooLarge = (bytes: number) =>
-  badInput(
-    `file is ${megabytes(bytes)} MB, over the ${MAX_UPLOAD_BYTES / 1024 / 1024} MB upload limit`,
-  );
 
 const chatSchema = z.object({
   message: z.string().min(1),
