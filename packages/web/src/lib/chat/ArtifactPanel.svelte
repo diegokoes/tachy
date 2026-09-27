@@ -30,7 +30,7 @@
     spin,
     tweenValue,
   } from "../motion";
-  import { nextNavKey } from "../nav";
+  import { actionKey, keyLabel } from "../keys/bindings.svelte";
   import { pushScope } from "../keys.svelte";
 
   let tabBtn = $state<HTMLButtonElement>();
@@ -112,15 +112,12 @@
     }
   }
 
-  // Picks up where the tab bar's digits stop, so the row reads 1..n, artifacts.
-  const hotkey = $derived(nextNavKey());
+  const hotkey = $derived(actionKey("artifacts"));
 
-  // hidden: the tab carries the digit itself, same as the nav bar.
   $effect(() => {
-    const key = String(hotkey);
     return pushScope([
       {
-        key,
+        key: hotkey,
         label: "artifacts",
         hidden: true,
         run: () => {
@@ -506,7 +503,7 @@
     class="edge-tab"
     class:active={open || !!chat.artifact}
     onclick={toggle}
-    title="Artifacts: reusable prompt templates to attach as context ({hotkey})"
+    title="Artifacts: reusable prompt templates to attach as context ({keyLabel(hotkey)})"
     aria-label="Artifacts"
     aria-expanded={open}
   >

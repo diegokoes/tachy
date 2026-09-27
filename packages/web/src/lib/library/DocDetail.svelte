@@ -12,7 +12,6 @@
   import { LinkTargets } from "../wikilinks.svelte";
   import { pushScope } from "../keys.svelte";
   import { setTopActions } from "../subnav.svelte";
-  import { vimState } from "../vim.svelte";
   import { createSequence, errText } from "../resource.svelte";
   import { Badge, Button, Chip, Icon, Note, Select } from "../tui";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
@@ -187,15 +186,13 @@
     load(id);
   });
 
-  /** Same as the entry view: backspace goes back while reading, not editing.
+  /** Same as the entry view: backspace or esc goes back while reading, not editing.
       Hidden, because back is a button in the carved row. */
   $effect(() => {
     if (editing || newVersion || !doc) return;
     return pushScope([
       { key: "backspace", label: "", hidden: true, run: onClose },
-      ...(vimState.enabled
-        ? [{ key: "esc", label: "", hidden: true, run: onClose }]
-        : []),
+      { key: "esc", label: "", hidden: true, run: onClose },
     ]);
   });
 

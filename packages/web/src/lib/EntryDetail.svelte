@@ -20,7 +20,6 @@
   import { isCurator, canCurateScope } from "./session.svelte";
   import { pushScope } from "./keys.svelte";
   import { setTopActions } from "./subnav.svelte";
-  import { vimState } from "./vim.svelte";
   import { Badge, Button, Chip, Icon } from "./tui";
 
   let { id, onClose, onOpen }: { id: string; onClose: () => void; onOpen?: (id: string) => void } = $props();
@@ -117,7 +116,7 @@
 
   const structured = $derived(asStructured(entry?.structured));
 
-  /** Reading the entry, backspace goes back. Not bound while editing, where it
+  /** Reading the entry, backspace or esc goes back. Not bound while editing, where it
       would sit one stray keystroke away from discarding a form.
 
       Hidden: back is a button in the carved row now, so printing it in the
@@ -126,10 +125,7 @@
     if (editing || !entry) return;
     return pushScope([
       { key: "backspace", label: "", hidden: true, run: onClose },
-      // esc is the vim reflex for "back out of here"; backspace stays either way.
-      ...(vimState.enabled
-        ? [{ key: "esc", label: "", hidden: true, run: onClose }]
-        : []),
+      { key: "esc", label: "", hidden: true, run: onClose },
     ]);
   });
 

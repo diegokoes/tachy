@@ -16,8 +16,3 @@ export function navItems(): NavItem[] {
     ? ALL.filter((n) => n.key !== "admin")
     : ALL;
 }
-
-/** The digit that continues the tab bar's numbering, for in-view hotkeys. */
-export function nextNavKey(): number {
-  return navItems().length + 1;
-}

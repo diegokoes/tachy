@@ -35,10 +35,19 @@ function persist() {
 
 export const defaultNavKey = (i: number) => String(i + 1);
 export const defaultSubnavKey = (i: number) => `shift+${i + 1}`;
-/** Settings lives outside the tab bar, so it keeps a chord rather than a digit. */
-export const defaultSettingsKey = "ctrl+,";
-/** Feedback sits beside settings and keeps a chord for the same reason. */
-export const defaultFeedbackKey = "ctrl+.";
+
+/**
+ * Keys for places outside the tab bar. They keep chords and letters rather
+ * than digits: a digit here would have to follow the tab count, and would move
+ * under whoever bound it the moment admin appeared or went.
+ */
+export const ACTIONS = {
+  settings: { label: "settings", key: "ctrl+," },
+  feedback: { label: "feedback", key: "ctrl+." },
+  artifacts: { label: "artifacts panel", key: "a" },
+} as const;
+
+export type Action = keyof typeof ACTIONS;
 
 export function navKey(item: string, i: number): string {
   return keymap.nav[item] ?? defaultNavKey(i);
@@ -48,17 +57,9 @@ export function subnavKey(i: number): string {
   return keymap.subnav[i] ?? defaultSubnavKey(i);
 }
 
-/** Stored in the same `nav` bucket as the tab bar's own keys — settings just
- *  isn't one of the items `navItems()` enumerates, so it can't collide with a
- *  digit fallback the way a real slot's key could. */
-export function settingsKey(): string {
-  return keymap.nav.settings ?? defaultSettingsKey;
-}
-
-/** Same bucket and reasoning as settings: not a tab-bar slot, so it can't
- *  collide with a digit fallback. */
-export function feedbackKey(): string {
-  return keymap.nav.feedback ?? defaultFeedbackKey;
+/** Stored in the `nav` bucket beside the tab keys, under the action's name. */
+export function actionKey(a: Action): string {
+  return keymap.nav[a] ?? ACTIONS[a].key;
 }
 
 export function setNavKey(item: string, key: string | null) {
@@ -94,22 +95,27 @@ const WORDS: Record<string, string> = {
 const MODS = /^(shift|ctrl|alt|meta)\+/;
 
 /**
- * A stored chord as a reader should see it: "ctrl+," is CTRL + ,  and "g g" is
- * G then G. Display only — `normalize()` in keys.svelte.ts still owns what a
- * binding *is*, and every saved keymap is in that spelling.
+ * A stored chord as the caps a reader presses: "ctrl+," is [[CTRL, ,]] and
+ * "g g" is [[G], [G]], one inner list per press. Display only — `normalize()`
+ * in keys.svelte.ts still owns what a binding *is*, and every saved keymap is
+ * in that spelling.
  */
+export function keyCaps(chord: string): string[][] {
+  return chord.split(" ").map((part) => {
+    const mods: string[] = [];
+    let rest = part;
+    for (let m = MODS.exec(rest); m; m = MODS.exec(rest)) {
+      mods.push(m[1].toUpperCase());
+      rest = rest.slice(m[0].length);
+    }
+    return [...mods, WORDS[rest] ?? rest.toUpperCase()];
+  });
+}
+
+/** keyCaps as one line of text: CTRL + , and G then G. */
 export function keyLabel(chord: string): string {
-  return chord
-    .split(" ")
-    .map((part) => {
-      const mods: string[] = [];
-      let rest = part;
-      for (let m = MODS.exec(rest); m; m = MODS.exec(rest)) {
-        mods.push(m[1].toUpperCase());
-        rest = rest.slice(m[0].length);
-      }
-      return [...mods, WORDS[rest] ?? rest.toUpperCase()].join(" + ");
-    })
+  return keyCaps(chord)
+    .map((caps) => caps.join(" + "))
     .join(" then ");
 }
 
@@ -136,7 +142,7 @@ export function conflicts(
   skip?:
     | { kind: "nav"; item: string }
     | { kind: "subnav"; slot: number }
-    | { kind: "settings" },
+    | { kind: "action"; item: Action },
 ): string[] {
   const hits: string[] = [];
   if (RESERVED[key]) hits.push(RESERVED[key]);
@@ -146,8 +152,11 @@ export function conflicts(
   });
   for (let i = 0; i < subnavCount; i++) {
     if (skip?.kind === "subnav" && skip.slot === i) continue;
-    if (subnavKey(i) === key) hits.push(`subnav tab ${i + 1}`);
+    if (subnavKey(i) === key) hits.push(`sub tab ${i + 1}`);
   }
-  if (skip?.kind !== "settings" && settingsKey() === key) hits.push("settings");
+  for (const a of Object.keys(ACTIONS) as Action[]) {
+    if (skip?.kind === "action" && skip.item === a) continue;
+    if (actionKey(a) === key) hits.push(ACTIONS[a].label);
+  }
   return hits;
 }

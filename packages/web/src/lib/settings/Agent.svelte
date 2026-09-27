@@ -51,7 +51,6 @@
             <Button
               variant="ghost"
               square
-              tone="danger"
               icon="reset"
               title="reset"
               aria-label="reset provider"
@@ -88,7 +87,6 @@
             <Button
               variant="ghost"
               square
-              tone="danger"
               icon="reset"
               title="reset"
               aria-label="reset model"
@@ -115,7 +113,6 @@
             <Button
               variant="ghost"
               square
-              tone="danger"
               icon="reset"
               title="reset"
               aria-label="reset effort"

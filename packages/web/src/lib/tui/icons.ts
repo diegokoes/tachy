@@ -55,6 +55,8 @@ import {
   ImageIcon,
   Info,
   Key,
+  Keyboard,
+  KeyRound,
   Landmark,
   Layers,
   Lightbulb,
@@ -62,6 +64,7 @@ import {
   LockKeyhole,
   LockKeyholeOpen,
   LogIn,
+  LogOut,
   Maximize2,
   Megaphone,
   MessageSquare,
@@ -102,6 +105,7 @@ import {
   Trophy,
   UserRound,
   UserRoundGroup,
+  Wallpaper,
   Wrench,
   X,
   type LucideIconData,
@@ -162,6 +166,7 @@ export const ICONS = {
   /** A chart taken out of its tile to the whole window. */
   enlarge: Maximize2,
   login: LogIn,
+  logout: LogOut,
   moveUp: ChevronUp,
   moveDown: ChevronDown,
   /** Expand and collapse: drawn open, turned a quarter to read as shut. */
@@ -208,6 +213,9 @@ export const ICONS = {
   refDoc: ScrollText,
   overview: Pyramid,
   gaps: GitCompareArrows,
+  theme: Wallpaper,
+  keybinds: Keyboard,
+  agent: KeyRound,
 
   /* ── Reach ────────────────────────────────────────────────────────────── */
   user: UserRound,
