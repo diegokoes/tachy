@@ -1,0 +1,26 @@
+name: Load scripts
+
+# The k6 scenarios need a live, seeded server, so they cannot run here. This
+# only bundles them: it catches a syntax error or a bad import in seconds.
+on:
+  pull_request:
+    paths:
+      - load/**
+      - .github/workflows/load-scripts.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  load-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate k6 scripts
+        run: |
+          for f in load/*.js; do
+            docker run --rm -v "$PWD/load:/load:ro" grafana/k6:2.2.0 \
+              archive "/load/$(basename "$f")" -O /dev/null
+          done
