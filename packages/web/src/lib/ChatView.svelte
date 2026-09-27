@@ -181,15 +181,18 @@
   }
 
   function pickAz(value: string) {
-    if (!azCtx) return;
-    if (azCtx.stage === "sub") chat.input = `/az ${value} `;
-    else if (azCtx.stage === "project") {
+    // Held in a local: azCtx derives from the input, so clearing the input
+    // below would null it before the composer opens.
+    const ctx = azCtx;
+    if (!ctx) return;
+    if (ctx.stage === "sub") chat.input = `/az ${value} `;
+    else if (ctx.stage === "project") {
       const p = az.projects?.find((x) => x.id === value);
       if (p) chat.input = `/az new ${p.name} `;
     } else {
-      const t = typesOf(azCtx.project.id).find((x) => x.name === value);
+      const t = typesOf(ctx.project.id).find((x) => x.name === value);
       chat.input = "";
-      openComposer(azCtx.project, t);
+      openComposer(ctx.project, t);
     }
   }
 
