@@ -12,6 +12,9 @@ on:
       - scripts/schema-plan.sh
       - .github/workflows/schema-plan.yml
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
