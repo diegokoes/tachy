@@ -15,7 +15,7 @@
   import Launcher from "./chat/Launcher.svelte";
   import { ArtifactMark, Button, G, Icon, tip } from "./tui";
   import { pushScope } from "./keys.svelte";
-  import type { AdoTypeOption, CreatedTicket } from "@tachy/contract";
+  import type { WorkItemTypeOption, CreatedTicket } from "@tachy/contract";
   import TicketComposer from "./work-items/TicketComposer.svelte";
   import TicketCard from "./work-items/TicketCard.svelte";
   import { composer, hasDraft, openComposer } from "./work-items/composer.svelte";
@@ -207,7 +207,7 @@
     openComposer(hit.project, type);
   }
 
-  function ticketMade(ticket: CreatedTicket, type: AdoTypeOption) {
+  function ticketMade(ticket: CreatedTicket, type: WorkItemTypeOption) {
     addEntry({ kind: "ticket", ticket, icon: type.icon, color: type.color });
     snap(true);
   }

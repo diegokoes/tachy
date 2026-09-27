@@ -434,11 +434,22 @@ export type {
   SourceProbe,
   WorkItemSource,
   SourceFactory,
+  WorkItemComposer,
+  NewWorkItem,
+  PastedImage,
+  CreateContext,
   SourceCallOrigin,
   SourceCallOutcome,
   SourceTraffic,
 } from "./sources";
 export { registerSource, resolveSource } from "./sources";
+export {
+  getComposeConfig,
+  setComposeConfig,
+  offeredTypes,
+  typeConfig,
+  applyFormConfig,
+} from "./flows";
 export type { ResolvedSource } from "./sources";
 export {
   listSourceConnections,
@@ -582,12 +593,18 @@ export type {
   AdoFieldType,
   FieldSpec,
   WorkItemSchema,
-  AdoTypeOption,
+  WorkItemTypeOption,
   ComposerProject,
   PrefillOrigin,
   PathOption,
   PersonOption,
   ComposerForm,
+  ComposeConfig,
+  TypeFormConfig,
+  FieldFormConfig,
+  FieldDefault,
+  FieldShow,
+  FormDisplay,
   ComposerLayout,
   FormGroup,
   FieldWidget,

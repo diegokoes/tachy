@@ -21,6 +21,7 @@ import {
   creatableTypes,
   createAdoClient,
   createWorkItem,
+  explainAdoError,
   fieldPath,
   flattenTree,
   projectLayout,
@@ -28,7 +29,6 @@ import {
   rewriteAttachments,
 } from "@tachy/source-azure-devops";
 import { createApp } from "../packages/api/src/app";
-import { explainAdoError } from "../packages/api/src/routes/azure";
 import { loginCookie, resetData, sql } from "./helpers";
 
 const ORG = "https://dev.azure.com/myorg";
@@ -491,7 +491,7 @@ describe("explainAdoError", () => {
   });
 });
 
-describe("/api/az", () => {
+describe("/api/compose", () => {
   const app = createApp({ passwordAuth: true });
   let memberCookie: string;
   let outsiderCookie: string;
@@ -499,7 +499,7 @@ describe("/api/az", () => {
   let projectId: string;
 
   const req = (cookie: string, path: string, init: RequestInit = {}) =>
-    app.request(`/api/az${path}`, {
+    app.request(`/api/compose${path}`, {
       ...init,
       headers: { cookie, ...(init.headers ?? {}) },
     });
@@ -555,7 +555,7 @@ describe("/api/az", () => {
 
   const keys = async (cookie: string) =>
     (
-      (await (await req(cookie, "/projects")).json()) as {
+      (await (await req(cookie, "/projects?source_type=azure-devops")).json()) as {
         external_key: string;
       }[]
     )
