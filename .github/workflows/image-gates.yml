@@ -1,0 +1,57 @@
+name: Image gates
+
+# What vitest cannot see: the built image itself. It must start, answer
+# readiness, pass smoke.js against seeded data, and carry no critical
+# vulnerability that already has a fix. Only pull requests that can change the
+# image or the stack it starts in pay for the build.
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - docker-compose.yml
+      - package.json
+      - package-lock.json
+      - packages/**
+      - db/**
+      - load/**
+      - scripts/**
+      - .github/workflows/image-gates.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: tachy:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan the image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: tachy:ci
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Start the stack
+        run: scripts/container-smoke.sh up
+
+      - name: Seed and smoke
+        run: scripts/container-smoke.sh smoke
+
+      - name: Logs
+        if: failure()
+        run: docker compose logs --tail 200
