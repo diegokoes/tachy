@@ -38,7 +38,7 @@ services:
       - ./mock-llm:/mock:ro
 
   api-load:
-    image: ${TACHY_IMAGE:-diegokoes/tachy:latest}
+    image: ${TACHY_IMAGE:-ghcr.io/diegokoes/tachy:main}
     init: true
     mem_limit: ${API_LOAD_MEM_LIMIT:-10g}
     depends_on:

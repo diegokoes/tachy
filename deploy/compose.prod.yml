@@ -73,7 +73,7 @@ services:
   # The one embedding model on the host (§5.4): queries first, passages in
   # batches of 8, background jobs' passages last.
   embedder:
-    image: ${TACHY_IMAGE:-diegokoes/tachy:latest}
+    image: ${TACHY_IMAGE:-ghcr.io/diegokoes/tachy:main}
     container_name: ${COMPOSE_PROJECT_NAME:-tachy}-embedder
     restart: unless-stopped
     command: ["node", "dist/embedder.js"]
@@ -105,7 +105,7 @@ services:
   # Job pools (DEPLOYMENT-ARCHITECTURE.md §5.3.4). Each claims only runs of its
   # class; a heavy run holds 3 chat slots while it runs.
   worker-light: &worker
-    image: ${TACHY_IMAGE:-diegokoes/tachy:latest}
+    image: ${TACHY_IMAGE:-ghcr.io/diegokoes/tachy:main}
     container_name: ${COMPOSE_PROJECT_NAME:-tachy}-worker-light
     restart: unless-stopped
     command: ["node", "dist/worker.js"]
