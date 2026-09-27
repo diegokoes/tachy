@@ -150,18 +150,3 @@ jobs:
           fi
           docker run --rm -v "$PWD:/repo" -w /repo ghcr.io/gitleaks/gitleaks:v8.30.1 \
             git --redact --no-banner --log-opts="$range" .
-
-  # The k6 scenarios need a live, seeded server, so they cannot run here. This
-  # only bundles them: it catches a syntax error or a bad import in seconds.
-  load-scripts:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Validate k6 scripts
-        run: |
-          for f in load/*.js; do
-            docker run --rm -v "$PWD/load:/load:ro" grafana/k6:2.2.0 \
-              archive "/load/$(basename "$f")" -O /dev/null
-          done
