@@ -80,6 +80,31 @@ export interface PersonOption {
   unique_name: string;
 }
 
+/** A group of fields as ADO's own form draws it. Null label: the form's header. */
+export interface FormGroup {
+  label: string | null;
+  fields: string[];
+}
+
+/**
+ * The type's form as its process lays it out, so the composer shows what ADO
+ * shows. `body` is the long prose fields (written on the left); `groups` are
+ * everything else (set on the right). Null when the layout cannot be read.
+ */
+export interface ComposerLayout {
+  body: string[];
+  groups: FormGroup[];
+}
+
+/**
+ * A field whose control on ADO's form is not what its schema suggests: an
+ * extension storing several values separated by ";", or a list that only
+ * suggests values and accepts anything typed.
+ */
+export type FieldWidget =
+  | { kind: "multi"; values: string[]; allow_custom: boolean }
+  | { kind: "suggest"; values: string[] };
+
 export interface ComposerForm {
   project: string;
   type: string;
@@ -89,8 +114,15 @@ export interface ComposerForm {
   prefill: Record<string, { value: unknown; origin: PrefillOrigin }>;
   areas: PathOption[];
   iterations: PathOption[];
+  /** Members of every team in the project, the caller first. */
   people: PersonOption[];
+  /** Whoever the caller's PAT belongs to. */
+  me: PersonOption | null;
   templates: { id: string; name: string; description: string | null }[];
+  layout: ComposerLayout | null;
+  /** ADO's label on the form, where it differs from the field's name. */
+  labels: Record<string, string>;
+  widgets: Record<string, FieldWidget>;
 }
 
 /**
