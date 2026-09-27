@@ -7,6 +7,7 @@ import {
   it,
   vi,
 } from "vitest";
+import type { FieldSpec } from "@tachy/core";
 import {
   addSourceConnection,
   addSourceProject,
@@ -22,6 +23,7 @@ import {
   createWorkItem,
   fieldPath,
   flattenTree,
+  projectLayout,
   referencedKeys,
   rewriteAttachments,
 } from "@tachy/source-azure-devops";
@@ -141,6 +143,28 @@ describe("composer form", () => {
       name: "ProjA",
       defaultTeam: { id: "t", name: "ProjA Team" },
     },
+    "/_apis/projects/ProjA/teams?": {
+      value: [{ id: "t", name: "ProjA Team" }],
+    },
+    "/_apis/connectionData": {
+      authenticatedUser: {
+        providerDisplayName: "Me Myself",
+        properties: { Account: { $value: "me@corp" } },
+      },
+    },
+    "/_apis/projects/p/properties": {
+      value: [{ name: "System.ProcessTemplateType", value: "proc-1" }],
+    },
+    "/ProjA/_apis/wit/workitemtypes?": {
+      value: [{ name: "Bug", referenceName: "Custom.Bug" }],
+    },
+    "/_apis/work/processes/proc-1/workItemTypes/Custom.Bug/layout": {
+      systemControls: [
+        { id: "System.AssignedTo", label: "Assi&gned To" },
+        { id: "System.AreaPath", label: "&Area" },
+      ],
+      pages: [],
+    },
     "/_apis/projects/ProjA/teams/ProjA%20Team/members": {
       value: [
         { identity: { displayName: "Zoe", uniqueName: "zoe@corp" } },
@@ -249,6 +273,23 @@ describe("composer form", () => {
     });
   });
 
+  it("treats a list of only ADO's <None> placeholder as free text", async () => {
+    const r = routes({});
+    (
+      r["/ProjA/_apis/wit/workitemtypes/Bug/fields"] as { value: unknown[] }
+    ).value.push({
+      referenceName: "Microsoft.VSTS.Build.FoundIn",
+      name: "Found In",
+      allowedValues: ["<None>"],
+    });
+    mockFetch(r);
+    const form = await composerForm(client(), "ProjA", "Bug");
+    expect(form.widgets["Microsoft.VSTS.Build.FoundIn"]).toEqual({
+      kind: "suggest",
+      values: [],
+    });
+  });
+
   it("uses the team's fixed default iteration when no macro is set", async () => {
     mockFetch(routes({ defaultIteration: { path: "\\Sprint 4" } }));
     const form = await composerForm(client(), "ProjA", "Bug");
@@ -268,10 +309,16 @@ describe("composer form", () => {
       { path: "ProjA\\Sprint 3", team: true, current: true },
       { path: "ProjA\\Sprint 4", team: true },
     ]);
+    expect(form.me).toEqual({ name: "Me Myself", unique_name: "me@corp" });
     expect(form.people).toEqual([
+      { name: "Me Myself", unique_name: "me@corp" },
       { name: "Ann", unique_name: "ann@corp" },
       { name: "Zoe", unique_name: "zoe@corp" },
     ]);
+    expect(form.layout?.groups[0]).toEqual({
+      label: null,
+      fields: ["System.AreaPath", "System.IterationPath"],
+    });
     expect(form.templates).toEqual([
       { id: "tpl", name: "Crash", description: null },
     ]);
@@ -285,7 +332,128 @@ describe("composer form", () => {
     const form = await composerForm(client(), "ProjA", "Bug");
     expect(form.team).toBeNull();
     expect(form.fields.length).toBe(5);
-    expect(form.people).toEqual([]);
+    // People come from every team, so they survive the default team's lookup failing.
+    expect(form.people.map((p) => p.unique_name)).toContain("me@corp");
+    expect(form.templates).toEqual([]);
+  });
+});
+
+describe("projectLayout", () => {
+  const f = (
+    reference_name: string,
+    extra: Partial<FieldSpec> = {},
+  ): FieldSpec => ({
+    reference_name,
+    name: reference_name.split(".").pop()!,
+    required: false,
+    ...extra,
+  });
+  const fields = [
+    f("System.AssignedTo", { name: "Assigned To" }),
+    f("System.AreaPath", { name: "Area Path" }),
+    f("System.Description", { type: "html" }),
+    f("Microsoft.VSTS.TCM.ReproSteps", { type: "html" }),
+    f("Microsoft.VSTS.TCM.SystemInfo", { type: "html" }),
+    f("Microsoft.VSTS.Common.Priority"),
+    f("Microsoft.VSTS.Common.Severity"),
+    f("Custom.Area", { name: "Area" }),
+    f("Custom.Cloud"),
+    f("System.CreatedBy", { read_only: true }),
+  ];
+  // Shaped after a real Scrum-derived Bug: Priority and System Info hidden,
+  // Custom.Area relabelled, Cloud drawn by the multivalue extension.
+  const layout = {
+    systemControls: [
+      { id: "System.Title" },
+      { id: "System.AssignedTo", label: "Assi&gned To" },
+      { id: "System.State" },
+      { id: "System.AreaPath", label: "&Area" },
+    ],
+    pages: [
+      {
+        pageType: "custom",
+        sections: [
+          {
+            groups: [
+              {
+                label: "Description",
+                controls: [{ id: "System.Description" }],
+              },
+              {
+                label: "Repro Steps",
+                controls: [{ id: "Microsoft.VSTS.TCM.ReproSteps" }],
+              },
+              {
+                label: "System Info",
+                visible: false,
+                controls: [{ id: "Microsoft.VSTS.TCM.SystemInfo" }],
+              },
+            ],
+          },
+          {
+            groups: [
+              {
+                label: "Planning",
+                controls: [
+                  { id: "Microsoft.VSTS.Common.Priority", visible: false },
+                  { id: "Microsoft.VSTS.Common.Severity" },
+                  { id: "System.CreatedBy" },
+                ],
+              },
+              {
+                label: "System Info",
+                controls: [
+                  {
+                    id: "3efcf0af",
+                    label: "Clouds",
+                    isContribution: true,
+                    contribution: {
+                      contributionId:
+                        "ms-devlabs.vsts-extensions-multivalue-control.multivalue-form-control",
+                      inputs: {
+                        FieldName: "Custom.Cloud",
+                        Values: "DEV;QA;PROD",
+                        AllowCustom: true,
+                      },
+                    },
+                  },
+                  { id: "Custom.Area", label: "Component" },
+                ],
+              },
+              { label: "Board", isContribution: true, controls: [] },
+            ],
+          },
+        ],
+      },
+      { pageType: "history", sections: [] },
+    ],
+  };
+
+  it("keeps what ADO shows, splits prose from the rest, and follows its groups", () => {
+    const { layout: l } = projectLayout(layout, fields);
+    expect(l.body).toEqual([
+      "System.Description",
+      "Microsoft.VSTS.TCM.ReproSteps",
+    ]);
+    expect(l.groups).toEqual([
+      { label: null, fields: ["System.AssignedTo", "System.AreaPath"] },
+      { label: "Planning", fields: ["Microsoft.VSTS.Common.Severity"] },
+      { label: "System Info", fields: ["Custom.Cloud", "Custom.Area"] },
+    ]);
+  });
+
+  it("takes ADO's labels and reads the multivalue control's options", () => {
+    const { labels, widgets } = projectLayout(layout, fields);
+    expect(labels).toEqual({
+      "System.AreaPath": "Area",
+      "Custom.Area": "Component",
+      "Custom.Cloud": "Clouds",
+    });
+    expect(widgets["Custom.Cloud"]).toEqual({
+      kind: "multi",
+      values: ["DEV", "QA", "PROD"],
+      allow_custom: true,
+    });
   });
 });
 

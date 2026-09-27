@@ -35,6 +35,7 @@ export {
   templateValues,
   fieldPath,
   flattenTree,
+  projectLayout,
 } from "./composer";
 export {
   createWorkItem,

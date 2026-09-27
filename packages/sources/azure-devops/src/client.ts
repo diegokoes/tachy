@@ -14,6 +14,8 @@ const MAX_PAGES = 100;
 
 const API_COMMENTS = "7.1-preview.4";
 const API_CONNECTION_DATA = "7.1-preview.1";
+/** Project properties have no released version either. */
+const API_PROJECT_PROPERTIES = "7.1-preview.1";
 
 /**
  * Every request carries the version; only the preview endpoints above name their
@@ -191,6 +193,39 @@ export interface AdoTeamMember {
   };
 }
 
+/** A control on a work item form: a field, or an extension bound to one. */
+export interface AdoLayoutControl {
+  id?: string;
+  label?: string;
+  controlType?: string;
+  visible?: boolean;
+  readOnly?: boolean;
+  isContribution?: boolean;
+  contribution?: {
+    contributionId?: string;
+    inputs?: Record<string, unknown>;
+  };
+}
+
+export interface AdoLayoutGroup {
+  id?: string;
+  label?: string;
+  visible?: boolean;
+  isContribution?: boolean;
+  controls?: AdoLayoutControl[];
+}
+
+/** The form ADO draws for a type, from the process it belongs to. */
+export interface AdoFormLayout {
+  pages?: {
+    label?: string;
+    pageType?: string;
+    visible?: boolean;
+    sections?: { id?: string; groups?: AdoLayoutGroup[] }[];
+  }[];
+  systemControls?: AdoLayoutControl[];
+}
+
 export interface AdoAttachmentRef {
   id: string;
   url: string;
@@ -274,6 +309,13 @@ export interface AdoClient {
     opts?: { validateOnly?: boolean },
   ): Promise<AdoWorkItem>;
   listTypeCategories(project: string): Promise<AdoTypeCategory[]>;
+  /** Named properties, e.g. System.ProcessTemplateType: the process the form comes from. */
+  getProjectProperties(
+    projectId: string,
+    keys: string[],
+  ): Promise<Record<string, unknown>>;
+  getFormLayout(processId: string, typeRef: string): Promise<AdoFormLayout>;
+  listTeams(project: string): Promise<AdoTeamRef[]>;
   getProject(project: string): Promise<{
     id: string;
     name: string;
@@ -501,6 +543,28 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     async listTypeCategories(project) {
       const res = await req<AdoList<AdoTypeCategory>>(
         `${proj(project)}/_apis/wit/workitemtypecategories`,
+      );
+      return res.value ?? [];
+    },
+
+    async getProjectProperties(projectId, keys) {
+      const res = await req<AdoList<{ name: string; value: unknown }>>(
+        `/_apis/projects/${encodeURIComponent(projectId)}/properties?keys=${keys.map(encodeURIComponent).join(",")}&api-version=${API_PROJECT_PROPERTIES}`,
+      );
+      return Object.fromEntries(
+        (res.value ?? []).map((p) => [p.name, p.value]),
+      );
+    },
+
+    async getFormLayout(processId, typeRef) {
+      return req<AdoFormLayout>(
+        `/_apis/work/processes/${encodeURIComponent(processId)}/workItemTypes/${encodeURIComponent(typeRef)}/layout`,
+      );
+    },
+
+    async listTeams(project) {
+      const res = await req<AdoList<AdoTeamRef>>(
+        `/_apis/projects/${encodeURIComponent(project)}/teams?$top=100`,
       );
       return res.value ?? [];
     },

@@ -1,11 +1,20 @@
 import type {
   AdoTypeOption,
   ComposerForm,
+  ComposerLayout,
+  FieldSpec,
+  FieldWidget,
+  FormGroup,
   PathOption,
   PersonOption,
   PrefillOrigin,
 } from "@tachy/core";
-import type { AdoClassificationNode, AdoClient } from "./client";
+import type {
+  AdoClassificationNode,
+  AdoClient,
+  AdoFormLayout,
+  AdoLayoutControl,
+} from "./client";
 import { workItemSchema } from "./fields";
 
 export type { AdoTypeOption, ComposerForm };
@@ -97,11 +106,165 @@ function mergePaths(first: PathOption[], rest: string[]): PathOption[] {
 const soft = <T>(p: Promise<T>, fallback: T): Promise<T> =>
   p.catch(() => fallback);
 
+/** How many of a project's teams are read for people to assign. */
+const MAX_TEAMS = 30;
+
+/** Header controls worth a field on a create form; State and Reason are ADO's. */
+const HEADER = ["System.AssignedTo", AREA, ITERATION, "System.Tags"];
+
+/** "Assi&gned To": the ampersand marks a keyboard accelerator in ADO's labels. */
+const cleanLabel = (label: string | undefined) =>
+  label?.replace(/&(?!&)/g, "").trim() || undefined;
+
+const flag = (v: unknown) => v === true || v === "true" || v === "True";
+
+/**
+ * ADO's form for the type, as the composer's two columns: prose on the left,
+ * everything else in ADO's own groups on the right. Hidden controls and groups
+ * are left out, and an extension control is read for the field it binds to.
+ */
+export function projectLayout(
+  layout: AdoFormLayout,
+  fields: readonly FieldSpec[],
+): {
+  layout: ComposerLayout;
+  labels: Record<string, string>;
+  widgets: Record<string, FieldWidget>;
+} {
+  const specs = new Map(fields.map((f) => [f.reference_name, f]));
+  const placed = new Set<string>();
+  const labels: Record<string, string> = {};
+  const widgets: Record<string, FieldWidget> = {};
+  const body: string[] = [];
+  const groups: FormGroup[] = [];
+
+  const take = (c: AdoLayoutControl): string | null => {
+    if (c.visible === false) return null;
+    const inputs = c.contribution?.inputs ?? {};
+    const ref =
+      c.isContribution && typeof inputs.FieldName === "string"
+        ? inputs.FieldName
+        : (c.id ?? "");
+    const spec = specs.get(ref);
+    if (!spec || spec.read_only || placed.has(ref)) return null;
+    placed.add(ref);
+    const label = cleanLabel(c.label);
+    if (label && label !== spec.name) labels[ref] = label;
+    if (
+      c.isContribution &&
+      /multivalue/i.test(c.contribution?.contributionId ?? "")
+    )
+      widgets[ref] = {
+        kind: "multi",
+        values: String(inputs.Values ?? "")
+          .split(";")
+          .map((v) => v.trim())
+          .filter(Boolean),
+        allow_custom: flag(inputs.AllowCustom),
+      };
+    return ref;
+  };
+
+  const header: string[] = [];
+  for (const ref of HEADER) {
+    const c = layout.systemControls?.find((x) => x.id === ref) ?? { id: ref };
+    const taken = take(c);
+    if (taken) header.push(taken);
+  }
+  if (header.length) groups.push({ label: null, fields: header });
+
+  for (const page of layout.pages ?? []) {
+    if (page.pageType !== "custom" || page.visible === false) continue;
+    for (const section of page.sections ?? [])
+      for (const g of section.groups ?? []) {
+        if (g.visible === false || g.isContribution) continue;
+        const here: string[] = [];
+        for (const c of g.controls ?? []) {
+          const ref = take(c);
+          if (!ref) continue;
+          if (specs.get(ref)?.type === "html") body.push(ref);
+          else here.push(ref);
+        }
+        if (here.length)
+          groups.push({ label: cleanLabel(g.label) ?? null, fields: here });
+      }
+  }
+  return { layout: { body, groups }, labels, widgets };
+}
+
+/**
+ * A list that only offers ADO's "<None>" placeholder is a suggestion list:
+ * Found In ships that way and real items carry versions typed by hand.
+ */
+function suggestionFields(
+  fields: readonly FieldSpec[],
+): Record<string, FieldWidget> {
+  const out: Record<string, FieldWidget> = {};
+  for (const f of fields) {
+    const values = (f.allowed_values ?? []).map(String);
+    if (values.length && values.every((v) => v === "<None>"))
+      out[f.reference_name] = { kind: "suggest", values: [] };
+  }
+  return out;
+}
+
+async function readLayout(
+  client: AdoClient,
+  projectId: string | undefined,
+  project: string,
+  type: string,
+): Promise<AdoFormLayout | null> {
+  if (!projectId) return null;
+  const [props, types] = await Promise.all([
+    client.getProjectProperties(projectId, ["System.ProcessTemplateType"]),
+    client.listWorkItemTypes(project),
+  ]);
+  const processId = props["System.ProcessTemplateType"];
+  const ref = types.find((t) => t.name === type)?.referenceName;
+  if (typeof processId !== "string" || !ref) return null;
+  return client.getFormLayout(processId, ref);
+}
+
+async function whoAmI(client: AdoClient): Promise<PersonOption | null> {
+  const u = (await client.getConnectionData()).authenticatedUser;
+  const email = u?.properties?.Account?.$value;
+  return email
+    ? { name: u?.providerDisplayName || email, unique_name: email }
+    : null;
+}
+
+/** Everyone on any of the project's teams: the default team is rarely all of them. */
+async function projectPeople(
+  client: AdoClient,
+  project: string,
+  me: PersonOption | null,
+): Promise<PersonOption[]> {
+  const teams = (await soft(client.listTeams(project), [])).slice(0, MAX_TEAMS);
+  const lists = await Promise.all(
+    teams.map((t) => soft(client.listTeamMembers(project, t.name), [])),
+  );
+  const byName = new Map<string, PersonOption>();
+  for (const m of lists.flat()) {
+    const i = m.identity;
+    if (!i?.uniqueName || i.isContainer || i.inactive) continue;
+    byName.set(i.uniqueName.toLowerCase(), {
+      name: i.displayName || i.uniqueName,
+      unique_name: i.uniqueName,
+    });
+  }
+  if (me) byName.delete(me.unique_name.toLowerCase());
+  const rest = [...byName.values()].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+  return me ? [me, ...rest] : rest;
+}
+
 /**
  * Everything the composer needs to draw one type's form, in one call: the field
- * schema, the team's areas and iterations with its defaults, the people it can
- * assign to, and its templates. Each team-scoped lookup degrades on its own, so
- * a PAT without Project & Team read still gets a form, just with fewer choices.
+ * schema laid out as ADO's own form, the team's areas and iterations with its
+ * defaults, the people it can assign to, and its templates. Each lookup beyond
+ * the schema degrades on its own, so a PAT without Project & Team read still
+ * gets a form, just with fewer choices.
  */
 export async function composerForm(
   client: AdoClient,
@@ -109,23 +272,23 @@ export async function composerForm(
   type: string,
   opts: { team?: string | null; configDefaults?: Record<string, unknown> } = {},
 ): Promise<ComposerForm> {
-  const team =
-    opts.team ??
-    (await soft(client.getProject(project), null))?.defaultTeam?.name ??
-    null;
+  const info = await soft(client.getProject(project), null);
+  const team = opts.team ?? info?.defaultTeam?.name ?? null;
 
-  const [schema, settings, current, teamIterations, fieldValues] =
+  const [schema, settings, current, teamIterations, fieldValues, layout, me] =
     await Promise.all([
       workItemSchema(client, project, type, opts.configDefaults ?? {}),
       team ? soft(client.getTeamSettings(project, team), null) : null,
       team ? soft(client.listTeamIterations(project, team, "current"), []) : [],
       team ? soft(client.listTeamIterations(project, team), []) : [],
       team ? soft(client.getTeamFieldValues(project, team), null) : null,
+      soft(readLayout(client, info?.id, project, type), null),
+      soft(whoAmI(client), null),
     ]);
-  const [areaTree, iterationTree, members, templates] = await Promise.all([
+  const [areaTree, iterationTree, people, templates] = await Promise.all([
     soft(client.getClassificationTree(project, "Areas", TREE_DEPTH), null),
     soft(client.getClassificationTree(project, "Iterations", TREE_DEPTH), null),
-    team ? soft(client.listTeamMembers(project, team), []) : [],
+    projectPeople(client, project, me),
     team ? soft(client.listTemplates(project, team, type), []) : [],
   ]);
 
@@ -150,19 +313,16 @@ export async function composerForm(
     flattenTree(areaTree),
   );
 
-  const people: PersonOption[] = members
-    .map((m) => m.identity)
-    .filter((i) => i?.uniqueName && !i.isContainer && !i.inactive)
-    .map((i) => ({
-      name: i!.displayName || i!.uniqueName!,
-      unique_name: i!.uniqueName!,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-
+  const specs = new Map(schema.fields.map((f) => [f.reference_name, f]));
   const prefill: ComposerForm["prefill"] = {};
   const put = (ref: string, value: unknown, origin: PrefillOrigin) => {
     if (value == null || value === "") return;
-    prefill[ref] = { value, origin };
+    // Process defaults for booleans arrive as "0"/"1".
+    const v =
+      specs.get(ref)?.type === "boolean" && typeof value === "string"
+        ? value === "1" || value.toLowerCase() === "true"
+        : value;
+    prefill[ref] = { value: v, origin };
   };
   for (const f of schema.fields)
     if (!f.read_only) put(f.reference_name, f.default_value, "process");
@@ -177,6 +337,7 @@ export async function composerForm(
   for (const [ref, value] of Object.entries(schema.config_defaults))
     put(ref, value, "config");
 
+  const projected = layout ? projectLayout(layout, schema.fields) : null;
   return {
     project,
     type,
@@ -186,11 +347,18 @@ export async function composerForm(
     areas,
     iterations,
     people,
+    me,
     templates: templates.map((t) => ({
       id: t.id,
       name: t.name,
       description: t.description || null,
     })),
+    layout: projected?.layout ?? null,
+    labels: projected?.labels ?? {},
+    widgets: {
+      ...suggestionFields(schema.fields),
+      ...(projected?.widgets ?? {}),
+    },
   };
 }
 
