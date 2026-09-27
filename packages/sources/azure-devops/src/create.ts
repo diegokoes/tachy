@@ -1,36 +1,8 @@
 import { addWorkItemLink, recordRun } from "@tachy/core";
+import type { CreateContext, NewWorkItem, TicketValidation } from "@tachy/core";
 import type { AdoClient, AdoWorkItem, JsonPatchOp } from "./client";
 
-export interface PastedImage {
-  /** The `attachment:<key>` an HTML field refers to it by. */
-  key: string;
-  name: string;
-  bytes: Uint8Array;
-}
-
-export interface NewWorkItem {
-  project: string;
-  type: string;
-  title: string;
-  /** Plain text or HTML. ADO renders System.Description as HTML only. */
-  description?: string;
-  fields?: Record<string, unknown>;
-  /** Applied underneath `fields`: the project's or connection's configured defaults. */
-  defaults?: Record<string, unknown>;
-  parentId?: string;
-  relatedIds?: string[];
-  tags?: string[];
-  images?: PastedImage[];
-}
-
-export interface CreateContext {
-  sourceSlug: string;
-  userId: string | null;
-  /** The registered project, when there is one, for the links it records. */
-  sourceProjectId?: string | null;
-  /** Tachy work items this is raised from; each records it as tracked_by. */
-  workItemIds?: string[];
-}
+export type { CreateContext, NewWorkItem, PastedImage } from "@tachy/core";
 
 const ATTACHMENT_RE = /attachment:([A-Za-z0-9_-]+)/g;
 
@@ -162,5 +134,29 @@ export async function createWorkItem(
     url:
       created._links?.html?.href ??
       `${client.orgUrl}/${encodeURIComponent(item.project)}/_workitems/edit/${created.id}`,
+  };
+}
+
+/**
+ * ADO's rule errors name fields in prose: "Rule Error for field Severity",
+ * "field 'System.AreaPath'". Pulled out so the form can mark them.
+ */
+export function explainAdoError(raw: string): TicketValidation {
+  const json = raw.slice(raw.indexOf("{"));
+  let message = raw;
+  try {
+    const parsed = JSON.parse(json) as { message?: string };
+    if (parsed.message) message = parsed.message;
+  } catch {
+    message = raw.replace(/^Azure DevOps \S+ \S+ -> \d+ /, "");
+  }
+  const fields = new Set<string>();
+  for (const m of message.matchAll(/field '([^']+)'/g)) fields.add(m[1]);
+  for (const m of message.matchAll(/for field ([^.'"]+?)\./g))
+    fields.add(m[1].trim());
+  return {
+    ok: false,
+    message,
+    ...(fields.size ? { fields: [...fields] } : {}),
   };
 }

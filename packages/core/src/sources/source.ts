@@ -1,3 +1,8 @@
+import type {
+  ComposerForm,
+  TicketValidation,
+  WorkItemTypeOption,
+} from "@tachy/contract";
 import type { TokenMap } from "../compliance/redaction";
 import type { RawWorkItem } from "../types";
 
@@ -57,6 +62,72 @@ export interface WorkItemSource {
    * name where known. Import scrubText/TokenMap from @tachy/core.
    */
   redactRaw?(raw: unknown, map: TokenMap, customerSlug: string | null): unknown;
+  /** Present when people can create items in this source from tachy. */
+  composer?: WorkItemComposer;
+}
+
+export interface PastedImage {
+  /** The `attachment:<key>` an HTML field refers to it by. */
+  key: string;
+  name: string;
+  bytes: Uint8Array;
+}
+
+/** An item to create, in the source's own field ids. */
+export interface NewWorkItem {
+  /** The source's project key: an ADO project name, a GitHub owner/repo. */
+  project: string;
+  type: string;
+  title: string;
+  /** Plain text or HTML, for sources with one description field. */
+  description?: string;
+  fields?: Record<string, unknown>;
+  /** Applied underneath `fields`. */
+  defaults?: Record<string, unknown>;
+  parentId?: string;
+  relatedIds?: string[];
+  tags?: string[];
+  images?: PastedImage[];
+}
+
+export interface CreateContext {
+  sourceSlug: string;
+  userId: string | null;
+  /** The registered project, when there is one, for the links it records. */
+  sourceProjectId?: string | null;
+  /** Tachy work items this is raised from; each records it as tracked_by. */
+  workItemIds?: string[];
+}
+
+/**
+ * Creating items from the composer. Everything the composer and the admin's
+ * form config know about a source goes through here, so a new source needs an
+ * adapter and nothing else. `projectConfig` is the registered project's own
+ * config, where a source keeps per-project defaults.
+ */
+export interface WorkItemComposer {
+  types(project: string): Promise<WorkItemTypeOption[]>;
+  form(
+    project: string,
+    type: string,
+    opts: { projectConfig?: Record<string, unknown> },
+  ): Promise<ComposerForm>;
+  /** A team template's field values, for sources that have templates. */
+  template?(
+    project: string,
+    team: string,
+    id: string,
+  ): Promise<Record<string, unknown>>;
+  /** Runs the source's own rules without saving, where it can. */
+  validate?(
+    item: NewWorkItem,
+    projectConfig?: Record<string, unknown>,
+  ): Promise<TicketValidation>;
+  create(
+    item: NewWorkItem,
+    ctx: CreateContext,
+    projectConfig?: Record<string, unknown>,
+  ): Promise<{ id: number | string; url: string }>;
 }
 
 export type SourceFactory = (cfg: {

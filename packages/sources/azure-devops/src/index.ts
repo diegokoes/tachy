@@ -7,12 +7,16 @@ import {
   TokenMap,
 } from "@tachy/core";
 import type {
+  WorkItemComposer,
   WorkItemSource,
   RawWorkItem,
   RawMessage,
   ListOptions,
   SourceFactory,
 } from "@tachy/core";
+import { composerForm, creatableTypes, templateValues } from "./composer";
+import { createWorkItem, explainAdoError, validateWorkItem } from "./create";
+import { workItemDefaults } from "./fields";
 import {
   createAdoClient,
   type AdoRelation,
@@ -39,6 +43,7 @@ export {
 } from "./composer";
 export {
   createWorkItem,
+  explainAdoError,
   validateWorkItem,
   buildPatch,
   asHtml,
@@ -293,10 +298,51 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
     return out;
   }
 
+  const defaultsFor = (
+    project: string,
+    type: string,
+    projectConfig?: Record<string, unknown>,
+  ) => workItemDefaults(cfg.config, project, type, projectConfig);
+
+  const composer: WorkItemComposer = {
+    types: (project) => creatableTypes(client, project),
+    form: (project, type, opts) =>
+      composerForm(client, project, type, {
+        team:
+          typeof opts.projectConfig?.team === "string" &&
+          opts.projectConfig.team
+            ? opts.projectConfig.team
+            : null,
+        configDefaults: defaultsFor(project, type, opts.projectConfig),
+      }),
+    template: (project, team, id) => templateValues(client, project, team, id),
+    async validate(item, projectConfig) {
+      try {
+        await validateWorkItem(client, {
+          ...item,
+          defaults: defaultsFor(item.project, item.type, projectConfig),
+        });
+        return { ok: true };
+      } catch (e) {
+        return explainAdoError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    create: (item, ctx, projectConfig) =>
+      createWorkItem(
+        client,
+        {
+          ...item,
+          defaults: defaultsFor(item.project, item.type, projectConfig),
+        },
+        ctx,
+      ),
+  };
+
   return {
     type: "azure-devops",
     capabilities: { postNote: false, incrementalSync: true },
     redactRaw: redactAdoRaw,
+    composer,
 
     async verify() {
       // connectionData is a preview endpoint and only names the caller, so a
