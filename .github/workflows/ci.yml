@@ -5,6 +5,12 @@ on:
     branches: [main, dev]
   pull_request:
 
+# A new push to a pull request cancels its older run. Pushes to dev and main
+# each get their own group, since every one of them publishes an image.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
