@@ -74,11 +74,23 @@ export const agent = new Hono()
         }
       : {};
     return c.json({
-      builtins: BUILTIN_COMMANDS.map(({ name, args, description }) => ({
-        name,
-        args,
-        description,
-      })),
+      builtins: BUILTIN_COMMANDS.map(
+        ({ name, args, description, subcommands }) => ({
+          name,
+          args,
+          description,
+          ...(subcommands
+            ? {
+                subcommands: subcommands.map((s) => ({
+                  name: s.name,
+                  args: s.args,
+                  description: s.description,
+                  ...(s.client ? { client: true } : {}),
+                })),
+              }
+            : {}),
+        }),
+      ),
       artifacts: await listVisibleArtifacts(ctx),
     });
   })

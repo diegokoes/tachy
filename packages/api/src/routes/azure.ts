@@ -23,8 +23,14 @@ import {
   type NewWorkItem,
   type PastedImage,
 } from "@tachy/source-azure-devops";
-import { callerUserId, isAdminIdentity } from "../authz";
+import {
+  callerScope,
+  callerUserId,
+  isAdminIdentity,
+  requireCaller,
+} from "../authz";
 import { adoClientFor } from "../azure-devops";
+import { reviewTicket } from "../ticket-review";
 import { MAX_UPLOAD_BYTES, tooLarge } from "../upload-limit";
 
 const draftSchema = z.object({
@@ -37,6 +43,27 @@ const draftSchema = z.object({
   work_item_ids: z.array(z.string().uuid()).optional(),
 });
 type Draft = z.infer<typeof draftSchema>;
+
+const reviewSchema = z.object({
+  type: z.string().min(1),
+  title: z.string(),
+  fields: z
+    .array(z.object({ ref: z.string(), name: z.string(), value: z.string() }))
+    .max(80)
+    .default([]),
+  images: z.number().int().min(0).default(0),
+  context: z
+    .array(
+      z.object({
+        source: z.string(),
+        external_id: z.string(),
+        title: z.string(),
+        text: z.string().max(20_000),
+      }),
+    )
+    .max(10)
+    .default([]),
+});
 
 /** The caller's teams, or null for an app admin, who sees every project. */
 async function callerTeamIds(c: Context): Promise<Set<string> | null> {
@@ -124,6 +151,13 @@ export function explainAdoError(raw: string): TicketValidation {
 }
 
 export const azure = new Hono()
+
+  .post("/review", zValidator("json", reviewSchema), async (c) => {
+    const userId = await requireCaller(c);
+    return c.json(
+      await reviewTicket(c.req.valid("json"), await callerScope(c), userId),
+    );
+  })
 
   .get("/projects", async (c) => {
     const teams = await callerTeamIds(c);
