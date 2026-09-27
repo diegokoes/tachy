@@ -6,7 +6,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@huggingface/transformers": "^4.2.0",
+    "@huggingface/transformers": "^4.3.0",
     "@tachy/contract": "*",
     "croner": "^10.0.1",
     "dotenv": "^16.4.7",
