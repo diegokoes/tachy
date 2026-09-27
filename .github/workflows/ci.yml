@@ -5,6 +5,9 @@ on:
     branches: [main, dev]
   pull_request:
 
+permissions:
+  contents: read
+
 # A new push to a pull request cancels its older run. Pushes to dev and main
 # each get their own group, since every one of them publishes an image.
 concurrency:
