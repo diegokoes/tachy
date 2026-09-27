@@ -14,6 +14,8 @@ export interface ReviewRequest {
   fields: { ref: string; name: string; value: string }[];
   images: number;
   context: TicketContextItem[];
+  /** The owning team's own guidance for this type, from its flows config. */
+  guidance?: string;
 }
 
 const MAX_FINDINGS = 8;
@@ -65,6 +67,9 @@ export function reviewPrompt(
 ): string {
   const parts = [
     checklistFor(r.type),
+    ...(r.guidance?.trim()
+      ? [`The team that owns this project also asks: ${r.guidance.trim()}`]
+      : []),
     `Work item type: ${r.type}`,
     `[System.Title] ${scrub(r.title) || "(empty)"}`,
     ...r.fields.map(

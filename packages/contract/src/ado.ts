@@ -1,3 +1,5 @@
+import type { FormDisplay } from "./flows";
+
 /** ADO's FieldType values, as seen in the account-wide field list. */
 export type AdoFieldType =
   | "string"
@@ -41,7 +43,7 @@ export interface WorkItemSchema {
 }
 
 /** A work item type the composer offers: what ADO's own "New" menu would list. */
-export interface AdoTypeOption {
+export interface WorkItemTypeOption {
   name: string;
   description: string | null;
   /** Hex without the '#'. */
@@ -58,12 +60,14 @@ export interface ComposerProject {
   /** The ADO project name. */
   external_key: string;
   source_slug: string;
+  source_type: string;
   team_slug: string;
   product_slug: string | null;
 }
 
 /** Where a prefilled value came from, lowest precedence first. */
-export type PrefillOrigin = "process" | "team" | "config" | "template";
+export type PrefillOrigin =
+  "process" | "team" | "config" | "admin" | "template";
 
 export interface PathOption {
   /** As System.AreaPath / System.IterationPath take it: `Project\Child`. */
@@ -123,6 +127,8 @@ export interface ComposerForm {
   /** ADO's label on the form, where it differs from the field's name. */
   labels: Record<string, string>;
   widgets: Record<string, FieldWidget>;
+  /** The team's own arrangement over the source's form, when it has one. */
+  display?: FormDisplay;
 }
 
 /**
@@ -148,7 +154,7 @@ export interface TicketValidation {
 }
 
 export interface CreatedTicket {
-  id: number;
+  id: number | string;
   url: string;
   title: string;
   type: string;

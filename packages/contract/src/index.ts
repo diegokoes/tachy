@@ -78,7 +78,7 @@ export type {
   AdoFieldType,
   FieldSpec,
   WorkItemSchema,
-  AdoTypeOption,
+  WorkItemTypeOption,
   ComposerProject,
   PrefillOrigin,
   PathOption,
@@ -197,3 +197,12 @@ export type {
   JobRun,
   JobDefinition,
 } from "./jobs";
+export { FIELD_SHOWS } from "./flows";
+export type {
+  ComposeConfig,
+  TypeFormConfig,
+  FieldFormConfig,
+  FieldDefault,
+  FieldShow,
+  FormDisplay,
+} from "./flows";

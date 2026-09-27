@@ -142,12 +142,8 @@ export interface Arranged {
   hidden: FieldSpec[];
 }
 
-/**
- * The form as ADO lays it out when the layout could be read, else the local
- * guess. A field ADO requires but its form hides, with nothing to fill it,
- * is still shown: leaving it off would only move the failure to create.
- */
-export function arrange(form: ComposerForm): Arranged {
+/** The source's own arrangement: its layout when it has one, else a guess. */
+function sourceArrangement(form: ComposerForm): Arranged {
   if (!form.layout) {
     const l = layoutFields(form.fields);
     return {
@@ -171,21 +167,78 @@ export function arrange(form: ComposerForm): Arranged {
   const placed = new Set(
     [...body, ...groups.flatMap((g) => g.fields)].map((f) => f.reference_name),
   );
-  const rest = form.fields.filter(
-    (f) =>
-      f.reference_name !== TITLE &&
-      editable(f) &&
-      !placed.has(f.reference_name),
+  return {
+    body,
+    groups,
+    hidden: form.fields.filter(
+      (f) =>
+        f.reference_name !== TITLE &&
+        editable(f) &&
+        !placed.has(f.reference_name),
+    ),
+  };
+}
+
+const byOrder = (order: string[]) => {
+  const at = new Map(order.map((r, i) => [r, i]));
+  return (a: FieldSpec, b: FieldSpec) =>
+    (at.get(a.reference_name) ?? Infinity) -
+    (at.get(b.reference_name) ?? Infinity);
+};
+
+/**
+ * The source's form with the team's choices laid over it: fields it shows,
+ * folds away or leaves out, and their order. One rule overrides both: a
+ * field the source requires, with nothing to fill it, is always on screen,
+ * since leaving it off would only move the failure to create.
+ */
+export function arrange(form: ComposerForm): Arranged {
+  const base = sourceArrangement(form);
+  const show = form.display?.show ?? {};
+  const specs = new Map(form.fields.map((f) => [f.reference_name, f]));
+  const moved = new Set(
+    Object.keys(show).filter((r) => {
+      const f = specs.get(r);
+      return f && r !== TITLE && editable(f);
+    }),
   );
-  const unfilled = rest.filter(
+  const keep = (f: FieldSpec) => !moved.has(f.reference_name);
+
+  const body = base.body.filter(keep);
+  const groups = base.groups.map((g) => ({
+    ...g,
+    fields: g.fields.filter(keep),
+  }));
+  const folded: FieldSpec[] = [];
+  const added: FieldSpec[] = [];
+  const excluded: FieldSpec[] = [];
+  for (const ref of moved) {
+    const f = specs.get(ref)!;
+    if (show[ref] === "hidden") excluded.push(f);
+    else if (show[ref] === "fold") folded.push(f);
+    else if (isBody(f)) body.push(f);
+    else added.push(f);
+  }
+  if (added.length) groups.push({ label: "more", fields: added });
+
+  const sort = byOrder(form.display?.order ?? []);
+  body.sort(sort);
+  for (const g of groups) g.fields.sort(sort);
+
+  const rest = [...folded, ...base.hidden.filter(keep)];
+  const unfilled = [...rest, ...excluded].filter(
     (f) =>
       f.required &&
       f.default_value == null &&
       !(f.reference_name in form.prefill),
   );
   if (unfilled.length)
-    groups.push({ label: "also required by Azure DevOps", fields: unfilled });
-  return { body, groups, hidden: rest.filter((f) => !unfilled.includes(f)) };
+    groups.push({ label: "also required", fields: unfilled });
+  return {
+    body,
+    groups: groups.filter((g) => g.fields.length),
+    hidden: rest.filter((f) => !unfilled.includes(f)),
+  };
 }
 
 /** The label ADO's form uses, falling back to the field's own name. */
