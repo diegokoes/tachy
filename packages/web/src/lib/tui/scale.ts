@@ -5,7 +5,7 @@
  * two marks that share a scale cannot drift apart in how they round it.
  */
 import { nice as d3Nice, ticks as d3Ticks } from "d3-array";
-import type { Part } from "./marks";
+import type { Block, Part } from "./marks";
 import type { Tone } from "./tone";
 
 /**
@@ -149,3 +149,7 @@ export function heatFill(value: number, max: number, tone: Tone = "accent") {
   const step = heatStep(value, max);
   return step < 0 ? "transparent" : toneMix(tone, RAMP_STEPS[step]);
 }
+
+/** The hottest leaf anywhere under `b`: a treemap's default heat scale. */
+export const hottest = (b: Block): number =>
+  b.children?.length ? Math.max(0, ...b.children.map(hottest)) : b.value;

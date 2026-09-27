@@ -150,6 +150,7 @@ export {
   listEnvironments,
   listKnowledgeFacets,
   knowledgeCensus,
+  knowledgeByComponent,
 } from "./knowledge";
 export type {
   KnowledgeInput,

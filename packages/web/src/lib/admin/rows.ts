@@ -2,6 +2,8 @@ import type {
   AgentProvider,
   AgentUsage,
   CatalogCensus,
+  ComponentKnowledge,
+  ComponentNode,
   ComponentRow,
   CustomerRow,
   DeploymentProfile,
@@ -209,6 +211,13 @@ export type Activity = {
   traffic: SourceTraffic;
   library: LibraryEngagement;
 };
+
+/** `GET /overview/components`: every component, with the entries filed under it. */
+export type ComponentCoverage = Pick<
+  ComponentNode,
+  "id" | "parent_id" | "slug" | "name" | "product_slug" | "product_name"
+> &
+  Omit<ComponentKnowledge, "component_id">;
 
 /** `GET /jobs/census` — what the workers have been doing. */
 export type { JobCensus };

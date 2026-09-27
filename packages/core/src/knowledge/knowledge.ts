@@ -1,4 +1,4 @@
-import type { KnowledgeCensus } from "@tachy/contract";
+import type { ComponentKnowledge, KnowledgeCensus } from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
 import {
   embedPassage,
@@ -784,4 +784,20 @@ export async function knowledgeCensus(): Promise<KnowledgeCensus> {
     ...row,
     by_status: Object.fromEntries(statuses.map((s) => [s.status, s.n])),
   };
+}
+
+/**
+ * Entries per component, for the structure overview's map. A component with
+ * none has no row; the caller lays these over the tree.
+ */
+export async function knowledgeByComponent(): Promise<ComponentKnowledge[]> {
+  return sql<ComponentKnowledge[]>`
+    select component_id,
+           count(*)::int as entries,
+           count(*) filter (where status in ('approved', 'deprecated'))::int
+             as searchable
+    from knowledge_entries
+    where component_id is not null
+    group by component_id
+  `;
 }

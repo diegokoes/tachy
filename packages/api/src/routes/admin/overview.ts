@@ -7,6 +7,8 @@ import {
   sourceCensus,
   repoCensus,
   knowledgeCensus,
+  knowledgeByComponent,
+  listComponentTree,
   reportsCensus,
   agentUsageCensus,
   toolUsageCensus,
@@ -103,6 +105,31 @@ export const overview = new Hono()
       delete tools.writers;
     }
     return c.json({ usage, tools, traffic, library });
+  })
+
+  /**
+   * Every component with its entries, for the structure overview's map. Its
+   * own route because it grows with the catalogue, and the census is fetched
+   * on every admin page.
+   */
+  .get("/overview/components", async (c) => {
+    const [tree, filed] = await Promise.all([
+      listComponentTree(),
+      knowledgeByComponent(),
+    ]);
+    const by = new Map(filed.map((f) => [f.component_id, f]));
+    return c.json(
+      tree.map((n) => ({
+        id: n.id,
+        parent_id: n.parent_id,
+        slug: n.slug,
+        name: n.name,
+        product_slug: n.product_slug,
+        product_name: n.product_name,
+        entries: by.get(n.id)?.entries ?? 0,
+        searchable: by.get(n.id)?.searchable ?? 0,
+      })),
+    );
   })
 
   /**

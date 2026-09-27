@@ -71,3 +71,20 @@ export function fitted<T>(rows: T[], fit: number): { shown: T[]; rest: T[] } {
   const shown = rows.slice(0, Math.max(1, room - 1));
   return { shown, rest: rows.slice(shown.length) };
 }
+
+/**
+ * The px sizes of --fs-xs and of the root font.
+ *
+ * Custom properties are not resolved by the cascade, so the token comes back
+ * as the string it was authored in ("0.72rem") and has to be multiplied by
+ * the root size by hand.
+ */
+export function typeSize(): { fs: number; rem: number } {
+  if (typeof window === "undefined") return { fs: 12, rem: 16 };
+  const root = getComputedStyle(document.documentElement);
+  const rem = parseFloat(root.fontSize) || 16;
+  const token = root.getPropertyValue("--fs-xs").trim();
+  const n = parseFloat(token);
+  if (!Number.isFinite(n)) return { fs: rem * 0.72, rem };
+  return { fs: token.endsWith("px") ? n : n * rem, rem };
+}
