@@ -448,7 +448,6 @@ export {
 } from "./sources";
 export type { SourceConnectionInput } from "./sources";
 export {
-  SOURCE_PROJECT_ROLES,
   listSourceProjects,
   getSourceProject,
   resolveSourceProject,
@@ -468,7 +467,6 @@ export {
   matchWiki,
 } from "./sources";
 export type {
-  SourceProjectRole,
   SourceProjectInput,
   SourceProjectPatch,
   SourceProjectRow,
@@ -583,6 +581,20 @@ export type {
   AdoFieldType,
   FieldSpec,
   WorkItemSchema,
+  AdoTypeOption,
+  ComposerProject,
+  PrefillOrigin,
+  PathOption,
+  PersonOption,
+  ComposerForm,
+  TicketDraft,
+  TicketValidation,
+  CreatedTicket,
+  TicketContextItem,
+  ReviewReadiness,
+  ReviewFindingKind,
+  ReviewFinding,
+  TicketReview,
   CatalogCensus,
   UserCensus,
   SourceCensus,

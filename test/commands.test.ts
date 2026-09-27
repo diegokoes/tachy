@@ -17,7 +17,7 @@ describe("slash command registry", () => {
         "analyze",
         "consult",
         "compact",
-        "create-ticket",
+        "az",
         "code",
         "ingest-wiki",
         "wiki-draft",
@@ -81,6 +81,34 @@ describe("slash command registry", () => {
     );
     expect(named.length).toBeGreaterThan(4);
     expect(named.filter((m) => !headings.has(m))).toEqual([]);
+  });
+
+  it("retires /create-ticket for the /az group", () => {
+    expect(findCommand("create-ticket")).toBeUndefined();
+    expect(findCommand("az")!.subcommands!.map((s) => s.name)).toEqual([
+      "new",
+      "explain",
+    ]);
+  });
+
+  it("/az new is the web app's own and never becomes an agent mode", () => {
+    const az = findCommand("az")!;
+    expect(az.subcommands!.find((s) => s.name === "new")).toMatchObject({
+      client: true,
+    });
+    expect(az.expand("new ProjA Bug")).toMatch(/web app/);
+    expect(az.expand("new ProjA Bug")).not.toMatch(/MODE/);
+  });
+
+  it("/az explain carries its own instructions and the id", () => {
+    const t = findCommand("az")!.expand("explain 4312");
+    expect(t).toContain("fetch_work_item");
+    expect(t).toContain("save nothing");
+    expect(t).toContain("User arguments: 4312");
+  });
+
+  it("/az with an unknown subcommand lists the real ones", () => {
+    expect(findCommand("az")!.expand("delete 1")).toContain("new, explain");
   });
 
   it("expands args into the command block", () => {

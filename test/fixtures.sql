@@ -17,8 +17,8 @@ insert into source_connections (source_type, slug, base_url) values
 on conflict (slug) do nothing;
 
 insert into source_projects
-    (source_connection_id, external_key, name, product_id, team_id, role)
-select sc.id, '70000000013', 'Test Group', p.id, t.id, 'knowledge'
+    (source_connection_id, external_key, name, product_id, team_id)
+select sc.id, '70000000013', 'Test Group', p.id, t.id
 from source_connections sc
 join products p on p.slug = 'tqx'
 join teams t on t.id = p.team_id and t.slug = 'test-team'

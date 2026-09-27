@@ -44,7 +44,7 @@ export async function linkRepo(i: RepoInput) {
     const project = await getSourceProject(i.sourceProjectId);
     if (!project.product_id)
       throw badInput(
-        `project '${project.external_key}' is a tracker: it holds no code, so no repos`,
+        `project '${project.external_key}' has no product, so it holds no code and no repos`,
       );
     if (productId && productId !== project.product_id)
       throw badInput(

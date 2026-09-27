@@ -5,6 +5,7 @@
   import ApprovalField from "./ApprovalField.svelte";
   import { api } from "../api";
   import type { WorkItemSchema } from "../types";
+  import { adoptAgentDraft } from "../work-items/composer.svelte";
 
   type Approval = Extract<Entry, { kind: "approval" }>;
 
@@ -86,6 +87,25 @@
   function setField(ref: string, v: unknown) {
     set("fields", { ...(adoFields ?? {}), [ref]: v });
   }
+  let adopting = $state(false);
+  let adoptNote = $state<string | null>(null);
+
+  /** Finishing by hand in the composer ends this call; the model is told why. */
+  async function toComposer() {
+    adopting = true;
+    adoptNote = null;
+    try {
+      if (await adoptAgentDraft(entry.input))
+        ondecide(
+          false,
+          "The user moved this draft into the work item composer to finish and create it themselves. Do not retry or create it; acknowledge in one line.",
+        );
+      else adoptNote = "That project is not one of your team's registered projects, so the composer cannot take it.";
+    } finally {
+      adopting = false;
+    }
+  }
+
   let rawBad = $state(false);
   let denying = $state(false);
   let reason = $state("");
@@ -198,7 +218,18 @@
           }}
         />
       {/if}
+      {#if adoptNote}<p class="missing">{adoptNote}</p>{/if}
       <div class="acts">
+        {#if isAdoCreate}
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="edit"
+            busy={adopting}
+            title="finish it yourself in the full composer"
+            onclick={toComposer}>open in composer</Button
+          >
+        {/if}
         <Button
           variant="ghost"
           size="sm"

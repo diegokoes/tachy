@@ -52,7 +52,7 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
   let poll: ReturnType<typeof setInterval> | undefined;
 
   const knowledgeProjects = $derived(
-    projects.data.filter((p) => p.role === "knowledge"),
+    projects.data.filter((p) => p.product_id),
   );
   const projectOf = (id: string) =>
     knowledgeProjects.find((p) => p.id === id) ?? null;

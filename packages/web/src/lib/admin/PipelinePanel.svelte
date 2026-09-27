@@ -49,7 +49,7 @@
   );
 
   const tokened = $derived(d.connections - d.untokened);
-  const wikied = $derived(d.knowledge - d.projects_no_wiki);
+  const wikied = $derived(d.with_product - d.projects_no_wiki);
 
   const readiness = $derived([
     {
@@ -64,11 +64,11 @@
     {
       key: "projects",
       label: "projects",
-      title: "knowledge projects with a wiki",
-      value: ratio(wikied, d.knowledge),
-      tone: grade(wikied, d.knowledge),
-      center: pct(wikied, d.knowledge),
-      sub: `${wikied}/${d.knowledge}`,
+      title: "projects with a product that have a wiki",
+      value: ratio(wikied, d.with_product),
+      tone: grade(wikied, d.with_product),
+      center: pct(wikied, d.with_product),
+      sub: `${wikied}/${d.with_product}`,
     },
     {
       key: "repos",

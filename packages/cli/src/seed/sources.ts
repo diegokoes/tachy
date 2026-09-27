@@ -24,7 +24,7 @@ import type { Volumes } from "./scale";
 export interface SeededProject {
   id: string;
   connectionId: string;
-  role: string;
+  hasProduct: boolean;
 }
 export interface SeededWorkItem {
   id: string;
@@ -70,31 +70,28 @@ export async function seedSources(
     })),
   );
 
-  // role='knowledge' must have a product, role='tracker' must not -- the
-  // schema ties the two together with a CHECK.
+  // Every third project has no product: a ticket target owned by a team.
   const projects: SeededProject[] = [];
   const projectRows: Record<string, unknown>[] = [];
   for (let i = 0; i < v.sourceProjects; i++) {
     const conn = connections[i % connections.length];
-    const role = i % 3 === 2 ? "tracker" : "knowledge";
+    const hasProduct = i % 3 !== 2;
     const product = products[i % products.length];
     const id = uuidFor("source_project", i);
-    projects.push({ id, connectionId: conn.id, role });
+    projects.push({ id, connectionId: conn.id, hasProduct });
     projectRows.push({
       id,
       source_connection_id: conn.id,
       // Enumerated per connection, so (connection, external_key) is unique.
       external_key: `${480_000 + i}`,
       name: `Seeded project ${i}`,
-      product_id: role === "knowledge" ? product.id : null,
+      product_id: hasProduct ? product.id : null,
       // team_id is NOT NULL, and must match the product's team so the
       // scope checks in sourceProjectScope stay coherent.
-      team_id:
-        role === "knowledge" ? product.teamId : teams[i % teams.length].id,
+      team_id: hasProduct ? product.teamId : teams[i % teams.length].id,
       customer_id: chance(rngFor("project", i), 0.2)
         ? customers[i % customers.length].id
         : null,
-      role,
     });
   }
   await insertRows(
@@ -108,7 +105,6 @@ export async function seedSources(
       "product_id",
       "team_id",
       "customer_id",
-      "role",
     ],
     projectRows,
   );
@@ -167,7 +163,7 @@ async function seedWorkItems(
   products: SeededProduct[],
   customers: SeededCustomer[],
 ): Promise<SeededWorkItem[]> {
-  const knowledgeProjects = projects.filter((p) => p.role === "knowledge");
+  const knowledgeProjects = projects.filter((p) => p.hasProduct);
 
   // external_id is a per-connection counter, so (connection, external_id)
   // is unique without needing a conflict clause.
@@ -316,7 +312,7 @@ async function seedLinks(
   projects: SeededProject[],
 ): Promise<void> {
   if (items.length < 2) return;
-  const trackers = projects.filter((p) => p.role === "tracker");
+  const trackers = projects.filter((p) => !p.hasProduct);
   const rows: Record<string, unknown>[] = [];
   const seen = new Set<string>();
 

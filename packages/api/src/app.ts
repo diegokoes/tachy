@@ -15,6 +15,7 @@ import { createGithubSource } from "@tachy/source-github";
 import { createAzureDevopsSource } from "@tachy/source-azure-devops";
 import { knowledge, analysisRuns } from "./routes/knowledge";
 import { workItems } from "./routes/work-items";
+import { azure } from "./routes/azure";
 import { admin } from "./routes/admin";
 import { reference } from "./routes/reference";
 import { agent } from "./routes/agent";
@@ -51,6 +52,7 @@ const STATUS_BY_CODE = {
 function apiRoutes() {
   return new Hono()
     .route("/work-items", workItems)
+    .route("/az", azure)
     .route("/knowledge", knowledge)
     .route("/analysis-runs", analysisRuns)
     .route("/reference", reference)
