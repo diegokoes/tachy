@@ -3,9 +3,11 @@ name: Schema plan
 # A schema.sql change must ship as a diff: planned from the base branch's schema
 # and fixtures, applied, converged, and round-tripped (scripts/schema-plan.sh).
 # Destructive hazards fail unless the pull request is labelled
-# schema-destructive.
+# schema-destructive; adding or removing the label runs the plan again, since a
+# re-run replays the original event and its labels.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     paths:
       - db/schema.sql
       - db/roles.sql
