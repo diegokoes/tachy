@@ -1,5 +1,5 @@
 import type {
-  AdoTypeOption,
+  WorkItemTypeOption,
   ComposerForm,
   ComposerProject,
   CreatedTicket,
@@ -45,7 +45,7 @@ const blank = () => ({
 export const composer = $state({
   open: false,
   project: null as ComposerProject | null,
-  type: null as AdoTypeOption | null,
+  type: null as WorkItemTypeOption | null,
   form: null as ComposerForm | null,
   loading: false,
   error: null as string | null,
@@ -114,7 +114,7 @@ export const saveDraft = persist;
 
 export async function openComposer(
   project?: ComposerProject | null,
-  type?: AdoTypeOption | null,
+  type?: WorkItemTypeOption | null,
 ) {
   composer.open = true;
   if (project && project.id !== composer.project?.id) setProject(project);
@@ -154,7 +154,7 @@ export function setProject(project: ComposerProject) {
 }
 
 /** What the person typed survives a type change; only prefills are redone. */
-export async function setType(type: AdoTypeOption) {
+export async function setType(type: WorkItemTypeOption) {
   composer.type = type;
   await loadForm();
 }
@@ -171,7 +171,7 @@ export async function loadForm() {
   composer.validation = null;
   try {
     const form = await api.get<ComposerForm>(
-      `/az/projects/${composer.project.id}/form?type=${encodeURIComponent(composer.type.name)}`,
+      `/compose/projects/${composer.project.id}/form?type=${encodeURIComponent(composer.type.name)}`,
     );
     dropPrefills();
     for (const [ref, { value, origin }] of Object.entries(form.prefill))
@@ -197,7 +197,7 @@ export async function applyTemplate(id: string) {
   const { project, form } = composer;
   if (!project || !form?.team) return;
   const values = await api.get<Record<string, unknown>>(
-    `/az/projects/${project.id}/templates/${encodeURIComponent(id)}?team=${encodeURIComponent(form.team)}`,
+    `/compose/projects/${project.id}/templates/${encodeURIComponent(id)}?team=${encodeURIComponent(form.team)}`,
   );
   for (const [ref, value] of Object.entries(values)) {
     if (ref === TITLE) {
@@ -254,7 +254,7 @@ export async function validate() {
   composer.checking = true;
   try {
     composer.validation = await api.post<TicketValidation>(
-      `/az/projects/${composer.project.id}/validate`,
+      `/compose/projects/${composer.project.id}/validate`,
       draft(),
     );
   } catch (e) {
@@ -277,7 +277,7 @@ export async function create(): Promise<CreatedTicket | null> {
     body.set("draft", JSON.stringify(draft()));
     for (const img of composer.images)
       body.set(`image:${img.key}`, img.file, img.name);
-    const res = await fetch(`/api/az/projects/${composer.project.id}/items`, {
+    const res = await fetch(`/api/compose/projects/${composer.project.id}/items`, {
       method: "POST",
       body,
     });
@@ -318,7 +318,8 @@ export async function askReview() {
   if (!composer.type) return;
   composer.reviewing = true;
   try {
-    const review = await api.post<TicketReview>("/az/review", {
+    const review = await api.post<TicketReview>("/compose/review", {
+      project_id: composer.project?.id,
       type: composer.type.name,
       title: composer.title,
       fields: reviewFields(),

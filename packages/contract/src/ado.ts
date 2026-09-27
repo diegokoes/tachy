@@ -60,6 +60,7 @@ export interface ComposerProject {
   /** The ADO project name. */
   external_key: string;
   source_slug: string;
+  source_type: string;
   team_slug: string;
   product_slug: string | null;
 }

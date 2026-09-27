@@ -29,6 +29,7 @@ const project = (name: string, key = name): ComposerProject => ({
   name,
   external_key: key,
   source_slug: "ado",
+  source_type: "azure-devops",
   team_slug: "t",
   product_slug: null,
 });
@@ -223,11 +224,87 @@ describe("arrange", () => {
     expect(a.body.map((x) => x.reference_name)).toEqual(["System.Description"]);
     expect(a.groups).toEqual([
       { label: "Planning", fields: [fields[2]] },
-      { label: "also required by Azure DevOps", fields: [fields[5]] },
+      { label: "also required", fields: [fields[5]] },
     ]);
     expect(a.hidden.map((x) => x.reference_name)).toEqual([
       "Microsoft.VSTS.Common.Priority",
       "Microsoft.VSTS.Common.ValueArea",
+    ]);
+  });
+
+  it("lays the team's choices over the source's form", () => {
+    const a = arrange(
+      form({
+        fields,
+        prefill: { "Custom.Secret": { value: "x", origin: "admin" } },
+        layout: {
+          body: ["System.Description"],
+          groups: [
+            {
+              label: "Planning",
+              fields: [
+                "Microsoft.VSTS.Common.Severity",
+                "Microsoft.VSTS.Common.ValueArea",
+              ],
+            },
+          ],
+        },
+        display: {
+          show: {
+            "Microsoft.VSTS.Common.Priority": "form",
+            "Microsoft.VSTS.Common.ValueArea": "hidden",
+            "Microsoft.VSTS.Common.Severity": "fold",
+          },
+          order: [],
+        },
+      }),
+    );
+    const refs = (xs: FieldSpec[]) => xs.map((x) => x.reference_name);
+    expect(a.groups.map((g) => [g.label, refs(g.fields)])).toEqual([
+      ["more", ["Microsoft.VSTS.Common.Priority"]],
+    ]);
+    expect(refs(a.hidden)).toEqual([
+      "Microsoft.VSTS.Common.Severity",
+      "Custom.Secret",
+    ]);
+  });
+
+  it("keeps a hidden field on screen when nothing would fill it", () => {
+    const a = arrange(
+      form({
+        fields,
+        layout: { body: [], groups: [] },
+        display: { show: { "Custom.Secret": "hidden" }, order: [] },
+      }),
+    );
+    expect(a.groups.at(-1)).toEqual({
+      label: "also required",
+      fields: [fields[5]],
+    });
+  });
+
+  it("orders fields the team's way", () => {
+    const a = arrange(
+      form({
+        fields,
+        layout: {
+          body: [],
+          groups: [
+            {
+              label: null,
+              fields: [
+                "Microsoft.VSTS.Common.Severity",
+                "Microsoft.VSTS.Common.Priority",
+              ],
+            },
+          ],
+        },
+        display: { show: {}, order: ["Microsoft.VSTS.Common.Priority"] },
+      }),
+    );
+    expect(a.groups[0].fields.map((f) => f.reference_name)).toEqual([
+      "Microsoft.VSTS.Common.Priority",
+      "Microsoft.VSTS.Common.Severity",
     ]);
   });
 

@@ -148,6 +148,7 @@ const asComposerProject = (p: SourceProjectRow): ComposerProject => ({
   name: p.name,
   external_key: p.external_key,
   source_slug: p.source_slug,
+  source_type: p.source_type,
   team_slug: p.team_slug,
   product_slug: p.product_slug,
 });

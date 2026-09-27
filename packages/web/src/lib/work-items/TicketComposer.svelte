@@ -1,6 +1,6 @@
 <script lang="ts">
   import type {
-    AdoTypeOption,
+    WorkItemTypeOption,
     CreatedTicket,
     FieldSpec,
     ReviewFinding,
@@ -37,7 +37,7 @@
 
   let {
     oncreated,
-  }: { oncreated: (t: CreatedTicket, type: AdoTypeOption) => void } = $props();
+  }: { oncreated: (t: CreatedTicket, type: WorkItemTypeOption) => void } = $props();
 
   $effect(() => {
     ensureProjects();
@@ -106,8 +106,9 @@
 
   const ORIGIN: Record<string, string> = {
     process: "process default",
-    team: "team default",
+    team: "sprint/area default",
     config: "tachy default",
+    admin: "team default",
     template: "from template",
   };
 
@@ -502,7 +503,7 @@
               onclick={() => (showHidden = !showHidden)}
             >
               <Chevron open={showHidden} />
-              {arranged.hidden.length} more, hidden on the Azure DevOps form
+              {arranged.hidden.length} more fields
             </button>
             {#if showHidden}
               <fieldset class="group">

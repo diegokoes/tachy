@@ -44,6 +44,7 @@
   import HostPanel from "./HostPanel.svelte";
   import ChecksPanel from "./ChecksPanel.svelte";
   import LoadsPanel from "./LoadsPanel.svelte";
+  import TicketFormsPanel from "./TicketFormsPanel.svelte";
 
   type Section = Omit<PageSection, "count" | "tone"> & {
     /** Which census key counts this section. Omitted for a section with nothing to count. */
@@ -63,6 +64,7 @@
     { key: "integrations", label: "integrations", icon: "integrations" },
     { key: "structure", label: "structure", icon: "structure" },
     { key: "access", label: "users", icon: "users" },
+    { key: "flows", label: "flows", icon: "flows" },
     ...(isGlobalAdmin()
       ? [
           { key: "workers", label: "workers", icon: "workers" as const },
@@ -74,6 +76,9 @@
   const admin = $derived(isGlobalAdmin());
 
   const SECTIONS: Record<string, Section[]> = $derived({
+    flows: [
+      { key: "forms", label: "ticket forms", view: TicketFormsPanel, fill: true },
+    ],
     integrations: [
       { key: "sources", label: "sources", view: SourcesPanel, n: "sources", show: admin, present: "modal" },
       { key: "projects", label: "projects", view: ProjectsPanel, n: "projects", present: "modal" },
@@ -110,6 +115,7 @@
   });
 
   const OVERVIEWS: Record<string, Component | undefined> = $derived({
+    flows: undefined,
     integrations: PipelinePanel,
     structure: CatalogPanel,
     access: PosturePanel,
@@ -180,6 +186,13 @@
   });
 
   const backToOverview = () => navigate(`/admin/${page}`);
+
+  /* A page without an overview has nothing to show until a section is named,
+     so it opens on its first. */
+  $effect(() => {
+    if (!overview && !segment(2) && live[0])
+      navigate(`/admin/${page}/${live[0].key}`, { replace: true });
+  });
 
   $effect(() => setTopActions(topActions));
 

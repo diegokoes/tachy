@@ -106,6 +106,7 @@ import {
   UserRound,
   UserRoundGroup,
   Wallpaper,
+  Workflow,
   Wrench,
   X,
   type LucideIconData,
@@ -206,6 +207,8 @@ export const ICONS = {
   settings: Settings,
   system: MonitorCog,
   integrations: Plug,
+  /** Admin's home for how people's commands behave. */
+  flows: Workflow,
   structure: Layers,
   users: UserRoundGroup,
   workers: Terminal,
