@@ -12,7 +12,6 @@
     Chip,
     CrudTable,
     DeleteButton,
-    Field,
     FilterBar,
     Note,
     Select,
@@ -22,12 +21,12 @@
   import type { AreaRule, Component, Connection, Customer, Product, ProjectWiki, Repo, SourceProject, Team } from "./rows";
   import { INFO } from "./help";
   import { sectionHoist } from "./sectionAction.svelte";
+  import ProjectFinder, { type Found } from "./ProjectFinder.svelte";
   import ProjectCoverage, {
     type CoverageGap,
     type CoverageGroup,
   } from "./ProjectCoverage.svelte";
 
-  type Found = { key: string; name: string };
   type Wiki = { identifier: string; name: string; type?: string };
 
   const projects = createResource(
@@ -55,7 +54,6 @@
 
   /** Live from the source, so admins pick a real project instead of typing one. */
   let found = $state<Record<string, Found[]>>({});
-  let discovering = $state<string | null>(null);
 
   const canEditProject = (p: SourceProject) =>
     canCurateScope({ team_slug: p.team_slug });
@@ -91,22 +89,13 @@
   }
 
   async function discover(slug: string) {
-    if (!slug) return;
-    discovering = slug;
-    error = null;
-    try {
-      const res = await api.get<{
-        ok: boolean;
-        error?: string;
-        projects?: Found[];
-      }>(`/source-connections/${slug}/discover/projects`);
-      if (!res.ok) throw new Error(res.error ?? "discovery failed");
-      found[slug] = res.projects ?? [];
-    } catch (e) {
-      error = errText(e);
-    } finally {
-      discovering = null;
-    }
+    const res = await api.get<{
+      ok: boolean;
+      error?: string;
+      projects?: Found[];
+    }>(`/source-connections/${slug}/discover/projects`);
+    if (!res.ok) throw new Error(res.error ?? "discovery failed");
+    found[slug] = res.projects ?? [];
   }
 
   async function loadWikis(p: SourceProject) {
@@ -223,7 +212,7 @@
       label: t("product"),
       width: "11rem",
       edit: "select",
-      initial: myProducts[0]?.slug ?? "",
+      initial: "",
       info: `Ingest target. Also scopes wiki, repos, area rules. None: a ticket target only.`,
       options: [
         { value: "", label: "(none)" },
@@ -237,6 +226,7 @@
       label: t("team"),
       width: "11rem",
       edit: "select",
+      initial: myTeams[0]?.slug ?? "",
       info: `Whose members create work items here. A ${t("product")} brings its own ${t("team")}, so this only applies without one.`,
       options: myTeams.map((tm) => ({ value: tm.slug, label: tm.name })),
     },
@@ -526,42 +516,19 @@
 })}
   {#if f.mode === "create"}
     {@const slug = String(f.draft.source_slug ?? "")}
-    {@const hits = found[slug] ?? []}
-    <!-- Full width, and a button that says what it does: the picker is the
-         point of the field, not an ornament beside a key you typed. -->
-    <div class="find">
-      <Field
-        label="find a project"
-        info="Ask the connection what it can see, instead of typing a key."
-        plain
-      >
-        <Button
-          variant="ghost"
-          size="sm"
-          icon="discover"
-          busy={discovering === slug}
-          disabled={!slug}
-          onclick={() => discover(slug)}
-          >{slug ? `ask ${slug}` : "pick a connection first"}</Button
-        >
-      </Field>
-      {#if hits.length}
-        <div class="chips">
-          {#each hits as g (g.key)}
-            <Chip
-              tone={f.draft.external_key === g.key ? "accent" : "default"}
-              title={g.key}
-              onclick={() => {
-                f.draft.external_key = g.key;
-                if (!f.draft.name) f.draft.name = g.name;
-              }}>{g.name}</Chip
-            >
-          {/each}
-        </div>
-      {:else if discovering !== slug && slug}
-        <span class="dim sm">nothing found yet</span>
-      {/if}
-    </div>
+    {#key slug}
+      <ProjectFinder
+        source={slug}
+        hits={found[slug]}
+        picked={String(f.draft.external_key ?? "")}
+        registered={(key) => registered.has(`${slug} ${key}`)}
+        onfetch={() => discover(slug)}
+        onpick={(g) => {
+          f.draft.external_key = g.key;
+          if (!f.draft.name) f.draft.name = g.name;
+        }}
+      />
+    {/key}
   {:else if f.row}
     <div class="probe">{@render detail(f.row)}</div>
   {/if}
