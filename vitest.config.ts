@@ -43,11 +43,13 @@ export default defineConfig({
         "**/dist/**",
       ],
       // A ratchet, set just under what the suite reaches today. Raise it when
-      // coverage rises; never lower it to make a red build green.
+      // coverage rises; never lower it to make a red build green. Vitest 5
+      // started measuring the `.svelte.ts` rune modules, which vitest 4 never
+      // reported, so the baseline was reset to include them.
       thresholds: {
-        lines: 76,
-        statements: 74,
-        functions: 74,
+        lines: 74,
+        statements: 72,
+        functions: 71,
         branches: 63,
       },
     },
