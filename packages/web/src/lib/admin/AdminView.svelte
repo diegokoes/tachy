@@ -81,7 +81,7 @@
     ],
     integrations: [
       { key: "sources", label: "sources", view: SourcesPanel, n: "sources", show: admin, present: "modal" },
-      { key: "projects", label: "projects", view: ProjectsPanel, n: "projects", present: "modal" },
+      { key: "projects", label: "projects", view: ProjectsPanel, n: "projects" },
       { key: "repos", label: "repos", view: ReposPanel, n: "repos" },
     ],
     structure: [
