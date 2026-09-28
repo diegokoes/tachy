@@ -6,8 +6,14 @@ updates:
     schedule:
       interval: "weekly"
     groups:
+      vitest:
+        patterns: ["vitest", "@vitest/*"]
       minor-and-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # svelte-check cannot load TypeScript 7 yet: sveltejs/language-tools#3063
+      - dependency-name: "typescript"
+        versions: [">=7"]
 
   - package-ecosystem: "docker"
     directory: "/"
