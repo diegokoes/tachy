@@ -10,15 +10,12 @@
   import {
     Badge,
     Button,
-    Checkbox,
     Chip,
     CrudTable,
     FilterBar,
     ErrorMark,
     Field,
-    Modal,
     Note,
-    Subject,
     type Column,
     type Draft,
   } from "../tui";
@@ -26,7 +23,13 @@
 import { INFO } from "./help";
 import { csv } from "../fields";
 import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
-  import { sectionHoist } from "./sectionAction.svelte";
+  import {
+    claimSectionAction,
+    sectionHoist,
+    type SectionAction,
+  } from "./sectionAction.svelte";
+  import { gsap, reducedMotion } from "../gsap";
+  import { navigate } from "../router.svelte";
 
   type FoundRepo = { name: string; url: string; default_branch: string };
 
@@ -102,104 +105,30 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
     ]);
   }
 
-  /* Bulk linking, because an Azure DevOps project routinely holds fifty repos
-     and the single-repo form is one dialog each. Component and customer stay a
-     per-repo decision afterwards — only the tedious part is batched. */
-  let bulk = $state<{ project: SourceProject; picked: Set<string> } | null>(
-    null,
-  );
-  let bulkBusy = $state(false);
-  let bulkError = $state<string | null>(null);
-  let bulkResults = $state<{ slug: string; ok: boolean; error?: string }[]>([]);
-  let bulkFilter = $state("");
-
-  const linkedUrls = $derived(new Set(repos.data.map((r) => r.url)));
-
-  const bulkHits = $derived(bulk ? (found[bulk.project.id] ?? []) : []);
-  const bulkShown = $derived(
-    bulkFilter.trim()
-      ? bulkHits.filter((r) =>
-          r.name.toLowerCase().includes(bulkFilter.trim().toLowerCase()),
-        )
-      : bulkHits,
-  );
-  /** Already-linked rows render ticked and locked, so they are never a choice. */
-  const bulkSelectable = $derived(
-    bulkShown.filter((r) => !linkedUrls.has(r.url)),
-  );
-  /* Counted within the filter, not across the whole discovery: the bar
-     describes what you are looking at. The confirm button carries the total. */
-  const bulkPickedShown = $derived(
-    bulk ? bulkSelectable.filter((r) => bulk!.picked.has(r.url)).length : 0,
+  /* An Azure DevOps project routinely holds fifty repos, and the form here is
+     one dialog each; bulk linking has a page of its own. */
+  const canBulk = $derived(
+    knowledgeProjects.some((p) => canCurateScope({ team_slug: p.team_slug })),
   );
 
-  async function openBulk(project: SourceProject) {
-    bulkError = null;
-    bulkResults = [];
-    bulkFilter = "";
-    bulk = { project, picked: new Set() };
-    if (!found[project.id]) await discover({ source_project_id: project.id });
-    const hits = found[project.id] ?? [];
-    // Pre-tick everything not already linked: the normal intent is "all of them",
-    // and un-ticking the few you don't want is less work than ticking fifty.
-    bulk = {
-      project,
-      picked: new Set(
-        hits.filter((r) => !linkedUrls.has(r.url)).map((r) => r.url),
-      ),
-    };
+  /** The section steps out of the way before the orbit takes the window. */
+  async function bulkLink() {
+    const section = document.getElementById("admin-repos");
+    if (section && !reducedMotion())
+      await gsap.to(section, { opacity: 0, y: -8, duration: 0.28, ease: "power2.in" });
+    navigate("/admin/integrations/bulk-link");
   }
 
-  function toggleBulk(url: string, on: boolean) {
-    if (!bulk) return;
-    const picked = new Set(bulk.picked);
-    if (on) picked.add(url);
-    else picked.delete(url);
-    bulk = { ...bulk, picked };
-  }
+  const bulkAction: SectionAction = {
+    label: "bulk link",
+    icon: "bulk",
+    tone: "info",
+    run: bulkLink,
+  };
 
-  /** Acts on what the filter shows, so "…-api" then "all" is two actions. */
-  function pickShown(on: boolean) {
-    if (!bulk) return;
-    const picked = new Set(bulk.picked);
-    for (const r of bulkSelectable) {
-      if (on) picked.add(r.url);
-      else picked.delete(r.url);
-    }
-    bulk = { ...bulk, picked };
-  }
-
-  async function saveBulk() {
-    if (!bulk) return;
-    const hits = (found[bulk.project.id] ?? []).filter((r) =>
-      bulk!.picked.has(r.url),
-    );
-    if (!hits.length) return;
-    bulkBusy = true;
-    bulkError = null;
-    try {
-      const taken = repos.data.map((r) => r.slug);
-      const payload = hits.map((r) => {
-        const slug = uniqueSlug(slugify(r.name), taken);
-        taken.push(slug);
-        return { slug, url: r.url, branch: r.default_branch || "main" };
-      });
-      const res = await api.put<{
-        ok: boolean;
-        results: { slug: string; ok: boolean; error?: string }[];
-      }>("/repos/bulk", {
-        source_project_id: bulk.project.id,
-        repos: payload,
-      });
-      await repos.reload();
-      bulkResults = res.results.filter((r) => !r.ok);
-      if (res.ok) bulk = null;
-    } catch (e) {
-      bulkError = errText(e);
-    } finally {
-      bulkBusy = false;
-    }
-  }
+  $effect(() => {
+    if (canBulk) return claimSectionAction("repos", bulkAction, "aside");
+  });
 
   /** Repos of the chosen project, so the clone URL is picked, not transcribed. */
   async function discover(d: Draft) {
@@ -539,21 +468,6 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
 {#if error}<Note tone="danger">{error}</Note>{/if}
 {@render indexErrors()}
 
-{#if knowledgeProjects.length}
-  <div class="bulkbar">
-    <span class="dim">link many at once:</span>
-    {#each knowledgeProjects as p (p.id)}
-      <Button
-        variant="ghost"
-        size="sm"
-        icon="discover"
-        disabled={!canCurateScope({ team_slug: p.team_slug })}
-        onclick={() => openBulk(p)}>browse {p.external_key}</Button
-      >
-    {/each}
-  </div>
-{/if}
-
 <FilterBar
   bind:value={filter}
   shown={filtered.length}
@@ -583,124 +497,7 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
   ondelete={(r) => repos.mutate(() => api.delete(`/repos/${r.slug}`))}
 />
 
-{#if bulk}
-  {@const b = bulk}
-  <Modal
-    title={`link repos from ${b.project.external_key}`}
-    width="56rem"
-    busy={bulkBusy}
-    confirmLabel={`link ${b.picked.size}`}
-    confirmIcon="create"
-    onConfirm={saveBulk}
-    onCancel={() => (bulk = null)}
-  >
-    {#if bulkError}<Note tone="danger">{bulkError}</Note>{/if}
-    <Subject verb="linking repos from" name={b.project.external_key} />
-    {#if bulkResults.length}
-      <Note tone="warn">
-        {bulkResults.length} could not be linked:
-        {bulkResults.map((r) => `${r.slug} (${r.error})`).join("; ")}
-      </Note>
-    {/if}
-    {#if !bulkHits.length}
-      <p class="dim">
-        {discovering ? "asking the source…" : "no repos readable with this token"}
-      </p>
-    {:else}
-      <p class="dim sm">Already linked ones are ticked and locked.</p>
-      <div class="pickbar">
-        <input
-          placeholder="filter repos…"
-          aria-label="filter repos"
-          bind:value={bulkFilter}
-          disabled={bulkBusy}
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={bulkBusy || !bulkSelectable.length}
-          onclick={() => pickShown(true)}>all</Button
-        >
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={bulkBusy || !bulkSelectable.length}
-          onclick={() => pickShown(false)}>none</Button
-        >
-        <span class="dim sm">
-          {bulkPickedShown} of {bulkSelectable.length} selected
-        </span>
-      </div>
-      <div class="picklist">
-        {#each bulkShown as r (r.url)}
-          {@const linked = linkedUrls.has(r.url)}
-          <label class="prow" class:linked>
-            <Checkbox
-              ariaLabel={r.name}
-              checked={linked || b.picked.has(r.url)}
-              disabled={linked || bulkBusy}
-              onchange={(on) => toggleBulk(r.url, on)}
-            />
-            <span class="pname">{r.name}</span>
-            <span class="dim sm">{r.default_branch || "main"}</span>
-            {#if linked}<Badge tone="muted">linked</Badge>{/if}
-          </label>
-        {/each}
-        {#if !bulkShown.length}
-          <p class="dim sm">nothing matches “{bulkFilter}”</p>
-        {/if}
-      </div>
-    {/if}
-  </Modal>
-{/if}
-
 <style>
-  .bulkbar {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--pad-1);
-    margin-bottom: var(--pad-2);
-    font-size: var(--fs-sm);
-  }
-  .pickbar {
-    display: flex;
-    align-items: center;
-    gap: var(--pad-2);
-    margin-bottom: var(--pad-2);
-  }
-  .pickbar input {
-    flex: 1;
-    min-width: 0;
-  }
-
-  /* A project routinely holds fifty repos — down one column that is a long
-     scroll past the fold, across three it is a glance. */
-  .picklist {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-    gap: var(--pad-1) var(--gap);
-    max-height: min(28rem, 50vh);
-    overflow-y: auto;
-  }
-  .prow {
-    display: flex;
-    align-items: center;
-    gap: var(--gap);
-    min-width: 0;
-    font-size: var(--fs-sm);
-  }
-  .prow.linked {
-    color: var(--muted);
-  }
-  .pname {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .sm {
-    font-size: var(--fs-xs);
-  }
   .chips {
     display: flex;
     flex-wrap: wrap;

@@ -10,7 +10,7 @@
   import SectionedPage, {
     type PageSection,
   } from "../sections/SectionedPage.svelte";
-  import { sectionAction } from "./sectionAction.svelte";
+  import { sectionActions } from "./sectionAction.svelte";
   import FillSection from "./FillSection.svelte";
   import { census } from "./census.svelte";
   import { activity } from "./activity.svelte";
@@ -20,6 +20,7 @@
   import SourcesPanel from "./SourcesPanel.svelte";
   import ProjectsPanel from "./ProjectsPanel.svelte";
   import ReposPanel from "./ReposPanel.svelte";
+  import BulkLink from "./BulkLink.svelte";
   import TeamsPanel from "./TeamsPanel.svelte";
   import ProductsPanel from "./ProductsPanel.svelte";
   import ComponentsPanel from "./ComponentsPanel.svelte";
@@ -83,6 +84,7 @@
       { key: "sources", label: "sources", view: SourcesPanel, n: "sources", show: admin, present: "modal" },
       { key: "projects", label: "projects", view: ProjectsPanel, n: "projects" },
       { key: "repos", label: "repos", view: ReposPanel, n: "repos" },
+      { key: "bulk-link", label: "bulk link", view: BulkLink, fill: true },
     ],
     structure: [
       { key: "teams", label: t("teams"), view: TeamsPanel, n: "teams", present: "modal" },
@@ -145,7 +147,7 @@
           ...s,
           count: n ? (census.loading ? null : (census.data.counts[n] ?? 0)) : undefined,
           tone: n && census.data.warn[n] ? ("warn" as const) : undefined,
-          action: sectionAction(s.key),
+          actions: sectionActions(s.key),
         }),
       ),
   );
