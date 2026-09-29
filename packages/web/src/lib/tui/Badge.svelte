@@ -6,7 +6,7 @@
     title,
     children,
   }: {
-    tone?: "muted" | "accent" | "ok" | "warn" | "danger";
+    tone?: "muted" | "accent" | "ok" | "warn" | "danger" | "info";
     title?: string;
     children: Snippet;
   } = $props();
@@ -42,5 +42,9 @@
   .badge.danger {
     border-color: var(--danger);
     color: var(--danger);
+  }
+  .badge.info {
+    border-color: var(--info);
+    color: var(--info);
   }
 </style>
