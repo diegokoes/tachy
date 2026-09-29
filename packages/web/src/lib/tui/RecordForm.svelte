@@ -134,6 +134,7 @@
           <Select
             value={(draft[c.key] ?? "") as string}
             options={optionsOf(c)}
+            searchable={c.searchable}
             aria-label={c.label}
             onchange={(v) => (draft[c.key] = v)}
           />
