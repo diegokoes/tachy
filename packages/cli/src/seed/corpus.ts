@@ -324,7 +324,7 @@ export const CODE_LANGS = [
 
 /**
  * Snippet shapes, not one snippet. Each interpolates the identifiers of the
- * file it belongs to, so `code_chunks.chunk_text` is distinct per row -- it was
+ * file it belongs to, so `code_blob_chunks.chunk_text` is distinct per row -- it was
  * a single shared constant, which gave 60k identical rows at --scale=large and,
  * under --embed, 60k identical vectors and a degenerate HNSW graph.
  */

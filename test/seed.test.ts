@@ -50,8 +50,10 @@ describe("seed", () => {
     const empty: string[] = [];
     // Written by whatever applied the schema, never by the seeder.
     const bookkeeping = new Set(["schema_meta", "chat_uploads", "test_runs"]);
+    // Superseded by repo_line_files and code_blob_chunks; nothing reads them.
+    const superseded = new Set(["repo_files", "code_chunks"]);
     for (const t of await tables()) {
-      if (bookkeeping.has(t)) continue;
+      if (bookkeeping.has(t) || superseded.has(t)) continue;
       const [{ n }] = await sql.unsafe<{ n: string }[]>(
         `select count(*)::text as n from ${t}`,
       );

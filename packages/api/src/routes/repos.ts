@@ -13,7 +13,14 @@ import {
   deleteRepo,
   repoScope,
   sourceProjectScope,
+  getSourceProject,
+  connectionToken,
+  listRemoteRefs,
+  previewIndex,
+  reindexInFlight,
+  repoToken,
   sql,
+  RELEASE_TAG_RE,
   type EntryScope,
 } from "@tachy/core";
 import {
@@ -33,8 +40,32 @@ const linkSchema = z.object({
   component: z.string().nullable().optional(),
   customer: z.string().nullable().optional(),
   branch: z.string().optional(),
+  lines: z.array(z.string().min(1)).max(20).optional(),
   config: z.record(z.string(), z.unknown()).optional(),
 });
+
+const reindexSchema = z.object({ line: z.string().min(1).optional() });
+const previewSchema = z.object({
+  config: z.record(z.string(), z.unknown()).optional(),
+});
+
+/** Newest release first; branches keep the remote's order. */
+const byReleaseDesc = (a: string, b: string) => {
+  const va = RELEASE_TAG_RE.exec(a)!.slice(1).map(Number);
+  const vb = RELEASE_TAG_RE.exec(b)!.slice(1).map(Number);
+  return vb[0] - va[0] || vb[1] - va[1] || vb[2] - va[2];
+};
+
+async function probe<T>(fn: () => Promise<T>) {
+  try {
+    return { ok: true as const, ...(await fn()) };
+  } catch (e) {
+    return {
+      ok: false as const,
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
 
 /** Linking a project's repos one form at a time does not scale past a handful:
  *  an Azure DevOps project routinely holds fifty. Authorization is checked once
@@ -112,9 +143,42 @@ export const repos = new Hono()
       componentSlug: body.component,
       customerSlug: body.customer,
       defaultBranch: body.branch,
+      lines: body.lines,
       config: body.config,
     });
     return c.json({ ok: true, repo: row });
+  })
+
+  /**
+   * The branches and release tags a remote offers, for the link form. Same
+   * authorisation as linking there, since it runs git against the URL with the
+   * project's connection token.
+   */
+  .get("/refs", async (c) => {
+    const url = c.req.query("url") ?? "";
+    const sourceProjectId = c.req.query("source_project_id") || undefined;
+    await assertCanWriteRepo(c, {
+      sourceProjectId,
+      productSlug: c.req.query("product") || undefined,
+    });
+    return c.json(
+      await probe(async () => {
+        const sourceSlug = sourceProjectId
+          ? (await getSourceProject(sourceProjectId)).source_slug
+          : null;
+        const refs = await listRemoteRefs(
+          url,
+          await connectionToken(sourceSlug, url, await callerUserId(c)),
+        );
+        return {
+          branches: refs.filter((r) => r.kind === "branch").map((r) => r.name),
+          releases: refs
+            .filter((r) => r.kind === "tag" && RELEASE_TAG_RE.test(r.name))
+            .map((r) => r.name)
+            .sort(byReleaseDesc),
+        };
+      }),
+    );
   })
 
   .put("/bulk", zValidator("json", bulkLinkSchema), async (c) => {
@@ -153,24 +217,35 @@ export const repos = new Hono()
   .post("/:slug/reindex", async (c) => {
     const slug = c.req.param("slug");
     await assertCanWriteRepo(c, {}, slug);
-    await getRepoBySlug(slug);
-    const [busy] = await sql`
-      select id from job_runs
-      where kind = 'repo.reindex' and params->>'repo' = ${slug}
-        and status in ('queued', 'running')
-      limit 1
-    `;
+    const body = reindexSchema.parse(await c.req.json().catch(() => ({})));
+    const repo = await getRepoBySlug(slug);
+    if (body.line && !repo.lines.some((l) => l.ref === body.line))
+      throw badInput(`repo '${slug}' does not track '${body.line}'`);
+    const busy = await reindexInFlight(slug);
     if (busy)
-      throw badInput(
-        `repo '${slug}' is already being indexed (run ${busy.id})`,
-      );
+      throw badInput(`repo '${slug}' is already being indexed (run ${busy})`);
     const runId = await enqueueRun({
       kind: "repo.reindex",
-      params: { repo: slug },
+      params: { repo: slug, ...(body.line ? { line: body.line } : {}) },
       trigger: "manual",
       requestedBy: await callerUserId(c),
     });
     return c.json({ ok: true, status: "queued", run_id: runId }, 202);
+  })
+
+  /** What the default line would index under a proposed config; nothing is embedded. */
+  .post("/:slug/preview", zValidator("json", previewSchema), async (c) => {
+    const slug = c.req.param("slug");
+    await assertCanWriteRepo(c, {}, slug);
+    const body = c.req.valid("json");
+    return c.json(
+      await probe(async () =>
+        previewIndex(slug, {
+          config: body.config,
+          token: await repoToken(slug, await callerUserId(c)),
+        }),
+      ),
+    );
   })
 
   .delete("/:slug", async (c) => {

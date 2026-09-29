@@ -28,6 +28,8 @@ export type Column<T> = {
   edit?: EditKind;
   /** A function when the choices depend on the rest of the draft. */
   options?: Opt[] | ((d: Draft) => Opt[]);
+  /** Offer a filter box on a select, for choices that run to hundreds. */
+  searchable?: boolean;
   /** Shown in the empty control. Only ever an example of the *shape* of the
    *  value; what the field is for and the rules behind it go in `info`. */
   placeholder?: string | ((d: Draft) => string);
