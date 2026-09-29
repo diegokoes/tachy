@@ -227,6 +227,32 @@ describe("POST /api/repos/:slug/reindex", () => {
     expect((await again.json()).error).toMatch(/already being indexed/);
   });
 
+  it("queues one line, and refuses a line the repo does not track", async () => {
+    await resetJobs();
+    const cookie = await adminCookie();
+    await linkRepo({
+      slug: "driver",
+      url: "https://example.invalid/driver.git",
+      defaultBranch: "master",
+      lines: ["legacy/master-1-50"],
+    });
+    const untracked = await app.request("/api/repos/driver/reindex", {
+      ...json({ line: "legacy/master-1-49" }),
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+    });
+    expect(untracked.status).toBe(400);
+
+    const res = await app.request("/api/repos/driver/reindex", {
+      ...json({ line: "legacy/master-1-50" }),
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+    });
+    expect(res.status).toBe(202);
+    const [run] = await sql`
+      select params from job_runs where id = ${(await res.json()).run_id}
+    `;
+    expect(run.params).toEqual({ repo: "driver", line: "legacy/master-1-50" });
+  });
+
   it("refuses a slug nobody has linked, without cloning anything", async () => {
     const cookie = await adminCookie();
     const res = await app.request("/api/repos/no-such-repo/reindex", {
@@ -260,6 +286,71 @@ describe("POST /api/repos/:slug/reindex", () => {
       headers: { Cookie: cookie },
     });
     expect(res.status).toBe(403);
+  });
+});
+
+describe("PUT /api/repos lines", () => {
+  it("tracks the lines it is given, and keeps them when it is given none", async () => {
+    const cookie = await adminCookie();
+    const put = (body: Record<string, unknown>) =>
+      app.request("/api/repos", {
+        ...json({
+          slug: "driver",
+          url: "https://example.invalid/driver.git",
+          ...body,
+        }),
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Cookie: cookie },
+      });
+    expect(
+      (await put({ branch: "master", lines: ["legacy/master-1-50"] })).status,
+    ).toBe(200);
+    const lines = async () =>
+      (
+        await (
+          await app.request("/api/repos", { headers: { Cookie: cookie } })
+        ).json()
+      ).repos[0].lines.map((l: { ref: string }) => l.ref);
+    expect(await lines()).toEqual(["master", "legacy/master-1-50"]);
+
+    await put({ branch: "master" });
+    expect(await lines()).toEqual(["master", "legacy/master-1-50"]);
+
+    await put({ branch: "main", lines: [] });
+    expect(await lines()).toEqual(["main"]);
+  });
+});
+
+describe("GET /api/repos/refs", () => {
+  it("is for whoever may link there, like the link itself", async () => {
+    await createUser({
+      email: "member@example.com",
+      password: "a-long-password",
+      role: "member",
+    });
+    await adminCookie();
+    const cookie = await loginCookie(
+      app,
+      "member@example.com",
+      "a-long-password",
+    );
+    const res = await app.request(
+      "/api/repos/refs?url=https://example.invalid/r.git",
+      { headers: { Cookie: cookie } },
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("reports a remote it cannot read instead of failing the request", async () => {
+    const cookie = await adminCookie();
+    const res = await app.request(
+      "/api/repos/refs?url=file:///nonexistent/tachy-repo",
+      { headers: { Cookie: cookie } },
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error).toBeTruthy();
   });
 });
 
