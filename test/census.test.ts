@@ -180,12 +180,13 @@ describe("the admin census", () => {
         productSlug: "tpd",
       });
       await sql`
-        update repos set index_status = 'ready', file_count = 10,
+        update repo_lines set index_status = 'ready', file_count = 10,
           chunk_count = 40, last_indexed_at = now() - interval '3 days'
-        where slug = 'seed-ready'
+        where repo_id = (select id from repos where slug = 'seed-ready')
       `;
       await sql`
-        update repos set index_status = 'error' where slug = 'seed-broken'
+        update repo_lines set index_status = 'error'
+        where repo_id = (select id from repos where slug = 'seed-broken')
       `;
 
       const r = await repoCensus();
