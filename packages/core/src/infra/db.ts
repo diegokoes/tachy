@@ -23,6 +23,7 @@ export const sql = postgres(env.databaseUrl, {
   ...(poolMax ? { max: poolMax } : {}),
   ...(idleTimeout ? { idle_timeout: idleTimeout } : {}),
   connection: {
+    TimeZone: "UTC",
     ...(appName ? { application_name: appName } : {}),
     ...(testSchema ? { search_path: `${testSchema},public` } : {}),
   },

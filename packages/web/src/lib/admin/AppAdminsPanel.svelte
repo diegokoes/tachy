@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { roleLabel } from "../terms";
   import { Badge, DataTable, Icon, Note, tip, type Column } from "../tui";
-  import { fmtDate } from "../dates";
+  import { fmtDate } from "../dates.svelte";
   import {
     reloadRoster,
     signIn,

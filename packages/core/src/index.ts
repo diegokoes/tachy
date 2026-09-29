@@ -115,6 +115,7 @@ export {
   PREF_KEYS,
   resolvePref,
   effectivePrefs,
+  dateFormatOf,
   setPref,
   deletePref,
   listVisibleArtifacts,
@@ -661,3 +662,18 @@ export type {
   ReportDirection,
   NotificationKind,
 } from "@tachy/contract";
+
+// Owned by the contract, because the SPA renders every date with them and the
+// agent's spreadsheet exports must agree.
+export {
+  DATE_ORDERS,
+  CLOCKS,
+  DEFAULT_DATE_FORMAT,
+  formatDay,
+  formatTime,
+  formatDateTime,
+  excelDateTimeFormat,
+  encodeDateFormat,
+  parseDateFormat,
+} from "@tachy/contract";
+export type { DateOrder, Clock, DateFormat, Moment } from "@tachy/contract";

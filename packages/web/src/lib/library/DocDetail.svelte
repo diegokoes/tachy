@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { fmtDate } from "../dates";
+  import { fmtDate } from "../dates.svelte";
   import { statusTone, type StatusAction } from "./status";
   import { patchLibraryItem } from "./edit";
   import { api } from "../api";
@@ -13,7 +13,7 @@
   import { pushScope } from "../keys.svelte";
   import { setTopActions } from "../subnav.svelte";
   import { createSequence, errText } from "../resource.svelte";
-  import { Badge, Button, Chip, Icon, Note, Select } from "../tui";
+  import { Badge, Button, Chip, Icon, Note, Select, Time } from "../tui";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
   import ScopeCrumb from "./ScopeCrumb.svelte";
   import StatusActions from "./StatusActions.svelte";
@@ -283,7 +283,7 @@
         {/if}
       </span>
       <span class="when">
-        {#if doc.updated_at}<span class="muted">updated {fmtDate(doc.updated_at)}</span>{/if}
+        {#if doc.updated_at}<span class="muted">updated <Time at={doc.updated_at} date /></span>{/if}
       </span>
     </div>
 

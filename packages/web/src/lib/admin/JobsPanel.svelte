@@ -20,8 +20,8 @@
     toneOf,
     type Column,
     type Draft,
+    Time,
   } from "../tui";
-  import { fmtDateTime } from "../dates";
   import { shadowPulse } from "../motion";
   import type {
     JobChange,
@@ -319,7 +319,7 @@
 {#snippet scheduleCell(d: JobDefinitionRow)}
   {#if d.schedule}
     <span class="sched">{d.schedule}<span class="dim">{d.timezone === "UTC" ? "" : ` ${d.timezone}`}</span></span>
-    {#if d.next_run}<span class="dim small">next {fmtDateTime(d.next_run)}</span>{/if}
+    {#if d.next_run}<span class="dim small">next <Time at={d.next_run} /></span>{/if}
   {:else}
     <span class="dim">by hand</span>
   {/if}
@@ -345,7 +345,7 @@
 {#snippet lastCell(d: JobDefinitionRow)}
   {#if d.last_run}
     {@render statusBadge(d.last_run.status)}
-    <span class="dim small">{fmtDateTime(d.last_run.created_at)}</span>
+    <span class="dim small"><Time at={d.last_run.created_at} /></span>
   {:else}
     <span class="dim">never</span>
   {/if}
@@ -361,7 +361,7 @@
           <tr>
             <td>{@render statusBadge(r.status)}</td>
             <td class="dim">{r.trigger}</td>
-            <td class="dim">{fmtDateTime(r.created_at)}</td>
+            <td class="dim"><Time at={r.created_at} /></td>
             <td>
               {#if r.status === "running" && r.progress != null}
                 {Math.round(r.progress * 100)}%{r.progress_note ? ` · ${r.progress_note}` : ""}
@@ -597,7 +597,7 @@
       {@render runList(historyRuns)}
     {:else}
       {#each historyChanges as c (c.id)}
-        <div class="dim small">{fmtDateTime(c.created_at)} · {c.action} by {c.changed_by ?? "the system"}</div>
+        <div class="dim small"><Time at={c.created_at} /> · {c.action} by {c.changed_by ?? "the system"}</div>
       {:else}
         <span class="dim">none recorded</span>
       {/each}
