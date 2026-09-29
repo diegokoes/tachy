@@ -61,7 +61,7 @@ export async function resetData() {
              wiki_gaps, library_assets,
              -- repos would be swept in anyway by the cascade from components;
              -- naming it keeps that visible. source_connections stays.
-             repos, repo_files, code_chunks
+             repos, repo_lines, repo_line_files, code_blob_chunks, repo_files, code_chunks
     restart identity cascade
   `;
   // source_projects references customers, so TRUNCATE ... CASCADE takes it with

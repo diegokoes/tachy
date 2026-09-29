@@ -21,7 +21,7 @@ export const EMBED_MODES = ["none", "search", "all"] as const;
 export type EmbedMode = (typeof EMBED_MODES)[number];
 
 /**
- * `search` covers what a search actually reads. `code_chunks` is the other 60%
+ * `search` covers what a search actually reads. `code_blob_chunks` is the other 60%
  * of the work and is only reached by search_code, so it is not worth an extra
  * fifty minutes unless that is the thing being measured. See below for where
  * those numbers come from.

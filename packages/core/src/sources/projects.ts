@@ -1,3 +1,4 @@
+import { releaseMinor } from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
 import { badInput, conflict, notFound } from "../infra/errors";
 import { getProductIdBySlug, getTeamIdBySlug } from "../catalog/products";
@@ -410,6 +411,13 @@ export interface ProjectRepoContext {
   index_status: string;
   indexed_commit: string | null;
   last_indexed_at: string | null;
+  lines: { ref: string; version_label: string | null; index_status: string }[];
+  /**
+   * With a work item that has an observed version: the line that version is
+   * searched on. `line_matches` false means no tracked line is on its minor
+   * and the default line stands in.
+   */
+  for_version?: { version: string; line: string; line_matches: boolean };
 }
 
 export interface ProjectContext {
@@ -458,14 +466,19 @@ export async function resolveProjectContext(
     productId = await getProductIdBySlug(q.productSlug);
 
   let projectId = q.projectId;
-  if (!projectId && q.workItemId) {
+  let observedVersion: string | null = null;
+  if (q.workItemId) {
     const [item] = await sql`
-      select source_project_id, product_id from work_items where id = ${q.workItemId}
+      select source_project_id, product_id, observed_version
+      from work_items where id = ${q.workItemId}
     `;
     if (!item) throw notFound(`Work item '${q.workItemId}' not found`);
-    if (item.source_project_id) projectId = item.source_project_id as string;
-    else if (!productId) productId = (item.product_id as string) ?? undefined;
-    if (!projectId && !productId) return [];
+    observedVersion = item.observed_version ?? null;
+    if (!projectId) {
+      if (item.source_project_id) projectId = item.source_project_id as string;
+      else if (!productId) productId = (item.product_id as string) ?? undefined;
+      if (!projectId && !productId) return [];
+    }
   }
 
   const rows = (await sql`
@@ -489,8 +502,17 @@ export async function resolveProjectContext(
   const repos = await sql`
     select r.id, r.slug, r.url, r.default_branch, r.source_project_id, r.product_id,
            r.component_id, c.slug as component_slug,
-           r.index_status, r.indexed_commit, r.last_indexed_at
+           coalesce(dl.index_status, 'idle') as index_status,
+           dl.indexed_commit, dl.last_indexed_at,
+           coalesce((
+             select json_agg(json_build_object(
+                      'ref', l.ref, 'version_label', l.version_label,
+                      'index_status', l.index_status)
+                    order by l.ref <> r.default_branch, l.ref)
+             from repo_lines l where l.repo_id = r.id
+           ), '[]'::json) as lines
     from repos r
+    left join repo_lines dl on dl.repo_id = r.id and dl.ref = r.default_branch
     left join components c on c.id = r.component_id
     where r.source_project_id = any(${ids})
        or (r.source_project_id is null and r.product_id = any(${productIds}))
@@ -542,6 +564,8 @@ export async function resolveProjectContext(
         index_status: repo.index_status,
         indexed_commit: repo.indexed_commit,
         last_indexed_at: repo.last_indexed_at,
+        lines: repo.lines,
+        ...forVersion(repo.lines, observedVersion),
       })),
     areas: areas
       .filter((a) => a.source_project_id === r.id)
@@ -550,6 +574,24 @@ export async function resolveProjectContext(
         component_slug: a.component_slug,
       })),
   }));
+}
+
+function forVersion(
+  lines: ProjectRepoContext["lines"],
+  version: string | null,
+): Pick<ProjectRepoContext, "for_version"> {
+  const minor = version ? releaseMinor(version) : null;
+  if (!version || !minor || !lines.length) return {};
+  const match = lines.find(
+    (l) => l.version_label && releaseMinor(l.version_label) === minor,
+  );
+  return {
+    for_version: {
+      version,
+      line: (match ?? lines[0]).ref,
+      line_matches: Boolean(match),
+    },
+  };
 }
 
 /** For callers that must act on exactly one project (the ADO wiki/create tools). */

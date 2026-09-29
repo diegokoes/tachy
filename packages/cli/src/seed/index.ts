@@ -74,6 +74,9 @@ const TABLES = [
   "wiki_gaps",
   "library_assets",
   "analysis_runs",
+  "code_blob_chunks",
+  "repo_line_files",
+  "repo_lines",
   "code_chunks",
   "repo_files",
   "repos",
@@ -121,8 +124,8 @@ const BULK_TABLES = [
   "knowledge_entries",
   "reference_docs",
   "reference_doc_chunks",
-  "repo_files",
-  "code_chunks",
+  "repo_line_files",
+  "code_blob_chunks",
 ];
 
 async function confirm(question: string): Promise<boolean> {
@@ -252,7 +255,7 @@ export async function seed(opts: SeedOptions): Promise<void> {
       `embedding ${mode === "all" ? "every corpus" : "the search corpora"} with the real model: ` +
         `about ${Math.round(estimate / 60)} min of CPU before the seed commits.` +
         (mode === "all"
-          ? "\n  --embed=search skips code_chunks, which is most of that and only search_code reads."
+          ? "\n  --embed=search skips code_blob_chunks, which is most of that and only search_code reads."
           : ""),
     );
   const embed =
@@ -427,7 +430,7 @@ function banner(opts: SeedOptions, credentials: number): void {
     );
   else if (mode === "search")
     console.log(
-      "  knowledge and reference vectors are real; code_chunks are synthetic,\n" +
+      "  knowledge and reference vectors are real; code_blob_chunks are synthetic,\n" +
         "  so search_code results are not meaningful. --embed=all covers those too.",
     );
 }
