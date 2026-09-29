@@ -1,7 +1,9 @@
 import { untrack } from "svelte";
+import type { HeadAction } from "../sections/Section.svelte";
 
 /**
- * A section's "add" button, drawn on that section's heading line.
+ * The buttons drawn on a section's heading line: its "add", and at most one
+ * more verb beside it.
  *
  * It travels as data rather than as a snippet so that `tui` never has to know
  * about the page layout: a CrudTable offers `{ label, run }` and whoever lays
@@ -13,12 +15,29 @@ import { untrack } from "svelte";
  * $state.raw, not $state, for the same reason as the subnav store: plain
  * $state would deep-proxy the object and break the identity check below.
  */
-export type SectionAction = { label: string; run: () => void };
+export type SectionAction = HeadAction;
+
+/**
+ * Where on the heading a claim is drawn. `add` is the CrudTable's, rightmost;
+ * `aside` is one more verb a panel wants beside it.
+ */
+export type SectionSlot = "add" | "aside";
 
 let claims = $state.raw<Record<string, SectionAction>>({});
 
-export const sectionAction = (section: string | undefined) =>
-  section ? claims[section] : undefined;
+const keyOf = (section: string, slot: SectionSlot) =>
+  slot === "add" ? section : `${section}:${slot}`;
+
+export const sectionAction = (
+  section: string | undefined,
+  slot: SectionSlot = "add",
+) => (section ? claims[keyOf(section, slot)] : undefined);
+
+/** Every action drawn on one section's heading, left to right. */
+export const sectionActions = (section: string): SectionAction[] =>
+  (["aside", "add"] as const)
+    .map((slot) => claims[keyOf(section, slot)])
+    .filter((a): a is SectionAction => Boolean(a));
 
 /* Claiming has to read the map to write it, and it is called from inside
    CrudTable's $effect. Untracked, or that effect would depend on the state it
@@ -37,14 +56,14 @@ function edit(
 export function claimSectionAction(
   section: string,
   next: SectionAction | null,
+  slot: SectionSlot = "add",
 ): () => void {
-  edit(({ [section]: _gone, ...rest }) =>
-    next ? { ...rest, [section]: next } : rest,
-  );
+  const key = keyOf(section, slot);
+  edit(({ [key]: _gone, ...rest }) => (next ? { ...rest, [key]: next } : rest));
   return () =>
     edit((was) => {
-      if (was[section] !== next) return was;
-      const { [section]: _dropped, ...without } = was;
+      if (was[key] !== next) return was;
+      const { [key]: _dropped, ...without } = was;
       return without;
     });
 }

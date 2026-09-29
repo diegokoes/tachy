@@ -71,6 +71,7 @@ import {
   MessageSquareQuote,
   MonitorCog,
   OctagonAlert,
+  Orbit,
   Palette,
   Pause,
   PencilSparkles,
@@ -189,6 +190,8 @@ export const ICONS = {
   refresh: RotateCw,
   seed: Sprout,
   index: Database,
+  /** Linking many repos of one project at once. */
+  bulk: Orbit,
   /** Anything that hands work to the model. */
   ai: Bot,
 

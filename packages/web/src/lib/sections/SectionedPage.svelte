@@ -4,6 +4,7 @@
   import { scrollport } from "../scrollport.svelte";
   import { createSpy } from "./spy.svelte";
   import Section from "./Section.svelte";
+  import type { HeadAction } from "./Section.svelte";
 
   export type PageSection = {
     key: string;
@@ -14,8 +15,8 @@
     tone?: "warn" | "danger";
     /** Mount without waiting to be scrolled near. */
     eager?: boolean;
-    /** Drawn at the right end of the section's heading line. */
-    action?: { label: string; run: () => void };
+    /** Drawn at the right end of the section's heading line, in order. */
+    actions?: HeadAction[];
   };
 
   let {
@@ -113,7 +114,7 @@
         label={s.label}
         view={s.view}
         eager={s.eager}
-        action={s.action}
+        actions={s.actions}
       />
     {/each}
 

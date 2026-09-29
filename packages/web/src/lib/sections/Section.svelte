@@ -1,3 +1,14 @@
+<script lang="ts" module>
+  import type { IconName } from "../tui";
+
+  export type HeadAction = {
+    label: string;
+    run: () => void;
+    icon?: IconName;
+    tone?: "ok" | "info";
+  };
+</script>
+
 <script lang="ts">
   import { onMount, untrack, type Component } from "svelte";
   import { Button, G, RAMP } from "../tui";
@@ -9,7 +20,7 @@
     label,
     view,
     eager = false,
-    action,
+    actions = [],
   }: {
     spy: Spy;
     section: string;
@@ -17,7 +28,7 @@
     view: Component;
     /** Mount without waiting to be scrolled near. */
     eager?: boolean;
-    action?: { label: string; run: () => void };
+    actions?: HeadAction[];
   } = $props();
 
   let el = $state<HTMLElement>();
@@ -39,11 +50,15 @@
     <span class="mark" aria-hidden="true">{G.marker}</span>
     <span class="lbl">{label}</span>
     <span class="rule" aria-hidden="true"></span>
-    {#if action}
-      <Button variant="ghost" tone="ok" size="sm" icon="plus" onclick={action.run}
-        >{action.label}</Button
+    {#each actions as a (a.label)}
+      <Button
+        variant="ghost"
+        tone={a.tone ?? "ok"}
+        size="sm"
+        icon={a.icon ?? "plus"}
+        onclick={a.run}>{a.label}</Button
       >
-    {/if}
+    {/each}
   </h2>
 
   <div class="section-body">
