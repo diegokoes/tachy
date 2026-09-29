@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount, untrack } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { keep, recall } from "../kept";
   import { JOB_NOTIFY, JOB_OVERLAP, JOB_RESOURCE_CLASSES } from "@tachy/contract";
   import { api } from "../api";
@@ -15,12 +15,14 @@
     Modal,
     Note,
     Select,
+    Tabs,
     isActive,
     toneOf,
     type Column,
     type Draft,
   } from "../tui";
   import { fmtDateTime } from "../dates";
+  import { shadowPulse } from "../motion";
   import type {
     JobChange,
     JobDefinitionRow,
@@ -44,7 +46,6 @@
     { kinds: [], chat_slot_cap: 0, class_chat_slots: {} } as KindsInfo,
   );
   const defs = createResource(() => api.get<JobDefinitionRow[]>("/jobs/definitions"), []);
-  const recent = createResource(() => api.get<JobRunRow[]>("/jobs/runs?limit=20"), []);
   const connections = createResource(
     () => api.get<Connection[]>("/source-connections"),
     [],
@@ -54,16 +55,15 @@
   let filter = $state(recall("admin.jobs.filter", ""));
   $effect(() => keep("admin.jobs.filter", filter));
   let params = $state<Record<string, unknown>>({});
-  let runsFor = $state<Record<string, JobRunRow[]>>({});
-  let changesFor = $state<Record<string, JobChange[]>>({});
   let logOpen = $state(new Set<string>());
   let running = $state<string | null>(null);
   let pausing = $state<string | null>(null);
-  /** The job whose record dialog is open, if one is. */
-  let opened = $state<JobDefinitionRow | null>(null);
-  /** The job whose full run history is open, and what was fetched for it. */
+  /** The job whose runs and changes are open, and what was fetched for it. */
   let history = $state<JobDefinitionRow | null>(null);
   let historyRuns = $state<JobRunRow[] | null>(null);
+  let historyChanges = $state<JobChange[]>([]);
+  let historyTab = $state<"runs" | "changes">("runs");
+  const HISTORY_LIMIT = 200;
 
   const kindOf = (k: unknown) => info.data.kinds.find((x) => x.kind === k);
   const opt = (values: readonly string[], inherit: string) => [
@@ -71,9 +71,9 @@
     ...values.map((v) => ({ value: v, label: v })),
   ];
 
-  /* No "failures only" toggle: the recent-runs list below and each job's own
-     history already answer "what broke", and the overview's failed counter
-     opens straight onto the jobs that did. */
+  /* No "failures only" toggle: each job's last run and its own run history
+     already answer "what broke", and the overview's failed counter opens
+     straight onto the jobs that did. */
   const filtered = $derived.by(() => {
     const q = filter.trim().toLowerCase();
     return defs.data.filter(
@@ -88,6 +88,7 @@
       width: "14rem",
       edit: "text",
       required: true,
+      cell: nameCell,
       info: "Display name in run history and Teams.",
     },
     {
@@ -181,13 +182,11 @@
     };
   }
 
-  async function loadDetail(id: string) {
-    const [runs, changes] = await Promise.all([
-      api.get<JobRunRow[]>(`/jobs/runs?definition_id=${id}&limit=20`),
-      api.get<JobChange[]>(`/jobs/definitions/${id}/changes`),
-    ]);
-    runsFor[id] = runs;
-    changesFor[id] = changes;
+  async function loadHistoryRuns(id: string) {
+    const runs = await api.get<JobRunRow[]>(
+      `/jobs/runs?definition_id=${id}&limit=${HISTORY_LIMIT}`,
+    );
+    if (history?.id === id) historyRuns = runs;
   }
 
   async function runNow(d: JobDefinitionRow) {
@@ -195,8 +194,10 @@
     error = null;
     try {
       await api.post(`/jobs/definitions/${d.id}/run`, {});
-      await loadDetail(d.id);
-      await Promise.all([defs.reload(), recent.reload()]);
+      await Promise.all([
+        defs.reload(),
+        history?.id === d.id ? loadHistoryRuns(d.id) : undefined,
+      ]);
       void census.reload();
     } catch (e) {
       error = errText(e);
@@ -224,10 +225,16 @@
   async function openHistory(d: JobDefinitionRow) {
     history = d;
     historyRuns = null;
+    historyChanges = [];
+    historyTab = "runs";
     try {
-      historyRuns = await api.get<JobRunRow[]>(
-        `/jobs/runs?definition_id=${d.id}&limit=200`,
-      );
+      const [runs, changes] = await Promise.all([
+        api.get<JobRunRow[]>(`/jobs/runs?definition_id=${d.id}&limit=${HISTORY_LIMIT}`),
+        api.get<JobChange[]>(`/jobs/definitions/${d.id}/changes`),
+      ]);
+      if (history?.id !== d.id) return;
+      historyRuns = runs;
+      historyChanges = changes;
     } catch (e) {
       error = errText(e);
       history = null;
@@ -238,8 +245,10 @@
     error = null;
     try {
       await api.post(`/jobs/runs/${run.id}/cancel`, {});
-      if (run.definition_id) await loadDetail(run.definition_id);
-      await recent.reload();
+      await Promise.all([
+        defs.reload(),
+        run.definition_id ? loadHistoryRuns(run.definition_id) : undefined,
+      ]);
     } catch (e) {
       error = errText(e);
     }
@@ -254,16 +263,15 @@
 
   /* Runs move on the server; while any shown run is active, follow it. */
   const anyActive = $derived(
-    recent.data.some((r) => isActive(r.status)) ||
-      Object.values(runsFor).some((rs) => rs.some((r) => isActive(r.status))),
+    defs.data.some((d) => isActive(d.last_run?.status)) ||
+      (historyRuns ?? []).some((r) => isActive(r.status)),
   );
   let poll: ReturnType<typeof setInterval> | undefined;
   $effect(() => {
     if (anyActive && !poll)
       poll = setInterval(() => {
-        void recent.reload();
         void defs.reload();
-        if (opened) void loadDetail(opened.id).catch(() => {});
+        if (history) void loadHistoryRuns(history.id).catch(() => {});
       }, 3000);
     if (!anyActive && poll) {
       clearInterval(poll);
@@ -277,16 +285,7 @@
   onMount(() => {
     void info.reload();
     void defs.reload();
-    void recent.reload();
     void connections.reload();
-  });
-
-  /* What hangs off a job (its recent runs and its change log) is fetched when
-     its dialog opens. */
-  $effect(() => {
-    const id = opened?.id;
-    if (!id) return;
-    untrack(() => void loadDetail(id).catch((e) => (error = errText(e))));
   });
 
   async function createJob(d: Draft) {
@@ -301,6 +300,22 @@
   }
 </script>
 
+{#snippet nameCell(d: JobDefinitionRow)}
+  {#if d.last_run?.status === "running"}
+    <span class="live" use:shadowPulse={{ loop: true }}>{d.name}</span>
+  {:else}
+    {d.name}
+  {/if}
+{/snippet}
+
+{#snippet statusBadge(status: string)}
+  {#if status === "running"}
+    <span class="live" use:shadowPulse={{ loop: true }}><Badge tone={toneOf(status)}>{status}</Badge></span>
+  {:else}
+    <Badge tone={toneOf(status)}>{status}</Badge>
+  {/if}
+{/snippet}
+
 {#snippet scheduleCell(d: JobDefinitionRow)}
   {#if d.schedule}
     <span class="sched">{d.schedule}<span class="dim">{d.timezone === "UTC" ? "" : ` ${d.timezone}`}</span></span>
@@ -311,7 +326,12 @@
 {/snippet}
 
 {#snippet classCell(d: JobDefinitionRow)}
-  {d.resource_class ?? kindOf(d.kind)?.resource_class ?? "-"}
+  {@const cls = d.resource_class ?? kindOf(d.kind)?.resource_class}
+  {#if cls}
+    <Badge tone={cls === "heavy" ? "danger" : "info"}>{cls}</Badge>
+  {:else}
+    <span class="dim">-</span>
+  {/if}
 {/snippet}
 
 {#snippet enabledCell(d: JobDefinitionRow)}
@@ -324,14 +344,14 @@
 
 {#snippet lastCell(d: JobDefinitionRow)}
   {#if d.last_run}
-    <Badge tone={toneOf(d.last_run.status)}>{d.last_run.status}</Badge>
+    {@render statusBadge(d.last_run.status)}
     <span class="dim small">{fmtDateTime(d.last_run.created_at)}</span>
   {:else}
     <span class="dim">never</span>
   {/if}
 {/snippet}
 
-{#snippet runList(runs: JobRunRow[], showKind: boolean)}
+{#snippet runList(runs: JobRunRow[])}
   {#if !runs.length}
     <span class="dim">no runs yet</span>
   {:else}
@@ -339,8 +359,7 @@
       <tbody>
         {#each runs as r (r.id)}
           <tr>
-            <td><Badge tone={toneOf(r.status)}>{r.status}</Badge></td>
-            {#if showKind}<td>{r.kind}</td>{/if}
+            <td>{@render statusBadge(r.status)}</td>
             <td class="dim">{r.trigger}</td>
             <td class="dim">{fmtDateTime(r.created_at)}</td>
             <td>
@@ -371,26 +390,12 @@
             </td>
           </tr>
           {#if logOpen.has(r.id)}
-            <tr><td colspan={showKind ? 6 : 5}><pre class="log">{r.log_tail}</pre></td></tr>
+            <tr><td colspan="5"><pre class="log">{r.log_tail}</pre></td></tr>
           {/if}
         {/each}
       </tbody>
     </table>
   {/if}
-{/snippet}
-
-{#snippet detail(d: JobDefinitionRow)}
-  <div class="detail">
-    {#if d.disabled_reason}<Note tone="danger">{d.disabled_reason}</Note>{/if}
-    <GroupHead label="runs" />
-    {@render runList(runsFor[d.id] ?? [], false)}
-    <GroupHead label="changes" />
-    {#each changesFor[d.id] ?? [] as c (c.id)}
-      <div class="dim small">{fmtDateTime(c.created_at)} · {c.action} by {c.changed_by ?? "the system"}</div>
-    {:else}
-      <span class="dim">none recorded</span>
-    {/each}
-  </div>
 {/snippet}
 
 {#snippet paramField(name: string, p: JsonSchema, required: boolean, kind: JobKindInfo)}
@@ -469,12 +474,12 @@
       </Note>
     {/if}
   {/if}
-  {#if f.row}{@render detail(f.row)}{/if}
+  {#if f.row?.disabled_reason}<Note tone="danger">{f.row.disabled_reason}</Note>{/if}
 {/snippet}
 
-<!-- The controls a job is opened for, on the row and in its dialog alike.
-     Pause stays lit while a job is paused, so the state is on the button
-     that changes it. -->
+<!-- Running and pausing happen on the row; the dialog is for editing, so it
+     carries only the way into runs and changes. Pause stays lit while a job
+     is paused, so the state is on the button that changes it. -->
 {#snippet controls(d: JobDefinitionRow)}
   <Button
     variant="ghost"
@@ -505,13 +510,17 @@
     disabled={pausing === d.id}
     onclick={() => pause(d)}
   />
+  {@render historyButton(d)}
+{/snippet}
+
+{#snippet historyButton(d: JobDefinitionRow)}
   <Button
     variant="ghost"
     square
     iconSize="1.4em"
     icon="history"
-    title="every run of this job"
-    aria-label={`history of ${d.name}`}
+    title="runs and changes"
+    aria-label={`runs and changes of ${d.name}`}
     onclick={() => openHistory(d)}
   />
 {/snippet}
@@ -543,11 +552,10 @@
   noun="job"
   editTitle={(d) => d.name}
   width="48rem"
-  extraActions={controls}
+  extraActions={historyButton}
   {formExtra}
   onform={(f) => {
     openedForm(f);
-    opened = f?.row ?? null;
     if (f?.mode === "create") params = {};
   }}
   oncreate={createJob}
@@ -560,13 +568,10 @@
     })}
 />
 
-<GroupHead label="recent runs, every job" />
-{@render runList(recent.data, true)}
-
 {#if history}
   {@const h = history}
   <Modal
-    title={`${h.name}: every run`}
+    title={h.name}
     width="56rem"
     cancelLabel="close"
     onCancel={() => {
@@ -574,16 +579,28 @@
       historyRuns = null;
     }}
   >
+    <Tabs
+      items={[
+        { key: "runs", label: "RUNS", tip: "kept 90 days, failures 180" },
+        { key: "changes", label: "CHANGES" },
+      ]}
+      active={historyTab}
+      anchor="--job-history-tab"
+      onpick={(k) => (historyTab = k as "runs" | "changes")}
+    />
     {#if !historyRuns}
       <p class="dim">loading…</p>
+    {:else if historyTab === "runs"}
+      {#if historyRuns.length === HISTORY_LIMIT}
+        <p class="dim small">the newest {HISTORY_LIMIT}</p>
+      {/if}
+      {@render runList(historyRuns)}
     {:else}
-      <p class="dim small">
-        {historyRuns.length}
-        {historyRuns.length === 1 ? "run" : "runs"}{historyRuns.length === 200
-          ? ", the newest 200"
-          : ""}. Kept 90 days, failures 180.
-      </p>
-      {@render runList(historyRuns, false)}
+      {#each historyChanges as c (c.id)}
+        <div class="dim small">{fmtDateTime(c.created_at)} · {c.action} by {c.changed_by ?? "the system"}</div>
+      {:else}
+        <span class="dim">none recorded</span>
+      {/each}
     {/if}
   </Modal>
 {/if}
@@ -598,5 +615,5 @@
   .runs .acts { text-align: end; white-space: nowrap; }
   .err { color: var(--danger); }
   .log { max-height: 16rem; overflow: auto; margin: 0; padding: var(--pad-2); border: 1px dashed var(--border); white-space: pre-wrap; font-size: 0.85em; }
-  .detail { padding: var(--pad-2) 0; }
+  .live { color: var(--accent); }
 </style>
