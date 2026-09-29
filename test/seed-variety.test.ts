@@ -44,7 +44,7 @@ describe("seeded data has variety", () => {
   });
 
   it.each([
-    ["code_chunks", "chunk_text", 0.9],
+    ["code_blob_chunks", "chunk_text", 0.9],
     ["reference_doc_chunks", "chunk_text", 0.9],
     ["knowledge_entries", "issue_summary", 0.9],
     ["reference_docs", "body", 0.9],
@@ -90,7 +90,7 @@ describe("seeded data has variety", () => {
   it("spreads code-chunk vectors rather than stacking them", async () => {
     const [row] = await sql<{ worst: number }[]>`
       with sample as (
-        select embedding from code_chunks where embedding is not null limit 200
+        select embedding from code_blob_chunks where embedding is not null limit 200
       )
       select max(1 - (a.embedding <=> b.embedding)) as worst
       from sample a, sample b

@@ -396,8 +396,10 @@ export async function getCustomerProfile(
         ),
     listCustomerComponents(customerId),
     sql<CustomerProfile["repos"]>`
-      select r.slug, c.slug as component, r.index_status
-      from repos r left join components c on c.id = r.component_id
+      select r.slug, c.slug as component, coalesce(dl.index_status, 'idle') as index_status
+      from repos r
+      left join repo_lines dl on dl.repo_id = r.id and dl.ref = r.default_branch
+      left join components c on c.id = r.component_id
       where r.customer_id = ${customerId} order by r.slug
     `,
     sql<CustomerProfile["projects"]>`

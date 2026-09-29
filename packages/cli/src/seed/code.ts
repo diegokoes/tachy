@@ -65,14 +65,8 @@ export async function seedCode(
       "component_id",
       "customer_id",
       "default_branch",
-      "index_status",
-      "indexed_commit",
-      "file_count",
-      "chunk_count",
-      "last_indexed_at",
     ],
     repos.map((r, i) => {
-      const rng = rngFor("repo", i);
       const product = products[i % products.length];
       return {
         id: r.id,
@@ -84,13 +78,29 @@ export async function seedCode(
         component_id: components[i % components.length].id,
         customer_id: i % 5 === 0 ? customers[i % customers.length].id : null,
         default_branch: "main",
-        index_status: REPO_INDEX_STATUSES[3],
-        indexed_commit: uuidFor("commit", i).replace(/-/g, "").slice(0, 40),
-        file_count: 0,
-        chunk_count: 0,
-        last_indexed_at: pastDate(rng, 30),
       };
     }),
+  );
+
+  await insertRows(
+    tx,
+    "repo_lines",
+    [
+      "id",
+      "repo_id",
+      "ref",
+      "index_status",
+      "indexed_commit",
+      "last_indexed_at",
+    ],
+    repos.map((r, i) => ({
+      id: uuidFor("repo_line", i),
+      repo_id: r.id,
+      ref: "main",
+      index_status: REPO_INDEX_STATUSES[3],
+      indexed_commit: uuidFor("commit", i).replace(/-/g, "").slice(0, 40),
+      last_indexed_at: pastDate(rngFor("repo", i), 30),
+    })),
   );
 
   const perRepo = Math.max(
@@ -99,19 +109,24 @@ export async function seedCode(
   );
   const fileCount = repos.length * perRepo;
 
+  const blobOf = (f: number) =>
+    uuidFor("blob", f).replace(/-/g, "").slice(0, 40);
+
   await insertWindowed(
     tx,
-    "repo_files",
-    ["id", "repo_id", "path", "lang", "blob_sha", "size_bytes"],
+    "repo_line_files",
+    ["id", "line_id", "repo_id", "path", "lang", "blob_sha", "size_bytes"],
     fileCount,
     (i) => {
       const { lang, path, rng } = fileIdentity(i);
+      const repo = Math.floor(i / perRepo);
       return {
         id: uuidFor("repo_file", i),
-        repo_id: repos[Math.floor(i / perRepo)].id,
+        line_id: uuidFor("repo_line", repo),
+        repo_id: repos[repo].id,
         path,
         lang,
-        blob_sha: uuidFor("blob", i).replace(/-/g, "").slice(0, 40),
+        blob_sha: blobOf(i),
         size_bytes: intBetween(rng, 400, 24_000),
       };
     },
@@ -124,11 +139,11 @@ export async function seedCode(
 
   await insertWindowed(
     tx,
-    "code_chunks",
+    "code_blob_chunks",
     [
       "id",
       "repo_id",
-      "file_id",
+      "blob_sha",
       "ordinal",
       "start_line",
       "end_line",
@@ -155,8 +170,8 @@ export async function seedCode(
       return {
         id: uuidFor("code_chunk", i),
         repo_id: repos[Math.floor(f / perRepo)].id,
-        file_id: uuidFor("repo_file", f),
-        // (file_id, ordinal) unique by construction.
+        blob_sha: blobOf(f),
+        // (repo_id, blob_sha, ordinal) unique by construction.
         ordinal: k,
         start_line: start,
         end_line: start + 39,
@@ -169,8 +184,8 @@ export async function seedCode(
 
   // Keep the denormalised counters honest, the way the indexer leaves them.
   await tx`
-    update repos r set
-      file_count = (select count(*) from repo_files f where f.repo_id = r.id),
-      chunk_count = (select count(*) from code_chunks c where c.repo_id = r.id)
+    update repo_lines l set
+      file_count = (select count(*) from repo_line_files f where f.line_id = l.id),
+      chunk_count = (select count(*) from code_blob_chunks c where c.repo_id = l.repo_id)
   `;
 }
