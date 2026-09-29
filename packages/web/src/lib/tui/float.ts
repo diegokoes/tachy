@@ -11,7 +11,7 @@
  */
 
 export type Placement =
-  "below-start" | "below-end" | "above-start" | "above-end";
+  "below-start" | "below-end" | "above-start" | "above-end" | "beside";
 
 export type FloatOptions = {
   anchor: HTMLElement | undefined;
@@ -66,6 +66,8 @@ export function float(node: HTMLElement, options: FloatOptions) {
 
     if (opts.matchWidth) node.style.minWidth = `${a.width}px`;
 
+    if (placement === "beside" && besides(a, vw, left, top, vh, gap)) return;
+
     /* Measured with the cap off, so "how tall does it want to be" is the
        content's answer and not the last frame's. The border box is what the
        cap is then set against — `scrollHeight` stops at the padding box, so
@@ -99,6 +101,34 @@ export function float(node: HTMLElement, options: FloatOptions) {
 
     node.style.top = `${clamp(y, top + MARGIN, vh - h - MARGIN)}px`;
     node.style.left = `${clamp(x, left + MARGIN, vw - w - MARGIN)}px`;
+  }
+
+  /**
+   * To the right of the anchor, top edges level, else to its left; for a list
+   * that must not cover what sits under its trigger. False when neither side
+   * has room, and the caller falls back to below.
+   */
+  function besides(
+    a: DOMRect,
+    vw: number,
+    left: number,
+    top: number,
+    vh: number,
+    gap: number,
+  ) {
+    node.style.maxHeight = `${vh - top - 2 * MARGIN}px`;
+    const w = node.offsetWidth;
+    const h = node.offsetHeight;
+    const x =
+      a.right + gap + w <= vw - MARGIN
+        ? a.right + gap
+        : a.left - gap - w >= left + MARGIN
+          ? a.left - gap - w
+          : null;
+    if (x === null) return false;
+    node.style.left = `${x}px`;
+    node.style.top = `${clamp(a.top, top + MARGIN, vh - h - MARGIN)}px`;
+    return true;
   }
 
   node.style.position = "fixed";
