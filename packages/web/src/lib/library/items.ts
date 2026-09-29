@@ -1,5 +1,5 @@
 import { entryText, excerpt, type Seg } from "./matching";
-import { fmtDate } from "../dates";
+import { fmtDate } from "../dates.svelte";
 import type { KnowledgeRow, ReferenceRow } from "../types";
 
 /**

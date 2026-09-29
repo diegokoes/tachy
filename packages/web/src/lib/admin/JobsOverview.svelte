@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fmtDate } from "../dates.svelte";
   import { onMount } from "svelte";
   import { Bars, Columns, Timeline, compact, dayOfMonth, type Bar, type Col } from "../tui";
   import { duration, pct, ratio, type Tone } from "./overview";
@@ -64,7 +65,7 @@
       (d): Col => ({
         key: d.day,
         label: dayOfMonth(d.day),
-        title: d.day,
+        title: fmtDate(d.day),
         value: OUTCOMES.reduce((n, o) => n + d[o.key], 0),
         parts: OUTCOMES.map((o) => ({ key: o.key, value: d[o.key], tone: o.tone })),
       }),

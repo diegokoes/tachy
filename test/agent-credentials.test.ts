@@ -98,6 +98,7 @@ describe("per-turn agent config isolation (cross-user token safety)", () => {
     const aliceCfg = await mcpConfig("alice@example.com", settings);
     expect(aliceCfg.mcpEnv[TOKEN_VAR]).toBe("alice-token");
     expect(aliceCfg.mcpEnv.TACHY_USER_EMAIL).toBe("alice@example.com");
+    expect(aliceCfg.mcpEnv.TACHY_DATE_FORMAT).toBe("iso/24h");
     expect(aliceCfg.agentAuth).toMatchObject({
       kind: "anthropic_api_key",
       value: "sk-ant-api03-alice",

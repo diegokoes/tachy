@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { fmtDate } from "../dates";
+  import { fmtDate } from "../dates.svelte";
   import { createSequence } from "../resource.svelte";
   import { KNOWLEDGE_STATUSES, REFERENCE_STATUSES } from "../vocab";
   import { MAX_PAGE } from "@tachy/contract";

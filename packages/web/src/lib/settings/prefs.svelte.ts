@@ -1,7 +1,7 @@
 import { api } from "../api";
 import { errText } from "../resource.svelte";
 
-import type { AgentProvider } from "@tachy/contract";
+import type { AgentProvider, Clock, DateOrder } from "@tachy/contract";
 
 export type PrefSource = "user" | "team" | "db" | "env" | "default";
 export type Pref<T> = { value: T; source: PrefSource };
@@ -10,6 +10,8 @@ export type Prefs = {
   agent_provider: Pref<AgentProvider>;
   agent_model: Pref<string>;
   agent_effort: Pref<string>;
+  date_order: Pref<DateOrder>;
+  clock: Pref<Clock>;
 };
 
 export type KeyScope = "user" | "team" | "global" | "env";
