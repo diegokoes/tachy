@@ -1,6 +1,7 @@
 export type Tone = "accent" | "ok" | "warn" | "danger" | "muted" | "info";
 
-const STATUS_TONE: Record<string, "ok" | "warn" | "danger"> = {
+const STATUS_TONE: Record<string, "ok" | "warn" | "danger" | "accent"> = {
+  running: "accent",
   ok: "ok",
   pass: "ok",
   passed: "ok",
