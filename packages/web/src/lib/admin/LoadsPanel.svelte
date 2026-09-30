@@ -2,7 +2,19 @@
   import { onDestroy, onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { Bars, Badge, Button, Checkbox, GroupHead, Note, Select, Time, isActive, toneOf, type Bar } from "../tui";
+  import {
+    Bars,
+    Badge,
+    Button,
+    Checkbox,
+    GroupHead,
+    Note,
+    Select,
+    Time,
+    isActive,
+    toneOf,
+    type Bar,
+  } from "../tui";
   import { endpointP95, loadSummary, type TestRun } from "./loadRuns";
   import { pct } from "./overview";
   import { loads } from "./systemState.svelte";
@@ -21,21 +33,20 @@
      on the bar, because a script that only ever passes unstressed has not
      been tested the way its name suggests. */
   const byScript = $derived(
-    summary.byScript.map(
-      (s): Bar => ({
-        key: s.script,
-        label: s.script,
-        value: s.runs,
-        parts: [
-          { key: "passed", value: s.passed, tone: "ok" },
-          { key: "other", value: Math.max(0, s.runs - s.passed), tone: "muted" },
-        ],
-      }),
-    ),
+    summary.byScript.map((s): Bar => ({
+      key: s.script,
+      label: s.script,
+      value: s.runs,
+      parts: [
+        { key: "passed", value: s.passed, tone: "ok" },
+        { key: "other", value: Math.max(0, s.runs - s.passed), tone: "muted" },
+      ],
+    })),
   );
 
   $effect(() => {
-    if (!target && loads.data.targets.length) target = loads.data.targets[0].name;
+    if (!target && loads.data.targets.length)
+      target = loads.data.targets[0].name;
   });
 
   async function start() {
@@ -77,7 +88,9 @@
       .join(" · ");
 
   const chosen = $derived(loads.data.scripts.find((s) => s.script === script));
-  const chosenTarget = $derived(loads.data.targets.find((t) => t.name === target));
+  const chosenTarget = $derived(
+    loads.data.targets.find((t) => t.name === target),
+  );
   const blocked = $derived.by(() => {
     if (!chosenTarget) return "no target (TACHY_LOAD_TARGETS)";
     if (chosenTarget.dev) return null;
@@ -107,7 +120,10 @@
 <div class="row">
   <Select
     value={script}
-    options={loads.data.scripts.map((s) => ({ value: s.script, label: s.script }))}
+    options={loads.data.scripts.map((s) => ({
+      value: s.script,
+      label: s.script,
+    }))}
     aria-label="script"
     onchange={(v) => (script = String(v))}
   />
@@ -139,8 +155,14 @@
   <div class="stats">
     <span><b>{summary.runs}</b> runs</span>
     <span
-      ><b>{summary.passRate === null ? "–" : pct(summary.passed, summary.judged)}</b>
-      passed{summary.judged < summary.runs ? ` of ${summary.judged} finished` : ""}</span
+      ><b
+        >{summary.passRate === null
+          ? "–"
+          : pct(summary.passed, summary.judged)}</b
+      >
+      passed{summary.judged < summary.runs
+        ? ` of ${summary.judged} finished`
+        : ""}</span
     >
     <span><b>{summary.stress}</b> under stress</span>
   </div>
@@ -157,7 +179,11 @@
           {r.script}{r.profile ? ` (${r.profile})` : ""}
           <span class="dim small"><Time at={r.created_at} /></span>
         </td>
-        <td>{r.target}<span class="dim small">{r.image_sha ?? "unknown build"}</span></td>
+        <td
+          >{r.target}<span class="dim small"
+            >{r.image_sha ?? "unknown build"}</span
+          ></td
+        >
         <td><Badge tone={toneOf(r.status)}>{r.status}</Badge></td>
         <td class="dim">{latencies(r)}</td>
         <td class="acts">
@@ -167,8 +193,12 @@
             >
           {/if}
           {#if isActive(r.status)}
-            <Button variant="ghost" size="sm" tone="danger" icon="stop" onclick={() => cancel(r)}
-              >stop</Button
+            <Button
+              variant="ghost"
+              size="sm"
+              tone="danger"
+              icon="stop"
+              onclick={() => cancel(r)}>stop</Button
             >
           {/if}
         </td>

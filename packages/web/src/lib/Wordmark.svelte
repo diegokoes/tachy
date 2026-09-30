@@ -67,7 +67,8 @@
       ctx.font = `700 ${Math.round(h * 0.82)}px ${face}`;
       // Loosened so adjacent letters keep a clear gutter at this sample
       // density — at 0 the A and C of TACHY bleed into one shape.
-      if ("letterSpacing" in ctx) ctx.letterSpacing = `${(h * 0.05).toFixed(1)}px`;
+      if ("letterSpacing" in ctx)
+        ctx.letterSpacing = `${(h * 0.05).toFixed(1)}px`;
       ctx.textBaseline = "alphabetic";
       ctx.textAlign = "left";
       ctx.fillStyle = "#fff";

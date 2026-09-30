@@ -34,9 +34,7 @@
   /* /wiki resolves to its landing scope in place, before the redirect below
      rewrites the address — otherwise re-picking the wiki tab from a main page
      unmounts the article for a frame and fetches it again. */
-  const scope = $derived(
-    segment(1) || (wikis.loaded ? landingScope() : ""),
-  );
+  const scope = $derived(segment(1) || (wikis.loaded ? landingScope() : ""));
   const second = $derived(segment(2));
   const third = $derived(segment(3));
 

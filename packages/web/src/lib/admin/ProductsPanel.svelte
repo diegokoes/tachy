@@ -8,8 +8,8 @@
   import { slugify, uniqueSlug } from "../slug";
   import SlugRename from "./SlugRename.svelte";
   import type { Product, Team } from "./rows";
-import { INFO } from "./help";
-import { csv } from "../fields";
+  import { INFO } from "./help";
+  import { csv } from "../fields";
   import { sectionHoist } from "./sectionAction.svelte";
 
   const products = createResource(() => api.get<Product[]>("/products"), []);
@@ -74,7 +74,8 @@ import { csv } from "../fields";
   onMount(() => {
     products.reload();
     teams.reload();
-  });</script>
+  });
+</script>
 
 <!-- A team picker rather than a text filter: a product belongs to exactly one
      team, so the question is always "whose", never "matching what". -->

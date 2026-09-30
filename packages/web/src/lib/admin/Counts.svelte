@@ -28,7 +28,9 @@
   {#if loading}
     <span class="n skeleton" aria-label="loading">{RAMP[0].repeat(4)}</span>
   {:else}
-    <span class="n {it.tone ?? 'accent'}">{it.text ?? (it.value ?? 0).toLocaleString()}</span>
+    <span class="n {it.tone ?? 'accent'}"
+      >{it.text ?? (it.value ?? 0).toLocaleString()}</span
+    >
   {/if}
   <span class="lbl">{it.label}</span>
 {/snippet}
@@ -37,7 +39,11 @@
   {#each items as it (it.key)}
     {#if it.to}
       {@const to = it.to}
-      <button class="cell go" title={it.title ?? `go to ${to}`} onclick={() => showSection(to)}>
+      <button
+        class="cell go"
+        title={it.title ?? `go to ${to}`}
+        onclick={() => showSection(to)}
+      >
         {@render body(it)}
       </button>
     {:else}

@@ -153,7 +153,9 @@
           class:edges
           class:hollow={!(n.data.value > 0)}
           class:inverse={heatStep(n.data.value, top) >= INVERSE_STEP}
-          style="{place}; background: {edges ? 'none' : heatFill(n.data.value, top)}"
+          style="{place}; background: {edges
+            ? 'none'
+            : heatFill(n.data.value, top)}"
           title={bare ? undefined : tip(n.data)}
         >
           {#if shown}<span class="name">{n.data.label}</span>{/if}

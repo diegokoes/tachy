@@ -144,10 +144,19 @@
           origin: "admin",
         };
     }
-    return arrange({ ...raw, prefill, display: { show, order: tc.order ?? [] } });
+    return arrange({
+      ...raw,
+      prefill,
+      display: { show, order: tc.order ?? [] },
+    });
   });
 
-  type Block = { key: string; title: string; hint?: string; fields: FieldSpec[] };
+  type Block = {
+    key: string;
+    title: string;
+    hint?: string;
+    fields: FieldSpec[];
+  };
   const blocks = $derived.by<Block[]>(() => {
     if (!raw || !effective) return [];
     const drawn = new Set(
@@ -158,7 +167,12 @@
       ].map((f) => f.reference_name),
     );
     const out: Block[] = [
-      { key: "body", title: "written", hint: "left column", fields: effective.body },
+      {
+        key: "body",
+        title: "written",
+        hint: "left column",
+        fields: effective.body,
+      },
       ...effective.groups.map((g, i) => ({
         key: `g${i}`,
         title: g.label ?? "header",
@@ -170,13 +184,21 @@
               : undefined,
         fields: g.fields,
       })),
-      { key: "folded", title: "folded away", hint: "under “more fields”", fields: effective.hidden },
+      {
+        key: "folded",
+        title: "folded away",
+        hint: "under “more fields”",
+        fields: effective.hidden,
+      },
       {
         key: "out",
         title: "left out",
         hint: "never shown; a default is still sent",
         fields: raw.fields.filter(
-          (f) => f.reference_name !== TITLE && editable(f) && !drawn.has(f.reference_name),
+          (f) =>
+            f.reference_name !== TITLE &&
+            editable(f) &&
+            !drawn.has(f.reference_name),
         ),
       },
     ];
@@ -210,7 +232,9 @@
     if (!raw) return new Set<string>();
     const a = arrange(raw);
     return new Set(
-      [...a.body, ...a.groups.flatMap((g) => g.fields)].map((f) => f.reference_name),
+      [...a.body, ...a.groups.flatMap((g) => g.fields)].map(
+        (f) => f.reference_name,
+      ),
     );
   });
 
@@ -269,7 +293,10 @@
     saving = true;
     saveError = null;
     try {
-      cfg = await api.put<ComposeConfig>(`/compose/projects/${projectId}/config`, cfg);
+      cfg = await api.put<ComposeConfig>(
+        `/compose/projects/${projectId}/config`,
+        cfg,
+      );
       saved = JSON.stringify(cfg);
     } catch (e) {
       saveError = errText(e);
@@ -291,12 +318,20 @@
     <span class="head">projects</span>
     {#if projectsError}<Note tone="danger">{projectsError}</Note>{/if}
     {#each projects as p (p.id)}
-      <button class="proj" class:active={p.id === projectId} onclick={() => (projectId = p.id)}>
+      <button
+        class="proj"
+        class:active={p.id === projectId}
+        onclick={() => (projectId = p.id)}
+      >
         <span>{p.name}</span>
-        <span class="muted">{p.source_type} · {p.product_slug ?? p.team_slug}</span>
+        <span class="muted"
+          >{p.source_type} · {p.product_slug ?? p.team_slug}</span
+        >
       </button>
     {:else}
-      {#if !projectsError}<p class="muted">No registered projects your teams own.</p>{/if}
+      {#if !projectsError}<p class="muted">
+          No registered projects your teams own.
+        </p>{/if}
     {/each}
   </nav>
 
@@ -309,12 +344,28 @@
       <header class="bar">
         <div class="title">
           <span class="crumb">{project.name}</span>
-          <span class="muted">what /{project.source_type === "azure-devops" ? "az" : project.source_type} new offers, and how its forms start</span>
+          <span class="muted"
+            >what /{project.source_type === "azure-devops"
+              ? "az"
+              : project.source_type} new offers, and how its forms start</span
+          >
         </div>
         <div class="acts">
           {#if saveError}<span class="bad">{saveError}</span>{/if}
-          <Button variant="ghost" icon="run" disabled={dirty || !raw} title={dirty ? "save first" : "open this form in the composer"} onclick={tryIt}>try it</Button>
-          <Button variant="primary" icon="save" busy={saving} disabled={!dirty} onclick={save}>save</Button>
+          <Button
+            variant="ghost"
+            icon="run"
+            disabled={dirty || !raw}
+            title={dirty ? "save first" : "open this form in the composer"}
+            onclick={tryIt}>try it</Button
+          >
+          <Button
+            variant="primary"
+            icon="save"
+            busy={saving}
+            disabled={!dirty}
+            onclick={save}>save</Button
+          >
         </div>
       </header>
 
@@ -324,24 +375,58 @@
           {#each offered as name, i (name)}
             {@const t = typeByName.get(name)}
             <span class="type" class:current={name === type}>
-              <button class="pick" onclick={() => (type = name)} use:tip={"edit this type's form"}>
-                <span class="glyph" style:color={typeColor(t?.color) ?? undefined}>
+              <button
+                class="pick"
+                onclick={() => (type = name)}
+                use:tip={"edit this type's form"}
+              >
+                <span
+                  class="glyph"
+                  style:color={typeColor(t?.color) ?? undefined}
+                >
                   <Icon name={typeIcon(t?.icon)} size="1em" />
                 </span>
                 {name}
               </button>
-              <button class="tiny" aria-label={`Move ${name} earlier`} disabled={i === 0} onclick={() => moveType(name, -1)}><Icon name="moveUp" size="0.8em" /></button>
-              <button class="tiny" aria-label={`Move ${name} later`} disabled={i === offered.length - 1} onclick={() => moveType(name, 1)}><Icon name="moveDown" size="0.8em" /></button>
-              <button class="tiny" aria-label={`Stop offering ${name}`} disabled={offered.length === 1} onclick={() => toggleType(name)}><Icon name="close" size="0.8em" /></button>
+              <button
+                class="tiny"
+                aria-label={`Move ${name} earlier`}
+                disabled={i === 0}
+                onclick={() => moveType(name, -1)}
+                ><Icon name="moveUp" size="0.8em" /></button
+              >
+              <button
+                class="tiny"
+                aria-label={`Move ${name} later`}
+                disabled={i === offered.length - 1}
+                onclick={() => moveType(name, 1)}
+                ><Icon name="moveDown" size="0.8em" /></button
+              >
+              <button
+                class="tiny"
+                aria-label={`Stop offering ${name}`}
+                disabled={offered.length === 1}
+                onclick={() => toggleType(name)}
+                ><Icon name="close" size="0.8em" /></button
+              >
             </span>
           {/each}
           {#each unoffered as t (t.name)}
-            <button class="type off" onclick={() => toggleType(t.name)} use:tip={"offer it"}>
-              <Icon name="plus" size="0.8em" /> {t.name}
+            <button
+              class="type off"
+              onclick={() => toggleType(t.name)}
+              use:tip={"offer it"}
+            >
+              <Icon name="plus" size="0.8em" />
+              {t.name}
             </button>
           {/each}
           {#if cfg.types?.length}
-            <button class="link" onclick={() => (cfg = { ...cfg, types: undefined })}>offer every type</button>
+            <button
+              class="link"
+              onclick={() => (cfg = { ...cfg, types: undefined })}
+              >offer every type</button
+            >
           {/if}
         </div>
       </div>
@@ -377,7 +462,10 @@
                       value={fc?.show ?? ""}
                       options={showOptions(f.reference_name)}
                       aria-label={`Where ${labelOf(raw, f)} shows`}
-                      onchange={(v) => setField(f.reference_name, { show: (v || undefined) as FieldFormConfig["show"] })}
+                      onchange={(v) =>
+                        setField(f.reference_name, {
+                          show: (v || undefined) as FieldFormConfig["show"],
+                        })}
                     />
                   </span>
                   <span class="def" role="cell">
@@ -396,8 +484,11 @@
                           class:on={cur === ME}
                           aria-pressed={cur === ME}
                           title="whoever creates the ticket, each person themselves"
-                          onclick={() => setDefault(f.reference_name, cur === ME ? null : ME)}
-                          >me</button
+                          onclick={() =>
+                            setDefault(
+                              f.reference_name,
+                              cur === ME ? null : ME,
+                            )}>me</button
                         >
                       </span>
                     {:else}
@@ -405,7 +496,9 @@
                         id={`def-${f.reference_name}`}
                         spec={f}
                         label={`Default for ${labelOf(raw, f)}`}
-                        value={fc?.default && "value" in fc.default ? fc.default.value : null}
+                        value={fc?.default && "value" in fc.default
+                          ? fc.default.value
+                          : null}
                         form={raw}
                         onchange={(v) => setDefault(f.reference_name, v)}
                       />
@@ -416,8 +509,20 @@
                   </span>
                   <span class="order" role="cell">
                     {#if b.key !== "out"}
-                      <button class="tiny" aria-label={`Move ${labelOf(raw, f)} up`} disabled={i === 0} onclick={() => move(b, f.reference_name, -1)}><Icon name="moveUp" size="0.8em" /></button>
-                      <button class="tiny" aria-label={`Move ${labelOf(raw, f)} down`} disabled={i === b.fields.length - 1} onclick={() => move(b, f.reference_name, 1)}><Icon name="moveDown" size="0.8em" /></button>
+                      <button
+                        class="tiny"
+                        aria-label={`Move ${labelOf(raw, f)} up`}
+                        disabled={i === 0}
+                        onclick={() => move(b, f.reference_name, -1)}
+                        ><Icon name="moveUp" size="0.8em" /></button
+                      >
+                      <button
+                        class="tiny"
+                        aria-label={`Move ${labelOf(raw, f)} down`}
+                        disabled={i === b.fields.length - 1}
+                        onclick={() => move(b, f.reference_name, 1)}
+                        ><Icon name="moveDown" size="0.8em" /></button
+                      >
                     {/if}
                   </span>
                 </div>
@@ -432,8 +537,11 @@
             rows="3"
             placeholder="e.g. always ask for the customer's MES version"
             value={tc.guidance ?? ""}
-            oninput={(e) => setTc({ ...tc, guidance: (e.target as HTMLTextAreaElement).value || undefined })}
-          ></textarea>
+            oninput={(e) =>
+              setTc({
+                ...tc,
+                guidance: (e.target as HTMLTextAreaElement).value || undefined,
+              })}></textarea>
         </label>
       {/if}
     {/if}
@@ -601,7 +709,10 @@
   }
   .row {
     display: grid;
-    grid-template-columns: minmax(12rem, 1.3fr) minmax(11rem, 0.9fr) minmax(12rem, 1.4fr) 3.5rem;
+    grid-template-columns: minmax(12rem, 1.3fr) minmax(11rem, 0.9fr) minmax(
+        12rem,
+        1.4fr
+      ) 3.5rem;
     align-items: center;
     gap: var(--pad-2);
     padding: 0.2rem 0;

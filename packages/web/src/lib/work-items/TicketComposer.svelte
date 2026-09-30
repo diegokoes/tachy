@@ -37,7 +37,8 @@
 
   let {
     oncreated,
-  }: { oncreated: (t: CreatedTicket, type: WorkItemTypeOption) => void } = $props();
+  }: { oncreated: (t: CreatedTicket, type: WorkItemTypeOption) => void } =
+    $props();
 
   $effect(() => {
     ensureProjects();
@@ -136,9 +137,9 @@
         `[data-field="${CSS.escape(ref)}"]`,
       );
       el?.scrollIntoView({ block: "center", behavior: "smooth" });
-      el
-        ?.querySelector<HTMLElement>("input, textarea, button")
-        ?.focus({ preventScroll: true });
+      el?.querySelector<HTMLElement>("input, textarea, button")?.focus({
+        preventScroll: true,
+      });
     });
   }
 
@@ -169,7 +170,9 @@
       const now = String(composer.values[f.field] ?? "").trimEnd();
       setValue(
         f.field,
-        spec && isBody(spec) && now ? `${now}\n\n${f.suggestion}` : f.suggestion,
+        spec && isBody(spec) && now
+          ? `${now}\n\n${f.suggestion}`
+          : f.suggestion,
       );
     }
     composer.dismissed = [...composer.dismissed, f.id];
@@ -361,7 +364,9 @@
         <span class="bad">{composer.validation.message}</span>
       {/if}
       {#if form && missing.length}
-        <span class="dim">still needed: {missing.map(fieldName).join(", ")}</span>
+        <span class="dim"
+          >still needed: {missing.map(fieldName).join(", ")}</span
+        >
       {/if}
     </div>
   {/if}
@@ -417,7 +422,9 @@
             <span class="req" aria-label="required">*</span>
             {#if findingsFor.get(TITLE)}
               <button class="flag" onclick={() => (side = "review")}
-                ><Icon name="review" size="0.9em" />{findingsFor.get(TITLE)}</button
+                ><Icon name="review" size="0.9em" />{findingsFor.get(
+                  TITLE,
+                )}</button
               >
             {/if}
           </span>
@@ -484,7 +491,8 @@
             reviewing={composer.reviewing}
             {fieldName}
             onapply={apply}
-            ondismiss={(id) => (composer.dismissed = [...composer.dismissed, id])}
+            ondismiss={(id) =>
+              (composer.dismissed = [...composer.dismissed, id])}
             onfocus={focusField}
           />
         {:else if form && arranged}

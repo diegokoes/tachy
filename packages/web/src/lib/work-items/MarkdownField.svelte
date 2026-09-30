@@ -50,8 +50,16 @@
     let took = false;
     for (const file of files) {
       if (!file.type.startsWith("image/")) continue;
-      const name = file.name && file.name !== "image.png" ? file.name : `pasted-${Date.now()}.png`;
-      insert(imageMarkdown(name, onimage(new File([file], name, { type: file.type }))));
+      const name =
+        file.name && file.name !== "image.png"
+          ? file.name
+          : `pasted-${Date.now()}.png`;
+      insert(
+        imageMarkdown(
+          name,
+          onimage(new File([file], name, { type: file.type })),
+        ),
+      );
       took = true;
     }
     return took;
@@ -75,7 +83,10 @@
   function removeImage(key: string) {
     onchange(
       value
-        .replace(new RegExp(`!\\[[^\\]]*\\]\\(attachment:${key}\\)\\n?`, "g"), "")
+        .replace(
+          new RegExp(`!\\[[^\\]]*\\]\\(attachment:${key}\\)\\n?`, "g"),
+          "",
+        )
         .trimEnd(),
     );
     onremoveimage(key);
@@ -113,8 +124,7 @@
       oninput={(e) => onchange((e.target as HTMLTextAreaElement).value)}
       {onpaste}
       {ondrop}
-      ondragover={(e) => e.preventDefault()}
-    ></textarea>
+      ondragover={(e) => e.preventDefault()}></textarea>
   {/if}
   {#if here.length}
     <div class="thumbs">

@@ -1,6 +1,4 @@
 <script lang="ts">
-  
-  
   import { onMount } from "svelte";
   import { gsap, SplitText, reducedMotion } from "./gsap";
 
@@ -19,7 +17,11 @@
     const tl = gsap.timeline();
     tl.from(split.chars, { autoAlpha: 0, duration: 0.001, stagger: 0.03 }, 0)
       .to(handle!, { x: width, duration: typeTime, ease: `steps(${n})` }, 0)
-      .fromTo(handle!, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.4, repeat: -1, yoyo: true });
+      .fromTo(
+        handle!,
+        { autoAlpha: 0 },
+        { autoAlpha: 1, duration: 0.4, repeat: -1, yoyo: true },
+      );
 
     return () => {
       tl.kill();
@@ -34,8 +36,14 @@
 </span>
 
 <style>
-  .typeline { position: relative; display: inline-block; }
-  p { margin: 0; white-space: nowrap; }
+  .typeline {
+    position: relative;
+    display: inline-block;
+  }
+  p {
+    margin: 0;
+    white-space: nowrap;
+  }
   .handle {
     position: absolute;
     left: 0;

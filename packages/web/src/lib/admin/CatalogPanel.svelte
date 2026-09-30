@@ -30,19 +30,47 @@
 
   const figures = $derived([
     { key: "teams", label: t("teams"), value: c.teams, to: "teams" },
-    { key: "products", label: t("products"), value: c.products, to: "products" },
-    { key: "components", label: "components", value: c.components, to: "components" },
+    {
+      key: "products",
+      label: t("products"),
+      value: c.products,
+      to: "products",
+    },
+    {
+      key: "components",
+      label: "components",
+      value: c.components,
+      to: "components",
+    },
     { key: "labels", label: "labels", value: c.labels, to: "labels" },
     { key: "patterns", label: "patterns", value: c.patterns, to: "patterns" },
-    { key: "entries", label: "entries", value: k.entries, title: "knowledge entries" },
+    {
+      key: "entries",
+      label: "entries",
+      value: k.entries,
+      title: "knowledge entries",
+    },
     ...(showCustomer()
-      ? [{ key: "customers", label: t("customers"), value: c.customers, to: "customers" }]
+      ? [
+          {
+            key: "customers",
+            label: t("customers"),
+            value: c.customers,
+            to: "customers",
+          },
+        ]
       : []),
   ]);
 
   /* A description is what an incoming question is matched against, so an
      undescribed component is one the agent cannot pick. */
-  const ring = (key: string, label: string, n: number, missing: number, title: string): DialItem => ({
+  const ring = (
+    key: string,
+    label: string,
+    n: number,
+    missing: number,
+    title: string,
+  ): DialItem => ({
     key,
     label,
     title,
@@ -53,11 +81,37 @@
   });
 
   const described = $derived([
-    ring("components", "components", c.components, c.components_no_description, "components with a description"),
-    ring("labels", "labels", c.labels, c.labels_no_description, "labels with a description"),
-    ring("patterns", "patterns", c.patterns, c.patterns_no_description, "resolution patterns with a description"),
+    ring(
+      "components",
+      "components",
+      c.components,
+      c.components_no_description,
+      "components with a description",
+    ),
+    ring(
+      "labels",
+      "labels",
+      c.labels,
+      c.labels_no_description,
+      "labels with a description",
+    ),
+    ring(
+      "patterns",
+      "patterns",
+      c.patterns,
+      c.patterns_no_description,
+      "resolution patterns with a description",
+    ),
     ...(showCustomer()
-      ? [ring("customers", t("customers"), c.customers, c.customers_no_domains, `${t("customers")} with an email domain`)]
+      ? [
+          ring(
+            "customers",
+            t("customers"),
+            c.customers,
+            c.customers_no_domains,
+            `${t("customers")} with an email domain`,
+          ),
+        ]
       : []),
   ]);
 
@@ -79,15 +133,21 @@
   } as const;
 
   const statuses = $derived(
-    Object.entries(STATUS_TONES).map(
-      ([key, tone]): Col => ({ key, label: key, value: k.by_status[key] ?? 0, tone }),
-    ),
+    Object.entries(STATUS_TONES).map(([key, tone]): Col => ({
+      key,
+      label: key,
+      value: k.by_status[key] ?? 0,
+      tone,
+    })),
   );
 
   const reads = $derived(
-    library.per_day.map(
-      (d): Col => ({ key: d.day, label: dayOfMonth(d.day), title: fmtDate(d.day), value: d.reads }),
-    ),
+    library.per_day.map((d): Col => ({
+      key: d.day,
+      label: dayOfMonth(d.day),
+      title: fmtDate(d.day),
+      value: d.reads,
+    })),
   );
   const readTotal = $derived(reads.reduce((n, d) => n + d.value, 0));
 
@@ -98,29 +158,42 @@
   ] as const;
 
   const edits = $derived(
-    library.edits_per_day.map(
-      (d): Col => ({
-        key: d.day,
-        label: dayOfMonth(d.day),
-        title: fmtDate(d.day),
-        value: d.people + d.agent + d.ingest,
-        parts: EDITORS.map((e) => ({ key: e.key, value: d[e.key], tone: e.tone })),
-      }),
-    ),
+    library.edits_per_day.map((d): Col => ({
+      key: d.day,
+      label: dayOfMonth(d.day),
+      title: fmtDate(d.day),
+      value: d.people + d.agent + d.ingest,
+      parts: EDITORS.map((e) => ({
+        key: e.key,
+        value: d[e.key],
+        tone: e.tone,
+      })),
+    })),
   );
   const editTotal = $derived(edits.reduce((n, d) => n + d.value, 0));
 
   const openRead = (b: Bar) => {
     const item = library.top.find((x) => x.id === b.key);
-    if (item) navigate(`/library/${item.kind === "doc" ? "docs" : "entries"}/${item.id}`);
+    if (item)
+      navigate(
+        `/library/${item.kind === "doc" ? "docs" : "entries"}/${item.id}`,
+      );
   };
 
   const mostRead = $derived(
-    library.top.map((item): Bar => ({ key: item.id, label: item.title, value: item.reads })),
+    library.top.map((item): Bar => ({
+      key: item.id,
+      label: item.title,
+      value: item.reads,
+    })),
   );
 </script>
 
-<Overview {figures} loading={census.loading} error={census.error ?? activity.error}>
+<Overview
+  {figures}
+  loading={census.loading}
+  error={census.error ?? activity.error}
+>
   <Tile title="described">
     <Dials items={described} />
   </Tile>
@@ -142,11 +215,19 @@
     <Columns rows={statuses} fill />
   </Tile>
 
-  <Tile title="reads" meta={`${compact(readTotal)} · ${reads.length} d`} empty={!readTotal}>
+  <Tile
+    title="reads"
+    meta={`${compact(readTotal)} · ${reads.length} d`}
+    empty={!readTotal}
+  >
     <Columns rows={reads} format={compact} fill />
   </Tile>
 
-  <Tile title="edits" meta={`${compact(editTotal)} · ${edits.length} d`} empty={!editTotal}>
+  <Tile
+    title="edits"
+    meta={`${compact(editTotal)} · ${edits.length} d`}
+    empty={!editTotal}
+  >
     <Columns rows={edits} format={compact} legend={[...EDITORS]} fill />
   </Tile>
 

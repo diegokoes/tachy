@@ -376,7 +376,11 @@
         {/each}
 
         {#each placed as n (n.key)}
-          <g class="node {n.kind}" class:top={n.depth === 1} transform="translate({n.x}, {n.y})">
+          <g
+            class="node {n.kind}"
+            class:top={n.depth === 1}
+            transform="translate({n.x}, {n.y})"
+          >
             {#if n.kind === "component"}
               <g
                 role="button"
