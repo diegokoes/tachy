@@ -29,17 +29,18 @@ beforeEach(async () => {
 });
 
 describe("core job kinds", () => {
-  it("registers the first kinds with their classes", () => {
+  it("registers the first kinds with their queues and classes", () => {
     const kinds = Object.fromEntries(
-      describeJobKinds().map((k) => [k.kind, k.resource_class]),
+      describeJobKinds().map((k) => [k.kind, `${k.queue}/${k.resource_class}`]),
     );
     expect(kinds).toMatchObject({
-      "repo.reindex": "heavy",
-      "repos.refresh": "light",
-      "source.sync": "light",
-      "embeddings.backfill": "heavy",
-      "retention.sweep": "light",
-      "wiki.gaps": "light",
+      "repo.reindex": "index/heavy",
+      "repos.refresh": "maintenance/light",
+      "source.sync": "sync/light",
+      "embeddings.backfill": "embed/heavy",
+      "load.test": "testing/heavy",
+      "retention.sweep": "maintenance/light",
+      "wiki.gaps": "maintenance/light",
     });
   });
 
@@ -82,8 +83,8 @@ describe("repos.refresh", () => {
         progress: async () => {},
         log: () => {},
         credential: async () => undefined,
-        enqueue: async (kind, params) =>
-          (await enqueueRun({ kind, params, trigger: "event" })) ?? "",
+        enqueue: (kind, params) =>
+          enqueueRun({ kind, params, trigger: "event" }),
       },
       {},
     );

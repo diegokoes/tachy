@@ -636,6 +636,10 @@ export {
   JOB_NOTIFY,
   JOB_CLASS_CHAT_SLOTS,
   JOB_FINISHED,
+  JOB_QUEUES,
+  JOB_QUEUE_NAMES,
+  JOB_PRIORITY,
+  jobQueue,
   parseDuration,
 } from "@tachy/contract";
 export type {
@@ -645,6 +649,8 @@ export type {
   JobOverlap,
   JobMissed,
   JobNotify,
+  JobQueue,
+  JobQueueName,
 } from "@tachy/contract";
 export * from "./jobs";
 export * from "./testing";

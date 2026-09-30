@@ -11,7 +11,7 @@ export function defineSearchJobs() {
     description:
       "Embeds knowledge entries, reference chunks and code chunks that have no vector. With 'all', re-embeds everything (after a model change).",
     params: z.object({ all: z.boolean().default(false) }),
-    resourceClass: "heavy",
+    queue: "embed",
     timeout: "6h",
     run: async (ctx, p) => {
       const entries = await backfillEmbeddings({ all: p.all });

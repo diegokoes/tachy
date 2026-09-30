@@ -10,6 +10,8 @@ export function defineSourceJobs() {
       "Pulls work items changed since the connection's last clean sync.",
     params: z.object({ connection: z.string().min(1) }),
     connection: "any",
+    queue: "sync",
+    dedupeKey: (p) => p.connection,
     timeout: "1h",
     maxAttempts: 3,
     run: async (ctx, p) => {

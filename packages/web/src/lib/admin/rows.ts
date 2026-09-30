@@ -9,6 +9,7 @@ import type {
   DeploymentProfile,
   JobCensus,
   JobDefinition,
+  JobQueueName,
   JobRun,
   JobRunListed,
   KnowledgeCensus,
@@ -245,6 +246,7 @@ export type JobKindInfo = {
   description: string | null;
   connection: string | null;
   default_schedule: string | null;
+  queue: JobQueueName;
   resource_class: "light" | "heavy";
   overlap: "skip" | "queue";
   missed: "run-once" | "skip";

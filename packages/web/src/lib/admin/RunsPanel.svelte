@@ -1,6 +1,11 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { JOB_STATUSES, JOB_TRIGGERS } from "@tachy/contract";
+  import {
+    JOB_QUEUES,
+    JOB_STATUSES,
+    JOB_TRIGGERS,
+    jobQueue,
+  } from "@tachy/contract";
   import { api } from "../api";
   import { keep, recall } from "../kept";
   import { createSequence, errText } from "../resource.svelte";
@@ -39,10 +44,14 @@
   let status = $state(recall("admin.runs.status", ""));
   let kind = $state(recall("admin.runs.kind", ""));
   let trigger = $state(recall("admin.runs.trigger", ""));
+  let queue = $state(recall("admin.runs.queue", ""));
+  /** The run whose children are shown; not kept, since it is a drill-down. */
+  let parent = $state<JobRunListedRow | null>(null);
   $effect(() => keep("admin.runs.filter", filter));
   $effect(() => keep("admin.runs.status", status));
   $effect(() => keep("admin.runs.kind", kind));
   $effect(() => keep("admin.runs.trigger", trigger));
+  $effect(() => keep("admin.runs.queue", queue));
 
   const current = createSequence();
 
@@ -52,6 +61,8 @@
     else if (status) q.set("status", status);
     if (kind) q.set("kind", kind);
     if (trigger) q.set("trigger", trigger);
+    if (queue) q.set("queue", queue);
+    if (parent) q.set("parent_id", parent.id);
     if (before) q.set("before", before);
     return `/jobs/runs?${q}`;
   }
@@ -90,7 +101,7 @@
   }
 
   $effect(() => {
-    void [status, kind, trigger];
+    void [status, kind, trigger, queue, parent];
     rows = [];
     loading = true;
     void load();
@@ -156,6 +167,7 @@
   const columns: Column<JobRunListedRow>[] = [
     { key: "status", label: "status", width: "7rem", cell: statusCell },
     { key: "job", label: "job", width: "16rem", cell: jobCell },
+    { key: "queue", label: "queue", width: "7rem", cell: queueCell },
     { key: "trigger", label: "by", width: "9rem", cell: triggerCell },
     { key: "detail", label: "progress", cell: detailCell },
     { key: "when", label: "queued", width: "10rem", cell: whenCell },
@@ -181,6 +193,18 @@
   >
 {/snippet}
 
+{#snippet queueCell(r: JobRunListedRow)}
+  {#if r.queue}
+    <span
+      class="queue"
+      title={`${jobQueue(r.queue).class} pool · priority ${r.priority}`}
+      >{r.queue}</span
+    >
+  {:else}
+    <span class="dim">{r.resource_class}</span>
+  {/if}
+{/snippet}
+
 {#snippet triggerCell(r: JobRunListedRow)}
   <span>{r.trigger}</span>
   {#if r.requested_by_name}<span class="dim small">{r.requested_by_name}</span
@@ -188,6 +212,18 @@
 {/snippet}
 
 {#snippet detailCell(r: JobRunListedRow)}
+  {#if r.children}
+    {@const c = r.children}
+    <button
+      class="link"
+      title="show the runs this one queued"
+      onclick={() => (parent = r)}
+    >
+      {c.succeeded + c.failed}/{c.total} queued runs done{c.running
+        ? ` · ${c.running} running`
+        : ""}{c.failed ? ` · ${c.failed} failed` : ""}
+    </button>
+  {/if}
   {#if r.status === "running"}
     <span class="progress">
       <Meter value={r.progress ?? 0} width={12} label="progress" />
@@ -272,6 +308,19 @@
     aria-label="filter by kind"
   />
   <Select
+    bind:value={queue}
+    options={JOB_QUEUES.map((q) => ({
+      value: q.name,
+      label: q.name,
+      hint: q.class,
+    }))}
+    placeholder="any queue"
+    clearable
+    keepOpen
+    active={!!queue}
+    aria-label="filter by queue"
+  />
+  <Select
     bind:value={trigger}
     options={JOB_TRIGGERS.map((t) => ({ value: t, label: t }))}
     placeholder="any trigger"
@@ -281,6 +330,14 @@
     aria-label="filter by trigger"
   />
 </div>
+
+{#if parent}
+  <Note>
+    Runs queued by {parent.definition_name ?? parent.kind}, started
+    <Time at={parent.created_at} />.
+    <button class="link" onclick={() => (parent = null)}>show all runs</button>
+  </Note>
+{/if}
 
 <DataTable
   {columns}
@@ -359,6 +416,20 @@
   }
   .live {
     color: var(--accent);
+  }
+  .queue {
+    font-family: var(--font-mono);
+  }
+  .link {
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-size: var(--fs-xs);
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: underline;
   }
   .more {
     display: flex;

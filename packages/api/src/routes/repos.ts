@@ -17,7 +17,7 @@ import {
   connectionToken,
   listRemoteRefs,
   previewIndex,
-  reindexInFlight,
+  inFlightRun,
   repoToken,
   sql,
   RELEASE_TAG_RE,
@@ -221,16 +221,23 @@ export const repos = new Hono()
     const repo = await getRepoBySlug(slug);
     if (body.line && !repo.lines.some((l) => l.ref === body.line))
       throw badInput(`repo '${slug}' does not track '${body.line}'`);
-    const busy = await reindexInFlight(slug);
-    if (busy)
-      throw badInput(`repo '${slug}' is already being indexed (run ${busy})`);
+    const params = { repo: slug, ...(body.line ? { line: body.line } : {}) };
     const runId = await enqueueRun({
       kind: "repo.reindex",
-      params: { repo: slug, ...(body.line ? { line: body.line } : {}) },
+      params,
       trigger: "manual",
       requestedBy: await callerUserId(c),
     });
-    return c.json({ ok: true, status: "queued", run_id: runId }, 202);
+    if (runId)
+      return c.json({ ok: true, status: "queued", run_id: runId }, 202);
+    return c.json(
+      {
+        ok: true,
+        status: "in_flight",
+        run_id: await inFlightRun("repo.reindex", params),
+      },
+      202,
+    );
   })
 
   /** What the default line would index under a proposed config; nothing is embedded. */

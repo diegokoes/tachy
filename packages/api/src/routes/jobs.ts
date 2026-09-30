@@ -3,6 +3,8 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   JOB_CLASS_CHAT_SLOTS,
+  JOB_QUEUES,
+  JOB_QUEUE_NAMES,
   JOB_STATUSES,
   JOB_TRIGGERS,
   badInput,
@@ -44,6 +46,7 @@ export const jobs = new Hono()
       kinds: describeJobKinds(),
       chat_slot_cap: settings.agent_slot_cap.value,
       class_chat_slots: JOB_CLASS_CHAT_SLOTS,
+      queues: JOB_QUEUES,
     });
   })
 
@@ -125,8 +128,10 @@ export const jobs = new Hono()
       "query",
       z.object({
         definition_id: z.string().uuid().optional(),
+        parent_id: z.string().uuid().optional(),
         status: z.enum(JOB_STATUSES).optional(),
         kind: z.string().min(1).optional(),
+        queue: z.enum(JOB_QUEUE_NAMES as [string, ...string[]]).optional(),
         trigger: z.enum(JOB_TRIGGERS).optional(),
         active: z
           .enum(["true", "false"])
@@ -141,8 +146,10 @@ export const jobs = new Hono()
       return c.json(
         await listJobRuns({
           definitionId: q.definition_id,
+          parentId: q.parent_id,
           status: q.status,
           kind: q.kind,
+          queue: q.queue,
           trigger: q.trigger,
           active: q.active,
           before: q.before,

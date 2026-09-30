@@ -1102,7 +1102,11 @@ create table job_definitions (
     enabled            boolean not null default true,
     schedule           text,
     timezone           text not null default 'UTC',
+    -- Superseded by queue, which implies a class. Kept for the previous
+    -- release to read on rollback; drop once no deployment runs it.
     resource_class     text check (resource_class in ('light','heavy')),
+    -- Overrides the kind's queue; null takes the kind's.
+    queue              text check (queue in ('index','embed','testing','sync','maintenance')),
     timeout            text,
     overlap            text check (overlap in ('skip','queue')),
     notify             text not null default 'failure' check (notify in ('failure','always','never')),
@@ -1121,7 +1125,16 @@ create table job_runs (
     definition_id    uuid references job_definitions(id) on delete set null,
     kind             text not null,
     params           jsonb not null default '{}'::jsonb,
+    -- The pool that serves the run, taken from its queue when it is queued.
     resource_class   text not null check (resource_class in ('light','heavy')),
+    -- Null only on runs queued before queues existed; workers claim those by class.
+    queue            text check (queue in ('index','embed','testing','sync','maintenance')),
+    -- Claim order within a queue, highest first.
+    priority         smallint not null default 0,
+    -- At most one queued or running run per key, e.g. one reindex per repo.
+    dedupe_key       text,
+    -- The run that queued this one.
+    parent_id        uuid references job_runs(id) on delete set null,
     trigger          text not null check (trigger in ('schedule','manual','event')),
     scheduled_for    timestamptz,
     requested_by     uuid references users(id) on delete set null,
@@ -1145,7 +1158,10 @@ create table job_runs (
     unique (definition_id, scheduled_for)
 );
 
-create index job_runs_claim_idx on job_runs(resource_class, run_after) where status = 'queued';
+create index job_runs_claim_idx on job_runs(resource_class, priority desc, run_after) where status = 'queued';
+create index job_runs_queue_idx on job_runs(queue, status) where status in ('queued','running');
+create unique index job_runs_dedupe_idx on job_runs(dedupe_key) where status in ('queued','running');
+create index job_runs_parent_idx on job_runs(parent_id) where parent_id is not null;
 create index job_runs_running_idx on job_runs(locked_until) where status = 'running';
 create index job_runs_definition_idx on job_runs(definition_id, created_at desc);
 create index job_runs_created_idx on job_runs(created_at);
