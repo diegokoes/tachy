@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   JOB_CLASS_CHAT_SLOTS,
   JOB_STATUSES,
+  JOB_TRIGGERS,
   badInput,
   cancelRun,
   createJobDefinition,
@@ -125,6 +126,13 @@ export const jobs = new Hono()
       z.object({
         definition_id: z.string().uuid().optional(),
         status: z.enum(JOB_STATUSES).optional(),
+        kind: z.string().min(1).optional(),
+        trigger: z.enum(JOB_TRIGGERS).optional(),
+        active: z
+          .enum(["true", "false"])
+          .transform((v) => v === "true")
+          .optional(),
+        before: z.string().uuid().optional(),
         limit: z.coerce.number().int().min(1).max(500).optional(),
       }),
     ),
@@ -134,6 +142,10 @@ export const jobs = new Hono()
         await listJobRuns({
           definitionId: q.definition_id,
           status: q.status,
+          kind: q.kind,
+          trigger: q.trigger,
+          active: q.active,
+          before: q.before,
           limit: q.limit,
         }),
       );

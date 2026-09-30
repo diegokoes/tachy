@@ -145,6 +145,16 @@ const PROFILES: Record<string, KindProfile> = {
     ],
     log: (p) => `indexing ${p.repo}`,
   },
+  "repos.refresh": {
+    resourceClass: "light",
+    timeoutMs: 10 * 60_000,
+    maxAttempts: 1,
+    seconds: [1, 6],
+    outcome: () => "succeeded",
+    output: () => ({ queued: 0, skipped: 0, never_indexed: 0 }),
+    errors: [],
+    log: () => "queueing reindexes",
+  },
   "embeddings.backfill": {
     resourceClass: "heavy",
     timeoutMs: 6 * HOUR,
@@ -217,15 +227,13 @@ export async function seedJobs(
         slots: everyHours(3, 20 + i * 5),
       }),
     ),
-    ...repos.map((slug, i) =>
-      def({
-        kind: "repo.reindex",
-        name: `Reindex ${slug}`,
-        params: { repo: slug },
-        enabled: true,
-        slots: daily(2, i * 15),
-      }),
-    ),
+    def({
+      kind: "repos.refresh",
+      name: "Refresh linked repositories",
+      params: {},
+      enabled: true,
+      slots: daily(2, 40),
+    }),
     def({
       kind: "embeddings.backfill",
       name: "Embed missing vectors",
@@ -248,11 +256,11 @@ export async function seedJobs(
   let r = 0;
 
   const addRun = (
-    d: Definition,
+    d: Pick<Definition, "kind" | "params"> & { id: string | null },
     at: Date,
-    trigger: "schedule" | "manual",
+    trigger: "schedule" | "manual" | "event",
     rng: () => number,
-  ) => {
+  ): Date | null => {
     const p = PROFILES[d.kind];
     const outcome = p.outcome(rng);
     const attempts =
@@ -265,7 +273,7 @@ export async function seedJobs(
           ? intBetween(rng, 30, p.seconds[0])
           : intBetween(rng, p.seconds[0], p.seconds[1]);
     const finished = new Date(started.getTime() + seconds * 1000);
-    if (finished > now) return;
+    if (finished > now) return null;
     const error =
       outcome === "failed"
         ? pick(rng, p.errors.length ? p.errors : ["unexpected error"])
@@ -299,15 +307,47 @@ export async function seedJobs(
       started_at: started,
       finished_at: finished,
     });
+    return finished;
   };
 
   for (const d of definitions) {
     if (!d.slots || !d.enabled) continue;
     const slots = slotsSince(d.slots, v.jobHistoryDays, now);
-    slots.forEach((at, i) =>
-      addRun(d, at, "schedule", rngFor(`job-${d.name}`, i)),
-    );
+    slots.forEach((at, i) => {
+      const rng = rngFor(`job-${d.name}`, i);
+      const done = addRun(d, at, "schedule", rng);
+      if (d.kind !== "repos.refresh" || !done) return;
+      runs[runs.length - 1].output = tx.json({
+        queued: repos.length,
+        skipped: 0,
+        never_indexed: 0,
+      });
+      let next = done;
+      for (const slug of repos) {
+        const end = addRun(
+          { id: null, kind: "repo.reindex", params: { repo: slug } },
+          next,
+          "event",
+          rng,
+        );
+        if (end) next = end;
+      }
+    });
     if (slots.length) lastSlot.set(d.id, slots[slots.length - 1]);
+  }
+
+  // Someone clicks index on a repo: a run with no definition behind it.
+  for (let i = 0; i < Math.min(repos.length * 2, v.jobManualRuns); i++) {
+    const rng = rngFor("job-repo-index", i);
+    const at = new Date(
+      now.getTime() - Math.floor(rng() * v.jobHistoryDays * 24 * HOUR),
+    );
+    addRun(
+      { id: null, kind: "repo.reindex", params: { repo: pick(rng, repos) } },
+      at,
+      "manual",
+      rng,
+    );
   }
 
   // Someone re-runs a sync after fixing its token, or kicks a backfill after a

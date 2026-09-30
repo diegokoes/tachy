@@ -127,6 +127,12 @@ export interface JobRun {
   finished_at: string | null;
 }
 
+/** A run as the admin lists it, with the names its ids point at. */
+export interface JobRunListed extends JobRun {
+  definition_name: string | null;
+  requested_by_name: string | null;
+}
+
 export interface JobDefinition {
   id: string;
   kind: string;

@@ -83,7 +83,7 @@
       label: "running",
       value: running,
       title: `${j.now.light.queued + j.now.heavy.queued} queued`,
-      to: "jobs",
+      to: "runs",
     },
   ]);
 
