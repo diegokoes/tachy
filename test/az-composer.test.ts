@@ -273,6 +273,43 @@ describe("composer form", () => {
     });
   });
 
+  it("starts from ADO's new-item template, under the team's paths", async () => {
+    const r = routes({});
+    (
+      r["/ProjA/_apis/wit/workitemtypes/Bug/fields"] as { value: unknown[] }
+    ).value.push(
+      { referenceName: "System.AssignedTo", name: "Assigned To" },
+      { referenceName: "System.State", name: "State" },
+      { referenceName: "Custom.Cloud", name: "Cloud" },
+    );
+    mockFetch({
+      ...r,
+      "/ProjA/_apis/wit/workitems/$Bug": {
+        fields: {
+          "System.AreaPath": "ProjA",
+          "System.State": "New",
+          "Microsoft.VSTS.Common.Severity": "2 - High",
+          "Custom.Cloud": "PROD",
+          "System.AssignedTo": { displayName: "Ann", uniqueName: "ann@corp" },
+        },
+      },
+    });
+    const form = await composerForm(client(), "ProjA", "Bug");
+    expect(form.prefill["Custom.Cloud"]).toEqual({
+      value: "PROD",
+      origin: "process",
+    });
+    expect(form.prefill["Microsoft.VSTS.Common.Severity"]?.value).toBe(
+      "2 - High",
+    );
+    expect(form.prefill["System.AssignedTo"]?.value).toBe("ann@corp");
+    expect(form.prefill["System.State"]).toBeUndefined();
+    expect(form.prefill["System.AreaPath"]).toEqual({
+      value: "ProjA\\Portal",
+      origin: "team",
+    });
+  });
+
   it("treats a list of only ADO's <None> placeholder as free text", async () => {
     const r = routes({});
     (
@@ -555,7 +592,9 @@ describe("/api/compose", () => {
 
   const keys = async (cookie: string) =>
     (
-      (await (await req(cookie, "/projects?source_type=azure-devops")).json()) as {
+      (await (
+        await req(cookie, "/projects?source_type=azure-devops")
+      ).json()) as {
         external_key: string;
       }[]
     )

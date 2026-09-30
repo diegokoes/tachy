@@ -116,6 +116,24 @@ const HEADER = ["System.AssignedTo", AREA, ITERATION, "System.Tags"];
 const cleanLabel = (label: string | undefined) =>
   label?.replace(/&(?!&)/g, "").trim() || undefined;
 
+/** Fields a new item cannot be given: ADO sets them, or they describe its life after. */
+const SYSTEM_SET = new Set([
+  "System.WorkItemType",
+  "System.TeamProject",
+  "System.State",
+  "System.Reason",
+  "System.CreatedBy",
+  "System.ChangedBy",
+  "Microsoft.VSTS.Common.StateChangeDate",
+]);
+
+/** An identity arrives as an object; the field takes its unique name. */
+function templateValue(v: unknown): unknown {
+  if (v == null || typeof v !== "object") return v;
+  const unique = (v as { uniqueName?: unknown }).uniqueName;
+  return typeof unique === "string" ? unique : undefined;
+}
+
 const flag = (v: unknown) => v === true || v === "true" || v === "True";
 
 /**
@@ -275,16 +293,25 @@ export async function composerForm(
   const info = await soft(client.getProject(project), null);
   const team = opts.team ?? info?.defaultTeam?.name ?? null;
 
-  const [schema, settings, current, teamIterations, fieldValues, layout, me] =
-    await Promise.all([
-      workItemSchema(client, project, type, opts.configDefaults ?? {}),
-      team ? soft(client.getTeamSettings(project, team), null) : null,
-      team ? soft(client.listTeamIterations(project, team, "current"), []) : [],
-      team ? soft(client.listTeamIterations(project, team), []) : [],
-      team ? soft(client.getTeamFieldValues(project, team), null) : null,
-      soft(readLayout(client, info?.id, project, type), null),
-      soft(whoAmI(client), null),
-    ]);
+  const [
+    schema,
+    settings,
+    current,
+    teamIterations,
+    fieldValues,
+    layout,
+    me,
+    fresh,
+  ] = await Promise.all([
+    workItemSchema(client, project, type, opts.configDefaults ?? {}),
+    team ? soft(client.getTeamSettings(project, team), null) : null,
+    team ? soft(client.listTeamIterations(project, team, "current"), []) : [],
+    team ? soft(client.listTeamIterations(project, team), []) : [],
+    team ? soft(client.getTeamFieldValues(project, team), null) : null,
+    soft(readLayout(client, info?.id, project, type), null),
+    soft(whoAmI(client), null),
+    soft(client.getNewItemTemplate(project, type), null),
+  ]);
   const [areaTree, iterationTree, people, templates] = await Promise.all([
     soft(client.getClassificationTree(project, "Areas", TREE_DEPTH), null),
     soft(client.getClassificationTree(project, "Iterations", TREE_DEPTH), null),
@@ -324,8 +351,16 @@ export async function composerForm(
         : value;
     prefill[ref] = { value: v, origin };
   };
+  /* The new-item template is the process's rules evaluated, so it covers
+     defaults that depend on other fields; a field's own default fills in
+     where the template could not be read. */
   for (const f of schema.fields)
     if (!f.read_only) put(f.reference_name, f.default_value, "process");
+  for (const [ref, raw] of Object.entries(fresh?.fields ?? {})) {
+    const spec = specs.get(ref);
+    if (!spec || spec.read_only || SYSTEM_SET.has(ref)) continue;
+    put(ref, templateValue(raw), "process");
+  }
   put(AREA, fieldPath(project, fieldValues?.defaultValue), "team");
   put(
     ITERATION,
@@ -370,18 +405,9 @@ export async function templateValues(
   id: string,
 ): Promise<Record<string, unknown>> {
   const t = await client.getTemplate(project, team, id);
-  const skip = new Set([
-    "System.WorkItemType",
-    "System.TeamProject",
-    "System.State",
-    "System.Reason",
-    "System.CreatedBy",
-    "System.ChangedBy",
-    "Microsoft.VSTS.Common.StateChangeDate",
-  ]);
   return Object.fromEntries(
     Object.entries(t.fields ?? {}).filter(
-      ([k, v]) => !skip.has(k) && v != null && typeof v !== "object",
+      ([k, v]) => !SYSTEM_SET.has(k) && v != null && typeof v !== "object",
     ),
   );
 }
