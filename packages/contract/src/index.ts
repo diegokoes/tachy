@@ -220,6 +220,7 @@ export type {
 } from "./flows";
 export {
   DATE_ORDERS,
+  DATE_ORDER_LABELS,
   CLOCKS,
   DEFAULT_DATE_FORMAT,
   formatDay,

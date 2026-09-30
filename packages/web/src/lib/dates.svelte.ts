@@ -1,5 +1,4 @@
 import {
-  DEFAULT_DATE_FORMAT,
   encodeDateFormat,
   formatDateTime,
   formatDay,
@@ -24,12 +23,9 @@ function stored(): string | null {
 
 /**
  * The signed-in reader's format. Seeded from the last one this browser saw so
- * a reload does not flash ISO before the server answers.
+ * a reload does not flash the default before the server answers.
  */
 export const dateFormat = $state<DateFormat>(parseDateFormat(stored()));
-
-/** Which of the two the reader has set themselves, for the reset mark. */
-export const dateFormatOwned = $state({ order: false, clock: false });
 
 function apply(f: DateFormat) {
   dateFormat.order = f.order;
@@ -47,8 +43,6 @@ type DatePrefs = { date_order: Pref<DateOrder>; clock: Pref<Clock> };
 export async function loadDateFormat() {
   try {
     const p = await api.get<DatePrefs>("/me/preferences");
-    dateFormatOwned.order = p.date_order.source === "user";
-    dateFormatOwned.clock = p.clock.source === "user";
     apply({ order: p.date_order.value, clock: p.clock.value });
   } catch {
     /* keep whatever the browser last saw */
@@ -63,22 +57,13 @@ export async function setDatePart<P extends keyof DateFormat>(
   value: DateFormat[P],
 ) {
   const before = { ...dateFormat };
-  const owned = dateFormatOwned[part];
   apply({ ...dateFormat, [part]: value });
-  dateFormatOwned[part] = true;
   try {
     await api.put(`/me/preferences/${PREF_KEY[part]}`, { value });
   } catch (e) {
     apply(before);
-    dateFormatOwned[part] = owned;
     throw e;
   }
-}
-
-export async function resetDatePart(part: keyof DateFormat) {
-  await api.delete(`/me/preferences/${PREF_KEY[part]}`);
-  dateFormatOwned[part] = false;
-  apply({ ...dateFormat, [part]: DEFAULT_DATE_FORMAT[part] });
 }
 
 /** A timestamp as the plain day it names. Times are noise in a list of records. */
