@@ -5,6 +5,7 @@ import {
   userSoleTeamId,
   createOutput,
   renderTable,
+  parseDateFormat,
   outputFilename,
   tableColumnSchema,
   TABLE_FORMATS,
@@ -86,6 +87,7 @@ tool(
       sheet: sheet ?? spec.sheet,
       columns: spec.columns,
       rows,
+      dateFormat: parseDateFormat(process.env.TACHY_DATE_FORMAT),
     });
 
     const meta = await createOutput({

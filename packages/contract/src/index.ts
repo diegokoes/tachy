@@ -96,8 +96,20 @@ export type {
   ReviewFinding,
   TicketReview,
 } from "./ado";
-export { DEFAULT_CODE_EXTENSIONS, REPO_INDEX_STATUSES } from "./code";
-export type { RepoIndexStatus, RepoRow, RepoCensus } from "./code";
+export {
+  DEFAULT_CODE_EXTENSIONS,
+  REPO_INDEX_STATUSES,
+  RELEASE_TAG_RE,
+  releaseMinor,
+  normalizeVersion,
+} from "./code";
+export type {
+  RepoIndexStatus,
+  RepoRow,
+  RepoLineRow,
+  RemoteRef,
+  RepoCensus,
+} from "./code";
 export type {
   CatalogCensus,
   TeamRow,
@@ -206,3 +218,16 @@ export type {
   FieldShow,
   FormDisplay,
 } from "./flows";
+export {
+  DATE_ORDERS,
+  DATE_ORDER_LABELS,
+  CLOCKS,
+  DEFAULT_DATE_FORMAT,
+  formatDay,
+  formatTime,
+  formatDateTime,
+  excelDateTimeFormat,
+  encodeDateFormat,
+  parseDateFormat,
+} from "./dates";
+export type { DateOrder, Clock, DateFormat, Moment } from "./dates";

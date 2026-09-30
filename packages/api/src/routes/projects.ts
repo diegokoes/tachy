@@ -17,9 +17,11 @@ import {
   sourceProjectScope,
   sql,
   updateSourceProject,
+  connectionToken,
+  releaseBranch,
 } from "@tachy/core";
 import { workItemDefaults, workItemSchema } from "@tachy/source-azure-devops";
-import { assertScopeEditor, assertTeamAdmin } from "../authz";
+import { assertScopeEditor, assertTeamAdmin, callerUserId } from "../authz";
 import { adoClientFor } from "../azure-devops";
 import type { Context } from "hono";
 
@@ -76,6 +78,9 @@ async function assertCanWriteProject(
 }
 
 /** Remote calls answer with {ok:false} so the setup UI can render the reason. */
+/** Remotes asked at once which release branch they have. */
+const DISCOVER_PROBES = 8;
+
 async function probe<T>(fn: () => Promise<T>) {
   try {
     return { ok: true as const, ...(await fn()) };
@@ -260,18 +265,29 @@ export const projects = new Hono()
       await probe(async () => {
         const project = c.req.query("project");
         if (!project) throw new Error("project is required");
-        const { client } = await adoClientFor(c, c.req.param("slug")!);
+        const slug = c.req.param("slug")!;
+        const { client } = await adoClientFor(c, slug);
         const found = await client.listRepos(project);
-        return {
-          repos: found.map((r) => ({
-            name: r.name,
-            url: r.remoteUrl ?? r.webUrl ?? "",
-            default_branch: (r.defaultBranch ?? "").replace(
-              /^refs\/heads\//,
-              "",
-            ),
-          })),
+        const userId = await callerUserId(c);
+        const repos = found.map((r) => ({
+          name: r.name,
+          url: r.remoteUrl ?? r.webUrl ?? "",
+          default_branch: (r.defaultBranch ?? "").replace(/^refs\/heads\//, ""),
+        }));
+        let next = 0;
+        const worker = async () => {
+          while (next < repos.length) {
+            const r = repos[next++];
+            if (!r.url) continue;
+            r.default_branch = await releaseBranch(
+              r.url,
+              r.default_branch,
+              await connectionToken(slug, r.url, userId).catch(() => undefined),
+            );
+          }
         };
+        await Promise.all(Array.from({ length: DISCOVER_PROBES }, worker));
+        return { repos };
       }),
     ),
   );

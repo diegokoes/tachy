@@ -5,6 +5,11 @@ import { join } from "node:path";
 import {
   agentHome,
   badInput,
+  dateFormatOf,
+  encodeDateFormat,
+  formatDateTime,
+  DEFAULT_DATE_FORMAT,
+  type DateFormat,
   envVarName,
   getUserByEmail,
   userSoleTeamId,
@@ -153,6 +158,9 @@ export async function mcpConfig(
         token;
   }
 
+  if (user)
+    mcpEnv.TACHY_DATE_FORMAT = encodeDateFormat(await dateFormatOf(ctx));
+
   const prefs = user
     ? await effectivePrefs(ctx)
     : {
@@ -181,6 +189,22 @@ export async function mcpConfig(
   };
 }
 
+const SAMPLE_DATE = "2026-09-29T14:05:00Z";
+
+/**
+ * Said only to a user who changed the format, and in their message rather than
+ * the system prompt, which must stay identical for every turn to be cached.
+ */
+function dateNote(f: DateFormat | undefined): string | undefined {
+  if (
+    !f ||
+    (f.order === DEFAULT_DATE_FORMAT.order &&
+      f.clock === DEFAULT_DATE_FORMAT.clock)
+  )
+    return undefined;
+  return `This user reads dates like ${formatDateTime(SAMPLE_DATE, f)} (UTC): use that in replies, and keep ISO in anything you save.`;
+}
+
 export function buildPrompt(i: {
   message: string;
   uploadPaths?: string[];
@@ -191,6 +215,7 @@ export function buildPrompt(i: {
     spec?: ArtifactSpec | null;
   };
   command?: { name: string; args: string };
+  dateFormat?: DateFormat;
 }): string {
   const parts: string[] = [];
   if (i.command) {
@@ -212,6 +237,8 @@ export function buildPrompt(i: {
     parts.push(
       `The user attached these files for you to analyze with the ingest_context tool: ${i.uploadPaths.join(", ")}.`,
     );
+  const note = dateNote(i.dateFormat);
+  if (note) parts.push(note);
   parts.push(i.message);
   return parts.join("\n\n");
 }

@@ -3,12 +3,12 @@
   import type { WikiGapKind } from "@tachy/contract";
   import { api } from "../api";
   import { chat } from "../chatState.svelte";
-  import { fmtDate } from "../dates";
+  import { fmtDate } from "../dates.svelte";
   import { createSequence, errText } from "../resource.svelte";
   import { navigate } from "../router.svelte";
   import { isCurator } from "../session.svelte";
   import { setTopActions } from "../subnav.svelte";
-  import { Button, EmptyState, Note } from "../tui";
+  import { Button, EmptyState, Note, Time } from "../tui";
   import type { CoverageNode, WikiGap, WikiGaps, WikiToc } from "../types";
   import CoverageTree from "./CoverageTree.svelte";
   import WikiLayout from "./WikiLayout.svelte";
@@ -286,7 +286,7 @@
                       </span>
                     {/if}
                     <span class="since">
-                      seen since {fmtDate(g.first_seen_at)}
+                      seen since <Time at={g.first_seen_at} date />
                       {#if g.dismissed_at}
                         · back after being dismissed at {g.dismissed_score}
                       {/if}

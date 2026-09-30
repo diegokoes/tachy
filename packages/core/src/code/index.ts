@@ -1,29 +1,38 @@
 export { chunkCode } from "./chunk-code";
 export type { CodeChunk } from "./chunk-code";
-export {
-  repoDir,
-  cloneOrFetch,
-  listTree,
-  readFileAt,
-  removeClone,
-} from "./git";
-export type { TreeEntry } from "./git";
+export { repoDir, listRemoteRefs, releaseBranch, removeClone } from "./git";
+export type { TreeEntry, CommitSummary } from "./git";
 export {
   DEFAULT_CODE_EXTENSIONS,
   REPO_INDEX_STATUSES,
   linkRepo,
   listRepos,
   getRepoBySlug,
+  getRepoLine,
   repoScope,
-  updateRepoStatus,
   deleteRepo,
   sweepInterruptedIndexes,
+  adoptSupersededIndex,
   repoCensus,
   repoIssues,
 } from "./repos";
-export type { RepoInput, RepoRow, RepoIndexStatus } from "./repos";
-export { indexRepo, backfillCodeEmbeddings } from "./indexer";
-export type { IndexResult } from "./indexer";
+export type {
+  RepoInput,
+  RepoRow,
+  RepoLine,
+  RepoLineRow,
+  RepoIndexStatus,
+} from "./repos";
+export { indexRepo, previewIndex, backfillCodeEmbeddings } from "./indexer";
+export type { IndexResult, LineIndexResult, IndexPreview } from "./indexer";
 export { searchCode, readCodeFile } from "./search";
-export { repoToken } from "./jobs";
-export type { CodeSearchOptions } from "./search";
+export type { CodeSearchOptions, ReadCodeOptions } from "./search";
+export { resolveVersion, codeChangesBetween } from "./versions";
+export type { ResolvedVersion, CodeChanges } from "./versions";
+export { repoToken, connectionToken, tokenMaySendTo } from "./token";
+export { reindexInFlight } from "./jobs";
+export {
+  RELEASE_TAG_RE,
+  releaseMinor,
+  normalizeVersion,
+} from "@tachy/contract";

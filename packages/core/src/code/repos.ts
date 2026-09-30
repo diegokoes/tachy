@@ -3,7 +3,12 @@ import {
   REPO_INDEX_STATUSES,
   SLUG_RE,
 } from "@tachy/contract";
-import type { RepoCensus, RepoIndexStatus, RepoRow } from "@tachy/contract";
+import type {
+  RepoCensus,
+  RepoIndexStatus,
+  RepoLineRow,
+  RepoRow,
+} from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { badInput, notFound } from "../infra/errors";
@@ -15,7 +20,7 @@ import type { EntryScope } from "../access/permissions";
 import { assertBranchName, assertRepoUrl, removeClone } from "./git";
 
 export { DEFAULT_CODE_EXTENSIONS, REPO_INDEX_STATUSES };
-export type { RepoIndexStatus, RepoRow, RepoCensus };
+export type { RepoIndexStatus, RepoRow, RepoLineRow, RepoCensus };
 
 export interface RepoInput {
   slug: string;
@@ -27,6 +32,11 @@ export interface RepoInput {
   /** Set for a customer's own addon repo; null/absent means shared product code. */
   customerSlug?: string | null;
   defaultBranch?: string;
+  /**
+   * Branches indexed besides the default, such as an older release line. Absent
+   * keeps the lines the repo already has; a list replaces them.
+   */
+  lines?: string[];
   config?: Record<string, unknown>;
 }
 
@@ -76,14 +86,20 @@ export async function linkRepo(i: RepoInput) {
   // Checked here as well as at the spawn: a value that cannot be cloned should
   // be refused in the form the operator typed it into, not on a later reindex.
   assertRepoUrl(i.url);
-  if (i.defaultBranch) assertBranchName(i.defaultBranch);
+  const defaultBranch = assertBranchName(i.defaultBranch || "main");
+  const extraLines = [...new Set(i.lines ?? [])]
+    .map(assertBranchName)
+    .filter((ref) => ref !== defaultBranch);
 
+  const [previous] = await sql`
+    select default_branch from repos where slug = ${i.slug}
+  `;
   const [row] = await sql`
     insert into repos (slug, url, product_id, source_slug, source_project_id, component_id,
                        customer_id, default_branch, config)
     values (${i.slug}, ${i.url}, ${productId}, ${sourceSlug},
             ${i.sourceProjectId ?? null}, ${componentId}, ${customerId},
-            ${i.defaultBranch ?? "main"}, ${jsonb(i.config ?? {})})
+            ${defaultBranch}, ${jsonb(i.config ?? {})})
     on conflict (slug) do update set
       url = excluded.url,
       product_id = excluded.product_id,
@@ -93,15 +109,74 @@ export async function linkRepo(i: RepoInput) {
       customer_id = excluded.customer_id,
       default_branch = excluded.default_branch,
       config = excluded.config
-    returning id, slug, url, default_branch, index_status
+    returning id, slug, url, default_branch
   `;
+
+  await sql`
+    insert into repo_lines (repo_id, ref)
+    select ${row.id}, unnest(${[defaultBranch, ...extraLines]}::text[])
+    on conflict (repo_id, ref) do nothing
+  `;
+  const dropped = i.lines
+    ? await sql`
+        delete from repo_lines
+        where repo_id = ${row.id} and ref <> all(${[defaultBranch, ...extraLines]}::text[])
+        returning id
+      `
+    : previous && previous.default_branch !== defaultBranch
+      ? await sql`
+          delete from repo_lines
+          where repo_id = ${row.id} and ref = ${previous.default_branch}
+          returning id
+        `
+      : [];
+  if (dropped.length) await collectOrphanChunks(row.id);
   return row;
 }
 
+/** Chunks of blobs no line holds any more. */
+export async function collectOrphanChunks(repoId: string): Promise<number> {
+  const rows = await sql`
+    delete from code_blob_chunks c
+    where c.repo_id = ${repoId}
+      and not exists (
+        select 1 from repo_line_files f
+        where f.repo_id = c.repo_id and f.blob_sha = c.blob_sha
+      )
+    returning 1
+  `;
+  return rows.length;
+}
+
+/** The line on the repo's default branch, as `dl`, for a query over `repos r`. */
+export const defaultLineJoin = () => sql`
+  left join repo_lines dl on dl.repo_id = r.id and dl.ref = r.default_branch
+`;
+
 const repoSelect = () => sql`
-  select r.*, p.slug as product_slug, c.slug as component_slug,
-         cu.slug as customer_slug, sp.external_key as project_key
+  select r.id, r.slug, r.url, r.product_id, r.source_slug, r.source_project_id,
+         r.component_id, r.customer_id, r.default_branch, r.config, r.created_at,
+         p.slug as product_slug, c.slug as component_slug,
+         cu.slug as customer_slug, sp.external_key as project_key,
+         coalesce(dl.index_status, 'idle') as index_status,
+         dl.indexed_commit, dl.index_error,
+         coalesce(dl.file_count, 0) as file_count,
+         coalesce(dl.chunk_count, 0) as chunk_count,
+         dl.last_indexed_at,
+         coalesce((
+           select json_agg(json_build_object(
+                    'id', l.id, 'ref', l.ref, 'version_label', l.version_label,
+                    'index_status', l.index_status,
+                    'indexed_commit', l.indexed_commit,
+                    'indexing_commit', l.indexing_commit,
+                    'index_error', l.index_error,
+                    'file_count', l.file_count, 'chunk_count', l.chunk_count,
+                    'last_indexed_at', l.last_indexed_at)
+                  order by l.ref <> r.default_branch, l.ref)
+           from repo_lines l where l.repo_id = r.id
+         ), '[]'::json) as lines
   from repos r
+  ${defaultLineJoin()}
   left join products p on p.id = r.product_id
   left join components c on c.id = r.component_id
   left join customers cu on cu.id = r.customer_id
@@ -162,26 +237,65 @@ export async function repoScope(slug: string): Promise<EntryScope> {
   return { productId: row.product_id, teamId: row.team_id };
 }
 
-export async function updateRepoStatus(
+export interface RepoLine extends RepoLineRow {
+  repo_id: string;
+}
+
+/** A tracked line of a repo; the default line when `ref` is omitted. */
+export async function getRepoLine(
   slug: string,
+  ref?: string,
+): Promise<RepoLine> {
+  const [row] = await sql<RepoLine[]>`
+    select l.* from repo_lines l
+    join repos r on r.id = l.repo_id
+    where r.slug = ${slug} and l.ref = coalesce(${ref ?? null}, r.default_branch)
+  `;
+  if (!row)
+    throw notFound(
+      ref
+        ? `Repo '${slug}' does not track '${ref}'`
+        : `Repo '${slug}' not found`,
+    );
+  return row;
+}
+
+export async function updateLineStatus(
+  lineId: string,
   patch: {
-    indexStatus?: string;
+    indexStatus?: RepoIndexStatus;
     indexedCommit?: string | null;
+    indexingCommit?: string | null;
     indexError?: string | null;
-    fileCount?: number;
-    chunkCount?: number;
+    versionLabel?: string | null;
     touchIndexedAt?: boolean;
   },
 ): Promise<void> {
+  const keep = (v: unknown, column: string) =>
+    v === undefined ? sql`${sql(column)}` : sql`${v as string | null}`;
   await sql`
-    update repos set
-      index_status = coalesce(${patch.indexStatus ?? null}, index_status),
-      indexed_commit = ${patch.indexedCommit === undefined ? sql`indexed_commit` : patch.indexedCommit},
-      index_error = ${patch.indexError === undefined ? sql`index_error` : patch.indexError},
-      file_count = coalesce(${patch.fileCount ?? null}, file_count),
-      chunk_count = coalesce(${patch.chunkCount ?? null}, chunk_count),
+    update repo_lines set
+      index_status = ${keep(patch.indexStatus, "index_status")},
+      indexed_commit = ${keep(patch.indexedCommit, "indexed_commit")},
+      indexing_commit = ${keep(patch.indexingCommit, "indexing_commit")},
+      index_error = ${keep(patch.indexError, "index_error")},
+      version_label = ${keep(patch.versionLabel, "version_label")},
       last_indexed_at = ${patch.touchIndexedAt ? sql`now()` : sql`last_indexed_at`}
-    where slug = ${slug}
+    where id = ${lineId}
+  `;
+}
+
+/** Recount what a line holds; a blob shared by two of its paths counts once. */
+export async function recountLine(lineId: string): Promise<void> {
+  await sql`
+    update repo_lines l set
+      file_count = (select count(*) from repo_line_files f where f.line_id = l.id),
+      chunk_count = (
+        select count(*) from code_blob_chunks c
+        where c.repo_id = l.repo_id
+          and c.blob_sha in (select f.blob_sha from repo_line_files f where f.line_id = l.id)
+      )
+    where l.id = ${lineId}
   `;
 }
 
@@ -191,13 +305,72 @@ export async function deleteRepo(slug: string): Promise<void> {
   await removeClone(slug);
 }
 
-/** Rows stuck in a transient status after a process crash/restart. */
+/**
+ * Carries an index built into the superseded repo_files and code_chunks over
+ * to lines, for each repo that has no line yet, so its embeddings are reused
+ * instead of recomputed. A file row with no chunks is left behind: the
+ * superseded indexer could write one when interrupted, and it is cheaper to
+ * embed it again than to trust it. Idempotent; a no-op once every repo has a
+ * line. Removed with the superseded tables.
+ */
+export async function adoptSupersededIndex(): Promise<number> {
+  return sql.begin(async (tx) => {
+    const adopted = await tx`
+      insert into repo_lines (repo_id, ref, index_status, indexed_commit, index_error,
+                              file_count, chunk_count, last_indexed_at)
+      select r.id, r.default_branch,
+             case when r.index_status in ('cloning','indexing') then 'error' else r.index_status end,
+             r.indexed_commit, r.index_error, r.file_count, r.chunk_count, r.last_indexed_at
+      from repos r
+      where not exists (select 1 from repo_lines l where l.repo_id = r.id)
+        and exists (select 1 from repo_files f where f.repo_id = r.id)
+      returning id, repo_id
+    `;
+    if (!adopted.length) return 0;
+    const repoIds = adopted.map((a) => a.repo_id);
+    await tx`
+      insert into code_blob_chunks (repo_id, blob_sha, ordinal, start_line, end_line,
+                                    chunk_text, embedding)
+      select c.repo_id, f.blob_sha, c.ordinal, c.start_line, c.end_line,
+             c.chunk_text, c.embedding
+      from code_chunks c
+      join repo_files f on f.id = c.file_id
+      where c.repo_id = any(${repoIds})
+      on conflict (repo_id, blob_sha, ordinal) do nothing
+    `;
+    await tx`
+      insert into repo_line_files (line_id, repo_id, path, lang, blob_sha, size_bytes)
+      select l.id, f.repo_id, f.path, f.lang, f.blob_sha, f.size_bytes
+      from repo_files f
+      join repo_lines l on l.repo_id = f.repo_id
+      where f.repo_id = any(${repoIds})
+        and exists (select 1 from code_chunks c where c.file_id = f.id)
+      on conflict (line_id, path) do nothing
+    `;
+    await tx`
+      update repo_lines l set
+        file_count = (select count(*) from repo_line_files f where f.line_id = l.id),
+        chunk_count = (
+          select count(*) from code_blob_chunks c
+          where c.repo_id = l.repo_id
+            and c.blob_sha in (select f.blob_sha from repo_line_files f where f.line_id = l.id)
+        )
+      where l.id = any(${adopted.map((a) => a.id)})
+    `;
+    return adopted.length;
+  }) as Promise<number>;
+}
+
+/**
+ * Lines stuck in a transient status after a process crash/restart. What they
+ * had written stays searchable; the next reindex finishes the diff.
+ */
 export async function sweepInterruptedIndexes(): Promise<number> {
   const rows = await sql`
-    update repos
+    update repo_lines
     set index_status = 'error', index_error = 'indexing interrupted (process restarted)'
     where index_status in ('cloning','indexing')
-    returning slug
+    returning id
   `;
   return rows.length;
 }
@@ -212,17 +385,18 @@ export async function repoCensus(): Promise<
   const [row] = await sql`
     select
       count(*)::int as repos,
-      count(*) filter (where index_status = 'error')::int as failing,
-      count(*) filter (where index_status = 'ready')::int as ready,
-      count(*) filter (where index_status in ('cloning','indexing'))::int as working,
-      count(*) filter (where index_status = 'idle')::int as idle,
-      count(*) filter (where component_id is null)::int as no_component,
-      count(*) filter (where source_project_id is null)::int as no_project,
-      count(*) filter (where last_indexed_at is null)::int as never_indexed,
-      coalesce(sum(file_count), 0)::int as files,
-      coalesce(sum(chunk_count), 0)::int as chunks,
-      min(last_indexed_at) as oldest_indexed_at
-    from repos
+      count(*) filter (where dl.index_status = 'error')::int as failing,
+      count(*) filter (where dl.index_status = 'ready')::int as ready,
+      count(*) filter (where dl.index_status in ('cloning','indexing'))::int as working,
+      count(*) filter (where coalesce(dl.index_status, 'idle') = 'idle')::int as idle,
+      count(*) filter (where r.component_id is null)::int as no_component,
+      count(*) filter (where r.source_project_id is null)::int as no_project,
+      count(*) filter (where dl.last_indexed_at is null)::int as never_indexed,
+      coalesce(sum(dl.file_count), 0)::int as files,
+      coalesce(sum(dl.chunk_count), 0)::int as chunks,
+      min(dl.last_indexed_at) as oldest_indexed_at
+    from repos r
+    ${defaultLineJoin()}
   `;
   return row as Omit<RepoCensus, "oldest_indexed_at"> & {
     oldest_indexed_at: Date | null;
@@ -232,17 +406,17 @@ export async function repoCensus(): Promise<
 /** Repos that are not answering searches, or are filed nowhere, by slug. */
 export async function repoIssues(): Promise<Record<string, IssueList>> {
   const where = {
-    "repos.failing": sql`index_status = 'error'`,
-    "repos.never_indexed": sql`last_indexed_at is null and index_status <> 'error'`,
-    "repos.no_component": sql`component_id is null`,
-    "repos.no_project": sql`source_project_id is null`,
+    "repos.failing": sql`dl.index_status = 'error'`,
+    "repos.never_indexed": sql`dl.last_indexed_at is null and coalesce(dl.index_status, 'idle') <> 'error'`,
+    "repos.no_component": sql`r.component_id is null`,
+    "repos.no_project": sql`r.source_project_id is null`,
   };
   const lists = await Promise.all(
     Object.values(where).map(
       (cond) => sql`
-        select slug as key, slug as label, count(*) over () as total
-        from repos where ${cond}
-        order by slug limit ${ISSUE_ITEMS}
+        select r.slug as key, r.slug as label, count(*) over () as total
+        from repos r ${defaultLineJoin()} where ${cond}
+        order by r.slug limit ${ISSUE_ITEMS}
       `,
     ),
   );

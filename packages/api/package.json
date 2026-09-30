@@ -4,14 +4,14 @@
   "main": "src/index.ts",
   "dependencies": {
     "@hono/node-server": "^2.1.1",
-    "@hono/oidc-auth": "^1.8.3",
-    "@hono/zod-validator": "^0.7.0",
+    "@hono/oidc-auth": "^1.10.0",
+    "@hono/zod-validator": "^0.9.1",
     "@tachy/agent": "*",
     "@tachy/core": "*",
     "@tachy/source-freshdesk": "*",
     "@tachy/source-github": "*",
     "@tachy/source-azure-devops": "*",
-    "hono": "^4.13.8",
-    "zod": "^4.0.0"
+    "hono": "^4.13.9",
+    "zod": "^4.6.5"
   }
 }

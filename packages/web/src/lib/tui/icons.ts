@@ -71,6 +71,7 @@ import {
   MessageSquareQuote,
   MonitorCog,
   OctagonAlert,
+  Orbit,
   Palette,
   Pause,
   PencilSparkles,
@@ -79,7 +80,7 @@ import {
   Plug,
   Plus,
   Pyramid,
-  Radar,
+  RadioTower,
   RotateCcw,
   RotateCcwClock,
   RotateCw,
@@ -185,10 +186,12 @@ export const ICONS = {
   /** Searching what we already hold. */
   search: Search,
   /** Asking a source what it holds. */
-  discover: Radar,
+  discover: RadioTower,
   refresh: RotateCw,
   seed: Sprout,
   index: Database,
+  /** Linking many repos of one project at once. */
+  bulk: Orbit,
   /** Anything that hands work to the model. */
   ai: Bot,
 

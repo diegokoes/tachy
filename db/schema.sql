@@ -970,10 +970,9 @@ create table mcp_tool_calls (
 create unique index mcp_tool_calls_bucket_idx
     on mcp_tool_calls(tool, user_id, day) nulls not distinct;
 
--- Linked git repositories for code consultation. Clones live on disk under
--- TACHY_REPO_DIR; only chunk text + embeddings are stored here. Indexing is
--- on-demand (API route / CLI), diff-only by blob sha; indexed_commit advances
--- only on success so an interrupted run retries the same diff.
+-- Linked git repositories for code consultation. One partial clone per repo
+-- lives on disk under TACHY_REPO_DIR; only chunk text + embeddings are stored
+-- here. Each tracked branch is a repo_lines row.
 create table repos (
     id              uuid primary key default gen_random_uuid(),
     slug            text not null unique,
@@ -988,6 +987,8 @@ create table repos (
     customer_id     uuid references customers(id) on delete set null,
     default_branch  text not null default 'main',
     config          jsonb not null default '{}'::jsonb,
+    -- Superseded by repo_lines, and unread. Kept so the previous release still
+    -- runs against this schema; dropped with repo_files and code_chunks.
     index_status    text not null default 'idle'
                         check (index_status in ('idle','cloning','indexing','ready','error')),
     indexed_commit  text,
@@ -1003,6 +1004,64 @@ create index repos_project_idx   on repos(source_project_id);
 create index repos_component_idx on repos(component_id);
 create index repos_customer_idx  on repos(customer_id);
 
+-- A branch of a repo that is indexed: the repo's default_branch always, plus
+-- any older release line (legacy/master-1-50) an admin adds. version_label is
+-- the newest release tag reachable from the line, which is how a ticket's
+-- version finds its line.
+create table repo_lines (
+    id              uuid primary key default gen_random_uuid(),
+    repo_id         uuid not null references repos(id) on delete cascade,
+    ref             text not null,
+    version_label   text,
+    index_status    text not null default 'idle'
+                        check (index_status in ('idle','cloning','indexing','ready','error')),
+    -- indexed_commit advances only when a run completes. indexing_commit is the
+    -- commit a run is writing, so the files it has already written can be read
+    -- and searched before it finishes.
+    indexed_commit  text,
+    indexing_commit text,
+    index_error     text,
+    file_count      integer not null default 0,
+    chunk_count     integer not null default 0,
+    last_indexed_at timestamptz,
+    created_at      timestamptz not null default now(),
+    unique (repo_id, ref)
+);
+
+-- What a line holds, path by path. Chunks hang off the blob, not the file, so
+-- content shared between lines is embedded once.
+create table repo_line_files (
+    id          uuid primary key default gen_random_uuid(),
+    line_id     uuid not null references repo_lines(id) on delete cascade,
+    repo_id     uuid not null references repos(id) on delete cascade,
+    path        text not null,
+    lang        text,
+    blob_sha    text not null,
+    size_bytes  integer not null,
+    unique (line_id, path)
+);
+
+create index repo_line_files_blob_idx      on repo_line_files(repo_id, blob_sha);
+create index repo_line_files_path_trgm_idx on repo_line_files using gin (path gin_trgm_ops);
+
+create table code_blob_chunks (
+    id          uuid primary key default gen_random_uuid(),
+    repo_id     uuid not null references repos(id) on delete cascade,
+    blob_sha    text not null,
+    ordinal     integer not null,
+    start_line  integer not null,
+    end_line    integer not null,
+    chunk_text  text not null,
+    embedding   vector(768),
+    unique (repo_id, blob_sha, ordinal)
+);
+
+create index code_blob_chunks_embedding_idx on code_blob_chunks using hnsw (embedding vector_cosine_ops)
+    with (m = 16, ef_construction = 64);
+create index code_blob_chunks_trgm_idx      on code_blob_chunks using gin (chunk_text gin_trgm_ops);
+
+-- Superseded by repo_line_files and code_blob_chunks, and unread. Kept so the
+-- previous release still runs against this schema.
 create table repo_files (
     id          uuid primary key default gen_random_uuid(),
     repo_id     uuid not null references repos(id) on delete cascade,

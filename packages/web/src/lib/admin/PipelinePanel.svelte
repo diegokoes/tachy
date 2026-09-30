@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fmtDate } from "../dates.svelte";
   import { Bars, Columns, compact, dayOfMonth, type Bar, type Col } from "../tui";
   import { census } from "./census.svelte";
   import { activity } from "./activity.svelte";
@@ -27,7 +28,7 @@
       (x): Col => ({
         key: x.day,
         label: dayOfMonth(x.day),
-        title: x.day,
+        title: fmtDate(x.day),
         value: x.agent + x.sync + x.app,
         parts: split(x),
       }),

@@ -12,19 +12,21 @@
     Chip,
     CrudTable,
     DeleteButton,
-    Field,
     FilterBar,
-    GroupHead,
     Note,
     Select,
     type Column,
     type Draft,
   } from "../tui";
   import type { AreaRule, Component, Connection, Customer, Product, ProjectWiki, Repo, SourceProject, Team } from "./rows";
-import { INFO } from "./help";
+  import { INFO } from "./help";
   import { sectionHoist } from "./sectionAction.svelte";
+  import ProjectFinder, { type Found } from "./ProjectFinder.svelte";
+  import ProjectCoverage, {
+    type CoverageGap,
+    type CoverageGroup,
+  } from "./ProjectCoverage.svelte";
 
-  type Found = { key: string; name: string };
   type Wiki = { identifier: string; name: string; type?: string };
 
   const projects = createResource(
@@ -52,7 +54,6 @@ import { INFO } from "./help";
 
   /** Live from the source, so admins pick a real project instead of typing one. */
   let found = $state<Record<string, Found[]>>({});
-  let discovering = $state<string | null>(null);
 
   const canEditProject = (p: SourceProject) =>
     canCurateScope({ team_slug: p.team_slug });
@@ -88,22 +89,13 @@ import { INFO } from "./help";
   }
 
   async function discover(slug: string) {
-    if (!slug) return;
-    discovering = slug;
-    error = null;
-    try {
-      const res = await api.get<{
-        ok: boolean;
-        error?: string;
-        projects?: Found[];
-      }>(`/source-connections/${slug}/discover/projects`);
-      if (!res.ok) throw new Error(res.error ?? "discovery failed");
-      found[slug] = res.projects ?? [];
-    } catch (e) {
-      error = errText(e);
-    } finally {
-      discovering = null;
-    }
+    const res = await api.get<{
+      ok: boolean;
+      error?: string;
+      projects?: Found[];
+    }>(`/source-connections/${slug}/discover/projects`);
+    if (!res.ok) throw new Error(res.error ?? "discovery failed");
+    found[slug] = res.projects ?? [];
   }
 
   async function loadWikis(p: SourceProject) {
@@ -220,7 +212,7 @@ import { INFO } from "./help";
       label: t("product"),
       width: "11rem",
       edit: "select",
-      initial: myProducts[0]?.slug ?? "",
+      initial: "",
       info: `Ingest target. Also scopes wiki, repos, area rules. None: a ticket target only.`,
       options: [
         { value: "", label: "(none)" },
@@ -234,6 +226,7 @@ import { INFO } from "./help";
       label: t("team"),
       width: "11rem",
       edit: "select",
+      initial: myTeams[0]?.slug ?? "",
       info: `Whose members create work items here. A ${t("product")} brings its own ${t("team")}, so this only applies without one.`,
       options: myTeams.map((tm) => ({ value: tm.slug, label: tm.name })),
     },
@@ -279,34 +272,76 @@ import { INFO } from "./help";
     };
   }
 
-  /** What is configured but not wired up — the setup screen's to-do list. */
-  const gaps = $derived.by(() => {
-    const registered = new Set(
-      projects.data.map((p) => `${p.source_slug} ${p.external_key}`),
-    );
-    const unregistered: string[] = [];
+  const registered = $derived(
+    new Set(projects.data.map((p) => `${p.source_slug} ${p.external_key}`)),
+  );
+
+  /** What is configured but not wired up, one group per project. */
+  const coverage = $derived.by(() => {
+    const groups = new Map<string, CoverageGroup>();
+    const add = (
+      key: string,
+      head: Omit<CoverageGroup, "key" | "gaps">,
+      gap: CoverageGap,
+    ) => {
+      const g = groups.get(key) ?? { key, ...head, gaps: [] };
+      g.gaps.push(gap);
+      groups.set(key, g);
+    };
+    const byId = new Map(projects.data.map((p) => [p.id, p]));
+    const headOf = (p: SourceProject) => ({
+      label: p.external_key,
+      detail: [p.source_slug, p.name !== p.external_key ? p.name : ""]
+        .filter(Boolean)
+        .join(" · "),
+      filter: p.external_key,
+    });
+
+    for (const p of projects.data) {
+      if (!p.product_id) continue;
+      if (p.source_type === "azure-devops" && !wikisOf(p).length)
+        add(p.id, headOf(p), { text: "no wiki set", tone: "warn" });
+      if (!reposOf(p).length)
+        add(p.id, headOf(p), { text: "no repos linked", tone: "warn" });
+    }
+
+    for (const r of repos.data) {
+      const p = r.source_project_id ? byId.get(r.source_project_id) : undefined;
+      const key = p?.id ?? r.source_project_id ?? "::none";
+      const head = p
+        ? headOf(p)
+        : { label: r.project_key ?? "no project", detail: r.source_slug ?? "" };
+      if (!r.component_id)
+        add(key, head, { text: `repo ${r.slug} has no component`, tone: "warn" });
+      if (r.index_status === "error")
+        add(key, head, { text: `repo ${r.slug} index failing`, tone: "danger" });
+    }
+
     for (const [slug, list] of Object.entries(found))
       for (const g of list)
-        if (!registered.has(`${slug} ${g.key}`)) unregistered.push(g.key);
-    const knowledge = projects.data.filter((p) => p.product_id);
-    return {
-      unregistered,
-      noWiki: knowledge.filter(
-        (p) => p.source_type === "azure-devops" && !wikisOf(p).length,
-      ),
-      noRepos: knowledge.filter((p) => reposOf(p).length === 0),
-      repoNoComponent: repos.data.filter((r) => !r.component_id),
-      brokenIndex: repos.data.filter((r) => r.index_status === "error"),
-    };
+        if (!registered.has(`${slug} ${g.key}`))
+          add(
+            `found ${slug} ${g.key}`,
+            { label: g.key, detail: slug },
+            { text: "discovered, not registered", tone: "warn" },
+          );
+
+    const rank = (g: CoverageGroup) =>
+      g.gaps.some((x) => x.tone === "danger") ? 0 : 1;
+    return [...groups.values()].sort(
+      (a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label),
+    );
   });
 
-  const clean = $derived(
-    !gaps.unregistered.length &&
-      !gaps.noWiki.length &&
-      !gaps.noRepos.length &&
-      !gaps.repoNoComponent.length &&
-      !gaps.brokenIndex.length,
+  const coverageTone = $derived(
+    coverage.some((g) => g.gaps.some((x) => x.tone === "danger"))
+      ? ("danger" as const)
+      : coverage.length
+        ? ("warn" as const)
+        : undefined,
   );
+
+  let showCoverage = $state(false);
 
   onMount(reload);
 
@@ -331,11 +366,11 @@ import { INFO } from "./help";
     if (!q) return projects.data;
     return projects.data.filter((p) =>
       [
-      p.external_key ?? "",
-      p.name ?? "",
-      p.source_slug ?? "",
-      p.product_slug ?? "",
-      p.team_slug ?? "",
+        p.external_key ?? "",
+        p.name ?? "",
+        p.source_slug ?? "",
+        p.product_slug ?? "",
+        p.team_slug ?? "",
       ]
         .join(" ")
         .toLowerCase()
@@ -481,42 +516,19 @@ import { INFO } from "./help";
 })}
   {#if f.mode === "create"}
     {@const slug = String(f.draft.source_slug ?? "")}
-    {@const hits = found[slug] ?? []}
-    <!-- Full width, and a button that says what it does: the picker is the
-         point of the field, not an ornament beside a key you typed. -->
-    <div class="find">
-      <Field
-        label="find a project"
-        info="Ask the connection what it can see, instead of typing a key."
-        plain
-      >
-        <Button
-          variant="ghost"
-          size="sm"
-          icon="discover"
-          busy={discovering === slug}
-          disabled={!slug}
-          onclick={() => discover(slug)}
-          >{slug ? `ask ${slug}` : "pick a connection first"}</Button
-        >
-      </Field>
-      {#if hits.length}
-        <div class="chips">
-          {#each hits as g (g.key)}
-            <Chip
-              tone={f.draft.external_key === g.key ? "accent" : "default"}
-              title={g.key}
-              onclick={() => {
-                f.draft.external_key = g.key;
-                if (!f.draft.name) f.draft.name = g.name;
-              }}>{g.name}</Chip
-            >
-          {/each}
-        </div>
-      {:else if discovering !== slug && slug}
-        <span class="dim sm">nothing found yet</span>
-      {/if}
-    </div>
+    {#key slug}
+      <ProjectFinder
+        source={slug}
+        hits={found[slug]}
+        picked={String(f.draft.external_key ?? "")}
+        registered={(key) => registered.has(`${slug} ${key}`)}
+        onfetch={() => discover(slug)}
+        onpick={(g) => {
+          f.draft.external_key = g.key;
+          if (!f.draft.name) f.draft.name = g.name;
+        }}
+      />
+    {/key}
   {:else if f.row}
     <div class="probe">{@render detail(f.row)}</div>
   {/if}
@@ -524,6 +536,7 @@ import { INFO } from "./help";
 
 {#if error}<Note tone="danger">{error}</Note>{/if}
 
+<div class="bar">
   <FilterBar
     bind:value={filter}
     shown={filtered.length}
@@ -531,88 +544,62 @@ import { INFO } from "./help";
     placeholder="filter projects…"
     label="filter projects"
   />
+  <Button
+    variant="ghost"
+    size="sm"
+    icon={coverage.length ? "issues" : "success"}
+    tone={coverageTone}
+    title={coverage.length
+      ? `${coverage.length} project(s) not fully wired up`
+      : "every project is wired up"}
+    onclick={() => (showCoverage = true)}
+    >coverage{coverage.length ? ` ${coverage.length}` : ""}</Button
+  >
+</div>
 
-  <CrudTable
-    hoist={sectionHoist("projects")}
-    {columns}
-    rows={filtered}
-    rowKey={(p) => p.id}
-    loading={projects.loading}
-    error={projects.error}
-    emptyTitle="No projects registered yet."
-    canEdit={canEditProject}
-    canDelete={canEditProject}
-    canCreate={canAdd}
-    addLabel="register project"
-    noun="project"
-    editTitle={(p) => p.name || p.external_key}
-    width="52rem"
-    {formExtra}
-    onform={(f) => (opened = f?.row ?? null)}
-    oncreate={(d) =>
-      projects.mutate(() =>
-        api.post("/source-projects", {
-          source_slug: d.source_slug,
-          external_key: String(d.external_key).trim(),
-          ...payload(d),
-        }),
-      )}
-    onsave={(row, d) =>
-      projects.mutate(() => api.patch(`/source-projects/${row.id}`, payload(d)))}
-    ondelete={(row) =>
-      projects.mutate(() => api.delete(`/source-projects/${row.id}`))}
+<CrudTable
+  hoist={sectionHoist("projects")}
+  {columns}
+  rows={filtered}
+  rowKey={(p) => p.id}
+  loading={projects.loading}
+  error={projects.error}
+  emptyTitle={projects.data.length
+    ? "No projects match the filter."
+    : "No projects registered yet."}
+  canEdit={canEditProject}
+  canDelete={canEditProject}
+  canCreate={canAdd}
+  addLabel="register project"
+  noun="project"
+  editTitle={(p) => p.name || p.external_key}
+  width="52rem"
+  {formExtra}
+  onform={(f) => (opened = f?.row ?? null)}
+  oncreate={(d) =>
+    projects.mutate(() =>
+      api.post("/source-projects", {
+        source_slug: d.source_slug,
+        external_key: String(d.external_key).trim(),
+        ...payload(d),
+      }),
+    )}
+  onsave={(row, d) =>
+    projects.mutate(() => api.patch(`/source-projects/${row.id}`, payload(d)))}
+  ondelete={(row) =>
+    projects.mutate(() => api.delete(`/source-projects/${row.id}`))}
+/>
+
+{#if showCoverage}
+  <ProjectCoverage
+    groups={coverage}
+    onpick={(g) => {
+      if (g.filter) filter = g.filter;
+      showCoverage = false;
+    }}
+    onclose={() => (showCoverage = false)}
   />
-
-  <div class="coverage">
-    <GroupHead label="coverage" />
-    <ul class="gaps">
-      {#if gaps.unregistered.length}
-        <li>
-          <span class="warn-dot">●</span>
-          {gaps.unregistered.length} discovered project(s) not registered:
-          <span class="dim">{gaps.unregistered.join(", ")}</span>
-        </li>
-      {/if}
-      {#if gaps.noWiki.length}
-        <li>
-          <span class="warn-dot">●</span> no wiki set:
-          <span class="dim">
-            {gaps.noWiki.map((p) => p.external_key).join(", ")}
-          </span>
-        </li>
-      {/if}
-      {#if gaps.noRepos.length}
-        <li>
-          <span class="warn-dot">●</span> no repos linked:
-          <span class="dim">
-            {gaps.noRepos.map((p) => p.external_key).join(", ")}
-          </span>
-        </li>
-      {/if}
-      {#if gaps.repoNoComponent.length}
-        <li>
-          <span class="warn-dot">●</span> repos with no component:
-          <span class="dim">
-            {gaps.repoNoComponent.map((r) => r.slug).join(", ")}
-          </span>
-        </li>
-      {/if}
-      {#if gaps.brokenIndex.length}
-        <li>
-          <span class="err-dot">●</span> index failing:
-          <span class="dim">
-            {gaps.brokenIndex.map((r) => r.slug).join(", ")}
-          </span>
-        </li>
-      {/if}
-      {#if clean}
-        <li class="dim">
-          Nothing outstanding. Run “discover” when registering a project to check
-          for ones that were never picked up.
-        </li>
-      {/if}
-    </ul>
-  </div>
+{/if}
 
 <style>
   .dim {
@@ -661,22 +648,15 @@ import { INFO } from "./help";
     color: var(--muted);
   }
 
-  .coverage {
-    margin-top: var(--pad-4);
-  }
-  .gaps {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    font-size: var(--fs-sm);
+  .bar {
     display: flex;
-    flex-direction: column;
-    gap: var(--pad-1);
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--gap);
   }
-  .warn-dot {
-    color: var(--warn);
-  }
-  .err-dot {
-    color: var(--danger);
+  /* Capitals, like the issues button it stands in for on this page. */
+  .bar :global(.btn) {
+    text-transform: uppercase;
+    letter-spacing: var(--label-spacing);
   }
 </style>

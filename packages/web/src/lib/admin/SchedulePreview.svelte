@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fmtDateTime } from "../dates.svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
   import { Note } from "../tui";
@@ -28,5 +29,5 @@
 {#if error}
   <Note tone="danger">{error}</Note>
 {:else if next.length}
-  <Note>next: {next.slice(0, 3).map((d) => new Date(d).toLocaleString()).join(" · ")}</Note>
+  <Note>next: {next.slice(0, 3).map(fmtDateTime).join(" · ")} UTC</Note>
 {/if}

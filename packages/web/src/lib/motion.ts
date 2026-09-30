@@ -151,18 +151,25 @@ export function clearGlow(node: Element) {
 /**
  * A few soft text-shadow pulses in the node's own colour, ending unlit. For a
  * tag that opens something and has to say so once, not keep saying it.
+ * `loop` keeps it going until the node goes, for something still under way.
  */
-export function shadowPulse(node: HTMLElement) {
+export function shadowPulse(node: HTMLElement, opts?: { loop?: boolean }) {
   if (reducedMotion()) return;
   const color = getComputedStyle(node).color;
   const tween = gsap.fromTo(
     node,
-    { textShadow: `0 0 0px ${color}` },
     {
-      textShadow: `0 0 6px ${color}`,
+      textShadow: opts?.loop
+        ? `0 0 0px ${color}, 0 0 0px ${color}`
+        : `0 0 0px ${color}`,
+    },
+    {
+      textShadow: opts?.loop
+        ? `0 0 8px ${color}, 0 0 14px ${color}`
+        : `0 0 6px ${color}`,
       duration: 1.1,
       yoyo: true,
-      repeat: 5,
+      repeat: opts?.loop ? -1 : 5,
       ease: "sine.inOut",
       clearProps: "textShadow",
     },
@@ -413,4 +420,176 @@ export function wipeIn(nodes: ArrayLike<Element>, onStart?: () => void) {
       onComplete: () => gsap.set(nodes, { clearProps: "clipPath" }),
     },
   );
+}
+
+export type Unfolding = {
+  /** Plays the unfold; `onLanded` fires once, when the window is whole. */
+  open(onLanded?: () => void): void;
+  /** Another dialog opened on top: fold away, or stay and sink into the blur. */
+  cover(mode: "hide" | "blur"): void;
+  uncover(): void;
+  /** Folds the window and fades its scrim. Returns how long that takes, in ms. */
+  close(): number;
+  kill(): void;
+};
+
+/**
+ * A dialog surface popping out of a blob: it grows from an ellipse, swells a
+ * little past its size while its corners square off, and settles into the
+ * rounded rectangle; the contents fade up once the corners are there to hold
+ * them. Closing and covering play the same timeline backwards, faster.
+ *
+ * Only `plate`, the surface layer under the window's contents, is transformed.
+ * The contents only fade, so their text is never rasterised at a scale and
+ * never snaps sharp on landing, and the window never becomes the containing
+ * block for the `position: fixed` popups inside it. The scrim is tweened on its
+ * own, so a covered dialog hands its ink to the one on top even while its
+ * window stays in view.
+ */
+export function unfold(o: {
+  win: HTMLElement;
+  plate: HTMLElement;
+  parts: Element[];
+  scrim: HTMLElement;
+}): Unfolding {
+  const { win, plate, parts, scrim } = o;
+  const still = reducedMotion();
+  const BACK = 1.6;
+  const radius = parseFloat(getComputedStyle(plate).borderTopLeftRadius) || 0;
+  const blur = getComputedStyle(document.documentElement)
+    .getPropertyValue("--scrim-blur")
+    .trim();
+  let landed: (() => void) | undefined;
+  let state: "open" | "hidden" | "sunk" = "open";
+  let queued = 0;
+
+  /* Explicit elliptical radii rather than "50%": a percentage and a length do
+     not interpolate into one another, and the blob has to be an ellipse of
+     the window's own proportions for the squaring-off to read. */
+  const blob = { k: 1 };
+  let w = 0;
+  let h = 0;
+  const measure = () => {
+    w = plate.offsetWidth;
+    h = plate.offsetHeight;
+  };
+  const shape = () => {
+    const rx = radius + (w / 2 - radius) * blob.k;
+    const ry = radius + (h / 2 - radius) * blob.k;
+    plate.style.borderRadius = `${rx}px / ${ry}px`;
+  };
+
+  const land = () => {
+    gsap.set(plate, { clearProps: "transform,opacity,borderRadius" });
+    gsap.set(parts, { clearProps: "opacity" });
+    landed?.();
+    landed = undefined;
+  };
+
+  const tl = gsap.timeline({ paused: true, onComplete: land });
+  tl.fromTo(
+    plate,
+    { scale: 0.5 },
+    { scale: 1, duration: 0.3, ease: "back.out(1.4)" },
+    0,
+  )
+    .fromTo(
+      plate,
+      { opacity: 0 },
+      { opacity: 1, duration: 0.06, ease: "none" },
+      0,
+    )
+    .fromTo(
+      blob,
+      { k: 1 },
+      { k: 0, duration: 0.22, ease: "power2.out", onUpdate: shape },
+      0,
+    )
+    .fromTo(
+      parts,
+      { opacity: 0 },
+      { opacity: 1, duration: 0.16, ease: "power1.out" },
+      0.12,
+    );
+
+  const fade = (to: number, speed = 1) =>
+    gsap.to(scrim, {
+      opacity: to,
+      duration: still ? 0 : 0.14 / speed,
+      ease: "none",
+      overwrite: true,
+    });
+
+  const forward = () => {
+    if (still) return void tl.progress(1);
+    measure();
+    tl.timeScale(1).play();
+  };
+  const backward = () => {
+    cancelAnimationFrame(queued);
+    if (still) return void tl.progress(0);
+    measure();
+    tl.timeScale(BACK).reverse();
+  };
+
+  return {
+    open(onLanded) {
+      landed = onLanded;
+      gsap.set(scrim, { opacity: 0 });
+      fade(1);
+      if (still) {
+        tl.progress(1);
+        land();
+        return;
+      }
+      measure();
+      shape();
+      /* The frame that first paints the dialog is the expensive one: its
+         layout, and the blur switching on across the app. Started any
+         earlier, the timeline counts that frame as elapsed time and the
+         first third of the pop is never seen. */
+      queued = requestAnimationFrame(() => {
+        queued = requestAnimationFrame(forward);
+      });
+    },
+    cover(mode) {
+      if (state !== "open") return;
+      fade(0);
+      if (mode === "hide") {
+        state = "hidden";
+        backward();
+      } else {
+        state = "sunk";
+        gsap.to(win, {
+          filter: `blur(${blur})`,
+          duration: still ? 0 : 0.14,
+          overwrite: "auto",
+        });
+      }
+    },
+    uncover() {
+      if (state === "open") return;
+      fade(1);
+      if (state === "hidden") forward();
+      else
+        gsap.to(win, {
+          filter: "blur(0px)",
+          duration: still ? 0 : 0.14,
+          overwrite: "auto",
+          clearProps: "filter",
+        });
+      state = "open";
+    },
+    close() {
+      landed = undefined;
+      fade(0, BACK);
+      if (state !== "hidden") backward();
+      return still ? 0 : Math.max(tl.time() / BACK, 0.14 / BACK) * 1000;
+    },
+    kill() {
+      cancelAnimationFrame(queued);
+      tl.kill();
+      gsap.killTweensOf([win, plate, scrim, blob, ...parts]);
+    },
+  };
 }

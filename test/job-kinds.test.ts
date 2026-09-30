@@ -6,7 +6,10 @@ import {
   createUser,
   deleteJobDefinition,
   describeJobKinds,
+  enqueueRun,
   ensureDefaultDefinitions,
+  getJobKind,
+  linkRepo,
   listJobDefinitions,
   registerCoreJobs,
   rollUpUsage,
@@ -32,6 +35,7 @@ describe("core job kinds", () => {
     );
     expect(kinds).toMatchObject({
       "repo.reindex": "heavy",
+      "repos.refresh": "light",
       "source.sync": "light",
       "embeddings.backfill": "heavy",
       "retention.sweep": "light",
@@ -40,10 +44,11 @@ describe("core job kinds", () => {
   });
 
   it("creates default schedules once, and never brings back a deleted one", async () => {
-    expect(await ensureDefaultDefinitions()).toHaveLength(2);
+    expect(await ensureDefaultDefinitions()).toHaveLength(3);
     expect(await ensureDefaultDefinitions()).toEqual([]);
     const defs = await listJobDefinitions();
     expect(defs.map((d) => [d.kind, d.schedule]).sort()).toEqual([
+      ["repos.refresh", "40 2 * * *"],
       ["retention.sweep", "30 3 * * *"],
       ["wiki.gaps", "7 * * * *"],
     ]);
@@ -52,6 +57,42 @@ describe("core job kinds", () => {
       null,
     );
     expect(await ensureDefaultDefinitions()).toEqual([]);
+  });
+});
+
+describe("repos.refresh", () => {
+  it("queues a reindex of each indexed repo that is not already in flight", async () => {
+    await linkRepo({ slug: "busy", url: "https://example.invalid/busy.git" });
+    await linkRepo({ slug: "stale", url: "https://example.invalid/stale.git" });
+    await linkRepo({ slug: "fresh", url: "https://example.invalid/fresh.git" });
+    await sql`
+      update repo_lines set indexed_commit = repeat('a', 40)
+      where repo_id in (select id from repos where slug in ('busy', 'stale'))
+    `;
+    await enqueueRun({
+      kind: "repo.reindex",
+      params: { repo: "busy" },
+      trigger: "manual",
+    });
+    const out = await getJobKind("repos.refresh").run(
+      {
+        runId: "test",
+        requestedBy: null,
+        signal: new AbortController().signal,
+        progress: async () => {},
+        log: () => {},
+        credential: async () => undefined,
+        enqueue: async (kind, params) =>
+          (await enqueueRun({ kind, params, trigger: "event" })) ?? "",
+      },
+      {},
+    );
+    expect(out).toEqual({ queued: 1, skipped: 1, never_indexed: 1 });
+    const runs = await sql`
+      select params->>'repo' as repo from job_runs
+      where kind = 'repo.reindex' order by repo
+    `;
+    expect(runs.map((r) => r.repo)).toEqual(["busy", "stale"]);
   });
 });
 

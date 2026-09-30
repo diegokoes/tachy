@@ -535,6 +535,7 @@
     width="46rem"
     cancelLabel="close"
     bind:element={pickerEl}
+    whenCovered="blur"
     onCancel={() => (open = false)}
   >
     {#snippet barExtra()}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { utcTip } from "../dates.svelte";
   import { fitRows, fitted } from "./fit";
 
   export type Lane = { key: string; label: string; at: string[] };
@@ -47,7 +48,7 @@
           <span
             class="tick"
             style="left: {pos(t)}%"
-            title={new Date(t).toLocaleString()}
+            title={utcTip(t)}
           ></span>
         {/each}
       </span>

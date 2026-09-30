@@ -1,15 +1,51 @@
 <script lang="ts" module>
-  /* Dialogs stack. Escape and Enter reach the topmost one only — two open
-     dialogs answering the same keypress is what forced callers to close one
-     before opening the next. */
-  let depth = $state(0);
-  const take = () => ++depth;
+  import { scrollport } from "../scrollport.svelte";
+
+  /* Dialogs stack. Escape and Enter reach the topmost one only, and only the
+     topmost one is in view: a dialog it covers folds away, or, where the caller
+     asks, stays and sinks into the blur with the app. */
+  const stack = $state<symbol[]>([]);
+
+  /* One lock for the whole stack, taken by the first dialog and handed back by
+     the last, whichever order they close in.
+
+     Both boxes, because the body is not what scrolls here: the view scrolls
+     inside `main`, so locking the body alone left the page running under the
+     dialog. Locking it anyway still matters on the surfaces that do. */
+  let unlock: (() => void) | null = null;
+
+  function enter(id: symbol) {
+    if (!stack.length) {
+      const port = scrollport();
+      const body = document.body.style.overflow;
+      const ported = port?.style.overflow ?? "";
+      document.body.style.overflow = "hidden";
+      if (port) port.style.overflow = "hidden";
+      document.documentElement.toggleAttribute("data-dialog", true);
+      unlock = () => {
+        document.body.style.overflow = body;
+        if (port) port.style.overflow = ported;
+        document.documentElement.toggleAttribute("data-dialog", false);
+      };
+    }
+    stack.push(id);
+  }
+
+  function leave(id: symbol) {
+    const i = stack.indexOf(id);
+    if (i < 0) return;
+    stack.splice(i, 1);
+    if (!stack.length) {
+      unlock?.();
+      unlock = null;
+    }
+  }
 </script>
 
 <script lang="ts">
-  import { onMount, type Snippet } from "svelte";
+  import { onMount, tick, type Snippet } from "svelte";
+  import { unfold, type Unfolding } from "../motion";
   import Scrollbar from "../Scrollbar.svelte";
-  import { scrollport } from "../scrollport.svelte";
   import Scrim from "./Scrim.svelte";
   import { portal } from "./portal";
   import Button from "./Button.svelte";
@@ -26,7 +62,9 @@
     disabled = false,
     width = "34rem",
     element = $bindable(),
+    whenCovered = "hide",
     onConfirm,
+    onOpened,
     onCancel,
     barExtra,
     children,
@@ -49,9 +87,13 @@
     busy?: boolean;
     disabled?: boolean;
     width?: string;
-    /** The dialog window itself, for a caller that has to draw against it. */
+    /** The dialog's visible surface, for a caller that has to draw against it. */
     element?: HTMLElement;
+    /** A dialog opened on top folds this one away, unless it has to stay in view. */
+    whenCovered?: "hide" | "blur";
     onConfirm?: () => void;
+    /** The window has finished unfolding. */
+    onOpened?: () => void;
     onCancel: () => void;
     /** Extra bar actions, left of cancel. */
     barExtra?: Snippet;
@@ -59,12 +101,42 @@
   } = $props();
 
   let win = $state<HTMLElement>();
+  let plate = $state<HTMLElement>();
   $effect(() => {
-    element = win;
+    element = plate;
   });
   let bodyEl = $state<HTMLElement>();
-  let mine = 0;
-  const top = $derived(mine === depth);
+  let bar = $state<HTMLElement>();
+  let content = $state<HTMLElement>();
+  let scrim = $state<HTMLElement>();
+
+  const me = Symbol();
+  const top = $derived(stack.at(-1) === me);
+  const covered = $derived(!top && stack.includes(me));
+
+  let motion: Unfolding | undefined;
+  let released = false;
+  /* Read before the children mount: one that autofocuses its first field
+     would otherwise be what focus goes back to. */
+  const restore = document.activeElement as HTMLElement | null;
+
+  /* Leaves the stack as soon as the close starts, not when the node goes, so
+     the dialog underneath comes back while this one is still folding. Focus
+     waits a tick for that dialog to be interactive again. */
+  function release() {
+    if (released) return;
+    released = true;
+    leave(me);
+    void tick().then(() => {
+      if (restore?.isConnected) restore.focus?.();
+    });
+  }
+
+  function fold(node: HTMLElement) {
+    node.style.pointerEvents = "none";
+    release();
+    return { duration: motion?.close() ?? 0 };
+  }
 
   /* A click is dismissal only when the press also began on the stage. A select
      option that hangs past the dialog's edge closes its panel on pointerdown, so
@@ -82,29 +154,23 @@
     'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
   onMount(() => {
-    mine = take();
-    const restore = document.activeElement as HTMLElement | null;
-    /* One lock for the whole stack: the innermost dialog must not release it
-       on the way out while an outer one is still open.
-
-       Both boxes, because the body is not what scrolls here — the view scrolls
-       inside `main`, so locking the body alone left the page running under the
-       dialog. Locking it anyway still matters on the surfaces that do. */
-    const port = scrollport();
-    const locked = document.body.style.overflow;
-    const lockedPort = port?.style.overflow ?? "";
-    document.body.style.overflow = "hidden";
-    if (port) port.style.overflow = "hidden";
+    enter(me);
+    if (win && plate && bar && content && scrim) {
+      motion = unfold({ win, plate, parts: [bar, content], scrim });
+      motion.open(() => onOpened?.());
+    }
     win?.focus();
 
     return () => {
-      depth--;
-      if (depth === 0) {
-        document.body.style.overflow = locked;
-        if (port) port.style.overflow = lockedPort;
-      }
-      restore?.focus?.();
+      motion?.kill();
+      release();
     };
+  });
+
+  $effect(() => {
+    if (released) return;
+    if (covered) motion?.cover(whenCovered);
+    else motion?.uncover();
   });
 
   function trap(e: KeyboardEvent) {
@@ -147,8 +213,8 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-<div class="over" use:portal>
-  <Scrim onclick={onCancel} soft={!top} />
+<div class="over" use:portal inert={covered} out:fold>
+  <Scrim onclick={onCancel} bind:element={scrim} />
 
   <div
     class="stage"
@@ -168,7 +234,9 @@
       style="width: min({width}, 100%)"
       onclick={(e) => e.stopPropagation()}
     >
-      <div class="bar">
+      <div class="plate" bind:this={plate} aria-hidden="true"></div>
+
+      <div class="bar" bind:this={bar}>
         <div class="side">
           {#if destructive}
             <Button
@@ -216,7 +284,7 @@
         </div>
       </div>
 
-      <div class="content">
+      <div class="content" bind:this={content}>
         <div class="body" bind:this={bodyEl}>{@render children?.()}</div>
         <Scrollbar target={bodyEl} />
       </div>
@@ -244,21 +312,33 @@
      different material laid over the first. One width, always — a dialog that
      shrink-wrapped its content changed shape whenever a section unfolded. */
   .win {
+    position: relative;
+    isolation: isolate;
     display: flex;
     flex-direction: column;
     min-width: 0;
     min-height: 0;
     /* dvh, not vh: a mobile URL bar must not be able to crop the titlebar. */
     max-height: min(calc(100dvh - 2 * var(--pad-4)), 46rem);
+    border: var(--panel-line-w) solid transparent;
+    border-radius: var(--radius);
+  }
+  .win:focus-visible {
+    outline: none;
+  }
+  /* The surface lives on its own layer so the unfold can morph it separately
+     from the contents it sits under. The shadow rides on it, so it takes the
+     blob's shape instead of outlining a window that is not there yet. */
+  .plate {
+    position: absolute;
+    inset: calc(-1 * var(--panel-line-w));
+    z-index: -1;
     background: var(--dialog-bg);
     border: var(--panel-line);
     border-radius: var(--radius);
     box-shadow: 0 8px 30px var(--drop);
   }
-  .win:focus-visible {
-    outline: none;
-  }
-  .win.danger {
+  .win.danger .plate {
     border-color: var(--danger);
   }
 

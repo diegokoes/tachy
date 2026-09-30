@@ -327,10 +327,10 @@
     display: none;
   }
 
-  /* Above the picker's scrim, not under it: the scrim's blur is what puts the
-     app on a plane behind the dialog, and a wire drawn into that plane reads
-     as part of what was pushed back. It has to arrive on top of the blur for
-     the dialog and the tab to look connected.
+  /* Above the picker's scrim and outside the blurred app, not in them: the
+     blur is what puts the app on a plane behind the dialog, and a wire drawn
+     into that plane reads as part of what was pushed back. It has to arrive
+     on top of the blur for the dialog and the tab to look connected.
 
      Portaled to the body for the same reason the dialog is: `.app` opens a
      stacking context, and no z-index inside it can rank above the scrim. At
@@ -345,8 +345,11 @@
     pointer-events: none;
     overflow: visible;
   }
+  /* Under the editor the wire is part of what that dialog pushes back, so it
+     blurs with the picker and the app. */
   .thread.buried {
     z-index: var(--z-overlay);
+    filter: blur(var(--scrim-blur));
   }
 
   .halo {
