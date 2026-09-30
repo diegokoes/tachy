@@ -30,7 +30,7 @@ export type { CodeSearchOptions, ReadCodeOptions } from "./search";
 export { resolveVersion, codeChangesBetween } from "./versions";
 export type { ResolvedVersion, CodeChanges } from "./versions";
 export { repoToken, connectionToken, tokenMaySendTo } from "./token";
-export { reindexInFlight } from "./jobs";
+export { activeReindexes } from "./jobs";
 export {
   RELEASE_TAG_RE,
   releaseMinor,

@@ -150,7 +150,7 @@ export function defineLoadTestJobs() {
     description:
       "Runs one k6 script from load/ against a configured target. Started from the admin page, never by a schedule.",
     params: z.object({ test_run_id: z.string().uuid() }),
-    resourceClass: "heavy",
+    queue: "testing",
     timeout: "45m",
     run: async (ctx, p) => {
       const run = await getTestRun(p.test_run_id);

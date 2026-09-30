@@ -145,9 +145,16 @@ const MESSAGES: Record<string, Message> = {
   },
   "jobs.stuck": {
     tone: "warn",
-    section: "jobs",
+    section: "runs",
     head: (n) => `${plural(n, "run", "runs")} waiting over 15 min for a worker`,
     item: (l) => `${l} is still queued`,
+  },
+  "jobs.no_worker": {
+    tone: "danger",
+    section: "processes",
+    head: (n) =>
+      `${plural(n, "queue", "queues")} with runs waiting and no live worker`,
+    item: (l) => `${l}: no running worker claims from it`,
   },
 
   "system.not_ready": {

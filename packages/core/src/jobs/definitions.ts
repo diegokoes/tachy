@@ -2,7 +2,8 @@ import { Cron } from "croner";
 import {
   JOB_NOTIFY,
   JOB_OVERLAP,
-  JOB_RESOURCE_CLASSES,
+  JOB_QUEUE_NAMES,
+  jobQueue,
   parseDuration,
   type JobDefinition,
 } from "@tachy/contract";
@@ -20,7 +21,10 @@ export const jobDefinitionInput = z.object({
   enabled: z.boolean().default(true),
   schedule: z.string().nullable().default(null),
   timezone: z.string().default("UTC"),
-  resource_class: z.enum(JOB_RESOURCE_CLASSES).nullable().default(null),
+  queue: z
+    .enum(JOB_QUEUE_NAMES as [string, ...string[]])
+    .nullable()
+    .default(null),
   timeout: z.string().nullable().default(null),
   overlap: z.enum(JOB_OVERLAP).nullable().default(null),
   notify: z.enum(JOB_NOTIFY).default("failure"),
@@ -70,8 +74,12 @@ export function previewSchedule(
     .map((d) => d.toISOString());
 }
 
-const COLUMNS = sql`id, kind, name, params, enabled, schedule, timezone, resource_class,
+const COLUMNS = sql`id, kind, name, params, enabled, schedule, timezone, queue,
   timeout, overlap, notify, last_scheduled_for, disabled_reason, created_at, updated_at`;
+
+/** Written beside `queue` so the previous release, which reads only the class, still routes the run. */
+const classOf = (queue: string | null) =>
+  queue ? jobQueue(queue).class : null;
 
 export async function listJobDefinitions(): Promise<JobDefinition[]> {
   return (await sql`select ${COLUMNS} from job_definitions order by name`) as never;
@@ -111,9 +119,10 @@ export async function createJobDefinition(
   return sql.begin(async (tx) => {
     const [row] = await tx`
       insert into job_definitions (kind, name, params, enabled, schedule, timezone,
-        resource_class, timeout, overlap, notify, created_by, updated_by, last_scheduled_for)
+        queue, resource_class, timeout, overlap, notify, created_by, updated_by, last_scheduled_for)
       values (${d.kind}, ${d.name}, ${jsonb(d.params)}, ${d.enabled}, ${d.schedule},
-        ${d.timezone}, ${d.resource_class}, ${d.timeout}, ${d.overlap}, ${d.notify}, ${by}, ${by}, now())
+        ${d.timezone}, ${d.queue}, ${classOf(d.queue)}, ${d.timeout}, ${d.overlap}, ${d.notify},
+        ${by}, ${by}, now())
       on conflict (name) do nothing
       returning ${COLUMNS}
     `;
@@ -149,7 +158,8 @@ export async function updateJobDefinition(
       update job_definitions set
         kind = ${merged.kind}, name = ${merged.name}, params = ${jsonb(merged.params)},
         enabled = ${merged.enabled}, schedule = ${merged.schedule}, timezone = ${merged.timezone},
-        resource_class = ${merged.resource_class}, timeout = ${merged.timeout},
+        queue = ${merged.queue}, resource_class = ${classOf(merged.queue)},
+        timeout = ${merged.timeout},
         overlap = ${merged.overlap}, notify = ${merged.notify},
         disabled_reason = ${merged.enabled ? null : disabled_reason},
         last_scheduled_for = ${scheduleChanged ? sql`now()` : sql`last_scheduled_for`},

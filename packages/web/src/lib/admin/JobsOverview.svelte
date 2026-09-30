@@ -10,11 +10,14 @@
     type Bar,
     type Col,
   } from "../tui";
-  import { duration, pct, ratio, type Tone } from "./overview";
+  import { duration, pct, ratio, showSection, type Tone } from "./overview";
   import { jobs as census } from "./jobCensus.svelte";
+  import { followLive, live } from "./jobLive.svelte";
   import Dials from "./Dials.svelte";
   import Overview from "./Overview.svelte";
   import Tile from "./Tile.svelte";
+
+  followLive(5_000);
 
   let from = $state(new Date());
   onMount(async () => {
@@ -25,6 +28,13 @@
   const j = $derived(census.data);
   const failed = $derived(j.by_status.failed + j.by_status.timed_out);
   const running = $derived(j.now.light.running + j.now.heavy.running);
+
+  const aliveWorkers = $derived(
+    live.data.workers.filter((w) => w.alive).length,
+  );
+  const unserved = $derived(
+    live.data.queues.filter((q) => q.queued && !q.workers).length,
+  );
 
   /* Jobs, not runs, where the two differ. The success rings already carry the
      run totals per pool, so a "runs 14 d" counter and a "light: 46 runs"
@@ -85,7 +95,37 @@
       title: `${j.now.light.queued + j.now.heavy.queued} queued`,
       to: "runs",
     },
+    {
+      key: "workers",
+      label: "workers",
+      value: aliveWorkers,
+      tone: unserved ? ("danger" as const) : undefined,
+      title: unserved
+        ? `${unserved} ${unserved === 1 ? "queue has" : "queues have"} runs waiting and no live worker`
+        : `${aliveWorkers} live, ${live.data.workers.reduce((n, w) => n + (w.alive ? w.concurrency : 0), 0)} slots`,
+      to: "processes",
+    },
   ]);
+
+  const queues = $derived(
+    live.data.queues.map((q): Bar => ({
+      key: q.name,
+      label: q.name,
+      value: q.running + q.queued,
+      tone: q.queued && !q.workers ? "danger" : undefined,
+      parts: [
+        { key: "running", value: q.running, tone: "accent" },
+        {
+          key: "queued",
+          value: q.queued,
+          tone: q.queued && !q.workers ? "danger" : "muted",
+        },
+      ],
+    })),
+  );
+  const backlog = $derived(
+    live.data.queues.reduce((n, q) => n + q.running + q.queued, 0),
+  );
 
   const OUTCOMES = [
     { key: "succeeded", label: "succeeded", tone: "ok" },
@@ -173,7 +213,7 @@
   const firings = $derived(lanes.reduce((n, l) => n + l.at.length, 0));
 </script>
 
-<Overview {figures} loading={census.loading} error={census.error}>
+<Overview {figures} loading={census.loading} error={census.error} cols={4}>
   <Tile
     title="runs"
     meta={`${compact(shownRuns)} · ${perDay.length} d`}
@@ -187,6 +227,15 @@
     <Dials items={success} />
   </Tile>
 
+  <Tile title="queues" meta={compact(backlog)} empty={!backlog}>
+    <Bars
+      rows={queues}
+      format={compact}
+      fit
+      onpick={() => showSection("processes")}
+    />
+  </Tile>
+
   <Tile title="runs by kind" meta="{j.days} d" empty={!byKind.length}>
     <Bars rows={byKind} format={compact} fit />
   </Tile>
@@ -195,7 +244,7 @@
     <Bars rows={byDuration} format={duration} sum={false} fit />
   </Tile>
 
-  <Tile title="next 24 h" meta={`${firings}`} empty={!lanes.length}>
+  <Tile title="next 24 h" meta={`${firings}`} empty={!lanes.length} span={2}>
     <Timeline {lanes} {from} />
   </Tile>
 </Overview>

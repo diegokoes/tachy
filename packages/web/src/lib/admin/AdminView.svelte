@@ -34,6 +34,7 @@
   import SystemPanel from "./SystemPanel.svelte";
   import JobsPanel from "./JobsPanel.svelte";
   import RunsPanel from "./RunsPanel.svelte";
+  import WorkersPanel from "./WorkersPanel.svelte";
   import JobFailuresPanel from "./JobFailuresPanel.svelte";
   import RuntimePanel from "./RuntimePanel.svelte";
   import JobsOverview from "./JobsOverview.svelte";
@@ -172,6 +173,12 @@
     ],
     workers: [
       { key: "runs", label: "runs", view: RunsPanel, show: admin },
+      {
+        key: "processes",
+        label: "workers",
+        view: WorkersPanel,
+        show: admin,
+      },
       { key: "jobs", label: "jobs", view: JobsPanel, show: admin },
       {
         key: "failures",

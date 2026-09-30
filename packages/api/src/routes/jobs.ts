@@ -3,6 +3,8 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   JOB_CLASS_CHAT_SLOTS,
+  JOB_QUEUES,
+  JOB_QUEUE_NAMES,
   JOB_STATUSES,
   JOB_TRIGGERS,
   badInput,
@@ -15,6 +17,7 @@ import {
   getJobDefinition,
   getJobRun,
   jobCensus,
+  jobLive,
   jobDefinitionInput,
   listJobDefinitionChanges,
   listJobDefinitions,
@@ -44,10 +47,13 @@ export const jobs = new Hono()
       kinds: describeJobKinds(),
       chat_slot_cap: settings.agent_slot_cap.value,
       class_chat_slots: JOB_CLASS_CHAT_SLOTS,
+      queues: JOB_QUEUES,
     });
   })
 
   .get("/census", async (c) => c.json(await jobCensus(14)))
+
+  .get("/live", async (c) => c.json(await jobLive()))
 
   .post("/schedule-preview", zValidator("json", previewSchema), async (c) => {
     const { schedule, timezone } = c.req.valid("json");
@@ -125,8 +131,10 @@ export const jobs = new Hono()
       "query",
       z.object({
         definition_id: z.string().uuid().optional(),
+        parent_id: z.string().uuid().optional(),
         status: z.enum(JOB_STATUSES).optional(),
         kind: z.string().min(1).optional(),
+        queue: z.enum(JOB_QUEUE_NAMES as [string, ...string[]]).optional(),
         trigger: z.enum(JOB_TRIGGERS).optional(),
         active: z
           .enum(["true", "false"])
@@ -141,8 +149,10 @@ export const jobs = new Hono()
       return c.json(
         await listJobRuns({
           definitionId: q.definition_id,
+          parentId: q.parent_id,
           status: q.status,
           kind: q.kind,
+          queue: q.queue,
           trigger: q.trigger,
           active: q.active,
           before: q.before,

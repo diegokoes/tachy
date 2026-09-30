@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { badInput } from "../infra/errors";
 import {
+  jobQueue,
   parseDuration,
   type JobMissed,
   type JobOverlap,
-  type JobResourceClass,
+  type JobQueueName,
 } from "@tachy/contract";
 
 export interface JobContext {
@@ -17,7 +18,11 @@ export interface JobContext {
   /** Goes to the container log with the run id, and to the run's log tail. */
   log(message: string, fields?: Record<string, unknown>): void;
   credential(name: string): Promise<string | undefined>;
-  enqueue(kind: string, params: unknown): Promise<string>;
+  /**
+   * Queues a run as this run's child, at this run's priority. Null when the
+   * kind's dedupe key already has a run queued or going.
+   */
+  enqueue(kind: string, params: unknown): Promise<string | null>;
 }
 
 export interface JobKind<P extends z.ZodType = z.ZodType> {
@@ -28,7 +33,12 @@ export interface JobKind<P extends z.ZodType = z.ZodType> {
   /** A source type whose connections the admin form offers as a picker. */
   connection?: string;
   defaultSchedule?: string;
-  resourceClass: JobResourceClass;
+  queue: JobQueueName;
+  /**
+   * Runs sharing a key never overlap: queueing one while another is queued or
+   * going hands back the existing run instead.
+   */
+  dedupeKey?: (params: z.infer<P>) => string;
   overlap: JobOverlap;
   missed: JobMissed;
   timeout: string;
@@ -46,22 +56,18 @@ const kinds = new Map<string, JobKind>();
  * schedule and parameterise it. The UI never uploads or runs code.
  */
 export function defineJob<P extends z.ZodType>(
-  kind: Omit<
-    JobKind<P>,
-    "overlap" | "missed" | "maxAttempts" | "resourceClass"
-  > &
-    Partial<
-      Pick<JobKind<P>, "overlap" | "missed" | "maxAttempts" | "resourceClass">
-    >,
+  kind: Omit<JobKind<P>, "overlap" | "missed" | "maxAttempts" | "queue"> &
+    Partial<Pick<JobKind<P>, "overlap" | "missed" | "maxAttempts" | "queue">>,
 ): JobKind<P> {
   parseDuration(kind.timeout);
   const full: JobKind<P> = {
     overlap: "skip",
     missed: "run-once",
     maxAttempts: 1,
-    resourceClass: "light",
+    queue: "maintenance",
     ...kind,
   };
+  jobQueue(full.queue);
   kinds.set(full.kind, full as unknown as JobKind);
   return full;
 }
@@ -84,7 +90,8 @@ export function describeJobKinds() {
       description: k.description ?? null,
       connection: k.connection ?? null,
       default_schedule: k.defaultSchedule ?? null,
-      resource_class: k.resourceClass,
+      queue: k.queue,
+      resource_class: jobQueue(k.queue).class,
       overlap: k.overlap,
       missed: k.missed,
       timeout: k.timeout,

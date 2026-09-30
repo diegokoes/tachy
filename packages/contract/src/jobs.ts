@@ -20,6 +20,71 @@ export const JOB_OVERLAP = ["skip", "queue"] as const;
 export const JOB_MISSED = ["run-once", "skip"] as const;
 export const JOB_NOTIFY = ["failure", "always", "never"] as const;
 
+/**
+ * Lanes of work. A queue is a routing label, not a process: every worker of a
+ * queue's class serves it unless told to serve named queues only, so adding
+ * one costs nothing until a pool is sized for it. `cap` bounds how many of
+ * its runs go at once across all workers; null leaves that to pool sizes.
+ */
+export const JOB_QUEUES = [
+  {
+    name: "index",
+    class: "heavy",
+    cap: 1,
+    description: "Repository indexing: fetch, diff and embed code.",
+  },
+  {
+    name: "embed",
+    class: "heavy",
+    cap: 1,
+    description: "Embedding backfills over stored knowledge and code.",
+  },
+  {
+    name: "testing",
+    class: "heavy",
+    cap: 1,
+    description: "Load tests against a named target.",
+  },
+  {
+    name: "sync",
+    class: "light",
+    cap: 2,
+    description: "Pulls from source connections.",
+  },
+  {
+    name: "maintenance",
+    class: "light",
+    cap: null,
+    description: "Short housekeeping: sweeps, refreshes, gap finding.",
+  },
+] as const satisfies readonly JobQueue[];
+
+export interface JobQueue {
+  name: string;
+  class: JobResourceClass;
+  cap: number | null;
+  description: string;
+}
+
+export const JOB_QUEUE_NAMES = JOB_QUEUES.map((q) => q.name);
+
+export function jobQueue(name: string): JobQueue {
+  const q = JOB_QUEUES.find((x) => x.name === name);
+  if (!q) throw new Error(`unknown job queue '${name}'`);
+  return q;
+}
+
+/**
+ * Claim order within a queue, highest first. Someone waiting on a button beats
+ * work a run fanned out, which beats a schedule; a run queued by another run
+ * takes its parent's priority instead.
+ */
+export const JOB_PRIORITY: Record<JobTrigger, number> = {
+  manual: 10,
+  event: 5,
+  schedule: 0,
+};
+
 /** Chat slots a running job of each class holds (§5.3.4). */
 export const JOB_CLASS_CHAT_SLOTS: Record<JobResourceClass, number> = {
   light: 0,
@@ -32,6 +97,7 @@ export type JobResourceClass = (typeof JOB_RESOURCE_CLASSES)[number];
 export type JobOverlap = (typeof JOB_OVERLAP)[number];
 export type JobMissed = (typeof JOB_MISSED)[number];
 export type JobNotify = (typeof JOB_NOTIFY)[number];
+export type JobQueueName = (typeof JOB_QUEUES)[number]["name"];
 
 export const JOB_FINISHED: readonly JobStatus[] = [
   "succeeded",
@@ -106,6 +172,12 @@ export interface JobRun {
   kind: string;
   params: Record<string, unknown>;
   resource_class: JobResourceClass;
+  /** Null on runs queued before queues existed; those are claimed by class. */
+  queue: JobQueueName | null;
+  priority: number;
+  dedupe_key: string | null;
+  /** The run that queued this one, for work a run fans out. */
+  parent_id: string | null;
   trigger: JobTrigger;
   scheduled_for: string | null;
   requested_by: string | null;
@@ -131,6 +203,14 @@ export interface JobRun {
 export interface JobRunListed extends JobRun {
   definition_name: string | null;
   requested_by_name: string | null;
+  /** How the runs this one queued are doing; null when it queued none. */
+  children: {
+    total: number;
+    queued: number;
+    running: number;
+    succeeded: number;
+    failed: number;
+  } | null;
 }
 
 export interface JobDefinition {
@@ -141,7 +221,7 @@ export interface JobDefinition {
   enabled: boolean;
   schedule: string | null;
   timezone: string;
-  resource_class: JobResourceClass | null;
+  queue: JobQueueName | null;
   timeout: string | null;
   overlap: JobOverlap | null;
   notify: JobNotify;
@@ -149,4 +229,47 @@ export interface JobDefinition {
   disabled_reason: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** A job worker process, as it last reported itself. */
+export interface JobWorkerRow {
+  id: string;
+  host: string;
+  pid: number;
+  classes: JobResourceClass[];
+  queues: JobQueueName[];
+  concurrency: number;
+  /** Slots per class within `concurrency`, where the process limits them. */
+  per_class: Partial<Record<JobResourceClass, number>>;
+  draining: boolean;
+  started_at: string;
+  last_seen_at: string;
+  /** Seen within the last minute. A dead worker stays listed a while. */
+  alive: boolean;
+  runs: {
+    id: string;
+    kind: string;
+    queue: JobQueueName | null;
+    params: Record<string, unknown>;
+    definition_name: string | null;
+    progress: number | null;
+    progress_note: string | null;
+    started_at: string;
+  }[];
+}
+
+/** What the workers page follows live. */
+export interface JobLive {
+  workers: JobWorkerRow[];
+  queues: {
+    name: JobQueueName;
+    class: JobResourceClass;
+    cap: number | null;
+    queued: number;
+    running: number;
+    oldest_queued_at: string | null;
+    /** Live workers that claim from this queue, and the slots they bring. */
+    workers: number;
+    slots: number;
+  }[];
 }
