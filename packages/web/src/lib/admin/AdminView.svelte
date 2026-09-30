@@ -47,7 +47,7 @@
   import HostPanel from "./HostPanel.svelte";
   import ChecksPanel from "./ChecksPanel.svelte";
   import LoadsPanel from "./LoadsPanel.svelte";
-  import TicketFormsPanel from "./TicketFormsPanel.svelte";
+  import FlowsPanel from "../flows/FlowsPanel.svelte";
 
   type Section = Omit<PageSection, "count" | "tone"> & {
     /** Which census key counts this section. Omitted for a section with nothing to count. */
@@ -83,7 +83,7 @@
       {
         key: "forms",
         label: "ticket forms",
-        view: TicketFormsPanel,
+        view: FlowsPanel,
         fill: true,
       },
     ],
