@@ -43,8 +43,20 @@
       key: "agent",
       label: "agent",
       icon: "agent",
-      left: [{ label: "model", view: Agent }],
-      right: [{ label: "keys", view: Credentials }],
+      left: [
+        {
+          label: "runtime",
+          hint: "Each setting follows your team, then your org, until you pick your own.",
+          view: Agent,
+        },
+      ],
+      right: [
+        {
+          label: "keys",
+          hint: "Stored encrypted. A shared key answers until you paste your own.",
+          view: Credentials,
+        },
+      ],
     },
   ];
 
