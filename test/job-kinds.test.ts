@@ -62,8 +62,8 @@ describe("retention", () => {
       await sql`insert into knowledge_entries (status, issue_summary) values ('approved', 'x') returning id`;
     await sql`
       insert into library_views (knowledge_entry_id, user_id, day, views) values
-        (${e.id}, ${u.id}, current_date - interval '15 months', 2),
-        (${e.id}, null, current_date - interval '15 months' + interval '1 day', 3),
+        (${e.id}, ${u.id}, date_trunc('month', current_date) - interval '15 months', 2),
+        (${e.id}, null, date_trunc('month', current_date) - interval '15 months' + interval '1 day', 3),
         (${e.id}, ${u.id}, current_date, 1)
     `;
     await sql`
