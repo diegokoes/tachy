@@ -1,21 +1,30 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { G } from "../tui";
+  import { G, Icon, type IconName } from "../tui";
 
   let {
     label,
     hint,
+    icon,
     children,
-  }: { label: string; hint?: string; children: Snippet } = $props();
+  }: {
+    label: string;
+    hint?: string;
+    /** Drawn in the marker's place. */
+    icon?: IconName;
+    children: Snippet;
+  } = $props();
 </script>
 
 <!-- The admin section heading, unpinned: a settings tab is short enough that
      a heading which sticks would only ever cover the rows under it. The body
      is indented past the marker so its rows start under the heading's word,
      and runs to the end of the rule so their controls end under it. -->
-<section>
+<section style:--mark-w={icon ? "1em" : undefined}>
   <h2 class="head">
-    <span class="mark" aria-hidden="true">{G.marker}</span>
+    <span class="mark" aria-hidden="true"
+      >{#if icon}<Icon name={icon} size="1em" />{:else}{G.marker}{/if}</span
+    >
     <span class="lbl">{label}</span>
     <span class="rule" aria-hidden="true"></span>
   </h2>
@@ -41,6 +50,7 @@
     letter-spacing: var(--label-spacing);
   }
   .mark {
+    display: inline-flex;
     flex: none;
     width: var(--mark-w);
     font-family: var(--font-mono);

@@ -1,15 +1,22 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import { tip } from "../tui";
 
   let {
     label,
     hint,
+    about,
+    mark,
     children,
     actions,
   }: {
     label: string;
     /** Sits under the label. */
     hint?: string;
+    /** Said on hover over the label, for what would crowd it as a hint. */
+    about?: string;
+    /** A badge set after the label, on its line. */
+    mark?: Snippet;
     children: Snippet;
     /** Reset marks, source notes: whatever qualifies the control, set just
      *  ahead of it so the control itself keeps the right edge. */
@@ -23,7 +30,13 @@
      still flush right. -->
 <div class="row">
   <div class="k">
-    <span class="name">{label}</span>
+    {#if mark}
+      <span class="line">
+        <span class="name" use:tip={about}>{label}</span>{@render mark()}
+      </span>
+    {:else}
+      <span class="name" use:tip={about}>{label}</span>
+    {/if}
     {#if hint}<span class="hint">{hint}</span>{/if}
   </div>
   <div class="end">
@@ -49,6 +62,12 @@
     gap: 2px;
     flex: 1 0 7rem;
     min-width: 0;
+  }
+  .line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--pad-2);
   }
   .name {
     font-size: var(--fs-xs);
