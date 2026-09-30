@@ -52,8 +52,10 @@ describe("seed", () => {
     const bookkeeping = new Set(["schema_meta", "chat_uploads", "test_runs"]);
     // Superseded by repo_line_files and code_blob_chunks; nothing reads them.
     const superseded = new Set(["repo_files", "code_chunks"]);
+    // Worker processes write themselves; a seeded one would show as a dead worker.
+    const live = new Set(["job_workers"]);
     for (const t of await tables()) {
-      if (bookkeeping.has(t) || superseded.has(t)) continue;
+      if (bookkeeping.has(t) || superseded.has(t) || live.has(t)) continue;
       const [{ n }] = await sql.unsafe<{ n: string }[]>(
         `select count(*)::text as n from ${t}`,
       );

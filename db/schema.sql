@@ -1168,6 +1168,23 @@ create index job_runs_running_idx on job_runs(locked_until) where status = 'runn
 create index job_runs_definition_idx on job_runs(definition_id, created_at desc);
 create index job_runs_created_idx on job_runs(created_at);
 
+-- Job worker processes, by their own heartbeat. A row stops being refreshed
+-- when its process dies, and the reaper removes it a while after.
+create table job_workers (
+    id            text primary key,
+    host          text not null,
+    pid           integer not null,
+    classes       text[] not null,
+    -- The queues it claims from: the ones it was told to serve, else every
+    -- queue of its classes.
+    queues        text[] not null,
+    concurrency   integer not null,
+    per_class     jsonb not null default '{}'::jsonb,
+    draining      boolean not null default false,
+    started_at    timestamptz not null default now(),
+    last_seen_at  timestamptz not null default now()
+);
+
 -- Who changed a definition and how: a schedule edit can silently stop a sync.
 create table job_definition_changes (
     id             uuid primary key default gen_random_uuid(),

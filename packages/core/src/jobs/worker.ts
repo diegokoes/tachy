@@ -16,6 +16,13 @@ import {
   type JobRun,
 } from "./runs";
 import { scheduleDueRuns } from "./scheduler";
+import {
+  beatWorker,
+  markWorkerDraining,
+  pruneWorkers,
+  retireWorker,
+  type WorkerCard,
+} from "./roster";
 
 export interface JobWorkerOptions {
   classes: string[];
@@ -31,6 +38,8 @@ export interface JobWorkerOptions {
   leaseMs?: number;
   pollMs?: number;
   scheduleMs?: number;
+  /** How often the worker reports itself alive in job_workers. */
+  beatMs?: number;
   /** How long a cancelled or timed-out run gets to notice its signal. */
   graceMs?: number;
   /** Called with a run that ended for good, e.g. to notify Teams. */
@@ -59,6 +68,21 @@ export async function startJobWorker(
   const running = new Map<string, { cls: string; done: Promise<void> }>();
   let draining = false;
   let ticking = false;
+
+  const card: WorkerCard = {
+    id: workerId,
+    host: hostname(),
+    pid: process.pid,
+    classes: opts.classes,
+    queues: opts.queues,
+    concurrency: opts.concurrency,
+    perClass: opts.perClass,
+  };
+  const report = () =>
+    beatWorker(card).catch((err) =>
+      log("warn", "job_worker_beat_failed", { error: String(err) }),
+    );
+  await report();
 
   const disabled = await disableInvalidDefinitions();
   if (disabled.length)
@@ -229,7 +253,11 @@ export async function startJobWorker(
     reapExpiredRuns()
       .then((n) => n && log("warn", "job_runs_reaped", { count: n }))
       .catch((err) => log("error", "job_reap_failed", { error: String(err) }));
+    pruneWorkers().catch((err) =>
+      log("error", "job_workers_prune_failed", { error: String(err) }),
+    );
   }, opts.scheduleMs ?? 30_000);
+  const alive = setInterval(() => void report(), opts.beatMs ?? 15_000);
   void tick();
   log("info", "job_worker_started", {
     worker: workerId,
@@ -246,11 +274,14 @@ export async function startJobWorker(
       draining = true;
       clearInterval(poll);
       clearInterval(schedule);
+      clearInterval(alive);
+      await markWorkerDraining(workerId).catch(() => {});
       await listener.unlisten().catch(() => {});
       await Promise.race([
         Promise.allSettled([...running.values()].map((r) => r.done)),
         new Promise((r) => setTimeout(r, waitMs)),
       ]);
+      await retireWorker(workerId).catch(() => {});
     },
   };
 }

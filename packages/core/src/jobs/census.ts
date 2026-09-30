@@ -12,6 +12,7 @@ import {
 import { sql } from "../infra/db";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { hasJobKind, getJobKind } from "./registry";
+import { unservedQueues } from "./roster";
 import type { JobCensus } from "@tachy/contract";
 
 export type { JobCensus };
@@ -204,9 +205,17 @@ export async function jobIssues(): Promise<Record<string, IssueList>> {
     where r.status = 'queued' and r.run_after < now() - interval '15 minutes'
     order by r.created_at limit ${ISSUE_ITEMS}
   `;
+  const unserved = await unservedQueues();
   return {
     "jobs.failing": issueList(failing),
     "jobs.disabled": issueList(disabled),
     "jobs.stuck": issueList(stuck),
+    "jobs.no_worker": {
+      n: unserved.length,
+      items: unserved.map((q) => ({
+        key: q.queue,
+        label: `${q.queue} (${q.queued} queued)`,
+      })),
+    },
   };
 }

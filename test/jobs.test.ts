@@ -4,7 +4,9 @@ import {
   cancelRun,
   claimRun,
   inFlightRun,
+  jobLive,
   listJobRuns,
+  pruneWorkers,
   createJobDefinition,
   defineJob,
   describeJobKinds,
@@ -407,6 +409,76 @@ describe("queues", () => {
     } finally {
       await worker.drain(1_000);
     }
+  });
+});
+
+describe("the worker roster", () => {
+  it("lists a live worker with its queues and the run it holds, and forgets it on drain", async () => {
+    const worker = await startJobWorker({
+      classes: ["heavy"],
+      concurrency: 1,
+      pollMs: 100,
+      scheduleMs: 60_000,
+    });
+    try {
+      const id = (await enqueueRun({
+        kind: "test.index",
+        params: { key: "a" },
+        trigger: "manual",
+      }))!;
+      await enqueueRun({ kind: "test.slow", params: {}, trigger: "manual" });
+      let live = await jobLive();
+      for (let i = 0; i < 50 && !live.workers[0]?.runs.length; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        live = await jobLive();
+      }
+      expect(live.workers).toHaveLength(1);
+      expect(live.workers[0]).toMatchObject({
+        classes: ["heavy"],
+        queues: ["index", "embed", "testing"],
+        concurrency: 1,
+        alive: true,
+        draining: false,
+        runs: [{ id, kind: "test.index", queue: "index" }],
+      });
+      const byName = Object.fromEntries(live.queues.map((q) => [q.name, q]));
+      expect(byName.index).toMatchObject({
+        running: 1,
+        queued: 0,
+        workers: 1,
+        slots: 1,
+      });
+      expect(byName.embed).toMatchObject({ running: 0, queued: 1, workers: 1 });
+      expect(byName.sync).toMatchObject({ workers: 0, slots: 0 });
+      await cancelRun(id);
+    } finally {
+      await worker.drain(1_000);
+    }
+    expect((await jobLive()).workers).toEqual([]);
+  });
+
+  it("marks a silent worker gone, prunes it later, and flags queues nobody serves", async () => {
+    await sql`
+      insert into job_workers (id, host, pid, classes, queues, concurrency, last_seen_at)
+      values ('quiet', 'h', 1, '{light}', '{sync,maintenance}', 2, now() - interval '5 minutes'),
+             ('dead', 'h', 2, '{heavy}', '{index}', 1, now() - interval '1 hour')
+    `;
+    await enqueueRun({ kind: "test.echo", params: {}, trigger: "manual" });
+    const live = await jobLive();
+    expect(live.workers.map((w) => [w.id, w.alive])).toEqual([
+      ["dead", false],
+      ["quiet", false],
+    ]);
+    expect(live.queues.find((q) => q.name === "maintenance")).toMatchObject({
+      queued: 1,
+      workers: 0,
+    });
+    expect((await jobIssues())["jobs.no_worker"]).toEqual({
+      n: 1,
+      items: [{ key: "maintenance", label: "maintenance (1 queued)" }],
+    });
+    expect(await pruneWorkers()).toBe(1);
+    expect((await jobLive()).workers.map((w) => w.id)).toEqual(["quiet"]);
   });
 });
 

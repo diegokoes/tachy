@@ -506,6 +506,11 @@ defineJob({
     "index" queue one reindex and the second gets the first's id back.
 - **`job_definition_changes`:** who changed what, old and new values. A
   schedule edit can silently stop a sync, so every change is recorded.
+- **`job_workers`:** each worker process as it reports itself every 15 s: host,
+  pid, classes, the queues it claims from, slots. One unseen for a minute shows
+  as gone; the reaper forgets it after 15 minutes. The workers page lists them
+  with the runs each holds (`job_runs.locked_by`), and a queue with runs waiting
+  and no live worker is raised as an issue.
 
 #### 5.3.3 Triggers
 
