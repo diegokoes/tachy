@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fmtDate } from "../dates.svelte";
   import { onMount } from "svelte";
   import { api } from "../api";
   import { createResource } from "../resource.svelte";
@@ -85,7 +86,7 @@
 
   const reads = $derived(
     library.per_day.map(
-      (d): Col => ({ key: d.day, label: dayOfMonth(d.day), title: d.day, value: d.reads }),
+      (d): Col => ({ key: d.day, label: dayOfMonth(d.day), title: fmtDate(d.day), value: d.reads }),
     ),
   );
   const readTotal = $derived(reads.reduce((n, d) => n + d.value, 0));
@@ -101,7 +102,7 @@
       (d): Col => ({
         key: d.day,
         label: dayOfMonth(d.day),
-        title: d.day,
+        title: fmtDate(d.day),
         value: d.people + d.agent + d.ingest,
         parts: EDITORS.map((e) => ({ key: e.key, value: d[e.key], tone: e.tone })),
       }),

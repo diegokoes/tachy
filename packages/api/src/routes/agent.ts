@@ -11,6 +11,7 @@ import {
   recordRun,
   env,
   effectiveSettings,
+  dateFormatOf,
   getUserByEmail,
   userSoleTeamId,
   getArtifact,
@@ -121,18 +122,23 @@ export const agent = new Hono()
         409,
       );
 
-    let artifact: Awaited<ReturnType<typeof getArtifact>> | undefined;
-    if (artifactId) {
-      const user = userEmail ? await getUserByEmail(userEmail) : null;
-      const ctx: ScopeContext = user
-        ? {
-            userId: user.id,
-            teamId: (await userSoleTeamId(user.id)) ?? undefined,
-          }
-        : {};
-      artifact = await getArtifact(artifactId, ctx);
-    }
-    const prompt = buildPrompt({ message, uploadPaths, artifact, command });
+    const user = userEmail ? await getUserByEmail(userEmail) : null;
+    const ctx: ScopeContext = user
+      ? {
+          userId: user.id,
+          teamId: (await userSoleTeamId(user.id)) ?? undefined,
+        }
+      : {};
+    const artifact = artifactId
+      ? await getArtifact(artifactId, ctx)
+      : undefined;
+    const prompt = buildPrompt({
+      message,
+      uploadPaths,
+      artifact,
+      command,
+      dateFormat: user ? await dateFormatOf(ctx) : undefined,
+    });
 
     const autoApprove = turnAutoApprove(command?.name, artifact?.spec);
 
@@ -148,7 +154,6 @@ export const agent = new Hono()
       systemPrompt: await systemPrompt(),
       ...(autoApprove.length ? { autoApprove } : {}),
     };
-    const user = userEmail ? await getUserByEmail(userEmail) : null;
 
     if (activeByUser.has(userKey))
       return c.json(

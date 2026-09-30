@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { utcTip } from "../dates.svelte";
   import { onDestroy, onMount } from "svelte";
   import { api } from "../api";
   import { navigate } from "../router.svelte";
@@ -66,7 +67,7 @@
     if (!x?.at) return { text: "none", tone: "danger" };
     const text = age(x.at, now) ?? "–";
     if (x.ok === false) return { text, tone: "danger", title: x.error ?? x.problems };
-    return { text, tone: now - Date.parse(x.at) > overdue ? "warn" : "ok", title: x.at };
+    return { text, tone: now - Date.parse(x.at) > overdue ? "warn" : "ok", title: utcTip(x.at) };
   };
 
   const disk = $derived.by(() => {
@@ -371,7 +372,7 @@
         ? {
             key: b.at!,
             label: dayOfMonth(b.at!),
-            title: `${b.at} · failed: ${b.error ?? ""}`,
+            title: `${utcTip(b.at)} · failed: ${b.error ?? ""}`,
             value: top,
             text: "fail",
             tone: "danger",
@@ -379,7 +380,7 @@
         : {
             key: b.at!,
             label: dayOfMonth(b.at!),
-            title: `${b.at} · ${bytes(b.dump_bytes ?? 0)}`,
+            title: `${utcTip(b.at)} · ${bytes(b.dump_bytes ?? 0)}`,
             value: (b.dump_bytes ?? 0) / 2 ** 20,
           },
     );
@@ -395,7 +396,7 @@
         ({ t, p95 }): Col => ({
           key: t.id,
           label: dayOfMonth(t.created_at),
-          title: `${t.script}${t.profile ? ` (${t.profile})` : ""} · ${t.target} · ${t.status} · ${new Date(t.created_at).toLocaleString()}`,
+          title: `${t.script}${t.profile ? ` (${t.profile})` : ""} · ${t.target} · ${t.status} · ${utcTip(t.created_at)}`,
           value: p95 ?? 0,
           tone: t.status === "passed" ? "ok" : t.status === "failed" || t.status === "error" ? "danger" : "muted",
         }),

@@ -1,5 +1,11 @@
 import { strToU8, zipSync } from "fflate";
-import { columnHeading, sheetName } from "@tachy/contract";
+import {
+  columnHeading,
+  DEFAULT_DATE_FORMAT,
+  excelDateTimeFormat,
+  sheetName,
+  type DateFormat,
+} from "@tachy/contract";
 import type { CellValue, TableColumn } from "./table";
 
 export { sheetName };
@@ -78,12 +84,14 @@ const ROOT_RELS = `${XML_HEADER}<Relationships xmlns="${PKG_REL_NS}"><Relationsh
 
 const WORKBOOK_RELS = `${XML_HEADER}<Relationships xmlns="${PKG_REL_NS}"><Relationship Id="rId1" Type="${REL_NS}/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="${REL_NS}/styles" Target="styles.xml"/></Relationships>`;
 
-const STYLES = `${XML_HEADER}<styleSheet xmlns="${MAIN_NS}"><numFmts count="1"><numFmt numFmtId="164" formatCode="yyyy\\-mm\\-dd\\ hh:mm"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+const styles = (f: DateFormat) =>
+  `${XML_HEADER}<styleSheet xmlns="${MAIN_NS}"><numFmts count="1"><numFmt numFmtId="164" formatCode="${esc(excelDateTimeFormat(f))}"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
 
 export function renderXlsx(
   name: string | undefined,
   columns: TableColumn[],
   rows: CellValue[][],
+  dateFormat: DateFormat = DEFAULT_DATE_FORMAT,
 ): Uint8Array {
   const dimension = `A1:${colRef(columns.length - 1)}${rows.length + 1}`;
 
@@ -109,7 +117,7 @@ export function renderXlsx(
       "_rels/.rels": strToU8(ROOT_RELS),
       "xl/workbook.xml": strToU8(workbook),
       "xl/_rels/workbook.xml.rels": strToU8(WORKBOOK_RELS),
-      "xl/styles.xml": strToU8(STYLES),
+      "xl/styles.xml": strToU8(styles(dateFormat)),
       "xl/worksheets/sheet1.xml": strToU8(worksheet),
     },
     { level: 6 },

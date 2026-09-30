@@ -134,6 +134,21 @@ describe("slash command registry", () => {
     ).toThrow(/unknown command/);
   });
 
+  it("buildPrompt names the reader's date format only when it is not the default", () => {
+    expect(
+      buildPrompt({
+        message: "hi",
+        dateFormat: { order: "dmy", clock: "24h" },
+      }),
+    ).toBe("hi");
+    const prompt = buildPrompt({
+      message: "hi",
+      dateFormat: { order: "iso", clock: "12h" },
+    });
+    expect(prompt).toContain("2026-09-29 2:05 PM (UTC)");
+    expect(prompt.endsWith("hi")).toBe(true);
+  });
+
   it("command block precedes artifact context", () => {
     const prompt = buildPrompt({
       message: "hello",
