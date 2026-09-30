@@ -6,10 +6,13 @@ import {
   defineFlowAction,
   evaluateCondition,
   getFlow,
+  enqueueRun,
+  getJobKind,
   ingestWorkItem,
   interpolate,
   itemTriggers,
   listFlowRuns,
+  registerCoreJobs,
   runFlow,
   setTeamMember,
   updateFlow,
@@ -513,6 +516,28 @@ describe("/api/flows", () => {
     ]);
   });
 
+  it("serves tachy's own lists, and says what a list still needs", async () => {
+    await ingestWorkItem(await seededFreshdeskConnId(), rawItem());
+    const read = async (path: string) =>
+      (await call(`/options/${path}`, teamAdmin)).json();
+    expect(await read("connections?source_type=freshdesk")).toContainEqual({
+      value: "test-freshdesk",
+      label: "test-freshdesk",
+      hint: "freshdesk",
+    });
+    expect(
+      (await read("teams")).map((t: { value: string }) => t.value),
+    ).toContain("test-team");
+    expect(await read("work_items?q=7001")).toEqual([
+      expect.objectContaining({ label: "#7001 Scanner offline" }),
+    ]);
+    expect(Array.isArray(await read("job.kinds"))).toBe(true);
+    expect(Array.isArray(await read("products"))).toBe(true);
+    const missing = await call("/options/item.values", teamAdmin);
+    expect(missing.status).toBe(400);
+    expect((await call("/options/nope", teamAdmin)).status).toBe(400);
+  });
+
   it("queues a dry run on an item by default", async () => {
     const flow = await (await call("", admin, "POST", body(null))).json();
     const item = await ingestWorkItem(await seededFreshdeskConnId(), rawItem());
@@ -553,5 +578,128 @@ describe("Freshdesk option lists", () => {
     expect(ticketFieldPath({ name: "cf_line", default: false })).toBe(
       "custom_fields.cf_line",
     );
+  });
+});
+
+describe("the flow.run job", () => {
+  beforeEach(async () => {
+    await resetData();
+    await resetJobs();
+    written.length = 0;
+  });
+
+  const job = () => {
+    registerCoreJobs();
+    return getJobKind("flow.run");
+  };
+  /* A run's trace points at its job run, so the context carries a real one. */
+  const ctx = async (queued: unknown[], flowId: string) => ({
+    runId: (await enqueueRun({
+      kind: "flow.run",
+      params: { flow_id: flowId, trigger_id: "ctx" },
+      trigger: "manual",
+    }))!,
+    requestedBy: null,
+    signal: new AbortController().signal,
+    progress: async () => {},
+    log: () => {},
+    credential: async () => undefined,
+    enqueue: async (_kind: string, params: unknown) => {
+      queued.push(params);
+      return "child";
+    },
+  });
+
+  it("leaves a paused flow alone unless someone runs it by hand", async () => {
+    const flow = await createFlow(
+      {
+        name: "paused",
+        team_id: null,
+        enabled: false,
+        graph: {
+          triggers: [
+            {
+              id: "s",
+              kind: "item.synced",
+              params: { connection: "test-freshdesk" },
+            },
+            { id: "m", kind: "manual" },
+          ],
+          steps: [
+            {
+              id: "w",
+              kind: "action",
+              action: "test.write",
+              params: { body: "hi" },
+            },
+          ],
+        },
+      },
+      null,
+    );
+    expect(
+      await job().run(await ctx([], flow.id), {
+        flow_id: flow.id,
+        trigger_id: "s",
+        dry_run: false,
+      }),
+    ).toEqual({ skipped: "the flow is paused" });
+    const out = await job().run(await ctx([], flow.id), {
+      flow_id: flow.id,
+      trigger_id: "m",
+      dry_run: false,
+    });
+    expect(out).toMatchObject({ status: "succeeded" });
+    expect(written).toEqual(["hi"]);
+  });
+
+  it("fans a schedule out to one run per recent item that matches", async () => {
+    const connId = await seededFreshdeskConnId();
+    const hit = await ingestWorkItem(
+      connId,
+      rawItem({ sourceUpdatedAt: new Date().toISOString() }),
+    );
+    await ingestWorkItem(
+      connId,
+      rawItem({
+        externalId: "7002",
+        status: "5",
+        sourceUpdatedAt: new Date().toISOString(),
+      }),
+    );
+    const flow = await createFlow(
+      {
+        name: "sweep",
+        team_id: null,
+        enabled: true,
+        graph: {
+          triggers: [
+            {
+              id: "nightly",
+              kind: "schedule",
+              params: { cron: "0 2 * * *", connection: "test-freshdesk" },
+              where: { field: "item.status", op: "eq", value: "2" },
+            },
+          ],
+          steps: [],
+        },
+      },
+      null,
+    );
+    const queued: unknown[] = [];
+    const out = await job().run(await ctx(queued, flow.id), {
+      flow_id: flow.id,
+      trigger_id: "nightly",
+      dry_run: false,
+    });
+    expect(out).toEqual({ matched: 1, queued: 1 });
+    expect(queued).toEqual([
+      {
+        flow_id: flow.id,
+        trigger_id: "nightly",
+        work_item_id: hit.id,
+        dry_run: false,
+      },
+    ]);
   });
 });
