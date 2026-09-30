@@ -1158,7 +1158,9 @@ create table job_runs (
     unique (definition_id, scheduled_for)
 );
 
-create index job_runs_claim_idx on job_runs(resource_class, priority desc, run_after) where status = 'queued';
+-- Superseded by job_runs_priority_idx; drop with job_definitions.resource_class.
+create index job_runs_claim_idx on job_runs(resource_class, run_after) where status = 'queued';
+create index job_runs_priority_idx on job_runs(resource_class, priority desc, run_after) where status = 'queued';
 create index job_runs_queue_idx on job_runs(queue, status) where status in ('queued','running');
 create unique index job_runs_dedupe_idx on job_runs(dedupe_key) where status in ('queued','running');
 create index job_runs_parent_idx on job_runs(parent_id) where parent_id is not null;
