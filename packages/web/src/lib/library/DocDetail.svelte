@@ -34,9 +34,9 @@
   let createError = $state<string | null>(null);
 
   const canEdit = $derived(
-    !!doc && canCurateScope({ team_id: doc.team_id, team_slug: productTeamSlug }),
+    !!doc &&
+      canCurateScope({ team_id: doc.team_id, team_slug: productTeamSlug }),
   );
-
 
   const versionLabel = (l: ReferenceLineageRow) =>
     `${l.doc_version ? `v${l.doc_version}` : fmtDate(l.created_at) || l.id.slice(0, 8)} · ${l.status}`;
@@ -57,7 +57,6 @@
           ]
         : [],
   );
-
 
   /** The doc lifecycle, as the left rail draws it. See EntryDetail. */
   function actionsFor(d: ReferenceRow): StatusAction[] {
@@ -283,7 +282,9 @@
         {/if}
       </span>
       <span class="when">
-        {#if doc.updated_at}<span class="muted">updated <Time at={doc.updated_at} date /></span>{/if}
+        {#if doc.updated_at}<span class="muted"
+            >updated <Time at={doc.updated_at} date /></span
+          >{/if}
       </span>
     </div>
 
@@ -328,7 +329,10 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
              wrapper, not an interactive element of its own -->
     <div class="body md" onclick={links.onClick} onkeydown={links.onKeydown}>
-      {@html markBrokenLinks(renderMarkdown(doc.body ?? "(no body)"), links.resolved)}
+      {@html markBrokenLinks(
+        renderMarkdown(doc.body ?? "(no body)"),
+        links.resolved,
+      )}
     </div>
 
     <Backlinks base="reference" id={doc.id} />

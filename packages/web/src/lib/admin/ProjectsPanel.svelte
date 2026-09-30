@@ -18,7 +18,17 @@
     type Column,
     type Draft,
   } from "../tui";
-  import type { AreaRule, Component, Connection, Customer, Product, ProjectWiki, Repo, SourceProject, Team } from "./rows";
+  import type {
+    AreaRule,
+    Component,
+    Connection,
+    Customer,
+    Product,
+    ProjectWiki,
+    Repo,
+    SourceProject,
+    Team,
+  } from "./rows";
   import { INFO } from "./help";
   import { sectionHoist } from "./sectionAction.svelte";
   import ProjectFinder, { type Found } from "./ProjectFinder.svelte";
@@ -312,9 +322,15 @@
         ? headOf(p)
         : { label: r.project_key ?? "no project", detail: r.source_slug ?? "" };
       if (!r.component_id)
-        add(key, head, { text: `repo ${r.slug} has no component`, tone: "warn" });
+        add(key, head, {
+          text: `repo ${r.slug} has no component`,
+          tone: "warn",
+        });
       if (r.index_status === "error")
-        add(key, head, { text: `repo ${r.slug} index failing`, tone: "danger" });
+        add(key, head, {
+          text: `repo ${r.slug} index failing`,
+          tone: "danger",
+        });
     }
 
     for (const [slug, list] of Object.entries(found))
@@ -397,8 +413,9 @@
   {:else}
     <div class="detail">
       <div class="block">
-        <span class="dim" title="ADO: one project wiki plus one code wiki per repo."
-          >wikis</span
+        <span
+          class="dim"
+          title="ADO: one project wiki plus one code wiki per repo.">wikis</span
         >
         {#if p.source_type === "azure-devops"}
           {#each wikisFor[p.id] ?? [] as w (w.identifier)}
@@ -414,13 +431,16 @@
               <span class:muted={!on}>{w.name}</span>
               {#if w.type}<span class="dim sm">{w.type}</span>{/if}
               {#if isDefault}
-                <Badge tone="accent" title="used when no wiki is named">default</Badge>
+                <Badge tone="accent" title="used when no wiki is named"
+                  >default</Badge
+                >
               {:else if on && canEditProject(p)}
                 <Button
                   variant="ghost"
                   size="sm"
                   disabled={busy === p.id}
-                  onclick={() => makeDefault(p, w.identifier)}>make default</Button
+                  onclick={() => makeDefault(p, w.identifier)}
+                  >make default</Button
                 >
               {/if}
             </div>

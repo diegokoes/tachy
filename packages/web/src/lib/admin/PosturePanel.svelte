@@ -30,7 +30,10 @@
   const usage = $derived(activity.data.usage);
   const tools = $derived(activity.data.tools);
 
-  const system = createResource(() => api.get<SystemInfo | null>("/system"), null);
+  const system = createResource(
+    () => api.get<SystemInfo | null>("/system"),
+    null,
+  );
   onMount(() => system.reload());
 
   const figures = $derived([
@@ -43,15 +46,30 @@
       tone: u.admins ? ("accent" as const) : ("danger" as const),
       to: "admins",
     },
-    { key: "active", label: "active 7 d", value: usage.active_7d, title: "people with an agent turn in the last 7 days" },
-    { key: "turns", label: `turns ${usage.days} d`, text: compact(usage.turns), title: `agent turns, last ${usage.days} days` },
+    {
+      key: "active",
+      label: "active 7 d",
+      value: usage.active_7d,
+      title: "people with an agent turn in the last 7 days",
+    },
+    {
+      key: "turns",
+      label: `turns ${usage.days} d`,
+      text: compact(usage.turns),
+      title: `agent turns, last ${usage.days} days`,
+    },
     {
       key: "tokens",
       label: `tokens ${usage.days} d`,
       text: compact(usage.input_tokens + usage.output_tokens),
       title: `${compact(usage.input_tokens)} in · ${compact(usage.output_tokens)} out`,
     },
-    { key: "cost", label: `cost ${usage.days} d`, text: usd(usage.cost_usd), title: "estimated at list price where the provider reported none" },
+    {
+      key: "cost",
+      label: `cost ${usage.days} d`,
+      text: usd(usage.cost_usd),
+      title: "estimated at list price where the provider reported none",
+    },
   ]);
 
   const inTeam = $derived(Math.max(0, u.users - u.users_no_team));
@@ -88,7 +106,9 @@
 
   /* userCensus counts app admins and team admins among the enabled and never
      the same person twice, so these four are the whole roll. */
-  const members = $derived(Math.max(0, u.users - u.disabled - u.admins - u.team_admins));
+  const members = $derived(
+    Math.max(0, u.users - u.disabled - u.admins - u.team_admins),
+  );
   const roles = $derived<Col[]>([
     { key: "admins", label: "admins", title: "app admins", value: u.admins },
     { key: "team-admins", label: `${t("team")} admins`, value: u.team_admins },
@@ -102,13 +122,18 @@
     const s = info.settings;
     const creds = info.credentials;
     const env = info.env;
-    const key = s.agent_provider.value === "copilot" ? "copilot_token" : "anthropic_api_key";
+    const key =
+      s.agent_provider.value === "copilot"
+        ? "copilot_token"
+        : "anthropic_api_key";
     const out: Cell[] = [
       {
         key: "vault",
         label: "vault",
         tone: creds.vault_enabled ? "ok" : "warn",
-        title: creds.vault_enabled ? "encrypted, keyed by TACHY_SECRET_KEY" : "off: TACHY_SECRET_KEY unset",
+        title: creds.vault_enabled
+          ? "encrypted, keyed by TACHY_SECRET_KEY"
+          : "off: TACHY_SECRET_KEY unset",
       },
       {
         key: "agent",
@@ -124,7 +149,9 @@
         key: "redaction",
         label: "PII redaction",
         tone: s.redaction_global.value ? "ok" : "muted",
-        title: s.redaction_global.value ? "scrubbed at the MCP boundary" : "off",
+        title: s.redaction_global.value
+          ? "scrubbed at the MCP boundary"
+          : "off",
       });
     if (env)
       out.push(
@@ -149,24 +176,36 @@
         { key: "auth", label: `auth ${env.auth_mode}`, tone: "muted" },
       );
     if (admin)
-      out.push({ key: "profile", label: s.deployment_profile.value, tone: "muted", title: "deployment profile" });
+      out.push({
+        key: "profile",
+        label: s.deployment_profile.value,
+        tone: "muted",
+        title: "deployment profile",
+      });
     return out;
   });
 
   /* A failure is only news here when the agent caused it: "held it wrong" is
      feedback on that tool's description. */
   const topTools = $derived(
-    tools.tools.map(
-      (x): Bar => ({ key: x.tool, label: x.tool, value: x.calls, tone: x.misuse ? "warn" : undefined }),
-    ),
+    tools.tools.map((x): Bar => ({
+      key: x.tool,
+      label: x.tool,
+      value: x.calls,
+      tone: x.misuse ? "warn" : undefined,
+    })),
   );
 
   /* A model is a category: a fixed tone per rank, and past three the tail
      folds into "other" rather than inventing a fifth colour. */
   const MODEL_TONES = ["accent", "info", "ok"] as const;
   const models = $derived([
-    ...usage.by_model.slice(0, 3).map((m, i) => ({ key: m.model, label: m.model, tone: MODEL_TONES[i] })),
-    ...(usage.by_model.length > 3 ? [{ key: "other", label: "other", tone: "muted" as const }] : []),
+    ...usage.by_model
+      .slice(0, 3)
+      .map((m, i) => ({ key: m.model, label: m.model, tone: MODEL_TONES[i] })),
+    ...(usage.by_model.length > 3
+      ? [{ key: "other", label: "other", tone: "muted" as const }]
+      : []),
   ]);
   const tokens = $derived(
     usage.per_day.map((d): Col => {
@@ -179,8 +218,16 @@
         title: fmtDate(d.day),
         value: d.tokens,
         parts: [
-          ...named.map((m) => ({ key: m.key, value: by[m.key] ?? 0, tone: m.tone })),
-          { key: "other", value: Math.max(0, d.tokens - known), tone: "muted" as const },
+          ...named.map((m) => ({
+            key: m.key,
+            value: by[m.key] ?? 0,
+            tone: m.tone,
+          })),
+          {
+            key: "other",
+            value: Math.max(0, d.tokens - known),
+            tone: "muted" as const,
+          },
         ],
       };
     }),
@@ -192,20 +239,26 @@
     { key: "writes", label: "writes", tone: "info" },
   ] as const;
   const calls = $derived(
-    tools.per_day.map(
-      (d): Col => ({
-        key: d.day,
-        label: dayOfMonth(d.day),
-        title: fmtDate(d.day),
-        value: d.reads + d.writes,
-        parts: CALL_KINDS.map((k) => ({ key: k.key, value: d[k.key], tone: k.tone })),
-      }),
-    ),
+    tools.per_day.map((d): Col => ({
+      key: d.day,
+      label: dayOfMonth(d.day),
+      title: fmtDate(d.day),
+      value: d.reads + d.writes,
+      parts: CALL_KINDS.map((k) => ({
+        key: k.key,
+        value: d[k.key],
+        tone: k.tone,
+      })),
+    })),
   );
   const callTotal = $derived(calls.reduce((n, d) => n + d.value, 0));
 
   const heaviest = $derived(
-    (usage.top_users ?? []).map((x): Bar => ({ key: x.email, label: x.email, value: x.tokens })),
+    (usage.top_users ?? []).map((x): Bar => ({
+      key: x.email,
+      label: x.email,
+      value: x.tokens,
+    })),
   );
   const showHeaviest = $derived(admin && usage.top_users !== undefined);
 </script>
@@ -232,11 +285,21 @@
     <Bars rows={topTools} format={compact} fit />
   </Tile>
 
-  <Tile title="tokens" meta={`${compact(tokenTotal)} · ${tokens.length} d`} span={2} empty={!tokenTotal}>
+  <Tile
+    title="tokens"
+    meta={`${compact(tokenTotal)} · ${tokens.length} d`}
+    span={2}
+    empty={!tokenTotal}
+  >
     <Columns rows={tokens} format={compact} legend={models} fill />
   </Tile>
 
-  <Tile title="tool calls" meta={`${compact(callTotal)} · ${calls.length} d`} span={showHeaviest ? 1 : 2} empty={!callTotal}>
+  <Tile
+    title="tool calls"
+    meta={`${compact(callTotal)} · ${calls.length} d`}
+    span={showHeaviest ? 1 : 2}
+    empty={!callTotal}
+  >
     <Columns rows={calls} format={compact} legend={[...CALL_KINDS]} fill />
   </Tile>
 

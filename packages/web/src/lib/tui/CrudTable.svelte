@@ -105,9 +105,7 @@
   let opError = $state<string | null>(null);
 
   const NEW = "::new";
-  const formKey = $derived(
-    form ? (form.row ? rowKey(form.row) : NEW) : null,
-  );
+  const formKey = $derived(form ? (form.row ? rowKey(form.row) : NEW) : null);
 
   /* An open record, draft and all, survives leaving the section, so coming
      back finds it as it was. Closing it, or moving elsewhere inside the
@@ -228,8 +226,7 @@
       tone="ok"
       size="sm"
       icon="plus"
-      onclick={onadd ?? startAdd}
-      >{addLabel}</Button
+      onclick={onadd ?? startAdd}>{addLabel}</Button
     >
   </div>
 {/if}
@@ -239,11 +236,7 @@
   {@const named = f.row ? (editTitle?.(f.row) ?? rowKey(f.row)) : null}
   {@const key = f.row ? rowKey(f.row) : NEW}
   <RecordModal
-    title={named
-      ? noun
-        ? `${noun}: ${named}`
-        : named
-      : addLabel}
+    title={named ? (noun ? `${noun}: ${named}` : named) : addLabel}
     {columns}
     {draft}
     {width}

@@ -100,7 +100,9 @@
           false,
           "The user moved this draft into the work item composer to finish and create it themselves. Do not retry or create it; acknowledge in one line.",
         );
-      else adoptNote = "That project is not one of your team's registered projects, so the composer cannot take it.";
+      else
+        adoptNote =
+          "That project is not one of your team's registered projects, so the composer cannot take it.";
     } finally {
       adopting = false;
     }
@@ -169,8 +171,7 @@
         value={entry.raw ?? ""}
         spellcheck="false"
         aria-label="raw tool input"
-        oninput={(e) => editRaw(e.currentTarget.value)}
-      ></textarea>
+        oninput={(e) => editRaw(e.currentTarget.value)}></textarea>
     {:else}
       <div class="fields">
         {#each keys as key (key)}

@@ -21,29 +21,39 @@
     list && list.provider === prefs?.agent_provider.value ? list.models : [],
   );
 
-  const current = $derived(listed.find((m) => m.id === prefs?.agent_model.value));
+  const current = $derived(
+    listed.find((m) => m.id === prefs?.agent_model.value),
+  );
 
   /* The stored model stays pickable when the runtime no longer offers it, so
      the menu never claims a value other than the one turns actually use. */
   const modelOptions = $derived.by(() => {
-    const opts: { value: string; label: string; hint?: string }[] = listed.map((m) => ({
-      value: m.id,
-      label: m.label,
-      hint: m.id,
-    }));
+    const opts: { value: string; label: string; hint?: string }[] = listed.map(
+      (m) => ({
+        value: m.id,
+        label: m.label,
+        hint: m.id,
+      }),
+    );
     const id = prefs?.agent_model.value;
     if (id && !current)
-      opts.unshift({ value: id, label: id, ...(listed.length ? { hint: "not offered" } : {}) });
+      opts.unshift({
+        value: id,
+        label: id,
+        ...(listed.length ? { hint: "not offered" } : {}),
+      });
     return opts;
   });
 
   const efforts = $derived(current ? current.efforts : [...AGENT_EFFORTS]);
   const effortOptions = $derived.by(() => {
     const v = prefs?.agent_effort.value;
-    const opts: { value: string; label: string; hint?: string }[] = efforts.map((e) => ({
-      value: e,
-      label: e,
-    }));
+    const opts: { value: string; label: string; hint?: string }[] = efforts.map(
+      (e) => ({
+        value: e,
+        label: e,
+      }),
+    );
     if (v && !efforts.includes(v as (typeof efforts)[number]))
       opts.push({ value: v, label: v, hint: "not offered" });
     return opts;
@@ -54,7 +64,9 @@
   const typed = $derived(Boolean(list && !list.models.length));
   let modelDraft = $state("");
   const draftChanged = $derived(
-    Boolean(modelDraft.trim() && modelDraft.trim() !== prefs?.agent_model.value),
+    Boolean(
+      modelDraft.trim() && modelDraft.trim() !== prefs?.agent_model.value,
+    ),
   );
 
   onMount(loadAgent);
@@ -115,7 +127,9 @@
       {/if}
       {#snippet actions()}
         {#if typed && list?.error}
-          <span class="warn" use:tip={`couldn't list models: ${list.error}`}>?</span>
+          <span class="warn" use:tip={`couldn't list models: ${list.error}`}
+            >?</span
+          >
         {/if}
         <Origin of={origin(prefs.agent_model.source, "default")} />
         {#if typed && draftChanged}
@@ -141,7 +155,9 @@
 
     <Row label="effort">
       {#if current && !current.efforts.length}
-        <span class="fixed" use:tip={`${current.label} takes no effort setting`}>fixed</span>
+        <span class="fixed" use:tip={`${current.label} takes no effort setting`}
+          >fixed</span
+        >
       {:else}
         <Select
           aria-label="effort"

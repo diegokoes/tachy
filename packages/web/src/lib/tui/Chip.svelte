@@ -29,8 +29,12 @@
     <span class="hit" {title}>{@render children()}</span>
   {/if}
   {#if onremove}
-    <button class="x" type="button" aria-label="remove" use:tip={"remove"} onclick={onremove}
-      ><Icon name="close" size="1em" weight={7} /></button
+    <button
+      class="x"
+      type="button"
+      aria-label="remove"
+      use:tip={"remove"}
+      onclick={onremove}><Icon name="close" size="1em" weight={7} /></button
     >
   {/if}
 </span>

@@ -1,7 +1,12 @@
 <script lang="ts" module>
   import { getContext } from "svelte";
 
-  export type Pad = { top: number; right: number; bottom: number; left: number };
+  export type Pad = {
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+  };
 
   export type Frame = {
     /** False until the box has been measured. Nothing draws before then. */
@@ -49,7 +54,13 @@
 <script lang="ts">
   import { setContext, type Snippet } from "svelte";
   import { measureBox, typeSize } from "./fit";
-  import { gutterPx, niceDomain, tickCount, tickValues, TICK_LEN } from "./scale";
+  import {
+    gutterPx,
+    niceDomain,
+    tickCount,
+    tickValues,
+    TICK_LEN,
+  } from "./scale";
 
   let {
     categories,
@@ -92,7 +103,11 @@
 
   const frame = $derived.by((): Frame => {
     const domain = niceDomain(max, 4);
-    const ticks = tickValues(domain[0], domain[1], tickCount(Math.max(0, h), fs));
+    const ticks = tickValues(
+      domain[0],
+      domain[1],
+      tickCount(Math.max(0, h), fs),
+    );
     const pad: Pad = {
       /* Headroom for the value a column prints above itself, the same
          allowance the flex version reserved with its padding-top. */

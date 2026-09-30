@@ -1,6 +1,12 @@
 <script lang="ts">
   import { keyLabel } from "../keys/bindings.svelte";
-  import { boundKey, customized, defaultKey, open, type Target } from "./rebind.svelte";
+  import {
+    boundKey,
+    customized,
+    defaultKey,
+    open,
+    type Target,
+  } from "./rebind.svelte";
   import Chord from "./Chord.svelte";
 
   let { label, target }: { label: string; target: Target } = $props();

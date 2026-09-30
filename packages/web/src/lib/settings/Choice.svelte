@@ -75,7 +75,8 @@
     left: 0;
     border-radius: calc(var(--radius-control) - 3px);
     background: var(--accent-dim);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+    box-shadow: inset 0 0 0 1px
+      color-mix(in srgb, var(--accent) 35%, transparent);
     pointer-events: none;
   }
   button {

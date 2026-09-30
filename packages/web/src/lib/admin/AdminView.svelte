@@ -78,41 +78,152 @@
 
   const SECTIONS: Record<string, Section[]> = $derived({
     flows: [
-      { key: "forms", label: "ticket forms", view: TicketFormsPanel, fill: true },
+      {
+        key: "forms",
+        label: "ticket forms",
+        view: TicketFormsPanel,
+        fill: true,
+      },
     ],
     integrations: [
-      { key: "sources", label: "sources", view: SourcesPanel, n: "sources", show: admin, present: "modal" },
-      { key: "projects", label: "projects", view: ProjectsPanel, n: "projects" },
+      {
+        key: "sources",
+        label: "sources",
+        view: SourcesPanel,
+        n: "sources",
+        show: admin,
+        present: "modal",
+      },
+      {
+        key: "projects",
+        label: "projects",
+        view: ProjectsPanel,
+        n: "projects",
+      },
       { key: "repos", label: "repos", view: ReposPanel, n: "repos" },
       { key: "bulk-link", label: "bulk link", view: BulkLink, fill: true },
     ],
     structure: [
-      { key: "teams", label: t("teams"), view: TeamsPanel, n: "teams", present: "modal" },
-      { key: "products", label: t("products"), view: ProductsPanel, n: "products", present: "modal" },
-      { key: "components", label: "components", view: ComponentsPanel, n: "components", fill: true },
-      { key: "map", label: "entries per component", view: CoverageMap, fill: true },
-      { key: "labels", label: "labels", view: LabelsPanel, n: "labels", present: "modal" },
-      { key: "patterns", label: "resolution patterns", view: PatternsPanel, n: "patterns", present: "modal" },
-      { key: "customers", label: t("customers"), view: CustomersPanel, n: "customers", show: showCustomer() },
+      {
+        key: "teams",
+        label: t("teams"),
+        view: TeamsPanel,
+        n: "teams",
+        present: "modal",
+      },
+      {
+        key: "products",
+        label: t("products"),
+        view: ProductsPanel,
+        n: "products",
+        present: "modal",
+      },
+      {
+        key: "components",
+        label: "components",
+        view: ComponentsPanel,
+        n: "components",
+        fill: true,
+      },
+      {
+        key: "map",
+        label: "entries per component",
+        view: CoverageMap,
+        fill: true,
+      },
+      {
+        key: "labels",
+        label: "labels",
+        view: LabelsPanel,
+        n: "labels",
+        present: "modal",
+      },
+      {
+        key: "patterns",
+        label: "resolution patterns",
+        view: PatternsPanel,
+        n: "patterns",
+        present: "modal",
+      },
+      {
+        key: "customers",
+        label: t("customers"),
+        view: CustomersPanel,
+        n: "customers",
+        show: showCustomer(),
+      },
     ],
     access: [
       { key: "users", label: "users", view: AccessPanel, n: "users" },
-      { key: "teams", label: t("teams"), view: TeamRosterPanel, n: "teams", present: "modal" },
-      { key: "admins", label: "app admins", view: AppAdminsPanel, present: "modal" },
+      {
+        key: "teams",
+        label: t("teams"),
+        view: TeamRosterPanel,
+        n: "teams",
+        present: "modal",
+      },
+      {
+        key: "admins",
+        label: "app admins",
+        view: AppAdminsPanel,
+        present: "modal",
+      },
     ],
     workers: [
       { key: "jobs", label: "jobs", view: JobsPanel, show: admin },
-      { key: "failures", label: "failed jobs", view: JobFailuresPanel, show: admin, present: "modal" },
+      {
+        key: "failures",
+        label: "failed jobs",
+        view: JobFailuresPanel,
+        show: admin,
+        present: "modal",
+      },
     ],
     /* All dialogs: the overview carries the summary of each, which is the
        page, and a counter or tile opens the full detail behind it. */
     system: [
-      { key: "reports", label: "reports", view: ReportsPanel, n: "reports", show: admin },
-      { key: "runtime", label: "runtime", view: RuntimePanel, show: admin, present: "modal" },
-      { key: "host", label: "backups & host", view: HostPanel, show: admin, present: "modal" },
-      { key: "checks", label: "checks", view: ChecksPanel, show: admin, present: "modal" },
-      { key: "loads", label: "load tests", view: LoadsPanel, show: admin, present: "modal" },
-      { key: "settings", label: "runtime settings", view: SystemPanel, show: admin, present: "modal" },
+      {
+        key: "reports",
+        label: "reports",
+        view: ReportsPanel,
+        n: "reports",
+        show: admin,
+      },
+      {
+        key: "runtime",
+        label: "runtime",
+        view: RuntimePanel,
+        show: admin,
+        present: "modal",
+      },
+      {
+        key: "host",
+        label: "backups & host",
+        view: HostPanel,
+        show: admin,
+        present: "modal",
+      },
+      {
+        key: "checks",
+        label: "checks",
+        view: ChecksPanel,
+        show: admin,
+        present: "modal",
+      },
+      {
+        key: "loads",
+        label: "load tests",
+        view: LoadsPanel,
+        show: admin,
+        present: "modal",
+      },
+      {
+        key: "settings",
+        label: "runtime settings",
+        view: SystemPanel,
+        show: admin,
+        present: "modal",
+      },
     ],
   });
 
@@ -143,9 +254,19 @@
     live
       .filter((s) => s.present !== "modal" && s.key === segment(2))
       .map(
-        ({ n, show: _show, present: _present, fill: _fill, ...s }): PageSection => ({
+        ({
+          n,
+          show: _show,
+          present: _present,
+          fill: _fill,
+          ...s
+        }): PageSection => ({
           ...s,
-          count: n ? (census.loading ? null : (census.data.counts[n] ?? 0)) : undefined,
+          count: n
+            ? census.loading
+              ? null
+              : (census.data.counts[n] ?? 0)
+            : undefined,
           tone: n && census.data.warn[n] ? ("warn" as const) : undefined,
           actions: sectionActions(s.key),
         }),
@@ -173,7 +294,9 @@
   const at = $derived(segment(2));
 
   /** The section open over the overview, if the one named opens that way. */
-  const modal = $derived(live.find((s) => s.key === at && s.present === "modal"));
+  const modal = $derived(
+    live.find((s) => s.key === at && s.present === "modal"),
+  );
 
   /* Anything that is not a window section lands on the overview: nothing
      named, /overview, a dialog section, or a key no section has. */
@@ -184,7 +307,8 @@
   /* Settle the explicit form back on the short one. This cannot loop: after
      the replace, segment(2) is undefined and the condition stops holding. */
   $effect(() => {
-    if (segment(2) === "overview") navigate(`/admin/${page}`, { replace: true });
+    if (segment(2) === "overview")
+      navigate(`/admin/${page}`, { replace: true });
   });
 
   const backToOverview = () => navigate(`/admin/${page}`);
@@ -263,7 +387,10 @@
   />
 {/if}
 
-<div class="admin-root admin-tables" class:fit={(showing && Boolean(overview)) || Boolean(filled)}>
+<div
+  class="admin-root admin-tables"
+  class:fit={(showing && Boolean(overview)) || Boolean(filled)}
+>
   {#if showing && overview}
     {@const View = overview}
     <View />

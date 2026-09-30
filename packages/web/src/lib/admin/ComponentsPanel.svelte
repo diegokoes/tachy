@@ -46,18 +46,17 @@
   let filters = $state<Filters>(
     recall("admin.components.filters", { ...EMPTY_FILTERS }),
   );
-  $effect(() =>
-    keep("admin.components.filters", $state.snapshot(filters)),
-  );
+  $effect(() => keep("admin.components.filters", $state.snapshot(filters)));
   let renaming = $state<ComponentNode | null>(null);
   let error = $state<string | null>(null);
 
   /* Create and edit are the same form, as everywhere else in admin; only the
      commit differs. The map replaces the table, so this panel drives the
      record dialog itself rather than through CrudTable. */
-  let form = $state<{ mode: "create" | "edit"; row: ComponentNode | null } | null>(
-    null,
-  );
+  let form = $state<{
+    mode: "create" | "edit";
+    row: ComponentNode | null;
+  } | null>(null);
   let draft = $state<Draft>({});
   let busy = $state(false);
   let armed = $state(false);
@@ -82,7 +81,7 @@
   function subtree(row: ComponentNode | null): Set<string> {
     if (!row) return new Set();
     const ids = new Set([row.id]);
-    for (let grew = true; grew; ) {
+    for (let grew = true; grew;) {
       grew = false;
       for (const c of tree.data)
         if (c.parent_id && ids.has(c.parent_id) && !ids.has(c.id)) {
@@ -136,8 +135,7 @@
             .map((c) => ({ value: c.slug, label: c.name })),
         ];
       },
-      value: (r) =>
-        tree.data.find((p) => p.id === r.parent_id)?.slug ?? "",
+      value: (r) => tree.data.find((p) => p.id === r.parent_id)?.slug ?? "",
     },
     {
       key: "aliases",
@@ -146,7 +144,12 @@
       info: INFO.aliases.component,
       value: (r) => (r.aliases ?? []).join(", "),
     },
-    { key: "description", label: "description", edit: "textarea", span: "full" },
+    {
+      key: "description",
+      label: "description",
+      edit: "textarea",
+      span: "full",
+    },
   ]);
 
   function startEdit(row: ComponentNode) {
@@ -200,10 +203,7 @@
     };
     const ok = await run(() =>
       form!.row
-        ? api.patch(
-            `/products/${product}/components/${form!.row.slug}`,
-            body,
-          )
+        ? api.patch(`/products/${product}/components/${form!.row.slug}`, body)
         : api.post(`/products/${product}/components`, {
             ...body,
             slug: draft.slug,

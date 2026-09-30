@@ -102,8 +102,8 @@
       use:jellyPress
     >
       <span class="lbl"
-        ><span class="br" aria-hidden="true">[</span
-        >{#if icon}<span class="ico"><Icon name={icon} weight={7} /></span
+        ><span class="br" aria-hidden="true">[</span>{#if icon}<span class="ico"
+            ><Icon name={icon} weight={7} /></span
           >{/if}{#if !bare}<span class="txt">{it.label}</span>{/if}<span
           class="br"
           aria-hidden="true">]</span

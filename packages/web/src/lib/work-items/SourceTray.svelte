@@ -108,7 +108,15 @@
         aria-label="Ticket id"
         bind:value={externalId}
       />
-      <Button size="sm" variant="ghost" icon="plus" type="submit" busy={busy} aria-label="Add as context" title="add as context" />
+      <Button
+        size="sm"
+        variant="ghost"
+        icon="plus"
+        type="submit"
+        {busy}
+        aria-label="Add as context"
+        title="add as context"
+      />
     </form>
   {/if}
   {#if error}<span class="err">{error}</span>{/if}

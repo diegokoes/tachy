@@ -1,7 +1,10 @@
 <script lang="ts">
   import { themeState } from "./theme.svelte";
 
-  let { target, controls }: { target: HTMLElement | undefined; controls?: string } = $props();
+  let {
+    target,
+    controls,
+  }: { target: HTMLElement | undefined; controls?: string } = $props();
 
   /* Must stay equal to the --row height below: the row maths here and the
      cells painted there have to agree, at every font scale. */
@@ -25,7 +28,10 @@
     visible = el.scrollHeight > el.clientHeight + 1;
     if (!visible) return;
     rows = Math.max(3, Math.floor(el.clientHeight / ROW) - 2);
-    thumbLen = Math.min(rows, Math.max(1, Math.round((el.clientHeight / el.scrollHeight) * rows)));
+    thumbLen = Math.min(
+      rows,
+      Math.max(1, Math.round((el.clientHeight / el.scrollHeight) * rows)),
+    );
     const maxScroll = el.scrollHeight - el.clientHeight;
     const p = maxScroll > 0 ? el.scrollTop / maxScroll : 0;
     thumbStart = Math.round(p * (rows - thumbLen));
@@ -45,8 +51,10 @@
     const el = target;
     if (!el || !bar) return;
     const row = (e.clientY - bar.getBoundingClientRect().top) / ROW;
-    if (row < 1) return el.scrollBy({ top: -el.clientHeight * 0.9, behavior: "smooth" });
-    if (row > rows + 1) return el.scrollBy({ top: el.clientHeight * 0.9, behavior: "smooth" });
+    if (row < 1)
+      return el.scrollBy({ top: -el.clientHeight * 0.9, behavior: "smooth" });
+    if (row > rows + 1)
+      return el.scrollBy({ top: el.clientHeight * 0.9, behavior: "smooth" });
     dragging = true;
     bar.setPointerCapture(e.pointerId);
     seek(e);

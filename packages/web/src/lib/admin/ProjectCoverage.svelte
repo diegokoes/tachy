@@ -27,7 +27,12 @@
     g.gaps.some((x) => x.tone === "danger") ? "danger" : "warn";
 </script>
 
-<Modal title="coverage · projects" cancelLabel="close" width="36rem" onCancel={onclose}>
+<Modal
+  title="coverage · projects"
+  cancelLabel="close"
+  width="36rem"
+  onCancel={onclose}
+>
   {#if !groups.length}
     <p class="quiet">
       Nothing outstanding. Fetch projects when registering one to check for any
@@ -46,7 +51,8 @@
             <span class="mark" aria-hidden="true"></span>
             <span class="text">{g.label}</span>
             {#if g.detail}<span class="detail">{g.detail}</span>{/if}
-            {#if g.filter}<span class="go" aria-hidden="true">{G.right}</span>{/if}
+            {#if g.filter}<span class="go" aria-hidden="true">{G.right}</span
+              >{/if}
           </button>
           <ul class="items">
             {#each g.gaps as it, i (i)}
@@ -136,7 +142,8 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    border-left: 1px solid color-mix(in srgb, var(--tone-color) 45%, transparent);
+    border-left: 1px solid
+      color-mix(in srgb, var(--tone-color) 45%, transparent);
     font-size: var(--fs-xs);
   }
   .items li {

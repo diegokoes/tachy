@@ -312,7 +312,8 @@
       >
         <span class="frame" aria-hidden="true"></span>
         <span class="name"
-          >{#each [...g.name] as ch, i (i)}<span class="ch">{ch}</span>{/each}</span
+          >{#each [...g.name] as ch, i (i)}<span class="ch">{ch}</span
+            >{/each}</span
         >
       </button>
     {/each}
@@ -393,7 +394,11 @@
   .ch {
     display: inline-block;
     --lit: 0;
-    color: color-mix(in srgb, var(--accent) calc(var(--lit) * 100%), currentColor);
+    color: color-mix(
+      in srgb,
+      var(--accent) calc(var(--lit) * 100%),
+      currentColor
+    );
   }
 
   .signal {
