@@ -2,36 +2,78 @@
   import { onMount } from "svelte";
   import { PROVIDER_OPTIONS } from "../vocab";
   import { AGENT_EFFORTS } from "@tachy/contract";
-  import { Button, Note, Select } from "../tui";
+  import { Button, Note, Select, tip } from "../tui";
   import {
     agentPrefs,
-    heldBy,
     loadAgent,
+    origin,
     resetPref,
     setPref,
+    type Pref,
   } from "./prefs.svelte";
+  import Origin from "./Origin.svelte";
   import Row from "./Row.svelte";
   import Rows from "./Rows.svelte";
 
   const prefs = $derived(agentPrefs.prefs);
+  const list = $derived(agentPrefs.models);
+  const listed = $derived(
+    list && list.provider === prefs?.agent_provider.value ? list.models : [],
+  );
 
-  let modelDraft = $state("");
-  let touched = $state(false);
+  const current = $derived(listed.find((m) => m.id === prefs?.agent_model.value));
 
-  /* The draft follows the stored value until the reader types, and then stops:
-     a reload triggered by saving the effort must not wipe a half-typed model. */
-  $effect(() => {
-    const p = agentPrefs.prefs;
-    if (!p || touched) return;
-    modelDraft = p.agent_model.source === "user" ? p.agent_model.value : "";
+  /* The stored model stays pickable when the runtime no longer offers it, so
+     the menu never claims a value other than the one turns actually use. */
+  const modelOptions = $derived.by(() => {
+    const opts: { value: string; label: string; hint?: string }[] = listed.map((m) => ({
+      value: m.id,
+      label: m.label,
+      hint: m.id,
+    }));
+    const id = prefs?.agent_model.value;
+    if (id && !current)
+      opts.unshift({ value: id, label: id, ...(listed.length ? { hint: "not offered" } : {}) });
+    return opts;
   });
 
-  const modelChanged = $derived(
+  const efforts = $derived(current ? current.efforts : [...AGENT_EFFORTS]);
+  const effortOptions = $derived.by(() => {
+    const v = prefs?.agent_effort.value;
+    const opts: { value: string; label: string; hint?: string }[] = efforts.map((e) => ({
+      value: e,
+      label: e,
+    }));
+    if (v && !efforts.includes(v as (typeof efforts)[number]))
+      opts.push({ value: v, label: v, hint: "not offered" });
+    return opts;
+  });
+
+  /* Typed by hand only when the runtime could not be asked: then there is no
+     list to pick from, and a model id is the one thing left to go on. */
+  const typed = $derived(Boolean(list && !list.models.length));
+  let modelDraft = $state("");
+  const draftChanged = $derived(
     Boolean(modelDraft.trim() && modelDraft.trim() !== prefs?.agent_model.value),
   );
 
   onMount(loadAgent);
 </script>
+
+{#snippet reset(key: string, pref: Pref<unknown>)}
+  <span class="slot">
+    {#if pref.source === "user"}
+      <Button
+        variant="ghost"
+        square
+        icon="reset"
+        title="reset to the shared default"
+        aria-label="reset {key}"
+        onclick={() => resetPref(`agent_${key}`)}
+      />
+    {/if}
+  </span>
+{/snippet}
 
 {#if agentPrefs.error}<Note tone="danger">{agentPrefs.error}</Note>{/if}
 {#if agentPrefs.loading && !prefs}<p class="quiet">loading…</p>{/if}
@@ -40,37 +82,44 @@
   <Rows>
     <Row label="provider">
       <Select
+        aria-label="provider"
         value={prefs.agent_provider.value}
         options={PROVIDER_OPTIONS}
         onchange={(v) => setPref("agent_provider", v)}
       />
       {#snippet actions()}
-        <span class="from">{heldBy(prefs.agent_provider.source)}</span>
-        <span class="slot">
-          {#if prefs.agent_provider.source === "user"}
-            <Button
-              variant="ghost"
-              square
-              icon="reset"
-              title="reset"
-              aria-label="reset provider"
-              onclick={() => resetPref("agent_provider")}
-            />
-          {/if}
-        </span>
+        <Origin of={origin(prefs.agent_provider.source, "default")} />
+        {@render reset("provider", prefs.agent_provider)}
       {/snippet}
     </Row>
 
-    <Row label="model">
-      <input
-        bind:value={modelDraft}
-        oninput={() => (touched = true)}
-        placeholder={prefs.agent_model.value}
-      />
+    <Row
+      label="model"
+      hint={list?.restricted ? "limited by your org" : undefined}
+    >
+      {#if typed}
+        <input
+          aria-label="model id"
+          bind:value={modelDraft}
+          placeholder={prefs.agent_model.value}
+        />
+      {:else}
+        <Select
+          aria-label="model"
+          value={prefs.agent_model.value}
+          options={modelOptions}
+          searchable={modelOptions.length > 8}
+          disabled={agentPrefs.modelsLoading && !listed.length}
+          onchange={(v) => setPref("agent_model", v)}
+        />
+      {/if}
       {#snippet actions()}
-        <span class="from">{heldBy(prefs.agent_model.source)}</span>
-        <span class="slot">
-          {#if modelChanged}
+        {#if typed && list?.error}
+          <span class="warn" use:tip={`couldn't list models: ${list.error}`}>?</span>
+        {/if}
+        <Origin of={origin(prefs.agent_model.source, "default")} />
+        {#if typed && draftChanged}
+          <span class="slot">
             <Button
               variant="ghost"
               square
@@ -79,47 +128,31 @@
               title="apply"
               aria-label="apply model"
               onclick={() => {
-                touched = false;
                 setPref("agent_model", modelDraft.trim());
+                modelDraft = "";
               }}
             />
-          {:else if prefs.agent_model.source === "user"}
-            <Button
-              variant="ghost"
-              square
-              icon="reset"
-              title="reset"
-              aria-label="reset model"
-              onclick={() => {
-                touched = false;
-                resetPref("agent_model");
-              }}
-            />
-          {/if}
-        </span>
+          </span>
+        {:else}
+          {@render reset("model", prefs.agent_model)}
+        {/if}
       {/snippet}
     </Row>
 
     <Row label="effort">
-      <Select
-        value={prefs.agent_effort.value}
-        options={[...AGENT_EFFORTS]}
-        onchange={(v) => setPref("agent_effort", v)}
-      />
+      {#if current && !current.efforts.length}
+        <span class="fixed" use:tip={`${current.label} takes no effort setting`}>fixed</span>
+      {:else}
+        <Select
+          aria-label="effort"
+          value={prefs.agent_effort.value}
+          options={effortOptions}
+          onchange={(v) => setPref("agent_effort", v)}
+        />
+      {/if}
       {#snippet actions()}
-        <span class="from">{heldBy(prefs.agent_effort.source)}</span>
-        <span class="slot">
-          {#if prefs.agent_effort.source === "user"}
-            <Button
-              variant="ghost"
-              square
-              icon="reset"
-              title="reset"
-              aria-label="reset effort"
-              onclick={() => resetPref("agent_effort")}
-            />
-          {/if}
-        </span>
+        <Origin of={origin(prefs.agent_effort.source, "default")} />
+        {@render reset("effort", prefs.agent_effort)}
       {/snippet}
     </Row>
   </Rows>
@@ -131,11 +164,6 @@
     font-size: var(--fs-xs);
     color: var(--muted);
   }
-  .from {
-    font-size: var(--fs-sm);
-    color: var(--muted);
-    white-space: nowrap;
-  }
   /* The mark keeps its column whether or not there is a mark in it, so nothing
      reflows when a save swaps in for a reset mid-row. */
   .slot {
@@ -145,8 +173,18 @@
     flex: none;
     width: var(--row-h);
   }
-  input {
-    width: 100%;
-    min-width: 0;
+  .fixed {
+    display: block;
+    width: var(--control-w, 12rem);
+    padding: 0 var(--pad-3);
+    font-size: var(--fs-sm);
+    color: var(--muted);
+    cursor: help;
+  }
+  .warn {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--warn);
+    cursor: help;
   }
 </style>

@@ -19,6 +19,8 @@ export {
 } from "./claude";
 export { copilotPermission, copilotSessionConfig } from "./copilot";
 export { completeOnce } from "./complete";
+export { listModels } from "./models";
+export type { ModelChoice, ModelListConfig } from "./models";
 export type { CompletionConfig, CompletionResult } from "./complete";
 export type { ApprovalGate } from "./turn";
 export {

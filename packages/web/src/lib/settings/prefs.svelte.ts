@@ -1,7 +1,12 @@
 import { api } from "../api";
 import { errText } from "../resource.svelte";
 
-import type { AgentProvider, Clock, DateOrder } from "@tachy/contract";
+import type {
+  AgentEffort,
+  AgentProvider,
+  Clock,
+  DateOrder,
+} from "@tachy/contract";
 
 export type PrefSource = "user" | "team" | "db" | "env" | "default";
 export type Pref<T> = { value: T; source: PrefSource };
@@ -20,6 +25,27 @@ export type MyCreds = {
   vault_enabled: boolean;
   mine: { name: string; updated_at: string }[];
   effective: Record<string, KeyScope | null>;
+  /** The credential a chat turn would pick right now. */
+  agent: {
+    provider: AgentProvider;
+    in_use: string | null;
+    source: KeyScope | null;
+  };
+};
+
+export type ModelChoice = {
+  id: string;
+  label: string;
+  efforts: AgentEffort[];
+  defaultEffort?: AgentEffort;
+};
+
+export type ModelList = {
+  provider: AgentProvider;
+  /** Empty when the runtime could not be asked and no allow-list applies. */
+  models: ModelChoice[];
+  restricted: boolean;
+  error: string | null;
 };
 
 /**
@@ -32,9 +58,25 @@ export type MyCreds = {
 export const agentPrefs = $state({
   prefs: null as Prefs | null,
   creds: null as MyCreds | null,
+  models: null as ModelList | null,
+  modelsLoading: false,
   error: null as string | null,
   loading: false,
 });
+
+/** Asked of the runtime, so slow next to a preference read: it lands on its
+ *  own and is fetched again only when the provider it describes changes. */
+async function loadModels() {
+  agentPrefs.modelsLoading = true;
+  try {
+    agentPrefs.models = await api.get<ModelList>("/me/models");
+  } catch (e) {
+    agentPrefs.models = null;
+    agentPrefs.error = errText(e);
+  } finally {
+    agentPrefs.modelsLoading = false;
+  }
+}
 
 export async function loadAgent() {
   agentPrefs.loading = true;
@@ -46,6 +88,8 @@ export async function loadAgent() {
     ]);
     agentPrefs.prefs = p;
     agentPrefs.creds = c;
+    if (agentPrefs.models?.provider !== p.agent_provider.value)
+      void loadModels();
   } catch (e) {
     agentPrefs.error = errText(e);
   } finally {
@@ -78,12 +122,45 @@ export const saveKey = (name: string, value: string) =>
 export const removeKey = (name: string) =>
   write(() => api.delete(`/me/credentials/${encodeURIComponent(name)}`));
 
-/**
- * One sentence for every inherited value in this view, wherever it lands:
- * where it comes from, and that you can take it over. A value of your own says
- * nothing — the reset mark is the whole story.
- */
-export const heldBy = (source: PrefSource | KeyScope | null) => {
-  if (!source || source === "user") return "";
-  return `${source === "db" ? "global" : source} · override`;
+export type Origin = { label: string; tip: string; mine: boolean };
+
+const INHERITED: Record<
+  Exclude<PrefSource | KeyScope, "user">,
+  [string, string]
+> = {
+  team: ["team", "your team's admin"],
+  db: ["org", "an admin, for everyone"],
+  global: ["org", "an admin, for everyone"],
+  env: ["server", "the server's configuration"],
+  default: ["built-in", "tachy itself"],
 };
+
+/**
+ * Where a value comes from, in words that say what picking another one does:
+ * an inherited value keeps following whoever set it until you choose your own,
+ * and yours stays until you reset it.
+ */
+export function origin(
+  source: PrefSource | KeyScope | null,
+  noun: "default" | "key",
+): Origin | null {
+  if (!source) return null;
+  if (source === "user")
+    return {
+      label: "yours",
+      tip:
+        noun === "key"
+          ? "Your own key. Remove it to fall back to a shared one, if there is one."
+          : "Your own choice. Reset it to follow the shared default again.",
+      mine: true,
+    };
+  const [who, by] = INHERITED[source];
+  return {
+    label: `${who} ${noun}`,
+    tip:
+      noun === "key"
+        ? `Shared key set by ${by}. Paste your own to use it instead.`
+        : `Set by ${by}. Pick a value to make it your own.`,
+    mine: false,
+  };
+}
