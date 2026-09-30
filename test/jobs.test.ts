@@ -670,6 +670,15 @@ describe("the job census", () => {
       timed_out: 1,
     });
 
+    expect(j.by_queue.map((q) => q.queue)).toEqual([
+      "index",
+      "embed",
+      "testing",
+      "sync",
+      "maintenance",
+    ]);
+    expect(j.by_queue.every((q) => q.started === 0)).toBe(true);
+
     const echo = j.by_kind.find((k) => k.kind === "test.echo");
     expect(echo).toMatchObject({ runs: 4, succeeded: 2, failed: 1 });
     expect(echo?.avg_seconds).toBeCloseTo(14, 5);
@@ -678,6 +687,27 @@ describe("the job census", () => {
       failed: 1,
       avg_seconds: 60,
     });
+  });
+
+  it("averages how long runs waited in each queue before starting", async () => {
+    await sql`
+      insert into job_runs (kind, resource_class, queue, trigger, status, timeout_ms,
+                            created_at, started_at, finished_at)
+      values ('test.echo', 'light', 'maintenance', 'manual', 'succeeded', 60000,
+              now() - interval '10 minutes', now() - interval '9 minutes', now()),
+             ('test.echo', 'light', 'maintenance', 'manual', 'succeeded', 60000,
+              now() - interval '10 minutes', now() - interval '7 minutes', now()),
+             ('test.echo', 'light', 'maintenance', 'manual', 'queued', 60000,
+              now() - interval '10 minutes', null, null)
+    `;
+    const j = await jobCensus(14);
+    expect(j.by_queue.find((q) => q.queue === "maintenance")).toEqual({
+      queue: "maintenance",
+      started: 2,
+      avg_wait_seconds: 120,
+      max_wait_seconds: 180,
+    });
+    expect(j.by_queue.find((q) => q.queue === "index")?.started).toBe(0);
   });
 
   /* The light and heavy counters on the overview are jobs, not runs. A
