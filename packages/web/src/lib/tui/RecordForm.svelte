@@ -160,8 +160,7 @@
             aria-label={c.label}
             placeholder={placeholderOf(c)}
             value={String(draft[c.key] ?? "")}
-            oninput={(e) => (draft[c.key] = e.currentTarget.value)}
-          ></textarea>
+            oninput={(e) => (draft[c.key] = e.currentTarget.value)}></textarea>
         {:else}
           <input
             class:mono={Boolean(c.transform)}

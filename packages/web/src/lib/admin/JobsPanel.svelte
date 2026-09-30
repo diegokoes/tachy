@@ -1,7 +1,11 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { keep, recall } from "../kept";
-  import { JOB_NOTIFY, JOB_OVERLAP, JOB_RESOURCE_CLASSES } from "@tachy/contract";
+  import {
+    JOB_NOTIFY,
+    JOB_OVERLAP,
+    JOB_RESOURCE_CLASSES,
+  } from "@tachy/contract";
   import { api } from "../api";
   import { createResource, errText } from "../resource.svelte";
   import {
@@ -41,11 +45,15 @@
   };
   type Connection = { slug: string; source_type: string; name?: string };
 
-  const info = createResource(
-    () => api.get<KindsInfo>("/jobs/kinds"),
-    { kinds: [], chat_slot_cap: 0, class_chat_slots: {} } as KindsInfo,
+  const info = createResource(() => api.get<KindsInfo>("/jobs/kinds"), {
+    kinds: [],
+    chat_slot_cap: 0,
+    class_chat_slots: {},
+  } as KindsInfo);
+  const defs = createResource(
+    () => api.get<JobDefinitionRow[]>("/jobs/definitions"),
+    [],
   );
-  const defs = createResource(() => api.get<JobDefinitionRow[]>("/jobs/definitions"), []);
   const connections = createResource(
     () => api.get<Connection[]>("/source-connections"),
     [],
@@ -98,7 +106,10 @@
       edit: "select",
       required: true,
       editable: () => false,
-      options: info.data.kinds.map((k) => ({ value: k.kind, label: `${k.kind}: ${k.title}` })),
+      options: info.data.kinds.map((k) => ({
+        value: k.kind,
+        label: `${k.kind}: ${k.title}`,
+      })),
       info: "Job kind. Defined in code.",
     },
     {
@@ -111,14 +122,24 @@
       cell: scheduleCell,
       info: "Cron, 5 fields. Blank: manual or event only.",
     },
-    { key: "timezone", label: "timezone", formOnly: true, edit: "text", initial: "UTC" },
+    {
+      key: "timezone",
+      label: "timezone",
+      formOnly: true,
+      edit: "text",
+      initial: "UTC",
+    },
     {
       key: "resource_class",
       label: "class",
       width: "6rem",
       edit: "select",
       value: (d) => d.resource_class ?? "",
-      options: (dr) => opt(JOB_RESOURCE_CLASSES, `kind default (${kindOf(dr.kind)?.resource_class ?? "?"})`),
+      options: (dr) =>
+        opt(
+          JOB_RESOURCE_CLASSES,
+          `kind default (${kindOf(dr.kind)?.resource_class ?? "?"})`,
+        ),
       cell: classCell,
       info: "Worker pool. Sizes set in Compose.",
     },
@@ -137,7 +158,8 @@
       formOnly: true,
       edit: "select",
       value: (d) => d.overlap ?? "",
-      options: (dr) => opt(JOB_OVERLAP, `kind default (${kindOf(dr.kind)?.overlap ?? "?"})`),
+      options: (dr) =>
+        opt(JOB_OVERLAP, `kind default (${kindOf(dr.kind)?.overlap ?? "?"})`),
       info: "Overlap policy: skip or queue.",
     },
     {
@@ -149,7 +171,14 @@
       options: JOB_NOTIFY.map((v) => ({ value: v, label: v })),
       info: "Posts to Teams (teams_job_webhook).",
     },
-    { key: "enabled", label: "on", width: "4rem", edit: "checkbox", initial: true, cell: enabledCell },
+    {
+      key: "enabled",
+      label: "on",
+      width: "4rem",
+      edit: "checkbox",
+      initial: true,
+      cell: enabledCell,
+    },
     { key: "last", label: "last run", width: "11rem", cell: lastCell },
     /* Running and pausing are what people come to this list to do, so they
        sit on the row rather than one dialog away. */
@@ -163,12 +192,15 @@
     return out;
   }
 
-  function openedForm(f: { mode: "create" | "edit"; row: JobDefinitionRow | null } | null) {
+  function openedForm(
+    f: { mode: "create" | "edit"; row: JobDefinitionRow | null } | null,
+  ) {
     params = f?.row ? { ...f.row.params } : {};
   }
 
   function payload(d: Draft) {
-    const blank = (v: unknown) => (String(v ?? "").trim() ? String(v).trim() : null);
+    const blank = (v: unknown) =>
+      String(v ?? "").trim() ? String(v).trim() : null;
     return {
       name: String(d.name ?? "").trim(),
       schedule: blank(d.schedule),
@@ -229,7 +261,9 @@
     historyTab = "runs";
     try {
       const [runs, changes] = await Promise.all([
-        api.get<JobRunRow[]>(`/jobs/runs?definition_id=${d.id}&limit=${HISTORY_LIMIT}`),
+        api.get<JobRunRow[]>(
+          `/jobs/runs?definition_id=${d.id}&limit=${HISTORY_LIMIT}`,
+        ),
         api.get<JobChange[]>(`/jobs/definitions/${d.id}/changes`),
       ]);
       if (history?.id !== d.id) return;
@@ -310,7 +344,9 @@
 
 {#snippet statusBadge(status: string)}
   {#if status === "running"}
-    <span class="live" use:shadowPulse={{ loop: true }}><Badge tone={toneOf(status)}>{status}</Badge></span>
+    <span class="live" use:shadowPulse={{ loop: true }}
+      ><Badge tone={toneOf(status)}>{status}</Badge></span
+    >
   {:else}
     <Badge tone={toneOf(status)}>{status}</Badge>
   {/if}
@@ -318,8 +354,13 @@
 
 {#snippet scheduleCell(d: JobDefinitionRow)}
   {#if d.schedule}
-    <span class="sched">{d.schedule}<span class="dim">{d.timezone === "UTC" ? "" : ` ${d.timezone}`}</span></span>
-    {#if d.next_run}<span class="dim small">next <Time at={d.next_run} /></span>{/if}
+    <span class="sched"
+      >{d.schedule}<span class="dim"
+        >{d.timezone === "UTC" ? "" : ` ${d.timezone}`}</span
+      ></span
+    >
+    {#if d.next_run}<span class="dim small">next <Time at={d.next_run} /></span
+      >{/if}
   {:else}
     <span class="dim">by hand</span>
   {/if}
@@ -364,7 +405,9 @@
             <td class="dim"><Time at={r.created_at} /></td>
             <td>
               {#if r.status === "running" && r.progress != null}
-                {Math.round(r.progress * 100)}%{r.progress_note ? ` · ${r.progress_note}` : ""}
+                {Math.round(r.progress * 100)}%{r.progress_note
+                  ? ` · ${r.progress_note}`
+                  : ""}
               {:else if r.error}
                 <span class="err">{r.error}</span>
               {:else if r.attempts > 1}
@@ -373,7 +416,10 @@
             </td>
             <td class="acts">
               {#if r.log_tail}
-                <Button variant="ghost" size="sm" onclick={() => toggleLog(r.id)}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onclick={() => toggleLog(r.id)}
                   >{logOpen.has(r.id) ? "hide log" : "log"}</Button
                 >
               {/if}
@@ -398,16 +444,31 @@
   {/if}
 {/snippet}
 
-{#snippet paramField(name: string, p: JsonSchema, required: boolean, kind: JobKindInfo)}
+{#snippet paramField(
+  name: string,
+  p: JsonSchema,
+  required: boolean,
+  kind: JobKindInfo,
+)}
   {#if name === "connection" && kind.connection}
-    <Field label={name} {required} info={p.description ?? "The source connection this runs against."}>
+    <Field
+      label={name}
+      {required}
+      info={p.description ?? "The source connection this runs against."}
+    >
       <Select
         value={String(params[name] ?? "")}
         options={[
           { value: "", label: "pick a connection…" },
           ...connections.data
-            .filter((c) => kind.connection === "any" || c.source_type === kind.connection)
-            .map((c) => ({ value: c.slug, label: `${c.slug} (${c.source_type})` })),
+            .filter(
+              (c) =>
+                kind.connection === "any" || c.source_type === kind.connection,
+            )
+            .map((c) => ({
+              value: c.slug,
+              label: `${c.slug} (${c.source_type})`,
+            })),
         ]}
         aria-label={name}
         onchange={(v) => (params[name] = String(v))}
@@ -454,27 +515,42 @@
   {/if}
 {/snippet}
 
-{#snippet formExtra(f: { mode: "create" | "edit"; row: JobDefinitionRow | null; draft: Draft })}
+{#snippet formExtra(f: {
+  mode: "create" | "edit";
+  row: JobDefinitionRow | null;
+  draft: Draft;
+})}
   {@const kind = kindOf(f.draft.kind)}
-  {@const effectiveClass = String(f.draft.resource_class || kind?.resource_class || "light")}
+  {@const effectiveClass = String(
+    f.draft.resource_class || kind?.resource_class || "light",
+  )}
   {#if kind}
     {#if kind.description}<Note>{kind.description}</Note>{/if}
     {#if Object.keys(kind.params_schema.properties ?? {}).length}
       <GroupHead label="parameters" />
       {#each Object.entries(kind.params_schema.properties ?? {}) as [name, p] (name)}
-        {@render paramField(name, p, (kind.params_schema.required ?? []).includes(name), kind)}
+        {@render paramField(
+          name,
+          p,
+          (kind.params_schema.required ?? []).includes(name),
+          kind,
+        )}
       {/each}
     {/if}
     <SchedulePreview schedule={f.draft.schedule} timezone={f.draft.timezone} />
     {#if (info.data.class_chat_slots[effectiveClass] ?? 0) > 0}
       <Note>
         while this runs, the chat cap is
-        {Math.max(1, info.data.chat_slot_cap - info.data.class_chat_slots[effectiveClass])}
+        {Math.max(
+          1,
+          info.data.chat_slot_cap - info.data.class_chat_slots[effectiveClass],
+        )}
         instead of {info.data.chat_slot_cap}.
       </Note>
     {/if}
   {/if}
-  {#if f.row?.disabled_reason}<Note tone="danger">{f.row.disabled_reason}</Note>{/if}
+  {#if f.row?.disabled_reason}<Note tone="danger">{f.row.disabled_reason}</Note
+    >{/if}
 {/snippet}
 
 <!-- Running and pausing happen on the row; the dialog is for editing, so it
@@ -597,7 +673,10 @@
       {@render runList(historyRuns)}
     {:else}
       {#each historyChanges as c (c.id)}
-        <div class="dim small"><Time at={c.created_at} /> · {c.action} by {c.changed_by ?? "the system"}</div>
+        <div class="dim small">
+          <Time at={c.created_at} /> · {c.action} by {c.changed_by ??
+            "the system"}
+        </div>
       {:else}
         <span class="dim">none recorded</span>
       {/each}
@@ -606,14 +685,45 @@
 {/if}
 
 <style>
-  .acts { display: inline-flex; gap: var(--pad-1); }
-  .dim { color: var(--muted); }
-  .small { display: block; font-size: 0.85em; }
-  .sched { font-family: var(--font-mono); }
-  .runs { width: 100%; border-collapse: collapse; }
-  .runs td { padding: 2px var(--pad-2); vertical-align: top; }
-  .runs .acts { text-align: end; white-space: nowrap; }
-  .err { color: var(--danger); }
-  .log { max-height: 16rem; overflow: auto; margin: 0; padding: var(--pad-2); border: 1px dashed var(--border); white-space: pre-wrap; font-size: 0.85em; }
-  .live { color: var(--accent); }
+  .acts {
+    display: inline-flex;
+    gap: var(--pad-1);
+  }
+  .dim {
+    color: var(--muted);
+  }
+  .small {
+    display: block;
+    font-size: 0.85em;
+  }
+  .sched {
+    font-family: var(--font-mono);
+  }
+  .runs {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .runs td {
+    padding: 2px var(--pad-2);
+    vertical-align: top;
+  }
+  .runs .acts {
+    text-align: end;
+    white-space: nowrap;
+  }
+  .err {
+    color: var(--danger);
+  }
+  .log {
+    max-height: 16rem;
+    overflow: auto;
+    margin: 0;
+    padding: var(--pad-2);
+    border: 1px dashed var(--border);
+    white-space: pre-wrap;
+    font-size: 0.85em;
+  }
+  .live {
+    color: var(--accent);
+  }
 </style>

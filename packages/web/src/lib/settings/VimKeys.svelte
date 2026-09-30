@@ -60,7 +60,9 @@
   .mark.on {
     color: var(--ok);
     opacity: 1;
-    filter: drop-shadow(0 0 0.6rem color-mix(in srgb, var(--ok) 55%, transparent));
+    filter: drop-shadow(
+      0 0 0.6rem color-mix(in srgb, var(--ok) 55%, transparent)
+    );
   }
   .keys {
     padding-top: var(--pad-2);

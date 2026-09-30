@@ -208,7 +208,8 @@
         placeholder="other…"
         aria-label={`Another ${label}`}
         bind:value={custom}
-        onkeydown={(e) => e.key === "Enter" && (e.preventDefault(), addCustom())}
+        onkeydown={(e) =>
+          e.key === "Enter" && (e.preventDefault(), addCustom())}
         onblur={addCustom}
       />
     {/if}
@@ -278,7 +279,9 @@
     class:invalid
     value={current}
     aria-label={label}
-    placeholder={spec.reference_name === "System.Tags" ? "tag; another tag" : ""}
+    placeholder={spec.reference_name === "System.Tags"
+      ? "tag; another tag"
+      : ""}
     oninput={(e) => onchange((e.target as HTMLInputElement).value)}
   />
 {/if}

@@ -7,4 +7,6 @@
     $props();
 </script>
 
-{#if at}<time datetime={at} use:tip={utcTip(at)}>{date ? fmtDate(at) : fmtDateTime(at)}</time>{:else if !date}-{/if}
+{#if at}<time datetime={at} use:tip={utcTip(at)}
+    >{date ? fmtDate(at) : fmtDateTime(at)}</time
+  >{:else if !date}-{/if}

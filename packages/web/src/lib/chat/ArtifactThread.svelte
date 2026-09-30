@@ -88,7 +88,11 @@
     const nx = -dy / len;
     const ny = dx / len;
     // Mostly a taut wire; now and then it cracks wide for one frame.
-    const amp = still ? 0 : Math.random() < 0.09 ? 10 + Math.random() * 8 : 3 + Math.random() * 4;
+    const amp = still
+      ? 0
+      : Math.random() < 0.09
+        ? 10 + Math.random() * 8
+        : 3 + Math.random() * 4;
 
     let path = `M${x1.toFixed(1)} ${y1.toFixed(1)}`;
     for (let i = 1; i < JAGS; i++) {
@@ -292,7 +296,9 @@
   /** The dash the draw-in left behind would clip the flickering path. */
   function settleStroke() {
     if (core && halo)
-      gsap.set([core, halo], { clearProps: "strokeDasharray,strokeDashoffset" });
+      gsap.set([core, halo], {
+        clearProps: "strokeDasharray,strokeDashoffset",
+      });
   }
 </script>
 

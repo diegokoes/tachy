@@ -80,7 +80,10 @@
     </div>
     {#if n.children.length}
       <ul>
-        {#each n.children as child (child.id)}{@render row(child, depth + 1)}{/each}
+        {#each n.children as child (child.id)}{@render row(
+            child,
+            depth + 1,
+          )}{/each}
       </ul>
     {/if}
   </li>

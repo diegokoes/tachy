@@ -30,7 +30,13 @@
 </script>
 
 {#snippet one(d: DialItem)}
-  <Dial value={d.value} tone={d.tone} rest={d.rest} label={d.title ?? d.label} {size}>
+  <Dial
+    value={d.value}
+    tone={d.tone}
+    rest={d.rest}
+    label={d.title ?? d.label}
+    {size}
+  >
     <span class="core">{d.center}</span>
   </Dial>
   <span class="name">{d.label}</span>
@@ -40,7 +46,9 @@
 <div class="dials">
   {#each items as d (d.key)}
     {#if d.onclick}
-      <button class="one go" title={d.title} onclick={d.onclick}>{@render one(d)}</button>
+      <button class="one go" title={d.title} onclick={d.onclick}
+        >{@render one(d)}</button
+      >
     {:else}
       <div class="one" title={d.title}>{@render one(d)}</div>
     {/if}

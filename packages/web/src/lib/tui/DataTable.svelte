@@ -47,7 +47,9 @@
 <div class="wrap">
   <table>
     <colgroup>
-      {#each columns as c}<col style={c.width ? `width: ${c.width}` : ""} />{/each}
+      {#each columns as c}<col
+          style={c.width ? `width: ${c.width}` : ""}
+        />{/each}
     </colgroup>
 
     <thead>

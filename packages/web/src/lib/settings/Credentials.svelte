@@ -53,7 +53,8 @@
             placeholder={from ? "" : "paste a key"}
           />
           {#if from && !draft}
-            <span class="dots" class:shared={!mine.has(name)} aria-hidden="true"></span>
+            <span class="dots" class:shared={!mine.has(name)} aria-hidden="true"
+            ></span>
           {/if}
           <span class="end">
             {#if draft}
@@ -78,7 +79,9 @@
         </div>
         {#snippet actions()}
           {#if creds.agent.in_use === name}
-            <span class="live" use:tip={"chat turns answer with this key"}>in use</span>
+            <span class="live" use:tip={"chat turns answer with this key"}
+              >in use</span
+            >
           {/if}
           <Origin of={origin(from, "key")} />
           {#if name === "anthropic_oauth_token"}
@@ -118,7 +121,11 @@
     bottom: 0;
     left: var(--pad-3);
     right: calc(var(--row-h) + var(--pad-1));
-    background: radial-gradient(circle, currentColor 0 0.2rem, transparent 0.23rem)
+    background: radial-gradient(
+        circle,
+        currentColor 0 0.2rem,
+        transparent 0.23rem
+      )
       left center / 0.85rem 100% repeat-x;
     color: var(--text);
     opacity: 0.7;

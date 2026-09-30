@@ -80,7 +80,8 @@
   );
 
   $effect(() => {
-    if (seg && seg !== tab.key) navigate(`/settings/${tab.key}`, { replace: true });
+    if (seg && seg !== tab.key)
+      navigate(`/settings/${tab.key}`, { replace: true });
   });
 
   $effect(() =>
@@ -101,7 +102,9 @@
 
 {#snippet account()}
   {#if session.me}
-    <span class="who" use:tip={`signed in as ${session.me.email}`}>{session.me.email}</span>
+    <span class="who" use:tip={`signed in as ${session.me.email}`}
+      >{session.me.email}</span
+    >
     <Button
       variant="ghost"
       square

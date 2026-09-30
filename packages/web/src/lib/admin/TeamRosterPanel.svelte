@@ -64,7 +64,8 @@
     {headless.length}
     {headless.length === 1 ? t("team") : t("teams")} with no
     {roleLabel("team", "admin")}: nobody there can curate.
-    <button class="link" onclick={() => showSection("users")}>open users</button>
+    <button class="link" onclick={() => showSection("users")}>open users</button
+    >
   </Note>
 {/if}
 

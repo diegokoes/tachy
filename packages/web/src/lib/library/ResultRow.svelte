@@ -21,60 +21,59 @@
   } = $props();
 </script>
 
-    <button
-      class="row {item.kind}"
-      class:cursor={selected}
-      bind:this={el}
-      onclick={onopen}
-      onfocus={onfocus}
-      onmouseenter={onhover}
+<button
+  class="row {item.kind}"
+  class:cursor={selected}
+  bind:this={el}
+  onclick={onopen}
+  {onfocus}
+  onmouseenter={onhover}
+>
+  {#if item.relevance != null}
+    <span
+      class="gauge {item.grade ?? 'weak'}"
+      role="meter"
+      aria-valuenow={Math.round(item.relevance * 100)}
+      aria-valuemin="0"
+      aria-valuemax="100"
+      aria-label="match"
+      title="{item.grade ?? 'weak'} match, {Math.round(item.relevance * 100)}%"
     >
-      {#if item.relevance != null}
-        <span
-          class="gauge {item.grade ?? 'weak'}"
-          role="meter"
-          aria-valuenow={Math.round(item.relevance * 100)}
-          aria-valuemin="0"
-          aria-valuemax="100"
-          aria-label="match"
-          title="{item.grade ?? 'weak'} match, {Math.round(
-            item.relevance * 100,
-          )}%"
-        >
-          <span class="fill" style="height: {fill(item.relevance)}%"></span>
-        </span>
-      {/if}
+      <span class="fill" style="height: {fill(item.relevance)}%"></span>
+    </span>
+  {/if}
 
-      <span class="body">
-        <span class="line">
-          <span class="title">{item.title}</span>
-          <span class="tr">
-            {#if item.version}<span class="ver">{item.version}</span>{/if}
-          </span>
-        </span>
-        {#if item.snippet}
-          <span class="snippet"
-            >{#each item.snippet as s}{#if s.hit}<mark>{s.t}</mark>{:else}{s.t}{/if}{/each}</span
+  <span class="body">
+    <span class="line">
+      <span class="title">{item.title}</span>
+      <span class="tr">
+        {#if item.version}<span class="ver">{item.version}</span>{/if}
+      </span>
+    </span>
+    {#if item.snippet}
+      <span class="snippet"
+        >{#each item.snippet as s}{#if s.hit}<mark>{s.t}</mark
+            >{:else}{s.t}{/if}{/each}</span
+      >
+    {/if}
+    <span class="foot">
+      <span class="tags">
+        {#if item.customer}
+          <Chip
+            tone="accent"
+            title="customer-specific; not general product behaviour"
+            >{item.customer}</Chip
           >
         {/if}
-        <span class="foot">
-          <span class="tags">
-            {#if item.customer}
-              <Chip
-                tone="accent"
-                title="customer-specific; not general product behaviour"
-                >{item.customer}</Chip
-              >
-            {/if}
-            {#each item.tags as tag}<Chip>{tag}</Chip>{/each}
-          </span>
-          <span class="state {item.status}">{item.status}</span>
-          <span class="stamp">
-            {#if item.updated}<span>updated {item.updated}</span>{/if}
-          </span>
-        </span>
+        {#each item.tags as tag}<Chip>{tag}</Chip>{/each}
       </span>
-    </button>
+      <span class="state {item.status}">{item.status}</span>
+      <span class="stamp">
+        {#if item.updated}<span>updated {item.updated}</span>{/if}
+      </span>
+    </span>
+  </span>
+</button>
 
 <style>
   .row {

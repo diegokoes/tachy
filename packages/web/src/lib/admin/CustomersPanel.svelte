@@ -25,11 +25,9 @@
     CustomerUnitRow,
     ResolvedFact,
   } from "@tachy/contract";
-import { INFO } from "./help";
-import { csv } from "../fields";
+  import { INFO } from "./help";
+  import { csv } from "../fields";
   import { sectionHoist } from "./sectionAction.svelte";
-
-
 
   const customers = createResource(() => api.get<Customer[]>("/customers"), []);
   const products = createResource(() => api.get<Product[]>("/products"), []);
@@ -53,7 +51,16 @@ import { csv } from "../fields";
   let busy = $state<string | null>(null);
 
   /* One row of each form per customer, so two open profiles never share a draft. */
-  let factForm = $state({ kind: "", label: "", value: "", source: "", notes: "", product: "", component: "", unit: "" });
+  let factForm = $state({
+    kind: "",
+    label: "",
+    value: "",
+    source: "",
+    notes: "",
+    product: "",
+    component: "",
+    unit: "",
+  });
   let compForm = $state({ product: "", component: "" });
 
   async function loadProfile(slug: string) {
@@ -72,7 +79,16 @@ import { csv } from "../fields";
   }
 
   async function openProfile(slug: string) {
-    factForm = { kind: "", label: "", value: "", source: "", notes: "", product: "", component: "", unit: "" };
+    factForm = {
+      kind: "",
+      label: "",
+      value: "",
+      source: "",
+      notes: "",
+      product: "",
+      component: "",
+      unit: "",
+    };
     compForm = { product: products.data[0]?.slug ?? "", component: "" };
     if (compForm.product) await components.load(compForm.product);
     kinds = await api
@@ -98,7 +114,16 @@ import { csv } from "../fields";
           ? { product_slug: factForm.product, component: factForm.component }
           : {}),
       });
-      factForm = { kind: "", label: "", value: "", source: "", notes: "", product: "", component: "", unit: "" };
+      factForm = {
+        kind: "",
+        label: "",
+        value: "",
+        source: "",
+        notes: "",
+        product: "",
+        component: "",
+        unit: "",
+      };
       await loadProfile(slug);
       kinds = await api.get<{ kind: string; count: number }[]>(
         "/customer-fact-kinds",
@@ -177,7 +202,10 @@ import { csv } from "../fields";
   }
 
   /** A unit cannot sit under, or conform to, its own descendant. */
-  function unitSubtree(rows: CustomerUnitRow[], root: CustomerUnitRow): string[] {
+  function unitSubtree(
+    rows: CustomerUnitRow[],
+    root: CustomerUnitRow,
+  ): string[] {
     const kids = rows.filter((u) => u.parent_id === root.id);
     return [root.slug, ...kids.flatMap((k) => unitSubtree(rows, k))];
   }
@@ -353,10 +381,10 @@ import { csv } from "../fields";
     if (!q) return customers.data;
     return customers.data.filter((c) =>
       [
-      c.slug ?? "",
-      c.name ?? "",
-      (c.aliases ?? []).join(" "),
-      (c.email_domains ?? []).join(" "),
+        c.slug ?? "",
+        c.name ?? "",
+        (c.aliases ?? []).join(" "),
+        (c.email_domains ?? []).join(" "),
       ]
         .join(" ")
         .toLowerCase()
@@ -391,7 +419,8 @@ import { csv } from "../fields";
           <button
             class="tiny"
             title="rename, move, or add an alias"
-            onclick={() => startEditUnit(r.slug, u)}>edit</button>
+            onclick={() => startEditUnit(r.slug, u)}>edit</button
+          >
           <DeleteButton
             label="remove unit"
             onclick={() => delUnit(r.slug, u.slug)}
@@ -400,15 +429,26 @@ import { csv } from "../fields";
         {#if editUnit[r.slug] === u.slug}
           <div class="frow add" style="--depth: {depth}">
             <span class="indent"></span>
-            <input aria-label="unit name" placeholder="name" bind:value={editForm.name} />
-            <input aria-label="unit kind" placeholder="kind" bind:value={editForm.kind} />
+            <input
+              aria-label="unit name"
+              placeholder="name"
+              bind:value={editForm.name}
+            />
+            <input
+              aria-label="unit kind"
+              placeholder="kind"
+              bind:value={editForm.kind}
+            />
             <Select
               bind:value={editForm.parent}
               aria-label="inside"
               options={[
                 { value: "", label: "top level" },
                 ...(units[r.slug] ?? [])
-                  .filter((x) => !unitSubtree(units[r.slug] ?? [], u).includes(x.slug))
+                  .filter(
+                    (x) =>
+                      !unitSubtree(units[r.slug] ?? [], u).includes(x.slug),
+                  )
                   .map((x) => ({ value: x.slug, label: `inside ${x.slug}` })),
               ]}
             />
@@ -419,7 +459,10 @@ import { csv } from "../fields";
                 { value: "", label: "no shared profile" },
                 ...(units[r.slug] ?? [])
                   .filter((x) => x.slug !== u.slug)
-                  .map((x) => ({ value: x.slug, label: `conforms to ${x.slug}` })),
+                  .map((x) => ({
+                    value: x.slug,
+                    label: `conforms to ${x.slug}`,
+                  })),
               ]}
             />
             <input
@@ -428,10 +471,19 @@ import { csv } from "../fields";
               title="Alternate names. Resolved like the slug."
               bind:value={editForm.aliases}
             />
-            <Button size="sm" variant="primary" busy={busy === r.slug} onclick={() => saveUnit(r.slug)}>
+            <Button
+              size="sm"
+              variant="primary"
+              busy={busy === r.slug}
+              onclick={() => saveUnit(r.slug)}
+            >
               save
             </Button>
-            <Button size="sm" variant="ghost" onclick={() => (editUnit[r.slug] = "")}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onclick={() => (editUnit[r.slug] = "")}
+            >
               cancel
             </Button>
           </div>
@@ -443,15 +495,31 @@ import { csv } from "../fields";
         </span>
       {/if}
       <div class="frow add">
-        <input aria-label="unit slug" placeholder="slug" bind:value={unitForm.slug} />
-        <input aria-label="unit name" placeholder="name" bind:value={unitForm.name} />
-        <input aria-label="unit kind" placeholder="kind" list="unit-kinds" bind:value={unitForm.kind} />
+        <input
+          aria-label="unit slug"
+          placeholder="slug"
+          bind:value={unitForm.slug}
+        />
+        <input
+          aria-label="unit name"
+          placeholder="name"
+          bind:value={unitForm.name}
+        />
+        <input
+          aria-label="unit kind"
+          placeholder="kind"
+          list="unit-kinds"
+          bind:value={unitForm.kind}
+        />
         <Select
           bind:value={unitForm.parent}
           aria-label="inside"
           options={[
             { value: "", label: "top level" },
-            ...(units[r.slug] ?? []).map((u) => ({ value: u.slug, label: `inside ${u.slug}` })),
+            ...(units[r.slug] ?? []).map((u) => ({
+              value: u.slug,
+              label: `inside ${u.slug}`,
+            })),
           ]}
         />
         <Select
@@ -459,7 +527,10 @@ import { csv } from "../fields";
           aria-label="conforms to"
           options={[
             { value: "", label: "no shared profile" },
-            ...(units[r.slug] ?? []).map((u) => ({ value: u.slug, label: `conforms to ${u.slug}` })),
+            ...(units[r.slug] ?? []).map((u) => ({
+              value: u.slug,
+              label: `conforms to ${u.slug}`,
+            })),
           ]}
         />
         <Button
@@ -470,7 +541,9 @@ import { csv } from "../fields";
           title="add unit"
           aria-label="add unit"
           busy={busy === r.slug}
-          disabled={!unitForm.slug.trim() || !unitForm.name.trim() || !unitForm.kind.trim()}
+          disabled={!unitForm.slug.trim() ||
+            !unitForm.name.trim() ||
+            !unitForm.kind.trim()}
           onclick={() => addUnit(r.slug)}
         />
       </div>
@@ -524,22 +597,23 @@ import { csv } from "../fields";
           <span class="dim sm">Nothing applies to this unit yet.</span>
         {/if}
       {:else}
-      {#each facts[r.slug] ?? [] as f (f.id)}
-        <div class="frow">
-          <Badge tone="muted">{f.kind}</Badge>
-          {#if f.label}<span class="lbl">{f.label}</span>{/if}
-          <code>{f.value}</code>
-          <DeleteButton
-            label="remove specific"
-            onclick={() => delFact(r.slug, f.id)}
-          />
-        </div>
-      {/each}
-      {#if !(facts[r.slug] ?? []).length}
-        <span class="dim sm">
-          Nothing recorded. An answer for them is only as good as what is here.
-        </span>
-      {/if}
+        {#each facts[r.slug] ?? [] as f (f.id)}
+          <div class="frow">
+            <Badge tone="muted">{f.kind}</Badge>
+            {#if f.label}<span class="lbl">{f.label}</span>{/if}
+            <code>{f.value}</code>
+            <DeleteButton
+              label="remove specific"
+              onclick={() => delFact(r.slug, f.id)}
+            />
+          </div>
+        {/each}
+        {#if !(facts[r.slug] ?? []).length}
+          <span class="dim sm">
+            Nothing recorded. An answer for them is only as good as what is
+            here.
+          </span>
+        {/if}
       {/if}
       <div class="frow add">
         <input
@@ -578,7 +652,11 @@ import { csv } from "../fields";
           placeholder="ticket URL, wiki page, person"
           bind:value={factForm.source}
         />
-        <input aria-label="notes" placeholder="notes (optional)" bind:value={factForm.notes} />
+        <input
+          aria-label="notes"
+          placeholder="notes (optional)"
+          bind:value={factForm.notes}
+        />
         <Select
           bind:value={factForm.product}
           aria-label="fact product"
@@ -632,8 +710,7 @@ import { csv } from "../fields";
       <span class="dim">components they run</span>
       <div class="chips">
         {#each p?.components ?? [] as c (c.product_slug + c.slug)}
-          <Chip
-            onremove={() => delComponent(r.slug, c.product_slug, c.slug)}
+          <Chip onremove={() => delComponent(r.slug, c.product_slug, c.slug)}
             >{c.slug}</Chip
           >
         {/each}

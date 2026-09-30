@@ -86,7 +86,9 @@
             <span class="t">{it.label}</span>
             <!-- Always present, empty for the enums: the label centres in the
                  same slot on every row, count or no count. -->
-            <span class="n">{it.kind === "enum" || it.unscoped ? "" : it.count}</span>
+            <span class="n"
+              >{it.kind === "enum" || it.unscoped ? "" : it.count}</span
+            >
           </button>
         </li>
       {/each}

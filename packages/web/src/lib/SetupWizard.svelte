@@ -13,7 +13,17 @@
   import { slugify } from "./slug";
   import AuthShell from "./AuthShell.svelte";
   import TypeLine from "./TypeLine.svelte";
-  import { Actions, Button, Checkbox, DeleteButton, Field, Meter, Note, Panel, Select } from "./tui";
+  import {
+    Actions,
+    Button,
+    Checkbox,
+    DeleteButton,
+    Field,
+    Meter,
+    Note,
+    Panel,
+    Select,
+  } from "./tui";
 
   let { onDone, onSkip }: { onDone: () => void; onSkip: () => void } = $props();
 
@@ -251,10 +261,7 @@
           <h2>Global agent config</h2>
           <div class="grid">
             <Field label="provider">
-              <Select
-                bind:value={agentProvider}
-                options={PROVIDER_OPTIONS}
-              />
+              <Select bind:value={agentProvider} options={PROVIDER_OPTIONS} />
             </Field>
             <Field label="model">
               <input bind:value={agentModel} />
@@ -269,20 +276,23 @@
             </Field>
             {#if agentKeyIsOAuth}
               <Note tone="accent">
-                Claude <strong>subscription token</strong>. Saved as your own key, under
-                this admin account; everyone else sets theirs in Settings › Keys.
+                Claude <strong>subscription token</strong>. Saved as your own
+                key, under this admin account; everyone else sets theirs in
+                Settings › Keys.
               </Note>
             {/if}
             <Field label="effort">
-              <Select
-                bind:value={agentEffort}
-                options={[...AGENT_EFFORTS]}
-              />
+              <Select bind:value={agentEffort} options={[...AGENT_EFFORTS]} />
             </Field>
           </div>
           <label class="check">
-            <Checkbox bind:checked={redaction} ariaLabel="scrub emails, secrets and names before they reach the model" />
-            <span>scrub emails, secrets and names before they reach the model</span>
+            <Checkbox
+              bind:checked={redaction}
+              ariaLabel="scrub emails, secrets and names before they reach the model"
+            />
+            <span
+              >scrub emails, secrets and names before they reach the model</span
+            >
           </label>
         {:else}
           <h2>Ready</h2>
@@ -302,7 +312,8 @@
           back={step > 0 ? { label: "back", onclick: back } : undefined}
           primary={{
             label: STEPS[step] === "agent" ? "finish" : "next",
-            icon: STEPS[step] === "agent" ? ("create" as const) : ("next" as const),
+            icon:
+              STEPS[step] === "agent" ? ("create" as const) : ("next" as const),
             onclick: next,
             busy,
           }}

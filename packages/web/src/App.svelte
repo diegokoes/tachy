@@ -17,7 +17,12 @@
   import { loadThemeFromStorage, themeState } from "./lib/theme.svelte";
   import { loadFonts } from "./lib/fonts.svelte";
   import { loadDateFormat } from "./lib/dates.svelte";
-  import { router, openSection, section, startRouter } from "./lib/router.svelte";
+  import {
+    router,
+    openSection,
+    section,
+    startRouter,
+  } from "./lib/router.svelte";
   import {
     refreshNotifications,
     startNotifications,
@@ -27,7 +32,15 @@
   import { loadVim, vimState, scrollBindings } from "./lib/vim.svelte";
   import { subnav, topActions } from "./lib/subnav.svelte";
   import { setScrollport } from "./lib/scrollport.svelte";
-  import { HintRule, Icon, Panel, Scrollbar, Tabs, TipHost, tip } from "./lib/tui";
+  import {
+    HintRule,
+    Icon,
+    Panel,
+    Scrollbar,
+    Tabs,
+    TipHost,
+    tip,
+  } from "./lib/tui";
 
   const nav = $derived(navItems());
 
@@ -326,10 +339,9 @@
       use:jellyPress
     >
       <span class="lbl"
-        ><span class="br" aria-hidden="true">[</span
-        ><span class="ico"><Icon name="settings" weight={7} /></span
-        ><span class="br" aria-hidden="true">]</span
-        ></span
+        ><span class="br" aria-hidden="true">[</span><span class="ico"
+          ><Icon name="settings" weight={7} /></span
+        ><span class="br" aria-hidden="true">]</span></span
       >
     </button>
 
@@ -348,10 +360,9 @@
       use:jellyPress
     >
       <span class="lbl"
-        ><span class="br" aria-hidden="true">[</span
-        ><span class="ico"><Icon name="flag" weight={7} /></span
-        ><span class="br" aria-hidden="true">]</span
-        ></span
+        ><span class="br" aria-hidden="true">[</span><span class="ico"
+          ><Icon name="flag" weight={7} /></span
+        ><span class="br" aria-hidden="true">]</span></span
       >
     </button>
 
@@ -392,22 +403,22 @@
 
       <Panel grow>
         <div class="shell">
-        <div class="content">
-          <main id="main-content" bind:this={mainEl}>
-            {#if view === "library"}
-              <LibraryView />
-            {:else if view === "wiki"}
-              <WikiView />
-            {:else if view === "admin"}
-              <AdminView />
-            {:else if view === "settings"}
-              <SettingsView />
-            {:else}
-              <ChatView />
-            {/if}
-          </main>
-          <Scrollbar target={mainEl} controls="main-content" />
-        </div>
+          <div class="content">
+            <main id="main-content" bind:this={mainEl}>
+              {#if view === "library"}
+                <LibraryView />
+              {:else if view === "wiki"}
+                <WikiView />
+              {:else if view === "admin"}
+                <AdminView />
+              {:else if view === "settings"}
+                <SettingsView />
+              {:else}
+                <ChatView />
+              {/if}
+            </main>
+            <Scrollbar target={mainEl} controls="main-content" />
+          </div>
 
           <div class="hintrow">
             <HintRule hints={hints()} />
@@ -669,9 +680,7 @@
        Panel's own rule sits above that, so a row the depth of the recess
        centres too high — six pixels of air above it against fourteen below,
        which reads as pinned to the top edge rather than centred in the row. */
-    height: calc(
-      var(--sub-depth) + var(--sub-air) + var(--panel-line-w)
-    );
+    height: calc(var(--sub-depth) + var(--sub-air) + var(--panel-line-w));
     /* Sized to the corner rather than to its contents, so the row centres in
        the space the carve opens up instead of hugging the window's right
        edge. The width is what is left of the top row once the recess mouth

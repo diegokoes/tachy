@@ -23,7 +23,9 @@
     {#if i}<span class="join">then</span>{/if}
     {#each caps as cap, j}
       {#if j}<span class="join" aria-hidden="true">+</span>{/if}
-      <kbd class="cap" style="--i: {i * 2 + j}"><span class="face">{cap}</span></kbd>
+      <kbd class="cap" style="--i: {i * 2 + j}"
+        ><span class="face">{cap}</span></kbd
+      >
     {/each}
   {/each}
 </span>

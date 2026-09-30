@@ -21,12 +21,13 @@
   let reply = $state("");
   let busy = $state(false);
 
-  const STATUS_TONE: Record<ReportStatus, "warn" | "accent" | "ok" | "muted"> = {
-    open: "warn",
-    in_progress: "accent",
-    resolved: "ok",
-    closed: "muted",
-  };
+  const STATUS_TONE: Record<ReportStatus, "warn" | "accent" | "ok" | "muted"> =
+    {
+      open: "warn",
+      in_progress: "accent",
+      resolved: "ok",
+      closed: "muted",
+    };
   const typeTone = (t: ReportType) => (t === "bug" ? "danger" : "accent");
 
   async function loadList() {
@@ -126,14 +127,22 @@
               class:on={selected?.id === r.id}
               onclick={() => open(r.id)}
             >
-              <span class="ico"><Icon name={r.type === "bug" ? "bug" : "lightbulb"} size="1em" weight={7} /></span>
+              <span class="ico"
+                ><Icon
+                  name={r.type === "bug" ? "bug" : "lightbulb"}
+                  size="1em"
+                  weight={7}
+                /></span
+              >
               <span class="who">
                 <span class="ttl">{r.title || r.body_text.slice(0, 60)}</span>
                 <span class="meta">
                   {r.reporter_name ?? "someone"} · {age(r.created_at)} ago
                 </span>
               </span>
-              <Badge tone={STATUS_TONE[r.status]}>{r.status.replace("_", " ")}</Badge>
+              <Badge tone={STATUS_TONE[r.status]}
+                >{r.status.replace("_", " ")}</Badge
+              >
             </button>
           </li>
         {/each}
@@ -166,7 +175,11 @@
         <div class="thread">
           {#each s.messages as m (m.id)}
             <div class="msg {m.direction}">
-              <span class="from">{m.direction === "admin" ? (m.author_name ?? "admin") : (s.reporter_name ?? "reporter")}</span>
+              <span class="from"
+                >{m.direction === "admin"
+                  ? (m.author_name ?? "admin")
+                  : (s.reporter_name ?? "reporter")}</span
+              >
               <p>{m.body_text}</p>
             </div>
           {/each}
@@ -176,7 +189,10 @@
       {#if error}<Note tone="danger">{error}</Note>{/if}
 
       <div class="reply">
-        <textarea rows="3" placeholder="reply to the reporter…" bind:value={reply}></textarea>
+        <textarea
+          rows="3"
+          placeholder="reply to the reporter…"
+          bind:value={reply}></textarea>
         <div class="actions">
           <div class="statuses">
             {#each REPORT_STATUSES as st}

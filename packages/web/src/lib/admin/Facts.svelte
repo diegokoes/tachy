@@ -54,7 +54,10 @@
     </div>
   {/each}
   {#if cut.rest.length}
-    <div class="row more" title={cut.rest.map((f) => `${f.label}: ${f.value}`).join(" · ")}>
+    <div
+      class="row more"
+      title={cut.rest.map((f) => `${f.label}: ${f.value}`).join(" · ")}
+    >
       <dt>+{cut.rest.length} more</dt>
     </div>
   {/if}

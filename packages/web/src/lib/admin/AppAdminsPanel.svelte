@@ -26,7 +26,9 @@
   /* Two ways to lose the keys: nobody holds them, or the only person who does
      cannot sign in. Both are worth saying out loud. */
   const live = $derived(
-    rows.filter((u) => !u.disabled && (signIn(u, sso).password || signIn(u, sso).sso)),
+    rows.filter(
+      (u) => !u.disabled && (signIn(u, sso).password || signIn(u, sso).sso),
+    ),
   );
 
   const columns: Column<UserRow>[] = $derived([
@@ -57,7 +59,12 @@
       ? "disabled"
       : "no way in"}
   <span class="mark" class:on use:tip={why}>
-    <Icon name={on ? "success" : "reject"} size="1.05em" weight={7} label={why} />
+    <Icon
+      name={on ? "success" : "reject"}
+      size="1.05em"
+      weight={7}
+      label={why}
+    />
   </span>
 {/snippet}
 
@@ -71,8 +78,8 @@
 
 {#if !live.length && rows.length}
   <Note tone="danger">
-    No {roleLabel("app", "admin")} can currently sign in. Nobody can change
-    settings, users or connections until one can.
+    No {roleLabel("app", "admin")} can currently sign in. Nobody can change settings,
+    users or connections until one can.
   </Note>
 {/if}
 

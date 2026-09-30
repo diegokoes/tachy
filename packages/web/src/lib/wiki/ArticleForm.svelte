@@ -264,7 +264,10 @@
   }
 
   const altFrom = (name: string) =>
-    name.replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").trim() || "image";
+    name
+      .replace(/\.[a-z0-9]+$/i, "")
+      .replace(/[-_]+/g, " ")
+      .trim() || "image";
 
   async function attach(files: File[]) {
     uploadError = null;
@@ -325,8 +328,7 @@
       categories = cats;
       components = comps;
       if (seed?.component_id)
-        component =
-          comps.find((c) => c.id === seed.component_id)?.slug ?? "";
+        component = comps.find((c) => c.id === seed.component_id)?.slug ?? "";
     } catch (e) {
       loadError = errText(e);
     }
@@ -382,7 +384,13 @@
 </script>
 
 {#snippet formActions()}
-  <FormActions form="wiki-form" {saving} title={editing ? "save changes" : "create article"} create={!editing} oncancel={onCancel} />
+  <FormActions
+    form="wiki-form"
+    {saving}
+    title={editing ? "save changes" : "create article"}
+    create={!editing}
+    oncancel={onCancel}
+  />
 {/snippet}
 
 <form id="wiki-form" class="article-form" onsubmit={submit}>
@@ -399,11 +407,7 @@
         ? "The article's address. Renaming it rewrites [[links]] to it, and the old address keeps working."
         : "The article's address, and what [[links]] to it use."}
     >
-      <input
-        bind:value={slug}
-        oninput={() => (slugTouched = true)}
-        required
-      />
+      <input bind:value={slug} oninput={() => (slugTouched = true)} required />
     </Field>
     <Field label="status">
       <AsciiSelect bind:value={status} options={[...REFERENCE_STATUSES]} />
@@ -455,7 +459,7 @@
         variant="ghost"
         size="sm"
         icon={preview ? "eyeClosed" : "eye"}
-      morph
+        morph
         title={preview ? "hide preview" : "show preview"}
         aria-label={preview ? "hide preview" : "show preview"}
         onclick={() => (preview = !preview)}
@@ -463,7 +467,11 @@
     </div>
     <!-- svelte-ignore a11y_no_static_element_interactions -- a drop target
          for images, beside the textarea that is the real control -->
-    <div class="editwrap" ondragover={(e) => e.preventDefault()} ondrop={onDrop}>
+    <div
+      class="editwrap"
+      ondragover={(e) => e.preventDefault()}
+      ondrop={onDrop}
+    >
       <textarea
         bind:this={bodyEl}
         bind:value={body}
@@ -473,8 +481,7 @@
         onkeydown={onBodyKeydown}
         onclick={syncPicker}
         onpaste={onPaste}
-        onblur={() => setTimeout(() => (picking = false), 150)}
-      ></textarea>
+        onblur={() => setTimeout(() => (picking = false), 150)}></textarea>
       {#if picking && suggestions.length}
         <ul class="picker-pop">
           {#each suggestions as s, i (s.insert)}
