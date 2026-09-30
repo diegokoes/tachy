@@ -4,6 +4,7 @@ import {
   JOB_RESOURCE_CLASSES,
   JOB_STATUSES,
   JOB_TRIGGERS,
+  JOB_QUEUES,
   jobQueue,
   type JobResourceClass,
   type JobStatus,
@@ -81,6 +82,24 @@ export async function jobCensus(
     group by kind
     order by 2 desc, 1
   `;
+
+  const waits = await sql`
+    select queue, count(*)::int as started,
+      avg(extract(epoch from started_at - created_at))::float8 as avg_wait,
+      max(extract(epoch from started_at - created_at))::float8 as max_wait
+    from job_runs
+    where ${window} and queue is not null and started_at is not null
+    group by queue
+  `;
+  const by_queue = JOB_QUEUES.map((q) => {
+    const w = waits.find((r) => r.queue === q.name);
+    return {
+      queue: q.name,
+      started: w?.started ?? 0,
+      avg_wait_seconds: w?.avg_wait ?? null,
+      max_wait_seconds: w?.max_wait ?? null,
+    };
+  });
 
   const live = await sql`
     select resource_class, status, count(*)::int as n
@@ -161,6 +180,7 @@ export async function jobCensus(
     by_class,
     per_day: [...days_.values()],
     by_kind: [...by_kind] as unknown as JobCensus["by_kind"],
+    by_queue,
     success,
     now: current,
     definitions: {
