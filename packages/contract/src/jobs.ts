@@ -230,3 +230,46 @@ export interface JobDefinition {
   created_at: string;
   updated_at: string;
 }
+
+/** A job worker process, as it last reported itself. */
+export interface JobWorkerRow {
+  id: string;
+  host: string;
+  pid: number;
+  classes: JobResourceClass[];
+  queues: JobQueueName[];
+  concurrency: number;
+  /** Slots per class within `concurrency`, where the process limits them. */
+  per_class: Partial<Record<JobResourceClass, number>>;
+  draining: boolean;
+  started_at: string;
+  last_seen_at: string;
+  /** Seen within the last minute. A dead worker stays listed a while. */
+  alive: boolean;
+  runs: {
+    id: string;
+    kind: string;
+    queue: JobQueueName | null;
+    params: Record<string, unknown>;
+    definition_name: string | null;
+    progress: number | null;
+    progress_note: string | null;
+    started_at: string;
+  }[];
+}
+
+/** What the workers page follows live. */
+export interface JobLive {
+  workers: JobWorkerRow[];
+  queues: {
+    name: JobQueueName;
+    class: JobResourceClass;
+    cap: number | null;
+    queued: number;
+    running: number;
+    oldest_queued_at: string | null;
+    /** Live workers that claim from this queue, and the slots they bring. */
+    workers: number;
+    slots: number;
+  }[];
+}

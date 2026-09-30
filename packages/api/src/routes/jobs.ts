@@ -17,6 +17,7 @@ import {
   getJobDefinition,
   getJobRun,
   jobCensus,
+  jobLive,
   jobDefinitionInput,
   listJobDefinitionChanges,
   listJobDefinitions,
@@ -51,6 +52,8 @@ export const jobs = new Hono()
   })
 
   .get("/census", async (c) => c.json(await jobCensus(14)))
+
+  .get("/live", async (c) => c.json(await jobLive()))
 
   .post("/schedule-preview", zValidator("json", previewSchema), async (c) => {
     const { schedule, timezone } = c.req.valid("json");

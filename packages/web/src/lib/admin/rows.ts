@@ -12,6 +12,8 @@ import type {
   JobQueueName,
   JobRun,
   JobRunListed,
+  JobLive,
+  JobWorkerRow,
   KnowledgeCensus,
   LabelRow,
   LibraryEngagement,
@@ -256,6 +258,7 @@ export type JobKindInfo = {
 };
 export type JobRunRow = JobRun;
 export type JobRunListedRow = JobRunListed;
+export type { JobLive, JobWorkerRow };
 export type JobDefinitionRow = JobDefinition & {
   next_run: string | null;
   last_run: Pick<JobRun, "id" | "status" | "created_at" | "error"> | null;
