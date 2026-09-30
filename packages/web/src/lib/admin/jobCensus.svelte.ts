@@ -19,6 +19,7 @@ export const EMPTY_JOBS: JobCensus = {
   by_class: { ...zero },
   per_day: [],
   by_kind: [],
+  by_queue: [],
   success: {
     light: { finished: 0, succeeded: 0 },
     heavy: { finished: 0, succeeded: 0 },
