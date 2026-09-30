@@ -593,7 +593,7 @@ create table analysis_runs (
     id              uuid primary key default gen_random_uuid(),
     work_item_id    uuid references work_items(id) on delete set null,
     user_id         uuid references users(id) on delete set null,
-    mode            text not null check (mode in ('ingest','consult','sync','create','code','chat','review')),
+    mode            text not null check (mode in ('ingest','consult','sync','create','code','chat','review','flow')),
     model           text,
     input_tokens    integer,
     output_tokens   integer,
@@ -1106,7 +1106,7 @@ create table job_definitions (
     -- release to read on rollback; drop once no deployment runs it.
     resource_class     text check (resource_class in ('light','heavy')),
     -- Overrides the kind's queue; null takes the kind's.
-    queue              text check (queue in ('index','embed','testing','sync','maintenance')),
+    queue              text check (queue in ('index','embed','testing','sync','flows','maintenance')),
     timeout            text,
     overlap            text check (overlap in ('skip','queue')),
     notify             text not null default 'failure' check (notify in ('failure','always','never')),
@@ -1128,7 +1128,7 @@ create table job_runs (
     -- The pool that serves the run, taken from its queue when it is queued.
     resource_class   text not null check (resource_class in ('light','heavy')),
     -- Null only on runs queued before queues existed; workers claim those by class.
-    queue            text check (queue in ('index','embed','testing','sync','maintenance')),
+    queue            text check (queue in ('index','embed','testing','sync','flows','maintenance')),
     -- Claim order within a queue, highest first.
     priority         smallint not null default 0,
     -- At most one queued or running run per key, e.g. one reindex per repo.
@@ -1197,6 +1197,46 @@ create table job_definition_changes (
 );
 
 create index job_definition_changes_def_idx on job_definition_changes(definition_id, created_at desc);
+
+-- A team's automation: triggers and a tree of steps (contract FlowGraph). Its
+-- steps act with the credentials of whoever saved it last, so what a flow does
+-- is always something that person could do and chose.
+create table flows (
+    id              uuid primary key default gen_random_uuid(),
+    name            text not null,
+    -- Null: global, edited by app admins only.
+    team_id         uuid references teams(id) on delete cascade,
+    enabled         boolean not null default false,
+    graph           jsonb not null default '{"triggers":[],"steps":[]}'::jsonb,
+    run_as_user_id  uuid references users(id) on delete set null,
+    created_by      uuid references users(id) on delete set null,
+    created_at      timestamptz not null default now(),
+    updated_at      timestamptz not null default now()
+);
+
+create unique index flows_name_idx on flows(team_id, lower(name)) nulls not distinct;
+
+create trigger flows_updated_at
+    before update on flows
+    for each row execute function set_updated_at();
+
+-- One pass of a flow over one item (or none), with what each step did.
+create table flow_runs (
+    id            uuid primary key default gen_random_uuid(),
+    flow_id       uuid not null references flows(id) on delete cascade,
+    job_run_id    uuid references job_runs(id) on delete set null,
+    trigger_id    text,
+    work_item_id  uuid references work_items(id) on delete set null,
+    dry_run       boolean not null default false,
+    status        text not null default 'running'
+                  check (status in ('running','succeeded','failed','stopped')),
+    steps         jsonb not null default '[]'::jsonb,
+    error         text,
+    started_at    timestamptz not null default now(),
+    finished_at   timestamptz
+);
+
+create index flow_runs_flow_idx on flow_runs(flow_id, started_at desc);
 
 -- Load runs started from the admin page (DEPLOYMENT-ARCHITECTURE.md §11.3).
 -- Their history is the latency record per release.

@@ -145,6 +145,7 @@ describe("jobs API", () => {
       "embed",
       "testing",
       "sync",
+      "flows",
       "maintenance",
     ]);
     expect(live.queues.at(-1)).toMatchObject({
