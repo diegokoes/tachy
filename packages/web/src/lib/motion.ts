@@ -471,6 +471,19 @@ export function unfold(o: {
      circle, to the window's radius. Explicit elliptical radii rather than
      "50%": a percentage and a length do not interpolate into one another. */
   const blob = { d: 0, m: 1, k: 0 };
+
+  /* The border draws only once the window has its shape. Scaled unevenly on
+     the two axes, a hairline changes weight every frame and ripples. */
+  const line = getComputedStyle(plate).borderTopColor;
+  const clear = /^rgba?\(/.test(line)
+    ? line.replace(/^rgba?\(([^,]+,[^,]+,[^,)]+).*$/, "rgba($1, 0)")
+    : "transparent";
+  const edge = (color: string) => ({
+    borderTopColor: color,
+    borderRightColor: color,
+    borderBottomColor: color,
+    borderLeftColor: color,
+  });
   let w = 0;
   let h = 0;
   const measure = () => {
@@ -492,7 +505,10 @@ export function unfold(o: {
     Object.assign(blob, { d: 0, m: 1, k: 0 });
     plate.style.transform = "";
     plate.style.borderRadius = "";
-    gsap.set(plate, { clearProps: "opacity" });
+    gsap.set(plate, {
+      clearProps:
+        "opacity,borderTopColor,borderRightColor,borderBottomColor,borderLeftColor",
+    });
     gsap.set(parts, { clearProps: "opacity" });
     landed?.();
     landed = undefined;
@@ -517,7 +533,8 @@ export function unfold(o: {
       .to(blob, { d: size * 0.5, duration: 0.1, ease: "power1.in" }, 0)
       .to(blob, { m: 1, duration: 0.24, ease: "back.out(1.7)" }, 0.07)
       .to(blob, { k: 0, duration: 0.2, ease: "power2.inOut" }, 0.09)
-      .to(parts, { opacity: 1, duration: 0.14, ease: "power1.out" }, 0.15);
+      .to(parts, { opacity: 1, duration: 0.14, ease: "power1.out" }, 0.15)
+      .to(plate, { ...edge(line), duration: 0.1, ease: "none" }, 0.22);
   };
 
   /** Returns how long the fold takes, in seconds. */
@@ -536,6 +553,7 @@ export function unfold(o: {
     tl = gsap
       .timeline({ onUpdate: draw })
       .to(parts, { opacity: 0, duration: 0.07, ease: "power1.out" }, 0)
+      .to(plate, { ...edge(clear), duration: 0.04, ease: "none" }, 0)
       .to(blob, { m: 0, k: 1, duration: 0.13, ease: "power2.out" }, 0)
       .to(blob, { d: 0, duration: 0.22, ease: "power2.in" }, 0)
       .to(plate, { opacity: 0, duration: 0.04, ease: "none" }, 0.18);
@@ -550,7 +568,7 @@ export function unfold(o: {
       if (still) return land();
       measure();
       Object.assign(blob, { d: Math.min(w, h) * 0.08, m: 0, k: 1 });
-      gsap.set(plate, { opacity: 0 });
+      gsap.set(plate, { opacity: 0, ...edge(clear) });
       gsap.set(parts, { opacity: 0 });
       draw();
       /* The frame that first paints the dialog is the expensive one: its
