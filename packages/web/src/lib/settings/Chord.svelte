@@ -105,10 +105,19 @@
   }
 
   /* Staggered by cap so the colour runs along the chord instead of every key
-     changing at once. */
+     changing at once. The six stripes of the pride flag, softened so the rim
+     reads as a tint rather than a light show. */
+  .live {
+    --k1: rgb(228, 96, 96);
+    --k2: rgb(235, 150, 80);
+    --k3: rgb(230, 205, 95);
+    --k4: rgb(100, 185, 115);
+    --k5: rgb(90, 140, 220);
+    --k6: rgb(160, 110, 205);
+  }
   .live .cap {
-    --delay: calc(var(--i) * 0.2s - 0.5s);
-    animation: glow 5s var(--delay) linear infinite;
+    --delay: calc(var(--i) * 0.25s - 0.5s);
+    animation: glow 7s var(--delay) linear infinite;
   }
   .live .cap::before {
     content: "";
@@ -120,20 +129,19 @@
     width: 1200%;
     aspect-ratio: 1;
     background: conic-gradient(
-      var(--key-red),
-      var(--key-green),
-      var(--key-blue),
-      var(--key-red)
+      var(--k1),
+      var(--k2),
+      var(--k3),
+      var(--k4),
+      var(--k5),
+      var(--k6),
+      var(--k1)
     );
-    animation: spin 5s var(--delay) linear infinite;
+    opacity: 0.85;
+    animation: spin 7s var(--delay) linear infinite;
   }
   .live .face {
-    animation: ink 5s var(--delay) linear infinite;
-  }
-  .live {
-    --key-red: rgb(255, 100, 100);
-    --key-green: rgb(100, 200, 100);
-    --key-blue: rgb(100, 100, 255);
+    animation: ink 7s var(--delay) linear infinite;
   }
 
   @keyframes spin {
@@ -147,25 +155,43 @@
   @keyframes glow {
     0%,
     100% {
-      box-shadow: 0 0 1.4rem -0.5rem var(--key-red);
+      box-shadow: 0 0 1.2rem -0.5rem var(--k1);
     }
-    33% {
-      box-shadow: 0 0 1.4rem -0.5rem var(--key-blue);
+    16.6% {
+      box-shadow: 0 0 1.2rem -0.5rem var(--k2);
     }
-    66% {
-      box-shadow: 0 0 1.4rem -0.5rem var(--key-green);
+    33.3% {
+      box-shadow: 0 0 1.2rem -0.5rem var(--k3);
+    }
+    50% {
+      box-shadow: 0 0 1.2rem -0.5rem var(--k4);
+    }
+    66.6% {
+      box-shadow: 0 0 1.2rem -0.5rem var(--k5);
+    }
+    83.3% {
+      box-shadow: 0 0 1.2rem -0.5rem var(--k6);
     }
   }
   @keyframes ink {
     0%,
     100% {
-      color: var(--key-red);
+      color: var(--k1);
     }
-    33% {
-      color: var(--key-blue);
+    16.6% {
+      color: var(--k2);
     }
-    66% {
-      color: var(--key-green);
+    33.3% {
+      color: var(--k3);
+    }
+    50% {
+      color: var(--k4);
+    }
+    66.6% {
+      color: var(--k5);
+    }
+    83.3% {
+      color: var(--k6);
     }
   }
 
@@ -176,10 +202,7 @@
       animation: none;
     }
     .live .cap::before {
-      background: var(--accent);
-    }
-    .live .face {
-      color: var(--accent);
+      transform: translate(-50%, -50%);
     }
   }
 </style>
