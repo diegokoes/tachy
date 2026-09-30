@@ -231,7 +231,9 @@
   {:else if missing}
     <EmptyState
       icon="file"
-      title={slug === MAIN_PAGE_SLUG ? "No main page yet." : `No article '${slug}' yet.`}
+      title={slug === MAIN_PAGE_SLUG
+        ? "No main page yet."
+        : `No article '${slug}' yet.`}
       detail={slug === MAIN_PAGE_SLUG
         ? "Landing page: product summary, entry points."
         : "Linked but not written."}
@@ -240,7 +242,8 @@
         <Button
           variant="primary"
           icon="edit"
-          onclick={() => navigate(wikiPath(scope, "new", slug))}>write it</Button
+          onclick={() => navigate(wikiPath(scope, "new", slug))}
+          >write it</Button
         >
       {/if}
     </EmptyState>
@@ -269,8 +272,8 @@
       {#if article.built?.changed}
         <Note tone="warn">
           {article.built.changed}
-          {article.built.changed === 1 ? "source has" : "sources have"} changed
-          since this was written{article.built.changedTitles.length
+          {article.built.changed === 1 ? "source has" : "sources have"} changed since
+          this was written{article.built.changedTitles.length
             ? `: ${article.built.changedTitles.join(" · ")}`
             : "."}
         </Note>
@@ -280,7 +283,11 @@
              focusable wikilink anchors this div delegates to -->
       <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
              wrapper, not an interactive element of its own -->
-      <div class="wiki-body md" onclick={onBodyClick} onkeydown={links.onKeydown}>
+      <div
+        class="wiki-body md"
+        onclick={onBodyClick}
+        onkeydown={links.onKeydown}
+      >
         {@html html}
       </div>
 

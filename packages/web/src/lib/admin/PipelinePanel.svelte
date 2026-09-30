@@ -1,6 +1,13 @@
 <script lang="ts">
   import { fmtDate } from "../dates.svelte";
-  import { Bars, Columns, compact, dayOfMonth, type Bar, type Col } from "../tui";
+  import {
+    Bars,
+    Columns,
+    compact,
+    dayOfMonth,
+    type Bar,
+    type Col,
+  } from "../tui";
   import { census } from "./census.svelte";
   import { activity } from "./activity.svelte";
   import { grade, pct, ratio } from "./overview";
@@ -24,28 +31,24 @@
     ORIGINS.map((o) => ({ key: o.key, value: x[o.key], tone: o.tone }));
 
   const perDay = $derived(
-    traffic.per_day.map(
-      (x): Col => ({
-        key: x.day,
-        label: dayOfMonth(x.day),
-        title: fmtDate(x.day),
-        value: x.agent + x.sync + x.app,
-        parts: split(x),
-      }),
-    ),
+    traffic.per_day.map((x): Col => ({
+      key: x.day,
+      label: dayOfMonth(x.day),
+      title: fmtDate(x.day),
+      value: x.agent + x.sync + x.app,
+      parts: split(x),
+    })),
   );
   const calls = $derived(perDay.reduce((n, c) => n + c.value, 0));
 
   const bySource = $derived(
     traffic.connections
-      .map(
-        (c): Bar => ({
-          key: c.slug,
-          label: c.slug,
-          value: c.agent + c.sync + c.app,
-          parts: split(c),
-        }),
-      )
+      .map((c): Bar => ({
+        key: c.slug,
+        label: c.slug,
+        value: c.agent + c.sync + c.app,
+        parts: split(c),
+      }))
       .sort((a, b) => b.value - a.value),
   );
 
@@ -86,9 +89,26 @@
     { key: "sources", label: "sources", value: d.connections, to: "sources" },
     { key: "projects", label: "projects", value: d.projects, to: "projects" },
     { key: "repos", label: "repos", value: r.repos, to: "repos" },
-    { key: "files", label: "files", text: compact(r.files), title: `${r.files.toLocaleString()} files indexed`, to: "repos" },
-    { key: "chunks", label: "chunks", text: compact(r.chunks), title: `${r.chunks.toLocaleString()} code chunks`, to: "repos" },
-    { key: "calls", label: `calls ${traffic.days} d`, text: compact(calls), title: `source calls, last ${traffic.days} days` },
+    {
+      key: "files",
+      label: "files",
+      text: compact(r.files),
+      title: `${r.files.toLocaleString()} files indexed`,
+      to: "repos",
+    },
+    {
+      key: "chunks",
+      label: "chunks",
+      text: compact(r.chunks),
+      title: `${r.chunks.toLocaleString()} code chunks`,
+      to: "repos",
+    },
+    {
+      key: "calls",
+      label: `calls ${traffic.days} d`,
+      text: compact(calls),
+      title: `source calls, last ${traffic.days} days`,
+    },
   ]);
 </script>
 

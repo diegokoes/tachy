@@ -19,15 +19,36 @@
     type Col,
   } from "../tui";
   import { loadSummary, runP95 } from "./loadRuns";
-  import { age, bytes, load, pct, ratio, showSection, span, type Tone } from "./overview";
+  import {
+    age,
+    bytes,
+    load,
+    pct,
+    ratio,
+    showSection,
+    span,
+    type Tone,
+  } from "./overview";
   import Dials, { type DialItem } from "./Dials.svelte";
   import Facts, { type Fact } from "./Facts.svelte";
   import Overview from "./Overview.svelte";
   import Tile from "./Tile.svelte";
   import { census } from "./census.svelte";
-  import { loads, probes, probeTally, runProbes, system } from "./systemState.svelte";
+  import {
+    loads,
+    probes,
+    probeTally,
+    runProbes,
+    system,
+  } from "./systemState.svelte";
 
-  type Result = { ok?: boolean; at?: string; error?: string; problems?: string; dump_bytes?: number };
+  type Result = {
+    ok?: boolean;
+    at?: string;
+    error?: string;
+    problems?: string;
+    dump_bytes?: number;
+  };
   type Watch = { checks?: Record<string, { state: string; value: string }> };
   type Host = { disk?: Record<string, string> };
 
@@ -55,19 +76,34 @@
 
   const r = $derived(system.data?.runtime ?? null);
   const settings = $derived(system.data?.settings ?? null);
-  const status = $derived((r?.status ?? null) as Record<string, unknown> | null);
+  const status = $derived(
+    (r?.status ?? null) as Record<string, unknown> | null,
+  );
   const backup = $derived(status?.backup as Result | undefined);
   const restore = $derived(status?.restore as Result | undefined);
   const tally = $derived(probeTally(probes.checks));
   const summary = $derived(loadSummary(loads.data.runs));
 
   /** A host result as a counter: its age, toned by whether it failed or is overdue. */
-  const result = (x: Result | undefined, overdue: number): { text: string; tone: Tone; title?: string } => {
-    if (!status) return { text: "–", tone: "muted", title: "TACHY_STATUS_DIR not mounted" };
+  const result = (
+    x: Result | undefined,
+    overdue: number,
+  ): { text: string; tone: Tone; title?: string } => {
+    if (!status)
+      return {
+        text: "–",
+        tone: "muted",
+        title: "TACHY_STATUS_DIR not mounted",
+      };
     if (!x?.at) return { text: "none", tone: "danger" };
     const text = age(x.at, now) ?? "–";
-    if (x.ok === false) return { text, tone: "danger", title: x.error ?? x.problems };
-    return { text, tone: now - Date.parse(x.at) > overdue ? "warn" : "ok", title: utcTip(x.at) };
+    if (x.ok === false)
+      return { text, tone: "danger", title: x.error ?? x.problems };
+    return {
+      text,
+      tone: now - Date.parse(x.at) > overdue ? "warn" : "ok",
+      title: utcTip(x.at),
+    };
   };
 
   const disk = $derived.by(() => {
@@ -117,11 +153,21 @@
         tone: commit ? ("accent" as Tone) : ("muted" as Tone),
         title: system.data?.env?.env_badge ?? undefined,
       },
-      { key: "up", label: "up", text: r?.uptimeSeconds !== undefined ? span(r.uptimeSeconds * 1000) : "–" },
+      {
+        key: "up",
+        label: "up",
+        text:
+          r?.uptimeSeconds !== undefined ? span(r.uptimeSeconds * 1000) : "–",
+      },
       {
         key: "checks",
         label: "checks",
-        text: probes.running && !tally ? "…" : tally ? `${tally.passing}/${counted}` : "–",
+        text:
+          probes.running && !tally
+            ? "…"
+            : tally
+              ? `${tally.passing}/${counted}`
+              : "–",
         tone: !tally
           ? ("muted" as Tone)
           : tally.failing
@@ -137,7 +183,8 @@
       {
         key: "loads",
         label: "load tests",
-        text: summary.passRate === null ? "–" : pct(summary.passed, summary.judged),
+        text:
+          summary.passRate === null ? "–" : pct(summary.passed, summary.judged),
         tone:
           summary.passRate === null
             ? ("muted" as Tone)
@@ -183,16 +230,28 @@
       {
         key: "memory",
         label: "memory",
-        title: memShare === null ? "no container limit" : "of the container limit",
+        title:
+          memShare === null ? "no container limit" : "of the container limit",
         value: memShare ?? 0,
         tone: memShare === null ? "muted" : load(memShare),
-        center: memShare === null ? (mem ? bytes(mem.currentBytes) : "–") : `${Math.round(memShare * 100)}%`,
-        sub: mem ? (mem.maxBytes ? `${bytes(mem.currentBytes)}` : "no limit") : "unknown",
+        center:
+          memShare === null
+            ? mem
+              ? bytes(mem.currentBytes)
+              : "–"
+            : `${Math.round(memShare * 100)}%`,
+        sub: mem
+          ? mem.maxBytes
+            ? `${bytes(mem.currentBytes)}`
+            : "no limit"
+          : "unknown",
       },
       {
         key: "postgres",
         label: "postgres",
-        title: pg ? pg.byProcess.map((p) => `${p.name} ${p.state} ${p.n}`).join(" · ") : "unavailable",
+        title: pg
+          ? pg.byProcess.map((p) => `${p.name} ${p.state} ${p.n}`).join(" · ")
+          : "unavailable",
         value: pg ? ratio(pgUsed, pg.max) : 0,
         tone: pg ? load(ratio(pgUsed, pg.max)) : "muted",
         center: pg ? pct(pgUsed, pg.max) : "–",
@@ -216,8 +275,17 @@
     danger: "failing",
     muted: "not in use",
   };
-  const WATCH_TONES: Record<string, Cell["tone"]> = { ok: "ok", warn: "warn", fail: "danger" };
-  const PROBE_TONES: Record<string, Cell["tone"]> = { pass: "ok", warn: "warn", fail: "danger", skip: "muted" };
+  const WATCH_TONES: Record<string, Cell["tone"]> = {
+    ok: "ok",
+    warn: "warn",
+    fail: "danger",
+  };
+  const PROBE_TONES: Record<string, Cell["tone"]> = {
+    pass: "ok",
+    warn: "warn",
+    fail: "danger",
+    skip: "muted",
+  };
 
   /* One board for every "is this working" answer: the runtime's own readiness
      lamps, tachy-watch's host checks, and the on-demand probes once run. They
@@ -227,11 +295,23 @@
     const rd = r.readiness;
     const vault = r.security.vault;
     const out: (Cell & { detail?: string })[] = [
-      { key: "database", label: "database", tone: rd.database ? "ok" : "danger", title: rd.database ? "up" : "down" },
+      {
+        key: "database",
+        label: "database",
+        tone: rd.database ? "ok" : "danger",
+        title: rd.database ? "up" : "down",
+      },
       {
         key: "schema",
         label: "schema",
-        tone: rd.schema === "match" ? "ok" : rd.schema === "mismatch" ? "danger" : rd.schema === "unstamped" ? "muted" : "warn",
+        tone:
+          rd.schema === "match"
+            ? "ok"
+            : rd.schema === "mismatch"
+              ? "danger"
+              : rd.schema === "unstamped"
+                ? "muted"
+                : "warn",
         title: rd.schema,
         detail:
           rd.schema === "mismatch"
@@ -254,16 +334,24 @@
       {
         key: "vault",
         label: "vault keys",
-        tone: !vault.enabled ? "muted" : vault.by_key.some((k) => !k.current) ? "warn" : "ok",
+        tone: !vault.enabled
+          ? "muted"
+          : vault.by_key.some((k) => !k.current)
+            ? "warn"
+            : "ok",
         title: vault.enabled
-          ? vault.by_key.map((k) => `${k.key_id ?? "no key id"}: ${k.count}`).join(" · ") || "nothing stored"
+          ? vault.by_key
+              .map((k) => `${k.key_id ?? "no key id"}: ${k.count}`)
+              .join(" · ") || "nothing stored"
           : "disabled",
         detail: vault.by_key.some((k) => !k.current)
           ? "Some credentials are still sealed with an older key. Run npm run sync rotate-key."
           : undefined,
       },
     ];
-    for (const [name, c] of Object.entries((status?.watch as Watch | undefined)?.checks ?? {}))
+    for (const [name, c] of Object.entries(
+      (status?.watch as Watch | undefined)?.checks ?? {},
+    ))
       out.push({
         key: `watch-${name}`,
         label: name.replaceAll("_", " "),
@@ -302,7 +390,9 @@
         label: "chat queue",
         value: String(t.queued),
         tone: t.queued ? "warn" : undefined,
-        detail: t.rejectedSinceBoot ? `${t.rejectedSinceBoot} refused since boot` : "none refused",
+        detail: t.rejectedSinceBoot
+          ? `${t.rejectedSinceBoot} refused since boot`
+          : "none refused",
       },
       {
         key: "approvals",
@@ -332,40 +422,81 @@
         label: "single sign-on",
         value: s.sso_configured ? "on" : "off",
         tone: s.sso_configured ? "ok" : "muted",
-        detail: s.sso_configured ? `${s.password_login_under_sso} with password too` : "password only",
+        detail: s.sso_configured
+          ? `${s.password_login_under_sso} with password too`
+          : "password only",
       },
       {
         key: "vault",
         label: "credential vault",
         value: s.vault.enabled ? (s.vault.current_key ?? "on") : "off",
-        tone: !s.vault.enabled ? "danger" : s.vault.by_key.some((k) => !k.current) ? "warn" : "ok",
+        tone: !s.vault.enabled
+          ? "danger"
+          : s.vault.by_key.some((k) => !k.current)
+            ? "warn"
+            : "ok",
         detail: s.vault.enabled ? undefined : "TACHY_SECRET_KEY unset",
       },
-      { key: "passwords", label: "password accounts", value: String(s.users_with_password) },
-      { key: "service", label: "service accounts", value: String(s.service_accounts) },
+      {
+        key: "passwords",
+        label: "password accounts",
+        value: String(s.users_with_password),
+      },
+      {
+        key: "service",
+        label: "service accounts",
+        value: String(s.service_accounts),
+      },
     ];
   });
 
   const settingFacts = $derived.by((): Fact[] => {
     if (!settings) return [];
-    const src = (x: { source: string }) => (x.source === "default" ? undefined : x.source);
+    const src = (x: { source: string }) =>
+      x.source === "default" ? undefined : x.source;
     return [
-      { key: "provider", label: "agent", value: String(settings.agent_provider.value), detail: src(settings.agent_provider) },
-      { key: "model", label: "model", value: String(settings.agent_model.value), detail: src(settings.agent_model) },
-      { key: "effort", label: "effort", value: String(settings.agent_effort.value), detail: src(settings.agent_effort) },
-      { key: "slots", label: "chat slot cap", value: String(settings.agent_slot_cap.value), detail: src(settings.agent_slot_cap) },
+      {
+        key: "provider",
+        label: "agent",
+        value: String(settings.agent_provider.value),
+        detail: src(settings.agent_provider),
+      },
+      {
+        key: "model",
+        label: "model",
+        value: String(settings.agent_model.value),
+        detail: src(settings.agent_model),
+      },
+      {
+        key: "effort",
+        label: "effort",
+        value: String(settings.agent_effort.value),
+        detail: src(settings.agent_effort),
+      },
+      {
+        key: "slots",
+        label: "chat slot cap",
+        value: String(settings.agent_slot_cap.value),
+        detail: src(settings.agent_slot_cap),
+      },
       {
         key: "redaction",
         label: "PII redaction",
         value: settings.redaction_global.value ? "on" : "per connection",
         tone: settings.redaction_global.value ? "ok" : undefined,
       },
-      { key: "profile", label: "profile", value: String(settings.deployment_profile.value) },
+      {
+        key: "profile",
+        label: "profile",
+        value: String(settings.deployment_profile.value),
+      },
     ];
   });
 
   const backups = $derived.by((): Col[] => {
-    const rows = ((r?.history?.backup ?? []) as Result[]).filter((b) => b.at).slice(-12);
+    const rows = ((r?.history?.backup ?? []) as Result[])
+      .filter((b) => b.at)
+      .slice(-12);
     const top = Math.max(1, ...rows.map((b) => (b.dump_bytes ?? 0) / 2 ** 20));
     return rows.map((b) =>
       b.ok === false
@@ -392,19 +523,26 @@
       .filter((x) => x.p95 !== null)
       .slice(0, 12)
       .reverse()
-      .map(
-        ({ t, p95 }): Col => ({
-          key: t.id,
-          label: dayOfMonth(t.created_at),
-          title: `${t.script}${t.profile ? ` (${t.profile})` : ""} · ${t.target} · ${t.status} · ${utcTip(t.created_at)}`,
-          value: p95 ?? 0,
-          tone: t.status === "passed" ? "ok" : t.status === "failed" || t.status === "error" ? "danger" : "muted",
-        }),
-      ),
+      .map(({ t, p95 }): Col => ({
+        key: t.id,
+        label: dayOfMonth(t.created_at),
+        title: `${t.script}${t.profile ? ` (${t.profile})` : ""} · ${t.target} · ${t.status} · ${utcTip(t.created_at)}`,
+        value: p95 ?? 0,
+        tone:
+          t.status === "passed"
+            ? "ok"
+            : t.status === "failed" || t.status === "error"
+              ? "danger"
+              : "muted",
+      })),
   );
 
   const storage = $derived(
-    (r?.tableSizes ?? []).map((x): Bar => ({ key: x.table, label: x.table, value: x.bytes })),
+    (r?.tableSizes ?? []).map((x): Bar => ({
+      key: x.table,
+      label: x.table,
+      value: x.bytes,
+    })),
   );
 
   async function setMaintenance(refuse: boolean) {
@@ -473,7 +611,10 @@
   </Tile>
 
   <Tile title="runtime" empty={!runtimeFacts.length}>
-    {#snippet actions()}{@render open("runtime", "full runtime detail")}{/snippet}
+    {#snippet actions()}{@render open(
+        "runtime",
+        "full runtime detail",
+      )}{/snippet}
     <Facts items={runtimeFacts} extra={runtimeExtra} />
   </Tile>
 
@@ -516,7 +657,9 @@
 
   <Tile
     title="load tests"
-    meta={summary.passRate === null ? "p95 ms" : `p95 ms · ${pct(summary.passed, summary.judged)} pass`}
+    meta={summary.passRate === null
+      ? "p95 ms"
+      : `p95 ms · ${pct(summary.passed, summary.judged)} pass`}
     empty={!loadTests.length}
   >
     {#snippet actions()}{@render open("loads", "every load test")}{/snippet}
@@ -530,7 +673,12 @@
 
 {#if lamp}
   {@const l = lamp}
-  <Modal title={l.label} width="28rem" cancelLabel="close" onCancel={() => (lamp = null)}>
+  <Modal
+    title={l.label}
+    width="28rem"
+    cancelLabel="close"
+    onCancel={() => (lamp = null)}
+  >
     <p class="state">
       <Badge tone={l.tone}>{LAMP_WORDS[l.tone]}</Badge>
       {#if l.title}<span class="dim">{l.title}</span>{/if}

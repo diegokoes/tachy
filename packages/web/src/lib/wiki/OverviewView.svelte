@@ -7,7 +7,15 @@
   import { setTopActions } from "../subnav.svelte";
   import { renderMarkdown, markBrokenLinks } from "../markdown";
   import { LinkTargets } from "../wikilinks.svelte";
-  import { Badge, Button, Checkbox, Chevron, EmptyState, Note, Select } from "../tui";
+  import {
+    Badge,
+    Button,
+    Checkbox,
+    Chevron,
+    EmptyState,
+    Note,
+    Select,
+  } from "../tui";
   import type {
     Coverage,
     CoverageNode,
@@ -193,7 +201,10 @@
       if (editing === "")
         await api.post(`/library/wiki/${scope}/categories`, payload);
       else
-        await api.patch(`/library/wiki/${scope}/categories/${editing}`, payload);
+        await api.patch(
+          `/library/wiki/${scope}/categories/${editing}`,
+          payload,
+        );
       editing = null;
       await load();
     } catch (e) {
@@ -346,7 +357,8 @@
       {#if badge}
         <span class="badge" title="articles · open gaps for this section">
           {badge.articles} art{#if badge.gaps}
-            <span class="gap">· {badge.gaps} gap{badge.gaps === 1 ? "" : "s"}</span
+            <span class="gap"
+              >· {badge.gaps} gap{badge.gaps === 1 ? "" : "s"}</span
             >{/if}
         </span>
       {/if}
@@ -355,8 +367,10 @@
       {/if}
       {#if isCurator()}
         <span class="edit">
-          <button class="tiny" title="rename, move or set lead" onclick={() => startEdit(node)}
-            >edit</button
+          <button
+            class="tiny"
+            title="rename, move or set lead"
+            onclick={() => startEdit(node)}>edit</button
           >
           <button
             class="tiny"

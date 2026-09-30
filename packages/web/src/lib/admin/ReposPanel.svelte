@@ -20,9 +20,9 @@
     type Draft,
   } from "../tui";
   import type { Customer, Product, Repo, SourceProject } from "./rows";
-import { INFO } from "./help";
-import { csv } from "../fields";
-import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
+  import { INFO } from "./help";
+  import { csv } from "../fields";
+  import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
   import {
     claimSectionAction,
     sectionHoist,
@@ -50,10 +50,7 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
     [],
   );
   const products = createResource(() => api.get<Product[]>("/products"), []);
-  const customers = createResource(
-    () => api.get<Customer[]>("/customers"),
-    [],
-  );
+  const customers = createResource(() => api.get<Customer[]>("/customers"), []);
 
   const components = new ComponentCache();
   let error = $state<string | null>(null);
@@ -67,9 +64,7 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
   let previewing = $state<string | null>(null);
   let poll: ReturnType<typeof setInterval> | undefined;
 
-  const knowledgeProjects = $derived(
-    projects.data.filter((p) => p.product_id),
-  );
+  const knowledgeProjects = $derived(projects.data.filter((p) => p.product_id));
   const projectOf = (id: string) =>
     knowledgeProjects.find((p) => p.id === id) ?? null;
 
@@ -94,7 +89,8 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
     status === "cloning" || status === "indexing";
   const busyIndex = $derived(
     repos.data.some(
-      (r) => working(r.index_status) || r.lines.some((l) => working(l.index_status)),
+      (r) =>
+        working(r.index_status) || r.lines.some((l) => working(l.index_status)),
     ),
   );
 
@@ -145,7 +141,10 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
         { ok: boolean; error?: string } & Partial<Refs>
       >(`/repos/refs?${q}`);
       if (!res.ok) throw new Error(res.error ?? "could not list branches");
-      refs[url] = { branches: res.branches ?? [], releases: res.releases ?? [] };
+      refs[url] = {
+        branches: res.branches ?? [],
+        releases: res.releases ?? [],
+      };
       delete refsError[url];
     } catch (e) {
       refsError[url] = errText(e);
@@ -175,10 +174,9 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
     previewing = slug;
     error = null;
     try {
-      const res = await api.post<{ ok: boolean; error?: string } & Partial<Preview>>(
-        `/repos/${slug}/preview`,
-        { config: configOf(d) },
-      );
+      const res = await api.post<
+        { ok: boolean; error?: string } & Partial<Preview>
+      >(`/repos/${slug}/preview`, { config: configOf(d) });
       if (!res.ok) throw new Error(res.error ?? "preview failed");
       preview[slug] = res as Preview;
     } catch (e) {
@@ -229,7 +227,12 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
   async function bulkLink() {
     const section = document.getElementById("admin-repos");
     if (section && !reducedMotion())
-      await gsap.to(section, { opacity: 0, y: -8, duration: 0.28, ease: "power2.in" });
+      await gsap.to(section, {
+        opacity: 0,
+        y: -8,
+        duration: 0.28,
+        ease: "power2.in",
+      });
     navigate("/admin/integrations/bulk-link");
   }
 
@@ -483,11 +486,11 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
     if (!q) return repos.data;
     return repos.data.filter((r) =>
       [
-      r.slug ?? "",
-      r.url ?? "",
-      r.product_slug ?? "",
-      r.component_slug ?? "",
-      r.project_key ?? "",
+        r.slug ?? "",
+        r.url ?? "",
+        r.product_slug ?? "",
+        r.component_slug ?? "",
+        r.project_key ?? "",
       ]
         .join(" ")
         .toLowerCase()
@@ -587,8 +590,7 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
           size="sm"
           icon="discover"
           busy={discovering}
-          onclick={() => discover(f.draft)}
-          >ask {project.external_key}</Button
+          onclick={() => discover(f.draft)}>ask {project.external_key}</Button
         >
       </Field>
       {#if hits.length}
@@ -735,9 +737,7 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
         >
       {/each}
       {#if picked.size}
-        <Chip tone="warn" onclick={() => (f.draft.extensions = "")}
-          >clear</Chip
-        >
+        <Chip tone="warn" onclick={() => (f.draft.extensions = "")}>clear</Chip>
       {/if}
     </div>
   </div>
@@ -769,7 +769,7 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
   noun="repo"
   editTitle={(r) => r.slug}
   extraActions={reindexAction}
-  formExtra={formExtra}
+  {formExtra}
   oncreate={(d) => repos.mutate(() => save(d))}
   onsave={(_row, d) => repos.mutate(() => save(d))}
   ondelete={(r) => repos.mutate(() => api.delete(`/repos/${r.slug}`))}

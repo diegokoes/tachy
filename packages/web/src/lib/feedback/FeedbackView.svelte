@@ -26,12 +26,22 @@
 
   $effect(() => {
     if (headingEl && !reducedMotion())
-      gsap.from(headingEl, { opacity: 0, y: 16, duration: 0.6, ease: "power2.out" });
+      gsap.from(headingEl, {
+        opacity: 0,
+        y: 16,
+        duration: 0.6,
+        ease: "power2.out",
+      });
   });
 
   $effect(() => {
     if (formEl && !reducedMotion())
-      gsap.from(formEl, { opacity: 0, y: 14, duration: 0.45, ease: "power2.out" });
+      gsap.from(formEl, {
+        opacity: 0,
+        y: 14,
+        duration: 0.45,
+        ease: "power2.out",
+      });
   });
 
   // Esc in a field only lets go of it, so a stray press mid-sentence cannot
@@ -45,7 +55,10 @@
         inFields: true,
         run: () => {
           const el = document.activeElement;
-          if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)
+          if (
+            el instanceof HTMLInputElement ||
+            el instanceof HTMLTextAreaElement
+          )
             el.blur();
           else leave();
         },
@@ -131,20 +144,14 @@
   </button>
 
   <div class="sheet">
-    <h1 class="heading" bind:this={headingEl}>
-      REPORT&nbsp;A
-    </h1>
+    <h1 class="heading" bind:this={headingEl}>REPORT&nbsp;A</h1>
 
     <BugIdeaToggle bind:value={type} />
 
     {#if type !== null}
       <div class="form" bind:this={formEl}>
         <Field label="title" required>
-          <input
-            type="text"
-            maxlength="200"
-            bind:value={title}
-          />
+          <input type="text" maxlength="200" bind:value={title} />
         </Field>
 
         <Field
@@ -153,16 +160,13 @@
             : "what happened?"}
           required
         >
-          <textarea
-            rows="7"
-            bind:value={body}
-          ></textarea>
+          <textarea rows="7" bind:value={body}></textarea>
         </Field>
 
         {#if review && held}
           <Note tone="warn">
-            A few things that would help whoever picks this up — add them, or send
-            as it is:
+            A few things that would help whoever picks this up — add them, or
+            send as it is:
             <ul class="tips">
               {#each review.suggestions as s}
                 <li>{s}</li>
@@ -234,7 +238,9 @@
     gap: var(--sheet-gap);
     padding-top: max(
       var(--pad-4),
-      calc(46vh - var(--pad-4) - var(--heading-size) - var(--sheet-gap) - 1.6rem)
+      calc(
+        46vh - var(--pad-4) - var(--heading-size) - var(--sheet-gap) - 1.6rem
+      )
     );
     padding-bottom: var(--pad-4);
   }

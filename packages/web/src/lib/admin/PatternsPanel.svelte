@@ -7,7 +7,7 @@
   import { slugify } from "../slug";
   import SlugRename from "./SlugRename.svelte";
   import type { Pattern } from "./rows";
-import { INFO } from "./help";
+  import { INFO } from "./help";
   import { sectionHoist } from "./sectionAction.svelte";
 
   const patterns = createResource(
@@ -47,7 +47,8 @@ import { INFO } from "./help";
     },
   ];
 
-  onMount(patterns.reload);</script>
+  onMount(patterns.reload);
+</script>
 
 <FilterBar
   bind:value={filter}

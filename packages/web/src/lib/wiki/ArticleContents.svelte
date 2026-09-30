@@ -110,7 +110,9 @@
   onMount(() => {
     const id = decodeURIComponent(location.hash.slice(1));
     if (!id) return;
-    requestAnimationFrame(() => heading(id)?.scrollIntoView({ block: "start" }));
+    requestAnimationFrame(() =>
+      heading(id)?.scrollIntoView({ block: "start" }),
+    );
   });
 </script>
 
@@ -143,8 +145,11 @@
 {/snippet}
 
 <nav class="contents" aria-label="Contents" bind:this={nav}>
-  <a class="cap" href={location.pathname} title="back to the top" onclick={toTop}
-    >contents</a
+  <a
+    class="cap"
+    href={location.pathname}
+    title="back to the top"
+    onclick={toTop}>contents</a
   >
   {@render branch(tree)}
 </nav>

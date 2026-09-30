@@ -4,7 +4,8 @@
   import { errText } from "../resource.svelte";
   import { Note } from "../tui";
 
-  let { schedule, timezone }: { schedule: unknown; timezone: unknown } = $props();
+  let { schedule, timezone }: { schedule: unknown; timezone: unknown } =
+    $props();
 
   let next = $state<string[]>([]);
   let error = $state<string | null>(null);
@@ -17,7 +18,12 @@
     if (!s) return;
     const timer = setTimeout(async () => {
       try {
-        next = (await api.post<{ next: string[] }>("/jobs/schedule-preview", { schedule: s, timezone: tz })).next;
+        next = (
+          await api.post<{ next: string[] }>("/jobs/schedule-preview", {
+            schedule: s,
+            timezone: tz,
+          })
+        ).next;
       } catch (e) {
         error = errText(e);
       }

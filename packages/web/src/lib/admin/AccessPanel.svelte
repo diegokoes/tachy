@@ -43,7 +43,9 @@
   const admin = $derived(isGlobalAdmin());
   /** A team admin manages their own team's roster but not the user records. */
   const myTeams = $derived(
-    admin ? teams.data : teams.data.filter((tm) => canCurateScope({ team_slug: tm.slug })),
+    admin
+      ? teams.data
+      : teams.data.filter((tm) => canCurateScope({ team_slug: tm.slug })),
   );
 
   let filter = $state(recall("admin.access.filter", ""));
@@ -69,7 +71,9 @@
   let rosterFor = $state<string | null>(null);
   let addTeam = $state("");
 
-  function openedForm(f: { mode: "create" | "edit"; row: UserRow | null } | null) {
+  function openedForm(
+    f: { mode: "create" | "edit"; row: UserRow | null } | null,
+  ) {
     rosterFor = f?.row?.id ?? null;
     addTeam = "";
     roster = {};
@@ -152,7 +156,8 @@
   onMount(() => {
     void reloadRoster();
     void system.reload();
-  });</script>
+  });
+</script>
 
 {#snippet roleCell(u: UserRow)}
   {#if u.role === "admin"}
@@ -185,7 +190,12 @@
      to be parsed, where a column of marks reads as a pattern to be scanned. -->
 {#snippet mark(on: boolean, why: string)}
   <span class="mark" class:on use:tip={why}>
-    <Icon name={on ? "success" : "reject"} size="1.05em" weight={7} label={why} />
+    <Icon
+      name={on ? "success" : "reject"}
+      size="1.05em"
+      weight={7}
+      label={why}
+    />
   </span>
 {/snippet}
 
@@ -296,9 +306,7 @@
   emptyTitle={users.data.length
     ? "No users match the filter."
     : "No users yet."}
-  emptyDetail={users.data.length
-    ? undefined
-    : "Run setup, or add one."}
+  emptyDetail={users.data.length ? undefined : "Run setup, or add one."}
   canEdit={() => admin}
   canDelete={() => false}
   canCreate={admin}

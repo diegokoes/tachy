@@ -181,11 +181,16 @@
      re-armed the THREAD_RETRACT delay and the tween spent its life waiting. */
   $effect(() => {
     const to = open ? 1 : 0;
-    const tween = tweenValue(untrack(() => openT), to, (v) => (openT = v), {
-      duration: open ? 0.44 : 0.28,
-      delay: open ? 0 : THREAD_RETRACT,
-      ease: open ? "back.out(1.6)" : "power2.inOut",
-    });
+    const tween = tweenValue(
+      untrack(() => openT),
+      to,
+      (v) => (openT = v),
+      {
+        duration: open ? 0.44 : 0.28,
+        delay: open ? 0 : THREAD_RETRACT,
+        ease: open ? "back.out(1.6)" : "power2.inOut",
+      },
+    );
     return () => tween?.kill();
   });
 
@@ -346,12 +351,7 @@
   }
 
   const fSlug = $derived(
-    freeSlug(
-      kebab(fTitle) || "artifact",
-      fScope,
-      fTeam,
-      fEditId,
-    ),
+    freeSlug(kebab(fTitle) || "artifact", fScope, fTeam, fEditId),
   );
 
   function openCreate() {
@@ -492,38 +492,38 @@
      on the first frame of the close would blink out while the wire was still
      travelling towards it. openT is 0 again only once the hexagon has shut. -->
 <div class="edge-home">
-<div
-  class="edge-slot"
-  class:lifted
-  use:raise={lifted}
->
-  <button
-    bind:this={tabBtn}
-    use:hoverRise={open}
-    class="edge-tab"
-    class:active={open || !!chat.artifact}
-    onclick={toggle}
-    title="Artifacts: reusable prompt templates to attach as context ({keyLabel(hotkey)})"
-    aria-label="Artifacts"
-    aria-expanded={open}
-  >
-    <!-- The frame is a drawn shape, not the button's own border: clip-path
+  <div class="edge-slot" class:lifted use:raise={lifted}>
+    <button
+      bind:this={tabBtn}
+      use:hoverRise={open}
+      class="edge-tab"
+      class:active={open || !!chat.artifact}
+      onclick={toggle}
+      title="Artifacts: reusable prompt templates to attach as context ({keyLabel(
+        hotkey,
+      )})"
+      aria-label="Artifacts"
+      aria-expanded={open}
+    >
+      <!-- The frame is a drawn shape, not the button's own border: clip-path
          would cut the border off along with everything else outside the
          polygon, leaving the tab with no outline at all. -->
-    <svg
-      bind:this={tabFrame}
-      class="frame"
-      viewBox="0 0 100 115"
-      style="transform: scale({frameScale})"
-      aria-hidden="true"
-    >
-      <polygon points="50,4 96.3,30.75 96.3,84.25 50,111 3.7,84.25 3.7,30.75" />
-    </svg>
-    <span bind:this={tabIcon} class="tab-icon"
-      ><ArtifactMark size="1em" {spread} /></span
-    >
-  </button>
-</div>
+      <svg
+        bind:this={tabFrame}
+        class="frame"
+        viewBox="0 0 100 115"
+        style="transform: scale({frameScale})"
+        aria-hidden="true"
+      >
+        <polygon
+          points="50,4 96.3,30.75 96.3,84.25 50,111 3.7,84.25 3.7,30.75"
+        />
+      </svg>
+      <span bind:this={tabIcon} class="tab-icon"
+        ><ArtifactMark size="1em" {spread} /></span
+      >
+    </button>
+  </div>
 </div>
 
 {#if open}
@@ -550,66 +550,73 @@
       />
     {/snippet}
 
-        <div class="pick-body">
-          {#if error}<p class="error">{error}</p>{/if}
-          {#if loading && items.length === 0}
-            <p class="muted">loading…</p>
-          {:else if items.length === 0 && !error}
-            <p class="muted empty">No artifacts yet</p>
-          {/if}
-          {#each grouped as g (g.scope)}
-            <div class="scope-head">
-              <Icon name={SCOPE_ICONS[g.scope]} size="0.95em" />
-              {SCOPE_LABELS[g.scope]}
-            </div>
-            <ul class="art-list">
-              {#each g.rows as a (a.id)}
-                <li
-                  class="art-row"
-                  class:selected={chat.artifact?.id === a.id}
-                  class:armed={armedDelete === a.id}
-                >
-                  <button class="art-pick" onclick={() => select(a)}>
-                    <span class="art-title">
-                      {#if chat.artifact?.id === a.id}<span class="sel"><Icon name="selected" size="0.7em" weight={10} /></span>{/if}{a.title}
-                      {#if a.spec?.output}<span
-                          class="art-out"
-                          title="produces a {a.spec.output.format} file"
-                        ><Icon name="download" size="0.9em" /> {a.spec.output.format}</span>{/if}
-                    </span>
-                    {#if a.description}<span class="art-desc">{a.description}</span>{/if}
-                  </button>
-                  {#if canWrite(a)}
-                    <span class="art-actions">
-                      <Button
-                        variant="ghost"
-                        tone="info"
-                        square
-                        icon="edit"
-                        iconSize="1.5em"
-                        title="edit"
-                        aria-label="edit"
-                        busy={fetching === a.id}
-                        onclick={() => openEdit(a)}
-                      />
-                      <Button
-                        variant="ghost"
-                        tone="danger"
-                        square
-                        icon={armedDelete === a.id ? "confirm" : "delete"}
-                        morph
-                        iconSize="1.5em"
-                        title={armedDelete === a.id ? "click again to delete" : "delete"}
-                        aria-label="delete"
-                        onclick={() => remove(a)}
-                      />
-                    </span>
-                  {/if}
-                </li>
-              {/each}
-            </ul>
-          {/each}
+    <div class="pick-body">
+      {#if error}<p class="error">{error}</p>{/if}
+      {#if loading && items.length === 0}
+        <p class="muted">loading…</p>
+      {:else if items.length === 0 && !error}
+        <p class="muted empty">No artifacts yet</p>
+      {/if}
+      {#each grouped as g (g.scope)}
+        <div class="scope-head">
+          <Icon name={SCOPE_ICONS[g.scope]} size="0.95em" />
+          {SCOPE_LABELS[g.scope]}
         </div>
+        <ul class="art-list">
+          {#each g.rows as a (a.id)}
+            <li
+              class="art-row"
+              class:selected={chat.artifact?.id === a.id}
+              class:armed={armedDelete === a.id}
+            >
+              <button class="art-pick" onclick={() => select(a)}>
+                <span class="art-title">
+                  {#if chat.artifact?.id === a.id}<span class="sel"
+                      ><Icon name="selected" size="0.7em" weight={10} /></span
+                    >{/if}{a.title}
+                  {#if a.spec?.output}<span
+                      class="art-out"
+                      title="produces a {a.spec.output.format} file"
+                      ><Icon name="download" size="0.9em" />
+                      {a.spec.output.format}</span
+                    >{/if}
+                </span>
+                {#if a.description}<span class="art-desc">{a.description}</span
+                  >{/if}
+              </button>
+              {#if canWrite(a)}
+                <span class="art-actions">
+                  <Button
+                    variant="ghost"
+                    tone="info"
+                    square
+                    icon="edit"
+                    iconSize="1.5em"
+                    title="edit"
+                    aria-label="edit"
+                    busy={fetching === a.id}
+                    onclick={() => openEdit(a)}
+                  />
+                  <Button
+                    variant="ghost"
+                    tone="danger"
+                    square
+                    icon={armedDelete === a.id ? "confirm" : "delete"}
+                    morph
+                    iconSize="1.5em"
+                    title={armedDelete === a.id
+                      ? "click again to delete"
+                      : "delete"}
+                    aria-label="delete"
+                    onclick={() => remove(a)}
+                  />
+                </span>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      {/each}
+    </div>
   </Modal>
 
   <ArtifactThread
@@ -757,7 +764,6 @@
     stroke-width: 5;
   }
 
-
   /* No height cap and no scroller of its own: the dialog window already caps
      its own height and scrolls its body. */
   .pick-body {
@@ -793,7 +799,9 @@
     align-items: stretch;
     min-width: 0;
   }
-  .art-row.selected .art-pick { border-color: var(--accent); }
+  .art-row.selected .art-pick {
+    border-color: var(--accent);
+  }
   .art-pick {
     flex: 1;
     min-width: 0;
@@ -804,7 +812,9 @@
     padding: var(--pad-2) var(--pad-3);
     background: var(--panel);
   }
-  .art-title { font-size: var(--fs-sm); }
+  .art-title {
+    font-size: var(--fs-sm);
+  }
   .sel {
     display: inline-flex;
     vertical-align: middle;
@@ -893,7 +903,9 @@
   @media (prefers-reduced-motion: reduce) {
     .art-actions,
     .art-title,
-    .art-desc { transition: none; }
+    .art-desc {
+      transition: none;
+    }
   }
 
   .ed-form {
@@ -903,7 +915,10 @@
     text-align: left;
     padding-right: var(--pad-2);
   }
-  .ed-form textarea { resize: vertical; max-width: 100%; }
+  .ed-form textarea {
+    resize: vertical;
+    max-width: 100%;
+  }
 
   .who {
     display: grid;
@@ -913,7 +928,9 @@
     border-bottom: 1px solid var(--border);
   }
 
-  .muted { color: var(--muted); }
+  .muted {
+    color: var(--muted);
+  }
   .empty {
     margin: auto;
     min-height: 5rem;
@@ -921,5 +938,9 @@
     place-items: center;
     text-align: center;
   }
-  .error { color: var(--danger); margin: 0; font-size: 0.8rem; }
+  .error {
+    color: var(--danger);
+    margin: 0;
+    font-size: 0.8rem;
+  }
 </style>

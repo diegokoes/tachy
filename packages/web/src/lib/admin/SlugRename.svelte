@@ -83,7 +83,7 @@
     <input
       type="text"
       aria-label="new slug"
-      value={value}
+      {value}
       oninput={(e) => (value = slugify(e.currentTarget.value))}
     />
   </Field>
@@ -93,4 +93,3 @@
   {/if}
   {#if warning}<Note tone="warn">{warning}</Note>{/if}
 </Modal>
-

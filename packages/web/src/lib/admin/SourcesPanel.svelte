@@ -36,8 +36,8 @@
   import { canCurateScope } from "../session.svelte";
   import { t } from "../terms";
   import type { Connection, Product, SourceProject, Team } from "./rows";
-import { INFO } from "./help";
-import { csv } from "../fields";
+  import { INFO } from "./help";
+  import { csv } from "../fields";
   import { sectionHoist } from "./sectionAction.svelte";
 
   type SourceType = "freshdesk" | "azure-devops" | "github";
@@ -368,9 +368,7 @@ import { csv } from "../fields";
   <span
     class="lock"
     class:on
-    title={on
-      ? "PII scrubbed before the model"
-      : "unscrubbed"}
+    title={on ? "PII scrubbed before the model" : "unscrubbed"}
   >
     <Icon
       name={on ? "lockOn" : "lockOff"}
@@ -382,7 +380,8 @@ import { csv } from "../fields";
 {/snippet}
 
 {#snippet tokenCell(r: Connection)}
-  <Badge tone={r.token_source ? "ok" : "warn"}>{r.token_source ?? "unset"}</Badge
+  <Badge tone={r.token_source ? "ok" : "warn"}
+    >{r.token_source ?? "unset"}</Badge
   >
 {/snippet}
 
@@ -453,9 +452,9 @@ import { csv } from "../fields";
      reads as acting on the whole connection rather than on that one field. -->
 {#snippet formTest(f: { draft: Draft; mode: "create" | "edit" })}
   {@const r = f.mode === "edit" ? connectionOf(f.draft) : undefined}
-  {#if r && admin}<span class="form-test">{@render testButton(r, "md")}</span>{/if}
+  {#if r && admin}<span class="form-test">{@render testButton(r, "md")}</span
+    >{/if}
 {/snippet}
-
 
 <!-- The probe belongs under the fields that produced it: saving a connection
      tests it, so the answer to "did that work" is already on screen. -->

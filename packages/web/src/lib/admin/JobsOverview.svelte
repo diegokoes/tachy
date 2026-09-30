@@ -1,7 +1,15 @@
 <script lang="ts">
   import { fmtDate } from "../dates.svelte";
   import { onMount } from "svelte";
-  import { Bars, Columns, Timeline, compact, dayOfMonth, type Bar, type Col } from "../tui";
+  import {
+    Bars,
+    Columns,
+    Timeline,
+    compact,
+    dayOfMonth,
+    type Bar,
+    type Col,
+  } from "../tui";
   import { duration, pct, ratio, type Tone } from "./overview";
   import { jobs as census } from "./jobCensus.svelte";
   import Dials from "./Dials.svelte";
@@ -29,7 +37,12 @@
       title: `${j.definitions.enabled} enabled · ${j.definitions.disabled} paused`,
       to: "jobs",
     },
-    { key: "succeeded", label: `succeeded ${j.days} d`, value: j.by_status.succeeded, tone: "ok" as const },
+    {
+      key: "succeeded",
+      label: `succeeded ${j.days} d`,
+      value: j.by_status.succeeded,
+      tone: "ok" as const,
+    },
     {
       key: "failed",
       label: `failed ${j.days} d`,
@@ -40,10 +53,31 @@
         : "failed or timed out",
       to: failed ? "failures" : undefined,
     },
-    { key: "light", label: "light", value: j.definitions.by_class.light, title: "jobs that run on the light pool" },
-    { key: "heavy", label: "heavy", value: j.definitions.by_class.heavy, title: "jobs that run on the heavy pool, holding chat slots while they do" },
-    { key: "scheduled", label: "scheduled", value: j.definitions.scheduled, title: `enabled jobs on a schedule · ${j.by_trigger.schedule} scheduled runs in ${j.days} d` },
-    { key: "manual", label: "manual", value: j.definitions.manual, title: `enabled jobs run only by hand · ${j.by_trigger.manual} manual runs in ${j.days} d` },
+    {
+      key: "light",
+      label: "light",
+      value: j.definitions.by_class.light,
+      title: "jobs that run on the light pool",
+    },
+    {
+      key: "heavy",
+      label: "heavy",
+      value: j.definitions.by_class.heavy,
+      title:
+        "jobs that run on the heavy pool, holding chat slots while they do",
+    },
+    {
+      key: "scheduled",
+      label: "scheduled",
+      value: j.definitions.scheduled,
+      title: `enabled jobs on a schedule · ${j.by_trigger.schedule} scheduled runs in ${j.days} d`,
+    },
+    {
+      key: "manual",
+      label: "manual",
+      value: j.definitions.manual,
+      title: `enabled jobs run only by hand · ${j.by_trigger.manual} manual runs in ${j.days} d`,
+    },
     {
       key: "running",
       label: "running",
@@ -61,21 +95,33 @@
   ] as const;
 
   const perDay = $derived(
-    j.per_day.map(
-      (d): Col => ({
-        key: d.day,
-        label: dayOfMonth(d.day),
-        title: fmtDate(d.day),
-        value: OUTCOMES.reduce((n, o) => n + d[o.key], 0),
-        parts: OUTCOMES.map((o) => ({ key: o.key, value: d[o.key], tone: o.tone })),
-      }),
-    ),
+    j.per_day.map((d): Col => ({
+      key: d.day,
+      label: dayOfMonth(d.day),
+      title: fmtDate(d.day),
+      value: OUTCOMES.reduce((n, o) => n + d[o.key], 0),
+      parts: OUTCOMES.map((o) => ({
+        key: o.key,
+        value: d[o.key],
+        tone: o.tone,
+      })),
+    })),
   );
   const shownRuns = $derived(perDay.reduce((n, d) => n + d.value, 0));
 
   const rate = (s: { finished: number; succeeded: number }): Tone =>
-    !s.finished ? "muted" : s.succeeded / s.finished >= 0.95 ? "ok" : s.succeeded / s.finished >= 0.8 ? "warn" : "danger";
-  const ring = (key: string, label: string, s: { finished: number; succeeded: number }) => ({
+    !s.finished
+      ? "muted"
+      : s.succeeded / s.finished >= 0.95
+        ? "ok"
+        : s.succeeded / s.finished >= 0.8
+          ? "warn"
+          : "danger";
+  const ring = (
+    key: string,
+    label: string,
+    s: { finished: number; succeeded: number },
+  ) => ({
     key,
     label,
     title: `${label}: finished runs that succeeded`,
@@ -94,33 +140,46 @@
   ]);
 
   const byKind = $derived(
-    j.by_kind.map(
-      (k): Bar => ({
-        key: k.kind,
-        label: k.kind,
-        value: k.runs,
-        parts: [
-          { key: "succeeded", value: k.succeeded, tone: "ok" },
-          { key: "failed", value: k.failed, tone: "danger" },
-          { key: "other", value: Math.max(0, k.runs - k.succeeded - k.failed), tone: "muted" },
-        ],
-      }),
-    ),
+    j.by_kind.map((k): Bar => ({
+      key: k.kind,
+      label: k.kind,
+      value: k.runs,
+      parts: [
+        { key: "succeeded", value: k.succeeded, tone: "ok" },
+        { key: "failed", value: k.failed, tone: "danger" },
+        {
+          key: "other",
+          value: Math.max(0, k.runs - k.succeeded - k.failed),
+          tone: "muted",
+        },
+      ],
+    })),
   );
 
   const byDuration = $derived(
     j.by_kind
       .filter((k) => k.avg_seconds !== null)
       .sort((a, b) => (b.avg_seconds ?? 0) - (a.avg_seconds ?? 0))
-      .map((k): Bar => ({ key: k.kind, label: k.kind, value: k.avg_seconds ?? 0 })),
+      .map((k): Bar => ({
+        key: k.kind,
+        label: k.kind,
+        value: k.avg_seconds ?? 0,
+      })),
   );
 
-  const lanes = $derived(j.upcoming.map((u) => ({ key: u.id, label: u.name, at: u.at })));
+  const lanes = $derived(
+    j.upcoming.map((u) => ({ key: u.id, label: u.name, at: u.at })),
+  );
   const firings = $derived(lanes.reduce((n, l) => n + l.at.length, 0));
 </script>
 
 <Overview {figures} loading={census.loading} error={census.error}>
-  <Tile title="runs" meta={`${compact(shownRuns)} · ${perDay.length} d`} span={2} empty={!shownRuns}>
+  <Tile
+    title="runs"
+    meta={`${compact(shownRuns)} · ${perDay.length} d`}
+    span={2}
+    empty={!shownRuns}
+  >
     <Columns rows={perDay} format={compact} legend={[...OUTCOMES]} fill />
   </Tile>
 

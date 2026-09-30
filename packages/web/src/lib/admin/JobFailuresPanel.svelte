@@ -35,8 +35,8 @@
 {/snippet}
 
 <Note>
-  Failed or timed out in the last {jobs.data.days} days. The logs are on each
-  job's history, in
+  Failed or timed out in the last {jobs.data.days} days. The logs are on each job's
+  history, in
   <button class="link" onclick={() => showSection("jobs")}>jobs</button>.
 </Note>
 

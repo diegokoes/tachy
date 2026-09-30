@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { CLOCKS, DATE_ORDERS, DATE_ORDER_LABELS, type DateFormat } from "@tachy/contract";
+  import {
+    CLOCKS,
+    DATE_ORDERS,
+    DATE_ORDER_LABELS,
+    type DateFormat,
+  } from "@tachy/contract";
   import { dateFormat, loadDateFormat, setDatePart } from "../dates.svelte";
   import { errText } from "../resource.svelte";
   import { Note, Select } from "../tui";
@@ -7,7 +12,10 @@
   import Row from "./Row.svelte";
   import Rows from "./Rows.svelte";
 
-  const ORDERS = DATE_ORDERS.map((order) => ({ value: order, label: DATE_ORDER_LABELS[order] }));
+  const ORDERS = DATE_ORDERS.map((order) => ({
+    value: order,
+    label: DATE_ORDER_LABELS[order],
+  }));
   const CLOCK_OPTIONS = CLOCKS.map((c) => ({ value: c, label: c }));
 
   let error = $state<string | null>(null);
@@ -37,7 +45,12 @@
   </Row>
 
   <Row label="clock">
-    <Choice label="clock" options={CLOCK_OPTIONS} value={dateFormat.clock} onpick={pick("clock")} />
+    <Choice
+      label="clock"
+      options={CLOCK_OPTIONS}
+      value={dateFormat.clock}
+      onpick={pick("clock")}
+    />
   </Row>
 </Rows>
 

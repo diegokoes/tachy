@@ -84,10 +84,17 @@
       const a = p.getPointAtLength(0);
       const b = p.getPointAtLength(p.getTotalLength());
       const near = (q: Point) =>
-        at.reduce((best, m, i) => (dist(q, m) < dist(q, at[best]) ? i : best), 0);
+        at.reduce(
+          (best, m, i) => (dist(q, m) < dist(q, at[best]) ? i : best),
+          0,
+        );
       const [head, far] =
         dist(a, at[near(a)]) <= dist(b, at[near(b)]) ? [a, b] : [b, a];
-      return { moon: near(head), from: { x: far.x, y: far.y }, to: { x: head.x, y: head.y } };
+      return {
+        moon: near(head),
+        from: { x: far.x, y: far.y },
+        to: { x: head.x, y: head.y },
+      };
     });
     untrack(() => {
       heads = pairs.map((p) => p.moon);
@@ -106,26 +113,43 @@
 
     /* Once, up front: an origin given only on the "to" side of a fromTo is
        resolved after the "from" state has already been drawn about 0 0. */
-    gsap.set([kick, ring, coreEl, voidEl, swarm, heart, ...cometEls], { svgOrigin: ORIGIN });
+    gsap.set([kick, ring, coreEl, voidEl, swarm, heart, ...cometEls], {
+      svgOrigin: ORIGIN,
+    });
 
     const tl = gsap.timeline();
     tl.to(ring, { rotation: 360, duration: 40, ease: "none", repeat: -1 }, 0)
       .fromTo(
         coreGrad,
         { attr: { gradientTransform: `rotate(0 ${ORIGIN})` } },
-        { attr: { gradientTransform: `rotate(360 ${ORIGIN})` }, duration: 6, ease: "none", repeat: -1 },
+        {
+          attr: { gradientTransform: `rotate(360 ${ORIGIN})` },
+          duration: 6,
+          ease: "none",
+          repeat: -1,
+        },
         0,
       )
       .fromTo(
         [coreEl, voidEl],
         { scale: 0.92 },
-        { scale: 1.08, duration: 2, ease: "sine.inOut", yoyo: true, repeat: -1 },
+        {
+          scale: 1.08,
+          duration: 2,
+          ease: "sine.inOut",
+          yoyo: true,
+          repeat: -1,
+        },
         0,
       );
     cometEls.forEach((el, i) => {
       const { scale, lap } = COMETS[i % COMETS.length];
       gsap.set(el, { scale });
-      tl.to(el, { rotation: "-=360", duration: lap, ease: "none", repeat: -1 }, 0);
+      tl.to(
+        el,
+        { rotation: "-=360", duration: lap, ease: "none", repeat: -1 },
+        0,
+      );
     });
     loops = tl;
 
@@ -133,11 +157,20 @@
        from still read as frozen, and an overshoot as a stall. */
     const arrive = gsap
       .timeline()
-      .fromTo(kick, { scale: 0.6, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "power2.out" }, 0)
+      .fromTo(
+        kick,
+        { scale: 0.6, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.6, ease: "power2.out" },
+        0,
+      )
       .fromTo(
         tl,
         { timeScale: 0.45 },
-        { timeScale: untrack(() => mode) === "seek" ? 2.4 : 1, duration: 1.2, ease: "power1.out" },
+        {
+          timeScale: untrack(() => mode) === "seek" ? 2.4 : 1,
+          duration: 1.2,
+          ease: "power1.out",
+        },
         0,
       );
     return () => {
@@ -176,7 +209,11 @@
        orbit for the first half, then the spiral tightens and quickens. */
     if (orbiting)
       tl.to(swarmEl, { scale: 0, duration: SPIRAL, ease: "power2.in" }, 0)
-        .to(swarmEl, { rotation: "-=1080", duration: SPIRAL, ease: "power3.in" }, 0)
+        .to(
+          swarmEl,
+          { rotation: "-=1080", duration: SPIRAL, ease: "power3.in" },
+          0,
+        )
         .set(swarmEl, { opacity: 0 }, ENTER);
     return tl;
   }
@@ -198,7 +235,11 @@
       ease: "sine.inOut",
       overwrite: "auto",
     });
-    gsap.to(halo, { autoAlpha: m === "idle" ? 1 : 0, duration: 0.5, overwrite: true });
+    gsap.to(halo, {
+      autoAlpha: m === "idle" ? 1 : 0,
+      duration: 0.5,
+      overwrite: true,
+    });
     if (m === "seek") flight = collapse(swarm, heart);
     else if (m === "gone") {
       still();
@@ -218,9 +259,15 @@
     } else {
       still();
       loops?.resume();
-      if (kick) gsap.to(kick, { scale: 1, rotation: 0, autoAlpha: 1, duration: 0.4 });
+      if (kick)
+        gsap.to(kick, { scale: 1, rotation: 0, autoAlpha: 1, duration: 0.4 });
       gsap.to(heart, { scale: 1, x: 0, y: 0, duration: 0.4 });
-      gsap.to(swarm, { scale: 1, opacity: 1, duration: 0.9, ease: "back.out(1.4)" });
+      gsap.to(swarm, {
+        scale: 1,
+        opacity: 1,
+        duration: 0.9,
+        ease: "back.out(1.4)",
+      });
     }
   });
 
@@ -319,7 +366,10 @@
           />
           {#if moon}
             {@const k = COMETS[i % COMETS.length].moon}
-            {@const tip = ends[i]?.to ?? { x: Number(moon.cx), y: Number(moon.cy) }}
+            {@const tip = ends[i]?.to ?? {
+              x: Number(moon.cx),
+              y: Number(moon.cy),
+            }}
             <!-- Shrunk toward the tail's end rather than its own centre, so
                  the head still sits on the tail. -->
             <circle

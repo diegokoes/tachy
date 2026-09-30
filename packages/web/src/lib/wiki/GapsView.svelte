@@ -75,13 +75,11 @@
   const HEADS: Record<WikiGapKind, { title: string; detail: string }> = {
     unwritten: {
       title: "Written about nowhere",
-      detail:
-        "Lessons with no covering article.",
+      detail: "Lessons with no covering article.",
     },
     outgrown: {
       title: "Outgrown",
-      detail:
-        "Newer lessons on these components, not cited.",
+      detail: "Newer lessons on these components, not cited.",
     },
     stale: {
       title: "Stale sources",
@@ -179,7 +177,10 @@
       navigate(wikiPath(scope, "new", slugify(g.key)));
       return;
     }
-    seedArticle({ title: g.subject, component: g.evidence.component ?? undefined });
+    seedArticle({
+      title: g.subject,
+      component: g.evidence.component ?? undefined,
+    });
     navigate(wikiPath(scope, "new", g.evidence.component ?? ""));
   }
 
@@ -197,7 +198,9 @@
       case "unwritten":
       case "outgrown": {
         const bits = [
-          e.entries ? `${e.entries} ${e.entries === 1 ? "lesson" : "lessons"}` : "",
+          e.entries
+            ? `${e.entries} ${e.entries === 1 ? "lesson" : "lessons"}`
+            : "",
           e.docs ? `${e.docs} ${e.docs === 1 ? "doc" : "docs"}` : "",
         ].filter(Boolean);
         return `${bits.join(" · ")}${g.kind === "outgrown" ? ` since ${fmtDate(e.since)}` : ""}`;
@@ -274,7 +277,9 @@
                       <span class="items">
                         {#each g.evidence.items as it (it.id)}
                           <a
-                            href="/library/{it.kind === 'entry' ? 'entries' : 'docs'}/{it.id}"
+                            href="/library/{it.kind === 'entry'
+                              ? 'entries'
+                              : 'docs'}/{it.id}"
                             onclick={(e) => {
                               e.preventDefault();
                               navigate(
@@ -302,7 +307,9 @@
                           icon="ai"
                           title="open chat with a /wiki-draft command for this"
                           onclick={() => draftWithAgent(g)}
-                          >{g.kind === "unwritten" ? "draft" : "refresh"}</Button
+                          >{g.kind === "unwritten"
+                            ? "draft"
+                            : "refresh"}</Button
                         >
                       {/if}
                       {#if g.kind === "unwritten" || g.kind === "wanted"}
