@@ -38,6 +38,7 @@ import {
   Delete,
   Diamond,
   Download,
+  Equal,
   Eye,
   EyeClosed,
   FileExclamationPoint,
@@ -46,6 +47,7 @@ import {
   Flag,
   Flame,
   FlaskConical,
+  FoldVertical,
   Gavel,
   Gift,
   GitCompareArrows,
@@ -75,6 +77,7 @@ import {
   Palette,
   Pause,
   PencilSparkles,
+  Pin,
   Plane,
   Play,
   Plug,
@@ -92,6 +95,7 @@ import {
   Settings,
   Shield,
   ShieldAlert,
+  Signpost,
   Sprout,
   Square,
   SquareCheck,
@@ -212,6 +216,8 @@ export const ICONS = {
   integrations: Plug,
   /** Admin's home for how people's commands behave. */
   flows: Workflow,
+  /** What a team tells tachy to look for when it reviews a draft. */
+  guidance: Signpost,
   structure: Layers,
   users: UserRoundGroup,
   workers: Terminal,
@@ -282,6 +288,11 @@ export const ICONS = {
   wiTest: FlaskConical,
   /** A type whose glyph has no counterpart here. */
   wiGeneric: SquareDashed,
+  /** Where a field sits on a team's form, from nothing changed to left out. */
+  placeAsSource: Equal,
+  placePinned: Pin,
+  placeFolded: FoldVertical,
+  placeOmitted: EyeClosed,
 } satisfies Record<string, LucideIconData>;
 
 export type IconName = keyof typeof ICONS;
