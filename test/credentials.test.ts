@@ -13,6 +13,7 @@ import {
   listCredentials,
   setPref,
   resolvePref,
+  dateFormatOf,
   setSetting,
   clearSettingsCache,
 } from "@tachy/core";
@@ -306,6 +307,49 @@ describe("scoped preferences", () => {
     await expect(
       setPref(alice.id, "user", alice.id, "agent_provider", "gpt"),
     ).rejects.toThrow(/invalid value/);
+  });
+});
+
+describe("personal preferences", () => {
+  it("are the reader's own, never a team or global default", async () => {
+    const { admin, alice, teamId } = await seedPeople();
+    const ctx = { userId: alice.id, teamId };
+
+    expect(await resolvePref("date_order", ctx)).toEqual({
+      value: "dmy",
+      source: "default",
+    });
+    expect(await dateFormatOf(ctx)).toEqual({ order: "dmy", clock: "24h" });
+
+    await expect(
+      setPref(admin.id, "global", undefined, "date_order", "iso"),
+    ).rejects.toThrow(/personal/);
+    await expect(
+      setPref(alice.id, "team", teamId, "clock", "12h"),
+    ).rejects.toThrow(/personal/);
+
+    await setPref(alice.id, "user", alice.id, "date_order", "iso");
+    await setPref(alice.id, "user", alice.id, "clock", "12h");
+    expect(await resolvePref("date_order", ctx)).toEqual({
+      value: "iso",
+      source: "user",
+    });
+    expect(await dateFormatOf(ctx)).toEqual({ order: "iso", clock: "12h" });
+
+    await expect(
+      setPref(alice.id, "user", alice.id, "clock", "25h"),
+    ).rejects.toThrow(/invalid value/);
+  });
+
+  it("ignore a team row written before the rule", async () => {
+    const { alice, teamId } = await seedPeople();
+    await sql`
+      insert into preferences (scope, team_id, key, value)
+      values ('team', ${teamId}, 'date_order', ${sql.json("mdy")})
+    `;
+    expect(
+      await resolvePref("date_order", { userId: alice.id, teamId }),
+    ).toMatchObject({ value: "dmy", source: "default" });
   });
 });
 

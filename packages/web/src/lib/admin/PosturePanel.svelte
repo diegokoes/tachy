@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fmtDate } from "../dates.svelte";
   import { onMount } from "svelte";
   import { api } from "../api";
   import { createResource } from "../resource.svelte";
@@ -175,7 +176,7 @@
       return {
         key: d.day,
         label: dayOfMonth(d.day),
-        title: d.day,
+        title: fmtDate(d.day),
         value: d.tokens,
         parts: [
           ...named.map((m) => ({ key: m.key, value: by[m.key] ?? 0, tone: m.tone })),
@@ -195,7 +196,7 @@
       (d): Col => ({
         key: d.day,
         label: dayOfMonth(d.day),
-        title: d.day,
+        title: fmtDate(d.day),
         value: d.reads + d.writes,
         parts: CALL_KINDS.map((k) => ({ key: k.key, value: d[k.key], tone: k.tone })),
       }),

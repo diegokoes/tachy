@@ -2,8 +2,7 @@
   import { onDestroy, onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { Bars, Badge, Button, Checkbox, GroupHead, Note, Select, isActive, toneOf, type Bar } from "../tui";
-  import { fmtDateTime } from "../dates";
+  import { Bars, Badge, Button, Checkbox, GroupHead, Note, Select, Time, isActive, toneOf, type Bar } from "../tui";
   import { endpointP95, loadSummary, type TestRun } from "./loadRuns";
   import { pct } from "./overview";
   import { loads } from "./systemState.svelte";
@@ -156,7 +155,7 @@
       <tr>
         <td>
           {r.script}{r.profile ? ` (${r.profile})` : ""}
-          <span class="dim small">{fmtDateTime(r.created_at)}</span>
+          <span class="dim small"><Time at={r.created_at} /></span>
         </td>
         <td>{r.target}<span class="dim small">{r.image_sha ?? "unknown build"}</span></td>
         <td><Badge tone={toneOf(r.status)}>{r.status}</Badge></td>

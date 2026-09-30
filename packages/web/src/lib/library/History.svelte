@@ -9,8 +9,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../api";
-  import { Badge, Button, Chip } from "../tui";
-  import { fmtDateTime } from "../dates";
+  import { Badge, Button, Chip, Time } from "../tui";
 
   /**
    * Edit history for one library item. `base` is the collection route
@@ -112,7 +111,7 @@
             <span class="v">v{r.version}</span>
             <Badge tone={doorTone(r.actor)}>{r.actor}</Badge>
             <span class="who">{revisionAuthor(r)}</span>
-            <span class="at">{fmtDateTime(r.created_at)}</span>
+            <span class="at"><Time at={r.created_at} /></span>
             {#if r.changed_fields.length}
               <span class="fields">
                 {#each r.changed_fields as f}<Chip>{f}</Chip>{/each}

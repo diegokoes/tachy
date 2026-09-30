@@ -33,6 +33,7 @@ export const READ_TOOLS = [
   "list_repos",
   "search_code",
   "read_code_file",
+  "code_changes_between",
   "export_table",
 ] as const;
 

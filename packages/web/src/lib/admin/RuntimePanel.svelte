@@ -2,7 +2,7 @@
   import { onDestroy, onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { Badge, Button, GroupHead, Note } from "../tui";
+  import { Badge, Button, GroupHead, Note, Time } from "../tui";
   import type { SystemInfo } from "./rows";
   import { system as shared } from "./systemState.svelte";
 
@@ -68,7 +68,7 @@
         <td>Release</td>
         <td>{system.env?.commit ?? "unknown"}{system.env?.env_badge ? ` (${system.env.env_badge})` : ""}</td>
         <td class="muted">
-          {#if release}last deploy {release.result} {release.at} · {release.image ?? ""}{:else}no deploy recorded{/if}
+          {#if release}last deploy {release.result} <Time at={release.at} /> · {release.image ?? ""}{:else}no deploy recorded{/if}
         </td>
       </tr>
       <tr>

@@ -10,15 +10,12 @@
   import {
     Badge,
     Button,
-    Checkbox,
     Chip,
     CrudTable,
     FilterBar,
     ErrorMark,
     Field,
-    Modal,
     Note,
-    Subject,
     type Column,
     type Draft,
   } from "../tui";
@@ -26,9 +23,23 @@
 import { INFO } from "./help";
 import { csv } from "../fields";
 import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
-  import { sectionHoist } from "./sectionAction.svelte";
+  import {
+    claimSectionAction,
+    sectionHoist,
+    type SectionAction,
+  } from "./sectionAction.svelte";
+  import { gsap, reducedMotion } from "../gsap";
+  import { navigate } from "../router.svelte";
 
   type FoundRepo = { name: string; url: string; default_branch: string };
+  type Refs = { branches: string[]; releases: string[] };
+  type Preview = {
+    ref: string;
+    files_total: number;
+    files_admitted: number;
+    by_dir: { dir: string; files: number }[];
+    by_ext: { ext: string; files: number }[];
+  };
 
   const repos = createResource(
     () => api.get<{ repos: Repo[] }>("/repos").then((r) => r.repos),
@@ -49,6 +60,11 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
   let indexing = $state<string | null>(null);
   let found = $state<Record<string, FoundRepo[]>>({});
   let discovering = $state(false);
+  let refs = $state<Record<string, Refs>>({});
+  let refsError = $state<Record<string, string>>({});
+  let probing = $state<string | null>(null);
+  let preview = $state<Record<string, Preview>>({});
+  let previewing = $state<string | null>(null);
   let poll: ReturnType<typeof setInterval> | undefined;
 
   const knowledgeProjects = $derived(
@@ -74,11 +90,112 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
     products.data.filter((p) => canCurateScope({ team_slug: p.team_slug })),
   );
   const canAdd = $derived(myProducts.length > 0);
+  const working = (status: string) =>
+    status === "cloning" || status === "indexing";
   const busyIndex = $derived(
     repos.data.some(
-      (r) => r.index_status === "cloning" || r.index_status === "indexing",
+      (r) => working(r.index_status) || r.lines.some((l) => working(l.index_status)),
     ),
   );
+
+  const MAINLINE = ["master", "main", "develop", "quality"];
+  const RELEASE_LINE_RE = /^(legacy|release)\//;
+  const branchRank = (b: string) =>
+    MAINLINE.includes(b) ? 0 : RELEASE_LINE_RE.test(b) ? 1 : 2;
+  /** Mainline in its usual order, then release lines newest first, then the rest. */
+  const byBranch = (a: string, b: string) =>
+    branchRank(a) - branchRank(b) ||
+    (branchRank(a) === 0
+      ? MAINLINE.indexOf(a) - MAINLINE.indexOf(b)
+      : branchRank(a) === 1
+        ? b.localeCompare(a, undefined, { numeric: true })
+        : a.localeCompare(b));
+
+  const refsFor = (d: Draft): Refs | null => refs[String(d.url ?? "")] ?? null;
+
+  function branchOptions(d: Draft) {
+    const current = String(d.default_branch ?? "");
+    return [...new Set([current, ...(refsFor(d)?.branches ?? [])])]
+      .filter(Boolean)
+      .sort(byBranch)
+      .map((b) => ({ value: b, label: b }));
+  }
+
+  /** Branches worth offering as extra lines: mainline and release lines. */
+  function lineCandidates(d: Draft): string[] {
+    const chosen = csv(String(d.lines ?? ""));
+    const offered = (refsFor(d)?.branches ?? []).filter(
+      (b) => branchRank(b) < 2,
+    );
+    return [...new Set([...chosen, ...offered])]
+      .filter((b) => b !== String(d.default_branch ?? ""))
+      .sort(byBranch);
+  }
+
+  const URLISH_RE = /^(https?:\/\/|ssh:\/\/|git@)\S+$/;
+
+  async function loadRefs(url: string, projectId: string, product: string) {
+    if (!URLISH_RE.test(url) || refs[url] || probing === url) return;
+    probing = url;
+    try {
+      const q = new URLSearchParams({ url });
+      if (projectId) q.set("source_project_id", projectId);
+      else if (product) q.set("product", product);
+      const res = await api.get<
+        { ok: boolean; error?: string } & Partial<Refs>
+      >(`/repos/refs?${q}`);
+      if (!res.ok) throw new Error(res.error ?? "could not list branches");
+      refs[url] = { branches: res.branches ?? [], releases: res.releases ?? [] };
+      delete refsError[url];
+    } catch (e) {
+      refsError[url] = errText(e);
+    } finally {
+      if (probing === url) probing = null;
+    }
+  }
+
+  /** Lists the remote's branches as the form's URL settles. */
+  function autoRefs(
+    _node: HTMLElement,
+    p: { url: string; projectId: string; product: string },
+  ) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const kick = (next: typeof p) => {
+      clearTimeout(timer);
+      timer = setTimeout(
+        () => void loadRefs(next.url, next.projectId, next.product),
+        500,
+      );
+    };
+    kick(p);
+    return { update: kick, destroy: () => clearTimeout(timer) };
+  }
+
+  async function runPreview(slug: string, d: Draft) {
+    previewing = slug;
+    error = null;
+    try {
+      const res = await api.post<{ ok: boolean; error?: string } & Partial<Preview>>(
+        `/repos/${slug}/preview`,
+        { config: configOf(d) },
+      );
+      if (!res.ok) throw new Error(res.error ?? "preview failed");
+      preview[slug] = res as Preview;
+    } catch (e) {
+      error = errText(e);
+    } finally {
+      previewing = null;
+    }
+  }
+
+  function toggleExclude(d: Draft, dir: string) {
+    const current = csv(String(d.exclude ?? ""));
+    d.exclude = (
+      current.includes(dir)
+        ? current.filter((p) => p !== dir)
+        : [...current, dir]
+    ).join(", ");
+  }
 
   const extensionsOf = (r: Repo): string[] =>
     Array.isArray(r.config?.include_extensions)
@@ -102,104 +219,30 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
     ]);
   }
 
-  /* Bulk linking, because an Azure DevOps project routinely holds fifty repos
-     and the single-repo form is one dialog each. Component and customer stay a
-     per-repo decision afterwards — only the tedious part is batched. */
-  let bulk = $state<{ project: SourceProject; picked: Set<string> } | null>(
-    null,
-  );
-  let bulkBusy = $state(false);
-  let bulkError = $state<string | null>(null);
-  let bulkResults = $state<{ slug: string; ok: boolean; error?: string }[]>([]);
-  let bulkFilter = $state("");
-
-  const linkedUrls = $derived(new Set(repos.data.map((r) => r.url)));
-
-  const bulkHits = $derived(bulk ? (found[bulk.project.id] ?? []) : []);
-  const bulkShown = $derived(
-    bulkFilter.trim()
-      ? bulkHits.filter((r) =>
-          r.name.toLowerCase().includes(bulkFilter.trim().toLowerCase()),
-        )
-      : bulkHits,
-  );
-  /** Already-linked rows render ticked and locked, so they are never a choice. */
-  const bulkSelectable = $derived(
-    bulkShown.filter((r) => !linkedUrls.has(r.url)),
-  );
-  /* Counted within the filter, not across the whole discovery: the bar
-     describes what you are looking at. The confirm button carries the total. */
-  const bulkPickedShown = $derived(
-    bulk ? bulkSelectable.filter((r) => bulk!.picked.has(r.url)).length : 0,
+  /* An Azure DevOps project routinely holds fifty repos, and the form here is
+     one dialog each; bulk linking has a page of its own. */
+  const canBulk = $derived(
+    knowledgeProjects.some((p) => canCurateScope({ team_slug: p.team_slug })),
   );
 
-  async function openBulk(project: SourceProject) {
-    bulkError = null;
-    bulkResults = [];
-    bulkFilter = "";
-    bulk = { project, picked: new Set() };
-    if (!found[project.id]) await discover({ source_project_id: project.id });
-    const hits = found[project.id] ?? [];
-    // Pre-tick everything not already linked: the normal intent is "all of them",
-    // and un-ticking the few you don't want is less work than ticking fifty.
-    bulk = {
-      project,
-      picked: new Set(
-        hits.filter((r) => !linkedUrls.has(r.url)).map((r) => r.url),
-      ),
-    };
+  /** The section steps out of the way before the orbit takes the window. */
+  async function bulkLink() {
+    const section = document.getElementById("admin-repos");
+    if (section && !reducedMotion())
+      await gsap.to(section, { opacity: 0, y: -8, duration: 0.28, ease: "power2.in" });
+    navigate("/admin/integrations/bulk-link");
   }
 
-  function toggleBulk(url: string, on: boolean) {
-    if (!bulk) return;
-    const picked = new Set(bulk.picked);
-    if (on) picked.add(url);
-    else picked.delete(url);
-    bulk = { ...bulk, picked };
-  }
+  const bulkAction: SectionAction = {
+    label: "bulk link",
+    icon: "bulk",
+    tone: "info",
+    run: bulkLink,
+  };
 
-  /** Acts on what the filter shows, so "…-api" then "all" is two actions. */
-  function pickShown(on: boolean) {
-    if (!bulk) return;
-    const picked = new Set(bulk.picked);
-    for (const r of bulkSelectable) {
-      if (on) picked.add(r.url);
-      else picked.delete(r.url);
-    }
-    bulk = { ...bulk, picked };
-  }
-
-  async function saveBulk() {
-    if (!bulk) return;
-    const hits = (found[bulk.project.id] ?? []).filter((r) =>
-      bulk!.picked.has(r.url),
-    );
-    if (!hits.length) return;
-    bulkBusy = true;
-    bulkError = null;
-    try {
-      const taken = repos.data.map((r) => r.slug);
-      const payload = hits.map((r) => {
-        const slug = uniqueSlug(slugify(r.name), taken);
-        taken.push(slug);
-        return { slug, url: r.url, branch: r.default_branch || "main" };
-      });
-      const res = await api.put<{
-        ok: boolean;
-        results: { slug: string; ok: boolean; error?: string }[];
-      }>("/repos/bulk", {
-        source_project_id: bulk.project.id,
-        repos: payload,
-      });
-      await repos.reload();
-      bulkResults = res.results.filter((r) => !r.ok);
-      if (res.ok) bulk = null;
-    } catch (e) {
-      bulkError = errText(e);
-    } finally {
-      bulkBusy = false;
-    }
-  }
+  $effect(() => {
+    if (canBulk) return claimSectionAction("repos", bulkAction, "aside");
+  });
 
   /** Repos of the chosen project, so the clone URL is picked, not transcribed. */
   async function discover(d: Draft) {
@@ -313,9 +356,43 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
       width: "8rem",
       edit: "text",
       initial: "main",
-      /* One row, one branch: the clone is --single-branch and repo_files is
-         unique on (repo, path). Two branches means linking the repo twice. */
-      info: "The one branch indexed. To index a second, link the repo again under another name.",
+      visible: (d) => !refsFor(d),
+      info: "Where releases land, usually master. Becomes a list once the remote's branches are read.",
+    },
+    {
+      key: "default_branch",
+      label: "branch",
+      formOnly: true,
+      edit: "select",
+      searchable: true,
+      visible: (d) => Boolean(refsFor(d)),
+      options: branchOptions,
+      info: "Where releases land, usually master. Searched by default; older release lines are added below.",
+    },
+    {
+      key: "lines",
+      label: "lines",
+      formOnly: true,
+      edit: "text",
+      /* Edited by the line chips below the form, like the file types. */
+      visible: () => false,
+      value: (r) =>
+        r.lines
+          .filter((l) => l.ref !== r.default_branch)
+          .map((l) => l.ref)
+          .join(", "),
+    },
+    {
+      key: "exclude",
+      label: "exclude",
+      formOnly: true,
+      edit: "text",
+      placeholder: "other/application/bopools, scripts/**/*.json",
+      info: "Paths or globs left out of the index. A path excludes everything under it.",
+      value: (r) =>
+        Array.isArray(r.config?.exclude)
+          ? (r.config.exclude as string[]).join(", ")
+          : "",
     },
     {
       key: "extensions",
@@ -335,16 +412,23 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
       info: "Larger files skipped. Default 200.",
       value: (r) => r.config?.max_file_kb ?? "",
     },
-    { key: "index_status", label: "index", width: "8rem", cell: indexCell },
+    { key: "index_status", label: "index", width: "13rem", cell: indexCell },
     { key: "indexed", label: "indexed", width: "10rem", cell: freshnessCell },
   ]);
 
-  async function save(d: Draft) {
+  function configOf(d: Draft): Record<string, unknown> {
     const config: Record<string, unknown> = {};
     const ext = csv(String(d.extensions ?? ""));
     if (ext.length) config.include_extensions = ext;
     if (String(d.max_file_kb ?? "").trim())
       config.max_file_kb = Number(d.max_file_kb);
+    const exclude = csv(String(d.exclude ?? ""));
+    if (exclude.length) config.exclude = exclude;
+    return config;
+  }
+
+  async function save(d: Draft) {
+    const config = configOf(d);
     const product = productOfDraft(d);
     await api.put("/repos", {
       slug: String(d.slug).trim(),
@@ -356,6 +440,7 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
       component: d.component_slug || null,
       customer: d.customer_slug || null,
       branch: String(d.default_branch ?? "").trim() || "main",
+      lines: csv(String(d.lines ?? "")),
       config,
     });
   }
@@ -422,14 +507,27 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
   </span>
 {/snippet}
 
-{#snippet indexCell(r: Repo)}
+{#snippet statusBadge(status: string)}
   <Badge
-    tone={r.index_status === "ready"
-      ? "ok"
-      : r.index_status === "error"
-        ? "danger"
-        : "muted"}>{r.index_status}</Badge
+    tone={status === "ready" ? "ok" : status === "error" ? "danger" : "muted"}
+    >{status}</Badge
   >
+{/snippet}
+
+{#snippet indexCell(r: Repo)}
+  {#if r.lines.length}
+    <span class="lines">
+      {#each r.lines as l (l.id)}
+        <span class="line" title={l.ref}>
+          {@render statusBadge(l.index_status)}
+          {#if r.lines.length > 1}<span class="ref">{l.ref}</span>{/if}
+          {#if l.version_label}<span class="ver">{l.version_label}</span>{/if}
+        </span>
+      {/each}
+    </span>
+  {:else}
+    {@render statusBadge(r.index_status)}
+  {/if}
 {/snippet}
 
 {#snippet freshnessCell(r: Repo)}
@@ -449,15 +547,21 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
       icon="index"
       title="clone this repo and re-read its files into the code index"
       busy={indexing === r.slug}
-      disabled={r.index_status === "cloning" || r.index_status === "indexing"}
+      disabled={working(r.index_status) ||
+        r.lines.some((l) => working(l.index_status))}
       onclick={() => reindex(r)}>index</Button
     >
   {/if}
 {/snippet}
 
 {#snippet indexErrors()}
-  {#each repos.data.filter((r) => r.index_error) as r (r.id)}
-    <ErrorMark message={r.index_error ?? ""} label={`${r.slug} index`} />
+  {#each repos.data as r (r.id)}
+    {#each r.lines.filter((l) => l.index_error) as l (l.id)}
+      <ErrorMark
+        message={l.index_error ?? ""}
+        label={`${r.slug} ${l.ref} index`}
+      />
+    {/each}
   {/each}
 {/snippet}
 
@@ -504,6 +608,109 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
     </div>
   {/if}
 
+  {@const url = String(f.draft.url ?? "")}
+  {@const candidates = lineCandidates(f.draft)}
+  {@const tracked = new Set(csv(String(f.draft.lines ?? "")))}
+  <div
+    class="find"
+    use:autoRefs={{
+      url,
+      projectId: String(f.draft.source_project_id ?? ""),
+      product: productOfDraft(f.draft),
+    }}
+  >
+    <Field
+      label="release lines"
+      info="Older branches to index as well, such as legacy/master-1-50. A ticket's version is searched on the line for its minor; any release can be read at its tag without one."
+      plain
+    >
+      {#if probing === url}
+        <span class="dim sm">reading branches…</span>
+      {:else if refsError[url]}
+        <Button
+          variant="ghost"
+          size="sm"
+          icon="discover"
+          title={refsError[url]}
+          onclick={() => {
+            delete refsError[url];
+            void loadRefs(
+              url,
+              String(f.draft.source_project_id ?? ""),
+              productOfDraft(f.draft),
+            );
+          }}>retry branches</Button
+        >
+      {:else}
+        <span class="dim sm"
+          >{tracked.size
+            ? `${tracked.size} besides ${f.draft.default_branch || "the default"}`
+            : refsFor(f.draft)
+              ? `${refsFor(f.draft)?.branches.length} branches, ${refsFor(f.draft)?.releases.length} releases`
+              : "none"}</span
+        >
+      {/if}
+    </Field>
+    {#if candidates.length}
+      <div class="chips">
+        {#each candidates as b (b)}
+          <Chip
+            tone={tracked.has(b) ? "accent" : "default"}
+            onclick={() => {
+              const next = new Set(tracked);
+              if (next.has(b)) next.delete(b);
+              else next.add(b);
+              f.draft.lines = [...next].sort(byBranch).join(", ");
+            }}>{b}</Chip
+          >
+        {/each}
+      </div>
+    {/if}
+  </div>
+
+  {#if f.mode === "edit" && f.row}
+    {@const slug = f.row.slug}
+    {@const p = preview[slug]}
+    {@const excluded = new Set(csv(String(f.draft.exclude ?? "")))}
+    <div class="find">
+      <Field
+        label="what gets indexed"
+        info="Counts the files the file types and excludes above admit on the default line, from the clone's trees. Nothing is embedded. Click a folder to exclude it."
+        plain
+      >
+        <Button
+          variant="ghost"
+          size="sm"
+          icon="discover"
+          busy={previewing === slug}
+          onclick={() => runPreview(slug, f.draft)}>count files</Button
+        >
+        {#if p}
+          <span class="dim sm"
+            >{p.files_admitted} of {p.files_total} files on {p.ref}</span
+          >
+        {/if}
+      </Field>
+      {#if p}
+        <div class="chips">
+          {#each p.by_dir as d (d.dir)}
+            <Chip
+              tone={excluded.has(d.dir) ? "warn" : "default"}
+              title={excluded.has(d.dir) ? "excluded" : "exclude this folder"}
+              onclick={() => toggleExclude(f.draft, d.dir)}
+              >{d.dir} · {d.files}</Chip
+            >
+          {/each}
+        </div>
+        <div class="chips">
+          {#each p.by_ext as e (e.ext)}
+            <span class="dim sm">.{e.ext} {e.files}</span>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {/if}
+
   <!-- The allowlist is long and nobody remembers it, so it is offered rather
        than described. Ticked chips are exactly what the field holds. -->
   {@const picked = new Set(csv(String(f.draft.extensions ?? "")))}
@@ -539,21 +746,6 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
 {#if error}<Note tone="danger">{error}</Note>{/if}
 {@render indexErrors()}
 
-{#if knowledgeProjects.length}
-  <div class="bulkbar">
-    <span class="dim">link many at once:</span>
-    {#each knowledgeProjects as p (p.id)}
-      <Button
-        variant="ghost"
-        size="sm"
-        icon="discover"
-        disabled={!canCurateScope({ team_slug: p.team_slug })}
-        onclick={() => openBulk(p)}>browse {p.external_key}</Button
-      >
-    {/each}
-  </div>
-{/if}
-
 <FilterBar
   bind:value={filter}
   shown={filtered.length}
@@ -583,124 +775,7 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
   ondelete={(r) => repos.mutate(() => api.delete(`/repos/${r.slug}`))}
 />
 
-{#if bulk}
-  {@const b = bulk}
-  <Modal
-    title={`link repos from ${b.project.external_key}`}
-    width="56rem"
-    busy={bulkBusy}
-    confirmLabel={`link ${b.picked.size}`}
-    confirmIcon="create"
-    onConfirm={saveBulk}
-    onCancel={() => (bulk = null)}
-  >
-    {#if bulkError}<Note tone="danger">{bulkError}</Note>{/if}
-    <Subject verb="linking repos from" name={b.project.external_key} />
-    {#if bulkResults.length}
-      <Note tone="warn">
-        {bulkResults.length} could not be linked:
-        {bulkResults.map((r) => `${r.slug} (${r.error})`).join("; ")}
-      </Note>
-    {/if}
-    {#if !bulkHits.length}
-      <p class="dim">
-        {discovering ? "asking the source…" : "no repos readable with this token"}
-      </p>
-    {:else}
-      <p class="dim sm">Already linked ones are ticked and locked.</p>
-      <div class="pickbar">
-        <input
-          placeholder="filter repos…"
-          aria-label="filter repos"
-          bind:value={bulkFilter}
-          disabled={bulkBusy}
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={bulkBusy || !bulkSelectable.length}
-          onclick={() => pickShown(true)}>all</Button
-        >
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={bulkBusy || !bulkSelectable.length}
-          onclick={() => pickShown(false)}>none</Button
-        >
-        <span class="dim sm">
-          {bulkPickedShown} of {bulkSelectable.length} selected
-        </span>
-      </div>
-      <div class="picklist">
-        {#each bulkShown as r (r.url)}
-          {@const linked = linkedUrls.has(r.url)}
-          <label class="prow" class:linked>
-            <Checkbox
-              ariaLabel={r.name}
-              checked={linked || b.picked.has(r.url)}
-              disabled={linked || bulkBusy}
-              onchange={(on) => toggleBulk(r.url, on)}
-            />
-            <span class="pname">{r.name}</span>
-            <span class="dim sm">{r.default_branch || "main"}</span>
-            {#if linked}<Badge tone="muted">linked</Badge>{/if}
-          </label>
-        {/each}
-        {#if !bulkShown.length}
-          <p class="dim sm">nothing matches “{bulkFilter}”</p>
-        {/if}
-      </div>
-    {/if}
-  </Modal>
-{/if}
-
 <style>
-  .bulkbar {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--pad-1);
-    margin-bottom: var(--pad-2);
-    font-size: var(--fs-sm);
-  }
-  .pickbar {
-    display: flex;
-    align-items: center;
-    gap: var(--pad-2);
-    margin-bottom: var(--pad-2);
-  }
-  .pickbar input {
-    flex: 1;
-    min-width: 0;
-  }
-
-  /* A project routinely holds fifty repos — down one column that is a long
-     scroll past the fold, across three it is a glance. */
-  .picklist {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-    gap: var(--pad-1) var(--gap);
-    max-height: min(28rem, 50vh);
-    overflow-y: auto;
-  }
-  .prow {
-    display: flex;
-    align-items: center;
-    gap: var(--gap);
-    min-width: 0;
-    font-size: var(--fs-sm);
-  }
-  .prow.linked {
-    color: var(--muted);
-  }
-  .pname {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .sm {
-    font-size: var(--fs-xs);
-  }
   .chips {
     display: flex;
     flex-wrap: wrap;
@@ -737,6 +812,28 @@ import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
     display: block;
     font-size: var(--fs-xs);
     opacity: 0.7;
+  }
+  .lines {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .line {
+    display: flex;
+    align-items: baseline;
+    gap: var(--pad-1);
+    min-width: 0;
+    font-size: var(--fs-xs);
+  }
+  .ref {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ver {
+    color: var(--muted);
+    white-space: nowrap;
   }
   .dim {
     color: var(--muted);

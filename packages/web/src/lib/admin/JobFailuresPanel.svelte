@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { DataTable, Note, type Column } from "../tui";
-  import { fmtDateTime } from "../dates";
+  import { fmtDateTime } from "../dates.svelte";
   import { showSection } from "./overview";
   import { jobs } from "./jobCensus.svelte";
 

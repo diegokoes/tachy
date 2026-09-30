@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api } from "../api";
-  import { fmtDateTime } from "../dates";
+  import { fmtDateTime } from "../dates.svelte";
   import { Icon, Modal } from "../tui";
   import type { Revision, ViewSummary } from "../types";
   import History, { revisionAuthor } from "./History.svelte";

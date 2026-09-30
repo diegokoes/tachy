@@ -16,6 +16,7 @@
   import Wordmark from "./lib/Wordmark.svelte";
   import { loadThemeFromStorage, themeState } from "./lib/theme.svelte";
   import { loadFonts } from "./lib/fonts.svelte";
+  import { loadDateFormat } from "./lib/dates.svelte";
   import { router, openSection, section, startRouter } from "./lib/router.svelte";
   import {
     refreshNotifications,
@@ -256,6 +257,10 @@
     if (session.me) void refreshNotifications();
   });
 
+  $effect(() => {
+    if (session.me) void loadDateFormat();
+  });
+
   onMount(() => {
     loadThemeFromStorage();
     loadFonts();
@@ -287,7 +292,7 @@
 {:else if view === "feedback"}
   <FeedbackView />
 {:else}
-  <div class="app">
+  <div class="app" data-scene>
     <div class="topbar">
       <div class="mark"><Wordmark /></div>
       <div class="navbar" bind:this={navEl} class:unrevealed={!navRevealed}>
@@ -428,6 +433,21 @@
      narrowest, for the opposite reason — the nav and the subnav in the recess
      below it are one control in two registers, and reading as a pair means
      sitting closer to each other than either does to anything else. */
+  /* The app and its wallpaper blur behind an open dialog. A filter on the
+     scene rather than a backdrop-filter on the scrim: under a backdrop blur,
+     Firefox leaves some pages sharp. */
+  :global([data-scene]) {
+    transition: filter 0.14s ease;
+  }
+  :global(:root[data-dialog] [data-scene]) {
+    filter: blur(var(--scrim-blur));
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :global([data-scene]) {
+      transition: none;
+    }
+  }
+
   .app {
     position: relative;
     z-index: 1;

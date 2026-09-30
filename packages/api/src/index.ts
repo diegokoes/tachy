@@ -9,6 +9,7 @@ import {
   sql,
   startEmbedHost,
   sweepInterruptedIndexes,
+  adoptSupersededIndex,
   startJobProcess,
 } from "@tachy/core";
 import { createApp } from "./app";
@@ -77,6 +78,8 @@ const app = createApp({
 
 startTurnHousekeeping();
 
+const adopted = await adoptSupersededIndex();
+if (adopted) log("info", "repo_index_adopted", { repos: adopted });
 const swept = await sweepInterruptedIndexes();
 if (swept) log("info", "repo_index_sweep", { interrupted: swept });
 

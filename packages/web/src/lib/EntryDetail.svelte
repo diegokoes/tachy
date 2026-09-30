@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { fmtDate } from "./dates";
   import { statusTone, type StatusAction } from "./library/status";
   import { patchLibraryItem } from "./library/edit";
   import { createSequence } from "./resource.svelte";
@@ -20,7 +19,7 @@
   import { isCurator, canCurateScope } from "./session.svelte";
   import { pushScope } from "./keys.svelte";
   import { setTopActions } from "./subnav.svelte";
-  import { Badge, Button, Chip, Icon } from "./tui";
+  import { Badge, Button, Chip, Icon, Time } from "./tui";
 
   let { id, onClose, onOpen }: { id: string; onClose: () => void; onOpen?: (id: string) => void } = $props();
 
@@ -314,7 +313,7 @@
                   {/if}
                 </span>
                 <span class="when">
-                  {#if entry.updated_at}<span class="muted">updated {fmtDate(entry.updated_at)}</span>{/if}
+                  {#if entry.updated_at}<span class="muted">updated <Time at={entry.updated_at} date /></span>{/if}
                 </span>
               </div>
 

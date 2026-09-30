@@ -49,6 +49,47 @@ export const REPO_INDEX_STATUSES = [
 ] as const;
 export type RepoIndexStatus = (typeof REPO_INDEX_STATUSES)[number];
 
+/**
+ * A release tag: `v1.51.32` or `1.51.32`, with no pre-release suffix. RC and
+ * SNAPSHOT tags share the prefix and are not releases a customer runs.
+ */
+export const RELEASE_TAG_RE = /^v?(\d+)\.(\d+)\.(\d+)$/;
+
+const VERSION_RE = /^v?(\d+)\.(\d+)(?:\.(\d+))?$/;
+
+/** `1.51.32` for `v1.51.32`, `1.51` for `1.51`; null when it is no version. */
+export function normalizeVersion(version: string): string | null {
+  const m = VERSION_RE.exec(version.trim());
+  if (!m) return null;
+  const minor = `${Number(m[1])}.${Number(m[2])}`;
+  return m[3] === undefined ? minor : `${minor}.${Number(m[3])}`;
+}
+
+/** The release line a version belongs to: `1.51` for `v1.51.32`. */
+export function releaseMinor(version: string): string | null {
+  const v = normalizeVersion(version);
+  return v && v.split(".").slice(0, 2).join(".");
+}
+
+export interface RepoLineRow {
+  id: string;
+  ref: string;
+  version_label: string | null;
+  index_status: RepoIndexStatus;
+  indexed_commit: string | null;
+  indexing_commit: string | null;
+  index_error: string | null;
+  file_count: number;
+  chunk_count: number;
+  last_indexed_at: string | null;
+}
+
+/** A ref the remote offers, from `git ls-remote`. */
+export interface RemoteRef {
+  name: string;
+  kind: "branch" | "tag";
+}
+
 export interface RepoRow {
   id: string;
   slug: string;
@@ -71,6 +112,8 @@ export interface RepoRow {
   chunk_count: number;
   last_indexed_at: string | null;
   created_at: string;
+  /** Every tracked line, the default first. The index fields above are the default line's. */
+  lines: RepoLineRow[];
 }
 
 export interface RepoCensus {

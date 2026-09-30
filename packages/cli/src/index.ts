@@ -57,7 +57,7 @@ async function embedBackfill(all: boolean) {
   const [left] = await sql`
     select (select count(*) from knowledge_entries where embedding is null)
              + (select count(*) from reference_doc_chunks where embedding is null)
-             + (select count(*) from code_chunks where embedding is null) as n
+             + (select count(*) from code_blob_chunks where embedding is null) as n
   `;
   if (Number(left.n) > 0)
     console.log(
@@ -70,11 +70,12 @@ async function indexRepoCmd(slug: string) {
   const token = await repoToken(slug);
   console.log(`indexing ${slug} (${repo.url})...`);
   const res = await indexRepo(slug, { token });
-  console.log(
-    res.upToDate
-      ? `${slug} already at ${res.indexedCommit.slice(0, 12)}`
-      : `${slug} @ ${res.indexedCommit.slice(0, 12)}: ${res.filesIndexed} file(s) re-embedded, ${res.filesDeleted} removed, ${res.chunkCount} chunks total`,
-  );
+  for (const l of res.lines)
+    console.log(
+      l.upToDate
+        ? `${slug} ${l.ref} already at ${l.indexedCommit.slice(0, 12)}`
+        : `${slug} ${l.ref} @ ${l.indexedCommit.slice(0, 12)}${l.versionLabel ? ` (${l.versionLabel})` : ""}: ${l.filesIndexed} file(s) written, ${l.filesEmbedded} embedded, ${l.filesDeleted} removed, ${l.chunkCount} chunks total`,
+    );
 }
 
 /**

@@ -5,7 +5,7 @@ import { embedPassages, toVectorLiteral } from "./embeddings";
 export const EMBED_BATCH = 64;
 
 export type EmbeddedTable =
-  "knowledge_entries" | "reference_doc_chunks" | "code_chunks";
+  "knowledge_entries" | "reference_doc_chunks" | "code_blob_chunks";
 
 /**
  * Embed each row's text and write the vector to `embedding` on the row with
