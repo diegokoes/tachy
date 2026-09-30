@@ -10,6 +10,7 @@ import type {
   JobCensus,
   JobDefinition,
   JobRun,
+  JobRunListed,
   KnowledgeCensus,
   LabelRow,
   LibraryEngagement,
@@ -252,6 +253,7 @@ export type JobKindInfo = {
   params_schema: JsonSchema;
 };
 export type JobRunRow = JobRun;
+export type JobRunListedRow = JobRunListed;
 export type JobDefinitionRow = JobDefinition & {
   next_run: string | null;
   last_run: Pick<JobRun, "id" | "status" | "created_at" | "error"> | null;
