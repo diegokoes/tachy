@@ -117,7 +117,7 @@ const PROFILES: Record<string, KindProfile> = {
   },
   "repo.reindex": {
     queue: "index",
-    timeoutMs: 2 * HOUR,
+    timeoutMs: 8 * HOUR,
     maxAttempts: 1,
     seconds: [180, 1500],
     outcome: (rng) =>
