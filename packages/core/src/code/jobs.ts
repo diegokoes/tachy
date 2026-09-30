@@ -1,8 +1,34 @@
 import { z } from "zod";
+import type { RepoIndexRun } from "@tachy/contract";
+import { sql } from "../infra/db";
 import { defineJob } from "../jobs/registry";
 import { indexRepo } from "./indexer";
 import { listRepos } from "./repos";
 import { repoToken } from "./token";
+
+/** Each repo's queued or running reindex, by slug. */
+export async function activeReindexes(): Promise<Map<string, RepoIndexRun>> {
+  const rows = await sql`
+    select params->>'repo' as repo, id, status, params->>'line' as line,
+           progress, progress_note, created_at
+    from job_runs
+    where kind = 'repo.reindex' and status in ('queued', 'running')
+    order by created_at
+  `;
+  return new Map(
+    rows.map((r) => [
+      r.repo as string,
+      {
+        id: r.id,
+        status: r.status,
+        line: r.line ?? null,
+        progress: r.progress,
+        progress_note: r.progress_note,
+        queued_at: new Date(r.created_at).toISOString(),
+      },
+    ]),
+  );
+}
 
 export function defineCodeJobs() {
   defineJob({
@@ -35,18 +61,27 @@ export function defineCodeJobs() {
 
   defineJob({
     kind: "repos.refresh",
-    title: "Refresh linked repositories",
+    title: "Reindex linked repositories",
     description:
-      "Queues a reindex of every repository that has been indexed before and is not being indexed now. A repo with no new commits costs a fetch and a tree diff. Repositories never indexed wait for someone to index them.",
-    params: z.object({}),
+      "Queues a reindex of each linked repository not being indexed already, as runs of their own under this one. With scope 'indexed' (the nightly default) it skips repositories never indexed, which wait for someone to index them; 'all' takes those too. A repo with no new commits costs a fetch and a tree diff.",
+    params: z.object({
+      scope: z.enum(["indexed", "all"]).default("indexed"),
+    }),
     defaultSchedule: "40 2 * * *",
+    dedupeKey: () => "all",
     timeout: "10m",
-    run: async (ctx) => {
+    run: async (ctx, p) => {
       let queued = 0;
       let skipped = 0;
       let neverIndexed = 0;
-      for (const repo of await listRepos()) {
-        if (!repo.lines.some((l) => l.indexed_commit || l.indexing_commit)) {
+      const repos = await listRepos();
+      for (const [i, repo] of repos.entries()) {
+        ctx.signal.throwIfAborted();
+        await ctx.progress(i / repos.length, repo.slug);
+        if (
+          p.scope !== "all" &&
+          !repo.lines.some((l) => l.indexed_commit || l.indexing_commit)
+        ) {
           neverIndexed++;
           continue;
         }

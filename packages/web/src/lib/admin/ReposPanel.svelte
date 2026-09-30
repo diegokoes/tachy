@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { keep, recall } from "../kept";
   import { api } from "../api";
-  import { canCurateScope } from "../session.svelte";
+  import { canCurateScope, isGlobalAdmin } from "../session.svelte";
   import { t } from "../terms";
   import { createResource, errText } from "../resource.svelte";
   import { slugify, uniqueSlug } from "../slug";
@@ -15,6 +15,7 @@
     FilterBar,
     ErrorMark,
     Field,
+    Meter,
     Note,
     type Column,
     type Draft,
@@ -55,6 +56,8 @@
   const components = new ComponentCache();
   let error = $state<string | null>(null);
   let indexing = $state<string | null>(null);
+  let indexingAll = $state(false);
+  let queuedAll = $state(false);
   let found = $state<Record<string, FoundRepo[]>>({});
   let discovering = $state(false);
   let refs = $state<Record<string, Refs>>({});
@@ -87,12 +90,11 @@
   const canAdd = $derived(myProducts.length > 0);
   const working = (status: string) =>
     status === "cloning" || status === "indexing";
-  const busyIndex = $derived(
-    repos.data.some(
-      (r) =>
-        working(r.index_status) || r.lines.some((l) => working(l.index_status)),
-    ),
-  );
+  const busyRepo = (r: Repo) =>
+    Boolean(r.active_run) ||
+    working(r.index_status) ||
+    r.lines.some((l) => working(l.index_status));
+  const busyIndex = $derived(repos.data.some(busyRepo) || queuedAll);
 
   const MAINLINE = ["master", "main", "develop", "quality"];
   const RELEASE_LINE_RE = /^(legacy|release)\//;
@@ -448,17 +450,37 @@
     });
   }
 
-  async function reindex(r: Repo) {
-    indexing = r.slug;
+  async function reindex(r: Repo, line?: string) {
+    indexing = line ? `${r.slug}:${line}` : r.slug;
     error = null;
     try {
-      await api.post(`/repos/${r.slug}/reindex`, {});
+      await api.post(`/repos/${r.slug}/reindex`, line ? { line } : {});
       await repos.reload();
     } catch (e) {
       error = errText(e);
     } finally {
       indexing = null;
     }
+  }
+
+  async function reindexAll() {
+    indexingAll = true;
+    error = null;
+    try {
+      await api.post("/repos/reindex", {});
+      queuedAll = true;
+      setTimeout(() => (queuedAll = false), 10_000);
+      await repos.reload();
+    } catch (e) {
+      error = errText(e);
+    } finally {
+      indexingAll = false;
+    }
+  }
+
+  function showRuns() {
+    keep("admin.runs.kind", "repo.reindex");
+    navigate("/admin/workers/runs");
   }
 
   // Indexing runs in the background on the server, so the table follows it.
@@ -525,11 +547,44 @@
           {@render statusBadge(l.index_status)}
           {#if r.lines.length > 1}<span class="ref">{l.ref}</span>{/if}
           {#if l.version_label}<span class="ver">{l.version_label}</span>{/if}
+          {#if r.lines.length > 1 && canEditRepo(r) && !busyRepo(r)}
+            <Button
+              variant="ghost"
+              size="sm"
+              square
+              icon="index"
+              title={`index ${l.ref} only`}
+              aria-label={`index ${r.slug} ${l.ref}`}
+              busy={indexing === `${r.slug}:${l.ref}`}
+              onclick={() => reindex(r, l.ref)}
+            />
+          {/if}
         </span>
       {/each}
     </span>
   {:else}
     {@render statusBadge(r.index_status)}
+  {/if}
+  {#if r.active_run}
+    {@const run = r.active_run}
+    <span class="run">
+      {#if run.status === "queued"}
+        <Badge tone="muted">queued</Badge>
+        <span class="sm"
+          >waiting in the index queue{run.line ? ` · ${run.line}` : ""}</span
+        >
+      {:else}
+        <Meter value={run.progress ?? 0} width={8} label="index progress" />
+        <span class="sm"
+          >{Math.round((run.progress ?? 0) * 100)}%{run.progress_note
+            ? ` · ${run.progress_note}`
+            : ""}</span
+        >
+      {/if}
+      {#if isGlobalAdmin()}
+        <button class="link sm" onclick={showRuns}>run</button>
+      {/if}
+    </span>
   {/if}
 {/snippet}
 
@@ -550,8 +605,7 @@
       icon="index"
       title="clone this repo and re-read its files into the code index"
       busy={indexing === r.slug}
-      disabled={working(r.index_status) ||
-        r.lines.some((l) => working(l.index_status))}
+      disabled={busyRepo(r)}
       onclick={() => reindex(r)}>index</Button
     >
   {/if}
@@ -746,13 +800,32 @@
 {#if error}<Note tone="danger">{error}</Note>{/if}
 {@render indexErrors()}
 
-<FilterBar
-  bind:value={filter}
-  shown={filtered.length}
-  total={repos.data.length}
-  placeholder="filter repos…"
-  label="filter repositories"
-/>
+<div class="bar">
+  <FilterBar
+    bind:value={filter}
+    shown={filtered.length}
+    total={repos.data.length}
+    placeholder="filter repos…"
+    label="filter repositories"
+  />
+  {#if isGlobalAdmin() && repos.data.length}
+    <Button
+      variant="ghost"
+      size="sm"
+      icon="index"
+      title="queue a reindex of every linked repo, including ones never indexed; one at a time, after any you start by hand"
+      busy={indexingAll}
+      disabled={indexingAll}
+      onclick={reindexAll}>index all</Button
+    >
+  {/if}
+</div>
+{#if queuedAll}
+  <Note>
+    Queued a reindex of every linked repo. They index one at a time; follow them
+    here or in <button class="link" onclick={showRuns}>runs</button>.
+  </Note>
+{/if}
 
 <CrudTable
   hoist={sectionHoist("repos")}
@@ -776,6 +849,29 @@
 />
 
 <style>
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-3);
+  }
+  .bar > :global(:first-child) {
+    flex: 1;
+  }
+  .run {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+    margin-top: var(--pad-1);
+  }
+  .link {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: underline;
+  }
   .chips {
     display: flex;
     flex-wrap: wrap;

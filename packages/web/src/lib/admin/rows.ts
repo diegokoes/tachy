@@ -21,6 +21,7 @@ import type {
   ProductRow,
   RepoCensus,
   RepoRow,
+  RepoIndexRun,
   SourceCensus,
   SourceConnectionRow,
   SourceTraffic,
@@ -77,7 +78,7 @@ export type AreaRule = {
   component_slug: string;
   component_name: string;
 };
-export type Repo = RepoRow;
+export type Repo = RepoRow & { active_run?: RepoIndexRun | null };
 export type Discovered<K extends string, T> = {
   ok: boolean;
   error?: string;
