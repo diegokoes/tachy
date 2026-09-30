@@ -107,6 +107,7 @@ export type {
   RepoIndexStatus,
   RepoRow,
   RepoLineRow,
+  RepoIndexRun,
   RemoteRef,
   RepoCensus,
 } from "./code";

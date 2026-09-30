@@ -230,7 +230,7 @@ export async function seedJobs(
     ),
     def({
       kind: "repos.refresh",
-      name: "Refresh linked repositories",
+      name: "Reindex linked repositories",
       params: {},
       enabled: true,
       slots: daily(2, 40),

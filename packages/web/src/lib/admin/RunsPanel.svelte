@@ -172,7 +172,7 @@
     { key: "detail", label: "progress", cell: detailCell },
     { key: "when", label: "queued", width: "10rem", cell: whenCell },
     { key: "took", label: "took", width: "6rem", align: "end", cell: tookCell },
-    { key: "acts", label: "", width: "7rem", align: "end", cell: actsCell },
+    { key: "acts", label: "", width: "9.5rem", align: "end", cell: actsCell },
   ];
 </script>
 

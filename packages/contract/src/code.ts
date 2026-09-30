@@ -90,6 +90,17 @@ export interface RemoteRef {
   kind: "branch" | "tag";
 }
 
+/** A repo's reindex while it waits or runs, for the repos list to follow. */
+export interface RepoIndexRun {
+  id: string;
+  status: "queued" | "running";
+  /** The one line it indexes; null for all of them. */
+  line: string | null;
+  progress: number | null;
+  progress_note: string | null;
+  queued_at: string;
+}
+
 export interface RepoRow {
   id: string;
   slug: string;

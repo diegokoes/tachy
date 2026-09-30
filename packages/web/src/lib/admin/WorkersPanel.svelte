@@ -44,7 +44,8 @@
 {/snippet}
 
 {#snippet queueRunning(q: Queue)}
-  {q.running}{#if q.cap}<span class="dim"> / {q.cap} at most</span>{/if}
+  {q.running}
+  {#if q.cap}<span class="dim">of {q.cap} at most</span>{/if}
 {/snippet}
 
 {#snippet queueWaiting(q: Queue)}
