@@ -157,7 +157,8 @@
   }
 
   function elapsed(r: JobRunListedRow) {
-    const from = Date.parse(r.started_at ?? r.created_at);
+    if (!r.started_at) return "";
+    const from = Date.parse(r.started_at);
     const to = r.finished_at ? Date.parse(r.finished_at) : now;
     return Number.isFinite(from)
       ? duration(Math.max(0, (to - from) / 1000))
@@ -166,13 +167,11 @@
 
   const columns: Column<JobRunListedRow>[] = [
     { key: "status", label: "status", width: "7rem", cell: statusCell },
-    { key: "job", label: "job", width: "16rem", cell: jobCell },
-    { key: "queue", label: "queue", width: "7rem", cell: queueCell },
-    { key: "trigger", label: "by", width: "9rem", cell: triggerCell },
+    { key: "job", label: "job", width: "15rem", cell: jobCell },
+    { key: "trigger", label: "queued by", width: "11rem", cell: triggerCell },
     { key: "detail", label: "progress", cell: detailCell },
-    { key: "when", label: "queued", width: "10rem", cell: whenCell },
-    { key: "took", label: "took", width: "6rem", align: "end", cell: tookCell },
-    { key: "acts", label: "", width: "9.5rem", align: "end", cell: actsCell },
+    { key: "took", label: "took", width: "5rem", align: "end", cell: tookCell },
+    { key: "acts", label: "", width: "5rem", align: "end", cell: actsCell },
   ];
 </script>
 
@@ -189,26 +188,21 @@
 {#snippet jobCell(r: JobRunListedRow)}
   <span class="name">{r.definition_name ?? r.kind}</span>
   <span class="dim small" title={summary(r.params)}
-    >{r.definition_name ? `${r.kind} ` : ""}{summary(r.params)}</span
+    ><span
+      class="queue"
+      title={r.queue
+        ? `${jobQueue(r.queue).class} pool · priority ${r.priority}`
+        : undefined}>{r.queue ?? r.resource_class}</span
+    >
+    {r.definition_name ? `${r.kind} ` : ""}{summary(r.params)}</span
   >
 {/snippet}
 
-{#snippet queueCell(r: JobRunListedRow)}
-  {#if r.queue}
-    <span
-      class="queue"
-      title={`${jobQueue(r.queue).class} pool · priority ${r.priority}`}
-      >{r.queue}</span
-    >
-  {:else}
-    <span class="dim">{r.resource_class}</span>
-  {/if}
-{/snippet}
-
 {#snippet triggerCell(r: JobRunListedRow)}
-  <span>{r.trigger}</span>
-  {#if r.requested_by_name}<span class="dim small">{r.requested_by_name}</span
-    >{/if}
+  <span class="name"
+    >{r.trigger}{r.requested_by_name ? ` · ${r.requested_by_name}` : ""}</span
+  >
+  <span class="dim small"><Time at={r.created_at} /></span>
 {/snippet}
 
 {#snippet detailCell(r: JobRunListedRow)}
@@ -248,30 +242,34 @@
   {/if}
 {/snippet}
 
-{#snippet whenCell(r: JobRunListedRow)}
-  <Time at={r.created_at} />
-{/snippet}
-
 {#snippet tookCell(r: JobRunListedRow)}
-  <span class="dim">{r.status === "queued" ? "" : elapsed(r)}</span>
+  <span class="dim">{elapsed(r)}</span>
 {/snippet}
 
 {#snippet actsCell(r: JobRunListedRow)}
   <span class="acts">
     {#if r.log_tail}
-      <Button variant="ghost" size="sm" onclick={() => (logOf = r.id)}
-        >log</Button
-      >
+      <Button
+        variant="ghost"
+        square
+        iconSize="1.2em"
+        icon="file"
+        title="log"
+        aria-label={`log of ${r.definition_name ?? r.kind}`}
+        onclick={() => (logOf = r.id)}
+      />
     {/if}
     {#if isActive(r.status) && !r.cancel_requested}
       <Button
         variant="ghost"
-        size="sm"
-        tone="danger"
+        square
+        iconSize="1.2em"
         icon="stop"
-        title="stop this run; it finishes its current step first"
-        onclick={() => cancel(r)}>stop</Button
-      >
+        tone="danger"
+        title="stop; a running run finishes its current step first"
+        aria-label={`stop ${r.definition_name ?? r.kind}`}
+        onclick={() => cancel(r)}
+      />
     {/if}
   </span>
 {/snippet}
@@ -395,6 +393,8 @@
     display: inline-flex;
     align-items: center;
     gap: var(--pad-2);
+    max-width: 100%;
+    overflow: hidden;
   }
   .pct {
     font-variant-numeric: tabular-nums;
@@ -413,12 +413,14 @@
   .acts {
     display: inline-flex;
     gap: var(--pad-1);
+    white-space: nowrap;
   }
   .live {
     color: var(--accent);
   }
   .queue {
     font-family: var(--font-mono);
+    margin-right: var(--pad-1);
   }
   .link {
     display: block;
