@@ -36,7 +36,10 @@ defineFlowAction({
   title: "Echo",
   category: "context",
   writes: false,
-  params: z.object({ say: z.string(), times: z.number().int().default(1) }),
+  params: z.object({
+    say: z.string().default("{{item.title}}"),
+    times: z.number().int().default(1),
+  }),
   output: z.object({ said: z.string(), count: z.number() }),
   run: async (_ctx, p) => ({ said: p.say.repeat(p.times), count: p.times }),
 });
@@ -228,6 +231,23 @@ describe("runFlow", () => {
       ["branch", "ok", true],
       ["yes", "ok", undefined],
     ]);
+  });
+
+  it("fills a param's template default from the item", async () => {
+    const item = await ingestWorkItem(await seededFreshdeskConnId(), rawItem());
+    const flow = await flowWith([
+      { id: "a", kind: "action", action: "test.echo", params: {} },
+    ]);
+    await runFlow({
+      ...noop,
+      flow,
+      triggerId: "m",
+      workItemId: item.id,
+      dryRun: false,
+      jobRunId: null,
+    });
+    const [run] = await listFlowRuns(flow.id);
+    expect(run.steps[0].output).toEqual({ said: "Scanner offline", count: 1 });
   });
 
   it("stops at a filter that does not hold, and writes nothing on a dry run", async () => {

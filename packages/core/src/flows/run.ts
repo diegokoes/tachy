@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   evaluateCondition,
   interpolate,
@@ -9,7 +10,7 @@ import {
 import { userSoleTeamId } from "../access/users";
 import type { ScopeContext } from "../config/scoped";
 import { sql, jsonb } from "../infra/db";
-import type { FlowActionContext } from "./actions";
+import type { FlowAction, FlowActionContext } from "./actions";
 import { flowAction } from "./catalog";
 import { loadSubject, type FlowSubject } from "./subject";
 
@@ -30,6 +31,29 @@ export async function ownerScope(userId: string | null): Promise<ScopeContext> {
 }
 
 class Stopped extends Error {}
+
+const defaults = new WeakMap<FlowAction, Record<string, unknown>>();
+
+/**
+ * An action's param defaults, filled in before interpolation: a default can be
+ * a template itself, as a search's query defaults to `{{item.title}}`, and
+ * Zod only applies defaults after, when there is nothing left to fill.
+ */
+function defaultsOf(a: FlowAction): Record<string, unknown> {
+  let d = defaults.get(a);
+  if (!d) {
+    const schema = z.toJSONSchema(a.params, { io: "input" }) as {
+      properties?: Record<string, { default?: unknown }>;
+    };
+    d = Object.fromEntries(
+      Object.entries(schema.properties ?? {})
+        .filter(([, p]) => p.default !== undefined)
+        .map(([k, p]) => [k, p.default]),
+    );
+    defaults.set(a, d);
+  }
+  return d;
+}
 
 export interface RunFlowOptions {
   flow: Flow;
@@ -117,7 +141,7 @@ export async function runFlow(o: RunFlowOptions): Promise<{
     }
 
     const action = flowAction(s.action);
-    const input = interpolate(s.params, context);
+    const input = interpolate({ ...defaultsOf(action), ...s.params }, context);
     const parsed = action.params.safeParse(input);
     if (!parsed.success) {
       const error = parsed.error.issues
