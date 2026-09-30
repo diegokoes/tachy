@@ -207,6 +207,7 @@ export type {
   JobNotify,
   JobCensus,
   JobRun,
+  JobRunListed,
   JobDefinition,
 } from "./jobs";
 export { FIELD_SHOWS } from "./flows";
