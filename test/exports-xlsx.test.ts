@@ -101,13 +101,13 @@ describe("date cells", () => {
   const styles = (f?: Parameters<typeof renderXlsx>[3]) =>
     strFromU8(unzipSync(renderXlsx("T", columns, [], f))["xl/styles.xml"]);
 
-  it("default to ISO date and 24h time", () => {
-    expect(styles()).toContain('formatCode="yyyy\\-mm\\-dd\\ hh:mm"');
+  it("default to day-first date and 24h time", () => {
+    expect(styles()).toContain('formatCode="dd\\-mm\\-yyyy\\ hh:mm"');
   });
 
   it("follow the reader's date format", () => {
     expect(styles({ order: "mdy", clock: "12h" })).toContain(
-      'formatCode="mm\\/dd\\/yyyy\\ h:mm\\ AM/PM"',
+      'formatCode="mm\\-dd\\-yyyy\\ h:mm\\ AM/PM"',
     );
   });
 });

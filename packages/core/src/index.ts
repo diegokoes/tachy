@@ -667,6 +667,7 @@ export type {
 // agent's spreadsheet exports must agree.
 export {
   DATE_ORDERS,
+  DATE_ORDER_LABELS,
   CLOCKS,
   DEFAULT_DATE_FORMAT,
   formatDay,
