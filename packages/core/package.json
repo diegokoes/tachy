@@ -9,7 +9,7 @@
     "@huggingface/transformers": "^4.3.0",
     "@tachy/contract": "*",
     "croner": "^10.0.1",
-    "dotenv": "^16.4.7",
+    "dotenv": "^18.0.4",
     "fflate": "^0.8.2",
     "postgres": "^3.4.5",
     "zod": "^4.6.5"
