@@ -1,14 +1,13 @@
 <script lang="ts">
   import { AGENT_KEY_LABELS, agentKeyError } from "../credentials";
   import { API_KEY_EXAMPLE, OAUTH_PREFIX } from "@tachy/contract";
-  import { Button, DeleteButton, InfoMark, Note } from "../tui";
-  import { agentPrefs, heldBy, removeKey, saveKey } from "./prefs.svelte";
+  import { Button, DeleteButton, InfoMark, Note, tip } from "../tui";
+  import { agentPrefs, origin, removeKey, saveKey } from "./prefs.svelte";
+  import Origin from "./Origin.svelte";
   import Row from "./Row.svelte";
   import Rows from "./Rows.svelte";
 
   const creds = $derived(agentPrefs.creds);
-
-  const MASK = "••••••••••";
 
   let drafts = $state<Record<string, string>>({});
 
@@ -41,35 +40,27 @@
       {@const draft = drafts[name]?.trim() ?? ""}
       {@const bad = draft ? agentKeyError(name, draft) : null}
       {@const from = creds.effective[name]}
-      {@const held = heldBy(from)}
       <Row label={keyLabel(name)}>
-        <input
-          type="password"
-          autocomplete="off"
-          class:bad
-          bind:value={drafts[name]}
-          placeholder={held || (mine.has(name) ? MASK : "")}
-          title={held ? `set at ${from} scope, type to override` : null}
-        />
-        {#snippet actions()}
-          <span class="slot">
-            {#if name === "anthropic_oauth_token"}
-              <InfoMark label="how to get a Claude subscription token">
-                Run <code>claude setup-token</code> and paste the
-                <code>{OAUTH_PREFIX}…</code> value it prints.
-              </InfoMark>
-            {:else if name === "anthropic_api_key"}
-              <InfoMark label="what an Anthropic API key looks like">
-                Starts with <code>{API_KEY_EXAMPLE}…</code>, from
-                console.anthropic.com.
-              </InfoMark>
-            {/if}
-          </span>
-          <span class="slot">
+        <!-- A stored key is drawn as dots across the whole field rather than
+             a short placeholder, so a filled field reads as filled at a glance. -->
+        <div class="field">
+          <input
+            type="password"
+            autocomplete="off"
+            aria-label="{keyLabel(name)}{from ? ', set' : ''}"
+            class:bad
+            bind:value={drafts[name]}
+            placeholder={from ? "" : "paste a key"}
+          />
+          {#if from && !draft}
+            <span class="dots" class:shared={!mine.has(name)} aria-hidden="true"></span>
+          {/if}
+          <span class="end">
             {#if draft}
               <Button
                 variant="ghost"
                 square
+                size="sm"
                 tone={bad ? "danger" : "accent"}
                 icon="save"
                 disabled={Boolean(bad)}
@@ -84,6 +75,23 @@
               />
             {/if}
           </span>
+        </div>
+        {#snippet actions()}
+          {#if creds.agent.in_use === name}
+            <span class="live" use:tip={"chat turns answer with this key"}>in use</span>
+          {/if}
+          <Origin of={origin(from, "key")} />
+          {#if name === "anthropic_oauth_token"}
+            <InfoMark label="how to get a Claude subscription token">
+              Run <code>claude setup-token</code> and paste the
+              <code>{OAUTH_PREFIX}…</code> value it prints.
+            </InfoMark>
+          {:else if name === "anthropic_api_key"}
+            <InfoMark label="what an Anthropic API key looks like">
+              Starts with <code>{API_KEY_EXAMPLE}…</code>, from
+              console.anthropic.com.
+            </InfoMark>
+          {/if}
         {/snippet}
       </Row>
     {/each}
@@ -91,19 +99,48 @@
 {/if}
 
 <style>
-  .slot {
+  .field {
+    position: relative;
     display: flex;
     align-items: center;
-    justify-content: center;
-    flex: none;
-    width: var(--row-h);
   }
   input {
     width: 100%;
     min-width: 0;
+    padding-right: calc(var(--row-h) + var(--pad-1));
   }
   input.bad {
     border-color: var(--danger);
+  }
+  .dots {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: var(--pad-3);
+    right: calc(var(--row-h) + var(--pad-1));
+    background: radial-gradient(circle, currentColor 0 0.2rem, transparent 0.23rem)
+      left center / 0.85rem 100% repeat-x;
+    color: var(--text);
+    opacity: 0.7;
+    pointer-events: none;
+  }
+  .dots.shared {
+    opacity: 0.35;
+  }
+  input:focus + .dots {
+    opacity: 0.2;
+  }
+  .end {
+    position: absolute;
+    right: 2px;
+    display: flex;
+    align-items: center;
+  }
+  .live {
+    font-size: var(--fs-xs);
+    color: var(--ok);
+    white-space: nowrap;
+    cursor: help;
   }
   code {
     background: var(--accent-dim);
