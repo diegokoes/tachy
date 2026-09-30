@@ -1,6 +1,7 @@
 <script lang="ts">
   import { keep, recall } from "../kept";
-  import { Note, Select } from "../tui";
+  import { Select } from "../tui";
+  import ComplexFlow from "./ComplexFlow.svelte";
   import ProjectFlow from "./ProjectFlow.svelte";
 
   type Mode = "project" | "complex";
@@ -27,14 +28,11 @@
   </span>
 {/snippet}
 
-<div class="flows">
+<div class="flows" class:canvas={mode === "complex"}>
   {#if mode === "project"}
     <ProjectFlow {lead} />
   {:else}
-    <header class="bar">{@render lead()}</header>
-    <div class="empty">
-      <Note>Complex flows are on their way.</Note>
-    </div>
+    <ComplexFlow {lead} />
   {/if}
 </div>
 
@@ -62,13 +60,10 @@
   .pick > :global(*) {
     width: 100%;
   }
-  .bar {
+  /* The canvas scrolls itself, so the panel holds still around it. */
+  .flows.canvas {
     display: flex;
-    align-items: center;
-    padding: var(--pad-3) 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .empty {
-    padding-top: var(--pad-4);
+    flex-direction: column;
+    overflow: hidden;
   }
 </style>
