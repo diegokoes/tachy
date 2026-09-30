@@ -189,6 +189,14 @@
 
   const backToOverview = () => navigate(`/admin/${page}`);
 
+  /* The page effect only recounts on a page change, and a dialog section is
+     where rows get added, so its counter would stay stale until a reload. */
+  function closeSection() {
+    backToOverview();
+    census.reload();
+    void loadIssues(page);
+  }
+
   /* A page without an overview has nothing to show until a section is named,
      so it opens on its first. */
   $effect(() => {
@@ -264,7 +272,7 @@
         section={modal.key}
         label={modal.label}
         view={modal.view}
-        onclose={backToOverview}
+        onclose={closeSection}
       />
     {/if}
   {:else if filled}

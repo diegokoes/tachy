@@ -109,7 +109,7 @@
         label={c.label}
         info={infoOf(c)}
         required={c.required}
-        plain={readOnly(c)}
+        plain={readOnly(c) || Boolean(c.aside)}
         wide={wide(c)}
       >
         {#if readOnly(c)}
@@ -146,7 +146,7 @@
           />
         {:else if c.edit === "secret"}
           <input
-            class="mono"
+            class="mono secret"
             type="password"
             autocomplete="off"
             aria-label={c.label}
@@ -175,6 +175,7 @@
                 : e.currentTarget.value)}
           />
         {/if}
+        {#if c.aside}{@render c.aside({ draft, mode })}{/if}
       </Field>
     {/each}
   {/each}
@@ -210,6 +211,13 @@
      read character by character rather than as words. */
   .mono {
     font-family: var(--font-mono);
+  }
+
+  /* A stored secret is never sent back, so its placeholder stands in for it
+     and reads as the dots the input would show. */
+  .secret::placeholder {
+    color: var(--text);
+    letter-spacing: 0.2em;
   }
 
   /* Read-only fields are slugs and derived names — identifiers, not prose. */
