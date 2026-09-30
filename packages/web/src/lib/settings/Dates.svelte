@@ -2,7 +2,7 @@
   import { CLOCKS, DATE_ORDERS, DATE_ORDER_LABELS, type DateFormat } from "@tachy/contract";
   import { dateFormat, loadDateFormat, setDatePart } from "../dates.svelte";
   import { errText } from "../resource.svelte";
-  import { Note } from "../tui";
+  import { Note, Select } from "../tui";
   import Choice from "./Choice.svelte";
   import Row from "./Row.svelte";
   import Rows from "./Rows.svelte";
@@ -28,7 +28,12 @@
 
 <Rows>
   <Row label="date" hint="times are shown in UTC">
-    <Choice label="date" options={ORDERS} value={dateFormat.order} onpick={pick("order")} />
+    <Select
+      aria-label="date"
+      value={dateFormat.order}
+      options={ORDERS}
+      onchange={(v) => pick("order")(v as DateFormat["order"])}
+    />
   </Row>
 
   <Row label="clock">

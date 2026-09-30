@@ -92,13 +92,12 @@
 
 <style>
   .swatches {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: repeat(7, 1.4rem);
     gap: var(--pad-1);
   }
   .sw {
-    width: 1.6rem;
+    width: 1.4rem;
     aspect-ratio: 1;
     border: 1px solid var(--border);
     border-radius: var(--radius-control);

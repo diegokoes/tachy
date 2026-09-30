@@ -9,18 +9,22 @@ import {
   credentialSource,
   resolveAgentAuth,
   effectivePrefs,
+  effectiveSettings,
   setPref,
   deletePref,
   userSoleTeamId,
   listSourceConnections,
   AGENT_CREDENTIALS,
+  AGENT_EFFORTS,
   ANTHROPIC_OAUTH_CREDENTIAL,
   sourceCredentialName,
   listNotifications,
   markRead,
   markSeen,
 } from "@tachy/core";
+import { listModels, type ModelChoice } from "@tachy/agent";
 import { requireCaller } from "../authz";
+import { emptySessionDir, userConfigDir } from "../turn-config";
 
 const valueSchema = z.object({ value: z.string().min(1) });
 const prefSchema = z.object({ value: z.unknown() });
@@ -94,6 +98,46 @@ export const me = new Hono()
     const userId = await requireCaller(c);
     const teamId = (await userSoleTeamId(userId)) ?? undefined;
     return c.json(await effectivePrefs({ userId, teamId }));
+  })
+
+  /**
+   * The models the caller's runtime offers under their own credential, held
+   * to the org's allow-list. A runtime that cannot be asked still gets the
+   * allow-list back, and an empty list tells the SPA to take a typed id.
+   */
+  .get("/models", async (c) => {
+    const userId = await requireCaller(c);
+    const teamId = (await userSoleTeamId(userId)) ?? undefined;
+    const ctx = { userId, teamId };
+    const [settings, prefs] = await Promise.all([
+      effectiveSettings(),
+      effectivePrefs(ctx),
+    ]);
+    const provider = prefs.agent_provider.value;
+    const allowed = settings.allowed_models.value;
+
+    let models: ModelChoice[] = [];
+    let error: string | null = null;
+    try {
+      const agentAuth = await resolveAgentAuth(provider, ctx);
+      models = await listModels({
+        provider,
+        ...(agentAuth ? { agentAuth } : {}),
+        configDir: await userConfigDir(userId),
+        sessionCwd: await emptySessionDir(),
+      });
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+
+    if (allowed.length) {
+      const offered = new Map(models.map((m) => [m.id, m]));
+      models = allowed.map(
+        (id) =>
+          offered.get(id) ?? { id, label: id, efforts: [...AGENT_EFFORTS] },
+      );
+    }
+    return c.json({ provider, models, restricted: allowed.length > 0, error });
   })
 
   .put("/preferences/:key", zValidator("json", prefSchema), async (c) => {

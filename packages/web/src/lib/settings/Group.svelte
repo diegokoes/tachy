@@ -10,18 +10,26 @@
 </script>
 
 <!-- The admin section heading, unpinned: a settings tab is short enough that
-     a heading which sticks would only ever cover the rows under it. -->
+     a heading which sticks would only ever cover the rows under it. The body
+     is indented past the marker so its rows start under the heading's word,
+     and runs to the end of the rule so their controls end under it. -->
 <section>
   <h2 class="head">
     <span class="mark" aria-hidden="true">{G.marker}</span>
     <span class="lbl">{label}</span>
     <span class="rule" aria-hidden="true"></span>
   </h2>
-  {#if hint}<p class="hint">{hint}</p>{/if}
-  <div class="body">{@render children()}</div>
+  <div class="body">
+    {#if hint}<p class="hint">{hint}</p>{/if}
+    {@render children()}
+  </div>
 </section>
 
 <style>
+  section {
+    --mark-w: 0.7rem;
+    --indent: calc(var(--mark-w) + var(--pad-2));
+  }
   .head {
     display: flex;
     align-items: center;
@@ -34,6 +42,7 @@
   }
   .mark {
     flex: none;
+    width: var(--mark-w);
     font-family: var(--font-mono);
     color: var(--accent);
   }
@@ -47,12 +56,14 @@
     height: 1px;
     background: var(--border);
   }
-  .hint {
-    margin: var(--pad-1) 0 0;
-    font-size: var(--fs-xs);
-    color: var(--muted);
-  }
   .body {
     margin-top: var(--pad-2);
+    padding-left: var(--indent);
+  }
+  .hint {
+    margin: 0 0 var(--pad-2);
+    font-size: var(--fs-xs);
+    line-height: 1.5;
+    color: var(--muted);
   }
 </style>
