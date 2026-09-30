@@ -675,6 +675,7 @@ describe("the job census", () => {
       "embed",
       "testing",
       "sync",
+      "flows",
       "maintenance",
     ]);
     expect(j.by_queue.every((q) => q.started === 0)).toBe(true);

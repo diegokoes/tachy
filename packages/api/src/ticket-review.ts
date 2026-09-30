@@ -6,7 +6,7 @@ import type {
   TicketContextItem,
   TicketReview,
 } from "@tachy/core";
-import { firstJsonObject, runAdvisory } from "./advisory";
+import { firstJsonObject, runAdvisory } from "@tachy/agent";
 
 export interface ReviewRequest {
   type: string;

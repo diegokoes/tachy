@@ -1,4 +1,5 @@
 import { defineCodeJobs } from "../code/jobs";
+import { defineFlowJobs } from "../flows/jobs";
 import { defineRetentionJobs } from "../compliance/retention";
 import { sql } from "../infra/db";
 import { log } from "../infra/log";
@@ -19,6 +20,7 @@ export function registerCoreJobs(): void {
   defineWikiJobs();
   defineRetentionJobs();
   defineLoadTestJobs();
+  defineFlowJobs();
 }
 
 /**
