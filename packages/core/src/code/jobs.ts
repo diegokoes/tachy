@@ -42,7 +42,7 @@ export function defineCodeJobs() {
     }),
     queue: "index",
     dedupeKey: (p) => p.repo,
-    timeout: "2h",
+    timeout: "8h",
     run: async (ctx, p) => {
       ctx.log(`indexing ${p.repo}${p.line ? ` ${p.line}` : ""}`);
       const res = await indexRepo(p.repo, {
