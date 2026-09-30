@@ -2,6 +2,7 @@ import {
   JOB_FINISHED,
   parseDuration,
   type JobRun,
+  type JobRunListed,
   type JobStatus,
   type JobTrigger,
 } from "@tachy/contract";
@@ -9,7 +10,7 @@ import { sql, type Db, jsonb } from "../infra/db";
 import { badInput, notFound } from "../infra/errors";
 import { getJobKind } from "./registry";
 
-export type { JobRun };
+export type { JobRun, JobRunListed };
 
 export const JOB_RUNS_CHANNEL = "job_runs";
 
@@ -190,18 +191,38 @@ export async function getJobRun(id: string): Promise<JobRun> {
   return row as never;
 }
 
+/**
+ * Newest first. `active` keeps queued and running runs; `before` is the id
+ * of the last run of the previous page.
+ */
 export async function listJobRuns(opts: {
   definitionId?: string;
   status?: JobStatus;
+  kind?: string;
+  trigger?: JobTrigger;
+  active?: boolean;
+  before?: string;
   limit?: number;
-}): Promise<JobRun[]> {
+}): Promise<JobRunListed[]> {
   const limit = Math.min(opts.limit ?? 50, 500);
   return (await sql`
-    select ${RUN_COLUMNS} from job_runs
-    where (${opts.definitionId ?? null}::uuid is null or definition_id = ${opts.definitionId ?? null})
-      and (${opts.status ?? null}::text is null or status = ${opts.status ?? null})
-    order by created_at desc
-    limit ${limit}
+    select r.*, d.name as definition_name,
+           coalesce(u.display_name, u.email) as requested_by_name
+    from (
+      select ${RUN_COLUMNS} from job_runs
+      where (${opts.definitionId ?? null}::uuid is null or definition_id = ${opts.definitionId ?? null})
+        and (${opts.status ?? null}::text is null or status = ${opts.status ?? null})
+        and (${opts.kind ?? null}::text is null or kind = ${opts.kind ?? null})
+        and (${opts.trigger ?? null}::text is null or trigger = ${opts.trigger ?? null})
+        and (not ${opts.active ?? false} or status in ('queued', 'running'))
+        and (${opts.before ?? null}::uuid is null
+             or created_at < (select created_at from job_runs where id = ${opts.before ?? null}))
+      order by created_at desc
+      limit ${limit}
+    ) r
+    left join job_definitions d on d.id = r.definition_id
+    left join users u on u.id = r.requested_by
+    order by r.created_at desc
   `) as never;
 }
 

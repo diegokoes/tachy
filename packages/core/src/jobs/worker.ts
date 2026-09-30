@@ -39,6 +39,8 @@ export interface JobWorker {
 }
 
 const TAIL_LINES = 200;
+/** How stale a run's progress may get in the admin view before a heartbeat is brought forward. */
+const PROGRESS_FLUSH_MS = 2_000;
 
 export async function startJobWorker(
   opts: JobWorkerOptions,
@@ -72,23 +74,26 @@ export async function startJobWorker(
       why = reason;
       controller.abort(new Error(reason));
     };
+    let beatAt = 0;
+    const heartbeat = async () => {
+      beatAt = Date.now();
+      try {
+        const r = await heartbeatRun(run.id, workerId, leaseMs, {
+          progress,
+          note,
+          logTail: tail.join("\n"),
+        });
+        if (r.cancelRequested) stop("cancelled");
+        if (r.lost) stop("cancelled");
+      } catch (err) {
+        log("warn", "job_heartbeat_failed", {
+          run: run.id,
+          error: String(err),
+        });
+      }
+    };
     const beat = setInterval(
-      async () => {
-        try {
-          const r = await heartbeatRun(run.id, workerId, leaseMs, {
-            progress,
-            note,
-            logTail: tail.join("\n"),
-          });
-          if (r.cancelRequested) stop("cancelled");
-          if (r.lost) stop("cancelled");
-        } catch (err) {
-          log("warn", "job_heartbeat_failed", {
-            run: run.id,
-            error: String(err),
-          });
-        }
-      },
+      () => void heartbeat(),
       Math.max(1_000, Math.floor(leaseMs / 3)),
     );
     const timer = setTimeout(() => stop("timed_out"), run.timeout_ms);
@@ -106,6 +111,7 @@ export async function startJobWorker(
         async progress(fraction: number, text?: string) {
           progress = Math.max(0, Math.min(1, fraction));
           if (text !== undefined) note = text;
+          if (Date.now() - beatAt >= PROGRESS_FLUSH_MS) void heartbeat();
         },
         log(message: string, fields: Record<string, unknown> = {}) {
           log("info", "job_log", {

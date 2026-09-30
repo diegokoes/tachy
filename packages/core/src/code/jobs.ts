@@ -34,10 +34,10 @@ export function defineCodeJobs() {
         line: p.line,
         token: await repoToken(p.repo, ctx.requestedBy),
         signal: ctx.signal,
-        onProgress: (done, total, ref) =>
+        onProgress: (done, total, ref, at) =>
           void ctx.progress(
-            total ? done / total : 1,
-            `${ref}: ${done}/${total} files`,
+            (at.index + (total ? done / total : 0)) / at.count,
+            `${ref}${at.count > 1 ? ` (${at.index + 1}/${at.count})` : ""}: ${total ? `${done}/${total} files` : "fetching"}`,
           ),
       });
       return { ...res };

@@ -201,17 +201,25 @@ export interface IndexOptions {
   /** Index only this line; every tracked line when absent. */
   line?: string;
   signal?: AbortSignal;
-  onProgress?: (done: number, total: number, ref: string) => void;
+  /** `at` places the line among those this call indexes; files done/total are per line. */
+  onProgress?: (
+    done: number,
+    total: number,
+    ref: string,
+    at: { index: number; count: number },
+  ) => void;
 }
 
 async function indexLine(
   repo: RepoRow,
   line: RepoLine,
   opts: IndexOptions,
+  at: { index: number; count: number },
 ): Promise<LineIndexResult> {
   const { token, signal } = opts;
   let done = 0;
   let total = 0;
+  opts.onProgress?.(0, 0, line.ref, at);
   await updateLineStatus(line.id, { indexStatus: "cloning", indexError: null });
   try {
     await ensureClone(
@@ -278,7 +286,7 @@ async function indexLine(
         embedded++;
       }
       done++;
-      opts.onProgress?.(done, total, line.ref);
+      opts.onProgress?.(done, total, line.ref, at);
       if (done % PROGRESS_EVERY_FILES === 0) {
         await recountLine(line.id);
         log("info", "repo_index_progress", {
@@ -355,7 +363,10 @@ export async function indexRepo(
   if (opts.line && !lines.length)
     throw new Error(`Repo '${slug}' does not track '${opts.line}'`);
   const results: LineIndexResult[] = [];
-  for (const line of lines) results.push(await indexLine(repo, line, opts));
+  for (const [index, line] of lines.entries())
+    results.push(
+      await indexLine(repo, line, opts, { index, count: lines.length }),
+    );
   return { slug, lines: results };
 }
 
