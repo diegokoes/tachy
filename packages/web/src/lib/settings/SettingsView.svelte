@@ -10,24 +10,28 @@
   import Credentials from "./Credentials.svelte";
   import Appearance from "./Appearance.svelte";
   import Fonts from "./Fonts.svelte";
+  import Dates from "./Dates.svelte";
   import Keybinds from "./Keybinds.svelte";
   import Columns from "./Columns.svelte";
   import Group from "./Group.svelte";
 
   type Section = { label: string; hint?: string; view: Component };
 
-  /** A tab is a pair of groups, one per column, or one view that lays itself
+  /** A tab is a pair of columns of groups, or one view that lays itself
    *  out. */
   type Tab = SubnavItem &
-    ({ left: Section; right: Section } | { view: Component });
+    ({ left: Section[]; right: Section[] } | { view: Component });
 
   const TABS: Tab[] = [
     {
       key: "theme",
       label: "theme",
       icon: "theme",
-      left: { label: "appearance", view: Appearance },
-      right: { label: "fonts", view: Fonts },
+      left: [
+        { label: "appearance", view: Appearance },
+        { label: "dates", view: Dates },
+      ],
+      right: [{ label: "fonts", view: Fonts }],
     },
     {
       key: "keybinds",
@@ -39,8 +43,8 @@
       key: "agent",
       label: "agent",
       icon: "agent",
-      left: { label: "model", view: Agent },
-      right: { label: "keys", view: Credentials },
+      left: [{ label: "model", view: Agent }],
+      right: [{ label: "keys", view: Credentials }],
     },
   ];
 
@@ -97,9 +101,11 @@
   {/if}
 {/snippet}
 
-{#snippet section(s: Section)}
-  {@const View = s.view}
-  <Group label={s.label} hint={s.hint}><View /></Group>
+{#snippet column(sections: Section[])}
+  {#each sections as s (s.label)}
+    {@const View = s.view}
+    <Group label={s.label} hint={s.hint}><View /></Group>
+  {/each}
 {/snippet}
 
 <div class="tab">
@@ -108,8 +114,8 @@
     <View />
   {:else}
     <Columns width="30rem">
-      {#snippet left()}{@render section(tab.left)}{/snippet}
-      {#snippet right()}{@render section(tab.right)}{/snippet}
+      {#snippet left()}{@render column(tab.left)}{/snippet}
+      {#snippet right()}{@render column(tab.right)}{/snippet}
     </Columns>
   {/if}
 </div>

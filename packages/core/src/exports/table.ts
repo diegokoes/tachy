@@ -6,6 +6,7 @@ import {
   columnHeading,
 } from "@tachy/contract";
 import type {
+  DateFormat,
   TableCellType,
   TableFormat,
   TableColumn,
@@ -195,6 +196,7 @@ export function renderTable(i: {
   sheet?: string;
   columns: TableColumn[];
   rows: TableRow[];
+  dateFormat?: DateFormat;
 }): RenderedTable {
   const problems = validateRows(i.columns, i.rows);
   if (problems.length) throw badInput(problems.join("\n"));
@@ -203,7 +205,7 @@ export function renderTable(i: {
   const bytes =
     i.format === "csv"
       ? renderCsv(i.columns, cells)
-      : renderXlsx(i.sheet, i.columns, cells);
+      : renderXlsx(i.sheet, i.columns, cells, i.dateFormat);
 
   if (bytes.byteLength > MAX_OUTPUT_BYTES)
     throw badInput(

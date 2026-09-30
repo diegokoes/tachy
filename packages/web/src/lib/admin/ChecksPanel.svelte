@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { fmtTime, utcTip } from "../dates.svelte";
   import { onMount } from "svelte";
-  import { Badge, Button, DataTable, Note, toneOf, type Column } from "../tui";
+  import { Badge, Button, DataTable, Note, tip, toneOf, type Column } from "../tui";
   import { probes, probeTally, runProbes, type Probe } from "./systemState.svelte";
 
   const tally = $derived(probeTally(probes.checks));
@@ -39,7 +40,7 @@
       {tally.passing} passing{tally.warning ? ` · ${tally.warning} warning` : ""}{tally.failing
         ? ` · ${tally.failing} failing`
         : ""}{tally.skipped ? ` · ${tally.skipped} skipped` : ""}
-      {#if probes.at}· {new Date(probes.at).toLocaleTimeString()}{/if}
+      {#if probes.at}· <span use:tip={utcTip(probes.at)}>{fmtTime(probes.at)}</span>{/if}
     </span>
   {/if}
 </div>

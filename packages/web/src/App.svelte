@@ -16,6 +16,7 @@
   import Wordmark from "./lib/Wordmark.svelte";
   import { loadThemeFromStorage, themeState } from "./lib/theme.svelte";
   import { loadFonts } from "./lib/fonts.svelte";
+  import { loadDateFormat } from "./lib/dates.svelte";
   import { router, openSection, section, startRouter } from "./lib/router.svelte";
   import {
     refreshNotifications,
@@ -254,6 +255,10 @@
 
   $effect(() => {
     if (session.me) void refreshNotifications();
+  });
+
+  $effect(() => {
+    if (session.me) void loadDateFormat();
   });
 
   onMount(() => {

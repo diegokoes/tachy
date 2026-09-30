@@ -97,6 +97,21 @@ describe("sheet chrome", () => {
   });
 });
 
+describe("date cells", () => {
+  const styles = (f?: Parameters<typeof renderXlsx>[3]) =>
+    strFromU8(unzipSync(renderXlsx("T", columns, [], f))["xl/styles.xml"]);
+
+  it("default to day-first date and 24h time", () => {
+    expect(styles()).toContain('formatCode="dd\\-mm\\-yyyy\\ hh:mm"');
+  });
+
+  it("follow the reader's date format", () => {
+    expect(styles({ order: "mdy", clock: "12h" })).toContain(
+      'formatCode="mm\\-dd\\-yyyy\\ h:mm\\ AM/PM"',
+    );
+  });
+});
+
 describe("colRef", () => {
   it("carries past Z the way Excel does", () => {
     expect([0, 25, 26, 27, 51, 52, 701, 702].map(colRef)).toEqual([

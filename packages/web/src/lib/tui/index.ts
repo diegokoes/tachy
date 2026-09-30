@@ -28,6 +28,7 @@ export { default as Treemap } from "./Treemap.svelte";
 export { default as HintRule } from "./HintRule.svelte";
 export { default as Icon } from "./Icon.svelte";
 export { default as Chevron } from "./Chevron.svelte";
+export { default as Time } from "./Time.svelte";
 export { default as VimMark } from "./VimMark.svelte";
 export { default as ArtifactMark } from "./ArtifactMark.svelte";
 export { default as Checkbox } from "./Checkbox.svelte";
