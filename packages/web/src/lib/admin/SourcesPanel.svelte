@@ -178,6 +178,10 @@ import { csv } from "../fields";
     return Array.isArray(v) ? (v as string[]) : [];
   };
 
+  const connectionOf = (d: Draft) =>
+    connections.data.find((c) => c.slug === d.slug);
+  const tokenSet = (d: Draft) => Boolean(connectionOf(d)?.token_source);
+
   const registered = $derived(
     new Set(projects.data.map((p) => `${p.source_slug} ${p.external_key}`)),
   );
@@ -262,14 +266,6 @@ import { csv } from "../fields";
       value: (r) => baseUrlToHost(r.source_type as SourceType, r.base_url),
     },
     {
-      key: "token",
-      label: "token",
-      formOnly: true,
-      edit: "secret",
-      info: (d) => SPEC[typeOf(d)].tokenInfo,
-    },
-    { key: "token_source", label: "token", width: "8rem", cell: tokenCell },
-    {
       key: "groups",
       label: "scope",
       formOnly: true,
@@ -280,6 +276,16 @@ import { csv } from "../fields";
       value: (r) => groupsOf(r).join(", "),
     },
     {
+      key: "token",
+      label: "token",
+      formOnly: true,
+      edit: "secret",
+      span: "half",
+      info: (d) => SPEC[typeOf(d)].tokenInfo,
+      placeholder: (d) => (tokenSet(d) ? "••••••••••••••••" : ""),
+    },
+    { key: "token_source", label: "token", width: "8rem", cell: tokenCell },
+    {
       key: "redaction",
       label: "PII redaction",
       width: "8rem",
@@ -287,6 +293,8 @@ import { csv } from "../fields";
       info: "Scrub PII from this source before the model.",
       value: (r) => redactionOn(r),
       cell: lockCell,
+      span: "full",
+      aside: formTest,
     },
     /* Testing is per connection but reading the results is a sweep down the
        list, so the action belongs on the row as well as in the dialog. */
@@ -378,11 +386,10 @@ import { csv } from "../fields";
   >
 {/snippet}
 
-{#snippet testButton(r: Connection, label: boolean)}
+{#snippet testButton(r: Connection, size: "sm" | "md" = "sm")}
   <Button
     variant="ghost"
-    size="sm"
-    square={!label}
+    {size}
     icon="test"
     tone={probeTone(r)}
     title={probes[r.slug]
@@ -393,21 +400,19 @@ import { csv } from "../fields";
     aria-label="test connection"
     busy={testing === r.slug}
     disabled={testing === r.slug}
-    onclick={() => test(r.slug)}>{label ? "test" : ""}</Button
+    onclick={() => test(r.slug)}>test</Button
   >
 {/snippet}
 
 {#snippet testCell(r: Connection)}
-  {#if admin}{@render testButton(r, true)}{/if}
+  {#if admin}{@render testButton(r)}{/if}
 {/snippet}
 
 {#snippet probeRow(r: Connection)}
   {@const probe = probes[r.slug]}
-  {#if !probe}
-    <p class="dim">Not tested yet. Hit <em>test</em>.</p>
-  {:else if !probe.ok}
+  {#if probe && !probe.ok}
     <Note tone="danger">{probe.error ?? "failed"}</Note>
-  {:else}
+  {:else if probe}
     <p class="ok-text">
       ✓ connected{probe.identity ? ` as ${probe.identity}` : ""}
     </p>
@@ -444,14 +449,18 @@ import { csv } from "../fields";
   {/if}
 {/snippet}
 
-{#snippet testAction(r: Connection)}
-  {#if admin}{@render testButton(r, false)}{/if}
+<!-- Pushed to the far end of the redaction row, clear of the checkbox, so it
+     reads as acting on the whole connection rather than on that one field. -->
+{#snippet formTest(f: { draft: Draft; mode: "create" | "edit" })}
+  {@const r = f.mode === "edit" ? connectionOf(f.draft) : undefined}
+  {#if r && admin}<span class="form-test">{@render testButton(r, "md")}</span>{/if}
 {/snippet}
+
 
 <!-- The probe belongs under the fields that produced it: saving a connection
      tests it, so the answer to "did that work" is already on screen. -->
 {#snippet probeExtra(f: { mode: "create" | "edit"; row: Connection | null })}
-  {#if f.row}
+  {#if f.row && probes[f.row.slug]}
     <div class="probe">{@render probeRow(f.row)}</div>
   {/if}
 {/snippet}
@@ -470,7 +479,6 @@ import { csv } from "../fields";
   addLabel="add connection"
   noun="connection"
   editTitle={(r) => r.slug}
-  extraActions={testAction}
   formExtra={probeExtra}
   oncreate={(d) => connections.mutate(() => save(null, d))}
   onsave={(row, d) => connections.mutate(() => save(row, d))}
@@ -546,6 +554,9 @@ import { csv } from "../fields";
     margin-top: var(--pad-3);
     padding-top: var(--pad-3);
     border-top: 1px dashed var(--border);
+  }
+  .form-test {
+    margin-left: auto;
   }
   .ok-text {
     margin: 0;
