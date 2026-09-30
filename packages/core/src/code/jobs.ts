@@ -1,20 +1,8 @@
 import { z } from "zod";
-import { sql } from "../infra/db";
 import { defineJob } from "../jobs/registry";
 import { indexRepo } from "./indexer";
 import { listRepos } from "./repos";
 import { repoToken } from "./token";
-
-/** The queued or running reindex of a repo, if there is one. */
-export async function reindexInFlight(slug: string): Promise<string | null> {
-  const [busy] = await sql`
-    select id from job_runs
-    where kind = 'repo.reindex' and params->>'repo' = ${slug}
-      and status in ('queued', 'running')
-    limit 1
-  `;
-  return busy ? (busy.id as string) : null;
-}
 
 export function defineCodeJobs() {
   defineJob({
@@ -26,7 +14,8 @@ export function defineCodeJobs() {
       repo: z.string().min(1),
       line: z.string().min(1).optional(),
     }),
-    resourceClass: "heavy",
+    queue: "index",
+    dedupeKey: (p) => p.repo,
     timeout: "2h",
     run: async (ctx, p) => {
       ctx.log(`indexing ${p.repo}${p.line ? ` ${p.line}` : ""}`);
@@ -61,12 +50,8 @@ export function defineCodeJobs() {
           neverIndexed++;
           continue;
         }
-        if (await reindexInFlight(repo.slug)) {
-          skipped++;
-          continue;
-        }
-        await ctx.enqueue("repo.reindex", { repo: repo.slug });
-        queued++;
+        if (await ctx.enqueue("repo.reindex", { repo: repo.slug })) queued++;
+        else skipped++;
       }
       ctx.log(
         `queued ${queued}; ${skipped} already in flight, ${neverIndexed} never indexed`,

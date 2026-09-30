@@ -196,6 +196,10 @@ export {
   JOB_NOTIFY,
   JOB_CLASS_CHAT_SLOTS,
   JOB_FINISHED,
+  JOB_QUEUES,
+  JOB_QUEUE_NAMES,
+  JOB_PRIORITY,
+  jobQueue,
   parseDuration,
 } from "./jobs";
 export type {
@@ -205,6 +209,8 @@ export type {
   JobOverlap,
   JobMissed,
   JobNotify,
+  JobQueue,
+  JobQueueName,
   JobCensus,
   JobRun,
   JobRunListed,

@@ -76,7 +76,9 @@ async function jobTablesExist(): Promise<boolean> {
  */
 export async function startJobProcess(opts: {
   classes: string[];
+  queues?: string[];
   concurrency: number;
+  perClass?: Partial<Record<string, number>>;
   waitMs?: number;
 }) {
   registerCoreJobs();

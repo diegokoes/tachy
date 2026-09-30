@@ -196,7 +196,7 @@ describe("PUT /api/repos/bulk", () => {
 });
 
 describe("POST /api/repos/:slug/reindex", () => {
-  it("queues a reindex run for the caller, and refuses a second while it waits", async () => {
+  it("queues a reindex run for the caller, and hands back that run while it waits", async () => {
     await resetJobs();
     const cookie = await adminCookie();
     await linkRepo({
@@ -210,12 +210,14 @@ describe("POST /api/repos/:slug/reindex", () => {
     expect(res.status).toBe(202);
     const { run_id } = await res.json();
     const [run] =
-      await sql`select kind, params, trigger, requested_by, resource_class from job_runs where id = ${run_id}`;
+      await sql`select kind, params, trigger, requested_by, resource_class, queue, priority from job_runs where id = ${run_id}`;
     expect(run).toMatchObject({
       kind: "repo.reindex",
       params: { repo: "driver" },
       trigger: "manual",
       resource_class: "heavy",
+      queue: "index",
+      priority: 10,
     });
     expect(run.requested_by).not.toBeNull();
 
@@ -223,8 +225,9 @@ describe("POST /api/repos/:slug/reindex", () => {
       method: "POST",
       headers: { Cookie: cookie },
     });
-    expect(again.status).toBe(400);
-    expect((await again.json()).error).toMatch(/already being indexed/);
+    expect(again.status).toBe(202);
+    expect(await again.json()).toMatchObject({ status: "in_flight", run_id });
+    expect(await sql`select 1 from job_runs`).toHaveLength(1);
   });
 
   it("queues one line, and refuses a line the repo does not track", async () => {

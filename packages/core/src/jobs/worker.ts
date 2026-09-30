@@ -19,7 +19,14 @@ import { scheduleDueRuns } from "./scheduler";
 
 export interface JobWorkerOptions {
   classes: string[];
+  /** Serve only these queues of those classes; every queue of them when absent. */
+  queues?: string[];
   concurrency: number;
+  /**
+   * Slots per class within `concurrency`, for a process serving several
+   * classes, so a long heavy run cannot hold every slot light runs need.
+   */
+  perClass?: Partial<Record<string, number>>;
   workerId?: string;
   leaseMs?: number;
   pollMs?: number;
@@ -49,7 +56,7 @@ export async function startJobWorker(
     opts.workerId ?? `${hostname()}-${process.pid}-${randomUUID().slice(0, 8)}`;
   const leaseMs = opts.leaseMs ?? 60_000;
   const graceMs = opts.graceMs ?? 30_000;
-  const running = new Map<string, Promise<void>>();
+  const running = new Map<string, { cls: string; done: Promise<void> }>();
   let draining = false;
   let ticking = false;
 
@@ -125,8 +132,14 @@ export async function startJobWorker(
           );
         },
         credential: (name: string) => resolveCredential(name, {}),
-        enqueue: async (k: string, p: unknown) =>
-          (await enqueueRun({ kind: k, params: p, trigger: "event" })) ?? "",
+        enqueue: (k: string, p: unknown) =>
+          enqueueRun({
+            kind: k,
+            params: p,
+            trigger: "event",
+            parentId: run.id,
+            priority: run.priority,
+          }),
       };
       const work = kind.run(ctx, params);
       const aborted = new Promise<never>((_, reject) =>
@@ -187,10 +200,16 @@ export async function startJobWorker(
     ticking = true;
     try {
       while (!draining && running.size < opts.concurrency) {
-        const run = await claimRun(opts.classes, workerId, leaseMs);
+        const room = opts.classes.filter(
+          (c) =>
+            [...running.values()].filter((r) => r.cls === c).length <
+            (opts.perClass?.[c] ?? Infinity),
+        );
+        if (!room.length) break;
+        const run = await claimRun(room, workerId, leaseMs, opts.queues);
         if (!run) break;
-        const p = execute(run).finally(() => running.delete(run.id));
-        running.set(run.id, p);
+        const done = execute(run).finally(() => running.delete(run.id));
+        running.set(run.id, { cls: run.resource_class, done });
       }
     } catch (err) {
       log("error", "job_claim_failed", { error: String(err) });
@@ -215,6 +234,7 @@ export async function startJobWorker(
   log("info", "job_worker_started", {
     worker: workerId,
     classes: opts.classes,
+    queues: opts.queues ?? "all",
     concurrency: opts.concurrency,
   });
 
@@ -228,7 +248,7 @@ export async function startJobWorker(
       clearInterval(schedule);
       await listener.unlisten().catch(() => {});
       await Promise.race([
-        Promise.allSettled([...running.values()]),
+        Promise.allSettled([...running.values()].map((r) => r.done)),
         new Promise((r) => setTimeout(r, waitMs)),
       ]);
     },

@@ -3,6 +3,8 @@ import { z } from "zod";
 import {
   cancelRun,
   claimRun,
+  inFlightRun,
+  listJobRuns,
   createJobDefinition,
   defineJob,
   describeJobKinds,
@@ -45,6 +47,28 @@ defineJob({
   },
 });
 defineJob({
+  kind: "test.index",
+  title: "Holds the index queue until stopped",
+  params: z.object({ key: z.string() }),
+  queue: "index",
+  dedupeKey: (p) => p.key,
+  timeout: "1m",
+  run: (ctx) =>
+    new Promise((resolve) =>
+      ctx.signal.addEventListener("abort", () => resolve(undefined)),
+    ),
+});
+defineJob({
+  kind: "test.fanout",
+  title: "Queues two echoes",
+  params: z.object({}),
+  timeout: "1m",
+  run: async (ctx) => {
+    await ctx.enqueue("test.echo", { word: "one" });
+    await ctx.enqueue("test.echo", { word: "two" });
+  },
+});
+defineJob({
   kind: "test.skip-missed",
   title: "Skips missed firings",
   params: z.object({}),
@@ -57,7 +81,7 @@ defineJob({
   title: "Waits for its signal",
   params: z.object({}),
   timeout: "1s",
-  resourceClass: "heavy",
+  queue: "embed",
   run: (ctx) =>
     new Promise((_, reject) =>
       ctx.signal.addEventListener("abort", () => reject(ctx.signal.reason)),
@@ -208,6 +232,181 @@ describe("job runs", () => {
     await sql`update job_runs set locked_until = now() - interval '1 second' where id = ${id}`;
     expect(await reapExpiredRuns()).toBe(1);
     expect((await getJobRun(id)).status).toBe("queued");
+  });
+});
+
+describe("queues", () => {
+  it("hands back the run already holding a dedupe key, and frees the key when it ends", async () => {
+    const first = await enqueueRun({
+      kind: "test.index",
+      params: { key: "a" },
+      trigger: "manual",
+    });
+    expect(
+      await Promise.all([
+        enqueueRun({
+          kind: "test.index",
+          params: { key: "a" },
+          trigger: "manual",
+        }),
+        enqueueRun({
+          kind: "test.index",
+          params: { key: "a" },
+          trigger: "event",
+        }),
+      ]),
+    ).toEqual([null, null]);
+    expect(await inFlightRun("test.index", { key: "a" })).toBe(first);
+    expect(
+      await enqueueRun({
+        kind: "test.index",
+        params: { key: "b" },
+        trigger: "manual",
+      }),
+    ).not.toBeNull();
+
+    await cancelRun(first!);
+    expect(await inFlightRun("test.index", { key: "a" })).toBeNull();
+    expect(
+      await enqueueRun({
+        kind: "test.index",
+        params: { key: "a" },
+        trigger: "manual",
+      }),
+    ).not.toBeNull();
+  });
+
+  it("never runs more of a queue than its cap, even when workers claim at once", async () => {
+    for (const key of ["a", "b"])
+      await enqueueRun({
+        kind: "test.index",
+        params: { key },
+        trigger: "manual",
+      });
+    const slow = await enqueueRun({
+      kind: "test.slow",
+      params: {},
+      trigger: "manual",
+    });
+    const claimed = await Promise.all([
+      claimRun(["heavy"], "w1", 60_000),
+      claimRun(["heavy"], "w2", 60_000),
+      claimRun(["heavy"], "w3", 60_000),
+    ]);
+    const kinds = claimed.map((r) => r?.kind ?? null).sort();
+    expect(kinds).toEqual([null, "test.index", "test.slow"]);
+
+    const index = claimed.find((r) => r?.kind === "test.index")!;
+    await finishRun(index.id, index.locked_by!, {
+      status: "succeeded",
+      logTail: "",
+    });
+    expect((await claimRun(["heavy"], "w1", 60_000))?.kind).toBe("test.index");
+    expect(slow).not.toBeNull();
+  });
+
+  it("claims by priority before age, and a worker can keep to named queues", async () => {
+    const scheduled = await enqueueRun({
+      kind: "test.echo",
+      params: {},
+      trigger: "schedule",
+    });
+    const clicked = await enqueueRun({
+      kind: "test.echo",
+      params: {},
+      trigger: "manual",
+    });
+    const indexing = await enqueueRun({
+      kind: "test.index",
+      params: { key: "a" },
+      trigger: "manual",
+    });
+
+    expect(await claimRun(["heavy"], "w", 60_000, ["embed"])).toBeNull();
+    expect((await claimRun(["heavy"], "w", 60_000, ["index"]))?.id).toBe(
+      indexing,
+    );
+    expect((await claimRun(["light"], "w", 60_000))?.id).toBe(clicked);
+    expect((await claimRun(["light"], "w", 60_000))?.id).toBe(scheduled);
+  });
+
+  it("links the runs a run queues to it, at its priority, and sums them up", async () => {
+    const worker = await startJobWorker({
+      classes: ["light"],
+      concurrency: 1,
+      pollMs: 100,
+      scheduleMs: 60_000,
+    });
+    try {
+      const parent = (await enqueueRun({
+        kind: "test.fanout",
+        params: {},
+        trigger: "manual",
+      }))!;
+      let listed = await listJobRuns({ parentId: parent });
+      for (
+        let i = 0;
+        i < 50 &&
+        (listed.length < 2 || listed.some((r) => r.status !== "succeeded"));
+        i++
+      ) {
+        await new Promise((r) => setTimeout(r, 100));
+        listed = await listJobRuns({ parentId: parent });
+      }
+      expect(
+        listed.map((r) => [r.kind, r.trigger, r.priority, r.status]),
+      ).toEqual([
+        ["test.echo", "event", 10, "succeeded"],
+        ["test.echo", "event", 10, "succeeded"],
+      ]);
+      const [row] = (await listJobRuns({})).filter((r) => r.id === parent);
+      expect(row.children).toEqual({
+        total: 2,
+        queued: 0,
+        running: 0,
+        succeeded: 2,
+        failed: 0,
+      });
+      expect(listed[0].children).toBeNull();
+    } finally {
+      await worker.drain(1_000);
+    }
+  });
+
+  it("keeps a slot for light runs while a heavy one holds the other", async () => {
+    const worker = await startJobWorker({
+      classes: ["light", "heavy"],
+      concurrency: 2,
+      perClass: { light: 1, heavy: 1 },
+      pollMs: 100,
+      scheduleMs: 60_000,
+    });
+    try {
+      const index = (await enqueueRun({
+        kind: "test.index",
+        params: { key: "a" },
+        trigger: "manual",
+      }))!;
+      await enqueueRun({ kind: "test.slow", params: {}, trigger: "manual" });
+      const echo = (await enqueueRun({
+        kind: "test.echo",
+        params: {},
+        trigger: "manual",
+      }))!;
+      let run = await getJobRun(echo);
+      for (let i = 0; i < 50 && run.status !== "succeeded"; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        run = await getJobRun(echo);
+      }
+      expect(run.status).toBe("succeeded");
+      const heavy = await sql`
+        select kind from job_runs where resource_class = 'heavy' and status = 'running'
+      `;
+      expect(heavy).toHaveLength(1);
+      await cancelRun(index);
+    } finally {
+      await worker.drain(1_000);
+    }
   });
 });
 
@@ -422,7 +621,7 @@ describe("the job census", () => {
       null,
     );
     await createJobDefinition(
-      { kind: "test.echo", name: "moved to heavy", resource_class: "heavy" },
+      { kind: "test.echo", name: "moved to heavy", queue: "index" },
       null,
     );
 
