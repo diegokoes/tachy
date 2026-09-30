@@ -316,25 +316,25 @@ describe("personal preferences", () => {
     const ctx = { userId: alice.id, teamId };
 
     expect(await resolvePref("date_order", ctx)).toEqual({
-      value: "iso",
+      value: "dmy",
       source: "default",
     });
-    expect(await dateFormatOf(ctx)).toEqual({ order: "iso", clock: "24h" });
+    expect(await dateFormatOf(ctx)).toEqual({ order: "dmy", clock: "24h" });
 
     await expect(
-      setPref(admin.id, "global", undefined, "date_order", "dmy"),
+      setPref(admin.id, "global", undefined, "date_order", "iso"),
     ).rejects.toThrow(/personal/);
     await expect(
       setPref(alice.id, "team", teamId, "clock", "12h"),
     ).rejects.toThrow(/personal/);
 
-    await setPref(alice.id, "user", alice.id, "date_order", "dmy");
+    await setPref(alice.id, "user", alice.id, "date_order", "iso");
     await setPref(alice.id, "user", alice.id, "clock", "12h");
     expect(await resolvePref("date_order", ctx)).toEqual({
-      value: "dmy",
+      value: "iso",
       source: "user",
     });
-    expect(await dateFormatOf(ctx)).toEqual({ order: "dmy", clock: "12h" });
+    expect(await dateFormatOf(ctx)).toEqual({ order: "iso", clock: "12h" });
 
     await expect(
       setPref(alice.id, "user", alice.id, "clock", "25h"),
@@ -349,7 +349,7 @@ describe("personal preferences", () => {
     `;
     expect(
       await resolvePref("date_order", { userId: alice.id, teamId }),
-    ).toMatchObject({ value: "iso", source: "default" });
+    ).toMatchObject({ value: "dmy", source: "default" });
   });
 });
 

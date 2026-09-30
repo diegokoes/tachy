@@ -138,14 +138,14 @@ describe("slash command registry", () => {
     expect(
       buildPrompt({
         message: "hi",
-        dateFormat: { order: "iso", clock: "24h" },
+        dateFormat: { order: "dmy", clock: "24h" },
       }),
     ).toBe("hi");
     const prompt = buildPrompt({
       message: "hi",
-      dateFormat: { order: "dmy", clock: "12h" },
+      dateFormat: { order: "iso", clock: "12h" },
     });
-    expect(prompt).toContain("29/09/2026 2:05 PM (UTC)");
+    expect(prompt).toContain("2026-09-29 2:05 PM (UTC)");
     expect(prompt.endsWith("hi")).toBe(true);
   });
 

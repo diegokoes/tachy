@@ -16,8 +16,8 @@ const AT = "2026-09-04T14:05:00Z";
 describe("formatDay", () => {
   it.each([
     ["iso", "2026-09-04"],
-    ["dmy", "04/09/2026"],
-    ["mdy", "09/04/2026"],
+    ["dmy", "04-09-2026"],
+    ["mdy", "09-04-2026"],
     ["long", "4 Sep 2026"],
   ] as const)("%s", (order, expected) => {
     expect(formatDay(AT, { order, clock: "24h" })).toBe(expected);
@@ -25,14 +25,14 @@ describe("formatDay", () => {
 
   it("names the UTC day, whatever zone the process runs in", () => {
     expect(formatDay("2026-09-04T23:30:00-05:00", DEFAULT_DATE_FORMAT)).toBe(
-      "2026-09-05",
+      "05-09-2026",
     );
   });
 
   it("takes a Date, an ISO string or epoch milliseconds alike", () => {
     const d = new Date(AT);
     for (const at of [d, AT, d.getTime()])
-      expect(formatDateTime(at, DEFAULT_DATE_FORMAT)).toBe("2026-09-04 14:05");
+      expect(formatDateTime(at, DEFAULT_DATE_FORMAT)).toBe("04-09-2026 14:05");
   });
 
   it("is empty for nothing and for garbage", () => {
@@ -41,7 +41,7 @@ describe("formatDay", () => {
   });
 
   it("reads epoch 0 as a moment, not as missing", () => {
-    expect(formatDay(0, DEFAULT_DATE_FORMAT)).toBe("1970-01-01");
+    expect(formatDay(0, DEFAULT_DATE_FORMAT)).toBe("01-01-1970");
   });
 });
 
@@ -61,15 +61,15 @@ describe("formatTime", () => {
 });
 
 describe("excelDateTimeFormat", () => {
-  it("keeps the ISO default Excel shipped with before", () => {
+  it("matches the default day-first format", () => {
     expect(excelDateTimeFormat(DEFAULT_DATE_FORMAT)).toBe(
-      "yyyy\\-mm\\-dd\\ hh:mm",
+      "dd\\-mm\\-yyyy\\ hh:mm",
     );
   });
 
   it("escapes every separator so Excel keeps them", () => {
-    expect(excelDateTimeFormat({ order: "dmy", clock: "12h" })).toBe(
-      "dd\\/mm\\/yyyy\\ h:mm\\ AM/PM",
+    expect(excelDateTimeFormat({ order: "mdy", clock: "12h" })).toBe(
+      "mm\\-dd\\-yyyy\\ h:mm\\ AM/PM",
     );
   });
 });
@@ -87,6 +87,6 @@ describe("encodeDateFormat / parseDateFormat", () => {
   it("falls back per part on anything unknown", () => {
     expect(parseDateFormat(undefined)).toEqual(DEFAULT_DATE_FORMAT);
     expect(parseDateFormat("dmy/13h")).toEqual({ order: "dmy", clock: "24h" });
-    expect(parseDateFormat("ymd/12h")).toEqual({ order: "iso", clock: "12h" });
+    expect(parseDateFormat("ymd/12h")).toEqual({ order: "dmy", clock: "12h" });
   });
 });

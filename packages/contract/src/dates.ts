@@ -7,6 +7,14 @@
 export const DATE_ORDERS = ["iso", "dmy", "mdy", "long"] as const;
 export type DateOrder = (typeof DATE_ORDERS)[number];
 
+/** The pattern each order is offered under. */
+export const DATE_ORDER_LABELS: Record<DateOrder, string> = {
+  iso: "YYYY-MM-DD",
+  dmy: "DD-MM-YYYY",
+  mdy: "MM-DD-YYYY",
+  long: "DD Month YYYY",
+};
+
 export const CLOCKS = ["24h", "12h"] as const;
 export type Clock = (typeof CLOCKS)[number];
 
@@ -15,7 +23,7 @@ export interface DateFormat {
   clock: Clock;
 }
 
-export const DEFAULT_DATE_FORMAT: DateFormat = { order: "iso", clock: "24h" };
+export const DEFAULT_DATE_FORMAT: DateFormat = { order: "dmy", clock: "24h" };
 
 const MONTHS = [
   "Jan",
@@ -52,9 +60,9 @@ export function formatDay(at: Moment, f: DateFormat): string {
   const day = d.getUTCDate();
   switch (f.order) {
     case "dmy":
-      return `${pad(day)}/${pad(m + 1)}/${y}`;
+      return `${pad(day)}-${pad(m + 1)}-${y}`;
     case "mdy":
-      return `${pad(m + 1)}/${pad(day)}/${y}`;
+      return `${pad(m + 1)}-${pad(day)}-${y}`;
     case "long":
       return `${day} ${MONTHS[m]} ${y}`;
     default:
@@ -85,8 +93,8 @@ export function formatDateTime(at: Moment, f: DateFormat): string {
 export function excelDateTimeFormat(f: DateFormat): string {
   const day = {
     iso: "yyyy\\-mm\\-dd",
-    dmy: "dd\\/mm\\/yyyy",
-    mdy: "mm\\/dd\\/yyyy",
+    dmy: "dd\\-mm\\-yyyy",
+    mdy: "mm\\-dd\\-yyyy",
     long: "d\\ mmm\\ yyyy",
   }[f.order];
   const time = f.clock === "24h" ? "hh:mm" : "h:mm\\ AM/PM";
