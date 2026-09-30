@@ -453,7 +453,7 @@ defineJob({
   dedupeKey: (p) => p.repo, // at most one queued or running run per key
   overlap: "skip", // skip | queue: when the previous run is still going
   missed: "run-once", // run-once | skip: when the host was down at fire time
-  timeout: "2h",
+  timeout: "8h",
   maxAttempts: 3,
   run: async (ctx, params) => {
     // ctx.signal (cancel), ctx.progress(0..1, note), ctx.log(), ctx.heartbeat(),
