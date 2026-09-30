@@ -308,6 +308,11 @@ export interface AdoClient {
     patch: JsonPatchOp[],
     opts?: { validateOnly?: boolean },
   ): Promise<AdoWorkItem>;
+  /**
+   * A new, unsaved item of the type with the process's rules already applied:
+   * the values ADO's own "New" form starts from.
+   */
+  getNewItemTemplate(project: string, type: string): Promise<AdoWorkItem>;
   listTypeCategories(project: string): Promise<AdoTypeCategory[]>;
   /** Named properties, e.g. System.ProcessTemplateType: the process the form comes from. */
   getProjectProperties(
@@ -537,6 +542,12 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
           headers: { "Content-Type": "application/json-patch+json" },
           body: JSON.stringify(patch),
         },
+      );
+    },
+
+    async getNewItemTemplate(project, type) {
+      return req<AdoWorkItem>(
+        `${proj(project)}/_apis/wit/workitems/$${encodeURIComponent(type)}`,
       );
     },
 
