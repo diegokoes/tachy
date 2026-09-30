@@ -107,6 +107,7 @@ export type {
   RepoIndexStatus,
   RepoRow,
   RepoLineRow,
+  RepoIndexRun,
   RemoteRef,
   RepoCensus,
 } from "./code";
@@ -196,6 +197,10 @@ export {
   JOB_NOTIFY,
   JOB_CLASS_CHAT_SLOTS,
   JOB_FINISHED,
+  JOB_QUEUES,
+  JOB_QUEUE_NAMES,
+  JOB_PRIORITY,
+  jobQueue,
   parseDuration,
 } from "./jobs";
 export type {
@@ -205,9 +210,13 @@ export type {
   JobOverlap,
   JobMissed,
   JobNotify,
+  JobQueue,
+  JobQueueName,
   JobCensus,
   JobRun,
   JobRunListed,
+  JobWorkerRow,
+  JobLive,
   JobDefinition,
 } from "./jobs";
 export { FIELD_SHOWS } from "./flows";

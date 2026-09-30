@@ -4,7 +4,8 @@
   import {
     JOB_NOTIFY,
     JOB_OVERLAP,
-    JOB_RESOURCE_CLASSES,
+    jobQueue,
+    type JobQueue,
   } from "@tachy/contract";
   import { api } from "../api";
   import { createResource, errText } from "../resource.svelte";
@@ -42,6 +43,7 @@
     kinds: JobKindInfo[];
     chat_slot_cap: number;
     class_chat_slots: Record<string, number>;
+    queues: JobQueue[];
   };
   type Connection = { slug: string; source_type: string; name?: string };
 
@@ -49,6 +51,7 @@
     kinds: [],
     chat_slot_cap: 0,
     class_chat_slots: {},
+    queues: [],
   } as KindsInfo);
   const defs = createResource(
     () => api.get<JobDefinitionRow[]>("/jobs/definitions"),
@@ -130,18 +133,23 @@
       initial: "UTC",
     },
     {
-      key: "resource_class",
-      label: "class",
-      width: "6rem",
+      key: "queue",
+      label: "queue",
+      width: "8rem",
       edit: "select",
-      value: (d) => d.resource_class ?? "",
-      options: (dr) =>
-        opt(
-          JOB_RESOURCE_CLASSES,
-          `kind default (${kindOf(dr.kind)?.resource_class ?? "?"})`,
-        ),
-      cell: classCell,
-      info: "Worker pool. Sizes set in Compose.",
+      value: (d) => d.queue ?? "",
+      options: (dr) => [
+        {
+          value: "",
+          label: `kind default (${kindOf(dr.kind)?.queue ?? "?"})`,
+        },
+        ...info.data.queues.map((q) => ({
+          value: q.name,
+          label: `${q.name} (${q.class}${q.cap ? `, ${q.cap} at a time` : ""})`,
+        })),
+      ],
+      cell: queueCell,
+      info: "The lane its runs wait in. Each queue belongs to the light or heavy worker pool, whose sizes are set in Compose.",
     },
     {
       key: "timeout",
@@ -205,7 +213,7 @@
       name: String(d.name ?? "").trim(),
       schedule: blank(d.schedule),
       timezone: blank(d.timezone) ?? "UTC",
-      resource_class: blank(d.resource_class),
+      queue: blank(d.queue),
       timeout: blank(d.timeout),
       overlap: blank(d.overlap),
       notify: d.notify || "failure",
@@ -366,10 +374,13 @@
   {/if}
 {/snippet}
 
-{#snippet classCell(d: JobDefinitionRow)}
-  {@const cls = d.resource_class ?? kindOf(d.kind)?.resource_class}
-  {#if cls}
-    <Badge tone={cls === "heavy" ? "danger" : "info"}>{cls}</Badge>
+{#snippet queueCell(d: JobDefinitionRow)}
+  {@const queue = d.queue ?? kindOf(d.kind)?.queue}
+  {#if queue}
+    {@const cls = jobQueue(queue).class}
+    <Badge tone={cls === "heavy" ? "danger" : "info"} title={`${cls} pool`}
+      >{queue}</Badge
+    >
   {:else}
     <span class="dim">-</span>
   {/if}
@@ -521,9 +532,9 @@
   draft: Draft;
 })}
   {@const kind = kindOf(f.draft.kind)}
-  {@const effectiveClass = String(
-    f.draft.resource_class || kind?.resource_class || "light",
-  )}
+  {@const effectiveClass = jobQueue(
+    String(f.draft.queue || kind?.queue || "maintenance"),
+  ).class}
   {#if kind}
     {#if kind.description}<Note>{kind.description}</Note>{/if}
     {#if Object.keys(kind.params_schema.properties ?? {}).length}

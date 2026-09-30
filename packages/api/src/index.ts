@@ -133,10 +133,15 @@ console.log(
 
 /* Jobs run in a dedicated worker service in production (TACHY_WORKER=external).
    Without one, this process works every class itself, so a single `npm run api`
-   still syncs, reindexes and sweeps. */
+   still syncs, reindexes and sweeps, with a slot per class so an hour-long
+   reindex does not hold up a sync. */
 let jobWorker: Awaited<ReturnType<typeof startJobProcess>> | null = null;
 if (process.env.TACHY_WORKER !== "external")
   // Not awaited: a database whose schema is behind must not hold up the server.
-  void startJobProcess({ classes: ["light", "heavy"], concurrency: 1 })
+  void startJobProcess({
+    classes: ["light", "heavy"],
+    concurrency: 2,
+    perClass: { light: 1, heavy: 1 },
+  })
     .then((w) => (jobWorker = w))
     .catch((err) => log("error", "job_worker_failed", { error: String(err) }));

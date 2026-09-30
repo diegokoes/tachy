@@ -1,5 +1,7 @@
 import {
+  JOB_QUEUE_NAMES,
   JOB_RESOURCE_CLASSES,
+  jobQueue,
   backgroundSettled,
   loadSettingsIntoEnv,
   log,
@@ -17,18 +19,37 @@ registerSource("github", createGithubSource);
 registerSource("azure-devops", createAzureDevopsSource);
 setSourceOrigin("sync");
 
-const classes = (process.env.TACHY_WORKER_CLASSES ?? "light")
-  .split(",")
-  .map((c) => c.trim())
-  .filter(Boolean);
+const list = (v: string | undefined) =>
+  (v ?? "")
+    .split(",")
+    .map((c) => c.trim())
+    .filter(Boolean);
+const queues = list(process.env.TACHY_WORKER_QUEUES);
+for (const q of queues)
+  if (!JOB_QUEUE_NAMES.includes(q as never))
+    throw new Error(`TACHY_WORKER_QUEUES: unknown queue '${q}'`);
+const classes = process.env.TACHY_WORKER_CLASSES
+  ? list(process.env.TACHY_WORKER_CLASSES)
+  : queues.length
+    ? [...new Set(queues.map((q) => jobQueue(q).class))]
+    : ["light"];
 for (const c of classes)
   if (!(JOB_RESOURCE_CLASSES as readonly string[]).includes(c))
     throw new Error(`TACHY_WORKER_CLASSES: unknown class '${c}'`);
+for (const q of queues)
+  if (!classes.includes(jobQueue(q).class))
+    throw new Error(
+      `TACHY_WORKER_QUEUES: '${q}' is a ${jobQueue(q).class} queue, outside TACHY_WORKER_CLASSES`,
+    );
 const concurrency = Number(process.env.TACHY_WORKER_CONCURRENCY) || 1;
 const drainMs = (Number(process.env.TACHY_DRAIN_SECONDS) || 120) * 1000;
 
 await loadSettingsIntoEnv().catch(() => {});
-const worker = await startJobProcess({ classes, concurrency });
+const worker = await startJobProcess({
+  classes,
+  queues: queues.length ? queues : undefined,
+  concurrency,
+});
 
 let stopping = false;
 async function stop(signal: string) {

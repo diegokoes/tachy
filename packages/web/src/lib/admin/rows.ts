@@ -9,8 +9,11 @@ import type {
   DeploymentProfile,
   JobCensus,
   JobDefinition,
+  JobQueueName,
   JobRun,
   JobRunListed,
+  JobLive,
+  JobWorkerRow,
   KnowledgeCensus,
   LabelRow,
   LibraryEngagement,
@@ -18,6 +21,7 @@ import type {
   ProductRow,
   RepoCensus,
   RepoRow,
+  RepoIndexRun,
   SourceCensus,
   SourceConnectionRow,
   SourceTraffic,
@@ -74,7 +78,7 @@ export type AreaRule = {
   component_slug: string;
   component_name: string;
 };
-export type Repo = RepoRow;
+export type Repo = RepoRow & { active_run?: RepoIndexRun | null };
 export type Discovered<K extends string, T> = {
   ok: boolean;
   error?: string;
@@ -245,6 +249,7 @@ export type JobKindInfo = {
   description: string | null;
   connection: string | null;
   default_schedule: string | null;
+  queue: JobQueueName;
   resource_class: "light" | "heavy";
   overlap: "skip" | "queue";
   missed: "run-once" | "skip";
@@ -254,6 +259,7 @@ export type JobKindInfo = {
 };
 export type JobRunRow = JobRun;
 export type JobRunListedRow = JobRunListed;
+export type { JobLive, JobWorkerRow };
 export type JobDefinitionRow = JobDefinition & {
   next_run: string | null;
   last_run: Pick<JobRun, "id" | "status" | "created_at" | "error"> | null;

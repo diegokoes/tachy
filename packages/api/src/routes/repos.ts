@@ -17,7 +17,8 @@ import {
   connectionToken,
   listRemoteRefs,
   previewIndex,
-  reindexInFlight,
+  inFlightRun,
+  activeReindexes,
   repoToken,
   sql,
   RELEASE_TAG_RE,
@@ -114,8 +115,8 @@ export const repos = new Hono()
 
   .get("/", async (c) => {
     const productSlug = c.req.query("product_slug");
-    return c.json({
-      repos: await listRepos({
+    const [repos, runs] = await Promise.all([
+      listRepos({
         productId: productSlug
           ? await getProductIdBySlug(productSlug)
           : undefined,
@@ -124,7 +125,33 @@ export const repos = new Hono()
           ? await getCustomerIdBySlug(c.req.query("customer")!)
           : undefined,
       }),
+      activeReindexes(),
+    ]);
+    return c.json({
+      repos: repos.map((r) => ({ ...r, active_run: runs.get(r.slug) ?? null })),
     });
+  })
+
+  /** Every linked repo, as one parent run fanning out a reindex per repo. */
+  .post("/reindex", async (c) => {
+    await assertGlobalAdmin(await requireCaller(c));
+    const params = { scope: "all" };
+    const runId = await enqueueRun({
+      kind: "repos.refresh",
+      params,
+      trigger: "manual",
+      requestedBy: await callerUserId(c),
+    });
+    return c.json(
+      runId
+        ? { ok: true, status: "queued", run_id: runId }
+        : {
+            ok: true,
+            status: "in_flight",
+            run_id: await inFlightRun("repos.refresh", params),
+          },
+      202,
+    );
   })
 
   .put("/", zValidator("json", linkSchema), async (c) => {
@@ -221,16 +248,23 @@ export const repos = new Hono()
     const repo = await getRepoBySlug(slug);
     if (body.line && !repo.lines.some((l) => l.ref === body.line))
       throw badInput(`repo '${slug}' does not track '${body.line}'`);
-    const busy = await reindexInFlight(slug);
-    if (busy)
-      throw badInput(`repo '${slug}' is already being indexed (run ${busy})`);
+    const params = { repo: slug, ...(body.line ? { line: body.line } : {}) };
     const runId = await enqueueRun({
       kind: "repo.reindex",
-      params: { repo: slug, ...(body.line ? { line: body.line } : {}) },
+      params,
       trigger: "manual",
       requestedBy: await callerUserId(c),
     });
-    return c.json({ ok: true, status: "queued", run_id: runId }, 202);
+    if (runId)
+      return c.json({ ok: true, status: "queued", run_id: runId }, 202);
+    return c.json(
+      {
+        ok: true,
+        status: "in_flight",
+        run_id: await inFlightRun("repo.reindex", params),
+      },
+      202,
+    );
   })
 
   /** What the default line would index under a proposed config; nothing is embedded. */

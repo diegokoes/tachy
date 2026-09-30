@@ -93,5 +93,5 @@ export async function tpdProductId(): Promise<string> {
 
 /** Job and load-run tables, which resetData leaves alone. */
 export async function resetJobs() {
-  await sql`truncate job_definition_changes, job_definitions, job_runs, test_runs cascade`;
+  await sql`truncate job_definition_changes, job_definitions, job_runs, job_workers, test_runs cascade`;
 }

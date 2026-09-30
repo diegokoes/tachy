@@ -136,6 +136,26 @@ describe("jobs API", () => {
     expect(older.map((r: any) => r.id)).toEqual([byDef]);
   });
 
+  it("reports every queue's backlog and the live workers", async () => {
+    await call("/runs", "POST", { kind: "wiki.gaps", params: {} });
+    const live = await (await call("/live")).json();
+    expect(live.workers).toEqual([]);
+    expect(live.queues.map((q: any) => q.name)).toEqual([
+      "index",
+      "embed",
+      "testing",
+      "sync",
+      "maintenance",
+    ]);
+    expect(live.queues.at(-1)).toMatchObject({
+      class: "light",
+      cap: null,
+      queued: 1,
+      running: 0,
+      workers: 0,
+    });
+  });
+
   it("is closed to members", async () => {
     await createUser({
       email: "dev@example.com",
