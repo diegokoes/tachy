@@ -344,7 +344,6 @@
   {loading}
   rowClass={(r) => (isActive(r.status) ? "active" : undefined)}
   emptyTitle={rows.length ? "No runs match." : "No runs yet."}
-  emptyDetail="Runs come from schedules, the run button on a job, and actions elsewhere such as indexing a repo."
 />
 
 {#if more}

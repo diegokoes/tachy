@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Badge, DataTable, Meter, Note, type Column } from "../tui";
-  import { duration, showSection } from "./overview";
+  import { duration } from "./overview";
   import type { JobLive, JobWorkerRow } from "./rows";
   import { followLive, live } from "./jobLive.svelte";
 
@@ -156,15 +156,7 @@
     loading={live.loading && !live.data.workers.length}
     rowClass={(w) => (w.alive ? undefined : "gone")}
     emptyTitle="No worker is running."
-    emptyDetail="Runs wait in their queues until a worker claims them. The API works every queue itself unless TACHY_WORKER=external."
   />
-
-  <p class="dim small foot">
-    Each worker claims from its queues, most urgent first. Its runs, their logs
-    and history are in <button class="link" onclick={() => showSection("runs")}
-      >runs</button
-    >.
-  </p>
 </div>
 
 <style>
@@ -208,18 +200,6 @@
     display: inline-flex;
     align-items: center;
     gap: var(--pad-2);
-  }
-  .foot {
-    margin-top: var(--pad-3);
-  }
-  .link {
-    background: none;
-    border: none;
-    padding: 0;
-    font: inherit;
-    color: var(--accent);
-    cursor: pointer;
-    text-decoration: underline;
   }
   .workers :global(tr.gone) {
     opacity: 0.55;

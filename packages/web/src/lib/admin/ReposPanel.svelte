@@ -822,8 +822,9 @@
 </div>
 {#if queuedAll}
   <Note>
-    Queued a reindex of every linked repo. They index one at a time; follow them
-    here or in <button class="link" onclick={showRuns}>runs</button>.
+    Every linked repo queued. <button class="link" onclick={showRuns}
+      >runs</button
+    >
   </Note>
 {/if}
 
