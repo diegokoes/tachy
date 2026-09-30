@@ -444,19 +444,17 @@
      narrowest, for the opposite reason — the nav and the subnav in the recess
      below it are one control in two registers, and reading as a pair means
      sitting closer to each other than either does to anything else. */
-  /* The app and its wallpaper blur behind an open dialog. A filter on the
-     scene rather than a backdrop-filter on the scrim: under a backdrop blur,
-     Firefox leaves some pages sharp. */
-  :global([data-scene]) {
-    transition: filter 0.14s ease;
-  }
+  /* The app blurs behind an open dialog. A filter on the scene rather than a
+     backdrop-filter on the scrim: under a backdrop blur, Firefox leaves some
+     pages sharp.
+
+     The blur switches on at full radius instead of transitioning, and the
+     starfield stays out of it. A blur is cheap only while its content holds
+     still. A changing radius re-blurs the whole app on every frame of the
+     unfold, and the twinkling stars would re-blur the viewport on every frame
+     the dialog is open. The scrim's ink fade carries the transition. */
   :global(:root[data-dialog] [data-scene]) {
     filter: blur(var(--scrim-blur));
-  }
-  @media (prefers-reduced-motion: reduce) {
-    :global([data-scene]) {
-      transition: none;
-    }
   }
 
   .app {

@@ -167,7 +167,7 @@
   });
 </script>
 
-<div class="starfield" bind:this={root} aria-hidden="true" data-scene>
+<div class="starfield" bind:this={root} aria-hidden="true">
   {#each stars as s}
     <span
       bind:this={s.el}
