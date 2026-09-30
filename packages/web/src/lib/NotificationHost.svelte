@@ -16,13 +16,18 @@
   );
 
   let burstEl = $state<HTMLElement>();
+  let landed = $state(false);
   let lastFired = "";
 
-  // Fire the confetti once per celebration, as soon as its container is up.
   $effect(() => {
-    if (celebration && burstEl && celebration.id !== lastFired) {
+    if (!celebration) landed = false;
+  });
+
+  // Fire the confetti once per celebration, once its dialog has unfolded.
+  $effect(() => {
+    if (celebration && burstEl && landed && celebration.id !== lastFired) {
       lastFired = celebration.id;
-      requestAnimationFrame(() => burstEl && confetti(burstEl, 44));
+      confetti(burstEl, 44);
     }
   });
 
@@ -40,6 +45,7 @@
     confirmIcon="success"
     cancelLabel="close"
     width="30rem"
+    onOpened={() => (landed = true)}
   >
     <div class="celebrate" bind:this={burstEl}>
       {#if celebration.body_text}
