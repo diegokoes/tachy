@@ -133,6 +133,16 @@ export interface JobCensus {
     failed: number;
     avg_seconds: number | null;
   }[];
+  /**
+   * How long runs waited in each queue before a worker took them, over runs
+   * that started in the window. Every queue is listed, in JOB_QUEUES order.
+   */
+  by_queue: {
+    queue: JobQueueName;
+    started: number;
+    avg_wait_seconds: number | null;
+    max_wait_seconds: number | null;
+  }[];
   /** Finished runs and how many of them succeeded, per pool. */
   success: Record<JobResourceClass, { finished: number; succeeded: number }>;
   now: Record<JobResourceClass, { running: number; queued: number }>;

@@ -27,18 +27,22 @@
 
   const j = $derived(census.data);
   const failed = $derived(j.by_status.failed + j.by_status.timed_out);
-  const running = $derived(j.now.light.running + j.now.heavy.running);
 
+  /* Live counts come from the roster poll, not the census, which loads once. */
+  const running = $derived(live.data.queues.reduce((n, q) => n + q.running, 0));
+  const queued = $derived(live.data.queues.reduce((n, q) => n + q.queued, 0));
   const aliveWorkers = $derived(
     live.data.workers.filter((w) => w.alive).length,
+  );
+  const slots = $derived(
+    live.data.workers.reduce((n, w) => n + (w.alive ? w.concurrency : 0), 0),
   );
   const unserved = $derived(
     live.data.queues.filter((q) => q.queued && !q.workers).length,
   );
 
-  /* Jobs, not runs, where the two differ. The success rings already carry the
-     run totals per pool, so a "runs 14 d" counter and a "light: 46 runs"
-     counter were saying the rings' numbers a second time. */
+  /* In the order work flows: what is configured, what is happening now, and
+     how the window went. */
   const figures = $derived([
     {
       key: "jobs",
@@ -46,6 +50,43 @@
       value: j.definitions.total,
       title: `${j.definitions.enabled} enabled · ${j.definitions.disabled} paused`,
       to: "jobs",
+    },
+    {
+      key: "scheduled",
+      label: "scheduled",
+      value: j.definitions.scheduled,
+      title: `enabled jobs on a schedule · ${j.by_trigger.schedule} scheduled runs in ${j.days} d`,
+    },
+    {
+      key: "manual",
+      label: "manual",
+      value: j.definitions.manual,
+      title: `enabled jobs run only by hand · ${j.by_trigger.manual} manual runs in ${j.days} d`,
+    },
+    {
+      key: "queued",
+      label: "queued",
+      value: queued,
+      tone: unserved ? ("danger" as const) : undefined,
+      title: "runs waiting for a worker",
+      to: "runs",
+    },
+    {
+      key: "running",
+      label: "running",
+      value: running,
+      tone: running ? ("accent" as const) : undefined,
+      to: "runs",
+    },
+    {
+      key: "workers",
+      label: "workers",
+      value: aliveWorkers,
+      tone: unserved ? ("danger" as const) : undefined,
+      title: unserved
+        ? `${unserved} ${unserved === 1 ? "queue has" : "queues have"} runs waiting and no live worker`
+        : `${slots} ${slots === 1 ? "slot" : "slots"}`,
+      to: "processes",
     },
     {
       key: "succeeded",
@@ -63,68 +104,34 @@
         : "failed or timed out",
       to: failed ? "failures" : undefined,
     },
-    {
-      key: "light",
-      label: "light",
-      value: j.definitions.by_class.light,
-      title: "jobs that run on the light pool",
-    },
-    {
-      key: "heavy",
-      label: "heavy",
-      value: j.definitions.by_class.heavy,
-      title:
-        "jobs that run on the heavy pool, holding chat slots while they do",
-    },
-    {
-      key: "scheduled",
-      label: "scheduled",
-      value: j.definitions.scheduled,
-      title: `enabled jobs on a schedule · ${j.by_trigger.schedule} scheduled runs in ${j.days} d`,
-    },
-    {
-      key: "manual",
-      label: "manual",
-      value: j.definitions.manual,
-      title: `enabled jobs run only by hand · ${j.by_trigger.manual} manual runs in ${j.days} d`,
-    },
-    {
-      key: "running",
-      label: "running",
-      value: running,
-      title: `${j.now.light.queued + j.now.heavy.queued} queued`,
-      to: "runs",
-    },
-    {
-      key: "workers",
-      label: "workers",
-      value: aliveWorkers,
-      tone: unserved ? ("danger" as const) : undefined,
-      title: unserved
-        ? `${unserved} ${unserved === 1 ? "queue has" : "queues have"} runs waiting and no live worker`
-        : `${aliveWorkers} live, ${live.data.workers.reduce((n, w) => n + (w.alive ? w.concurrency : 0), 0)} slots`,
-      to: "processes",
-    },
   ]);
 
+  /* Average wait says whether a pool is big enough; the tone says what the
+     queue is doing now. */
   const queues = $derived(
-    live.data.queues.map((q): Bar => ({
-      key: q.name,
-      label: q.name,
-      value: q.running + q.queued,
-      tone: q.queued && !q.workers ? "danger" : undefined,
-      parts: [
-        { key: "running", value: q.running, tone: "accent" },
+    j.by_queue.flatMap((w): Bar[] => {
+      const now = live.data.queues.find((q) => q.name === w.queue);
+      if (!w.started && !now?.running && !now?.queued) return [];
+      return [
         {
-          key: "queued",
-          value: q.queued,
-          tone: q.queued && !q.workers ? "danger" : "muted",
+          key: w.queue,
+          label: now?.running
+            ? `${w.queue} · ${now.running} running`
+            : now?.queued
+              ? `${w.queue} · ${now.queued} waiting`
+              : w.queue,
+          value: w.avg_wait_seconds ?? 0,
+          tone:
+            now?.queued && !now.workers
+              ? "danger"
+              : now?.queued
+                ? "warn"
+                : now?.running
+                  ? "accent"
+                  : undefined,
         },
-      ],
-    })),
-  );
-  const backlog = $derived(
-    live.data.queues.reduce((n, q) => n + q.running + q.queued, 0),
+      ];
+    }),
   );
 
   const OUTCOMES = [
@@ -227,10 +234,11 @@
     <Dials items={success} />
   </Tile>
 
-  <Tile title="queues" meta={compact(backlog)} empty={!backlog}>
+  <Tile title="queue wait" meta="avg · {j.days} d" empty={!queues.length}>
     <Bars
       rows={queues}
-      format={compact}
+      format={duration}
+      sum={false}
       fit
       onpick={() => showSection("processes")}
     />
