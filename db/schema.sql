@@ -1092,6 +1092,96 @@ create index code_chunks_embedding_idx on code_chunks using hnsw (embedding vect
     with (m = 16, ef_construction = 64);
 create index code_chunks_trgm_idx      on code_chunks using gin (chunk_text gin_trgm_ops);
 
+-- A bucket is a collection of documents maintained outside tachy and pushed in
+-- by a script that holds the token, e.g. a Document360 knowledge base synced
+-- from a laptop that can reach it. Kept apart from the library on purpose:
+-- nothing here is reviewed or edited in tachy, so it is never mixed into
+-- reference or knowledge search. Only the token's sha256 is stored; the token
+-- is shown once, on create or rotate.
+create table buckets (
+    id                uuid primary key default gen_random_uuid(),
+    slug              text not null unique,
+    name              text not null,
+    description       text,
+    source            text,
+    ingest_token_hash bytea not null unique,
+    ingest_token_hint text not null,
+    token_rotated_at  timestamptz not null default now(),
+    last_batch_at     timestamptz,
+    last_sync_id      text,
+    created_by        uuid references users(id) on delete set null,
+    created_at        timestamptz not null default now(),
+    updated_at        timestamptz not null default now()
+);
+
+create trigger buckets_updated_at
+    before update on buckets
+    for each row execute function set_updated_at();
+
+-- The teams whose members can read a bucket. A bucket with no teams is visible
+-- to app admins only.
+create table bucket_teams (
+    bucket_id uuid not null references buckets(id) on delete cascade,
+    team_id   uuid not null references teams(id) on delete cascade,
+    primary key (bucket_id, team_id)
+);
+
+create index bucket_teams_team_idx on bucket_teams(team_id);
+
+-- external_key is the pusher's own stable id for the document. last_sync_id is
+-- the sync that last carried it, which is how a full sync prunes what the
+-- source no longer has.
+create table bucket_docs (
+    id            uuid primary key default gen_random_uuid(),
+    bucket_id     uuid not null references buckets(id) on delete cascade,
+    external_key  text not null,
+    title         text not null,
+    url           text,
+    path          text[] not null default '{}',
+    version       text,
+    modified_at   timestamptz,
+    body          text not null,
+    body_sha      text not null,
+    metadata      jsonb not null default '{}'::jsonb,
+    last_sync_id  text,
+    received_at   timestamptz not null default now(),
+    updated_at    timestamptz not null default now(),
+
+    search_text text generated always as (
+        coalesce(title,'') || ' ' || tachy_join(path) || ' ' || coalesce(body,'')
+    ) stored,
+    search_tsv tsvector generated always as (
+        to_tsvector('simple', coalesce(title,'') || ' ' || tachy_join(path) || ' ' || coalesce(body,''))
+    ) stored,
+    search_tsv_en tsvector generated always as (
+        to_tsvector('english', coalesce(title,'') || ' ' || tachy_join(path) || ' ' || coalesce(body,''))
+    ) stored,
+
+    unique (bucket_id, external_key)
+);
+
+create index bucket_docs_sync_idx   on bucket_docs(bucket_id, last_sync_id);
+create index bucket_docs_tsv_idx    on bucket_docs using gin (search_tsv);
+create index bucket_docs_tsv_en_idx on bucket_docs using gin (search_tsv_en);
+create index bucket_docs_trgm_idx   on bucket_docs using gin (search_text gin_trgm_ops);
+
+-- Written with a null embedding by the ingest request; the bucket.embed job
+-- fills it, so text search works the moment a batch is accepted.
+create table bucket_doc_chunks (
+    id          uuid primary key default gen_random_uuid(),
+    doc_id      uuid not null references bucket_docs(id) on delete cascade,
+    ordinal     integer not null,
+    chunk_text  text not null,
+    embedding   vector(768),
+    unique (doc_id, ordinal)
+);
+
+create index bucket_doc_chunks_doc_idx       on bucket_doc_chunks(doc_id);
+create index bucket_doc_chunks_pending_idx   on bucket_doc_chunks(doc_id) where embedding is null;
+create index bucket_doc_chunks_embedding_idx on bucket_doc_chunks using hnsw (embedding vector_cosine_ops)
+    with (m = 16, ef_construction = 64);
+create index bucket_doc_chunks_trgm_idx      on bucket_doc_chunks using gin (chunk_text gin_trgm_ops);
+
 -- The job layer (DEPLOYMENT-ARCHITECTURE.md §5.3). A kind is code; a definition
 -- is an admin's configuration of a kind; a run is one execution.
 create table job_definitions (

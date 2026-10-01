@@ -10,6 +10,7 @@ import {
   backfillEmbeddings,
   backfillReferenceEmbeddings,
   backfillCodeEmbeddings,
+  embedBucketChunks,
   EMBEDDING_MODEL,
   env,
   sql,
@@ -53,11 +54,14 @@ async function embedBackfill(all: boolean) {
   console.log(`  reference chunks:  ${chunks}`);
   const code = await backfillCodeEmbeddings({ all });
   console.log(`  code chunks:       ${code}`);
+  const buckets = await embedBucketChunks({ all });
+  console.log(`  bucket chunks:     ${buckets}`);
 
   const [left] = await sql`
     select (select count(*) from knowledge_entries where embedding is null)
              + (select count(*) from reference_doc_chunks where embedding is null)
-             + (select count(*) from code_blob_chunks where embedding is null) as n
+             + (select count(*) from code_blob_chunks where embedding is null)
+             + (select count(*) from bucket_doc_chunks where embedding is null) as n
   `;
   if (Number(left.n) > 0)
     console.log(

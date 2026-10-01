@@ -34,6 +34,7 @@ import { seedLibrary } from "./library";
 import { seedWiki } from "./wiki";
 import { seedReports } from "./reports";
 import { seedFlows } from "./flows";
+import { seedBuckets } from "./buckets";
 import { seedJobs } from "./jobs";
 
 export { SCALE_NAMES, type ScaleName } from "./scale";
@@ -59,6 +60,10 @@ const MARKER = "dev_seed";
 const TABLES = [
   "flow_runs",
   "flows",
+  "bucket_doc_chunks",
+  "bucket_docs",
+  "bucket_teams",
+  "buckets",
   "job_definition_changes",
   "job_runs",
   "job_definitions",
@@ -348,6 +353,9 @@ export async function seed(opts: SeedOptions): Promise<void> {
         sources.connections,
         sources.workItems,
       ),
+    );
+    await phases.run("buckets", () =>
+      seedBuckets(tx, org.teams, org.users, embed),
     );
   });
 
