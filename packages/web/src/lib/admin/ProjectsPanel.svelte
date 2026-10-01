@@ -31,7 +31,7 @@
   } from "./rows";
   import { INFO } from "./help";
   import { sectionHoist } from "./sectionAction.svelte";
-  import ProjectFinder, { type Found } from "./ProjectFinder.svelte";
+  import SourceFinder, { type Found } from "./SourceFinder.svelte";
   import ProjectCoverage, {
     type CoverageGap,
     type CoverageGroup,
@@ -537,8 +537,11 @@
   {#if f.mode === "create"}
     {@const slug = String(f.draft.source_slug ?? "")}
     {#key slug}
-      <ProjectFinder
+      <SourceFinder
         source={slug}
+        label="fetch projects"
+        takenTip="already registered"
+        empty="{slug} shows no projects to this token"
         hits={found[slug]}
         picked={String(f.draft.external_key ?? "")}
         registered={(key) => registered.has(`${slug} ${key}`)}
