@@ -12,6 +12,8 @@
   import { navigate } from "../../router.svelte";
   import { canCurateScope, isGlobalAdmin } from "../../session.svelte";
   import { keep } from "../../kept";
+  import { tweenValue } from "../../motion";
+  import { setPageActions } from "../pageActions.svelte";
   import { t } from "../../terms";
   import Columns from "../../settings/Columns.svelte";
   import Group from "../../settings/Group.svelte";
@@ -32,14 +34,7 @@
   import { INFO } from "../help";
   import type { Customer, Product, Repo, SourceProject } from "../rows";
   import { byBranch, isUrlish, lineCandidates, type Refs } from "./branches";
-  import {
-    configOf,
-    draftOf,
-    isGlob,
-    saveRepo,
-    unsaved,
-    type RepoDraft,
-  } from "./draft";
+  import { configOf, draftOf, saveRepo, type RepoDraft } from "./draft";
   import FileTypes from "./FileTypes.svelte";
   import FolderTree from "./FolderTree.svelte";
   import ToggleRow from "./ToggleRow.svelte";
@@ -72,8 +67,7 @@
 
   let draft = $state<RepoDraft | null>(null);
   $effect(() => {
-    if (found && !draft)
-      untrack(() => (draft = unsaved.get(slug) ?? draftOf(repo!)));
+    if (found && !draft) untrack(() => (draft = draftOf(repo!)));
   });
 
   /** Order carries no meaning in these lists, so it cannot make a draft dirty. */
@@ -86,12 +80,6 @@
     });
   const baseline = $derived(repo ? norm(draftOf(repo)) : "");
   const dirty = $derived(Boolean(draft) && norm(draft!) !== baseline);
-
-  $effect(() => {
-    if (!draft) return;
-    if (dirty) unsaved.set(slug, $state.snapshot(draft));
-    else unsaved.delete(slug);
-  });
 
   const knowledgeProjects = $derived(projects.data.filter((p) => p.product_id));
   const project = $derived(
@@ -187,6 +175,22 @@
       : [],
   );
 
+  /** Past this many, release lines wait behind a chevron. */
+  const FIRST_LINES = 5;
+  let allLines = $state(false);
+
+  /* Tracked lines lead, by what is saved rather than by the draft, so a row
+     never moves out from under the click that toggled it. */
+  const orderedLines = $derived.by(() => {
+    const saved = new Set(repo?.lines.map((l) => l.ref) ?? []);
+    return [...candidates].sort(
+      (a, b) => Number(saved.has(b)) - Number(saved.has(a)) || byBranch(a, b),
+    );
+  });
+  const shownLines = $derived(
+    allLines ? orderedLines : orderedLines.slice(0, FIRST_LINES),
+  );
+
   function toggleLine(b: string, on: boolean) {
     if (!draft) return;
     draft.lines = on
@@ -196,13 +200,11 @@
 
   let preview = $state<IndexPreview | null>(null);
   let previewError = $state<string | null>(null);
-  let counting = $state(false);
   const sequence = createSequence();
   const configKey = $derived(draft ? JSON.stringify(configOf(draft)) : "");
 
   async function count(config: Record<string, unknown>) {
     const current = sequence();
-    counting = true;
     try {
       const res = await api.post<
         { ok: boolean; error?: string } & Partial<IndexPreview>
@@ -213,8 +215,6 @@
       previewError = null;
     } catch (e) {
       if (current()) previewError = errText(e);
-    } finally {
-      if (current()) counting = false;
     }
   }
 
@@ -230,48 +230,65 @@
     return () => clearTimeout(timer);
   });
 
-  const globs = $derived(draft?.exclude.filter(isGlob) ?? []);
-  let globText = $state("");
+  /* The tree owns excludes that name one of its folders; the patterns field
+     owns everything else, kept as typed while it has focus. */
+  const dirSet = $derived(new Set(preview?.dirs.map((x) => x.path) ?? []));
+  const patterns = $derived(
+    draft?.exclude.filter((p) => !dirSet.has(p)).join(", ") ?? "",
+  );
+  let patternText = $state("");
+  /* The tree's share, taken when typing starts: a half-typed `load/k6`
+     passes through `load`, which must not stick as a folder. */
+  let treeOwned: string[] | null = null;
   $effect(() => {
-    const now = globs.join(", ");
+    const now = patterns;
+    if (!treeOwned) untrack(() => (patternText = now));
+  });
+  function startTyping() {
+    treeOwned = draft?.exclude.filter((p) => dirSet.has(p)) ?? [];
+  }
+  function stopTyping() {
+    treeOwned = null;
+    patternText = patterns;
+  }
+  function setPatterns(text: string) {
+    patternText = text;
+    if (draft && treeOwned) draft.exclude = [...treeOwned, ...csv(text)];
+  }
+
+  let shown = $state(0);
+  let counter: ReturnType<typeof tweenValue> = null;
+  $effect(() => {
+    const to = preview?.files_admitted;
+    if (to === undefined) return;
     untrack(() => {
-      if (csv(globText).join(", ") !== now) globText = now;
+      counter?.kill();
+      counter = document.hidden
+        ? ((shown = to), null)
+        : tweenValue(shown, to, (v) => (shown = Math.round(v)), {
+            duration: 0.45,
+          });
     });
   });
-  function setGlobs(text: string) {
-    globText = text;
-    if (draft)
-      draft.exclude = [
-        ...draft.exclude.filter((p) => !isGlob(p)),
-        ...csv(text).filter(isGlob),
-      ];
-  }
+  onDestroy(() => counter?.kill());
 
   let saving = $state(false);
   let indexing = $state<string | null>(null);
   let error = $state<string | null>(null);
 
-  async function save(thenIndex = false) {
+  async function save() {
     if (!draft) return;
     saving = true;
     error = null;
     try {
       await saveRepo(slug, draft, product);
-      unsaved.delete(slug);
       await repos.reload();
       if (repo) draft = draftOf(repo);
-      if (thenIndex) await reindex();
     } catch (e) {
       error = errText(e);
     } finally {
       saving = false;
     }
-  }
-
-  function discard() {
-    if (!repo) return;
-    unsaved.delete(slug);
-    draft = draftOf(repo);
   }
 
   async function reindex(line?: string) {
@@ -291,7 +308,6 @@
     error = null;
     try {
       await api.delete(`/repos/${slug}`);
-      unsaved.delete(slug);
       navigate(LIST);
     } catch (e) {
       error = errText(e);
@@ -332,50 +348,34 @@
     { value: "", label: "(none, shared)" },
     ...customers.data.map((c) => ({ value: c.slug, label: c.name })),
   ]);
+
+  $effect(() => setPageActions(actions));
 </script>
 
-<header class="bar">
-  <span class="title">
-    <Icon name="repo" size="1.1em" />
-    <span class="slug">{slug}</span>
-    {#if repo}<span class="url" use:tip={repo.url}>{repo.url}</span>{/if}
-  </span>
-  <span class="acts">
-    {#if error}<span class="bad">{error}</span>{/if}
-    {#if canEdit && draft}
-      {#if dirty}
-        <Button variant="ghost" icon="reset" disabled={saving} onclick={discard}
-          >discard</Button
-        >
-        <Button
-          variant="ghost"
-          icon="index"
-          disabled={saving || busy}
-          title="save, then clone and re-read the files"
-          onclick={() => save(true)}>save & index</Button
-        >
-        <Button
-          variant="primary"
-          icon="save"
-          busy={saving}
-          onclick={() => save()}>save</Button
-        >
-      {:else}
-        <Button
-          variant="ghost"
-          icon="index"
-          busy={indexing === "*"}
-          disabled={busy}
-          title="clone this repo and re-read its files into the code index"
-          onclick={() => reindex()}>index</Button
-        >
-      {/if}
-      <DeleteButton label="unlink repo" onclick={unlink} />
-    {/if}
-  </span>
-</header>
+<!-- In admin's top tab: index while nothing is changed, morphing into save
+     the moment something is. Leaving the page is how a change is dropped.
+     Delete stays on the page; the corner has no room for a third word. -->
+{#snippet actions()}
+  {#if canEdit && draft}
+    <Button
+      variant="ghost"
+      size="sm"
+      icon={dirty ? "save" : "index"}
+      morph
+      tone={dirty ? "accent" : undefined}
+      busy={saving || indexing === "*"}
+      disabled={!dirty && busy}
+      title={dirty
+        ? "save the changes"
+        : "clone this repo and re-read its files into the code index"}
+      onclick={() => (dirty ? save() : reindex())}
+      >{dirty ? "save" : "index"}</Button
+    >
+  {/if}
+{/snippet}
 
 <div class="body">
+  {#if error}<Note tone="danger">{error}</Note>{/if}
   {#if repos.error}
     <Note tone="danger">{repos.error}</Note>
   {:else if repos.loading && !repo}
@@ -389,7 +389,7 @@
     {@const d = draft}
     <Columns width="30rem">
       {#snippet left()}
-        <Group label="source" icon="integrations">
+        <Group label="source" icon="source">
           <Rows>
             <Row
               label="project"
@@ -497,7 +497,7 @@
               <button class="link" onclick={loadRefs}>retry</button>
             </p>
           {/if}
-          {#each candidates as b (b)}
+          {#each shownLines as b (b)}
             {@const line = repo.lines.find((l) => l.ref === b)}
             <ToggleRow
               checked={d.lines.includes(b)}
@@ -505,8 +505,8 @@
               label={`index ${b}`}
               onchange={(on) => toggleLine(b, on)}
             >
-              <Icon name="branch" size="1em" />
-              <span>{b}</span>
+              {#snippet icon()}<Icon name="branch" size="1em" />{/snippet}
+              {b}
               {#snippet end()}
                 {#if line}
                   {#if line.version_label}<span class="quiet"
@@ -537,6 +537,18 @@
               <p class="quiet">listed once the remote's branches are read</p>
             {/if}
           {/each}
+          {#if orderedLines.length > FIRST_LINES}
+            <button
+              class="more"
+              aria-expanded={allLines}
+              onclick={() => (allLines = !allLines)}
+            >
+              <span class="chev" class:up={allLines}
+                ><Icon name="chevron" size="1em" /></span
+              >
+              {allLines ? "fewer" : `${orderedLines.length - FIRST_LINES} more`}
+            </button>
+          {/if}
         </Group>
 
         <Group label="index" icon="index">
@@ -612,6 +624,12 @@
             <ErrorMark message={l.index_error ?? ""} label={`${l.ref} index`} />
           {/each}
         </Group>
+
+        {#if canEdit}
+          <div class="danger">
+            <DeleteButton label="unlink repo" text="delete" onclick={unlink} />
+          </div>
+        {/if}
       {/snippet}
 
       {#snippet right()}
@@ -628,34 +646,34 @@
           {:else if !preview}
             <p class="quiet">reading the tree…</p>
           {:else}
-            <p class="sum" class:stale={counting}>
-              <strong>{fmt(preview.files_admitted)}</strong>
+            <p class="sum">
+              <strong>{fmt(shown)}</strong>
               <span class="quiet"
                 >of {fmt(preview.files_total)} files indexed on</span
               >
               <Icon name="branch" size="1em" />
               <span>{preview.ref}</span>
             </p>
-            <div class:stale={counting}>
-              <FolderTree
-                {slug}
-                dirs={preview.dirs}
-                admitted={preview.files_admitted}
-                exclude={d.exclude}
-                onchange={(next) => (d.exclude = next)}
-              />
-            </div>
+            <FolderTree
+              {slug}
+              dirs={preview.dirs}
+              admitted={preview.files_admitted}
+              exclude={d.exclude}
+              onchange={(next) => (d.exclude = next)}
+            />
             <Rows>
               <Row
                 label="patterns"
-                about="Globs left out as well, such as scripts/**/*.json. Folders are switched off above."
+                about="Paths or globs left out as well, comma separated, such as scripts/**/*.json. Folders are switched off above."
               >
                 <input
-                  value={globText}
+                  value={patternText}
                   placeholder="scripts/**/*.json"
                   aria-label="exclude patterns"
                   spellcheck="false"
-                  oninput={(e) => setGlobs(e.currentTarget.value)}
+                  onfocus={startTyping}
+                  onblur={stopTyping}
+                  oninput={(e) => setPatterns(e.currentTarget.value)}
                 />
               </Row>
             </Rows>
@@ -670,18 +688,23 @@
               ? "Found in this repo. This repo's own set is on."
               : "Found in this repo. The built-in set is on."}
           >
-            <div class:stale={counting}>
-              <FileTypes
-                types={preview.types}
-                extensions={d.extensions}
-                onchange={(next) => (d.extensions = next)}
-              />
-            </div>
-            {#if d.extensions}
-              <button class="link" onclick={() => (d.extensions = null)}
-                >back to the built-in set</button
-              >
-            {/if}
+            {#snippet action()}
+              {#if d.extensions}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  square
+                  icon="reset"
+                  title="back to the built-in set"
+                  onclick={() => (d.extensions = null)}
+                />
+              {/if}
+            {/snippet}
+            <FileTypes
+              types={preview.types}
+              extensions={d.extensions}
+              onchange={(next) => (d.extensions = next)}
+            />
           </Group>
         {/if}
       {/snippet}
@@ -690,66 +713,26 @@
 </div>
 
 <style>
-  .bar {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--pad-2) var(--pad-3);
-    padding: var(--pad-3) 0;
-    border-bottom: 1px solid var(--border);
-    background: var(--panel-solid);
+  /* Tighter than settings: these groups hold lists, not a handful of
+     controls, and read like the repos table they open from. */
+  .body {
+    --row-h: 1.5rem;
+    --control-w: 16rem;
+    padding-top: var(--pad-3);
   }
-  /* The scrollport starts one --main-air above the bar's pinned edge, as
-     under Section's heading; this covers that strip so rows never show over
-     the bar. */
-  .bar::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 100%;
-    height: var(--main-air, 0.65rem);
-    background: var(--panel-solid);
+  .body :global(.cols) {
+    column-gap: calc(var(--pad-4) * 2);
+    row-gap: var(--pad-4);
   }
-  .title {
-    display: inline-flex;
-    align-items: baseline;
-    gap: var(--pad-2);
-    min-width: 0;
-    color: var(--accent);
-  }
-  .slug {
-    font-weight: 600;
-    color: var(--text);
-  }
-  .url {
-    min-width: 0;
-    max-width: 32rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: var(--fs-xs);
-    color: var(--muted);
-  }
-  .acts {
-    display: flex;
-    align-items: center;
-    gap: var(--pad-2);
-    margin-left: auto;
+  .body :global(.col) {
+    gap: var(--pad-4);
   }
   .bad {
     color: var(--danger);
     font-size: var(--fs-sm);
   }
-  .body {
-    padding-top: var(--pad-4);
-    --control-w: 16rem;
-  }
   .sub {
-    margin: var(--pad-3) 0 var(--pad-1);
+    margin: var(--pad-2) 0 var(--pad-1);
     font-size: var(--fs-xs);
     color: var(--muted);
     letter-spacing: var(--label-spacing);
@@ -769,20 +752,45 @@
     display: flex;
     align-items: center;
     gap: var(--pad-2);
-    margin: 0 0 var(--pad-3);
+    margin: 0 0 var(--pad-2);
     font-size: var(--fs-sm);
   }
   .sum strong {
+    min-width: 3.5ch;
     font-size: var(--fs-md);
     color: var(--accent);
     font-variant-numeric: tabular-nums;
   }
-  .stale {
-    opacity: 0.55;
-    transition: opacity 0.15s ease;
+  .danger {
+    display: flex;
+    justify-content: flex-end;
   }
   input.kb {
     width: 6rem;
+  }
+  .more {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pad-1);
+    margin-top: var(--pad-1);
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: var(--fs-xs);
+    cursor: pointer;
+  }
+  .more:hover,
+  .more:focus-visible {
+    color: var(--accent);
+  }
+  .chev {
+    display: inline-flex;
+    transition: transform 0.16s ease;
+  }
+  .chev.up {
+    transform: rotate(180deg);
   }
   .link {
     padding: 0;

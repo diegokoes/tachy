@@ -6,12 +6,15 @@
     label,
     hint,
     icon,
+    action,
     children,
   }: {
     label: string;
     hint?: string;
     /** Drawn in the marker's place. */
     icon?: IconName;
+    /** Set at the right end of the rule: a reset, a small verb. */
+    action?: Snippet;
     children: Snippet;
   } = $props();
 </script>
@@ -27,6 +30,7 @@
     >
     <span class="lbl">{label}</span>
     <span class="rule" aria-hidden="true"></span>
+    {#if action}<span class="act">{@render action()}</span>{/if}
   </h2>
   <div class="body">
     {#if hint}<p class="hint">{hint}</p>{/if}
@@ -65,6 +69,11 @@
     flex: 1;
     height: 1px;
     background: var(--border);
+  }
+  .act {
+    display: inline-flex;
+    flex: none;
+    margin-block: calc(var(--pad-2) * -1);
   }
   .body {
     margin-top: var(--pad-2);

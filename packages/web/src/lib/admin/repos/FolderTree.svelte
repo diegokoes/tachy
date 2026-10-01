@@ -103,8 +103,10 @@
           <span class="twist" aria-hidden="true"></span>
         {/if}
       {/snippet}
-      <Icon name={expanded ? "folderOpen" : "folder"} size="1em" />
-      <span>{nameOf(d.path)}</span>
+      {#snippet icon()}
+        <Icon name={expanded ? "folderOpen" : "folder"} size="1em" />
+      {/snippet}
+      {nameOf(d.path)}
     </ToggleRow>
     {#if expanded}{@render level(d.path, depth + 1)}{/if}
   {/each}
