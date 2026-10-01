@@ -15,6 +15,7 @@
     disabled = false,
     busy = false,
     iconSize,
+    text,
   }: {
     /** What goes: "remove unit", "delete". Doubles as the accessible name. */
     label: string;
@@ -23,6 +24,8 @@
     disabled?: boolean;
     busy?: boolean;
     iconSize?: string;
+    /** A word beside the can, for where an icon alone reads as decoration. */
+    text?: string;
   } = $props();
 
   let armed = $state(false);
@@ -47,19 +50,35 @@
 </script>
 
 <span class="del" onfocusout={disarm}>
-  <Button
-    variant="ghost"
-    tone="danger"
-    square
-    icon={armed ? "confirm" : "delete"}
-    morph={confirm}
-    {iconSize}
-    {disabled}
-    {busy}
-    title={armed ? "click again to confirm" : label}
-    aria-label={armed ? `confirm: ${label}` : label}
-    onclick={click}
-  />
+  {#if text}
+    <Button
+      variant="ghost"
+      tone="danger"
+      size="sm"
+      icon={armed ? "confirm" : "delete"}
+      morph={confirm}
+      {iconSize}
+      {disabled}
+      {busy}
+      title={armed ? "click again to confirm" : label}
+      aria-label={armed ? `confirm: ${label}` : label}
+      onclick={click}>{armed ? "sure?" : text}</Button
+    >
+  {:else}
+    <Button
+      variant="ghost"
+      tone="danger"
+      square
+      icon={armed ? "confirm" : "delete"}
+      morph={confirm}
+      {iconSize}
+      {disabled}
+      {busy}
+      title={armed ? "click again to confirm" : label}
+      aria-label={armed ? `confirm: ${label}` : label}
+      onclick={click}
+    />
+  {/if}
 </span>
 
 <style>

@@ -59,9 +59,6 @@ export function saveRepo(slug: string, d: RepoDraft, product: string) {
   });
 }
 
-/** Edits not yet saved, per repo, so leaving the page does not lose them. */
-export const unsaved = new Map<string, RepoDraft>();
-
 const GLOB_CHARS_RE = /[*?[{]/;
 
 /** Globs are typed; plain paths are what the folder tree toggles. */
