@@ -429,6 +429,22 @@ describe("GET /api/repos/refs", () => {
   });
 });
 
+describe("GET /api/repos/file-icons/:file", () => {
+  it("serves a theme icon as an SVG", async () => {
+    const res = await app.request("/api/repos/file-icons/typescript.svg");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/svg+xml");
+    expect(await res.text()).toContain("<svg");
+  });
+
+  it("refuses an id the theme does not define", async () => {
+    for (const file of ["nope.svg", "typescript", "..%2F..%2Fpackage.json"])
+      expect((await app.request(`/api/repos/file-icons/${file}`)).status).toBe(
+        404,
+      );
+  });
+});
+
 describe("DELETE /api/repos/:slug", () => {
   it("unlinks a repo and takes its files with it", async () => {
     const cookie = await adminCookie();

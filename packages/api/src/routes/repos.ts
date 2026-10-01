@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
@@ -17,6 +18,8 @@ import {
   connectionToken,
   listRemoteRefs,
   previewIndex,
+  fileIconPath,
+  notFound,
   inFlightRun,
   activeReindexes,
   repoToken,
@@ -129,6 +132,20 @@ export const repos = new Hono()
     ]);
     return c.json({
       repos: repos.map((r) => ({ ...r, active_run: runs.get(r.slug) ?? null })),
+    });
+  })
+
+  /** A file type's icon, by the id a preview names; only the theme's own ids resolve. */
+  .get("/file-icons/:file", async (c) => {
+    const file = c.req.param("file");
+    const path = file.endsWith(".svg") ? fileIconPath(file.slice(0, -4)) : null;
+    if (!path) throw notFound(`No file icon '${file}'`);
+    return c.body(new Uint8Array(await readFile(path)), 200, {
+      "Content-Type": "image/svg+xml",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Security-Policy":
+        "default-src 'none'; style-src 'unsafe-inline'",
+      "Cache-Control": "private, max-age=31536000, immutable",
     });
   })
 
