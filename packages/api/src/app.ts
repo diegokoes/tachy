@@ -16,6 +16,7 @@ import { createAzureDevopsSource } from "@tachy/source-azure-devops";
 import { knowledge, analysisRuns } from "./routes/knowledge";
 import { workItems } from "./routes/work-items";
 import { compose } from "./routes/compose";
+import { flows } from "./routes/flows";
 import { admin } from "./routes/admin";
 import { reference } from "./routes/reference";
 import { agent } from "./routes/agent";
@@ -53,6 +54,7 @@ function apiRoutes() {
   return new Hono()
     .route("/work-items", workItems)
     .route("/compose", compose)
+    .route("/flows", flows)
     .route("/knowledge", knowledge)
     .route("/analysis-runs", analysisRuns)
     .route("/reference", reference)

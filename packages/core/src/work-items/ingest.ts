@@ -16,6 +16,10 @@ export interface IngestedItem {
   observedVersion: string | null;
   /** Component the item's area path maps to, when the project has a rule for it. */
   componentSlug: string | null;
+  /** No row existed for it before this call. */
+  inserted: boolean;
+  /** New, or the source's updated time moved: something happened to it. */
+  changed: boolean;
 }
 
 export async function ingestWorkItem(
@@ -43,6 +47,10 @@ export async function ingestWorkItem(
 
   return sql.begin(async (tx) => {
     const [item] = await tx`
+      with prior as (
+        select source_updated_at from work_items
+        where source_connection_id = ${connId} and external_id = ${raw.externalId}
+      )
       insert into work_items
         (source_connection_id, external_id, external_url, kind, title, status,
          external_group_key, source_project_id, product_id, team_id, customer_id, requester, raw,
@@ -65,7 +73,8 @@ export async function ingestWorkItem(
         -- would otherwise stay unattributed forever, even after add_customer.
         customer_id = coalesce(work_items.customer_id, excluded.customer_id)
       returning id, source_project_id, product_id, team_id, customer_id,
-                customer_unit_id, observed_version
+                customer_unit_id, observed_version, (xmax = 0) as inserted,
+                source_updated_at is distinct from (select source_updated_at from prior) as moved
     `;
 
     if (raw.messages.length) {
@@ -114,6 +123,8 @@ export async function ingestWorkItem(
             : {}),
       observedVersion: item.observed_version,
       componentSlug: route.componentSlug,
+      inserted: item.inserted,
+      changed: item.inserted || item.moved,
     };
   });
 }

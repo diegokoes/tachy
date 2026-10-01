@@ -19,6 +19,8 @@ export {
 } from "./claude";
 export { copilotPermission, copilotSessionConfig } from "./copilot";
 export { completeOnce } from "./complete";
+export { runAdvisory, firstJsonObject, type Advisory } from "./advisory";
+export { registerAgentFlowActions } from "./flow-actions";
 export { listModels } from "./models";
 export type { ModelChoice, ModelListConfig } from "./models";
 export type { CompletionConfig, CompletionResult } from "./complete";

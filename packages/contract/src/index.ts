@@ -219,7 +219,15 @@ export type {
   JobLive,
   JobDefinition,
 } from "./jobs";
-export { FIELD_SHOWS } from "./flows";
+export {
+  FIELD_SHOWS,
+  FLOW_TRIGGER_KINDS,
+  CONDITION_OPS,
+  FLOW_RUN_STATUSES,
+  readPath,
+  interpolate,
+  evaluateCondition,
+} from "./flows";
 export type {
   ComposeConfig,
   TypeFormConfig,
@@ -227,6 +235,23 @@ export type {
   FieldDefault,
   FieldShow,
   FormDisplay,
+  FlowTriggerKind,
+  ConditionOp,
+  Condition,
+  FlowTrigger,
+  FlowActionStep,
+  FlowIfStep,
+  FlowFilterStep,
+  FlowStep,
+  FlowGraph,
+  Flow,
+  FlowActionCategory,
+  FlowActionInfo,
+  FlowOption,
+  FlowRunStatus,
+  FlowStepStatus,
+  FlowStepTrace,
+  FlowRun,
 } from "./flows";
 export {
   DATE_ORDERS,

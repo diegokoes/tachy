@@ -10,6 +10,7 @@ import {
   sql,
   startJobProcess,
 } from "@tachy/core";
+import { registerAgentFlowActions } from "@tachy/agent";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 import { createAzureDevopsSource } from "@tachy/source-azure-devops";
@@ -18,6 +19,7 @@ registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
 registerSource("azure-devops", createAzureDevopsSource);
 setSourceOrigin("sync");
+registerAgentFlowActions();
 
 const list = (v: string | undefined) =>
   (v ?? "")

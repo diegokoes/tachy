@@ -1,5 +1,6 @@
 import { recordRun } from "../analytics/runs";
 import { resolveCurrentUserId } from "../access/users";
+import { itemTriggers } from "../flows/triggers";
 import { sql } from "../infra/db";
 import { ingestWorkItem } from "../work-items/ingest";
 import { resolveSource } from "./registry";
@@ -34,6 +35,7 @@ export async function syncSource(
   // picked up next time rather than stepped over.
   const startedAt = new Date();
 
+  const fire = await itemTriggers(sourceSlug);
   let cursor: string | undefined;
   let total = 0;
   const seen = new Set<string>();
@@ -49,7 +51,9 @@ export async function syncSource(
       cursor,
     });
     for (const it of items) {
-      await ingestWorkItem(conn.id, it);
+      const stored = await ingestWorkItem(conn.id, it);
+      if (fire && stored.changed)
+        await fire(stored.id, stored.inserted ? "created" : "updated");
       total++;
     }
     opts.onPage?.(total, since);
