@@ -15,7 +15,6 @@
   import { tweenValue } from "../../motion";
   import { setPageActions } from "../pageActions.svelte";
   import { t } from "../../terms";
-  import Columns from "../../settings/Columns.svelte";
   import Group from "../../settings/Group.svelte";
   import Row from "../../settings/Row.svelte";
   import Rows from "../../settings/Rows.svelte";
@@ -387,10 +386,21 @@
     </Note>
   {:else}
     {@const d = draft}
-    <Columns width="30rem">
-      {#snippet left()}
+    <div class="layout">
+      <div class="wide">
         <Group label="source" icon="source">
-          <Rows>
+          {#snippet action()}
+            {#if canEdit}
+              <span class="loud">
+                <DeleteButton
+                  label="unlink repo"
+                  text="delete"
+                  onclick={unlink}
+                />
+              </span>
+            {/if}
+          {/snippet}
+          <div class="pairs">
             <Row
               label="project"
               about="Owning project. Its connection supplies clone credentials."
@@ -449,9 +459,11 @@
                 spellcheck="false"
               />
             </Row>
-          </Rows>
+          </div>
         </Group>
+      </div>
 
+      <div class="col">
         <Group
           label="branches"
           icon="branch"
@@ -624,15 +636,9 @@
             <ErrorMark message={l.index_error ?? ""} label={`${l.ref} index`} />
           {/each}
         </Group>
+      </div>
 
-        {#if canEdit}
-          <div class="danger">
-            <DeleteButton label="unlink repo" text="delete" onclick={unlink} />
-          </div>
-        {/if}
-      {/snippet}
-
-      {#snippet right()}
+      <div class="col">
         <Group label="files" icon="folder">
           {#if !canEdit}
             <p class="quiet">Only editors of this repo see its files.</p>
@@ -707,8 +713,8 @@
             />
           </Group>
         {/if}
-      {/snippet}
-    </Columns>
+      </div>
+    </div>
   {/if}
 </div>
 
@@ -719,13 +725,42 @@
     --row-h: 1.5rem;
     --control-w: 16rem;
     padding-top: var(--pad-3);
+    padding-inline: var(--view-pad-x);
   }
-  .body :global(.cols) {
-    column-gap: calc(var(--pad-4) * 2);
+  /* The repos table's width: source runs across the top, two fields to a
+     line, and the lists share the rest in two columns. */
+  .layout {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    column-gap: calc(var(--pad-4) * 3);
     row-gap: var(--pad-4);
   }
-  .body :global(.col) {
+  .wide {
+    grid-column: 1 / -1;
+  }
+  .col {
+    display: flex;
+    flex-direction: column;
     gap: var(--pad-4);
+    min-width: 0;
+  }
+  .pairs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: calc(var(--pad-4) * 3);
+    row-gap: var(--pad-1);
+    container-type: inline-size;
+  }
+  .loud :global(.btn) {
+    text-transform: uppercase;
+    letter-spacing: var(--label-spacing);
+  }
+  @media (max-width: 60rem) {
+    .layout,
+    .pairs {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
   .bad {
     color: var(--danger);
@@ -760,10 +795,6 @@
     font-size: var(--fs-md);
     color: var(--accent);
     font-variant-numeric: tabular-nums;
-  }
-  .danger {
-    display: flex;
-    justify-content: flex-end;
   }
   input.kb {
     width: 6rem;
