@@ -22,6 +22,7 @@ import {
   Bot,
   Braces,
   Bug,
+  CalendarClock,
   Car,
   Check,
   ChevronDown,
@@ -48,11 +49,14 @@ import {
   Flame,
   FlaskConical,
   FoldVertical,
+  Funnel,
   Gavel,
   Gift,
+  GitBranch,
   GitCompareArrows,
   Globe,
   GraduationCap,
+  Hand,
   Headphones,
   ImageIcon,
   Info,
@@ -71,6 +75,7 @@ import {
   Megaphone,
   MessageSquare,
   MessageSquareQuote,
+  Minus,
   MonitorCog,
   OctagonAlert,
   Orbit,
@@ -89,6 +94,7 @@ import {
   RotateCw,
   Save,
   SavePlus,
+  Scan,
   ScrollText,
   Search,
   SendHorizontal,
@@ -114,6 +120,7 @@ import {
   Workflow,
   Wrench,
   X,
+  Zap,
   type LucideIconData,
   type LucideIconNode,
 } from "@lucide/icons";
@@ -293,6 +300,17 @@ export const ICONS = {
   placePinned: Pin,
   placeFolded: FoldVertical,
   placeOmitted: EyeClosed,
+
+  /* ── Flows ────────────────────────────────────────────────────────────── */
+  /** A synced item starting a flow. */
+  triggerSynced: Zap,
+  triggerManual: Hand,
+  triggerSchedule: CalendarClock,
+  flowIf: GitBranch,
+  flowFilter: Funnel,
+  zoomIn: Plus,
+  zoomOut: Minus,
+  fit: Scan,
 } satisfies Record<string, LucideIconData>;
 
 export type IconName = keyof typeof ICONS;
