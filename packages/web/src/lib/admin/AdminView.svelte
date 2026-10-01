@@ -19,7 +19,8 @@
   import PosturePanel from "./PosturePanel.svelte";
   import SourcesPanel from "./SourcesPanel.svelte";
   import ProjectsPanel from "./ProjectsPanel.svelte";
-  import ReposPanel from "./ReposPanel.svelte";
+  import ReposPanel from "./repos/ReposPanel.svelte";
+  import RepoDetail from "./repos/RepoDetail.svelte";
   import BucketsPanel from "./BucketsPanel.svelte";
   import BulkLink from "./BulkLink.svelte";
   import TeamsPanel from "./TeamsPanel.svelte";
@@ -62,6 +63,8 @@
     present?: "modal" | "page";
     /** A page section that takes the whole window, edge to edge, and never scrolls. */
     fill?: boolean;
+    /** What opens in the window for one record of the section, at /admin/<page>/<section>/<id>. */
+    detail?: Component;
   };
 
   const PAGES: SubnavItem[] = $derived([
@@ -103,7 +106,13 @@
         view: ProjectsPanel,
         n: "projects",
       },
-      { key: "repos", label: "repos", view: ReposPanel, n: "repos" },
+      {
+        key: "repos",
+        label: "repos",
+        view: ReposPanel,
+        n: "repos",
+        detail: RepoDetail,
+      },
       {
         key: "buckets",
         label: "buckets",
@@ -277,6 +286,7 @@
           show: _show,
           present: _present,
           fill: _fill,
+          detail: _detail,
           ...s
         }): PageSection => ({
           ...s,
@@ -321,6 +331,11 @@
   const showing = $derived(Boolean(overview) && !sections.length);
 
   const filled = $derived(live.find((s) => s.fill && s.key === at));
+
+  /** The record open in the window, when the route names one under its section. */
+  const detail = $derived(
+    segment(3) ? live.find((s) => s.detail && s.key === at) : undefined,
+  );
 
   /* Settle the explicit form back on the short one. This cannot loop: after
      the replace, segment(2) is undefined and the condition stops holding. */
@@ -374,7 +389,15 @@
 {#snippet topActions()}
   <!-- Only on the way back. Going in is the counter you clicked, and a modal
        section carries its own close. -->
-  {#if overview && !showing}
+  {#if detail}
+    <Button
+      variant="ghost"
+      size="sm"
+      icon="back"
+      onclick={() => navigate(`/admin/${page}/${detail.key}`)}
+      >{detail.label}</Button
+    >
+  {:else if overview && !showing}
     <Button variant="ghost" size="sm" icon="back" onclick={backToOverview}
       >overview</Button
     >
@@ -422,6 +445,9 @@
     {/if}
   {:else if filled}
     <FillSection view={filled.view} />
+  {:else if detail?.detail}
+    {@const Detail = detail.detail}
+    <Detail />
   {:else}
     <SectionedPage
       {sections}

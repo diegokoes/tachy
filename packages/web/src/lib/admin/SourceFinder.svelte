@@ -11,25 +11,32 @@
 
   let {
     source,
+    label,
+    takenTip,
+    empty,
     hits,
     picked,
     registered,
     onfetch,
     onpick,
   }: {
-    /** The connection being asked. */
+    /** What is being asked, e.g. the connection or project. */
     source: string;
+    /** The button's word, e.g. "fetch projects". */
+    label: string;
+    /** Said on a name that is already taken here. */
+    takenTip: string;
+    /** Said when the source answers with nothing. */
+    empty: string;
     /** What it answered last time, if it has been asked. */
     hits: Found[] | undefined;
-    /** The project key the form holds now. */
+    /** The key the form holds now. */
     picked: string;
     registered: (key: string) => boolean;
     /** Asks the source and stores what it said; throws on failure. */
     onfetch: () => Promise<void>;
     onpick: (g: Found) => void;
   } = $props();
-
-  const LABEL = "fetch projects";
 
   /** Long enough for the broadcast to read as one, on a source that answers at once. */
   const HOLD = 1600;
@@ -255,9 +262,9 @@
     class:scanning
     type="button"
     disabled={!source}
-    aria-label="fetch projects from {source}"
+    aria-label="{label} from {source}"
     aria-busy={scanning}
-    use:tip={landed ? "fetch projects again" : undefined}
+    use:tip={landed ? `${label} again` : undefined}
     onclick={run}
   >
     <svg
@@ -276,7 +283,7 @@
       {/each}
     </svg>
     <span class="word" class:gone={landed} bind:this={word} aria-hidden="true"
-      >{#each [...LABEL] as ch, i (i)}<span class="ch">{ch}</span>{/each}</span
+      >{#each [...label] as ch, i (i)}<span class="ch">{ch}</span>{/each}</span
     >
     <svg
       bind:this={signal}
@@ -304,7 +311,7 @@
         disabled={taken}
         aria-pressed={picked === g.key}
         use:tip={taken
-          ? `${g.key} · already registered`
+          ? `${g.key} · ${takenTip}`
           : g.name === g.key
             ? undefined
             : g.key}
@@ -318,7 +325,7 @@
       </button>
     {/each}
     {#if hits && !scanning && !list.length && !failure}
-      <p class="quiet">{source} shows no projects to this token</p>
+      <p class="quiet">{empty}</p>
     {/if}
   </div>
 </div>
@@ -467,6 +474,7 @@
 
   .quiet {
     margin: 0;
+    text-align: center;
     font-size: var(--fs-sm);
     color: var(--muted);
   }
