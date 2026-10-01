@@ -35,6 +35,9 @@ export const READ_TOOLS = [
   "read_code_file",
   "code_changes_between",
   "export_table",
+  "list_buckets",
+  "search_bucket",
+  "get_bucket_doc",
 ] as const;
 
 export const WRITE_TOOLS = [

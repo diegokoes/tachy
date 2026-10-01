@@ -20,6 +20,7 @@
   import SourcesPanel from "./SourcesPanel.svelte";
   import ProjectsPanel from "./ProjectsPanel.svelte";
   import ReposPanel from "./ReposPanel.svelte";
+  import BucketsPanel from "./BucketsPanel.svelte";
   import BulkLink from "./BulkLink.svelte";
   import TeamsPanel from "./TeamsPanel.svelte";
   import ProductsPanel from "./ProductsPanel.svelte";
@@ -103,6 +104,13 @@
         n: "projects",
       },
       { key: "repos", label: "repos", view: ReposPanel, n: "repos" },
+      {
+        key: "buckets",
+        label: "buckets",
+        view: BucketsPanel,
+        show: admin,
+        present: "modal",
+      },
       { key: "bulk-link", label: "bulk link", view: BulkLink, fill: true },
     ],
     structure: [

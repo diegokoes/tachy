@@ -1,4 +1,6 @@
 import type { FlowOption } from "@tachy/contract";
+import { readableBuckets } from "../buckets/access";
+import { listBuckets } from "../buckets/buckets";
 import { listCustomers } from "../catalog/customers";
 import { listProducts, listTeams } from "../catalog/products";
 import { listRepos } from "../code/repos";
@@ -93,6 +95,16 @@ defineOptionSource("products", async () =>
 defineOptionSource("customers", async () =>
   (await listCustomers()).map((c) => ({ value: c.slug, label: c.name })),
 );
+
+defineOptionSource("buckets", async (req) => {
+  const ids = (await readableBuckets(req.scope.userId)).map((b) => b.id);
+  if (!ids.length) return [];
+  return (await listBuckets(ids)).map((b) => ({
+    value: b.slug,
+    label: b.name,
+    hint: b.source ?? undefined,
+  }));
+});
 
 defineOptionSource("repos", async () =>
   (await listRepos()).map((r) => ({

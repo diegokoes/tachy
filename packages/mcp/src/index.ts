@@ -35,6 +35,7 @@ import "./tools/sources";
 import "./tools/azure-devops";
 import "./tools/code";
 import "./tools/exports";
+import "./tools/buckets";
 
 export { server };
 export { runTool } from "./server";

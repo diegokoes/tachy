@@ -33,6 +33,7 @@ import {
   CircleQuestionMark,
   CircleSmall,
   ClipboardList,
+  Copy,
   Code,
   Crown,
   Database,
@@ -160,6 +161,8 @@ export const ICONS = {
   edit: SquarePen,
   reset: RotateCcw,
   clear: Delete,
+  /** Put a value on the clipboard. */
+  copy: Copy,
 
   /* ── Lifecycle ────────────────────────────────────────────────────────── */
   approve: CircleDashedCheck,

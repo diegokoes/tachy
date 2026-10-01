@@ -620,6 +620,12 @@ export {
   readPath,
   interpolate,
   evaluateCondition,
+  INGEST_TOKEN_PREFIX,
+  BUCKET_BATCH_VERSION,
+  MAX_BUCKET_BATCH_DOCS,
+  MAX_BUCKET_DOC_CHARS,
+  BUCKET_BATCH_MAX_BYTES,
+  bucketIngestPath,
 } from "@tachy/contract";
 export type {
   WikiGapKind,
@@ -702,6 +708,7 @@ export type {
   JobQueue,
   JobQueueName,
 } from "@tachy/contract";
+export * from "./buckets";
 export * from "./jobs";
 export * from "./testing";
 export * from "./reports";
