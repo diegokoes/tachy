@@ -11,6 +11,7 @@
     type PageSection,
   } from "../sections/SectionedPage.svelte";
   import { sectionActions } from "./sectionAction.svelte";
+  import { pageActions } from "./pageActions.svelte";
   import FillSection from "./FillSection.svelte";
   import { census } from "./census.svelte";
   import { activity } from "./activity.svelte";
@@ -402,7 +403,11 @@
       >overview</Button
     >
   {/if}
-  {#if groups.length}
+  {#if detail}
+    {@render pageActions()?.()}
+  {/if}
+  <!-- Issues belong to the page as a whole, so only its overview raises them. -->
+  {#if showing && groups.length}
     <Button
       variant="ghost"
       size="sm"
@@ -417,7 +422,7 @@
   {/if}
 {/snippet}
 
-{#if showIssues}
+{#if showIssues && showing}
   <IssuesModal
     {page}
     {groups}

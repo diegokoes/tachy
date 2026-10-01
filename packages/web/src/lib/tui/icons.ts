@@ -27,6 +27,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  ChevronsLeftRightEllipsis,
   CircleCheckBig,
   CircleDashedCheck,
   CircleOff,
@@ -209,6 +210,8 @@ export const ICONS = {
   seed: Sprout,
   index: Database,
   repo: FolderGit2,
+  /** Where a repo comes from: its project, clone URL and scope. */
+  source: ChevronsLeftRightEllipsis,
   branch: GitBranch,
   folder: Folder,
   folderOpen: FolderOpen,
