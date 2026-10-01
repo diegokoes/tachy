@@ -160,3 +160,15 @@ export async function bucketByToken(
     return null;
   return { id: row.id, slug: row.slug };
 }
+
+/** For the admin overview: how many buckets, and documents across them. */
+export async function bucketCensus(): Promise<{
+  buckets: number;
+  docs: number;
+}> {
+  const [row] = await sql`
+    select (select count(*)::int from buckets) as buckets,
+           (select count(*)::int from bucket_docs) as docs
+  `;
+  return { buckets: row.buckets, docs: row.docs };
+}

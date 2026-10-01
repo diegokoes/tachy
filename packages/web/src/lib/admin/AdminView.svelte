@@ -108,6 +108,7 @@
         key: "buckets",
         label: "buckets",
         view: BucketsPanel,
+        n: "buckets",
         show: admin,
         present: "modal",
       },
