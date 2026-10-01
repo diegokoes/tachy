@@ -4,6 +4,8 @@ import {
   getCustomerProfile,
   setWorkItemCustomer,
 } from "../catalog/customers";
+import { readableBucket } from "../buckets/access";
+import { searchBucket } from "../buckets/search";
 import { searchCode } from "../code/search";
 import { badInput } from "../infra/errors";
 import { searchKnowledge } from "../knowledge/knowledge";
@@ -172,6 +174,33 @@ export function registerBuiltinFlowActions(): void {
         results: rows,
         count: rows.length,
         text: lines(rows, (r) => String(r.title ?? r.id)),
+      };
+    },
+  });
+
+  defineFlowAction({
+    key: "bucket.search",
+    title: "Search a bucket",
+    description:
+      "One bucket of pushed documents, such as a product's public knowledge base. Only buckets shared with the flow's owner.",
+    category: "context",
+    writes: false,
+    params: z.object({
+      bucket: z.string().min(1).meta(options("buckets")),
+      query,
+      limit,
+    }),
+    output: hits,
+    async run(ctx, p) {
+      const bucket = await readableBucket(ctx.userId, p.bucket);
+      const rows = (await searchBucket(p.query, {
+        bucketIds: [bucket.id],
+        limit: p.limit,
+      })) as unknown as Record<string, unknown>[];
+      return {
+        results: rows,
+        count: rows.length,
+        text: lines(rows, (r) => `${r.title}${r.url ? ` (${r.url})` : ""}`),
       };
     },
   });

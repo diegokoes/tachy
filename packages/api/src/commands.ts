@@ -91,6 +91,17 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
       ].join("\n"),
   },
   {
+    name: "bucket",
+    args: "<bucket> <question>",
+    description: "Answer a question from one bucket of pushed documents",
+    expand: (args) =>
+      [
+        "Answer the user's question from the named bucket only, with search_bucket and get_bucket_doc. Do not search the library, the wiki or the codebases for this, and save nothing.",
+        "Cite each document you rely on by title and url. If the bucket has nothing on it, say so. If no bucket is named, or the name matches none, call list_buckets and ask which one.",
+        argsLine(args),
+      ].join("\n"),
+  },
+  {
     name: "ingest-wiki",
     args: "<source> <project> [wiki] [page-path]",
     description: "Pull Azure DevOps wiki pages into reference docs",

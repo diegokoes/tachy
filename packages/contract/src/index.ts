@@ -132,6 +132,15 @@ export type {
   SourceConnectionRow,
   SourceTraffic,
 } from "./sources";
+export {
+  INGEST_TOKEN_PREFIX,
+  BUCKET_BATCH_VERSION,
+  MAX_BUCKET_BATCH_DOCS,
+  MAX_BUCKET_DOC_CHARS,
+  BUCKET_BATCH_MAX_BYTES,
+  bucketIngestPath,
+} from "./buckets";
+export type { BucketRow, BucketWithToken } from "./buckets";
 export type { AgentUsage, ToolUsage } from "./analytics";
 export type { ComponentKnowledge, KnowledgeCensus } from "./knowledge";
 export type {

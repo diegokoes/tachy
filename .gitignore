@@ -12,3 +12,6 @@ data/repos/
 db/seed.local.sql
 .claude/
 report.*.json
+
+# A separate repo for the Document360 pusher, kept beside the checkout while in use
+document360-sync/

@@ -41,6 +41,7 @@ describe("core job kinds", () => {
       "load.test": "testing/heavy",
       "retention.sweep": "maintenance/light",
       "wiki.gaps": "maintenance/light",
+      "bucket.embed": "embed/heavy",
     });
   });
 

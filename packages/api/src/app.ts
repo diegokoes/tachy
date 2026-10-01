@@ -36,6 +36,7 @@ import { initOidc, installAuth, isBootstrapped, type OidcConfig } from "./auth";
 import { httpLogger, noteError } from "./logging";
 import { readiness } from "./lifecycle";
 import { internalRoutes, type InternalOptions } from "./routes/internal";
+import { ingest } from "./routes/ingest";
 
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
@@ -90,6 +91,7 @@ export function createApp(
   base.get("/livez", livez);
   base.get("/health", livez);
   if (opts.internal) base.route("/internal", internalRoutes(opts.internal));
+  base.route("/ingest", ingest);
   base.get("/readyz", async (c) => {
     const r = await readiness();
     return c.json(r, r.ready ? 200 : 503);
