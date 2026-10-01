@@ -24,7 +24,9 @@ export type {
   RepoIndexStatus,
 } from "./repos";
 export { indexRepo, previewIndex, backfillCodeEmbeddings } from "./indexer";
-export type { IndexResult, LineIndexResult, IndexPreview } from "./indexer";
+export type { IndexResult, LineIndexResult } from "./indexer";
+export type { IndexPreview, PreviewDir, PreviewType } from "@tachy/contract";
+export { fileIconOf, fileIconPath } from "./file-icons";
 export { searchCode, readCodeFile } from "./search";
 export type { CodeSearchOptions, ReadCodeOptions } from "./search";
 export { resolveVersion, codeChangesBetween } from "./versions";
