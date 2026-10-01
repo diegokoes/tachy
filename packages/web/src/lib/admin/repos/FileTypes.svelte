@@ -55,8 +55,10 @@
         : fmt(t.files)}
       onchange={(v) => toggle(t.ext, v)}
     >
-      <FileIcon icon={t.icon} light={t.icon_light} />
-      <span>{t.ext ? `.${t.ext}` : "no extension"}</span>
+      {#snippet icon()}
+        <FileIcon icon={t.icon} light={t.icon_light} />
+      {/snippet}
+      {t.ext ? `.${t.ext}` : "no extension"}
     </ToggleRow>
   {/each}
   {#if types.length > FIRST}
