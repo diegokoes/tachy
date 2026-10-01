@@ -1,6 +1,7 @@
 import type {
   AgentProvider,
   AgentUsage,
+  BucketRow,
   CatalogCensus,
   ComponentKnowledge,
   ComponentNode,
@@ -37,6 +38,7 @@ import type {
  * API returns them.
  */
 export type Team = TeamRow;
+export type Bucket = BucketRow;
 export type Product = ProductRow;
 export type Component = ComponentRow;
 export type Label = LabelRow;
