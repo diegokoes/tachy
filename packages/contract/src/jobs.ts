@@ -52,6 +52,12 @@ export const JOB_QUEUES = [
     description: "Pulls from source connections.",
   },
   {
+    name: "flows",
+    class: "light",
+    cap: 4,
+    description: "Runs of the flows teams build: triggers, checks and actions.",
+  },
+  {
     name: "maintenance",
     class: "light",
     cap: null,

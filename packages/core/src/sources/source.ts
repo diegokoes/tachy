@@ -1,5 +1,6 @@
 import type {
   ComposerForm,
+  FlowOption,
   TicketValidation,
   WorkItemTypeOption,
 } from "@tachy/contract";
@@ -64,6 +65,12 @@ export interface WorkItemSource {
   redactRaw?(raw: unknown, map: TokenMap, customerSlug: string | null): unknown;
   /** Present when people can create items in this source from tachy. */
   composer?: WorkItemComposer;
+  /**
+   * Named lists of the source's own values, for a flow's pickers: a
+   * helpdesk's companies, its ticket fields and their choices. An unknown
+   * name is an empty list.
+   */
+  options?(name: string, params: Record<string, string>): Promise<FlowOption[]>;
 }
 
 export interface PastedImage {

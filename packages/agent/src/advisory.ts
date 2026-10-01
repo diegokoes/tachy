@@ -10,7 +10,7 @@ import {
   TokenMap,
   type ScopeContext,
 } from "@tachy/core";
-import { completeOnce } from "@tachy/agent";
+import { completeOnce } from "./complete";
 
 /**
  * A cheap tier for short judgements. Only used on Claude; on Copilot the
