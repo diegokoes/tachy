@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   catalogCensus,
+  bucketCensus,
   userCensus,
   sourceCensus,
   repoCensus,
@@ -37,21 +38,31 @@ export const overview = new Hono()
    */
   .get("/overview", async (c) => {
     const ctx = await callerScope(c);
-    const [catalog, users, sources, repos, knowledge, reports, untokened] =
-      await Promise.all([
-        catalogCensus(),
-        userCensus(),
-        sourceCensus(),
-        repoCensus(),
-        knowledgeCensus(),
-        reportsCensus(),
-        untokenedConnections(ctx).then((slugs) => slugs.length),
-      ]);
+    const [
+      catalog,
+      users,
+      sources,
+      repos,
+      knowledge,
+      reports,
+      untokened,
+      buckets,
+    ] = await Promise.all([
+      catalogCensus(),
+      userCensus(),
+      sourceCensus(),
+      repoCensus(),
+      knowledgeCensus(),
+      reportsCensus(),
+      untokenedConnections(ctx).then((slugs) => slugs.length),
+      bucketCensus(),
+    ]);
     return c.json({
       counts: {
         sources: sources.connections,
         projects: sources.projects,
         repos: repos.repos,
+        buckets: buckets.buckets,
         teams: catalog.teams,
         products: catalog.products,
         components: catalog.components,

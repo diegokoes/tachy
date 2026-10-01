@@ -90,6 +90,12 @@
     { key: "projects", label: "projects", value: d.projects, to: "projects" },
     { key: "repos", label: "repos", value: r.repos, to: "repos" },
     {
+      key: "buckets",
+      label: "buckets",
+      value: census.data.counts.buckets ?? 0,
+      to: "buckets",
+    },
+    {
       key: "files",
       label: "files",
       text: compact(r.files),
