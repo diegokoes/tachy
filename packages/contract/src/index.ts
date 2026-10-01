@@ -110,6 +110,9 @@ export type {
   RepoIndexRun,
   RemoteRef,
   RepoCensus,
+  IndexPreview,
+  PreviewDir,
+  PreviewType,
 } from "./code";
 export type {
   CatalogCensus,

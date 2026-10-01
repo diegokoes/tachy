@@ -23,7 +23,12 @@ import {
   type RepoLine,
   type RepoRow,
 } from "./repos";
-import { DEFAULT_CODE_EXTENSIONS } from "@tachy/contract";
+import {
+  DEFAULT_CODE_EXTENSIONS,
+  type IndexPreview,
+  type PreviewDir,
+} from "@tachy/contract";
+import { fileIconOf } from "./file-icons";
 
 const EXCLUDED_DIR_RE =
   /(^|\/)(node_modules|vendor|dist|build|out|target|bin|obj|third_party|\.git|coverage|__pycache__|packages\/generated)(\/|$)/;
@@ -66,8 +71,72 @@ const LANG_BY_EXT: Record<string, string> = {
   proto: "protobuf",
 };
 
-const ext = (path: string) =>
-  path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+/** Lowercased, without the dot; empty for a name with none, such as `Makefile`. */
+const ext = (path: string) => {
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  const dot = name.lastIndexOf(".");
+  return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+};
+
+/** Never indexed, even when a repo lists them: there is no text to chunk. */
+const BINARY_EXTENSIONS = new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "bmp",
+  "ico",
+  "icns",
+  "webp",
+  "tif",
+  "tiff",
+  "psd",
+  "pdf",
+  "zip",
+  "gz",
+  "tgz",
+  "bz2",
+  "xz",
+  "7z",
+  "rar",
+  "tar",
+  "jar",
+  "war",
+  "aar",
+  "apk",
+  "ipa",
+  "dll",
+  "exe",
+  "so",
+  "dylib",
+  "a",
+  "o",
+  "lib",
+  "class",
+  "pyc",
+  "bin",
+  "dat",
+  "db",
+  "sqlite",
+  "ttf",
+  "otf",
+  "woff",
+  "woff2",
+  "eot",
+  "mp3",
+  "mp4",
+  "mov",
+  "wav",
+  "ogg",
+  "avi",
+  "webm",
+  "keystore",
+  "jks",
+  "p12",
+  "pfx",
+  "car",
+  "nib",
+]);
 
 const GLOB_CHARS_RE = /[*?[{]/;
 
@@ -110,12 +179,15 @@ export function indexableFiles(
   const excluded = excludedBy(
     Array.isArray(config.exclude) ? (config.exclude as string[]) : [],
   );
-  return tree.filter(
-    (f) =>
+  return tree.filter((f) => {
+    const e = ext(f.path);
+    return (
       !EXCLUDED_DIR_RE.test(f.path) &&
-      extensions.has(ext(f.path)) &&
-      !excluded(f.path),
-  );
+      extensions.has(e) &&
+      !BINARY_EXTENSIONS.has(e) &&
+      !excluded(f.path)
+    );
+  });
 }
 
 async function upsertFile(
@@ -370,26 +442,6 @@ export async function indexRepo(
   return { slug, lines: results };
 }
 
-export interface IndexPreview {
-  ref: string;
-  commit: string;
-  files_total: number;
-  files_admitted: number;
-  by_dir: { dir: string; files: number }[];
-  by_ext: { ext: string; files: number }[];
-}
-
-const PREVIEW_GROUPS = 15;
-
-function topCounts(keys: string[]): { key: string; files: number }[] {
-  const counts = new Map<string, number>();
-  for (const k of keys) counts.set(k, (counts.get(k) ?? 0) + 1);
-  return [...counts]
-    .map(([key, files]) => ({ key, files }))
-    .sort((a, b) => b.files - a.files || a.key.localeCompare(b.key))
-    .slice(0, PREVIEW_GROUPS);
-}
-
 /**
  * What a repo's default line would index under `config` (the repo's own when
  * omitted), counted from trees alone: nothing is fetched beyond commits and
@@ -407,28 +459,51 @@ export async function previewIndex(
     (await resolveRef(slug, `refs/heads/${ref}`)) ??
     (await fetchLine(slug, ref, opts.token));
   const tree = await listTree(slug, commit);
-  const admitted = indexableFiles(tree, opts.config ?? repo.config);
-  const dirOf = (path: string) => {
+  return { ref, commit, ...countTree(tree, opts.config ?? repo.config) };
+}
+
+/** A tree's files by directory and by extension, against what `config` admits. */
+export function countTree(
+  tree: TreeEntry[],
+  config: Record<string, unknown>,
+): Omit<IndexPreview, "ref" | "commit"> {
+  const admitted = new Set(indexableFiles(tree, config).map((f) => f.path));
+  const dirs = new Map<string, PreviewDir>();
+  const types = new Map<string, { files: number; admitted: number }>();
+  for (const { path } of tree) {
+    const ok = admitted.has(path);
     const parts = path.split("/");
-    return parts.length > 2
-      ? parts.slice(0, 2).join("/")
-      : parts.length === 2
-        ? parts[0]
-        : ".";
-  };
+    for (let i = 1; i < parts.length; i++) {
+      const dir = parts.slice(0, i).join("/");
+      const d = dirs.get(dir) ?? {
+        path: dir,
+        files: 0,
+        admitted: 0,
+        skipped: EXCLUDED_DIR_RE.test(dir),
+      };
+      d.files++;
+      if (ok) d.admitted++;
+      dirs.set(dir, d);
+    }
+    if (EXCLUDED_DIR_RE.test(path)) continue;
+    const t = types.get(ext(path)) ?? { files: 0, admitted: 0 };
+    t.files++;
+    if (ok) t.admitted++;
+    types.set(ext(path), t);
+  }
+
   return {
-    ref,
-    commit,
     files_total: tree.length,
-    files_admitted: admitted.length,
-    by_dir: topCounts(admitted.map((f) => dirOf(f.path))).map((c) => ({
-      dir: c.key,
-      files: c.files,
-    })),
-    by_ext: topCounts(admitted.map((f) => ext(f.path))).map((c) => ({
-      ext: c.key,
-      files: c.files,
-    })),
+    files_admitted: admitted.size,
+    dirs: [...dirs.values()].sort((a, b) => a.path.localeCompare(b.path)),
+    types: [...types]
+      .map(([e, t]) => ({
+        ext: e,
+        ...t,
+        binary: !e || BINARY_EXTENSIONS.has(e),
+        ...fileIconOf(e),
+      }))
+      .sort((a, b) => b.files - a.files || a.ext.localeCompare(b.ext)),
   };
 }
 
