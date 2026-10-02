@@ -196,3 +196,48 @@ describe("freshdesk request deadline", () => {
       expect(r.init?.signal).toBeInstanceOf(AbortSignal);
   });
 });
+
+describe("freshdesk companies and tags", () => {
+  it("reads the ticket's company with its custom fields beside the standard ones", async () => {
+    mockFetch({
+      "/companies/42": {
+        id: 42,
+        name: "Acme",
+        domains: ["acme.com"],
+        custom_fields: { prod_tenant: "acme-eu" },
+      },
+    });
+    expect(await source().customerRecord!({ company_id: 42 })).toEqual({
+      id: 42,
+      name: "Acme",
+      domains: ["acme.com"],
+      prod_tenant: "acme-eu",
+    });
+    expect(await source().customerRecord!({})).toBeNull();
+  });
+
+  it("lists company fields by name", async () => {
+    mockFetch({
+      "/company_fields": [
+        { name: "name", label: "Company Name", default: true },
+        { name: "prod_tenant", label: "Prod tenant", default: false },
+      ],
+    });
+    expect(await source().options!("company_fields", {})).toEqual([
+      { value: "name", label: "Company Name", hint: undefined },
+      { value: "prod_tenant", label: "Prod tenant", hint: "custom" },
+    ]);
+  });
+
+  it("writes the whole tag list back, since Freshdesk takes it whole", async () => {
+    mockFetch({ "/tickets/7": { ...ticket, tags: ["bug", "Plant-3"] } });
+    expect(
+      await source().setTags!("7", { add: ["escalated"], remove: ["plant-3"] }),
+    ).toEqual(["bug", "escalated"]);
+    const put = requests.find((r) => r.init?.method === "PUT")!;
+    expect(put.path).toBe("/tickets/7");
+    expect(JSON.parse(String(put.init?.body))).toEqual({
+      tags: ["bug", "escalated"],
+    });
+  });
+});

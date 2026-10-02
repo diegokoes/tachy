@@ -1,4 +1,5 @@
 import {
+  changeTagList,
   customerStandIn,
   listSourceProjects,
   scrubbableCopy,
@@ -406,6 +407,27 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
 
       const relations = await resolveRelations(wi, project ?? "");
       return toItem(wi, messages, relations);
+    },
+
+    async setTags(externalId, change) {
+      const wi = await client.getWorkItem(externalId);
+      const current = String(wi.fields?.["System.Tags"] ?? "")
+        .split(";")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const tags = changeTagList(current, change);
+      // `add` on System.Tags appends to what is there; `replace` sets the list.
+      await client.updateWorkItem(externalId, [
+        ...(wi.rev != null
+          ? [{ op: "test" as const, path: "/rev", value: wi.rev }]
+          : []),
+        {
+          op: current.length ? "replace" : "add",
+          path: "/fields/System.Tags",
+          value: tags.join("; "),
+        },
+      ]);
+      return tags;
     },
 
     async listItems(opts: ListOptions) {

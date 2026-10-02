@@ -71,6 +71,17 @@ export interface WorkItemSource {
    * name is an empty list.
    */
   options?(name: string, params: Record<string, string>): Promise<FlowOption[]>;
+  /**
+   * The source's own record of the customer an item belongs to, one level
+   * deep (custom fields alongside the standard ones), from the item's `raw`.
+   * Null when the item names no customer the source keeps a record of.
+   */
+  customerRecord?(raw: unknown): Promise<Record<string, unknown> | null>;
+  /** Adds and removes tags on an item, keeping the rest; returns the tags it ends with. */
+  setTags?(
+    externalId: string,
+    change: { add: string[]; remove: string[] },
+  ): Promise<string[]>;
 }
 
 export interface PastedImage {

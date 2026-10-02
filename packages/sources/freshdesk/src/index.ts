@@ -1,4 +1,5 @@
 import {
+  changeTagList,
   customerStandIn,
   freshdeskToken,
   scrubbableCopy,
@@ -99,6 +100,7 @@ interface FreshdeskGroup {
 interface FreshdeskCompany {
   id: number;
   name?: string;
+  custom_fields?: Record<string, unknown> | null;
 }
 
 interface FreshdeskTicketField {
@@ -359,6 +361,14 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
         }
         return out.sort((a, b) => a.label.localeCompare(b.label));
       }
+      if (name === "company_fields") {
+        const fields = await get<FreshdeskTicketField[]>("/company_fields");
+        return (Array.isArray(fields) ? fields : []).map((f) => ({
+          value: f.name,
+          label: f.label ?? f.name,
+          hint: f.default ? undefined : "custom",
+        }));
+      }
       if (name === "ticket_fields" || name === "field_choices") {
         const fields = await get<FreshdeskTicketField[]>("/ticket_fields");
         const list = Array.isArray(fields) ? fields : [];
@@ -373,6 +383,36 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
         return f ? fieldChoices(f.choices) : [];
       }
       return [];
+    },
+
+    async customerRecord(raw) {
+      const id = (raw as { company_id?: unknown } | null)?.company_id;
+      if (id == null) return null;
+      const { custom_fields, ...company } = await get<FreshdeskCompany>(
+        `/companies/${encodeURIComponent(String(id))}`,
+      );
+      return { ...company, ...(custom_fields ?? {}) };
+    },
+
+    async setTags(externalId, change) {
+      const path = `/tickets/${encodeURIComponent(externalId)}`;
+      const ticket = await get<{ tags?: string[] }>(path);
+      const tags = changeTagList(ticket.tags ?? [], change);
+      const res = await sourceFetch(
+        "Freshdesk ticket PUT",
+        api + path,
+        {
+          method: "PUT",
+          headers: { Authorization: auth, "Content-Type": "application/json" },
+          body: JSON.stringify({ tags }),
+        },
+        { connection: cfg.slug },
+      );
+      if (!res.ok)
+        throw new Error(
+          `Freshdesk ticket PUT -> ${res.status} ${await res.text()}`,
+        );
+      return tags;
     },
 
     async postNote(externalId, body, o) {

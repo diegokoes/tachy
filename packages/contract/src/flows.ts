@@ -135,7 +135,16 @@ export interface Flow {
   updated_at: string;
 }
 
-export type FlowActionCategory = "context" | "write" | "agent" | "control";
+/** The step menu's groups, in the order it lists them. */
+export const FLOW_ACTION_CATEGORIES = [
+  "control",
+  "read",
+  "search",
+  "agent",
+  "update",
+  "create",
+] as const;
+export type FlowActionCategory = (typeof FLOW_ACTION_CATEGORIES)[number];
 
 /** One entry of the action library, as the editor draws its palette. */
 export interface FlowActionInfo {

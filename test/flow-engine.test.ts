@@ -37,7 +37,7 @@ const written: unknown[] = [];
 defineFlowAction({
   key: "test.echo",
   title: "Echo",
-  category: "context",
+  category: "read",
   writes: false,
   params: z.object({
     say: z.string().default("{{item.title}}"),
@@ -50,7 +50,7 @@ defineFlowAction({
 defineFlowAction({
   key: "test.write",
   title: "Write",
-  category: "write",
+  category: "update",
   writes: true,
   params: z.object({ body: z.string() }),
   output: z.object({ ok: z.boolean() }),
@@ -480,7 +480,7 @@ describe("/api/flows", () => {
       (a: { key: string }) => a.key === "item.post_note",
     );
     expect(note).toMatchObject({
-      category: "write",
+      category: "update",
       writes: true,
       source: "freshdesk",
     });
