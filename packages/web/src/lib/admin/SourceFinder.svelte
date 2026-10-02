@@ -19,6 +19,7 @@
     registered,
     onfetch,
     onpick,
+    below = false,
   }: {
     /** What is being asked, e.g. the connection or project. */
     source: string;
@@ -36,6 +37,8 @@
     /** Asks the source and stores what it said; throws on failure. */
     onfetch: () => Promise<void>;
     onpick: (g: Found) => void;
+    /** Swirl only under the tower, for a finder with no room above it. */
+    below?: boolean;
   } = $props();
 
   /** Long enough for the broadcast to read as one, on a source that answers at once. */
@@ -198,7 +201,8 @@
     const radius = Math.min(70, 6 * Math.sqrt(n));
     const swirl = (i: number) => {
       const r = 8 + radius * Math.sqrt(i / n);
-      return { x: r * Math.cos(i * 2.4), y: r * Math.sin(i * 2.4) };
+      const y = r * Math.sin(i * 2.4);
+      return { x: r * Math.cos(i * 2.4), y: below ? Math.abs(y) : y };
     };
 
     const tl = gsap.timeline({ onComplete: () => (flight = null) });
@@ -338,7 +342,7 @@
     gap: var(--pad-3);
     /* Room above the tower for the swirl, which reaches about 80px out from
        the lamp, so the letters never cross the fields over it. */
-    margin-top: 3.5rem;
+    margin-top: var(--finder-air, 3.5rem);
     min-height: 16rem;
   }
 

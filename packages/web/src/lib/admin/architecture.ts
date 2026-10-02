@@ -6,7 +6,7 @@
  * first draw a small force simulation takes over, so the graph can be
  * dragged and rearranged by hand.
  */
-import type { ComponentNode } from "@tachy/contract";
+import type { ComponentNode, ProductRow } from "@tachy/contract";
 import {
   forceCollide,
   forceSimulation,
@@ -497,19 +497,18 @@ export function overlaps(nodes: Placed[]): number {
 }
 
 /** Everything a filter row needs to offer, narrowed by what is above it. */
-export function options(rows: ComponentNode[], team: string) {
+export function options(products: ProductRow[], team: string) {
   const teams = new Map<string, string>();
-  const products = new Map<string, string>();
-  for (const r of rows) {
-    teams.set(r.team_slug, r.team_name);
-    if (!team || r.team_slug === team)
-      products.set(r.product_slug, r.product_name);
+  const named = new Map<string, string>();
+  for (const p of products) {
+    teams.set(p.team_slug, p.team_name);
+    if (!team || p.team_slug === team) named.set(p.slug, p.name);
   }
   const sorted = (m: Map<string, string>) =>
     [...m].sort((a, b) => a[1].localeCompare(b[1]));
   return {
     teams: sorted(teams).map(([value, label]) => ({ value, label })),
-    products: sorted(products).map(([value, label]) => ({ value, label })),
+    products: sorted(named).map(([value, label]) => ({ value, label })),
   };
 }
 

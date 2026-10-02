@@ -15,7 +15,7 @@
 
   const HEADING = "PROJECT";
 
-  /** Past this many letters the burst is flown per tag, not per letter. */
+  /** Past this many letters the burst is flown per name, not per letter. */
   const MAX_LETTERS = 900;
 
   const repos = createResource(
@@ -248,9 +248,13 @@
     const tags = [...cloud.querySelectorAll<HTMLElement>(".tag")];
     if (!tags.length) return reveal();
     const letters = [...cloud.querySelectorAll<HTMLElement>(".tag .ch")];
-    const movers = letters.length <= MAX_LETTERS ? letters : tags;
+    const movers =
+      letters.length <= MAX_LETTERS
+        ? letters
+        : [...cloud.querySelectorAll<HTMLElement>(".tag .name")];
     const frames = [...cloud.querySelectorAll<HTMLElement>(".frame")];
     gsap.set([search, dock].filter(Boolean), { opacity: 0 });
+    gsap.set(frames, { opacity: 0 });
 
     const n = movers.length;
     const home = movers.map((el) => {
@@ -268,7 +272,6 @@
     });
 
     const tl = gsap.timeline({ onComplete: () => (flight = null) });
-    if (movers === letters) tl.set(frames, { opacity: 0 }, 0);
     tl.fromTo(
       movers,
       {
@@ -301,19 +304,18 @@
       },
       "-=0.1",
     );
-    if (movers === letters)
-      tl.fromTo(
-        frames,
-        { opacity: 0, scaleX: 0.7 },
-        {
-          opacity: 1,
-          scaleX: 1,
-          duration: 0.25,
-          ease: "back.out(1.6)",
-          stagger: { each: Math.min(0.01, 0.2 / frames.length) },
-        },
-        "-=0.25",
-      );
+    tl.fromTo(
+      frames,
+      { opacity: 0, scaleX: 0.7 },
+      {
+        opacity: 1,
+        scaleX: 1,
+        duration: 0.25,
+        ease: "back.out(1.6)",
+        stagger: { each: Math.min(0.01, 0.2 / frames.length) },
+      },
+      "-=0.05",
+    );
     tl.set([...movers, ...frames], { clearProps: "all" });
     tl.add(reveal, "-=0.3");
     flight = tl;
@@ -353,23 +355,8 @@
     });
   }
 
-  let leaving = false;
-
-  async function leave() {
-    if (leaving) return;
-    leaving = true;
+  function leave() {
     flight?.kill();
-    if (stage && !reducedMotion())
-      await Promise.all([
-        orbit?.vanish(),
-        gsap.to(stage.querySelectorAll(".rise, .tag, .dock, .close"), {
-          opacity: 0,
-          y: -10,
-          duration: 0.3,
-          ease: "power2.in",
-          stagger: 0.02,
-        }),
-      ]);
     navigate("/admin/integrations/repos");
   }
 
@@ -739,6 +726,7 @@
   }
   .name {
     position: relative;
+    display: inline-block;
   }
   .tag:hover:not(:disabled) .frame,
   .tag:focus-visible .frame {

@@ -5,6 +5,7 @@
   import { createResource, errText } from "../../resource.svelte";
   import { navigate } from "../../router.svelte";
   import { canCurateScope } from "../../session.svelte";
+  import { setPageActions } from "../pageActions.svelte";
   import { slugify, uniqueSlug } from "../../slug";
   import { t } from "../../terms";
   import Group from "../../settings/Group.svelte";
@@ -91,7 +92,12 @@
       `/source-connections/${p.source_slug}/discover/repos?project=${encodeURIComponent(p.external_key)}`,
     );
     if (!res.ok) throw new Error(res.error ?? "discovery failed");
-    found[p.id] = res.repos ?? [];
+    found[p.id] = [...(res.repos ?? [])].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, {
+        sensitivity: "base",
+        numeric: true,
+      }),
+    );
   }
 
   const linked = $derived(new Set(repos.data.map((r) => r.url)));
@@ -152,205 +158,246 @@
       hint: p.product_slug ?? undefined,
     })),
   ]);
+
+  $effect(() => setPageActions(actions));
 </script>
 
-<header class="bar">
-  <span class="title">
-    <Icon name="repo" size="1.1em" />
-    <span class="name">link a repository</span>
-  </span>
-  <span class="acts">
-    {#if error}<span class="bad">{error}</span>{/if}
-    <Button variant="ghost" onclick={() => navigate(LIST)}>cancel</Button>
-    <Button
-      variant="primary"
-      icon="plus"
-      busy={linking}
-      disabled={!ready}
-      title={ready ? `link as ${slug}` : "pick a repo or paste its clone URL"}
-      onclick={link}>link</Button
-    >
-  </span>
-</header>
+<!-- In admin's top tab beside the way back, which is also how a link is
+     abandoned. -->
+{#snippet actions()}
+  <Button
+    variant="ghost"
+    tone="ok"
+    size="sm"
+    icon="plus"
+    busy={linking}
+    disabled={!ready}
+    title={ready ? `link as ${slug}` : "pick a repo or paste its clone URL"}
+    onclick={link}>link</Button
+  >
+{/snippet}
 
-<div class="body">
+<div class="page">
+  <h2 class="head">
+    <span class="mark" aria-hidden="true"><Icon name="repo" size="1em" /></span>
+    <span class="lbl">link a repository</span>
+    <span class="rule" aria-hidden="true"></span>
+    {#if error}<span class="bad">{error}</span>{/if}
+  </h2>
+
   {#if !mine.length && !myProducts.length && !projects.loading && !products.loading}
     <Note>Nothing here you can link repos to.</Note>
   {:else}
-    <Group label="project" icon="integrations">
-      <Rows>
-        <Row
-          label="project"
-          about="Owning project. Its connection supplies clone credentials and lists its repos."
-        >
-          <Select
-            value={projectId ?? ""}
-            options={projectOptions}
-            searchable
-            aria-label="project"
-            onchange={(v) => (projectId = String(v ?? ""))}
-          />
-        </Row>
-        {#if !project}
-          <Row label={t("product")}>
-            <Select
-              value={productSlug}
-              options={[
-                { value: "", label: "(pick one)" },
-                ...myProducts.map((p) => ({ value: p.slug, label: p.name })),
-              ]}
-              aria-label={t("product")}
-              onchange={(v) => (productSlug = String(v ?? ""))}
+    <!-- The finder holds two thirds whether or not it has answered, so the
+         names land in a column that never changes width under them. -->
+    <div class="layout">
+      <div class="seek">
+        {#if project}
+          {#key project.id}
+            <SourceFinder
+              source={project.external_key}
+              label="fetch {project.external_key} repos"
+              takenTip="already linked"
+              empty="{project.external_key} shows no repos to this token"
+              hits={hits?.map((h) => ({ key: h.name, name: h.name }))}
+              {picked}
+              registered={(name) =>
+                linked.has(hits?.find((h) => h.name === name)?.url ?? "")}
+              onfetch={discover}
+              below
+              onpick={(g) => {
+                const h = hits?.find((x) => x.name === g.key);
+                if (!h) return;
+                url = h.url;
+                if (h.default_branch) branch = h.default_branch;
+              }}
             />
-          </Row>
+          {/key}
         {/if}
-      </Rows>
-    </Group>
+      </div>
 
-    {#if project}
-      {#key project.id}
-        <SourceFinder
-          source={project.external_key}
-          label="fetch {project.external_key} repos"
-          takenTip="already linked"
-          empty="{project.external_key} shows no repos to this token"
-          hits={hits?.map((h) => ({ key: h.name, name: h.name }))}
-          {picked}
-          registered={(name) =>
-            linked.has(hits?.find((h) => h.name === name)?.url ?? "")}
-          onfetch={discover}
-          onpick={(g) => {
-            const h = hits?.find((x) => x.name === g.key);
-            if (!h) return;
-            url = h.url;
-            if (h.default_branch) branch = h.default_branch;
-          }}
-        />
-      {/key}
-    {/if}
+      <div class="col">
+        <Group label="project" icon="integrations">
+          <Rows>
+            <Row
+              label="project"
+              about="Owning project. Its connection supplies clone credentials and lists its repos."
+            >
+              <Select
+                value={projectId ?? ""}
+                options={projectOptions}
+                searchable
+                aria-label="project"
+                onchange={(v) => (projectId = String(v ?? ""))}
+              />
+            </Row>
+            {#if !project}
+              <Row label={t("product")}>
+                <Select
+                  value={productSlug}
+                  options={[
+                    { value: "", label: "(pick one)" },
+                    ...myProducts.map((p) => ({
+                      value: p.slug,
+                      label: p.name,
+                    })),
+                  ]}
+                  aria-label={t("product")}
+                  onchange={(v) => (productSlug = String(v ?? ""))}
+                />
+              </Row>
+            {/if}
+          </Rows>
+        </Group>
 
-    <Group label="repository" icon="repo">
-      <Rows>
-        <Row
-          label="clone URL"
-          about={project
-            ? "Filled by picking a repo above, or pasted."
-            : "Cloned with the token of the product's connection."}
-        >
-          <input
-            bind:value={url}
-            placeholder="https://…"
-            aria-label="clone URL"
-            spellcheck="false"
-          />
-        </Row>
-        <Row
-          label="default branch"
-          about="Where releases land, usually master."
-        >
-          <input
-            bind:value={branch}
-            aria-label="default branch"
-            spellcheck="false"
-          />
-        </Row>
-        <Row label="component" about={INFO.repoComponent}>
-          <Select
-            value={component}
-            options={[
-              { value: "", label: "(none)" },
-              ...components
-                .of(product)
-                .map((c) => ({ value: c.slug, label: c.name })),
-            ]}
-            searchable
-            aria-label="component"
-            onchange={(v) => (component = String(v ?? ""))}
-          />
-        </Row>
-        <Row
-          label="customer"
-          about="Customer addon repos only. Empty: shared code, included in customer-scoped search."
-        >
-          <Select
-            value={customer}
-            options={[
-              { value: "", label: "(none, shared)" },
-              ...customers.data.map((c) => ({ value: c.slug, label: c.name })),
-            ]}
-            searchable
-            aria-label="customer"
-            onchange={(v) => (customer = String(v ?? ""))}
-          />
-        </Row>
-      </Rows>
-      {#if slug}
-        <p class="quiet">
-          Linked as <strong>{slug}</strong>. Folders, file types and release
-          lines are set on its page before the first index.
-        </p>
-      {/if}
-    </Group>
+        <Group label="repository" icon="repo">
+          <Rows>
+            <Row
+              label="clone URL"
+              about={project
+                ? "Filled by picking a fetched repo, or pasted."
+                : "Cloned with the token of the product's connection."}
+            >
+              <input
+                bind:value={url}
+                placeholder="https://…"
+                aria-label="clone URL"
+                spellcheck="false"
+              />
+            </Row>
+            <Row
+              label="default branch"
+              about="Where releases land, usually master."
+            >
+              <input
+                bind:value={branch}
+                aria-label="default branch"
+                spellcheck="false"
+              />
+            </Row>
+            <Row label="component" about={INFO.repoComponent}>
+              <Select
+                value={component}
+                options={[
+                  { value: "", label: "(none)" },
+                  ...components
+                    .of(product)
+                    .map((c) => ({ value: c.slug, label: c.name })),
+                ]}
+                searchable
+                aria-label="component"
+                onchange={(v) => (component = String(v ?? ""))}
+              />
+            </Row>
+            <Row
+              label="customer"
+              about="Customer addon repos only. Empty: shared code, included in customer-scoped search."
+            >
+              <Select
+                value={customer}
+                options={[
+                  { value: "", label: "(none, shared)" },
+                  ...customers.data.map((c) => ({
+                    value: c.slug,
+                    label: c.name,
+                  })),
+                ]}
+                searchable
+                aria-label="customer"
+                onchange={(v) => (customer = String(v ?? ""))}
+              />
+            </Row>
+          </Rows>
+          {#if slug}
+            <p class="quiet">
+              Linked as <strong>{slug}</strong>. Folders, file types and release
+              lines are set on its page before the first index.
+            </p>
+          {/if}
+        </Group>
+      </div>
+    </div>
   {/if}
 </div>
 
 <style>
-  .bar {
+  .page {
+    --row-h: 1.5rem;
+    --control-w: 16rem;
+    padding-inline: var(--view-pad-x);
+  }
+  /* Set like a section heading on the repos page it opens from. */
+  .head {
     position: sticky;
     top: 0;
-    z-index: 2;
+    z-index: 3;
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: var(--pad-2) var(--pad-3);
-    padding: var(--pad-3) 0;
-    border-bottom: 1px solid var(--border);
-    background: var(--panel-solid);
+    gap: var(--pad-2);
+    margin: 0 0 var(--pad-3);
+    padding: var(--pad-2) 0;
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    letter-spacing: var(--label-spacing);
+    background: var(--panel-bg);
   }
-  /* The scrollport starts one --main-air above the bar's pinned edge, as
-     under Section's heading; this covers that strip so rows never show over
-     the bar. */
-  .bar::before {
+  .head::before {
     content: "";
     position: absolute;
     left: 0;
     right: 0;
     bottom: 100%;
     height: var(--main-air, 0.65rem);
-    background: var(--panel-solid);
+    background: var(--panel-bg);
   }
-  .title {
+  .mark {
     display: inline-flex;
-    align-items: baseline;
-    gap: var(--pad-2);
+    flex: none;
     color: var(--accent);
   }
-  .name {
+  .lbl {
+    flex: none;
     font-weight: 600;
-    color: var(--text);
+    text-transform: uppercase;
   }
-  .acts {
-    display: flex;
-    align-items: center;
-    gap: var(--pad-2);
-    margin-left: auto;
+  .rule {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
   }
   .bad {
     color: var(--danger);
     font-size: var(--fs-sm);
+    letter-spacing: normal;
   }
-  .body {
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    align-items: start;
+    column-gap: calc(var(--pad-4) * 3);
+    row-gap: var(--pad-4);
+  }
+  .seek {
+    min-width: 0;
+    --finder-air: 0;
+  }
+  .col {
     display: flex;
     flex-direction: column;
-    gap: calc(var(--pad-4) * 1.5);
-    width: min(100%, 40rem);
-    margin: 0 auto;
-    padding-top: var(--pad-4);
-    --control-w: 18rem;
+    gap: var(--pad-4);
+    min-width: 0;
   }
   .quiet {
     margin: var(--pad-2) 0 0;
     font-size: var(--fs-xs);
     color: var(--muted);
+  }
+  @media (max-width: 60rem) {
+    .layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .col {
+      order: -1;
+    }
   }
 </style>
