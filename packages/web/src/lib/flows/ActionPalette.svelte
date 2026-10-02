@@ -181,7 +181,6 @@
         >{/if}
       {#if tag}<span class="tag">{GROUPS[e.group].label}</span>{/if}
     </span>
-    {#if e.description}<span class="desc">{e.description}</span>{/if}
   </button>
 {/snippet}
 
@@ -220,16 +219,13 @@
           aria-haspopup="menu"
           aria-expanded={g.key === open}
           onclick={() => {
-            if (g.key === open) open = null;
-            else show(i);
+            show(i);
             input?.focus();
           }}
           onpointerenter={() => open && show(i)}
         >
-          <Icon name={g.icon} size="0.95em" />
-          <span class="label">{g.label}</span>
-          <span class="count">{g.items.length}</span>
-          <Icon name="flowGroup" size="0.85em" />
+          <Icon name={g.icon} size="1.15em" />
+          {g.label}
         </button>
       {/each}
     </div>
@@ -257,7 +253,7 @@
     z-index: calc(var(--z-overlay) + 1);
     display: flex;
     flex-direction: column;
-    width: 12rem;
+    width: 10.5rem;
     max-height: 26rem;
     padding: 2px;
     background: var(--panel-bg);
@@ -267,7 +263,9 @@
   }
   .palette:has(.wide),
   .children {
-    width: 20rem;
+    width: max-content;
+    min-width: 10.5rem;
+    max-width: 18rem;
   }
   .q {
     flex: none;
@@ -293,26 +291,15 @@
   .group {
     display: flex;
     align-items: center;
-    gap: var(--pad-2);
-    padding: var(--pad-2);
-    font-size: var(--fs-sm);
-    color: var(--muted);
-  }
-  .group .label {
-    flex: 1;
-    color: var(--text);
-  }
-  .count {
-    font-size: var(--fs-xs);
+    gap: var(--pad-3);
+    padding: var(--pad-2) var(--pad-3);
+    font-size: var(--fs-lg);
   }
   .group.open {
     color: var(--accent);
   }
   .entry {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: var(--pad-2);
+    padding: var(--pad-2) var(--pad-3);
   }
   .group:hover,
   .group:focus-visible,
@@ -327,17 +314,14 @@
     display: flex;
     align-items: center;
     gap: var(--pad-2);
-    font-size: var(--fs-sm);
+    font-size: var(--fs-md);
+    white-space: nowrap;
   }
   .tag {
     margin-left: auto;
     font-size: var(--fs-xs);
     letter-spacing: var(--label-spacing);
     text-transform: uppercase;
-    color: var(--muted);
-  }
-  .desc {
-    font-size: var(--fs-xs);
     color: var(--muted);
   }
   .none {
