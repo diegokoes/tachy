@@ -23,7 +23,9 @@ import {
   Braces,
   Bug,
   CalendarClock,
+  CalendarCog,
   Car,
+  ChartNoAxesGantt,
   Check,
   ChevronDown,
   ChevronUp,
@@ -72,6 +74,7 @@ import {
   Landmark,
   Layers,
   Lightbulb,
+  ListStart,
   ListTodo,
   LockKeyhole,
   LockKeyholeOpen,
@@ -87,12 +90,14 @@ import {
   Orbit,
   Palette,
   Pause,
+  Pickaxe,
   PencilSparkles,
   Pin,
   Plane,
   Play,
   Plug,
   Plus,
+  Power,
   Pyramid,
   RadioTower,
   RotateCcw,
@@ -198,6 +203,8 @@ export const ICONS = {
   /* ── Running things ───────────────────────────────────────────────────── */
   run: Play,
   pause: Pause,
+  /** A flow that is switched on; its off state is `pause`. */
+  power: Power,
   stop: Square,
   test: FlaskConical,
 
@@ -210,6 +217,8 @@ export const ICONS = {
   seed: Sprout,
   index: Database,
   repo: FolderGit2,
+  /** A source project: what tickets and repos are filed under. */
+  project: ChartNoAxesGantt,
   /** Where a repo comes from: its project, clone URL and scope. */
   source: ChevronsLeftRightEllipsis,
   branch: GitBranch,
@@ -243,6 +252,12 @@ export const ICONS = {
   structure: Layers,
   users: UserRoundGroup,
   workers: Terminal,
+  /** One execution of a job, queued, running or finished. */
+  runs: ListStart,
+  /** The processes that take runs off the queues. */
+  workerPool: Pickaxe,
+  /** What runs and when: a job's kind, schedule and settings. */
+  jobs: CalendarCog,
   knowledge: GraduationCap,
   refDoc: ScrollText,
   overview: Pyramid,
