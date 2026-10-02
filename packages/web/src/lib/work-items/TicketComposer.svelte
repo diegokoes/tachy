@@ -363,11 +363,6 @@
       {:else if composer.validation}
         <span class="bad">{composer.validation.message}</span>
       {/if}
-      {#if form && missing.length}
-        <span class="dim"
-          >still needed: {missing.map(fieldName).join(", ")}</span
-        >
-      {/if}
     </div>
   {/if}
 
@@ -534,8 +529,6 @@
     height: 100%;
     min-height: 0;
   }
-
-  /* Sticky by construction: the bar sits outside the one scrolling region. */
   .bar {
     flex: none;
     display: flex;
