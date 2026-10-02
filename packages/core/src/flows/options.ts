@@ -10,6 +10,7 @@ import { badInput } from "../infra/errors";
 import { describeJobKinds } from "../jobs/registry";
 import { getSourceProject, listSourceProjects } from "../sources/projects";
 import { resolveSource } from "../sources/registry";
+import { customerPropertyOptions } from "./customer";
 import { subjectFields, subjectValues } from "./subject";
 
 export interface OptionRequest {
@@ -126,6 +127,16 @@ defineOptionSource("item.fields", async (req) =>
 
 defineOptionSource("item.values", async (req) =>
   subjectValues(need(req, "connection"), need(req, "field")),
+);
+
+defineOptionSource("item.tags", async (req) =>
+  req.params.connection
+    ? subjectValues(req.params.connection, "item.tags")
+    : [],
+);
+
+defineOptionSource("customer.properties", async (req) =>
+  customerPropertyOptions(req.params.connection || undefined, req.scope),
 );
 
 /** Items to try a flow on, by title or the source's id. */

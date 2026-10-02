@@ -43,7 +43,7 @@ export interface AdoWorkItemSummary {
 }
 
 export interface JsonPatchOp {
-  op: "add" | "replace" | "remove";
+  op: "add" | "replace" | "remove" | "test";
   path: string;
   value?: unknown;
 }
@@ -75,6 +75,7 @@ export interface AdoRelation {
 
 export interface AdoWorkItem {
   id: number;
+  rev?: number;
   fields?: AdoFields;
   relations?: AdoRelation[];
   _links?: { html?: { href?: string } };
@@ -302,6 +303,8 @@ export interface AdoClient {
    * `validateOnly` runs the type's rules without saving, which is the only way
    * to learn about requirements that depend on other fields' values.
    */
+  /** Applies a patch to an existing item; a `test` on /rev makes it refuse a stale write. */
+  updateWorkItem(id: string, patch: JsonPatchOp[]): Promise<AdoWorkItem>;
   createWorkItem(
     project: string,
     type: string,
@@ -532,6 +535,17 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
         `${proj(project)}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/fields?$expand=all`,
       );
       return res.value ?? [];
+    },
+
+    async updateWorkItem(id, patch) {
+      return req<AdoWorkItem>(
+        `/_apis/wit/workitems/${encodeURIComponent(id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json-patch+json" },
+          body: JSON.stringify(patch),
+        },
+      );
     },
 
     async createWorkItem(project, type, patch, opts) {

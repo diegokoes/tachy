@@ -27,6 +27,7 @@ export function registerAgentFlowActions(): void {
       material: z
         .string()
         .default("")
+        .meta({ title: "context" })
         .describe("What it works from, e.g. {{steps.fetch.text}}."),
       answer: z
         .enum(["text", "json"])
@@ -37,6 +38,7 @@ export function registerAgentFlowActions(): void {
       tier: z
         .enum(["cheap", "caller"])
         .default("caller")
+        .meta({ title: "model" })
         .describe("cheap for a quick yes or no, caller for the owner's model."),
     }),
     output: z.object({
