@@ -1,5 +1,6 @@
 <script lang="ts">
   import type {
+    FlowActionCategory,
     FlowActionInfo,
     FlowGraph,
     FlowStep,
@@ -108,11 +109,13 @@
     manual: "triggerManual",
     schedule: "triggerSchedule",
   };
-  const CATEGORY_ICONS: Record<string, IconName> = {
-    context: "search",
-    write: "edit",
-    agent: "ai",
+  const CATEGORY_ICONS: Record<FlowActionCategory, IconName> = {
     control: "flowIf",
+    read: "flowRead",
+    search: "flowSearch",
+    agent: "flowAgent",
+    update: "flowUpdate",
+    create: "flowCreate",
   };
 
   function stepFace(s: FlowStep): {
@@ -123,7 +126,7 @@
     if (s.kind === "if")
       return {
         icon: "flowIf",
-        title: s.label || "if",
+        title: s.label || "if / else",
         line: describeCondition(s.when),
       };
     if (s.kind === "filter")
@@ -134,7 +137,7 @@
       };
     const a = actions.get(s.action);
     return {
-      icon: CATEGORY_ICONS[a?.category ?? "context"],
+      icon: a ? CATEGORY_ICONS[a.category] : "flowRead",
       title: s.label || a?.title || s.action,
       line: s.id,
     };

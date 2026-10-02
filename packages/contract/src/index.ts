@@ -235,6 +235,7 @@ export {
   FIELD_SHOWS,
   FLOW_TRIGGER_KINDS,
   CONDITION_OPS,
+  FLOW_ACTION_CATEGORIES,
   FLOW_RUN_STATUSES,
   readPath,
   interpolate,

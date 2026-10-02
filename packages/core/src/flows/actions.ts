@@ -1,5 +1,9 @@
 import { z } from "zod";
-import type { FlowActionCategory, FlowActionInfo } from "@tachy/contract";
+import {
+  FLOW_ACTION_CATEGORIES,
+  type FlowActionCategory,
+  type FlowActionInfo,
+} from "@tachy/contract";
 import type { ScopeContext } from "../config/scoped";
 import { badInput } from "../infra/errors";
 import type { FlowSubject } from "./subject";
@@ -58,7 +62,9 @@ export function describeFlowActions(): FlowActionInfo[] {
   return [...actions.values()]
     .sort(
       (a, b) =>
-        a.category.localeCompare(b.category) || a.title.localeCompare(b.title),
+        FLOW_ACTION_CATEGORIES.indexOf(a.category) -
+          FLOW_ACTION_CATEGORIES.indexOf(b.category) ||
+        a.title.localeCompare(b.title),
     )
     .map((a) => ({
       key: a.key,

@@ -14,6 +14,7 @@ import { getSourceProject } from "../sources/projects";
 import { resolveSource } from "../sources/registry";
 import { ingestWorkItem } from "../work-items/ingest";
 import { defineFlowAction, type FlowActionContext } from "./actions";
+import { customerProperties } from "./customer";
 import { applyFormConfig, getComposeConfig, typeConfig } from "./forms";
 import type { FlowSubject } from "./subject";
 
@@ -53,10 +54,10 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "item.fetch",
-    title: "Read the whole ticket",
+    title: "Read ticket",
     description:
       "Fetches the item fresh from its source, with every message, and stores it.",
-    category: "context",
+    category: "read",
     writes: false,
     params: z.object({}),
     output: z.object({
@@ -101,7 +102,7 @@ export function registerBuiltinFlowActions(): void {
     title: "Search knowledge",
     description:
       "Past resolutions for the item's product and team, its customer's first.",
-    category: "context",
+    category: "search",
     writes: false,
     params: z.object({ query, limit }),
     output: hits,
@@ -128,7 +129,7 @@ export function registerBuiltinFlowActions(): void {
     key: "code.search",
     title: "Search code",
     description: "Indexed repositories, narrowed to the item's product.",
-    category: "context",
+    category: "search",
     writes: false,
     params: z.object({
       query,
@@ -159,7 +160,7 @@ export function registerBuiltinFlowActions(): void {
     key: "reference.search",
     title: "Search reference docs",
     description: "Approved docs and wiki articles for the item's product.",
-    category: "context",
+    category: "search",
     writes: false,
     params: z.object({ query, limit }),
     output: hits,
@@ -183,7 +184,7 @@ export function registerBuiltinFlowActions(): void {
     title: "Search a bucket",
     description:
       "One bucket of pushed documents, such as a product's public knowledge base. Only buckets shared with the flow's owner.",
-    category: "context",
+    category: "search",
     writes: false,
     params: z.object({
       bucket: z.string().min(1).meta(options("buckets")),
@@ -209,7 +210,7 @@ export function registerBuiltinFlowActions(): void {
     key: "customer.profile",
     title: "Customer profile",
     description: "What tachy knows about the item's customer.",
-    category: "context",
+    category: "read",
     writes: false,
     params: z.object({}),
     output: z.object({
@@ -229,10 +230,90 @@ export function registerBuiltinFlowActions(): void {
   });
 
   defineFlowAction({
+    key: "customer.properties",
+    title: "Customer properties",
+    description:
+      "Picked values of the item's customer: tachy's facts and the source's company fields. Redacted when redaction is on.",
+    category: "read",
+    writes: false,
+    params: z.object({
+      keys: z
+        .array(z.string().min(1))
+        .min(1)
+        .meta(
+          options("customer.properties", {
+            "x-free": true,
+            title: "properties",
+          }),
+        ),
+    }),
+    output: z.object({
+      found: z.boolean(),
+      customer: z.string().nullable(),
+      values: z
+        .record(z.string(), z.string().nullable())
+        .meta({ "x-keys-from": "keys" }),
+      text: z.string(),
+    }),
+    async run(ctx, p) {
+      const item = needItem(ctx);
+      const got = await customerProperties(item, p.keys, ctx.scope);
+      return {
+        ...got,
+        text: Object.entries(got.values)
+          .map(([k, v]) => `${k}: ${v ?? "(none)"}`)
+          .join("\n"),
+      };
+    },
+  });
+
+  const tags = z
+    .array(z.string().min(1))
+    .min(1)
+    .meta(options("item.tags", { "x-free": true }));
+
+  async function changeTags(
+    ctx: FlowActionContext,
+    change: { add: string[]; remove: string[] },
+  ) {
+    const item = needItem(ctx);
+    const { source } = await resolveSource(item.connection, ctx.scope);
+    if (!source.setTags)
+      throw badInput(`${item.source_type} items cannot take tags`);
+    const now = await source.setTags(item.external_id, change);
+    item.tags = now;
+    return { tags: now };
+  }
+
+  defineFlowAction({
+    key: "item.add_tags",
+    title: "Add tags",
+    description:
+      "Adds tags to the item in its source, keeping the ones it has.",
+    category: "update",
+    writes: true,
+    params: z.object({ tags }),
+    output: z.object({ tags: z.array(z.string()) }),
+    run: (ctx, p) => changeTags(ctx, { add: p.tags, remove: [] }),
+  });
+
+  defineFlowAction({
+    key: "item.remove_tags",
+    title: "Remove tags",
+    description:
+      "Takes tags off the item in its source; ones it lacks are fine.",
+    category: "update",
+    writes: true,
+    params: z.object({ tags }),
+    output: z.object({ tags: z.array(z.string()) }),
+    run: (ctx, p) => changeTags(ctx, { add: [], remove: p.tags }),
+  });
+
+  defineFlowAction({
     key: "item.post_note",
-    title: "Post a note on the ticket",
+    title: "Post note",
     description: "A note on the item in its source, private unless said.",
-    category: "write",
+    category: "update",
     source: "freshdesk",
     writes: true,
     params: z.object({
@@ -252,10 +333,10 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "ado.create_item",
-    title: "Create an ADO work item",
+    title: "Create ADO item",
     description:
       "Starts from the project's form as the team set it up, then these fields. Linked to the item as tracked by.",
-    category: "write",
+    category: "create",
     source: "azure-devops",
     writes: true,
     params: z.object({
@@ -318,9 +399,9 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "item.set_customer",
-    title: "Set the customer",
+    title: "Set customer",
     description: "Attributes the item to a customer in tachy.",
-    category: "write",
+    category: "update",
     writes: true,
     params: z.object({
       customer: z.string().min(1).meta(options("customers")),
@@ -335,9 +416,9 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "job.enqueue",
-    title: "Start a job",
+    title: "Start job",
     description: "Queues a job as part of the run, with its own parameters.",
-    category: "write",
+    category: "create",
     writes: true,
     params: z.object({
       kind: z.string().min(1).meta(options("job.kinds")),

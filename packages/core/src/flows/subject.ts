@@ -54,7 +54,17 @@ const iso = (v: unknown) =>
 
 function toSubject(row: Record<string, unknown>): FlowSubject {
   const raw = (row.raw ?? {}) as Record<string, unknown>;
-  const tags = Array.isArray(raw.tags) ? raw.tags.map(String) : [];
+  const adoTags = (raw.fields as Record<string, unknown> | undefined)?.[
+    "System.Tags"
+  ];
+  const tags = Array.isArray(raw.tags)
+    ? raw.tags.map(String)
+    : typeof adoTags === "string"
+      ? adoTags
+          .split(";")
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : [];
   return {
     ...(row as unknown as FlowSubject),
     raw,
