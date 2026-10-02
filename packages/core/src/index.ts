@@ -443,7 +443,7 @@ export type {
   SourceCallOutcome,
   SourceTraffic,
 } from "./sources";
-export { registerSource, resolveSource } from "./sources";
+export { changeTagList, registerSource, resolveSource } from "./sources";
 export {
   getComposeConfig,
   setComposeConfig,
@@ -616,6 +616,7 @@ export {
   FIELD_SHOWS,
   FLOW_TRIGGER_KINDS,
   CONDITION_OPS,
+  FLOW_ACTION_CATEGORIES,
   FLOW_RUN_STATUSES,
   readPath,
   interpolate,

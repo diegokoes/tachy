@@ -558,3 +558,34 @@ describe("azure-devops sync project list", () => {
     expect(calls.some((c) => c.includes("/ProjA/"))).toBe(true);
   });
 });
+
+describe("ado tags", () => {
+  it("replaces System.Tags with the changed list, guarded by the revision", async () => {
+    const { calls, bodies } = mockFetch({
+      "/_apis/wit/workitems/42": {
+        id: 42,
+        rev: 6,
+        fields: { "System.Tags": "Bug; Plant-3" },
+      },
+    });
+    expect(
+      await source().setTags!("42", { add: ["urgent"], remove: ["plant-3"] }),
+    ).toEqual(["Bug", "urgent"]);
+    expect(calls.at(-1)).toMatch(/^PATCH \/_apis\/wit\/workitems\/42/);
+    expect(bodies.at(-1)).toEqual([
+      { op: "test", path: "/rev", value: 6 },
+      { op: "replace", path: "/fields/System.Tags", value: "Bug; urgent" },
+    ]);
+  });
+
+  it("adds the field on an item with no tags yet", async () => {
+    const { bodies } = mockFetch({
+      "/_apis/wit/workitems/42": { id: 42, rev: 1, fields: {} },
+    });
+    await source().setTags!("42", { add: ["new"], remove: [] });
+    expect(bodies.at(-1)).toEqual([
+      { op: "test", path: "/rev", value: 1 },
+      { op: "add", path: "/fields/System.Tags", value: "new" },
+    ]);
+  });
+});

@@ -3,6 +3,7 @@
     CONDITION_OPS,
     type Condition,
     type ConditionOp,
+    type FlowOption,
   } from "@tachy/contract";
   import Choice from "../settings/Choice.svelte";
   import { Icon, Select } from "../tui";
@@ -12,12 +13,15 @@
   let {
     value,
     connection = "",
+    fields = [],
     onchange,
     onremove,
   }: {
     value: Condition;
     /** Whose items the field and value lists are read from. */
     connection?: string;
+    /** What earlier steps returned, offered ahead of the item's fields. */
+    fields?: FlowOption[];
     onchange: (next: Condition) => void;
     /** Present for a nested condition, which its group can drop. */
     onremove?: () => void;
@@ -76,6 +80,7 @@
       <ConditionEditor
         value={c}
         {connection}
+        {fields}
         onchange={(n) => setChild(i, n)}
         onremove={() => setChildren(children.filter((_, j) => j !== i))}
       />
@@ -104,6 +109,7 @@
     <ConditionEditor
       value={value.not}
       {connection}
+      {fields}
       onchange={(n) => onchange({ not: n })}
     />
   </div>
@@ -115,9 +121,9 @@
         source="item.fields"
         deps={{ connection }}
         value={c.field}
+        extra={fields}
         free
         label="Field"
-        placeholder="item.status"
         onchange={(v) => onchange({ ...c, field: v })}
       />
     </span>
@@ -134,7 +140,7 @@
         {#if c.op === "in"}
           <input
             aria-label="Values"
-            placeholder="a, b, c"
+            title="separated by commas"
             value={listText(c.value)}
             oninput={(e) =>
               onchange({
@@ -152,13 +158,11 @@
             value={listText(c.value)}
             free
             label="Value"
-            placeholder="value"
             onchange={(v) => onchange({ ...c, value: v })}
           />
         {:else}
           <input
             aria-label="Value"
-            placeholder="value"
             value={listText(c.value)}
             oninput={(e) => onchange({ ...c, value: e.currentTarget.value })}
           />
