@@ -9,8 +9,9 @@
     needs = [],
     value,
     free = false,
+    extra = [],
     label,
-    placeholder = "pick…",
+    placeholder,
     onchange,
   }: {
     /** The option source key, as a param's `x-options` names it. */
@@ -21,6 +22,8 @@
     value: string;
     /** Anything typed is fine too; the list only suggests. */
     free?: boolean;
+    /** Choices offered ahead of the source's own. */
+    extra?: FlowOption[];
     label: string;
     placeholder?: string;
     onchange: (v: string) => void;
@@ -45,10 +48,11 @@
       .catch((e) => (error = e instanceof Error ? e.message : String(e)));
   });
 
+  const all = $derived([...extra, ...options]);
   const shown = $derived(
-    value && !options.some((o) => o.value === value)
-      ? [{ value, label: value }, ...options]
-      : options,
+    value && !all.some((o) => o.value === value)
+      ? [{ value, label: value }, ...all]
+      : all,
   );
 </script>
 
@@ -64,8 +68,7 @@
     oninput={(e) => onchange((e.target as HTMLInputElement).value)}
   />
   <datalist {id}>
-    {#each options as o (o.value)}<option value={o.value}>{o.label}</option
-      >{/each}
+    {#each all as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
   </datalist>
 {:else}
   <Select

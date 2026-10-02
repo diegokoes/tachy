@@ -8,6 +8,7 @@
     FlowStepTrace,
     FlowTrigger,
   } from "@tachy/contract";
+  import Group from "../settings/Group.svelte";
   import { Button, Checkbox, Field, Note, Select } from "../tui";
   import ConditionEditor from "./ConditionEditor.svelte";
   import {
@@ -64,20 +65,36 @@
       .catch(() => (itemFields = []));
   });
 
-  /** `item.*` and what each earlier step returns, for `{{…}}`. */
-  const variables = $derived.by<FlowOption[]>(() => {
+  /**
+   * What each earlier step returns. A record whose keys are a param's picks
+   * (`x-keys-from`) is offered key by key, so a picked customer property is
+   * one choice rather than a path to type.
+   */
+  const upstream = $derived.by<FlowOption[]>(() => {
     if (!step) return [];
-    const upstream = stepsBefore(graph.steps, step.id).flatMap((s) => {
-      if (s.kind !== "action") return [];
-      const out = actions.get(s.action)?.output_schema as Schema | undefined;
-      return Object.keys(out?.properties ?? {}).map((k) => ({
-        value: `steps.${s.id}.${k}`,
-        label: `${s.id}.${k}`,
-        hint: actions.get(s.action)?.title,
-      }));
-    });
-    return [...upstream.reverse(), ...itemFields];
+    return stepsBefore(graph.steps, step.id)
+      .flatMap((s) => {
+        if (s.kind !== "action") return [];
+        const a = actions.get(s.action);
+        const out = a?.output_schema as Schema | undefined;
+        return Object.entries(out?.properties ?? {}).flatMap(([k, p]) => {
+          const from = p["x-keys-from"];
+          const keys =
+            from && Array.isArray(s.params[from])
+              ? (s.params[from] as unknown[]).map(String)
+              : [];
+          const at = (path: string) => ({
+            value: `steps.${s.id}.${path}`,
+            label: `${s.id}.${path}`,
+            hint: a?.title,
+          });
+          return [...keys.map((key) => at(`${k}.${key}`)), at(k)];
+        });
+      })
+      .reverse();
   });
+  /** `item.*` and what each earlier step returns, for `{{…}}`. */
+  const variables = $derived([...upstream, ...itemFields]);
 
   const setStep = (s: FlowStep) => onchange(replaceStep(graph, s));
   const setTrigger = (t: FlowTrigger) => onchange(replaceTrigger(graph, t));
@@ -136,7 +153,7 @@
       <span class="what">trigger</span>
       <span class="id">{t.id}</span>
     </header>
-    <Field label="starts the flow">
+    <Field label="trigger">
       <Select
         value={t.kind}
         options={KINDS}
@@ -171,7 +188,7 @@
       </Field>
     {/if}
     {#if t.kind === "item.synced"}
-      <Field label="on" plain>
+      <Field label="events" plain>
         <span class="events">
           {#each ["created", "updated"] as e (e)}
             <span class="event">
@@ -186,7 +203,11 @@
         </span>
       </Field>
     {:else if t.kind === "schedule"}
-      <Field label="cron" required info="minute hour day month weekday">
+      <Field
+        label="schedule"
+        required
+        info="cron: minute hour day month weekday"
+      >
         <input
           value={str(t.params.cron)}
           oninput={(e) => setParam(t, "cron", e.currentTarget.value)}
@@ -199,7 +220,10 @@
         />
       </Field>
       {#if t.params.connection}
-        <Field label="items changed in the last … days">
+        <Field
+          label="lookback days"
+          info="only items changed within this many days"
+        >
           <input
             inputmode="numeric"
             value={str(t.params.since_days ?? 7)}
@@ -211,7 +235,7 @@
               )}
           />
         </Field>
-        <Field label="at most … items per run">
+        <Field label="max items" info="per run">
           <input
             inputmode="numeric"
             value={str(t.params.max_items ?? 50)}
@@ -226,7 +250,7 @@
       {/if}
     {/if}
     {#if t.kind !== "manual"}
-      <Field label="only for items where" plain>
+      <Group label="filter" hint="runs only for items that match">
         {#if t.where}
           <ConditionEditor
             value={t.where}
@@ -243,7 +267,7 @@
             >add a condition</Button
           >
         {/if}
-      </Field>
+      </Group>
     {/if}
   {:else if step}
     {@const s = step}
@@ -252,7 +276,7 @@
         >{s.kind === "action"
           ? (action?.title ?? s.action)
           : s.kind === "if"
-            ? "if"
+            ? "if / else"
             : "only if"}</span
       >
       <span class="id" title="later steps read this one as steps.{s.id}"
@@ -263,64 +287,70 @@
     {#if s.kind === "action" && !action}
       <Note tone="danger">'{s.action}' is not in the library any more.</Note>
     {/if}
-    <Field label="label">
+    <Field
+      label="name"
+      info="what the canvas shows; the step's kind when empty"
+    >
       <input
         value={s.label ?? ""}
-        placeholder="what the canvas calls it"
         oninput={(e) =>
           setStep({ ...s, label: e.currentTarget.value || undefined })}
       />
     </Field>
     {#if s.kind === "action" && action}
-      <SchemaForm
-        schema={action.params_schema as Schema}
-        value={s.params}
-        {variables}
-        onchange={(params) => setStep({ ...s, params })}
-      />
+      {#if Object.keys((action.params_schema as Schema).properties ?? {}).length}
+        <Group label="settings">
+          <SchemaForm
+            schema={action.params_schema as Schema}
+            value={s.params}
+            {variables}
+            context={connection ? { connection } : {}}
+            onchange={(params) => setStep({ ...s, params })}
+          />
+        </Group>
+      {/if}
     {:else if s.kind === "if" || s.kind === "filter"}
-      <Field
-        label={s.kind === "if" ? "take then when" : "go on only when"}
-        plain
+      <Group
+        label={s.kind === "if" ? "condition" : "continue when"}
+        hint={s.kind === "if"
+          ? "matches go to then, the rest to else; both end the flow"
+          : "the run stops here when this does not match"}
       >
         <ConditionEditor
           value={"all" in s.when || "any" in s.when
             ? s.when
             : { all: [s.when] }}
           {connection}
+          fields={upstream}
           onchange={(when) => setStep({ ...s, when })}
         />
-      </Field>
-      {#if s.kind === "if"}
-        <Note
-          >then and else each end the flow; steps after an if go in its
-          branches.</Note
-        >
-      {/if}
+      </Group>
     {/if}
     {#if trace}
-      <section class="trace">
-        <span class="what"
-          >in this run: {trace.status}{trace.held !== undefined
-            ? trace.held
-              ? ", held"
-              : ", did not hold"
-            : ""} · {trace.ms} ms</span
-        >
-        {#if trace.error}<Note tone="danger">{trace.error}</Note>{/if}
-        {#if trace.input !== undefined}
-          <details>
-            <summary>input</summary>
-            <pre>{show(trace.input)}</pre>
-          </details>
-        {/if}
-        {#if trace.output !== undefined}
-          <details open>
-            <summary>output</summary>
-            <pre>{show(trace.output)}</pre>
-          </details>
-        {/if}
-      </section>
+      <Group label="last run">
+        <section class="trace">
+          <span class="what"
+            >{trace.status}{trace.held !== undefined
+              ? trace.held
+                ? ", held"
+                : ", did not hold"
+              : ""} · {trace.ms} ms</span
+          >
+          {#if trace.error}<Note tone="danger">{trace.error}</Note>{/if}
+          {#if trace.input !== undefined}
+            <details>
+              <summary>input</summary>
+              <pre>{show(trace.input)}</pre>
+            </details>
+          {/if}
+          {#if trace.output !== undefined}
+            <details open>
+              <summary>output</summary>
+              <pre>{show(trace.output)}</pre>
+            </details>
+          {/if}
+        </section>
+      </Group>
     {/if}
   {/if}
   <footer>
