@@ -617,7 +617,7 @@
                 >{fmt(repo.file_count)} files · {fmt(repo.chunk_count)} chunks</span
               >
             </Row>
-            <Row label="max file size" hint="Larger files are skipped.">
+            <Row label="max file size">
               <span class="inline">
                 <input
                   class="kb"
