@@ -285,23 +285,6 @@
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }
 
-  /** Folds back into its core, for leaving. */
-  export function vanish(): Promise<void> {
-    const el = kick;
-    if (!el || reducedMotion()) return Promise.resolve();
-    return new Promise((done) =>
-      gsap.to(el, {
-        scale: 0,
-        rotation: -140,
-        opacity: 0,
-        duration: 0.45,
-        ease: "power2.in",
-        overwrite: true,
-        onComplete: () => done(),
-      }),
-    );
-  }
-
   onDestroy(() => {
     still();
     if (svg) gsap.killTweensOf(svg);
