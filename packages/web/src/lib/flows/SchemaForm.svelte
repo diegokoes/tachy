@@ -2,6 +2,7 @@
   import type { FlowOption } from "@tachy/contract";
   import { Checkbox, Field, Select } from "../tui";
   import AdoFields from "./AdoFields.svelte";
+  import OptionList from "./OptionList.svelte";
   import OptionSelect from "./OptionSelect.svelte";
   import type { Schema } from "./schema";
 
@@ -9,12 +10,15 @@
     schema,
     value,
     variables = [],
+    context = {},
     onchange,
   }: {
     schema: Schema;
     value: Record<string, unknown>;
     /** What `{{…}}` can name at this step. */
     variables?: FlowOption[];
+    /** What every option source may read, such as the flow's connection. */
+    context?: Record<string, string>;
     onchange: (next: Record<string, unknown>) => void;
   } = $props();
 
@@ -35,10 +39,26 @@
   const LONG = new Set(["body", "prompt", "material", "note"]);
   const kindOf = (p: Schema) => (Array.isArray(p.type) ? p.type[0] : p.type);
 
-  const depsOf = (p: Schema) =>
-    Object.fromEntries(
+  const depsOf = (p: Schema) => ({
+    ...context,
+    ...Object.fromEntries(
       (p["x-depends-on"] ?? []).map((d) => [d, text(d)] as const),
-    );
+    ),
+  });
+  const titleOf = (name: string, p: Schema) => p.title ?? name;
+  const infoOf = (p: Schema) =>
+    [
+      p.description,
+      p.default !== undefined &&
+      p.default !== "" &&
+      typeof p.default !== "object"
+        ? `default: ${p.default}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || undefined;
+  const listOf = (v: unknown): string[] =>
+    Array.isArray(v) ? v.map(String) : v == null || v === "" ? [] : [String(v)];
 
   /** A number, unless it is a template, which fills in at run time. */
   const numberish = (raw: string): unknown =>
@@ -66,7 +86,7 @@
 {#each fields as [name, p] (name)}
   {@const t = kindOf(p)}
   {#if p["x-form"] === "ado"}
-    <Field label={name} info={p.description} plain>
+    <Field label={titleOf(name, p)} info={infoOf(p)} plain>
       <AdoFields
         project={text("project")}
         type={text("type")}
@@ -74,29 +94,50 @@
         onchange={(v) => set(name, v)}
       />
     </Field>
+  {:else if p["x-options"] && t === "array"}
+    <Field
+      label={titleOf(name, p)}
+      required={required.has(name)}
+      info={infoOf(p) ??
+        (p["x-free"] ? "pick or type one, Enter adds it" : undefined)}
+      plain
+    >
+      <OptionList
+        source={p["x-options"]}
+        deps={depsOf(p)}
+        value={listOf(value[name])}
+        free={p["x-free"]}
+        label={titleOf(name, p)}
+        onchange={(v) => set(name, v.length ? v : undefined)}
+      />
+    </Field>
   {:else if p["x-options"]}
-    <Field label={name} required={required.has(name)} info={p.description}>
+    <Field
+      label={titleOf(name, p)}
+      required={required.has(name)}
+      info={infoOf(p)}
+    >
       <OptionSelect
         source={p["x-options"]}
         deps={depsOf(p)}
         needs={p["x-depends-on"] ?? []}
         value={text(name)}
         free={p["x-free"]}
-        label={name}
+        label={titleOf(name, p)}
         onchange={(v) => set(name, v || undefined)}
       />
     </Field>
   {:else if p.enum}
-    <Field label={name} info={p.description}>
+    <Field label={titleOf(name, p)} info={infoOf(p)}>
       <Select
         value={String(value[name] ?? p.default ?? "")}
         options={p.enum.map((v) => ({ value: String(v), label: String(v) }))}
-        aria-label={name}
+        aria-label={titleOf(name, p)}
         onchange={(v) => set(name, v)}
       />
     </Field>
   {:else if t === "boolean"}
-    <Field label={name} info={p.description} inline>
+    <Field label={titleOf(name, p)} info={infoOf(p)} inline>
       <Checkbox
         checked={Boolean(value[name] ?? p.default)}
         ariaLabel={name}
@@ -104,15 +145,18 @@
       />
     </Field>
   {:else if t === "number" || t === "integer"}
-    <Field label={name} required={required.has(name)} info={p.description}>
+    <Field
+      label={titleOf(name, p)}
+      required={required.has(name)}
+      info={infoOf(p)}
+    >
       <input
         value={text(name)}
-        placeholder={p.default !== undefined ? String(p.default) : ""}
         oninput={(e) => set(name, numberish(e.currentTarget.value))}
       />
     </Field>
   {:else if t === "array"}
-    <Field label={name} info={p.description ?? "separated by commas"}>
+    <Field label={titleOf(name, p)} info={infoOf(p) ?? "separated by commas"}>
       <input
         value={Array.isArray(value[name])
           ? (value[name] as unknown[]).join(", ")
@@ -132,7 +176,7 @@
       />
     </Field>
   {:else if t === "object"}
-    <Field label={name} info={p.description ?? "as JSON"}>
+    <Field label={titleOf(name, p)} info={infoOf(p) ?? "as JSON"}>
       <textarea
         rows="4"
         class="mono"
@@ -141,24 +185,22 @@
     </Field>
   {:else}
     <Field
-      label={name}
+      label={titleOf(name, p)}
       required={required.has(name)}
-      info={p.description}
+      info={infoOf(p)}
       plain
     >
       <div class="textual">
         {#if LONG.has(name)}
           <textarea
             rows="5"
-            aria-label={name}
+            aria-label={titleOf(name, p)}
             value={text(name)}
-            placeholder={p.default !== undefined ? String(p.default) : ""}
             oninput={(e) => set(name, e.currentTarget.value)}></textarea>
         {:else}
           <input
-            aria-label={name}
+            aria-label={titleOf(name, p)}
             value={text(name)}
-            placeholder={p.default !== undefined ? String(p.default) : ""}
             oninput={(e) => set(name, e.currentTarget.value)}
           />
         {/if}
