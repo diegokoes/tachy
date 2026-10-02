@@ -29,7 +29,6 @@ import {
   ChartNoAxesGantt,
   Check,
   ChevronDown,
-  ChevronRight,
   ChevronUp,
   ChevronsLeftRightEllipsis,
   CircleCheckBig,
@@ -341,13 +340,12 @@ export const ICONS = {
   triggerSchedule: CalendarClock,
   flowIf: GitBranch,
   flowFilter: Funnel,
-  /** The step menu's groups, and the mark that opens one. */
+  /** The step menu's groups. */
   flowRead: BookOpenText,
   flowSearch: Search,
   flowAgent: Bot,
   flowUpdate: SquarePen,
   flowCreate: SquarePlus,
-  flowGroup: ChevronRight,
   zoomIn: Plus,
   zoomOut: Minus,
   fit: Scan,

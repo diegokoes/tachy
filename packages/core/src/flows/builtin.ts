@@ -181,7 +181,7 @@ export function registerBuiltinFlowActions(): void {
 
   defineFlowAction({
     key: "bucket.search",
-    title: "Search a bucket",
+    title: "Search bucket",
     description:
       "One bucket of pushed documents, such as a product's public knowledge base. Only buckets shared with the flow's owner.",
     category: "search",
