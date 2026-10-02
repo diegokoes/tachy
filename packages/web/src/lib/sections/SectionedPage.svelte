@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick, untrack, type Component } from "svelte";
-  import { Rail } from "../tui";
+  import { Rail, type IconName } from "../tui";
   import { scrollport } from "../scrollport.svelte";
   import { createSpy } from "./spy.svelte";
   import Section from "./Section.svelte";
@@ -9,6 +9,8 @@
   export type PageSection = {
     key: string;
     label: string;
+    /** Drawn in the heading marker's place. */
+    icon?: IconName;
     view: Component;
     /** Shown on the rail row. null while it is still being counted. */
     count?: number | null;
@@ -112,6 +114,7 @@
         {spy}
         section={s.key}
         label={s.label}
+        icon={s.icon}
         view={s.view}
         eager={s.eager}
         actions={s.actions}

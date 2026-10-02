@@ -11,8 +11,8 @@
     FlowTrigger,
   } from "@tachy/contract";
   import { api } from "../api";
+  import { setPageActions } from "../admin/pageActions.svelte";
   import { keep, recall } from "../kept";
-  import Choice from "../settings/Choice.svelte";
   import Group from "../settings/Group.svelte";
   import {
     Button,
@@ -292,7 +292,34 @@
       ? (run.steps.find((s) => s.step_id === selection!.id) ?? null)
       : null,
   );
+
+  $effect(() => setPageActions(topActions));
 </script>
+
+{#snippet topActions()}
+  {#if draft}
+    <Button
+      variant="ghost"
+      size="sm"
+      icon="test"
+      disabled={!draft.id || dirty}
+      title={dirty ? "save first" : "run it on an item"}
+      onclick={(e) =>
+        (testAnchor = testAnchor
+          ? null
+          : ((e?.currentTarget as HTMLElement) ?? null))}>test run</Button
+    >
+    <Button
+      variant="ghost"
+      size="sm"
+      icon="save"
+      tone={dirty ? "accent" : undefined}
+      busy={saving}
+      disabled={!dirty}
+      onclick={save}>save</Button
+    >
+  {/if}
+{/snippet}
 
 <svelte:window onpointerdown={outsideTriggerMenu} />
 
@@ -309,62 +336,47 @@
       onchange={(v) => (flowId = String(v ?? ""))}
     />
   </span>
-  <span class="acts">
-    {#if error}<span class="bad" title={error}>{error}</span>{/if}
-    <Button
-      variant="ghost"
-      icon="test"
-      disabled={!draft?.id || dirty}
-      title={dirty ? "save first" : "run it on an item"}
-      onclick={(e) =>
-        (testAnchor = testAnchor
-          ? null
-          : ((e?.currentTarget as HTMLElement) ?? null))}>test run</Button
-    >
-    <Button
-      variant="primary"
-      icon="save"
-      busy={saving}
-      disabled={!dirty}
-      onclick={save}>save</Button
-    >
-  </span>
+  {#if draft && !listError}
+    {@const d = draft}
+    <label class="field">
+      <span class="k">name</span>
+      <input class="name" bind:value={d.name} aria-label="Flow name" />
+    </label>
+    <span class="field">
+      <span class="k">team</span>
+      <span class="pick">
+        <Select
+          value={d.team ?? ""}
+          options={teamOptions}
+          searchable
+          aria-label="Team"
+          onchange={(v) => (d.team = String(v ?? "") || null)}
+        />
+      </span>
+    </span>
+    <span class="end loud">
+      <Button
+        variant="ghost"
+        size="sm"
+        icon={d.enabled ? "power" : "pause"}
+        morph
+        tone={d.enabled ? "ok" : "warn"}
+        aria-pressed={d.enabled}
+        title={d.enabled ? "runs on its triggers; pause it" : "switch it on"}
+        onclick={() => (d.enabled = !d.enabled)}
+        >{d.enabled ? "on" : "paused"}</Button
+      >
+      {#if d.id}
+        <DeleteButton label="delete flow" text="delete" onclick={remove} />
+      {/if}
+    </span>
+  {/if}
 </header>
 
+{#if error}<Note tone="danger">{error}</Note>{/if}
 {#if listError}
   <Note tone="danger">{listError}</Note>
 {:else if draft}
-  <div class="settings">
-    <label class="name">
-      <span class="k">name</span>
-      <input bind:value={draft.name} aria-label="Flow name" />
-    </label>
-    <span class="k">team</span>
-    <span class="pick">
-      <Select
-        value={draft.team ?? ""}
-        options={teamOptions}
-        searchable
-        aria-label="Team"
-        onchange={(v) => draft && (draft.team = String(v ?? "") || null)}
-      />
-    </span>
-    <Choice
-      label="Whether the flow runs"
-      options={[
-        { value: "on", label: "on" },
-        { value: "paused", label: "paused" },
-      ]}
-      value={draft.enabled ? "on" : "paused"}
-      onpick={(v) => draft && (draft.enabled = v === "on")}
-    />
-    {#if draft.id}
-      <span class="del">
-        <DeleteButton label="delete flow" onclick={remove} />
-      </span>
-    {/if}
-  </div>
-
   <div class="work">
     <div class="canvas">
       <FlowCanvas
@@ -390,8 +402,6 @@
             onselect={(s) => (selection = s)}
           />
         {/key}
-      {:else}
-        <Note>Pick a node to edit it, or a plus to add a step there.</Note>
       {/if}
       {#if draft.id}
         <Group label="runs">
@@ -474,35 +484,28 @@
     max-width: 100%;
   }
   .pick.wide {
-    width: 18rem;
+    width: 16rem;
   }
   .pick > :global(*) {
     width: 100%;
   }
-  .acts {
+  .field {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pad-3);
+  }
+  .end {
     display: flex;
     align-items: center;
     gap: var(--pad-2);
     margin-left: auto;
-    min-width: 0;
   }
-  .acts :global(.btn) {
+  .end :global(.btn) {
     min-height: var(--control-h);
   }
-  .bad {
-    max-width: 24rem;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    color: var(--danger);
-    font-size: var(--fs-sm);
-  }
-  .settings {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--pad-2) var(--pad-3);
-    padding: var(--pad-3) 0;
+  .loud :global(.btn) {
+    text-transform: uppercase;
+    letter-spacing: var(--label-spacing);
   }
   .k {
     font-size: var(--fs-xs);
@@ -511,18 +514,11 @@
     text-transform: uppercase;
   }
   .name {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--pad-3);
-  }
-  .name input {
-    width: 18rem;
-  }
-  .del {
-    margin-left: auto;
+    width: 12rem;
   }
   .work {
     flex: 1;
+    margin-top: var(--pad-3);
     min-height: 24rem;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(17rem, 22rem);
