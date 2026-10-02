@@ -104,12 +104,14 @@
       {
         key: "projects",
         label: "projects",
+        icon: "project",
         view: ProjectsPanel,
         n: "projects",
       },
       {
         key: "repos",
         label: "repos",
+        icon: "repo",
         view: ReposPanel,
         n: "repos",
         detail: RepoDetail,
@@ -175,7 +177,13 @@
       },
     ],
     access: [
-      { key: "users", label: "users", view: AccessPanel, n: "users" },
+      {
+        key: "users",
+        label: "users",
+        icon: "users",
+        view: AccessPanel,
+        n: "users",
+      },
       {
         key: "teams",
         label: t("teams"),
@@ -191,14 +199,27 @@
       },
     ],
     workers: [
-      { key: "runs", label: "runs", view: RunsPanel, show: admin },
+      {
+        key: "runs",
+        label: "runs",
+        icon: "runs",
+        view: RunsPanel,
+        show: admin,
+      },
       {
         key: "processes",
         label: "workers",
+        icon: "workerPool",
         view: WorkersPanel,
         show: admin,
       },
-      { key: "jobs", label: "jobs", view: JobsPanel, show: admin },
+      {
+        key: "jobs",
+        label: "jobs",
+        icon: "jobs",
+        view: JobsPanel,
+        show: admin,
+      },
       {
         key: "failures",
         label: "failed jobs",
@@ -403,7 +424,7 @@
       >overview</Button
     >
   {/if}
-  {#if detail}
+  {#if detail || filled}
     {@render pageActions()?.()}
   {/if}
   <!-- Issues belong to the page as a whole, so only its overview raises them. -->

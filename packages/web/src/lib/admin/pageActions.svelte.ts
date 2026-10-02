@@ -1,9 +1,9 @@
 import type { Snippet } from "svelte";
 
 /**
- * Controls a record page puts in admin's top tab, where the overview keeps
- * its issues. $state.raw for the identity check in the disposer, as in the
- * subnav store.
+ * Controls a record page or a full-window section puts in admin's top tab,
+ * where the overview keeps its issues. $state.raw for the identity check in
+ * the disposer, as in the subnav store.
  */
 let current = $state.raw<Snippet | null>(null);
 

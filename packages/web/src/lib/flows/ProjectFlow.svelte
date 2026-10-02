@@ -10,6 +10,7 @@
     WorkItemTypeOption,
   } from "@tachy/contract";
   import { api } from "../api";
+  import { setPageActions } from "../admin/pageActions.svelte";
   import { keep, recall } from "../kept";
   import { navigate } from "../router.svelte";
   import Choice from "../settings/Choice.svelte";
@@ -356,7 +357,29 @@
     navigate("/chat");
     openComposer(project, t);
   }
+
+  $effect(() => setPageActions(actions));
 </script>
+
+{#snippet actions()}
+  <Button
+    variant="ghost"
+    size="sm"
+    icon="run"
+    disabled={dirty || !raw}
+    title={dirty ? "save first" : "open this form in the composer"}
+    onclick={tryIt}>try it</Button
+  >
+  <Button
+    variant="ghost"
+    size="sm"
+    icon="save"
+    tone={dirty ? "accent" : undefined}
+    busy={saving}
+    disabled={!dirty}
+    onclick={save}>save</Button
+  >
+{/snippet}
 
 <header class="bar">
   {@render lead()}
@@ -382,26 +405,10 @@
       />
     </span>
   {/if}
-  <span class="acts">
-    {#if saveError}<span class="bad">{saveError}</span>{/if}
-    <Button
-      variant="ghost"
-      icon="run"
-      disabled={dirty || !raw}
-      title={dirty ? "save first" : "open this form in the composer"}
-      onclick={tryIt}>try it</Button
-    >
-    <Button
-      variant="primary"
-      icon="save"
-      busy={saving}
-      disabled={!dirty}
-      onclick={save}>save</Button
-    >
-  </span>
 </header>
 
 <div class="body">
+  {#if saveError}<Note tone="danger">{saveError}</Note>{/if}
   {#if projectsError}
     <Note tone="danger">{projectsError}</Note>
   {:else if !projects.length}
@@ -611,19 +618,6 @@
   }
   .pick > :global(*) {
     width: 100%;
-  }
-  .acts {
-    display: flex;
-    align-items: center;
-    gap: var(--pad-2);
-    margin-left: auto;
-  }
-  .acts :global(.btn) {
-    min-height: var(--control-h);
-  }
-  .bad {
-    color: var(--danger);
-    font-size: var(--fs-sm);
   }
   .body {
     display: flex;
