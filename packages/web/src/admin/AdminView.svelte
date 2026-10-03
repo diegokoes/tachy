@@ -24,10 +24,10 @@
   import PosturePanel from "../access/PosturePanel.svelte";
   import SourcesPanel from "../sources/SourcesPanel.svelte";
   import ProjectsPanel from "../sources/ProjectsPanel.svelte";
-  import ReposPanel from "../repos/ReposPanel.svelte";
-  import RepoDetail from "../repos/RepoDetail.svelte";
+  import ReposPanel from "../code/ReposPanel.svelte";
+  import RepoDetail from "../code/RepoDetail.svelte";
   import BucketsPanel from "../buckets/BucketsPanel.svelte";
-  import BulkLink from "../repos/BulkLink.svelte";
+  import BulkLink from "../code/BulkLink.svelte";
   import TeamsPanel from "../catalog/TeamsPanel.svelte";
   import ProductsPanel from "../catalog/ProductsPanel.svelte";
   import ComponentsPanel from "../catalog/ComponentsPanel.svelte";

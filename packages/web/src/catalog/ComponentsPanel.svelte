@@ -23,7 +23,7 @@
   import { csv } from "../tui/fields";
   import { INFO } from "../admin/help";
   import type { Product } from "./rows";
-  import type { Repo } from "../repos/rows";
+  import type { Repo } from "../code/rows";
   import { pushScope } from "../keys/keys.svelte";
   import ArchitectureMap from "./ArchitectureMap.svelte";
   import SlugRename from "./SlugRename.svelte";
