@@ -92,7 +92,7 @@ async function probe<T>(fn: () => Promise<T>) {
   }
 }
 
-export const projects = new Hono()
+export const sourceProjects = new Hono()
 
   .get("/source-projects", async (c) => {
     const productSlug = c.req.query("product_slug");

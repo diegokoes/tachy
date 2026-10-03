@@ -28,10 +28,10 @@ import { preferences } from "./routes/preferences";
 import { artifacts } from "./routes/artifacts";
 import { outputs } from "./routes/outputs";
 import { repos } from "./routes/repos";
-import { library } from "./routes/library";
+import { wiki } from "./routes/wiki";
 import { jobs } from "./routes/jobs";
-import { tests } from "./routes/tests";
-import { projects } from "./routes/projects";
+import { diagnostics } from "./routes/diagnostics";
+import { sourceProjects } from "./routes/source-projects";
 import { initOidc, installAuth, isBootstrapped, type OidcConfig } from "./auth";
 import { httpLogger, noteError } from "./logging";
 import { readiness } from "./lifecycle";
@@ -67,10 +67,10 @@ function apiRoutes() {
     .route("/artifacts", artifacts)
     .route("/outputs", outputs)
     .route("/repos", repos)
-    .route("/library", library)
+    .route("/library", wiki)
     .route("/jobs", jobs)
-    .route("/tests", tests)
-    .route("/", projects)
+    .route("/tests", diagnostics)
+    .route("/", sourceProjects)
     .route("/", admin);
 }
 

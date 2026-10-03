@@ -110,7 +110,7 @@ const articlePatchSchema = articleSchema.partial().extend({
   expectedVersion: z.number().int().optional(),
 });
 
-export const library = new Hono()
+export const wiki = new Hono()
   .get("/wiki", async (c) => c.json(await listWikis()))
 
   // Served from this origin with everything but the image switched off, so an
