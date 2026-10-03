@@ -92,7 +92,7 @@
   let mode = $state<"link" | "callout">("link");
   /** Whether Enter belongs to the picker. A bare `>` is also the start of an
    *  ordinary blockquote, and Enter there is a newline until a type is asked
-   *  for — by opening the marker, or by arrowing into the list. */
+   *  for - by opening the marker, or by arrowing into the list. */
   let armed = $state(true);
   let queryText = $state("");
   let suggestions = $state<Suggestion[]>([]);
@@ -242,7 +242,7 @@
 
   /**
    * An image is a paragraph of its own, figure-like, whatever line the caret
-   * happened to be in the middle of — so it is padded with just enough blank
+   * happened to be in the middle of - so it is padded with just enough blank
    * lines to stand apart from the text either side of it.
    */
   function insertBlock(text: string) {

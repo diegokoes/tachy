@@ -7,7 +7,7 @@ export type { AgentUsage };
 /**
  * Rows grouped by model with the tokens no provider priced split out. A backend
  * records `cost_usd: 0` when its SDK reports nothing, so zero means "unknown",
- * not "free" — those tokens are priced here with the same table `recordRun`
+ * not "free" - those tokens are priced here with the same table `recordRun`
  * estimates from, and rows written before the estimate existed get one too.
  */
 interface Priced {

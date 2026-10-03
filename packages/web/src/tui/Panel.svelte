@@ -61,7 +61,7 @@
   }
 
   /* Titles and hints straddle the rule, so the padding on that edge must
-     always clear half a label — even at density compact. */
+     always clear half a label - even at density compact. */
   .panel.titled {
     padding-top: max(var(--pad-3), 0.8rem);
   }

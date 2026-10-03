@@ -41,7 +41,7 @@
     full?: boolean;
     title?: string;
     type?: "button" | "submit";
-    /** Submits a form this button is not nested in — the carved action row. */
+    /** Submits a form this button is not nested in - the carved action row. */
     form?: string;
     onclick?: (e: MouseEvent) => void;
     children?: Snippet;
@@ -168,7 +168,7 @@
     color: var(--warn);
   }
 
-  /* Icon buttons have no chrome — no border, no fill, in any state. */
+  /* Icon buttons have no chrome - no border, no fill, in any state. */
   .btn.square {
     --btn-edge: transparent;
     background: transparent;

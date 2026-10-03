@@ -74,7 +74,7 @@ const EMPTY: Census = {
  *
  * Every block is laid over EMPTY rather than taken as it arrives. The SPA is
  * built separately from the server it talks to, so a browser holding a newer
- * bundle than the API asks for figures that response has never heard of — and
+ * bundle than the API asks for figures that response has never heard of - and
  * one `undefined` reaching a `.toLocaleString()` takes down the whole panel,
  * not just the number that is missing.
  */

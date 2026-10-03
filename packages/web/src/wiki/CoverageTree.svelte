@@ -10,8 +10,8 @@
 
   /**
    * What the product is made of and how much of each part has been written
-   * about. A report over the component tree — deliberately not the wiki's
-   * navigation, which is its categories — and the ground the gap list above it
+   * about. A report over the component tree - deliberately not the wiki's
+   * navigation, which is its categories - and the ground the gap list above it
    * was measured against.
    */
   let {

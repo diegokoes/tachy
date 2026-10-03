@@ -84,7 +84,7 @@ async function indexRepoCmd(slug: string) {
 
 /**
  * The connection string carries the password, and argv is world-readable via
- * /proc — so it travels in the child's environment instead, and is never printed
+ * /proc - so it travels in the child's environment instead, and is never printed
  * back. `redactedDbUrl` is what a prompt or a log line gets.
  */
 function pgEnv(): NodeJS.ProcessEnv {

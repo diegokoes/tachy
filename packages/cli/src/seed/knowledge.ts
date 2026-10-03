@@ -115,7 +115,7 @@ export async function seedKnowledge(
        * Drawn from the row's own stream rather than by `i % list.length`. Modular
        * cycling correlated the parts: ROOT_CAUSES and RESOLUTIONS are the same
        * length, so every entry paired cause N with fix N, and the whole corpus
-       * collapsed to lcm(12,10,10) = 60 distinct bodies — and therefore 60
+       * collapsed to lcm(12,10,10) = 60 distinct bodies - and therefore 60
        * distinct embeddings, however many rows were asked for. Independent draws
        * plus the row-specific detail below keep the text effectively unique.
        */
@@ -195,7 +195,7 @@ export async function seedKnowledge(
           : null,
         structured: tx.json({ seeded: true }),
         // The embed text is the row's real prose, so distinct rows get distinct
-        // vectors — the whole point of decorrelating the draws above. The column
+        // vectors - the whole point of decorrelating the draws above. The column
         // holds it until the window's fill swaps in the vector.
         embedding: `${summary} ${rootCause} ${resolution}`,
         created_at: created,
@@ -327,7 +327,7 @@ async function seedReference(
         Math.min(ROOT_CAUSES.length, RESOLUTIONS.length) - 1,
       );
       const docBody = [
-        `${title} — ${product.slug}${component ? ` / ${component.slug}` : ""}.`,
+        `${title} - ${product.slug}${component ? ` / ${component.slug}` : ""}.`,
         `${ROOT_CAUSES[docScenario]}.`,
         `${RESOLUTIONS[docScenario]}.`,
         `Applies ${pick(rng, CONTEXTS)}. ${pick(rng, DIAGNOSTICS)}.`,
@@ -381,7 +381,7 @@ async function seedReference(
       // which yields thousands of exact duplicates.
       const heading = SECTION_HEADINGS[k % SECTION_HEADINGS.length];
       const chunkText = [
-        `${parent.fullTitle} — ${heading} (${parent.product.slug}${parent.component ? ` / ${parent.component.slug}` : ""}).`,
+        `${parent.fullTitle} - ${heading} (${parent.product.slug}${parent.component ? ` / ${parent.component.slug}` : ""}).`,
         `${ROOT_CAUSES[cs]}. ${RESOLUTIONS[cs]}.`,
         `Applies ${pick(crng, CONTEXTS)}. ${pick(crng, DIAGNOSTICS)}.`,
         `Otherwise ${pick(crng, IMPACTS)}.`,

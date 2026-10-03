@@ -39,7 +39,7 @@ export function validateCredential(name: string, value: string): string | null {
     return `a Claude subscription token starts with ${OAUTH_PREFIX}. Run 'claude setup-token' to mint one, or save an API key under 'Anthropic API key' instead`;
   /*
    * GitHub mints several prefixes and keeps adding them, so there is no shape
-   * here worth asserting — only that a credential is one value. Anything
+   * here worth asserting - only that a credential is one value. Anything
    * narrower risks rejecting a token that works, which is worse than not
    * checking.
    */

@@ -4,7 +4,7 @@ import { errText } from "../resource.svelte";
 /**
  * An edit to a library item, and what came back. Both detail views send the
  * version they were rendered from, so a 409 means somebody else saved in
- * between — the one outcome the caller has to offer a reload for rather than
+ * between - the one outcome the caller has to offer a reload for rather than
  * just report. Shared because it was written twice, and the two had already
  * drifted to different wordings for the same situation.
  */

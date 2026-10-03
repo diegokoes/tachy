@@ -16,7 +16,7 @@ export const KNOWLEDGE_STATUSES = [
 ] as const;
 export const REFERENCE_STATUSES = ["draft", "approved", "archived"] as const;
 /**
- * What a reference_docs row is. 'reference' is imported source material — an
+ * What a reference_docs row is. 'reference' is imported source material - an
  * Azure DevOps wiki page, a pasted runbook. 'wiki' is an article authored here,
  * addressed by slug and placed by its categories.
  */
@@ -110,7 +110,7 @@ export type DeploymentProfile = (typeof DEPLOYMENT_PROFILES)[number];
  * app admin manages users, org structure and system settings; a team admin
  * curates one team's library and roster. Nothing in the stored value says
  * which rung it came from, so every surface that shows one has to name the
- * rung with it — see `roleLabel` in packages/web/src/terms.ts.
+ * rung with it - see `roleLabel` in packages/web/src/terms.ts.
  */
 export const USER_ROLES = ["admin", "member"] as const;
 export type UserRole = (typeof USER_ROLES)[number];

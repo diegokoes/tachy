@@ -59,7 +59,7 @@ export function shatterAll(nodes: HTMLElement[], onComplete: () => void) {
 }
 
 /**
- * Resolves a mask of password dots into plain text — in the placeholder if the
+ * Resolves a mask of password dots into plain text - in the placeholder if the
  * node is an input, in its text otherwise. A setting the user has not set
  * themselves still resolves to something; the decode is what says so, and says
  * that typing or picking here replaces it.
@@ -179,7 +179,7 @@ export function shadowPulse(node: HTMLElement, opts?: { loop?: boolean }) {
 
 /**
  * Half-period of the grow/shrink pulse: the icon is at its biggest at PULSE,
- * 3·PULSE, 5·PULSE… Anything that wants to land on a peak — the thread's bead —
+ * 3·PULSE, 5·PULSE… Anything that wants to land on a peak - the thread's bead -
  * schedules itself off this, so both must be started in the same frame.
  */
 export const PULSE = 0.9;
@@ -209,11 +209,11 @@ export function settle(node: Element) {
 }
 
 /**
- * One discharge into a node — the far end of an arriving thread.
+ * One discharge into a node - the far end of an arriving thread.
  *
  * drop-shadow, not box-shadow: box-shadow traces the element's border box, so
- * on a node whose visible shape is drawn rather than boxed — the artifact tab
- * is a hexagon on a borderless button — it flashes a rectangle around it.
+ * on a node whose visible shape is drawn rather than boxed - the artifact tab
+ * is a hexagon on a borderless button - it flashes a rectangle around it.
  * drop-shadow follows what is actually painted.
  */
 export function jolt(node: Element) {
@@ -402,7 +402,7 @@ export function confetti(container: HTMLElement, count = 36) {
   }
 }
 
-/** Horizontal clip-path wipe, staggered — the nav reveal. */
+/** Horizontal clip-path wipe, staggered - the nav reveal. */
 export function wipeIn(nodes: ArrayLike<Element>, onStart?: () => void) {
   if (reducedMotion()) {
     onStart?.();

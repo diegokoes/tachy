@@ -119,7 +119,7 @@ describe("calibration constants", () => {
     }
     expect(SEM_FLOOR).toBeLessThan(SEM_CEIL);
     // Every golden top hit clears the floor its own vector leg is gated on, or
-    // it only got in on keywords — either way the floor is not cutting matches.
+    // it only got in on keywords - either way the floor is not cutting matches.
     expect(worstTrue).toBeGreaterThan(0);
   });
 

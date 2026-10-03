@@ -57,7 +57,7 @@ export interface ArticleSeed {
 
 /**
  * What a new article starts from when something other than a blank page asked
- * for it — a gap naming the component it is about. Taken once by the form, so
+ * for it - a gap naming the component it is about. Taken once by the form, so
  * the next "new article" starts blank again.
  */
 let seed: ArticleSeed | null = null;

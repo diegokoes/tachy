@@ -181,7 +181,7 @@ describe("wiki articles", () => {
     expect((await findArticle(null, "printing")).id).toBe(orgWide.id);
   });
 
-  it("never clears a slug on update — that would orphan its links", async () => {
+  it("never clears a slug on update - that would orphan its links", async () => {
     const a = await article("printing");
     await updateReferenceDoc(a.id, { slug: null });
     expect((await getReferenceDoc(a.id)).slug).toBe("printing");

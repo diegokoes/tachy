@@ -5,7 +5,7 @@ import {
 } from "@tachy/core/compliance";
 
 /**
- * How a tool answers. Everything here shapes what the model reads back — the
+ * How a tool answers. Everything here shapes what the model reads back - the
  * redaction, the notes that steer the next call, and the row trimming that keeps
  * a result inside the size ceiling.
  */
@@ -42,7 +42,7 @@ export function forAgent<T extends Record<string, unknown>>(rows: T[]) {
     }) => ({
       ...rest,
       // One spelling of the customer across all three search surfaces, and the
-      // slug rather than the uuid — the uuid is not something to cite or filter by.
+      // slug rather than the uuid - the uuid is not something to cite or filter by.
       ...(customer_slug ? { customer: customer_slug } : {}),
     }),
   );
@@ -53,7 +53,7 @@ export function forAgent<T extends Record<string, unknown>>(rows: T[]) {
  * silence with a plausible-sounding recollection.
  */
 export const NO_MATCHES =
-  "no entries cleared the relevance floor for this query — the archive has nothing on this. Say so rather than inferring an answer.";
+  "no entries cleared the relevance floor for this query - the archive has nothing on this. Say so rather than inferring an answer.";
 
 /** Calibration for the scores every search returns; shared so the three stay in step. */
 export const GRADE_NOTE =
@@ -62,11 +62,11 @@ export const GRADE_NOTE =
 /**
  * Fires whenever a result set is not uniformly general. Said once per call, on
  * the results themselves, because attribution is only wrong at the moment the
- * answer is written — and a mixed list is exactly where one install's fix gets
+ * answer is written - and a mixed list is exactly where one install's fix gets
  * retold as how the product behaves.
  */
 export const CUSTOMER_NOTE =
-  "Some hits carry a `customer`: that material came from one customer's install and must be attributed to them by name — never restated as general product behaviour. Hits with customer null are general. Where the two disagree, say so rather than merging them.";
+  "Some hits carry a `customer`: that material came from one customer's install and must be attributed to them by name - never restated as general product behaviour. Hits with customer null are general. Where the two disagree, say so rather than merging them.";
 
 export function searchOut(rows: Record<string, unknown>[], kind: string) {
   const trimmed = forAgent(rows);

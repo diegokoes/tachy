@@ -5,7 +5,7 @@ import { unitVector, vectorLiteral } from "./deterministic";
  * model on a batch of one, awaited inside the row loop; batching is worth about
  * 1.15x, measured, because the model is throughput-bound rather than
  * overhead-bound. What actually moves the number is not embedding a corpus at
- * all — see EMBED_MODES.
+ * all - see EMBED_MODES.
  *
  * `offset` is the index of the window's first row in its table, so the synthetic
  * side stays keyed to the row rather than to its position in the window.

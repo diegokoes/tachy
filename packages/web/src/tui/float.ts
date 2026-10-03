@@ -5,7 +5,7 @@
  * `position: fixed` rather than a portal: nothing is reparented, so Svelte
  * keeps ownership of the node and the popup stays inside the stacking context
  * it was written in. The one thing it asks in return is that no ancestor
- * carries a transform, filter or `contain` — any of those makes itself the
+ * carries a transform, filter or `contain` - any of those makes itself the
  * containing block and fixed goes back to being absolute. That is why the
  * dialog's open tween clears its own transform when it lands.
  */
@@ -70,13 +70,13 @@ export function float(node: HTMLElement, options: FloatOptions) {
 
     /* Measured with the cap off, so "how tall does it want to be" is the
        content's answer and not the last frame's. The border box is what the
-       cap is then set against — `scrollHeight` stops at the padding box, so
+       cap is then set against - `scrollHeight` stops at the padding box, so
        capping with it left every bordered popup two pixels short of its own
        content and permanently scrolling.
 
        Taking the cap off also makes the popup's own scrollers briefly
        non-overflowing, and the browser clamps their scrollTop to 0 on the way
-       past — so what the user had scrolled to is put back once it is on. */
+       past - so what the user had scrolled to is put back once it is on. */
     const scrolled: [Element, number][] = [];
     for (const el of node.querySelectorAll("*"))
       if (el.scrollTop) scrolled.push([el, el.scrollTop]);
@@ -136,7 +136,7 @@ export function float(node: HTMLElement, options: FloatOptions) {
   node.style.left = "0";
   place();
 
-  /* Capture, so an ancestor scrolling under the popup moves it too — the
+  /* Capture, so an ancestor scrolling under the popup moves it too - the
      bubbling phase never sees a scroll on anything but the document. The
      popup's own list is the exception: it has not moved, and re-placing on it
      re-measures, which is the one thing that disturbs the scroll being made. */

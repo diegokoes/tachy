@@ -140,7 +140,7 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
 
   const PER_PAGE = 100;
 
-  /** One page of one repo — the unit the sync loop advances through. */
+  /** One page of one repo - the unit the sync loop advances through. */
   async function listRepoIssuePage(
     repo: string,
     page: number,

@@ -41,7 +41,7 @@ import { componentIntoFilter, resolveScopeIds } from "../context";
 tool(
   "search_knowledge",
   {
-    description: `Search prior knowledge entries by keyword / symptom / error code. Use for consult mode. Results may include status 'deprecated' entries (possibly with superseded_by pointing at their replacement) — warn that those are outdated, never present them as current advice. Filter with product_slug / team_slug (slugs or aliases — not UUIDs), tags (entry must carry at least one), and/or component (matches the entry's linked component or its slug/aliases in tags). ${GRADE_NOTE}`,
+    description: `Search prior knowledge entries by keyword / symptom / error code. Use for consult mode. Results may include status 'deprecated' entries (possibly with superseded_by pointing at their replacement) - warn that those are outdated, never present them as current advice. Filter with product_slug / team_slug (slugs or aliases - not UUIDs), tags (entry must carry at least one), and/or component (matches the entry's linked component or its slug/aliases in tags). ${GRADE_NOTE}`,
     inputSchema: {
       query: z.string(),
       ...knowledgeFilterFields,
@@ -50,7 +50,7 @@ tool(
         .string()
         .optional()
         .describe(
-          "Customer slug from list_customers. Ranks that customer's own material first WITHOUT hiding the rest — a fix found on one install is often the answer for the next.",
+          "Customer slug from list_customers. Ranks that customer's own material first WITHOUT hiding the rest - a fix found on one install is often the answer for the next.",
         ),
     },
     annotations: { readOnlyHint: true },
@@ -92,38 +92,38 @@ tool(
   "save_knowledge_entry",
   {
     description:
-      "Persist a structured knowledge entry. The call is gated by a review box the user can edit before it runs, so draft it and call — do not ask for approval in prose first. resolution_pattern must be an existing slug from list_resolution_patterns (or omitted) — it is not free text. component must be an existing slug/alias from list_components; if the ticket's area is missing from the glossary, call add_component first — it gets its own review box — then save. product_area is derived automatically from the component hierarchy — it is not an input. For manual entries (no work_item_id) that set component, pass product_slug — component slugs resolve within a product.",
+      "Persist a structured knowledge entry. The call is gated by a review box the user can edit before it runs, so draft it and call - do not ask for approval in prose first. resolution_pattern must be an existing slug from list_resolution_patterns (or omitted) - it is not free text. component must be an existing slug/alias from list_components; if the ticket's area is missing from the glossary, call add_component first - it gets its own review box - then save. product_area is derived automatically from the component hierarchy - it is not an input. For manual entries (no work_item_id) that set component, pass product_slug - component slugs resolve within a product.",
     inputSchema: {
       work_item_id: z.string().optional(),
       product_slug: z
         .string()
         .optional()
         .describe(
-          "Product slug or alias — the normal way to scope an entry. Required for manual entries that set component.",
+          "Product slug or alias - the normal way to scope an entry. Required for manual entries that set component.",
         ),
       team_slug: z.string().optional().describe("Team slug or alias."),
       product_id: z
         .string()
         .optional()
         .describe(
-          "Product UUID — only if you already hold one (e.g. from fetch_work_item); otherwise use product_slug.",
+          "Product UUID - only if you already hold one (e.g. from fetch_work_item); otherwise use product_slug.",
         ),
       team_id: z
         .string()
         .optional()
-        .describe("Team UUID — otherwise use team_slug."),
+        .describe("Team UUID - otherwise use team_slug."),
       customer_slug: z
         .string()
         .nullable()
         .optional()
         .describe(
-          "Set ONLY when the lesson is true of one customer's install and not of the product — their addon, their configuration, their version. It is not inherited from the ticket, and whose ticket it was is not the test: most problems found on a customer's ticket are the product's behaviour and must stay general, or they will not be found for anyone else. Setting it makes every future answer cite the entry as that customer's case.",
+          "Set ONLY when the lesson is true of one customer's install and not of the product - their addon, their configuration, their version. It is not inherited from the ticket, and whose ticket it was is not the test: most problems found on a customer's ticket are the product's behaviour and must stay general, or they will not be found for anyone else. Setting it makes every future answer cite the entry as that customer's case.",
         ),
       unit: z
         .string()
         .optional()
         .describe(
-          "Which part of that customer's estate it was learned on — a unit slug from list_customer_units. Needs customer_slug. When the entry comes from a ticket already filed against a unit AND you name that same customer, it is inherited automatically, so pass this only to override.",
+          "Which part of that customer's estate it was learned on - a unit slug from list_customer_units. Needs customer_slug. When the entry comes from a ticket already filed against a unit AND you name that same customer, it is inherited automatically, so pass this only to override.",
         ),
       status: knowledgeStatusSchema.optional(),
       issue_summary: z
@@ -138,7 +138,7 @@ tool(
         .string()
         .optional()
         .describe(
-          "The underlying technical cause, stated precisely. Omit rather than guess — an unknown cause means confidence 'low'.",
+          "The underlying technical cause, stated precisely. Omit rather than guess - an unknown cause means confidence 'low'.",
         ),
       resolution: z
         .string()
@@ -148,7 +148,7 @@ tool(
         .string()
         .optional()
         .describe(
-          "Slug from list_resolution_patterns — a controlled vocabulary, never free text. Omit entirely if none fits.",
+          "Slug from list_resolution_patterns - a controlled vocabulary, never free text. Omit entirely if none fits.",
         ),
       component: z
         .string()
@@ -159,24 +159,24 @@ tool(
       confidence: confidenceSchema
         .optional()
         .describe(
-          "How sure you are that the root_cause and resolution written here are CORRECT — a property of this entry, not of the ticket. 'high': cause identified and the fix confirmed to address it. 'medium': plausible cause, fix worked but was never confirmed to be the reason. 'low': cause unknown or guessed. No root_cause means 'low'.",
+          "How sure you are that the root_cause and resolution written here are CORRECT - a property of this entry, not of the ticket. 'high': cause identified and the fix confirmed to address it. 'medium': plausible cause, fix worked but was never confirmed to be the reason. 'low': cause unknown or guessed. No root_cause means 'low'.",
         ),
       tags: tagsField,
       cloud: cloudSchema
         .optional()
         .describe(
-          "Environment the issue was observed in — lowercase slug (e.g. prod, qa, dev). Call list_environments first and reuse an existing value when one fits.",
+          "Environment the issue was observed in - lowercase slug (e.g. prod, qa, dev). Call list_environments first and reuse an existing value when one fits.",
         ),
       resolution_clarity: resolutionClaritySchema
         .optional()
         .describe(
-          "Whether the ticket actually ended in a fix — a property of what happened, not of how sure you are. 'clear': a specific fix was applied and the issue confirmed gone. 'partial': mitigated or worked around, the underlying cause still stands. 'unclear': closed with no real resolution — it stopped recurring, the customer went quiet, nobody identified a fix. Independent of confidence: a restart that verifiably fixed it with no known cause is clear + low; a cause you fully understand that was never fixed is unclear + high.",
+          "Whether the ticket actually ended in a fix - a property of what happened, not of how sure you are. 'clear': a specific fix was applied and the issue confirmed gone. 'partial': mitigated or worked around, the underlying cause still stands. 'unclear': closed with no real resolution - it stopped recurring, the customer went quiet, nobody identified a fix. Independent of confidence: a restart that verifiably fixed it with no known cause is clear + low; a cause you fully understand that was never fixed is unclear + high.",
         ),
       hidden_fix: z
         .boolean()
         .optional()
         .describe(
-          "True when the real fix was not visible on the ticket surface — the reporter's described problem and the actual cause diverged. Marks the entries worth reading before trusting a ticket at face value, and is filterable in the library.",
+          "True when the real fix was not visible on the ticket surface - the reporter's described problem and the actual cause diverged. Marks the entries worth reading before trusting a ticket at face value, and is filterable in the library.",
         ),
       affected_version: z
         .string()
@@ -233,7 +233,7 @@ tool(
   "add_knowledge_feedback",
   {
     description:
-      "Record human feedback (a correction, rating, or note) on an existing knowledge entry, so it can be improved over time. kind 'deprecation' records WHY an entry is outdated — the actual retirement is a separate update_knowledge_entry call with status 'deprecated'.",
+      "Record human feedback (a correction, rating, or note) on an existing knowledge entry, so it can be improved over time. kind 'deprecation' records WHY an entry is outdated - the actual retirement is a separate update_knowledge_entry call with status 'deprecated'.",
     inputSchema: {
       knowledge_entry_id: z.string(),
       kind: feedbackKindSchema.optional(),
@@ -243,7 +243,7 @@ tool(
         .record(z.string(), z.any())
         .optional()
         .describe(
-          "A proposed correction, recorded alongside the feedback rather than applied. Nothing reads it back automatically — a curator decides. To actually change an entry, call update_knowledge_entry.",
+          "A proposed correction, recorded alongside the feedback rather than applied. Nothing reads it back automatically - a curator decides. To actually change an entry, call update_knowledge_entry.",
         ),
     },
   },
@@ -265,7 +265,7 @@ tool(
   "update_knowledge_entry",
   {
     description:
-      "Update fields on an existing knowledge entry, or change its status. Mark outdated knowledge with status 'deprecated' (it stays searchable but flagged; set superseded_by when a newer entry replaces it) — reserve 'archived' for entries that should vanish from search entirely. Pass only the fields you want to change; omitted fields are left as-is. Nullable fields (issue_summary, root_cause, etc.) accept null to clear them. component takes a slug/alias from list_components (product_area is re-derived from it; null clears both). The search results include 'version' — pass it as expected_version to guard against concurrent edits.",
+      "Update fields on an existing knowledge entry, or change its status. Mark outdated knowledge with status 'deprecated' (it stays searchable but flagged; set superseded_by when a newer entry replaces it) - reserve 'archived' for entries that should vanish from search entirely. Pass only the fields you want to change; omitted fields are left as-is. Nullable fields (issue_summary, root_cause, etc.) accept null to clear them. component takes a slug/alias from list_components (product_area is re-derived from it; null clears both). The search results include 'version' - pass it as expected_version to guard against concurrent edits.",
     inputSchema: {
       id: z.string(),
       status: knowledgeStatusSchema.optional(),
@@ -290,7 +290,7 @@ tool(
         .nullable()
         .optional()
         .describe(
-          "Environment slug — reuse an existing value from list_environments when one fits; null clears it.",
+          "Environment slug - reuse an existing value from list_environments when one fits; null clears it.",
         ),
       resolution_clarity: resolutionClaritySchema.nullable().optional(),
       hidden_fix: z.boolean().nullable().optional(),
@@ -359,7 +359,7 @@ tool(
   "list_knowledge_entries",
   {
     description:
-      "List knowledge entries (newest first), optionally filtered by status (e.g. 'draft' to find pending entries, 'deprecated' to review outdated ones), product_slug / team_slug (slug or alias), or tags. Useful for review and curation — not semantic search; use search_knowledge for consult.",
+      "List knowledge entries (newest first), optionally filtered by status (e.g. 'draft' to find pending entries, 'deprecated' to review outdated ones), product_slug / team_slug (slug or alias), or tags. Useful for review and curation - not semantic search; use search_knowledge for consult.",
     inputSchema: {
       status: knowledgeStatusSchema.optional(),
       ...knowledgeFilterFields,
@@ -405,7 +405,7 @@ tool(
   "list_environments",
   {
     description:
-      "List the environments ('cloud' values) already used by knowledge entries in this deployment, with usage counts. The vocabulary is deployment-specific (e.g. prod/qa vs dev/demo/preprod) — call this before setting `cloud` on a save/update and reuse an existing slug when one fits, rather than inventing a near-duplicate.",
+      "List the environments ('cloud' values) already used by knowledge entries in this deployment, with usage counts. The vocabulary is deployment-specific (e.g. prod/qa vs dev/demo/preprod) - call this before setting `cloud` on a save/update and reuse an existing slug when one fits, rather than inventing a near-duplicate.",
     inputSchema: {},
     annotations: { readOnlyHint: true },
   },

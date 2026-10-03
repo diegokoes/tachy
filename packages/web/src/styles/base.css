@@ -1,4 +1,4 @@
-/* Element defaults. Only bare elements are styled here — every named class
+/* Element defaults. Only bare elements are styled here - every named class
    lives in a component. */
 
 * {
@@ -58,7 +58,7 @@ select {
   caret-shape: block;
 }
 
-/* Focus ring drawn INSIDE the box (border + inset shadow) — outlines render
+/* Focus ring drawn INSIDE the box (border + inset shadow) - outlines render
    outside and get clipped when a control touches the scroll container's edge. */
 input:focus-visible,
 textarea:focus-visible,
@@ -69,7 +69,7 @@ button:focus-visible {
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
-/* Readable measure for running prose only — containers stay full-frame so the
+/* Readable measure for running prose only - containers stay full-frame so the
    list → detail transition never changes width.
 
    ch is the width of "0" in the inherited face, so this stays a character-count

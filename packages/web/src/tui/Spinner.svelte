@@ -5,7 +5,7 @@
   let { label = "loading" }: { label?: string } = $props();
 
   const W = 16;
-  /** Cells behind the head, brightest first — the old ▓▒░ ramp as opacity. */
+  /** Cells behind the head, brightest first - the old ▓▒░ ramp as opacity. */
   const TAIL = [1, 0.62, 0.35, 0.16];
 
   let tick = $state(0);
@@ -66,7 +66,7 @@
     border-radius: var(--radius);
   }
 
-  /* Drawn, not typed — the ╔═╗ frame and █▓▒░· comet were glyphs neither
+  /* Drawn, not typed - the ╔═╗ frame and █▓▒░· comet were glyphs neither
      bundled face carries. The frame is now a real border. */
   .frame {
     display: flex;

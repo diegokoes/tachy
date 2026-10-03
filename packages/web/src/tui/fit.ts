@@ -1,5 +1,5 @@
 /**
- * How many rows of `row` rem, `gap` rem apart, fit the node's height — told to
+ * How many rows of `row` rem, `gap` rem apart, fit the node's height - told to
  * `onfit` now and whenever the node resizes. Measured by hand on mount first: a
  * ResizeObserver only delivers on a rendered frame, and a tab nobody is looking
  * at renders none, which left a chart built there with no rows at all.

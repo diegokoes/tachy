@@ -21,7 +21,7 @@
   const pending = $derived(entry.status === "pending");
   const keys = $derived(Object.keys(entry.input));
 
-  /** Collapsed summary once decided — the longest string field reads best. */
+  /** Collapsed summary once decided - the longest string field reads best. */
   const peek = $derived.by(() => {
     const s = Object.values(entry.input)
       .filter((v): v is string => typeof v === "string")
@@ -69,7 +69,7 @@
   const specFor = (ref: string) =>
     schema?.fields.find((f) => f.reference_name === ref);
 
-  /** Required fields the model did not fill — the commonest reason a create bounces. */
+  /** Required fields the model did not fill - the commonest reason a create bounces. */
   const missing = $derived(
     schema && adoFields
       ? schema.fields

@@ -2,7 +2,7 @@ import { sql } from "./db";
 
 /**
  * Self-parenting tables. Named rather than taken as a string so the identifier
- * that reaches the query is one of these three and nothing else — the same
+ * that reaches the query is one of these three and nothing else - the same
  * shape `resolveScoped` uses for its own table argument.
  */
 const HIERARCHY_TABLES = [
@@ -14,14 +14,14 @@ export type HierarchyTable = (typeof HIERARCHY_TABLES)[number];
 
 /**
  * Deep enough for any real tree, and the reason the walk terminates at all: if
- * a ring already exists — written before these checks did — an uncapped
+ * a ring already exists - written before these checks did - an uncapped
  * recursive CTE does not return, and this runs on the save path.
  */
 const MAX_DEPTH = 64;
 
 /**
  * The columns that point at another row of the same table. `customer_units` has
- * two — where a unit sits, and which unit it takes its shape from — and both can
+ * two - where a unit sits, and which unit it takes its shape from - and both can
  * ring.
  */
 const PARENT_COLUMNS = ["parent_id", "profile_id"] as const;

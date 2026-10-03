@@ -96,7 +96,7 @@ export interface CustomerMatch {
  *
  * A domain registered to more than one customer resolves to NEITHER. Picking one
  * would file the ticket, the entry learned from it and every future search hit
- * under a customer nobody chose — an unresolved item that says why is recoverable,
+ * under a customer nobody chose - an unresolved item that says why is recoverable,
  * a confidently wrong one is not.
  */
 export async function resolveCustomerByEmail(
@@ -129,7 +129,7 @@ export interface ResolvedCustomer {
 }
 
 /**
- * Slug, then alias, then a trigram-ranked hint on a miss — the same ladder
+ * Slug, then alias, then a trigram-ranked hint on a miss - the same ladder
  * resolveComponentStrict offers, so the other names an account trades under
  * resolve rather than merely being stored. Slugs are unique but aliases are not,
  * so an alias claimed by two customers is ambiguous rather than a coin toss.
@@ -243,7 +243,7 @@ export interface CustomerFactInput {
 /**
  * Set one specific about a customer's install. Keyed on
  * (customer, unit, kind, label) with nulls not distinct, so re-stating a version
- * replaces it instead of leaving two answers to the same question — while the
+ * replaces it instead of leaving two answers to the same question - while the
  * same kind stated for a particular line coexists with the customer-wide one.
  */
 export async function setCustomerFact(i: CustomerFactInput) {
@@ -353,11 +353,11 @@ export async function listCustomerComponents(customerId: string) {
 /**
  * Everything configured about one customer, in one read: the specifics of their
  * install plus the records that belong to them. This is what a ticket turn needs
- * BEFORE it reasons — their version and addons decide whether a general answer
+ * BEFORE it reasons - their version and addons decide whether a general answer
  * even applies to them.
  *
  * With `unit`, the facts are the RESOLVED ladder for
- * that part of their estate — each one carrying where it came from — rather
+ * that part of their estate - each one carrying where it came from - rather
  * than the flat list, so an answer can say which level it is true of.
  */
 export async function getCustomerProfile(

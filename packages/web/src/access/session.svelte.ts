@@ -64,7 +64,7 @@ export async function initSession(): Promise<void> {
 }
 
 /**
- * Global admin. Treats "no session" as admin, matching the open-auth mode —
+ * Global admin. Treats "no session" as admin, matching the open-auth mode -
  * but not when boot failed, where "no session" means "we do not know".
  */
 export function isGlobalAdmin(): boolean {
@@ -99,7 +99,7 @@ export function onUnauthorized(): void {
   }
   session.me = null;
   /*
-   * With no interactive way back in — token or open mode — App renders no login
+   * With no interactive way back in - token or open mode - App renders no login
    * view, so clearing `me` alone left the shell up with no session and nothing
    * the user could do. Re-deriving the whole session is the honest answer: in
    * open mode it comes straight back, and otherwise the shell has current

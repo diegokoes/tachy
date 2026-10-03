@@ -17,7 +17,7 @@ export type Column<T> = {
    * Plain display value; ignored when `cell` is given.
    *
    * On an editable column this is also what seeds the record form, so it must
-   * return the **stored** form — the option's `value`, not its label; a boolean,
+   * return the **stored** form - the option's `value`, not its label; a boolean,
    * not "on"/"off". Anything a column wants to *show* differently belongs in
    * `cell`. Returning a label here put "Freshdesk" where "freshdesk" was
    * expected and crashed the source form on open, and made every edit of a
@@ -51,14 +51,14 @@ export type Column<T> = {
   /** What a fresh create form starts this field at. */
   initial?: string | number | boolean;
   required?: boolean;
-  /** Per-row override — e.g. a slug that may not be changed after creation. */
+  /** Per-row override - e.g. a slug that may not be changed after creation. */
   editable?: (row: T) => boolean;
   /**
    * Computed from the rest of the draft while creating, never typed. Derived
    * fields render read-only; changing one afterwards is a rename, not an edit.
    */
   derive?: (d: Draft) => string;
-  /** Normalises as the user types — a label whose slug *is* its name. */
+  /** Normalises as the user types - a label whose slug *is* its name. */
   transform?: (v: string) => string;
   /** Drawn after the control in the record form, e.g. a button acting on it. */
   aside?: Snippet<[{ draft: Draft; mode: "create" | "edit" }]>;

@@ -32,8 +32,8 @@ function checkoutDir(slug: string): string {
  * the remote has to be one of the shapes we actually clone from, not merely
  * "not shell metacharacters".
  *
- * `file://` is on the list because it cannot run anything — it reads a git
- * repository and nothing else — and it is how a local clone is indexed in
+ * `file://` is on the list because it cannot run anything - it reads a git
+ * repository and nothing else - and it is how a local clone is indexed in
  * tests. The transports that execute are the ones missing from it.
  */
 const REPO_URL_RE = /^(?:https?:\/\/|ssh:\/\/|file:\/\/|git@)[A-Za-z0-9\/]/;
@@ -48,7 +48,7 @@ export function assertRepoUrl(url: string): string {
 
 /**
  * A ref name reaches git as a positional too, so the same reasoning applies.
- * This is narrower than git's own rules deliberately — it is the set of branch
+ * This is narrower than git's own rules deliberately - it is the set of branch
  * and tag names anyone actually has.
  */
 export function assertBranchName(branch: string): string {

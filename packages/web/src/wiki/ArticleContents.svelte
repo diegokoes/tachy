@@ -191,7 +191,7 @@
     border-left: 2px solid transparent;
     padding: 0.1rem 0 0.1rem var(--pad-1);
   }
-  /* Where you are: the accent edge Rail uses, not a highlight bar — the
+  /* Where you are: the accent edge Rail uses, not a highlight bar - the
      column is a reading aid and should not shout over the page. */
   .row.on {
     border-left-color: var(--accent);

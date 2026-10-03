@@ -21,7 +21,7 @@
   let root = $state<HTMLElement>();
 
   /**
-   * Every extra, always, in the same order — the ones already on the row are
+   * Every extra, always, in the same order - the ones already on the row are
    * marked rather than dropped. Picking three in a row is the normal way this
    * menu is used, and a list that reflows under the pointer after each pick
    * costs a misclick.
@@ -100,7 +100,7 @@
   .menu {
     position: relative;
   }
-  /* Cased in CSS, not in the copy — a screen reader still hears a word. */
+  /* Cased in CSS, not in the copy - a screen reader still hears a word. */
   .lbl {
     text-transform: uppercase;
     letter-spacing: var(--label-spacing);

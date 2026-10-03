@@ -110,7 +110,7 @@ export async function getSourceProject(id: string): Promise<SourceProjectRow> {
   return row as SourceProjectRow;
 }
 
-/** Resolve by the key the source itself uses — ADO project name, Freshdesk group id. */
+/** Resolve by the key the source itself uses - ADO project name, Freshdesk group id. */
 export async function resolveSourceProject(
   sourceSlug: string,
   externalKey: string,
@@ -162,7 +162,7 @@ async function resolveScope(
 /**
  * Drops anything without an identifier, de-duplicates, and settles the default:
  * whichever entry is flagged, else the first. Exactly one survives flagged, so
- * no caller has to cope with two — or with none, which would silently turn every
+ * no caller has to cope with two - or with none, which would silently turn every
  * wiki tool into "name the wiki yourself".
  */
 export function normalizeWikis(input: unknown): ProjectWiki[] {
@@ -437,7 +437,7 @@ export interface ProjectContext {
   product: { id: string; slug: string } | null;
   team: { id: string; slug: string };
   customer: { id: string; slug: string } | null;
-  /** The default wiki — what every tool uses when the caller names none. */
+  /** The default wiki - what every tool uses when the caller names none. */
   wiki: ProjectWiki | null;
   /** All registered wikis. An ADO project routinely has several. */
   wikis: ProjectWiki[];

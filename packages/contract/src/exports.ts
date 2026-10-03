@@ -42,7 +42,7 @@ const MAX_SHEET = 31;
 const MAX_FILENAME = 180;
 
 /**
- * The character rules alone, with no fallback for an empty result — what an
+ * The character rules alone, with no fallback for an empty result - what an
  * input field needs while someone is still typing into it. `sheetName` and
  * `safeFilename` are these plus the fallback, for the value that is finally
  * used.
@@ -65,7 +65,7 @@ export function sheetName(name: string | undefined): string {
   return cleaned || DEFAULT_SHEET;
 }
 
-/** `basename`, without `node:path` — this file is bundled into the browser. */
+/** `basename`, without `node:path` - this file is bundled into the browser. */
 const basename = (path: string) =>
   path.replace(/\/+$/, "").split("/").pop() ?? "";
 
@@ -101,7 +101,7 @@ export function outputFilename(
   );
 }
 
-/** The heading a column is shown under — its label, or its key if unlabelled. */
+/** The heading a column is shown under - its label, or its key if unlabelled. */
 export const columnHeading = (c: Pick<TableColumn, "key" | "label">) =>
   (c.label ?? "").trim() || c.key.trim();
 

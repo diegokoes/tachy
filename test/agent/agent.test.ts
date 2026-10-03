@@ -60,7 +60,7 @@ describe("agent tool allowlist (security boundary)", () => {
     // No tool registered twice under two names.
     expect(new Set(registered).size).toBe(registered.length);
 
-    // A conditional write is classified too — by its flag rather than a list.
+    // A conditional write is classified too - by its flag rather than a list.
     const listed = new Set<string>([
       ...READ_TOOLS,
       ...WRITE_TOOLS,

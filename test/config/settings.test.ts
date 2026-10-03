@@ -122,7 +122,7 @@ describe("settings API gating", () => {
     // The settings and credential availability are what the app renders from.
     expect(body.settings).toBeDefined();
     expect(body.credentials).toBeDefined();
-    // The deployment inventory — secrets configured, upload path, port — is not.
+    // The deployment inventory - secrets configured, upload path, port - is not.
     expect(body.env).toBeUndefined();
 
     const res = await put(memberCookie, "agent_effort", "low");

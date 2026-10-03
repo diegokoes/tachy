@@ -6,7 +6,7 @@
 
   let copied = $state(false);
 
-  /** Clone/auth failures run to paragraphs — keep them out of the layout
+  /** Clone/auth failures run to paragraphs - keep them out of the layout
       entirely: the icon is fixed size, the text lives in the tooltip, and a
       click puts the whole thing on the clipboard. */
   async function copy() {

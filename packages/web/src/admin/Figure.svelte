@@ -6,7 +6,7 @@
     size = "fig",
   }: {
     value: number;
-    /** Printed small after the figure — "of 12", "chunks". */
+    /** Printed small after the figure - "of 12", "chunks". */
     unit?: string;
     tone?: "accent" | "ok" | "warn" | "danger" | "muted";
     /** "fig" is the number a card leads with; "sm" rides inside a dial. */

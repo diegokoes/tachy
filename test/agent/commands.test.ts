@@ -71,7 +71,7 @@ describe("slash command registry", () => {
       "utf8",
     );
     const headings = new Set(
-      [...prompt.matchAll(/^### (.+?)(?: —|$)/gm)].map((m) =>
+      [...prompt.matchAll(/^### (.+?)(?: -|$)/gm)].map((m) =>
         m[1].trim().toLowerCase(),
       ),
     );

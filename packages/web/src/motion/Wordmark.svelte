@@ -66,7 +66,7 @@
       ctx.clearRect(0, 0, w, h);
       ctx.font = `700 ${Math.round(h * 0.82)}px ${face}`;
       // Loosened so adjacent letters keep a clear gutter at this sample
-      // density — at 0 the A and C of TACHY bleed into one shape.
+      // density - at 0 the A and C of TACHY bleed into one shape.
       if ("letterSpacing" in ctx)
         ctx.letterSpacing = `${(h * 0.05).toFixed(1)}px`;
       ctx.textBaseline = "alphabetic";
@@ -133,7 +133,7 @@
           moving = true;
       }
       draw();
-      // Park the loop once everything is home — this is decoration, and it has
+      // Park the loop once everything is home - this is decoration, and it has
       // no business holding a rAF open for the life of the session.
       if (!moving && px < -1e5) {
         settled = true;
@@ -204,7 +204,7 @@
 </div>
 
 <style>
-  /* Sized, not positioned — App places it at the left of the top row, on the
+  /* Sized, not positioned - App places it at the left of the top row, on the
      window's left edge, where it can actually receive the pointer. */
   .wordmark {
     width: 11rem;

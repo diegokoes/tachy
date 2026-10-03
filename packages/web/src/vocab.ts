@@ -1,5 +1,5 @@
 /**
- * The controlled vocabularies come from `@tachy/contract` — the same lists the
+ * The controlled vocabularies come from `@tachy/contract` - the same lists the
  * API validates against and `db/schema.sql` constrains. Re-exported here so the
  * SPA's call sites have one import to reach for.
  */
@@ -21,8 +21,8 @@ export {
 };
 
 /**
- * The provider dropdown, in the contract's order. Only the labels live here —
- * they are copy, not vocabulary — and keying them by AgentProvider is what makes
+ * The provider dropdown, in the contract's order. Only the labels live here -
+ * they are copy, not vocabulary - and keying them by AgentProvider is what makes
  * a new backend a type error in the SPA rather than a silently short list.
  */
 const PROVIDER_LABELS: Record<AgentProvider, string> = {
@@ -36,7 +36,7 @@ export const PROVIDER_OPTIONS = AGENT_PROVIDERS.map((value) => ({
 }));
 
 /**
- * Keys whose values come from a fixed list wherever they appear — used to give
+ * Keys whose values come from a fixed list wherever they appear - used to give
  * a tool-input field a dropdown instead of a free-text box.
  */
 export const ENUM_FIELDS: Record<string, readonly string[]> = {

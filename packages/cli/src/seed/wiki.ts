@@ -83,18 +83,18 @@ const BODY = (
   rng: () => number,
   image: string | null,
 ) =>
-  `## Overview\n\n${title} — what it is and when it matters on ${scope}.` +
+  `## Overview\n\n${title} - what it is and when it matters on ${scope}.` +
   (links.length ? ` See ${links.map((l) => `[[${l}]]`).join(" and ")}.` : "") +
   `\n\n## Architecture\n\nHow the pieces fit together. ${pick(rng, CONTEXTS)} is the case to watch.\n\n` +
   (image ? `![Architecture sketch](${assetPath(image)})\n\n` : "") +
   `### Components\n\nThe moving parts. ${pick(rng, DIAGNOSTICS)}.\n\n` +
-  `## Common failures\n\n${pick(rng, SYMPTOMS)} — ${pick(rng, ROOT_CAUSES)}. ` +
+  `## Common failures\n\n${pick(rng, SYMPTOMS)} - ${pick(rng, ROOT_CAUSES)}. ` +
   `${pick(rng, RESOLUTIONS)}, otherwise ${pick(rng, IMPACTS)}.\n`;
 
 /**
  * A picture for the seeded articles to show, drawn here rather than shipped as
  * a binary fixture: four block-shaded bands in muted green, the ░▒▓█ ramp as
- * pixels. Enough to put the image path — upload table, route, renderer — in
+ * pixels. Enough to put the image path - upload table, route, renderer - in
  * front of anyone running a dev database.
  */
 function sketchPng(w = 96, h = 32): Buffer {
@@ -130,7 +130,7 @@ function sketchPng(w = 96, h = 32): Buffer {
   ]);
 }
 
-/** The pages that carry the sketch — enough to see it, not so many it is noise. */
+/** The pages that carry the sketch - enough to see it, not so many it is noise. */
 const ILLUSTRATED = new Set(["main", "overview"]);
 
 /**

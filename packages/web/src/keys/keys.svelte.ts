@@ -1,5 +1,5 @@
 export type Binding = {
-  /** A normalized key, or a space-separated sequence of them — e.g. "g g". */
+  /** A normalized key, or a space-separated sequence of them - e.g. "g g". */
   key: string;
   label: string;
   run: () => void;
@@ -16,7 +16,7 @@ const scopes: Scope[] = [];
 let seq = 0;
 let stamp = $state.raw(0);
 
-/** Innermost scope wins — a modal's bindings shadow the view's. */
+/** Innermost scope wins - a modal's bindings shadow the view's. */
 const top = (): Scope | undefined => scopes[scopes.length - 1];
 
 export function hints(): { key: string; label: string }[] {
@@ -48,7 +48,7 @@ function inTextField(t: EventTarget | null): boolean {
 export function normalize(e: KeyboardEvent, ctrl = false): string {
   if (e.shiftKey && /^Digit[1-9]$/.test(e.code))
     return `shift+${e.code.slice(5)}`;
-  // Shifted letters are their own binding — vim's G is not its j.
+  // Shifted letters are their own binding - vim's G is not its j.
   if (e.shiftKey && /^Key[A-Z]$/.test(e.code))
     return `shift+${e.code.slice(3).toLowerCase()}`;
   const base =
@@ -69,7 +69,7 @@ export function normalize(e: KeyboardEvent, ctrl = false): string {
 export function startKeys() {
   /* Keys typed so far towards a multi-key binding. A lone `g` is not a binding
      on its own, so it has to be held until either its partner arrives or the
-     window lapses — and it must lapse, or a stray `g` would arm the next
+     window lapses - and it must lapse, or a stray `g` would arm the next
      unrelated keystroke indefinitely. */
   let pending: string[] = [];
   let lapse: ReturnType<typeof setTimeout> | undefined;
@@ -121,7 +121,7 @@ export function startKeys() {
       return;
     }
 
-    // No sequence continues — fall back to reading this key on its own, so a
+    // No sequence continues - fall back to reading this key on its own, so a
     // lapsed prefix never eats the keystroke that follows it.
     if (pending.length) {
       clearPending();

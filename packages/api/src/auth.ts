@@ -49,7 +49,7 @@ export const sessionSecret: string =
   })();
 
 /**
- * Behind a TLS-terminating proxy — which is how this is deployed — the request
+ * Behind a TLS-terminating proxy - which is how this is deployed - the request
  * the app sees is plain http, so keying `Secure` off the URL alone drops the
  * flag on exactly the deployments that need it. The forwarded header is the
  * proxy's statement about the leg the browser actually made.
@@ -136,7 +136,7 @@ function recordFailure(email: string): void {
   if (failures.size > MAX_TRACKED_FAILURES) {
     const now = Date.now();
     for (const [k, v] of failures) if (v.resetAt < now) failures.delete(k);
-    // Still full means every window is live — drop the oldest insertions, which
+    // Still full means every window is live - drop the oldest insertions, which
     // Map iterates first. Losing one is at worst a few extra tries for them.
     if (failures.size > MAX_TRACKED_FAILURES)
       for (const k of failures.keys()) {
@@ -199,7 +199,7 @@ export function getIdentity(c: Context): Identity | undefined {
 /**
  * No identity is a refusal, not a pass. Every mount point today sits behind the
  * `/api/*` middleware that guarantees one, so the old `identity && …` form was
- * never wrong in practice — but it fails open the moment that stops being true.
+ * never wrong in practice - but it fails open the moment that stops being true.
  */
 export async function requireAdmin(c: Context, next: Next): Promise<void> {
   if (getIdentity(c)?.role !== "admin")
@@ -213,7 +213,7 @@ const loginSchema = z.object({
 });
 
 /**
- * Registered before any route that needs to know who is calling — including
+ * Registered before any route that needs to know who is calling - including
  * `/api/setup`, which sits outside the `/api/*` identity guard and still has to
  * tell an operator holding an SSO session from a stranger. Separate from
  * `installAuth` only because of that ordering.

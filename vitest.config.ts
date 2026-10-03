@@ -5,8 +5,8 @@ import { MAX_WORKERS } from "./test/parallel";
 export default defineConfig({
   /*
    * The Svelte plugin is here rather than in a project of its own. `.svelte.ts`
-   * modules are only valid once the compiler has processed them — a rune in a
-   * file Vite does not transform is a reference to a global that is not there —
+   * modules are only valid once the compiler has processed them - a rune in a
+   * file Vite does not transform is a reference to a global that is not there -
    * and the plugin touches nothing else, so one project can hold both halves of
    * the suite. Two projects could not: vitest hands out VITEST_POOL_ID per pool,
    * worker-setup.ts turns that id into a schema name, and with a second pool in

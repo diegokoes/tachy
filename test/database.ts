@@ -31,7 +31,7 @@ export async function resetData() {
     restart identity cascade
   `;
   // source_projects references customers, so TRUNCATE ... CASCADE takes it with
-  // them however the list is written — the cascade follows the FK, not the
+  // them however the list is written - the cascade follows the FK, not the
   // delete rule. Re-seed the routing fixture rather than fight that.
   await sql`
     insert into source_projects

@@ -103,7 +103,7 @@ export async function getArtifact(
   return withSpec<ArtifactRow>(row);
 }
 
-/** The caller-visible artifact for `slug`, most specific scope first — the shape `export_table` resolves against. */
+/** The caller-visible artifact for `slug`, most specific scope first - the shape `export_table` resolves against. */
 export async function getArtifactBySlug(
   slug: string,
   ctx: ScopeContext,

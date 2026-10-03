@@ -321,7 +321,7 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
 
     async verify() {
       // connectionData is a preview endpoint and only names the caller, so a
-      // failure there must not fail the check — the project list is the proof.
+      // failure there must not fail the check - the project list is the proof.
       const [conn, projects] = await Promise.all([
         client.getConnectionData().catch(() => null),
         client.listProjects(),
@@ -449,7 +449,7 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
           // it. System.ChangedDate is a required field, so this is the API
           // misbehaving and worth saying so.
           throw new Error(
-            `Azure DevOps returned ${SYNC_PAGE} work items for '${project}' with no readable System.ChangedDate — cannot advance the sync cursor`,
+            `Azure DevOps returned ${SYNC_PAGE} work items for '${project}' with no readable System.ChangedDate - cannot advance the sync cursor`,
           );
         next = { p: cursor.p, since: new Date(mark).toISOString() };
       }

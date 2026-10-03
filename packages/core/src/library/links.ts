@@ -22,7 +22,7 @@ const UUID_RE =
 
 /**
  * Point a link at a row. An article resolves within its own wiki first, then
- * the org-wide one — the same includeUnscoped idea search already uses, so a
+ * the org-wide one - the same includeUnscoped idea search already uses, so a
  * product article can cite a shared page without qualifying it.
  *
  * A link that resolves to nothing is not an error: it is stored unresolved so a
@@ -68,7 +68,7 @@ async function resolveTarget(
  *
  * Only edges leaving this item are touched. Edges pointing AT it belong to
  * whoever wrote them, and deleting those here would silently unlink other
- * people's articles — the obvious bug, and the reason this is a narrow delete.
+ * people's articles - the obvious bug, and the reason this is a narrow delete.
  */
 export async function syncLinks(
   db: Db,
@@ -121,7 +121,7 @@ export interface OutboundLink {
   label: string | null;
   to_doc_id: string | null;
   to_entry_id: string | null;
-  /** Null when nothing resolved — a broken link, shown as such. */
+  /** Null when nothing resolved - a broken link, shown as such. */
   to_title: string | null;
   to_slug: string | null;
   to_kind: string | null;
@@ -160,7 +160,7 @@ export interface Backlink {
   from_title: string | null;
   from_slug: string | null;
   from_product_id: string | null;
-  /** 'wiki' | 'reference' | 'entry' — what the linking item is. */
+  /** 'wiki' | 'reference' | 'entry' - what the linking item is. */
   from_kind: string | null;
 }
 

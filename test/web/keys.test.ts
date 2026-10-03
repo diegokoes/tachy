@@ -82,7 +82,7 @@ describe("overrides", () => {
 });
 
 /**
- * A collision does not error at runtime — the scope stack resolves innermost
+ * A collision does not error at runtime - the scope stack resolves innermost
  * first, so the rebind silently steals the key from whichever view owns it.
  * Warning before the fact is the only place it is visible.
  */

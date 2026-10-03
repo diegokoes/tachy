@@ -509,7 +509,7 @@ export function countTree(
 
 /**
  * Re-embed code chunks from their stored text, without touching git. `all: true`
- * rebuilds every vector after a model change — far cheaper than re-cloning and
+ * rebuilds every vector after a model change - far cheaper than re-cloning and
  * re-indexing every repo just to get new vectors for text that has not changed.
  */
 export async function backfillCodeEmbeddings(

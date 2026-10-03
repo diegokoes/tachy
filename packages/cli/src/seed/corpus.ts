@@ -67,7 +67,7 @@ export const SYMPTOMS = [
 
 /**
  * ROOT_CAUSES[n] and RESOLUTIONS[n] are a matched pair: the fix addresses that
- * cause. Draw them with one index, never two, or the corpus reads as nonsense —
+ * cause. Draw them with one index, never two, or the corpus reads as nonsense -
  * "timestamps drift after DST" fixed by "widen the column to int32" is not
  * something a reader can judge a search result against.
  */
@@ -194,7 +194,7 @@ export const CLOUDS = ["prod", "qa", "demo", "preprod", "dev"];
 /**
  * Fragments that combine with the lists above. The point is combinatorial
  * reach: composing one symptom with one cause and one resolution gives a few
- * hundred distinct bodies, which is not enough to exercise a vector index —
+ * hundred distinct bodies, which is not enough to exercise a vector index -
  * every row ends up sharing a handful of embeddings. Adding independent
  * dimensions multiplies instead of adding.
  */

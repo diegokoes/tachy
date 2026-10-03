@@ -13,7 +13,7 @@ import {
  * No database here. What these guard is the layer whose failures are silent:
  * a batch that comes back in the wrong order, or a spec that disagrees with the
  * vector(N) columns, both produce vectors that are the right shape and the
- * wrong meaning — search then ranks nonsense above matches with nothing failing.
+ * wrong meaning - search then ranks nonsense above matches with nothing failing.
  */
 describe("embedPassages", () => {
   it("returns nothing for nothing", async () => {
