@@ -29,7 +29,7 @@ export interface FieldSpec {
   /**
    * An identity field takes a person. ADO resolves the string server-side and
    * rejects one it cannot match, so an email / unique name is the reliable
-   * form — a display name alone is ambiguous.
+   * form - a display name alone is ambiguous.
    */
   is_identity?: true;
   help_text?: string;

@@ -3,7 +3,7 @@
 
   /**
    * `product_area` is written at save time by getComponentPath and already
-   * carries the whole chain, product name first — "FTRACE / Label Printer /
+   * carries the whole chain, product name first - "FTRACE / Label Printer /
    * Firmware". Components nest arbitrarily deep, so this renders whatever
    * depth the entry actually has rather than a fixed product+component pair.
    */
@@ -28,12 +28,12 @@
 
 <style>
   /* Its own vertical rhythm, because it renders nothing at all when an entry
-     has no scope — a wrapper padding an empty box was the alternative. */
+     has no scope - a wrapper padding an empty box was the alternative. */
   .crumb {
     display: flex;
     margin: var(--pad-2) 0;
     align-items: center;
-    /* Centred on the same axis as the title below it — flush left it read as
+    /* Centred on the same axis as the title below it - flush left it read as
        a stray label rather than as the heading of the column it introduces. */
     justify-content: center;
     flex-wrap: wrap;

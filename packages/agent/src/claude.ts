@@ -52,7 +52,7 @@ export function explainFailure(raw: string): {
       kind: "rate_limit",
       message: `Your Claude subscription has hit its usage limit${
         resets ? `, which resets ${resets}` : ""
-      }. The turn was not lost — send it again once the limit resets.`,
+      }. The turn was not lost - send it again once the limit resets.`,
     };
   if (/not logged in|run \/login/i.test(raw))
     return {
@@ -64,7 +64,7 @@ export function explainFailure(raw: string): {
     return {
       kind: "bad_credential",
       message:
-        "Your saved Claude credential was rejected. It may be expired, revoked, or saved in the wrong field — re-add it under Settings › Keys.",
+        "Your saved Claude credential was rejected. It may be expired, revoked, or saved in the wrong field - re-add it under Settings › Keys.",
     };
   return { kind: "other", message: raw };
 }

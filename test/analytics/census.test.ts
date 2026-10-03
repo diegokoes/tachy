@@ -81,7 +81,7 @@ describe("the admin census", () => {
       expect(c.patterns_no_description).toBe(0);
     });
 
-    it("counts a customer with no email domain — nothing resolves to them", async () => {
+    it("counts a customer with no email domain - nothing resolves to them", async () => {
       await addCustomer({ name: "Anon Co", slug: "anon-co" });
       await addCustomer({
         name: "Known Co",
@@ -108,7 +108,7 @@ describe("the admin census", () => {
       const mine = c.components_by_product.find((p) => p.slug === "tpd");
       expect(mine?.n).toBe(2);
       /* Products with nothing under them are the point of the chart, so they
-         must still be rows in it — the left join, not an inner one. */
+         must still be rows in it - the left join, not an inner one. */
       expect(c.components_by_product.length).toBe(c.products);
       const summed = c.components_by_product.reduce((n, p) => n + p.n, 0);
       expect(summed).toBe(c.components);
@@ -201,7 +201,7 @@ describe("the admin census", () => {
       expect(r.no_project).toBe(2);
       expect(r.oldest_indexed_at).toBeInstanceOf(Date);
 
-      /* The same conditions by name, for the issues list — a failing repo is
+      /* The same conditions by name, for the issues list - a failing repo is
          not also listed as never indexed. */
       const issues = await repoIssues();
       expect(issues["repos.failing"]).toEqual({

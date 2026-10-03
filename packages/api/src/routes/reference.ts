@@ -64,7 +64,7 @@ async function listFilters(c: QueryCtx) {
   const component = c.req.query("component");
   const productId = c.req.query("product_id");
   const customerSlug = c.req.query("customer");
-  // Component slugs resolve within a product, so the pair is required — same
+  // Component slugs resolve within a product, so the pair is required - same
   // rule the knowledge route follows.
   const f =
     component && productId

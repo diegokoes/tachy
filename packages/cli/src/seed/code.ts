@@ -17,7 +17,7 @@ import type { Volumes } from "./scale";
 
 /**
  * The identity of one generated file. Chunks read it rather than each drawing
- * their own, so a file's chunks name the same module and the same symbols —
+ * their own, so a file's chunks name the same module and the same symbols -
  * which is what makes a trigram hit on an identifier land somewhere specific.
  */
 function fileIdentity(i: number) {

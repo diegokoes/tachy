@@ -231,7 +231,7 @@
     flex-direction: column;
     gap: var(--pad-4);
   }
-  /* No box per key — these already sit inside a bordered section, and eight
+  /* No box per key - these already sit inside a bordered section, and eight
      nested cards read as clutter. A left rule marks the block instead. */
   .block {
     border-left: 1px solid var(--border);

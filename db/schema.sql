@@ -79,8 +79,8 @@ create table team_members (
 -- never leaves the server process.
 --
 -- A credential belongs to one person. The global scope is not a way to share
--- one: it holds the deployment's own machine tokens — a source connection's
--- token, the job webhook — which the worker resolves with no user to be.
+-- one: it holds the deployment's own machine tokens - a source connection's
+-- token, the job webhook - which the worker resolves with no user to be.
 create table credentials (
     id               uuid primary key default gen_random_uuid(),
     scope            text not null check (scope in ('global','user')),
@@ -193,7 +193,7 @@ create table customers (
     aliases     text[] not null default '{}',
     -- domains whose senders are this customer, including partners who front for
     -- them (a distributor raising tickets on their behalf). A domain registered
-    -- to two customers resolves to neither — see resolveCustomerByEmail.
+    -- to two customers resolves to neither - see resolveCustomerByEmail.
     email_domains text[] not null default '{}',
     notes       text,
     created_at  timestamptz not null default now()
@@ -203,8 +203,8 @@ create index customers_aliases_idx on customers using gin (aliases);
 create index customers_domains_idx on customers using gin (email_domains);
 
 -- A named part of one customer's estate: a site, a production line, a tenant.
--- The second axis of the customer model — customers say WHO, units say WHICH OF
--- THEIRS — because most of what is true of a big account is true of one place in
+-- The second axis of the customer model - customers say WHO, units say WHICH OF
+-- THEIRS - because most of what is true of a big account is true of one place in
 -- it rather than of the account.
 --
 -- `kind` is a deployment-specific vocabulary exactly like customer_facts.kind
@@ -216,7 +216,7 @@ create table customer_units (
     -- Containment: a line is inside a site.
     parent_id    uuid references customer_units(id) on delete cascade,
     -- Sharing WITHOUT containment: a unit whose facts this one inherits without
-    -- being part of it — the layout several production lines conform to. Set
+    -- being part of it - the layout several production lines conform to. Set
     -- null on delete rather than cascade: losing a template must not delete the
     -- lines that referenced it.
     profile_id   uuid references customer_units(id) on delete set null,
@@ -255,7 +255,7 @@ create table source_projects (
     -- guessing at the sender's domain, which partners and freemail defeat. Null
     -- means the project serves many, and each ticket is resolved on its own.
     customer_id           uuid references customers(id) on delete set null,
-    -- [{identifier, name, type, root_path, default}] — an ADO project routinely
+    -- [{identifier, name, type, root_path, default}] - an ADO project routinely
     -- has several wikis (one project wiki plus a code wiki per repo). Exactly one
     -- carries default:true; that is the one every tool uses with no wiki argument.
     wikis                 jsonb not null default '[]'::jsonb,
@@ -386,7 +386,7 @@ create index customer_components_component_idx on customer_components(component_
 
 -- Everything about a customer's install that is not an entity in its own right:
 -- the version they run, their line layout, an integration they depend on. Their
--- repos, projects and components are edges instead — those are real records.
+-- repos, projects and components are edges instead - those are real records.
 --
 -- `kind` is a deployment-specific vocabulary, exactly like knowledge_entries.cloud:
 -- no lookup table, because what counts as a customer specific differs per
@@ -405,7 +405,7 @@ create table customer_facts (
     unit_id      uuid references customer_units(id) on delete cascade,
     value        text not null,
     notes        text,
-    -- Where this was learned — a ticket URL, a wiki page, a person.
+    -- Where this was learned - a ticket URL, a wiki page, a person.
     source       text,
     component_id uuid references components(id) on delete set null,
     created_at   timestamptz not null default now(),
@@ -413,7 +413,7 @@ create table customer_facts (
 );
 
 -- `nulls not distinct` so a customer-level fact (unit_id null) still upserts in
--- place rather than piling up a row per set — the idiom
+-- place rather than piling up a row per set - the idiom
 -- work_item_links_external_idx uses.
 create unique index customer_facts_key_idx
     on customer_facts(customer_id, unit_id, kind, label) nulls not distinct;
@@ -466,13 +466,13 @@ create table knowledge_entries (
     tags                text[] not null default '{}',
     -- component is the validated taxonomy anchor; product_area is DERIVED from the
     -- component hierarchy at write time (kept as a column so the generated search
-    -- columns below can reference it — they can't join other tables).
+    -- columns below can reference it - they can't join other tables).
     component_id        uuid references components(id) on delete set null,
     product_area        text,
     -- confidence and resolution_clarity answer two different questions and are
     -- deliberately not collapsed: confidence is about THIS ROW ("is what we
     -- wrote here correct?"), resolution_clarity is about the WORLD ("did the
-    -- ticket actually end in a fix?"). They come apart in both directions — a
+    -- ticket actually end in a fix?"). They come apart in both directions - a
     -- restart that verifiably fixed it with nobody knowing why is clear/low;
     -- a customer who went silent on a cause we fully understand is unclear/high.
     confidence          text check (confidence is null or confidence in ('low','medium','high')),
@@ -628,7 +628,7 @@ create table reference_docs (
     source_project_id uuid references source_projects(id) on delete set null,
     external_key      text,
     -- Same taxonomy anchor as knowledge_entries: a doc scoped to a product may
-    -- also name the component it documents. Optional on purpose — a general
+    -- also name the component it documents. Optional on purpose - a general
     -- product doc (onboarding, release process) belongs to the product and to
     -- no single component. product_area is DERIVED from the component hierarchy
     -- at write time, kept as a column so the generated search columns below can
@@ -648,12 +648,12 @@ create table reference_docs (
     doc_version   text,
     superseded_by uuid references reference_docs(id) on delete set null,
     -- 'wiki' = an article authored here, placed by wiki_article_categories and
-    -- addressed by slug. NOT an imported Azure DevOps wiki page — those are
+    -- addressed by slug. NOT an imported Azure DevOps wiki page - those are
     -- 'reference', with source_project_id/external_key set.
     kind        text not null default 'reference'
                     check (kind in ('reference','wiki')),
     -- Stable address for an article. Articles are linked by slug, so it has to
-    -- survive an edit — which is why they are updated in place and never
+    -- survive an edit - which is why they are updated in place and never
     -- superseded. Null for imported docs.
     slug        text,
 

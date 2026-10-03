@@ -6,7 +6,7 @@ export type { ToolUsage };
 
 export interface ToolCallOutcome {
   ok: boolean;
-  /** Refused as bad input — the agent held the tool wrong. */
+  /** Refused as bad input - the agent held the tool wrong. */
   misuse: boolean;
 }
 

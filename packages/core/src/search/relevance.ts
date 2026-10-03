@@ -24,7 +24,7 @@ export type { Grade };
  * FLOOR sits in that gap; CEIL is where real matches actually top out, so a
  * strong paraphrase can still reach the top of the scale. FLOOR gates the
  * VECTOR LEG ONLY, which is what makes a gap this narrow safe: an identifier
- * query like "ECONNREFUSED" scores only ~0.56 semantically — below the floor —
+ * query like "ECONNREFUSED" scores only ~0.56 semantically - below the floor -
  * and is meant to arrive through the trigram and tsvector legs instead. Raising
  * FLOOR therefore costs paraphrase recall and never exact-match recall.
  */
@@ -50,7 +50,7 @@ export function relevance(r: Ranked): number {
   );
   // Either arm can reach STRONG alone. A paraphrase nobody worded the same way
   // is a real hit; so is a bare error code in an entry whose prose is otherwise
-  // unrelated — that second case is the entire reason lexical is in the mix.
+  // unrelated - that second case is the entire reason lexical is in the mix.
   return clamp01(0.85 * sem + 0.72 * lex);
 }
 
@@ -58,7 +58,7 @@ export const gradeOf = (r: Ranked): Grade => grade(relevance(r));
 
 /**
  * Attach relevance + grade to a search row. Raw signals are not comparable
- * across surfaces — an interleaved knowledge/reference list needs these.
+ * across surfaces - an interleaved knowledge/reference list needs these.
  */
 export function withRelevance<T extends Record<string, unknown>>(row: T) {
   const r = relevance(row as Ranked);

@@ -8,7 +8,7 @@ export { LIBRARY_ACTORS };
 export type { LibraryActor };
 
 /**
- * Which library item a revision or a view is about. Exactly one is set — the
+ * Which library item a revision or a view is about. Exactly one is set - the
  * two-nullable-targets shape the tables use.
  */
 export type LibraryTarget =
@@ -40,7 +40,7 @@ function targetWhere(t: LibraryTarget) {
  * The row reduced to what a reader would call its content. Ids, timestamps and
  * the version counter are the row's identity rather than its substance, and the
  * embedding and generated search columns are excluded because they are derived
- * — and because a vector is larger than the text it came from.
+ * - and because a vector is larger than the text it came from.
  */
 export function snapshotOf(row: Record<string, any>): Record<string, unknown> {
   const skip = new Set([
@@ -61,7 +61,7 @@ export function snapshotOf(row: Record<string, any>): Record<string, unknown> {
 /**
  * Which keys differ between two snapshots. Arrays compare by content, so
  * re-saving the same tags is not an edit. Everything else compares by JSON,
- * which reports a re-ordered `structured` blob as changed — cheap and honest,
+ * which reports a re-ordered `structured` blob as changed - cheap and honest,
  * rather than a deep-equality guess that could hide a real edit.
  */
 export function changedFields(
@@ -171,7 +171,7 @@ export interface RevisionRow {
   created_at: string;
 }
 
-/** Newest first. Snapshots are omitted — forty of them is a payload, not a list. */
+/** Newest first. Snapshots are omitted - forty of them is a payload, not a list. */
 export async function listRevisions(
   target: LibraryTarget,
 ): Promise<RevisionRow[]> {

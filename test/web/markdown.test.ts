@@ -65,8 +65,8 @@ describe("wikilink rendering", () => {
 
 describe("wikilinks are reachable without a pointer", () => {
   it("renders them focusable and announced as links", () => {
-    // There is no href to give them — the route a target resolves to is only
-    // known once the server answers — so these two are what make the anchor
+    // There is no href to give them - the route a target resolves to is only
+    // known once the server answers - so these two are what make the anchor
     // focusable and announce it as a link at all.
     const html = render("see [[line-controller]]");
     expect(html).toContain('role="link"');

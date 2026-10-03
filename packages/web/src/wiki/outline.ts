@@ -4,7 +4,7 @@ export interface OutlineItem {
   depth: number;
   text: string;
   id: string;
-  /** "2.1" — the heading's place in the outline, as the reader sees it. */
+  /** "2.1" - the heading's place in the outline, as the reader sees it. */
   number: string;
   /** 0 for a top-level section, 1 for its subsections, and so on. */
   level: number;
@@ -16,7 +16,7 @@ export interface OutlineNode extends OutlineItem {
 
 /**
  * A slug for a heading anchor. Kept in step with `outline()` below, which is
- * what numbers duplicates — "Overview" twice must not produce two elements with
+ * what numbers duplicates - "Overview" twice must not produce two elements with
  * the same id, or the second link jumps to the first.
  */
 function anchorId(text: string, seen: Map<string, number>): string {

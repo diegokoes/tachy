@@ -82,7 +82,7 @@
       actions: listing && isCurator() ? newAction : undefined,
     }),
   );
-  /** Which form the create screen shows — in the URL, so it deep-links. */
+  /** Which form the create screen shows - in the URL, so it deep-links. */
   const newKind = $derived(param === "doc" ? "doc" : "entry");
 
   /** The search and its scope, as the library was left. */
@@ -105,14 +105,14 @@
 
   /** Counts for every facet under whatever else is currently selected. */
   let facets = $state<Facets>({});
-  /** Which extra filters the user added, and to what — persisted per browser. */
+  /** Which extra filters the user added, and to what - persisted per browser. */
   let shown = $state<FacetKey[]>([]);
   let extras = $state<Record<string, string>>({});
 
   let items = $state<Item[]>([]);
   /**
    * A leg came back full, so the server had more it would not send. There is no
-   * cursor to follow it with yet — what this buys is the tally saying "first",
+   * cursor to follow it with yet - what this buys is the tally saying "first",
    * instead of counting a truncated list as though it were the whole answer.
    */
   let capped = $state(false);
@@ -126,7 +126,7 @@
   let rowEls = $state<(HTMLElement | undefined)[]>([]);
   /**
    * Keyboard navigation scrolls the list under a stationary pointer, and the
-   * browser fires mouseenter for that — which would yank the cursor back to
+   * browser fires mouseenter for that - which would yank the cursor back to
    * wherever the mouse happens to sit. Ignore hover until the mouse really moves.
    */
   let pointerMoved = $state(true);
@@ -152,7 +152,7 @@
   const showDocFilters = $derived(kind === "docs");
   /**
    * Counts hidden filters too: the entry-only ones still travel on entryQs, so
-   * a filter you cannot see must stay clearable — otherwise the list is
+   * a filter you cannot see must stay clearable - otherwise the list is
    * silently narrowed with no way out.
    */
   const activeFilters = $derived(
@@ -245,7 +245,7 @@
   }
 
   /**
-   * Every filter's options, narrowed by everything else that is selected — a
+   * Every filter's options, narrowed by everything else that is selected - a
    * filter offering a value with no rows behind it is worse than no filter.
    * Each facet is counted with its own selection lifted, so its other options
    * stay reachable once one is picked.
@@ -300,7 +300,7 @@
   /**
    * product › component › version. A version names a release of one component,
    * so once there is no component under it there is nothing for the number to
-   * mean — carrying it over would narrow the list by a build from elsewhere.
+   * mean - carrying it over would narrow the list by a build from elsewhere.
    */
   function dropComponentScoped() {
     extras = clearScoped(extras);
@@ -332,7 +332,7 @@
   }
 
   /**
-   * A control never reads narrower than the cap naming it — the caps are what
+   * A control never reads narrower than the cap naming it - the caps are what
    * the row is scanned by. Measured rather than guessed at in `ch`: the cap is
    * a different size and tracking from the control under it.
    */
@@ -431,7 +431,7 @@
   });
 
   /**
-   * Re-count the options whenever the narrowing changes — but not on `extras`,
+   * Re-count the options whenever the narrowing changes - but not on `extras`,
    * which loadFacets itself prunes. loadFacets reads `extras` before its first
    * await, so it runs untracked: tracked, every prune re-ran this effect, and
    * each rerun restarted the list's debounce so the filtered list never loaded.
@@ -486,7 +486,7 @@
         hidden: true,
         run: () => items[cursor] && openItem(items[cursor]),
       },
-      // j/k and the arrows are always on — they cost nothing and cannot be
+      // j/k and the arrows are always on - they cost nothing and cannot be
       // typed by accident outside a field. The rest is vim-mode only, because
       // g, G and / are keys someone who did not ask for vim would rather have.
       ...(vimState.enabled
@@ -505,7 +505,7 @@
               run: () => searchEl?.focus(),
             },
             /*
-             * n/N step the matches, and only mean that with a query on — but
+             * n/N step the matches, and only mean that with a query on - but
              * the check belongs inside `run`, not in the effect body. Read out
              * here it made `q` a dependency of the whole scope, so every
              * keystroke in the search box tore down and re-registered all
@@ -634,8 +634,8 @@
   </div>
 
   <!-- The default row stays deliberately short. Everything else the schema can
-       be narrowed by — environment, confidence, clarity, pattern, hidden fix,
-       versions, tags — is one `+` away and remembered per browser. -->
+       be narrowed by - environment, confidence, clarity, pattern, hidden fix,
+       versions, tags - is one `+` away and remembered per browser. -->
   <div class="controls">
     <div class="filters">
       <!-- product and component scope entries AND docs, so they stay visible in
@@ -744,7 +744,7 @@
       {/if}
     </div>
 
-    <!-- Never a "0 items" line above an empty state — the empty state says it.
+    <!-- Never a "0 items" line above an empty state - the empty state says it.
          It rides in the left margin the centred filter row leaves empty, so it
          costs the list no height of its own. -->
     {#if items.length}
@@ -811,7 +811,7 @@
   }
 
   /* Pinned: the filters and the result list scroll under it, so the query that
-     produced them is never off screen. It needs a ground of its own — the rows
+     produced them is never off screen. It needs a ground of its own - the rows
      it pins over are opaque cards, and without one they read through it. */
   .bar {
     position: sticky;
@@ -846,7 +846,7 @@
     align-items: center;
     gap: var(--pad-1);
   }
-  /* Cased in CSS, not in the copy — a screen reader still hears a word. */
+  /* Cased in CSS, not in the copy - a screen reader still hears a word. */
   .lbl {
     text-transform: uppercase;
     letter-spacing: var(--label-spacing);

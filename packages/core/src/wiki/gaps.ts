@@ -35,7 +35,7 @@ export interface WikiGapRow extends WikiGapFinding {
 }
 
 /**
- * Open and not dismissed — or dismissed, but grown well past what it was
+ * Open and not dismissed - or dismissed, but grown well past what it was
  * dismissed at. Written against the alias `g` so the wiki index can count with
  * the same rule it lists by.
  */
@@ -80,7 +80,7 @@ const item = ({ kind, id, title }: Material): WikiGapItem => ({
  * An article anchored at a component covers that component's whole subtree,
  * and an item any article cites is covered wherever it sits. What is left over
  * is grouped by component and rolled up post-order, so the gap is raised at the
- * most specific part of the product that has enough on its own — a parent is
+ * most specific part of the product that has enough on its own - a parent is
  * only flagged for what its flagged children did not already account for.
  *
  * Uncited material that arrived after the covering article was last written is
@@ -229,7 +229,7 @@ export async function findWikiGaps(
       group by l.from_doc_id
     `,
     // An entry or doc link that fails to resolve points at an id, and there is
-    // nothing to write at an id — only a missing slug is a page someone wants.
+    // nothing to write at an id - only a missing slug is a page someone wants.
     db`
       select l.target, count(distinct l.from_doc_id)::int as pages,
              (array_agg(distinct src.title))[1:${EVIDENCE_ITEMS}::int] as titles
@@ -345,8 +345,8 @@ export interface SweepResult {
 /**
  * Re-find every wiki's gaps, or one wiki's when `productId` is given (null for
  * the org-wide one). One transaction per wiki under a transaction-scoped
- * advisory lock, so two API processes — or an hourly run and a rescan after an
- * edit — never write the same wiki at once; whoever loses skips it rather than
+ * advisory lock, so two API processes - or an hourly run and a rescan after an
+ * edit - never write the same wiki at once; whoever loses skips it rather than
  * waiting, since the winner is computing the same answer.
  *
  * `wait` queues behind a sweep already running instead, for a curator who asked
@@ -370,7 +370,7 @@ export async function sweepWikiGaps(
 
   const result: SweepResult = { wikis: 0, skipped: 0, failed: 0, gaps: 0 };
   for (const productId of scopes) {
-    // One wiki failing — a product deleted mid-sweep, say — must not cost the
+    // One wiki failing - a product deleted mid-sweep, say - must not cost the
     // rest of them their run.
     try {
       const n = await sql.begin(async (tx) => {
@@ -416,7 +416,7 @@ export async function listWikiGaps(
   ` as unknown as Promise<WikiGapRow[]>;
 }
 
-/** "Not worth writing up" — until the evidence grows; see `visibleGap`. */
+/** "Not worth writing up" - until the evidence grows; see `visibleGap`. */
 export async function dismissWikiGap(
   productId: string | null,
   id: string,

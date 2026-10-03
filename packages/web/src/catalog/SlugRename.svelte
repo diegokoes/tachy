@@ -20,7 +20,7 @@
   }: {
     title?: string;
     current: string;
-    /** Sibling slugs — the create routes upsert, so a clash would overwrite. */
+    /** Sibling slugs - the create routes upsert, so a clash would overwrite. */
     taken?: string[];
     warning?: string;
     /** Resource path whose `/rename-impact` counts what a rename rewrites. */

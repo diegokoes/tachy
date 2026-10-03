@@ -248,7 +248,7 @@ describe("customer routes", () => {
 
   /**
    * 400, not 404: the slug is caller-supplied and resolveCustomer treats an
-   * unknown one as a bad request — the same message the agent's tools get.
+   * unknown one as a bad request - the same message the agent's tools get.
    */
   it("refuses the profile of a customer that does not exist", async () => {
     const res = await get("/api/customers/nope/profile");

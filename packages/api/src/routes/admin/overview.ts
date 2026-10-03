@@ -96,8 +96,8 @@ export const overview = new Hono()
    * route so the rail's counts stay one cheap query: these scan day buckets and
    * the run log, and only the overviews render them.
    *
-   * Everything is aggregate except two lists that name people — who spends the
-   * most tokens, who has the agent change the most — and those travel only to an
+   * Everything is aggregate except two lists that name people - who spends the
+   * most tokens, who has the agent change the most - and those travel only to an
    * app admin, for the same reason `/system` keeps its `env` block back.
    */
   .get("/overview/activity", async (c) => {

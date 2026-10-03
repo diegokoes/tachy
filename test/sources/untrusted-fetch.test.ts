@@ -3,7 +3,7 @@ import { fetchUntrustedUrl } from "../../packages/core/src/sources/fetch";
 
 /**
  * Every case here is refused before any socket is opened, so the suite needs no
- * network. The positive path — a real public host — is deliberately not covered:
+ * network. The positive path - a real public host - is deliberately not covered:
  * it would make the suite depend on DNS and on the internet being up.
  */
 describe("fetchUntrustedUrl", () => {

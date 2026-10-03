@@ -23,7 +23,7 @@
 
 <!-- Every overview is this and nothing else: a row of counters, then a grid of
      charts that shares out the rest of the window, so the page never scrolls.
-     Air on every side rather than a frame — the window is the frame. -->
+     Air on every side rather than a frame - the window is the frame. -->
 <div class="overview" style="--cols: {cols}; --rows: {rows}">
   {#if error}<p class="error">{error}</p>{/if}
   <Counts items={figures} {loading} />

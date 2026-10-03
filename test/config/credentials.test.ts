@@ -364,7 +364,7 @@ describe("API never leaks plaintext or ciphertext", () => {
     });
     expect(put.status).toBe(200);
 
-    // The global scope holds machine tokens, written from inside the server —
+    // The global scope holds machine tokens, written from inside the server -
     // no route offers it, so this is the only way in.
     await setCredential(
       admin.id,
@@ -547,7 +547,7 @@ describe("a ciphertext is bound to the row that holds it", () => {
       "carol-secret",
     );
 
-    // Rewrite it the way the old code did — no AAD — and it must still resolve.
+    // Rewrite it the way the old code did - no AAD - and it must still resolve.
     const legacy = encryptSecret("carol-legacy");
     await sql`
       update credentials

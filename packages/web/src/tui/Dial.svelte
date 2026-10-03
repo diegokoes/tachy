@@ -18,7 +18,7 @@
     size?: string;
     /**
      * Paints the unlit part in a tone of its own instead of the faint track,
-     * turning the meter into a two-part split — password against SSO, say —
+     * turning the meter into a two-part split - password against SSO, say -
      * where neither part is "missing".
      */
     rest?: "accent" | "ok" | "warn" | "danger" | "muted" | "info";
@@ -32,7 +32,7 @@
 
   /* Meter's algorithm in polar coordinates: whole ticks light, and the one
      straddling the boundary carries the remainder as a mix towards the track.
-     Ticks are drawn rather than typed for the same reason Meter's cells are —
+     Ticks are drawn rather than typed for the same reason Meter's cells are -
      neither bundled face carries a block glyph. */
   const lit = $derived.by(() => {
     const exact = pct * segments;

@@ -97,7 +97,7 @@ export async function loadAgent() {
   }
 }
 
-/** Runs `fn`, then re-reads — every write here changes what is effective. */
+/** Runs `fn`, then re-reads - every write here changes what is effective. */
 async function write(fn: () => Promise<unknown>) {
   agentPrefs.error = null;
   try {

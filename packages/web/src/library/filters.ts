@@ -34,8 +34,8 @@ export type ExtraFilter = {
 };
 
 /**
- * Everything the `+` menu can add. The default controls — product, component,
- * status — stay hard-wired in the view.
+ * Everything the `+` menu can add. The default controls - product, component,
+ * status - stay hard-wired in the view.
  *
  * All of them are entry-only: `/knowledge/facets` counts knowledge entries, so
  * offering them while browsing docs would show counts that do not describe the
@@ -122,14 +122,14 @@ export function saveFilters(s: Stored) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
   } catch {
-    /* private mode, quota — the filters still work for this session. */
+    /* private mode, quota - the filters still work for this session. */
   }
 }
 
 /**
  * A stored value that the current facet counts no longer offer would silently
  * narrow the list to nothing, so it is dropped rather than kept. `enum` filters
- * are checked against their fixed list instead — an enum value with no rows
+ * are checked against their fixed list instead - an enum value with no rows
  * behind it right now is still a legitimate thing to ask for.
  */
 export function pruneValues(
@@ -185,7 +185,7 @@ export function applyExtras(
 
 /**
  * A product and component to open the list already narrowed to, handed over by
- * a page elsewhere — the wiki's coverage tree — that wants to show "everything
+ * a page elsewhere - the wiki's coverage tree - that wants to show "everything
  * recorded under this part". The router carries paths only, so it travels
  * here; taken once, so the next visit opens unfiltered as usual.
  */

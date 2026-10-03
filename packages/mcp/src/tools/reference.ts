@@ -34,7 +34,7 @@ tool(
   "ingest_context",
   {
     description:
-      "Load freeform project context from pasted text, local file paths, and/or URLs, and return the cleaned raw text for you to structure. PDF paths are text-extracted automatically. This tool ONLY reads — it never saves. Long sources are truncated at max_chars (default 20000); for large documents (big PDFs), preview here, then call save_reference_doc with body_path so the full text is extracted and saved server-side. After loading, classify the content and route each part: durable incident lessons → save_knowledge_entry; architecture facts → add_component; everything else (docs, runbooks, design notes, config explainers) → save_reference_doc. Say briefly how you routed it, then make the calls — each is gated by its own review box.",
+      "Load freeform project context from pasted text, local file paths, and/or URLs, and return the cleaned raw text for you to structure. PDF paths are text-extracted automatically. This tool ONLY reads - it never saves. Long sources are truncated at max_chars (default 20000); for large documents (big PDFs), preview here, then call save_reference_doc with body_path so the full text is extracted and saved server-side. After loading, classify the content and route each part: durable incident lessons → save_knowledge_entry; architecture facts → add_component; everything else (docs, runbooks, design notes, config explainers) → save_reference_doc. Say briefly how you routed it, then make the calls - each is gated by its own review box.",
     inputSchema: {
       product_slug: z.string().optional(),
       team_slug: z.string().optional(),
@@ -70,7 +70,7 @@ tool(
           text: redact ? scrubText(textOut, map) : textOut,
           ...(truncated
             ? {
-                note: `Truncated at ${limit} of ${s.text.length} chars — summarize from this preview; to save the FULL text as a reference doc, call save_reference_doc with body_path.`,
+                note: `Truncated at ${limit} of ${s.text.length} chars - summarize from this preview; to save the FULL text as a reference doc, call save_reference_doc with body_path.`,
               }
             : {}),
         };
@@ -78,7 +78,7 @@ tool(
       ...(redact
         ? {
             redaction:
-              "Placeholders like [EMAIL_1]/[SECRET_1] are intentional redactions — treat them as opaque, never guess the originals.",
+              "Placeholders like [EMAIL_1]/[SECRET_1] are intentional redactions - treat them as opaque, never guess the originals.",
           }
         : {}),
       next: "Summarize how this routes, then call save_knowledge_entry / save_reference_doc / add_component. Each call is gated by its own review box.",
@@ -90,7 +90,7 @@ tool(
   "save_reference_doc",
   {
     description:
-      "Persist an APPROVED reference doc — freeform project context (docs, runbooks, architecture notes) that doesn't fit the issue→root_cause→resolution shape of a knowledge entry. The body is chunked and embedded so it surfaces in consult-mode search. Provide EITHER body (inline text) OR body_path (a local file — e.g. a large PDF — extracted server-side so the full text is saved without echoing it). Scope it with product_slug, and add component when the doc is about one part of that product (leave it off for general product docs). Pass doc_version when the source document carries a version label; pass supersedes with the id of the doc this replaces — the predecessor is archived and linked automatically, and search returns only the latest version. The call is gated by a review box the user can edit, so draft it and call rather than asking first.",
+      "Persist an APPROVED reference doc - freeform project context (docs, runbooks, architecture notes) that doesn't fit the issue→root_cause→resolution shape of a knowledge entry. The body is chunked and embedded so it surfaces in consult-mode search. Provide EITHER body (inline text) OR body_path (a local file - e.g. a large PDF - extracted server-side so the full text is saved without echoing it). Scope it with product_slug, and add component when the doc is about one part of that product (leave it off for general product docs). Pass doc_version when the source document carries a version label; pass supersedes with the id of the doc this replaces - the predecessor is archived and linked automatically, and search returns only the latest version. The call is gated by a review box the user can edit, so draft it and call rather than asking first.",
     inputSchema: {
       title: z.string(),
       body: z.string().optional(),
@@ -103,13 +103,13 @@ tool(
         .nullable()
         .optional()
         .describe(
-          "Set only when the doc describes ONE customer's install (their addon, their configuration). Leave it off for anything true of the product generally — a customer here means the doc is cited as that customer's setup, not as how the product works.",
+          "Set only when the doc describes ONE customer's install (their addon, their configuration). Leave it off for anything true of the product generally - a customer here means the doc is cited as that customer's setup, not as how the product works.",
         ),
       source: z
         .string()
         .optional()
         .describe(
-          "Where the content came from — a URL (an ADO wiki page's remote_url), file path or origin note. Provenance, not a connection slug.",
+          "Where the content came from - a URL (an ADO wiki page's remote_url), file path or origin note. Provenance, not a connection slug.",
         ),
       tags: z.array(z.string()).optional(),
       status: referenceStatusSchema.optional(),
@@ -119,7 +119,7 @@ tool(
       source_project_id: z
         .string()
         .optional()
-        .describe("From get_ado_wiki_page — the project this page belongs to"),
+        .describe("From get_ado_wiki_page - the project this page belongs to"),
       external_key: z
         .string()
         .optional()
@@ -230,7 +230,7 @@ tool(
   "list_reference_docs",
   {
     description:
-      "List reference docs (newest first), optionally filtered by status, product_slug / team_slug, component, doc_version or tags. Bodies are omitted; use get_reference_doc for the full text. Rows carry doc_version and superseded_by — archived rows with superseded_by set are old versions of a newer doc.",
+      "List reference docs (newest first), optionally filtered by status, product_slug / team_slug, component, doc_version or tags. Bodies are omitted; use get_reference_doc for the full text. Rows carry doc_version and superseded_by - archived rows with superseded_by set are old versions of a newer doc.",
     inputSchema: {
       status: referenceStatusSchema.optional(),
       product_slug: z.string().optional(),
@@ -287,7 +287,7 @@ tool(
   "update_reference_doc",
   {
     description:
-      "Update a reference doc, or change its status ('archived' to retire). Pass only the fields you want to change. If the body changes it is re-chunked and re-embedded. To publish a NEW VERSION of a doc, do not edit the body here — call save_reference_doc with supersedes instead. Pass expected_version (from list/get) to guard against concurrent edits.",
+      "Update a reference doc, or change its status ('archived' to retire). Pass only the fields you want to change. If the body changes it is re-chunked and re-embedded. To publish a NEW VERSION of a doc, do not edit the body here - call save_reference_doc with supersedes instead. Pass expected_version (from list/get) to guard against concurrent edits.",
     inputSchema: {
       id: z.string(),
       title: z.string().optional(),

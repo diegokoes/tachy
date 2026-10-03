@@ -19,7 +19,7 @@
     height?: string;
     /** Take the parent's whole height instead of `height`. */
     fill?: boolean;
-    /** How a column's count is printed — compact, for figures in the millions. */
+    /** How a column's count is printed - compact, for figures in the millions. */
     format?: (n: number) => string;
     /** The stacked parts, named once under the plot. */
     legend?: { key: string; label: string; tone: Tone }[];

@@ -39,7 +39,7 @@ import {
 
 /**
  * The work item itself: reading it from its source, shrinking a long one, and
- * writing back to it — the private note, whose customer it is, and the version
+ * writing back to it - the private note, whose customer it is, and the version
  * it was seen on.
  */
 
@@ -47,7 +47,7 @@ tool(
   "fetch_work_item",
   {
     description:
-      "Fetch a work item (ticket/issue) from a source, store it, and return its normalized metadata + cleaned messages for analysis. Read the messages chronologically. linked_items holds the Azure DevOps items this ticket references, already fetched — they usually carry the engineering side of the story, so treat them as part of the ticket; never re-fetch them and never fetch relations of relations. component is the area→component match when the project has a rule for it. A long, repetitive ticket comes back as transcript + compaction instead of item.messages.",
+      "Fetch a work item (ticket/issue) from a source, store it, and return its normalized metadata + cleaned messages for analysis. Read the messages chronologically. linked_items holds the Azure DevOps items this ticket references, already fetched - they usually carry the engineering side of the story, so treat them as part of the ticket; never re-fetch them and never fetch relations of relations. component is the area→component match when the project has a rule for it. A long, repetitive ticket comes back as transcript + compaction instead of item.messages.",
     inputSchema: {
       source: sourceSlug,
       external_id: z.string(),
@@ -81,7 +81,7 @@ tool(
   "compact_work_item",
   {
     description:
-      "Compact a long ticket into a de-duplicated, attributed turn list ('X: ...' script) and post it back as a private note. Deterministic text processing, no summarising: it strips quoted reply chains, signatures, legal footers, security banners and automated reminders, drops repeated blocks, and recovers content that only ever existed inside a quote (attributed to its real sender and date). post_note (default true) writes the transcript to the ticket where it is readable in full; the reply here is only the stats, because a whole transcript does not belong in the conversation. Ask for return_turns only when you must reason over the text itself — it is truncated to fit, so the note remains the complete copy.",
+      "Compact a long ticket into a de-duplicated, attributed turn list ('X: ...' script) and post it back as a private note. Deterministic text processing, no summarising: it strips quoted reply chains, signatures, legal footers, security banners and automated reminders, drops repeated blocks, and recovers content that only ever existed inside a quote (attributed to its real sender and date). post_note (default true) writes the transcript to the ticket where it is readable in full; the reply here is only the stats, because a whole transcript does not belong in the conversation. Ask for return_turns only when you must reason over the text itself - it is truncated to fit, so the note remains the complete copy.",
     inputSchema: {
       source: sourceSlug,
       external_id: z.string(),
@@ -161,7 +161,7 @@ tool(
   "get_context",
   {
     description:
-      "Fetch a work item AND auto-search the archive for similar prior cases in one call — the consult-mode entry point. Returns 'similar' (past knowledge entries with their full structured context) and 'reference' (matching project reference docs), each graded; check every similar entry's status, because a 'deprecated' one is outdated and must be flagged as such rather than presented as current advice. 'linked_items' holds the referenced Azure DevOps items, already fetched — read them, never re-fetch. 'project_context' names the ticket's project, its wiki and its repos with the component each implements: use it to aim search_code at the right repo instead of searching everything. A long, repetitive ticket comes back as transcript + compaction instead of item.messages.",
+      "Fetch a work item AND auto-search the archive for similar prior cases in one call - the consult-mode entry point. Returns 'similar' (past knowledge entries with their full structured context) and 'reference' (matching project reference docs), each graded; check every similar entry's status, because a 'deprecated' one is outdated and must be flagged as such rather than presented as current advice. 'linked_items' holds the referenced Azure DevOps items, already fetched - read them, never re-fetch. 'project_context' names the ticket's project, its wiki and its repos with the component each implements: use it to aim search_code at the right repo instead of searching everything. A long, repetitive ticket comes back as transcript + compaction instead of item.messages.",
     inputSchema: {
       source: sourceSlug,
       external_id: z.string(),
@@ -190,7 +190,7 @@ tool(
       ? await embedQueryLiteral(query)
       : undefined;
     // The ticket's own customer lifts their history without excluding anyone
-    // else's — the same tiebreaker search_knowledge gives an explicit `customer`.
+    // else's - the same tiebreaker search_knowledge gives an explicit `customer`.
     const boostCustomerId = item.customerId ?? undefined;
     const boostUnitId = item.customerUnitId ?? undefined;
     const [similar, reference] = await Promise.all([
@@ -247,7 +247,7 @@ tool(
       body: z
         .string()
         .describe(
-          "Private note text. It lands on the customer's own ticket in their helpdesk — private to your organisation, not to you, and visible to every agent who opens it. Write it as something a colleague will read six months from now.",
+          "Private note text. It lands on the customer's own ticket in their helpdesk - private to your organisation, not to you, and visible to every agent who opens it. Write it as something a colleague will read six months from now.",
         ),
     },
   },
@@ -272,7 +272,7 @@ tool(
         .string()
         .optional()
         .describe(
-          "Which part of that customer's estate the ticket concerns — a unit slug or alias from list_customer_units. Only meaningful alongside a customer.",
+          "Which part of that customer's estate the ticket concerns - a unit slug or alias from list_customer_units. Only meaningful alongside a customer.",
         ),
       customer_slug: z.string().nullable(),
     },
@@ -296,7 +296,7 @@ tool(
   "set_observed_version",
   {
     description:
-      "Record (or clear) the product version observed/mentioned on a specific ticket. Only set this when a version is actually known from the ticket — leave unset otherwise.",
+      "Record (or clear) the product version observed/mentioned on a specific ticket. Only set this when a version is actually known from the ticket - leave unset otherwise.",
     inputSchema: { work_item_id: z.string(), version: z.string().nullable() },
   },
   async ({ work_item_id, version }) => {

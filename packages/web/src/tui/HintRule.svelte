@@ -25,7 +25,7 @@
     gap: 0.35em;
     white-space: nowrap;
   }
-  /* Key names are keycaps, not words — mono, but at the row's own size rather
+  /* Key names are keycaps, not words - mono, but at the row's own size rather
      than the browser's default kbd styling. */
   kbd {
     font-family: var(--font-mono);

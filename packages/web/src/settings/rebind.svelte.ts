@@ -83,7 +83,7 @@ const heldMods = (e: KeyboardEvent) =>
 
 /**
  * Captured through the dispatcher's own normalize(), so a key recorded here is
- * byte-for-byte the string a keypress will later be matched against — anything
+ * byte-for-byte the string a keypress will later be matched against - anything
  * else silently records bindings that can never fire. A modifier on its own is
  * shown as it goes down but never recorded: you cannot bind Shift by itself.
  *

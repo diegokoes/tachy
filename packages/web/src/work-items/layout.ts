@@ -65,7 +65,7 @@ export const editable = (f: FieldSpec) =>
 export const isBody = (f: FieldSpec) => f.type === "html";
 
 export interface FieldLayout {
-  /** Long HTML fields — Description, Repro Steps, System Info — as markdown. */
+  /** Long HTML fields - Description, Repro Steps, System Info - as markdown. */
   body: FieldSpec[];
   core: FieldSpec[];
   /** Required by the type and not already above. */

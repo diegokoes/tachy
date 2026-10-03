@@ -22,8 +22,8 @@ const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 /**
  * The first two branches carry their own evidence (a country code, an area code
  * in brackets). The third is bare digit groups, which in a support ticket are far
- * more often the identifiers the ticket is *about* — UIDs, serials, order numbers
- * — than a phone number, so it only fires behind a word that announces one.
+ * more often the identifiers the ticket is *about* - UIDs, serials, order numbers
+ * - than a phone number, so it only fires behind a word that announces one.
  * Tokenizing those identifiers is privacy-neutral and destroys the case.
  */
 const PHONE_WORD = String.raw`(?:tel|telephone|tele?fono|tfno|tlf|phone|mobile|m[oó]vil|cell|fax|whatsapp)`;
@@ -127,7 +127,7 @@ const flatten = (s: string) => s.replace(/\s+/g, " ").trim();
 const NAME_PART_MIN = 4;
 
 /**
- * Tokenize known person names wherever they appear in free text — same USER
+ * Tokenize known person names wherever they appear in free text - same USER
  * kind as the author fields, so mentions map to the same token. Best-effort:
  * only names the item declares, or that the source could name for it, are found.
  *
@@ -136,7 +136,7 @@ const NAME_PART_MIN = 4;
  * full one their account is registered under ("Hola Javier," opening a mail from
  * Javier Baños).
  *
- * One alternation over one pass, rather than a replace per name — a long ticket
+ * One alternation over one pass, rather than a replace per name - a long ticket
  * against a full agent directory is hundreds of names across hundreds of KB, and
  * that many sequential scans is the difference between milliseconds and seconds.
  * Longest first, so the full name wins wherever both could match and a part never
@@ -150,7 +150,7 @@ export function scrubKnownNames(
   if (!text) return text ?? "";
 
   // Keyed on the flattened, lowercased form, which is also how a match is
-  // looked up — so a name stored "Javier  Baños" still finds "Javier Baños".
+  // looked up - so a name stored "Javier  Baños" still finds "Javier Baños".
   const byKey = new Map<string, string>();
   const add = (pattern: string, full: string) => {
     const key = flatten(pattern).toLowerCase();

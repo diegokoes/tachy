@@ -352,7 +352,7 @@
     gap: var(--pad-2);
   }
   /* Two text fields down the left, the two small controls stacked beside them,
-     the row actions outside both — so nothing is a lone control in open space. */
+     the row actions outside both - so nothing is a lone control in open space. */
   .col {
     display: grid;
     grid-template-columns: 1.2rem minmax(10rem, 1fr) 9rem auto;

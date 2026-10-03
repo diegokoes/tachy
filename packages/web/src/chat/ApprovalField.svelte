@@ -21,7 +21,7 @@
   /**
    * Where a schema exists it decides the widget; otherwise the widget comes from
    * the shape of the value the model actually sent. The fallback is not a
-   * stopgap — a tool nobody anticipated still has to render, and most tools
+   * stopgap - a tool nobody anticipated still has to render, and most tools
    * carry no schema at all. `ENUM_FIELDS` is the built-in per-key schema, and
    * folds into the same lookup rather than sitting beside it.
    */
@@ -92,12 +92,12 @@
     adding = "";
   }
 
-  /** Nested objects stay JSON — a generic form cannot do better, and the raw
+  /** Nested objects stay JSON - a generic form cannot do better, and the raw
       editor on the box is there for anything this cannot express. */
   let jsonText = $state("");
   let jsonBad = $state(false);
   /** What this field last emitted, so a re-seed can tell an outside change
-      (the raw editor on the box) from the user's own typing — reformatting
+      (the raw editor on the box) from the user's own typing - reformatting
       mid-keystroke would fight them. */
   let emitted = $state.raw<unknown>(Symbol("unset"));
 
@@ -240,7 +240,7 @@
     gap: var(--pad-1);
     min-width: 0;
   }
-  /* Short scalars read better as label-then-control on one line — but only
+  /* Short scalars read better as label-then-control on one line - but only
      while there is room for both, so a narrow pane or a large font scale
      drops them back to stacked. */
   .field.inline {

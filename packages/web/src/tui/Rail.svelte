@@ -25,7 +25,7 @@
 </script>
 
 <!-- The index for one section of the app: what is in here, how much of it
-     there is, and which part you are looking at. It is not a third tab bar —
+     there is, and which part you are looking at. It is not a third tab bar -
      it answers "what can I configure here", which a bar of labels alone never
      did, and it is why each part can now have the window to itself. -->
 <nav class="rail" aria-label={label}>

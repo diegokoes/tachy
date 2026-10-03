@@ -28,7 +28,7 @@ tool(
         .record(z.string(), z.any())
         .optional()
         .describe(
-          "Free-form context for this run — the work item, the source, what was attempted. Not a place for the content itself.",
+          "Free-form context for this run - the work item, the source, what was attempted. Not a place for the content itself.",
         ),
     },
   },

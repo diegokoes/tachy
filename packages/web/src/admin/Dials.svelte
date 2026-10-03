@@ -22,8 +22,8 @@
 
   let { items }: { items: DialItem[] } = $props();
 
-  /* The ring takes whichever runs out first — the tile's height less the two
-     lines under it, or its share of the width — and never more than 6.5rem. */
+  /* The ring takes whichever runs out first - the tile's height less the two
+     lines under it, or its share of the width - and never more than 6.5rem. */
   const size = $derived(
     `min(6.5rem, calc(100cqh - 2.9rem), calc(100cqw / ${Math.max(1, items.length)} - 1.25rem))`,
   );

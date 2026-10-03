@@ -89,7 +89,7 @@
    * The right end keeps the floor's inward round and a mouth that rounds
    * outward, so the window's top rule sweeps down into the recess instead of
    * stopping at a square shoulder. A CSS border cannot turn that way, which is
-   * why the outline is stroked from the same path the mask is filled from —
+   * why the outline is stroked from the same path the mask is filled from -
    * generating them separately is how a cut and the line drawn on it drift
    * apart.
    *
@@ -118,7 +118,7 @@
   }
 
   /* Measured, not guessed. The recess is cut to the bar's size and the content
-     below has to clear it — but the bar's box moves with the text size AND with
+     below has to clear it - but the bar's box moves with the text size AND with
      whichever interface font is picked, so hardcoded rems would drift out of
      true the moment someone changed either. The tokens are resolved through the
      window itself for the same reason: they stay the single source of truth. */
@@ -153,7 +153,7 @@
       const round = cssPx(host, "var(--radius)");
 
       // Open to within `reserve` of the right edge, but never tighter than the
-      // centred bar's own right edge plus its air — which is what happens on a
+      // centred bar's own right edge plus its air - which is what happens on a
       // window too narrow for both.
       const wall = Math.max(avail / 2 + w / 2 + air, avail - reserve);
       const h = h0 + air;
@@ -365,7 +365,7 @@
       style="--sub-h-raw: {subH}px; --sub-mouth: {carveW}px; --sub-mask: {carveMask}"
     >
       <!-- Rendered before the window so its hotkey scope is pushed first and
-           the view's scope stays innermost — otherwise this bar's (all hidden)
+           the view's scope stays innermost - otherwise this bar's (all hidden)
            bindings would sit on top and blank the hint rule. -->
       {#if sub}
         <svg
@@ -428,12 +428,12 @@
 <style>
   /* Two objects on one centre line: a top row carrying the wordmark and the
      nav, and the window they sit above. The nav is no longer chrome bolted to
-     a document — it reads as the object you steer the document with.
+     a document - it reads as the object you steer the document with.
 
      The bottom gutter is the widest of the three: the window's lower edge is
      the one nothing else sits against, so it needs air to read as a floating
      object rather than as content jammed into the viewport. The gap is now the
-     narrowest, for the opposite reason — the nav and the subnav in the recess
+     narrowest, for the opposite reason - the nav and the subnav in the recess
      below it are one control in two registers, and reading as a pair means
      sitting closer to each other than either does to anything else. */
   /* The app blurs behind an open dialog. A filter on the scene rather than a
@@ -461,7 +461,7 @@
   }
 
   /* The cap is in px, not rem. max-width in rem multiplies by --font-scale, so
-     picking a larger text size used to widen the box itself — at 175% it filled
+     picking a larger text size used to widen the box itself - at 175% it filled
      95% of a 1920 screen. Character count per line should track the text size;
      the frame around it should not. */
   .topbar,
@@ -482,7 +482,7 @@
     min-width: 0;
   }
 
-  /* The floating surfaces let the sky through, just barely — enough that a
+  /* The floating surfaces let the sky through, just barely - enough that a
      star crossing behind them stays perceptible, not enough to cost any
      contrast against the text on top. Panels nested INSIDE keep --panel-bg
      opaque, so their inline titles still mask the rule they straddle. */
@@ -506,8 +506,8 @@
     min-width: 0;
   }
 
-  /* A lone tab, styled like one of Tabs.svelte's own — same bracketed label,
-     same hover/focus behaviour — but with none of the machinery that only
+  /* A lone tab, styled like one of Tabs.svelte's own - same bracketed label,
+     same hover/focus behaviour - but with none of the machinery that only
      makes sense among siblings: no anchor-positioned indicator to slide
      between entries, since there is only ever this one. Pinned to the
      viewport's lower-left corner with its line box on the window's bottom
@@ -596,8 +596,8 @@
   .window {
     --sub-air: var(--pad-2);
     /* The air `main` keeps above and below its content. Named because a
-       sticky child cannot rise above its containing block — `main`'s content
-       box — so it pins this far down the scrollport and has to paint the
+       sticky child cannot rise above its containing block - `main`'s content
+       box - so it pins this far down the scrollport and has to paint the
        strip left over it. See .bar in LibraryView. */
     --main-air: calc(var(--fs-xs) * 0.9);
     /* Right edge to recess wall: the corner the carved row keeps for its own
@@ -640,13 +640,13 @@
     stroke-width: var(--panel-line-w);
   }
 
-  /* No box of its own — the recess is the box. A second bordered pill hung
+  /* No box of its own - the recess is the box. A second bordered pill hung
      under the nav's read as chrome about chrome; bare labels in a cut let the
      window's own edge do the framing, and cost the row a border and two steps
      of padding on the way. Its padding is what the Panel used to supply, so
      the labels still clear the recess floor.
 
-     Centred on the window's centre line — the same one the nav pill sits on,
+     Centred on the window's centre line - the same one the nav pill sits on,
      so the two stack. */
   .subnav {
     position: absolute;
@@ -656,7 +656,7 @@
     z-index: 2;
     padding: var(--pad-2) var(--pad-3);
   }
-  /* The window's own top row, right of the recess — space the carve opens up
+  /* The window's own top row, right of the recess - space the carve opens up
      and nothing else was using. Aligned to the Panel's content edge so it
      reads as part of the page, and capped short of the recess mouth so it can
      never collide with it. */
@@ -668,7 +668,7 @@
     /* The band down to where page content actually starts, not down to the
        recess floor. `.shell` clears the floor by another --sub-air and the
        Panel's own rule sits above that, so a row the depth of the recess
-       centres too high — six pixels of air above it against fourteen below,
+       centres too high - six pixels of air above it against fourteen below,
        which reads as pinned to the top edge rather than centred in the row. */
     height: calc(var(--sub-depth) + var(--sub-air) + var(--panel-line-w));
     /* Sized to the corner rather than to its contents, so the row centres in
@@ -716,7 +716,7 @@
 
   /* Wiped out until the GSAP reveal takes over (its inline clip-path wins).
      The tab indicator is anchored to a layout box, which exists from the first
-     frame — so it has to be held back too, or it draws under a label that has
+     frame - so it has to be held back too, or it draws under a label that has
      not wiped in yet. */
   .navbar.unrevealed :global(button) {
     clip-path: inset(0 100% 0 0);
@@ -752,11 +752,11 @@
     user-select: none;
   }
 
-  /* Native bar hidden — the drawn scrollbar beside it takes over.
+  /* Native bar hidden - the drawn scrollbar beside it takes over.
      The block padding is not cosmetic: a Panel's title and hint straddle its
      own rule at translateY(±50%), so half of each sits OUTSIDE the panel. A
      titled panel flush against this scroll box lost the top half of its label
-     to `overflow: auto` — visible on admin, whose pages open straight onto
+     to `overflow: auto` - visible on admin, whose pages open straight onto
      one. Half a label's line box is the clearance that costs. */
   main {
     flex: 1;
@@ -794,7 +794,7 @@
 
   /* Its own top spacing rather than a gap on .shell, so that when the row has
      nothing to print it takes up nothing at all. Almost every scope now marks
-     its bindings hidden — Settings › keybinds is the discovery surface — so a
+     its bindings hidden - Settings › keybinds is the discovery surface - so a
      permanently reserved row was a dead band above the window's lower edge on
      every view. */
   .hintrow {

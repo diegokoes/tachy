@@ -10,7 +10,7 @@ const fixtures = readFileSync(join(here, "..", "fixtures.sql"), "utf8");
 
 /**
  * Ratios, not fixed strings. What matters is that a column does not collapse
- * onto a handful of values — every one of these was a real collapse: one shared
+ * onto a handful of values - every one of these was a real collapse: one shared
  * code snippet across every chunk, `i % SYMPTOMS.length` titles, twelve message
  * bodies, and a chunk heading drawn independently of its own document. Asserting
  * the ratio lets the corpus grow without churning the test.
@@ -54,7 +54,7 @@ describe("seeded data has variety", () => {
     expect(await distinctRatio(table, col)).toBeGreaterThan(floor);
   });
 
-  /** Only six rows at this scale, so a ratio says nothing — the count does. */
+  /** Only six rows at this scale, so a ratio says nothing - the count does. */
   it("draws an artifact body per artifact", async () => {
     const [row] = await sql<{ n: string }[]>`
       select count(distinct body)::text as n from artifacts

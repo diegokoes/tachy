@@ -222,7 +222,7 @@ export interface MembershipRow {
   team_role: TeamRole;
 }
 
-/** Every membership at once — the access table shows teams per user. */
+/** Every membership at once - the access table shows teams per user. */
 export async function listMemberships(): Promise<MembershipRow[]> {
   const rows = await sql`
     select tm.user_id, t.slug as team_slug, t.name as team_name, tm.role as team_role
@@ -256,7 +256,7 @@ export async function setTeamMember(
 /**
  * For the admin index: users, how many of them cannot sign in, and who can
  * curate. `teams_with_admin` counts teams from this domain's own membership
- * table rather than joining the catalog's — the caller compares it against the
+ * table rather than joining the catalog's - the caller compares it against the
  * team count it already has.
  *
  * `admins` and `team_admins` are both taken among the enabled, and an app admin

@@ -20,7 +20,7 @@ setSourceOrigin("agent");
 
 /*
  * Imported for the registrations they perform. One file per domain, under the
- * name core gives it — a tool sits beside the others that read and write the
+ * name core gives it - a tool sits beside the others that read and write the
  * same tables.
  */
 import "./tools/work-items";

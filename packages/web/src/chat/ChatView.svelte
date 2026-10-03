@@ -317,8 +317,8 @@
       return;
     }
     // The list is otherwise only fetched while a bare `/name` is being typed, so
-    // a command that arrived already written — the wiki's "draft with agent"
-    // puts one in the composer — would go out as plain text without this.
+    // a command that arrived already written - the wiki's "draft with agent"
+    // puts one in the composer - would go out as plain text without this.
     if (message.startsWith("/") && !commands)
       commands = await getCommands().catch(() => null);
     const command = parseCommand(message);
@@ -780,7 +780,7 @@
     border-color: var(--border);
   }
   /* Armed Clear inverts to a solid block, the same move .btn.primary makes on
-     hover — the label rides on --bg so it reads in either theme. */
+     hover - the label rides on --bg so it reads in either theme. */
   .send-col :global(.btn.danger) {
     background: var(--danger);
     color: var(--bg);
@@ -793,7 +793,7 @@
       2px 0 rgba(64, 224, 255, 0.4);
   }
 
-  /* Retro terminal caret: solid block, hard on/off blink — no glow, no fade.
+  /* Retro terminal caret: solid block, hard on/off blink - no glow, no fade.
      Shared by the waiting turn and the one riding the end of a streaming
      message, so the two can never drift apart. */
   .caret,
@@ -902,7 +902,7 @@
     gap: 0.35rem;
     padding-right: 2.8rem;
   }
-  /* Native bar hidden — the ASCII scrollbar next to it takes over. */
+  /* Native bar hidden - the ASCII scrollbar next to it takes over. */
   .transcript {
     flex: 1;
     min-width: 0;
@@ -916,7 +916,7 @@
   .transcript::-webkit-scrollbar {
     display: none;
   }
-  /* A turn is a speaker marker plus its text — no boxes. Only events
+  /* A turn is a speaker marker plus its text - no boxes. Only events
      (approval, compaction, export) get a Panel.
 
      The transcript is the longest thing anyone reads here, so the prose is on
@@ -951,7 +951,7 @@
   .turn .body.waiting {
     min-height: 1.5em;
   }
-  /* A tool line is a trace, not prose — it keeps the terminal face. */
+  /* A tool line is a trace, not prose - it keeps the terminal face. */
   .tool {
     display: flex;
     align-items: center;
@@ -963,7 +963,7 @@
   }
 
   /* The user's turn is positioned right; its text stays left-aligned. Reading
-     returns to the left edge on every line, so ragged-left costs a re-scan —
+     returns to the left edge on every line, so ragged-left costs a re-scan -
      which is why no chat UI right-aligns the text itself. Only the marker,
      a single token, sits on the right. */
   .turn.user {
@@ -978,7 +978,7 @@
     align-self: flex-end;
     color: var(--accent);
   }
-  /* Same glyph as tachy's, mirrored — no second marker to keep in step. */
+  /* Same glyph as tachy's, mirrored - no second marker to keep in step. */
   .turn.user .mk {
     display: inline-block;
     transform: scaleX(-1);
@@ -1048,7 +1048,7 @@
     flex: 1;
     resize: none;
   }
-  /* A <label>, not a <button> — it has to wrap the file input — so it borrows
+  /* A <label>, not a <button> - it has to wrap the file input - so it borrows
      the mark's hover language rather than inheriting it from Button. */
   .upload {
     width: var(--upload-w);

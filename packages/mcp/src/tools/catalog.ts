@@ -33,8 +33,8 @@ import {
 } from "../permissions";
 
 /**
- * The vocabularies a ticket is filed against — resolution patterns, components,
- * and the customers and units that own an install — and who owns what: teams,
+ * The vocabularies a ticket is filed against - resolution patterns, components,
+ * and the customers and units that own an install - and who owns what: teams,
  * their products, and the labels shared across them.
  */
 
@@ -42,7 +42,7 @@ tool(
   "list_resolution_patterns",
   {
     description:
-      "List the controlled vocabulary of resolution patterns. ALWAYS call this before choosing resolution_pattern for save_knowledge_entry — pick an existing slug, or leave it unset, rather than inventing one.",
+      "List the controlled vocabulary of resolution patterns. ALWAYS call this before choosing resolution_pattern for save_knowledge_entry - pick an existing slug, or leave it unset, rather than inventing one.",
     inputSchema: {},
     annotations: { readOnlyHint: true },
   },
@@ -53,7 +53,7 @@ tool(
   "add_resolution_pattern",
   {
     description:
-      "Add a new resolution_pattern slug to the controlled vocabulary. Call ONLY when the user explicitly asks to add a new pattern — never invent one just to tag a ticket; leave resolution_pattern unset instead.",
+      "Add a new resolution_pattern slug to the controlled vocabulary. Call ONLY when the user explicitly asks to add a new pattern - never invent one just to tag a ticket; leave resolution_pattern unset instead.",
     inputSchema: { slug: z.string(), description: z.string() },
   },
   async ({ slug, description }) => {
@@ -78,7 +78,7 @@ tool(
   "add_component",
   {
     description:
-      "Add (or update) a fact in the architecture glossary, e.g. a service, module, or config pool. Call it whenever a component is genuinely missing — when the user describes the architecture, or when a ticket names an area absent from the list. The review box is where the user refuses one they don't want, so never work around a missing component by inventing a slug inline or forcing the entry onto an unrelated one. Use aliases for alternate names (e.g. slug 'line-controller' with aliases ['lc','LC']) so naming variants resolve to one component.",
+      "Add (or update) a fact in the architecture glossary, e.g. a service, module, or config pool. Call it whenever a component is genuinely missing - when the user describes the architecture, or when a ticket names an area absent from the list. The review box is where the user refuses one they don't want, so never work around a missing component by inventing a slug inline or forcing the entry onto an unrelated one. Use aliases for alternate names (e.g. slug 'line-controller' with aliases ['lc','LC']) so naming variants resolve to one component.",
     inputSchema: {
       product_slug: z.string(),
       slug: z.string(),
@@ -127,7 +127,7 @@ tool(
         .array(z.string())
         .optional()
         .describe(
-          "Other NAMES this account trades under. Not email domains — a domain here would come back out of list_customers as something to call them.",
+          "Other NAMES this account trades under. Not email domains - a domain here would come back out of list_customers as something to call them.",
         ),
       email_domains: z
         .array(z.string())
@@ -156,7 +156,7 @@ tool(
   "get_customer_profile",
   {
     description:
-      "Everything configured about one customer's install: their specifics (the version they run, their layout, integrations), the components they have, their own repos, any source project that exists for them, and the parts their estate divides into (`units` — sites, production lines, tenants). Call it before advising a named customer — a general answer can be wrong for them because of what is here. Pass `unit` when the question is about one part of their estate: the facts then come back RESOLVED for that unit, each carrying `origin` and `inherited`, so you can say a thing is true of every line on a shared layout rather than only of the one asked about. Arrives automatically on fetch_work_item/get_context when the ticket resolves to a customer, so do not re-fetch it then.",
+      "Everything configured about one customer's install: their specifics (the version they run, their layout, integrations), the components they have, their own repos, any source project that exists for them, and the parts their estate divides into (`units` - sites, production lines, tenants). Call it before advising a named customer - a general answer can be wrong for them because of what is here. Pass `unit` when the question is about one part of their estate: the facts then come back RESOLVED for that unit, each carrying `origin` and `inherited`, so you can say a thing is true of every line on a shared layout rather than only of the one asked about. Arrives automatically on fetch_work_item/get_context when the ticket resolves to a customer, so do not re-fetch it then.",
     inputSchema: {
       customer: z.string().describe("Slug from list_customers"),
       unit: z
@@ -176,7 +176,7 @@ tool(
   "list_customer_units",
   {
     description:
-      "The parts one customer's estate divides into — sites, production lines, tenants — with how they nest and which shared profile each conforms to. `kind` is a deployment-specific vocabulary, not a fixed list. Read this before set_customer_fact with a unit, or before answering a question about a named line or site: a fact recorded against a line is not visible on the customer as a whole.",
+      "The parts one customer's estate divides into - sites, production lines, tenants - with how they nest and which shared profile each conforms to. `kind` is a deployment-specific vocabulary, not a fixed list. Read this before set_customer_fact with a unit, or before answering a question about a named line or site: a fact recorded against a line is not visible on the customer as a whole.",
     inputSchema: { customer: z.string().describe("Slug from list_customers") },
     annotations: { readOnlyHint: true },
   },
@@ -206,7 +206,7 @@ tool(
   "add_customer_unit",
   {
     description:
-      "Add (or update) one part of a customer's estate. `parent` is containment — a line is inside a site. `profile` is sharing WITHOUT containment: the shared layout several lines conform to, whose facts they inherit without being part of it. Pick `kind` to match what this deployment already uses (see list_customer_units); it is free text, not a fixed vocabulary. Do not invent units from ticket text — propose one and let the user confirm.",
+      "Add (or update) one part of a customer's estate. `parent` is containment - a line is inside a site. `profile` is sharing WITHOUT containment: the shared layout several lines conform to, whose facts they inherit without being part of it. Pick `kind` to match what this deployment already uses (see list_customer_units); it is free text, not a fixed vocabulary. Do not invent units from ticket text - propose one and let the user confirm.",
     inputSchema: {
       customer: z.string().describe("Slug from list_customers"),
       slug: z.string().describe("Short identifier, e.g. 'tlc191'"),
@@ -222,7 +222,7 @@ tool(
         .string()
         .optional()
         .describe(
-          "A unit whose facts this one inherits without being inside it — a shared layout or template.",
+          "A unit whose facts this one inherits without being inside it - a shared layout or template.",
         ),
       aliases: z
         .array(z.string())
@@ -263,7 +263,7 @@ tool(
   "set_customer_fact",
   {
     description:
-      "Record one specific about a customer's install — the version they run, their line layout, an integration they depend on. This is where customer-specific truth belongs; a knowledge entry is for a problem and its resolution, so do not use one to store what is really a configuration fact. Re-setting the same (unit, kind, label) replaces the value, so this is how a version gets updated rather than duplicated. Pass `unit` when the fact is true of one part of their estate rather than of the whole account — an IP belongs to a line, a timezone to a site. Call list_customer_fact_kinds first and reuse a kind.",
+      "Record one specific about a customer's install - the version they run, their line layout, an integration they depend on. This is where customer-specific truth belongs; a knowledge entry is for a problem and its resolution, so do not use one to store what is really a configuration fact. Re-setting the same (unit, kind, label) replaces the value, so this is how a version gets updated rather than duplicated. Pass `unit` when the fact is true of one part of their estate rather than of the whole account - an IP belongs to a line, a timezone to a site. Call list_customer_fact_kinds first and reuse a kind.",
     inputSchema: {
       customer: z.string().describe("Slug from list_customers"),
       unit: z
@@ -279,7 +279,7 @@ tool(
         .string()
         .optional()
         .describe(
-          "What it is about when the kind alone is ambiguous — which product a version belongs to, which line a layout describes. Together with kind it identifies the fact, so reuse it to update rather than add.",
+          "What it is about when the kind alone is ambiguous - which product a version belongs to, which line a layout describes. Together with kind it identifies the fact, so reuse it to update rather than add.",
         ),
       value: z.string(),
       notes: z.string().optional(),
@@ -287,7 +287,7 @@ tool(
         .string()
         .optional()
         .describe(
-          "Where this was learned — a ticket URL, a wiki page, a person.",
+          "Where this was learned - a ticket URL, a wiki page, a person.",
         ),
       product_slug: z.string().optional(),
       component: z
@@ -402,7 +402,7 @@ tool(
   "list_labels",
   {
     description:
-      "List the optional, per-product advisory tag vocabulary. Call this before tagging a knowledge entry so you reuse existing tag slugs (e.g. 'lc', 'mas', 'printing') instead of inventing near-duplicates. An empty list is normal — tags are free-form, this is just a curated suggestion list.",
+      "List the optional, per-product advisory tag vocabulary. Call this before tagging a knowledge entry so you reuse existing tag slugs (e.g. 'lc', 'mas', 'printing') instead of inventing near-duplicates. An empty list is normal - tags are free-form, this is just a curated suggestion list.",
     inputSchema: { product_slug: z.string() },
     annotations: { readOnlyHint: true },
   },
@@ -414,7 +414,7 @@ tool(
   "add_label",
   {
     description:
-      "Add a tag slug to a product's advisory label vocabulary. Call when the user wants to curate the team's taxonomy — not inferred silently. Tags on knowledge entries remain free-form; this only records a preferred vocabulary.",
+      "Add a tag slug to a product's advisory label vocabulary. Call when the user wants to curate the team's taxonomy - not inferred silently. Tags on knowledge entries remain free-form; this only records a preferred vocabulary.",
     inputSchema: {
       product_slug: z.string(),
       slug: z.string(),

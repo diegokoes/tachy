@@ -40,12 +40,12 @@
 
   const activeMatches = $derived(items.some((it) => it.key === active));
 
-  /* `active` doesn't always name one of `items` — the top bar's own tab set
+  /* `active` doesn't always name one of `items` - the top bar's own tab set
      no longer includes every destination (settings moved out of it), so
      landing there leaves no tab "on". Without a real anchor somewhere, the
      first hover afterwards has to spring the indicator into existence from
      an unresolved position, and the size/position jump lands out of step
-     with the colour fade that's transitioning smoothly the whole time —
+     with the colour fade that's transitioning smoothly the whole time -
      the "not really soft yet" flash. Keeping the anchor parked on the last
      tab that WAS on (invisible via opacity, not by lacking a position) means
      that first hover interpolates like every other one. */
@@ -92,7 +92,7 @@
       onclick={(e) => {
         onpick(it.key);
         // A pointer click (detail > 0) leaves the button focused but not
-        // :focus-visible — until an unrelated later keypress makes Chrome
+        // :focus-visible - until an unrelated later keypress makes Chrome
         // upgrade that stale focus, stealing the anchored indicator from
         // whichever tab is actually active. Blurring after a pointer click
         // avoids that; a keyboard-activated click (detail === 0) keeps focus
@@ -119,7 +119,7 @@
   /* btop's options-menu bar: the active tab is bracketed and a rule runs out to
      fill the remaining width. The brackets are always laid out and only toggled
      with visibility, so a tab keeps the same width whether or not it is the
-     active one — the row never reflows when you switch section.
+     active one - the row never reflows when you switch section.
 
      The accent-colored hotkey digits that used to ride here are gone. The keys
      still work; Settings › keybinds is what advertises them.
@@ -143,7 +143,7 @@
        motion whether it is the left edge or the right one arriving.
 
        This is a damped-spring curve cut at the point it first crosses back
-       through 1 — 55.8% of the way along — and re-timed to end there. Run
+       through 1 - 55.8% of the way along - and re-timed to end there. Run
        past that point it dips to 0.99 and then creeps back up over the whole
        remaining 40%, which reads as a second, slower bounce arriving after
        the element has visibly already stopped. */
@@ -204,7 +204,7 @@
   /* The icon sits on the label's own line instead of turning the label into a
      flex row. The label's box is the line box either way, so the indicator
      anchored to it lands on the same edges in all three modes, and the bar
-     keeps the height the text gives it — switching modes never jumps the
+     keeps the height the text gives it - switching modes never jumps the
      recess the subnav is cut into. */
   .ico {
     display: inline-block;
@@ -224,7 +224,7 @@
   }
 
   /* One rule under the active tab, anchored to it rather than drawn inside it,
-     so it slides between tabs instead of blinking from one to the next — and
+     so it slides between tabs instead of blinking from one to the next - and
      grows into a block behind whichever tab the pointer or keyboard is on.
 
      The anchor is the label, not the button: a button is label plus the
@@ -233,8 +233,8 @@
      block form adds its own padding back.
 
      Deliberately no `position: relative` on .tabs or .tab: the indicator's
-     containing block is the surface the bar sits on — the nav's Panel, the
-     subnav's own box — and the anchor only has to be a descendant of that. */
+     containing block is the surface the bar sits on - the nav's Panel, the
+     subnav's own box - and the anchor only has to be a descendant of that. */
   .tab.on .lbl,
   .tab:hover .lbl,
   .tab:focus-visible .lbl,
@@ -245,7 +245,7 @@
   /* The active tab gives the name up while a tab is being pointed at, so
      exactly one element ever holds it. Without this, hovering a tab that sits
      BEFORE the active one does nothing: duplicate names resolve to the last in
-     tree order, not the nearest. Same for the sticky fallback below — it's
+     tree order, not the nearest. Same for the sticky fallback below - it's
      just standing in for an "on" tab that isn't there. */
   .tabs:has(.tab:is(:hover, :focus-visible))
     .tab.on:not(:hover, :focus-visible)
@@ -256,7 +256,7 @@
     anchor-name: none;
   }
 
-  /* No tab is genuinely on, so the indicator has nothing to show — but it
+  /* No tab is genuinely on, so the indicator has nothing to show - but it
      still sits at the sticky tab's position rather than an unresolved one, so
      that the first hover afterwards slides and fades in from a real place
      instead of springing from nowhere. */
@@ -267,7 +267,7 @@
   @supports (anchor-name: --a) {
     /* An inset resolved off anchor() is measured from that inset's own edge,
        so subtracting always grows the box outward and adding always pulls it
-       in — top and bottom move in opposite directions for the same sign. The
+       in - top and bottom move in opposite directions for the same sign. The
        underline is --panel-line-w thick, sitting --pad-1 clear of the
        descenders. */
     .tabs::before {
@@ -283,7 +283,7 @@
       background: var(--accent);
       border-radius: 0;
       /* The bounce is horizontal only. Overshoot on the vertical edges makes
-         the underline-to-block growth wobble instead of land — top and bottom
+         the underline-to-block growth wobble instead of land - top and bottom
          each fly past their mark and spring back, and the two crossing is the
          shake. They get a plain ease and are done before the slide is. */
       transition:

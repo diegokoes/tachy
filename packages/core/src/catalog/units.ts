@@ -40,7 +40,7 @@ export interface CustomerUnitPatch {
 
 /**
  * Deliberately looser than the contract's SLUG_RE, and case-insensitive: unit
- * slugs are transcribed off equipment labels — TLC191, acme.eu — rather than
+ * slugs are transcribed off equipment labels - TLC191, acme.eu - rather than
  * typed as identifiers.
  */
 const UNIT_SLUG_RE = /^[a-z0-9][a-z0-9._-]*$/i;
@@ -66,7 +66,7 @@ export async function getUnitSlug(
 }
 
 /**
- * Slug, then alias, then a trigram-ranked hint — the same ladder
+ * Slug, then alias, then a trigram-ranked hint - the same ladder
  * resolveComponentStrict and resolveCustomer offer, because a line is referred
  * to by whatever name the person at the site uses for it.
  */

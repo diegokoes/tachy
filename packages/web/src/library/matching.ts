@@ -2,7 +2,7 @@
  * Which parts of a hit's text to show on a library card.
  *
  * Match strength is NOT computed here. The server returns `relevance` (0-1) and
- * `grade`, calibrated against the embedding model's measured distribution — the
+ * `grade`, calibrated against the embedding model's measured distribution - the
  * same numbers the MCP tools hand the agent. Duplicating that arithmetic in the
  * client is how the two drift apart on the next model change. The band edges
  * the gauge draws its tick marks at come from @tachy/contract.
@@ -12,7 +12,7 @@ export { GOOD, STRONG } from "@tachy/contract";
 
 export type Seg = { t: string; hit?: boolean };
 
-/** Words worth centring an excerpt on — noise words are too short to matter. */
+/** Words worth centring an excerpt on - noise words are too short to matter. */
 export const terms = (q: string) => [
   ...new Set(q.toLowerCase().match(/[\p{L}\p{N}_]{3,}/gu) ?? []),
 ];
@@ -93,7 +93,7 @@ export function excerpt(
   return segs;
 }
 
-/** The entry field the query actually landed in — root cause, else the fix. */
+/** The entry field the query actually landed in - root cause, else the fix. */
 export function entryText(
   fields: (string | null | undefined)[],
   query: string,

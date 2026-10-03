@@ -70,8 +70,8 @@
 
     /*
      * `update` reads getComputedStyle plus four layout properties. The observers
-     * below fire on every mutation of the subtree — for the chat transcript that
-     * is once per streamed token — so they are coalesced onto a frame rather
+     * below fire on every mutation of the subtree - for the chat transcript that
+     * is once per streamed token - so they are coalesced onto a frame rather
      * than made to measure synchronously in the middle of a paint.
      */
     let frame = 0;
@@ -127,7 +127,7 @@
 
 <style>
   /* Drawn, not typed. This was a ▲░█▼ column on --font-mono, and neither
-     bundled face carries those glyphs — every row came from whatever fallback
+     bundled face carries those glyphs - every row came from whatever fallback
      the OS supplied, so the track drifted out of step with the row maths
      above on any machine whose fallback had different metrics. */
   .scrollbar {
@@ -162,7 +162,7 @@
     background: var(--accent);
   }
 
-  /* Triangles from borders — the same reason as above, one step further: no
+  /* Triangles from borders - the same reason as above, one step further: no
      glyph at all, so nothing to substitute. The cap keeps its full row height
      so the arrow slots stay exactly one ROW, which is what down() measures. */
   .cap {
