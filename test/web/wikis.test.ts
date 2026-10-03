@@ -4,17 +4,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const rows = vi.fn();
-vi.mock("../../packages/web/src/lib/api", () => ({
+vi.mock("../../packages/web/src/api", () => ({
   api: { get: () => rows() },
 }));
 const unauthorized = vi.fn();
-vi.mock("../../packages/web/src/lib/session.svelte", () => ({
+vi.mock("../../packages/web/src/session.svelte", () => ({
   onUnauthorized: () => unauthorized(),
 }));
 
 const { wikis, loadWikis, landingScope, rememberScope, seedArticle, takeSeed } =
-  await import("../../packages/web/src/lib/wiki/wikis.svelte");
-const { uploadImage } = await import("../../packages/web/src/lib/wiki/images");
+  await import("../../packages/web/src/wiki/wikis.svelte");
+const { uploadImage } = await import("../../packages/web/src/wiki/images");
 
 const wiki = (slug: string | null, articles: number) => ({
   product_id: slug,

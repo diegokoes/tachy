@@ -10,8 +10,8 @@ import {
   replaceStep,
   replaceTrigger,
   stepsBefore,
-} from "../../packages/web/src/lib/flows/graph";
-import { layoutFlow } from "../../packages/web/src/lib/flows/layout";
+} from "../../packages/web/src/flows/graph";
+import { layoutFlow } from "../../packages/web/src/flows/layout";
 
 const act = (id: string): FlowStep => ({
   id,
@@ -153,13 +153,13 @@ describe("what the canvas says", () => {
 
 describe("option lists", () => {
   it("reads each list once per set of dependencies, and again after a failure", async () => {
-    const { api } = await import("../../packages/web/src/lib/api");
+    const { api } = await import("../../packages/web/src/api");
     const get = vi
       .spyOn(api, "get")
       .mockRejectedValueOnce(new Error("offline"))
       .mockResolvedValue([{ value: "a", label: "A" }]);
     const { fetchOptions } =
-      await import("../../packages/web/src/lib/flows/options.svelte");
+      await import("../../packages/web/src/flows/options.svelte");
     await expect(fetchOptions("teams", { q: "" })).rejects.toThrow("offline");
     expect(await fetchOptions("teams", { q: "" })).toEqual([
       { value: "a", label: "A" },

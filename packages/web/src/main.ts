@@ -1,5 +1,5 @@
 // The two defaults load eagerly so first paint never flashes. Every other
-// pickable face is code-split behind a dynamic import in lib/fonts.ts.
+// pickable face is code-split behind a dynamic import in fonts.svelte.ts.
 import "@fontsource-variable/ibm-plex-sans/wght.css";
 import "@fontsource-variable/ibm-plex-sans/wght-italic.css";
 import "@fontsource/ibm-plex-mono/400.css";

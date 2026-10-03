@@ -6,7 +6,7 @@ import {
   entryText,
   excerpt,
   terms,
-} from "../../packages/web/src/lib/library/matching";
+} from "../../packages/web/src/library/matching";
 
 const text = (segs: { t: string }[]) => segs.map((s) => s.t).join("");
 const hits = (segs: { t: string; hit?: boolean }[]) =>

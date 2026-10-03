@@ -12,8 +12,8 @@ import {
   tickValues,
   toneMix,
   toneVar,
-} from "../../packages/web/src/lib/tui/scale";
-import type { Part } from "../../packages/web/src/lib/tui/marks";
+} from "../../packages/web/src/tui/scale";
+import type { Part } from "../../packages/web/src/tui/marks";
 
 describe("niceDomain", () => {
   it("starts at zero and ends on a round number", () => {
