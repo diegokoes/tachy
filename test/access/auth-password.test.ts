@@ -7,7 +7,8 @@ import {
   setUserDisabled,
 } from "@tachy/core/access";
 import { AppError } from "@tachy/core/infra";
-import { cookieOf, json, resetData, sql } from "../helpers";
+import { cookieOf, json } from "../http";
+import { resetData, sql } from "../database";
 
 afterAll(() => sql.end());
 

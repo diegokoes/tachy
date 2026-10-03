@@ -4,14 +4,8 @@ import { addSourceProject } from "@tachy/core/sources";
 import { createUser } from "@tachy/core/access";
 import { linkRepo } from "@tachy/core/code";
 import { createApp } from "../../packages/api/src/app";
-import {
-  json,
-  loginCookie,
-  resetData,
-  sql,
-  tpdProductId,
-  resetJobs,
-} from "../helpers";
+import { json, loginCookie } from "../http";
+import { resetData, sql, tpdProductId, resetJobs } from "../database";
 
 afterAll(() => sql.end());
 

@@ -10,7 +10,7 @@ import {
 import { addResolutionPattern } from "@tachy/core/catalog";
 import { sweepWikiGaps } from "@tachy/core/wiki";
 import { server } from "../../packages/mcp/src/index";
-import { resetData, sql, tpdProductId } from "../helpers";
+import { resetData, sql, tpdProductId } from "../database";
 
 afterAll(() => sql.end());
 

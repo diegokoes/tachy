@@ -3,7 +3,8 @@ import { clearSettingsCache, setSetting } from "@tachy/core/config";
 import { createUser } from "@tachy/core/access";
 import type { AgentEvent, AgentTurn } from "@tachy/agent";
 import { createApp } from "../../packages/api/src/app";
-import { json, loginCookie, resetData, sql } from "../helpers";
+import { json, loginCookie } from "../http";
+import { resetData, sql } from "../database";
 
 class FakeTurn implements AgentTurn {
   finished = false;

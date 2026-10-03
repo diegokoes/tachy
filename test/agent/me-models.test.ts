@@ -3,7 +3,8 @@ import { clearSettingsCache, setSetting } from "@tachy/core/config";
 import { createUser } from "@tachy/core/access";
 import type { ModelChoice, ModelListConfig } from "@tachy/agent";
 import { createApp } from "../../packages/api/src/app";
-import { loginCookie, resetData, sql } from "../helpers";
+import { loginCookie } from "../http";
+import { resetData, sql } from "../database";
 
 const listModels = vi.fn<(cfg: ModelListConfig) => Promise<ModelChoice[]>>();
 vi.mock("@tachy/agent", async (importOriginal) => ({

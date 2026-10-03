@@ -3,7 +3,8 @@ import { addComponent, addLabel } from "@tachy/core/catalog";
 import { createUser } from "@tachy/core/access";
 import { saveKnowledgeEntry } from "@tachy/core/knowledge";
 import { createApp } from "../../packages/api/src/app";
-import { json, loginCookie, resetData, sql, tpdProductId } from "../helpers";
+import { json, loginCookie } from "../http";
+import { resetData, sql, tpdProductId } from "../database";
 
 afterAll(() => sql.end());
 

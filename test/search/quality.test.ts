@@ -3,7 +3,7 @@ import { saveKnowledgeEntry, searchKnowledge } from "@tachy/core/knowledge";
 import { saveReferenceDoc, searchReferenceDocs } from "@tachy/core/reference";
 import { relevance, SEM_FLOOR, SEM_CEIL } from "@tachy/core/search";
 import { grade, GOOD, STRONG } from "@tachy/core";
-import { resetData, sql, tpdProductId } from "../helpers";
+import { resetData, sql, tpdProductId } from "../database";
 import {
   GOLDEN,
   KNOWLEDGE,

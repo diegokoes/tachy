@@ -9,7 +9,7 @@ import {
   vaultState,
 } from "@tachy/core/config";
 import { clearSecretKeyCache } from "../../packages/core/src/infra/secrets";
-import { resetData, sql } from "../helpers";
+import { resetData, sql } from "../database";
 
 afterAll(() => {
   delete process.env.TACHY_SECRET_KEY;

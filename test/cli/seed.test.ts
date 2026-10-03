@@ -10,7 +10,9 @@ import {
   DEV_PASSWORD,
 } from "../../packages/cli/src/seed";
 import { createApp } from "../../packages/api/src/app";
-import { sql, resetData, loginCookie, enableVault } from "../helpers";
+import { sql, resetData } from "../database";
+import { loginCookie } from "../http";
+import { enableVault } from "../vault";
 
 afterAll(() => sql.end());
 

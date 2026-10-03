@@ -7,7 +7,8 @@ import {
   type SourceFactory,
 } from "@tachy/core/sources";
 import { createApp } from "../../packages/api/src/app";
-import { json, resetData, seededFreshdeskConnId, sql } from "../helpers";
+import { json } from "../http";
+import { resetData, seededFreshdeskConnId, sql } from "../database";
 
 afterAll(() => sql.end());
 

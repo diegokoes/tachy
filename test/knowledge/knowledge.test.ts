@@ -10,7 +10,7 @@ import {
   listKnowledgeFacets,
 } from "@tachy/core/knowledge";
 import { addCustomer, getCustomerIdBySlug } from "@tachy/core/catalog";
-import { resetData, sql, tpdProductId } from "../helpers";
+import { resetData, sql, tpdProductId } from "../database";
 
 afterAll(() => sql.end());
 

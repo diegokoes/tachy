@@ -3,7 +3,8 @@ import { createUser } from "@tachy/core/access";
 import { recordToolCall } from "@tachy/core/analytics";
 import { recordView } from "@tachy/core/library";
 import { createApp } from "../../packages/api/src/app";
-import { json, resetData, sql } from "../helpers";
+import { json } from "../http";
+import { resetData, sql } from "../database";
 
 afterAll(() => sql.end());
 

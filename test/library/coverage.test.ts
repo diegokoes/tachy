@@ -3,7 +3,7 @@ import { addComponent } from "@tachy/core/catalog";
 import { coverage, recordView } from "@tachy/core/library";
 import { saveKnowledgeEntry } from "@tachy/core/knowledge";
 import { saveReferenceDoc } from "@tachy/core/reference";
-import { resetData, sql, tpdProductId } from "../helpers";
+import { resetData, sql, tpdProductId } from "../database";
 
 afterAll(() => sql.end());
 

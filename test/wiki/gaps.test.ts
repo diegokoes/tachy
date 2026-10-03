@@ -15,7 +15,7 @@ import { saveReferenceDoc, updateReferenceDoc } from "@tachy/core/reference";
 import { setComposedFrom } from "@tachy/core/library";
 import { sql as coreSql } from "@tachy/core/infra";
 import type { WikiGapRow } from "@tachy/core/wiki";
-import { resetData, sql, tpdProductId } from "../helpers";
+import { resetData, sql, tpdProductId } from "../database";
 
 afterAll(() => sql.end());
 

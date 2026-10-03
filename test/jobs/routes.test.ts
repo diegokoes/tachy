@@ -1,7 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createUser } from "@tachy/core/access";
 import { createApp } from "../../packages/api/src/app";
-import { json, loginCookie, resetData, sql, resetJobs } from "../helpers";
+import { json, loginCookie } from "../http";
+import { resetData, sql, resetJobs } from "../database";
 
 afterAll(() => sql.end());
 

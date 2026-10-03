@@ -6,7 +6,9 @@ import {
   credentialSource,
   resolveCredential,
 } from "@tachy/core/config";
-import { enableVault, json, resetData, sql } from "../helpers";
+import { enableVault } from "../vault";
+import { json } from "../http";
+import { resetData, sql } from "../database";
 
 afterAll(() => sql.end());
 

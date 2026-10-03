@@ -22,13 +22,9 @@ import {
   clearSecretKeyCache,
 } from "../../packages/core/src/infra/secrets";
 import { createApp } from "../../packages/api/src/app";
-import {
-  enableVault,
-  disableVault,
-  loginCookie,
-  resetData,
-  sql,
-} from "../helpers";
+import { enableVault, disableVault } from "../vault";
+import { loginCookie } from "../http";
+import { resetData, sql } from "../database";
 
 afterAll(() => sql.end());
 

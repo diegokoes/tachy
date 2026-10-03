@@ -16,7 +16,7 @@ import { extractAdoRefs } from "@tachy/core/work-items";
 import { TokenMap } from "@tachy/core/compliance";
 import { envCredential } from "@tachy/core/config";
 import type { RawWorkItem } from "@tachy/core/sources";
-import { sql } from "../helpers";
+import { sql } from "../database";
 
 afterAll(() => sql.end());
 

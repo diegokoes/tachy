@@ -28,7 +28,8 @@ import {
   rewriteAttachments,
 } from "@tachy/source-azure-devops";
 import { createApp } from "../../packages/api/src/app";
-import { loginCookie, resetData, sql } from "../helpers";
+import { loginCookie } from "../http";
+import { resetData, sql } from "../database";
 
 const ORG = "https://dev.azure.com/myorg";
 

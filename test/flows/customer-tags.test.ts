@@ -19,7 +19,7 @@ import {
   runFlow,
 } from "@tachy/core/flows";
 import { ingestWorkItem } from "@tachy/core/work-items";
-import { resetData, sql } from "../helpers";
+import { resetData, sql } from "../database";
 
 afterAll(async () => {
   await sql`delete from source_connections where slug = 'fake-flow-conn'`;

@@ -4,7 +4,8 @@ import { clearPermissionCache, createUser } from "@tachy/core/access";
 import { MAX_ASSET_BYTES } from "@tachy/core";
 import { saveKnowledgeEntry } from "@tachy/core/knowledge";
 import { createApp } from "../../packages/api/src/app";
-import { json, loginCookie, resetData, sql, tpdProductId } from "../helpers";
+import { json, loginCookie } from "../http";
+import { resetData, sql, tpdProductId } from "../database";
 
 afterAll(() => sql.end());
 

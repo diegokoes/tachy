@@ -13,7 +13,8 @@ import { flowAction, listOptions } from "@tachy/core/flows";
 import { registerCoreJobs } from "@tachy/core/jobs";
 import { createApp } from "../../packages/api/src/app";
 import { server } from "../../packages/mcp/src/index";
-import { json, loginCookie, resetData, resetJobs, sql } from "../helpers";
+import { json, loginCookie } from "../http";
+import { resetData, resetJobs, sql } from "../database";
 
 afterAll(() => sql.end());
 

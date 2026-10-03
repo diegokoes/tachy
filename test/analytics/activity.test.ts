@@ -22,7 +22,7 @@ import {
   sourceFetch,
   sourceTrafficCensus,
 } from "@tachy/core/sources";
-import { resetData, sql, tpdProductId } from "../helpers";
+import { resetData, sql, tpdProductId } from "../database";
 
 /*
  * The overviews' activity figures. Each aggregate is asserted from empty, so a

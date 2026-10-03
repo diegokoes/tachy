@@ -14,7 +14,8 @@ import {
 import { addTeam, addProduct } from "@tachy/core/catalog";
 import { saveKnowledgeEntry } from "@tachy/core/knowledge";
 import { AppError } from "@tachy/core/infra";
-import { loginCookie, resetData, sql, tpdProductId } from "../helpers";
+import { loginCookie } from "../http";
+import { resetData, sql, tpdProductId } from "../database";
 
 afterAll(() => sql.end());
 
