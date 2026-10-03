@@ -19,7 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      # Full history, so the pull request's base is there to diff against.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v7
         with:
@@ -53,6 +56,11 @@ jobs:
       # `coverage` runs the same suite as `npm test` and adds the thresholds, so
       # running both would pay for the suite twice.
       - run: npm run coverage
+
+      # The thresholds hold what each package already has. This holds what the
+      # pull request adds: the share of its new lines the suite ran.
+      - if: github.event_name == 'pull_request'
+        run: npx tsx scripts/coverage-diff.ts
 
   # Built once per commit that passed the tests, and pulled by digest on the
   # host; the host never builds. `dev` and `main` are convenience tags only.
