@@ -3,7 +3,7 @@ import type { Tokens } from "marked";
 import DOMPurify from "dompurify";
 import { ASSET_SRC_RE, parseWikilink, WIKILINK_RE } from "@tachy/contract";
 import { GRID, iconMarkup, type IconName } from "../tui/icons";
-import { highlight } from "./code";
+import { highlight } from "./highlight";
 
 marked.setOptions({ gfm: true, breaks: true });
 

@@ -25,7 +25,7 @@
     SourceProject,
   } from "./rows";
   import type { Component, Customer, Product, Team } from "../catalog/rows";
-  import type { Repo } from "../repos/rows";
+  import type { Repo } from "../code/rows";
   import { INFO } from "../admin/help";
   import { sectionHoist } from "../admin/sectionAction.svelte";
   import SourceFinder, { type Found } from "./SourceFinder.svelte";
