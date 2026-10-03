@@ -14,7 +14,7 @@ import {
   markRead,
   createUser,
 } from "@tachy/core";
-import { reviewReport } from "../packages/api/src/report-review";
+import { reviewReport } from "../packages/agent/src/report-review";
 import { resetData, sql, disableVault } from "./helpers";
 
 afterAll(() => sql.end());

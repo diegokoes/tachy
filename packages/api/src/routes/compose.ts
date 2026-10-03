@@ -30,7 +30,7 @@ import {
   isAdminIdentity,
   requireCaller,
 } from "../authz";
-import { reviewTicket } from "../ticket-review";
+import { reviewTicket } from "@tachy/agent";
 import { MAX_UPLOAD_BYTES, tooLarge } from "../upload-limit";
 
 const draftSchema = z.object({
