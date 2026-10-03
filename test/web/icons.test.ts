@@ -9,8 +9,8 @@ import {
   outline,
   shapes,
   type IconName,
-} from "../../packages/web/src/lib/tui/icons";
-import { renderMarkdown } from "../../packages/web/src/lib/markdown";
+} from "../../packages/web/src/tui/icons";
+import { renderMarkdown } from "../../packages/web/src/markdown";
 
 const names = Object.keys(ICONS) as IconName[];
 

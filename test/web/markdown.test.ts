@@ -4,7 +4,7 @@ import {
   wikilinkExtension,
   imageRenderer,
   markBrokenLinks,
-} from "../../packages/web/src/lib/markdown";
+} from "../../packages/web/src/markdown";
 
 /**
  * The sanitize step needs a DOM, so these exercise the layer that is this

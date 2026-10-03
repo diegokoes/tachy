@@ -7,22 +7,22 @@ import {
   isAzNew,
   matchProject,
   parseAz,
-} from "../../packages/web/src/lib/work-items/azCommand";
+} from "../../packages/web/src/work-items/azCommand";
 import {
   arrange,
   fieldForName,
   layoutFields,
   missingRequired,
-} from "../../packages/web/src/lib/work-items/layout";
+} from "../../packages/web/src/work-items/layout";
 import {
   typeColor,
   typeIcon,
-} from "../../packages/web/src/lib/work-items/ado-icons";
+} from "../../packages/web/src/work-items/ado-icons";
 import {
   toHtml,
   toPreview,
-} from "../../packages/web/src/lib/work-items/ticketMarkdown";
-import { ICONS } from "../../packages/web/src/lib/tui/icons";
+} from "../../packages/web/src/work-items/ticketMarkdown";
+import { ICONS } from "../../packages/web/src/tui/icons";
 
 const project = (name: string, key = name): ComposerProject => ({
   id: name.toLowerCase().replace(/\s/g, "-"),

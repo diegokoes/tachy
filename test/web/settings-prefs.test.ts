@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const get = vi.hoisted(() => vi.fn());
-vi.mock("../../packages/web/src/lib/api", async (importOriginal) => ({
+vi.mock("../../packages/web/src/api", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   api: { get, put: vi.fn(), delete: vi.fn() },
 }));
 
 const { agentPrefs, loadAgent, origin } =
-  await import("../../packages/web/src/lib/settings/prefs.svelte");
+  await import("../../packages/web/src/settings/prefs.svelte");
 
 const prefsFor = (provider: string) => ({
   agent_provider: { value: provider, source: "user" },

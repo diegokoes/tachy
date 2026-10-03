@@ -110,7 +110,7 @@ export type DeploymentProfile = (typeof DEPLOYMENT_PROFILES)[number];
  * app admin manages users, org structure and system settings; a team admin
  * curates one team's library and roster. Nothing in the stored value says
  * which rung it came from, so every surface that shows one has to name the
- * rung with it — see `roleLabel` in packages/web/src/lib/terms.ts.
+ * rung with it — see `roleLabel` in packages/web/src/terms.ts.
  */
 export const USER_ROLES = ["admin", "member"] as const;
 export type UserRole = (typeof USER_ROLES)[number];

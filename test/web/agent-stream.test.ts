@@ -4,12 +4,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const unauthorized = vi.fn();
-vi.mock("../../packages/web/src/lib/session.svelte", () => ({
+vi.mock("../../packages/web/src/session.svelte", () => ({
   onUnauthorized: unauthorized,
 }));
 
 const { chatStream, ChatRefused } =
-  await import("../../packages/web/src/lib/agent");
+  await import("../../packages/web/src/agent");
 
 afterEach(() => {
   vi.unstubAllGlobals();
