@@ -3,13 +3,10 @@ import { requestId } from "hono/request-id";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { z } from "zod";
-import {
-  env,
-  AppError,
-  registerSource,
-  registerCoreJobs,
-  effectiveSettings,
-} from "@tachy/core";
+import { env, AppError } from "@tachy/core/infra";
+import { registerSource } from "@tachy/core/sources";
+import { registerCoreJobs } from "@tachy/core/jobs";
+import { effectiveSettings } from "@tachy/core/config";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 import { createAzureDevopsSource } from "@tachy/source-azure-devops";

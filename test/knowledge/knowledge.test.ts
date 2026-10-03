@@ -8,9 +8,8 @@ import {
   addFeedback,
   listEnvironments,
   listKnowledgeFacets,
-  addCustomer,
-  getCustomerIdBySlug,
-} from "@tachy/core";
+} from "@tachy/core/knowledge";
+import { addCustomer, getCustomerIdBySlug } from "@tachy/core/catalog";
 import { resetData, sql, tpdProductId } from "../helpers";
 
 afterAll(() => sql.end());

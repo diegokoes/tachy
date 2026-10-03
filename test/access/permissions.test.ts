@@ -3,9 +3,6 @@ import { createApp } from "../../packages/api/src/app";
 import {
   createUser,
   setTeamMember,
-  addTeam,
-  addProduct,
-  saveKnowledgeEntry,
   canEditScope,
   canManageTeamBySlug,
   isAnyTeamAdmin,
@@ -13,8 +10,10 @@ import {
   assertCanEditScope,
   assertGlobalAdmin,
   clearPermissionCache,
-  AppError,
-} from "@tachy/core";
+} from "@tachy/core/access";
+import { addTeam, addProduct } from "@tachy/core/catalog";
+import { saveKnowledgeEntry } from "@tachy/core/knowledge";
+import { AppError } from "@tachy/core/infra";
 import { loginCookie, resetData, sql, tpdProductId } from "../helpers";
 
 afterAll(() => sql.end());

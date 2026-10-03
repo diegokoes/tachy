@@ -79,7 +79,7 @@ export async function realEmbedder(
   mode: EmbedMode,
   onProgress?: (kind: string, done: number) => void,
 ): Promise<Embedder> {
-  const { embedPassages, toVectorLiteral } = await import("@tachy/core");
+  const { embedPassages, toVectorLiteral } = await import("@tachy/core/search");
   const done: Record<string, number> = {};
 
   return async (kind, texts, offset) => {

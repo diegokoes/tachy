@@ -1,10 +1,7 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { pathToFileURL } from "node:url";
-import {
-  loadSettingsIntoEnv,
-  registerSource,
-  setSourceOrigin,
-} from "@tachy/core";
+import { loadSettingsIntoEnv } from "@tachy/core/config";
+import { registerSource, setSourceOrigin } from "@tachy/core/sources";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 import { createAzureDevopsSource } from "@tachy/source-azure-devops";

@@ -1,9 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { createUser, setTeamMember } from "@tachy/core/access";
+import { addTeam, getTeamIdBySlug } from "@tachy/core/catalog";
 import {
-  createUser,
-  addTeam,
-  setTeamMember,
-  getTeamIdBySlug,
   resolveScoped,
   upsertScoped,
   resolveCredential,
@@ -16,7 +14,7 @@ import {
   dateFormatOf,
   setSetting,
   clearSettingsCache,
-} from "@tachy/core";
+} from "@tachy/core/config";
 import {
   encryptSecret,
   decryptSecret,

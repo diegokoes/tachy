@@ -1,5 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { createUser, recordToolCall, recordView } from "@tachy/core";
+import { createUser } from "@tachy/core/access";
+import { recordToolCall } from "@tachy/core/analytics";
+import { recordView } from "@tachy/core/library";
 import { createApp } from "../../packages/api/src/app";
 import { json, resetData, sql } from "../helpers";
 

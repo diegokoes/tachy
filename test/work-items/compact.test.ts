@@ -15,9 +15,8 @@ import {
   compactForLlm,
   COMPACT_MIN_CHARS,
   TRANSCRIPT_MARKER,
-  type RawMessage,
-  type RawWorkItem,
-} from "@tachy/core";
+} from "@tachy/core/work-items";
+import { type RawMessage, type RawWorkItem } from "@tachy/core/sources";
 
 const msg = (over: Partial<RawMessage> & { bodyText: string }): RawMessage => ({
   visibility: "public",

@@ -6,16 +6,15 @@ import {
   addResolutionPattern,
   addTeam,
   catalogCensus,
-  createUser,
+} from "@tachy/core/catalog";
+import { createUser, userCensus } from "@tachy/core/access";
+import {
   knowledgeByComponent,
   knowledgeCensus,
-  linkRepo,
   saveKnowledgeEntry,
-  repoCensus,
-  repoIssues,
-  sourceCensus,
-  userCensus,
-} from "@tachy/core";
+} from "@tachy/core/knowledge";
+import { linkRepo, repoCensus, repoIssues } from "@tachy/core/code";
+import { sourceCensus } from "@tachy/core/sources";
 import { resetData, sql, tpdProductId } from "../helpers";
 
 /*

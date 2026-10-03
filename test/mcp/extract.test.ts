@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { createUser, saveUpload, sweepUploads } from "@tachy/core";
+import { createUser } from "@tachy/core/access";
+import { saveUpload, sweepUploads } from "@tachy/core/chat";
 import { extractSource, isPdf } from "../../packages/mcp/src/extract";
 import { resetData, sql } from "../helpers";
 

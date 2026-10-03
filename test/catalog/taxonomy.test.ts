@@ -7,10 +7,6 @@ import {
   resolveComponentStrict,
   listLabels,
   addLabel,
-  saveKnowledgeEntry,
-  searchKnowledge,
-  updateKnowledgeEntry,
-  getKnowledgeEntry,
   updateComponent,
   deleteComponent,
   updateProduct,
@@ -24,7 +20,13 @@ import {
   updateCustomer,
   deleteCustomer,
   addCustomer,
-} from "@tachy/core";
+} from "@tachy/core/catalog";
+import {
+  saveKnowledgeEntry,
+  searchKnowledge,
+  updateKnowledgeEntry,
+  getKnowledgeEntry,
+} from "@tachy/core/knowledge";
 import { resetData, sql, tpdProductId } from "../helpers";
 
 afterAll(() => sql.end());

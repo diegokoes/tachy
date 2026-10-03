@@ -10,7 +10,7 @@ import {
   loadTargets,
   runSystemChecks,
   startTestRun,
-} from "@tachy/core";
+} from "@tachy/core/diagnostics";
 import { requireAdmin } from "../auth";
 import { callerUserId } from "../authz";
 

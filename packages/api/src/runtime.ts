@@ -1,15 +1,10 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { monitorEventLoopDelay } from "node:perf_hooks";
-import {
-  env,
-  issueFlag,
-  sql,
-  vaultState,
-  type EmbedQueueDepth,
-  type IssueList,
-  uploadTtlMs,
-} from "@tachy/core";
+import { env, issueFlag, sql, type IssueList } from "@tachy/core/infra";
+import { vaultState } from "@tachy/core/config";
+import { type EmbedQueueDepth } from "@tachy/core/search";
+import { uploadTtlMs } from "@tachy/core/chat";
 import { lifecycle, readiness } from "./lifecycle";
 import { turnStats } from "./turns";
 

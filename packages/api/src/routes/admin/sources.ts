@@ -6,15 +6,16 @@ import {
   addSourceConnection,
   deleteSourceConnection,
   resolveSource,
-  secretsEnabled,
+} from "@tachy/core/sources";
+import { secretsEnabled, badInput } from "@tachy/core/infra";
+import {
   credentialSource,
   setCredential,
   sourceCredentialName,
-  badInput,
-  SLUG_RE,
   type CredentialSource,
   type ScopeContext,
-} from "@tachy/core";
+} from "@tachy/core/config";
+import { SLUG_RE } from "@tachy/core";
 import { requireAdmin } from "../../auth";
 import { callerScope, requireCaller } from "../../authz";
 

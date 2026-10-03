@@ -1,5 +1,6 @@
 import type { AgentTurn } from "@tachy/agent";
-import { JOB_CLASS_CHAT_SLOTS, runningHeavyJobs } from "@tachy/core";
+import { JOB_CLASS_CHAT_SLOTS } from "@tachy/core";
+import { runningHeavyJobs } from "@tachy/core/jobs";
 import { Admission, type AdmissionLimits } from "./admission";
 
 /** A chat turn this process is running, and who it belongs to. */

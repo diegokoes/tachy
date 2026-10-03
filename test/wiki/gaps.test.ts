@@ -1,19 +1,20 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { addComponent } from "@tachy/core/catalog";
 import {
-  addComponent,
   addWikiCategory,
   dismissWikiGap,
   listWikiGaps,
-  saveKnowledgeEntry,
-  saveReferenceDoc,
   setArticleCategories,
-  setComposedFrom,
   sweepWikiGaps,
+} from "@tachy/core/wiki";
+import {
+  saveKnowledgeEntry,
   updateKnowledgeEntry,
-  updateReferenceDoc,
-  sql as coreSql,
-} from "@tachy/core";
-import type { WikiGapRow } from "@tachy/core";
+} from "@tachy/core/knowledge";
+import { saveReferenceDoc, updateReferenceDoc } from "@tachy/core/reference";
+import { setComposedFrom } from "@tachy/core/library";
+import { sql as coreSql } from "@tachy/core/infra";
+import type { WikiGapRow } from "@tachy/core/wiki";
 import { resetData, sql, tpdProductId } from "../helpers";
 
 afterAll(() => sql.end());

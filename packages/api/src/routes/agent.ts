@@ -8,18 +8,18 @@ import {
   badInput,
   notFound,
   forbidden,
-  recordRun,
   env,
+  unavailable,
+} from "@tachy/core/infra";
+import { recordRun } from "@tachy/core/analytics";
+import {
   effectiveSettings,
   dateFormatOf,
-  getUserByEmail,
-  userSoleTeamId,
-  getArtifact,
-  listVisibleArtifacts,
   type ScopeContext,
-  saveUpload,
-  unavailable,
-} from "@tachy/core";
+} from "@tachy/core/config";
+import { getUserByEmail, userSoleTeamId } from "@tachy/core/access";
+import { getArtifact, listVisibleArtifacts } from "@tachy/core/exports";
+import { saveUpload } from "@tachy/core/chat";
 import { startTurn, type AgentConfig, type AgentTurn } from "@tachy/agent";
 import { requireCaller } from "../authz";
 import { sessionEmail } from "../auth";

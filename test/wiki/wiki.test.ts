@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { addComponent } from "@tachy/core/catalog";
 import {
-  addComponent,
   addWikiCategory,
   updateWikiCategory,
   deleteWikiCategory,
@@ -13,13 +13,15 @@ import {
   setArticleCategories,
   findArticle,
   findMainPage,
+} from "@tachy/core/wiki";
+import {
   saveReferenceDoc,
   updateReferenceDoc,
   listReferenceDocs,
   searchReferenceDocs,
   getReferenceDoc,
-  listRevisions,
-} from "@tachy/core";
+} from "@tachy/core/reference";
+import { listRevisions } from "@tachy/core/library";
 import { resetData, sql, tpdProductId } from "../helpers";
 
 afterAll(() => sql.end());

@@ -1,7 +1,6 @@
 import { z } from "zod";
+import { getProductIdBySlug, getTeamIdBySlug } from "@tachy/core/catalog";
 import {
-  getProductIdBySlug,
-  getTeamIdBySlug,
   listSourceConnections,
   addSourceConnection,
   listSourceProjects,
@@ -9,7 +8,7 @@ import {
   setProjectAreaMap,
   sourceProjectScope,
   resolveProjectContext,
-} from "@tachy/core";
+} from "@tachy/core/sources";
 import { tool } from "../server";
 import { out } from "../results";
 import {

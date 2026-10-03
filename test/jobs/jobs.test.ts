@@ -24,7 +24,7 @@ import {
   startJobWorker,
   startJobProcess,
   updateJobDefinition,
-} from "@tachy/core";
+} from "@tachy/core/jobs";
 import { sql, resetJobs } from "../helpers";
 
 afterAll(() => sql.end());

@@ -3,27 +3,23 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   catalogCensus,
-  bucketCensus,
-  userCensus,
-  sourceCensus,
-  repoCensus,
-  knowledgeCensus,
-  knowledgeByComponent,
   listComponentTree,
-  reportsCensus,
-  agentUsageCensus,
-  toolUsageCensus,
-  sourceTrafficCensus,
-  libraryEngagementCensus,
-  sourceIssues,
-  repoIssues,
   catalogIssues,
-  userIssues,
-  jobIssues,
-  forbidden,
-  ISSUE_ITEMS,
-  type IssueList,
-} from "@tachy/core";
+} from "@tachy/core/catalog";
+import { bucketCensus } from "@tachy/core/buckets";
+import { userCensus, userIssues } from "@tachy/core/access";
+import {
+  sourceCensus,
+  sourceTrafficCensus,
+  sourceIssues,
+} from "@tachy/core/sources";
+import { repoCensus, repoIssues } from "@tachy/core/code";
+import { knowledgeCensus, knowledgeByComponent } from "@tachy/core/knowledge";
+import { reportsCensus } from "@tachy/core/reports";
+import { agentUsageCensus, toolUsageCensus } from "@tachy/core/analytics";
+import { libraryEngagementCensus } from "@tachy/core/library";
+import { jobIssues } from "@tachy/core/jobs";
+import { forbidden, ISSUE_ITEMS, type IssueList } from "@tachy/core/infra";
 import { callerScope, isAdminIdentity } from "../../authz";
 import { runtimeSnapshot, systemIssues } from "../../runtime";
 import { untokenedConnections } from "./sources";

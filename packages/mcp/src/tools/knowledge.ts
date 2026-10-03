@@ -2,9 +2,7 @@ import { z } from "zod";
 import {
   saveKnowledgeEntry,
   searchKnowledge,
-  resolveCurrentUserId,
   addFeedback,
-  getCustomerIdBySlug,
   cloudSchema,
   resolutionClaritySchema,
   knowledgeStatusSchema,
@@ -14,8 +12,10 @@ import {
   getKnowledgeEntry,
   listKnowledgeEntries,
   listEnvironments,
-} from "@tachy/core";
-import type { KnowledgeUpdateInput } from "@tachy/core";
+} from "@tachy/core/knowledge";
+import { resolveCurrentUserId } from "@tachy/core/access";
+import { getCustomerIdBySlug } from "@tachy/core/catalog";
+import type { KnowledgeUpdateInput } from "@tachy/core/knowledge";
 import { tool } from "../server";
 import { GRADE_NOTE, out, searchOut, outScrubbed } from "../results";
 import {

@@ -1,17 +1,13 @@
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { serve } from "@hono/node-server";
+import { backgroundSettled, env, log, sql } from "@tachy/core/infra";
+import { setEmbedBackend, startEmbedHost } from "@tachy/core/search";
 import {
-  backgroundSettled,
-  env,
-  log,
-  setEmbedBackend,
-  sql,
-  startEmbedHost,
   sweepInterruptedIndexes,
   adoptSupersededIndex,
-  startJobProcess,
-} from "@tachy/core";
+} from "@tachy/core/code";
+import { startJobProcess } from "@tachy/core/jobs";
 import { registerAgentFlowActions } from "@tachy/agent";
 import { createApp } from "./app";
 import { isBootstrapped } from "./auth";

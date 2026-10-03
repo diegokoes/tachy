@@ -1,12 +1,11 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { addCustomer, addCustomerUnit } from "@tachy/core/catalog";
+import { ingestWorkItem } from "@tachy/core/work-items";
 import {
-  addCustomer,
-  addCustomerUnit,
-  ingestWorkItem,
   registerSource,
   type RawWorkItem,
   type SourceFactory,
-} from "@tachy/core";
+} from "@tachy/core/sources";
 import { createApp } from "../../packages/api/src/app";
 import { json, resetData, seededFreshdeskConnId, sql } from "../helpers";
 

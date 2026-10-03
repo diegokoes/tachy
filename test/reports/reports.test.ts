@@ -7,13 +7,15 @@ import {
   addReportMessage,
   setReportStatus,
   reportsCensus,
+} from "@tachy/core/reports";
+import {
   notify,
   listNotifications,
   unreadCount,
   markSeen,
   markRead,
-  createUser,
-} from "@tachy/core";
+} from "@tachy/core/notifications";
+import { createUser } from "@tachy/core/access";
 import { reviewReport } from "../../packages/agent/src/report-review";
 import { resetData, sql, disableVault } from "../helpers";
 

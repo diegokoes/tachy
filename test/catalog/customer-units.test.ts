@@ -9,12 +9,14 @@ import {
   resolveUnitFacts,
   setCustomerFact,
   getCustomerIdBySlug,
+  setWorkItemCustomer,
+} from "@tachy/core/catalog";
+import {
   saveKnowledgeEntry,
   updateKnowledgeEntry,
-  saveReferenceDoc,
   searchKnowledge,
-  setWorkItemCustomer,
-} from "@tachy/core";
+} from "@tachy/core/knowledge";
+import { saveReferenceDoc } from "@tachy/core/reference";
 import { resetData, sql, tpdProductId } from "../helpers";
 
 afterAll(() => sql.end());

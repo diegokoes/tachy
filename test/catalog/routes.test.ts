@@ -1,10 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import {
-  addComponent,
-  addLabel,
-  createUser,
-  saveKnowledgeEntry,
-} from "@tachy/core";
+import { addComponent, addLabel } from "@tachy/core/catalog";
+import { createUser } from "@tachy/core/access";
+import { saveKnowledgeEntry } from "@tachy/core/knowledge";
 import { createApp } from "../../packages/api/src/app";
 import { json, loginCookie, resetData, sql, tpdProductId } from "../helpers";
 

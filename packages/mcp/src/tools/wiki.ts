@@ -1,21 +1,19 @@
 import { z } from "zod";
+import { resolveCurrentUserId } from "@tachy/core/access";
+import { sql, AppError } from "@tachy/core/infra";
+import { getProductIdBySlug } from "@tachy/core/catalog";
+import { saveReferenceDoc, updateReferenceDoc } from "@tachy/core/reference";
+import { referenceStatusSchema } from "@tachy/core/knowledge";
 import {
-  resolveCurrentUserId,
-  sql,
-  getProductIdBySlug,
-  saveReferenceDoc,
-  updateReferenceDoc,
-  AppError,
-  referenceStatusSchema,
   draftSources,
   wikiToc,
   findArticle,
   setArticleCategories,
-  setComposedFrom,
   addWikiCategory,
   seedSectionsFromComponents,
   listWikiGaps,
-} from "@tachy/core";
+} from "@tachy/core/wiki";
+import { setComposedFrom } from "@tachy/core/library";
 import { tool } from "../server";
 import { out, outScrubbed } from "../results";
 import { mcpActor, requireCanEdit } from "../permissions";

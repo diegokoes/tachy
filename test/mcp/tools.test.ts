@@ -3,12 +3,12 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import {
   addSourceConnection,
-  addResolutionPattern,
   registerSource,
-  sweepWikiGaps,
   type RawWorkItem,
   type SourceFactory,
-} from "@tachy/core";
+} from "@tachy/core/sources";
+import { addResolutionPattern } from "@tachy/core/catalog";
+import { sweepWikiGaps } from "@tachy/core/wiki";
 import { server } from "../../packages/mcp/src/index";
 import { resetData, sql, tpdProductId } from "../helpers";
 

@@ -5,8 +5,8 @@ import {
   verifyPassword,
   createUser,
   setUserDisabled,
-  AppError,
-} from "@tachy/core";
+} from "@tachy/core/access";
+import { AppError } from "@tachy/core/infra";
 import { cookieOf, json, resetData, sql } from "../helpers";
 
 afterAll(() => sql.end());

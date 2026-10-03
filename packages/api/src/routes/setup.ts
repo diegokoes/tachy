@@ -3,24 +3,22 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   sql,
-  hashPassword,
-  countAdmins,
-  setSetting,
-  addTeam,
-  addProduct,
+  conflict,
+  forbidden,
+  env,
+  secretsEnabled,
+} from "@tachy/core/infra";
+import { hashPassword, countAdmins, getUserByEmail } from "@tachy/core/access";
+import { setSetting, setCredential } from "@tachy/core/config";
+import { addTeam, addProduct } from "@tachy/core/catalog";
+import {
   AGENT_EFFORTS,
   AGENT_CREDENTIALS,
   AGENT_PROVIDERS,
   DEPLOYMENT_PROFILES,
   MIN_PASSWORD_LENGTH,
-  conflict,
-  forbidden,
-  env,
-  secretsEnabled,
   ANTHROPIC_OAUTH_CREDENTIAL,
   OAUTH_PREFIX,
-  setCredential,
-  getUserByEmail,
 } from "@tachy/core";
 import { setSessionCookie, markBootstrapped, sessionEmail } from "../auth";
 

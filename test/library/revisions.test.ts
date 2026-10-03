@@ -4,13 +4,10 @@ import {
   updateKnowledgeEntry,
   revertKnowledgeEntry,
   getKnowledgeEntry,
-  listRevisions,
-  getRevision,
-  changedFields,
-  saveReferenceDoc,
-  updateReferenceDoc,
-  createUser,
-} from "@tachy/core";
+} from "@tachy/core/knowledge";
+import { listRevisions, getRevision, changedFields } from "@tachy/core/library";
+import { saveReferenceDoc, updateReferenceDoc } from "@tachy/core/reference";
+import { createUser } from "@tachy/core/access";
 import { resetData, sql, tpdProductId } from "../helpers";
 
 afterAll(() => sql.end());

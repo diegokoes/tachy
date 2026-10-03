@@ -22,7 +22,7 @@ import {
   unlinkCustomerComponent,
   listCustomerUnits,
   addCustomerUnit,
-} from "@tachy/core";
+} from "@tachy/core/catalog";
 import { tool } from "../server";
 import { out } from "../results";
 import {

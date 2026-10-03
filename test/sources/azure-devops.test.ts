@@ -11,14 +11,11 @@ import {
   createAzureDevopsSource,
   createAdoClient,
 } from "@tachy/source-azure-devops";
-import {
-  addSourceConnection,
-  addSourceProject,
-  extractAdoRefs,
-  TokenMap,
-  envCredential,
-} from "@tachy/core";
-import type { RawWorkItem } from "@tachy/core";
+import { addSourceConnection, addSourceProject } from "@tachy/core/sources";
+import { extractAdoRefs } from "@tachy/core/work-items";
+import { TokenMap } from "@tachy/core/compliance";
+import { envCredential } from "@tachy/core/config";
+import type { RawWorkItem } from "@tachy/core/sources";
 import { sql } from "../helpers";
 
 afterAll(() => sql.end());

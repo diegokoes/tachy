@@ -12,9 +12,9 @@ import {
   redactForLlm,
   resolveRedactionPolicy,
   globalRedactionEnabled,
-  estimateCostUsd,
-  type RawWorkItem,
-} from "@tachy/core";
+} from "@tachy/core/compliance";
+import { estimateCostUsd } from "@tachy/core/analytics";
+import { type RawWorkItem } from "@tachy/core/sources";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 

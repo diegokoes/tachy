@@ -1,4 +1,8 @@
-import { schemaStampStatus, sql, type SchemaStampStatus } from "@tachy/core";
+import {
+  schemaStampStatus,
+  sql,
+  type SchemaStampStatus,
+} from "@tachy/core/infra";
 
 /**
  * What /readyz answers from. The server flips `modelRequired` and `modelReady`

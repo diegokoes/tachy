@@ -6,10 +6,9 @@ import {
   updateReferenceDoc,
   searchReferenceDocs,
   referenceDocLineage,
-  chunkText,
-  addComponent,
-  resolveComponentFilter,
-} from "@tachy/core";
+} from "@tachy/core/reference";
+import { chunkText } from "@tachy/core/search";
+import { addComponent, resolveComponentFilter } from "@tachy/core/catalog";
 import { resetData, sql, tpdProductId } from "../helpers";
 
 afterAll(() => sql.end());

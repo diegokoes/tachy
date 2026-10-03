@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { runTool } from "../../packages/mcp/src/index";
-import { badInput, saveKnowledgeEntry } from "@tachy/core";
+import { badInput } from "@tachy/core/infra";
+import { saveKnowledgeEntry } from "@tachy/core/knowledge";
 import { resetData, sql } from "../helpers";
 
 afterAll(() => sql.end());

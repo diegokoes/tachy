@@ -1,13 +1,11 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { saveReferenceDoc, updateReferenceDoc } from "@tachy/core/reference";
 import {
-  saveReferenceDoc,
-  updateReferenceDoc,
   saveKnowledgeEntry,
   updateKnowledgeEntry,
-  outboundLinks,
-  backlinks,
-  parseWikilinks,
-} from "@tachy/core";
+} from "@tachy/core/knowledge";
+import { outboundLinks, backlinks } from "@tachy/core/library";
+import { parseWikilinks } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "../helpers";
 
 afterAll(() => sql.end());

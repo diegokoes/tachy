@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defineFlowAction } from "@tachy/core";
+import { defineFlowAction } from "@tachy/core/flows";
 import { firstJsonObject, runAdvisory } from "./advisory";
 
 const SYSTEM = `You are one step of an automated support flow in tachy. You get an

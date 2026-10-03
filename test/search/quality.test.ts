@@ -1,16 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  saveKnowledgeEntry,
-  saveReferenceDoc,
-  searchKnowledge,
-  searchReferenceDocs,
-  relevance,
-  grade,
-  SEM_FLOOR,
-  SEM_CEIL,
-  GOOD,
-  STRONG,
-} from "@tachy/core";
+import { saveKnowledgeEntry, searchKnowledge } from "@tachy/core/knowledge";
+import { saveReferenceDoc, searchReferenceDocs } from "@tachy/core/reference";
+import { relevance, SEM_FLOOR, SEM_CEIL } from "@tachy/core/search";
+import { grade, GOOD, STRONG } from "@tachy/core";
 import { resetData, sql, tpdProductId } from "../helpers";
 import {
   GOLDEN,

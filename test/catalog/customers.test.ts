@@ -6,8 +6,6 @@ import {
   getCustomerIdBySlug,
   resolveCustomer,
   getCustomerName,
-  linkRepo,
-  listRepos,
   addComponent,
   setCustomerFact,
   listCustomerFacts,
@@ -15,7 +13,8 @@ import {
   linkCustomerComponent,
   unlinkCustomerComponent,
   getCustomerProfile,
-} from "@tachy/core";
+} from "@tachy/core/catalog";
+import { linkRepo, listRepos } from "@tachy/core/code";
 import { resetData, sql, tpdProductId } from "../helpers";
 
 // File scope, not inside the first describe: a later block would otherwise run

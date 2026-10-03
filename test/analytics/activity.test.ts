@@ -7,21 +7,21 @@ import {
   it,
   vi,
 } from "vitest";
+import { addFeedback, saveKnowledgeEntry } from "@tachy/core/knowledge";
 import {
-  addFeedback,
   agentUsageCensus,
-  createUser,
-  libraryEngagementCensus,
   recordRun,
-  recordSourceCall,
   recordToolCall,
-  recordView,
-  saveKnowledgeEntry,
+  toolUsageCensus,
+} from "@tachy/core/analytics";
+import { createUser } from "@tachy/core/access";
+import { libraryEngagementCensus, recordView } from "@tachy/core/library";
+import {
+  recordSourceCall,
   setSourceOrigin,
   sourceFetch,
   sourceTrafficCensus,
-  toolUsageCensus,
-} from "@tachy/core";
+} from "@tachy/core/sources";
 import { resetData, sql, tpdProductId } from "../helpers";
 
 /*

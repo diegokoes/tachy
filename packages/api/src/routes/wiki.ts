@@ -14,25 +14,23 @@ import {
   findArticle,
   findMainPage,
   listWikis,
-  coverage,
-  articleStaleness,
-  updateComponent,
-  componentRenameImpact,
-  saveReferenceDoc,
-  updateReferenceDoc,
-  countView,
-  referenceStatusSchema,
-  notFound,
-  badInput,
-  sql,
-  saveAsset,
-  getAsset,
-  MAX_ASSET_BYTES,
   sweepWikiGaps,
   listWikiGaps,
   dismissWikiGap,
-} from "@tachy/core";
-import type { EntryScope } from "@tachy/core";
+} from "@tachy/core/wiki";
+import {
+  coverage,
+  articleStaleness,
+  countView,
+  saveAsset,
+  getAsset,
+} from "@tachy/core/library";
+import { updateComponent, componentRenameImpact } from "@tachy/core/catalog";
+import { saveReferenceDoc, updateReferenceDoc } from "@tachy/core/reference";
+import { referenceStatusSchema } from "@tachy/core/knowledge";
+import { notFound, badInput, sql } from "@tachy/core/infra";
+import { MAX_ASSET_BYTES } from "@tachy/core";
+import type { EntryScope } from "@tachy/core/access";
 import { assertScopeEditor, callerActor, callerUserId } from "../authz";
 
 /**

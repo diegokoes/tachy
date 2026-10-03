@@ -2,11 +2,11 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   listComponents,
   addComponent,
-  saveKnowledgeEntry,
   componentRenameImpact,
   renameComponent,
   updateComponent,
-} from "@tachy/core";
+} from "@tachy/core/catalog";
+import { saveKnowledgeEntry } from "@tachy/core/knowledge";
 import { resetData, sql, tpdProductId } from "../helpers";
 
 describe("components", () => {

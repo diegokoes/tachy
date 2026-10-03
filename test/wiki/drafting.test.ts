@@ -1,16 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import {
-  addComponent,
-  addWikiCategory,
-  draftSources,
-  saveKnowledgeEntry,
-  saveReferenceDoc,
-  updateReferenceDoc,
-  setComposedFrom,
-  articleStaleness,
-  wikiToc,
-  sql as coreSql,
-} from "@tachy/core";
+import { addComponent } from "@tachy/core/catalog";
+import { addWikiCategory, draftSources, wikiToc } from "@tachy/core/wiki";
+import { saveKnowledgeEntry } from "@tachy/core/knowledge";
+import { saveReferenceDoc, updateReferenceDoc } from "@tachy/core/reference";
+import { setComposedFrom, articleStaleness } from "@tachy/core/library";
+import { sql as coreSql } from "@tachy/core/infra";
 import { resetData, sql, tpdProductId } from "../helpers";
 
 afterAll(() => sql.end());

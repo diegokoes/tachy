@@ -17,10 +17,9 @@ import {
   verifyPassword,
   teamAdminTeams,
   userTeams,
-  env,
-  log,
-  type UserRole,
-} from "@tachy/core";
+} from "@tachy/core/access";
+import { env, log } from "@tachy/core/infra";
+import { type UserRole } from "@tachy/core";
 
 export interface OidcConfig {
   issuer: string;

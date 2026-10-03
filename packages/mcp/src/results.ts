@@ -1,4 +1,8 @@
-import { globalRedactionEnabled, scrubDeep, TokenMap } from "@tachy/core";
+import {
+  globalRedactionEnabled,
+  scrubDeep,
+  TokenMap,
+} from "@tachy/core/compliance";
 
 /**
  * How a tool answers. Everything here shapes what the model reads back — the

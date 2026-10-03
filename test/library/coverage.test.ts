@@ -1,11 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import {
-  addComponent,
-  coverage,
-  saveKnowledgeEntry,
-  saveReferenceDoc,
-  recordView,
-} from "@tachy/core";
+import { addComponent } from "@tachy/core/catalog";
+import { coverage, recordView } from "@tachy/core/library";
+import { saveKnowledgeEntry } from "@tachy/core/knowledge";
+import { saveReferenceDoc } from "@tachy/core/reference";
 import { resetData, sql, tpdProductId } from "../helpers";
 
 afterAll(() => sql.end());

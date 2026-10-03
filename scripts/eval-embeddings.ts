@@ -16,7 +16,7 @@ import {
   EMBEDDING_SPEC,
   SEM_FLOOR,
   SEM_CEIL,
-} from "@tachy/core";
+} from "@tachy/core/search";
 import { GOLDEN, KNOWLEDGE, NONSENSE } from "../test/fixtures/search-corpus";
 
 const cos = (a: number[], b: number[]) =>

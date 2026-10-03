@@ -8,6 +8,9 @@ import {
   saveReferenceDoc,
   updateReferenceDoc,
   revertReferenceDoc,
+  referenceDocLineage,
+} from "@tachy/core/reference";
+import {
   listRevisions,
   getRevision,
   countView,
@@ -15,11 +18,12 @@ import {
   outboundLinks,
   viewStats,
   viewHistory,
-  referenceDocLineage,
-  referenceStatusSchema,
+} from "@tachy/core/library";
+import { referenceStatusSchema } from "@tachy/core/knowledge";
+import {
   resolveComponentFilter,
   getCustomerIdBySlug,
-} from "@tachy/core";
+} from "@tachy/core/catalog";
 import { assertScopeEditor, callerActor, callerUserId } from "../authz";
 import { csv } from "../query";
 

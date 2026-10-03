@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { createUser, parseUploadRef } from "@tachy/core";
+import { createUser } from "@tachy/core/access";
+import { parseUploadRef } from "@tachy/core/chat";
 import { createApp } from "../../packages/api/src/app";
 import { loginCookie, resetData, sql } from "../helpers";
 

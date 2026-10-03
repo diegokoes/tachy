@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { resolveCurrentUserId, recordRun, runModeSchema } from "@tachy/core";
+import { resolveCurrentUserId } from "@tachy/core/access";
+import { recordRun } from "@tachy/core/analytics";
+import { runModeSchema } from "@tachy/core/knowledge";
 import { tool } from "../server";
 import { out } from "../results";
 

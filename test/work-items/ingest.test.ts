@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { ingestWorkItem, addCustomer, setWorkItemCustomer } from "@tachy/core";
-import type { RawWorkItem } from "@tachy/core";
+import { ingestWorkItem } from "@tachy/core/work-items";
+import { addCustomer, setWorkItemCustomer } from "@tachy/core/catalog";
+import type { RawWorkItem } from "@tachy/core/sources";
 import {
   resetData,
   seededFreshdeskConnId,
