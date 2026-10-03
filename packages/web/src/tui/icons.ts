@@ -59,6 +59,7 @@ import {
   FlaskConical,
   FoldVertical,
   Funnel,
+  Ghost,
   Gavel,
   Gift,
   GitBranch,
@@ -216,6 +217,8 @@ export const ICONS = {
   search: Search,
   /** The text caret, where the app draws its own. */
   caret: Tally1,
+  /** A filter that narrowed its list to nothing. */
+  noMatch: Ghost,
   /** Asking a source what it holds. */
   discover: RadioTower,
   refresh: RotateCw,

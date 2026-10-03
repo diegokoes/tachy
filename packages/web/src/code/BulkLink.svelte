@@ -420,7 +420,6 @@
                 : "no project you can link into"}
             disabled={seeking || fetching || linking || !mine.length}
             aria-label="project to link repos from"
-            filterPlaceholder="filter projects…"
             onchange={(v) => choose(String(v))}
           />
         </div>

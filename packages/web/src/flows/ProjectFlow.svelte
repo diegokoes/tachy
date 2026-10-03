@@ -388,7 +388,6 @@
       value={projectId}
       options={projectOptions}
       searchable
-      filterPlaceholder="filter projects"
       placeholder="project"
       aria-label="Project"
       onchange={(v) => (projectId = String(v ?? ""))}
