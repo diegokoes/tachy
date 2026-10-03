@@ -59,6 +59,8 @@ import {
   FlaskConical,
   FoldVertical,
   Funnel,
+  FunnelPlus,
+  FunnelX,
   Ghost,
   Gavel,
   Gift,
@@ -217,6 +219,10 @@ export const ICONS = {
   search: Search,
   /** The text caret, where the app draws its own. */
   caret: Tally1,
+  /** Put another filter on a filter row. */
+  filterAdd: FunnelPlus,
+  /** Drop every filter on the row. */
+  filterReset: FunnelX,
   /** A filter that narrowed its list to nothing. */
   noMatch: Ghost,
   /** Asking a source what it holds. */
