@@ -1429,7 +1429,7 @@ using constants measured by hand (`search/relevance.ts`).
   - The bands in `packages/contract/src/relevance.ts` (`GOOD` 0.35, `STRONG`
     0.7) keep their meaning, so the SPA's gauge doesn't change.
   - `SEM_FLOOR` still gates the vector leg's candidates.
-- **One scale across surfaces.** `consult.ts` returns knowledge and reference
+- **One scale across surfaces.** `get_context` returns knowledge and reference
   hits side by side, and reranked scores compare between them.
 - **A lane in `EmbedQueue`.** Reranks are query-time work, so they go ahead of
   passages along with queries. `/internal/rerank` sits beside
@@ -1610,8 +1610,8 @@ waits for tier B. None of it is built:
     `texts` (`search/embed-thread.ts`). A model name has to travel in the
     request and in the stamp.
   - Code search then embeds its query with the code model.
-  - The vector `consult.ts` shares between knowledge and reference search
-    (`mcp/src/tools/consult.ts:255`) stays a text-model vector.
+  - The vector `get_context` shares between knowledge and reference search
+    (`mcp/src/tools/work-items.ts`) stays a text-model vector.
 - **Each model adds to the image.** bge-base alone is 417 MB (§2.1).
 
 ## 6. Durability, backup, restore
