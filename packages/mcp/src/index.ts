@@ -22,15 +22,16 @@ registerSource("azure-devops", createAzureDevopsSource);
 setSourceOrigin("agent");
 
 /*
- * Imported for the registrations they perform, in the order the tools were
- * written in — a tool sits beside the others that read and write the same
- * tables, and beside the helpers only they use.
+ * Imported for the registrations they perform. One file per domain, under the
+ * name core gives it — a tool sits beside the others that read and write the
+ * same tables.
  */
-import "./tools/consult";
-import "./tools/catalog";
+import "./tools/work-items";
 import "./tools/knowledge";
-import "./tools/library";
-import "./tools/org";
+import "./tools/analytics";
+import "./tools/catalog";
+import "./tools/wiki";
+import "./tools/reference";
 import "./tools/sources";
 import "./tools/azure-devops";
 import "./tools/code";
