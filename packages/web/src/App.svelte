@@ -32,7 +32,16 @@
   import { loadVim, vimState, scrollBindings } from "./keys/vim.svelte";
   import { subnav, topActions } from "./shell/subnav.svelte";
   import { setScrollport } from "./shell/scrollport.svelte";
-  import { HintRule, Icon, Panel, Scrollbar, Tabs, TipHost, tip } from "./tui";
+  import {
+    CaretHost,
+    HintRule,
+    Icon,
+    Panel,
+    Scrollbar,
+    Tabs,
+    TipHost,
+    tip,
+  } from "./tui";
 
   const nav = $derived(navItems());
 
@@ -424,6 +433,7 @@
 {/if}
 
 <TipHost />
+<CaretHost />
 
 <style>
   /* Two objects on one centre line: a top row carrying the wordmark and the

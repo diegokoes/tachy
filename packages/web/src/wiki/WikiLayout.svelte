@@ -92,7 +92,6 @@
         title="switch wiki"
         aria-label="wiki"
         searchable
-        filterPlaceholder="filter wikis…"
         onchange={(v) => switchTo(String(v))}
       />
     </div>

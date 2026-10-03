@@ -53,9 +53,31 @@ select {
   border-radius: var(--radius-control);
   padding: var(--pad-2) var(--pad-3);
   min-height: var(--control-h);
-  /* Terminal caret everywhere: accent-colored; block shape where supported. */
+  /* What a field falls back to where tui/CaretHost does not draw its caret:
+     the same upright stroke, in the same colour. */
   caret-color: var(--accent);
-  caret-shape: block;
+  caret-shape: bar;
+}
+
+/* The drawn caret's flash: lit most of the time, a short dip that springs
+   back a hair tall. One beat per loop, so no cycle differs from the next. */
+@keyframes caret-beat {
+  0%,
+  42%,
+  87%,
+  100% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  48%,
+  72% {
+    opacity: 0.12;
+    transform: scaleY(0.6);
+  }
+  81% {
+    opacity: 1;
+    transform: scaleY(1.12);
+  }
 }
 
 /* Focus ring drawn INSIDE the box (border + inset shadow) - outlines render

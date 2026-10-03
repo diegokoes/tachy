@@ -59,6 +59,9 @@ import {
   FlaskConical,
   FoldVertical,
   Funnel,
+  FunnelPlus,
+  FunnelX,
+  Ghost,
   Gavel,
   Gift,
   GitBranch,
@@ -122,6 +125,7 @@ import {
   SquarePlus,
   Star,
   StickyNote,
+  Tally1,
   Terminal,
   TrafficCone,
   Trash,
@@ -213,6 +217,14 @@ export const ICONS = {
   /* ── Finding things ───────────────────────────────────────────────────── */
   /** Searching what we already hold. */
   search: Search,
+  /** The text caret, where the app draws its own. */
+  caret: Tally1,
+  /** Put another filter on a filter row. */
+  filterAdd: FunnelPlus,
+  /** Drop every filter on the row. */
+  filterReset: FunnelX,
+  /** A filter that narrowed its list to nothing. */
+  noMatch: Ghost,
   /** Asking a source what it holds. */
   discover: RadioTower,
   refresh: RotateCw,
