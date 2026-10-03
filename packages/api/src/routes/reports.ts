@@ -15,7 +15,7 @@ import {
 } from "@tachy/core";
 import { requireAdmin } from "../auth";
 import { requireCaller, callerScope } from "../authz";
-import { reviewReport } from "../report-review";
+import { reviewReport } from "@tachy/agent";
 
 const reviewSchema = z.object({
   type: z.enum(REPORT_TYPES),

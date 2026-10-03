@@ -3,7 +3,7 @@ import {
   checklistFor,
   parseTicketReview,
   reviewPrompt,
-} from "../packages/api/src/ticket-review";
+} from "../packages/agent/src/ticket-review";
 
 const request = {
   type: "Bug",

@@ -21,7 +21,7 @@ import {
   type ComposerForm,
 } from "@tachy/core";
 import { createApp } from "../packages/api/src/app";
-import { reviewPrompt } from "../packages/api/src/ticket-review";
+import { reviewPrompt } from "../packages/agent/src/ticket-review";
 import { loginCookie, resetData, sql } from "./helpers";
 
 const ORG = "https://dev.azure.com/flowsorg";
