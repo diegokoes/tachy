@@ -15,7 +15,7 @@ import { requireAdmin } from "../auth";
 import { callerUserId } from "../authz";
 
 /** The admin page's checks and load runs (DEPLOYMENT-ARCHITECTURE.md §11.3). */
-export const tests = new Hono()
+export const diagnostics = new Hono()
   .use("*", requireAdmin)
 
   .get("/checks", async (c) => c.json({ checks: await runSystemChecks() }))
