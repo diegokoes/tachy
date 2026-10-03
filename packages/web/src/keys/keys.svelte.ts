@@ -44,6 +44,17 @@ function inTextField(t: EventTarget | null): boolean {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
+/**
+ * Escape hands the keyboard back to the view's bindings. A field that spends
+ * Escape on its own popup prevents the default to keep focus, and a dialog
+ * closes on it instead.
+ */
+function leaveField(e: KeyboardEvent) {
+  const t = e.target as HTMLElement;
+  if (e.defaultPrevented || t.closest('[role="dialog"]')) return;
+  t.blur();
+}
+
 /** Exported so the rebind UI captures exactly the shape dispatch matches on. */
 export function normalize(e: KeyboardEvent, ctrl = false): string {
   if (e.shiftKey && /^Digit[1-9]$/.test(e.code))
@@ -130,11 +141,16 @@ export function startKeys() {
         pending = [pressed];
         lapse = setTimeout(clearPending, SEQUENCE_MS);
         e.preventDefault();
-      } else if (solo) {
+        return;
+      }
+      if (solo) {
         e.preventDefault();
         solo.run();
+        return;
       }
     }
+
+    if (pressed === "esc" && field) leaveField(e);
   };
 
   window.addEventListener("keydown", onKey);
