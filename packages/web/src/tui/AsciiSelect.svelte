@@ -1,4 +1,6 @@
 <script lang="ts">
+  import CaretInput from "./CaretInput.svelte";
+  import NoMatch from "./NoMatch.svelte";
   import Scrollbar from "./Scrollbar.svelte";
   import { float, type Placement } from "./float";
 
@@ -15,7 +17,6 @@
     active = false,
     keepOpen = false,
     searchable = false,
-    filterPlaceholder = "filter…",
     placeholder,
     clearable,
     placement,
@@ -39,7 +40,6 @@
     /** Offer the filter box however short the list, for lists that grow with
      *  the catalog rather than staying a fixed vocabulary. */
     searchable?: boolean;
-    filterPlaceholder?: string;
     /**
      * What the trigger says while nothing is picked. A filter row wants the
      * unfiltered state named ("any") without spending a list row on an
@@ -232,16 +232,14 @@
       use:float={{ anchor: trigger, matchWidth: true, placement }}
     >
       {#if filterable}
-        <input
-          class="q"
-          type="text"
-          bind:this={queryEl}
-          bind:value={query}
-          placeholder={filterPlaceholder}
-          aria-label="filter options"
-          autocomplete="off"
-          onkeydown={onKeydown}
-        />
+        <div class="q">
+          <CaretInput
+            bind:el={queryEl}
+            bind:value={query}
+            aria-label="filter options"
+            onkeydown={onKeydown}
+          />
+        </div>
       {/if}
 
       <div class="scroller">
@@ -277,7 +275,9 @@
               </div>
             {/each}
             {#if !shown.length}
-              <p class="none">no match</p>
+              {#key query}
+                <NoMatch onclear={query ? () => (query = "") : undefined} />
+              {/key}
             {/if}
           </div>
         </div>
@@ -353,17 +353,22 @@
     width: max-content;
     max-width: min(90vw, 24rem);
     overflow: hidden;
-    padding: 2px;
+    --edge: color-mix(in srgb, var(--accent) 55%, var(--border));
     background: var(--panel-bg);
-    border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+    border: 1px solid var(--edge);
     border-radius: var(--radius-control);
     box-shadow: 0 4px 14px var(--drop);
   }
 
+  /* Flush with the panel's walls: the rule under it is the only edge it
+     draws, so nothing sits a hair inside the frame. */
   .q {
     flex: none;
-    margin-bottom: 2px;
-    border-radius: calc(var(--radius-control) - 2px);
+    display: flex;
+    min-height: var(--control-h);
+    padding: 0 var(--pad-3);
+    background: var(--panel);
+    border-bottom: 1px solid var(--edge);
   }
 
   .scroller {
@@ -398,13 +403,13 @@
   }
   /* The label keeps its room; the hint gives way first. */
   .opt .txt {
-    flex: none;
-    max-width: 70%;
+    flex: 0 1 auto;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .opt .hint {
-    flex: 0 10 auto;
+    flex: 0 1000 auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -430,14 +435,8 @@
     background: var(--accent);
     color: var(--bg);
   }
-  .opt.cursor .mark {
+  .opt.cursor .mark,
+  .opt.cursor .hint {
     color: var(--bg);
-  }
-
-  .none {
-    margin: 0;
-    padding: var(--pad-2) var(--pad-3);
-    font-size: var(--fs-xs);
-    color: var(--muted);
   }
 </style>

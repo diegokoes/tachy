@@ -173,6 +173,13 @@
     applyExtras(scopeQs(new URLSearchParams()), shown, extras).toString();
   const docQs = () => scopeQs(new URLSearchParams()).toString();
 
+  /**
+   * What the list is actually asked for. A filter put on the row with no value
+   * yet, or a prune that changes nothing, leaves this as it was, so the list
+   * is not fetched again for it.
+   */
+  const request = $derived([kind, status, entryQs(), docQs()].join("\n"));
+
   let seq = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let slowTimer: ReturnType<typeof setTimeout> | undefined;
@@ -416,13 +423,7 @@
   let ranOnce = false;
   $effect(() => {
     if (!listing) return;
-    void q;
-    void kind;
-    void status;
-    void productId;
-    void component;
-    void shown;
-    void extras;
+    void request;
     clearTimeout(timer);
     loading = true;
     timer = setTimeout(run, ranOnce ? 250 : 0);
@@ -598,7 +599,7 @@
     <input
       bind:this={searchEl}
       class="search"
-      placeholder="Search symptoms, error codes, root causes, docs…"
+      aria-label="Search symptoms, error codes, root causes, docs"
       bind:value={q}
       onkeydown={(e) => {
         if (e.key === "Enter") {
@@ -623,11 +624,11 @@
         <Button
           variant="ghost"
           tone="danger"
-          icon="reset"
+          icon="filterReset"
           title="reset every filter"
           onclick={clearFilters}
         >
-          <span class="lbl">reset filters</span>
+          <span class="lbl">reset</span>
         </Button>
       {/if}
     </span>
@@ -646,7 +647,6 @@
           bind:value={productId}
           active={!!productId}
           keepOpen
-          filterPlaceholder=""
           searchable
           title={t("product")}
           placeholder="any"
@@ -661,7 +661,6 @@
           bind:value={component}
           active={!!component}
           keepOpen
-          filterPlaceholder=""
           searchable
           title={`Component (within the chosen ${t("product")})`}
           disabled={!productId || components.length === 0}
@@ -681,7 +680,6 @@
           bind:value={status}
           active={!!status}
           keepOpen
-          filterPlaceholder=""
           title="Status"
           placeholder="any"
           clearable
@@ -693,7 +691,17 @@
         {#each shown as key (key)}
           {@const def = byKey(key)}
           {#if def}
-            <span class="extra">
+            <!-- No close button: the add menu toggles it off, and so does a
+                 right click anywhere on it. -->
+            <span
+              class="extra"
+              role="group"
+              aria-label="{def.label} filter"
+              oncontextmenu={(e) => {
+                e.preventDefault();
+                removeFilter(key);
+              }}
+            >
               <span class="field" use:capFloor>
                 <span class="cap">{def.label}</span>
                 {#if def.kind === "tags"}
@@ -707,10 +715,9 @@
                     value={extras[key] ?? ""}
                     active={!!extras[key]}
                     keepOpen
-                    filterPlaceholder=""
-                    title={def.needsComponent
-                      ? `${def.label} (within the chosen component)`
-                      : def.label}
+                    title={`${def.label}${
+                      def.needsComponent ? " (within the chosen component)" : ""
+                    }, right click to remove`}
                     disabled={def.needsComponent && !component}
                     placeholder="any"
                     clearable
@@ -729,15 +736,6 @@
                   />
                 {/if}
               </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                square
-                icon="close"
-                title="remove the {def.label} filter"
-                aria-label="remove the {def.label} filter"
-                onclick={() => removeFilter(key)}
-              />
             </span>
           {/if}
         {/each}
@@ -836,8 +834,10 @@
     height: var(--main-air, 0.65rem);
     background: var(--panel-bg);
   }
+  /* Stops at the bar's midpoint, so the tools beside it come and go without
+     the box changing width. */
   .search {
-    flex: 0 1 75%;
+    flex: 0 1 50%;
     min-width: 12rem;
   }
   .tools {

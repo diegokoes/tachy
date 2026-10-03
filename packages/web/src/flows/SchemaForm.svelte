@@ -210,7 +210,6 @@
               value=""
               options={variableOptions}
               searchable
-              filterPlaceholder="item.title, steps.…"
               aria-label={`Insert a value into ${name}`}
               onchange={(v) => {
                 if (v) set(name, `${text(name)}${v}`);
