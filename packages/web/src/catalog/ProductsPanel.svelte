@@ -28,7 +28,7 @@
   );
 
   /* The table only requires (team, slug) to be unique, but getProductIdBySlug
-     resolves a slug across every team and refuses an ambiguous one — so a
+     resolves a slug across every team and refuses an ambiguous one - so a
      derived slug has to clear the whole set, not just its team's. */
   const allSlugs = $derived(products.data.map((p) => p.slug));
 

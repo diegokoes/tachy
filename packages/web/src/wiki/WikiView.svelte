@@ -25,14 +25,14 @@
    *   (none)              the wiki you were last in
    *   :scope              its landing: intro, sections and coverage in one page
    *   :scope/gaps         what the sweep found missing, over the coverage tree
-   *   :scope/c/:slug      a section — its lead article, or its article list
+   *   :scope/c/:slug      a section - its lead article, or its article list
    *   :scope/new[/:slug]  a new article, at a slug something asked for
-   *   :scope/:slug        an article — WIKI_RESERVED_SLUGS are never one
+   *   :scope/:slug        an article - WIKI_RESERVED_SLUGS are never one
    *   :scope/:slug/edit
    * Old addresses (contents, toc, coverage) redirect via renamedPage below.
    */
   /* /wiki resolves to its landing scope in place, before the redirect below
-     rewrites the address — otherwise re-picking the wiki tab from a main page
+     rewrites the address - otherwise re-picking the wiki tab from a main page
      unmounts the article for a frame and fetches it again. */
   const scope = $derived(segment(1) || (wikis.loaded ? landingScope() : ""));
   const second = $derived(segment(2));
@@ -72,8 +72,8 @@
     void loadWikis();
   });
 
-  /* /wiki alone opens a wiki rather than a list of them — the switcher is the
-     list — and waits for the list so it can pick one that exists. */
+  /* /wiki alone opens a wiki rather than a list of them - the switcher is the
+     list - and waits for the list so it can pick one that exists. */
   $effect(() => {
     if (segment(1) || !scope) return;
     navigate(wikiPath(scope), { replace: true });
@@ -104,7 +104,7 @@
   });
 
   /* The editor needs the current article. One that turns out not to exist is
-     a new one at that slug — which is what "write it" on an empty main page
+     a new one at that slug - which is what "write it" on an empty main page
      used to reach, and then wait on forever. */
   $effect(() => {
     if (page !== "edit" || !scope || !second) {

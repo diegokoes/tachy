@@ -361,7 +361,7 @@
   /** The project whose record dialog is open, if one is. */
   let opened = $state<SourceProject | null>(null);
 
-  /* What hangs off a project with a product — its area rules, its product's
+  /* What hangs off a project with a product - its area rules, its product's
      components, its wikis, fetched when the dialog opens on it, and again
      when an edit changes what it hangs off. */
   const hangs = $derived(

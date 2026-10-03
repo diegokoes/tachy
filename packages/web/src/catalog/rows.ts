@@ -10,7 +10,7 @@ import type {
 } from "@tachy/contract";
 
 /**
- * The shapes the admin panels render — one per table they administer, as the
+ * The shapes the admin panels render - one per table they administer, as the
  * API returns them.
  */
 export type Team = TeamRow;

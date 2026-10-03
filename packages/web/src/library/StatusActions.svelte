@@ -74,7 +74,7 @@
     }
   }
 
-  /* No margin left to sit in — the column rejoins the flow above the content
+  /* No margin left to sit in - the column rejoins the flow above the content
      rather than printing itself over the first paragraph. */
   @media (max-width: 68rem) {
     .rail {

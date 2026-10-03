@@ -33,7 +33,7 @@
 
   /* One packet per cycle: it runs during the first half and the wire rests
      through the second, so every arrival still lands on a growth peak of the
-     tab icon (see PULSE). Variance lives in the packet's character — never in
+     tab icon (see PULSE). Variance lives in the packet's character - never in
      its timing, which would break that sync. */
   const CYCLE = PULSE * 2;
 
@@ -167,7 +167,7 @@
   }
 
   /**
-   * The commit send: one fat packet, then `done` — the caller lights the tab and
+   * The commit send: one fat packet, then `done` - the caller lights the tab and
    * closes the picker behind it.
    */
   export function discharge(done: () => void) {
@@ -214,7 +214,7 @@
 
     let since = 0;
     /* Whether either endpoint has moved since the last frame. The tab's
-       open/close grow is a transform, which changes no layout box — so the
+       open/close grow is a transform, which changes no layout box - so the
        ResizeObserver above never fires for it and the wire would hang off the
        hexagon's old edge until the next random flicker. Watching the client
        rect catches it, and catches anything else that moves an end. */

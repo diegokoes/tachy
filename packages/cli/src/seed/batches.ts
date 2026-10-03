@@ -52,7 +52,7 @@ const WINDOW = 2_000;
  * it is where the embedder runs the model over a window's text at once, instead
  * of once per row inside the build loop.
  *
- * Not a memory optimisation — measured against building the array whole, peak
+ * Not a memory optimisation - measured against building the array whole, peak
  * heap and wall time are the same, because `insertRows` already chunks and V8
  * reclaims the rows behind it.
  *

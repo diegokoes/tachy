@@ -16,7 +16,7 @@ function piiItem(): RawWorkItem {
   return {
     externalId: "40123",
     kind: "ticket",
-    title: "Scanner offline — from jane@dalmoor.example",
+    title: "Scanner offline - from jane@dalmoor.example",
     status: "2",
     groupKey: "70000000013",
     requester: "42",

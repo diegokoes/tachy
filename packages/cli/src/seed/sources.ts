@@ -204,8 +204,8 @@ async function seedWorkItems(
       const rng = rngFor("work_item", i);
       /*
        * Drawn from the row's stream, not by `i % list.length`. Cycling gave
-       * lcm(SYMPTOMS, products) distinct titles — 60 of them across the 40k rows
-       * --scale=large asks for — so the trigram index saw 60 strings repeated
+       * lcm(SYMPTOMS, products) distinct titles - 60 of them across the 40k rows
+       * --scale=large asks for - so the trigram index saw 60 strings repeated
        * 667 times each. Same reasoning as the knowledge entries.
        */
       const project = pick(rng, knowledgeProjects);
@@ -282,7 +282,7 @@ async function seedMessages(
       const body =
         k === 0
           ? `${pick(rng, MESSAGE_OPENERS)}: ${symptom}. It shows up ${pick(rng, CONTEXTS)}, and ${pick(rng, IMPACTS)}. Logged as #${ref} against ${intBetween(rng, 3, 9)}.${intBetween(rng, 0, 12)}.`
-          : `Update ${k} on #${ref}: ${pick(rng, MESSAGE_STEPS)} — ${pick(rng, MESSAGE_OUTCOMES)}. ${pick(rng, DIAGNOSTICS)}. Seen ${intBetween(rng, 2, 400)} times in the last ${intBetween(rng, 2, 72)} hours.`;
+          : `Update ${k} on #${ref}: ${pick(rng, MESSAGE_STEPS)} - ${pick(rng, MESSAGE_OUTCOMES)}. ${pick(rng, DIAGNOSTICS)}. Seen ${intBetween(rng, 2, 400)} times in the last ${intBetween(rng, 2, 72)} hours.`;
 
       return {
         id: uuidFor("work_item_message", i),

@@ -89,7 +89,7 @@ describe("customer units", () => {
     const layout = units.find((u) => u.slug === "layout-3")!;
     expect(line.parent_id).toBe(site.id);
     expect(line.profile_id).toBe(layout.id);
-    // A layout is not part of the estate — it has no parent.
+    // A layout is not part of the estate - it has no parent.
     expect(layout.parent_id).toBeNull();
   });
 

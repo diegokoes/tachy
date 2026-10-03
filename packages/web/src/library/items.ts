@@ -24,7 +24,7 @@ export type Item = {
   tags: string[];
   /** Set when the item describes one customer's install rather than the product. */
   customer?: string | null;
-  /** Server-calibrated 0-1 match strength — what the gauge draws. */
+  /** Server-calibrated 0-1 match strength - what the gauge draws. */
   relevance?: number;
   /** "strong" | "good" | "weak", from the same calibration. */
   grade?: string;

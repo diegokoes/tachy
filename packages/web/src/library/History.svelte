@@ -84,7 +84,7 @@
     }
   }
 
-  /** The door, not the person — an agent edit is still made by a human. */
+  /** The door, not the person - an agent edit is still made by a human. */
   const doorTone = (actor: string) =>
     actor === "agent" ? "warn" : actor === "web" ? "ok" : "muted";
 

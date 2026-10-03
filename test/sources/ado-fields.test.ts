@@ -63,7 +63,7 @@ describe("ADO field projection", () => {
   });
 
   /**
-   * The per-type endpoint carries no data type at all — the join with the
+   * The per-type endpoint carries no data type at all - the join with the
    * account-wide list is the only way a widget can be chosen.
    */
   it("takes type, readOnly and isIdentity from the account-wide list", () => {
@@ -138,7 +138,7 @@ describe("workItemSchema", () => {
     const schema = await workItemSchema(
       client({
         listFields: async () => {
-          throw new Error("403 — PAT lacks the scope");
+          throw new Error("403 - PAT lacks the scope");
         },
       }),
       "ProjA",
@@ -148,12 +148,12 @@ describe("workItemSchema", () => {
     expect(byRef(schema.fields, "System.State").type).toBeUndefined();
   });
 
-  it("fails when the per-type call fails — there is no schema without it", async () => {
+  it("fails when the per-type call fails - there is no schema without it", async () => {
     await expect(
       workItemSchema(
         client({
           getTypeFields: async () => {
-            throw new Error("404 — unknown type");
+            throw new Error("404 - unknown type");
           },
         }),
         "ProjA",

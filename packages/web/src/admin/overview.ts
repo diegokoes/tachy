@@ -17,7 +17,7 @@ export const pct = (n: number, of: number) =>
   of ? `${Math.round((n / of) * 100)}%` : "–";
 
 /**
- * Readiness: all of it, some of it, none of it — and muted when there is
+ * Readiness: all of it, some of it, none of it - and muted when there is
  * nothing to be ready. The ring colours the part that is done, so a partial
  * state must not paint the finished part red.
  */
@@ -28,7 +28,7 @@ export const grade = (done: number, of: number): Tone =>
 export const load = (share: number): Tone =>
   share >= 0.9 ? "danger" : share >= 0.7 ? "warn" : "ok";
 
-/** "12 min", "5 h", "3 d" — how long ago, or how long up. */
+/** "12 min", "5 h", "3 d" - how long ago, or how long up. */
 export const span = (ms: number) => {
   const min = Math.max(0, Math.round(ms / 60_000));
   if (min < 60) return `${min} min`;

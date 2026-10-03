@@ -16,7 +16,7 @@
   import { loadWikis, seedArticle } from "./wikis.svelte";
 
   /**
-   * What this wiki is missing, as the hourly sweep last found it — the list a
+   * What this wiki is missing, as the hourly sweep last found it - the list a
    * curator works down, most pressing kind first. Nothing here is computed on
    * the page: it reads the sweep's table, which is also what the switcher's
    * counts come from.
@@ -243,7 +243,7 @@
     {#if scope === ORG_WIDE}
       <Note tone="muted">
         The org-wide wiki has no components, so coverage-based gaps (uncovered
-        lessons and outgrown articles) are not computed here — only stale
+        lessons and outgrown articles) are not computed here - only stale
         sources, wanted pages, drafts and uncategorised articles.
       </Note>
     {/if}

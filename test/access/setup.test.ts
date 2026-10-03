@@ -26,7 +26,7 @@ describe("first-run setup wizard", () => {
   });
 
   it("refuses to take over an account that already exists", async () => {
-    // An attribution user — what `TACHY_USER_EMAIL` creates on a sync or an MCP
+    // An attribution user - what `TACHY_USER_EMAIL` creates on a sync or an MCP
     // call, before anyone has run the wizard. It has no password and no role,
     // and taking it over would hand back a session as its owner.
     await sql`insert into users (email) values ('colleague@example.com')`;

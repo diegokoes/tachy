@@ -1,7 +1,7 @@
 /**
  * Three semantic faces, each pickable from Settings › ui.
  *
- * Every stack ends in DejaVu Mono before its generic — see the note in
+ * Every stack ends in DejaVu Mono before its generic - see the note in
  * tokens.css. It is the only bundled face carrying the block, box-drawing and
  * geometric glyphs the TUI chrome is built from, so a user-picked primary can
  * never take those away.

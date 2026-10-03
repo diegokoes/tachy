@@ -2,7 +2,7 @@ import type { ComponentRow } from "@tachy/contract";
 
 /**
  * Components nest arbitrarily deep via `parent_id`, but `/products/:slug/components`
- * returns them flat and slug-ordered — so a sub-component lands next to its
+ * returns them flat and slug-ordered - so a sub-component lands next to its
  * parent's siblings and the shape is invisible in a picker. Re-order the flat
  * list depth-first and indent each row by its depth.
  */

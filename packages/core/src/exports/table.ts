@@ -154,7 +154,7 @@ const CSV_BOM = "\uFEFF";
 
 /**
  * Cell text is composed by the model out of ticket content, so a cell can begin
- * with a character Excel and Sheets read as the start of a formula — a pasted
+ * with a character Excel and Sheets read as the start of a formula - a pasted
  * `=HYPERLINK("http://…"&A1)` becomes live in the download. A leading apostrophe
  * is the spreadsheet convention for "this is text": it is consumed on the way
  * in and does not show in the cell.
@@ -221,14 +221,14 @@ export function renderColumnContract(
 ): string {
   const columns = output.columns.map((c) => {
     const flags = c.required ? `${c.type}, required` : c.type;
-    return `  ${c.key} (${flags})${c.description ? ` — ${c.description}` : ""}`;
+    return `  ${c.key} (${flags})${c.description ? ` - ${c.description}` : ""}`;
   });
   return [
     `<output-contract utility="export_table" artifact="${slug}" format="${output.format}">`,
-    "Produce one row per record with EXACTLY these columns — no extras, no renames:",
+    "Produce one row per record with EXACTLY these columns - no extras, no renames:",
     ...columns,
     `Then call export_table with artifact_slug "${slug}" and those rows.`,
-    "Do not print the table in chat — the user gets a download.",
+    "Do not print the table in chat - the user gets a download.",
     "</output-contract>",
   ].join("\n");
 }

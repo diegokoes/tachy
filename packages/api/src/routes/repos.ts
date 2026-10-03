@@ -86,7 +86,7 @@ const bulkLinkSchema = z.object({
 });
 
 /**
- * Where a repo lands, and — on the slug-keyed upsert — where it currently is:
+ * Where a repo lands, and - on the slug-keyed upsert - where it currently is:
  * without the second check a team admin could re-point another team's repo.
  */
 async function assertCanWriteRepo(

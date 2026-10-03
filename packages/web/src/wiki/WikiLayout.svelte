@@ -11,7 +11,7 @@
   /**
    * Every reading page of the wiki: the switcher and whatever the page adds to
    * the left column, beside the page itself. `lead` sits above the switcher and
-   * stays put with it; `aside` scrolls beneath. The editor does not use it — it
+   * stays put with it; `aside` scrolls beneath. The editor does not use it - it
    * needs the width more than the reader needs the index.
    */
   let {
@@ -26,7 +26,7 @@
     children: Snippet;
   } = $props();
 
-  /* The switcher doubles as the wiki index, so each row carries its size — how
+  /* The switcher doubles as the wiki index, so each row carries its size - how
      many articles, and how many open gaps when there are any. */
   const options = $derived(
     wikis.rows.map((w) => ({
@@ -68,7 +68,7 @@
   }
 
   /* Every reading page of the wiki gets its own quick-find, the way Components
-     does — scoped to this wiki rather than the whole library. */
+     does - scoped to this wiki rather than the whole library. */
   let searching = $state(false);
   $effect(() =>
     pushScope([

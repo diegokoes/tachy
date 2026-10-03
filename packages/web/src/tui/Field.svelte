@@ -21,7 +21,7 @@
     required?: boolean;
     inline?: boolean;
     /** Renders as a div, for rows holding a value and its own button rather
-     *  than one control — a <label> around a button steals its clicks. */
+     *  than one control - a <label> around a button steals its clicks. */
     plain?: boolean;
     /** Spans every column of the grid it is laid out in. */
     wide?: boolean;
@@ -85,7 +85,7 @@
     gap: var(--pad-1);
     min-width: 0;
   }
-  /* Cased in CSS, not in the copy — a screen reader still hears a word. */
+  /* Cased in CSS, not in the copy - a screen reader still hears a word. */
   .lbl {
     font-size: var(--fs-xs);
     letter-spacing: var(--label-spacing);
@@ -111,7 +111,7 @@
     gap: var(--pad-2);
     min-width: 0;
   }
-  /* A checkbox is its own size — stretching one to the field width leaves the
+  /* A checkbox is its own size - stretching one to the field width leaves the
      box floating in the middle of an empty row. */
   .control > :global(input:not([type="checkbox"])),
   .control > :global(textarea) {

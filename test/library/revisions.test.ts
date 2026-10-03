@@ -48,7 +48,7 @@ describe("library revisions", () => {
     expect(revs[0].actor).toBe("web");
   });
 
-  it("keeps the snapshot free of the embedding — the reason this is cheap", async () => {
+  it("keeps the snapshot free of the embedding - the reason this is cheap", async () => {
     const e = await entry();
     const { snapshot } = await getRevision({ entryId: e.id }, 1);
     expect(snapshot).not.toHaveProperty("embedding");
@@ -120,7 +120,7 @@ describe("library revisions", () => {
 
     const revs = await listRevisions({ entryId: e.id });
     expect(revs.map((r) => r.version)).toEqual([4, 3, 2, 1]);
-    // The bad versions are still there — reverting hides nothing.
+    // The bad versions are still there - reverting hides nothing.
     expect((await getRevision({ entryId: e.id }, 3)).snapshot.resolution).toBe(
       "worse turn",
     );

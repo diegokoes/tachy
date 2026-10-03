@@ -120,10 +120,10 @@ differently:
 | Permission cache                         | 60 s `Map` (`core/src/access/permissions.ts:15`)                                                           | no                                   | a role change is stale for up to 60 s elsewhere            |
 | Repo clones                              | `tachy-repo-data` volume, mounted in the api and both workers                                              | rebuildable cache                    | per host                                                   |
 | Embedding model                          | image layer (`/app/.model-cache`)                                                                          | rebuildable                          | fine                                                       |
-| Container logs                           | Docker `local` driver, 20 MB × 10 files per container                                                      | bounded by size, not by age          | —                                                          |
-| Backups                                  | age ciphertext in `/srv/tachy/backup-export`, on the same disk until someone downloads it (§6)             | off-host only once downloaded        | —                                                          |
-| Host status                              | `/srv/tachy/status/*.json`, written by backups, the watch script and deploys; mounted read-only in the api | rebuildable                          | —                                                          |
-| Deploy log                               | `/srv/tachy/deploy.log`; in no backup                                                                      | no                                   | —                                                          |
+| Container logs                           | Docker `local` driver, 20 MB × 10 files per container                                                      | bounded by size, not by age          | -                                                          |
+| Backups                                  | age ciphertext in `/srv/tachy/backup-export`, on the same disk until someone downloads it (§6)             | off-host only once downloaded        | -                                                          |
+| Host status                              | `/srv/tachy/status/*.json`, written by backups, the watch script and deploys; mounted read-only in the api | rebuildable                          | -                                                          |
+| Deploy log                               | `/srv/tachy/deploy.log`; in no backup                                                                      | no                                   | -                                                          |
 
 ### 2.3 How it is deployed
 
@@ -230,12 +230,12 @@ every 250 ms.
 
 | Work                             | Time    | Longest event-loop block | RSS after (from 770 MB warm) |
 | -------------------------------- | ------- | -----------------------: | ---------------------------: |
-| 1 query                          | 11 ms   |                     0 ms |                            — |
-| 20 queries, concurrently         | 212 ms  |                     0 ms |                            — |
+| 1 query                          | 11 ms   |                     0 ms |                            - |
+| 20 queries, concurrently         | 212 ms  |                     0 ms |                            - |
 | 64 long passages, batches of 32  | 7.4 s   |                **3.7 s** |                  **1653 MB** |
 | 64 long passages, batches of 16  | 7.6 s   |                    1.9 s |                      1173 MB |
 | 64 long passages, batches of 8   | 7.3 s   |                    0.9 s |                       960 MB |
-| 1 query while a batch of 32 runs | 3704 ms |                        — |                            — |
+| 1 query while a batch of 32 runs | 3704 ms |                        - |                            - |
 
 - Queries are cheap. Passages are not, and the cost is in how they're batched.
 - Passages went 32 at a time when this was measured. The queue now takes 8
@@ -408,13 +408,13 @@ A pusher is a script outside tachý that holds one bucket's ingest token (§7).
 
 | Service    | A · without the overlay | A · production    | B · server         | C · HA                          |
 | ---------- | ----------------------- | ----------------- | ------------------ | ------------------------------- |
-| caddy      | —                       | 1                 | 1                  | 1 per app host, behind a VIP    |
+| caddy      | -                       | 1                 | 1                  | 1 per app host, behind a VIP    |
 | api        | 1 (runs turns)          | 1 (runs turns)    | 2, stateless       | 2+ across hosts                 |
-| agent      | —                       | —                 | 1–2                | 1+ per app host, sticky by user |
-| embedder   | — (a thread in the api) | 1                 | 1–2                | 1 per app host                  |
-| worker     | — (the api works jobs)  | 2: light, heavy   | 2+                 | 2+, cron under a leader lock    |
+| agent      | -                       | -                 | 1–2                | 1+ per app host, sticky by user |
+| embedder   | - (a thread in the api) | 1                 | 1–2                | 1 per app host                  |
+| worker     | - (the api works jobs)  | 2: light, heavy   | 2+                 | 2+, cron under a leader lock    |
 | postgres   | 1                       | 1                 | 1, on its own host | primary and standby             |
-| monitoring | —                       | host watch script | same, per host     | same, per host                  |
+| monitoring | -                       | host watch script | same, per host     | same, per host                  |
 
 ### 4.3 Limits on the laptop
 
@@ -427,7 +427,7 @@ From `deploy/compose.prod.yml`. They are starting values.
 | embedder     | 2g        | `cpus: 6`, 2048 shares | 256        | healthcheck on its `/readyz`                                  |
 | worker-light | 512m      | `cpus: 1`, 512 shares  | 256        | 4 runs at once, `stop_grace_period` 90 s                      |
 | worker-heavy | 2g        | `cpus: 4`, 256 shares  | 256        | 1 run at a time; runs k6 for `load.test` (§11.3)              |
-| postgres     | 2g        | 2048 shares            | —          | `shm_size: 1gb`, tuned conf (§5.9)                            |
+| postgres     | 2g        | 2048 shares            | -          | `shm_size: 1gb`, tuned conf (§5.9)                            |
 
 - The api's limit covers its own 0.3 GB and 8.2 GB of turns, with 1.5 GB to
   spare. Summed with the other limits, that spare memory doesn't exist (§3.2).
@@ -873,15 +873,15 @@ page shows them (§5.13) and never schedules them.
 
 | Kind                  | Queue       | Schedule (UTC) | Does                                                     |
 | --------------------- | ----------- | -------------- | -------------------------------------------------------- |
-| `repo.reindex`        | index       | —              | fetches one repo's tracked lines and embeds what changed |
+| `repo.reindex`        | index       | -              | fetches one repo's tracked lines and embeds what changed |
 | `repos.refresh`       | maintenance | 02:40 daily    | queues a `repo.reindex` for each linked repo             |
 | `source.sync`         | sync        | per definition | pulls one source connection                              |
-| `embeddings.backfill` | embed       | —              | embeds rows with no vector, or all of them (§5.15)       |
-| `bucket.embed`        | embed       | —              | embeds the chunks a bucket ingest wrote                  |
+| `embeddings.backfill` | embed       | -              | embeds rows with no vector, or all of them (§5.15)       |
+| `bucket.embed`        | embed       | -              | embeds the chunks a bucket ingest wrote                  |
 | `retention.sweep`     | maintenance | 03:30 daily    | applies the retention rules (§7)                         |
 | `wiki.gaps`           | maintenance | hourly         | finds wiki gaps                                          |
 | `flow.run`            | flows       | per flow       | one pass of a flow over one item                         |
-| `load.test`           | testing     | —              | runs a k6 script against a named target (§11.3)          |
+| `load.test`           | testing     | -              | runs a k6 script against a named target (§11.3)          |
 
 **Why.** It extends what was already there: the index status on `repo_lines`,
 `sweepInterruptedIndexes` (`core/src/code/repos.ts:368`) and
@@ -943,7 +943,7 @@ never runs on an event loop that serves requests. Built in deploy-03, 06 and 25.
 | Memory, whole host            | one model per searching process                     | one model, 925 MiB, loaded at boot              |
 | First search in a turn        | ~1.5 s model load, then ~0.8 s                      | ~11 ms embed plus an HTTP hop, then the query   |
 | A reference save or reindex   | freezes whichever process runs it for 3.7 s a batch | freezes nothing; queries jump the passage queue |
-| Search results                | —                                                   | unchanged: same model, same vectors, same SQL   |
+| Search results                | -                                                   | unchanged: same model, same vectors, same SQL   |
 | Throughput for bulk embedding | 64 passages in 7.4 s                                | 7.3 s, in batches of 8                          |
 | API boot                      | model loads on first search                         | `/readyz` waits for the embedder to answer (§9) |
 
@@ -1302,19 +1302,19 @@ definition. Nothing in the UI reaches the host. Built in deploy-10, 24, 28 and
 | Area        | Shown                                                            | Configurable                                                                                    | Host or `.env` only                                   |
 | ----------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | Chats       | active and queued against the cap, refused, api memory           | slot cap, Copilot weight                                                                        | api `mem_limit`, approval timeout                     |
-| Embeddings  | query and passage queue depth                                    | —                                                                                               | —                                                     |
+| Embeddings  | query and passage queue depth                                    | -                                                                                               | -                                                     |
 | Jobs        | runs, progress, log tail, failures, next fire times, workers     | definitions: kind, params, schedule, timezone, queue, timeout, overlap, notify; run now; cancel | worker pool sizes and limits                          |
-| Sources     | traffic, rate limits, auth failures                              | sync cadence, as a `source.sync` definition                                                     | —                                                     |
-| Buckets     | documents, last batch, token hint                                | create, teams that may read, rotate the ingest token                                            | —                                                     |
-| Backups     | last backup, last restore test, downloads per person             | —                                                                                               | schedule, recipients, downloaders                     |
-| Monitoring  | `tachy-watch` check states, whether the last run posted to Teams | —                                                                                               | webhook URL, since alerts must work with the app down |
-| Host        | disk per mount, temperature, throttling, AC, battery, SMART      | —                                                                                               | everything                                            |
-| Release     | commit, environment badge, the last deploy's image and result    | —                                                                                               | deploying and rolling back                            |
-| Schema      | whether the stamped schema hash matches the image's              | —                                                                                               | applying changes                                      |
+| Sources     | traffic, rate limits, auth failures                              | sync cadence, as a `source.sync` definition                                                     | -                                                     |
+| Buckets     | documents, last batch, token hint                                | create, teams that may read, rotate the ingest token                                            | -                                                     |
+| Backups     | last backup, last restore test, downloads per person             | -                                                                                               | schedule, recipients, downloaders                     |
+| Monitoring  | `tachy-watch` check states, whether the last run posted to Teams | -                                                                                               | webhook URL, since alerts must work with the app down |
+| Host        | disk per mount, temperature, throttling, AC, battery, SMART      | -                                                                                               | everything                                            |
+| Release     | commit, environment badge, the last deploy's image and result    | -                                                                                               | deploying and rolling back                            |
+| Schema      | whether the stamped schema hash matches the image's              | -                                                                                               | applying changes                                      |
 | Retention   | the 12 largest tables                                            | transcript days and usage months, as `retention.sweep` parameters                               | upload and output TTL                                 |
 | Security    | SSO state, users with passwords, vault key ids                   | password login per user (`password_login_allowed`)                                              | vault key, session secret, TLS, firewall              |
 | Load tests  | runs and results (§11.3)                                         | start and cancel runs                                                                           | targets, the load-test window                         |
-| Maintenance | whether chats are paused                                         | pause new chats before a deploy                                                                 | —                                                     |
+| Maintenance | whether chats are paused                                         | pause new chats before a deploy                                                                 | -                                                     |
 
 Planned here and not built:
 
@@ -2758,7 +2758,7 @@ the laptop yet.
 | 17  | `feat/deploy-17-tachy-watch`       | `tachy-watch`                                       | posts, escalation, reposts and `--force` against a capture server                               |
 | 18  | `feat/deploy-18-tachy-deploy`      | `tachy-deploy`                                      | good deploy, broken image rolls back, schema change refused                                     |
 | 19  | `feat/deploy-19-host-playbook`     | Ansible playbook                                    | syntax check, ansible-lint, `sshd -t`, `nft -c`, rules applied twice in a container             |
-| 20  | `feat/deploy-20-docs-runbooks`     | runbooks, README, this section                      | —                                                                                               |
+| 20  | `feat/deploy-20-docs-runbooks`     | runbooks, README, this section                      | -                                                                                               |
 
 PR 14 in the plan (the turn load test) landed with PR 11. Still to verify on the
 laptop: the sshd log wording `tachy-watch` parses for downloads, and
@@ -2782,7 +2782,7 @@ Phase 2 is complete in code, on the same one-PR-per-branch stack.
 | 30  | `feat/deploy-30-load-scenarios`     | contention, mixed, spike, breakpoint                                                       | run against a seeded stack: spike 2170 requests with no errors                                |
 | 31  | `feat/deploy-31-admin-tests`        | checks panel, test_runs, load.test job kind, guardrails                                    | on the image: a smoke load run started from the API and executed by worker-heavy, 19/19       |
 | 32  | `feat/deploy-32-vault-key-ids`      | key ids and online key rotation                                                            | tests: stamping, rotation with a previous key, and a clear error for a missing key            |
-| 33  | `feat/deploy-33-docs-phase2`        | this section                                                                               | —                                                                                             |
+| 33  | `feat/deploy-33-docs-phase2`        | this section                                                                               | -                                                                                             |
 
 **Phase 2 exit criteria.** A schema change has shipped by diff (§5.10,
 demonstrated end to end). One request id follows a request across the api and

@@ -59,7 +59,7 @@
   // moment the knob meets the side, before the overshoot settles.
   const KNOB_ARRIVES = KNOB_SECONDS * 0.38;
 
-  // Position the knob, crossfade the face, and ripple the chosen label — all
+  // Position the knob, crossfade the face, and ripple the chosen label - all
   // driven off `value`, so a keyboard pick animates the same as a click.
   $effect(() => {
     const v = value;

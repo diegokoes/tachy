@@ -43,7 +43,7 @@
     };
     onConfirm: () => void;
     onCancel: () => void;
-    /** Per-record actions that are not save — test, reindex. Titlebar right. */
+    /** Per-record actions that are not save - test, reindex. Titlebar right. */
     barExtra?: Snippet;
     extra?: Snippet;
   } = $props();

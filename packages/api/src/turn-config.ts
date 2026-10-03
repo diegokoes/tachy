@@ -27,7 +27,7 @@ import { findCommand, commandAutoApprove } from "./commands";
 
 /**
  * The review box invariant lives in prompt.md, where the tool descriptions
- * agree with it. This only names the surface it renders on — anything more
+ * agree with it. This only names the surface it renders on - anything more
  * would restate instructions the model already has, on every turn.
  */
 const UI_APPROVAL_NOTE = `
@@ -79,8 +79,8 @@ export async function userConfigDir(
 /**
  * What the MCP subprocess inherits from the server, named rather than copied.
  * The subprocess runs on behalf of one caller, so anything the server holds for
- * everyone — the vault key, the session and API secrets, the OIDC client
- * secret, the server's own agent and source tokens — must not travel with it.
+ * everyone - the vault key, the session and API secrets, the OIDC client
+ * secret, the server's own agent and source tokens - must not travel with it.
  * A copy-then-delete list would grow a hole every time a new secret is added.
  */
 const INHERITED_ENV = [
@@ -141,7 +141,7 @@ export async function mcpConfig(
     ? { userId: user.id, teamId: (await userSoleTeamId(user.id)) ?? undefined }
     : {};
   // Caller-scoped tokens are only safe here because this env is built fresh
-  // for each turn's MCP subprocess — never pool or share it across users.
+  // for each turn's MCP subprocess - never pool or share it across users.
   //
   // Resolved here rather than in the subprocess, and unconditionally: the child
   // has no TACHY_SECRET_KEY, so its own resolveCredential falls straight to
@@ -222,7 +222,7 @@ export function buildPrompt(i: {
     const cmd = findCommand(i.command.name);
     if (!cmd) throw badInput(`unknown command '/${i.command.name}'`);
     parts.push(
-      `<command name="${cmd.name}">\n${cmd.expand(i.command.args)}\n</command>\n\nThe block above is an authoritative mode selector triggered by the user typing /${cmd.name} — follow it without re-deciding what mode applies.`,
+      `<command name="${cmd.name}">\n${cmd.expand(i.command.args)}\n</command>\n\nThe block above is an authoritative mode selector triggered by the user typing /${cmd.name} - follow it without re-deciding what mode applies.`,
     );
   }
   if (i.artifact) {

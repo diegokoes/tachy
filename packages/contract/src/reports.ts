@@ -16,7 +16,7 @@ export interface ReportInput {
 
 /**
  * The advisory the configured model gives back on a draft. `available` is false
- * when no token resolves for the caller — the form then submits with no review
+ * when no token resolves for the caller - the form then submits with no review
  * rather than trapping the person behind a model they never set up.
  */
 export interface ReportReview {

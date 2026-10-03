@@ -309,7 +309,7 @@
 
   /* An app window, not a card: the same surface, rule and radius the main
      window wears, so a dialog reads as a second one of those rather than as a
-     different material laid over the first. One width, always — a dialog that
+     different material laid over the first. One width, always - a dialog that
      shrink-wrapped its content changed shape whenever a section unfolded. */
   .win {
     position: relative;
@@ -344,7 +344,7 @@
 
   /* The titlebar: what you are doing, between the buttons that end it. Three
      columns rather than a flex row with a spacer, so the name sits at the
-     centre of the window and not at the centre of whatever is left over — the
+     centre of the window and not at the centre of whatever is left over - the
      two 1fr flanks are equal whether or not a destructive action is present. */
   .bar {
     flex: none;

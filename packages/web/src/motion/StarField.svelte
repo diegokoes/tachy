@@ -37,7 +37,7 @@
     y: rand(0, 100),
     size: rand(0.6, 1.25),
     // Floor raised off 0.35: multiplied into --star-ink and then again by the
-    // twinkle, the faintest stars were landing near 5% alpha — present in the
+    // twinkle, the faintest stars were landing near 5% alpha - present in the
     // DOM, invisible on screen.
     dim: rand(0.6, 1),
   }));
@@ -74,7 +74,7 @@
     }
 
     const ctx = gsap.context(() => {
-      // Twinkle. Long, offset durations so the field never pulses in unison —
+      // Twinkle. Long, offset durations so the field never pulses in unison -
       // synchronised blinking reads as a loading state, not as sky.
       for (const s of stars) {
         if (!s.el) continue;
@@ -194,7 +194,7 @@
     overflow: hidden;
     pointer-events: none;
     user-select: none;
-    /* Not `strict` — that adds size containment, and this element takes its
+    /* Not `strict` - that adds size containment, and this element takes its
        size from inset:0. Everything else is worth having: 235 absolutely
        positioned spans should never invalidate layout above them. */
     contain: layout paint style;

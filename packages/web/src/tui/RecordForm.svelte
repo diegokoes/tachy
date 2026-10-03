@@ -34,7 +34,7 @@
   }
 
   /* A derived value is not the user's to set, so on the way in there is nothing
-     to show them — the slug they cannot influence was only ever noise on an
+     to show them - the slug they cannot influence was only ever noise on an
      add form. In edit mode it stays, because that is where it carries the
      rename action. */
   const fields = $derived(
@@ -72,7 +72,7 @@
   });
 
   /* A select whose options depend on another field is holding a stale value the
-     moment that field changes — the control renders blank (nothing matches) while
+     moment that field changes - the control renders blank (nothing matches) while
      the draft still carries the old one, and the form submits what was never on
      screen. Clearing it makes the required-check catch it here instead of the
      server rejecting a value the user never chose. */
@@ -206,7 +206,7 @@
     width: 100%;
   }
 
-  /* A key being pasted in, or a value normalised as it is typed — both are
+  /* A key being pasted in, or a value normalised as it is typed - both are
      read character by character rather than as words. */
   .mono {
     font-family: var(--font-mono);
@@ -219,7 +219,7 @@
     letter-spacing: 0.2em;
   }
 
-  /* Read-only fields are slugs and derived names — identifiers, not prose. */
+  /* Read-only fields are slugs and derived names - identifiers, not prose. */
   .ro {
     flex: 1;
     min-width: 0;

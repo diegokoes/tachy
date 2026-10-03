@@ -96,7 +96,7 @@ const MODS = /^(shift|ctrl|alt|meta)\+/;
 
 /**
  * A stored chord as the caps a reader presses: "ctrl+," is [[CTRL, ,]] and
- * "g g" is [[G], [G]], one inner list per press. Display only — `normalize()`
+ * "g g" is [[G], [G]], one inner list per press. Display only - `normalize()`
  * in keys.svelte.ts still owns what a binding *is*, and every saved keymap is
  * in that spelling.
  */
@@ -121,7 +121,7 @@ export function keyLabel(chord: string): string {
 
 /**
  * Fixed bindings a rebind would shadow. The scope stack resolves innermost
- * first, so a collision does not error — it silently steals the key from
+ * first, so a collision does not error - it silently steals the key from
  * whichever view owns it, which is worth warning about before it happens.
  */
 export const RESERVED: Record<string, string> = {

@@ -52,7 +52,7 @@
     canCreate?: boolean;
     addLabel?: string;
     /**
-     * What one row is, singular — "project", "repo". It prefixes the record
+     * What one row is, singular - "project", "repo". It prefixes the record
      * dialog's name, because a dialog titled with a bare slug says what you
      * are editing but never what kind of thing it is.
      */
@@ -69,7 +69,7 @@
     oncreate?: (draft: Draft) => Promise<void> | void;
     ondelete?: (row: T) => Promise<void> | void;
     /**
-     * Opens the row somewhere other than the record dialog — a page of its
+     * Opens the row somewhere other than the record dialog - a page of its
      * own. Given one, a row click calls it and the dialog never opens.
      */
     onopen?: (row: T) => void;

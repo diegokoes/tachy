@@ -24,7 +24,7 @@ describe("slugify", () => {
 
   /**
    * Accented characters are dropped, not transliterated, so a name that is
-   * mostly non-ascii slugs to very little — worth knowing before naming a
+   * mostly non-ascii slugs to very little - worth knowing before naming a
    * product in one. `uniqueSlug` is what keeps two such names from colliding.
    */
   it("drops non-ascii rather than transliterating it", () => {

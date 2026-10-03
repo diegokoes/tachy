@@ -55,7 +55,7 @@ export const setup = new Hono()
     const hash = await hashPassword(body.password);
 
     /*
-     * This route sits outside the `/api/*` identity guard — on a fresh install
+     * This route sits outside the `/api/*` identity guard - on a fresh install
      * there is nobody to authenticate yet. The admin count is therefore the only
      * thing standing between a stranger and an admin account, and on an SSO
      * deployment it never rises: `upsertUser` provisions members, so nothing

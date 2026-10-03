@@ -165,7 +165,7 @@
 
   /**
    * A red link is how a wiki asks for a page. For someone who can write one,
-   * following it opens the editor at the slug it wanted — entry and doc links
+   * following it opens the editor at the slug it wanted - entry and doc links
    * point at ids, and there is nothing to write at an id.
    */
   function onBodyClick(e: MouseEvent) {

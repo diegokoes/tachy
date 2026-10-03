@@ -160,7 +160,7 @@ describe("composed-from provenance", () => {
     // updated_at is trigger-managed, so it cannot be backdated: the trigger
     // overwrites any value with now(), and now() is transaction-scoped. Two
     // separate statements therefore give the source a strictly later timestamp
-    // than the article — which is the real-world sequence being modelled.
+    // than the article - which is the real-world sequence being modelled.
     await sql`update reference_docs set title = title where id = ${article.id}`;
     await sql`update knowledge_entries set issue_summary = issue_summary
               where id = ${entry.id}`;
@@ -217,7 +217,7 @@ describe("composed-from provenance", () => {
     const article = await page(productId);
     await setComposedFrom(coreSql, article.id, [{ entryId: entry.id }]);
 
-    // The trigger rewrites updated_at on every update, so this is a no-op —
+    // The trigger rewrites updated_at on every update, so this is a no-op -
     // asserting it keeps the staleness tests honest about their mechanism.
     await sql`update reference_docs set updated_at = now() - interval '1 day'
               where id = ${article.id}`;

@@ -30,7 +30,7 @@
     active = $bindable(""),
   }: {
     sections: PageSection[];
-    /** Names the rail for a screen reader — "connect sections". */
+    /** Names the rail for a screen reader - "connect sections". */
     label: string;
     /** The section to open at, from the URL. */
     at?: string;
@@ -43,7 +43,7 @@
     page?: string;
     /**
      * Which rail row is lit, readable by the caller. It follows the scroll, not
-     * the route — the route is what the scroll writes. Rendering from the URL
+     * the route - the route is what the scroll writes. Rendering from the URL
      * instead would close the loop and re-render the page on every section the
      * reader passes.
      */
@@ -72,7 +72,7 @@
   const railed = $derived(sections.length > 1);
 
   /* Rebuilt per page, because the whole column of sections is replaced. `at` is
-     read here and nowhere else — as a place to open at, not as a thing to
+     read here and nowhere else - as a place to open at, not as a thing to
      render from. */
   $effect(() => {
     page;
@@ -101,7 +101,7 @@
 </script>
 
 <!-- The index and everything it points at, in one column. The rail's active row
-     is still the heading of the part you are in — it just tracks the scroll
+     is still the heading of the part you are in - it just tracks the scroll
      instead of choosing what gets rendered at all. -->
 <div class="page" class:railed>
   {#if railed}

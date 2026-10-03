@@ -138,7 +138,7 @@ async function insertChunks(
 }
 
 /**
- * The live doc for an imported page — an *Azure DevOps* wiki page — so a
+ * The live doc for an imported page - an *Azure DevOps* wiki page - so a
  * re-import supersedes instead of duplicating. Nothing to do with kind='wiki',
  * which means an article authored here.
  */
@@ -444,7 +444,7 @@ export interface ReferenceSearchOptions {
   productId?: string;
   teamId?: string;
   /** Also match docs with NO product/team (org-wide) when a scope filter is
-   *  set — for agent consults, where global runbooks still apply. */
+   *  set - for agent consults, where global runbooks still apply. */
   includeUnscoped?: boolean;
   tags?: string[];
   componentId?: string;
@@ -458,8 +458,8 @@ export interface ReferenceSearchOptions {
   boostCustomerId?: string;
   /**
    * Narrow to imported docs or to wiki articles. Unlike the list, search spans
-   * BOTH by default: a curated article should be findable beside — and able to
-   * outrank — the material it consolidates.
+   * BOTH by default: a curated article should be findable beside - and able to
+   * outrank - the material it consolidates.
    */
   kind?: string;
 }
@@ -549,7 +549,7 @@ export async function searchReferenceDocs(
 }
 
 /**
- * Re-embed reference chunks. `all: true` rebuilds every vector — required after
+ * Re-embed reference chunks. `all: true` rebuilds every vector - required after
  * a model change, since vectors from two models share no space.
  */
 export async function backfillReferenceEmbeddings(

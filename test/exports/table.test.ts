@@ -183,7 +183,7 @@ describe("renderColumnContract", () => {
     expect(contract).toContain('artifact="escalation-register"');
     expect(contract).toContain('format="xlsx"');
     expect(contract).toContain(
-      "ticket_id (string, required) — source ticket id",
+      "ticket_id (string, required) - source ticket id",
     );
     expect(contract).toContain("opened_at (date)");
     expect(contract).toContain(

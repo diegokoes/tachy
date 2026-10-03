@@ -19,8 +19,8 @@
   const r = $derived(census.data.detail.repos);
   const traffic = $derived(activity.data.traffic);
 
-  /* Whose traffic it is — the agent reading on someone's behalf, sync, or the
-     app itself — is what a request-rate scrape cannot tell you. */
+  /* Whose traffic it is - the agent reading on someone's behalf, sync, or the
+     app itself - is what a request-rate scrape cannot tell you. */
   const ORIGINS = [
     { key: "agent", label: "agent", tone: "accent" },
     { key: "sync", label: "sync", tone: "info" },

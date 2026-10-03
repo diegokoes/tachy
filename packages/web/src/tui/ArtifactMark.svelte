@@ -7,7 +7,7 @@
    * or the triangle orbits the middle instead of turning in place.
    *
    * `spread` is the circumradius. Growing it moves the rings apart without
-   * touching their radius — which is the whole point, since the frame around
+   * touching their radius - which is the whole point, since the frame around
    * them scales and the rings must not.
    */
   let {
