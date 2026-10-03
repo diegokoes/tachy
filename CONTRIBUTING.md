@@ -32,7 +32,7 @@ supported, which is what [SECURITY.md](SECURITY.md) says too.
 ## Database schema changes
 
 `db/schema.sql` is the single source of truth. Edit it directly; the test setup
-applies it on every run, and `test/schema-drift.test.ts` checks its CHECK
+applies it on every run, and `test/infra/schema-drift.test.ts` checks its CHECK
 constraints against the core enums, so drift fails CI.
 
 `db/roles.sql` holds the least-privilege roles (`tachy_app` for the API and MCP

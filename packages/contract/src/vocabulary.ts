@@ -1,7 +1,7 @@
 /**
  * The controlled vocabularies, in the order they should be offered. Both the
  * API's zod schemas and the SPA's dropdowns are built from these lists, and
- * `test/schema-drift.test.ts` holds them against the CHECK constraints in
+ * `test/infra/schema-drift.test.ts` holds them against the CHECK constraints in
  * `db/schema.sql`.
  */
 
@@ -44,7 +44,7 @@ export const REPORT_STATUSES = [
 ] as const;
 /**
  * The in-app notifications a person can receive. One kind today; the list is
- * the seam future kinds are added along, and `test/schema-drift.test.ts` holds
+ * the seam future kinds are added along, and `test/infra/schema-drift.test.ts` holds
  * it against the notifications.kind CHECK.
  */
 export const NOTIFICATION_KINDS = ["report_reply"] as const;
