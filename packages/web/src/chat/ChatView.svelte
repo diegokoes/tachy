@@ -27,7 +27,7 @@
   import OutputCard, { type OutputFile } from "./OutputCard.svelte";
   import Approval from "./Approval.svelte";
   import Launcher from "./Launcher.svelte";
-  import { ArtifactMark, Button, G, Icon, tip } from "../tui";
+  import { ArtifactMark, Button, Caret, G, Icon, tip } from "../tui";
   import { pushScope } from "../keys/keys.svelte";
   import type { WorkItemTypeOption, CreatedTicket } from "@tachy/contract";
   import TicketComposer from "../work-items/TicketComposer.svelte";
@@ -631,7 +631,7 @@
             <div class="body waiting">
               {#if chat.queuePosition}<span class="muted"
                   >waiting for a free chat slot · #{chat.queuePosition}
-                </span>{/if}<span class="caret" aria-hidden="true"></span>
+                </span>{/if}<Caret />
             </div>
           </div>
         {/if}
@@ -706,7 +706,7 @@
       </label>
       <textarea
         bind:this={composerEl}
-        placeholder="Message the assistant… ( / for commands )"
+        aria-label="Message the assistant, / for commands"
         bind:value={chat.input}
         rows="2"
         onkeydown={composerKeydown}></textarea>
@@ -793,31 +793,26 @@
       2px 0 rgba(64, 224, 255, 0.4);
   }
 
-  /* Retro terminal caret: solid block, hard on/off blink - no glow, no fade.
-     Shared by the waiting turn and the one riding the end of a streaming
-     message, so the two can never drift apart. */
-  .caret,
+  /* The caret riding the end of a streaming message. A pseudo-element cannot
+     hold tui/Caret, so it is drawn to match: same stroke, same beat. */
   .md.streaming > :global(:last-child)::after {
     display: inline-block;
-    width: 0.55em;
+    width: 0.165em;
     height: 1.05em;
     margin-left: 0.15em;
     vertical-align: text-bottom;
+    border-radius: 1em;
     background: var(--text);
-    animation: caret-blink 1.06s steps(2, jump-none) infinite;
+    animation: caret-beat 1.2s infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .md.streaming > :global(:last-child)::after {
+      animation: none;
+    }
   }
 
   .waiting {
     min-height: 1.4em;
-  }
-
-  @keyframes caret-blink {
-    from {
-      opacity: 1;
-    }
-    to {
-      opacity: 0;
-    }
   }
 
   /* Assistant markdown. Rendered via {@html} so children need :global. */
@@ -891,7 +886,7 @@
     margin: 0.7em 0;
   }
 
-  /* While streaming, the block caret rides the end of the last element. */
+  /* While streaming, the caret rides the end of the last element. */
   .md.streaming > :global(:last-child)::after {
     content: "";
   }

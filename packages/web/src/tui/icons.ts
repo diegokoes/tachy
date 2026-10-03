@@ -122,6 +122,7 @@ import {
   SquarePlus,
   Star,
   StickyNote,
+  Tally1,
   Terminal,
   TrafficCone,
   Trash,
@@ -213,6 +214,8 @@ export const ICONS = {
   /* ── Finding things ───────────────────────────────────────────────────── */
   /** Searching what we already hold. */
   search: Search,
+  /** The text caret, where the app draws its own. */
+  caret: Tally1,
   /** Asking a source what it holds. */
   discover: RadioTower,
   refresh: RotateCw,
