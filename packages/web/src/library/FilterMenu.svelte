@@ -58,11 +58,11 @@
   <Button
     variant="ghost"
     tone="ok"
-    icon="plus"
+    icon="filterAdd"
     title="add a filter"
     onclick={() => (open = !open)}
   >
-    <span class="lbl">add filter</span>
+    <span class="lbl">add</span>
   </Button>
   {#if open}
     <ul>

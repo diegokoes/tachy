@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Chip } from "../tui";
+  import { CaretInput, Chip, NoMatch } from "../tui";
   import type { FacetCount } from "./filters";
 
   let {
@@ -30,7 +30,8 @@
       .slice(0, 12),
   );
 
-  const open = $derived(focused && matches.length > 0);
+  const typed = $derived(query.trim() !== "");
+  const open = $derived(focused && (matches.length > 0 || typed));
 
   function add(tag: string) {
     if (picked.includes(tag)) return;
@@ -65,10 +66,9 @@
     {#each picked as tag (tag)}
       <Chip tone="accent" onremove={() => remove(tag)}>{tag}</Chip>
     {/each}
-    <input
+    <CaretInput
       bind:value={query}
-      placeholder={picked.length ? "" : "any"}
-      title="Filter by tag"
+      title="Filter by tag, right click to remove"
       aria-label="filter by tag"
       onfocus={() => (focused = true)}
       onkeydown={onKey}
@@ -83,6 +83,12 @@
             <span class="t">{m.value}</span>
             <span class="n">{m.count}</span>
           </button>
+        </li>
+      {:else}
+        <li>
+          {#key query}
+            <NoMatch onclear={() => (query = "")} />
+          {/key}
         </li>
       {/each}
     </ul>
@@ -108,18 +114,6 @@
   .tags.active .row {
     border-color: var(--accent);
   }
-  input {
-    flex: 1 1 6ch;
-    min-width: 6ch;
-    border: none;
-    background: transparent;
-    padding: 0;
-    font: inherit;
-  }
-  input:focus {
-    outline: none;
-    box-shadow: none;
-  }
 
   .suggest {
     position: absolute;
@@ -131,7 +125,7 @@
     overflow-y: auto;
     list-style: none;
     margin: 0;
-    padding: var(--pad-1);
+    padding: 0;
     border: 1px solid var(--accent);
     border-radius: var(--radius-control);
     background: var(--panel-solid);
@@ -147,14 +141,17 @@
     color: var(--text);
     background: none;
     border: none;
-    border-radius: var(--radius-control);
-    padding: var(--pad-1) var(--pad-2);
+    border-radius: 0;
+    padding: var(--pad-1) var(--pad-3);
     cursor: pointer;
     text-align: left;
   }
   .suggest button:hover {
-    background: var(--accent-dim);
-    color: var(--accent);
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .suggest button:hover .n {
+    color: var(--bg);
   }
   .n {
     flex: none;
