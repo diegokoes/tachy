@@ -580,7 +580,7 @@ export type { RedactOptions, RedactionPolicy } from "./compliance";
  * The rest of the contract, re-exported wholesale. packages/api and the CLI
  * import only from here, so anything the contract owns but core does not pass
  * on is a rule they have to write out by hand — which is how two copies of it
- * come to exist and drift. test/contract-reach.test.ts holds this complete.
+ * come to exist and drift. test/contract/contract-reach.test.ts holds this complete.
  */
 export {
   CLOUD_RE,

@@ -1450,7 +1450,7 @@ query with no candidates returns zero rows and costs no rerank.
 - **The embedder grows** by the memory in the table above.
 - **Calibration is per reranker,** as `SEM_FLOOR` is per embedding model. A
   reranker change is a release with a re-derived mapping, and
-  `test/search-quality.test.ts` fails until then.
+  `test/search/quality.test.ts` fails until then.
 - **A new way to fail.** If the rerank lane is down or past its deadline, the
   search returns fused order with today's relevance and says so. It never
   fails the search.
@@ -1531,7 +1531,7 @@ Code is most of it.
   today's 14. Plus a real-model seed (`--embed=search`) for load numbers.
 - **The candidate measured.** Run `scripts/eval-embeddings.ts` against it, and
   re-derive `SEM_FLOOR` and `SEM_CEIL` (`search/relevance.ts:31`). By design,
-  `test/search-quality.test.ts` fails until they are re-derived.
+  `test/search/quality.test.ts` fails until they are re-derived.
 - **The model described.** An entry in `EMBEDDING_MODELS`
   (`search/model.ts`), cached in the image by the Dockerfile's warmup step.
   The entry can't express every model yet:
@@ -2198,8 +2198,8 @@ has proved itself.
 | Layer                | Tool                                                           | Status                               |
 | -------------------- | -------------------------------------------------------------- | ------------------------------------ |
 | Unit and integration | vitest, testcontainers Postgres, coverage ratchet              | in CI, required                      |
-| Search quality       | `test/search-quality.test.ts`, `scripts/eval-embeddings.ts`    | in CI; 14 golden queries (§4.6)      |
-| Schema drift         | `test/schema-drift.test.ts`, plus `schema-plan` (§10)          | in CI                                |
+| Search quality       | `test/search/quality.test.ts`, `scripts/eval-embeddings.ts`    | in CI; 14 golden queries (§4.6)      |
+| Schema drift         | `test/infra/schema-drift.test.ts`, plus `schema-plan` (§10)    | in CI                                |
 | Container smoke      | `image-gates.yml` (§10)                                        | in CI, on the base Compose file only |
 | Load and capacity    | k6, `load/turns.mjs`                                           | scripts built; no laptop numbers yet |
 | Backup restore       | weekly host timer; quarterly drill from a laptop copy (§6.4)   | built; not yet run on the laptop     |

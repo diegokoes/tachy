@@ -1,0 +1,177 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { describe, expect, it } from "vitest";
+import {
+  KNOWLEDGE_STATUSES,
+  REFERENCE_STATUSES,
+  REFERENCE_KINDS,
+  LINK_KINDS,
+  CONFIDENCES,
+  FEEDBACK_KINDS,
+  REPORT_TYPES,
+  REPORT_STATUSES,
+  REPORT_DIRECTIONS,
+  NOTIFICATION_KINDS,
+  RUN_MODES,
+  SOURCE_CALL_ORIGINS,
+  RESOLUTION_CLARITIES,
+  LIBRARY_ACTORS,
+  USER_ROLES,
+  TEAM_ROLES,
+  WORK_ITEM_LINK_KINDS,
+  REPO_INDEX_STATUSES,
+  scopesOf,
+  WIKI_GAP_KINDS,
+  LIBRARY_ASSET_TYPES,
+  JOB_RESOURCE_CLASSES,
+  JOB_QUEUE_NAMES,
+  JOB_OVERLAP,
+  JOB_NOTIFY,
+  JOB_TRIGGERS,
+  JOB_STATUSES,
+} from "@tachy/core";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const schema = readFileSync(join(here, "..", "..", "db", "schema.sql"), "utf8");
+
+function tableBlock(table: string): string {
+  const m = schema.match(
+    new RegExp(`create table ${table} \\(([\\s\\S]*?)\\n\\);`),
+  );
+  if (!m) throw new Error(`table ${table} not found in schema.sql`);
+  return m[1];
+}
+
+function checkValues(table: string, col: string): string[] {
+  const block = tableBlock(table);
+  const re = new RegExp(
+    `check \\((?:${col} is null or )?${col} in \\(([^)]*)\\)\\)`,
+  );
+  const m = block.match(re);
+  if (!m) throw new Error(`no CHECK for ${table}.${col} in schema.sql`);
+  return m[1].split(",").map((s) => s.trim().replace(/^'|'$/g, ""));
+}
+
+describe("core enums match db/schema.sql CHECK constraints", () => {
+  it.each([
+    ["knowledge_entries", "status", KNOWLEDGE_STATUSES],
+    ["knowledge_entries", "confidence", CONFIDENCES],
+    ["knowledge_entries", "resolution_clarity", RESOLUTION_CLARITIES],
+    ["knowledge_feedback", "kind", FEEDBACK_KINDS],
+    ["reports", "type", REPORT_TYPES],
+    ["reports", "status", REPORT_STATUSES],
+    ["report_messages", "direction", REPORT_DIRECTIONS],
+    ["notifications", "kind", NOTIFICATION_KINDS],
+    ["analysis_runs", "mode", RUN_MODES],
+    ["source_calls", "origin", SOURCE_CALL_ORIGINS],
+    ["library_revisions", "actor", LIBRARY_ACTORS],
+    ["reference_docs", "status", REFERENCE_STATUSES],
+    ["reference_docs", "kind", REFERENCE_KINDS],
+    ["library_links", "kind", LINK_KINDS],
+    ["wiki_gaps", "kind", WIKI_GAP_KINDS],
+    ["library_assets", "content_type", LIBRARY_ASSET_TYPES],
+    ["users", "role", USER_ROLES],
+    ["team_members", "role", TEAM_ROLES],
+    ["work_item_links", "kind", WORK_ITEM_LINK_KINDS],
+    ["repos", "index_status", REPO_INDEX_STATUSES],
+    ["credentials", "scope", scopesOf("credentials")],
+    ["preferences", "scope", scopesOf("preferences")],
+    ["artifacts", "scope", scopesOf("artifacts")],
+    ["job_definitions", "resource_class", JOB_RESOURCE_CLASSES],
+    ["job_definitions", "queue", JOB_QUEUE_NAMES],
+    ["job_runs", "queue", JOB_QUEUE_NAMES],
+    ["job_definitions", "overlap", JOB_OVERLAP],
+    ["job_definitions", "notify", JOB_NOTIFY],
+    ["job_runs", "resource_class", JOB_RESOURCE_CLASSES],
+    ["job_runs", "trigger", JOB_TRIGGERS],
+    ["job_runs", "status", JOB_STATUSES],
+  ] as const)("%s.%s", (table, col, values) => {
+    expect(checkValues(table, col).sort()).toEqual([...values].sort());
+  });
+
+  it("source_projects always has a team, and a product only optionally", () => {
+    const block = tableBlock("source_projects");
+    expect(block).toMatch(/team_id\s+uuid not null/);
+    expect(block).toMatch(/product_id\s+uuid references/);
+    expect(block).not.toMatch(/\brole\b/);
+  });
+
+  it("repos carry their project and component", () => {
+    const block = tableBlock("repos");
+    expect(block).toContain("source_project_id");
+    expect(block).toContain("component_id");
+  });
+
+  it("knowledge_entries carries the taxonomy/lifecycle columns", () => {
+    const block = tableBlock("knowledge_entries");
+    expect(block).toContain("component_id");
+    expect(block).toContain("superseded_by");
+    expect(block).toContain("knowledge_entries_no_self_supersede");
+    expect(block).toContain("affected_version");
+    expect(block).toContain("fixed_version");
+  });
+
+  it("knowledge_entries.cloud has no CHECK constraint", () => {
+    expect(() => checkValues("knowledge_entries", "cloud")).toThrow(/no CHECK/);
+  });
+
+  /** Same reasoning as cloud: what a customer divides into differs per product. */
+  it("customer_units.kind has no CHECK constraint", () => {
+    expect(() => checkValues("customer_units", "kind")).toThrow(/no CHECK/);
+  });
+
+  it("customer_units carries both edges and guards them", () => {
+    const block = tableBlock("customer_units");
+    expect(block).toContain("parent_id");
+    expect(block).toContain("profile_id");
+    expect(block).toContain("customer_units_no_self_parent");
+    expect(block).toContain("customer_units_no_self_profile");
+  });
+
+  it("customer_facts keys on the unit, nulls not distinct", () => {
+    expect(tableBlock("customer_facts")).toContain("unit_id");
+    expect(schema).toContain(
+      "on customer_facts(customer_id, unit_id, kind, label) nulls not distinct",
+    );
+  });
+
+  it("reference_docs carries the versioning columns", () => {
+    const block = tableBlock("reference_docs");
+    expect(block).toContain("doc_version");
+    expect(block).toContain("superseded_by");
+    expect(block).toContain("reference_docs_no_self_supersede");
+  });
+
+  it("artifacts mirrors the scoped-table layout", () => {
+    const block = tableBlock("artifacts");
+    expect(block).toContain("check (scope in ('global','team','user'))");
+    expect(block).toContain("check ((scope = 'team') = (team_id is not null))");
+    expect(block).toContain("check ((scope = 'user') = (user_id is not null))");
+    for (const idx of [
+      "artifacts_global_idx on artifacts(slug)",
+      "artifacts_team_idx   on artifacts(team_id, slug)",
+      "artifacts_user_idx   on artifacts(user_id, slug)",
+    ])
+      expect(schema).toContain(idx);
+  });
+
+  it("artifacts carries the output spec column", () => {
+    expect(tableBlock("artifacts")).toMatch(/^\s*spec\s+jsonb,$/m);
+  });
+
+  it("generated_outputs stores bytes, ownership and an expiry", () => {
+    const block = tableBlock("generated_outputs");
+    for (const col of [
+      "user_id     uuid references users(id) on delete cascade",
+      "artifact_id uuid references artifacts(id) on delete set null",
+      "bytes       bytea not null",
+      "byte_size   integer not null",
+      "expires_at  timestamptz not null",
+    ])
+      expect(block).toContain(col);
+    expect(schema).toContain(
+      "generated_outputs_expiry_idx on generated_outputs(expires_at)",
+    );
+  });
+});
