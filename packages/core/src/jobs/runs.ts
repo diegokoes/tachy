@@ -1,15 +1,20 @@
 import {
   JOB_FINISHED,
+  JOB_PRIORITY,
+  JOB_QUEUES,
+  jobQueue,
   parseDuration,
+  type JobQueueName,
   type JobRun,
+  type JobRunListed,
   type JobStatus,
   type JobTrigger,
 } from "@tachy/contract";
 import { sql, type Db, jsonb } from "../infra/db";
 import { badInput, notFound } from "../infra/errors";
-import { getJobKind } from "./registry";
+import { getJobKind, type JobKind } from "./registry";
 
-export type { JobRun };
+export type { JobRun, JobRunListed };
 
 export const JOB_RUNS_CHANNEL = "job_runs";
 
@@ -17,7 +22,8 @@ export const JOB_RUNS_CHANNEL = "job_runs";
  * Inserts a run, and notifies workers once the transaction commits. Code that
  * changes data passes its own transaction, so the run exists exactly when the
  * change does. Returns null when overlap is `skip` and the definition already
- * has a run queued or going.
+ * has a run queued or going, or when the kind's dedupe key does
+ * (`inFlightRun` finds that one).
  */
 export async function enqueueRun(opts: {
   kind: string;
@@ -26,6 +32,10 @@ export async function enqueueRun(opts: {
   definitionId?: string | null;
   scheduledFor?: Date | null;
   requestedBy?: string | null;
+  /** The run queueing this one. */
+  parentId?: string | null;
+  /** Defaults by trigger (JOB_PRIORITY). */
+  priority?: number;
   db?: Db;
 }): Promise<string | null> {
   const db = opts.db ?? sql;
@@ -36,15 +46,15 @@ export async function enqueueRun(opts: {
       `params for ${opts.kind}: ${parsed.error.issues.map((i) => i.message).join("; ")}`,
     );
 
-  let resourceClass = kind.resourceClass;
+  let queue: JobQueueName = kind.queue;
   let timeout = kind.timeout;
   let overlap = kind.overlap;
   if (opts.definitionId) {
     const [d] = await db`
-      select resource_class, timeout, overlap from job_definitions where id = ${opts.definitionId}
+      select queue, timeout, overlap from job_definitions where id = ${opts.definitionId}
     `;
     if (!d) throw notFound(`job definition ${opts.definitionId} not found`);
-    resourceClass = d.resource_class ?? resourceClass;
+    queue = d.queue ?? queue;
     timeout = d.timeout ?? timeout;
     overlap = d.overlap ?? overlap;
     if (overlap === "skip" && opts.trigger === "schedule") {
@@ -57,12 +67,15 @@ export async function enqueueRun(opts: {
   }
 
   const [row] = await db`
-    insert into job_runs (definition_id, kind, params, resource_class, trigger, scheduled_for,
-                          requested_by, max_attempts, timeout_ms)
+    insert into job_runs (definition_id, kind, params, resource_class, queue, priority,
+                          dedupe_key, parent_id, trigger, scheduled_for, requested_by,
+                          max_attempts, timeout_ms)
     values (${opts.definitionId ?? null}, ${opts.kind}, ${jsonb(parsed.data)},
-            ${resourceClass}, ${opts.trigger}, ${opts.scheduledFor ?? null},
-            ${opts.requestedBy ?? null}, ${kind.maxAttempts}, ${parseDuration(timeout)})
-    on conflict (definition_id, scheduled_for) do nothing
+            ${jobQueue(queue).class}, ${queue}, ${opts.priority ?? JOB_PRIORITY[opts.trigger]},
+            ${dedupeKeyOf(kind, parsed.data)}, ${opts.parentId ?? null}, ${opts.trigger},
+            ${opts.scheduledFor ?? null}, ${opts.requestedBy ?? null}, ${kind.maxAttempts},
+            ${parseDuration(timeout)})
+    on conflict do nothing
     returning id
   `;
   if (!row) return null;
@@ -70,32 +83,71 @@ export async function enqueueRun(opts: {
   return row.id as string;
 }
 
-const RUN_COLUMNS = sql`id, definition_id, kind, params, resource_class, trigger, scheduled_for,
+function dedupeKeyOf(kind: JobKind, params: unknown): string | null {
+  return kind.dedupeKey ? `${kind.kind}:${kind.dedupeKey(params)}` : null;
+}
+
+/** The queued or running run holding the dedupe key these params make, if any. */
+export async function inFlightRun(
+  kindName: string,
+  params: unknown,
+): Promise<string | null> {
+  const kind = getJobKind(kindName);
+  const key = dedupeKeyOf(kind, kind.params.parse(params));
+  if (!key) return null;
+  const [row] = await sql`
+    select id from job_runs
+    where dedupe_key = ${key} and status in ('queued', 'running')
+  `;
+  return row ? (row.id as string) : null;
+}
+
+const RUN_COLUMNS = sql`id, definition_id, kind, params, resource_class, queue, priority,
+  dedupe_key, parent_id, trigger, scheduled_for,
   requested_by, status, attempts, max_attempts, timeout_ms::float8 as timeout_ms, run_after,
   locked_by, locked_until, cancel_requested, progress, progress_note, output, error, log_tail,
   created_at, started_at, finished_at`;
 
-/** Takes the oldest runnable run of the given classes, or null. */
+const CLAIM_LOCK = 7_311_902_452;
+
+/**
+ * Takes the most urgent runnable run of the given classes, or null: highest
+ * priority, then oldest. `queues` narrows a worker to those queues. A queue
+ * already running its cap is passed over. Claims take turns under an advisory
+ * lock so two workers cannot both see room under a cap and both fill it.
+ */
 export async function claimRun(
   classes: string[],
   workerId: string,
   leaseMs: number,
+  queues?: string[],
 ): Promise<JobRun | null> {
-  const [row] = await sql`
-    update job_runs set
-      status = 'running', attempts = attempts + 1, locked_by = ${workerId},
-      locked_until = now() + ${leaseMs} * interval '1 millisecond',
-      started_at = coalesce(started_at, now()), error = null
-    where id = (
-      select id from job_runs
-      where status = 'queued' and resource_class = any(${classes}) and run_after <= now()
-      order by run_after, created_at
-      for update skip locked
-      limit 1
-    )
-    returning ${RUN_COLUMNS}
-  `;
-  return (row as never) ?? null;
+  const capped = JOB_QUEUES.filter((q) => q.cap !== null);
+  return sql.begin(async (tx) => {
+    await tx`select pg_advisory_xact_lock(${CLAIM_LOCK})`;
+    const [row] = await tx`
+      update job_runs set
+        status = 'running', attempts = attempts + 1, locked_by = ${workerId},
+        locked_until = now() + ${leaseMs} * interval '1 millisecond',
+        started_at = coalesce(started_at, now()), error = null
+      where id = (
+        select j.id from job_runs j
+        where j.status = 'queued' and j.resource_class = any(${classes})
+          and j.run_after <= now()
+          and (${queues ?? null}::text[] is null or j.queue = any(${queues ?? null}::text[]))
+          and (j.queue is null or j.queue <> all (
+            select c.name
+            from unnest(${capped.map((q) => q.name)}::text[], ${capped.map((q) => q.cap)}::int[]) as c(name, cap)
+            where (select count(*) from job_runs r where r.status = 'running' and r.queue = c.name) >= c.cap
+          ))
+        order by j.priority desc, j.run_after, j.created_at
+        for update skip locked
+        limit 1
+      )
+      returning ${RUN_COLUMNS}
+    `;
+    return (row as never) ?? null;
+  }) as Promise<JobRun | null>;
 }
 
 /** Extends the lease; answers whether someone asked for the run to stop. */
@@ -190,18 +242,53 @@ export async function getJobRun(id: string): Promise<JobRun> {
   return row as never;
 }
 
+/**
+ * Newest first. `active` keeps queued and running runs; `before` is the id
+ * of the last run of the previous page.
+ */
 export async function listJobRuns(opts: {
   definitionId?: string;
+  parentId?: string;
   status?: JobStatus;
+  kind?: string;
+  queue?: string;
+  trigger?: JobTrigger;
+  active?: boolean;
+  before?: string;
   limit?: number;
-}): Promise<JobRun[]> {
+}): Promise<JobRunListed[]> {
   const limit = Math.min(opts.limit ?? 50, 500);
   return (await sql`
-    select ${RUN_COLUMNS} from job_runs
-    where (${opts.definitionId ?? null}::uuid is null or definition_id = ${opts.definitionId ?? null})
-      and (${opts.status ?? null}::text is null or status = ${opts.status ?? null})
-    order by created_at desc
-    limit ${limit}
+    select r.*, d.name as definition_name,
+           coalesce(u.display_name, u.email) as requested_by_name,
+           case when ch.total > 0 then json_build_object(
+             'total', ch.total, 'queued', ch.queued, 'running', ch.running,
+             'succeeded', ch.succeeded, 'failed', ch.failed) end as children
+    from (
+      select ${RUN_COLUMNS} from job_runs
+      where (${opts.definitionId ?? null}::uuid is null or definition_id = ${opts.definitionId ?? null})
+        and (${opts.parentId ?? null}::uuid is null or parent_id = ${opts.parentId ?? null})
+        and (${opts.status ?? null}::text is null or status = ${opts.status ?? null})
+        and (${opts.kind ?? null}::text is null or kind = ${opts.kind ?? null})
+        and (${opts.queue ?? null}::text is null or queue = ${opts.queue ?? null})
+        and (${opts.trigger ?? null}::text is null or trigger = ${opts.trigger ?? null})
+        and (not ${opts.active ?? false} or status in ('queued', 'running'))
+        and (${opts.before ?? null}::uuid is null
+             or created_at < (select created_at from job_runs where id = ${opts.before ?? null}))
+      order by created_at desc
+      limit ${limit}
+    ) r
+    left join job_definitions d on d.id = r.definition_id
+    left join users u on u.id = r.requested_by
+    left join lateral (
+      select count(*)::int as total,
+             count(*) filter (where c.status = 'queued')::int as queued,
+             count(*) filter (where c.status = 'running')::int as running,
+             count(*) filter (where c.status = 'succeeded')::int as succeeded,
+             count(*) filter (where c.status in ('failed', 'timed_out'))::int as failed
+      from job_runs c where c.parent_id = r.id
+    ) ch on true
+    order by r.created_at desc
   `) as never;
 }
 

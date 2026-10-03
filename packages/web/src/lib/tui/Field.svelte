@@ -43,7 +43,8 @@
   {#if label}
     <span class="lblrow">
       <span class="lbl"
-        >{label}{#if required}<span class="req" aria-hidden="true">*</span>{/if}</span
+        >{label}{#if required}<span class="req" aria-hidden="true">*</span
+          >{/if}</span
       >
       {#if info}<InfoMark label="about {label}">{info}</InfoMark>{/if}
     </span>

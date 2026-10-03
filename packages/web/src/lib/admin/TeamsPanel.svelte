@@ -8,7 +8,7 @@
   import { slugify, uniqueSlug } from "../slug";
   import SlugRename from "./SlugRename.svelte";
   import type { Product, Team } from "./rows";
-import { INFO } from "./help";
+  import { INFO } from "./help";
   import { sectionHoist } from "./sectionAction.svelte";
 
   const teams = createResource(() => api.get<Team[]>("/teams"), []);
@@ -51,7 +51,8 @@ import { INFO } from "./help";
     await Promise.all([teams.reload(), products.reload()]);
   }
 
-  onMount(reloadBoth);</script>
+  onMount(reloadBoth);
+</script>
 
 <CrudTable
   hoist={sectionHoist("teams")}

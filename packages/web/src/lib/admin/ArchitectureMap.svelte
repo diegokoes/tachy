@@ -333,7 +333,13 @@
   };
 </script>
 
-{#if !graph.nodes.length}
+{#if !rows.length}
+  <EmptyState
+    icon="structure"
+    title="No components yet."
+    detail="Open find (ctrl+k) to add the first one."
+  />
+{:else if !graph.nodes.length}
   <EmptyState
     title="Nothing matches."
     detail="Clear the filters to see the whole catalogue."
@@ -376,7 +382,11 @@
         {/each}
 
         {#each placed as n (n.key)}
-          <g class="node {n.kind}" class:top={n.depth === 1} transform="translate({n.x}, {n.y})">
+          <g
+            class="node {n.kind}"
+            class:top={n.depth === 1}
+            transform="translate({n.x}, {n.y})"
+          >
             {#if n.kind === "component"}
               <g
                 role="button"

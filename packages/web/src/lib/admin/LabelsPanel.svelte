@@ -7,7 +7,7 @@
   import { slugify } from "../slug";
   import SlugRename from "./SlugRename.svelte";
   import type { Label, Product } from "./rows";
-import { INFO } from "./help";
+  import { INFO } from "./help";
   import { sectionHoist } from "./sectionAction.svelte";
 
   let team = $state("");
@@ -58,7 +58,8 @@ import { INFO } from "./help";
   $effect(() => {
     void product;
     labels.reload();
-  });</script>
+  });
+</script>
 
 <!-- Team narrows the product list; the product itself is not optional,
      because a label only exists inside one. -->
@@ -90,7 +91,7 @@ import { INFO } from "./help";
   <Note>Pick a {t("product")} to see its labels.</Note>
 {:else}
   <CrudTable
-  hoist={sectionHoist("labels")}
+    hoist={sectionHoist("labels")}
     {columns}
     rows={labels.data}
     rowKey={(r) => r.slug}
@@ -114,7 +115,9 @@ import { INFO } from "./help";
         }),
       )}
     ondelete={(row) =>
-      labels.mutate(() => api.delete(`/products/${product}/labels/${row.slug}`))}
+      labels.mutate(() =>
+        api.delete(`/products/${product}/labels/${row.slug}`),
+      )}
   />
 {/if}
 

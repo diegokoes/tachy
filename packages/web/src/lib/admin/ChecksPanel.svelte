@@ -1,8 +1,21 @@
 <script lang="ts">
   import { fmtTime, utcTip } from "../dates.svelte";
   import { onMount } from "svelte";
-  import { Badge, Button, DataTable, Note, tip, toneOf, type Column } from "../tui";
-  import { probes, probeTally, runProbes, type Probe } from "./systemState.svelte";
+  import {
+    Badge,
+    Button,
+    DataTable,
+    Note,
+    tip,
+    toneOf,
+    type Column,
+  } from "../tui";
+  import {
+    probes,
+    probeTally,
+    runProbes,
+    type Probe,
+  } from "./systemState.svelte";
 
   const tally = $derived(probeTally(probes.checks));
 
@@ -37,10 +50,14 @@
   >
   {#if tally}
     <span class="dim">
-      {tally.passing} passing{tally.warning ? ` · ${tally.warning} warning` : ""}{tally.failing
-        ? ` · ${tally.failing} failing`
-        : ""}{tally.skipped ? ` · ${tally.skipped} skipped` : ""}
-      {#if probes.at}· <span use:tip={utcTip(probes.at)}>{fmtTime(probes.at)}</span>{/if}
+      {tally.passing} passing{tally.warning
+        ? ` · ${tally.warning} warning`
+        : ""}{tally.failing ? ` · ${tally.failing} failing` : ""}{tally.skipped
+        ? ` · ${tally.skipped} skipped`
+        : ""}
+      {#if probes.at}· <span use:tip={utcTip(probes.at)}
+          >{fmtTime(probes.at)}</span
+        >{/if}
     </span>
   {/if}
 </div>

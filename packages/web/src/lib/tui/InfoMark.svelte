@@ -3,10 +3,8 @@
   import Icon from "./Icon.svelte";
   import { float } from "./float";
 
-  let {
-    label = "info",
-    children,
-  }: { label?: string; children: Snippet } = $props();
+  let { label = "info", children }: { label?: string; children: Snippet } =
+    $props();
 
   let btn = $state<HTMLElement>();
   // The tip carries the field's actual rule, so the button has to point at it:

@@ -1,52 +1,75 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import { tip } from "../tui";
 
   let {
     label,
     hint,
+    about,
+    mark,
     children,
     actions,
   }: {
     label: string;
-    /** Sits under the control, in the control's column. */
+    /** Sits under the label. */
     hint?: string;
+    /** Said on hover over the label, for what would crowd it as a hint. */
+    about?: string;
+    /** A badge set after the label, on its line. */
+    mark?: Snippet;
     children: Snippet;
-    /** Reset marks, source notes — whatever trails the control. */
+    /** Reset marks, source notes: whatever qualifies the control, set just
+     *  ahead of it so the control itself keeps the right edge. */
     actions?: Snippet;
   } = $props();
 </script>
 
-<!-- One setting, unframed. The label column is what lines the page up; a box
-     around each option was only ever restating that they are separate, which
-     the column already says. The trailing 1fr takes the slack so the marks sit
-     against the control instead of against the window's right edge. -->
+<!-- One setting: its name against the left edge, its control against the
+     right, so every name in a group starts on one line and every control ends
+     on another. A column too narrow for both drops the control under the name,
+     still flush right. -->
 <div class="row">
-  <span class="k">{label}</span>
-  <div class="v">
-    {@render children()}
-    {#if hint}<p class="hint">{hint}</p>{/if}
+  <div class="k">
+    {#if mark}
+      <span class="line">
+        <span class="name" use:tip={about}>{label}</span>{@render mark()}
+      </span>
+    {:else}
+      <span class="name" use:tip={about}>{label}</span>
+    {/if}
+    {#if hint}<span class="hint">{hint}</span>{/if}
   </div>
-  <div class="a">{#if actions}{@render actions()}{/if}</div>
-  <span></span>
+  <div class="end">
+    {#if actions}<div class="a">{@render actions()}</div>{/if}
+    <div class="v">{@render children()}</div>
+  </div>
 </div>
 
 <style>
   .row {
-    display: grid;
-    grid-template-columns: 10rem minmax(0, 22rem) auto 1fr;
-    gap: var(--gap);
-    align-items: start;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    column-gap: var(--gap);
+    row-gap: var(--pad-1);
     min-height: var(--row-h);
     padding: var(--pad-1) 0;
   }
-  /* Centred in its own box rather than given the row's line-height: a label
-     long enough to wrap — "Claude subscription token" — dropped its second line
-     past the control it names. */
   .k {
     display: flex;
-    align-items: center;
-    min-height: var(--row-h);
+    flex-direction: column;
+    gap: 2px;
+    flex: 1 0 7rem;
     min-width: 0;
+  }
+  .line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--pad-2);
+  }
+  .name {
     font-size: var(--fs-xs);
     color: var(--muted);
     letter-spacing: var(--label-spacing);
@@ -54,58 +77,36 @@
     line-height: 1.3;
     overflow-wrap: anywhere;
   }
-  .v {
+  .hint {
+    font-size: var(--fs-xs);
+    color: var(--muted);
+    opacity: 0.75;
+  }
+  .end {
     display: flex;
-    flex-direction: column;
-    justify-content: center;
+    align-items: center;
+    justify-content: flex-end;
     gap: var(--pad-2);
+    flex: 0 1 auto;
     min-width: 0;
-    min-height: var(--row-h);
+    margin-left: auto;
   }
   .a {
     display: flex;
     align-items: center;
     gap: var(--pad-1);
-    min-height: var(--row-h);
   }
-  .hint {
-    margin: 0;
-    font-size: var(--fs-xs);
-    color: var(--muted);
+  .v {
+    display: flex;
+    justify-content: flex-end;
+    min-width: 0;
   }
-
-  /* By the column's width, not the window's: in a two-column tab a wide
-     window still leaves each row too narrow for a label column. */
-  @container (max-width: 36rem) {
-    .row {
-      grid-template-columns: 1fr auto 1fr;
-      grid-template-areas: ". k a" "v v v";
-      row-gap: var(--pad-1);
-      padding: var(--pad-3) 0;
-    }
-    .k {
-      grid-area: k;
-      justify-content: center;
-      text-align: center;
-    }
-    .a {
-      grid-area: a;
-      justify-self: end;
-    }
-    /* Controls keep a form's width under their centred label; stretched to
-       the column, a font menu ran twice the length of any name in it. */
-    .v {
-      grid-area: v;
-      align-items: center;
-      text-align: center;
-    }
-    .v > :global(input),
-    .v > :global(.asel) {
-      width: 100%;
-      max-width: 20rem;
-    }
-    .row > span:last-child {
-      display: none;
-    }
+  /* Menus and text boxes share one width, so the controls down a group line
+     up on their left edges as well as their right. */
+  .v > :global(.asel),
+  .v > :global(input),
+  .v > :global(.field) {
+    width: var(--control-w, 12rem);
+    max-width: 100%;
   }
 </style>

@@ -6,3 +6,4 @@ export * from "./projects";
 export * from "./traffic";
 export * from "./html";
 export * from "./sync";
+export * from "./tags";

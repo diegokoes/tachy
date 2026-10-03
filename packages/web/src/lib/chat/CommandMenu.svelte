@@ -90,22 +90,22 @@
           pick: { kind: "option", value: o.value } as CommandPick,
         }))
       : mode === "artifact"
-      ? matchArtifacts(artifacts, query).map((a) => ({
-          key: `a:${a.id}`,
-          label: `⛬ ${a.title}`,
-          hint: a.slug,
-          desc: a.description ?? "",
-          pick: { kind: "artifact", artifact: a } as CommandPick,
-        }))
-      : [...builtins, ARTIFACT_COMMAND]
-          .filter((b) => b.name.startsWith(query.toLowerCase()))
-          .map((b) => ({
-            key: `b:${b.name}`,
-            label: `/${b.name}`,
-            hint: b.args,
-            desc: b.description,
-            pick: { kind: "builtin", builtin: b } as CommandPick,
-          })),
+        ? matchArtifacts(artifacts, query).map((a) => ({
+            key: `a:${a.id}`,
+            label: `⛬ ${a.title}`,
+            hint: a.slug,
+            desc: a.description ?? "",
+            pick: { kind: "artifact", artifact: a } as CommandPick,
+          }))
+        : [...builtins, ARTIFACT_COMMAND]
+            .filter((b) => b.name.startsWith(query.toLowerCase()))
+            .map((b) => ({
+              key: `b:${b.name}`,
+              label: `/${b.name}`,
+              hint: b.args,
+              desc: b.description,
+              pick: { kind: "builtin", builtin: b } as CommandPick,
+            })),
   );
 
   let idx = $state(0);
@@ -167,7 +167,9 @@
     {/each}
     {#if !items.length}
       <div class="cmd-none">
-        {mode === "options" ? (crumb?.empty ?? "nothing matches") : "no artifact matches"}
+        {mode === "options"
+          ? (crumb?.empty ?? "nothing matches")
+          : "no artifact matches"}
       </div>
     {/if}
   </div>

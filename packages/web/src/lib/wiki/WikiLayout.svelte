@@ -34,7 +34,9 @@
       label:
         wikiLabel(w) +
         (w.articles ? ` (${w.articles})` : "") +
-        (w.open_gaps ? ` · ${w.open_gaps} gap${w.open_gaps === 1 ? "" : "s"}` : ""),
+        (w.open_gaps
+          ? ` · ${w.open_gaps} gap${w.open_gaps === 1 ? "" : "s"}`
+          : ""),
     })),
   );
 

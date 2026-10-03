@@ -1,4 +1,6 @@
+import { defineBucketJobs } from "../buckets/jobs";
 import { defineCodeJobs } from "../code/jobs";
+import { defineFlowJobs } from "../flows/jobs";
 import { defineRetentionJobs } from "../compliance/retention";
 import { sql } from "../infra/db";
 import { log } from "../infra/log";
@@ -19,6 +21,8 @@ export function registerCoreJobs(): void {
   defineWikiJobs();
   defineRetentionJobs();
   defineLoadTestJobs();
+  defineFlowJobs();
+  defineBucketJobs();
 }
 
 /**
@@ -76,7 +80,9 @@ async function jobTablesExist(): Promise<boolean> {
  */
 export async function startJobProcess(opts: {
   classes: string[];
+  queues?: string[];
   concurrency: number;
+  perClass?: Partial<Record<string, number>>;
   waitMs?: number;
 }) {
   registerCoreJobs();

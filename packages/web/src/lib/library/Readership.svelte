@@ -51,8 +51,12 @@
     views
       ? [
           plural(views.views, "read", "reads") +
-            (views.viewers ? ` by ${plural(views.viewers, "person", "people")}` : ""),
-          views.last_viewed_at ? `last ${fmtDateTime(views.last_viewed_at)}` : "",
+            (views.viewers
+              ? ` by ${plural(views.viewers, "person", "people")}`
+              : ""),
+          views.last_viewed_at
+            ? `last ${fmtDateTime(views.last_viewed_at)}`
+            : "",
         ]
           .filter(Boolean)
           .join(" · ")

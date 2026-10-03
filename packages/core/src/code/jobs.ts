@@ -1,19 +1,33 @@
 import { z } from "zod";
+import type { RepoIndexRun } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { defineJob } from "../jobs/registry";
 import { indexRepo } from "./indexer";
 import { listRepos } from "./repos";
 import { repoToken } from "./token";
 
-/** The queued or running reindex of a repo, if there is one. */
-export async function reindexInFlight(slug: string): Promise<string | null> {
-  const [busy] = await sql`
-    select id from job_runs
-    where kind = 'repo.reindex' and params->>'repo' = ${slug}
-      and status in ('queued', 'running')
-    limit 1
+/** Each repo's queued or running reindex, by slug. */
+export async function activeReindexes(): Promise<Map<string, RepoIndexRun>> {
+  const rows = await sql`
+    select params->>'repo' as repo, id, status, params->>'line' as line,
+           progress, progress_note, created_at
+    from job_runs
+    where kind = 'repo.reindex' and status in ('queued', 'running')
+    order by created_at
   `;
-  return busy ? (busy.id as string) : null;
+  return new Map(
+    rows.map((r) => [
+      r.repo as string,
+      {
+        id: r.id,
+        status: r.status,
+        line: r.line ?? null,
+        progress: r.progress,
+        progress_note: r.progress_note,
+        queued_at: new Date(r.created_at).toISOString(),
+      },
+    ]),
+  );
 }
 
 export function defineCodeJobs() {
@@ -26,18 +40,19 @@ export function defineCodeJobs() {
       repo: z.string().min(1),
       line: z.string().min(1).optional(),
     }),
-    resourceClass: "heavy",
-    timeout: "2h",
+    queue: "index",
+    dedupeKey: (p) => p.repo,
+    timeout: "8h",
     run: async (ctx, p) => {
       ctx.log(`indexing ${p.repo}${p.line ? ` ${p.line}` : ""}`);
       const res = await indexRepo(p.repo, {
         line: p.line,
         token: await repoToken(p.repo, ctx.requestedBy),
         signal: ctx.signal,
-        onProgress: (done, total, ref) =>
+        onProgress: (done, total, ref, at) =>
           void ctx.progress(
-            total ? done / total : 1,
-            `${ref}: ${done}/${total} files`,
+            (at.index + (total ? done / total : 0)) / at.count,
+            `${ref}${at.count > 1 ? ` (${at.index + 1}/${at.count})` : ""}: ${total ? `${done}/${total} files` : "fetching"}`,
           ),
       });
       return { ...res };
@@ -46,27 +61,32 @@ export function defineCodeJobs() {
 
   defineJob({
     kind: "repos.refresh",
-    title: "Refresh linked repositories",
+    title: "Reindex linked repositories",
     description:
-      "Queues a reindex of every repository that has been indexed before and is not being indexed now. A repo with no new commits costs a fetch and a tree diff. Repositories never indexed wait for someone to index them.",
-    params: z.object({}),
+      "Queues a reindex of each linked repository not being indexed already, as runs of their own under this one. With scope 'indexed' (the nightly default) it skips repositories never indexed, which wait for someone to index them; 'all' takes those too. A repo with no new commits costs a fetch and a tree diff.",
+    params: z.object({
+      scope: z.enum(["indexed", "all"]).default("indexed"),
+    }),
     defaultSchedule: "40 2 * * *",
+    dedupeKey: () => "all",
     timeout: "10m",
-    run: async (ctx) => {
+    run: async (ctx, p) => {
       let queued = 0;
       let skipped = 0;
       let neverIndexed = 0;
-      for (const repo of await listRepos()) {
-        if (!repo.lines.some((l) => l.indexed_commit || l.indexing_commit)) {
+      const repos = await listRepos();
+      for (const [i, repo] of repos.entries()) {
+        ctx.signal.throwIfAborted();
+        await ctx.progress(i / repos.length, repo.slug);
+        if (
+          p.scope !== "all" &&
+          !repo.lines.some((l) => l.indexed_commit || l.indexing_commit)
+        ) {
           neverIndexed++;
           continue;
         }
-        if (await reindexInFlight(repo.slug)) {
-          skipped++;
-          continue;
-        }
-        await ctx.enqueue("repo.reindex", { repo: repo.slug });
-        queued++;
+        if (await ctx.enqueue("repo.reindex", { repo: repo.slug })) queued++;
+        else skipped++;
       }
       ctx.log(
         `queued ${queued}; ${skipped} already in flight, ${neverIndexed} never indexed`,

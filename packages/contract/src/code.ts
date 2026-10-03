@@ -84,10 +84,52 @@ export interface RepoLineRow {
   last_indexed_at: string | null;
 }
 
+/** What a repo's default line would index under a proposed config. */
+export interface IndexPreview {
+  ref: string;
+  commit: string;
+  files_total: number;
+  files_admitted: number;
+  /** Every directory, with the files under it at any depth. */
+  dirs: PreviewDir[];
+  /** Every extension outside the always-skipped directories, most files first. */
+  types: PreviewType[];
+}
+
+export interface PreviewDir {
+  path: string;
+  files: number;
+  admitted: number;
+  /** Under node_modules, vendor and the like, which are never indexed. */
+  skipped: boolean;
+}
+
+export interface PreviewType {
+  /** Empty for files with no extension. */
+  ext: string;
+  files: number;
+  admitted: number;
+  /** Never indexable, whatever the config says. */
+  binary: boolean;
+  icon: string;
+  icon_light: string | null;
+}
+
 /** A ref the remote offers, from `git ls-remote`. */
 export interface RemoteRef {
   name: string;
   kind: "branch" | "tag";
+}
+
+/** A repo's reindex while it waits or runs, for the repos list to follow. */
+export interface RepoIndexRun {
+  id: string;
+  status: "queued" | "running";
+  /** The one line it indexes; null for all of them. */
+  line: string | null;
+  progress: number | null;
+  progress_note: string | null;
+  queued_at: string;
 }
 
 export interface RepoRow {

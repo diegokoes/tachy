@@ -64,6 +64,7 @@ export const RUN_MODES = [
   "code",
   "chat",
   "review",
+  "flow",
 ] as const;
 
 export type ResolutionClarity = (typeof RESOLUTION_CLARITIES)[number];

@@ -85,7 +85,8 @@
             <button class="hit" class:on={i === cursor} onclick={() => open(h)}>
               <span class="head">
                 <span class="title">{h.title}</span>
-                {#if h.status === "draft"}<Badge tone="accent">draft</Badge>{/if}
+                {#if h.status === "draft"}<Badge tone="accent">draft</Badge
+                  >{/if}
               </span>
               {#if h.snippet}<span class="snip">{h.snippet}</span>{/if}
             </button>

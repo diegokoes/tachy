@@ -161,7 +161,11 @@
   {#if enabled}
     <div class="meta">
       <Field label="file type">
-        <Select bind:value={output.format} options={FORMATS} aria-label="file type" />
+        <Select
+          bind:value={output.format}
+          options={FORMATS}
+          aria-label="file type"
+        />
       </Field>
       <Field label="file name">
         <input
@@ -215,7 +219,11 @@
 
           <div class="f-type">
             <Field label="cell type">
-              <Select bind:value={col.type} options={TYPES} aria-label="cell type" />
+              <Select
+                bind:value={col.type}
+                options={TYPES}
+                aria-label="cell type"
+              />
             </Field>
           </div>
 
@@ -256,7 +264,10 @@
 
           <div class="f-desc">
             <Field label="what goes in it">
-              <input bind:value={col.description} aria-label="column description" />
+              <input
+                bind:value={col.description}
+                aria-label="column description"
+              />
             </Field>
           </div>
         </li>
@@ -292,7 +303,10 @@
 
   .meta {
     display: grid;
-    grid-template-columns: minmax(9rem, 1fr) minmax(13rem, 2fr) minmax(9rem, 1fr);
+    grid-template-columns: minmax(9rem, 1fr) minmax(13rem, 2fr) minmax(
+        9rem,
+        1fr
+      );
     gap: var(--pad-2) var(--gap);
     align-items: start;
   }
@@ -370,9 +384,18 @@
     font-size: var(--fs-xs);
     color: var(--muted);
   }
-  .f-head { grid-area: head; min-width: 0; }
-  .f-type { grid-area: type; min-width: 0; }
-  .f-desc { grid-area: desc; min-width: 0; }
+  .f-head {
+    grid-area: head;
+    min-width: 0;
+  }
+  .f-type {
+    grid-area: type;
+    min-width: 0;
+  }
+  .f-desc {
+    grid-area: desc;
+    min-width: 0;
+  }
   .f-type :global(.asel) {
     width: 100%;
   }

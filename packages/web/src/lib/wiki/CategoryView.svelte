@@ -57,7 +57,8 @@
     navigate(path);
   };
 
-  const open = (a: WikiArticleRef) => a.slug && navigate(wikiPath(scope, a.slug));
+  const open = (a: WikiArticleRef) =>
+    a.slug && navigate(wikiPath(scope, a.slug));
 </script>
 
 <WikiLayout {scope}>
@@ -101,7 +102,8 @@
             {#each node.articles as a (a.id)}
               <li>
                 <button onclick={() => open(a)}>{a.title}</button>
-                {#if a.status === "draft"}<Badge tone="accent">draft</Badge>{/if}
+                {#if a.status === "draft"}<Badge tone="accent">draft</Badge
+                  >{/if}
               </li>
             {/each}
           </ul>

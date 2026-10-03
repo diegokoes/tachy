@@ -55,22 +55,24 @@ export async function systemPrompt(): Promise<string> {
 }
 
 /**
- * Per-user Claude Code state directory. Without it every turn falls back to
- * whatever login the server itself holds, so users share one identity and one
- * pool of session transcripts. Created once and reused: a fresh directory
- * mints a new machine identity and orphans the transcripts `resume` needs.
- */
-/**
  * Kept empty: the Copilot runtime reads instruction files from the directory
  * its session runs in, and nothing in the repo root is written for the agent.
  */
-async function emptySessionDir(): Promise<string> {
+export async function emptySessionDir(): Promise<string> {
   const dir = join(tmpdir(), "tachy-agent-empty");
   await mkdir(dir, { recursive: true, mode: 0o700 });
   return dir;
 }
 
-async function userConfigDir(userId: string | undefined): Promise<string> {
+/**
+ * Per-user Claude Code state directory. Without it every turn falls back to
+ * whatever login the server itself holds, so users share one identity and one
+ * pool of session transcripts. Created once and reused: a fresh directory
+ * mints a new machine identity and orphans the transcripts `resume` needs.
+ */
+export async function userConfigDir(
+  userId: string | undefined,
+): Promise<string> {
   const dir = join(agentHome(), "users", userId ?? "_default");
   await mkdir(dir, { recursive: true, mode: 0o700 });
   return dir;

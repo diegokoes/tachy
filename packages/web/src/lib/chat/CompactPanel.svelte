@@ -217,10 +217,22 @@
     padding: 0 1px;
     user-select: none;
   }
-  .tl { top: -0.6rem; left: -0.35rem; }
-  .tr { top: -0.6rem; right: -0.35rem; }
-  .bl { bottom: -0.6rem; left: -0.35rem; }
-  .br { bottom: -0.6rem; right: -0.35rem; }
+  .tl {
+    top: -0.6rem;
+    left: -0.35rem;
+  }
+  .tr {
+    top: -0.6rem;
+    right: -0.35rem;
+  }
+  .bl {
+    bottom: -0.6rem;
+    left: -0.35rem;
+  }
+  .br {
+    bottom: -0.6rem;
+    right: -0.35rem;
+  }
 
   .head {
     font-size: 0.72rem;

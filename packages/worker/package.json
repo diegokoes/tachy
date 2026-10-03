@@ -4,8 +4,9 @@
   "main": "src/index.ts",
   "dependencies": {
     "@tachy/core": "*",
+    "@tachy/agent": "*",
+    "@tachy/source-azure-devops": "*",
     "@tachy/source-freshdesk": "*",
-    "@tachy/source-github": "*",
-    "@tachy/source-azure-devops": "*"
+    "@tachy/source-github": "*"
   }
 }

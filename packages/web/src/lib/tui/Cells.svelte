@@ -20,9 +20,13 @@
   /* Worst first, so what the tile cannot fit is only ever what is fine — and
      the last lamp that does fit counts the rest rather than half-showing one. */
   const RANK = { danger: 0, warn: 1, ok: 2, muted: 3 };
-  const sorted = $derived([...cells].sort((a, b) => RANK[a.tone] - RANK[b.tone]));
+  const sorted = $derived(
+    [...cells].sort((a, b) => RANK[a.tone] - RANK[b.tone]),
+  );
   const room = $derived(Math.max(1, rows) * COLS);
-  const shown = $derived(sorted.length > room ? sorted.slice(0, room - 1) : sorted);
+  const shown = $derived(
+    sorted.length > room ? sorted.slice(0, room - 1) : sorted,
+  );
   const rest = $derived(sorted.slice(shown.length));
 </script>
 

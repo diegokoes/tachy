@@ -16,6 +16,7 @@ import { createAzureDevopsSource } from "@tachy/source-azure-devops";
 import { knowledge, analysisRuns } from "./routes/knowledge";
 import { workItems } from "./routes/work-items";
 import { compose } from "./routes/compose";
+import { flows } from "./routes/flows";
 import { admin } from "./routes/admin";
 import { reference } from "./routes/reference";
 import { agent } from "./routes/agent";
@@ -35,6 +36,7 @@ import { initOidc, installAuth, isBootstrapped, type OidcConfig } from "./auth";
 import { httpLogger, noteError } from "./logging";
 import { readiness } from "./lifecycle";
 import { internalRoutes, type InternalOptions } from "./routes/internal";
+import { ingest } from "./routes/ingest";
 
 registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
@@ -53,6 +55,7 @@ function apiRoutes() {
   return new Hono()
     .route("/work-items", workItems)
     .route("/compose", compose)
+    .route("/flows", flows)
     .route("/knowledge", knowledge)
     .route("/analysis-runs", analysisRuns)
     .route("/reference", reference)
@@ -88,6 +91,7 @@ export function createApp(
   base.get("/livez", livez);
   base.get("/health", livez);
   if (opts.internal) base.route("/internal", internalRoutes(opts.internal));
+  base.route("/ingest", ingest);
   base.get("/readyz", async (c) => {
     const r = await readiness();
     return c.json(r, r.ready ? 200 : 503);

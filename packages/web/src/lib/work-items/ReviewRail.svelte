@@ -30,7 +30,11 @@
     "needs-work": { value: 0.33, tone: "danger", label: "needs work" },
   } as const;
 
-  const KIND = { gap: "missing", unclear: "unclear", improve: "could be better" };
+  const KIND = {
+    gap: "missing",
+    unclear: "unclear",
+    improve: "could be better",
+  };
 
   const open = $derived(
     (review?.findings ?? []).filter((f) => !dismissed.includes(f.id)),
@@ -66,7 +70,9 @@
       pick it up, and points at what they would ask you. It never rewrites it.
     </p>
   {:else if !review.available}
-    <Note tone="warn">No model is set up for you. Add one under Settings › agent.</Note>
+    <Note tone="warn"
+      >No model is set up for you. Add one under Settings › agent.</Note
+    >
   {:else}
     {@const r = READINESS[review.readiness]}
     <div class="verdict">
@@ -76,7 +82,9 @@
     {#if review.summary}<p class="summary">{review.summary}</p>{/if}
     {#if fixed.length}
       <p class="fixed">
-        <Icon name="success" size="1em" /> fixed since last time: {fixed.map(fieldName).join(", ")}
+        <Icon name="success" size="1em" /> fixed since last time: {fixed
+          .map(fieldName)
+          .join(", ")}
       </p>
     {/if}
     <ol class="findings" bind:this={list}>
@@ -91,9 +99,19 @@
           {/if}
           <div class="acts">
             {#if f.suggestion && f.field !== "general"}
-              <Button size="sm" variant="ghost" icon="plus" onclick={() => onapply(f)}>apply</Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                icon="plus"
+                onclick={() => onapply(f)}>apply</Button
+              >
             {/if}
-            <Button size="sm" variant="ghost" icon="close" onclick={() => ondismiss(f.id)}>dismiss</Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              icon="close"
+              onclick={() => ondismiss(f.id)}>dismiss</Button
+            >
           </div>
         </li>
       {/each}

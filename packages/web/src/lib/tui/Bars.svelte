@@ -73,7 +73,8 @@
   {#if cut.rest.length}
     <div class="row more">
       <span class="lbl">{cut.rest.length} more</span>
-      {#if sum}<span class="n">{format(restTotal)}{unit && ` ${unit}`}</span>{/if}
+      {#if sum}<span class="n">{format(restTotal)}{unit && ` ${unit}`}</span
+        >{/if}
     </div>
   {/if}
 </div>

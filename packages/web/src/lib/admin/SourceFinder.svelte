@@ -11,25 +11,35 @@
 
   let {
     source,
+    label,
+    takenTip,
+    empty,
     hits,
     picked,
     registered,
     onfetch,
     onpick,
+    below = false,
   }: {
-    /** The connection being asked. */
+    /** What is being asked, e.g. the connection or project. */
     source: string;
+    /** The button's word, e.g. "fetch projects". */
+    label: string;
+    /** Said on a name that is already taken here. */
+    takenTip: string;
+    /** Said when the source answers with nothing. */
+    empty: string;
     /** What it answered last time, if it has been asked. */
     hits: Found[] | undefined;
-    /** The project key the form holds now. */
+    /** The key the form holds now. */
     picked: string;
     registered: (key: string) => boolean;
     /** Asks the source and stores what it said; throws on failure. */
     onfetch: () => Promise<void>;
     onpick: (g: Found) => void;
+    /** Swirl only under the tower, for a finder with no room above it. */
+    below?: boolean;
   } = $props();
-
-  const LABEL = "fetch projects";
 
   /** Long enough for the broadcast to read as one, on a source that answers at once. */
   const HOLD = 1600;
@@ -191,7 +201,8 @@
     const radius = Math.min(70, 6 * Math.sqrt(n));
     const swirl = (i: number) => {
       const r = 8 + radius * Math.sqrt(i / n);
-      return { x: r * Math.cos(i * 2.4), y: r * Math.sin(i * 2.4) };
+      const y = r * Math.sin(i * 2.4);
+      return { x: r * Math.cos(i * 2.4), y: below ? Math.abs(y) : y };
     };
 
     const tl = gsap.timeline({ onComplete: () => (flight = null) });
@@ -255,9 +266,9 @@
     class:scanning
     type="button"
     disabled={!source}
-    aria-label="fetch projects from {source}"
+    aria-label="{label} from {source}"
     aria-busy={scanning}
-    use:tip={landed ? "fetch projects again" : undefined}
+    use:tip={landed ? `${label} again` : undefined}
     onclick={run}
   >
     <svg
@@ -276,7 +287,7 @@
       {/each}
     </svg>
     <span class="word" class:gone={landed} bind:this={word} aria-hidden="true"
-      >{#each [...LABEL] as ch, i (i)}<span class="ch">{ch}</span>{/each}</span
+      >{#each [...label] as ch, i (i)}<span class="ch">{ch}</span>{/each}</span
     >
     <svg
       bind:this={signal}
@@ -304,7 +315,7 @@
         disabled={taken}
         aria-pressed={picked === g.key}
         use:tip={taken
-          ? `${g.key} · already registered`
+          ? `${g.key} · ${takenTip}`
           : g.name === g.key
             ? undefined
             : g.key}
@@ -312,12 +323,13 @@
       >
         <span class="frame" aria-hidden="true"></span>
         <span class="name"
-          >{#each [...g.name] as ch, i (i)}<span class="ch">{ch}</span>{/each}</span
+          >{#each [...g.name] as ch, i (i)}<span class="ch">{ch}</span
+            >{/each}</span
         >
       </button>
     {/each}
     {#if hits && !scanning && !list.length && !failure}
-      <p class="quiet">{source} shows no projects to this token</p>
+      <p class="quiet">{empty}</p>
     {/if}
   </div>
 </div>
@@ -330,7 +342,7 @@
     gap: var(--pad-3);
     /* Room above the tower for the swirl, which reaches about 80px out from
        the lamp, so the letters never cross the fields over it. */
-    margin-top: 3.5rem;
+    margin-top: var(--finder-air, 3.5rem);
     min-height: 16rem;
   }
 
@@ -393,7 +405,11 @@
   .ch {
     display: inline-block;
     --lit: 0;
-    color: color-mix(in srgb, var(--accent) calc(var(--lit) * 100%), currentColor);
+    color: color-mix(
+      in srgb,
+      var(--accent) calc(var(--lit) * 100%),
+      currentColor
+    );
   }
 
   .signal {
@@ -462,6 +478,7 @@
 
   .quiet {
     margin: 0;
+    text-align: center;
     font-size: var(--fs-sm);
     color: var(--muted);
   }

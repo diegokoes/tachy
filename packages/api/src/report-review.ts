@@ -1,5 +1,5 @@
 import type { ReportReview, ReportType, ScopeContext } from "@tachy/core";
-import { firstJsonObject, runAdvisory } from "./advisory";
+import { firstJsonObject, runAdvisory } from "@tachy/agent";
 
 const REVIEW_SYSTEM = `You review draft bug reports and feature requests for an internal knowledge tool called tachy (an AI support/engineering assistant with a chat, a library of knowledge entries and wiki articles, source connectors, and an admin panel).
 

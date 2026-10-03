@@ -196,7 +196,7 @@ describe("PUT /api/repos/bulk", () => {
 });
 
 describe("POST /api/repos/:slug/reindex", () => {
-  it("queues a reindex run for the caller, and refuses a second while it waits", async () => {
+  it("queues a reindex run for the caller, and hands back that run while it waits", async () => {
     await resetJobs();
     const cookie = await adminCookie();
     await linkRepo({
@@ -210,12 +210,14 @@ describe("POST /api/repos/:slug/reindex", () => {
     expect(res.status).toBe(202);
     const { run_id } = await res.json();
     const [run] =
-      await sql`select kind, params, trigger, requested_by, resource_class from job_runs where id = ${run_id}`;
+      await sql`select kind, params, trigger, requested_by, resource_class, queue, priority from job_runs where id = ${run_id}`;
     expect(run).toMatchObject({
       kind: "repo.reindex",
       params: { repo: "driver" },
       trigger: "manual",
       resource_class: "heavy",
+      queue: "index",
+      priority: 10,
     });
     expect(run.requested_by).not.toBeNull();
 
@@ -223,8 +225,9 @@ describe("POST /api/repos/:slug/reindex", () => {
       method: "POST",
       headers: { Cookie: cookie },
     });
-    expect(again.status).toBe(400);
-    expect((await again.json()).error).toMatch(/already being indexed/);
+    expect(again.status).toBe(202);
+    expect(await again.json()).toMatchObject({ status: "in_flight", run_id });
+    expect(await sql`select 1 from job_runs`).toHaveLength(1);
   });
 
   it("queues one line, and refuses a line the repo does not track", async () => {
@@ -251,6 +254,78 @@ describe("POST /api/repos/:slug/reindex", () => {
       select params from job_runs where id = ${(await res.json()).run_id}
     `;
     expect(run.params).toEqual({ repo: "driver", line: "legacy/master-1-50" });
+  });
+
+  it("shows each repo's reindex while it waits", async () => {
+    await resetJobs();
+    const cookie = await adminCookie();
+    await linkRepo({
+      slug: "driver",
+      url: "https://example.invalid/driver.git",
+    });
+    await linkRepo({ slug: "idle", url: "https://example.invalid/idle.git" });
+    const { run_id } = await (
+      await app.request("/api/repos/driver/reindex", {
+        method: "POST",
+        headers: { Cookie: cookie },
+      })
+    ).json();
+    const { repos } = await (
+      await app.request("/api/repos", { headers: { Cookie: cookie } })
+    ).json();
+    const bySlug = Object.fromEntries(repos.map((r: any) => [r.slug, r]));
+    expect(bySlug.driver.active_run).toMatchObject({
+      id: run_id,
+      status: "queued",
+      line: null,
+    });
+    expect(bySlug.idle.active_run).toBeNull();
+  });
+
+  it("queues every linked repo under one parent run, for admins only", async () => {
+    await resetJobs();
+    const cookie = await adminCookie();
+    const res = await app.request("/api/repos/reindex", {
+      method: "POST",
+      headers: { Cookie: cookie },
+    });
+    expect(res.status).toBe(202);
+    const { run_id, status } = await res.json();
+    expect(status).toBe("queued");
+    const [run] =
+      await sql`select kind, params, trigger, priority from job_runs where id = ${run_id}`;
+    expect(run).toEqual({
+      kind: "repos.refresh",
+      params: { scope: "all" },
+      trigger: "manual",
+      priority: 10,
+    });
+    const again = await (
+      await app.request("/api/repos/reindex", {
+        method: "POST",
+        headers: { Cookie: cookie },
+      })
+    ).json();
+    expect(again).toMatchObject({ status: "in_flight", run_id });
+
+    await createUser({
+      email: "member@example.com",
+      password: "a-long-password",
+      role: "member",
+    });
+    const member = await loginCookie(
+      app,
+      "member@example.com",
+      "a-long-password",
+    );
+    expect(
+      (
+        await app.request("/api/repos/reindex", {
+          method: "POST",
+          headers: { Cookie: member },
+        })
+      ).status,
+    ).toBe(403);
   });
 
   it("refuses a slug nobody has linked, without cloning anything", async () => {
@@ -351,6 +426,22 @@ describe("GET /api/repos/refs", () => {
     const body = await res.json();
     expect(body.ok).toBe(false);
     expect(body.error).toBeTruthy();
+  });
+});
+
+describe("GET /api/repos/file-icons/:file", () => {
+  it("serves a theme icon as an SVG", async () => {
+    const res = await app.request("/api/repos/file-icons/typescript.svg");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/svg+xml");
+    expect(await res.text()).toContain("<svg");
+  });
+
+  it("refuses an id the theme does not define", async () => {
+    for (const file of ["nope.svg", "typescript", "..%2F..%2Fpackage.json"])
+      expect((await app.request(`/api/repos/file-icons/${file}`)).status).toBe(
+        404,
+      );
   });
 });
 

@@ -15,8 +15,7 @@
 
   const HEADING = "PROJECT";
 
-
-  /** Past this many letters the burst is flown per tag, not per letter. */
+  /** Past this many letters the burst is flown per name, not per letter. */
   const MAX_LETTERS = 900;
 
   const repos = createResource(
@@ -82,10 +81,17 @@
 
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const byName = (a: FoundRepo, b: FoundRepo) =>
-    a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
+    a.name.localeCompare(b.name, undefined, {
+      sensitivity: "base",
+      numeric: true,
+    });
 
   async function discover(p: SourceProject) {
-    const res = await api.get<{ ok: boolean; error?: string; repos?: FoundRepo[] }>(
+    const res = await api.get<{
+      ok: boolean;
+      error?: string;
+      repos?: FoundRepo[];
+    }>(
       `/source-connections/${p.source_slug}/discover/repos?project=${encodeURIComponent(p.external_key)}`,
     );
     if (!res.ok) throw new Error(res.error ?? "discovery failed");
@@ -212,9 +218,14 @@
       await repos.reload();
       rejected = res.results.filter((r) => !r.ok);
       const bad = new Set(rejected.map((r) => r.slug));
-      picked = new Set(payload.filter((p) => bad.has(p.slug)).map((p) => p.url));
+      picked = new Set(
+        payload.filter((p) => bad.has(p.slug)).map((p) => p.url),
+      );
       const n = res.results.length - rejected.length;
-      if (n) toast(`linked ${n} repo${n === 1 ? "" : "s"} from ${project.external_key}`);
+      if (n)
+        toast(
+          `linked ${n} repo${n === 1 ? "" : "s"} from ${project.external_key}`,
+        );
     } catch (e) {
       failure = errText(e);
     } finally {
@@ -237,9 +248,13 @@
     const tags = [...cloud.querySelectorAll<HTMLElement>(".tag")];
     if (!tags.length) return reveal();
     const letters = [...cloud.querySelectorAll<HTMLElement>(".tag .ch")];
-    const movers = letters.length <= MAX_LETTERS ? letters : tags;
+    const movers =
+      letters.length <= MAX_LETTERS
+        ? letters
+        : [...cloud.querySelectorAll<HTMLElement>(".tag .name")];
     const frames = [...cloud.querySelectorAll<HTMLElement>(".frame")];
     gsap.set([search, dock].filter(Boolean), { opacity: 0 });
+    gsap.set(frames, { opacity: 0 });
 
     const n = movers.length;
     const home = movers.map((el) => {
@@ -257,7 +272,6 @@
     });
 
     const tl = gsap.timeline({ onComplete: () => (flight = null) });
-    if (movers === letters) tl.set(frames, { opacity: 0 }, 0);
     tl.fromTo(
       movers,
       {
@@ -290,19 +304,18 @@
       },
       "-=0.1",
     );
-    if (movers === letters)
-      tl.fromTo(
-        frames,
-        { opacity: 0, scaleX: 0.7 },
-        {
-          opacity: 1,
-          scaleX: 1,
-          duration: 0.25,
-          ease: "back.out(1.6)",
-          stagger: { each: Math.min(0.01, 0.2 / frames.length) },
-        },
-        "-=0.25",
-      );
+    tl.fromTo(
+      frames,
+      { opacity: 0, scaleX: 0.7 },
+      {
+        opacity: 1,
+        scaleX: 1,
+        duration: 0.25,
+        ease: "back.out(1.6)",
+        stagger: { each: Math.min(0.01, 0.2 / frames.length) },
+      },
+      "-=0.05",
+    );
     tl.set([...movers, ...frames], { clearProps: "all" });
     tl.add(reveal, "-=0.3");
     flight = tl;
@@ -316,7 +329,14 @@
     gsap.fromTo(
       parts,
       { opacity: 0, y: (i) => (parts[i] === dock ? 12 : -6) },
-      { opacity: 1, y: 0, duration: 0.35, ease: "power2.out", stagger: 0.06, clearProps: "transform" },
+      {
+        opacity: 1,
+        y: 0,
+        duration: 0.35,
+        ease: "power2.out",
+        stagger: 0.06,
+        clearProps: "transform",
+      },
     );
   }
 
@@ -335,23 +355,8 @@
     });
   }
 
-  let leaving = false;
-
-  async function leave() {
-    if (leaving) return;
-    leaving = true;
+  function leave() {
     flight?.kill();
-    if (stage && !reducedMotion())
-      await Promise.all([
-        orbit?.vanish(),
-        gsap.to(stage.querySelectorAll(".rise, .tag, .dock, .close"), {
-          opacity: 0,
-          y: -10,
-          duration: 0.3,
-          ease: "power2.in",
-          stagger: 0.02,
-        }),
-      ]);
     navigate("/admin/integrations/repos");
   }
 
@@ -362,7 +367,15 @@
     gsap.fromTo(
       stage.querySelectorAll(".heading .ch"),
       { opacity: 0, y: "0.6em" },
-      { opacity: 1, y: 0, duration: 0.5, ease: "power3.out", stagger: 0.05, delay: 0.25, clearProps: "all" },
+      {
+        opacity: 1,
+        y: 0,
+        duration: 0.5,
+        ease: "power3.out",
+        stagger: 0.05,
+        delay: 0.25,
+        clearProps: "all",
+      },
     );
     gsap.fromTo(
       stage.querySelectorAll(".pick, .close"),
@@ -375,7 +388,12 @@
 </script>
 
 <div class="stage" bind:this={stage}>
-  <button class="close" onclick={leave} aria-label="back to repos" use:tip={"back to repos"}>
+  <button
+    class="close"
+    onclick={leave}
+    aria-label="back to repos"
+    use:tip={"back to repos"}
+  >
     <Icon name="close" size="1.4em" weight={6} />
   </button>
 
@@ -383,7 +401,9 @@
     <div class="inner">
       <div class="top" bind:clientHeight={topH}>
         <h1 class="heading rise" aria-label={HEADING}>
-          {#each [...HEADING] as ch, i (i)}<span class="ch" aria-hidden="true">{ch}</span>{/each}
+          {#each [...HEADING] as ch, i (i)}<span class="ch" aria-hidden="true"
+              >{ch}</span
+            >{/each}
         </h1>
 
         <div class="pick rise">
@@ -421,7 +441,11 @@
            what they need and it sits where the eye lands. Once the hole
            closes, the names take the same place, a short list centred where
            it was and a long one running on down from there. -->
-      <div class="well" style:margin-top="{orbGap}px" style:min-height="{orbH}px">
+      <div
+        class="well"
+        style:margin-top="{orbGap}px"
+        style:min-height="{orbH}px"
+      >
         <div class="orb" bind:clientHeight={orbH}>
           <Orbit bind:this={orbit} {mode} />
         </div>
@@ -429,7 +453,9 @@
         {#if landed && failure}
           <p class="quiet danger" aria-live="polite">{failure}</p>
         {:else if landed && project && !list.length && !fetching}
-          <p class="quiet">{project.external_key} shows no repos to this token</p>
+          <p class="quiet">
+            {project.external_key} shows no repos to this token
+          </p>
         {/if}
 
         <div class="answer">
@@ -478,7 +504,8 @@
               >
                 <span class="frame" aria-hidden="true"></span>
                 <span class="name"
-                  >{#each [...r.name] as ch, i (i)}<span class="ch">{ch}</span>{/each}</span
+                  >{#each [...r.name] as ch, i (i)}<span class="ch">{ch}</span
+                    >{/each}</span
                 >
               </button>
             {/each}
@@ -699,6 +726,7 @@
   }
   .name {
     position: relative;
+    display: inline-block;
   }
   .tag:hover:not(:disabled) .frame,
   .tag:focus-visible .frame {

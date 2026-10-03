@@ -1,4 +1,5 @@
 import {
+  changeTagList,
   customerStandIn,
   freshdeskToken,
   scrubbableCopy,
@@ -7,6 +8,7 @@ import {
   TokenMap,
 } from "@tachy/core";
 import type {
+  FlowOption,
   WorkItemSource,
   RawWorkItem,
   RawMessage,
@@ -93,6 +95,52 @@ interface FreshdeskAgent {
 interface FreshdeskGroup {
   id: number;
   name?: string;
+}
+
+interface FreshdeskCompany {
+  id: number;
+  name?: string;
+  custom_fields?: Record<string, unknown> | null;
+}
+
+interface FreshdeskTicketField {
+  name: string;
+  label?: string;
+  default?: boolean;
+  choices?: unknown;
+}
+
+/** Where a default ticket field sits on a ticket, by the field's name. */
+const TICKET_KEYS: Record<string, string> = {
+  ticket_type: "type",
+  group: "group_id",
+  agent: "responder_id",
+  company: "company_id",
+  product: "product_id",
+  requester: "requester_id",
+};
+
+/** A ticket field's path on the ticket: custom ones live under custom_fields. */
+export const ticketFieldPath = (f: FreshdeskTicketField) =>
+  f.default ? (TICKET_KEYS[f.name] ?? f.name) : `custom_fields.${f.name}`;
+
+/**
+ * A ticket field's choices as options. Freshdesk shapes them by field: a list
+ * for a dropdown, `{label: id}` for priority, source and group, `{id: [agent
+ * label, customer label]}` for status, and nested objects for a dependent
+ * field, whose first level is what the ticket stores.
+ */
+export function fieldChoices(choices: unknown): FlowOption[] {
+  if (Array.isArray(choices))
+    return choices.map((c) => ({ value: String(c), label: String(c) }));
+  if (!choices || typeof choices !== "object") return [];
+  return Object.entries(choices).map(([k, v]) =>
+    Array.isArray(v)
+      ? { value: k, label: String(v[0] ?? k) }
+      : typeof v === "number" || typeof v === "string"
+        ? { value: String(v), label: k }
+        : { value: k, label: k },
+  );
 }
 
 /** Freshdesk adapter. Uses *_text fields, so no HTML stripping is needed. */
@@ -297,6 +345,74 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
         throw new Error(
           `Freshdesk conversation DELETE -> ${res.status} ${await res.text()}`,
         );
+    },
+
+    async options(name, params) {
+      if (name === "companies") {
+        const out: FlowOption[] = [];
+        for (let page = 1; page <= 20; page++) {
+          const batch = await get<FreshdeskCompany[]>(
+            `/companies?per_page=100&page=${page}`,
+          );
+          if (!Array.isArray(batch) || !batch.length) break;
+          for (const c of batch)
+            out.push({ value: String(c.id), label: c.name ?? String(c.id) });
+          if (batch.length < 100) break;
+        }
+        return out.sort((a, b) => a.label.localeCompare(b.label));
+      }
+      if (name === "company_fields") {
+        const fields = await get<FreshdeskTicketField[]>("/company_fields");
+        return (Array.isArray(fields) ? fields : []).map((f) => ({
+          value: f.name,
+          label: f.label ?? f.name,
+          hint: f.default ? undefined : "custom",
+        }));
+      }
+      if (name === "ticket_fields" || name === "field_choices") {
+        const fields = await get<FreshdeskTicketField[]>("/ticket_fields");
+        const list = Array.isArray(fields) ? fields : [];
+        if (name === "ticket_fields")
+          return list.map((f) => ({
+            value: ticketFieldPath(f),
+            label: f.label ?? f.name,
+            hint: f.default ? undefined : "custom",
+          }));
+        const want = params.field?.replace(/^item\.raw\./, "");
+        const f = list.find((x) => ticketFieldPath(x) === want);
+        return f ? fieldChoices(f.choices) : [];
+      }
+      return [];
+    },
+
+    async customerRecord(raw) {
+      const id = (raw as { company_id?: unknown } | null)?.company_id;
+      if (id == null) return null;
+      const { custom_fields, ...company } = await get<FreshdeskCompany>(
+        `/companies/${encodeURIComponent(String(id))}`,
+      );
+      return { ...company, ...(custom_fields ?? {}) };
+    },
+
+    async setTags(externalId, change) {
+      const path = `/tickets/${encodeURIComponent(externalId)}`;
+      const ticket = await get<{ tags?: string[] }>(path);
+      const tags = changeTagList(ticket.tags ?? [], change);
+      const res = await sourceFetch(
+        "Freshdesk ticket PUT",
+        api + path,
+        {
+          method: "PUT",
+          headers: { Authorization: auth, "Content-Type": "application/json" },
+          body: JSON.stringify({ tags }),
+        },
+        { connection: cfg.slug },
+      );
+      if (!res.ok)
+        throw new Error(
+          `Freshdesk ticket PUT -> ${res.status} ${await res.text()}`,
+        );
+      return tags;
     },
 
     async postNote(externalId, body, o) {

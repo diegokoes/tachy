@@ -54,14 +54,17 @@
       docId: l.from_doc_id,
       kind: l.from_kind,
       slug: l.from_slug,
-      scope:
-        products.find((p) => p.id === l.from_product_id)?.slug ?? ORG_WIDE,
+      scope: products.find((p) => p.id === l.from_product_id)?.slug ?? ORG_WIDE,
     });
     if (path) navigate(path);
   }
 
   const what = (l: Link) =>
-    l.from_kind === "wiki" ? "article" : l.from_kind === "entry" ? "entry" : "doc";
+    l.from_kind === "wiki"
+      ? "article"
+      : l.from_kind === "entry"
+        ? "entry"
+        : "doc";
 </script>
 
 {#if inbound.length}
@@ -70,7 +73,8 @@
     <ul>
       {#each inbound as l (l.id)}
         <li>
-          <button onclick={() => open(l)}>{l.from_title ?? "(untitled)"}</button>
+          <button onclick={() => open(l)}>{l.from_title ?? "(untitled)"}</button
+          >
           <span class="what">{what(l)}</span>
         </li>
       {/each}

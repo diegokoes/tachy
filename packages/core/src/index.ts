@@ -443,13 +443,40 @@ export type {
   SourceCallOutcome,
   SourceTraffic,
 } from "./sources";
-export { registerSource, resolveSource } from "./sources";
+export { changeTagList, registerSource, resolveSource } from "./sources";
 export {
   getComposeConfig,
   setComposeConfig,
   offeredTypes,
   typeConfig,
   applyFormConfig,
+  defineFlowAction,
+  flowActionCatalog,
+  flowAction,
+  defineOptionSource,
+  listOptions,
+  validateGraph,
+  listFlows,
+  getFlow,
+  flowScope,
+  createFlow,
+  updateFlow,
+  deleteFlow,
+  listFlowRuns,
+  getFlowRun,
+  runFlow,
+  ownerScope,
+  itemTriggers,
+  scheduledItems,
+  loadSubject,
+} from "./flows";
+export type {
+  FlowAction,
+  FlowActionContext,
+  OptionRequest,
+  FlowInput,
+  ItemEvent,
+  FlowSubject,
 } from "./flows";
 export type { ResolvedSource } from "./sources";
 export {
@@ -587,6 +614,19 @@ export {
   assetPath,
   ASSET_SRC_RE,
   FIELD_SHOWS,
+  FLOW_TRIGGER_KINDS,
+  CONDITION_OPS,
+  FLOW_ACTION_CATEGORIES,
+  FLOW_RUN_STATUSES,
+  readPath,
+  interpolate,
+  evaluateCondition,
+  INGEST_TOKEN_PREFIX,
+  BUCKET_BATCH_VERSION,
+  MAX_BUCKET_BATCH_DOCS,
+  MAX_BUCKET_DOC_CHARS,
+  BUCKET_BATCH_MAX_BYTES,
+  bucketIngestPath,
 } from "@tachy/contract";
 export type {
   WikiGapKind,
@@ -601,6 +641,23 @@ export type {
   PathOption,
   PersonOption,
   ComposerForm,
+  FlowTriggerKind,
+  ConditionOp,
+  Condition,
+  FlowTrigger,
+  FlowActionStep,
+  FlowIfStep,
+  FlowFilterStep,
+  FlowStep,
+  FlowGraph,
+  Flow,
+  FlowActionCategory,
+  FlowActionInfo,
+  FlowOption,
+  FlowRunStatus,
+  FlowStepStatus,
+  FlowStepTrace,
+  FlowRun,
   ComposeConfig,
   TypeFormConfig,
   FieldFormConfig,
@@ -636,6 +693,10 @@ export {
   JOB_NOTIFY,
   JOB_CLASS_CHAT_SLOTS,
   JOB_FINISHED,
+  JOB_QUEUES,
+  JOB_QUEUE_NAMES,
+  JOB_PRIORITY,
+  jobQueue,
   parseDuration,
 } from "@tachy/contract";
 export type {
@@ -645,7 +706,10 @@ export type {
   JobOverlap,
   JobMissed,
   JobNotify,
+  JobQueue,
+  JobQueueName,
 } from "@tachy/contract";
+export * from "./buckets";
 export * from "./jobs";
 export * from "./testing";
 export * from "./reports";

@@ -227,7 +227,10 @@
   </button>
 
   {#if open}
-    <div class="panel" use:float={{ anchor: trigger, matchWidth: true, placement }}>
+    <div
+      class="panel"
+      use:float={{ anchor: trigger, matchWidth: true, placement }}
+    >
       {#if filterable}
         <input
           class="q"

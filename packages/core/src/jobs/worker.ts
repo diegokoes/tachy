@@ -16,14 +16,30 @@ import {
   type JobRun,
 } from "./runs";
 import { scheduleDueRuns } from "./scheduler";
+import {
+  beatWorker,
+  markWorkerDraining,
+  pruneWorkers,
+  retireWorker,
+  type WorkerCard,
+} from "./roster";
 
 export interface JobWorkerOptions {
   classes: string[];
+  /** Serve only these queues of those classes; every queue of them when absent. */
+  queues?: string[];
   concurrency: number;
+  /**
+   * Slots per class within `concurrency`, for a process serving several
+   * classes, so a long heavy run cannot hold every slot light runs need.
+   */
+  perClass?: Partial<Record<string, number>>;
   workerId?: string;
   leaseMs?: number;
   pollMs?: number;
   scheduleMs?: number;
+  /** How often the worker reports itself alive in job_workers. */
+  beatMs?: number;
   /** How long a cancelled or timed-out run gets to notice its signal. */
   graceMs?: number;
   /** Called with a run that ended for good, e.g. to notify Teams. */
@@ -39,6 +55,8 @@ export interface JobWorker {
 }
 
 const TAIL_LINES = 200;
+/** How stale a run's progress may get in the admin view before a heartbeat is brought forward. */
+const PROGRESS_FLUSH_MS = 2_000;
 
 export async function startJobWorker(
   opts: JobWorkerOptions,
@@ -47,9 +65,24 @@ export async function startJobWorker(
     opts.workerId ?? `${hostname()}-${process.pid}-${randomUUID().slice(0, 8)}`;
   const leaseMs = opts.leaseMs ?? 60_000;
   const graceMs = opts.graceMs ?? 30_000;
-  const running = new Map<string, Promise<void>>();
+  const running = new Map<string, { cls: string; done: Promise<void> }>();
   let draining = false;
   let ticking = false;
+
+  const card: WorkerCard = {
+    id: workerId,
+    host: hostname(),
+    pid: process.pid,
+    classes: opts.classes,
+    queues: opts.queues,
+    concurrency: opts.concurrency,
+    perClass: opts.perClass,
+  };
+  const report = () =>
+    beatWorker(card).catch((err) =>
+      log("warn", "job_worker_beat_failed", { error: String(err) }),
+    );
+  await report();
 
   const disabled = await disableInvalidDefinitions();
   if (disabled.length)
@@ -72,23 +105,26 @@ export async function startJobWorker(
       why = reason;
       controller.abort(new Error(reason));
     };
+    let beatAt = 0;
+    const heartbeat = async () => {
+      beatAt = Date.now();
+      try {
+        const r = await heartbeatRun(run.id, workerId, leaseMs, {
+          progress,
+          note,
+          logTail: tail.join("\n"),
+        });
+        if (r.cancelRequested) stop("cancelled");
+        if (r.lost) stop("cancelled");
+      } catch (err) {
+        log("warn", "job_heartbeat_failed", {
+          run: run.id,
+          error: String(err),
+        });
+      }
+    };
     const beat = setInterval(
-      async () => {
-        try {
-          const r = await heartbeatRun(run.id, workerId, leaseMs, {
-            progress,
-            note,
-            logTail: tail.join("\n"),
-          });
-          if (r.cancelRequested) stop("cancelled");
-          if (r.lost) stop("cancelled");
-        } catch (err) {
-          log("warn", "job_heartbeat_failed", {
-            run: run.id,
-            error: String(err),
-          });
-        }
-      },
+      () => void heartbeat(),
       Math.max(1_000, Math.floor(leaseMs / 3)),
     );
     const timer = setTimeout(() => stop("timed_out"), run.timeout_ms);
@@ -106,6 +142,7 @@ export async function startJobWorker(
         async progress(fraction: number, text?: string) {
           progress = Math.max(0, Math.min(1, fraction));
           if (text !== undefined) note = text;
+          if (Date.now() - beatAt >= PROGRESS_FLUSH_MS) void heartbeat();
         },
         log(message: string, fields: Record<string, unknown> = {}) {
           log("info", "job_log", {
@@ -119,8 +156,14 @@ export async function startJobWorker(
           );
         },
         credential: (name: string) => resolveCredential(name, {}),
-        enqueue: async (k: string, p: unknown) =>
-          (await enqueueRun({ kind: k, params: p, trigger: "event" })) ?? "",
+        enqueue: (k: string, p: unknown) =>
+          enqueueRun({
+            kind: k,
+            params: p,
+            trigger: "event",
+            parentId: run.id,
+            priority: run.priority,
+          }),
       };
       const work = kind.run(ctx, params);
       const aborted = new Promise<never>((_, reject) =>
@@ -181,10 +224,16 @@ export async function startJobWorker(
     ticking = true;
     try {
       while (!draining && running.size < opts.concurrency) {
-        const run = await claimRun(opts.classes, workerId, leaseMs);
+        const room = opts.classes.filter(
+          (c) =>
+            [...running.values()].filter((r) => r.cls === c).length <
+            (opts.perClass?.[c] ?? Infinity),
+        );
+        if (!room.length) break;
+        const run = await claimRun(room, workerId, leaseMs, opts.queues);
         if (!run) break;
-        const p = execute(run).finally(() => running.delete(run.id));
-        running.set(run.id, p);
+        const done = execute(run).finally(() => running.delete(run.id));
+        running.set(run.id, { cls: run.resource_class, done });
       }
     } catch (err) {
       log("error", "job_claim_failed", { error: String(err) });
@@ -204,11 +253,16 @@ export async function startJobWorker(
     reapExpiredRuns()
       .then((n) => n && log("warn", "job_runs_reaped", { count: n }))
       .catch((err) => log("error", "job_reap_failed", { error: String(err) }));
+    pruneWorkers().catch((err) =>
+      log("error", "job_workers_prune_failed", { error: String(err) }),
+    );
   }, opts.scheduleMs ?? 30_000);
+  const alive = setInterval(() => void report(), opts.beatMs ?? 15_000);
   void tick();
   log("info", "job_worker_started", {
     worker: workerId,
     classes: opts.classes,
+    queues: opts.queues ?? "all",
     concurrency: opts.concurrency,
   });
 
@@ -220,11 +274,14 @@ export async function startJobWorker(
       draining = true;
       clearInterval(poll);
       clearInterval(schedule);
+      clearInterval(alive);
+      await markWorkerDraining(workerId).catch(() => {});
       await listener.unlisten().catch(() => {});
       await Promise.race([
-        Promise.allSettled([...running.values()]),
+        Promise.allSettled([...running.values()].map((r) => r.done)),
         new Promise((r) => setTimeout(r, waitMs)),
       ]);
+      await retireWorker(workerId).catch(() => {});
     },
   };
 }

@@ -20,7 +20,12 @@
   } = $props();
 </script>
 
-<Modal title="issues · {page}" cancelLabel="close" width="36rem" onCancel={onclose}>
+<Modal
+  title="issues · {page}"
+  cancelLabel="close"
+  width="36rem"
+  onCancel={onclose}
+>
   {#if error}
     <p class="quiet danger">{error}</p>
   {:else if !groups.length}
@@ -29,7 +34,11 @@
     <ul class="groups">
       {#each groups as g (g.key)}
         <li class="group {g.tone}">
-          <button class="head" title="go to {g.section}" onclick={() => onpick(g.section)}>
+          <button
+            class="head"
+            title="go to {g.section}"
+            onclick={() => onpick(g.section)}
+          >
             <span class="mark" aria-hidden="true"></span>
             <span class="text">{g.head}</span>
             <span class="go" aria-hidden="true">{g.section} {G.right}</span>
@@ -38,12 +47,16 @@
             <ul class="items">
               {#each g.items as it (it.key)}
                 <li>
-                  <button class="item" onclick={() => onpick(g.section)}>{it.text}</button>
+                  <button class="item" onclick={() => onpick(g.section)}
+                    >{it.text}</button
+                  >
                 </li>
               {/each}
               {#if g.more}
                 <li>
-                  <button class="item more" onclick={() => onpick(g.section)}>+{g.more} more</button>
+                  <button class="item more" onclick={() => onpick(g.section)}
+                    >+{g.more} more</button
+                  >
                 </li>
               {/if}
             </ul>
@@ -121,7 +134,8 @@
     padding: 0 0 0 var(--pad-3);
     display: flex;
     flex-direction: column;
-    border-left: 1px solid color-mix(in srgb, var(--tone-color) 45%, transparent);
+    border-left: 1px solid
+      color-mix(in srgb, var(--tone-color) 45%, transparent);
   }
   .item {
     padding: var(--pad-1) var(--pad-2);

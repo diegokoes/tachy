@@ -29,17 +29,19 @@ beforeEach(async () => {
 });
 
 describe("core job kinds", () => {
-  it("registers the first kinds with their classes", () => {
+  it("registers the first kinds with their queues and classes", () => {
     const kinds = Object.fromEntries(
-      describeJobKinds().map((k) => [k.kind, k.resource_class]),
+      describeJobKinds().map((k) => [k.kind, `${k.queue}/${k.resource_class}`]),
     );
     expect(kinds).toMatchObject({
-      "repo.reindex": "heavy",
-      "repos.refresh": "light",
-      "source.sync": "light",
-      "embeddings.backfill": "heavy",
-      "retention.sweep": "light",
-      "wiki.gaps": "light",
+      "repo.reindex": "index/heavy",
+      "repos.refresh": "maintenance/light",
+      "source.sync": "sync/light",
+      "embeddings.backfill": "embed/heavy",
+      "load.test": "testing/heavy",
+      "retention.sweep": "maintenance/light",
+      "wiki.gaps": "maintenance/light",
+      "bucket.embed": "embed/heavy",
     });
   });
 
@@ -60,7 +62,33 @@ describe("core job kinds", () => {
   });
 });
 
+const refreshCtx = () => ({
+  runId: "test",
+  requestedBy: null,
+  signal: new AbortController().signal,
+  progress: async () => {},
+  log: () => {},
+  credential: async () => undefined,
+  enqueue: (kind: string, params: unknown) =>
+    enqueueRun({ kind, params, trigger: "event" }),
+});
+
 describe("repos.refresh", () => {
+  it("takes repos never indexed too when asked for all of them", async () => {
+    await linkRepo({ slug: "new", url: "https://example.invalid/new.git" });
+    await linkRepo({ slug: "old", url: "https://example.invalid/old.git" });
+    await sql`
+      update repo_lines set indexed_commit = repeat('a', 40)
+      where repo_id in (select id from repos where slug = 'old')
+    `;
+    const kind = getJobKind("repos.refresh");
+    const out = await kind.run(
+      refreshCtx(),
+      kind.params.parse({ scope: "all" }),
+    );
+    expect(out).toEqual({ queued: 2, skipped: 0, never_indexed: 0 });
+  });
+
   it("queues a reindex of each indexed repo that is not already in flight", async () => {
     await linkRepo({ slug: "busy", url: "https://example.invalid/busy.git" });
     await linkRepo({ slug: "stale", url: "https://example.invalid/stale.git" });
@@ -82,8 +110,8 @@ describe("repos.refresh", () => {
         progress: async () => {},
         log: () => {},
         credential: async () => undefined,
-        enqueue: async (kind, params) =>
-          (await enqueueRun({ kind, params, trigger: "event" })) ?? "",
+        enqueue: (kind, params) =>
+          enqueueRun({ kind, params, trigger: "event" }),
       },
       {},
     );
