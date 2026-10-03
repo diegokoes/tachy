@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createApp } from "../../packages/api/src/app";
 import { lifecycle } from "../../packages/api/src/lifecycle";
-import { json, sql } from "../helpers";
+import { json } from "../http";
+import { sql } from "../database";
 
 afterAll(() => sql.end());
 

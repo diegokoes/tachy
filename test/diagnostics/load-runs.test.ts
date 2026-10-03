@@ -8,7 +8,7 @@ import {
   startTestRun,
 } from "@tachy/core/diagnostics";
 import { registerCoreJobs } from "@tachy/core/jobs";
-import { resetData, sql, resetJobs } from "../helpers";
+import { resetData, sql, resetJobs } from "../database";
 
 afterAll(() => {
   delete process.env.TACHY_LOAD_TARGETS;

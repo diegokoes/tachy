@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../packages/api/src/app";
-import { json, resetData, sql } from "../helpers";
+import { json } from "../http";
+import { resetData, sql } from "../database";
 
 afterAll(() => sql.end());
 

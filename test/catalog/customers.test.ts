@@ -15,7 +15,7 @@ import {
   getCustomerProfile,
 } from "@tachy/core/catalog";
 import { linkRepo, listRepos } from "@tachy/core/code";
-import { resetData, sql, tqxProductId } from "../helpers";
+import { resetData, sql, tqxProductId } from "../database";
 
 // File scope, not inside the first describe: a later block would otherwise run
 // against a pool that has already been closed.

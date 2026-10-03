@@ -27,7 +27,7 @@ import {
   updateKnowledgeEntry,
   getKnowledgeEntry,
 } from "@tachy/core/knowledge";
-import { resetData, sql, tqxProductId } from "../helpers";
+import { resetData, sql, tqxProductId } from "../database";
 
 afterAll(() => sql.end());
 

@@ -7,7 +7,7 @@ import {
   seededFreshdeskConnId,
   sql,
   tqxProductId,
-} from "../helpers";
+} from "../database";
 
 // File scope: a later describe would otherwise run against a closed pool.
 afterAll(() => sql.end());

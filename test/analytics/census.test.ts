@@ -15,7 +15,7 @@ import {
 } from "@tachy/core/knowledge";
 import { linkRepo, repoCensus, repoIssues } from "@tachy/core/code";
 import { sourceCensus } from "@tachy/core/sources";
-import { resetData, sql, tqxProductId } from "../helpers";
+import { resetData, sql, tqxProductId } from "../database";
 
 /*
  * The admin overview renders from these four numbers-only queries rather than

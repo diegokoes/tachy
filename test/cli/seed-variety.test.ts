@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { seed } from "../../packages/cli/src/seed";
-import { resetData, sql } from "../helpers";
+import { resetData, sql } from "../database";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = readFileSync(join(here, "..", "fixtures.sql"), "utf8");

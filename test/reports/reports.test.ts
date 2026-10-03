@@ -17,7 +17,8 @@ import {
 } from "@tachy/core/notifications";
 import { createUser } from "@tachy/core/access";
 import { reviewReport } from "../../packages/agent/src/report-review";
-import { resetData, sql, disableVault } from "../helpers";
+import { resetData, sql } from "../database";
+import { disableVault } from "../vault";
 
 afterAll(() => sql.end());
 

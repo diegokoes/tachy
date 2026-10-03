@@ -23,7 +23,8 @@ import {
 import { type ComposerForm } from "@tachy/core";
 import { createApp } from "../../packages/api/src/app";
 import { reviewPrompt } from "../../packages/agent/src/ticket-review";
-import { loginCookie, resetData, sql } from "../helpers";
+import { loginCookie } from "../http";
+import { resetData, sql } from "../database";
 
 const ORG = "https://dev.azure.com/flowsorg";
 

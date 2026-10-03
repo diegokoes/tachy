@@ -6,7 +6,7 @@ import {
   renameResolutionPattern,
   resolutionPatternRenameImpact,
 } from "@tachy/core/catalog";
-import { resetData, sql } from "../helpers";
+import { resetData, sql } from "../database";
 
 describe("resolution_patterns", () => {
   beforeEach(resetData);

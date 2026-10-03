@@ -6,7 +6,7 @@ import {
   listWorkItemLinks,
   recordAdoRefs,
 } from "@tachy/core/work-items";
-import { resetData, seededFreshdeskConnId, sql } from "../helpers";
+import { resetData, seededFreshdeskConnId, sql } from "../database";
 
 afterAll(() => sql.end());
 

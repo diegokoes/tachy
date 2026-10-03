@@ -16,14 +16,8 @@ import { enqueueRun, getJobKind, registerCoreJobs } from "@tachy/core/jobs";
 import { ingestWorkItem } from "@tachy/core/work-items";
 import { type RawWorkItem } from "@tachy/core/sources";
 import { createApp } from "../../packages/api/src/app";
-import {
-  json,
-  loginCookie,
-  resetData,
-  resetJobs,
-  seededFreshdeskConnId,
-  sql,
-} from "../helpers";
+import { json, loginCookie } from "../http";
+import { resetData, resetJobs, seededFreshdeskConnId, sql } from "../database";
 
 afterAll(() => sql.end());
 

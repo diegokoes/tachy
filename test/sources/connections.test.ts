@@ -8,7 +8,9 @@ import {
 } from "@tachy/core/sources";
 import { setCredential } from "@tachy/core/config";
 import { createApp } from "../../packages/api/src/app";
-import { enableVault, json, loginCookie, resetData, sql } from "../helpers";
+import { enableVault } from "../vault";
+import { json, loginCookie } from "../http";
+import { resetData, sql } from "../database";
 
 afterAll(() => sql.end());
 

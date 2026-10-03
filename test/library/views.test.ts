@@ -8,7 +8,7 @@ import {
 import { saveReferenceDoc } from "@tachy/core/reference";
 import { recordView, viewStats, viewHistory } from "@tachy/core/library";
 import { createUser } from "@tachy/core/access";
-import { resetData, sql, tqxProductId } from "../helpers";
+import { resetData, sql, tqxProductId } from "../database";
 
 afterAll(() => sql.end());
 

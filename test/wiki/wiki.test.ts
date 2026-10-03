@@ -22,7 +22,7 @@ import {
   getReferenceDoc,
 } from "@tachy/core/reference";
 import { listRevisions } from "@tachy/core/library";
-import { resetData, sql, tqxProductId } from "../helpers";
+import { resetData, sql, tqxProductId } from "../database";
 
 afterAll(() => sql.end());
 

@@ -19,7 +19,7 @@ import {
   sweepTranscripts,
 } from "@tachy/core/compliance";
 import { saveAsset } from "@tachy/core/library";
-import { resetData, sql, resetJobs } from "../helpers";
+import { resetData, sql, resetJobs } from "../database";
 
 afterAll(() => sql.end());
 

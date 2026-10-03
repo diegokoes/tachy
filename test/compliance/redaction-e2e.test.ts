@@ -8,7 +8,7 @@ import { addCustomer } from "@tachy/core/catalog";
 import { resolveRedactionPolicy, redactForLlm } from "@tachy/core/compliance";
 import type { RawWorkItem } from "@tachy/core/sources";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
-import { resetData, sql } from "../helpers";
+import { resetData, sql } from "../database";
 
 registerSource("freshdesk", createFreshdeskSource);
 

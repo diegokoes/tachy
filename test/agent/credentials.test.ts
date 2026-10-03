@@ -12,7 +12,8 @@ import {
 import { ANTHROPIC_OAUTH_CREDENTIAL, validateCredential } from "@tachy/core";
 import { mcpConfig } from "../../packages/api/src/turn-config";
 import { setInternalEndpoint } from "../../packages/api/src/internal-endpoint";
-import { enableVault, resetData, sql } from "../helpers";
+import { enableVault } from "../vault";
+import { resetData, sql } from "../database";
 
 const agentHome = mkdtempSync(join(tmpdir(), "tachy-agent-home-"));
 process.env.TACHY_AGENT_HOME = agentHome;

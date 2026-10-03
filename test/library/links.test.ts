@@ -6,7 +6,7 @@ import {
 } from "@tachy/core/knowledge";
 import { outboundLinks, backlinks } from "@tachy/core/library";
 import { parseWikilinks } from "@tachy/core";
-import { resetData, sql, tqxProductId } from "../helpers";
+import { resetData, sql, tqxProductId } from "../database";
 
 afterAll(() => sql.end());
 

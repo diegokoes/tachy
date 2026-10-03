@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { runTool } from "../../packages/mcp/src/index";
 import { badInput } from "@tachy/core/infra";
 import { saveKnowledgeEntry } from "@tachy/core/knowledge";
-import { resetData, sql } from "../helpers";
+import { resetData, sql } from "../database";
 
 afterAll(() => sql.end());
 

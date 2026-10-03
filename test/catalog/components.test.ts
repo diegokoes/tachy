@@ -7,7 +7,7 @@ import {
   updateComponent,
 } from "@tachy/core/catalog";
 import { saveKnowledgeEntry } from "@tachy/core/knowledge";
-import { resetData, sql, tqxProductId } from "../helpers";
+import { resetData, sql, tqxProductId } from "../database";
 
 describe("components", () => {
   beforeEach(resetData);

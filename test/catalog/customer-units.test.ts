@@ -17,7 +17,7 @@ import {
   searchKnowledge,
 } from "@tachy/core/knowledge";
 import { saveReferenceDoc } from "@tachy/core/reference";
-import { resetData, sql, tqxProductId } from "../helpers";
+import { resetData, sql, tqxProductId } from "../database";
 
 afterAll(() => sql.end());
 

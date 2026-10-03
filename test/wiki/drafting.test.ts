@@ -5,7 +5,7 @@ import { saveKnowledgeEntry } from "@tachy/core/knowledge";
 import { saveReferenceDoc, updateReferenceDoc } from "@tachy/core/reference";
 import { setComposedFrom, articleStaleness } from "@tachy/core/library";
 import { sql as coreSql } from "@tachy/core/infra";
-import { resetData, sql, tqxProductId } from "../helpers";
+import { resetData, sql, tqxProductId } from "../database";
 
 afterAll(() => sql.end());
 

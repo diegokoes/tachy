@@ -9,7 +9,7 @@ import {
 } from "@tachy/core/reference";
 import { chunkText } from "@tachy/core/search";
 import { addComponent, resolveComponentFilter } from "@tachy/core/catalog";
-import { resetData, sql, tqxProductId } from "../helpers";
+import { resetData, sql, tqxProductId } from "../database";
 
 afterAll(() => sql.end());
 

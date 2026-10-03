@@ -19,7 +19,7 @@ import {
   verifyPassword,
 } from "@tachy/core/access";
 import { recordRun } from "@tachy/core/analytics";
-import { resetData, sql } from "../helpers";
+import { resetData, sql } from "../database";
 
 afterAll(() => sql.end());
 

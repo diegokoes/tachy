@@ -9,7 +9,8 @@ import {
 } from "@tachy/core/exports";
 import { safeFilename } from "@tachy/core";
 import { createApp } from "../../packages/api/src/app";
-import { loginCookie, resetData, sql } from "../helpers";
+import { loginCookie } from "../http";
+import { resetData, sql } from "../database";
 
 afterAll(() => sql.end());
 

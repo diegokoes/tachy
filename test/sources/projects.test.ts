@@ -20,7 +20,7 @@ import {
   seededFreshdeskConnId,
   sql,
   tqxProductId,
-} from "../helpers";
+} from "../database";
 
 const SOURCE = "test-freshdesk";
 const FIXTURE_KEY = "70000000013";

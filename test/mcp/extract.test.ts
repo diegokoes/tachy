@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createUser } from "@tachy/core/access";
 import { saveUpload, sweepUploads } from "@tachy/core/chat";
 import { extractSource, isPdf } from "../../packages/mcp/src/extract";
-import { resetData, sql } from "../helpers";
+import { resetData, sql } from "../database";
 
 afterAll(() => sql.end());
 beforeEach(async () => {

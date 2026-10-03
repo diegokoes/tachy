@@ -9,7 +9,8 @@ import {
 import { createApp } from "../../packages/api/src/app";
 import { buildPrompt } from "../../packages/api/src/turn-config";
 import { server } from "../../packages/mcp/src/index";
-import { loginCookie, resetData, sql } from "../helpers";
+import { loginCookie } from "../http";
+import { resetData, sql } from "../database";
 
 afterAll(() => sql.end());
 
