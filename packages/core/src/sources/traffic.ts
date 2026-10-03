@@ -10,7 +10,7 @@ export type { SourceCallOrigin };
 
 /**
  * Who this process spends source calls on behalf of. Set once at the entry
- * point — the MCP server is the agent, the CLI is sync — rather than threaded
+ * point - the MCP server is the agent, the CLI is sync - rather than threaded
  * through every adapter call, because a process only ever plays one of them.
  * The API is the default.
  */
@@ -28,8 +28,8 @@ export interface SourceCallOutcome {
 }
 
 /**
- * Record one logical call against a connection. A slug with no connection row —
- * an ad-hoc client, a test double — matches nothing and records nothing.
+ * Record one logical call against a connection. A slug with no connection row -
+ * an ad-hoc client, a test double - matches nothing and records nothing.
  */
 export async function recordSourceCall(
   connection: string,

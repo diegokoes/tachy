@@ -16,7 +16,7 @@ afterAll(() => sql.end());
 
 /**
  * The tools themselves, over a real MCP client. Everything below the tool layer
- * has its own suite; what this covers is the layer that only exists here — the
+ * has its own suite; what this covers is the layer that only exists here - the
  * zod schemas, the result envelope, and the `note:` / `next:` guidance the
  * agent actually reads. Those travel with the tool by design (see CLAUDE.md),
  * so they need a test that goes through the tool rather than around it.

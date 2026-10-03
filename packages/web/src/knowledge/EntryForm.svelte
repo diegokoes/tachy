@@ -113,7 +113,7 @@
       cloud: cloud.trim() || (mode === "edit" ? null : undefined),
       resolutionClarity:
         resolutionClarity || (mode === "edit" ? null : undefined),
-      // A checkbox is always a real answer, so it is sent either way — the
+      // A checkbox is always a real answer, so it is sent either way - the
       // `|| null` the other optional fields use would drop an explicit false.
       hiddenFix,
       resolutionPattern:

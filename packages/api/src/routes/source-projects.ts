@@ -225,7 +225,7 @@ export const sourceProjects = new Hono()
   /*
    * Live discovery for the setup screens. Read-only against our own database,
    * but each one spends the connection's credential on a remote call and hands
-   * back that system's answer — including its error text, by design, so an
+   * back that system's answer - including its error text, by design, so an
    * operator can see why a connection will not come up. That is a
    * configuration surface, so it is held to the same rights as editing the
    * connection itself.

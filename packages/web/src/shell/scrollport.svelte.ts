@@ -1,5 +1,5 @@
 /**
- * The element the app actually scrolls — `main` inside the window frame, not
+ * The element the app actually scrolls - `main` inside the window frame, not
  * the document. Anything that has to measure scroll position (ScrollTrigger
  * needs it as `scroller`) is nowhere near App.svelte, so the element is
  * published here rather than threaded down through every view.

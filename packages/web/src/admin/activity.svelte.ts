@@ -32,7 +32,7 @@ const EMPTY: Activity = {
  * also feeds the rail's counts on every page, and these scan run logs and day
  * buckets that only the overviews render.
  *
- * Laid over EMPTY for the same reason as the census — a newer bundle against
+ * Laid over EMPTY for the same reason as the census - a newer bundle against
  * an older API must lose a figure, not the panel.
  */
 export const activity = createResource(async () => {

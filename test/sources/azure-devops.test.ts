@@ -512,8 +512,8 @@ describe("azure-devops sync project list", () => {
   });
 
   /*
-   * resetData() deliberately keeps source_connections — the fixture rows every
-   * other file builds on live there — so this one has to take its own away.
+   * resetData() deliberately keeps source_connections - the fixture rows every
+   * other file builds on live there - so this one has to take its own away.
    * Test schemas are per worker slot, not per file, so a row left behind here
    * turns up in whatever file the pool schedules on this slot next.
    */
@@ -540,7 +540,7 @@ describe("azure-devops sync project list", () => {
     expect(calls.every((c) => !c.includes("/ProjA/"))).toBe(true);
   });
 
-  it("ignores projects without a product — those receive created items, not synced ones", async () => {
+  it("ignores projects without a product - those receive created items, not synced ones", async () => {
     await register("RegA", true);
     await register("TrackerOnly", false);
     const { calls } = mockFetch({ "/RegA/_apis/wit/wiql": { workItems: [] } });

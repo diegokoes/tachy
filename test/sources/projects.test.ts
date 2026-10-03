@@ -205,7 +205,7 @@ describe("area path mapping", () => {
     expect(await resolveAreaComponent(project.id, null)).toBeNull();
   });
 
-  it("survives a component rename — the point of it being a table", async () => {
+  it("survives a component rename - the point of it being a table", async () => {
     const project = await withComponents();
     const tpd = await tpdProductId();
     await setProjectAreaMap({

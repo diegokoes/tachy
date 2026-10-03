@@ -5,7 +5,7 @@
  *   npx tsx scripts/eval-embeddings.ts
  *   TACHY_EMBED_MODEL=Xenova/gte-base npx tsx scripts/eval-embeddings.ts
  *
- * Reads nothing from the database — it embeds the fixture directly, so it runs
+ * Reads nothing from the database - it embeds the fixture directly, so it runs
  * on a laptop with no stack up. The separation it reports is what makes a
  * nonsense query return zero rows; if it collapses, the floor is wrong.
  */
@@ -43,7 +43,7 @@ const keys = KNOWLEDGE.map((e) => e.key);
 const docs: number[][] = [];
 for (const e of KNOWLEDGE) docs.push(await embedPassage(passageText(e)));
 
-/** Highest a meaningless query ever scores — the floor must clear this. */
+/** Highest a meaningless query ever scores - the floor must clear this. */
 let noiseMax = 0;
 let noiseAt = "";
 for (const q of NONSENSE) {

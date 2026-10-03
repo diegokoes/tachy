@@ -12,7 +12,7 @@ export type EntryData =
       kind: "approval";
       id: string;
       tool: string;
-      /** The tool input the user is editing — the object, not a JSON string. */
+      /** The tool input the user is editing - the object, not a JSON string. */
       input: Record<string, unknown>;
       /** Set only while the raw-JSON editor is open, so a half-typed payload
           can be invalid without destroying the parsed fields behind it. */
@@ -29,7 +29,7 @@ export type EntryData =
   | { kind: "error"; text: string }
   | { kind: "running"; turnId: string; text: string; stopped: boolean };
 
-/** Stable per-entry key — index keys break on the export_table splice. */
+/** Stable per-entry key - index keys break on the export_table splice. */
 export type Entry = EntryData & { key: number };
 
 let nextKey = 1;

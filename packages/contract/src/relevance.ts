@@ -1,5 +1,5 @@
 /**
- * The grade bands. `relevance()` itself stays in `@tachy/core` — the score is
+ * The grade bands. `relevance()` itself stays in `@tachy/core` - the score is
  * calibrated against the embedding model's measured distribution and is
  * computed once, server-side, so every surface reads the same number. What the
  * client needs is only where the bands fall, for the gauge's tick marks.

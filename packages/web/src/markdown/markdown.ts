@@ -10,7 +10,7 @@ marked.setOptions({ gfm: true, breaks: true });
 /**
  * [[wikilinks]] as a real inline token, so they compose with the rest of
  * markdown instead of being string-replaced into it. The parser is the
- * contract's, the same one the server extracts edges with — two parsers that
+ * contract's, the same one the server extracts edges with - two parsers that
  * could disagree would let a rendered link have no stored edge.
  *
  * The output is a plain anchor carrying its target in a data attribute; nothing
@@ -38,7 +38,7 @@ export const wikilinkExtension = {
      * role and tabindex, because there is no href to give it: the route a
      * target resolves to is only known once the server has answered, and until
      * then an anchor without href is not focusable and is not announced as a
-     * link. LinkTargets.onKeydown is the other half — without it these would be
+     * link. LinkTargets.onKeydown is the other half - without it these would be
      * reachable by keyboard and still not followable.
      */
     return `<a class="wikilink" role="link" tabindex="0" data-wikilink="${esc(token.target)}">${esc(token.label)}</a>`;
@@ -178,7 +178,7 @@ export function renderMarkdown(src: string): string {
     return DOMPurify.sanitize(marked.parse(src, { async: false }), {
       // DOMPurify allows every data-* attribute by default. Article bodies are
       // untrusted, so close that and re-open only the one the wikilink renderer
-      // emits — ADD_ATTR extends ALLOWED_ATTR, which is checked independently
+      // emits - ADD_ATTR extends ALLOWED_ATTR, which is checked independently
       // of the data-* rule.
       ALLOW_DATA_ATTR: false,
       ADD_ATTR: ["data-wikilink", "role", "tabindex", "loading"],

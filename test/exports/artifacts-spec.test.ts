@@ -153,7 +153,7 @@ describe("buildPrompt output contract", () => {
       prompt.indexOf("</artifact>"),
     );
     expect(prompt).toContain(
-      "ticket_id (string, required) — the source ticket id",
+      "ticket_id (string, required) - the source ticket id",
     );
     expect(prompt).toContain("opened_at (date)");
     expect(prompt.indexOf("fill the register")).toBeGreaterThan(

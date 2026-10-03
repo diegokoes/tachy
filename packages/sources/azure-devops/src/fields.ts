@@ -9,7 +9,7 @@ export type { AdoFieldType, FieldSpec, WorkItemSchema };
  *
  *   workitemtypes/{type}/fields?$expand=all  what the type REQUIRES and ALLOWS
  *                                            (alwaysRequired, allowedValues,
- *                                            defaultValue, helpText) — but
+ *                                            defaultValue, helpText) - but
  *                                            carries no data type at all
  *   _apis/wit/fields                         the account-wide definitions, which
  *                                            DO carry type / readOnly / isIdentity
@@ -61,7 +61,7 @@ export function projectFields(
 
 /**
  * Fetch and join. The account-wide list is org-scoped and unchanging between
- * calls, so a failure to read it degrades the result rather than failing it —
+ * calls, so a failure to read it degrades the result rather than failing it -
  * required fields and allowed values still arrive, only the typed widgets do
  * not.
  */

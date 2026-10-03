@@ -17,7 +17,7 @@
   }
 
   /**
-   * What points at this item. `base` is the collection the item lives in —
+   * What points at this item. `base` is the collection the item lives in -
    * both expose the same /:id/links endpoint.
    */
   let { base, id }: { base: "knowledge" | "reference"; id: string } = $props();

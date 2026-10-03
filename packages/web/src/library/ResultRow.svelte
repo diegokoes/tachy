@@ -101,7 +101,7 @@
   .row.article {
     --kind: var(--article);
   }
-  /* Only `.cursor` paints — hovering MOVES the cursor rather than lighting a
+  /* Only `.cursor` paints - hovering MOVES the cursor rather than lighting a
      second card, so there is exactly one highlight and the pointer and the
      keyboard share one position. */
   .row.cursor,
@@ -127,8 +127,8 @@
   }
 
   /* The track runs the full height of the card, so a card with a preview
-     simply gets a longer bar. The tiers stay at fixed PERCENTAGES — that is
-     the shared reference — and are cut out in the page color so they read as
+     simply gets a longer bar. The tiers stay at fixed PERCENTAGES - that is
+     the shared reference - and are cut out in the page color so they read as
      notches through the fill. */
   .gauge {
     position: relative;

@@ -133,7 +133,7 @@
     text-transform: uppercase;
     color: var(--muted);
     border-bottom: 1px solid var(--border);
-    /* Headers truncate like cells — a fixed layout squeezes the auto column,
+    /* Headers truncate like cells - a fixed layout squeezes the auto column,
        and a nowrap header would otherwise overrun its neighbour. */
     white-space: nowrap;
     overflow: hidden;
@@ -159,7 +159,7 @@
     box-shadow: inset 2px 0 0 var(--accent);
   }
 
-  /* Plain cell values only — ids, slugs, counts, dates, all of which are read
+  /* Plain cell values only - ids, slugs, counts, dates, all of which are read
      by comparing one row against the one above it. A `cell` snippet renders
      its own chips and buttons and stays on the UI face. */
   .v {

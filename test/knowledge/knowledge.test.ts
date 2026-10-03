@@ -390,8 +390,8 @@ describe("listKnowledgeFacets", () => {
     await seed();
     const f = await listKnowledgeFacets({ confidence: "low" });
 
-    // Only the two low-confidence entries are in scope, so "firmware" — which
-    // only the high-confidence one carries — is no longer offered.
+    // Only the two low-confidence entries are in scope, so "firmware" - which
+    // only the high-confidence one carries - is no longer offered.
     expect(f.tags).toEqual([
       { value: "caching", count: 1 },
       { value: "printing", count: 1 },
@@ -485,7 +485,7 @@ describe("customer scoping", () => {
     );
   });
 
-  it("filtering by customer is exact — a general entry is not swept in", async () => {
+  it("filtering by customer is exact - a general entry is not swept in", async () => {
     await twins();
     const rows = await searchKnowledge("codes not locked quantity increase", {
       customerId: await getCustomerIdBySlug("logista"),
@@ -494,7 +494,7 @@ describe("customer scoping", () => {
     expect(rows[0].customer_slug).toBe("logista");
   });
 
-  it("never inherits the ticket's customer — it has to be stated", async () => {
+  it("never inherits the ticket's customer - it has to be stated", async () => {
     const c = await addCustomer({ name: "Logista", slug: "logista" });
     const [wi] = await sql`
       insert into work_items (source_connection_id, external_id, kind, customer_id)

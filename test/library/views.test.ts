@@ -103,8 +103,8 @@ describe("library views", () => {
   });
 
   /**
-   * The property the whole design rests on: reading through core — which is all
-   * the MCP subprocess ever does — must never count as a human visit. Only the
+   * The property the whole design rests on: reading through core - which is all
+   * the MCP subprocess ever does - must never count as a human visit. Only the
    * HTTP route the browser calls records one.
    */
   it("does not count agent reads", async () => {

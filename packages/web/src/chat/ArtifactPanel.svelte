@@ -155,7 +155,7 @@
   /* Opening the panel opens the mark up: the hexagon grows from its centre and
      the three rings drift apart inside it, while the rings themselves keep
      exactly the size they had. That is why the frame scales and the mark does
-     not — scaling the button would have taken the rings with it.
+     not - scaling the button would have taken the rings with it.
 
      One tween drives both, so the frame and the spread can never drift out of
      step. Growing the FRAME (rather than the button) is also what keeps the
@@ -163,8 +163,8 @@
      follows this transform, where the button's would not move at all.
 
      Closing waits for the wire to retract first. The thread freezes its path
-     on outro — it has to, since redrawing mid-retract would jump the drawn
-     fraction — so shrinking underneath it would pull the hexagon out from
+     on outro - it has to, since redrawing mid-retract would jump the drawn
+     fraction - so shrinking underneath it would pull the hexagon out from
      under a wire still pointing at where the edge used to be. */
   const SPREAD_SHUT = 30;
   const SPREAD_OPEN = 42;
@@ -176,7 +176,7 @@
   const frameScale = $derived(1 + (FRAME_OPEN - 1) * openT);
 
   /* untrack: the tween writes openT, so reading it tracked would re-run this
-     effect on every frame it animates — killing and restarting the tween from
+     effect on every frame it animates - killing and restarting the tween from
      wherever it had got to. Closing never finished, because each restart also
      re-armed the THREAD_RETRACT delay and the tween spent its life waiting. */
   $effect(() => {
@@ -325,7 +325,7 @@
       .replace(/^-+|-+$/g, "");
 
   /* The name the agent and `/artifact` use. Nobody should have to invent one,
-     so it follows the title — suffixed when that name is already taken where
+     so it follows the title - suffixed when that name is already taken where
      the artifact is going, which is also what keeps a move from landing on
      someone else's artifact. */
   function freeSlug(
@@ -694,7 +694,7 @@
     pointer-events: none;
   }
   /* While the picker is open the tab is the far end of the wire, not part of
-     the app the scrim pushes back — so it rides over the blur, one step above
+     the app the scrim pushes back - so it rides over the blur, one step above
      the thread that lands in it. Blurring the hexagon left the wire running
      into a smudge. */
   .edge-slot.lifted {
@@ -845,7 +845,7 @@
      :focus-within raises them for anyone arriving by keyboard. `armed` keeps a
      delete waiting for its second click visible after the pointer has left.
 
-     The overlay takes no pointer events, only the marks on it do — the card
+     The overlay takes no pointer events, only the marks on it do - the card
      underneath stays clickable everywhere else, which is how attaching an
      artifact still works while its actions are showing. */
   .art-actions {

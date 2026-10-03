@@ -66,7 +66,7 @@ describe("createUser", () => {
 
   /**
    * `on conflict do nothing` returns no row, so this has to be an error rather
-   * than a silent no-op — otherwise creating a duplicate looks like success and
+   * than a silent no-op - otherwise creating a duplicate looks like success and
    * hands back nothing to act on.
    */
   it("refuses an email that already exists", async () => {

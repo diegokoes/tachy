@@ -34,7 +34,7 @@
     [],
   );
 
-  /* A label has no display name of its own — the slug is what people read. */
+  /* A label has no display name of its own - the slug is what people read. */
   const columns: Column<Label>[] = [
     {
       key: "slug",

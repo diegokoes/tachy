@@ -22,7 +22,7 @@
      */
     label?: string;
     /**
-     * Tween the outline from one mark to the next when `name` changes — trash
+     * Tween the outline from one mark to the next when `name` changes - trash
      * into the check that confirms it, an eye opening and shutting.
      */
     morph?: boolean;

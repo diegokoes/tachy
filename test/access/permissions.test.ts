@@ -216,7 +216,7 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     );
     expect(ok.status).toBe(200);
 
-    // Another team's ticket, and a plain member on their own team's — both are
+    // Another team's ticket, and a plain member on their own team's - both are
     // edits to curated attribution, not reads.
     expect(
       (
@@ -482,7 +482,7 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
       ).status,
     ).toBe(403);
 
-    // Reads stay open — the admin panel loads them before knowing who you are.
+    // Reads stay open - the admin panel loads them before knowing who you are.
     expect((await req(devCookie, "/source-projects", "GET")).status).toBe(200);
 
     const area = await req(
@@ -517,7 +517,7 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     expect(own.status).toBe(200);
 
     // The upsert is keyed on slug, so re-pointing an existing repo is checked
-    // against both scopes — otherwise a team admin could hijack the slug.
+    // against both scopes - otherwise a team admin could hijack the slug.
     expect(
       (
         await req(leadCookie, "/repos", "PUT", {

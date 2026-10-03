@@ -27,7 +27,7 @@
     options: readonly OptIn[];
     title?: string;
     disabled?: boolean;
-    /** Holds a non-default value — worn as an accent border, so a narrowed
+    /** Holds a non-default value - worn as an accent border, so a narrowed
      *  list is visible without a separate "N active" counter. */
     active?: boolean;
     /**
@@ -71,7 +71,7 @@
   let query = $state("");
   /*
    * When the list is short enough to skip the filter input, focus stays on the
-   * trigger — so the trigger is what has to name the option the arrow keys are
+   * trigger - so the trigger is what has to name the option the arrow keys are
    * on. That needs ids, and ids have to be unique per instance because this is
    * every dropdown in the product.
    */

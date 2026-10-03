@@ -10,7 +10,7 @@ afterAll(() => sql.end());
  * One structured line per request, carrying the id the response header hands
  * back. load/README.md tells whoever is chasing a slow request to take the
  * `x-request-id` off the response and grep the log for it, so the two have to
- * agree — and nothing else checks that they do.
+ * agree - and nothing else checks that they do.
  */
 type Line = Record<string, unknown>;
 
@@ -76,7 +76,7 @@ describe("the request line", () => {
 describe("levels", () => {
   /**
    * The Docker healthcheck fires every 30s; at info it drowns the log. Logged
-   * at debug, which the default level filters out entirely — so what is
+   * at debug, which the default level filters out entirely - so what is
    * observable, and what matters, is that the line is not written at all.
    */
   it("keeps /health out of the log at the default level", async () => {

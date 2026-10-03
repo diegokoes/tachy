@@ -20,7 +20,7 @@ export interface CodeSearchOptions {
   sourceProjectId?: string;
   customerId?: string;
   /**
-   * With a customer, also search the repos belonging to no customer — their
+   * With a customer, also search the repos belonging to no customer - their
    * addon sits on shared product code, and the answer is as often in one as the
    * other. Set false for only what is theirs.
    */

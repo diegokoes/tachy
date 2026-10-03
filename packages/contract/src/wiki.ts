@@ -14,7 +14,7 @@ export const WIKI_RESERVED_SLUGS = [
   "gaps",
 ] as const;
 
-/** The article a wiki opens on — a real article at a reserved address. */
+/** The article a wiki opens on - a real article at a reserved address. */
 export const MAIN_PAGE_SLUG = "main";
 
 /**
@@ -86,7 +86,7 @@ export interface WikiTocNode extends WikiCategoryRow {
 
 export interface WikiToc {
   categories: WikiTocNode[];
-  /** Articles filed under nothing — the wiki's own measure of unfiled work. */
+  /** Articles filed under nothing - the wiki's own measure of unfiled work. */
   uncategorised: WikiArticleRef[];
 }
 

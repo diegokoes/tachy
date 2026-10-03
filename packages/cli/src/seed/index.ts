@@ -434,7 +434,7 @@ function banner(opts: SeedOptions, credentials: number): void {
   );
   if (!credentials)
     console.log(
-      "  vault disabled — skipped credentials; set TACHY_SECRET_KEY to seed them",
+      "  vault disabled - skipped credentials; set TACHY_SECRET_KEY to seed them",
     );
   const mode = embedMode(opts.embed);
   if (mode === "none")

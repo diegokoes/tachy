@@ -100,7 +100,7 @@ const feedbackSchema = z.object({
 
 type QueryCtx = { req: { query(k: string): string | undefined } };
 
-/** `hidden_fix` is the one boolean facet — absent means "don't filter". */
+/** `hidden_fix` is the one boolean facet - absent means "don't filter". */
 function boolParam(v: string | undefined): boolean | undefined {
   return v === undefined || v === "" ? undefined : v === "true";
 }

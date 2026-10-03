@@ -12,7 +12,7 @@ import { MAX_PAGE } from "@tachy/contract";
  *    embedding <=> $1 LIMIT k`, `tsv @@ query` and `$1 <% text` each hit theirs.
  *
  * 2. **Ranks fuse, scores do not.** Cosine, ts_rank and word_similarity live on
- *    incomparable scales — adding them means whichever has the widest range
+ *    incomparable scales - adding them means whichever has the widest range
  *    decides the order. Reciprocal Rank Fusion is scale-free, so knowledge and
  *    reference results are also comparable against each other in one list.
  *
@@ -33,7 +33,7 @@ export const RRF_WEIGHTS = { vec: 1.0, lex: 1.0, fuzzy: 0.5 } as const;
 /**
  * Same-customer material leads, on the same scale as everything else: the boost
  * is what one top-ranked tiebreaker signal is worth, not a raw score added to
- * incomparable units. Deliberately small — a customer's own history should win a
+ * incomparable units. Deliberately small - a customer's own history should win a
  * tie, never bury a better answer that happens to be general.
  */
 export const CUSTOMER_BOOST = 0.5 / (RRF_K + 1);
@@ -101,7 +101,7 @@ export const ftsRank = (
  * signals kept for display and `rrf` for ordering.
  *
  * `boost` names a table with (id, customer_id) to lift rows belonging to
- * `customerId`. Rows of other customers are not excluded — a fix for one
+ * `customerId`. Rows of other customers are not excluded - a fix for one
  * install is often the answer for the next.
  *
  * With `unitId`, a row from a SIBLING unit sharing the same profile gets a

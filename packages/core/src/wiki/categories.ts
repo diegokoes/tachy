@@ -222,7 +222,7 @@ export async function setCategoryComponents(
 }
 
 /**
- * Seed sections from the product's top-level components — the one-click start for
+ * Seed sections from the product's top-level components - the one-click start for
  * a new wiki. One section per top-level component, linked to it, appended after
  * any sections already there. Re-runnable: a slug that already exists is skipped,
  * so it never clobbers curation.
@@ -260,7 +260,7 @@ export async function seedSectionsFromComponents(productId: string) {
 /**
  * Children are re-parented onto the deleted category's own parent rather than
  * cascading, so removing a middle category flattens that branch instead of
- * deleting a subtree of work. Article memberships do cascade — an article is
+ * deleting a subtree of work. Article memberships do cascade - an article is
  * not owned by its category.
  */
 export async function deleteWikiCategory(
@@ -427,8 +427,8 @@ export async function findArticle(productId: string | null, slug: string) {
 
 /**
  * In-wiki quick search for the Ctrl+K palette. Scoped to this one wiki and,
- * unlike the library's reference search, it includes drafts — a curator navigates
- * their own unfinished pages — and stays lightweight (title/slug/body match) since
+ * unlike the library's reference search, it includes drafts - a curator navigates
+ * their own unfinished pages - and stays lightweight (title/slug/body match) since
  * it answers keystroke by keystroke.
  */
 export async function searchWikiArticles(
@@ -501,7 +501,7 @@ export interface DraftSource {
 
 /**
  * The material under one component, for an article to be written from. Walks
- * the component subtree, because "Printing" should draw on its children too —
+ * the component subtree, because "Printing" should draw on its children too -
  * a lesson recorded against a sub-component is still about printing.
  *
  * Returns the substance rather than ids: composing needs the text, and a second

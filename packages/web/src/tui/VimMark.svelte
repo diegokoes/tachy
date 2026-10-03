@@ -3,7 +3,7 @@
    * The Vim logo (Simple Icons, CC0). It lives outside ICONS because every
    * entry there is stroke-only on a 0 0 100 100 grid and takes its weight from
    * Icon.svelte; this is a filled path on 0 0 24 24. One path serves both
-   * themes — currentColor already resolves light and dark.
+   * themes - currentColor already resolves light and dark.
    */
   let { size = "1.1em", label }: { size?: string; label?: string } = $props();
 </script>

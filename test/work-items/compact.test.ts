@@ -518,7 +518,7 @@ describe("attachments", () => {
     const html = renderCompactHtml(c);
     expect(html).toContain("xml-bad-soap.xml (66 KB, application/xml)");
     expect(summarizeCompaction(c).files).toBe(
-      "2 files referenced by name — open them on the ticket.",
+      "2 files referenced by name - open them on the ticket.",
     );
   });
 
@@ -703,7 +703,7 @@ describe("renderers", () => {
     const md = renderCompactScript(c);
     expect(md).toContain("# Report T&T   [#42]");
     expect(md).toContain(
-      "Earlier mail, recovered from quoted replies — 1 message",
+      "Earlier mail, recovered from quoted replies - 1 message",
     );
     expect(md).toContain("Alejandro Plaza (2025-12-16):");
     expect(md).toContain("javier@t.com (2026-06-20)");

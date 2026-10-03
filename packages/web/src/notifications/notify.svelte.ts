@@ -61,7 +61,7 @@ export async function markNotificationsRead(ids: string[]): Promise<void> {
 }
 
 /**
- * Poll on a gentle interval — the app has no push channel, and a reply the admin
+ * Poll on a gentle interval - the app has no push channel, and a reply the admin
  * left is not time-critical. Every minute, and on tab refocus so a returning
  * user sees a fresh inbox. The first fetch is App's, once the session knows who
  * is signed in: at mount it does not yet, and a fetch then would find no one.

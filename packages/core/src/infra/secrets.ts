@@ -65,8 +65,8 @@ export interface EncryptedSecret {
 
 /**
  * `aad` binds a ciphertext to the row that holds it. Without it the encryption
- * says only "this deployment wrote this", so anyone able to UPDATE the table —
- * but not read TACHY_SECRET_KEY — could move one user's credential into another
+ * says only "this deployment wrote this", so anyone able to UPDATE the table -
+ * but not read TACHY_SECRET_KEY - could move one user's credential into another
  * user's row and have it decrypt cleanly as theirs.
  */
 export function encryptSecret(

@@ -15,7 +15,7 @@ export const VIEW_DEDUPE_MINUTES = 30;
  * never reaches the HTTP routes that call this, so no filtering is needed for
  * this to mean people rather than tool calls.
  *
- * `userId` may be null — a bearer-token or open-mode caller has no identity, and
+ * `userId` may be null - a bearer-token or open-mode caller has no identity, and
  * the unique indexes are `nulls not distinct` so those still bucket by day
  * instead of inserting a row per hit.
  */
@@ -86,7 +86,7 @@ export interface DailyViews {
   views: number;
 }
 
-/** The read curve for one item, oldest first — a sparkline's worth of rows. */
+/** The read curve for one item, oldest first - a sparkline's worth of rows. */
 export async function viewHistory(
   target: LibraryTarget,
   days = 90,

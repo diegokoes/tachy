@@ -29,7 +29,7 @@ const SETTLE_CAP = 3000;
  * Sections register themselves as they mount; this builds one ScrollTrigger
  * per section against the app's real scroller and reports which one the reader
  * is in. It also owns the two other things that are really scroll position in
- * disguise — the once-only reveal, and mounting a section shortly before it is
+ * disguise - the once-only reveal, and mounting a section shortly before it is
  * reached.
  */
 export function createSpy(opts: {
@@ -53,7 +53,7 @@ export function createSpy(opts: {
   let holdCap = 0;
 
   /* Trailing air under the last section. Without it a short last section can
-     never reach the top — there is nothing below to scroll — so where the rail
+     never reach the top - there is nothing below to scroll - so where the rail
      puts you would depend on how many rows the table happened to have. */
   let tail = $state(0);
 
@@ -143,7 +143,7 @@ export function createSpy(opts: {
   /* The scroll has arrived, but the panels above it are still fetching, and
      each one that lands pushes the target further down. So the hold does not
      run on a fixed timer: every resize of the column extends it, up to a cap,
-     and it ends the instant the reader scrolls for themselves — which is the
+     and it ends the instant the reader scrolls for themselves - which is the
      whole difference between settling and scroll-jacking. */
   function hold(el: HTMLElement, goal: () => number) {
     const give = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
@@ -180,7 +180,7 @@ export function createSpy(opts: {
 
   /* clearProps is load-bearing, not tidiness: `from` leaves its transform
      inline when it lands, and a transformed ancestor becomes the containing
-     block for every `position: fixed` inside it — which trapped a dialog's
+     block for every `position: fixed` inside it - which trapped a dialog's
      scrim and its own stacking order inside this one section. */
   function reveal(e: Entry) {
     wipeIn([e.head]);
@@ -248,7 +248,7 @@ export function createSpy(opts: {
      * problem: a panel renders an empty table and then grows again when its
      * fetch lands, which on a page this tall happens while the scroll is still
      * travelling. So the destination is re-measured on every tick rather than
-     * recorded once, and held for a moment after arrival — until the reader
+     * recorded once, and held for a moment after arrival - until the reader
      * touches the scroll themselves.
      */
     goto(key: string, animate = true) {

@@ -95,7 +95,7 @@
   });
 
   const leadOptions = $derived([
-    { value: "", label: "— no lead page —" },
+    { value: "", label: "- no lead page -" },
     ...articles.map((a) => ({ value: a.slug as string, label: a.title })),
   ]);
 

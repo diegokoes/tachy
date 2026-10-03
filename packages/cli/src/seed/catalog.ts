@@ -31,7 +31,7 @@ export interface SeededUnit {
   id: string;
   slug: string;
   customerId: string;
-  /** The profile it conforms to, when it has one — the sibling-boost case. */
+  /** The profile it conforms to, when it has one - the sibling-boost case. */
   profileId: string | null;
 }
 
@@ -275,8 +275,8 @@ async function seedCustomerFacts(
   components: SeededComponent[],
   products: SeededProduct[],
 ): Promise<SeededUnit[]> {
-  // One customer gets a real estate — two sites of lines, two of which share a
-  // layout — so the resolution ladder and the unit tree have something to show.
+  // One customer gets a real estate - two sites of lines, two of which share a
+  // layout - so the resolution ladder and the unit tree have something to show.
   // The rest stay flat, which is the commoner shape.
   const unitRows: Record<string, unknown>[] = [];
   const unitIds = new Map<string, string>();

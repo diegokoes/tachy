@@ -9,7 +9,7 @@
     label,
   }: {
     /**
-     * Mutually exclusive parts of one population — that is what makes the
+     * Mutually exclusive parts of one population - that is what makes the
      * widths a whole rather than several unrelated ratios.
      */
     segments: Segment[];

@@ -5,7 +5,7 @@ import * as core from "@tachy/core";
 /**
  * CLAUDE.md: a rule both sides enforce belongs in the contract, and core
  * re-exports it so server code still reaches it through @tachy/core. The
- * failure this guards is quiet — packages/api imports only from core, so a
+ * failure this guards is quiet - packages/api imports only from core, so a
  * symbol missing from that re-export is not an error there, it is a literal
  * written out by hand. That is how the admin panel and the vault came to
  * disagree about what a valid Anthropic key looks like, and how

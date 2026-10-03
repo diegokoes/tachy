@@ -100,7 +100,7 @@
      and the action pulls it back when that would run off the screen. The width
      is in ch so the measure holds at any font scale. */
   .tip {
-    /* Not pointer-events: none — a tip long enough to scroll has to be
+    /* Not pointer-events: none - a tip long enough to scroll has to be
        scrollable, and these carry the actual rule for the field beside them. */
     z-index: calc(var(--z-overlay) + 1);
     width: max-content;

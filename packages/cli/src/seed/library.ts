@@ -18,7 +18,7 @@ import type { Volumes } from "./scale";
  * database without them cannot show either working.
  *
  * saveKnowledgeEntry seeds version 1 for entries created through core, but the
- * seeder inserts rows directly for speed — so version 1 is written here too,
+ * seeder inserts rows directly for speed - so version 1 is written here too,
  * and later versions are stacked on top of it.
  */
 export async function seedLibrary(

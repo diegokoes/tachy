@@ -308,7 +308,7 @@
         <div class="content">
           <h2>{entry.issue_summary ?? "(no summary)"}</h2>
 
-          <!-- Bars left, status band centred, nothing right — the third track
+          <!-- Bars left, status band centred, nothing right - the third track
                keeps the centre optically centred whatever the bars measure. -->
           <div class="meta">
             <div class="left">

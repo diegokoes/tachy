@@ -194,7 +194,7 @@ describe("overview activity", () => {
     });
 
     /* One logical call however many retries the rate limiter cost, flagged as
-       limited because it was — the retry is invisible to the caller, not to the
+       limited because it was - the retry is invisible to the caller, not to the
        quota. */
     it("counts a retried call once, through sourceFetch", async () => {
       const responses = [

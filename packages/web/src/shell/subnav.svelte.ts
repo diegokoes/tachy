@@ -18,7 +18,7 @@ export type Subnav = {
   onpick: (key: string) => void;
   /**
    * Optional content for the carved row, right of the recess. It rides along
-   * with the subnav because that row only exists when there is one — and it
+   * with the subnav because that row only exists when there is one - and it
    * travels as a snippet so the view keeps ownership of what it renders
    * instead of App having to know what a section's controls are.
    */
@@ -28,7 +28,7 @@ export type Subnav = {
 /**
  * $state.raw, not $state. Plain $state deep-proxies whatever is assigned to it,
  * so the stored value is a Proxy of what was passed in and `stored === passed`
- * is false — which silently broke the identity check in the disposer below, and
+ * is false - which silently broke the identity check in the disposer below, and
  * left admin's tabs on screen after navigating to chat. raw stores the
  * reference itself; the whole value is replaced on every change anyway.
  */
@@ -66,7 +66,7 @@ export function setSubnav(next: Subnav) {
  * This is the same store in a second register: while something has claimed the
  * row, its snippet wins; when it unmounts, the section's own actions come back.
  *
- * $state.raw for the same reason as `current` — a Snippet is a function, and
+ * $state.raw for the same reason as `current` - a Snippet is a function, and
  * the identity check below is what makes the disposer safe.
  */
 let claimed = $state.raw<Snippet | null>(null);

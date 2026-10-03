@@ -93,7 +93,7 @@
     flex-direction: column;
     gap: var(--pad-1);
   }
-  /* Clears the password field — the button sat right on top of it. */
+  /* Clears the password field - the button sat right on top of it. */
   .submit {
     display: flex;
     justify-content: flex-end;

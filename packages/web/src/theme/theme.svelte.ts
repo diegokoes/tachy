@@ -14,7 +14,7 @@ const OPPOSITE_ACCENTS: Record<string, string> = {
 
 /* The fluid clamp in tokens.css tops out at 18px and saturates around a
    1571px viewport, so width alone cannot tell a 27" 1440p display from a 32"
-   4K one — only pixel density can, and CSS cannot read it. These steps are the
+   4K one - only pixel density can, and CSS cannot read it. These steps are the
    knob that covers the difference, so the top one has to reach far enough to. */
 export const TEXT_SIZES = [
   { key: "small", scale: 0.9 },
@@ -98,7 +98,7 @@ export function loadThemeFromStorage() {
   }
 
   // The old control was a 0.05-step slider, so a stored value is very unlikely
-  // to land on one of the three steps — snap it to the nearest.
+  // to land on one of the three steps - snap it to the nearest.
   const saved = Number(localStorage.getItem("tachy-font-scale"));
   const nearest =
     Number.isFinite(saved) && saved > 0

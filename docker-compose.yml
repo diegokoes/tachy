@@ -63,13 +63,13 @@ services:
       - "${TACHY_API_PORT:-8787}:8787"
     volumes:
       - ./backups:/app/backups
-      # Linked-repo clones for code search — survives redeploys so reindexes
+      # Linked-repo clones for code search - survives redeploys so reindexes
       # stay diff-only instead of re-cloning.
       - tachy-repo-data:/app/data
       # Per-user Claude Code state: one directory per user under users/<id>,
       # each holding that user's credential store and session transcripts.
       # Persisting it lets multi-turn chats resume across redeploys. The
-      # server's own `claude login` no longer answers turns — users bring
+      # server's own `claude login` no longer answers turns - users bring
       # their own credential, or fall back to ANTHROPIC_API_KEY /
       # CLAUDE_CODE_OAUTH_TOKEN from the environment.
       # Under /home/node, not /root: the container runs as an unprivileged user.
@@ -80,7 +80,7 @@ services:
   #   docker compose run --rm cli npm run sync backup
   #   docker compose run --rm cli npm run sync embed-backfill
   cli:
-    # No `build:` — a second build definition for the same tag would race the
+    # No `build:` - a second build definition for the same tag would race the
     # api's. `up -d --build` produces the image this runs on.
     image: ${TACHY_IMAGE:-ghcr.io/diegokoes/tachy:main}
     profiles: ["tools"]

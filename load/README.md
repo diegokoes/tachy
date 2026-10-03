@@ -83,7 +83,7 @@ Every request is tagged, so the per-endpoint rows are the ones that matter:
 ```
 
 To chase a slow request, take its `x-request-id` response header and grep the
-API log — every request logs one JSON line carrying the same id:
+API log - every request logs one JSON line carrying the same id:
 
 ```sh
 docker compose logs api | grep <request-id>
@@ -98,12 +98,12 @@ knowledge entries, 21k vectors), at 10 rps:
 
 The office laptop is slower than this, so treat it as an upper bound on what
 good looks like rather than a target. The thresholds in `search.js` are set
-well above it deliberately — they are there to catch a regression that changes
+well above it deliberately - they are there to catch a regression that changes
 the shape of the curve, not to grade the hardware.
 
 ## What is deliberately not tested
 
-- **Uploads and `work-items/:source/:id/fetch`** — both call third-party APIs.
+- **Uploads and `work-items/:source/:id/fetch`** - both call third-party APIs.
 - **All writes.** `POST /api/knowledge` runs another embedding and grows the
   database, so a second run would not measure the same thing as the first.
 
@@ -139,7 +139,7 @@ docker compose run --rm cli npm run sync -- seed --scale=medium --reset --yes --
 
 `--embed=search` embeds what a search reads: knowledge entries and reference
 chunks. `--embed` (or `--embed=all`) adds `code_chunks`, which no scenario here
-touches and which is most of the cost — measured on a 20-core workstation the
+touches and which is most of the cost - measured on a 20-core workstation the
 model manages roughly 33 knowledge entries, 25 reference chunks or 20 code
 chunks a second, so at `--scale=large` that is about 23 minutes for `search`
 against 73 for `all`. The model saturates the cores it is given; the seeder

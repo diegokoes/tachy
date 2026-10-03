@@ -41,7 +41,7 @@
   const versionLabel = (l: ReferenceLineageRow) =>
     `${l.doc_version ? `v${l.doc_version}` : fmtDate(l.created_at) || l.id.slice(0, 8)} · ${l.status}`;
 
-  /** A doc with no recorded lineage is still one version — its own. */
+  /** A doc with no recorded lineage is still one version - its own. */
   const versions = $derived<ReferenceLineageRow[]>(
     lineage.length
       ? lineage
@@ -131,7 +131,7 @@
         if (!isCurrent()) return;
         lineage = [];
       }
-      // Only for the permission check — the scope is displayed off product_area.
+      // Only for the permission check - the scope is displayed off product_area.
       if (next.product_id) {
         try {
           const products = await api.get<ProductRow[]>("/products");

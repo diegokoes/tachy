@@ -2,7 +2,7 @@ import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 
 /**
  * Pooling and prefixes are per-model facts, not library defaults. Getting them
- * wrong does not fail — it silently collapses every vector toward a narrow cone,
+ * wrong does not fail - it silently collapses every vector toward a narrow cone,
  * so unrelated text scores as high as a real match. They live here, in data, so
  * a model swap is a table entry rather than a hidden assumption.
  */

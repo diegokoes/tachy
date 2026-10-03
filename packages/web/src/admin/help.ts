@@ -7,7 +7,7 @@
  */
 export const INFO = {
   slug: "Lowercase id, derived from the name. Used by URLs, filters and the agent. Not shown in lists.",
-  /* Three tables carry aliases and they do not all mean the same thing —
+  /* Three tables carry aliases and they do not all mean the same thing -
      a customer's are trading names, not email domains. See catalog/customers.ts. */
   aliases: {
     product:

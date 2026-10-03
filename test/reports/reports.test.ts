@@ -49,7 +49,7 @@ describe("reports domain", () => {
       reportId: report.id,
       authorId: admin.id,
       direction: "admin",
-      body: "thanks — which browser?",
+      body: "thanks - which browser?",
     });
 
     const full = await getReport(report.id);
