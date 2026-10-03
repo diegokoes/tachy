@@ -1,13 +1,13 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { createUser } from "@tachy/core/access";
 import {
-  createUser,
   createOutput,
   getOutput,
   listOutputs,
   deleteOutput,
   sweepExpiredOutputs,
-  safeFilename,
-} from "@tachy/core";
+} from "@tachy/core/exports";
+import { safeFilename } from "@tachy/core";
 import { createApp } from "../../packages/api/src/app";
 import { loginCookie, resetData, sql } from "../helpers";
 

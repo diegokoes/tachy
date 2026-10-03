@@ -2,10 +2,10 @@ import type {
   ReviewFinding,
   ReviewFindingKind,
   ReviewReadiness,
-  ScopeContext,
   TicketContextItem,
   TicketReview,
 } from "@tachy/core";
+import type { ScopeContext } from "@tachy/core/config";
 import { firstJsonObject, runAdvisory } from "./advisory";
 
 export interface ReviewRequest {

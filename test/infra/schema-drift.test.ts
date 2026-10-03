@@ -19,9 +19,7 @@ import {
   LIBRARY_ACTORS,
   USER_ROLES,
   TEAM_ROLES,
-  WORK_ITEM_LINK_KINDS,
   REPO_INDEX_STATUSES,
-  scopesOf,
   WIKI_GAP_KINDS,
   LIBRARY_ASSET_TYPES,
   JOB_RESOURCE_CLASSES,
@@ -31,6 +29,8 @@ import {
   JOB_TRIGGERS,
   JOB_STATUSES,
 } from "@tachy/core";
+import { WORK_ITEM_LINK_KINDS } from "@tachy/core/work-items";
+import { scopesOf } from "@tachy/core/config";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const schema = readFileSync(join(here, "..", "..", "db", "schema.sql"), "utf8");

@@ -6,7 +6,7 @@ import {
   setEmbedBackend,
   startEmbedHost,
   type EmbedHost,
-} from "@tachy/core";
+} from "@tachy/core/search";
 import { internalRoutes } from "../../packages/api/src/routes/internal";
 
 let host: EmbedHost | undefined;

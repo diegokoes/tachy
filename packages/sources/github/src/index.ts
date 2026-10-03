@@ -1,19 +1,18 @@
+import { badInput, githubToken } from "@tachy/core/infra";
 import {
-  badInput,
   customerStandIn,
-  githubToken,
   scrubbableCopy,
   scrubStrings,
-  sourceFetch,
   TokenMap,
-} from "@tachy/core";
+} from "@tachy/core/compliance";
+import { sourceFetch } from "@tachy/core/sources";
 import type {
   WorkItemSource,
   RawWorkItem,
   RawMessage,
   ListOptions,
   SourceFactory,
-} from "@tachy/core";
+} from "@tachy/core/sources";
 
 function scrubActor(u: unknown, map: TokenMap, name: string): void {
   if (!u || typeof u !== "object") return;

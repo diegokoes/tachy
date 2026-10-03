@@ -1,10 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import {
-  addCustomer,
-  addSourceProject,
-  createUser,
-  linkRepo,
-} from "@tachy/core";
+import { addCustomer } from "@tachy/core/catalog";
+import { addSourceProject } from "@tachy/core/sources";
+import { createUser } from "@tachy/core/access";
+import { linkRepo } from "@tachy/core/code";
 import { createApp } from "../../packages/api/src/app";
 import {
   json,

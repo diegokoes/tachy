@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearSettingsCache, createUser, setSetting } from "@tachy/core";
+import { clearSettingsCache, setSetting } from "@tachy/core/config";
+import { createUser } from "@tachy/core/access";
 import type { ModelChoice, ModelListConfig } from "@tachy/agent";
 import { createApp } from "../../packages/api/src/app";
 import { loginCookie, resetData, sql } from "../helpers";

@@ -2,7 +2,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { createUser } from "@tachy/core";
+import { createUser } from "@tachy/core/access";
 import { createApp } from "../../packages/api/src/app";
 import { loginCookie, resetData, sql } from "../helpers";
 

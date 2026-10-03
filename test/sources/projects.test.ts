@@ -1,22 +1,20 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { addComponent, addTeam, renameComponent } from "@tachy/core/catalog";
 import {
-  addComponent,
-  addTeam,
   addSourceProject,
   deleteProjectAreaMap,
   deleteSourceProject,
-  ingestWorkItem,
-  linkRepo,
   listProjectAreaMap,
   listSourceProjects,
-  renameComponent,
   resolveAreaComponent,
   resolveProjectContext,
   resolveProjectContextStrict,
   resolveSourceProject,
   setProjectAreaMap,
   updateSourceProject,
-} from "@tachy/core";
+} from "@tachy/core/sources";
+import { ingestWorkItem } from "@tachy/core/work-items";
+import { linkRepo } from "@tachy/core/code";
 import {
   resetData,
   seededFreshdeskConnId,

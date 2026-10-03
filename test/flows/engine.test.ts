@@ -2,24 +2,19 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   createFlow,
-  createUser,
   defineFlowAction,
-  evaluateCondition,
   getFlow,
-  enqueueRun,
-  getJobKind,
-  ingestWorkItem,
-  interpolate,
   itemTriggers,
   listFlowRuns,
-  registerCoreJobs,
   runFlow,
-  setTeamMember,
   updateFlow,
   validateGraph,
-  type FlowGraph,
-  type RawWorkItem,
-} from "@tachy/core";
+} from "@tachy/core/flows";
+import { createUser, setTeamMember } from "@tachy/core/access";
+import { evaluateCondition, interpolate, type FlowGraph } from "@tachy/core";
+import { enqueueRun, getJobKind, registerCoreJobs } from "@tachy/core/jobs";
+import { ingestWorkItem } from "@tachy/core/work-items";
+import { type RawWorkItem } from "@tachy/core/sources";
 import { createApp } from "../../packages/api/src/app";
 import {
   json,

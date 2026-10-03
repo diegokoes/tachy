@@ -8,11 +8,9 @@ import {
   getReport,
   addReportMessage,
   setReportStatus,
-  notify,
-  REPORT_TYPES,
-  REPORT_STATUSES,
-  type ReportReview,
-} from "@tachy/core";
+} from "@tachy/core/reports";
+import { notify } from "@tachy/core/notifications";
+import { REPORT_TYPES, REPORT_STATUSES, type ReportReview } from "@tachy/core";
 import { requireAdmin } from "../auth";
 import { requireCaller, callerScope } from "../authz";
 import { reviewReport } from "@tachy/agent";

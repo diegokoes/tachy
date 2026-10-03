@@ -7,7 +7,7 @@ import {
   embedPassages,
   embedQuery,
   toVectorLiteral,
-} from "@tachy/core";
+} from "@tachy/core/search";
 
 /**
  * No database here. What these guard is the layer whose failures are silent:

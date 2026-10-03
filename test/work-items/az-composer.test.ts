@@ -8,14 +8,13 @@ import {
   vi,
 } from "vitest";
 import type { FieldSpec } from "@tachy/core";
+import { addSourceConnection, addSourceProject } from "@tachy/core/sources";
+import { addTeam } from "@tachy/core/catalog";
 import {
-  addSourceConnection,
-  addSourceProject,
-  addTeam,
   clearPermissionCache,
   createUser,
   setTeamMember,
-} from "@tachy/core";
+} from "@tachy/core/access";
 import {
   composerForm,
   creatableTypes,

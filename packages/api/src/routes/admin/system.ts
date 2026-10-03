@@ -1,16 +1,14 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { log, env, secretsEnabled } from "@tachy/core/infra";
 import {
-  log,
-  env,
   effectiveSettings,
   setSetting,
-  secretsEnabled,
   credentialSource,
-  AGENT_CREDENTIALS,
   envCredential,
-} from "@tachy/core";
+} from "@tachy/core/config";
+import { AGENT_CREDENTIALS } from "@tachy/core";
 import { requireAdmin } from "../../auth";
 import { isAdminIdentity } from "../../authz";
 import { runtimeSnapshot } from "../../runtime";

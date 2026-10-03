@@ -1,14 +1,16 @@
 import { z } from "zod";
 import {
   resolveSource,
-  resolveCurrentUserId,
+  resolveProjectContextStrict,
+  matchWiki,
+} from "@tachy/core/sources";
+import { resolveCurrentUserId } from "@tachy/core/access";
+import {
   resolveRedactionPolicy,
   scrubText,
   TokenMap,
-  resolveProjectContextStrict,
-  matchWiki,
-  badInput,
-} from "@tachy/core";
+} from "@tachy/core/compliance";
+import { badInput } from "@tachy/core/infra";
 import {
   createAdoClient,
   createWorkItem,

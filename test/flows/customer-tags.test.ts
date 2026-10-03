@@ -1,20 +1,24 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   addCustomer,
-  changeTagList,
-  createFlow,
   getCustomerIdBySlug,
-  ingestWorkItem,
+  setCustomerFact,
+  setWorkItemCustomer,
+} from "@tachy/core/catalog";
+import {
+  changeTagList,
+  registerSource,
+  type RawWorkItem,
+  type SourceFactory,
+} from "@tachy/core/sources";
+import {
+  createFlow,
   listFlowRuns,
   listOptions,
   loadSubject,
-  registerSource,
   runFlow,
-  setCustomerFact,
-  setWorkItemCustomer,
-  type RawWorkItem,
-  type SourceFactory,
-} from "@tachy/core";
+} from "@tachy/core/flows";
+import { ingestWorkItem } from "@tachy/core/work-items";
 import { resetData, sql } from "../helpers";
 
 afterAll(async () => {

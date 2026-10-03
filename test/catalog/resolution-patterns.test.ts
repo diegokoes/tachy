@@ -1,11 +1,11 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { saveKnowledgeEntry } from "@tachy/core/knowledge";
 import {
-  saveKnowledgeEntry,
   listResolutionPatterns,
   addResolutionPattern,
   renameResolutionPattern,
   resolutionPatternRenameImpact,
-} from "@tachy/core";
+} from "@tachy/core/catalog";
 import { resetData, sql } from "../helpers";
 
 describe("resolution_patterns", () => {

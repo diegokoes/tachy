@@ -1,14 +1,12 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { createUser, setTeamMember } from "@tachy/core/access";
+import { addTeam, getTeamIdBySlug } from "@tachy/core/catalog";
 import {
-  createUser,
-  addTeam,
-  setTeamMember,
-  getTeamIdBySlug,
   listVisibleArtifacts,
   getArtifact,
   upsertArtifact,
   deleteArtifact,
-} from "@tachy/core";
+} from "@tachy/core/exports";
 import { createApp } from "../../packages/api/src/app";
 import { buildPrompt } from "../../packages/api/src/turn-config";
 import { loginCookie, resetData, sql } from "../helpers";

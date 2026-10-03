@@ -2,21 +2,23 @@ import { mkdir, mkdtemp, readdir, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { createUser } from "@tachy/core/access";
 import {
-  createUser,
   deleteJobDefinition,
   describeJobKinds,
   enqueueRun,
   ensureDefaultDefinitions,
   getJobKind,
-  linkRepo,
   listJobDefinitions,
   registerCoreJobs,
+} from "@tachy/core/jobs";
+import { linkRepo } from "@tachy/core/code";
+import {
   rollUpUsage,
-  saveAsset,
   sweepOrphanAssets,
   sweepTranscripts,
-} from "@tachy/core";
+} from "@tachy/core/compliance";
+import { saveAsset } from "@tachy/core/library";
 import { resetData, sql, resetJobs } from "../helpers";
 
 afterAll(() => sql.end());

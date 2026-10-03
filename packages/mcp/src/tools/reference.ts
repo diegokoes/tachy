@@ -1,20 +1,22 @@
 import { z } from "zod";
+import { resolveCurrentUserId } from "@tachy/core/access";
+import { getCustomerIdBySlug } from "@tachy/core/catalog";
 import {
-  resolveCurrentUserId,
-  getCustomerIdBySlug,
   TokenMap,
-  searchReferenceDocs,
-  badInput,
   globalRedactionEnabled,
   scrubText,
+} from "@tachy/core/compliance";
+import {
+  searchReferenceDocs,
   saveReferenceDoc,
   getReferenceDoc,
   listReferenceDocs,
   updateReferenceDoc,
   referenceDocLineage,
-  referenceStatusSchema,
-} from "@tachy/core";
-import type { ReferenceDocUpdate } from "@tachy/core";
+} from "@tachy/core/reference";
+import { badInput } from "@tachy/core/infra";
+import { referenceStatusSchema } from "@tachy/core/knowledge";
+import type { ReferenceDocUpdate } from "@tachy/core/reference";
 import { extractSource } from "../extract";
 import { tool } from "../server";
 import { GRADE_NOTE, out, searchOut, outScrubbed } from "../results";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EmbedQueue } from "@tachy/core";
+import { EmbedQueue } from "@tachy/core/search";
 
 /** A runner that records each batch and answers with each text's length. */
 function recorder() {

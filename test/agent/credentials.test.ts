@@ -2,15 +2,14 @@ import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createUser } from "@tachy/core/access";
 import {
-  createUser,
   setCredential,
   setPref,
   effectiveSettings,
   resolveAgentAuth,
-  ANTHROPIC_OAUTH_CREDENTIAL,
-  validateCredential,
-} from "@tachy/core";
+} from "@tachy/core/config";
+import { ANTHROPIC_OAUTH_CREDENTIAL, validateCredential } from "@tachy/core";
 import { mcpConfig } from "../../packages/api/src/turn-config";
 import { setInternalEndpoint } from "../../packages/api/src/internal-endpoint";
 import { enableVault, resetData, sql } from "../helpers";

@@ -3,8 +3,8 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { sql } from "@tachy/core/infra";
 import {
-  sql,
   linkRepo,
   listRepos,
   getRepoBySlug,
@@ -22,7 +22,7 @@ import {
   connectionToken,
   repoDir,
   adoptSupersededIndex,
-} from "@tachy/core";
+} from "@tachy/core/code";
 import {
   countTree,
   indexableFiles,

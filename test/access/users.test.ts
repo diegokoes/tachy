@@ -1,14 +1,13 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { AppError } from "@tachy/core/infra";
+import { addTeam } from "@tachy/core/catalog";
 import {
-  AppError,
-  addTeam,
   countAdmins,
   createUser,
   getUserByEmail,
   listMemberships,
   listTeamMembers,
   listUsers,
-  recordRun,
   setTeamMember,
   setUserDisabled,
   setUserDisplayName,
@@ -18,7 +17,8 @@ import {
   userSoleTeamId,
   userTeams,
   verifyPassword,
-} from "@tachy/core";
+} from "@tachy/core/access";
+import { recordRun } from "@tachy/core/analytics";
 import { resetData, sql } from "../helpers";
 
 afterAll(() => sql.end());

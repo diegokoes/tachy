@@ -1,14 +1,13 @@
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { createUser } from "@tachy/core/access";
+import { keyId, vaultKeys } from "@tachy/core/infra";
 import {
-  createUser,
-  keyId,
   resolveCredential,
   rotateVaultKey,
   setCredential,
-  vaultKeys,
   vaultState,
-} from "@tachy/core";
+} from "@tachy/core/config";
 import { clearSecretKeyCache } from "../../packages/core/src/infra/secrets";
 import { resetData, sql } from "../helpers";
 

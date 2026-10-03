@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { verifyPassword } from "@tachy/core";
+import { verifyPassword } from "@tachy/core/access";
 import {
   seed,
   ADMIN_EMAIL,

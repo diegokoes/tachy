@@ -21,8 +21,8 @@ import {
   addCustomer,
   updateCustomer,
   deleteCustomer,
-  badInput,
-} from "@tachy/core";
+} from "@tachy/core/catalog";
+import { badInput } from "@tachy/core/infra";
 import { assertAnyTeamAdminApi } from "../../authz";
 import { slugField } from "./catalog";
 

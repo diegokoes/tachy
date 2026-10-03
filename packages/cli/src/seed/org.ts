@@ -1,4 +1,6 @@
-import { SCOPES, TEAM_ROLES, USER_ROLES, hashPassword } from "@tachy/core";
+import { SCOPES } from "@tachy/core/config";
+import { TEAM_ROLES, USER_ROLES } from "@tachy/core";
+import { hashPassword } from "@tachy/core/access";
 import { insertRows, type Tx } from "./batches";
 import { chance, intBetween, pick, rngFor, uuidFor } from "./deterministic";
 import { ARTIFACT_BODIES, PRODUCTS, slugify } from "./corpus";

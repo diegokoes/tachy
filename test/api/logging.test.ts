@@ -1,5 +1,5 @@
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
-import { log, runWithLogContext } from "@tachy/core";
+import { log, runWithLogContext } from "@tachy/core/infra";
 import { createApp } from "../../packages/api/src/app";
 import { json, resetData, sql } from "../helpers";
 

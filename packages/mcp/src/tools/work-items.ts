@@ -1,28 +1,31 @@
 import { z } from "zod";
+import { resolveSource, resolveProjectContext } from "@tachy/core/sources";
 import {
-  resolveSource,
   ingestWorkItem,
-  searchKnowledge,
-  resolveCurrentUserId,
-  recordRun,
-  getCustomerIdBySlug,
-  getCustomerSlug,
-  resolveRedactionPolicy,
-  redactForLlm,
   compactWorkItem,
   renderCompactHtml,
   splitNoteBody,
-  scrubDeep,
-  TokenMap,
-  searchReferenceDocs,
-  embedQueryLiteral,
-  resolveProjectContext,
-  badInput,
   externalWorkItemScope,
+  workItemScope,
+} from "@tachy/core/work-items";
+import { searchKnowledge } from "@tachy/core/knowledge";
+import { resolveCurrentUserId } from "@tachy/core/access";
+import { recordRun } from "@tachy/core/analytics";
+import {
+  getCustomerIdBySlug,
+  getCustomerSlug,
   setWorkItemCustomer,
   setObservedVersion,
-  workItemScope,
-} from "@tachy/core";
+} from "@tachy/core/catalog";
+import {
+  resolveRedactionPolicy,
+  redactForLlm,
+  scrubDeep,
+  TokenMap,
+} from "@tachy/core/compliance";
+import { searchReferenceDocs } from "@tachy/core/reference";
+import { embedQueryLiteral } from "@tachy/core/search";
+import { badInput } from "@tachy/core/infra";
 import { tool } from "../server";
 import { NO_MATCHES, forAgent, out } from "../results";
 import { requireCanEdit } from "../permissions";

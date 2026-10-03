@@ -4,10 +4,10 @@ import {
   inLoadWindow,
   listTestRuns,
   loadTargets,
-  registerCoreJobs,
   runSystemChecks,
   startTestRun,
-} from "@tachy/core";
+} from "@tachy/core/diagnostics";
+import { registerCoreJobs } from "@tachy/core/jobs";
 import { resetData, sql, resetJobs } from "../helpers";
 
 afterAll(() => {

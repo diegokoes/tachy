@@ -7,19 +7,20 @@ import {
   it,
   vi,
 } from "vitest";
+import { addSourceConnection, addSourceProject } from "@tachy/core/sources";
+import { addTeam } from "@tachy/core/catalog";
 import {
-  addSourceConnection,
-  addSourceProject,
-  addTeam,
   applyFormConfig,
-  clearPermissionCache,
-  createUser,
   getComposeConfig,
   offeredTypes,
   setComposeConfig,
+} from "@tachy/core/flows";
+import {
+  clearPermissionCache,
+  createUser,
   setTeamMember,
-  type ComposerForm,
-} from "@tachy/core";
+} from "@tachy/core/access";
+import { type ComposerForm } from "@tachy/core";
 import { createApp } from "../../packages/api/src/app";
 import { reviewPrompt } from "../../packages/agent/src/ticket-review";
 import { loginCookie, resetData, sql } from "../helpers";

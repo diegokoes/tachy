@@ -1,12 +1,14 @@
 import {
   changeTagList,
-  customerStandIn,
   listSourceProjects,
+  stripHtml,
+} from "@tachy/core/sources";
+import {
+  customerStandIn,
   scrubbableCopy,
   scrubStrings,
-  stripHtml,
   TokenMap,
-} from "@tachy/core";
+} from "@tachy/core/compliance";
 import type {
   WorkItemComposer,
   WorkItemSource,
@@ -14,7 +16,7 @@ import type {
   RawMessage,
   ListOptions,
   SourceFactory,
-} from "@tachy/core";
+} from "@tachy/core/sources";
 import { composerForm, creatableTypes, templateValues } from "./composer";
 import { createWorkItem, explainAdoError, validateWorkItem } from "./create";
 import { workItemDefaults } from "./fields";

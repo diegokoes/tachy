@@ -1,4 +1,5 @@
-import { azureDevopsToken, badInput, sourceFetch } from "@tachy/core";
+import { azureDevopsToken, badInput } from "@tachy/core/infra";
+import { sourceFetch } from "@tachy/core/sources";
 
 /** The released Azure DevOps REST version. Everything in 7.2 is still preview. */
 const API_VERSION = "7.1";

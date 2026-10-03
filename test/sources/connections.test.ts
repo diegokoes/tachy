@@ -1,12 +1,12 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createUser } from "@tachy/core/access";
 import {
-  createUser,
   registerSource,
   resolveSource,
-  setCredential,
   deleteSourceConnection,
   type SourceFactory,
-} from "@tachy/core";
+} from "@tachy/core/sources";
+import { setCredential } from "@tachy/core/config";
 import { createApp } from "../../packages/api/src/app";
 import { enableVault, json, loginCookie, resetData, sql } from "../helpers";
 

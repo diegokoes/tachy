@@ -1,19 +1,16 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { BUCKET_BATCH_VERSION, INGEST_TOKEN_PREFIX } from "@tachy/core";
 import {
-  BUCKET_BATCH_VERSION,
-  INGEST_TOKEN_PREFIX,
   createBucket,
-  createUser,
   embedBucketChunks,
-  flowAction,
-  listOptions,
   readableBuckets,
-  registerCoreJobs,
   searchBucket,
-  setTeamMember,
-} from "@tachy/core";
+} from "@tachy/core/buckets";
+import { createUser, setTeamMember } from "@tachy/core/access";
+import { flowAction, listOptions } from "@tachy/core/flows";
+import { registerCoreJobs } from "@tachy/core/jobs";
 import { createApp } from "../../packages/api/src/app";
 import { server } from "../../packages/mcp/src/index";
 import { json, loginCookie, resetData, resetJobs, sql } from "../helpers";

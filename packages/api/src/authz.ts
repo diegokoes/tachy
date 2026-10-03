@@ -1,16 +1,15 @@
 import type { Context } from "hono";
 import {
   getUserByEmail,
-  env,
-  forbidden,
   assertCanEditScope,
   assertCanManageTeamBySlug,
   assertAnyTeamAdmin,
   userSoleTeamId,
   type EntryScope,
-  type ScopeContext,
-  type ActorRef,
-} from "@tachy/core";
+} from "@tachy/core/access";
+import { env, forbidden } from "@tachy/core/infra";
+import { type ScopeContext } from "@tachy/core/config";
+import { type ActorRef } from "@tachy/core/library";
 import { getIdentity } from "./auth";
 
 export async function callerUserId(c: Context): Promise<string | null> {

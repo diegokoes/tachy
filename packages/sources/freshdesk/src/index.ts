@@ -1,20 +1,19 @@
+import { changeTagList, sourceFetch } from "@tachy/core/sources";
 import {
-  changeTagList,
   customerStandIn,
-  freshdeskToken,
   scrubbableCopy,
   scrubStrings,
-  sourceFetch,
   TokenMap,
-} from "@tachy/core";
+} from "@tachy/core/compliance";
+import { freshdeskToken } from "@tachy/core/infra";
+import type { FlowOption } from "@tachy/core";
 import type {
-  FlowOption,
   WorkItemSource,
   RawWorkItem,
   RawMessage,
   ListOptions,
   SourceFactory,
-} from "@tachy/core";
+} from "@tachy/core/sources";
 
 function redactFreshdeskRaw(
   raw: unknown,

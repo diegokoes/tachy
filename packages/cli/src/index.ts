@@ -5,20 +5,20 @@ import { createInterface } from "node:readline/promises";
 import {
   registerSource,
   syncSource,
-  repoToken,
   setSourceOrigin,
-  backfillEmbeddings,
-  backfillReferenceEmbeddings,
+} from "@tachy/core/sources";
+import {
+  repoToken,
   backfillCodeEmbeddings,
-  embedBucketChunks,
-  EMBEDDING_MODEL,
-  env,
-  sql,
-  loadSettingsIntoEnv,
-  rotateVaultKey,
   getRepoBySlug,
   indexRepo,
-} from "@tachy/core";
+} from "@tachy/core/code";
+import { backfillEmbeddings } from "@tachy/core/knowledge";
+import { backfillReferenceEmbeddings } from "@tachy/core/reference";
+import { embedBucketChunks } from "@tachy/core/buckets";
+import { EMBEDDING_MODEL } from "@tachy/core/search";
+import { env, sql } from "@tachy/core/infra";
+import { loadSettingsIntoEnv, rotateVaultKey } from "@tachy/core/config";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 import { createAzureDevopsSource } from "@tachy/source-azure-devops";

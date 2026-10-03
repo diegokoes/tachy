@@ -1,18 +1,17 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { badInput } from "@tachy/core/infra";
+import { getTeamIdBySlug } from "@tachy/core/catalog";
 import {
-  badInput,
-  getTeamIdBySlug,
   listVisibleArtifacts,
   getArtifact,
   upsertArtifact,
   deleteArtifact,
-  userSoleTeamId,
   artifactSpecSchema,
-  type Scope,
-  type ScopeContext,
-} from "@tachy/core";
+} from "@tachy/core/exports";
+import { userSoleTeamId } from "@tachy/core/access";
+import { type Scope, type ScopeContext } from "@tachy/core/config";
 import { requireCaller } from "../authz";
 
 const scopeSchema = z.enum(["global", "team", "user"]);

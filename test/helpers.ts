@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { sql, clearSettingsCache, backgroundSettled } from "@tachy/core";
+import { sql, backgroundSettled } from "@tachy/core/infra";
+import { clearSettingsCache } from "@tachy/core/config";
 import { clearSecretKeyCache } from "../packages/core/src/infra/secrets";
 
 export { sql };

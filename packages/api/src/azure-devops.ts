@@ -1,11 +1,6 @@
 import type { Context } from "hono";
-import {
-  badInput,
-  notFound,
-  resolveCredential,
-  sourceCredentialName,
-  sql,
-} from "@tachy/core";
+import { badInput, notFound, sql } from "@tachy/core/infra";
+import { resolveCredential, sourceCredentialName } from "@tachy/core/config";
 import { createAdoClient, type AdoClient } from "@tachy/source-azure-devops";
 import { callerScope } from "./authz";
 

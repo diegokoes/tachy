@@ -2,24 +2,20 @@ import { Hono } from "hono";
 import { requireAdmin } from "../auth";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { badInput, notFound, sql } from "@tachy/core/infra";
 import {
-  badInput,
-  notFound,
   addSourceProject,
   deleteProjectAreaMap,
   deleteSourceProject,
-  getProductIdBySlug,
-  getTeamIdBySlug,
   listProjectAreaMap,
   listSourceProjects,
   resolveProjectContext,
   setProjectAreaMap,
   sourceProjectScope,
-  sql,
   updateSourceProject,
-  connectionToken,
-  releaseBranch,
-} from "@tachy/core";
+} from "@tachy/core/sources";
+import { getProductIdBySlug, getTeamIdBySlug } from "@tachy/core/catalog";
+import { connectionToken, releaseBranch } from "@tachy/core/code";
 import { workItemDefaults, workItemSchema } from "@tachy/source-azure-devops";
 import { assertScopeEditor, assertTeamAdmin, callerUserId } from "../authz";
 import { adoClientFor } from "../azure-devops";

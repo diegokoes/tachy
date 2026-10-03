@@ -2,15 +2,11 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 
 process.env.FRESHDESK_TOKEN = "test-token";
 
-import {
-  registerSource,
-  resolveSource,
-  ingestWorkItem,
-  addCustomer,
-  resolveRedactionPolicy,
-  redactForLlm,
-} from "@tachy/core";
-import type { RawWorkItem } from "@tachy/core";
+import { registerSource, resolveSource } from "@tachy/core/sources";
+import { ingestWorkItem } from "@tachy/core/work-items";
+import { addCustomer } from "@tachy/core/catalog";
+import { resolveRedactionPolicy, redactForLlm } from "@tachy/core/compliance";
+import type { RawWorkItem } from "@tachy/core/sources";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { resetData, sql } from "../helpers";
 

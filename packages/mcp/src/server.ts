@@ -1,12 +1,8 @@
 import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ZodRawShape } from "zod";
-import {
-  AppError,
-  inBackground,
-  log,
-  recordToolCall,
-  resolveCurrentUserId,
-} from "@tachy/core";
+import { AppError, inBackground, log } from "@tachy/core/infra";
+import { recordToolCall } from "@tachy/core/analytics";
+import { resolveCurrentUserId } from "@tachy/core/access";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 /** The MCP server itself, and how a tool is declared on it. */

@@ -5,9 +5,9 @@ import {
   setSetting,
   effectiveSettings,
   clearSettingsCache,
-  createUser,
-  AppError,
-} from "@tachy/core";
+} from "@tachy/core/config";
+import { createUser } from "@tachy/core/access";
+import { AppError } from "@tachy/core/infra";
 import { loginCookie, resetData, sql } from "../helpers";
 
 afterAll(() => sql.end());

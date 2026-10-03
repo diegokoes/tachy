@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { sql } from "@tachy/core";
+import { sql } from "@tachy/core/infra";
 
 const rolesSql = readFileSync(
   join(import.meta.dirname, "..", "..", "db", "roles.sql"),
