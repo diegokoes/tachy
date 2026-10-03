@@ -7,8 +7,8 @@ import {
   signIn,
   teamsOf,
   type Membership,
-} from "../../packages/web/src/admin/roster.svelte";
-import type { UserRow } from "../../packages/web/src/admin/rows";
+} from "../../packages/web/src/access/roster.svelte";
+import type { UserRow } from "../../packages/web/src/access/rows";
 
 const user = (p: Partial<UserRow> = {}): UserRow => ({
   id: "u1",

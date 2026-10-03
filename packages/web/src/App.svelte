@@ -5,7 +5,7 @@
   import WikiView from "./wiki/WikiView.svelte";
   import AdminView from "./admin/AdminView.svelte";
   import SettingsView from "./settings/SettingsView.svelte";
-  import FeedbackView from "./feedback/FeedbackView.svelte";
+  import FeedbackView from "./reports/FeedbackView.svelte";
   import SetupWizard from "./access/SetupWizard.svelte";
   import LoginView from "./access/LoginView.svelte";
   import NotificationHost from "./notifications/NotificationHost.svelte";

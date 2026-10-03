@@ -20,14 +20,14 @@ import {
   OWN,
   coverageTree,
   trailTo,
-} from "../../packages/web/src/admin/coverage";
-import type { ComponentCoverage } from "../../packages/web/src/admin/rows";
+} from "../../packages/web/src/catalog/coverage";
+import type { ComponentCoverage } from "../../packages/web/src/catalog/rows";
 import {
   endpointP95,
   loadSummary,
   runP95,
   type TestRun,
-} from "../../packages/web/src/admin/loadRuns";
+} from "../../packages/web/src/diagnostics/loadRuns";
 import { fitRows, fitted, measureBox } from "../../packages/web/src/tui/fit";
 import { portal } from "../../packages/web/src/tui/portal";
 
