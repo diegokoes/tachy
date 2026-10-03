@@ -16,7 +16,7 @@ import {
   type SimNode,
   toGraph,
   type ArchNode,
-} from "../../packages/web/src/admin/architecture";
+} from "../../packages/web/src/catalog/architecture";
 
 const node = (
   id: string,

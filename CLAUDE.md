@@ -19,6 +19,12 @@ Folders are named for the domain they own, never `utils` / `helpers` / `common`.
 | `packages/worker`    | The job worker service: works runs of the job kinds core defines                                                                                                                                                                                                           |
 | `packages/cli`       | `npm run sync` — backup/restore, indexing                                                                                                                                                                                                                                  |
 
+A concept keeps the name core gives it in every layer: `core/src/wiki`,
+`mcp/src/tools/wiki.ts`, `api/src/routes/wiki.ts`, `web/src/wiki`, `test/wiki`. In the SPA a domain's
+folder holds its views, its admin panels and its row types; `admin/` only mounts
+those panels. `tui`, `shell`, `motion`, `markdown`, `keys` and `theme` are what
+the domains share.
+
 ## Commands
 
 ```sh
