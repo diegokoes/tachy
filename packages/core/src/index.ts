@@ -9,13 +9,15 @@ export {
   azureDevopsToken,
   sourceToken,
   sourceTokenOptional,
+} from "./infra";
+export {
   sweepUploads,
   saveUpload,
   readUpload,
   uploadRef,
   parseUploadRef,
   uploadTtlMs,
-} from "./infra";
+} from "./chat";
 export {
   AppError,
   notFound,
@@ -118,12 +120,6 @@ export {
   dateFormatOf,
   setPref,
   deletePref,
-  listVisibleArtifacts,
-  getArtifact,
-  getArtifactBySlug,
-  upsertArtifact,
-  deleteArtifact,
-  artifactSpecSchema,
 } from "./config";
 export type {
   Scope,
@@ -134,9 +130,6 @@ export type {
   AgentAuth,
   PrefKey,
   PrefSource,
-  ArtifactMeta,
-  ArtifactRow,
-  ArtifactSpec,
 } from "./config";
 export { vaultState, rotateVaultKey } from "./config";
 
@@ -711,7 +704,7 @@ export type {
 } from "@tachy/contract";
 export * from "./buckets";
 export * from "./jobs";
-export * from "./testing";
+export * from "./diagnostics";
 export * from "./reports";
 export * from "./notifications";
 export type {

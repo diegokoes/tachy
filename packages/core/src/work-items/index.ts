@@ -1,3 +1,4 @@
+export type { RawMessage, RawWorkItem } from "./raw";
 export * from "./ingest";
 export * from "./linked-refs";
 export * from "./links";

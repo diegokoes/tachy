@@ -1008,7 +1008,7 @@ both live in Postgres with a TTL.
 
 - **Uploads** are rows in `chat_uploads` (deploy-26). They expire after 24 h
   (`TACHY_UPLOAD_TTL_HOURS`), only their owner's turn can read them
-  (`core/src/infra/uploads.ts`), and `retention.sweep` deletes them.
+  (`core/src/chat/uploads.ts`), and `retention.sweep` deletes them.
 - **Neither table's data is in the dumps** (`deploy/backup/tachy-backup`).
 
 **Revisit.** If uploads regularly approach the 25 MB limit
@@ -2285,7 +2285,7 @@ admins. Built in deploy-31.
 **What it shows:**
 
 1. **Checks.** Fast, and safe to click at any hour. Each one is a pass, warn,
-   fail or skip row with the detail behind it (`core/src/testing/checks.ts`):
+   fail or skip row with the detail behind it (`core/src/diagnostics/checks.ts`):
    - the database answers;
    - the embedding model answers, and one query embeds within budget;
    - the vault key decrypts a stored credential;
@@ -2314,7 +2314,7 @@ the api needs the Docker socket, which §7 rules out.
   summary when k6 exits. Cancel becomes SIGINT, and k6 still writes its
   summary.
 
-**Guardrails** (`core/src/testing/load-runs.ts`). These carry the rule from
+**Guardrails** (`core/src/diagnostics/load-runs.ts`). These carry the rule from
 §11.1: never load production while people are using it.
 
 - Targets come from `TACHY_LOAD_TARGETS`, not from free text, so the page
