@@ -12,5 +12,5 @@ services:
       RATE: ${RATE:-}
       DURATION: ${DURATION:-}
     volumes:
-      # Mounted rather than piped on stdin: the scenarios import from ./lib.
+      # Mounted rather than piped on stdin: the scenarios import session.js and corpus.js.
       - ./load:/load:ro

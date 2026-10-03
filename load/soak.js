@@ -1,7 +1,7 @@
 import http from "k6/http";
 import { check } from "k6";
-import { BASE_URL, headers, setupSession, pick } from "./lib/session.js";
-import { QUERIES } from "./lib/corpus.js";
+import { BASE_URL, headers, setupSession, pick } from "./session.js";
+import { QUERIES } from "./corpus.js";
 
 /**
  * A low, steady mix held for a long time. What this is looking for is not

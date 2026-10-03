@@ -1,7 +1,7 @@
 import http from "k6/http";
 import { check } from "k6";
-import { BASE_URL, headers, setupSession, pick } from "./lib/session.js";
-import { QUERIES, DOC_QUERIES } from "./lib/corpus.js";
+import { BASE_URL, headers, setupSession, pick } from "./session.js";
+import { QUERIES, DOC_QUERIES } from "./corpus.js";
 
 /**
  * A day's traffic in miniature. The weights are placeholders until a week of
