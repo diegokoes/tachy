@@ -2231,7 +2231,7 @@ has proved itself.
   - Whether the Copilot runtime can be pointed at a mock is **to verify**.
 - **`contention.js` is the test that proves the embedder and worker
   separation.** It hasn't run on the laptop.
-- **Logins.** The scripts sign in with a password (`load/lib/session.js`), as
+- **Logins.** The scripts sign in with a password (`load/session.js`), as
   a user flagged `service_account`, so load never shows in engagement figures.
 - **The only measured baseline comes from a workstation.** The laptop's
   numbers are still needed.
