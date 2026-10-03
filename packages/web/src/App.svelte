@@ -1,46 +1,38 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import ChatView from "./lib/ChatView.svelte";
-  import LibraryView from "./lib/library/LibraryView.svelte";
-  import WikiView from "./lib/wiki/WikiView.svelte";
-  import AdminView from "./lib/admin/AdminView.svelte";
-  import SettingsView from "./lib/settings/SettingsView.svelte";
-  import FeedbackView from "./lib/feedback/FeedbackView.svelte";
-  import SetupWizard from "./lib/SetupWizard.svelte";
-  import LoginView from "./lib/LoginView.svelte";
-  import NotificationHost from "./lib/NotificationHost.svelte";
-  import { session, initSession } from "./lib/session.svelte";
-  import { navItems } from "./lib/nav";
-  import { wipeIn, jellyPress } from "./lib/motion";
-  import StarField from "./lib/StarField.svelte";
-  import Wordmark from "./lib/Wordmark.svelte";
-  import { loadThemeFromStorage, themeState } from "./lib/theme.svelte";
-  import { loadFonts } from "./lib/fonts.svelte";
-  import { loadDateFormat } from "./lib/dates.svelte";
+  import ChatView from "./chat/ChatView.svelte";
+  import LibraryView from "./library/LibraryView.svelte";
+  import WikiView from "./wiki/WikiView.svelte";
+  import AdminView from "./admin/AdminView.svelte";
+  import SettingsView from "./settings/SettingsView.svelte";
+  import FeedbackView from "./reports/FeedbackView.svelte";
+  import SetupWizard from "./access/SetupWizard.svelte";
+  import LoginView from "./access/LoginView.svelte";
+  import NotificationHost from "./notifications/NotificationHost.svelte";
+  import { session, initSession } from "./access/session.svelte";
+  import { navItems } from "./shell/nav";
+  import { wipeIn, jellyPress } from "./motion/motion";
+  import StarField from "./motion/StarField.svelte";
+  import Wordmark from "./motion/Wordmark.svelte";
+  import { loadThemeFromStorage, themeState } from "./theme/theme.svelte";
+  import { loadFonts } from "./theme/fonts.svelte";
+  import { loadDateFormat } from "./dates.svelte";
   import {
     router,
     openSection,
     section,
     startRouter,
-  } from "./lib/router.svelte";
+  } from "./shell/router.svelte";
   import {
     refreshNotifications,
     startNotifications,
-  } from "./lib/notify.svelte";
-  import { hints, pushScope, startKeys } from "./lib/keys.svelte";
-  import { navKey, actionKey } from "./lib/keys/bindings.svelte";
-  import { loadVim, vimState, scrollBindings } from "./lib/vim.svelte";
-  import { subnav, topActions } from "./lib/subnav.svelte";
-  import { setScrollport } from "./lib/scrollport.svelte";
-  import {
-    HintRule,
-    Icon,
-    Panel,
-    Scrollbar,
-    Tabs,
-    TipHost,
-    tip,
-  } from "./lib/tui";
+  } from "./notifications/notify.svelte";
+  import { hints, pushScope, startKeys } from "./keys/keys.svelte";
+  import { navKey, actionKey } from "./keys/bindings.svelte";
+  import { loadVim, vimState, scrollBindings } from "./keys/vim.svelte";
+  import { subnav, topActions } from "./shell/subnav.svelte";
+  import { setScrollport } from "./shell/scrollport.svelte";
+  import { HintRule, Icon, Panel, Scrollbar, Tabs, TipHost, tip } from "./tui";
 
   const nav = $derived(navItems());
 

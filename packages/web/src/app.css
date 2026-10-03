@@ -1,6 +1,6 @@
 /* Bare-element chrome for panels not yet on the tui primitives (sources,
    projects, repos, users, membership, system, credentials). Everything else
-   lives in styles/tokens.css, styles/base.css and lib/tui/.
+   lives in styles/tokens.css, styles/base.css and tui/.
 
    Nothing new may be added here. */
 

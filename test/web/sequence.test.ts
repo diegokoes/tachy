@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSequence } from "../../packages/web/src/lib/resource.svelte";
+import { createSequence } from "../../packages/web/src/resource.svelte";
 
 /**
  * The guard the hand-written views use instead of `createResource`. What it

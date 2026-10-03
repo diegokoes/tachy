@@ -1,4 +1,4 @@
-import type { Db } from "@tachy/core";
+import type { Db } from "@tachy/core/infra";
 
 export type Tx = Db;
 

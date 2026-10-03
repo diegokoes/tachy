@@ -1,15 +1,8 @@
-import {
-  JOB_QUEUE_NAMES,
-  JOB_RESOURCE_CLASSES,
-  jobQueue,
-  backgroundSettled,
-  loadSettingsIntoEnv,
-  log,
-  registerSource,
-  setSourceOrigin,
-  sql,
-  startJobProcess,
-} from "@tachy/core";
+import { JOB_QUEUE_NAMES, JOB_RESOURCE_CLASSES, jobQueue } from "@tachy/core";
+import { backgroundSettled, log, sql } from "@tachy/core/infra";
+import { loadSettingsIntoEnv } from "@tachy/core/config";
+import { registerSource, setSourceOrigin } from "@tachy/core/sources";
+import { startJobProcess } from "@tachy/core/jobs";
 import { registerAgentFlowActions } from "@tachy/agent";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";

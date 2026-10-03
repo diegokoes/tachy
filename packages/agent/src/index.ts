@@ -20,6 +20,8 @@ export {
 export { copilotPermission, copilotSessionConfig } from "./copilot";
 export { completeOnce } from "./complete";
 export { runAdvisory, firstJsonObject, type Advisory } from "./advisory";
+export { reviewTicket, type ReviewRequest } from "./ticket-review";
+export { reviewReport } from "./report-review";
 export { registerAgentFlowActions } from "./flow-actions";
 export { listModels } from "./models";
 export type { ModelChoice, ModelListConfig } from "./models";

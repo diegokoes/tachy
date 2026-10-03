@@ -1,8 +1,14 @@
-import { addWorkItemLink, recordRun } from "@tachy/core";
-import type { CreateContext, NewWorkItem, TicketValidation } from "@tachy/core";
+import { addWorkItemLink } from "@tachy/core/work-items";
+import { recordRun } from "@tachy/core/analytics";
+import type { CreateContext, NewWorkItem } from "@tachy/core/sources";
+import type { TicketValidation } from "@tachy/core";
 import type { AdoClient, AdoWorkItem, JsonPatchOp } from "./client";
 
-export type { CreateContext, NewWorkItem, PastedImage } from "@tachy/core";
+export type {
+  CreateContext,
+  NewWorkItem,
+  PastedImage,
+} from "@tachy/core/sources";
 
 const ATTACHMENT_RE = /attachment:([A-Za-z0-9_-]+)/g;
 

@@ -4,25 +4,28 @@ import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 import {
   applyFormConfig,
-  badInput,
-  FIELD_SHOWS,
-  forbidden,
   getComposeConfig,
-  getSourceProject,
-  listSourceProjects,
   offeredTypes,
-  resolveSource,
   setComposeConfig,
-  sourceProjectScope,
   typeConfig,
-  userTeams,
+} from "@tachy/core/flows";
+import { badInput, forbidden } from "@tachy/core/infra";
+import {
+  FIELD_SHOWS,
   type ComposeConfig,
   type ComposerProject,
   type CreatedTicket,
+} from "@tachy/core";
+import {
+  getSourceProject,
+  listSourceProjects,
+  resolveSource,
+  sourceProjectScope,
   type NewWorkItem,
   type PastedImage,
   type SourceProjectRow,
-} from "@tachy/core";
+} from "@tachy/core/sources";
+import { userTeams } from "@tachy/core/access";
 import {
   assertScopeEditor,
   callerScope,
@@ -30,7 +33,7 @@ import {
   isAdminIdentity,
   requireCaller,
 } from "../authz";
-import { reviewTicket } from "../ticket-review";
+import { reviewTicket } from "@tachy/agent";
 import { MAX_UPLOAD_BYTES, tooLarge } from "../upload-limit";
 
 const draftSchema = z.object({

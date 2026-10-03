@@ -12,10 +12,8 @@ import {
   listTeamMembers,
   listMemberships,
   setTeamMember,
-  USER_ROLES,
-  TEAM_ROLES,
-  MIN_PASSWORD_LENGTH,
-} from "@tachy/core";
+} from "@tachy/core/access";
+import { USER_ROLES, TEAM_ROLES, MIN_PASSWORD_LENGTH } from "@tachy/core";
 import { requireAdmin } from "../auth";
 import { assertAnyTeamAdminApi, assertTeamAdmin } from "../authz";
 

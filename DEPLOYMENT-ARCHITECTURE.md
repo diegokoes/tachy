@@ -1008,7 +1008,7 @@ both live in Postgres with a TTL.
 
 - **Uploads** are rows in `chat_uploads` (deploy-26). They expire after 24 h
   (`TACHY_UPLOAD_TTL_HOURS`), only their owner's turn can read them
-  (`core/src/infra/uploads.ts`), and `retention.sweep` deletes them.
+  (`core/src/chat/uploads.ts`), and `retention.sweep` deletes them.
 - **Neither table's data is in the dumps** (`deploy/backup/tachy-backup`).
 
 **Revisit.** If uploads regularly approach the 25 MB limit
@@ -1429,7 +1429,7 @@ using constants measured by hand (`search/relevance.ts`).
   - The bands in `packages/contract/src/relevance.ts` (`GOOD` 0.35, `STRONG`
     0.7) keep their meaning, so the SPA's gauge doesn't change.
   - `SEM_FLOOR` still gates the vector leg's candidates.
-- **One scale across surfaces.** `consult.ts` returns knowledge and reference
+- **One scale across surfaces.** `get_context` returns knowledge and reference
   hits side by side, and reranked scores compare between them.
 - **A lane in `EmbedQueue`.** Reranks are query-time work, so they go ahead of
   passages along with queries. `/internal/rerank` sits beside
@@ -1450,7 +1450,7 @@ query with no candidates returns zero rows and costs no rerank.
 - **The embedder grows** by the memory in the table above.
 - **Calibration is per reranker,** as `SEM_FLOOR` is per embedding model. A
   reranker change is a release with a re-derived mapping, and
-  `test/search-quality.test.ts` fails until then.
+  `test/search/quality.test.ts` fails until then.
 - **A new way to fail.** If the rerank lane is down or past its deadline, the
   search returns fused order with today's relevance and says so. It never
   fails the search.
@@ -1531,7 +1531,7 @@ Code is most of it.
   today's 14. Plus a real-model seed (`--embed=search`) for load numbers.
 - **The candidate measured.** Run `scripts/eval-embeddings.ts` against it, and
   re-derive `SEM_FLOOR` and `SEM_CEIL` (`search/relevance.ts:31`). By design,
-  `test/search-quality.test.ts` fails until they are re-derived.
+  `test/search/quality.test.ts` fails until they are re-derived.
 - **The model described.** An entry in `EMBEDDING_MODELS`
   (`search/model.ts`), cached in the image by the Dockerfile's warmup step.
   The entry can't express every model yet:
@@ -1610,8 +1610,8 @@ waits for tier B. None of it is built:
     `texts` (`search/embed-thread.ts`). A model name has to travel in the
     request and in the stamp.
   - Code search then embeds its query with the code model.
-  - The vector `consult.ts` shares between knowledge and reference search
-    (`mcp/src/tools/consult.ts:255`) stays a text-model vector.
+  - The vector `get_context` shares between knowledge and reference search
+    (`mcp/src/tools/work-items.ts`) stays a text-model vector.
 - **Each model adds to the image.** bge-base alone is 417 MB (§2.1).
 
 ## 6. Durability, backup, restore
@@ -2198,8 +2198,8 @@ has proved itself.
 | Layer                | Tool                                                           | Status                               |
 | -------------------- | -------------------------------------------------------------- | ------------------------------------ |
 | Unit and integration | vitest, testcontainers Postgres, coverage ratchet              | in CI, required                      |
-| Search quality       | `test/search-quality.test.ts`, `scripts/eval-embeddings.ts`    | in CI; 14 golden queries (§4.6)      |
-| Schema drift         | `test/schema-drift.test.ts`, plus `schema-plan` (§10)          | in CI                                |
+| Search quality       | `test/search/quality.test.ts`, `scripts/eval-embeddings.ts`    | in CI; 14 golden queries (§4.6)      |
+| Schema drift         | `test/infra/schema-drift.test.ts`, plus `schema-plan` (§10)    | in CI                                |
 | Container smoke      | `image-gates.yml` (§10)                                        | in CI, on the base Compose file only |
 | Load and capacity    | k6, `load/turns.mjs`                                           | scripts built; no laptop numbers yet |
 | Backup restore       | weekly host timer; quarterly drill from a laptop copy (§6.4)   | built; not yet run on the laptop     |
@@ -2231,7 +2231,7 @@ has proved itself.
   - Whether the Copilot runtime can be pointed at a mock is **to verify**.
 - **`contention.js` is the test that proves the embedder and worker
   separation.** It hasn't run on the laptop.
-- **Logins.** The scripts sign in with a password (`load/lib/session.js`), as
+- **Logins.** The scripts sign in with a password (`load/session.js`), as
   a user flagged `service_account`, so load never shows in engagement figures.
 - **The only measured baseline comes from a workstation.** The laptop's
   numbers are still needed.
@@ -2285,7 +2285,7 @@ admins. Built in deploy-31.
 **What it shows:**
 
 1. **Checks.** Fast, and safe to click at any hour. Each one is a pass, warn,
-   fail or skip row with the detail behind it (`core/src/testing/checks.ts`):
+   fail or skip row with the detail behind it (`core/src/diagnostics/checks.ts`):
    - the database answers;
    - the embedding model answers, and one query embeds within budget;
    - the vault key decrypts a stored credential;
@@ -2314,7 +2314,7 @@ the api needs the Docker socket, which §7 rules out.
   summary when k6 exits. Cancel becomes SIGINT, and k6 still writes its
   summary.
 
-**Guardrails** (`core/src/testing/load-runs.ts`). These carry the rule from
+**Guardrails** (`core/src/diagnostics/load-runs.ts`). These carry the rule from
 §11.1: never load production while people are using it.
 
 - Targets come from `TACHY_LOAD_TARGETS`, not from free text, so the page

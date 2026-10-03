@@ -6,7 +6,7 @@ import {
   EMBEDDING_SPEC,
   EmbedderUnavailable,
   type EmbedKind,
-} from "@tachy/core";
+} from "@tachy/core/search";
 
 export interface InternalOptions {
   secret: string;

@@ -1,0 +1,165 @@
+<script lang="ts">
+  import { tick, untrack, type Component } from "svelte";
+  import { Rail, type IconName } from "../tui";
+  import { scrollport } from "../shell/scrollport.svelte";
+  import { createSpy } from "./spy.svelte";
+  import Section from "./Section.svelte";
+  import type { HeadAction } from "./Section.svelte";
+
+  export type PageSection = {
+    key: string;
+    label: string;
+    /** Drawn in the heading marker's place. */
+    icon?: IconName;
+    view: Component;
+    /** Shown on the rail row. null while it is still being counted. */
+    count?: number | null;
+    tone?: "warn" | "danger";
+    /** Mount without waiting to be scrolled near. */
+    eager?: boolean;
+    /** Drawn at the right end of the section's heading line, in order. */
+    actions?: HeadAction[];
+  };
+
+  let {
+    sections,
+    label,
+    at,
+    onactive,
+    page,
+    active = $bindable(""),
+  }: {
+    sections: PageSection[];
+    /** Names the rail for a screen reader — "connect sections". */
+    label: string;
+    /** The section to open at, from the URL. */
+    at?: string;
+    /** Called as the reader scrolls, so the caller can write the URL. */
+    onactive?: (key: string) => void;
+    /**
+     * Changes when the whole column of sections is replaced. Admin passes its
+     * page; a page whose sections never swap can leave it alone.
+     */
+    page?: string;
+    /**
+     * Which rail row is lit, readable by the caller. It follows the scroll, not
+     * the route — the route is what the scroll writes. Rendering from the URL
+     * instead would close the loop and re-render the page on every section the
+     * reader passes.
+     */
+    active?: string;
+  } = $props();
+
+  const spy = createSpy({
+    onactive: (key) => {
+      active = key;
+      onactive?.(key);
+    },
+    order: () => sections.map((s) => s.key),
+  });
+
+  const items = $derived(
+    sections.map((s) => ({
+      key: s.key,
+      label: s.label,
+      count: s.count,
+      tone: s.tone,
+    })),
+  );
+
+  /* A rail of one row indexes nothing. The section itself still renders, so it
+     keeps its heading and its add button. */
+  const railed = $derived(sections.length > 1);
+
+  /* Rebuilt per page, because the whole column of sections is replaced. `at` is
+     read here and nowhere else — as a place to open at, not as a thing to
+     render from. */
+  $effect(() => {
+    page;
+    const open = untrack(() => at);
+    let cancelled = false;
+    tick().then(() => {
+      if (cancelled) return;
+      const first = sections[0]?.key ?? "";
+      const target = sections.find((s) => s.key === open)?.key;
+      /* The scroller is shared with every other view, so it still holds
+         whatever the last page was scrolled to. Put it back at the top before
+         the spy reads it, or arriving on a page lands halfway down it. */
+      if (!target || target === first) {
+        const port = scrollport();
+        if (port) port.scrollTop = 0;
+      }
+      spy.start();
+      active = target ?? first;
+      if (target && target !== first) spy.goto(target, false);
+    });
+    return () => {
+      cancelled = true;
+      spy.destroy();
+    };
+  });
+</script>
+
+<!-- The index and everything it points at, in one column. The rail's active row
+     is still the heading of the part you are in — it just tracks the scroll
+     instead of choosing what gets rendered at all. -->
+<div class="page" class:railed>
+  {#if railed}
+    <Rail {items} {active} {label} onpick={(k) => spy.goto(k)} />
+  {/if}
+
+  <div class="content">
+    {#each sections as s (s.key)}
+      <Section
+        {spy}
+        section={s.key}
+        label={s.label}
+        icon={s.icon}
+        view={s.view}
+        eager={s.eager}
+        actions={s.actions}
+      />
+    {/each}
+
+    <!-- Air under the last section so it can be scrolled to the top like any
+         other. Blank space is the price; the rail landing somewhere different
+         depending on how many rows the last table holds was the alternative. -->
+    <div class="tail" style="height: {spy.tail}px" aria-hidden="true"></div>
+  </div>
+</div>
+
+<style>
+  /* Horizontal only. The vertical air is `main`'s --main-air, which the
+     sticky section heading already compensates for with its ::before strip;
+     top padding here would move that strip's containing block down and let
+     rows scroll through an unpainted gap. */
+  .page {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--pad-4);
+    padding-inline: var(--view-pad-x);
+    align-items: start;
+    min-width: 0;
+  }
+  .page.railed {
+    grid-template-columns: minmax(9rem, 12rem) 1fr;
+  }
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pad-4);
+    min-width: 0;
+  }
+  .tail {
+    flex: none;
+  }
+
+  @media (max-width: 52rem) {
+    .page.railed {
+      grid-template-columns: 1fr;
+    }
+    .page {
+      gap: var(--pad-3);
+    }
+  }
+</style>

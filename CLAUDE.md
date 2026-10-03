@@ -7,17 +7,27 @@ Instructions for working **on** this repo. The instructions the tachy agent runs
 
 Folders are named for the domain they own, never `utils` / `helpers` / `common`.
 
-| Package              | Owns                                                                                                                                                                                                |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/contract`  | What the browser and the server must agree on: vocabularies, grade bands, credential and export-naming rules. No dependencies, ever — it is bundled into the SPA                                    |
-| `packages/core`      | Everything with logic: `knowledge`, `reference`, `wiki`, `library`, `search`, `work-items`, `code`, `catalog`, `access`, `config`, `compliance`, `exports`, `analytics`, `sources`, `jobs`, `infra` |
-| `packages/sources/*` | One connector each: `freshdesk`, `github`, `azure-devops`                                                                                                                                           |
-| `packages/mcp`       | The MCP server — every tool the agent can call                                                                                                                                                      |
-| `packages/agent`     | Backends (`claude.ts`, `copilot.ts`), turn plumbing, and `prompt.md`                                                                                                                                |
-| `packages/api`       | HTTP routes, auth, slash-command expansion                                                                                                                                                          |
-| `packages/web`       | Svelte SPA                                                                                                                                                                                          |
-| `packages/worker`    | The job worker service: works runs of the job kinds core defines                                                                                                                                    |
-| `packages/cli`       | `npm run sync` — backup/restore, indexing                                                                                                                                                           |
+| Package              | Owns                                                                                                                                                                                                                                                                       |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/contract`  | What the browser and the server must agree on: vocabularies, grade bands, credential and export-naming rules. No dependencies, ever — it is bundled into the SPA                                                                                                           |
+| `packages/core`      | Everything with logic: `knowledge`, `reference`, `wiki`, `library`, `search`, `work-items`, `code`, `catalog`, `buckets`, `flows`, `chat`, `reports`, `notifications`, `access`, `config`, `compliance`, `exports`, `analytics`, `sources`, `jobs`, `diagnostics`, `infra` |
+| `packages/sources/*` | One connector each: `freshdesk`, `github`, `azure-devops`                                                                                                                                                                                                                  |
+| `packages/mcp`       | The MCP server — every tool the agent can call                                                                                                                                                                                                                             |
+| `packages/agent`     | Backends (`claude.ts`, `copilot.ts`), turn plumbing, `prompt.md`, and the one-shot review prompts                                                                                                                                                                          |
+| `packages/api`       | HTTP routes, auth, slash-command expansion                                                                                                                                                                                                                                 |
+| `packages/web`       | Svelte SPA                                                                                                                                                                                                                                                                 |
+| `packages/worker`    | The job worker service: works runs of the job kinds core defines                                                                                                                                                                                                           |
+| `packages/cli`       | `npm run sync` — backup/restore, indexing                                                                                                                                                                                                                                  |
+
+A concept keeps the name core gives it in every layer: `core/src/wiki`,
+`mcp/src/tools/wiki.ts`, `api/src/routes/wiki.ts`, `web/src/wiki`, `test/wiki`.
+Server code imports a domain from its subpath, `@tachy/core/wiki`, so a file's
+imports say which domains it depends on; `@tachy/core` itself is only the
+contract, re-exported.
+
+In the SPA a domain's folder holds its views, its admin panels and its row
+types; `admin/` only mounts those panels. `tui`, `shell`, `motion`, `markdown`,
+`keys` and `theme` are what the domains share.
 
 ## Commands
 

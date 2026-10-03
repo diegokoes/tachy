@@ -2,27 +2,25 @@ import { mkdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { agentHome, badInput, envVarName } from "@tachy/core/infra";
 import {
-  agentHome,
-  badInput,
   dateFormatOf,
+  effectivePrefs,
+  resolveCredential,
+  resolveAgentAuth,
+  sourceCredentialName,
+  type EffectiveSettings,
+  type ScopeContext,
+} from "@tachy/core/config";
+import {
   encodeDateFormat,
   formatDateTime,
   DEFAULT_DATE_FORMAT,
   type DateFormat,
-  envVarName,
-  getUserByEmail,
-  userSoleTeamId,
-  effectivePrefs,
-  resolveCredential,
-  resolveAgentAuth,
-  listSourceConnections,
-  sourceCredentialName,
-  renderColumnContract,
-  type ArtifactSpec,
-  type EffectiveSettings,
-  type ScopeContext,
 } from "@tachy/core";
+import { getUserByEmail, userSoleTeamId } from "@tachy/core/access";
+import { listSourceConnections } from "@tachy/core/sources";
+import { renderColumnContract, type ArtifactSpec } from "@tachy/core/exports";
 import type { AgentConfig } from "@tachy/agent";
 import { internalEndpoint } from "./internal-endpoint";
 import { findCommand, commandAutoApprove } from "./commands";

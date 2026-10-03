@@ -1,15 +1,9 @@
 import { createInterface } from "node:readline/promises";
-import {
-  AGENT_CREDENTIALS,
-  API_KEY_EXAMPLE,
-  clearPermissionCache,
-  env,
-  secretsEnabled,
-  setCredential,
-  setSetting,
-  sql,
-  sweepWikiGaps,
-} from "@tachy/core";
+import { AGENT_CREDENTIALS, API_KEY_EXAMPLE } from "@tachy/core";
+import { clearPermissionCache } from "@tachy/core/access";
+import { env, secretsEnabled, sql } from "@tachy/core/infra";
+import { setCredential, setSetting } from "@tachy/core/config";
+import { sweepWikiGaps } from "@tachy/core/wiki";
 import type { Tx } from "./batches";
 import { SCALES, type ScaleName } from "./scale";
 import { seedOrg, ADMIN_EMAIL, DEV_PASSWORD, MEMBER_EMAIL } from "./org";

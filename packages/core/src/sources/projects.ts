@@ -1,7 +1,8 @@
 import { releaseMinor } from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
 import { badInput, conflict, notFound } from "../infra/errors";
-import { getProductIdBySlug, getTeamIdBySlug } from "../catalog/products";
+import { getProductIdBySlug } from "../catalog/products";
+import { getTeamIdBySlug } from "../catalog/teams";
 import { getCustomerIdBySlug } from "../catalog/customers";
 import { resolveComponentStrict } from "../catalog/components";
 import type { EntryScope } from "../access/permissions";

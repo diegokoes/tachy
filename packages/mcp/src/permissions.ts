@@ -1,15 +1,14 @@
 import {
   resolveCurrentUserId,
-  sql,
   countAdmins,
-  forbidden,
   canManageTeam,
   assertCanEditScope,
   assertAnyTeamAdmin,
   assertGlobalAdmin,
-  env,
-} from "@tachy/core";
-import type { ActorRef, EntryScope } from "@tachy/core";
+} from "@tachy/core/access";
+import { sql, forbidden, env } from "@tachy/core/infra";
+import type { ActorRef } from "@tachy/core/library";
+import type { EntryScope } from "@tachy/core/access";
 
 /** Who is calling, and whether they may. */
 export let enforcementCache = false;

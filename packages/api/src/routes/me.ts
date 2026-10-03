@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { secretsEnabled } from "@tachy/core/infra";
 import {
-  secretsEnabled,
   listCredentials,
   setCredential,
   deleteCredential,
@@ -12,16 +12,20 @@ import {
   effectiveSettings,
   setPref,
   deletePref,
-  userSoleTeamId,
-  listSourceConnections,
+  sourceCredentialName,
+} from "@tachy/core/config";
+import { userSoleTeamId } from "@tachy/core/access";
+import { listSourceConnections } from "@tachy/core/sources";
+import {
   AGENT_CREDENTIALS,
   AGENT_EFFORTS,
   ANTHROPIC_OAUTH_CREDENTIAL,
-  sourceCredentialName,
+} from "@tachy/core";
+import {
   listNotifications,
   markRead,
   markSeen,
-} from "@tachy/core";
+} from "@tachy/core/notifications";
 import { listModels, type ModelChoice } from "@tachy/agent";
 import { requireCaller } from "../authz";
 import { emptySessionDir, userConfigDir } from "../turn-config";

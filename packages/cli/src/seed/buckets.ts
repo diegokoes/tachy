@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { bucketChunks } from "@tachy/core";
+import { bucketChunks } from "@tachy/core/buckets";
 import { insertRows, type Tx } from "./batches";
 import { uuidFor } from "./deterministic";
 import { embedColumn, type Embedder } from "./embed";

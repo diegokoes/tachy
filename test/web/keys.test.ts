@@ -13,7 +13,7 @@ import {
   setNavKey,
   setSubnavKey,
   subnavKey,
-} from "../../packages/web/src/lib/keys/bindings.svelte";
+} from "../../packages/web/src/keys/bindings.svelte";
 
 const NAV = [
   { key: "chat", label: "Chat" },

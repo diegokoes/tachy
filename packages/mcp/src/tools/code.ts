@@ -1,16 +1,18 @@
 import { z } from "zod";
+import { resolveCurrentUserId } from "@tachy/core/access";
+import { recordRun } from "@tachy/core/analytics";
 import {
-  resolveCurrentUserId,
-  recordRun,
   getCustomerIdBySlug,
+  resolveComponentStrict,
+} from "@tachy/core/catalog";
+import {
   listRepos,
   searchCode,
   readCodeFile,
   codeChangesBetween,
   repoToken,
-  resolveComponentStrict,
-  badInput,
-} from "@tachy/core";
+} from "@tachy/core/code";
+import { badInput } from "@tachy/core/infra";
 import { tool } from "../server";
 import { GRADE_NOTE, out, outScrubbed, searchOut } from "../results";
 import { resolveScopeIds } from "../context";

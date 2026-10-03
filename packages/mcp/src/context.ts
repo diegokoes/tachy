@@ -5,27 +5,30 @@
  */
 import {
   resolveSource,
+  fetchUntrustedUrl,
+  stripHtml,
+} from "@tachy/core/sources";
+import {
   ingestWorkItem,
-  resolveCurrentUserId,
-  sql,
+  extractAdoRefs,
+  compactForLlm,
+  summarizeCompaction,
+  recordAdoRefs,
+} from "@tachy/core/work-items";
+import { resolveCurrentUserId } from "@tachy/core/access";
+import { sql, badInput } from "@tachy/core/infra";
+import {
   resolveComponentFilter,
   getProductIdBySlug,
   getCustomerName,
   getCustomerProfile,
   getCustomerSlug,
-  resolveRedactionPolicy,
-  redactForLlm,
-  extractAdoRefs,
-  compactForLlm,
-  summarizeCompaction,
   getTeamIdBySlug,
-  recordAdoRefs,
-  badInput,
   listCustomerUnits,
-  fetchUntrustedUrl,
-  stripHtml,
-} from "@tachy/core";
-import type { IngestedItem, RawWorkItem } from "@tachy/core";
+} from "@tachy/core/catalog";
+import { resolveRedactionPolicy, redactForLlm } from "@tachy/core/compliance";
+import type { IngestedItem } from "@tachy/core/work-items";
+import type { RawWorkItem } from "@tachy/core/sources";
 import { extractSource } from "./extract";
 
 /**
