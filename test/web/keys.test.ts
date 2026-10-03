@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   RESERVED,
   conflicts,
@@ -14,6 +14,7 @@ import {
   setSubnavKey,
   subnavKey,
 } from "../../packages/web/src/keys/bindings.svelte";
+import { pushScope, startKeys } from "../../packages/web/src/keys/keys.svelte";
 
 const NAV = [
   { key: "chat", label: "Chat" },
@@ -132,5 +133,97 @@ describe("conflicts", () => {
     setNavKey("library", "l");
     expect(conflicts("2", NAV, 0)).toEqual([]);
     expect(conflicts("l", NAV, 0)).toEqual(["section “Library”"]);
+  });
+});
+
+describe("dispatch", () => {
+  let teardown: (() => void)[] = [];
+
+  beforeEach(() => {
+    teardown = [startKeys()];
+  });
+
+  afterEach(() => {
+    for (const stop of teardown) stop();
+    document.body.replaceChildren();
+  });
+
+  const press = (key: string, target: EventTarget = document.body) => {
+    const e = new KeyboardEvent("keydown", {
+      key,
+      bubbles: true,
+      cancelable: true,
+    });
+    target.dispatchEvent(e);
+    return e;
+  };
+
+  const focusedInput = (parent: HTMLElement = document.body) => {
+    const input = document.createElement("input");
+    parent.append(input);
+    input.focus();
+    return input;
+  };
+
+  const bind = (...keys: string[]) => {
+    const ran: string[] = [];
+    teardown.push(
+      pushScope(
+        keys.map((key) => ({ key, label: key, run: () => ran.push(key) })),
+      ),
+    );
+    return ran;
+  };
+
+  it("leaves a text field on Escape", () => {
+    const input = focusedInput();
+    press("Escape", input);
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("keeps focus when the field spent Escape itself", () => {
+    const input = focusedInput();
+    input.addEventListener("keydown", (e) => e.preventDefault());
+    press("Escape", input);
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("keeps focus inside a dialog, which closes on Escape instead", () => {
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    document.body.append(dialog);
+    const input = focusedInput(dialog);
+    press("Escape", input);
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("keeps focus on any other key", () => {
+    const input = focusedInput();
+    press("a", input);
+    expect(document.activeElement).toBe(input);
+  });
+
+  /** A prefix that goes nowhere must not eat the key typed after it. */
+  it("reads a key on its own when it does not continue the sequence", () => {
+    const ran = bind("g g", "j");
+    press("g");
+    const e = press("j");
+    expect(ran).toEqual(["j"]);
+    expect(e.defaultPrevented).toBe(true);
+  });
+
+  it("starts a new sequence from the key that broke the last one", () => {
+    const ran = bind("g g", "d d");
+    press("g");
+    expect(press("d").defaultPrevented).toBe(true);
+    press("d");
+    expect(ran).toEqual(["d d"]);
+  });
+
+  it("lets an unbound key through after a broken sequence", () => {
+    const ran = bind("g g");
+    press("g");
+    expect(press("x").defaultPrevented).toBe(false);
+    expect(ran).toEqual([]);
   });
 });
