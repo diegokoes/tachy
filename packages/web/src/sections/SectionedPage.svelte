@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick, untrack, type Component } from "svelte";
   import { Rail, type IconName } from "../tui";
-  import { scrollport } from "../scrollport.svelte";
+  import { scrollport } from "../shell/scrollport.svelte";
   import { createSpy } from "./spy.svelte";
   import Section from "./Section.svelte";
   import type { HeadAction } from "./Section.svelte";

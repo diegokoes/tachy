@@ -2,7 +2,7 @@
   import { utcTip } from "../dates.svelte";
   import { onDestroy, onMount } from "svelte";
   import { api } from "../api";
-  import { navigate } from "../router.svelte";
+  import { navigate } from "../shell/router.svelte";
   import { errText } from "../resource.svelte";
   import {
     Badge,

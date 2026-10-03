@@ -4,15 +4,15 @@
   import type { Snippet } from "svelte";
   import { Checkbox, Field, FormActions } from "../tui";
   import { onMount, tick, untrack } from "svelte";
-  import { gsap } from "../gsap";
+  import { gsap } from "../motion/gsap";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import type { KnowledgeRow } from "../types";
-  import AsciiSelect from "../AsciiSelect.svelte";
+  import type { KnowledgeRow } from "./rows";
+  import AsciiSelect from "../tui/AsciiSelect.svelte";
   import { t } from "../terms";
-  import { csv } from "../fields";
-  import { setTopActions } from "../subnav.svelte";
-  import { Filing } from "../filing.svelte";
+  import { csv } from "../tui/fields";
+  import { setTopActions } from "../shell/subnav.svelte";
+  import { Filing } from "../library/filing.svelte";
   import Icon from "../tui/Icon.svelte";
   import { asStructured } from "./structured";
 

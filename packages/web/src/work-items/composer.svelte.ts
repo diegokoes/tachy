@@ -11,7 +11,7 @@ import type {
 } from "@tachy/contract";
 import { api, ApiError } from "../api";
 import { ensureProjects, ensureTypes } from "./az.svelte";
-import { onUnauthorized } from "../session.svelte";
+import { onUnauthorized } from "../access/session.svelte";
 import { isBody, isEmpty, TAGS, TITLE } from "./layout";
 import { toHtml } from "./ticketMarkdown";
 

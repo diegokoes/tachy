@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { PROVIDER_OPTIONS } from "./vocab";
-  import { api } from "./api";
+  import { PROVIDER_OPTIONS } from "../vocab";
+  import { api } from "../api";
   import {
     AGENT_EFFORTS,
     MIN_PASSWORD_LENGTH,
     OAUTH_PREFIX,
   } from "@tachy/contract";
   import type { AgentProvider } from "@tachy/contract";
-  import { csv } from "./fields";
+  import { csv } from "../tui/fields";
   import { initSession } from "./session.svelte";
-  import { errText } from "./resource.svelte";
-  import { slugify } from "./slug";
+  import { errText } from "../resource.svelte";
+  import { slugify } from "../slug";
   import AuthShell from "./AuthShell.svelte";
-  import TypeLine from "./TypeLine.svelte";
+  import TypeLine from "../motion/TypeLine.svelte";
   import {
     Actions,
     Button,
@@ -23,7 +23,7 @@
     Note,
     Panel,
     Select,
-  } from "./tui";
+  } from "../tui";
 
   let { onDone, onSkip }: { onDone: () => void; onSkip: () => void } = $props();
 

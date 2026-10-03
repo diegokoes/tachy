@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from "svelte";
-  import { gsap, reducedMotion } from "../gsap";
+  import { gsap, reducedMotion } from "../motion/gsap";
   import { GRID, shapes } from "../tui/icons";
 
   let {

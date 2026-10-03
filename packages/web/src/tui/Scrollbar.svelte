@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { themeState } from "./theme.svelte";
+  import { themeState } from "../theme/theme.svelte";
 
   let {
     target,

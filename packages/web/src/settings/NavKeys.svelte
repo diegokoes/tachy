@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { navItems } from "../nav";
+  import { navItems } from "../shell/nav";
   import {
     ACTIONS,
     keymap,

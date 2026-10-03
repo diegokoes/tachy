@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { AGENT_KEY_LABELS, agentKeyError } from "../credentials";
+  import { AGENT_KEY_LABELS, agentKeyError } from "./credentials";
   import { API_KEY_EXAMPLE, OAUTH_PREFIX } from "@tachy/contract";
   import { Button, DeleteButton, InfoMark, Note, tip } from "../tui";
   import { agentPrefs, origin, removeKey, saveKey } from "./prefs.svelte";

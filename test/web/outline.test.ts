@@ -3,7 +3,7 @@ import {
   outline,
   outlineTree,
   withAnchors,
-} from "../../packages/web/src/outline";
+} from "../../packages/web/src/wiki/outline";
 
 const numbers = (body: string) => outline(body).map((i) => i.number);
 

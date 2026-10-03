@@ -12,7 +12,7 @@
   } from "@tachy/contract";
   import { api } from "../api";
   import { setPageActions } from "../admin/pageActions.svelte";
-  import { keep, recall } from "../kept";
+  import { keep, recall } from "../shell/kept";
   import Group from "../settings/Group.svelte";
   import {
     Button,

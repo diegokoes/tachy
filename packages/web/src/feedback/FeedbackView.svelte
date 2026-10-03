@@ -1,12 +1,12 @@
 <script lang="ts">
-  import StarField from "../StarField.svelte";
+  import StarField from "../motion/StarField.svelte";
   import { Field, Note, Button, Icon, tip } from "../tui";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { openSection } from "../router.svelte";
-  import { toast } from "../notify.svelte";
-  import { gsap, reducedMotion } from "../gsap";
-  import { pushScope } from "../keys.svelte";
+  import { openSection } from "../shell/router.svelte";
+  import { toast } from "../notifications/notify.svelte";
+  import { gsap, reducedMotion } from "../motion/gsap";
+  import { pushScope } from "../keys/keys.svelte";
   import BugIdeaToggle from "./BugIdeaToggle.svelte";
   import type { ReportReview, ReportType } from "@tachy/contract";
 

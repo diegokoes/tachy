@@ -1,6 +1,7 @@
 import { entryText, excerpt, type Seg } from "./matching";
 import { fmtDate } from "../dates.svelte";
-import type { KnowledgeRow, ReferenceRow } from "../types";
+import type { KnowledgeRow } from "../knowledge/rows";
+import type { ReferenceRow } from "../reference/rows";
 
 /**
  * One row of the library list, whichever table it came from. The view renders

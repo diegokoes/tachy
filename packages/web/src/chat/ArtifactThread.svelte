@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { gsap, reducedMotion } from "../gsap";
-  import { PULSE } from "../motion";
+  import { gsap, reducedMotion } from "../motion/gsap";
+  import { PULSE } from "../motion/motion";
   import { portal } from "../tui/portal";
 
   /* Element, not HTMLElement: `to` is the tab's frame <svg>, and everything

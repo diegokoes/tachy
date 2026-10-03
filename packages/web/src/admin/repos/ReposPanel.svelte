@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { keep, recall } from "../../kept";
+  import { keep, recall } from "../../shell/kept";
   import { api } from "../../api";
-  import { canCurateScope, isGlobalAdmin } from "../../session.svelte";
+  import { canCurateScope, isGlobalAdmin } from "../../access/session.svelte";
   import { createResource, errText } from "../../resource.svelte";
   import {
     Badge,
@@ -20,8 +20,8 @@
     sectionHoist,
     type SectionAction,
   } from "../sectionAction.svelte";
-  import { gsap, reducedMotion } from "../../gsap";
-  import { navigate } from "../../router.svelte";
+  import { gsap, reducedMotion } from "../../motion/gsap";
+  import { navigate } from "../../shell/router.svelte";
 
   const LIST = "/admin/integrations/repos";
 

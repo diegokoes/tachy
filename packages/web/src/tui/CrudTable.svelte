@@ -1,7 +1,7 @@
 <script lang="ts" generics="T">
   import { onDestroy, untrack, type Snippet } from "svelte";
-  import { forget, keep, recall } from "../kept";
-  import { router, sectionNow } from "../router.svelte";
+  import { forget, keep, recall } from "../shell/kept";
+  import { router, sectionNow } from "../shell/router.svelte";
   import DataTable from "./DataTable.svelte";
   import Button from "./Button.svelte";
   import Note from "./Note.svelte";

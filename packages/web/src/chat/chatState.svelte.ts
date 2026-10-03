@@ -1,5 +1,5 @@
-import type { CompactStats } from "./chat/CompactPanel.svelte";
-import type { OutputFile } from "./chat/OutputCard.svelte";
+import type { CompactStats } from "./CompactPanel.svelte";
+import type { OutputFile } from "./OutputCard.svelte";
 import type { CreatedTicket } from "@tachy/contract";
 
 export type EntryData =

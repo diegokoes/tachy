@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { keep, recall } from "../kept";
+  import { keep, recall } from "../shell/kept";
   import { api } from "../api";
   import { createResource } from "../resource.svelte";
   import { CrudTable, FilterBar, type Column } from "../tui";

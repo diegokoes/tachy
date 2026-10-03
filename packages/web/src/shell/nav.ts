@@ -1,5 +1,5 @@
-import { isCurator, session } from "./session.svelte";
-import type { IconName } from "./tui/icons";
+import { isCurator, session } from "../access/session.svelte";
+import type { IconName } from "../tui/icons";
 
 export type NavItem = { key: string; label: string; icon?: IconName };
 

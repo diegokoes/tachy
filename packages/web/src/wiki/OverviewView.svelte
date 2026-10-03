@@ -2,11 +2,11 @@
   import { MAIN_PAGE_SLUG, slugify } from "@tachy/contract";
   import { createSequence, errText } from "../resource.svelte";
   import { api } from "../api";
-  import { navigate } from "../router.svelte";
-  import { isCurator } from "../session.svelte";
-  import { setTopActions } from "../subnav.svelte";
-  import { renderMarkdown, markBrokenLinks } from "../markdown";
-  import { LinkTargets } from "../wikilinks.svelte";
+  import { navigate } from "../shell/router.svelte";
+  import { isCurator } from "../access/session.svelte";
+  import { setTopActions } from "../shell/subnav.svelte";
+  import { renderMarkdown, markBrokenLinks } from "../markdown/markdown";
+  import { LinkTargets } from "./wikilinks.svelte";
   import {
     Badge,
     Button,
@@ -19,12 +19,12 @@
   import type {
     Coverage,
     CoverageNode,
-    ReferenceRow,
-    WikiGaps,
     WikiTocNode,
     WikiToc,
     WikiArticleRef,
-  } from "../types";
+  } from "@tachy/contract";
+  import type { ReferenceRow } from "../reference/rows";
+  import type { WikiGaps } from "./rows";
   import WikiLayout from "./WikiLayout.svelte";
   import { wikiPath } from "./paths";
   import { flattenTree, subtreeSlugs } from "./tree";

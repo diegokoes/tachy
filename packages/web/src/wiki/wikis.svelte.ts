@@ -1,6 +1,6 @@
 import { api } from "../api";
-import type { WikiListRow } from "../types";
-import { setLanding } from "../router.svelte";
+import type { WikiListRow } from "@tachy/contract";
+import { setLanding } from "../shell/router.svelte";
 import { ORG_WIDE, scopeOf, wikiPath } from "./paths";
 
 /**

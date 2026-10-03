@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { ReviewFinding, TicketReview } from "@tachy/contract";
   import { tick } from "svelte";
-  import { wipeIn } from "../motion";
+  import { wipeIn } from "../motion/motion";
   import { Button, Icon, Meter, Note } from "../tui";
 
   let {

@@ -2,14 +2,14 @@
   import { onMount } from "svelte";
   import { api } from "../api";
   import { createResource } from "../resource.svelte";
-  import { canCurateScope } from "../session.svelte";
+  import { canCurateScope } from "../access/session.svelte";
   import { t } from "../terms";
   import { CrudTable, Select, type Column } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
   import SlugRename from "./SlugRename.svelte";
   import type { Product, Team } from "./rows";
   import { INFO } from "./help";
-  import { csv } from "../fields";
+  import { csv } from "../tui/fields";
   import { sectionHoist } from "./sectionAction.svelte";
 
   const products = createResource(() => api.get<Product[]>("/products"), []);

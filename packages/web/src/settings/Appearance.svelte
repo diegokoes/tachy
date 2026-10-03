@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ANSI16 } from "../accent-palette";
+  import { ANSI16 } from "./accent-palette";
   import {
     themeState as th,
     selectAccent,
@@ -9,7 +9,7 @@
     setNavLabels,
     NAV_LABELS,
     TEXT_SIZES,
-  } from "../theme.svelte";
+  } from "../theme/theme.svelte";
   import { Button } from "../tui";
   import Choice from "./Choice.svelte";
   import Row from "./Row.svelte";

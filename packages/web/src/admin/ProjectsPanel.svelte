@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { keep, recall } from "../kept";
+  import { keep, recall } from "../shell/kept";
   import { api } from "../api";
-  import { canCurateScope } from "../session.svelte";
+  import { canCurateScope } from "../access/session.svelte";
   import { t } from "../terms";
   import { createResource, errText } from "../resource.svelte";
   import {

@@ -1,25 +1,25 @@
 <script lang="ts">
-  import { statusTone, type StatusAction } from "./library/status";
-  import { patchLibraryItem } from "./library/edit";
-  import { createSequence } from "./resource.svelte";
-  import { api } from "./api";
-  import type { KnowledgeRow, Feedback } from "./types";
+  import { statusTone, type StatusAction } from "../library/status";
+  import { patchLibraryItem } from "../library/edit";
+  import { createSequence } from "../resource.svelte";
+  import { api } from "../api";
+  import type { KnowledgeRow, Feedback } from "./rows";
   import type { ProductRow } from "@tachy/contract";
-  import Readership from "./library/Readership.svelte";
-  import DeprecatedMark from "./library/DeprecatedMark.svelte";
-  import Backlinks from "./library/Backlinks.svelte";
-  import { renderMarkdown, markBrokenLinks } from "./markdown";
-  import { LinkTargets } from "./wikilinks.svelte";
-  import StructuredView from "./knowledge/StructuredView.svelte";
-  import { asStructured } from "./knowledge/structured";
-  import QualityBars from "./knowledge/QualityBars.svelte";
-  import EntryForm from "./knowledge/EntryForm.svelte";
-  import ScopeCrumb from "./library/ScopeCrumb.svelte";
-  import StatusActions from "./library/StatusActions.svelte";
-  import { isCurator, canCurateScope } from "./session.svelte";
-  import { pushScope } from "./keys.svelte";
-  import { setTopActions } from "./subnav.svelte";
-  import { Badge, Button, Chip, Icon, Time } from "./tui";
+  import Readership from "../library/Readership.svelte";
+  import DeprecatedMark from "../library/DeprecatedMark.svelte";
+  import Backlinks from "../library/Backlinks.svelte";
+  import { renderMarkdown, markBrokenLinks } from "../markdown/markdown";
+  import { LinkTargets } from "../wiki/wikilinks.svelte";
+  import StructuredView from "./StructuredView.svelte";
+  import { asStructured } from "./structured";
+  import QualityBars from "./QualityBars.svelte";
+  import EntryForm from "./EntryForm.svelte";
+  import ScopeCrumb from "../library/ScopeCrumb.svelte";
+  import StatusActions from "../library/StatusActions.svelte";
+  import { isCurator, canCurateScope } from "../access/session.svelte";
+  import { pushScope } from "../keys/keys.svelte";
+  import { setTopActions } from "../shell/subnav.svelte";
+  import { Badge, Button, Chip, Icon, Time } from "../tui";
 
   let {
     id,

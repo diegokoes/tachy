@@ -4,7 +4,7 @@
 
 <script lang="ts">
   import { onDestroy, tick } from "svelte";
-  import { gsap, reducedMotion } from "../gsap";
+  import { gsap, reducedMotion } from "../motion/gsap";
   import { errText } from "../resource.svelte";
   import { GRID, shapes } from "../tui/icons";
   import { tip } from "../tui";

@@ -12,45 +12,45 @@
     type CommandArtifactMeta,
   } from "./agent";
   import { addEntry, chat, type Entry } from "./chatState.svelte";
-  import { renderMarkdown } from "./markdown";
-  import { gsap, reducedMotion } from "./gsap";
-  import { shatterAll } from "./motion";
-  import Scrollbar from "./Scrollbar.svelte";
-  import ArtifactPanel from "./chat/ArtifactPanel.svelte";
+  import { renderMarkdown } from "../markdown/markdown";
+  import { gsap, reducedMotion } from "../motion/gsap";
+  import { shatterAll } from "../motion/motion";
+  import Scrollbar from "../tui/Scrollbar.svelte";
+  import ArtifactPanel from "./ArtifactPanel.svelte";
   import CommandMenu, {
     matchArtifacts,
     type CommandPick,
     type MenuCrumb,
     type MenuOption,
-  } from "./chat/CommandMenu.svelte";
-  import CompactPanel from "./chat/CompactPanel.svelte";
-  import OutputCard, { type OutputFile } from "./chat/OutputCard.svelte";
-  import Approval from "./chat/Approval.svelte";
-  import Launcher from "./chat/Launcher.svelte";
-  import { ArtifactMark, Button, G, Icon, tip } from "./tui";
-  import { pushScope } from "./keys.svelte";
+  } from "./CommandMenu.svelte";
+  import CompactPanel from "./CompactPanel.svelte";
+  import OutputCard, { type OutputFile } from "./OutputCard.svelte";
+  import Approval from "./Approval.svelte";
+  import Launcher from "./Launcher.svelte";
+  import { ArtifactMark, Button, G, Icon, tip } from "../tui";
+  import { pushScope } from "../keys/keys.svelte";
   import type { WorkItemTypeOption, CreatedTicket } from "@tachy/contract";
-  import TicketComposer from "./work-items/TicketComposer.svelte";
-  import TicketCard from "./work-items/TicketCard.svelte";
+  import TicketComposer from "../work-items/TicketComposer.svelte";
+  import TicketCard from "../work-items/TicketCard.svelte";
   import {
     composer,
     hasDraft,
     openComposer,
-  } from "./work-items/composer.svelte";
+  } from "../work-items/composer.svelte";
   import {
     az,
     ensureProjects,
     ensureTypes,
     typesNote,
     typesOf,
-  } from "./work-items/az.svelte";
+  } from "../work-items/az.svelte";
   import {
     isAzNew,
     matches,
     matchProject,
     parseAz,
-  } from "./work-items/azCommand";
-  import { typeColor, typeIcon } from "./work-items/ado-icons";
+  } from "../work-items/azCommand";
+  import { typeColor, typeIcon } from "../work-items/ado-icons";
 
   const short = (tool: string) => tool.replace(/^mcp__tachy__/, "");
 

@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { navigate, segment } from "../router.svelte";
-  import { scrollport } from "../scrollport.svelte";
-  import { pushScope } from "../keys.svelte";
+  import { navigate, segment } from "../shell/router.svelte";
+  import { scrollport } from "../shell/scrollport.svelte";
+  import { pushScope } from "../keys/keys.svelte";
   import { Select } from "../tui";
   import { scopeOf, wikiLabel, wikiPath } from "./paths";
   import { wikis } from "./wikis.svelte";

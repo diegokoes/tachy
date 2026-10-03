@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { slugify, uniqueSlug } from "../../packages/web/src/slug";
-import { ANSI16 } from "../../packages/web/src/accent-palette";
+import { ANSI16 } from "../../packages/web/src/settings/accent-palette";
 import {
   CONFIDENCES,
   KNOWLEDGE_STATUSES,

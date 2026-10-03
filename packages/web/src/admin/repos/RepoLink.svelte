@@ -1,10 +1,10 @@
 <script lang="ts">
   import { api } from "../../api";
-  import { ComponentCache } from "../../filing.svelte";
-  import { keep, recall } from "../../kept";
+  import { ComponentCache } from "../../library/filing.svelte";
+  import { keep, recall } from "../../shell/kept";
   import { createResource, errText } from "../../resource.svelte";
-  import { navigate } from "../../router.svelte";
-  import { canCurateScope } from "../../session.svelte";
+  import { navigate } from "../../shell/router.svelte";
+  import { canCurateScope } from "../../access/session.svelte";
   import { setPageActions } from "../pageActions.svelte";
   import { slugify, uniqueSlug } from "../../slug";
   import { t } from "../../terms";

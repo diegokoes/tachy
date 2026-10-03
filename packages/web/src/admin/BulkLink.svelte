@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onDestroy, onMount, tick } from "svelte";
   import { api } from "../api";
-  import { gsap, reducedMotion } from "../gsap";
-  import { toast } from "../notify.svelte";
+  import { gsap, reducedMotion } from "../motion/gsap";
+  import { toast } from "../notifications/notify.svelte";
   import { createResource, errText } from "../resource.svelte";
-  import { navigate } from "../router.svelte";
-  import { canCurateScope } from "../session.svelte";
+  import { navigate } from "../shell/router.svelte";
+  import { canCurateScope } from "../access/session.svelte";
   import { slugify, uniqueSlug } from "../slug";
   import { Button, Icon, Note, Scrollbar, Select, tip } from "../tui";
   import Orbit from "./Orbit.svelte";

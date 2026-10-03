@@ -2,17 +2,17 @@
   import { onDestroy, untrack } from "svelte";
   import type { IndexPreview } from "@tachy/contract";
   import { api } from "../../api";
-  import { csv } from "../../fields";
-  import { ComponentCache } from "../../filing.svelte";
+  import { csv } from "../../tui/fields";
+  import { ComponentCache } from "../../library/filing.svelte";
   import {
     createResource,
     createSequence,
     errText,
   } from "../../resource.svelte";
-  import { navigate } from "../../router.svelte";
-  import { canCurateScope, isGlobalAdmin } from "../../session.svelte";
-  import { keep } from "../../kept";
-  import { tweenValue } from "../../motion";
+  import { navigate } from "../../shell/router.svelte";
+  import { canCurateScope, isGlobalAdmin } from "../../access/session.svelte";
+  import { keep } from "../../shell/kept";
+  import { tweenValue } from "../../motion/motion";
   import { setPageActions } from "../pageActions.svelte";
   import { t } from "../../terms";
   import Group from "../../settings/Group.svelte";

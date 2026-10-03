@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { FAMILIES, fontState, setFont, type FontAxis } from "../fonts.svelte";
+  import {
+    FAMILIES,
+    fontState,
+    setFont,
+    type FontAxis,
+  } from "../theme/fonts.svelte";
   import { Select } from "../tui";
   import Row from "./Row.svelte";
   import Rows from "./Rows.svelte";

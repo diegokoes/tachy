@@ -11,8 +11,8 @@
   } from "@tachy/contract";
   import { api } from "../api";
   import { setPageActions } from "../admin/pageActions.svelte";
-  import { keep, recall } from "../kept";
-  import { navigate } from "../router.svelte";
+  import { keep, recall } from "../shell/kept";
+  import { navigate } from "../shell/router.svelte";
   import Choice from "../settings/Choice.svelte";
   import Group from "../settings/Group.svelte";
   import Row from "../settings/Row.svelte";

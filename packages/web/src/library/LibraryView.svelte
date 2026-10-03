@@ -5,20 +5,21 @@
   import { MAX_PAGE } from "@tachy/contract";
   import { onMount, untrack } from "svelte";
   import { api } from "../api";
-  import type { KnowledgeRow, ReferenceRow } from "../types";
+  import type { KnowledgeRow } from "../knowledge/rows";
+  import type { ReferenceRow } from "../reference/rows";
   import type { ComponentRow, ProductRow } from "@tachy/contract";
-  import { navigate, segment, segments } from "../router.svelte";
-  import { keep, recall } from "../kept";
-  import { setSubnav, type SubnavItem } from "../subnav.svelte";
-  import { pushScope } from "../keys.svelte";
-  import { vimState } from "../vim.svelte";
+  import { navigate, segment, segments } from "../shell/router.svelte";
+  import { keep, recall } from "../shell/kept";
+  import { setSubnav, type SubnavItem } from "../shell/subnav.svelte";
+  import { pushScope } from "../keys/keys.svelte";
+  import { vimState } from "../keys/vim.svelte";
   import { excerpt, type Seg } from "./matching";
   import ResultRow from "./ResultRow.svelte";
   import { fill, toDoc, toEntry, type Item } from "./items";
-  import { isCurator } from "../session.svelte";
+  import { isCurator } from "../access/session.svelte";
   import { t } from "../terms";
   import { errText } from "../resource.svelte";
-  import { componentOptions } from "../catalog";
+  import { componentOptions } from "../catalog/componentOptions";
   import { Button, EmptyState, Note, Select, Spinner } from "../tui";
   import FilterMenu from "./FilterMenu.svelte";
   import TagFilter from "./TagFilter.svelte";
@@ -34,8 +35,8 @@
     type Facets,
     type ScopePreset,
   } from "./filters";
-  import EntryDetail from "../EntryDetail.svelte";
-  import DocDetail from "./DocDetail.svelte";
+  import EntryDetail from "../knowledge/EntryDetail.svelte";
+  import DocDetail from "../reference/DocDetail.svelte";
   import { movedWikiPath, ORG_WIDE, wikiPath } from "../wiki/paths";
   import EntryForm from "../knowledge/EntryForm.svelte";
   import ReferenceForm from "../reference/ReferenceForm.svelte";

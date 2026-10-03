@@ -10,7 +10,7 @@ import {
   shapes,
   type IconName,
 } from "../../packages/web/src/tui/icons";
-import { renderMarkdown } from "../../packages/web/src/markdown";
+import { renderMarkdown } from "../../packages/web/src/markdown/markdown";
 
 const names = Object.keys(ICONS) as IconName[];
 

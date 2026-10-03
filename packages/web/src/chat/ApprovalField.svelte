@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Checkbox, Chevron, Chip, Select } from "../tui";
   import { ENUM_FIELDS } from "../vocab";
-  import type { FieldSpec } from "../types";
+  import type { FieldSpec } from "@tachy/contract";
 
   let {
     name,

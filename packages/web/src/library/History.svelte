@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  import type { Revision } from "../types";
+  import type { Revision } from "./rows";
 
   /** Who made a revision, as far as the record can say. */
   export const revisionAuthor = (r: Revision) =>

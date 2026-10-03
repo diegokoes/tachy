@@ -1,9 +1,9 @@
 <script lang="ts">
   import { createSequence, errText } from "../resource.svelte";
   import { api } from "../api";
-  import { navigate } from "../router.svelte";
+  import { navigate } from "../shell/router.svelte";
   import { Badge, Note } from "../tui";
-  import type { WikiToc, WikiTocNode, WikiArticleRef } from "../types";
+  import type { WikiToc, WikiTocNode, WikiArticleRef } from "@tachy/contract";
   import WikiLayout from "./WikiLayout.svelte";
   import { wikiPath } from "./paths";
 

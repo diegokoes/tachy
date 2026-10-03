@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Component } from "svelte";
-  import { navigate, segment } from "../router.svelte";
-  import { session, logout } from "../session.svelte";
-  import { setSubnav, type SubnavItem } from "../subnav.svelte";
+  import { navigate, segment } from "../shell/router.svelte";
+  import { session, logout } from "../access/session.svelte";
+  import { setSubnav, type SubnavItem } from "../shell/subnav.svelte";
   import { Button, tip } from "../tui";
   import { close, rebind } from "./rebind.svelte";
   import RebindModal from "./RebindModal.svelte";

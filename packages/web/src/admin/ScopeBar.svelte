@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Select from "../AsciiSelect.svelte";
+  import Select from "../tui/AsciiSelect.svelte";
   import type { Opt } from "../tui";
 
   let {

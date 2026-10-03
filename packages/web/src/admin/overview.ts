@@ -1,4 +1,4 @@
-import { navigate, segment } from "../router.svelte";
+import { navigate, segment } from "../shell/router.svelte";
 
 /**
  * Leave the overview for one section of the same page. The overview and the
