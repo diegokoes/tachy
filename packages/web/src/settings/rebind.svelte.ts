@@ -12,8 +12,8 @@ import {
   setSubnavKey,
   subnavKey,
 } from "../keys/bindings.svelte";
-import { normalize } from "../keys.svelte";
-import { navItems } from "../nav";
+import { normalize } from "../keys/keys.svelte";
+import { navItems } from "../shell/nav";
 
 export type Target =
   | { kind: "nav"; item: string }

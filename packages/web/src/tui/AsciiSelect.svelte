@@ -1,6 +1,6 @@
 <script lang="ts">
   import Scrollbar from "./Scrollbar.svelte";
-  import { float, type Placement } from "./tui/float";
+  import { float, type Placement } from "./float";
 
   type Val = string | number;
   /** `hint` is said quietly after the label, and searched with it. */

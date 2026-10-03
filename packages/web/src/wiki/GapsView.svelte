@@ -1,15 +1,15 @@
 <script lang="ts">
   import { WIKI_GAP_KINDS, slugify } from "@tachy/contract";
-  import type { WikiGapKind } from "@tachy/contract";
+  import type { WikiGapKind, CoverageNode, WikiToc } from "@tachy/contract";
   import { api } from "../api";
-  import { chat } from "../chatState.svelte";
+  import { chat } from "../chat/chatState.svelte";
   import { fmtDate } from "../dates.svelte";
   import { createSequence, errText } from "../resource.svelte";
-  import { navigate } from "../router.svelte";
-  import { isCurator } from "../session.svelte";
-  import { setTopActions } from "../subnav.svelte";
+  import { navigate } from "../shell/router.svelte";
+  import { isCurator } from "../access/session.svelte";
+  import { setTopActions } from "../shell/subnav.svelte";
   import { Button, EmptyState, Note, Time } from "../tui";
-  import type { CoverageNode, WikiGap, WikiGaps, WikiToc } from "../types";
+  import type { WikiGap, WikiGaps } from "./rows";
   import CoverageTree from "./CoverageTree.svelte";
   import WikiLayout from "./WikiLayout.svelte";
   import { ORG_WIDE, wikiPath } from "./paths";

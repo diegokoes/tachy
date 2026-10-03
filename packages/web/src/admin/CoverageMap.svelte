@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../api";
-  import { pushScope } from "../keys.svelte";
+  import { pushScope } from "../keys/keys.svelte";
   import { createResource } from "../resource.svelte";
-  import { navigate, segments } from "../router.svelte";
+  import { navigate, segments } from "../shell/router.svelte";
   import { t } from "../terms";
   import { Note, Treemap, hottest, toneMix } from "../tui";
   import { RAMP_STEPS } from "../tui/scale";

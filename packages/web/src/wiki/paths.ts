@@ -1,4 +1,4 @@
-import type { WikiListRow } from "../types";
+import type { WikiListRow } from "@tachy/contract";
 
 /**
  * The scope segment for the org-wide wiki. A product actually slugged

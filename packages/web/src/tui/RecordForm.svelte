@@ -4,7 +4,7 @@
   import GroupHead from "./GroupHead.svelte";
   import Button from "./Button.svelte";
   import Checkbox from "./Checkbox.svelte";
-  import Select from "../AsciiSelect.svelte";
+  import Select from "./AsciiSelect.svelte";
   import type { Column, Draft } from "./table";
 
   /** The fields of one record, laid out from its columns. Drawn by RecordModal. */

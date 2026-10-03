@@ -7,7 +7,7 @@
     jobQueue,
   } from "@tachy/contract";
   import { api } from "../api";
-  import { keep, recall } from "../kept";
+  import { keep, recall } from "../shell/kept";
   import { createSequence, errText } from "../resource.svelte";
   import {
     Badge,
@@ -23,7 +23,7 @@
     toneOf,
     type Column,
   } from "../tui";
-  import { shadowPulse } from "../motion";
+  import { shadowPulse } from "../motion/motion";
   import { duration } from "./overview";
   import type { JobKindInfo, JobRunListedRow } from "./rows";
   import { jobs as census } from "./jobCensus.svelte";

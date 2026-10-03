@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { keep, recall } from "../kept";
+  import { keep, recall } from "../shell/kept";
   import { api } from "../api";
   import { createResource, errText } from "../resource.svelte";
   import { t } from "../terms";
@@ -17,7 +17,7 @@
     type Draft,
   } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
-  import { ComponentCache } from "../filing.svelte";
+  import { ComponentCache } from "../library/filing.svelte";
   import type { Customer, Product } from "./rows";
   import type {
     CustomerFactRow,
@@ -26,7 +26,7 @@
     ResolvedFact,
   } from "@tachy/contract";
   import { INFO } from "./help";
-  import { csv } from "../fields";
+  import { csv } from "../tui/fields";
   import { sectionHoist } from "./sectionAction.svelte";
 
   const customers = createResource(() => api.get<Customer[]>("/customers"), []);

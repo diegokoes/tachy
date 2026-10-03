@@ -13,7 +13,7 @@
 
 <script lang="ts">
   import { onMount } from "svelte";
-  import { reducedMotion } from "../gsap";
+  import { reducedMotion } from "../motion/gsap";
 
   let { file = undefined }: { file?: OutputFile } = $props();
 

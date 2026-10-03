@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { keep, recall } from "../kept";
+  import { keep, recall } from "../shell/kept";
   import {
     JOB_NOTIFY,
     JOB_OVERLAP,
@@ -27,7 +27,7 @@
     type Draft,
     Time,
   } from "../tui";
-  import { shadowPulse } from "../motion";
+  import { shadowPulse } from "../motion/motion";
   import type {
     JobChange,
     JobDefinitionRow,

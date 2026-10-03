@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, tick } from "svelte";
-  import { gsap, reducedMotion } from "../gsap";
+  import { gsap, reducedMotion } from "../motion/gsap";
   import Icon from "../tui/Icon.svelte";
   import { asStructured } from "./structured";
 

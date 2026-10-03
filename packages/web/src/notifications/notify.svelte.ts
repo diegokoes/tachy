@@ -1,5 +1,5 @@
-import { api } from "./api";
-import { session } from "./session.svelte";
+import { api } from "../api";
+import { session } from "../access/session.svelte";
 import type { NotificationRow } from "@tachy/contract";
 
 export interface Toast {

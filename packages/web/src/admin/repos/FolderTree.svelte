@@ -2,7 +2,7 @@
   import { untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import type { PreviewDir } from "@tachy/contract";
-  import { keep, recall } from "../../kept";
+  import { keep, recall } from "../../shell/kept";
   import { Chevron, Icon } from "../../tui";
   import { isGlob } from "./draft";
   import ToggleRow from "./ToggleRow.svelte";

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it } from "vitest";
-import { renderMarkdown } from "../../packages/web/src/markdown";
+import { renderMarkdown } from "../../packages/web/src/markdown/markdown";
 
 /**
  * The renderer only ever sees markdown images. A raw <img> in a body goes

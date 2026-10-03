@@ -3,7 +3,7 @@
   import { onMount } from "svelte";
   import { api } from "../api";
   import { createResource } from "../resource.svelte";
-  import { navigate } from "../router.svelte";
+  import { navigate } from "../shell/router.svelte";
   import {
     Bars,
     Columns,

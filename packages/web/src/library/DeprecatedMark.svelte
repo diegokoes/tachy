@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { shadowPulse } from "../motion";
+  import { shadowPulse } from "../motion/motion";
   import { Button, Icon, Modal } from "../tui";
 
   /** A deprecated entry's status tag. The warning behind it opens on click. */

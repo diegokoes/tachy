@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { reducedMotion } from "../gsap";
-  import { outlineTree, type OutlineItem, type OutlineNode } from "../outline";
-  import { scrollport } from "../scrollport.svelte";
+  import { reducedMotion } from "../motion/gsap";
+  import { outlineTree, type OutlineItem, type OutlineNode } from "./outline";
+  import { scrollport } from "../shell/scrollport.svelte";
   import Chevron from "../tui/Chevron.svelte";
 
   /**

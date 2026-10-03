@@ -2,7 +2,7 @@
   import { api } from "../api";
   import { fmtDateTime } from "../dates.svelte";
   import { Icon, Modal } from "../tui";
-  import type { Revision, ViewSummary } from "../types";
+  import type { Revision, ViewSummary } from "./rows";
   import History, { revisionAuthor } from "./History.svelte";
 
   /**

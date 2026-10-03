@@ -8,7 +8,7 @@
  * sibling of the window, against an edge that does not move.
  */
 import type { Snippet } from "svelte";
-import type { IconName } from "./tui/icons";
+import type { IconName } from "../tui/icons";
 
 export type SubnavItem = { key: string; label: string; icon?: IconName };
 

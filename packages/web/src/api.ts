@@ -1,4 +1,4 @@
-import { onUnauthorized } from "./session.svelte";
+import { onUnauthorized } from "./access/session.svelte";
 
 export class ApiError extends Error {
   constructor(

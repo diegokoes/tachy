@@ -3,10 +3,10 @@
   import { MAIN_PAGE_SLUG } from "@tachy/contract";
   import { api, ApiError } from "../api";
   import { errText } from "../resource.svelte";
-  import { navigate, segment } from "../router.svelte";
-  import { setSubnav, type SubnavItem } from "../subnav.svelte";
+  import { navigate, segment } from "../shell/router.svelte";
+  import { setSubnav, type SubnavItem } from "../shell/subnav.svelte";
   import { Note } from "../tui";
-  import type { ReferenceRow } from "../types";
+  import type { ReferenceRow } from "../reference/rows";
   import ArticleView from "./ArticleView.svelte";
   import ArticleForm from "./ArticleForm.svelte";
   import CategoryView from "./CategoryView.svelte";

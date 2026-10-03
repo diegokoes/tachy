@@ -8,7 +8,7 @@ vi.mock("../../packages/web/src/api", () => ({
   api: { get: () => rows() },
 }));
 const unauthorized = vi.fn();
-vi.mock("../../packages/web/src/session.svelte", () => ({
+vi.mock("../../packages/web/src/access/session.svelte", () => ({
   onUnauthorized: () => unauthorized(),
 }));
 

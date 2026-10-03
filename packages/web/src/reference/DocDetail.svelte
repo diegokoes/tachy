@@ -1,22 +1,22 @@
 <script lang="ts">
   import { fmtDate } from "../dates.svelte";
-  import { statusTone, type StatusAction } from "./status";
-  import { patchLibraryItem } from "./edit";
+  import { statusTone, type StatusAction } from "../library/status";
+  import { patchLibraryItem } from "../library/edit";
   import { api } from "../api";
-  import type { ReferenceLineageRow, ReferenceRow } from "../types";
+  import type { ReferenceLineageRow, ReferenceRow } from "./rows";
   import type { ProductRow } from "@tachy/contract";
-  import { canCurateScope, isCurator } from "../session.svelte";
-  import Readership from "./Readership.svelte";
-  import Backlinks from "./Backlinks.svelte";
-  import { renderMarkdown, markBrokenLinks } from "../markdown";
-  import { LinkTargets } from "../wikilinks.svelte";
-  import { pushScope } from "../keys.svelte";
-  import { setTopActions } from "../subnav.svelte";
+  import { canCurateScope, isCurator } from "../access/session.svelte";
+  import Readership from "../library/Readership.svelte";
+  import Backlinks from "../library/Backlinks.svelte";
+  import { renderMarkdown, markBrokenLinks } from "../markdown/markdown";
+  import { LinkTargets } from "../wiki/wikilinks.svelte";
+  import { pushScope } from "../keys/keys.svelte";
+  import { setTopActions } from "../shell/subnav.svelte";
   import { createSequence, errText } from "../resource.svelte";
   import { Badge, Button, Chip, Icon, Note, Select, Time } from "../tui";
-  import ReferenceForm from "../reference/ReferenceForm.svelte";
-  import ScopeCrumb from "./ScopeCrumb.svelte";
-  import StatusActions from "./StatusActions.svelte";
+  import ReferenceForm from "./ReferenceForm.svelte";
+  import ScopeCrumb from "../library/ScopeCrumb.svelte";
+  import StatusActions from "../library/StatusActions.svelte";
 
   let { id, onClose }: { id: string; onClose: () => void } = $props();
 

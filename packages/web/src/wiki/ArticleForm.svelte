@@ -8,22 +8,22 @@
   } from "@tachy/contract";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { setTopActions } from "../subnav.svelte";
+  import { setTopActions } from "../shell/subnav.svelte";
   import { Button, Checkbox, Field, FormActions, Note } from "../tui";
-  import AsciiSelect from "../AsciiSelect.svelte";
-  import { componentOptions } from "../catalog";
-  import type { ComponentRow } from "@tachy/contract";
-  import { CALLOUT_TYPES, renderMarkdown } from "../markdown";
-  import { outline, withAnchors } from "../outline";
-  import { REFERENCE_STATUSES } from "../vocab";
+  import AsciiSelect from "../tui/AsciiSelect.svelte";
+  import { componentOptions } from "../catalog/componentOptions";
   import type {
-    KnowledgeRow,
-    ReferenceRow,
+    ComponentRow,
     WikiArticleRef,
-    WikiCategory,
     WikiToc,
     WikiTocNode,
-  } from "../types";
+  } from "@tachy/contract";
+  import { CALLOUT_TYPES, renderMarkdown } from "../markdown/markdown";
+  import { outline, withAnchors } from "./outline";
+  import { REFERENCE_STATUSES } from "../vocab";
+  import type { KnowledgeRow } from "../knowledge/rows";
+  import type { ReferenceRow } from "../reference/rows";
+  import type { WikiCategory } from "./rows";
   import { uploadImage } from "./images";
   import { ORG_WIDE } from "./paths";
   import { takeSeed } from "./wikis.svelte";

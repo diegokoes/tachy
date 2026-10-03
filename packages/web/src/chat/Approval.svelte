@@ -1,10 +1,10 @@
 <script lang="ts">
-  import type { Entry } from "../chatState.svelte";
-  import { shatter } from "../motion";
+  import type { Entry } from "./chatState.svelte";
+  import { shatter } from "../motion/motion";
   import { Button, Panel } from "../tui";
   import ApprovalField from "./ApprovalField.svelte";
   import { api } from "../api";
-  import type { WorkItemSchema } from "../types";
+  import type { WorkItemSchema } from "@tachy/contract";
   import { adoptAgentDraft } from "../work-items/composer.svelte";
 
   type Approval = Extract<Entry, { kind: "approval" }>;

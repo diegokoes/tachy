@@ -3,14 +3,14 @@
   import { AGENT_EFFORTS } from "@tachy/contract";
   import { onMount } from "svelte";
   import { api } from "../api";
-  import { initSession } from "../session.svelte";
-  import AsciiSelect from "../AsciiSelect.svelte";
+  import { initSession } from "../access/session.svelte";
+  import AsciiSelect from "../tui/AsciiSelect.svelte";
   import Checkbox from "../tui/Checkbox.svelte";
   import Icon from "../tui/Icon.svelte";
   import { errText } from "../resource.svelte";
   import type { SystemInfo } from "./rows";
   import { system as shared } from "./systemState.svelte";
-  import { csv } from "../fields";
+  import { csv } from "../tui/fields";
   import { Button, GroupHead } from "../tui";
 
   let system = $state<SystemInfo | null>(null);

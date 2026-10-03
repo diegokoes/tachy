@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  import { scrollport } from "../scrollport.svelte";
+  import { scrollport } from "../shell/scrollport.svelte";
 
   /* Dialogs stack. Escape and Enter reach the topmost one only, and only the
      topmost one is in view: a dialog it covers folds away, or, where the caller
@@ -44,8 +44,8 @@
 
 <script lang="ts">
   import { onMount, tick, type Snippet } from "svelte";
-  import { unfold, type Unfolding } from "../motion";
-  import Scrollbar from "../Scrollbar.svelte";
+  import { unfold, type Unfolding } from "../motion/motion";
+  import Scrollbar from "./Scrollbar.svelte";
   import Scrim from "./Scrim.svelte";
   import { portal } from "./portal";
   import Button from "./Button.svelte";

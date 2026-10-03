@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Meter } from "../tui";
-  import { wipeIn } from "../motion";
+  import { wipeIn } from "../motion/motion";
 
   let {
     confidence,

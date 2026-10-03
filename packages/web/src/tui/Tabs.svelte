@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { pushScope } from "../keys.svelte";
+  import { pushScope } from "../keys/keys.svelte";
   import { subnavKey } from "../keys/bindings.svelte";
-  import { vimState } from "../vim.svelte";
-  import { jellyPress } from "../motion";
+  import { vimState } from "../keys/vim.svelte";
+  import { jellyPress } from "../motion/motion";
   import Icon from "./Icon.svelte";
   import type { IconName } from "./icons";
   import { tip } from "./tip.svelte";

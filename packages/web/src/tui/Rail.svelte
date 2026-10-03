@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { jellyPress } from "../motion";
+  import { jellyPress } from "../motion/motion";
   import { G } from "./glyphs";
 
   export type RailItem = {

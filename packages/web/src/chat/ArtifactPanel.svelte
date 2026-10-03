@@ -1,8 +1,8 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { api } from "../api";
-  import { chat } from "../chatState.svelte";
-  import { session } from "../session.svelte";
+  import { chat } from "./chatState.svelte";
+  import { session } from "../access/session.svelte";
   import type { TeamRow } from "@tachy/contract";
   import {
     ArtifactMark,
@@ -29,9 +29,9 @@
     settle,
     spin,
     tweenValue,
-  } from "../motion";
+  } from "../motion/motion";
   import { actionKey, keyLabel } from "../keys/bindings.svelte";
-  import { pushScope } from "../keys.svelte";
+  import { pushScope } from "../keys/keys.svelte";
 
   let tabBtn = $state<HTMLButtonElement>();
   let tabIcon = $state<HTMLSpanElement>();

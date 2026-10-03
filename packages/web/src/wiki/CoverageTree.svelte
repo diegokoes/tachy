@@ -1,11 +1,11 @@
 <script lang="ts">
   import { api } from "../api";
-  import { navigate } from "../router.svelte";
+  import { navigate } from "../shell/router.svelte";
   import { errText } from "../resource.svelte";
-  import { isCurator } from "../session.svelte";
+  import { isCurator } from "../access/session.svelte";
   import { Button, Note, Select } from "../tui";
   import { presetScope } from "../library/filters";
-  import type { Coverage, CoverageNode } from "../types";
+  import type { Coverage, CoverageNode } from "@tachy/contract";
   import { flattenTree, subtreeSlugs } from "./tree";
 
   /**

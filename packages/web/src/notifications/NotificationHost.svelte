@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Modal, Button } from "./tui";
-  import { portal } from "./tui/portal";
-  import { confetti } from "./motion";
+  import { Modal, Button } from "../tui";
+  import { portal } from "../tui/portal";
+  import { confetti } from "../motion/motion";
   import {
     notifyState,
     unread,

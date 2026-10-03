@@ -4,11 +4,12 @@
 import { describe, expect, it, vi } from "vitest";
 
 const navigated: string[] = [];
-vi.mock("../../packages/web/src/router.svelte", () => ({
+vi.mock("../../packages/web/src/shell/router.svelte", () => ({
   navigate: (to: string) => navigated.push(to),
 }));
 
-const { LinkTargets } = await import("../../packages/web/src/wikilinks.svelte");
+const { LinkTargets } =
+  await import("../../packages/web/src/wiki/wikilinks.svelte");
 
 /**
  * The anchors carry no href — the route is only known once the server has

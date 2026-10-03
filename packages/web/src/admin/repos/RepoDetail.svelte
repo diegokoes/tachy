@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { segment } from "../../router.svelte";
+  import { segment } from "../../shell/router.svelte";
   import RepoLink from "./RepoLink.svelte";
   import RepoPage from "./RepoPage.svelte";
 

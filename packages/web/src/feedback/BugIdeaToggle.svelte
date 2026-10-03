@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Icon } from "../tui";
-  import { gsap, SplitText, reducedMotion } from "../gsap";
-  import { ripple } from "../motion";
+  import { gsap, SplitText, reducedMotion } from "../motion/gsap";
+  import { ripple } from "../motion/motion";
   import type { ReportType } from "@tachy/contract";
 
   let {

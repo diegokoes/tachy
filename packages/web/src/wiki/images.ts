@@ -1,4 +1,4 @@
-import { onUnauthorized } from "../session.svelte";
+import { onUnauthorized } from "../access/session.svelte";
 
 /**
  * Store an image for this wiki's articles. Multipart, so it cannot go through

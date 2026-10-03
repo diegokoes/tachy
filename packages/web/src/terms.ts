@@ -1,4 +1,4 @@
-import { session } from "./session.svelte";
+import { session } from "./access/session.svelte";
 
 import type { DeploymentProfile } from "@tachy/contract";
 

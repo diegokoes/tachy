@@ -1,5 +1,5 @@
 <script module lang="ts">
-  import type { BuiltinCommandMeta, CommandArtifactMeta } from "../agent";
+  import type { BuiltinCommandMeta, CommandArtifactMeta } from "./agent";
   import type { IconName } from "../tui/icons";
 
   export type CommandMode = "command" | "artifact" | "options";

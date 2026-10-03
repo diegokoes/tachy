@@ -16,7 +16,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../api";
-  import { session } from "../session.svelte";
+  import { session } from "../access/session.svelte";
   import { createResource, errText } from "../resource.svelte";
   import { slugify, uniqueSlug } from "../slug";
   import {
@@ -33,11 +33,11 @@
     type Column,
     type Draft,
   } from "../tui";
-  import { canCurateScope } from "../session.svelte";
+  import { canCurateScope } from "../access/session.svelte";
   import { t } from "../terms";
   import type { Connection, Product, SourceProject, Team } from "./rows";
   import { INFO } from "./help";
-  import { csv } from "../fields";
+  import { csv } from "../tui/fields";
   import { sectionHoist } from "./sectionAction.svelte";
 
   type SourceType = "freshdesk" | "azure-devops" | "github";

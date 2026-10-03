@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { gsap, reducedMotion } from "../gsap";
+  import { gsap, reducedMotion } from "../motion/gsap";
   import { GRID, iconPath, shapes, type IconName } from "./icons";
 
   let {

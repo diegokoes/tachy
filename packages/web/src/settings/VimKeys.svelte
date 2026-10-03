@@ -1,6 +1,6 @@
 <script lang="ts">
   import { slide } from "svelte/transition";
-  import { vimState, setVim } from "../vim.svelte";
+  import { vimState, setVim } from "../keys/vim.svelte";
   import { tip, VimMark } from "../tui";
   import RefList from "./RefList.svelte";
 

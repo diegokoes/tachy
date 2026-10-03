@@ -3,12 +3,12 @@
   import type { Snippet } from "svelte";
   import { Field, FormActions } from "../tui";
   import { onMount, untrack } from "svelte";
-  import type { ReferenceRow } from "../types";
-  import AsciiSelect from "../AsciiSelect.svelte";
+  import type { ReferenceRow } from "./rows";
+  import AsciiSelect from "../tui/AsciiSelect.svelte";
   import { t } from "../terms";
-  import { csv } from "../fields";
-  import { setTopActions } from "../subnav.svelte";
-  import { Filing } from "../filing.svelte";
+  import { csv } from "../tui/fields";
+  import { setTopActions } from "../shell/subnav.svelte";
+  import { Filing } from "../library/filing.svelte";
 
   let {
     mode,

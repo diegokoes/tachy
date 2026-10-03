@@ -4,11 +4,11 @@ import type {
   CustomerUnitRow,
   ProductRow,
 } from "@tachy/contract";
-import { api } from "./api";
-import { componentOptions } from "./catalog";
-import { errText } from "./resource.svelte";
-import { canCurateScope } from "./session.svelte";
-import { t } from "./terms";
+import { api } from "../api";
+import { componentOptions } from "../catalog/componentOptions";
+import { errText } from "../resource.svelte";
+import { canCurateScope } from "../access/session.svelte";
+import { t } from "../terms";
 
 /** The ids and slugs of the row being edited; `product_id` only when editing. */
 type FilingSeed = {

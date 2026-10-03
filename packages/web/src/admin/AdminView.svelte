@@ -1,12 +1,16 @@
 <script lang="ts">
   import type { Component } from "svelte";
-  import { navigate, segment } from "../router.svelte";
-  import { keep, recall } from "../kept";
-  import { scrollport } from "../scrollport.svelte";
-  import { isGlobalAdmin } from "../session.svelte";
+  import { navigate, segment } from "../shell/router.svelte";
+  import { keep, recall } from "../shell/kept";
+  import { scrollport } from "../shell/scrollport.svelte";
+  import { isGlobalAdmin } from "../access/session.svelte";
   import { t, showCustomer } from "../terms";
   import { Button } from "../tui";
-  import { setSubnav, setTopActions, type SubnavItem } from "../subnav.svelte";
+  import {
+    setSubnav,
+    setTopActions,
+    type SubnavItem,
+  } from "../shell/subnav.svelte";
   import SectionedPage, {
     type PageSection,
   } from "../sections/SectionedPage.svelte";

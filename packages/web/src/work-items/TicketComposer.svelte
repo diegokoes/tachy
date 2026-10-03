@@ -5,7 +5,7 @@
     FieldSpec,
     ReviewFinding,
   } from "@tachy/contract";
-  import { pushScope } from "../keys.svelte";
+  import { pushScope } from "../keys/keys.svelte";
   import { Badge, Button, Chevron, Icon, Note, Select, tip } from "../tui";
   import { typeColor, typeIcon } from "./ado-icons";
   import { az, ensureProjects, ensureTypes, typesOf } from "./az.svelte";

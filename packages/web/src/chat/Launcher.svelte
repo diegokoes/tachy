@@ -1,5 +1,5 @@
 <script lang="ts">
-  import TypeLine from "../TypeLine.svelte";
+  import TypeLine from "../motion/TypeLine.svelte";
 </script>
 
 <div class="launcher">

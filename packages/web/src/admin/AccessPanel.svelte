@@ -1,9 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { keep, recall } from "../kept";
+  import { keep, recall } from "../shell/kept";
   import type { TeamRole } from "@tachy/contract";
   import { api } from "../api";
-  import { session, isGlobalAdmin, canCurateScope } from "../session.svelte";
+  import {
+    session,
+    isGlobalAdmin,
+    canCurateScope,
+  } from "../access/session.svelte";
   import { roleLabel, roleTip, t } from "../terms";
   import {
     Badge,

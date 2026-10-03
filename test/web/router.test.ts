@@ -12,7 +12,7 @@ import {
   segments,
   setLanding,
   startRouter,
-} from "../../packages/web/src/router.svelte";
+} from "../../packages/web/src/shell/router.svelte";
 
 /**
  * The SPA's whole navigation model. `RESERVED` is the part that matters most:

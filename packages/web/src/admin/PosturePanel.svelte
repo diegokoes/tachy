@@ -3,7 +3,7 @@
   import { onMount } from "svelte";
   import { api } from "../api";
   import { createResource } from "../resource.svelte";
-  import { isGlobalAdmin } from "../session.svelte";
+  import { isGlobalAdmin } from "../access/session.svelte";
   import { t } from "../terms";
   import {
     Bars,

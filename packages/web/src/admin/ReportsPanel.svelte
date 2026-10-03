@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { api } from "../api";
   import { errText } from "../resource.svelte";
-  import { refreshNotifications, toast } from "../notify.svelte";
+  import { refreshNotifications, toast } from "../notifications/notify.svelte";
   import { Badge, Button, Note, Icon, EmptyState } from "../tui";
   import { age } from "./overview";
   import { census } from "./census.svelte";

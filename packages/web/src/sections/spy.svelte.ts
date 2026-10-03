@@ -1,6 +1,6 @@
-import { gsap, reducedMotion, ScrollTrigger } from "../gsap";
-import { wipeIn } from "../motion";
-import { scrollport } from "../scrollport.svelte";
+import { gsap, reducedMotion, ScrollTrigger } from "../motion/gsap";
+import { wipeIn } from "../motion/motion";
+import { scrollport } from "../shell/scrollport.svelte";
 
 type Entry = {
   key: string;

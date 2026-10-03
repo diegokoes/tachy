@@ -1,8 +1,8 @@
 <script lang="ts">
   import { session, login } from "./session.svelte";
-  import { errText } from "./resource.svelte";
+  import { errText } from "../resource.svelte";
   import AuthShell from "./AuthShell.svelte";
-  import { Button, Field, Note, Panel } from "./tui";
+  import { Button, Field, Note, Panel } from "../tui";
 
   let email = $state("");
   let password = $state("");

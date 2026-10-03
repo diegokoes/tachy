@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createSequence } from "../resource.svelte";
   import { api } from "../api";
-  import { navigate } from "../router.svelte";
+  import { navigate } from "../shell/router.svelte";
   import type { ProductRow } from "@tachy/contract";
   import { libraryItemPath, ORG_WIDE } from "../wiki/paths";
 

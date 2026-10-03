@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { keep, recall } from "../kept";
+  import { keep, recall } from "../shell/kept";
   import type { ComponentNode } from "@tachy/contract";
   import { api } from "../api";
   import { createResource, errText } from "../resource.svelte";
-  import { canCurateScope } from "../session.svelte";
+  import { canCurateScope } from "../access/session.svelte";
   import { t } from "../terms";
   import {
     Button,
@@ -20,10 +20,10 @@
     type Draft,
   } from "../tui";
   import { slugify, uniqueSlug } from "../slug";
-  import { csv } from "../fields";
+  import { csv } from "../tui/fields";
   import { INFO } from "./help";
   import type { Product, Repo } from "./rows";
-  import { pushScope } from "../keys.svelte";
+  import { pushScope } from "../keys/keys.svelte";
   import ArchitectureMap from "./ArchitectureMap.svelte";
   import SlugRename from "./SlugRename.svelte";
   import {

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { api } from "../api";
-  import { navigate } from "../router.svelte";
+  import { navigate } from "../shell/router.svelte";
   import { createSequence } from "../resource.svelte";
   import { Badge, Modal } from "../tui";
-  import type { WikiSearchHit } from "../types";
+  import type { WikiSearchHit } from "@tachy/contract";
   import { wikiPath } from "./paths";
 
   /** The wiki's own quick-find (ctrl+k): this wiki's articles, drafts included. */
