@@ -41,6 +41,10 @@ npm run format                   # prettier
 
 Tests need Docker (testcontainers spins up Postgres).
 
+Coverage floors are per package, in `vitest.config.ts`. New code ships with
+tests that run it: `scripts/coverage-diff.ts` fails a pull request under 80% of
+added lines. Raise a package's floor when its coverage rises; never lower one.
+
 ## The agent prompt is a per-request cost
 
 `packages/agent/prompt.md` is the system prompt of **every** agent turn: the

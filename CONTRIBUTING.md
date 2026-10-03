@@ -26,6 +26,13 @@ supported, which is what [SECURITY.md](SECURITY.md) says too.
   opening it. GitHub Actions runs the same three on every pull request and on
   pushes to `dev` and `main`, so a failure blocks the merge. `coverage` rather
   than `test` because that is what applies the thresholds.
+- Coverage is gated twice. `vitest.config.ts` holds a floor for the whole repo
+  and one per package; a run below any of them fails. On a pull request,
+  `scripts/coverage-diff.ts` also fails when under 80% of the added lines are
+  run by the suite. Check it locally with
+  `npm run coverage && npx tsx scripts/coverage-diff.ts codeberg/dev`.
+- When a change raises a package's coverage, raise that package's floor in the
+  same pull request. A floor is never lowered to make a build pass.
 - tachý is AGPL-3.0-or-later; your contribution will be licensed the same way
   once merged.
 
