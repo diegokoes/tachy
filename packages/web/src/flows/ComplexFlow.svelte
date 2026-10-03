@@ -330,7 +330,6 @@
       value={flowId}
       options={flowOptions}
       searchable
-      filterPlaceholder="filter flows"
       placeholder="flow"
       aria-label="Flow"
       onchange={(v) => (flowId = String(v ?? ""))}

@@ -646,7 +646,6 @@
           bind:value={productId}
           active={!!productId}
           keepOpen
-          filterPlaceholder=""
           searchable
           title={t("product")}
           placeholder="any"
@@ -661,7 +660,6 @@
           bind:value={component}
           active={!!component}
           keepOpen
-          filterPlaceholder=""
           searchable
           title={`Component (within the chosen ${t("product")})`}
           disabled={!productId || components.length === 0}
@@ -681,7 +679,6 @@
           bind:value={status}
           active={!!status}
           keepOpen
-          filterPlaceholder=""
           title="Status"
           placeholder="any"
           clearable
@@ -707,7 +704,6 @@
                     value={extras[key] ?? ""}
                     active={!!extras[key]}
                     keepOpen
-                    filterPlaceholder=""
                     title={def.needsComponent
                       ? `${def.label} (within the chosen component)`
                       : def.label}
