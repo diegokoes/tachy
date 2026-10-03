@@ -43,8 +43,20 @@
       key: "agent",
       label: "agent",
       icon: "agent",
-      left: [{ label: "model", view: Agent }],
-      right: [{ label: "keys", view: Credentials }],
+      left: [
+        {
+          label: "runtime",
+          hint: "Each setting follows your team, then your org, until you pick your own.",
+          view: Agent,
+        },
+      ],
+      right: [
+        {
+          label: "keys",
+          hint: "Stored encrypted. A shared key answers until you paste your own.",
+          view: Credentials,
+        },
+      ],
     },
   ];
 
@@ -68,7 +80,8 @@
   );
 
   $effect(() => {
-    if (seg && seg !== tab.key) navigate(`/settings/${tab.key}`, { replace: true });
+    if (seg && seg !== tab.key)
+      navigate(`/settings/${tab.key}`, { replace: true });
   });
 
   $effect(() =>
@@ -89,7 +102,9 @@
 
 {#snippet account()}
   {#if session.me}
-    <span class="who" use:tip={`signed in as ${session.me.email}`}>{session.me.email}</span>
+    <span class="who" use:tip={`signed in as ${session.me.email}`}
+      >{session.me.email}</span
+    >
     <Button
       variant="ghost"
       square

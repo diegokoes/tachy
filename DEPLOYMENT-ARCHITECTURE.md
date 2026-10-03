@@ -449,10 +449,11 @@ defineJob({
   params: z.object({ repo: repoSlug, full: z.boolean().default(false) }),
   connection: "github", // optional: which source type it runs against
   defaultSchedule: "0 2 * * *",
-  resourceClass: "heavy",
+  queue: "index", // a lane in JOB_QUEUES; its class picks the worker pool
+  dedupeKey: (p) => p.repo, // at most one queued or running run per key
   overlap: "skip", // skip | queue: when the previous run is still going
   missed: "run-once", // run-once | skip: when the host was down at fire time
-  timeout: "2h",
+  timeout: "8h",
   maxAttempts: 3,
   run: async (ctx, params) => {
     // ctx.signal (cancel), ctx.progress(0..1, note), ctx.log(), ctx.heartbeat(),
@@ -473,8 +474,9 @@ defineJob({
 - **Secrets.** A parameter that needs a secret takes a vault credential _name_,
   rendered as a credential picker. `ctx.credential(name)` resolves it at run
   time. Secret values never sit in `params`.
-- **Shared vocabulary.** Kind ids, trigger types, statuses and resource class
-  names go in `@tachy/contract`, since both sides enforce them.
+- **Shared vocabulary.** Trigger types, statuses, resource classes, queues and
+  priorities go in `@tachy/contract`, since both sides enforce them. Kind ids
+  stay in code and reach the SPA through `/jobs/kinds`.
 
 #### 5.3.2 Tables
 
@@ -482,12 +484,15 @@ defineJob({
   - `kind`, `name`, `params` (jsonb, validated against the kind on every save
     and at worker start), `enabled`;
   - `schedule` (cron, nullable), `timezone` (IANA; defaults to an org-wide timezone setting);
-  - `resource_class`, `timeout` and `overlap`, each overriding the kind's
-    default;
+  - `queue`, `timeout` and `overlap`, each overriding the kind's default
+    (`resource_class` is still written, from the queue, for the previous
+    release to read on rollback);
   - `notify` (on failure, on success, never);
   - `created_by`, `updated_by`, and timestamps.
 - **`job_runs`**:
   - `definition_id` (null for one-off runs), `kind`, `params` snapshot;
+  - `queue`, `resource_class` (the queue's), `priority`, `dedupe_key`, and
+    `parent_id` for a run another run queued;
   - `trigger` (`schedule` / `manual` / `event`), `scheduled_for`,
     `requested_by`;
   - `status` (`queued` / `running` / `succeeded` / `failed` / `cancelled` /
@@ -496,9 +501,16 @@ defineJob({
   - `progress`, `progress_note`, `output` (small jsonb summary), `error`,
     `log_tail` (the last ~200 lines, passed through redaction);
   - timestamps.
-  - Unique `(definition_id, scheduled_for)`, so a double firing inserts one run.
+  - Unique `(definition_id, scheduled_for)`, so a double firing inserts one run,
+    and unique `dedupe_key` among queued and running runs, so two clicks on
+    "index" queue one reindex and the second gets the first's id back.
 - **`job_definition_changes`:** who changed what, old and new values. A
   schedule edit can silently stop a sync, so every change is recorded.
+- **`job_workers`:** each worker process as it reports itself every 15 s: host,
+  pid, classes, the queues it claims from, slots. One unseen for a minute shows
+  as gone; the reaper forgets it after 15 minutes. The workers page lists them
+  with the runs each holds (`job_runs.locked_by`), and a queue with runs waiting
+  and no live worker is raised as an issue.
 
 #### 5.3.3 Triggers
 
@@ -511,7 +523,7 @@ defineJob({
 Workers `LISTEN` for new runs and also poll every 10 s, so a missed
 notification costs seconds, not a run.
 
-#### 5.3.4 Resource classes
+#### 5.3.4 Resource classes and queues
 
 Memory and CPU limits are cgroup settings, fixed when a container starts.
 Setting them per run from the UI would need the Docker socket or host systemd,
@@ -525,7 +537,20 @@ which hands the web app the host (§7). So:
   | `light` | `worker-light` | 512m      | 1    |            4 |                        0 slots |
   | `heavy` | `worker-heavy` | 2g        | 4    |            1 |                        3 slots |
 
-- **In the UI,** a definition picks a class. Knobs a process can enforce
+- **Queues are lanes inside a class,** declared in `JOB_QUEUES`: `index`,
+  `embed` and `testing` (heavy), `sync` and `maintenance` (light). A queue is a
+  routing label, not a process, so adding one costs nothing until a pool is
+  sized for it. A pool serves every queue of its class unless
+  `TACHY_WORKER_QUEUES` names some, which is how a dedicated indexing worker
+  would be split off. Each queue has a `cap` on runs going at once across all
+  workers, so a reindex fan-out cannot fill the heavy pool while an embedding
+  backfill waits.
+- **Priority** orders claims within the queues a worker serves: manual 10, event
+  5, schedule 0, and a run another run queued takes its parent's. A reindex
+  someone clicked goes ahead of the nightly refresh's backlog.
+- **Without worker services** (`TACHY_WORKER` unset), the API process works both
+  classes with one slot each, so a two-hour reindex cannot hold up a sync.
+- **In the UI,** a definition picks a queue. Knobs a process can enforce
   itself are also set there: timeout, overlap, embedding priority and batch
   size, and ONNX thread count.
 - **Shared budget.** Heavy runs take chat slots (§3.2) while they run. The UI
@@ -538,7 +563,12 @@ which hands the web app the host (§7). So:
 #### 5.3.5 Running a run
 
 - **Claiming:** `update … where id = (select … for update skip locked limit 1)`,
-  filtered by class. A reaper requeues runs whose lease expired.
+  filtered by class and queue, skipping queues at their cap, highest priority
+  then oldest first. Claims take turns under a transaction advisory lock, so
+  two workers cannot both see room under a cap. A reaper requeues runs whose
+  lease expired.
+- **Fan-out:** `ctx.enqueue` links the new run to its parent. The runs view
+  shows a parent's children done out of total, and opens onto them.
 - **Cancelling:** the UI sets `cancel_requested`, the worker aborts
   `ctx.signal`, and the kind stops at its next check. After a grace period the
   worker kills the run.

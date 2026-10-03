@@ -1,13 +1,21 @@
 <script lang="ts">
-  import { CLOCKS, DATE_ORDERS, DATE_ORDER_LABELS, type DateFormat } from "@tachy/contract";
+  import {
+    CLOCKS,
+    DATE_ORDERS,
+    DATE_ORDER_LABELS,
+    type DateFormat,
+  } from "@tachy/contract";
   import { dateFormat, loadDateFormat, setDatePart } from "../dates.svelte";
   import { errText } from "../resource.svelte";
-  import { Note } from "../tui";
+  import { Note, Select } from "../tui";
   import Choice from "./Choice.svelte";
   import Row from "./Row.svelte";
   import Rows from "./Rows.svelte";
 
-  const ORDERS = DATE_ORDERS.map((order) => ({ value: order, label: DATE_ORDER_LABELS[order] }));
+  const ORDERS = DATE_ORDERS.map((order) => ({
+    value: order,
+    label: DATE_ORDER_LABELS[order],
+  }));
   const CLOCK_OPTIONS = CLOCKS.map((c) => ({ value: c, label: c }));
 
   let error = $state<string | null>(null);
@@ -28,11 +36,21 @@
 
 <Rows>
   <Row label="date" hint="times are shown in UTC">
-    <Choice label="date" options={ORDERS} value={dateFormat.order} onpick={pick("order")} />
+    <Select
+      aria-label="date"
+      value={dateFormat.order}
+      options={ORDERS}
+      onchange={(v) => pick("order")(v as DateFormat["order"])}
+    />
   </Row>
 
   <Row label="clock">
-    <Choice label="clock" options={CLOCK_OPTIONS} value={dateFormat.clock} onpick={pick("clock")} />
+    <Choice
+      label="clock"
+      options={CLOCK_OPTIONS}
+      value={dateFormat.clock}
+      onpick={pick("clock")}
+    />
   </Row>
 </Rows>
 

@@ -45,11 +45,7 @@
       <span class="lbl" title={l.label}>{l.label}</span>
       <span class="track">
         {#each l.at as t (t)}
-          <span
-            class="tick"
-            style="left: {pos(t)}%"
-            title={utcTip(t)}
-          ></span>
+          <span class="tick" style="left: {pos(t)}%" title={utcTip(t)}></span>
         {/each}
       </span>
       <span class="n">{l.at.length}</span>

@@ -41,8 +41,11 @@
       <span class="mark" aria-hidden="true">{on ? G.marker : " "}</span>
       <span class="lbl">{it.label}</span>
       {#if it.count !== undefined}
-        <span class="n" class:pending={it.count === null} class:warn={it.tone === "warn"} class:danger={it.tone === "danger"}
-          >{it.count ?? "·"}</span
+        <span
+          class="n"
+          class:pending={it.count === null}
+          class:warn={it.tone === "warn"}
+          class:danger={it.tone === "danger"}>{it.count ?? "·"}</span
         >
       {/if}
     </button>

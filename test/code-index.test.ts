@@ -23,7 +23,7 @@ import {
   repoDir,
   adoptSupersededIndex,
 } from "@tachy/core";
-import { indexableFiles } from "../packages/core/src/code/indexer";
+import { countTree, indexableFiles } from "../packages/core/src/code/indexer";
 
 afterAll(() => sql.end());
 
@@ -316,6 +316,12 @@ describe("release lines", () => {
       config: { exclude: ["alpha.ts", "*.bin"] },
     });
     expect(fewer.files_admitted).toBe(4);
+    expect(fewer.types.find((t) => t.ext === "ts")).toMatchObject({
+      admitted: 4,
+      binary: false,
+      icon: "typescript",
+    });
+    expect(fewer.types.find((t) => t.ext === "bin")?.binary).toBe(true);
   });
 
   it("lists a remote's branches and tags", async () => {
@@ -391,6 +397,46 @@ describe("indexableFiles", () => {
       "other/application/config.yaml",
       "README.md",
     ]);
+  });
+});
+
+describe("countTree", () => {
+  const tree = [
+    "api/src/a.ts",
+    "api/src/b.ts",
+    "api/Pods/x.h",
+    "api/node_modules/y/index.js",
+    "art/logo.png",
+    "docs.v2/Makefile",
+  ].map((path) => ({ path, blobSha: "0".repeat(40) }));
+
+  it("counts every directory at any depth against what the config admits", () => {
+    const counts = countTree(tree, { exclude: ["api/Pods"] });
+    expect(counts.files_admitted).toBe(2);
+    expect(counts.dirs).toEqual([
+      { path: "api", files: 4, admitted: 2, skipped: false },
+      { path: "api/node_modules", files: 1, admitted: 0, skipped: true },
+      { path: "api/node_modules/y", files: 1, admitted: 0, skipped: true },
+      { path: "api/Pods", files: 1, admitted: 0, skipped: false },
+      { path: "api/src", files: 2, admitted: 2, skipped: false },
+      { path: "art", files: 1, admitted: 0, skipped: false },
+      { path: "docs.v2", files: 1, admitted: 0, skipped: false },
+    ]);
+  });
+
+  it("lists extensions by name alone, outside the always-skipped directories", () => {
+    const types = countTree(tree, {}).types;
+    expect(types.map((t) => [t.ext, t.files, t.admitted, t.binary])).toEqual([
+      ["ts", 2, 2, false],
+      ["", 1, 0, true],
+      ["h", 1, 1, false],
+      ["png", 1, 0, true],
+    ]);
+  });
+
+  it("never admits a binary type, even when a repo lists it", () => {
+    const kept = indexableFiles(tree, { include_extensions: ["png", "ts"] });
+    expect(kept.map((f) => f.path)).toEqual(["api/src/a.ts", "api/src/b.ts"]);
   });
 });
 

@@ -132,7 +132,8 @@
 
   function moveCursor(delta: number) {
     pointerMoved = false;
-    cursor = cursor < 0 ? 0 : Math.min(items.length - 1, Math.max(0, cursor + delta));
+    cursor =
+      cursor < 0 ? 0 : Math.min(items.length - 1, Math.max(0, cursor + delta));
     rowEls[cursor]?.scrollIntoView({ block: "nearest" });
   }
 
@@ -210,7 +211,8 @@
         ...ents.map((e) => toEntry(e, query)),
         ...docs.map((d) => toDoc(d, query)),
       ];
-      if (searching && status) merged = merged.filter((i) => i.status === status);
+      if (searching && status)
+        merged = merged.filter((i) => i.status === status);
 
       merged.sort((a, b) =>
         searching
@@ -317,7 +319,9 @@
     const slug = products.find((p) => p.id === id)?.slug;
     if (slug)
       try {
-        const next = await api.get<ComponentRow[]>(`/products/${slug}/components`);
+        const next = await api.get<ComponentRow[]>(
+          `/products/${slug}/components`,
+        );
         if (!isCurrent()) return;
         components = next;
       } catch {
@@ -390,8 +394,7 @@
   /** Opens narrowed to what another page asked for; see `presetScope`. */
   async function applyPreset(p: ScopePreset) {
     const id = products.find((x) => x.slug === p.product)?.id as
-      | string
-      | undefined;
+      string | undefined;
     if (!id) return;
     productId = id;
     await onProductChange(id);
@@ -712,7 +715,10 @@
                     clearable
                     options={[
                       ...(def.kind === "enum"
-                        ? (def.options ?? []).map((o) => ({ value: o, label: o }))
+                        ? (def.options ?? []).map((o) => ({
+                            value: o,
+                            label: o,
+                          }))
                         : (facets[key] ?? []).map((o) => ({
                             value: o.value,
                             label: `${o.value} (${o.count})`,
@@ -752,7 +758,9 @@
   {#if error}<Note tone="danger">{error}</Note>{/if}
   {#if slow}
     <Spinner
-      label={mode === "search" ? "searching the archive" : "loading the library"}
+      label={mode === "search"
+        ? "searching the archive"
+        : "loading the library"}
     />
   {/if}
 
@@ -778,7 +786,11 @@
     {#if !loading && !error && items.length === 0}
       <li>
         <EmptyState
-          icon={kind === "docs" ? "refDoc" : kind === "entries" ? "knowledge" : "library"}
+          icon={kind === "docs"
+            ? "refDoc"
+            : kind === "entries"
+              ? "knowledge"
+              : "library"}
           title={mode === "search"
             ? `No matches for “${q}”.`
             : "The library is empty."}
@@ -926,6 +938,4 @@
 
   /* One kind color per card, worn by the left bar and the match gauge, which
      spans the card so it can run its full height. */
-
-
 </style>

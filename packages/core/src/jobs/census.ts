@@ -4,6 +4,8 @@ import {
   JOB_RESOURCE_CLASSES,
   JOB_STATUSES,
   JOB_TRIGGERS,
+  JOB_QUEUES,
+  jobQueue,
   type JobResourceClass,
   type JobStatus,
   type JobTrigger,
@@ -11,6 +13,7 @@ import {
 import { sql } from "../infra/db";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { hasJobKind, getJobKind } from "./registry";
+import { unservedQueues } from "./roster";
 import type { JobCensus } from "@tachy/contract";
 
 export type { JobCensus };
@@ -80,6 +83,24 @@ export async function jobCensus(
     order by 2 desc, 1
   `;
 
+  const waits = await sql`
+    select queue, count(*)::int as started,
+      avg(extract(epoch from started_at - created_at))::float8 as avg_wait,
+      max(extract(epoch from started_at - created_at))::float8 as max_wait
+    from job_runs
+    where ${window} and queue is not null and started_at is not null
+    group by queue
+  `;
+  const by_queue = JOB_QUEUES.map((q) => {
+    const w = waits.find((r) => r.queue === q.name);
+    return {
+      queue: q.name,
+      started: w?.started ?? 0,
+      avg_wait_seconds: w?.avg_wait ?? null,
+      max_wait_seconds: w?.max_wait ?? null,
+    };
+  });
+
   const live = await sql`
     select resource_class, status, count(*)::int as n
     from job_runs where status in ('running', 'queued')
@@ -102,18 +123,17 @@ export async function jobCensus(
     from job_definitions
   `;
 
-  /* The effective class lives half in the row and half in code: a null
-     resource_class means "whatever the kind defaults to", and that default is
-     in the registry, not the database. A definition for a kind this process
-     does not know counts under light, which is what defineJob defaults to. */
-  const classes = await sql`select kind, resource_class from job_definitions`;
+  /* The effective queue lives half in the row and half in code: a null queue
+     means "whatever the kind defaults to", and that default is in the
+     registry, not the database. A definition for a kind this process does not
+     know counts under maintenance, which is what defineJob defaults to. */
+  const queues = await sql`select kind, queue from job_definitions`;
   const defsByClass = zeroes(JOB_RESOURCE_CLASSES);
-  for (const d of classes) {
-    const cls = (d.resource_class ??
-      (hasJobKind(d.kind)
-        ? getJobKind(d.kind).resourceClass
-        : "light")) as JobResourceClass;
-    defsByClass[cls] += 1;
+  for (const d of queues) {
+    const queue =
+      d.queue ??
+      (hasJobKind(d.kind) ? getJobKind(d.kind).queue : "maintenance");
+    defsByClass[jobQueue(queue).class] += 1;
   }
 
   const failures = await sql`
@@ -160,6 +180,7 @@ export async function jobCensus(
     by_class,
     per_day: [...days_.values()],
     by_kind: [...by_kind] as unknown as JobCensus["by_kind"],
+    by_queue,
     success,
     now: current,
     definitions: {
@@ -204,9 +225,17 @@ export async function jobIssues(): Promise<Record<string, IssueList>> {
     where r.status = 'queued' and r.run_after < now() - interval '15 minutes'
     order by r.created_at limit ${ISSUE_ITEMS}
   `;
+  const unserved = await unservedQueues();
   return {
     "jobs.failing": issueList(failing),
     "jobs.disabled": issueList(disabled),
     "jobs.stuck": issueList(stuck),
+    "jobs.no_worker": {
+      n: unserved.length,
+      items: unserved.map((q) => ({
+        key: q.queue,
+        label: `${q.queue} (${q.queued} queued)`,
+      })),
+    },
   };
 }

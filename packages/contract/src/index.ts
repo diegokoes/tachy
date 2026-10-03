@@ -107,8 +107,12 @@ export type {
   RepoIndexStatus,
   RepoRow,
   RepoLineRow,
+  RepoIndexRun,
   RemoteRef,
   RepoCensus,
+  IndexPreview,
+  PreviewDir,
+  PreviewType,
 } from "./code";
 export type {
   CatalogCensus,
@@ -131,6 +135,15 @@ export type {
   SourceConnectionRow,
   SourceTraffic,
 } from "./sources";
+export {
+  INGEST_TOKEN_PREFIX,
+  BUCKET_BATCH_VERSION,
+  MAX_BUCKET_BATCH_DOCS,
+  MAX_BUCKET_DOC_CHARS,
+  BUCKET_BATCH_MAX_BYTES,
+  bucketIngestPath,
+} from "./buckets";
+export type { BucketRow, BucketWithToken } from "./buckets";
 export type { AgentUsage, ToolUsage } from "./analytics";
 export type { ComponentKnowledge, KnowledgeCensus } from "./knowledge";
 export type {
@@ -196,6 +209,10 @@ export {
   JOB_NOTIFY,
   JOB_CLASS_CHAT_SLOTS,
   JOB_FINISHED,
+  JOB_QUEUES,
+  JOB_QUEUE_NAMES,
+  JOB_PRIORITY,
+  jobQueue,
   parseDuration,
 } from "./jobs";
 export type {
@@ -205,11 +222,25 @@ export type {
   JobOverlap,
   JobMissed,
   JobNotify,
+  JobQueue,
+  JobQueueName,
   JobCensus,
   JobRun,
+  JobRunListed,
+  JobWorkerRow,
+  JobLive,
   JobDefinition,
 } from "./jobs";
-export { FIELD_SHOWS } from "./flows";
+export {
+  FIELD_SHOWS,
+  FLOW_TRIGGER_KINDS,
+  CONDITION_OPS,
+  FLOW_ACTION_CATEGORIES,
+  FLOW_RUN_STATUSES,
+  readPath,
+  interpolate,
+  evaluateCondition,
+} from "./flows";
 export type {
   ComposeConfig,
   TypeFormConfig,
@@ -217,6 +248,23 @@ export type {
   FieldDefault,
   FieldShow,
   FormDisplay,
+  FlowTriggerKind,
+  ConditionOp,
+  Condition,
+  FlowTrigger,
+  FlowActionStep,
+  FlowIfStep,
+  FlowFilterStep,
+  FlowStep,
+  FlowGraph,
+  Flow,
+  FlowActionCategory,
+  FlowActionInfo,
+  FlowOption,
+  FlowRunStatus,
+  FlowStepStatus,
+  FlowStepTrace,
+  FlowRun,
 } from "./flows";
 export {
   DATE_ORDERS,

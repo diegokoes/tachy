@@ -126,9 +126,18 @@
   );
 </script>
 
-<div class="field" class:inline={kind === "line" || kind === "enum" || kind === "bool" || kind === "number"}>
+<div
+  class="field"
+  class:inline={kind === "line" ||
+    kind === "enum" ||
+    kind === "bool" ||
+    kind === "number"}
+>
   <span class="label" title={hint}>
-    {label}{#if spec?.required}<span class="req" title="required by this work item type">*</span>{/if}
+    {label}{#if spec?.required}<span
+        class="req"
+        title="required by this work item type">*</span
+      >{/if}
   </span>
 
   {#if kind === "enum"}
@@ -169,13 +178,19 @@
       value={(value as string) ?? ""}
       {disabled}
       aria-label={label}
-      rows={Math.min(12, Math.max(2, String(value ?? "").split("\n").length + 1))}
-      oninput={(e) => onchange(e.currentTarget.value)}
-    ></textarea>
+      rows={Math.min(
+        12,
+        Math.max(2, String(value ?? "").split("\n").length + 1),
+      )}
+      oninput={(e) => onchange(e.currentTarget.value)}></textarea>
   {:else if kind === "list"}
     <div class="list">
       {#each list as item, i (i + item)}
-        <Chip onremove={disabled ? undefined : () => onchange(list.filter((_, j) => j !== i))}>
+        <Chip
+          onremove={disabled
+            ? undefined
+            : () => onchange(list.filter((_, j) => j !== i))}
+        >
           {item}
         </Chip>
       {/each}
@@ -207,8 +222,7 @@
         {disabled}
         spellcheck="false"
         aria-label={label}
-        oninput={(e) => commitJson(e.currentTarget.value)}
-      ></textarea>
+        oninput={(e) => commitJson(e.currentTarget.value)}></textarea>
     {/if}
   {/if}
 </div>

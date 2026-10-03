@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ComponentNode } from "../../packages/contract/src";
+import type { ComponentNode, ProductRow } from "../../packages/contract/src";
 import {
   boxOf,
   makeRoom,
@@ -509,18 +509,35 @@ describe("radius", () => {
 });
 
 describe("options", () => {
+  const product = (slug: string, team: string): ProductRow => ({
+    id: slug,
+    slug,
+    name: slug.toUpperCase(),
+    aliases: null,
+    team_slug: team,
+    team_name: team.toUpperCase(),
+  });
+  const PRODUCTS = [
+    product("trace", "platform"),
+    product("fleet", "platform"),
+    product("inkmon", "support"),
+    product("ledger", "support"),
+  ];
+
   it("offers every team, and only the chosen team's products", () => {
-    expect(options(ROWS, "").teams.map((o) => o.value)).toEqual([
+    expect(options(PRODUCTS, "").teams.map((o) => o.value)).toEqual([
       "platform",
       "support",
     ]);
-    expect(options(ROWS, "").products.map((o) => o.value)).toEqual([
+    expect(options(PRODUCTS, "").products.map((o) => o.value)).toEqual([
       "fleet",
       "inkmon",
+      "ledger",
       "trace",
     ]);
-    expect(options(ROWS, "support").products.map((o) => o.value)).toEqual([
+    expect(options(PRODUCTS, "support").products.map((o) => o.value)).toEqual([
       "inkmon",
+      "ledger",
     ]);
   });
 });

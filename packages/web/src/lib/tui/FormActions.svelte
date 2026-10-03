@@ -23,8 +23,12 @@
   } = $props();
 </script>
 
-<Button size="sm" variant="ghost" icon="close" disabled={saving} onclick={oncancel}
-  >cancel</Button
+<Button
+  size="sm"
+  variant="ghost"
+  icon="close"
+  disabled={saving}
+  onclick={oncancel}>cancel</Button
 >
 <Button
   size="sm"

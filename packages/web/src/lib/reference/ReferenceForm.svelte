@@ -30,7 +30,9 @@
     extra?: Snippet;
   } = $props();
 
-  const SUBMIT_LABEL = $derived(mode === "create" ? "create doc" : "save changes");
+  const SUBMIT_LABEL = $derived(
+    mode === "create" ? "create doc" : "save changes",
+  );
 
   const seed = untrack(() => initial);
 
@@ -61,12 +63,22 @@
       ...filing.payload(mode),
     };
     if (mode === "create" && supersedes) payload.supersedes = supersedes;
-    onSubmit(Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined)));
+    onSubmit(
+      Object.fromEntries(
+        Object.entries(payload).filter(([, v]) => v !== undefined),
+      ),
+    );
   }
 </script>
 
 {#snippet formActions()}
-  <FormActions form="ref-form" {saving} title={SUBMIT_LABEL} create={mode === "create"} oncancel={onCancel} />
+  <FormActions
+    form="ref-form"
+    {saving}
+    title={SUBMIT_LABEL}
+    create={mode === "create"}
+    oncancel={onCancel}
+  />
 {/snippet}
 
 <form id="ref-form" class="ref-form" onsubmit={submit}>
@@ -91,16 +103,25 @@
       <AsciiSelect
         bind:value={filing.component}
         disabled={!filing.productSlug || filing.components.length === 0}
-        options={[{ value: "", label: "whole product" }, ...filing.componentChoices]}
+        options={[
+          { value: "", label: "whole product" },
+          ...filing.componentChoices,
+        ]}
       />
     </Field>
     <Field label={t("customer")}>
-      <AsciiSelect bind:value={filing.customerSlug} options={filing.customerOptions}
-        onchange={() => filing.customerChanged()} />
+      <AsciiSelect
+        bind:value={filing.customerSlug}
+        options={filing.customerOptions}
+        onchange={() => filing.customerChanged()}
+      />
     </Field>
     <Field label="unit">
-      <AsciiSelect bind:value={filing.unitSlug} options={filing.unitOptions}
-        disabled={!filing.customerSlug || filing.units.length === 0} />
+      <AsciiSelect
+        bind:value={filing.unitSlug}
+        options={filing.unitOptions}
+        disabled={!filing.customerSlug || filing.units.length === 0}
+      />
     </Field>
     <Field label="doc version">
       <input bind:value={docVersion} class="short" />
@@ -120,7 +141,6 @@
   {/if}
 
   {#if error ?? filing.error}<p class="error">{error ?? filing.error}</p>{/if}
-
 </form>
 
 <style>
@@ -135,11 +155,35 @@
     padding-bottom: var(--pad-2);
     border-bottom: var(--panel-line);
   }
-  .ref-form { display: flex; flex-direction: column; gap: 0.6rem; }
-  input, textarea { font: inherit; color: var(--text); }
-  textarea { resize: vertical; }
-  .row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end; }
-  .short { max-width: 8rem; }
-  p.hint { margin: 0; color: var(--muted); font-size: 0.78rem; }
-  .error { color: var(--danger); margin: 0; }
+  .ref-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  input,
+  textarea {
+    font: inherit;
+    color: var(--text);
+  }
+  textarea {
+    resize: vertical;
+  }
+  .row {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+  .short {
+    max-width: 8rem;
+  }
+  p.hint {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.78rem;
+  }
+  .error {
+    color: var(--danger);
+    margin: 0;
+  }
 </style>

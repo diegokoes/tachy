@@ -25,7 +25,11 @@
   };
 
   const tone = (step: number) =>
-    step >= 3 ? ("ok" as const) : step === 2 ? ("warn" as const) : ("muted" as const);
+    step >= 3
+      ? ("ok" as const)
+      : step === 2
+        ? ("warn" as const)
+        : ("muted" as const);
 
   const rows = $derived(
     (
@@ -37,7 +41,13 @@
       .filter(([, v]) => v && STEPS[v])
       .map(([label, v]) => {
         const step = STEPS[v as string];
-        return { label, value: v as string, step, frac: step / 3, tone: tone(step) };
+        return {
+          label,
+          value: v as string,
+          step,
+          frac: step / 3,
+          tone: tone(step),
+        };
       }),
   );
 
@@ -61,7 +71,12 @@
       <!-- The bar already says how far along the scale this sits; the word
            would only repeat it. It stays in the tooltip and the aria label. -->
       <dd class="bar" title="{r.label}: {r.value}">
-        <Meter value={r.frac} width={8} tone={r.tone} label="{r.label} {r.value}" />
+        <Meter
+          value={r.frac}
+          width={8}
+          tone={r.tone}
+          label="{r.label} {r.value}"
+        />
       </dd>
     {/each}
   </dl>

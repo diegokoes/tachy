@@ -61,7 +61,9 @@ export async function resetData() {
              wiki_gaps, library_assets,
              -- repos would be swept in anyway by the cascade from components;
              -- naming it keeps that visible. source_connections stays.
-             repos, repo_lines, repo_line_files, code_blob_chunks, repo_files, code_chunks
+             repos, repo_lines, repo_line_files, code_blob_chunks, repo_files, code_chunks,
+             flows, flow_runs,
+             buckets, bucket_teams, bucket_docs, bucket_doc_chunks
     restart identity cascade
   `;
   // source_projects references customers, so TRUNCATE ... CASCADE takes it with
@@ -93,5 +95,5 @@ export async function tpdProductId(): Promise<string> {
 
 /** Job and load-run tables, which resetData leaves alone. */
 export async function resetJobs() {
-  await sql`truncate job_definition_changes, job_definitions, job_runs, test_runs cascade`;
+  await sql`truncate job_definition_changes, job_definitions, job_runs, job_workers, test_runs cascade`;
 }

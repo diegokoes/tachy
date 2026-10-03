@@ -152,11 +152,21 @@
   }
 
   /* Tone colours the glyph and label; the border stays the variant's. */
-  .btn.tone-danger { color: var(--danger); }
-  .btn.tone-ok { color: var(--ok); }
-  .btn.tone-info { color: var(--info); }
-  .btn.tone-accent { color: var(--accent); }
-  .btn.tone-warn { color: var(--warn); }
+  .btn.tone-danger {
+    color: var(--danger);
+  }
+  .btn.tone-ok {
+    color: var(--ok);
+  }
+  .btn.tone-info {
+    color: var(--info);
+  }
+  .btn.tone-accent {
+    color: var(--accent);
+  }
+  .btn.tone-warn {
+    color: var(--warn);
+  }
 
   /* Icon buttons have no chrome — no border, no fill, in any state. */
   .btn.square {

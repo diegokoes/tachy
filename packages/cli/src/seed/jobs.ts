@@ -1,3 +1,4 @@
+import { JOB_PRIORITY, jobQueue, type JobQueueName } from "@tachy/core";
 import { insertRows, type Tx } from "./batches";
 import { chance, intBetween, pick, rngFor, uuidFor } from "./deterministic";
 import type { SeededUser } from "./org";
@@ -50,7 +51,7 @@ type Outcome = "succeeded" | "failed" | "cancelled" | "timed_out";
 
 /** What one kind's runs look like: how long they take, how they go wrong. */
 interface KindProfile {
-  resourceClass: "light" | "heavy";
+  queue: JobQueueName;
   timeoutMs: number;
   maxAttempts: number;
   seconds: [number, number];
@@ -65,7 +66,7 @@ interface KindProfile {
 
 const PROFILES: Record<string, KindProfile> = {
   "wiki.gaps": {
-    resourceClass: "light",
+    queue: "maintenance",
     timeoutMs: 30 * 60_000,
     maxAttempts: 1,
     seconds: [2, 25],
@@ -80,7 +81,7 @@ const PROFILES: Record<string, KindProfile> = {
     log: () => "sweeping wikis\nsweep done",
   },
   "retention.sweep": {
-    resourceClass: "light",
+    queue: "maintenance",
     timeoutMs: 60 * 60_000,
     maxAttempts: 1,
     seconds: [4, 70],
@@ -97,7 +98,7 @@ const PROFILES: Record<string, KindProfile> = {
     log: () => "retention applied",
   },
   "source.sync": {
-    resourceClass: "light",
+    queue: "sync",
     timeoutMs: 60 * 60_000,
     maxAttempts: 3,
     seconds: [15, 420],
@@ -115,8 +116,8 @@ const PROFILES: Record<string, KindProfile> = {
     log: (p) => `syncing ${p.connection}\nfetching changed work items`,
   },
   "repo.reindex": {
-    resourceClass: "heavy",
-    timeoutMs: 2 * HOUR,
+    queue: "index",
+    timeoutMs: 8 * HOUR,
     maxAttempts: 1,
     seconds: [180, 1500],
     outcome: (rng) =>
@@ -145,8 +146,18 @@ const PROFILES: Record<string, KindProfile> = {
     ],
     log: (p) => `indexing ${p.repo}`,
   },
+  "repos.refresh": {
+    queue: "maintenance",
+    timeoutMs: 10 * 60_000,
+    maxAttempts: 1,
+    seconds: [1, 6],
+    outcome: () => "succeeded",
+    output: () => ({ queued: 0, skipped: 0, never_indexed: 0 }),
+    errors: [],
+    log: () => "queueing reindexes",
+  },
   "embeddings.backfill": {
-    resourceClass: "heavy",
+    queue: "embed",
     timeoutMs: 6 * HOUR,
     maxAttempts: 1,
     seconds: [300, 2400],
@@ -217,15 +228,13 @@ export async function seedJobs(
         slots: everyHours(3, 20 + i * 5),
       }),
     ),
-    ...repos.map((slug, i) =>
-      def({
-        kind: "repo.reindex",
-        name: `Reindex ${slug}`,
-        params: { repo: slug },
-        enabled: true,
-        slots: daily(2, i * 15),
-      }),
-    ),
+    def({
+      kind: "repos.refresh",
+      name: "Reindex linked repositories",
+      params: {},
+      enabled: true,
+      slots: daily(2, 40),
+    }),
     def({
       kind: "embeddings.backfill",
       name: "Embed missing vectors",
@@ -248,11 +257,12 @@ export async function seedJobs(
   let r = 0;
 
   const addRun = (
-    d: Definition,
+    d: Pick<Definition, "kind" | "params"> & { id: string | null },
     at: Date,
-    trigger: "schedule" | "manual",
+    trigger: "schedule" | "manual" | "event",
     rng: () => number,
-  ) => {
+    parent?: { id: string; priority: number },
+  ): Date | null => {
     const p = PROFILES[d.kind];
     const outcome = p.outcome(rng);
     const attempts =
@@ -265,7 +275,7 @@ export async function seedJobs(
           ? intBetween(rng, 30, p.seconds[0])
           : intBetween(rng, p.seconds[0], p.seconds[1]);
     const finished = new Date(started.getTime() + seconds * 1000);
-    if (finished > now) return;
+    if (finished > now) return null;
     const error =
       outcome === "failed"
         ? pick(rng, p.errors.length ? p.errors : ["unexpected error"])
@@ -279,7 +289,10 @@ export async function seedJobs(
       definition_id: d.id,
       kind: d.kind,
       params: tx.json(d.params),
-      resource_class: p.resourceClass,
+      resource_class: jobQueue(p.queue).class,
+      queue: p.queue,
+      priority: parent?.priority ?? JOB_PRIORITY[trigger],
+      parent_id: parent?.id ?? null,
       trigger,
       scheduled_for: trigger === "schedule" ? at : null,
       requested_by:
@@ -299,15 +312,53 @@ export async function seedJobs(
       started_at: started,
       finished_at: finished,
     });
+    return finished;
   };
 
   for (const d of definitions) {
     if (!d.slots || !d.enabled) continue;
     const slots = slotsSince(d.slots, v.jobHistoryDays, now);
-    slots.forEach((at, i) =>
-      addRun(d, at, "schedule", rngFor(`job-${d.name}`, i)),
-    );
+    slots.forEach((at, i) => {
+      const rng = rngFor(`job-${d.name}`, i);
+      const done = addRun(d, at, "schedule", rng);
+      if (d.kind !== "repos.refresh" || !done) return;
+      const refresh = runs[runs.length - 1];
+      refresh.output = tx.json({
+        queued: repos.length,
+        skipped: 0,
+        never_indexed: 0,
+      });
+      const parent = {
+        id: refresh.id as string,
+        priority: refresh.priority as number,
+      };
+      let next = done;
+      for (const slug of repos) {
+        const end = addRun(
+          { id: null, kind: "repo.reindex", params: { repo: slug } },
+          next,
+          "event",
+          rng,
+          parent,
+        );
+        if (end) next = end;
+      }
+    });
     if (slots.length) lastSlot.set(d.id, slots[slots.length - 1]);
+  }
+
+  // Someone clicks index on a repo: a run with no definition behind it.
+  for (let i = 0; i < Math.min(repos.length * 2, v.jobManualRuns); i++) {
+    const rng = rngFor("job-repo-index", i);
+    const at = new Date(
+      now.getTime() - Math.floor(rng() * v.jobHistoryDays * 24 * HOUR),
+    );
+    addRun(
+      { id: null, kind: "repo.reindex", params: { repo: pick(rng, repos) } },
+      at,
+      "manual",
+      rng,
+    );
   }
 
   // Someone re-runs a sync after fixing its token, or kicks a backfill after a
@@ -365,6 +416,9 @@ export async function seedJobs(
       "kind",
       "params",
       "resource_class",
+      "queue",
+      "priority",
+      "parent_id",
       "trigger",
       "scheduled_for",
       "requested_by",

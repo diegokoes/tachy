@@ -43,7 +43,7 @@ export interface AdoWorkItemSummary {
 }
 
 export interface JsonPatchOp {
-  op: "add" | "replace" | "remove";
+  op: "add" | "replace" | "remove" | "test";
   path: string;
   value?: unknown;
 }
@@ -75,6 +75,7 @@ export interface AdoRelation {
 
 export interface AdoWorkItem {
   id: number;
+  rev?: number;
   fields?: AdoFields;
   relations?: AdoRelation[];
   _links?: { html?: { href?: string } };
@@ -302,12 +303,19 @@ export interface AdoClient {
    * `validateOnly` runs the type's rules without saving, which is the only way
    * to learn about requirements that depend on other fields' values.
    */
+  /** Applies a patch to an existing item; a `test` on /rev makes it refuse a stale write. */
+  updateWorkItem(id: string, patch: JsonPatchOp[]): Promise<AdoWorkItem>;
   createWorkItem(
     project: string,
     type: string,
     patch: JsonPatchOp[],
     opts?: { validateOnly?: boolean },
   ): Promise<AdoWorkItem>;
+  /**
+   * A new, unsaved item of the type with the process's rules already applied:
+   * the values ADO's own "New" form starts from.
+   */
+  getNewItemTemplate(project: string, type: string): Promise<AdoWorkItem>;
   listTypeCategories(project: string): Promise<AdoTypeCategory[]>;
   /** Named properties, e.g. System.ProcessTemplateType: the process the form comes from. */
   getProjectProperties(
@@ -529,6 +537,17 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
       return res.value ?? [];
     },
 
+    async updateWorkItem(id, patch) {
+      return req<AdoWorkItem>(
+        `/_apis/wit/workitems/${encodeURIComponent(id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json-patch+json" },
+          body: JSON.stringify(patch),
+        },
+      );
+    },
+
     async createWorkItem(project, type, patch, opts) {
       return req<AdoWorkItem>(
         `${proj(project)}/_apis/wit/workitems/$${encodeURIComponent(type)}${opts?.validateOnly ? "?validateOnly=true" : ""}`,
@@ -537,6 +556,12 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
           headers: { "Content-Type": "application/json-patch+json" },
           body: JSON.stringify(patch),
         },
+      );
+    },
+
+    async getNewItemTemplate(project, type) {
+      return req<AdoWorkItem>(
+        `${proj(project)}/_apis/wit/workitems/$${encodeURIComponent(type)}`,
       );
     },
 

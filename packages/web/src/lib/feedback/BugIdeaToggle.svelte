@@ -162,7 +162,9 @@
     border-radius: 3.2rem;
     background: var(--surface-2, rgba(255, 255, 255, 0.08));
     border: var(--panel-line);
-    transition: background 0.4s ease, border-color 0.4s ease;
+    transition:
+      background 0.4s ease,
+      border-color 0.4s ease;
   }
   .toggle[data-value="bug"] .track {
     background: color-mix(in srgb, var(--danger) 28%, transparent);

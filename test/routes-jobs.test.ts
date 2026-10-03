@@ -103,6 +103,60 @@ describe("jobs API", () => {
     expect((await call("/runs", "POST", { kind: "nope" })).status).toBe(400);
   });
 
+  it("lists every run, with or without a definition, by kind, trigger and state", async () => {
+    const def = await (
+      await call("/definitions", "POST", { kind: "wiki.gaps", name: "gaps" })
+    ).json();
+    const { run_id: byDef } = await (
+      await call(`/definitions/${def.id}/run`, "POST", {})
+    ).json();
+    const { run_id: adHoc } = await (
+      await call("/runs", "POST", {
+        kind: "embeddings.backfill",
+        params: { all: false },
+      })
+    ).json();
+    await call(`/runs/${byDef}/cancel`, "POST", {});
+
+    const all = await (await call("/runs")).json();
+    expect(all.map((r: any) => r.id)).toEqual([adHoc, byDef]);
+    expect(all[1]).toMatchObject({
+      definition_name: "gaps",
+      requested_by_name: "ops@example.com",
+    });
+    expect(all[0].definition_name).toBeNull();
+
+    const active = await (await call("/runs?active=true")).json();
+    expect(active.map((r: any) => r.id)).toEqual([adHoc]);
+    const gaps = await (await call("/runs?kind=wiki.gaps")).json();
+    expect(gaps.map((r: any) => r.id)).toEqual([byDef]);
+    const manual = await (await call("/runs?trigger=manual")).json();
+    expect(manual).toHaveLength(2);
+    const older = await (await call(`/runs?before=${adHoc}`)).json();
+    expect(older.map((r: any) => r.id)).toEqual([byDef]);
+  });
+
+  it("reports every queue's backlog and the live workers", async () => {
+    await call("/runs", "POST", { kind: "wiki.gaps", params: {} });
+    const live = await (await call("/live")).json();
+    expect(live.workers).toEqual([]);
+    expect(live.queues.map((q: any) => q.name)).toEqual([
+      "index",
+      "embed",
+      "testing",
+      "sync",
+      "flows",
+      "maintenance",
+    ]);
+    expect(live.queues.at(-1)).toMatchObject({
+      class: "light",
+      cap: null,
+      queued: 1,
+      running: 0,
+      workers: 0,
+    });
+  });
+
   it("is closed to members", async () => {
     await createUser({
       email: "dev@example.com",

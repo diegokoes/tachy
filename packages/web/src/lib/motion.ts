@@ -434,10 +434,11 @@ export type Unfolding = {
 };
 
 /**
- * A dialog surface popping out of a blob: it grows from an ellipse, swells a
- * little past its size while its corners square off, and settles into the
- * rounded rectangle; the contents fade up once the corners are there to hold
- * them. Closing and covering play the same timeline backwards, faster.
+ * A dialog surface popping out of a blob: a small circle at the window's
+ * centre grows, swells a little past the window's size while its corners
+ * square off, and settles into the rounded rectangle; the contents fade up
+ * once the corners are there to hold them. Closing and covering pull the
+ * window back into a circle and shrink that to nothing.
  *
  * Only `plate`, the surface layer under the window's contents, is transformed.
  * The contents only fade, so their text is never rasterised at a scale and
@@ -462,55 +463,56 @@ export function unfold(o: {
   let landed: (() => void) | undefined;
   let state: "open" | "hidden" | "sunk" = "open";
   let queued = 0;
+  let tl: gsap.core.Timeline | undefined;
 
-  /* Explicit elliptical radii rather than "50%": a percentage and a length do
-     not interpolate into one another, and the blob has to be an ellipse of
-     the window's own proportions for the squaring-off to read. */
-  const blob = { k: 1 };
+  /* The blob is the plate at its own size, scaled on each axis. At `m` 0 it is
+     a circle of diameter `d`, at 1 the window; `k` runs its corners from an
+     ellipse of the window's proportions, which that scale turns into the
+     circle, to the window's radius. Explicit elliptical radii rather than
+     "50%": a percentage and a length do not interpolate into one another. */
+  const blob = { d: 0, m: 1, k: 0 };
+
+  /* The border draws only once the window has its shape. Scaled unevenly on
+     the two axes, a hairline changes weight every frame and ripples. */
+  const line = getComputedStyle(plate).borderTopColor;
+  const clear = /^rgba?\(/.test(line)
+    ? line.replace(/^rgba?\(([^,]+,[^,]+,[^,)]+).*$/, "rgba($1, 0)")
+    : "transparent";
+  const edge = (color: string) => ({
+    borderTopColor: color,
+    borderRightColor: color,
+    borderBottomColor: color,
+    borderLeftColor: color,
+  });
   let w = 0;
   let h = 0;
   const measure = () => {
     w = plate.offsetWidth;
     h = plate.offsetHeight;
   };
-  const shape = () => {
-    const rx = radius + (w / 2 - radius) * blob.k;
-    const ry = radius + (h / 2 - radius) * blob.k;
+  const draw = () => {
+    if (!w || !h) return;
+    const sx = (blob.d / w) * (1 - blob.m) + blob.m;
+    const sy = (blob.d / h) * (1 - blob.m) + blob.m;
+    const k = Math.min(Math.max(blob.k, 0), 1);
+    const rx = radius + (w / 2 - radius) * k;
+    const ry = radius + (h / 2 - radius) * k;
+    plate.style.transform = `scale(${sx}, ${sy})`;
     plate.style.borderRadius = `${rx}px / ${ry}px`;
   };
 
   const land = () => {
-    gsap.set(plate, { clearProps: "transform,opacity,borderRadius" });
+    Object.assign(blob, { d: 0, m: 1, k: 0 });
+    plate.style.transform = "";
+    plate.style.borderRadius = "";
+    gsap.set(plate, {
+      clearProps:
+        "opacity,borderTopColor,borderRightColor,borderBottomColor,borderLeftColor",
+    });
     gsap.set(parts, { clearProps: "opacity" });
     landed?.();
     landed = undefined;
   };
-
-  const tl = gsap.timeline({ paused: true, onComplete: land });
-  tl.fromTo(
-    plate,
-    { scale: 0.5 },
-    { scale: 1, duration: 0.3, ease: "back.out(1.4)" },
-    0,
-  )
-    .fromTo(
-      plate,
-      { opacity: 0 },
-      { opacity: 1, duration: 0.06, ease: "none" },
-      0,
-    )
-    .fromTo(
-      blob,
-      { k: 1 },
-      { k: 0, duration: 0.22, ease: "power2.out", onUpdate: shape },
-      0,
-    )
-    .fromTo(
-      parts,
-      { opacity: 0 },
-      { opacity: 1, duration: 0.16, ease: "power1.out" },
-      0.12,
-    );
 
   const fade = (to: number, speed = 1) =>
     gsap.to(scrim, {
@@ -521,15 +523,41 @@ export function unfold(o: {
     });
 
   const forward = () => {
-    if (still) return void tl.progress(1);
+    tl?.kill();
+    if (still) return land();
     measure();
-    tl.timeScale(1).play();
+    const size = Math.min(w, h);
+    tl = gsap
+      .timeline({ onUpdate: draw, onComplete: land })
+      .to(plate, { opacity: 1, duration: 0.05, ease: "none" }, 0)
+      .to(blob, { d: size * 0.5, duration: 0.1, ease: "power1.in" }, 0)
+      .to(blob, { m: 1, duration: 0.24, ease: "back.out(1.7)" }, 0.07)
+      .to(blob, { k: 0, duration: 0.2, ease: "power2.inOut" }, 0.09)
+      .to(parts, { opacity: 1, duration: 0.14, ease: "power1.out" }, 0.15)
+      .to(plate, { ...edge(line), duration: 0.1, ease: "none" }, 0.22);
   };
+
+  /** Returns how long the fold takes, in seconds. */
   const backward = () => {
     cancelAnimationFrame(queued);
-    if (still) return void tl.progress(0);
+    tl?.kill();
+    if (still) {
+      Object.assign(blob, { d: 0, m: 0, k: 1 });
+      gsap.set(plate, { opacity: 0 });
+      gsap.set(parts, { opacity: 0 });
+      return 0;
+    }
     measure();
-    tl.timeScale(BACK).reverse();
+    const size = Math.min(w, h);
+    if (blob.m > 0.99) blob.d = size * 0.6;
+    tl = gsap
+      .timeline({ onUpdate: draw })
+      .to(parts, { opacity: 0, duration: 0.07, ease: "power1.out" }, 0)
+      .to(plate, { ...edge(clear), duration: 0.04, ease: "none" }, 0)
+      .to(blob, { m: 0, k: 1, duration: 0.13, ease: "power2.out" }, 0)
+      .to(blob, { d: 0, duration: 0.22, ease: "power2.in" }, 0)
+      .to(plate, { opacity: 0, duration: 0.04, ease: "none" }, 0.18);
+    return 0.22;
   };
 
   return {
@@ -537,13 +565,12 @@ export function unfold(o: {
       landed = onLanded;
       gsap.set(scrim, { opacity: 0 });
       fade(1);
-      if (still) {
-        tl.progress(1);
-        land();
-        return;
-      }
+      if (still) return land();
       measure();
-      shape();
+      Object.assign(blob, { d: Math.min(w, h) * 0.08, m: 0, k: 1 });
+      gsap.set(plate, { opacity: 0, ...edge(clear) });
+      gsap.set(parts, { opacity: 0 });
+      draw();
       /* The frame that first paints the dialog is the expensive one: its
          layout, and the blur switching on across the app. Started any
          earlier, the timeline counts that frame as elapsed time and the
@@ -583,12 +610,12 @@ export function unfold(o: {
     close() {
       landed = undefined;
       fade(0, BACK);
-      if (state !== "hidden") backward();
-      return still ? 0 : Math.max(tl.time() / BACK, 0.14 / BACK) * 1000;
+      const fold = state === "hidden" ? 0 : backward();
+      return still ? 0 : Math.max(fold, 0.14 / BACK) * 1000;
     },
     kill() {
       cancelAnimationFrame(queued);
-      tl.kill();
+      tl?.kill();
       gsap.killTweensOf([win, plate, scrim, blob, ...parts]);
     },
   };

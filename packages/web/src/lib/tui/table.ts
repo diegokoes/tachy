@@ -60,6 +60,8 @@ export type Column<T> = {
   derive?: (d: Draft) => string;
   /** Normalises as the user types — a label whose slug *is* its name. */
   transform?: (v: string) => string;
+  /** Drawn after the control in the record form, e.g. a button acting on it. */
+  aside?: Snippet<[{ draft: Draft; mode: "create" | "edit" }]>;
   /** A way out of a read-only field in edit mode, e.g. "rename…" on a slug. */
   action?: { label: string; icon?: IconName; onclick: (row: T) => void };
 };

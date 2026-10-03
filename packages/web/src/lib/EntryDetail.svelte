@@ -21,7 +21,12 @@
   import { setTopActions } from "./subnav.svelte";
   import { Badge, Button, Chip, Icon, Time } from "./tui";
 
-  let { id, onClose, onOpen }: { id: string; onClose: () => void; onOpen?: (id: string) => void } = $props();
+  let {
+    id,
+    onClose,
+    onOpen,
+  }: { id: string; onClose: () => void; onOpen?: (id: string) => void } =
+    $props();
 
   let entry = $state<KnowledgeRow | null>(null);
   let feedback = $state<Feedback[]>([]);
@@ -49,9 +54,12 @@
   let supersedeId = $state<string | null>(null);
 
   const canEdit = $derived(
-    !!entry && canCurateScope({ team_id: entry.team_id as string | null | undefined, team_slug: productTeamSlug }),
+    !!entry &&
+      canCurateScope({
+        team_id: entry.team_id as string | null | undefined,
+        team_slug: productTeamSlug,
+      }),
   );
-
 
   /**
    * The lifecycle column. Built as a list rather than written out as markup so
@@ -197,7 +205,10 @@
     mutateError = null;
     try {
       if (deprecateReason.trim()) {
-        await api.post(`/knowledge/${id}/feedback`, { kind: "deprecation", comment: deprecateReason.trim() });
+        await api.post(`/knowledge/${id}/feedback`, {
+          kind: "deprecation",
+          comment: deprecateReason.trim(),
+        });
       }
       await patch({ status: "deprecated", supersededBy: supersedeId });
       deprecateReason = "";
@@ -220,7 +231,9 @@
         return;
       }
       try {
-        const rows = await api.get<KnowledgeRow[]>(`/knowledge/search?q=${encodeURIComponent(supersedeQuery)}&limit=5`);
+        const rows = await api.get<KnowledgeRow[]>(
+          `/knowledge/search?q=${encodeURIComponent(supersedeQuery)}&limit=5`,
+        );
         supersedeResults = rows.filter((r) => r.id !== id);
       } catch {
         supersedeResults = [];
@@ -271,7 +284,10 @@
   {#if entry}
     {#if editing}
       {#if conflict}
-        <p class="error">{mutateError} <Button size="sm" onclick={load}>reload</Button></p>
+        <p class="error">
+          {mutateError}
+          <Button size="sm" onclick={load}>reload</Button>
+        </p>
       {/if}
       <EntryForm
         mode="edit"
@@ -279,7 +295,10 @@
         saving={mutating}
         error={conflict ? null : mutateError}
         onSubmit={patch}
-        onCancel={() => { editing = false; mutateError = null; }}
+        onCancel={() => {
+          editing = false;
+          mutateError = null;
+        }}
       />
     {:else}
       <div class="read">
@@ -309,24 +328,36 @@
                         : undefined}
                     />
                   {:else}
-                    <Badge tone={statusTone(entry.status)}>{entry.status}</Badge>
+                    <Badge tone={statusTone(entry.status)}>{entry.status}</Badge
+                    >
                   {/if}
                 </span>
                 <span class="when">
-                  {#if entry.updated_at}<span class="muted">updated <Time at={entry.updated_at} date /></span>{/if}
+                  {#if entry.updated_at}<span class="muted"
+                      >updated <Time at={entry.updated_at} date /></span
+                    >{/if}
                 </span>
               </div>
 
               {#if entry.affected_version || entry.fixed_version}
                 <div class="versions">
                   {#if entry.affected_version}
-                    <span class="affected" title="affected version">{entry.affected_version}</span>
+                    <span class="affected" title="affected version"
+                      >{entry.affected_version}</span
+                    >
                   {/if}
                   {#if entry.affected_version && entry.fixed_version}
-                    <Icon name="versionArrow" size="1.1em" weight={7} label="fixed in" />
+                    <Icon
+                      name="versionArrow"
+                      size="1.1em"
+                      weight={7}
+                      label="fixed in"
+                    />
                   {/if}
                   {#if entry.fixed_version}
-                    <span class="fixed" title="fixed in version">{entry.fixed_version}</span>
+                    <span class="fixed" title="fixed in version"
+                      >{entry.fixed_version}</span
+                    >
                   {/if}
                 </div>
               {/if}
@@ -341,9 +372,15 @@
                     >
                   {/if}
                   {#if entry.cloud}<Badge>{entry.cloud}</Badge>{/if}
-                  {#if entry.resolution_pattern}<Badge>{entry.resolution_pattern}</Badge>{/if}
+                  {#if entry.resolution_pattern}<Badge
+                      >{entry.resolution_pattern}</Badge
+                    >{/if}
                   {#if entry.hidden_fix}
-                    <Badge tone="accent" title="the real fix wasn't visible on the ticket surface">hidden fix</Badge>
+                    <Badge
+                      tone="accent"
+                      title="the real fix wasn't visible on the ticket surface"
+                      >hidden fix</Badge
+                    >
                   {/if}
                 </div>
               {/if}
@@ -356,13 +393,18 @@
             {#if mutateError && !editing}
               <p class="error">
                 {mutateError}
-                {#if conflict}<Button size="sm" onclick={load}>reload</Button>{/if}
+                {#if conflict}<Button size="sm" onclick={load}>reload</Button
+                  >{/if}
               </p>
             {/if}
 
             {#if deprecating}
               <div class="deprecate-form">
-                <textarea rows="2" bind:value={deprecateReason} placeholder="why is this outdated? (recorded as feedback)"></textarea>
+                <textarea
+                  rows="2"
+                  bind:value={deprecateReason}
+                  placeholder="why is this outdated? (recorded as feedback)"
+                ></textarea>
                 <input
                   placeholder="search for the replacement entry (optional)"
                   bind:value={supersedeQuery}
@@ -373,16 +415,24 @@
                     {#each supersedeResults as r (r.id)}
                       <li>
                         <label>
-                          <input type="radio" name="supersede" checked={supersedeId === r.id}
-                            onchange={() => (supersedeId = r.id)} />
+                          <input
+                            type="radio"
+                            name="supersede"
+                            checked={supersedeId === r.id}
+                            onchange={() => (supersedeId = r.id)}
+                          />
                           {r.issue_summary ?? r.id}
                         </label>
                       </li>
                     {/each}
                     <li>
                       <label>
-                        <input type="radio" name="supersede" checked={supersedeId === null}
-                          onchange={() => (supersedeId = null)} />
+                        <input
+                          type="radio"
+                          name="supersede"
+                          checked={supersedeId === null}
+                          onchange={() => (supersedeId = null)}
+                        />
                         <span class="muted">no replacement</span>
                       </label>
                     </li>
@@ -390,14 +440,21 @@
                 {/if}
                 <div class="actions">
                   <Button
-                    variant="ghost" square tone="warn" icon="deprecate"
-                    aria-label="deprecate" title="deprecate"
+                    variant="ghost"
+                    square
+                    tone="warn"
+                    icon="deprecate"
+                    aria-label="deprecate"
+                    title="deprecate"
                     busy={mutating}
                     onclick={deprecate}
                   />
                   <Button
-                    variant="ghost" square icon="close"
-                    aria-label="cancel" title="cancel"
+                    variant="ghost"
+                    square
+                    icon="close"
+                    aria-label="cancel"
+                    title="cancel"
                     disabled={mutating}
                     onclick={() => (deprecating = false)}
                   />
@@ -413,7 +470,13 @@
           {#if entry.root_cause}
             <section>
               <h3>Root cause</h3>
-              <div class="md prose" onclick={links.onClick} onkeydown={links.onKeydown}>{@html prose(entry.root_cause)}</div>
+              <div
+                class="md prose"
+                onclick={links.onClick}
+                onkeydown={links.onKeydown}
+              >
+                {@html prose(entry.root_cause)}
+              </div>
             </section>
           {/if}
           {#if entry.resolution}
@@ -423,7 +486,13 @@
              focusable wikilink anchors this div delegates to -->
               <!-- svelte-ignore a11y_no_static_element_interactions -- a delegation
              wrapper, not an interactive element of its own -->
-              <div class="md prose" onclick={links.onClick} onkeydown={links.onKeydown}>{@html prose(entry.resolution)}</div>
+              <div
+                class="md prose"
+                onclick={links.onClick}
+                onkeydown={links.onKeydown}
+              >
+                {@html prose(entry.resolution)}
+              </div>
             </section>
           {/if}
 
@@ -438,14 +507,17 @@
             </section>
           {/if}
 
-          <Backlinks base="knowledge" id={id} />
+          <Backlinks base="knowledge" {id} />
 
           {#if feedback.length}
             <section>
               <h3>Feedback</h3>
               <ul class="fb-list">
                 {#each feedback as f}
-                  <li><strong>{f.kind}{f.rating ? ` · ${f.rating}★` : ""}</strong> {f.comment ?? ""}</li>
+                  <li>
+                    <strong>{f.kind}{f.rating ? ` · ${f.rating}★` : ""}</strong>
+                    {f.comment ?? ""}
+                  </li>
                 {/each}
               </ul>
             </section>
@@ -591,12 +663,46 @@
     gap: var(--pad-2);
   }
   .deprecate-form textarea,
-  .deprecate-form input { font: inherit; color: var(--text); }
-  .supersede-results { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--pad-1); }
-  .supersede-results label { display: flex; align-items: baseline; gap: var(--pad-2); font-size: var(--fs-sm); cursor: pointer; }
-  .actions { display: flex; gap: var(--pad-2); }
-  .fb-list { list-style: none; padding: 0; margin: 0; }
-  .fb-list li { padding: var(--pad-2) 0; border-top: 1px solid var(--border); }
-  .muted { color: var(--muted); }
-  .error { color: var(--danger); display: flex; align-items: center; gap: var(--pad-2); flex-wrap: wrap; }
+  .deprecate-form input {
+    font: inherit;
+    color: var(--text);
+  }
+  .supersede-results {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--pad-1);
+  }
+  .supersede-results label {
+    display: flex;
+    align-items: baseline;
+    gap: var(--pad-2);
+    font-size: var(--fs-sm);
+    cursor: pointer;
+  }
+  .actions {
+    display: flex;
+    gap: var(--pad-2);
+  }
+  .fb-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .fb-list li {
+    padding: var(--pad-2) 0;
+    border-top: 1px solid var(--border);
+  }
+  .muted {
+    color: var(--muted);
+  }
+  .error {
+    color: var(--danger);
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+    flex-wrap: wrap;
+  }
 </style>

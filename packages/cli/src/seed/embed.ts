@@ -28,8 +28,17 @@ export type EmbedMode = (typeof EMBED_MODES)[number];
  */
 const REAL_KINDS: Record<EmbedMode, Set<string>> = {
   none: new Set(),
-  search: new Set(["knowledge_entry", "reference_doc_chunk"]),
-  all: new Set(["knowledge_entry", "reference_doc_chunk", "code_chunk"]),
+  search: new Set([
+    "knowledge_entry",
+    "reference_doc_chunk",
+    "bucket_doc_chunk",
+  ]),
+  all: new Set([
+    "knowledge_entry",
+    "reference_doc_chunk",
+    "bucket_doc_chunk",
+    "code_chunk",
+  ]),
 };
 
 /**

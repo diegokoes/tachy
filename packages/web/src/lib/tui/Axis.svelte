@@ -21,9 +21,7 @@
 
   /* A day-of-month label is the widest thing the bottom axis carries, and two
      of them touching is what makes a 14-column chart unreadable. */
-  const stride = $derived(
-    labelStride(categories.length, f.iw, f.fs * 2.2),
-  );
+  const stride = $derived(labelStride(categories.length, f.iw, f.fs * 2.2));
 </script>
 
 {#if side === "left"}
@@ -34,8 +32,12 @@
         <line class="grid" x1={0} x2={f.iw} y1={y} y2={y} />
       {/if}
       <line class="tick" x1={-TICK_LEN} x2={0} y1={y} y2={y} />
-      <text class="lbl" x={-TICK_LEN - 4} y={y} dominant-baseline="middle" text-anchor="end"
-        >{format(t)}</text
+      <text
+        class="lbl"
+        x={-TICK_LEN - 4}
+        {y}
+        dominant-baseline="middle"
+        text-anchor="end">{format(t)}</text
       >
     {/each}
     <line class="rule" x1={0} x2={0} y1={0} y2={f.ih} />
@@ -46,8 +48,11 @@
     {#each categories as key, i (key)}
       {@const x = f.bandAt(key) + f.band / 2}
       {#if i % stride === 0}
-        <text class="lbl" {x} y={f.ih + TICK_LEN + f.fs * 0.9} text-anchor="middle"
-          >{format(key)}</text
+        <text
+          class="lbl"
+          {x}
+          y={f.ih + TICK_LEN + f.fs * 0.9}
+          text-anchor="middle">{format(key)}</text
         >
       {/if}
     {/each}

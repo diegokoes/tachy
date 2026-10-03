@@ -1,14 +1,28 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import { tick } from "svelte";
-  import { chatStream, approve, uploadDoc, getCommands, stopTurn, ChatRefused, type BuiltinCommandMeta, type CommandArtifactMeta } from "./agent";
+  import {
+    chatStream,
+    approve,
+    uploadDoc,
+    getCommands,
+    stopTurn,
+    ChatRefused,
+    type BuiltinCommandMeta,
+    type CommandArtifactMeta,
+  } from "./agent";
   import { addEntry, chat, type Entry } from "./chatState.svelte";
   import { renderMarkdown } from "./markdown";
   import { gsap, reducedMotion } from "./gsap";
   import { shatterAll } from "./motion";
   import Scrollbar from "./Scrollbar.svelte";
   import ArtifactPanel from "./chat/ArtifactPanel.svelte";
-  import CommandMenu, { matchArtifacts, type CommandPick, type MenuCrumb, type MenuOption } from "./chat/CommandMenu.svelte";
+  import CommandMenu, {
+    matchArtifacts,
+    type CommandPick,
+    type MenuCrumb,
+    type MenuOption,
+  } from "./chat/CommandMenu.svelte";
   import CompactPanel from "./chat/CompactPanel.svelte";
   import OutputCard, { type OutputFile } from "./chat/OutputCard.svelte";
   import Approval from "./chat/Approval.svelte";
@@ -18,9 +32,24 @@
   import type { WorkItemTypeOption, CreatedTicket } from "@tachy/contract";
   import TicketComposer from "./work-items/TicketComposer.svelte";
   import TicketCard from "./work-items/TicketCard.svelte";
-  import { composer, hasDraft, openComposer } from "./work-items/composer.svelte";
-  import { az, ensureProjects, ensureTypes, typesNote, typesOf } from "./work-items/az.svelte";
-  import { isAzNew, matches, matchProject, parseAz } from "./work-items/azCommand";
+  import {
+    composer,
+    hasDraft,
+    openComposer,
+  } from "./work-items/composer.svelte";
+  import {
+    az,
+    ensureProjects,
+    ensureTypes,
+    typesNote,
+    typesOf,
+  } from "./work-items/az.svelte";
+  import {
+    isAzNew,
+    matches,
+    matchProject,
+    parseAz,
+  } from "./work-items/azCommand";
   import { typeColor, typeIcon } from "./work-items/ado-icons";
 
   const short = (tool: string) => tool.replace(/^mcp__tachy__/, "");
@@ -31,9 +60,10 @@
       ? result
       : (result as { content?: unknown })?.content;
     const text = Array.isArray(blocks)
-      ? (blocks.find(
-          (b) => (b as { type?: string })?.type === "text",
-        ) as { text?: string } | undefined)?.text
+      ? (
+          blocks.find((b) => (b as { type?: string })?.type === "text") as
+            { text?: string } | undefined
+        )?.text
       : typeof result === "string"
         ? result
         : undefined;
@@ -45,8 +75,6 @@
     }
   }
 
-  
-  
   let transcriptEl = $state<HTMLDivElement>();
   let composerEl = $state<HTMLTextAreaElement>();
   let pinned = true;
@@ -75,25 +103,27 @@
     if (el && pinned) el.scrollTop = el.scrollHeight;
   }
 
-  
   $effect(() => {
     if (transcriptEl) snap(true);
   });
 
-  
-  
   function appendAssistant(text: string) {
     const last = chat.entries[chat.entries.length - 1];
     if (last && last.kind === "assistant") last.text += text;
     else addEntry({ kind: "assistant", text });
   }
 
-  let commands = $state<{ builtins: BuiltinCommandMeta[]; artifacts: CommandArtifactMeta[] } | null>(null);
+  let commands = $state<{
+    builtins: BuiltinCommandMeta[];
+    artifacts: CommandArtifactMeta[];
+  } | null>(null);
   let cmdMenu = $state<CommandMenu>();
   let cmdDismissed = $state(false);
 
   const azCommand = $derived(commands?.builtins.find((b) => b.name === "az"));
-  const azCtx = $derived(azCommand ? parseAz(chat.input, az.projects ?? []) : null);
+  const azCtx = $derived(
+    azCommand ? parseAz(chat.input, az.projects ?? []) : null,
+  );
 
   /** `/name` picks a command; `/artifact <query>` and `/az …` pick arguments. */
   const cmdCtx = $derived.by(() => {
@@ -110,59 +140,82 @@
     if (azCtx?.stage === "type") ensureTypes(azCtx.project.id);
   });
 
-  const azMenu = $derived.by((): { options: MenuOption[]; crumb: MenuCrumb } | null => {
-    if (!azCtx) return null;
-    if (azCtx.stage === "sub")
-      return {
-        crumb: { cmd: "/az", param: "subcommand", desc: azCommand?.description },
-        options: (azCommand?.subcommands ?? [])
-          .filter((s) => s.name.startsWith(azCtx.query))
-          .map((s) => ({ value: s.name, label: s.name, hint: s.args, desc: s.description })),
-      };
-    if (azCtx.stage === "project")
+  const azMenu = $derived.by(
+    (): { options: MenuOption[]; crumb: MenuCrumb } | null => {
+      if (!azCtx) return null;
+      if (azCtx.stage === "sub")
+        return {
+          crumb: {
+            cmd: "/az",
+            param: "subcommand",
+            desc: azCommand?.description,
+          },
+          options: (azCommand?.subcommands ?? [])
+            .filter((s) => s.name.startsWith(azCtx.query))
+            .map((s) => ({
+              value: s.name,
+              label: s.name,
+              hint: s.args,
+              desc: s.description,
+            })),
+        };
+      if (azCtx.stage === "project")
+        return {
+          crumb: {
+            cmd: "/az new",
+            param: "project",
+            desc: "your team's Azure DevOps projects",
+            empty:
+              az.projectsError ??
+              (az.projects
+                ? az.projects.length
+                  ? "no project matches"
+                  : "none of your teams has an Azure DevOps project registered"
+                : "loading projects…"),
+          },
+          options: (az.projects ?? [])
+            .filter((p) => matches(azCtx.query, p.name, p.external_key))
+            .map((p) => ({
+              value: p.id,
+              label: p.name,
+              hint: p.name === p.external_key ? p.source_slug : p.external_key,
+              desc: p.product_slug ?? p.team_slug,
+            })),
+        };
       return {
         crumb: {
-          cmd: "/az new",
-          param: "project",
-          desc: "your team's Azure DevOps projects",
-          empty:
-            az.projectsError ??
-            (az.projects
-              ? az.projects.length
-                ? "no project matches"
-                : "none of your teams has an Azure DevOps project registered"
-              : "loading projects…"),
+          cmd: `/az new ${azCtx.project.name}`,
+          param: "type",
+          desc: "what you are raising",
+          empty: typesNote(azCtx.project.id),
         },
-        options: (az.projects ?? [])
-          .filter((p) => matches(azCtx.query, p.name, p.external_key))
-          .map((p) => ({
-            value: p.id,
-            label: p.name,
-            hint: p.name === p.external_key ? p.source_slug : p.external_key,
-            desc: p.product_slug ?? p.team_slug,
+        options: typesOf(azCtx.project.id)
+          .filter((t) => matches(azCtx.query, t.name))
+          .map((t) => ({
+            value: t.name,
+            label: t.name,
+            desc: t.description ?? "",
+            icon: typeIcon(t.icon),
+            color: typeColor(t.color),
           })),
       };
-    return {
-      crumb: { cmd: `/az new ${azCtx.project.name}`, param: "type", desc: "what you are raising", empty: typesNote(azCtx.project.id) },
-      options: typesOf(azCtx.project.id)
-        .filter((t) => matches(azCtx.query, t.name))
-        .map((t) => ({
-          value: t.name,
-          label: t.name,
-          desc: t.description ?? "",
-          icon: typeIcon(t.icon),
-          color: typeColor(t.color),
-        })),
-    };
-  });
-  const menuOpen = $derived(cmdCtx !== null && !cmdDismissed && !chat.busy && commands !== null);
+    },
+  );
+  const menuOpen = $derived(
+    cmdCtx !== null && !cmdDismissed && !chat.busy && commands !== null,
+  );
 
   $effect(() => {
-    if (cmdCtx && !commands) getCommands().then((c) => (commands = c)).catch(() => {});
+    if (cmdCtx && !commands)
+      getCommands()
+        .then((c) => (commands = c))
+        .catch(() => {});
   });
   $effect(() => {
     const refresh = () =>
-      getCommands().then((c) => (commands = c)).catch(() => {});
+      getCommands()
+        .then((c) => (commands = c))
+        .catch(() => {});
     window.addEventListener("artifacts-changed", refresh);
     return () => window.removeEventListener("artifacts-changed", refresh);
   });
@@ -203,7 +256,9 @@
     const hit = rest ? matchProject(`${rest} `, await ensureProjects()) : null;
     if (!hit) return openComposer();
     const types = await ensureTypes(hit.project.id);
-    const type = types.find((t) => t.name.toLowerCase() === hit.rest.toLowerCase());
+    const type = types.find(
+      (t) => t.name.toLowerCase() === hit.rest.toLowerCase(),
+    );
     openComposer(hit.project, type);
   }
 
@@ -216,7 +271,11 @@
   const draftWaiting = $derived(!composer.open && hasDraft());
 
   function composerKeydown(e: KeyboardEvent) {
-    if (menuOpen && cmdMenu && (!cmdMenu.empty() || cmdCtx?.mode === "artifact")) {
+    if (
+      menuOpen &&
+      cmdMenu &&
+      (!cmdMenu.empty() || cmdCtx?.mode === "artifact")
+    ) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         cmdMenu.move(e.key === "ArrowDown" ? 1 : -1);
@@ -238,9 +297,12 @@
     }
   }
 
-  function parseCommand(message: string): { name: string; args: string } | undefined {
+  function parseCommand(
+    message: string,
+  ): { name: string; args: string } | undefined {
     const m = message.match(/^\/([a-z0-9-]+)(?:\s+([\s\S]*))?$/);
-    if (!m || !commands?.builtins.some((b) => b.name === m[1])) return undefined;
+    if (!m || !commands?.builtins.some((b) => b.name === m[1]))
+      return undefined;
     return { name: m[1], args: m[2]?.trim() ?? "" };
   }
 
@@ -250,7 +312,8 @@
     if (isAzNew(message)) return openFromLine(message);
     if (cmdCtx?.mode === "artifact") {
       const hits = matchArtifacts(commands?.artifacts ?? [], cmdCtx.query);
-      if (hits.length === 1) pickCommand({ kind: "artifact", artifact: hits[0] });
+      if (hits.length === 1)
+        pickCommand({ kind: "artifact", artifact: hits[0] });
       return;
     }
     // The list is otherwise only fetched while a bare `/name` is being typed, so
@@ -271,8 +334,18 @@
     turnAbort?.abort();
     turnAbort = new AbortController();
     try {
-      for await (const { event, data } of chatStream({ message, sessionId: chat.sessionId, uploadPaths: uploadPaths.length ? uploadPaths : undefined, artifactId: chat.artifact?.id, command }, turnAbort.signal)) {
-        chat.queuePosition = event === "queued" ? (data.position as number) : null;
+      for await (const { event, data } of chatStream(
+        {
+          message,
+          sessionId: chat.sessionId,
+          uploadPaths: uploadPaths.length ? uploadPaths : undefined,
+          artifactId: chat.artifact?.id,
+          command,
+        },
+        turnAbort.signal,
+      )) {
+        chat.queuePosition =
+          event === "queued" ? (data.position as number) : null;
         if (event === "start") chat.turnId = data.turnId as string;
         else if (event === "text") appendAssistant(data.text as string);
         else if (event === "tool_use") {
@@ -282,33 +355,46 @@
             addEntry({
               kind: "compact",
               id: data.id as string,
-              title: [input.source, input.external_id].filter(Boolean).join(" · "),
+              title: [input.source, input.external_id]
+                .filter(Boolean)
+                .join(" · "),
             });
           } else if (tool === "export_table") {
             addEntry({ kind: "output", id: data.id as string });
           } else addEntry({ kind: "tool", tool });
-        } else if (event === "tool_result" && short(data.tool as string) === "compact_work_item") {
+        } else if (
+          event === "tool_result" &&
+          short(data.tool as string) === "compact_work_item"
+        ) {
           const panel = chat.entries.find(
             (e) => e.kind === "compact" && e.id === data.id,
           ) as Extract<Entry, { kind: "compact" }> | undefined;
           const payload = toolPayload(data.result);
-          const stats = payload?.compaction as Extract<Entry, { kind: "compact" }>["stats"];
+          const stats = payload?.compaction as Extract<
+            Entry,
+            { kind: "compact" }
+          >["stats"];
           if (panel && stats) {
             panel.stats = stats;
             const t = payload?.ticket as { title?: string } | undefined;
             if (t?.title) panel.title = t.title;
           }
-        } else if (event === "tool_result" && short(data.tool as string) === "export_table") {
+        } else if (
+          event === "tool_result" &&
+          short(data.tool as string) === "export_table"
+        ) {
           const at = chat.entries.findIndex(
             (e) => e.kind === "output" && e.id === data.id,
           );
           if (at >= 0) {
-            const file = toolPayload(data.result)?.output as OutputFile | undefined;
-            if (file) (chat.entries[at] as Extract<Entry, { kind: "output" }>).file = file;
+            const file = toolPayload(data.result)?.output as
+              OutputFile | undefined;
+            if (file)
+              (chat.entries[at] as Extract<Entry, { kind: "output" }>).file =
+                file;
             else chat.entries.splice(at, 1);
           }
-        }
-        else if (event === "approval_request")
+        } else if (event === "approval_request")
           addEntry({
             kind: "approval",
             id: data.id as string,
@@ -317,19 +403,31 @@
             status: "pending",
           });
         else if (event === "approval_resolved") {
-          const a = chat.entries.find((e) => e.kind === "approval" && e.id === data.id) as Extract<Entry, { kind: "approval" }> | undefined;
+          const a = chat.entries.find(
+            (e) => e.kind === "approval" && e.id === data.id,
+          ) as Extract<Entry, { kind: "approval" }> | undefined;
           if (a) a.status = data.approved ? "approved" : "denied";
-        } else if (event === "result") chat.sessionId = data.sessionId as string;
-        else if (event === "error") addEntry({ kind: "error", text: data.message as string });
+        } else if (event === "result")
+          chat.sessionId = data.sessionId as string;
+        else if (event === "error")
+          addEntry({ kind: "error", text: data.message as string });
         snap();
       }
     } catch (e) {
       // An abort is this component going away, not something to report.
       if (e instanceof ChatRefused && e.status === 409 && e.turnId) {
-        addEntry({ kind: "running", turnId: e.turnId, text: e.message, stopped: false });
+        addEntry({
+          kind: "running",
+          turnId: e.turnId,
+          text: e.message,
+          stopped: false,
+        });
         chat.input = message;
       } else if (!(e instanceof DOMException && e.name === "AbortError"))
-        addEntry({ kind: "error", text: e instanceof Error ? e.message : String(e) });
+        addEntry({
+          kind: "error",
+          text: e instanceof Error ? e.message : String(e),
+        });
       snap();
     } finally {
       chat.busy = false;
@@ -342,12 +440,13 @@
       await stopTurn(entry.turnId);
       entry.stopped = true;
     } catch (e) {
-      addEntry({ kind: "error", text: e instanceof Error ? e.message : String(e) });
+      addEntry({
+        kind: "error",
+        text: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
-  
-  
   async function decide(
     entry: Extract<Entry, { kind: "approval" }>,
     ok: boolean,
@@ -355,9 +454,18 @@
   ) {
     if (!chat.turnId) return;
     try {
-      await approve(chat.turnId, entry.id, ok, ok ? entry.input : undefined, reason);
+      await approve(
+        chat.turnId,
+        entry.id,
+        ok,
+        ok ? entry.input : undefined,
+        reason,
+      );
     } catch (e) {
-      addEntry({ kind: "error", text: e instanceof Error ? e.message : String(e) });
+      addEntry({
+        kind: "error",
+        text: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
@@ -366,7 +474,10 @@
       try {
         chat.uploads.push(await uploadDoc(file));
       } catch (err) {
-        addEntry({ kind: "error", text: err instanceof Error ? err.message : String(err) });
+        addEntry({
+          kind: "error",
+          text: err instanceof Error ? err.message : String(err),
+        });
       }
     }
   }
@@ -376,7 +487,6 @@
     (e.target as HTMLInputElement).value = "";
   }
 
-  
   let dragDepth = $state(0);
 
   function onDrop(e: DragEvent) {
@@ -385,15 +495,13 @@
     addFiles(e.dataTransfer?.files);
   }
 
-  
-  
-  
   let turnAbort: AbortController | undefined;
   onDestroy(() => turnAbort?.abort());
   let clearArmed = $state(false);
   let disarmTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const transcriptNodes = () => Array.from(transcriptEl?.children ?? []) as HTMLElement[];
+  const transcriptNodes = () =>
+    Array.from(transcriptEl?.children ?? []) as HTMLElement[];
 
   function armClear() {
     clearArmed = true;
@@ -441,136 +549,188 @@
     <TicketComposer oncreated={ticketMade} />
   </div>
 {:else}
-<div
-  class="chat"
-  role="region"
-  aria-label="Chat"
-  ondragenter={(e) => {
-    e.preventDefault();
-    dragDepth++;
-  }}
-  ondragover={(e) => e.preventDefault()}
-  ondragleave={() => (dragDepth = Math.max(0, dragDepth - 1))}
-  ondrop={onDrop}
->
-  {#if dragDepth > 0}
-    <div class="dropzone">drop to attach</div>
-  {/if}
-  <div class="transcript-wrap">
-  <div class="transcript" id="chat-transcript" bind:this={transcriptEl} onscroll={onScroll}>
-    {#each chat.entries as e, i (e.key)}
-      {#if e.kind === "user"}
-        <div class="turn user">
-          <span class="who">you<span class="mk" aria-hidden="true">{G.marker}</span></span>
-          <div class="body">{e.text}</div>
-        </div>
-      {:else if e.kind === "assistant"}
-        <div class="turn"><span class="who"><span class="mk" aria-hidden="true">{G.marker}</span>tachy</span>
-          <div class="body md" class:streaming={chat.busy && i === chat.entries.length - 1}>{@html renderMarkdown(e.text)}</div>
-        </div>
-      {:else if e.kind === "tool"}
-        <div class="tool"><Icon name="tool" size="1em" weight={7} /> {e.tool}</div>
-      {:else if e.kind === "compact"}
-        <CompactPanel title={e.title} stats={e.stats} />
-      {:else if e.kind === "output"}
-        <OutputCard file={e.file} />
-      {:else if e.kind === "ticket"}
-        <TicketCard ticket={e.ticket} icon={e.icon} color={e.color} />
-      {:else if e.kind === "error"}
-        <div class="turn"><span class="who err">{G.marker}error</span><div class="body err">{e.text}</div></div>
-      {:else if e.kind === "running"}
-        <div class="turn"><span class="who err">{G.marker}busy</span>
-          <div class="body err">
-            {#if e.stopped}stopped. send your message again.{:else}{e.text} <Button size="sm" onclick={() => stopRunning(e)}>stop it</Button>{/if}
+  <div
+    class="chat"
+    role="region"
+    aria-label="Chat"
+    ondragenter={(e) => {
+      e.preventDefault();
+      dragDepth++;
+    }}
+    ondragover={(e) => e.preventDefault()}
+    ondragleave={() => (dragDepth = Math.max(0, dragDepth - 1))}
+    ondrop={onDrop}
+  >
+    {#if dragDepth > 0}
+      <div class="dropzone">drop to attach</div>
+    {/if}
+    <div class="transcript-wrap">
+      <div
+        class="transcript"
+        id="chat-transcript"
+        bind:this={transcriptEl}
+        onscroll={onScroll}
+      >
+        {#each chat.entries as e, i (e.key)}
+          {#if e.kind === "user"}
+            <div class="turn user">
+              <span class="who"
+                >you<span class="mk" aria-hidden="true">{G.marker}</span></span
+              >
+              <div class="body">{e.text}</div>
+            </div>
+          {:else if e.kind === "assistant"}
+            <div class="turn">
+              <span class="who"
+                ><span class="mk" aria-hidden="true">{G.marker}</span
+                >tachy</span
+              >
+              <div
+                class="body md"
+                class:streaming={chat.busy && i === chat.entries.length - 1}
+              >
+                {@html renderMarkdown(e.text)}
+              </div>
+            </div>
+          {:else if e.kind === "tool"}
+            <div class="tool">
+              <Icon name="tool" size="1em" weight={7} />
+              {e.tool}
+            </div>
+          {:else if e.kind === "compact"}
+            <CompactPanel title={e.title} stats={e.stats} />
+          {:else if e.kind === "output"}
+            <OutputCard file={e.file} />
+          {:else if e.kind === "ticket"}
+            <TicketCard ticket={e.ticket} icon={e.icon} color={e.color} />
+          {:else if e.kind === "error"}
+            <div class="turn">
+              <span class="who err">{G.marker}error</span>
+              <div class="body err">{e.text}</div>
+            </div>
+          {:else if e.kind === "running"}
+            <div class="turn">
+              <span class="who err">{G.marker}busy</span>
+              <div class="body err">
+                {#if e.stopped}stopped. send your message again.{:else}{e.text}
+                  <Button size="sm" onclick={() => stopRunning(e)}
+                    >stop it</Button
+                  >{/if}
+              </div>
+            </div>
+          {:else if e.kind === "approval"}
+            <Approval
+              entry={e}
+              ondecide={(ok, reason) => decide(e, ok, reason)}
+            />
+          {/if}
+        {/each}
+        {#if chat.busy && chat.entries[chat.entries.length - 1]?.kind !== "assistant"}
+          <div class="turn">
+            <span class="who">{G.marker}tachy</span>
+            <div class="body waiting">
+              {#if chat.queuePosition}<span class="muted"
+                  >waiting for a free chat slot · #{chat.queuePosition}
+                </span>{/if}<span class="caret" aria-hidden="true"></span>
+            </div>
           </div>
-        </div>
-      {:else if e.kind === "approval"}
-        <Approval entry={e} ondecide={(ok, reason) => decide(e, ok, reason)} />
-      {/if}
-    {/each}
-    {#if chat.busy && chat.entries[chat.entries.length - 1]?.kind !== "assistant"}
-      <div class="turn"><span class="who">{G.marker}tachy</span>
-        <div class="body waiting">{#if chat.queuePosition}<span class="muted">waiting for a free chat slot · #{chat.queuePosition} </span>{/if}<span class="caret" aria-hidden="true"></span></div>
+        {/if}
+        {#if chat.entries.length === 0}
+          <Launcher />
+        {/if}
+      </div>
+      <Scrollbar target={transcriptEl} controls="chat-transcript" />
+      <ArtifactPanel />
+    </div>
+
+    {#if chat.uploads.length || chat.artifact || draftWaiting}
+      <div class="attachments">
+        {#if draftWaiting}
+          <button
+            class="attach draft-chip"
+            use:tip={"Reopen the work item you were writing"}
+            onclick={() => openComposer()}
+          >
+            <Icon name="review" size="1em" />
+            draft {composer.type?.name ?? "work item"}{composer.title.trim()
+              ? `: ${composer.title.trim()}`
+              : ""}
+          </button>
+        {/if}
+        {#if chat.artifact}
+          <span class="attach artifact-chip">
+            <ArtifactMark size="1em" />
+            {chat.artifact.title}
+            <button
+              class="chip-x"
+              aria-label="Detach artifact"
+              use:tip={"Detach artifact"}
+              onclick={() => (chat.artifact = undefined)}
+              ><Icon name="close" size="1em" weight={7} /></button
+            >
+          </span>
+        {/if}
+        {#each chat.uploads as u, i (u.path)}
+          {#if i > 0}<span class="sep" aria-hidden="true">~~</span>{/if}
+          <span class="attach">
+            <Icon name={u.image ? "image" : "file"} size="1.1em" />
+            {u.filename}
+            <button
+              class="chip-x"
+              aria-label="Remove attachment"
+              use:tip={"Remove attachment"}
+              onclick={() => chat.uploads.splice(i, 1)}
+              ><Icon name="close" size="1em" weight={7} /></button
+            >
+          </span>
+        {/each}
       </div>
     {/if}
-    {#if chat.entries.length === 0}
-      <Launcher />
-    {/if}
-  </div>
-  <Scrollbar target={transcriptEl} controls="chat-transcript" />
-  <ArtifactPanel />
-  </div>
 
-  {#if chat.uploads.length || chat.artifact || draftWaiting}
-    <div class="attachments">
-      {#if draftWaiting}
-        <button class="attach draft-chip" use:tip={"Reopen the work item you were writing"} onclick={() => openComposer()}>
-          <Icon name="review" size="1em" />
-          draft {composer.type?.name ?? "work item"}{composer.title.trim() ? `: ${composer.title.trim()}` : ""}
-        </button>
+    <div class="composer">
+      {#if menuOpen && commands}
+        <CommandMenu
+          bind:this={cmdMenu}
+          mode={cmdCtx?.mode ?? "command"}
+          query={cmdCtx?.query ?? ""}
+          builtins={commands.builtins}
+          artifacts={commands.artifacts}
+          options={azMenu?.options}
+          crumb={azMenu?.crumb}
+          onpick={pickCommand}
+        />
       {/if}
-      {#if chat.artifact}
-        <span class="attach artifact-chip">
-          <ArtifactMark size="1em" /> {chat.artifact.title}
-          <button class="chip-x" aria-label="Detach artifact" use:tip={"Detach artifact"} onclick={() => (chat.artifact = undefined)}><Icon name="close" size="1em" weight={7} /></button>
-        </span>
-      {/if}
-      {#each chat.uploads as u, i (u.path)}
-        {#if i > 0}<span class="sep" aria-hidden="true">~~</span>{/if}
-        <span class="attach">
-          <Icon name={u.image ? "image" : "file"} size="1.1em" />
-          {u.filename}
-          <button class="chip-x" aria-label="Remove attachment" use:tip={"Remove attachment"} onclick={() => chat.uploads.splice(i, 1)}><Icon name="close" size="1em" weight={7} /></button>
-        </span>
-      {/each}
-    </div>
-  {/if}
-
-  <div class="composer">
-    {#if menuOpen && commands}
-      <CommandMenu
-        bind:this={cmdMenu}
-        mode={cmdCtx?.mode ?? "command"}
-        query={cmdCtx?.query ?? ""}
-        builtins={commands.builtins}
-        artifacts={commands.artifacts}
-        options={azMenu?.options}
-        crumb={azMenu?.crumb}
-        onpick={pickCommand}
-      />
-    {/if}
-    <label class="upload" use:tip={"Attach a document"}>
-      <Icon name="attach" label="Attach a document" />
-      <input type="file" onchange={onFile} />
-    </label>
-    <textarea
-      bind:this={composerEl}
-      placeholder="Message the assistant… ( / for commands )"
-      bind:value={chat.input}
-      rows="2"
-      onkeydown={composerKeydown}
-    ></textarea>
-    <div class="send-col">
-      <Button
-        variant={clearArmed ? "danger" : "ghost"}
-        icon={clearArmed ? "confirm" : "clear"}
-        morph
-        disabled={chat.busy || !chat.entries.length}
-        aria-label="Clear the conversation"
-        title={clearArmed ? "click again to clear" : "Clear the conversation"}
-        onclick={onClear}
-      />
-      <Button
-        variant="ghost"
-        icon="send"
-        disabled={chat.busy || !chat.input.trim()}
-        aria-label="Send"
-        title="Send"
-        onclick={send}
-      />
+      <label class="upload" use:tip={"Attach a document"}>
+        <Icon name="attach" label="Attach a document" />
+        <input type="file" onchange={onFile} />
+      </label>
+      <textarea
+        bind:this={composerEl}
+        placeholder="Message the assistant… ( / for commands )"
+        bind:value={chat.input}
+        rows="2"
+        onkeydown={composerKeydown}></textarea>
+      <div class="send-col">
+        <Button
+          variant={clearArmed ? "danger" : "ghost"}
+          icon={clearArmed ? "confirm" : "clear"}
+          morph
+          disabled={chat.busy || !chat.entries.length}
+          aria-label="Clear the conversation"
+          title={clearArmed ? "click again to clear" : "Clear the conversation"}
+          onclick={onClear}
+        />
+        <Button
+          variant="ghost"
+          icon="send"
+          disabled={chat.busy || !chat.input.trim()}
+          aria-label="Send"
+          title="Send"
+          onclick={send}
+        />
+      </div>
     </div>
   </div>
-</div>
 {/if}
 
 <style>
@@ -628,7 +788,9 @@
 
   /* Momentary RGB-split while the clear glitch timeline jitters the blocks. */
   :global(.glitching) {
-    text-shadow: -2px 0 rgba(255, 64, 64, 0.55), 2px 0 rgba(64, 224, 255, 0.4);
+    text-shadow:
+      -2px 0 rgba(255, 64, 64, 0.55),
+      2px 0 rgba(64, 224, 255, 0.4);
   }
 
   /* Retro terminal caret: solid block, hard on/off blink — no glow, no fade.
@@ -645,25 +807,48 @@
     animation: caret-blink 1.06s steps(2, jump-none) infinite;
   }
 
-  .waiting { min-height: 1.4em; }
+  .waiting {
+    min-height: 1.4em;
+  }
 
   @keyframes caret-blink {
-    from { opacity: 1; }
-    to { opacity: 0; }
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
   }
 
   /* Assistant markdown. Rendered via {@html} so children need :global. */
-  .md { white-space: normal; }
-  .md :global(p) { margin: 0.4em 0; }
-  .md :global(> :first-child) { margin-top: 0; }
-  .md :global(> :last-child) { margin-bottom: 0; }
-  .md :global(h1), .md :global(h2), .md :global(h3), .md :global(h4) {
+  .md {
+    white-space: normal;
+  }
+  .md :global(p) {
+    margin: 0.4em 0;
+  }
+  .md :global(> :first-child) {
+    margin-top: 0;
+  }
+  .md :global(> :last-child) {
+    margin-bottom: 0;
+  }
+  .md :global(h1),
+  .md :global(h2),
+  .md :global(h3),
+  .md :global(h4) {
     font-size: 1.02em;
     margin: 0.7em 0 0.35em;
     letter-spacing: 0.04em;
   }
-  .md :global(ul), .md :global(ol) { margin: 0.4em 0; padding-left: 1.5em; }
-  .md :global(li) { margin: 0.15em 0; }
+  .md :global(ul),
+  .md :global(ol) {
+    margin: 0.4em 0;
+    padding-left: 1.5em;
+  }
+  .md :global(li) {
+    margin: 0.15em 0;
+  }
   .md :global(code) {
     background: var(--accent-dim);
     border-radius: 3px;
@@ -678,42 +863,104 @@
     margin: 0.5em 0;
     overflow-x: auto;
   }
-  .md :global(pre code) { background: none; padding: 0; font-size: 0.85em; }
+  .md :global(pre code) {
+    background: none;
+    padding: 0;
+    font-size: 0.85em;
+  }
   .md :global(blockquote) {
     margin: 0.5em 0;
     padding-left: 0.8em;
     border-left: 3px solid var(--border);
     color: var(--muted);
   }
-  .md :global(table) { border-collapse: collapse; margin: 0.5em 0; display: block; overflow-x: auto; }
-  .md :global(th), .md :global(td) { border: 1px solid var(--border); padding: 0.25em 0.6em; }
-  .md :global(hr) { border: none; border-top: 1px solid var(--border); margin: 0.7em 0; }
+  .md :global(table) {
+    border-collapse: collapse;
+    margin: 0.5em 0;
+    display: block;
+    overflow-x: auto;
+  }
+  .md :global(th),
+  .md :global(td) {
+    border: 1px solid var(--border);
+    padding: 0.25em 0.6em;
+  }
+  .md :global(hr) {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0.7em 0;
+  }
 
   /* While streaming, the block caret rides the end of the last element. */
-  .md.streaming > :global(:last-child)::after { content: ""; }
-  .transcript-wrap { flex: 1; min-height: 0; display: flex; gap: 0.35rem; padding-right: 2.8rem; }
+  .md.streaming > :global(:last-child)::after {
+    content: "";
+  }
+  .transcript-wrap {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    gap: 0.35rem;
+    padding-right: 2.8rem;
+  }
   /* Native bar hidden — the ASCII scrollbar next to it takes over. */
-  .transcript { flex: 1; min-width: 0; overflow: auto; scrollbar-width: none; display: flex; flex-direction: column; gap: 0.6rem; padding-right: 0.5rem; }
-  .transcript::-webkit-scrollbar { display: none; }
+  .transcript {
+    flex: 1;
+    min-width: 0;
+    overflow: auto;
+    scrollbar-width: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding-right: 0.5rem;
+  }
+  .transcript::-webkit-scrollbar {
+    display: none;
+  }
   /* A turn is a speaker marker plus its text — no boxes. Only events
      (approval, compaction, export) get a Panel.
 
      The transcript is the longest thing anyone reads here, so the prose is on
      the UI face; code, tool traces and event panels stay mono. 60ch and 46ch
      hold the 72 and 56 characters the mono measures did. */
-  .turn { display: flex; flex-direction: column; gap: 0.1rem; max-width: 60ch; }
+  .turn {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    max-width: 60ch;
+  }
   .turn .who {
     font-size: var(--fs-xs);
     letter-spacing: var(--label-spacing);
     color: var(--muted);
   }
-  .turn .who.err { color: var(--danger); }
-  .turn .body { font-family: var(--font-prose); white-space: pre-wrap; line-height: 1.6; padding-left: 1ch; }
-  .turn .body.md { white-space: normal; }
-  .turn .body.err { color: var(--danger); }
-  .turn .body.waiting { min-height: 1.5em; }
+  .turn .who.err {
+    color: var(--danger);
+  }
+  .turn .body {
+    font-family: var(--font-prose);
+    white-space: pre-wrap;
+    line-height: 1.6;
+    padding-left: 1ch;
+  }
+  .turn .body.md {
+    white-space: normal;
+  }
+  .turn .body.err {
+    color: var(--danger);
+  }
+  .turn .body.waiting {
+    min-height: 1.5em;
+  }
   /* A tool line is a trace, not prose — it keeps the terminal face. */
-  .tool { display: flex; align-items: center; gap: 0.5ch; font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--muted); padding-left: 1ch; }
+  .tool {
+    display: flex;
+    align-items: center;
+    gap: 0.5ch;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--muted);
+    padding-left: 1ch;
+  }
 
   /* The user's turn is positioned right; its text stays left-aligned. Reading
      returns to the left edge on every line, so ragged-left costs a re-scan —
@@ -727,28 +974,80 @@
     border-right: 2px solid var(--accent-dim);
     padding-right: var(--pad-2);
   }
-  .turn.user .who { align-self: flex-end; color: var(--accent); }
+  .turn.user .who {
+    align-self: flex-end;
+    color: var(--accent);
+  }
   /* Same glyph as tachy's, mirrored — no second marker to keep in step. */
-  .turn.user .mk { display: inline-block; transform: scaleX(-1); }
-  .turn.user .body { padding-left: 0; padding-right: 1ch; }
+  .turn.user .mk {
+    display: inline-block;
+    transform: scaleX(-1);
+  }
+  .turn.user .body {
+    padding-left: 0;
+    padding-right: 1ch;
+  }
 
   /* Indented past the upload mark so the row starts where the textarea does. */
   .attachments {
     display: flex;
     gap: var(--pad-3);
-    padding: var(--pad-2) 0 var(--pad-2) calc(var(--upload-w) + var(--composer-gap));
+    padding: var(--pad-2) 0 var(--pad-2)
+      calc(var(--upload-w) + var(--composer-gap));
     flex-wrap: wrap;
     align-items: center;
   }
-  .draft-chip { background: none; border: 1px dashed var(--accent); border-radius: var(--radius-chip); padding: 0 var(--pad-2); cursor: pointer; }
-  .draft-chip:hover, .draft-chip:focus-visible { color: var(--accent); }
-  .attach { display: inline-flex; align-items: center; gap: var(--pad-2); font-size: var(--fs-sm); color: var(--muted); }
-  .sep { color: var(--muted); opacity: 0.55; user-select: none; }
-  .artifact-chip { color: var(--accent); }
-  .chip-x { display: inline-flex; align-items: center; border: none; background: none; padding: 0 var(--pad-1); color: inherit; font: inherit; cursor: pointer; }
-  .chip-x:hover { color: var(--text); }
-  .composer { position: relative; display: flex; gap: var(--composer-gap); align-items: stretch; padding-top: 0.6rem; border-top: 1px solid var(--border); }
-  .composer textarea { flex: 1; resize: none; }
+  .draft-chip {
+    background: none;
+    border: 1px dashed var(--accent);
+    border-radius: var(--radius-chip);
+    padding: 0 var(--pad-2);
+    cursor: pointer;
+  }
+  .draft-chip:hover,
+  .draft-chip:focus-visible {
+    color: var(--accent);
+  }
+  .attach {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pad-2);
+    font-size: var(--fs-sm);
+    color: var(--muted);
+  }
+  .sep {
+    color: var(--muted);
+    opacity: 0.55;
+    user-select: none;
+  }
+  .artifact-chip {
+    color: var(--accent);
+  }
+  .chip-x {
+    display: inline-flex;
+    align-items: center;
+    border: none;
+    background: none;
+    padding: 0 var(--pad-1);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .chip-x:hover {
+    color: var(--text);
+  }
+  .composer {
+    position: relative;
+    display: flex;
+    gap: var(--composer-gap);
+    align-items: stretch;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--border);
+  }
+  .composer textarea {
+    flex: 1;
+    resize: none;
+  }
   /* A <label>, not a <button> — it has to wrap the file input — so it borrows
      the mark's hover language rather than inheriting it from Button. */
   .upload {
