@@ -287,6 +287,7 @@
         return;
       }
       if (e.key === "Escape") {
+        e.preventDefault();
         cmdDismissed = true;
         return;
       }

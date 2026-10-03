@@ -229,6 +229,7 @@
       e.preventDefault();
       choose(suggestions[highlighted]);
     } else if (e.key === "Escape") {
+      e.preventDefault();
       picking = false;
     }
   }
