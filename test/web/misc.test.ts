@@ -2,13 +2,13 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it } from "vitest";
-import { slugify, uniqueSlug } from "../../packages/web/src/lib/slug";
-import { ANSI16 } from "../../packages/web/src/lib/accent-palette";
+import { slugify, uniqueSlug } from "../../packages/web/src/slug";
+import { ANSI16 } from "../../packages/web/src/settings/accent-palette";
 import {
   CONFIDENCES,
   KNOWLEDGE_STATUSES,
   RESOLUTION_CLARITIES,
-} from "../../packages/web/src/lib/vocab";
+} from "../../packages/web/src/vocab";
 import * as contract from "@tachy/contract";
 
 describe("slugify", () => {

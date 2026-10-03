@@ -5,9 +5,9 @@ import type {
   WorkItemTypeOption,
 } from "@tachy/contract";
 import type { TokenMap } from "../compliance/redaction";
-import type { RawWorkItem } from "../types";
+import type { RawWorkItem } from "../work-items/raw";
 
-export type { RawMessage, RawWorkItem } from "../types";
+export type { RawMessage, RawWorkItem } from "../work-items/raw";
 
 export interface SourceCapabilities {
   postNote: boolean;

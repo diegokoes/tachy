@@ -13,7 +13,7 @@ export type { Grade };
  * similarity distribution on your data".
  *
  * So the numbers below are measurements, not opinions, and `scripts/eval-embeddings.ts`
- * re-derives them. `test/search-quality.test.ts` asserts them, so changing
+ * re-derives them. `test/search/quality.test.ts` asserts them, so changing
  * TACHY_EMBED_MODEL fails the build instead of silently skewing every gauge.
  *
  * Measured for Xenova/bge-base-en-v1.5 over the golden corpus:

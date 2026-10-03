@@ -1,4 +1,4 @@
-import { WORK_ITEM_LINK_KINDS } from "@tachy/core";
+import { WORK_ITEM_LINK_KINDS } from "@tachy/core/work-items";
 import { insertRows, insertWindowed, type Tx } from "./batches";
 import {
   chance,

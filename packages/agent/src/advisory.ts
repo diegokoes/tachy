@@ -5,11 +5,10 @@ import {
   effectiveSettings,
   effectivePrefs,
   resolveAgentAuth,
-  recordRun,
-  scrubText,
-  TokenMap,
   type ScopeContext,
-} from "@tachy/core";
+} from "@tachy/core/config";
+import { recordRun } from "@tachy/core/analytics";
+import { scrubText, TokenMap } from "@tachy/core/compliance";
 import { completeOnce } from "./complete";
 
 /**

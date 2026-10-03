@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { cloudSchema } from "@tachy/core";
+import { cloudSchema } from "@tachy/core/knowledge";
 
 /**
  * Fields more than one tool takes. Named so the wording travels with the field

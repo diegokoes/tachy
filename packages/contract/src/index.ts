@@ -95,7 +95,7 @@ export type {
   ReviewFindingKind,
   ReviewFinding,
   TicketReview,
-} from "./ado";
+} from "./azure-devops";
 export {
   DEFAULT_CODE_EXTENSIONS,
   REPO_INDEX_STATUSES,

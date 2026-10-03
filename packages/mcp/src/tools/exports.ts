@@ -1,16 +1,13 @@
 import { z } from "zod";
+import { resolveCurrentUserId, userSoleTeamId } from "@tachy/core/access";
 import {
-  resolveCurrentUserId,
   getArtifactBySlug,
-  userSoleTeamId,
   createOutput,
   renderTable,
-  parseDateFormat,
-  outputFilename,
   tableColumnSchema,
-  TABLE_FORMATS,
-  badInput,
-} from "@tachy/core";
+} from "@tachy/core/exports";
+import { parseDateFormat, outputFilename, TABLE_FORMATS } from "@tachy/core";
+import { badInput } from "@tachy/core/infra";
 import { tool } from "../server";
 import { out } from "../results";
 

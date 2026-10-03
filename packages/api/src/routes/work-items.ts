@@ -1,18 +1,20 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { resolveSource } from "@tachy/core/sources";
 import {
-  resolveSource,
   ingestWorkItem,
-  recordRun,
+  workItemScope,
+  externalWorkItemScope,
+} from "@tachy/core/work-items";
+import { recordRun } from "@tachy/core/analytics";
+import {
   getCustomerName,
   getCustomerIdBySlug,
   setWorkItemCustomer,
   setObservedVersion,
-  badInput,
-  workItemScope,
-  externalWorkItemScope,
-} from "@tachy/core";
+} from "@tachy/core/catalog";
+import { badInput } from "@tachy/core/infra";
 import { assertScopeEditor, callerScope } from "../authz";
 
 const customerSchema = z.object({

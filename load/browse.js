@@ -1,6 +1,6 @@
 import http from "k6/http";
 import { check } from "k6";
-import { BASE_URL, headers, setupSession, pick } from "./lib/session.js";
+import { BASE_URL, headers, setupSession, pick } from "./session.js";
 
 /**
  * The read paths a person actually clicks through. Arrival rate rather than a

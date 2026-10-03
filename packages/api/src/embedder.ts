@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { log, startEmbedHost } from "@tachy/core";
+import { log } from "@tachy/core/infra";
+import { startEmbedHost } from "@tachy/core/search";
 import { internalRoutes } from "./routes/internal";
 
 /*

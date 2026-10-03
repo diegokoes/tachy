@@ -11,11 +11,11 @@ import {
   saveFilters,
   type Facets,
   type FacetKey,
-} from "../../packages/web/src/lib/library/filters";
+} from "../../packages/web/src/library/filters";
 import {
   CONFIDENCES,
   RESOLUTION_CLARITIES,
-} from "../../packages/web/src/lib/vocab";
+} from "../../packages/web/src/vocab";
 
 beforeEach(() => localStorage.clear());
 

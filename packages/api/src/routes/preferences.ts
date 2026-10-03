@@ -1,16 +1,10 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import {
-  forbidden,
-  badInput,
-  assertGlobalAdmin,
-  canManageTeam,
-  getTeamIdBySlug,
-  setPref,
-  deletePref,
-  type Scope,
-} from "@tachy/core";
+import { forbidden, badInput } from "@tachy/core/infra";
+import { assertGlobalAdmin, canManageTeam } from "@tachy/core/access";
+import { getTeamIdBySlug } from "@tachy/core/catalog";
+import { setPref, deletePref, type Scope } from "@tachy/core/config";
 import { requireCaller } from "../authz";
 
 const scopeSchema = z.enum(["global", "team"]);

@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { SLUG_RE } from "@tachy/core";
 import {
-  SLUG_RE,
   createBucket,
   deleteBucket,
   getBucket,
@@ -11,7 +11,7 @@ import {
   rotateBucketToken,
   searchBucket,
   updateBucket,
-} from "@tachy/core";
+} from "@tachy/core/buckets";
 import { requireAdmin } from "../../auth";
 import { callerUserId } from "../../authz";
 

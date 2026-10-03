@@ -129,7 +129,7 @@ you see came from the lexical and trigram legs. Concretely:
   `hnsw.max_scan_tuples`, so it does not spin. This is what the suite measures,
   and it is the real bottleneck.
 - **Result counts and relevance are not meaningful.** Do not use these runs to
-  judge search quality. `test/search-quality.test.ts` is what does that.
+  judge search quality. `test/search/quality.test.ts` is what does that.
 
 For numbers that reflect real vector search, seed with `--embed`:
 
