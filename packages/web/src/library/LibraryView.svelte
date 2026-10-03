@@ -598,7 +598,7 @@
     <input
       bind:this={searchEl}
       class="search"
-      placeholder="Search symptoms, error codes, root causes, docs…"
+      aria-label="Search symptoms, error codes, root causes, docs"
       bind:value={q}
       onkeydown={(e) => {
         if (e.key === "Enter") {

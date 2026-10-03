@@ -44,6 +44,9 @@ export { default as FormActions } from "./FormActions.svelte";
 
 /* Kept where they are until their last legacy call site is migrated. */
 export { default as Select } from "./AsciiSelect.svelte";
+export { default as Caret } from "./Caret.svelte";
+export { default as CaretHost } from "./CaretHost.svelte";
+export { default as CaretInput } from "./CaretInput.svelte";
 export { default as Spinner } from "./Spinner.svelte";
 export { default as Scrollbar } from "./Scrollbar.svelte";
 
