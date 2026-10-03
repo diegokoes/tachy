@@ -1,5 +1,5 @@
-// Shared shapes used by both `sources/` and `compliance/` — hoisted here so
-// neither folder has to import from the other.
+// A work item as its source hands it over, before ingest. `sources/` produces
+// this shape and `compliance/` scrubs it, so it lives with neither.
 
 export interface RawMessage {
   externalId?: string;

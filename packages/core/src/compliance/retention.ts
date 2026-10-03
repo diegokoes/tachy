@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { sweepExpiredOutputs } from "../exports/outputs";
 import { sql } from "../infra/db";
-import { sweepUploads } from "../infra/uploads";
+import { sweepUploads } from "../chat/uploads";
 import { defineJob } from "../jobs/registry";
 import { sweepJobRuns } from "../jobs/runs";
 

@@ -1,5 +1,5 @@
-import { sql } from "./db";
-import { badInput } from "./errors";
+import { sql } from "../infra/db";
+import { badInput } from "../infra/errors";
 
 export const uploadTtlMs = () =>
   (Number(process.env.TACHY_UPLOAD_TTL_HOURS) || 24) * 60 * 60_000;

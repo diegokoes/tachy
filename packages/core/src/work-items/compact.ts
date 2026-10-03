@@ -1,4 +1,4 @@
-import type { RawMessage, RawWorkItem } from "../types";
+import type { RawMessage, RawWorkItem } from "./raw";
 
 /**
  * A file on the message, referenced not linked: source download URLs are signed

@@ -3,14 +3,14 @@ import { z } from "zod";
 import { ARTIFACT_UTILITIES } from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
 import { badInput, forbidden, notFound } from "../infra/errors";
-import { tableOutputSchema } from "../exports/table";
+import { tableOutputSchema } from "./table";
 import {
   assertCanWriteScope,
   scopeCondition,
   upsertScoped,
   type Scope,
   type ScopeContext,
-} from "./scoped";
+} from "../config/scoped";
 
 export const artifactSpecSchema = z
   .object({
