@@ -335,15 +335,6 @@
     }),
   );
 
-  /* One cheap query per page, not per section: every section on the page is on
-     screen now, so there is no click left to recount on. */
-  $effect(() => {
-    page;
-    census.reload();
-    activity.reload();
-    void loadIssues(page);
-  });
-
   const overview = $derived(OVERVIEWS[page]);
   const at = $derived(segment(2));
 
@@ -355,6 +346,22 @@
   /* Anything that is not a window section lands on the overview: nothing
      named, /overview, a dialog section, or a key no section has. */
   const showing = $derived(Boolean(overview) && !sections.length);
+
+  /* Recount on landing on a page and every time its overview comes back into
+     view with nothing over it. Sections are where rows change, and they are
+     left by a button, a dialog's close or the browser's back alike, so the
+     recount hangs on the route rather than on any one of those. */
+  const resting = $derived(showing && !modal);
+  let counted: string | undefined;
+  $effect(() => {
+    const landed = page !== counted;
+    const back = resting;
+    counted = page;
+    if (!landed && !back) return;
+    census.reload();
+    activity.reload();
+    void loadIssues(page);
+  });
 
   const filled = $derived(live.find((s) => s.fill && s.key === at));
 
@@ -371,14 +378,6 @@
   });
 
   const backToOverview = () => navigate(`/admin/${page}`);
-
-  /* The page effect only recounts on a page change, and a dialog section is
-     where rows get added, so its counter would stay stale until a reload. */
-  function closeSection() {
-    backToOverview();
-    census.reload();
-    void loadIssues(page);
-  }
 
   /* A page without an overview has nothing to show until a section is named,
      so it opens on its first. */
@@ -470,7 +469,7 @@
         section={modal.key}
         label={modal.label}
         view={modal.view}
-        onclose={closeSection}
+        onclose={backToOverview}
       />
     {/if}
   {:else if filled}

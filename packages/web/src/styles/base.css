@@ -215,3 +215,34 @@ details.callout[open] > summary.callout-title::after {
 .hljs-strong {
   font-weight: 700;
 }
+
+/* The theme wipe, driven from motion.ts. Both snapshots hold still at full
+   strength, the new one on top and cut to the travelling edge. */
+:root[data-theme-wipe]::view-transition-old(root),
+:root[data-theme-wipe]::view-transition-new(root),
+:root[data-theme-wipe]::view-transition-new(theme-wipe) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+:root[data-theme-wipe]::view-transition-new(root) {
+  clip-path: var(--theme-wipe);
+}
+
+.theme-wipe {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2147483647;
+  pointer-events: none;
+  view-transition-name: theme-wipe;
+}
+
+.theme-wipe path:first-child {
+  fill: var(--accent);
+}
+
+.theme-wipe path:last-child {
+  fill: color-mix(in srgb, var(--accent) 45%, var(--bg));
+}

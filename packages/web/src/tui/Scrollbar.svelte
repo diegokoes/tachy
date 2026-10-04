@@ -152,14 +152,14 @@
     background: color-mix(in srgb, var(--muted) 40%, transparent);
   }
   .row.on {
-    background: var(--accent);
+    background: var(--accent-fill);
     border-radius: 1px;
   }
   .scrollbar:hover .row {
     background: color-mix(in srgb, var(--muted) 70%, transparent);
   }
   .scrollbar:hover .row.on {
-    background: var(--accent);
+    background: var(--accent-fill);
   }
 
   /* Triangles from borders - the same reason as above, one step further: no

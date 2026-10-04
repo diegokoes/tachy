@@ -51,6 +51,6 @@
     transform: translateY(-50%);
     width: 0.55em;
     height: 1.15em;
-    background: var(--accent);
+    background: var(--accent-fill);
   }
 </style>

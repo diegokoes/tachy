@@ -1,4 +1,4 @@
-import { gsap, SplitText, reducedMotion } from "./gsap";
+import { gsap, Flip, SplitText, reducedMotion } from "./gsap";
 
 /**
  * Character-shatter: chars fall, tumble and fade, then the block collapses.
@@ -402,6 +402,119 @@ export function confetti(container: HTMLElement, count = 36) {
   }
 }
 
+let wipeRun = 0;
+
+/**
+ * Swaps the theme behind a wavy edge that crosses the screen, two bands of
+ * accent running ahead of it. `swap` makes the change; the page as it was
+ * stays put and the page as it becomes is uncovered behind the last edge, so
+ * text changes colour exactly where the edge passes over it.
+ *
+ * The two pages are the snapshots of a view transition, which is the only way
+ * to have both themes painted at once. The new one is clipped to a path that
+ * GSAP rewrites every frame through `--theme-wipe` on the root. The bands sit
+ * in a group of their own: left in the root snapshot they would be clipped
+ * away with it, since they are always ahead of the edge.
+ *
+ * Each edge is ten points that leave at slightly different times, the same
+ * offsets on all three edges, so the edges ripple but never cross.
+ */
+export function themeWipe(
+  swap: () => void | Promise<void>,
+  from: "top" | "bottom" = "bottom",
+) {
+  const root = document.documentElement;
+  if (reducedMotion() || !document.startViewTransition) {
+    void swap();
+    return;
+  }
+  const POINTS = 10;
+  const EDGES = 3;
+  const run = ++wipeRun;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const start = from === "bottom" ? h : 0;
+  const step = w / (POINTS - 1);
+  const edges = Array.from({ length: EDGES }, () =>
+    Array<number>(POINTS).fill(start),
+  );
+  const last = edges[EDGES - 1];
+
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.classList.add("theme-wipe");
+  const bands = edges.slice(1).map(() => {
+    const path = document.createElementNS(NS, "path");
+    svg.append(path);
+    return path;
+  });
+
+  const along = (ys: number[], back = false) => {
+    let d = "";
+    for (let n = 0; n < POINTS - 1; n++) {
+      const j = back ? POINTS - 1 - n : n;
+      const k = back ? j - 1 : j + 1;
+      const cp = ((j + k) / 2) * step;
+      d += ` C ${cp} ${ys[j]} ${cp} ${ys[k]} ${k * step} ${ys[k]}`;
+    }
+    return d;
+  };
+  const draw = () => {
+    root.style.setProperty(
+      "--theme-wipe",
+      `path("M 0 ${last[0]}${along(last)} V ${start} H 0 Z")`,
+    );
+    bands.forEach((path, i) => {
+      const lead = edges[i];
+      const trail = edges[i + 1];
+      path.setAttribute(
+        "d",
+        `M 0 ${lead[0]}${along(lead)} V ${trail[POINTS - 1]}${along(trail, true)} Z`,
+      );
+    });
+  };
+
+  const tl = gsap.timeline({
+    paused: true,
+    onUpdate: draw,
+    defaults: { ease: "power2.inOut", duration: 0.6 },
+  });
+  const offsets = last.map(() => Math.random() * 0.2);
+  edges.forEach((ys, i) =>
+    offsets.forEach((delay, j) =>
+      tl.to(ys, { [j]: h - start }, delay + i * 0.12),
+    ),
+  );
+
+  root.dataset.themeWipe = "";
+  draw();
+  const transition = document.startViewTransition(async () => {
+    await swap();
+    document.body.append(svg);
+  });
+  const done = () => {
+    tl.kill();
+    svg.remove();
+    if (run !== wipeRun) return;
+    delete root.dataset.themeWipe;
+    root.style.removeProperty("--theme-wipe");
+  };
+  transition.ready.then(() => {
+    /* A view transition ends when its pseudo-elements stop animating, and the
+       wipe is not an animation the browser can see. This one changes nothing
+       and keeps the snapshots up for as long as the timeline runs. */
+    root.animate(
+      { opacity: [1, 1] },
+      {
+        duration: tl.duration() * 1000 + 50,
+        pseudoElement: "::view-transition-old(root)",
+      },
+    );
+    tl.play();
+  }, done);
+  transition.finished.then(done, done);
+}
+
 /** Horizontal clip-path wipe, staggered - the nav reveal. */
 export function wipeIn(nodes: ArrayLike<Element>, onStart?: () => void) {
   if (reducedMotion()) {
@@ -618,5 +731,38 @@ export function unfold(o: {
       tl?.kill();
       gsap.killTweensOf([win, plate, scrim, blob, ...parts]);
     },
+  };
+}
+
+/**
+ * Smooth resizing for a layout change. Call it while the nodes still sit where
+ * they were, make the change, then call what it returns once the DOM has the
+ * new layout: each node travels from its old box to its new one.
+ *
+ * Width and height are tweened, not a scale, so text inside a node reflows
+ * rather than stretching. A node the change hides (`display: none`) fades out
+ * where it stood, and one it reveals fades in.
+ *
+ * The nodes are positioned absolutely for the length of the tween. A flex item
+ * with a zero basis ignores an inline height, so left in flow it would jump to
+ * its final size and only its offset would animate.
+ */
+export function reflow(
+  targets: (Element | null | undefined)[],
+  o: { duration?: number; ease?: string } = {},
+): () => void {
+  const nodes = targets.filter((t): t is Element => Boolean(t));
+  if (reducedMotion() || !nodes.length) return () => {};
+  const state = Flip.getState(nodes);
+  const duration = o.duration ?? 0.35;
+  return () => {
+    Flip.from(state, {
+      duration,
+      ease: o.ease ?? "power2.inOut",
+      absolute: true,
+      onEnter: (els) =>
+        gsap.fromTo(els, { opacity: 0 }, { opacity: 1, duration }),
+      onLeave: (els) => gsap.to(els, { opacity: 0, duration: duration / 2 }),
+    });
   };
 }

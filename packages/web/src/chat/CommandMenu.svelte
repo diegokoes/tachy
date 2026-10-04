@@ -209,7 +209,7 @@
     flex: none;
     font-size: 0.75rem;
     color: var(--bg);
-    background: var(--accent);
+    background: var(--accent-fill);
     border-radius: 3px;
     padding: 0.05rem 0.35rem;
   }
