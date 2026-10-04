@@ -92,6 +92,12 @@ describe("reflow", () => {
     expect(vars).toMatchObject({ duration: 0.2, absolute: true });
   });
 
+  it("keeps the nodes in flow when asked to", () => {
+    const from = vi.spyOn(Flip, "from");
+    reflow([box()], { absolute: false })();
+    expect(from.mock.calls[0][1]).toMatchObject({ absolute: false });
+  });
+
   it("fades what the change hides or reveals", () => {
     const el = box();
     const from = vi.spyOn(Flip, "from");
