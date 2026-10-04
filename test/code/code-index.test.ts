@@ -21,7 +21,6 @@ import {
   tokenMaySendTo,
   connectionToken,
   repoDir,
-  adoptSupersededIndex,
 } from "@tachy/core/code";
 import {
   countTree,
@@ -337,47 +336,6 @@ describe("release lines", () => {
         { name: "v1.2.0-RC.1", kind: "tag" },
       ]),
     );
-  });
-});
-
-describe("adopting the superseded index", () => {
-  afterAll(() => sql`delete from repos where slug = 'oldrepo'`);
-
-  it("carries files and chunks over to a default line, once", async () => {
-    const [repo] = await sql`
-      insert into repos (slug, url, default_branch, index_status, indexed_commit,
-                         file_count, chunk_count)
-      values ('oldrepo', 'https://example.invalid/old.git', 'master', 'ready',
-              ${"c".repeat(40)}, 2, 1)
-      returning id
-    `;
-    const [kept, halfWritten] = await sql`
-      insert into repo_files (repo_id, path, lang, blob_sha, size_bytes)
-      values (${repo.id}, 'kept.ts', 'typescript', ${"1".repeat(40)}, 10),
-             (${repo.id}, 'half.ts', 'typescript', ${"2".repeat(40)}, 10)
-      returning id
-    `;
-    await sql`
-      insert into code_chunks (repo_id, file_id, ordinal, start_line, end_line, chunk_text)
-      values (${repo.id}, ${kept.id}, 0, 1, 1, 'export const kept = 1;')
-    `;
-    expect(halfWritten.id).toBeTruthy();
-
-    expect(await adoptSupersededIndex()).toBe(1);
-    const line = await getRepoLine("oldrepo");
-    expect(line).toMatchObject({
-      ref: "master",
-      index_status: "ready",
-      indexed_commit: "c".repeat(40),
-      file_count: 1,
-      chunk_count: 1,
-    });
-    const files = await sql`
-      select path from repo_line_files where line_id = ${line.id}
-    `;
-    expect(files.map((f) => f.path)).toEqual(["kept.ts"]);
-
-    expect(await adoptSupersededIndex()).toBe(0);
   });
 });
 

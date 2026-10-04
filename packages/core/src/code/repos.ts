@@ -306,62 +306,6 @@ export async function deleteRepo(slug: string): Promise<void> {
 }
 
 /**
- * Carries an index built into the superseded repo_files and code_chunks over
- * to lines, for each repo that has no line yet, so its embeddings are reused
- * instead of recomputed. A file row with no chunks is left behind: the
- * superseded indexer could write one when interrupted, and it is cheaper to
- * embed it again than to trust it. Idempotent; a no-op once every repo has a
- * line. Removed with the superseded tables.
- */
-export async function adoptSupersededIndex(): Promise<number> {
-  return sql.begin(async (tx) => {
-    const adopted = await tx`
-      insert into repo_lines (repo_id, ref, index_status, indexed_commit, index_error,
-                              file_count, chunk_count, last_indexed_at)
-      select r.id, r.default_branch,
-             case when r.index_status in ('cloning','indexing') then 'error' else r.index_status end,
-             r.indexed_commit, r.index_error, r.file_count, r.chunk_count, r.last_indexed_at
-      from repos r
-      where not exists (select 1 from repo_lines l where l.repo_id = r.id)
-        and exists (select 1 from repo_files f where f.repo_id = r.id)
-      returning id, repo_id
-    `;
-    if (!adopted.length) return 0;
-    const repoIds = adopted.map((a) => a.repo_id);
-    await tx`
-      insert into code_blob_chunks (repo_id, blob_sha, ordinal, start_line, end_line,
-                                    chunk_text, embedding)
-      select c.repo_id, f.blob_sha, c.ordinal, c.start_line, c.end_line,
-             c.chunk_text, c.embedding
-      from code_chunks c
-      join repo_files f on f.id = c.file_id
-      where c.repo_id = any(${repoIds})
-      on conflict (repo_id, blob_sha, ordinal) do nothing
-    `;
-    await tx`
-      insert into repo_line_files (line_id, repo_id, path, lang, blob_sha, size_bytes)
-      select l.id, f.repo_id, f.path, f.lang, f.blob_sha, f.size_bytes
-      from repo_files f
-      join repo_lines l on l.repo_id = f.repo_id
-      where f.repo_id = any(${repoIds})
-        and exists (select 1 from code_chunks c where c.file_id = f.id)
-      on conflict (line_id, path) do nothing
-    `;
-    await tx`
-      update repo_lines l set
-        file_count = (select count(*) from repo_line_files f where f.line_id = l.id),
-        chunk_count = (
-          select count(*) from code_blob_chunks c
-          where c.repo_id = l.repo_id
-            and c.blob_sha in (select f.blob_sha from repo_line_files f where f.line_id = l.id)
-        )
-      where l.id = any(${adopted.map((a) => a.id)})
-    `;
-    return adopted.length;
-  }) as Promise<number>;
-}
-
-/**
  * Lines stuck in a transient status after a process crash/restart. What they
  * had written stays searchable; the next reindex finishes the diff.
  */
