@@ -169,6 +169,8 @@ services:
 
   postgres:
     command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
     volumes:
       - ${TACHY_POSTGRES_CONF:-./deploy/postgres/postgresql.conf}:/etc/postgresql/postgresql.conf:ro
     mem_limit: ${TACHY_POSTGRES_MEM_LIMIT:-2g}
