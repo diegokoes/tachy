@@ -30,11 +30,14 @@ services:
       - ./db/roles.sql:/docker-entrypoint-initdb.d/20-roles.sql:ro
       - ./deploy/postgres/role-passwords.sh:/docker-entrypoint-initdb.d/30-role-passwords.sh:ro
       - ./deploy/postgres/schema-stamp.sh:/docker-entrypoint-initdb.d/40-schema-stamp.sh:ro
+    # Over TCP: on a fresh volume the image runs its init scripts on a server
+    # that listens on the socket only, and a check that passes then lets the
+    # api start against a database that is about to restart.
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-tachy} -d ${POSTGRES_DB:-tachy}",
+          "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER:-tachy} -d ${POSTGRES_DB:-tachy}",
         ]
       interval: 10s
       timeout: 5s
