@@ -26,7 +26,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Families = @('tachy-db-', 'tachy-tachy-agent-home-', 'tachy-caddy-data-')
+$Families = @('tachy-db-', 'tachy-tachy-agent-home-', 'tachy-caddy-data-', 'tachy-deploy-log-')
 
 function Expand-Home([string]$Path) {
     if ($Path -and $Path.StartsWith('~')) { return Join-Path $HOME $Path.Substring(1).TrimStart('/', '\') }
