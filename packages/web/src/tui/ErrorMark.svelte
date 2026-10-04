@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "./Icon.svelte";
+  import { tip } from "./tip.svelte";
 
   let { message, label = "error" }: { message: string; label?: string } =
     $props();
@@ -7,7 +8,7 @@
   let copied = $state(false);
 
   /** Clone/auth failures run to paragraphs - keep them out of the layout
-      entirely: the icon is fixed size, the text lives in the tooltip, and a
+      entirely: the icon is fixed size, the text lives in the tip, and a
       click puts the whole thing on the clipboard. */
   async function copy() {
     try {
@@ -24,9 +25,9 @@
   class="errmark"
   class:copied
   type="button"
-  title={copied ? "copied" : `${message}\n\n(click to copy)`}
   aria-label={`${label}: ${message}`}
   onclick={copy}
+  use:tip={copied ? "copied" : message}
 >
   <Icon name="alert" size="1em" weight={7} />
 </button>

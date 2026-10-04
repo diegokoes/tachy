@@ -228,7 +228,6 @@
     variant="ghost"
     size="sm"
     icon="refresh"
-    title="rescan now (hourly otherwise)"
     busy={rescanning}
     onclick={rescan}>rescan</Button
   >
@@ -305,7 +304,6 @@
                           variant="ghost"
                           tone="accent"
                           icon="ai"
-                          title="open chat with a /wiki-draft command for this"
                           onclick={() => draftWithAgent(g)}
                           >{g.kind === "unwritten"
                             ? "draft"
@@ -317,7 +315,6 @@
                           size="sm"
                           variant="ghost"
                           icon="edit"
-                          title="write it by hand"
                           onclick={() => write(g)}>write</Button
                         >
                       {/if}
@@ -326,7 +323,6 @@
                           size="sm"
                           variant="ghost"
                           icon="close"
-                          title="not worth an article; returns if evidence grows"
                           busy={acting === g.id}
                           onclick={() => dismiss(g)}>dismiss</Button
                         >

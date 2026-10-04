@@ -3,16 +3,14 @@
 
   let {
     tone = "muted",
-    title,
     children,
   }: {
     tone?: "muted" | "accent" | "ok" | "warn" | "danger" | "info";
-    title?: string;
     children: Snippet;
   } = $props();
 </script>
 
-<span class="badge {tone}" {title}>{@render children()}</span>
+<span class="badge {tone}">{@render children()}</span>
 
 <style>
   .badge {

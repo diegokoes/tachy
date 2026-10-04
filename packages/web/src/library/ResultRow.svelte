@@ -59,11 +59,7 @@
     <span class="foot">
       <span class="tags">
         {#if item.customer}
-          <Chip
-            tone="accent"
-            title="customer-specific; not general product behaviour"
-            >{item.customer}</Chip
-          >
+          <Chip tone="accent">{item.customer}</Chip>
         {/if}
         {#each item.tags as tag}<Chip>{tag}</Chip>{/each}
       </span>

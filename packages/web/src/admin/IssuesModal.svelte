@@ -34,11 +34,7 @@
     <ul class="groups">
       {#each groups as g (g.key)}
         <li class="group {g.tone}">
-          <button
-            class="head"
-            title="go to {g.section}"
-            onclick={() => onpick(g.section)}
-          >
+          <button class="head" onclick={() => onpick(g.section)}>
             <span class="mark" aria-hidden="true"></span>
             <span class="text">{g.head}</span>
             <span class="go" aria-hidden="true">{g.section} {G.right}</span>

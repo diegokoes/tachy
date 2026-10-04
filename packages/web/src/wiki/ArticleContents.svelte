@@ -145,12 +145,7 @@
 {/snippet}
 
 <nav class="contents" aria-label="Contents" bind:this={nav}>
-  <a
-    class="cap"
-    href={location.pathname}
-    title="back to the top"
-    onclick={toTop}>contents</a
-  >
+  <a class="cap" href={location.pathname} onclick={toTop}>contents</a>
   {@render branch(tree)}
 </nav>
 

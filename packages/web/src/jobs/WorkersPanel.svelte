@@ -69,9 +69,7 @@
 
 {#snippet workerName(w: JobWorkerRow)}
   <span class="mono">{w.host}</span>
-  <span class="dim small" title={w.id}
-    >pid {w.pid} · up {since(w.started_at)}</span
-  >
+  <span class="dim small">pid {w.pid} · up {since(w.started_at)}</span>
 {/snippet}
 
 {#snippet workerQueues(w: JobWorkerRow)}
@@ -98,7 +96,7 @@
 {#snippet workerRuns(w: JobWorkerRow)}
   {#each w.runs as r (r.id)}
     <div class="run">
-      <span class="name" title={params(r.params)}
+      <span class="name"
         >{r.definition_name ?? r.kind}
         <span class="dim">{params(r.params)}</span></span
       >

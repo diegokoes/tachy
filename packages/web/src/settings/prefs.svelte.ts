@@ -122,45 +122,25 @@ export const saveKey = (name: string, value: string) =>
 export const removeKey = (name: string) =>
   write(() => api.delete(`/me/credentials/${encodeURIComponent(name)}`));
 
-export type Origin = { label: string; tip: string; mine: boolean };
+export type Origin = { label: string; mine: boolean };
 
-const INHERITED: Record<
-  Exclude<PrefSource | KeyScope, "user">,
-  [string, string]
-> = {
-  team: ["team", "your team's admin"],
-  db: ["org", "an admin, for everyone"],
-  global: ["org", "an admin, for everyone"],
-  env: ["server", "the server's configuration"],
-  default: ["built-in", "tachy itself"],
+const INHERITED: Record<Exclude<PrefSource | KeyScope, "user">, string> = {
+  team: "team",
+  db: "org",
+  global: "org",
+  env: "server",
+  default: "built-in",
 };
 
 /**
- * Where a value comes from, in words that say what picking another one does:
- * an inherited value keeps following whoever set it until you choose your own,
- * and yours stays until you reset it.
+ * Where a value comes from: an inherited value keeps following whoever set it
+ * until you choose your own, and yours stays until you reset it.
  */
 export function origin(
   source: PrefSource | KeyScope | null,
   noun: "default" | "key",
 ): Origin | null {
   if (!source) return null;
-  if (source === "user")
-    return {
-      label: "yours",
-      tip:
-        noun === "key"
-          ? "Your own key. Remove it to fall back to a shared one, if there is one."
-          : "Your own choice. Reset it to follow the shared default again.",
-      mine: true,
-    };
-  const [who, by] = INHERITED[source];
-  return {
-    label: `${who} ${noun}`,
-    tip:
-      noun === "key"
-        ? `Shared key set by ${by}. Paste your own to use it instead.`
-        : `Set by ${by}. Pick a value to make it your own.`,
-    mine: false,
-  };
+  if (source === "user") return { label: "yours", mine: true };
+  return { label: `${INHERITED[source]} ${noun}`, mine: false };
 }

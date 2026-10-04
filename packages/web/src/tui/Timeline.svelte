@@ -42,7 +42,7 @@
 >
   {#each cut.shown as l (l.key)}
     <div class="lane">
-      <span class="lbl" title={l.label}>{l.label}</span>
+      <span class="lbl">{l.label}</span>
       <span class="track">
         {#each l.at as t (t)}
           <span class="tick" style="left: {pos(t)}%" title={utcTip(t)}></span>

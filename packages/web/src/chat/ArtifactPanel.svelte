@@ -11,6 +11,7 @@
     Modal,
     Select,
     Icon,
+    tip,
     type IconName,
   } from "../tui";
   import OutputSpecEditor, {
@@ -499,9 +500,7 @@
       class="edge-tab"
       class:active={open || !!chat.artifact}
       onclick={toggle}
-      title="Artifacts: reusable prompt templates to attach as context ({keyLabel(
-        hotkey,
-      )})"
+      use:tip={`Artifacts (${keyLabel(hotkey)})`}
       aria-label="Artifacts"
       aria-expanded={open}
     >
@@ -574,9 +573,7 @@
                   {#if chat.artifact?.id === a.id}<span class="sel"
                       ><Icon name="selected" size="0.7em" weight={10} /></span
                     >{/if}{a.title}
-                  {#if a.spec?.output}<span
-                      class="art-out"
-                      title="produces a {a.spec.output.format} file"
+                  {#if a.spec?.output}<span class="art-out"
                       ><Icon name="download" size="0.9em" />
                       {a.spec.output.format}</span
                     >{/if}

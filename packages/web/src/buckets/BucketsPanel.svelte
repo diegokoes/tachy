@@ -152,7 +152,6 @@
     variant="ghost"
     size="sm"
     icon={armed === b.slug ? "confirm" : "refresh"}
-    title="issue a new ingest token; the current one stops working at once"
     busy={rotating === b.slug}
     onclick={() => rotate(b)}
     >{armed === b.slug ? "replace token?" : "new token"}</Button

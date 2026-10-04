@@ -297,25 +297,18 @@
       tone="ok"
       size="sm"
       icon="seed"
-      title="one section per top-level component"
       {busy}
       onclick={seed}>seed from components</Button
     >
   {/if}
-  <Button
-    variant="ghost"
-    tone="ok"
-    size="sm"
-    icon="plus"
-    title="add a section"
-    onclick={startAdd}>section</Button
+  <Button variant="ghost" tone="ok" size="sm" icon="plus" onclick={startAdd}
+    >section</Button
   >
   <Button
     variant="ghost"
     tone="ok"
     size="sm"
     icon="plus"
-    title="write a new article"
     onclick={() => navigate(wikiPath(scope, "new"))}>article</Button
   >
 {/snippet}
@@ -324,9 +317,7 @@
   <button class="art" onclick={() => openArticle(a)}>{a.title}</button>
   {#if a.status === "draft"}<Badge tone="accent">draft</Badge>{/if}
   {#if a.stale}
-    <Badge tone="warn" title="sources changed since it was written"
-      >{a.stale} changed</Badge
-    >
+    <Badge tone="warn">{a.stale} changed</Badge>
   {/if}
 {/snippet}
 
@@ -355,7 +346,7 @@
         {node.name}
       </button>
       {#if badge}
-        <span class="badge" title="articles · open gaps for this section">
+        <span class="badge">
           {badge.articles} art{#if badge.gaps}
             <span class="gap"
               >· {badge.gaps} gap{badge.gaps === 1 ? "" : "s"}</span
@@ -363,20 +354,12 @@
         </span>
       {/if}
       {#if node.lead_slug}
-        <span class="lead" title="this section has a lead page">lead</span>
+        <span class="lead">lead</span>
       {/if}
       {#if isCurator()}
         <span class="edit">
-          <button
-            class="tiny"
-            title="rename, move or set lead"
-            onclick={() => startEdit(node)}>edit</button
-          >
-          <button
-            class="tiny"
-            title="remove; children move up"
-            onclick={() => remove(node.slug)}>remove</button
-          >
+          <button class="tiny" onclick={() => startEdit(node)}>edit</button>
+          <button class="tiny" onclick={() => remove(node.slug)}>remove</button>
         </span>
       {/if}
     </div>
@@ -412,7 +395,6 @@
               size="sm"
               tone="info"
               icon="edit"
-              title="edit the intro"
               onclick={() => navigate(wikiPath(scope, MAIN_PAGE_SLUG, "edit"))}
               >edit</Button
             >
@@ -472,7 +454,6 @@
             aria-label="order"
             type="number"
             class="ord"
-            title="order among its siblings"
             bind:value={form.ordinal}
           />
         </div>

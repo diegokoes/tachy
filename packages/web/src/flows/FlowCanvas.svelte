@@ -261,9 +261,7 @@
             <span class="line">{face.line}</span>
           </span>
           {#if s.kind === "action" && actions.get(s.action)?.writes}
-            <span class="writes" use:tip={"changes something outside tachy"}
-              >w</span
-            >
+            <span class="writes">w</span>
           {/if}
         </button>
       {/if}

@@ -71,21 +71,11 @@
 </script>
 
 <div class="readership">
-  <button
-    class="line"
-    title="versions"
-    aria-haspopup="dialog"
-    onclick={() => (open = true)}
-  >
+  <button class="line" aria-haspopup="dialog" onclick={() => (open = true)}>
     <Icon name="eye" size="1.1em" weight={7} />
     <span>{readLine}</span>
   </button>
-  <button
-    class="line"
-    title="versions"
-    aria-haspopup="dialog"
-    onclick={() => (open = true)}
-  >
+  <button class="line" aria-haspopup="dialog" onclick={() => (open = true)}>
     <Icon name="history" size="1.1em" weight={7} />
     <span>{modifiedLine}</span>
   </button>

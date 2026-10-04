@@ -73,12 +73,6 @@
     return "json";
   });
 
-  const hint = $derived(
-    spec?.is_identity
-      ? "person: email or unique name, not display name"
-      : (spec?.help_text ?? undefined),
-  );
-
   const label = $derived(spec?.name ?? name.replaceAll("_", " "));
   const list = $derived(Array.isArray(value) ? (value as string[]) : []);
 
@@ -133,11 +127,8 @@
     kind === "bool" ||
     kind === "number"}
 >
-  <span class="label" title={hint}>
-    {label}{#if spec?.required}<span
-        class="req"
-        title="required by this work item type">*</span
-      >{/if}
+  <span class="label">
+    {label}{#if spec?.required}<span class="req">*</span>{/if}
   </span>
 
   {#if kind === "enum"}

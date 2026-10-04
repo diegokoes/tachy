@@ -1,7 +1,7 @@
 <script lang="ts">
   import { AGENT_KEY_LABELS, agentKeyError } from "./credentials";
   import { API_KEY_EXAMPLE, OAUTH_PREFIX } from "@tachy/contract";
-  import { Button, DeleteButton, InfoMark, Note, tip } from "../tui";
+  import { Button, DeleteButton, InfoMark, Note } from "../tui";
   import { agentPrefs, origin, removeKey, saveKey } from "./prefs.svelte";
   import Origin from "./Origin.svelte";
   import Row from "./Row.svelte";
@@ -79,9 +79,7 @@
         </div>
         {#snippet actions()}
           {#if creds.agent.in_use === name}
-            <span class="live" use:tip={"chat turns answer with this key"}
-              >in use</span
-            >
+            <span class="live">in use</span>
           {/if}
           <Origin of={origin(from, "key")} />
           {#if name === "anthropic_oauth_token"}

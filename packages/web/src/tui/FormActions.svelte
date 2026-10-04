@@ -10,13 +10,11 @@
   let {
     form,
     saving = false,
-    title,
     create = false,
     oncancel,
   }: {
     form: string;
     saving?: boolean;
-    title?: string;
     /** The record does not exist yet: save wears its plus. */
     create?: boolean;
     oncancel: () => void;
@@ -36,6 +34,5 @@
   icon={create ? "create" : "save"}
   type="submit"
   {form}
-  {title}
   busy={saving}>save</Button
 >

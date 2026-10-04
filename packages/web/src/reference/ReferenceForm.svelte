@@ -30,10 +30,6 @@
     extra?: Snippet;
   } = $props();
 
-  const SUBMIT_LABEL = $derived(
-    mode === "create" ? "create doc" : "save changes",
-  );
-
   const seed = untrack(() => initial);
 
   let title = $state(seed.title ?? "");
@@ -75,7 +71,6 @@
   <FormActions
     form="ref-form"
     {saving}
-    title={SUBMIT_LABEL}
     create={mode === "create"}
     oncancel={onCancel}
   />

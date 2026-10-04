@@ -437,7 +437,6 @@
       size="sm"
       icon="issues"
       tone={issueTone}
-      title="{groups.length} open on this page"
       onclick={() => {
         showIssues = true;
         void loadIssues(page);

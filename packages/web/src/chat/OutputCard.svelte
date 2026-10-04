@@ -80,7 +80,7 @@
     <div class="body">
       <span class="ext" aria-hidden="true">{ext}</span>
       <span class="detail">
-        <span class="name" title={file.filename}>{file.filename}</span>
+        <span class="name">{file.filename}</span>
         <span class="facts">
           {size}{#if shape}
             · {shape} cells{/if}

@@ -2,6 +2,7 @@
   import { onDestroy, tick } from "svelte";
   import { gsap, reducedMotion } from "../motion/gsap";
   import Icon from "../tui/Icon.svelte";
+  import { tip } from "../tui/tip.svelte";
   import { asStructured } from "./structured";
 
   let { structured }: { structured: unknown } = $props();
@@ -213,7 +214,7 @@
   <button
     class="json-toggle"
     aria-label={showRaw ? "Show rendered knowledge entry" : "Show raw JSON"}
-    title={showRaw ? "Show rendered view" : "Show raw JSON"}
+    use:tip={showRaw ? "Show rendered view" : "Show raw JSON"}
     onclick={() => void toggleRaw()}
   >
     <Icon name="json" size="1.8rem" />

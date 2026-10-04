@@ -53,9 +53,7 @@
   {#if value.length}
     <span class="chips">
       {#each value as v (v)}
-        <Chip
-          title={labelOf(v) ? v : undefined}
-          onremove={() => onchange(value.filter((x) => x !== v))}
+        <Chip onremove={() => onchange(value.filter((x) => x !== v))}
           >{labelOf(v) ?? v}</Chip
         >
       {/each}
@@ -66,7 +64,6 @@
       list={id}
       bind:value={typed}
       aria-label={`Add to ${label}`}
-      title={error ?? undefined}
       onkeydown={(e) => {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -85,7 +82,6 @@
       options={left}
       searchable
       placeholder={error ? "could not read the list" : undefined}
-      title={error ?? undefined}
       aria-label={`Add to ${label}`}
       onchange={(v) => add(String(v ?? ""))}
     />

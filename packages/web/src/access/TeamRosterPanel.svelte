@@ -51,7 +51,7 @@
   {#if list.length}
     <span class="chips">
       {#each list as m (m.user_id)}
-        <Chip tone="accent" title={nameOf(m.user_id)}>{nameOf(m.user_id)}</Chip>
+        <Chip tone="accent">{nameOf(m.user_id)}</Chip>
       {/each}
     </span>
   {:else}
