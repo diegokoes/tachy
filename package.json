@@ -40,7 +40,7 @@
     "tar": "7.5.19"
   },
   "devDependencies": {
-    "@testcontainers/postgresql": "^12.1.0",
+    "@testcontainers/postgresql": "^12.2.0",
     "@types/node": "^26.6.3",
     "@vitest/coverage-v8": "^5.0.1",
     "esbuild": "^0.28.2",
