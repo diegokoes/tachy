@@ -12,6 +12,10 @@
 #                                     apply a schema plan that drops or rewrites
 #                                     data (pg-schema-diff hazards; see
 #                                     deploy/postgres/schema-hazards.sh)
+#   tachy-deploy <commit> --skip-smoke
+#                                     deploy without the smoke run, which
+#                                     otherwise needs SMOKE_EMAIL and
+#                                     SMOKE_PASSWORD; recorded as skipped
 #
 # Rollback is `tachy-deploy <previous commit>`: safe while the previous image
 # accepts the current schema, which is what expand-and-contract is for.
@@ -31,16 +35,18 @@ K6_IMAGE=${TACHY_K6_IMAGE:-grafana/k6:2.2.0}
 
 PULL=true
 ALLOW_DESTRUCTIVE=false
+SMOKE=run
 TARGET=""
 for arg in "$@"; do
   case "$arg" in
   --no-pull) PULL=false ;;
   --allow-destructive) ALLOW_DESTRUCTIVE=true ;;
+  --skip-smoke) SMOKE=skipped ;;
   -*) echo "unknown option $arg" >&2; exit 2 ;;
   *) TARGET=$arg ;;
   esac
 done
-[ -n "$TARGET" ] || { echo "usage: tachy-deploy <commit|branch> [--no-pull] [--allow-destructive] | stamp" >&2; exit 2; }
+[ -n "$TARGET" ] || { echo "usage: tachy-deploy <commit|branch> [--no-pull] [--allow-destructive] [--skip-smoke] | stamp" >&2; exit 2; }
 
 exec 9>"${TACHY_DEPLOY_LOCK:-/tmp/tachy-deploy.lock}"
 flock -n 9 || { echo "another deploy is running" >&2; exit 1; }
@@ -94,8 +100,8 @@ wait_ready() {
 }
 
 smoke() {
-  if [ -z "${SMOKE_EMAIL:-}" ] || [ -z "${SMOKE_PASSWORD:-}" ]; then
-    log "smoke skipped: SMOKE_EMAIL / SMOKE_PASSWORD not set in $TACHY_ENV_FILE"
+  if [ "$SMOKE" = skipped ]; then
+    log "smoke skipped: --skip-smoke"
     return 0
   fi
   docker run --rm --network "$(project)" -v "$TACHY_DIR/load:/load:ro" \
@@ -124,12 +130,18 @@ record() {
   local line
   line=$(jq -nc --arg at "$(utc_now)" --arg commit "$1" --arg image "$2" \
     --arg previous "$3" --arg schema "$4" --arg result "$5" --arg by "${SUDO_USER:-$(id -un)}" \
-    '{at: $at, commit: $commit, image: $image, previous: $previous, schema: $schema, result: $result, by: $by}')
+    --arg smoke "$SMOKE" \
+    '{at: $at, commit: $commit, image: $image, previous: $previous, schema: $schema, result: $result, smoke: $smoke, by: $by}')
   mkdir -p "$(dirname "$DEPLOY_LOG")"
   printf '%s\n' "$line" >>"$DEPLOY_LOG"
   write_status release "$line"
   append_history release "$line"
 }
+
+if [ "$SMOKE" = run ] && { [ -z "${SMOKE_EMAIL:-}" ] || [ -z "${SMOKE_PASSWORD:-}" ]; }; then
+  echo "SMOKE_EMAIL and SMOKE_PASSWORD are not set in $TACHY_ENV_FILE, so the deploy would go unchecked. Set them, or pass --skip-smoke." >&2
+  exit 2
+fi
 
 git_ fetch -q --all --prune
 if git_ rev-parse -q --verify "origin/$TARGET^{commit}" >/dev/null; then
