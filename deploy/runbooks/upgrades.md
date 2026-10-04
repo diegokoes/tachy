@@ -3,8 +3,8 @@
 ## Postgres or pgvector
 
 The image is pinned (`pgvector/pgvector:<pgvector>-pg<major>`) in
-`docker-compose.yml`, `test/global-setup.ts`, `load/turns.compose.yml` and
-`TACHY_PG_IMAGE` for the restore test.
+`docker-compose.yml`, `test/global-setup.ts` and `load/turns.compose.yml`. The
+restore test reads it from `docker-compose.yml`.
 
 - **pgvector minor** (same Postgres major): bump the tag everywhere in a
   release and deploy; `tachy-deploy` runs `alter extension vector update`
