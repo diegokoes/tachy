@@ -13,6 +13,7 @@ import {
   setSetting,
   effectiveSettings,
   clearSettingsCache,
+  orgTimezone,
 } from "@tachy/core/config";
 import { createUser } from "@tachy/core/access";
 import { AppError } from "@tachy/core/infra";
@@ -82,6 +83,33 @@ describe("settings store", () => {
       value: "engineering",
       source: "db",
     });
+  });
+
+  it("reads the organisation's timezone from the setting, then TACHY_TIMEZONE, then UTC", async () => {
+    await sql`delete from settings`;
+    clearSettingsCache();
+    try {
+      expect((await effectiveSettings()).org_timezone).toEqual({
+        value: "UTC",
+        source: "default",
+      });
+
+      process.env.TACHY_TIMEZONE = "Not/AZone";
+      expect((await effectiveSettings()).org_timezone.source).toBe("default");
+      process.env.TACHY_TIMEZONE = "Europe/Madrid";
+      expect((await effectiveSettings()).org_timezone).toEqual({
+        value: "Europe/Madrid",
+        source: "env",
+      });
+
+      await expect(setSetting("org_timezone", "Madrid")).rejects.toThrow(
+        /not an IANA timezone/,
+      );
+      await setSetting("org_timezone", "Asia/Tokyo");
+      expect(await orgTimezone()).toBe("Asia/Tokyo");
+    } finally {
+      delete process.env.TACHY_TIMEZONE;
+    }
   });
 
   it("precedence: db > env > default", async () => {

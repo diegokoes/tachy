@@ -33,8 +33,27 @@ describe("load run guardrails", () => {
       { name: "production", url: "http://api:8787", dev: false },
       { name: "dev", url: "http://dev:8787", dev: true },
     ]);
-    expect(inLoadWindow(workHours)).toBe(false);
-    expect(inLoadWindow(evening)).toBe(true);
+    expect(inLoadWindow(workHours, "UTC")).toBe(false);
+    expect(inLoadWindow(evening, "UTC")).toBe(true);
+  });
+
+  it("reads the window on the organisation's clock, not the server's", () => {
+    // 07:30 UTC on a Wednesday in July is 09:30 in Madrid.
+    const summerMorning = new Date("2026-07-15T07:30:00Z");
+    expect(inLoadWindow(summerMorning, "UTC")).toBe(false);
+    expect(inLoadWindow(new Date("2026-07-15T06:30:00Z"), "UTC")).toBe(true);
+    expect(
+      inLoadWindow(new Date("2026-07-15T06:30:00Z"), "Europe/Madrid"),
+    ).toBe(false);
+    // 17:30 UTC is 19:30 in Madrid: the window has opened there.
+    expect(inLoadWindow(new Date("2026-07-15T17:30:00Z"), "UTC")).toBe(false);
+    expect(
+      inLoadWindow(new Date("2026-07-15T17:30:00Z"), "Europe/Madrid"),
+    ).toBe(true);
+    // Friday 22:30 UTC is Saturday in Madrid.
+    expect(
+      inLoadWindow(new Date("2026-07-17T22:30:00Z"), "Europe/Madrid"),
+    ).toBe(true);
   });
 
   it("allows smoke against production at any hour", async () => {

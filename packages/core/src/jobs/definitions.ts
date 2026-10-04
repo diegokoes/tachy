@@ -8,6 +8,7 @@ import {
   type JobDefinition,
 } from "@tachy/contract";
 import { z } from "zod";
+import { orgTimezone } from "../config/settings";
 import { sql, type Db, jsonb } from "../infra/db";
 import { badInput, notFound } from "../infra/errors";
 import { getJobKind, hasJobKind } from "./registry";
@@ -20,7 +21,8 @@ export const jobDefinitionInput = z.object({
   params: z.record(z.string(), z.unknown()).default({}),
   enabled: z.boolean().default(true),
   schedule: z.string().nullable().default(null),
-  timezone: z.string().default("UTC"),
+  /** Absent on a new definition: the organisation's. */
+  timezone: z.string().optional(),
   queue: z
     .enum(JOB_QUEUE_NAMES as [string, ...string[]])
     .nullable()
@@ -32,7 +34,9 @@ export const jobDefinitionInput = z.object({
 export type JobDefinitionInput = z.input<typeof jobDefinitionInput>;
 
 /** Every check a save must pass, so a bad definition never reaches a worker. */
-export function validateDefinition(input: z.output<typeof jobDefinitionInput>) {
+export function validateDefinition(
+  input: z.output<typeof jobDefinitionInput> & { timezone: string },
+) {
   if (!hasJobKind(input.kind))
     throw badInput(`unknown job kind '${input.kind}'`);
   const kind = getJobKind(input.kind);
@@ -115,7 +119,11 @@ export async function createJobDefinition(
   input: JobDefinitionInput,
   by: string | null,
 ): Promise<JobDefinition> {
-  const d = validateDefinition(jobDefinitionInput.parse(input));
+  const parsed = jobDefinitionInput.parse(input);
+  const d = validateDefinition({
+    ...parsed,
+    timezone: parsed.timezone ?? (await orgTimezone()),
+  });
   return sql.begin(async (tx) => {
     const [row] = await tx`
       insert into job_definitions (kind, name, params, enabled, schedule, timezone,
@@ -148,9 +156,11 @@ export async function updateJobDefinition(
       updated_at,
       ...editable
     } = current;
-    const merged = validateDefinition(
-      jobDefinitionInput.parse({ ...editable, ...patch }),
-    );
+    const parsed = jobDefinitionInput.parse({ ...editable, ...patch });
+    const merged = validateDefinition({
+      ...parsed,
+      timezone: parsed.timezone ?? current.timezone,
+    });
     const scheduleChanged =
       merged.schedule !== current.schedule ||
       merged.timezone !== current.timezone;

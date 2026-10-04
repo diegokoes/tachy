@@ -25,6 +25,7 @@ import {
   startJobProcess,
   updateJobDefinition,
 } from "@tachy/core/jobs";
+import { clearSettingsCache, setSetting } from "@tachy/core/config";
 import { sql, resetJobs } from "../database";
 
 afterAll(() => sql.end());
@@ -105,6 +106,38 @@ describe("job definitions", () => {
       properties: { word: { type: "string", default: "hi" } },
     });
     expect(echo.max_attempts).toBe(2);
+  });
+
+  it("gives a definition the organisation's timezone unless it names one", async () => {
+    await setSetting("org_timezone", "Europe/Madrid");
+    try {
+      const local = await createJobDefinition(
+        { kind: "test.echo", name: "local", schedule: "0 2 * * *" },
+        null,
+      );
+      expect(local.timezone).toBe("Europe/Madrid");
+      const named = await createJobDefinition(
+        {
+          kind: "test.echo",
+          name: "named",
+          schedule: "0 2 * * *",
+          timezone: "Asia/Tokyo",
+        },
+        null,
+      );
+      expect(named.timezone).toBe("Asia/Tokyo");
+
+      await setSetting("org_timezone", "UTC");
+      const edited = await updateJobDefinition(
+        local.id,
+        { schedule: "0 3 * * *" },
+        null,
+      );
+      expect(edited.timezone).toBe("Europe/Madrid");
+    } finally {
+      await sql`delete from settings where key = 'org_timezone'`;
+      clearSettingsCache();
+    }
   });
 
   it("refuses bad params, schedules and timezones, and records every change", async () => {

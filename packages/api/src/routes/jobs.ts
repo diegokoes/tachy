@@ -26,13 +26,13 @@ import {
   previewSchedule,
   updateJobDefinition,
 } from "@tachy/core/jobs";
-import { effectiveSettings } from "@tachy/core/config";
+import { effectiveSettings, orgTimezone } from "@tachy/core/config";
 import { requireAdmin } from "../auth";
 import { callerUserId } from "../authz";
 
 const previewSchema = z.object({
   schedule: z.string().min(1),
-  timezone: z.string().default("UTC"),
+  timezone: z.string().optional(),
 });
 
 /**
@@ -47,6 +47,7 @@ export const jobs = new Hono()
     return c.json({
       kinds: describeJobKinds(),
       chat_slot_cap: settings.agent_slot_cap.value,
+      timezone: settings.org_timezone.value,
       class_chat_slots: JOB_CLASS_CHAT_SLOTS,
       queues: JOB_QUEUES,
     });
@@ -59,7 +60,9 @@ export const jobs = new Hono()
   .post("/schedule-preview", zValidator("json", previewSchema), async (c) => {
     const { schedule, timezone } = c.req.valid("json");
     try {
-      return c.json({ next: previewSchedule(schedule, timezone) });
+      return c.json({
+        next: previewSchedule(schedule, timezone || (await orgTimezone())),
+      });
     } catch (err) {
       throw badInput(`schedule: ${(err as Error).message}`);
     }
