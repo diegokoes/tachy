@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createUser } from "@tachy/core/access";
-import { saveUpload, sweepUploads } from "@tachy/core/chat";
+import { ANONYMOUS_UPLOADS, saveUpload, sweepUploads } from "@tachy/core/chat";
 import { extractSource, isPdf } from "../../packages/mcp/src/extract";
 import { resetData, sql } from "../database";
 
@@ -102,6 +102,33 @@ describe("extractSource", () => {
     } finally {
       delete process.env.TACHY_UPLOAD_OWNER;
     }
+  });
+});
+
+describe("a turn with no user", () => {
+  it("reads the uploads nobody owns, and no one else's", async () => {
+    const alice = await createUser({ email: "alice@example.com" });
+    const hers = await saveUpload({
+      userId: alice.id,
+      filename: "a.txt",
+      bytes: Buffer.from("alice's"),
+    });
+    const ownerless = await saveUpload({
+      userId: null,
+      filename: "n.txt",
+      bytes: Buffer.from("nobody's"),
+    });
+
+    process.env.TACHY_UPLOAD_OWNER = ANONYMOUS_UPLOADS;
+    try {
+      expect((await extractSource(ownerless.ref)).text).toBe("nobody's");
+      await expect(extractSource(hers.ref)).rejects.toThrow(
+        "is not an uploaded file",
+      );
+    } finally {
+      delete process.env.TACHY_UPLOAD_OWNER;
+    }
+    expect((await extractSource(hers.ref)).text).toBe("alice's");
   });
 });
 
