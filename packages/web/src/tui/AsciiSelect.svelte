@@ -12,7 +12,6 @@
   let {
     value = $bindable(),
     options,
-    title,
     disabled = false,
     active = false,
     keepOpen = false,
@@ -26,7 +25,6 @@
     value: Val;
     /** readonly, so a vocabulary declared `as const` can be passed as it is. */
     options: readonly OptIn[];
-    title?: string;
     disabled?: boolean;
     /** Holds a non-default value - worn as an accent border, so a narrowed
      *  list is visible without a separate "N active" counter. */
@@ -211,7 +209,6 @@
     class="trigger"
     class:active
     bind:this={trigger}
-    {title}
     {disabled}
     role="combobox"
     aria-haspopup="listbox"

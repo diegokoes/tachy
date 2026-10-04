@@ -42,12 +42,7 @@
     <ul class="groups">
       {#each groups as g (g.key)}
         <li class="group {toneOf(g)}">
-          <button
-            class="head"
-            disabled={!g.filter}
-            title={g.filter ? `show ${g.label}` : undefined}
-            onclick={() => onpick(g)}
-          >
+          <button class="head" disabled={!g.filter} onclick={() => onpick(g)}>
             <span class="mark" aria-hidden="true"></span>
             <span class="text">{g.label}</span>
             {#if g.detail}<span class="detail">{g.detail}</span>{/if}

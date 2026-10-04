@@ -74,20 +74,12 @@
     <thead
       ><tr
         ><th>setting</th><th>value</th>
-        <th
-          class="tip"
-          title="db: set here. env: environment variable. default: built-in."
-          >source</th
-        >
+        <th class="tip">source</th>
       </tr></thead
     >
     <tbody>
       <tr>
-        <td
-          class="tip"
-          title="engineering: product→repository, team→organization, customers hidden. Labels only."
-          >Deployment profile</td
-        >
+        <td class="tip">Deployment profile</td>
         <td>
           <AsciiSelect
             value={system.settings.deployment_profile.value}
@@ -105,11 +97,7 @@
         >
       </tr>
       <tr>
-        <td
-          class="tip"
-          title="Scrubs PII and secrets from all LLM input. Database keeps raw data."
-          >PII / secret redaction</td
-        >
+        <td class="tip">PII / secret redaction</td>
         <td>
           <label class="check">
             <Checkbox
@@ -141,11 +129,7 @@
         >
       </tr>
       <tr>
-        <td
-          class="tip"
-          title="Chat backend. claude: API key or Claude Code login. copilot: token or CLI login."
-          >Agent provider</td
-        >
+        <td class="tip">Agent provider</td>
         <td>
           <AsciiSelect
             value={system.settings.agent_provider.value}
@@ -194,9 +178,7 @@
         >
       </tr>
       <tr>
-        <td class="tip" title="Comma-separated. Empty: unrestricted."
-          >Model allowlist</td
-        >
+        <td class="tip">Model allowlist</td>
         <td class="edit-cell">
           <input bind:value={draft.allowed_models} placeholder="unrestricted" />
           {#if draft.allowed_models !== system.settings.allowed_models.value.join(", ")}
@@ -233,11 +215,7 @@
         >
       </tr>
       <tr>
-        <td
-          class="tip"
-          title="Total slots across running turns. Claude turn: 1 slot. Over cap: queued."
-          >Chat slot cap</td
-        >
+        <td class="tip">Chat slot cap</td>
         <td class="edit-cell">
           <input inputmode="numeric" bind:value={draft.agent_slot_cap} />
           {#if draft.agent_slot_cap !== String(system.settings.agent_slot_cap.value) && draft.agent_slot_cap !== ""}
@@ -256,7 +234,7 @@
         >
       </tr>
       <tr>
-        <td class="tip" title="Slots per Copilot turn.">Copilot turn weight</td>
+        <td class="tip">Copilot turn weight</td>
         <td class="edit-cell">
           <input inputmode="numeric" bind:value={draft.copilot_slot_weight} />
           {#if draft.copilot_slot_weight !== String(system.settings.copilot_slot_weight.value) && draft.copilot_slot_weight !== ""}
@@ -277,9 +255,7 @@
         >
       </tr>
       <tr>
-        <td class="tip" title="Max queued turns. Over max: busy."
-          >Chat queue length</td
-        >
+        <td class="tip">Chat queue length</td>
         <td class="edit-cell">
           <input inputmode="numeric" bind:value={draft.agent_queue_max} />
           {#if draft.agent_queue_max !== String(system.settings.agent_queue_max.value) && draft.agent_queue_max !== ""}

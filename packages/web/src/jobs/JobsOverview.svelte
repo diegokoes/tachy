@@ -54,27 +54,23 @@
       key: "jobs",
       label: "jobs",
       value: j.definitions.total,
-      title: `${j.definitions.enabled} enabled · ${j.definitions.disabled} paused`,
       to: "jobs",
     },
     {
       key: "scheduled",
       label: "scheduled",
       value: j.definitions.scheduled,
-      title: `enabled jobs on a schedule · ${j.by_trigger.schedule} scheduled runs in ${j.days} d`,
     },
     {
       key: "manual",
       label: "manual",
       value: j.definitions.manual,
-      title: `enabled jobs run only by hand · ${j.by_trigger.manual} manual runs in ${j.days} d`,
     },
     {
       key: "queued",
       label: "queued",
       value: queued,
       tone: unserved ? ("danger" as const) : undefined,
-      title: "runs waiting for a worker",
       to: "runs",
     },
     {
@@ -89,9 +85,6 @@
       label: "workers",
       value: aliveWorkers,
       tone: unserved ? ("danger" as const) : undefined,
-      title: unserved
-        ? `${unserved} ${unserved === 1 ? "queue has" : "queues have"} runs waiting and no live worker`
-        : `${slots} ${slots === 1 ? "slot" : "slots"}`,
       to: "processes",
     },
     {
@@ -105,9 +98,6 @@
       label: `failed ${j.days} d`,
       value: failed,
       tone: failed ? ("danger" as const) : ("muted" as const),
-      title: failed
-        ? `${j.failures.length} ${j.failures.length === 1 ? "job" : "jobs"} failed. Open to see which`
-        : "failed or timed out",
       to: failed ? "failures" : undefined,
     },
   ]);

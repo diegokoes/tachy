@@ -5,7 +5,7 @@
     key: string;
     label: string;
     value: string;
-    /** The reading behind the value, on hover and in small print. */
+    /** The reading behind the value, in small print. */
     detail?: string;
     tone?: Tone;
   };
@@ -44,7 +44,7 @@
   use:fitRows={{ row: ROW_REM, gap: GAP_REM, onfit: (n) => (room = n) }}
 >
   {#each cut.shown as f (f.key)}
-    <div class="row" title={f.detail ? `${f.label}: ${f.detail}` : f.label}>
+    <div class="row">
       <dt>{f.label}</dt>
       <dd class={f.tone ?? ""}>
         <span class="v">{f.value}</span>
@@ -54,10 +54,7 @@
     </div>
   {/each}
   {#if cut.rest.length}
-    <div
-      class="row more"
-      title={cut.rest.map((f) => `${f.label}: ${f.value}`).join(" · ")}
-    >
+    <div class="row more">
       <dt>+{cut.rest.length} more</dt>
     </div>
   {/if}

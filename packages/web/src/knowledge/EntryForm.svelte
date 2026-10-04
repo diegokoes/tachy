@@ -14,6 +14,7 @@
   import { setTopActions } from "../shell/subnav.svelte";
   import { Filing } from "../library/filing.svelte";
   import Icon from "../tui/Icon.svelte";
+  import { tip } from "../tui/tip.svelte";
   import { asStructured } from "./structured";
 
   let {
@@ -33,10 +34,6 @@
     onCancel: () => void;
     extra?: Snippet;
   } = $props();
-
-  const SUBMIT_LABEL = $derived(
-    mode === "create" ? "create entry" : "save changes",
-  );
 
   const csvJoin = (v: string[] | null | undefined) => (v ?? []).join(", ");
 
@@ -170,7 +167,6 @@
   <FormActions
     form="entry-form"
     {saving}
-    title={SUBMIT_LABEL}
     create={mode === "create"}
     oncancel={onCancel}
   />
@@ -263,7 +259,6 @@
       <AsciiSelect
         bind:value={filing.component}
         disabled={!filing.productSlug || filing.components.length === 0}
-        title={filing.productSlug ? undefined : `pick a ${t("product")} first`}
         options={[{ value: "", label: "none" }, ...filing.componentChoices]}
       />
     </Field>
@@ -272,7 +267,6 @@
         bind:value={filing.customerSlug}
         options={filing.customerOptions}
         onchange={() => filing.customerChanged()}
-        title="customer this applies to; none if general"
       />
     </Field>
     <Field label="unit">
@@ -280,9 +274,6 @@
         bind:value={filing.unitSlug}
         options={filing.unitOptions}
         disabled={!filing.customerSlug || filing.units.length === 0}
-        title={filing.customerSlug
-          ? "which part of their estate: a site or line"
-          : `pick a ${t("customer")} first`}
       />
     </Field>
   </div>
@@ -293,7 +284,7 @@
     aria-label={showStructured
       ? "Hide structured JSON"
       : "Show structured JSON"}
-    title={showStructured ? "Hide structured JSON" : "Show structured JSON"}
+    use:tip={showStructured ? "Hide structured JSON" : "Show structured JSON"}
     onclick={() => void toggleStructured()}
   >
     <Icon name="json" size="1.8rem" />

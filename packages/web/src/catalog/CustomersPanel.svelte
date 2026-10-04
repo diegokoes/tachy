@@ -398,11 +398,7 @@
   {#if error}<Note tone="danger">{error}</Note>{/if}
   <div class="profile">
     <div class="block wide">
-      <span
-        class="dim"
-        title="Sites, lines, tenants. `profile`: shared template, inherited, not a parent."
-        >estate</span
-      >
+      <span class="dim">estate</span>
       {#each unitTree(units[r.slug] ?? []) as { u, depth } (u.id)}
         <div class="frow" style="--depth: {depth}">
           <span class="indent"></span>
@@ -416,10 +412,8 @@
               >conforms to {unitName(units[r.slug] ?? [], u.profile_id)}</span
             >
           {/if}
-          <button
-            class="tiny"
-            title="rename, move, or add an alias"
-            onclick={() => startEditUnit(r.slug, u)}>edit</button
+          <button class="tiny" onclick={() => startEditUnit(r.slug, u)}
+            >edit</button
           >
           <DeleteButton
             label="remove unit"
@@ -468,7 +462,6 @@
             <input
               aria-label="unit aliases"
               placeholder="aliases"
-              title="Alternate names. Resolved like the slug."
               bind:value={editForm.aliases}
             />
             <Button
@@ -555,11 +548,7 @@
     </div>
 
     <div class="block wide">
-      <span
-        class="dim"
-        title="Install-specific facts: version, layout, integrations. Not problems or fixes."
-        >specifics</span
-      >
+      <span class="dim">specifics</span>
       {#if (units[r.slug] ?? []).length}
         <div class="frow">
           <span class="dim sm">showing</span>

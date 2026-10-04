@@ -152,7 +152,7 @@
       <span class="ttl">output file</span>
     </label>
     {#if enabled}
-      <span class="preview" title="the name the download arrives with">
+      <span class="preview">
         <span class="arrow" aria-hidden="true">{G.right}</span>{preview}
       </span>
     {/if}
@@ -171,7 +171,6 @@
         <input
           value={output.filename ?? ""}
           oninput={(e) => (output.filename = sanitize(e, stripFilenameChars))}
-          title="Optional. Default: artifact name and date. Tokens: {'{date}'}, {'{slug}'}. Extension added."
           aria-label="file name"
         />
       </Field>
@@ -180,7 +179,6 @@
           <input
             value={output.sheet ?? ""}
             oninput={(e) => (output.sheet = sanitize(e, stripSheetChars))}
-            title="Optional. Sheet tab, max 31 characters. Default {DEFAULT_SHEET}."
             aria-label="tab name"
           />
         </Field>
@@ -227,7 +225,7 @@
             </Field>
           </div>
 
-          <label class="req" title="the agent may not leave this column empty">
+          <label class="req">
             <Checkbox
               checked={!!col.required}
               onchange={(v) => (col.required = v)}

@@ -28,7 +28,7 @@
 
 {#snippet errorCell(f: Failure)}
   {#if f.last_error}
-    <span class="err" title={f.last_error}>{f.last_error}</span>
+    <span class="err">{f.last_error}</span>
   {:else}
     <span class="dim">no message</span>
   {/if}

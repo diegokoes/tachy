@@ -227,14 +227,12 @@
             size="sm"
             icon="edit"
             busy={adopting}
-            title="finish it yourself in the full composer"
             onclick={toComposer}>open in composer</Button
           >
         {/if}
         <Button
           variant="ghost"
           size="sm"
-          title={raw ? "back to fields" : "edit raw JSON"}
           aria-label={raw ? "back to fields" : "edit raw JSON"}
           onclick={toggleRaw}>{raw ? "fields" : "{ }"}</Button
         >

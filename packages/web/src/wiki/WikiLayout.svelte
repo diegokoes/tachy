@@ -89,7 +89,6 @@
       <Select
         value={scope}
         {options}
-        title="switch wiki"
         aria-label="wiki"
         searchable
         onchange={(v) => switchTo(String(v))}

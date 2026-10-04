@@ -262,15 +262,12 @@
 
 <!-- Rendered by App into the carved row beside the subnav, not here. -->
 {#snippet readActions()}
-  <Button size="sm" icon="back" title="back (backspace)" onclick={onClose}
-    >back</Button
-  >
+  <Button size="sm" icon="back" onclick={onClose}>back</Button>
   {#if canEdit}
     <Button
       size="sm"
       tone="info"
       icon="edit"
-      title="edit"
       onclick={() => {
         editing = true;
         mutateError = null;
@@ -342,9 +339,7 @@
               {#if entry.affected_version || entry.fixed_version}
                 <div class="versions">
                   {#if entry.affected_version}
-                    <span class="affected" title="affected version"
-                      >{entry.affected_version}</span
-                    >
+                    <span class="affected">{entry.affected_version}</span>
                   {/if}
                   {#if entry.affected_version && entry.fixed_version}
                     <Icon
@@ -355,9 +350,7 @@
                     />
                   {/if}
                   {#if entry.fixed_version}
-                    <span class="fixed" title="fixed in version"
-                      >{entry.fixed_version}</span
-                    >
+                    <span class="fixed">{entry.fixed_version}</span>
                   {/if}
                 </div>
               {/if}
@@ -365,22 +358,14 @@
               {#if entry.cloud || entry.resolution_pattern || entry.hidden_fix || entry.customer_slug}
                 <div class="badges">
                   {#if entry.customer_slug}
-                    <Badge
-                      tone="accent"
-                      title="customer-specific; not general product behaviour"
-                      >{entry.customer_slug}</Badge
-                    >
+                    <Badge tone="accent">{entry.customer_slug}</Badge>
                   {/if}
                   {#if entry.cloud}<Badge>{entry.cloud}</Badge>{/if}
                   {#if entry.resolution_pattern}<Badge
                       >{entry.resolution_pattern}</Badge
                     >{/if}
                   {#if entry.hidden_fix}
-                    <Badge
-                      tone="accent"
-                      title="the real fix wasn't visible on the ticket surface"
-                      >hidden fix</Badge
-                    >
+                    <Badge tone="accent">hidden fix</Badge>
                   {/if}
                 </div>
               {/if}

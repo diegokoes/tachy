@@ -187,13 +187,8 @@
 
 {#snippet jobCell(r: JobRunListedRow)}
   <span class="name">{r.definition_name ?? r.kind}</span>
-  <span class="dim small" title={summary(r.params)}
-    ><span
-      class="queue"
-      title={r.queue
-        ? `${jobQueue(r.queue).class} pool · priority ${r.priority}`
-        : undefined}>{r.queue ?? r.resource_class}</span
-    >
+  <span class="dim small"
+    ><span class="queue">{r.queue ?? r.resource_class}</span>
     {r.definition_name ? `${r.kind} ` : ""}{summary(r.params)}</span
   >
 {/snippet}
@@ -208,11 +203,7 @@
 {#snippet detailCell(r: JobRunListedRow)}
   {#if r.children}
     {@const c = r.children}
-    <button
-      class="link"
-      title="show the runs this one queued"
-      onclick={() => (parent = r)}
-    >
+    <button class="link" onclick={() => (parent = r)}>
       {c.succeeded + c.failed}/{c.total} queued runs done{c.running
         ? ` · ${c.running} running`
         : ""}{c.failed ? ` · ${c.failed} failed` : ""}
@@ -234,11 +225,9 @@
         : ""}</span
     >
   {:else if r.error}
-    <span class="err" title={r.error}>{r.error}</span>
+    <span class="err">{r.error}</span>
   {:else if r.output}
-    <span class="dim small" title={JSON.stringify(r.output)}
-      >{summary(r.output)}</span
-    >
+    <span class="dim small">{summary(r.output)}</span>
   {/if}
 {/snippet}
 

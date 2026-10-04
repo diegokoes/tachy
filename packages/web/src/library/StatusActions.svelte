@@ -27,7 +27,6 @@
         variant="ghost"
         icon={a.icon}
         tone={a.tone}
-        title={a.title ?? a.label}
         disabled={a.disabled}
         onclick={a.onclick}>{a.label}</Button
       >

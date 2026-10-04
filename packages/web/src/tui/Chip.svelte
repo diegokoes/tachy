@@ -6,14 +6,12 @@
   let {
     tone = "default",
     selected = false,
-    title,
     onclick,
     onremove,
     children,
   }: {
     tone?: "default" | "accent" | "warn" | "muted";
     selected?: boolean;
-    title?: string;
     onclick?: () => void;
     onremove?: () => void;
     children: Snippet;
@@ -22,11 +20,9 @@
 
 <span class="chip {tone}" class:selected class:clickable={Boolean(onclick)}>
   {#if onclick}
-    <button class="hit" type="button" {title} {onclick}
-      >{@render children()}</button
-    >
+    <button class="hit" type="button" {onclick}>{@render children()}</button>
   {:else}
-    <span class="hit" {title}>{@render children()}</span>
+    <span class="hit">{@render children()}</span>
   {/if}
   {#if onremove}
     <button

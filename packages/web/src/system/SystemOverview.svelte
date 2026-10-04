@@ -88,22 +88,12 @@
   const result = (
     x: Result | undefined,
     overdue: number,
-  ): { text: string; tone: Tone; title?: string } => {
-    if (!status)
-      return {
-        text: "–",
-        tone: "muted",
-        title: "TACHY_STATUS_DIR not mounted",
-      };
+  ): { text: string; tone: Tone } => {
+    if (!status) return { text: "–", tone: "muted" };
     if (!x?.at) return { text: "none", tone: "danger" };
     const text = age(x.at, now) ?? "–";
-    if (x.ok === false)
-      return { text, tone: "danger", title: x.error ?? x.problems };
-    return {
-      text,
-      tone: now - Date.parse(x.at) > overdue ? "warn" : "ok",
-      title: utcTip(x.at),
-    };
+    if (x.ok === false) return { text, tone: "danger" };
+    return { text, tone: now - Date.parse(x.at) > overdue ? "warn" : "ok" };
   };
 
   const disk = $derived.by(() => {
@@ -141,9 +131,6 @@
           : census.data.counts.reports
             ? ("accent" as Tone)
             : ("muted" as Tone),
-        title: openReports
-          ? `${openReports} open`
-          : "user bug reports & feature requests",
         to: "reports",
       },
       {
@@ -151,7 +138,6 @@
         label: "release",
         text: commit ? commit.slice(0, 7) : "dev",
         tone: commit ? ("accent" as Tone) : ("muted" as Tone),
-        title: system.data?.env?.env_badge ?? undefined,
       },
       {
         key: "up",
@@ -175,9 +161,6 @@
             : tally.warning
               ? ("warn" as Tone)
               : ("ok" as Tone),
-        title: tally
-          ? `${tally.passing} passing · ${tally.warning} warning · ${tally.failing} failing · ${tally.skipped} skipped`
-          : "not run yet",
         to: "checks",
       },
       {
@@ -193,7 +176,6 @@
               : summary.passRate >= 0.8
                 ? ("warn" as Tone)
                 : ("danger" as Tone),
-        title: `${summary.passed} of ${summary.judged} finished runs passed`,
         to: "loads",
       },
       { key: "backup", label: "last backup", ...b, to: "host" },
@@ -203,7 +185,6 @@
         label: "disk",
         text: disk === null ? "–" : `${disk}%`,
         tone: disk === null ? ("muted" as Tone) : load(disk / 100),
-        title: "fullest mount",
         to: "host",
       },
     ];

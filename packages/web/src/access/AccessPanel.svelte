@@ -17,7 +17,6 @@
     GroupHead,
     Icon,
     Select,
-    tip,
     type Column,
   } from "../tui";
   import type { UserRow } from "./rows";
@@ -33,7 +32,6 @@
   } from "./roster.svelte";
 
   const ROLE_TIP = $derived(roleTip("app"));
-  const TEAM_ROLE_TIP = $derived(roleTip("team"));
 
   const sso = $derived(ssoConfigured());
 
@@ -161,7 +159,7 @@
 
 {#snippet roleCell(u: UserRow)}
   {#if u.role === "admin"}
-    <Badge tone="accent" title={ROLE_TIP}>{roleLabel("app", "admin")}</Badge>
+    <Badge tone="accent">{roleLabel("app", "admin")}</Badge>
   {:else}
     <span class="none">member</span>
   {/if}
@@ -172,9 +170,7 @@
   {#if ms.length}
     <span class="chips">
       {#each ms as m (m.team_slug)}
-        <Chip
-          tone={m.team_role === "admin" ? "accent" : "default"}
-          title={m.team_role === "admin" ? TEAM_ROLE_TIP : m.team_name}
+        <Chip tone={m.team_role === "admin" ? "accent" : "default"}
           >{m.team_name}{m.team_role === "admin"
             ? ` · ${roleLabel("team", "admin")}`
             : ""}</Chip
@@ -189,7 +185,7 @@
 <!-- Yes or no, drawn rather than worded: a column of "yes"/"no" reads as text
      to be parsed, where a column of marks reads as a pattern to be scanned. -->
 {#snippet mark(on: boolean, why: string)}
-  <span class="mark" class:on use:tip={why}>
+  <span class="mark" class:on>
     <Icon
       name={on ? "success" : "reject"}
       size="1.05em"
@@ -243,7 +239,7 @@
           <span class="rn">{tm.name}</span>
           <!-- Membership is the row existing at all; the toggle only asks
                whether they also run the team. -->
-          <label class="opt" title={TEAM_ROLE_TIP}>
+          <label class="opt">
             <Checkbox
               checked={roster[tm.slug] === "admin"}
               ariaLabel={`${tm.name}: ${roleLabel("team", "admin")}`}

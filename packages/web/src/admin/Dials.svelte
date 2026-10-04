@@ -15,7 +15,7 @@
     center: string;
     /** Under the name, usually "12/15". */
     sub?: string;
-    /** What the ring measures, in full, on hover. */
+    /** What the ring measures, in full: the ring's accessible name. */
     title?: string;
     onclick?: () => void;
   };
@@ -46,11 +46,9 @@
 <div class="dials">
   {#each items as d (d.key)}
     {#if d.onclick}
-      <button class="one go" title={d.title} onclick={d.onclick}
-        >{@render one(d)}</button
-      >
+      <button class="one go" onclick={d.onclick}>{@render one(d)}</button>
     {:else}
-      <div class="one" title={d.title}>{@render one(d)}</div>
+      <div class="one">{@render one(d)}</div>
     {/if}
   {/each}
 </div>

@@ -99,21 +99,18 @@
       key: "files",
       label: "files",
       text: compact(r.files),
-      title: `${r.files.toLocaleString()} files indexed`,
       to: "repos",
     },
     {
       key: "chunks",
       label: "chunks",
       text: compact(r.chunks),
-      title: `${r.chunks.toLocaleString()} code chunks`,
       to: "repos",
     },
     {
       key: "calls",
       label: `calls ${traffic.days} d`,
       text: compact(calls),
-      title: `source calls, last ${traffic.days} days`,
     },
   ]);
 </script>

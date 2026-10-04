@@ -3,7 +3,7 @@
   import { navigate, segment } from "../shell/router.svelte";
   import { session, logout } from "../access/session.svelte";
   import { setSubnav, type SubnavItem } from "../shell/subnav.svelte";
-  import { Button, tip } from "../tui";
+  import { Button } from "../tui";
   import { close, rebind } from "./rebind.svelte";
   import RebindModal from "./RebindModal.svelte";
   import Agent from "./Agent.svelte";
@@ -102,9 +102,7 @@
 
 {#snippet account()}
   {#if session.me}
-    <span class="who" use:tip={`signed in as ${session.me.email}`}
-      >{session.me.email}</span
-    >
+    <span class="who">{session.me.email}</span>
     <Button
       variant="ghost"
       square

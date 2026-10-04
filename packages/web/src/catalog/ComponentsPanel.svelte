@@ -275,9 +275,8 @@
       {#if rs.length}
         <span class="chips">
           {#each rs as r (r.id)}
-            <Chip
-              tone={r.index_status === "ready" ? "default" : "warn"}
-              title={`${r.url} · ${r.index_status}`}>{r.slug}</Chip
+            <Chip tone={r.index_status === "ready" ? "default" : "warn"}
+              >{r.slug}</Chip
             >
           {/each}
         </span>
@@ -296,12 +295,7 @@
     <ArchitectureMap rows={tree.data} {filters} onpick={open} />
   {/if}
   {#if narrowed}
-    <button
-      class="scope"
-      type="button"
-      title="change the filter (ctrl+k)"
-      onclick={() => (finding = true)}
-    >
+    <button class="scope" type="button" onclick={() => (finding = true)}>
       {[
         picked.teams.find((o) => o.value === filters.team)?.label,
         picked.products.find((o) => o.value === filters.product)?.label,

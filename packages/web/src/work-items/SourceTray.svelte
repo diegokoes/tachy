@@ -84,7 +84,7 @@
 <div class="tray">
   <span class="label">context</span>
   {#each items as item, i (`${item.source}:${item.external_id}`)}
-    <Chip tone="accent" title={item.title} onremove={() => onremove(i)}>
+    <Chip tone="accent" onremove={() => onremove(i)}>
       {item.source} #{item.external_id} · {item.title}
     </Chip>
   {/each}

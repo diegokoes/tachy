@@ -59,7 +59,6 @@
     variant="ghost"
     tone="ok"
     icon="filterAdd"
-    title="add a filter"
     onclick={() => (open = !open)}
   >
     <span class="lbl">add</span>
@@ -73,13 +72,6 @@
             class:added={it.added}
             aria-pressed={it.added}
             disabled={!it.added && (it.empty || it.unscoped)}
-            title={it.added
-              ? `remove the ${it.label} filter`
-              : it.unscoped
-                ? "pick a component first"
-                : it.empty
-                  ? "nothing recorded under the current filters"
-                  : ""}
             onclick={() => toggle(it)}
           >
             <span class="mark" aria-hidden="true">{it.added ? "›" : " "}</span>

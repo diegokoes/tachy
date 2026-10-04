@@ -22,12 +22,9 @@ describe("origin", () => {
     expect(origin(null, "key")).toBeNull();
   });
 
-  it("marks your own value, and says how to give it back", () => {
-    expect(origin("user", "default")).toMatchObject({
-      label: "yours",
-      mine: true,
-    });
-    expect(origin("user", "key")?.tip).toMatch(/Remove it/);
+  it("marks your own value", () => {
+    expect(origin("user", "default")).toEqual({ label: "yours", mine: true });
+    expect(origin("user", "key")).toEqual({ label: "yours", mine: true });
   });
 
   it("names who set an inherited value, the same way for settings and the vault", () => {
@@ -37,7 +34,7 @@ describe("origin", () => {
       label: "team default",
       mine: false,
     });
-    expect(origin("env", "key")?.tip).toMatch(/server's configuration/);
+    expect(origin("env", "key")?.label).toBe("server key");
     expect(origin("default", "default")?.label).toBe("built-in default");
   });
 });

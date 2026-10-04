@@ -204,15 +204,12 @@
 
 <!-- Rendered by App into the carved row beside the subnav, not here. -->
 {#snippet readActions()}
-  <Button size="sm" icon="back" title="back (backspace)" onclick={onClose}
-    >back</Button
-  >
+  <Button size="sm" icon="back" onclick={onClose}>back</Button>
   {#if canEdit}
     <Button
       size="sm"
       tone="info"
       icon="edit"
-      title="edit"
       onclick={() => {
         editing = true;
         mutateError = null;
@@ -274,11 +271,7 @@
       <span class="lifecycle">
         <Badge tone={statusTone(doc.status)}>{doc.status}</Badge>
         {#if doc.customer_slug}
-          <Badge
-            tone="accent"
-            title="customer-specific; not general product behaviour"
-            >{doc.customer_slug}</Badge
-          >
+          <Badge tone="accent">{doc.customer_slug}</Badge>
         {/if}
       </span>
       <span class="when">
@@ -289,7 +282,7 @@
     </div>
 
     <div class="meta">
-      <span class="source" title="source">
+      <span class="source">
         <Icon name="search" size="1em" weight={7} />
         <span class:muted={!doc.source}>{doc.source || "n/a"}</span>
       </span>
@@ -298,7 +291,6 @@
     <div class="meta">
       <Select
         value={doc.id}
-        title="All versions of this doc"
         aria-label="version"
         options={versions.map((l) => ({ value: l.id, label: versionLabel(l) }))}
         onchange={(v) => load(String(v))}

@@ -60,7 +60,6 @@
       {iconSize}
       {disabled}
       {busy}
-      title={armed ? "click again to confirm" : label}
       aria-label={armed ? `confirm: ${label}` : label}
       onclick={click}>{armed ? "sure?" : text}</Button
     >
