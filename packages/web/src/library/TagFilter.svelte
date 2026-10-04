@@ -147,7 +147,7 @@
     text-align: left;
   }
   .suggest button:hover {
-    background: var(--accent);
+    background: var(--accent-fill);
     color: var(--bg);
   }
   .suggest button:hover .n {

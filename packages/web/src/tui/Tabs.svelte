@@ -280,7 +280,7 @@
       right: anchor(right);
       top: calc(anchor(bottom) + var(--pad-1));
       bottom: calc(anchor(bottom) - var(--pad-1) - var(--panel-line-w));
-      background: var(--accent);
+      background: var(--accent-fill);
       border-radius: 0;
       /* The bounce is horizontal only. Overshoot on the vertical edges makes
          the underline-to-block growth wobble instead of land - top and bottom

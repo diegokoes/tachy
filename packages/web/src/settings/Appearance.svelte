@@ -15,7 +15,8 @@
     NAV_LABELS,
     TEXT_SIZES,
   } from "../theme/theme.svelte";
-  import { Button } from "../tui";
+  import { Button, Icon, tip } from "../tui";
+  import AccentModal from "./AccentModal.svelte";
   import Choice from "./Choice.svelte";
   import Row from "./Row.svelte";
   import Rows from "./Rows.svelte";
@@ -29,6 +30,13 @@
       (c) => !(th.theme === "dark" ? DARK_HIDDEN : LIGHT_HIDDEN).has(c.hex),
     ),
   );
+
+  const current = $derived(th.accentColor.toLowerCase());
+  const custom = $derived(
+    th.accentCustomized &&
+      (th.accentColor2 !== null || !ANSI16.some((c) => c.hex === current)),
+  );
+  let picking = $state(false);
 
   function pickTheme(t: Theme) {
     if (t === th.theme) return;
@@ -103,18 +111,33 @@
       {#each accents as c}
         <button
           class="sw"
-          class:on={th.accentColor.toLowerCase() === c.hex}
+          class:on={!custom && current === c.hex}
           role="radio"
-          aria-checked={th.accentColor.toLowerCase() === c.hex}
+          aria-checked={!custom && current === c.hex}
           style="background: {c.hex}"
           title="{c.name} · {c.hex}"
           aria-label={c.name}
           onclick={() => selectAccent(c.hex)}
         ></button>
       {/each}
+      <button
+        class="sw custom"
+        class:on={custom}
+        role="radio"
+        aria-checked={custom}
+        style={custom ? "background: var(--accent-fill)" : undefined}
+        aria-label="custom color"
+        use:tip={"custom color"}
+        onclick={() => (picking = true)}
+      >
+        {#if !custom}<Icon name="plus" size="1em" />{/if}
+      </button>
     </div>
     {#snippet actions()}
-      <span class="hex">{th.accentColor}</span>
+      <span class="hex"
+        >{th.accentColor}{#if th.accentColor2}
+          → {th.accentColor2}{/if}</span
+      >
       <span class="slot">
         {#if th.accentCustomized}
           <Button
@@ -131,6 +154,10 @@
   </Row>
 </Rows>
 
+{#if picking}
+  <AccentModal onclose={() => (picking = false)} />
+{/if}
+
 <style>
   .swatches {
     display: grid;
@@ -144,6 +171,13 @@
     border-radius: var(--radius-control);
     cursor: pointer;
     padding: 0;
+  }
+  .sw.custom {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    color: var(--muted);
   }
   .sw.on {
     outline: 2px solid var(--text);

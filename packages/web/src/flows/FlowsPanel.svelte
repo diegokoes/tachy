@@ -87,7 +87,7 @@
     width: 50%;
     height: 100%;
     border-radius: var(--radius-chip);
-    background: var(--accent);
+    background: var(--accent-fill);
     transition: transform 0.2s ease;
   }
   .track.right .knob {
