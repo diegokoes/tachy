@@ -1,4 +1,9 @@
-import type { Flow, FlowGraph, FlowRun } from "@tachy/contract";
+import {
+  FLOW_MODEL_CALLS_PER_DAY,
+  type Flow,
+  type FlowGraph,
+  type FlowRun,
+} from "@tachy/contract";
 import type { EntryScope } from "../access/permissions";
 import { orgTimezone } from "../config/settings";
 import { sql, jsonb } from "../infra/db";
@@ -15,15 +20,40 @@ export interface FlowInput {
   team_id: string | null;
   enabled: boolean;
   graph: unknown;
+  /** Absent: a new flow gets the default, an existing one keeps its own. */
+  model_calls_per_day?: number;
 }
+
+const CALLS_TODAY = sql`
+  (select count(*)::int from analysis_runs r
+   where r.mode = 'flow' and r.meta->>'flow_id' = f.id::text
+     and r.created_at > now() - interval '24 hours')
+`;
 
 const SELECT = sql`
   select f.id, f.name, f.team_id, t.slug as team_slug, f.enabled, f.graph,
+         f.model_calls_per_day, ${CALLS_TODAY} as model_calls_today,
          f.run_as_user_id, u.email as run_as_email, f.created_at, f.updated_at
   from flows f
   left join teams t on t.id = f.team_id
   left join users u on u.id = f.run_as_user_id
 `;
+
+/**
+ * Refuses a model call once the flow has made its share for 24 hours. A flow
+ * runs unattended on its owner's credential, so without this a trigger that
+ * matches more than it should spends until someone notices.
+ */
+export async function assertModelCallAllowed(flowId: string): Promise<void> {
+  const [row] = await sql`
+    select f.model_calls_per_day as cap, ${CALLS_TODAY} as used
+    from flows f where f.id = ${flowId}
+  `;
+  if (row && row.used >= row.cap)
+    throw badInput(
+      `this flow has made its ${row.cap} model calls for 24 hours; raise the limit on the flow to go on`,
+    );
+}
 
 /** Every flow, or only those of the given teams (global ones stay admin's). */
 export async function listFlows(teamIds?: string[] | null): Promise<Flow[]> {
@@ -58,8 +88,10 @@ export async function createFlow(input: FlowInput, by: string | null) {
   let row;
   try {
     [row] = await sql`
-      insert into flows (name, team_id, enabled, graph, run_as_user_id, created_by)
-      values (${input.name}, ${input.team_id}, ${input.enabled}, ${jsonb(graph)}, ${by}, ${by})
+      insert into flows (name, team_id, enabled, graph, model_calls_per_day,
+                         run_as_user_id, created_by)
+      values (${input.name}, ${input.team_id}, ${input.enabled}, ${jsonb(graph)},
+              ${input.model_calls_per_day ?? FLOW_MODEL_CALLS_PER_DAY}, ${by}, ${by})
       returning id
     `;
   } catch (e) {
@@ -79,7 +111,9 @@ export async function updateFlow(
   try {
     [row] = await sql`
       update flows set name = ${input.name}, team_id = ${input.team_id},
-        enabled = ${input.enabled}, graph = ${jsonb(graph)}, run_as_user_id = ${by}
+        enabled = ${input.enabled}, graph = ${jsonb(graph)},
+        model_calls_per_day = coalesce(${input.model_calls_per_day ?? null}, model_calls_per_day),
+        run_as_user_id = ${by}
       where id = ${id}
       returning id
     `;

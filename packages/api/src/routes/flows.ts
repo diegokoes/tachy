@@ -33,6 +33,7 @@ const flowSchema = z.object({
   team: z.string().nullable(),
   enabled: z.boolean().default(false),
   graph: z.unknown(),
+  model_calls_per_day: z.number().int().min(0).max(100_000).optional(),
 });
 
 const runSchema = z.object({
@@ -49,6 +50,7 @@ async function input(c: Context, body: z.infer<typeof flowSchema>) {
     team_id,
     enabled: body.enabled,
     graph: body.graph,
+    model_calls_per_day: body.model_calls_per_day,
   };
 }
 
