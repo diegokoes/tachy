@@ -10,7 +10,7 @@
   import type { ComponentRow, ProductRow } from "@tachy/contract";
   import { navigate, segment, segments } from "../shell/router.svelte";
   import { keep, recall } from "../shell/kept";
-  import { setSubnav, type SubnavItem } from "../shell/subnav.svelte";
+  import { setSubnav } from "../shell/subnav.svelte";
   import { pushScope } from "../keys/keys.svelte";
   import { vimState } from "../keys/vim.svelte";
   import { excerpt, type Seg } from "./matching";
@@ -20,7 +20,14 @@
   import { t } from "../terms";
   import { errText } from "../resource.svelte";
   import { componentOptions } from "../catalog/componentOptions";
-  import { Button, EmptyState, Note, Select, Spinner } from "../tui";
+  import {
+    Button,
+    CaretInput,
+    EmptyState,
+    Note,
+    Select,
+    Spinner,
+  } from "../tui";
   import FilterMenu from "./FilterMenu.svelte";
   import TagFilter from "./TagFilter.svelte";
   import {
@@ -41,18 +48,19 @@
   import EntryForm from "../knowledge/EntryForm.svelte";
   import ReferenceForm from "../reference/ReferenceForm.svelte";
 
-  // The section's places, rendered as the subnav across the window's top edge.
-  // Keys are URL segments and labels are not: the segment stays 'entries' so
-  // existing links keep resolving, while the tab reads 'knowledge'.
-  //
-  // 'all' is the landing on purpose. Entries and docs are one corpus that
-  // search spans; splitting them is an optional narrowing, never a gate you
-  // have to pass to see anything.
-  const KINDS: SubnavItem[] = [
-    { key: "all", label: "all" },
-    { key: "entries", label: "knowledge", icon: "knowledge" },
-    { key: "docs", label: "docs", icon: "refDoc" },
+  // Entries, docs and articles are one corpus that search spans; narrowing to
+  // one of them is a filter like any other, never a gate you have to pass to
+  // see anything.
+  const TYPES = [
+    { value: "knowledge", label: "knowledge" },
+    { value: "docs", label: "docs" },
+    { value: "wiki", label: "wiki" },
   ];
+  /** The list segments the tabs used to live at, kept so old links resolve. */
+  const TYPE_OF_SEGMENT: Record<string, string> = {
+    entries: "knowledge",
+    docs: "docs",
+  };
 
   // From vocab.ts, so they are offered in the order the contract documents.
   const STATUSES = KNOWLEDGE_STATUSES;
@@ -64,19 +72,25 @@
     kind === "new" || kind === "wiki" ? false : !param || kind === "all",
   );
 
-  /** The tab a detail view was opened from, so "back" returns there. */
-  let origin = $state(recall("library.origin", "all"));
-
   // Old /library/wiki links redirect to the wiki section.
   $effect(() => {
     if (kind === "wiki") navigate(movedWikiPath(segments()), { replace: true });
   });
 
+  $effect(() => {
+    const narrowed = param ? undefined : TYPE_OF_SEGMENT[kind];
+    if (!narrowed) return;
+    type = narrowed;
+    navigate("/library", { replace: true });
+  });
+
+  // No tabs: the library is one list. The subnav is registered for its row,
+  // which the detail views and forms put their actions in.
   $effect(() =>
     setSubnav({
-      items: KINDS,
-      active: kind === "new" ? origin : kind,
-      onpick: (k) => navigate(k === "all" ? "/library" : `/library/${k}`),
+      items: [],
+      active: "",
+      onpick: () => {},
       // Only over a list. A detail view claims the row for itself, and a
       // create screen has nothing to create from.
       actions: listing && isCurator() ? newAction : undefined,
@@ -88,17 +102,21 @@
   /** The search and its scope, as the library was left. */
   const left = recall("library.search", {
     q: "",
+    type: "",
     status: "",
     productId: "",
     component: "",
   });
   let q = $state(left.q);
+  /** "" = any. */
+  let type = $state(left.type ?? "");
   let status = $state(left.status);
   let productId = $state(left.productId);
   let component = $state(left.component);
 
-  $effect(() => keep("library.search", { q, status, productId, component }));
-  $effect(() => keep("library.origin", origin));
+  $effect(() =>
+    keep("library.search", { q, type, status, productId, component }),
+  );
 
   let products = $state<ProductRow[]>([]);
   let components = $state<ComponentRow[]>([]);
@@ -148,15 +166,15 @@
   let createSaving = $state(false);
   let createError = $state<string | null>(null);
 
-  const showEntryFilters = $derived(kind === "entries");
-  const showDocFilters = $derived(kind === "docs");
+  const showEntryFilters = $derived(type === "knowledge");
+  const showDocFilters = $derived(type === "docs" || type === "wiki");
   /**
    * Counts hidden filters too: the entry-only ones still travel on entryQs, so
    * a filter you cannot see must stay clearable - otherwise the list is
    * silently narrowed with no way out.
    */
   const activeFilters = $derived(
-    [productId, component, status].filter(Boolean).length +
+    [type, productId, component, status].filter(Boolean).length +
       shown.filter((k) => extras[k]).length,
   );
 
@@ -171,14 +189,22 @@
 
   const entryQs = () =>
     applyExtras(scopeQs(new URLSearchParams()), shown, extras).toString();
-  const docQs = () => scopeQs(new URLSearchParams()).toString();
+  /** Browsing lists imported docs only unless asked, so "any" has to say so. */
+  const docQs = () => {
+    const p = scopeQs(new URLSearchParams());
+    p.set(
+      "kind",
+      type === "wiki" ? "wiki" : type === "docs" ? "reference" : "any",
+    );
+    return p.toString();
+  };
 
   /**
    * What the list is actually asked for. A filter put on the row with no value
    * yet, or a prune that changes nothing, leaves this as it was, so the list
    * is not fetched again for it.
    */
-  const request = $derived([kind, status, entryQs(), docQs()].join("\n"));
+  const request = $derived([type, status, entryQs(), docQs()].join("\n"));
 
   let seq = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -197,8 +223,8 @@
     const searching = mode === "search";
 
     try {
-      const wantEntries = kind !== "docs";
-      const wantDocs = kind !== "entries";
+      const wantEntries = !type || type === "knowledge";
+      const wantDocs = type !== "knowledge";
       const [ents, docs] = await Promise.all([
         wantEntries
           ? api.get<KnowledgeRow[]>(
@@ -355,7 +381,14 @@
     return { destroy: () => ro.disconnect() };
   }
 
+  /** A status carried over from a type that does not have it matches nothing. */
+  function onTypeChange() {
+    const offered: readonly string[] = showDocFilters ? DOC_STATUSES : STATUSES;
+    if (status && !offered.includes(status)) status = "";
+  }
+
   function clearFilters() {
+    type = "";
     productId = "";
     component = "";
     components = [];
@@ -366,7 +399,6 @@
   }
 
   function openItem(i: Item) {
-    origin = kind;
     if (i.kind === "article" && i.slug) {
       const scope =
         products.find((p) => p.id === i.productId)?.slug ?? ORG_WIDE;
@@ -376,10 +408,7 @@
     navigate(`/library/${i.kind === "entry" ? "entries" : "docs"}/${i.id}`);
   }
 
-  /** Back from a detail returns to the tab you opened it from, not its kind. */
-  function backToList() {
-    navigate(origin === "all" ? "/library" : `/library/${origin}`);
-  }
+  const backToList = () => navigate("/library");
 
   /** Create through `endpoint`, then open what was made under `/library/<tab>`. */
   const create =
@@ -532,13 +561,12 @@
   });
 </script>
 
-<!-- Rendered by App into the carved row beside the subnav, not here. -->
+<!-- Rendered by App into the window's top row, not here. -->
 {#snippet newAction()}
   <Button
     size="sm"
     tone="ok"
     icon="plus"
-    title="new entry or doc"
     onclick={() => navigate("/library/new/entry")}>new</Button
   >
 {/snippet}
@@ -595,22 +623,42 @@
     />
   {/if}
 {:else}
+  <!-- The default row stays deliberately short. Everything else the schema can
+       be narrowed by - environment, confidence, clarity, pattern, hidden fix,
+       versions, tags - is one `+` away and remembered per browser. -->
   <div class="bar">
-    <input
-      bind:this={searchEl}
-      class="search"
-      aria-label="Search symptoms, error codes, root causes, docs"
-      bind:value={q}
-      onkeydown={(e) => {
-        if (e.key === "Enter") {
-          clearTimeout(timer);
-          run();
-        }
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <span
+      class="box"
+      onpointerdown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        e.preventDefault();
+        searchEl?.focus();
       }}
-    />
-    <!-- Both act on the row below rather than being filters themselves, so
-         they follow the search box instead of joining that row. -->
-    <span class="tools">
+    >
+      <CaretInput
+        bind:el={searchEl}
+        aria-label="Search symptoms, error codes, root causes, docs"
+        bind:value={q}
+        onkeydown={(e) => {
+          if (e.key === "Enter") {
+            clearTimeout(timer);
+            run();
+          }
+        }}
+      />
+      <!-- Reset keeps its place whether or not it is there, so add never
+           moves under the pointer. -->
+      <span class="slot" class:off={!activeFilters}>
+        <Button
+          variant="ghost"
+          tone="danger"
+          icon="filterReset"
+          onclick={clearFilters}
+        >
+          <span class="lbl">reset</span>
+        </Button>
+      </span>
       {#if showEntryFilters}
         <FilterMenu
           {shown}
@@ -620,131 +668,122 @@
           onremove={removeFilter}
         />
       {/if}
-      {#if activeFilters}
-        <Button
-          variant="ghost"
-          tone="danger"
-          icon="filterReset"
-          title="reset every filter"
-          onclick={clearFilters}
-        >
-          <span class="lbl">reset</span>
-        </Button>
-      {/if}
     </span>
-  </div>
 
-  <!-- The default row stays deliberately short. Everything else the schema can
-       be narrowed by - environment, confidence, clarity, pattern, hidden fix,
-       versions, tags - is one `+` away and remembered per browser. -->
-  <div class="controls">
-    <div class="filters">
-      <!-- product and component scope entries AND docs, so they stay visible in
-           every mode. -->
-      <span class="field" use:capFloor>
-        <span class="cap">{t("product")}</span>
-        <Select
-          bind:value={productId}
-          active={!!productId}
-          keepOpen
-          searchable
-          title={t("product")}
-          placeholder="any"
-          clearable
-          options={products.map((p) => ({ value: p.id, label: p.name }))}
-          onchange={(v) => onProductChange(String(v))}
-        />
-      </span>
-      <span class="field" use:capFloor>
-        <span class="cap">component</span>
-        <Select
-          bind:value={component}
-          active={!!component}
-          keepOpen
-          searchable
-          title={`Component (within the chosen ${t("product")})`}
-          disabled={!productId || components.length === 0}
-          placeholder="any"
-          clearable
-          options={componentOptions(components)}
-          onchange={(v) => {
-            if (!v) dropComponentScoped();
-            void loadFacets();
-          }}
-        />
-      </span>
+    <span class="field" use:capFloor>
+      <span class="cap">type</span>
+      <Select
+        bind:value={type}
+        active={!!type}
+        keepOpen
+        aria-label="Type"
+        placeholder="any"
+        clearable
+        options={TYPES}
+        onchange={onTypeChange}
+      />
+    </span>
+    <!-- product and component scope entries AND docs, so they stay visible
+         whatever the type. -->
+    <span class="field" use:capFloor>
+      <span class="cap">{t("product")}</span>
+      <Select
+        bind:value={productId}
+        active={!!productId}
+        keepOpen
+        searchable
+        aria-label={t("product")}
+        placeholder="any"
+        clearable
+        options={products.map((p) => ({ value: p.id, label: p.name }))}
+        onchange={(v) => onProductChange(String(v))}
+      />
+    </span>
+    <span class="field" use:capFloor>
+      <span class="cap">component</span>
+      <Select
+        bind:value={component}
+        active={!!component}
+        keepOpen
+        searchable
+        aria-label="Component"
+        disabled={!productId || components.length === 0}
+        placeholder="any"
+        clearable
+        options={componentOptions(components)}
+        onchange={(v) => {
+          if (!v) dropComponentScoped();
+          void loadFacets();
+        }}
+      />
+    </span>
 
-      <span class="field" use:capFloor>
-        <span class="cap">status</span>
-        <Select
-          bind:value={status}
-          active={!!status}
-          keepOpen
-          title="Status"
-          placeholder="any"
-          clearable
-          options={showDocFilters ? DOC_STATUSES : STATUSES}
-        />
-      </span>
+    <span class="field" use:capFloor>
+      <span class="cap">status</span>
+      <Select
+        bind:value={status}
+        active={!!status}
+        keepOpen
+        aria-label="Status"
+        placeholder="any"
+        clearable
+        options={showDocFilters ? DOC_STATUSES : STATUSES}
+      />
+    </span>
 
-      {#if showEntryFilters}
-        {#each shown as key (key)}
-          {@const def = byKey(key)}
-          {#if def}
-            <!-- No close button: the add menu toggles it off, and so does a
-                 right click anywhere on it. -->
-            <span
-              class="extra"
-              role="group"
-              aria-label="{def.label} filter"
-              oncontextmenu={(e) => {
-                e.preventDefault();
-                removeFilter(key);
-              }}
-            >
-              <span class="field" use:capFloor>
-                <span class="cap">{def.label}</span>
-                {#if def.kind === "tags"}
-                  <TagFilter
-                    value={extras[key] ?? ""}
-                    options={facets.tags ?? []}
-                    onchange={(v) => setExtra(key, v)}
-                  />
-                {:else}
-                  <Select
-                    value={extras[key] ?? ""}
-                    active={!!extras[key]}
-                    keepOpen
-                    title={`${def.label}${
-                      def.needsComponent ? " (within the chosen component)" : ""
-                    }, right click to remove`}
-                    disabled={def.needsComponent && !component}
-                    placeholder="any"
-                    clearable
-                    options={[
-                      ...(def.kind === "enum"
-                        ? (def.options ?? []).map((o) => ({
-                            value: o,
-                            label: o,
-                          }))
-                        : (facets[key] ?? []).map((o) => ({
-                            value: o.value,
-                            label: `${o.value} (${o.count})`,
-                          }))),
-                    ]}
-                    onchange={(v) => setExtra(key, String(v))}
-                  />
-                {/if}
-              </span>
+    {#if showEntryFilters}
+      {#each shown as key (key)}
+        {@const def = byKey(key)}
+        {#if def}
+          <!-- No close button: the add menu toggles it off, and so does a
+               right click anywhere on it. -->
+          <span
+            class="extra"
+            role="group"
+            aria-label="{def.label} filter"
+            oncontextmenu={(e) => {
+              e.preventDefault();
+              removeFilter(key);
+            }}
+          >
+            <span class="field" use:capFloor>
+              <span class="cap">{def.label}</span>
+              {#if def.kind === "tags"}
+                <TagFilter
+                  value={extras[key] ?? ""}
+                  options={facets.tags ?? []}
+                  onchange={(v) => setExtra(key, v)}
+                />
+              {:else}
+                <Select
+                  value={extras[key] ?? ""}
+                  active={!!extras[key]}
+                  keepOpen
+                  aria-label={def.label}
+                  disabled={def.needsComponent && !component}
+                  placeholder="any"
+                  clearable
+                  options={[
+                    ...(def.kind === "enum"
+                      ? (def.options ?? []).map((o) => ({
+                          value: o,
+                          label: o,
+                        }))
+                      : (facets[key] ?? []).map((o) => ({
+                          value: o.value,
+                          label: `${o.value} (${o.count})`,
+                        }))),
+                  ]}
+                  onchange={(v) => setExtra(key, String(v))}
+                />
+              {/if}
             </span>
-          {/if}
-        {/each}
-      {/if}
-    </div>
+          </span>
+        {/if}
+      {/each}
+    {/if}
 
-    <!-- Never a "0 items" line above an empty state - the empty state says it.
-         It rides in the left margin the centred filter row leaves empty, so it
-         costs the list no height of its own. -->
+    <!-- Never a "0 items" line above an empty state - the empty state says it. -->
     {#if items.length}
       <p class="tally">
         {#if capped}first{/if}
@@ -785,11 +824,13 @@
     {#if !loading && !error && items.length === 0}
       <li>
         <EmptyState
-          icon={kind === "docs"
+          icon={type === "docs"
             ? "refDoc"
-            : kind === "entries"
+            : type === "knowledge"
               ? "knowledge"
-              : "library"}
+              : type === "wiki"
+                ? "wiki"
+                : "library"}
           title={mode === "search"
             ? `No matches for “${q}”.`
             : "The library is empty."}
@@ -808,18 +849,21 @@
     gap: var(--pad-1);
   }
 
-  /* Pinned: the filters and the result list scroll under it, so the query that
-     produced them is never off screen. It needs a ground of its own - the rows
-     it pins over are opaque cards, and without one they read through it. */
+  /* Pinned: the result list scrolls under it, so the query and the filters
+     that produced it are never off screen. It needs a ground of its own - the
+     rows it pins over are opaque cards, and without one they read through it.
+     Bottom-aligned: a cap is one line, a tag box is not. */
   .bar {
     position: sticky;
     top: 0;
     z-index: 2;
     display: flex;
+    flex-wrap: wrap;
     gap: var(--pad-2);
-    align-items: center;
+    align-items: end;
     background: var(--panel-bg);
     padding-block: var(--pad-2);
+    margin-bottom: var(--pad-2);
   }
   /* A sticky box cannot rise above its containing block, and `main`'s content
      box starts one --main-air below the scrollport. So the bar pins that far
@@ -834,41 +878,40 @@
     height: var(--main-air, 0.65rem);
     background: var(--panel-bg);
   }
-  /* Stops at the bar's midpoint, so the tools beside it come and go without
-     the box changing width. */
-  .search {
+  /* Half the bar: the filters take the other half, then the rows below. */
+  .box {
     flex: 0 1 50%;
-    min-width: 12rem;
-  }
-  .tools {
-    flex: none;
-    display: inline-flex;
-    align-items: center;
+    min-width: 16rem;
+    min-height: var(--control-h);
+    display: flex;
+    align-items: stretch;
     gap: var(--pad-1);
+    padding-left: var(--pad-3);
+    border: 1px solid var(--border-bare);
+    border-radius: var(--radius-control);
+    background: var(--panel-bg);
+    cursor: text;
+  }
+  .box:has(:global(input:focus-visible)) {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .slot {
+    display: flex;
+  }
+  .slot.off {
+    visibility: hidden;
+  }
+  .box :global(.menu) {
+    display: flex;
+  }
+  .box :global(.btn) {
+    min-height: 0;
   }
   /* Cased in CSS, not in the copy - a screen reader still hears a word. */
   .lbl {
     text-transform: uppercase;
     letter-spacing: var(--label-spacing);
-  }
-
-  /* The caps occupy the space between the search bar and the controls. The
-     top margin subtracts a cap and its gap, so the controls keep their
-     offset. */
-  .controls {
-    position: relative;
-    margin-top: calc(var(--pad-4) - var(--fs-xs) - var(--pad-1));
-    margin-bottom: var(--pad-2);
-  }
-
-  /* Centred, so the controls read as a row of their own rather than a second
-     line of the input. Bottom-aligned: a cap is one line, a tag box is not. */
-  .filters {
-    display: flex;
-    gap: var(--pad-2);
-    align-items: end;
-    justify-content: center;
-    flex-wrap: wrap;
   }
 
   .field {
@@ -900,12 +943,12 @@
     gap: var(--pad-1);
   }
 
+  /* Pushed to the far end of whichever row it lands on, on the controls'
+     centre line. */
   .tally {
-    position: absolute;
-    left: 0;
-    bottom: 0;
-    margin: 0;
+    margin: 0 0 0 auto;
     font-size: var(--fs-sm);
+    line-height: var(--control-h);
     color: var(--muted);
     pointer-events: none;
   }
