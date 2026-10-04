@@ -1,4 +1,12 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { createApp } from "../../packages/api/src/app";
 import {
   getSettings,
@@ -36,6 +44,21 @@ describe("settings store", () => {
       agent_model: "claude-opus-4-8",
       redaction_global: true,
     });
+  });
+
+  it("picks up a setting another process saved, within seconds", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      await setSetting("redaction_global", false);
+      expect((await getSettings()).redaction_global).toBe(false);
+      // What the api's save looks like from a worker: the row changes under it.
+      await sql`update settings set value = 'true'::jsonb where key = 'redaction_global'`;
+      expect((await getSettings()).redaction_global).toBe(false);
+      vi.advanceTimersByTime(15_001);
+      expect((await getSettings()).redaction_global).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rejects unknown keys and invalid values", async () => {

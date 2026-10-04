@@ -37,10 +37,17 @@ export type SettingsMap = {
   [K in SettingKey]?: z.infer<(typeof SETTING_SCHEMAS)[K]>;
 };
 
-let cache: SettingsMap | undefined;
+/**
+ * How long a process trusts what it last read. A setting is saved in the api,
+ * and the workers are other processes: without an expiry a worker kept the
+ * values it started with, so redaction switched on in the admin page did not
+ * reach a flow's model call until the worker restarted.
+ */
+const CACHE_MS = 15_000;
+let cache: { at: number; value: SettingsMap } | undefined;
 
 export async function getSettings(): Promise<SettingsMap> {
-  if (cache) return cache;
+  if (cache && Date.now() - cache.at < CACHE_MS) return cache.value;
   const rows = await sql`select key, value from settings`;
   const out: SettingsMap = {};
   for (const row of rows) {
@@ -50,7 +57,7 @@ export async function getSettings(): Promise<SettingsMap> {
       if (parsed.success) (out as Record<string, unknown>)[key] = parsed.data;
     }
   }
-  cache = out;
+  cache = { at: Date.now(), value: out };
   return out;
 }
 
