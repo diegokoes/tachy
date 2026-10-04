@@ -2,6 +2,8 @@
 #   npm run load -- /load/smoke.js
 services:
   k6:
+    # The one pin besides the Dockerfile's. tachy-deploy, container-smoke.sh
+    # and the load-scripts workflow read the image from this line.
     image: grafana/k6:2.3.0
     profiles: ["load"]
     environment:
