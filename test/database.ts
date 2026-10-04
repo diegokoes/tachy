@@ -25,7 +25,7 @@ export async function resetData() {
              wiki_gaps, library_assets,
              -- repos would be swept in anyway by the cascade from components;
              -- naming it keeps that visible. source_connections stays.
-             repos, repo_lines, repo_line_files, code_blob_chunks, repo_files, code_chunks,
+             repos, repo_lines, repo_line_files, code_blob_chunks,
              flows, flow_runs,
              buckets, bucket_teams, bucket_docs, bucket_doc_chunks
     restart identity cascade
