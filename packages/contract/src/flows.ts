@@ -120,6 +120,9 @@ export interface FlowGraph {
   steps: FlowStep[];
 }
 
+/** What a new flow may spend on the model in 24 hours, until someone changes it. */
+export const FLOW_MODEL_CALLS_PER_DAY = 100;
+
 export interface Flow {
   id: string;
   name: string;
@@ -128,6 +131,10 @@ export interface Flow {
   team_slug: string | null;
   enabled: boolean;
   graph: FlowGraph;
+  /** Model calls its steps may make in any 24 hours; 0 allows none. */
+  model_calls_per_day: number;
+  /** How many of those it has made in the last 24 hours. */
+  model_calls_today: number;
   /** Whose credentials the flow's steps use: whoever saved it last. */
   run_as_user_id: string | null;
   run_as_email: string | null;

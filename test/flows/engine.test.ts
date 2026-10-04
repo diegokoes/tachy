@@ -1,8 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  assertModelCallAllowed,
   createFlow,
   defineFlowAction,
+  flowAction,
   getFlow,
   itemTriggers,
   listFlowRuns,
@@ -16,6 +18,7 @@ import { enqueueRun, getJobKind, registerCoreJobs } from "@tachy/core/jobs";
 import { ingestWorkItem } from "@tachy/core/work-items";
 import { type RawWorkItem } from "@tachy/core/sources";
 import { createApp } from "../../packages/api/src/app";
+import { registerAgentFlowActions } from "../../packages/agent/src/flow-actions";
 import { json, loginCookie } from "../http";
 import { resetData, resetJobs, seededFreshdeskConnId, sql } from "../database";
 
@@ -401,6 +404,112 @@ describe("triggers", () => {
   });
 });
 
+describe("a flow's model calls", () => {
+  beforeEach(resetData);
+
+  const graph = {
+    triggers: [{ id: "m", kind: "manual", params: {} }],
+    steps: [],
+  };
+  const called = (flowId: string, hoursAgo: number) =>
+    sql`insert into analysis_runs (mode, meta, created_at)
+        values ('flow', ${sql.json({ flow_id: flowId })}, now() - make_interval(hours => ${hoursAgo}))`;
+
+  it("stop once the flow has made its share for 24 hours", async () => {
+    const flow = await createFlow(
+      {
+        name: "asks",
+        team_id: null,
+        enabled: true,
+        graph,
+        model_calls_per_day: 2,
+      },
+      null,
+    );
+    const other = await createFlow(
+      { name: "other", team_id: null, enabled: true, graph },
+      null,
+    );
+    expect(other.model_calls_per_day).toBe(100);
+
+    await called(flow.id, 1);
+    await called(flow.id, 30);
+    await called(other.id, 1);
+    await assertModelCallAllowed(flow.id);
+    expect((await getFlow(flow.id)).model_calls_today).toBe(1);
+
+    await called(flow.id, 2);
+    await expect(assertModelCallAllowed(flow.id)).rejects.toThrow(
+      /made its 2 model calls for 24 hours/,
+    );
+    await assertModelCallAllowed(other.id);
+  });
+
+  it("are refused by the agent.ask step before it reaches a model", async () => {
+    registerAgentFlowActions();
+    const flow = await createFlow(
+      {
+        name: "silent",
+        team_id: null,
+        enabled: true,
+        graph,
+        model_calls_per_day: 0,
+      },
+      null,
+    );
+    const ask = flowAction("agent.ask");
+    await expect(
+      ask.run(
+        {
+          flowId: flow.id,
+          flowRunId: flow.id,
+          scope: {},
+          userId: null,
+          item: null,
+          signal: new AbortController().signal,
+          log: () => {},
+          enqueue: async () => null,
+        },
+        ask.params.parse({ prompt: "summarise" }),
+      ),
+    ).rejects.toThrow(/made its 0 model calls/);
+  });
+
+  it("keep their limit through a save that names none, and stop at 0", async () => {
+    const flow = await createFlow(
+      {
+        name: "asks",
+        team_id: null,
+        enabled: true,
+        graph,
+        model_calls_per_day: 7,
+      },
+      null,
+    );
+    const renamed = await updateFlow(
+      flow.id,
+      { name: "asks more", team_id: null, enabled: true, graph },
+      null,
+    );
+    expect(renamed.model_calls_per_day).toBe(7);
+
+    await updateFlow(
+      flow.id,
+      {
+        name: "asks more",
+        team_id: null,
+        enabled: true,
+        graph,
+        model_calls_per_day: 0,
+      },
+      null,
+    );
+    await expect(assertModelCallAllowed(flow.id)).rejects.toThrow(
+      /made its 0 model calls/,
+    );
+  });
+});
+
 describe("/api/flows", () => {
   const app = createApp({ passwordAuth: true });
   let admin = "";
@@ -443,6 +552,24 @@ describe("/api/flows", () => {
         { id: "a", kind: "action", action: "knowledge.search", params: {} },
       ],
     },
+  });
+
+  it("takes a limit on model calls, and refuses one below zero", async () => {
+    const made = await call("", admin, "POST", {
+      ...body(null),
+      model_calls_per_day: 12,
+    });
+    expect(made.status).toBe(201);
+    expect((await made.json()).model_calls_per_day).toBe(12);
+    expect(
+      (
+        await call("", admin, "POST", {
+          ...body(null),
+          name: "negative",
+          model_calls_per_day: -1,
+        })
+      ).status,
+    ).toBe(400);
   });
 
   it("lets a team's admins build its flows, and only app admins global ones", async () => {
