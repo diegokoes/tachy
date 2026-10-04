@@ -1,7 +1,10 @@
 <script lang="ts">
+  import { tick } from "svelte";
+  import { themeWipe } from "../motion/motion";
   import { ANSI16 } from "./accent-palette";
   import {
     themeState as th,
+    type Theme,
     selectAccent,
     resetAccent,
     setTheme,
@@ -26,6 +29,17 @@
     ),
   );
 
+  function pickTheme(t: Theme) {
+    if (t === th.theme) return;
+    themeWipe(
+      async () => {
+        setTheme(t);
+        await tick();
+      },
+      t === "dark" ? "top" : "bottom",
+    );
+  }
+
   const MODES = [
     { value: "dark", label: "dark" },
     { value: "light", label: "light" },
@@ -40,7 +54,7 @@
 
 <Rows>
   <Row label="mode">
-    <Choice label="mode" options={MODES} value={th.theme} onpick={setTheme} />
+    <Choice label="mode" options={MODES} value={th.theme} onpick={pickTheme} />
   </Row>
 
   <!-- Three steps, not a slider. Dragging one re-laid out the whole app on
