@@ -432,7 +432,7 @@
   }
 
   .opt.cursor {
-    background: var(--accent);
+    background: var(--accent-fill);
     color: var(--bg);
   }
   .opt.cursor .mark,

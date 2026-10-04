@@ -34,6 +34,8 @@ export type NavLabels = (typeof NAV_LABELS)[number];
 export const themeState = $state({
   theme: "dark" as Theme,
   accentColor: ACCENT_DEFAULTS.dark,
+  /** The far end of the gradient, when the accent is one. */
+  accentColor2: null as string | null,
   accentCustomized: false,
   fontScale: DEFAULT_SCALE as number,
   navLabels: "text" as NavLabels,
@@ -42,21 +44,42 @@ export const themeState = $state({
   subnavHidden: false,
 });
 
-function applyAccent(v: string) {
-  themeState.accentColor = v;
-  document.documentElement.style.setProperty("--accent", v);
+const HEX = /^#[0-9a-f]{6}$/i;
+
+export function isHexColor(v: string): boolean {
+  return HEX.test(v);
 }
 
-export function selectAccent(hex: string) {
+function applyAccent(
+  v: string,
+  second: string | null = themeState.accentColor2,
+) {
+  const root = document.documentElement.style;
+  themeState.accentColor = v;
+  themeState.accentColor2 = second;
+  root.setProperty("--accent", v);
+  if (second)
+    root.setProperty(
+      "--accent-fill",
+      `linear-gradient(90deg, ${v}, ${second})`,
+    );
+  else root.removeProperty("--accent-fill");
+}
+
+/** A second colour makes the accent a gradient running from the first to it. */
+export function selectAccent(hex: string, second: string | null = null) {
   themeState.accentCustomized = true;
-  applyAccent(hex);
+  applyAccent(hex, second);
   localStorage.setItem("tachy-accent", hex);
+  if (second) localStorage.setItem("tachy-accent-2", second);
+  else localStorage.removeItem("tachy-accent-2");
 }
 
 export function resetAccent() {
   themeState.accentCustomized = false;
   localStorage.removeItem("tachy-accent");
-  applyAccent(ACCENT_DEFAULTS[themeState.theme]);
+  localStorage.removeItem("tachy-accent-2");
+  applyAccent(ACCENT_DEFAULTS[themeState.theme], null);
 }
 
 export function setTheme(t: Theme) {
@@ -105,8 +128,9 @@ export function loadThemeFromStorage() {
   }
   const savedAccent = localStorage.getItem("tachy-accent");
   if (savedAccent) {
+    const second = localStorage.getItem("tachy-accent-2");
     themeState.accentCustomized = true;
-    applyAccent(savedAccent);
+    applyAccent(savedAccent, second && isHexColor(second) ? second : null);
   } else {
     applyAccent(ACCENT_DEFAULTS[themeState.theme]);
   }

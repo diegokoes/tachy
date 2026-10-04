@@ -42,6 +42,10 @@
   --text: #e2e2e2;
   --muted: #6d6d6d;
   --accent: #6ea8fe;
+  /* What an accent-filled surface paints with: the accent, or the two-colour
+     gradient a user picked. Ink and rules stay on --accent, which a gradient
+     cannot stand in for. */
+  --accent-fill: var(--accent);
   --accent-dim: color-mix(in srgb, var(--accent) 14%, transparent);
   --star-ink: rgba(255, 255, 255, 0.3);
   /* Fainter than the starfield: the wordmark sits in the top row next to the

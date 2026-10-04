@@ -165,7 +165,7 @@
     background: var(--muted);
   }
   .gauge.good .fill {
-    background: var(--accent);
+    background: var(--accent-fill);
   }
   .gauge.strong .fill {
     background: var(--ok);
