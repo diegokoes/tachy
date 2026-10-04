@@ -2,7 +2,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agentHome, badInput, envVarName } from "@tachy/core/infra";
+import { badInput, envVarName } from "@tachy/core/infra";
 import {
   dateFormatOf,
   effectivePrefs,
@@ -22,7 +22,7 @@ import { getUserByEmail, userSoleTeamId } from "@tachy/core/access";
 import { listSourceConnections } from "@tachy/core/sources";
 import { ANONYMOUS_UPLOADS } from "@tachy/core/chat";
 import { renderColumnContract, type ArtifactSpec } from "@tachy/core/exports";
-import type { AgentConfig } from "@tachy/agent";
+import { userStateDir, type AgentConfig } from "@tachy/agent";
 import { internalEndpoint } from "./internal-endpoint";
 import { findCommand, commandAutoApprove } from "./commands";
 
@@ -72,7 +72,7 @@ export async function emptySessionDir(): Promise<string> {
 export async function userConfigDir(
   userId: string | undefined,
 ): Promise<string> {
-  const dir = join(agentHome(), "users", userId ?? "_default");
+  const dir = userStateDir(userId);
   await mkdir(dir, { recursive: true, mode: 0o700 });
   return dir;
 }

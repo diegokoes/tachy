@@ -8,6 +8,7 @@ import {
 import { classifyCall, qualify, MCP_SERVER } from "./tools";
 import { effectiveModel, type AgentConfig } from "./backend";
 import { TurnBase, type ApprovalGate } from "./turn";
+import { copilotHome } from "./state";
 
 export async function copilotPermission(
   request: PermissionRequest,
@@ -111,6 +112,7 @@ export class CopilotTurn extends TurnBase {
     try {
       client = new CopilotClient({
         workingDirectory: cfg.sessionCwd,
+        baseDirectory: await copilotHome(cfg.configDir),
         logLevel: "error",
       });
       this.client = client;
