@@ -68,6 +68,7 @@ restore_test() {
   local problems=()
   started=$(date +%s)
   docker run -d --rm --name "$name" --network none --shm-size 1g \
+    --memory "${TACHY_RESTORE_MEM_LIMIT:-1g}" \
     -e POSTGRES_PASSWORD=restore-test -e POSTGRES_DB=tachy "$PG_IMAGE" >/dev/null
   for _ in $(seq 60); do
     docker exec "$name" pg_isready -U postgres -d tachy >/dev/null 2>&1 && break
