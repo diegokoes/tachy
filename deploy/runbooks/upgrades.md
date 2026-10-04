@@ -38,16 +38,13 @@ C="docker compose -f docker-compose.yml -f deploy/compose.prod.yml"
 2. Switch maintenance on (the Maintenance row in the admin runtime panel).
 3. **Only if the dimension changes**, null the vectors. pgvector refuses to
    alter a populated `vector(768)` column (`expected N dimensions, not 768`).
-   `code_chunks` is the superseded code index, read only by
-   `adoptSupersededIndex` at api boot. It holds vectors too.
 
    ```sh
    $C exec -T postgres psql -v ON_ERROR_STOP=1 -U tachy -d tachy \
      -c 'update knowledge_entries set embedding = null' \
      -c 'update reference_doc_chunks set embedding = null' \
      -c 'update code_blob_chunks set embedding = null' \
-     -c 'update bucket_doc_chunks set embedding = null' \
-     -c 'update code_chunks set embedding = null'
+     -c 'update bucket_doc_chunks set embedding = null'
    ```
 
 4. `tachy-deploy <commit>`. Read the plan as in

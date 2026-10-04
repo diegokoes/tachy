@@ -987,15 +987,6 @@ create table repos (
     customer_id     uuid references customers(id) on delete set null,
     default_branch  text not null default 'main',
     config          jsonb not null default '{}'::jsonb,
-    -- Superseded by repo_lines, and unread. Kept so the previous release still
-    -- runs against this schema; dropped with repo_files and code_chunks.
-    index_status    text not null default 'idle'
-                        check (index_status in ('idle','cloning','indexing','ready','error')),
-    indexed_commit  text,
-    index_error     text,
-    file_count      integer not null default 0,
-    chunk_count     integer not null default 0,
-    last_indexed_at timestamptz,
     created_at      timestamptz not null default now()
 );
 
@@ -1059,38 +1050,6 @@ create table code_blob_chunks (
 create index code_blob_chunks_embedding_idx on code_blob_chunks using hnsw (embedding vector_cosine_ops)
     with (m = 16, ef_construction = 64);
 create index code_blob_chunks_trgm_idx      on code_blob_chunks using gin (chunk_text gin_trgm_ops);
-
--- Superseded by repo_line_files and code_blob_chunks, and unread. Kept so the
--- previous release still runs against this schema.
-create table repo_files (
-    id          uuid primary key default gen_random_uuid(),
-    repo_id     uuid not null references repos(id) on delete cascade,
-    path        text not null,
-    lang        text,
-    blob_sha    text not null,
-    size_bytes  integer not null,
-    unique (repo_id, path)
-);
-
-create index repo_files_repo_idx      on repo_files(repo_id);
-create index repo_files_path_trgm_idx on repo_files using gin (path gin_trgm_ops);
-
-create table code_chunks (
-    id          uuid primary key default gen_random_uuid(),
-    repo_id     uuid not null references repos(id) on delete cascade,
-    file_id     uuid not null references repo_files(id) on delete cascade,
-    ordinal     integer not null,
-    start_line  integer not null,
-    end_line    integer not null,
-    chunk_text  text not null,
-    embedding   vector(768),
-    unique (file_id, ordinal)
-);
-
-create index code_chunks_repo_idx      on code_chunks(repo_id);
-create index code_chunks_embedding_idx on code_chunks using hnsw (embedding vector_cosine_ops)
-    with (m = 16, ef_construction = 64);
-create index code_chunks_trgm_idx      on code_chunks using gin (chunk_text gin_trgm_ops);
 
 -- A bucket is a collection of documents maintained outside tachy and pushed in
 -- by a script that holds the token, e.g. a Document360 knowledge base synced
