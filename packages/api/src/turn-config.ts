@@ -20,6 +20,7 @@ import {
 } from "@tachy/core";
 import { getUserByEmail, userSoleTeamId } from "@tachy/core/access";
 import { listSourceConnections } from "@tachy/core/sources";
+import { ANONYMOUS_UPLOADS } from "@tachy/core/chat";
 import { renderColumnContract, type ArtifactSpec } from "@tachy/core/exports";
 import type { AgentConfig } from "@tachy/agent";
 import { internalEndpoint } from "./internal-endpoint";
@@ -171,7 +172,7 @@ export async function mcpConfig(
   const provider = prefs.agent_provider.value;
   const agentAuth = await resolveAgentAuth(provider, ctx);
   const configDir = await userConfigDir(user?.id);
-  mcpEnv.TACHY_UPLOAD_OWNER = user?.id ?? "_anonymous";
+  mcpEnv.TACHY_UPLOAD_OWNER = user?.id ?? ANONYMOUS_UPLOADS;
 
   const allowedModels = settings.allowed_models.value;
   return {
