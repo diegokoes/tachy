@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
-  import { tick } from "svelte";
+  import { onDestroy, tick, untrack } from "svelte";
   import {
     chatStream,
     approve,
@@ -14,7 +13,7 @@
   import { addEntry, chat, type Entry } from "./chatState.svelte";
   import { renderMarkdown } from "../markdown/markdown";
   import { gsap, reducedMotion } from "../motion/gsap";
-  import { shatterAll } from "../motion/motion";
+  import { reflow, shatterAll } from "../motion/motion";
   import Scrollbar from "../tui/Scrollbar.svelte";
   import ArtifactPanel from "./ArtifactPanel.svelte";
   import CommandMenu, {
@@ -77,7 +76,18 @@
 
   let transcriptEl = $state<HTMLDivElement>();
   let composerEl = $state<HTMLTextAreaElement>();
+  let dockEl = $state<HTMLDivElement>();
   let pinned = true;
+
+  const empty = $derived(chat.entries.length === 0);
+
+  /* A pre effect, so the dock is read where it still sits: centred before the
+     first message, at the foot after it. */
+  $effect.pre(() => {
+    void empty;
+    const play = untrack(() => reflow([dockEl], { absolute: false }));
+    void tick().then(play);
+  });
 
   $effect(() =>
     pushScope([
@@ -551,7 +561,8 @@
   </div>
 {:else}
   <div
-    class="chat"
+    class="chat bare"
+    class:empty
     role="region"
     aria-label="Chat"
     ondragenter={(e) => {
@@ -636,99 +647,105 @@
             </div>
           </div>
         {/if}
-        {#if chat.entries.length === 0}
+        {#if empty}
           <Launcher />
         {/if}
       </div>
-      <Scrollbar target={transcriptEl} controls="chat-transcript" />
+      {#if !empty}
+        <Scrollbar target={transcriptEl} controls="chat-transcript" />
+      {/if}
       <ArtifactPanel />
     </div>
 
-    {#if chat.uploads.length || chat.artifact || draftWaiting}
-      <div class="attachments">
-        {#if draftWaiting}
-          <button
-            class="attach draft-chip"
-            use:tip={"Reopen the work item you were writing"}
-            onclick={() => openComposer()}
-          >
-            <Icon name="review" size="1em" />
-            draft {composer.type?.name ?? "work item"}{composer.title.trim()
-              ? `: ${composer.title.trim()}`
-              : ""}
-          </button>
-        {/if}
-        {#if chat.artifact}
-          <span class="attach artifact-chip">
-            <ArtifactMark size="1em" />
-            {chat.artifact.title}
+    <div class="dock" bind:this={dockEl}>
+      {#if chat.uploads.length || chat.artifact || draftWaiting}
+        <div class="attachments">
+          {#if draftWaiting}
             <button
-              class="chip-x"
-              aria-label="Detach artifact"
-              use:tip={"Detach artifact"}
-              onclick={() => (chat.artifact = undefined)}
-              ><Icon name="close" size="1em" weight={7} /></button
+              class="attach draft-chip"
+              use:tip={"Reopen the work item you were writing"}
+              onclick={() => openComposer()}
             >
-          </span>
-        {/if}
-        {#each chat.uploads as u, i (u.path)}
-          {#if i > 0}<span class="sep" aria-hidden="true">~~</span>{/if}
-          <span class="attach">
-            <Icon name={u.image ? "image" : "file"} size="1.1em" />
-            {u.filename}
-            <button
-              class="chip-x"
-              aria-label="Remove attachment"
-              use:tip={"Remove attachment"}
-              onclick={() => chat.uploads.splice(i, 1)}
-              ><Icon name="close" size="1em" weight={7} /></button
-            >
-          </span>
-        {/each}
-      </div>
-    {/if}
-
-    <div class="composer">
-      {#if menuOpen && commands}
-        <CommandMenu
-          bind:this={cmdMenu}
-          mode={cmdCtx?.mode ?? "command"}
-          query={cmdCtx?.query ?? ""}
-          builtins={commands.builtins}
-          artifacts={commands.artifacts}
-          options={azMenu?.options}
-          crumb={azMenu?.crumb}
-          onpick={pickCommand}
-        />
+              <Icon name="review" size="1em" />
+              draft {composer.type?.name ?? "work item"}{composer.title.trim()
+                ? `: ${composer.title.trim()}`
+                : ""}
+            </button>
+          {/if}
+          {#if chat.artifact}
+            <span class="attach artifact-chip">
+              <ArtifactMark size="1em" />
+              {chat.artifact.title}
+              <button
+                class="chip-x"
+                aria-label="Detach artifact"
+                use:tip={"Detach artifact"}
+                onclick={() => (chat.artifact = undefined)}
+                ><Icon name="close" size="1em" weight={7} /></button
+              >
+            </span>
+          {/if}
+          {#each chat.uploads as u, i (u.path)}
+            {#if i > 0}<span class="sep" aria-hidden="true">~~</span>{/if}
+            <span class="attach">
+              <Icon name={u.image ? "image" : "file"} size="1.1em" />
+              {u.filename}
+              <button
+                class="chip-x"
+                aria-label="Remove attachment"
+                use:tip={"Remove attachment"}
+                onclick={() => chat.uploads.splice(i, 1)}
+                ><Icon name="close" size="1em" weight={7} /></button
+              >
+            </span>
+          {/each}
+        </div>
       {/if}
-      <label class="upload" use:tip={"Attach a document"}>
-        <Icon name="attach" label="Attach a document" />
-        <input type="file" onchange={onFile} />
-      </label>
-      <textarea
-        bind:this={composerEl}
-        aria-label="Message the assistant, / for commands"
-        bind:value={chat.input}
-        rows="2"
-        onkeydown={composerKeydown}></textarea>
-      <div class="send-col">
-        <Button
-          variant={clearArmed ? "danger" : "ghost"}
-          icon={clearArmed ? "confirm" : "clear"}
-          morph
-          disabled={chat.busy || !chat.entries.length}
-          aria-label="Clear the conversation"
-          title={clearArmed ? "click again to clear" : "Clear the conversation"}
-          onclick={onClear}
-        />
-        <Button
-          variant="ghost"
-          icon="send"
-          disabled={chat.busy || !chat.input.trim()}
-          aria-label="Send"
-          title="Send"
-          onclick={send}
-        />
+
+      <div class="composer">
+        {#if menuOpen && commands}
+          <CommandMenu
+            bind:this={cmdMenu}
+            mode={cmdCtx?.mode ?? "command"}
+            query={cmdCtx?.query ?? ""}
+            builtins={commands.builtins}
+            artifacts={commands.artifacts}
+            options={azMenu?.options}
+            crumb={azMenu?.crumb}
+            onpick={pickCommand}
+          />
+        {/if}
+        <label class="upload" use:tip={"Attach a document"}>
+          <Icon name="attach" label="Attach a document" />
+          <input type="file" onchange={onFile} />
+        </label>
+        <textarea
+          bind:this={composerEl}
+          aria-label="Message the assistant, / for commands"
+          bind:value={chat.input}
+          rows="2"
+          onkeydown={composerKeydown}></textarea>
+        <div class="send-col">
+          <Button
+            variant={clearArmed ? "danger" : "ghost"}
+            icon={clearArmed ? "confirm" : "clear"}
+            morph
+            disabled={chat.busy || !chat.entries.length}
+            aria-label="Clear the conversation"
+            title={clearArmed
+              ? "click again to clear"
+              : "Clear the conversation"}
+            onclick={onClear}
+          />
+          <Button
+            variant="ghost"
+            icon="send"
+            disabled={chat.busy || !chat.input.trim()}
+            aria-label="Send"
+            title="Send"
+            onclick={send}
+          />
+        </div>
       </div>
     </div>
   </div>
@@ -736,7 +753,8 @@
 
 <style>
   .chat {
-    --upload-w: 1.375rem;
+    --side-w: 3.25rem;
+    --upload-w: var(--side-w);
     --composer-gap: 0.5rem;
     display: flex;
     flex-direction: column;
@@ -767,7 +785,7 @@
     gap: 0.35rem;
     align-self: stretch;
     flex: none;
-    width: 3.25rem;
+    width: var(--side-w);
   }
   .send-col :global(.btn) {
     width: 100%;
@@ -779,6 +797,7 @@
      read as controls sitting beside the textarea. */
   .send-col :global(.btn.ghost) {
     border-color: var(--border);
+    background: var(--panel-bg);
   }
   /* Armed Clear inverts to a solid block, the same move .btn.primary makes on
      hover - the label rides on --bg so it reads in either theme. */
@@ -852,7 +871,7 @@
     font-size: 0.92em;
   }
   .md :global(pre) {
-    background: var(--panel-solid);
+    background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 6px;
     padding: 0.6em 0.8em;
@@ -912,8 +931,23 @@
   .transcript::-webkit-scrollbar {
     display: none;
   }
-  /* A turn is a speaker marker plus its text - no boxes. Only events
-     (approval, compaction, export) get a Panel.
+
+  /* Nothing said yet: the lede and the dock sit together in the middle. */
+  .chat.empty {
+    justify-content: center;
+  }
+  .chat.empty .transcript-wrap {
+    flex: none;
+    padding-right: 0;
+  }
+  .chat.empty .transcript {
+    align-items: center;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  /* A turn is a speaker marker over its text. The text gets a plate of its
+     own: there is no window behind it, only the sky.
 
      The transcript is the longest thing anyone reads here, so the prose is on
      the UI face; code, tool traces and event panels stay mono. 60ch and 46ch
@@ -922,6 +956,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.1rem;
+    width: fit-content;
     max-width: 60ch;
   }
   .turn .who {
@@ -936,7 +971,10 @@
     font-family: var(--font-prose);
     white-space: pre-wrap;
     line-height: 1.6;
-    padding-left: 1ch;
+    padding: var(--pad-2) var(--pad-3);
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
   }
   .turn .body.md {
     white-space: normal;
@@ -964,11 +1002,8 @@
      a single token, sits on the right. */
   .turn.user {
     align-self: flex-end;
-    width: fit-content;
     max-width: 46ch;
     text-align: left;
-    border-right: 2px solid var(--accent-dim);
-    padding-right: var(--pad-2);
   }
   .turn.user .who {
     align-self: flex-end;
@@ -980,8 +1015,18 @@
     transform: scaleX(-1);
   }
   .turn.user .body {
-    padding-left: 0;
-    padding-right: 1ch;
+    background: color-mix(in srgb, var(--accent) 14%, var(--panel-solid));
+  }
+
+  /* The textarea is what sits on the nav's centre line, not the row: the
+     upload mark gets a column as wide as the send column, and the row steps
+     right by half of the padding `main` keeps on that side only. */
+  .dock {
+    position: relative;
+    left: calc(var(--pad-2) / 2);
+    width: 100%;
+    max-width: 46rem;
+    align-self: center;
   }
 
   /* Indented past the upload mark so the row starts where the textarea does. */
@@ -1037,17 +1082,18 @@
     display: flex;
     gap: var(--composer-gap);
     align-items: stretch;
-    padding-top: 0.6rem;
-    border-top: 1px solid var(--border);
   }
   .composer textarea {
     flex: 1;
     resize: none;
+    background: var(--panel-bg);
   }
   /* A <label>, not a <button> - it has to wrap the file input - so it borrows
      the mark's hover language rather than inheriting it from Button. */
   .upload {
     width: var(--upload-w);
+    display: flex;
+    justify-content: flex-end;
     cursor: pointer;
     align-self: center;
     font-size: 1.1rem;
