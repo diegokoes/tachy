@@ -41,8 +41,9 @@ ENV
   ;;
 smoke)
   docker compose run --rm cli npm run sync -- seed --scale=small --reset --yes
+  k6=$(sed -n 's/^ *image: *\(grafana\/k6:[^ ]*\) *$/\1/p' load/k6.compose.yml)
   docker run --rm --network "$project" -v "$PWD/load:/load:ro" \
-    -e BASE_URL=http://api:8787 grafana/k6:2.2.0 run --quiet /load/smoke.js
+    -e BASE_URL=http://api:8787 "$k6" run --quiet /load/smoke.js
   ;;
 *)
   echo "usage: container-smoke.sh up|smoke" >&2
