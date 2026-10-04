@@ -525,6 +525,14 @@
     background: var(--window-bg);
   }
 
+  /* Chat has no window: the conversation sits on the sky, inside the bounds
+     the other sections fill. The rule turns transparent rather than going
+     away, so the box keeps its size. */
+  .window:has(main > :global(.chat.bare)) > :global(section) {
+    background: transparent;
+    border-color: transparent;
+  }
+
   /* Three tracks, and the outer two are equal: the pill stays on the frame's
      true centre no matter how wide the wordmark draws. */
   .topbar {

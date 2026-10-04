@@ -746,10 +746,13 @@ export function unfold(o: {
  * The nodes are positioned absolutely for the length of the tween. A flex item
  * with a zero basis ignores an inline height, so left in flow it would jump to
  * its final size and only its offset would animate.
+ *
+ * `absolute: false` keeps them in flow, for a node that only changes place:
+ * lifted out, its neighbours would take its room and give it back at the end.
  */
 export function reflow(
   targets: (Element | null | undefined)[],
-  o: { duration?: number; ease?: string } = {},
+  o: { duration?: number; ease?: string; absolute?: boolean } = {},
 ): () => void {
   const nodes = targets.filter((t): t is Element => Boolean(t));
   if (reducedMotion() || !nodes.length) return () => {};
@@ -759,7 +762,7 @@ export function reflow(
     Flip.from(state, {
       duration,
       ease: o.ease ?? "power2.inOut",
-      absolute: true,
+      absolute: o.absolute ?? true,
       onEnter: (els) =>
         gsap.fromTo(els, { opacity: 0 }, { opacity: 1, duration }),
       onLeave: (els) => gsap.to(els, { opacity: 0, duration: duration / 2 }),
