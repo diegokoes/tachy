@@ -7,6 +7,17 @@ create or replace function tachy_join(arr text[]) returns text
     language sql immutable parallel safe
     as $$ select array_to_string(arr, ' ') $$;
 
+-- The words inside identifiers and paths: scheduleDueRuns and
+-- schedule_due_runs both become "schedule due runs", so a tsvector built from
+-- this matches a symbol typed either way, or as words.
+create or replace function tachy_code_words(t text) returns text
+    language sql immutable parallel safe
+    as $$ select regexp_replace(
+              regexp_replace(
+                regexp_replace(t, '([a-z0-9])([A-Z])', '\1 \2', 'g'),
+                '([A-Z]+)([A-Z][a-z])', '\1 \2', 'g'),
+              '[^A-Za-z0-9]+', ' ', 'g') $$;
+
 -- One row: the sha256 of the schema.sql this database was built from, written by
 -- whatever applied it. /readyz compares it with the schema.sql in the image.
 create table schema_meta (
@@ -1044,12 +1055,18 @@ create table code_blob_chunks (
     end_line    integer not null,
     chunk_text  text not null,
     embedding   vector(768),
+    -- The words of the chunk, with the names it defines weighted A and its
+    -- body D, so a search for a name finds where it is defined before the
+    -- places that use it. Written by the indexer, which finds the names
+    -- (core/src/code/symbols.ts); null until it has.
+    search_tsv  tsvector,
     unique (repo_id, blob_sha, ordinal)
 );
 
 create index code_blob_chunks_embedding_idx on code_blob_chunks using hnsw (embedding vector_cosine_ops)
     with (m = 16, ef_construction = 64);
 create index code_blob_chunks_trgm_idx      on code_blob_chunks using gin (chunk_text gin_trgm_ops);
+create index code_blob_chunks_tsv_idx       on code_blob_chunks using gin (search_tsv);
 
 -- A bucket is a collection of documents maintained outside tachy and pushed in
 -- by a script that holds the token, e.g. a Document360 knowledge base synced
