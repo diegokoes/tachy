@@ -184,7 +184,6 @@
     {#if form.me && !isMe(current)}
       <button
         class="me"
-        title={`set to ${form.me.name}`}
         onclick={() => {
           typingPerson = false;
           onchange(form.me!.unique_name);

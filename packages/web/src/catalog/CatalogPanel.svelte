@@ -47,7 +47,6 @@
       key: "entries",
       label: "entries",
       value: k.entries,
-      title: "knowledge entries",
     },
     ...(showCustomer()
       ? [

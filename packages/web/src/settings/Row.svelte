@@ -1,11 +1,9 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { tip } from "../tui";
 
   let {
     label,
     hint,
-    about,
     mark,
     children,
     actions,
@@ -13,8 +11,6 @@
     label: string;
     /** Sits under the label. */
     hint?: string;
-    /** Said on hover over the label, for what would crowd it as a hint. */
-    about?: string;
     /** A badge set after the label, on its line. */
     mark?: Snippet;
     children: Snippet;
@@ -32,10 +28,10 @@
   <div class="k">
     {#if mark}
       <span class="line">
-        <span class="name" use:tip={about}>{label}</span>{@render mark()}
+        <span class="name">{label}</span>{@render mark()}
       </span>
     {:else}
-      <span class="name" use:tip={about}>{label}</span>
+      <span class="name">{label}</span>
     {/if}
     {#if hint}<span class="hint">{hint}</span>{/if}
   </div>

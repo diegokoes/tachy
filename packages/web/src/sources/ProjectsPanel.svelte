@@ -410,10 +410,7 @@
   {:else}
     <div class="detail">
       <div class="block">
-        <span
-          class="dim"
-          title="ADO: one project wiki plus one code wiki per repo.">wikis</span
-        >
+        <span class="dim">wikis</span>
         {#if p.source_type === "azure-devops"}
           {#each wikisFor[p.id] ?? [] as w (w.identifier)}
             {@const on = wikisOf(p).some((x) => x.identifier === w.identifier)}
@@ -428,9 +425,7 @@
               <span class:muted={!on}>{w.name}</span>
               {#if w.type}<span class="dim sm">{w.type}</span>{/if}
               {#if isDefault}
-                <Badge tone="accent" title="used when no wiki is named"
-                  >default</Badge
-                >
+                <Badge tone="accent">default</Badge>
               {:else if on && canEditProject(p)}
                 <Button
                   variant="ghost"
@@ -472,7 +467,7 @@
       </div>
 
       <div class="block wide">
-        <span class="dim" title={INFO.area}>area path → component</span>
+        <span class="dim">area path → component</span>
         {#each areas[p.id] ?? [] as a (a.id)}
           <div class="arow">
             <code>{a.area_prefix}</code>
@@ -537,7 +532,6 @@
       <SourceFinder
         source={slug}
         label="fetch projects"
-        takenTip="already registered"
         empty="{slug} shows no projects to this token"
         hits={found[slug]}
         picked={String(f.draft.external_key ?? "")}
@@ -569,9 +563,6 @@
     size="sm"
     icon={coverage.length ? "issues" : "success"}
     tone={coverageTone}
-    title={coverage.length
-      ? `${coverage.length} project(s) not fully wired up`
-      : "every project is wired up"}
     onclick={() => (showCoverage = true)}
     >coverage{coverage.length ? ` ${coverage.length}` : ""}</Button
   >

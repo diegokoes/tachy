@@ -39,6 +39,7 @@
     busy?: boolean;
     disabled?: boolean;
     full?: boolean;
+    /** The name of an icon-only button; ignored once it has words. */
     title?: string;
     type?: "button" | "submit";
     /** Submits a form this button is not nested in - the carved action row. */
@@ -50,7 +51,8 @@
   } = $props();
 
   /* A mark with no words beside it shows its title as a tip, which hover,
-     focus and touch all reach, and takes it as its name if it has none. */
+     focus and touch all reach, and takes it as its name if it has none.
+     A button with words needs neither. */
   const bare = $derived(!children);
 </script>
 
@@ -60,7 +62,6 @@
   class:full
   {type}
   {form}
-  title={bare ? undefined : title}
   aria-label={ariaLabel ?? (bare ? title : undefined)}
   aria-pressed={ariaPressed}
   aria-busy={busy || undefined}

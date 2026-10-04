@@ -44,11 +44,6 @@
       checked={on}
       disabled={t.binary}
       label={t.ext ? `index .${t.ext} files` : "files with no extension"}
-      about={t.binary
-        ? t.ext
-          ? "binary, never indexed"
-          : "no extension, never indexed"
-        : undefined}
       share={(on ? t.admitted : t.files) / top}
       count={on && t.admitted !== t.files
         ? `${fmt(t.admitted)} / ${fmt(t.files)}`

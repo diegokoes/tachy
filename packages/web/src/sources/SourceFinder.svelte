@@ -12,7 +12,6 @@
   let {
     source,
     label,
-    takenTip,
     empty,
     hits,
     picked,
@@ -25,8 +24,6 @@
     source: string;
     /** The button's word, e.g. "fetch projects". */
     label: string;
-    /** Said on a name that is already taken here. */
-    takenTip: string;
     /** Said when the source answers with nothing. */
     empty: string;
     /** What it answered last time, if it has been asked. */
@@ -314,11 +311,6 @@
         class:on={picked === g.key}
         disabled={taken}
         aria-pressed={picked === g.key}
-        use:tip={taken
-          ? `${g.key} · ${takenTip}`
-          : g.name === g.key
-            ? undefined
-            : g.key}
         onclick={() => onpick(g)}
       >
         <span class="frame" aria-hidden="true"></span>

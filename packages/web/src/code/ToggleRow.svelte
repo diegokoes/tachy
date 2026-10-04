@@ -1,12 +1,11 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { Meter, tip } from "../tui";
+  import { Meter } from "../tui";
 
   let {
     checked,
     disabled = false,
     label,
-    about,
     depth = 0,
     share,
     count,
@@ -21,7 +20,6 @@
     disabled?: boolean;
     /** The switch's accessible name. */
     label: string;
-    about?: string;
     depth?: number;
     /** This row's part of its whole, drawn as a meter. */
     share?: number;
@@ -49,7 +47,6 @@
     aria-checked={checked}
     aria-label={label}
     {disabled}
-    use:tip={about}
     onclick={() => onchange(!checked)}
   >
     <span class="ico">{@render icon()}</span>

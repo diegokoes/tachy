@@ -11,8 +11,6 @@
     tone?: "accent" | "ok" | "warn" | "danger" | "muted";
     /** The section on this page this figure is the count of. */
     to?: string;
-    /** What the figure is, in full, on hover. */
-    title?: string;
   };
 
   let {
@@ -39,15 +37,11 @@
   {#each items as it (it.key)}
     {#if it.to}
       {@const to = it.to}
-      <button
-        class="cell go"
-        title={it.title ?? `go to ${to}`}
-        onclick={() => showSection(to)}
-      >
+      <button class="cell go" onclick={() => showSection(to)}>
         {@render body(it)}
       </button>
     {:else}
-      <div class="cell" title={it.title}>{@render body(it)}</div>
+      <div class="cell">{@render body(it)}</div>
     {/if}
   {/each}
 </div>

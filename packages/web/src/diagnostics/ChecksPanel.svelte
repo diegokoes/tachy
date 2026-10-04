@@ -1,15 +1,7 @@
 <script lang="ts">
-  import { fmtTime, utcTip } from "../dates.svelte";
+  import { fmtTime } from "../dates.svelte";
   import { onMount } from "svelte";
-  import {
-    Badge,
-    Button,
-    DataTable,
-    Note,
-    tip,
-    toneOf,
-    type Column,
-  } from "../tui";
+  import { Badge, Button, DataTable, Note, toneOf, type Column } from "../tui";
   import {
     probes,
     probeTally,
@@ -37,7 +29,7 @@
 {/snippet}
 
 {#snippet detailCell(p: Probe)}
-  <span class="detail" title={p.detail}>{p.detail}</span>
+  <span class="detail">{p.detail}</span>
 {/snippet}
 
 <div class="bar">
@@ -55,9 +47,7 @@
         : ""}{tally.failing ? ` · ${tally.failing} failing` : ""}{tally.skipped
         ? ` · ${tally.skipped} skipped`
         : ""}
-      {#if probes.at}· <span use:tip={utcTip(probes.at)}
-          >{fmtTime(probes.at)}</span
-        >{/if}
+      {#if probes.at}· {fmtTime(probes.at)}{/if}
     </span>
   {/if}
 </div>

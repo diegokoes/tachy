@@ -12,7 +12,6 @@
   import Row from "../settings/Row.svelte";
   import Rows from "../settings/Rows.svelte";
   import { Button, Icon, Note, Select } from "../tui";
-  import { INFO } from "../admin/help";
   import type { Customer, Product } from "../catalog/rows";
   import type { Repo } from "./rows";
   import type { SourceProject } from "../sources/rows";
@@ -174,7 +173,6 @@
     icon="plus"
     busy={linking}
     disabled={!ready}
-    title={ready ? `link as ${slug}` : "pick a repo or paste its clone URL"}
     onclick={link}>link</Button
   >
 {/snippet}
@@ -199,7 +197,6 @@
             <SourceFinder
               source={project.external_key}
               label="fetch {project.external_key} repos"
-              takenTip="already linked"
               empty="{project.external_key} shows no repos to this token"
               hits={hits?.map((h) => ({ key: h.name, name: h.name }))}
               {picked}
@@ -221,10 +218,7 @@
       <div class="col">
         <Group label="project" icon="integrations">
           <Rows>
-            <Row
-              label="project"
-              about="Owning project. Its connection supplies clone credentials and lists its repos."
-            >
+            <Row label="project">
               <Select
                 value={projectId ?? ""}
                 options={projectOptions}
@@ -254,12 +248,7 @@
 
         <Group label="repository" icon="repo">
           <Rows>
-            <Row
-              label="clone URL"
-              about={project
-                ? "Filled by picking a fetched repo, or pasted."
-                : "Cloned with the token of the product's connection."}
-            >
+            <Row label="clone URL">
               <input
                 bind:value={url}
                 placeholder="https://…"
@@ -267,17 +256,14 @@
                 spellcheck="false"
               />
             </Row>
-            <Row
-              label="default branch"
-              about="Where releases land, usually master."
-            >
+            <Row label="default branch">
               <input
                 bind:value={branch}
                 aria-label="default branch"
                 spellcheck="false"
               />
             </Row>
-            <Row label="component" about={INFO.repoComponent}>
+            <Row label="component">
               <Select
                 value={component}
                 options={[
@@ -291,10 +277,7 @@
                 onchange={(v) => (component = String(v ?? ""))}
               />
             </Row>
-            <Row
-              label="customer"
-              about="Customer addon repos only. Empty: shared code, included in customer-scoped search."
-            >
+            <Row label="customer">
               <Select
                 value={customer}
                 options={[

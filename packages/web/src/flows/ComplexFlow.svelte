@@ -303,7 +303,6 @@
       size="sm"
       icon="test"
       disabled={!draft.id || dirty}
-      title={dirty ? "save first" : "run it on an item"}
       onclick={(e) =>
         (testAnchor = testAnchor
           ? null
@@ -361,7 +360,6 @@
         morph
         tone={d.enabled ? "ok" : "warn"}
         aria-pressed={d.enabled}
-        title={d.enabled ? "runs on its triggers; pause it" : "switch it on"}
         onclick={() => (d.enabled = !d.enabled)}
         >{d.enabled ? "on" : "paused"}</Button
       >

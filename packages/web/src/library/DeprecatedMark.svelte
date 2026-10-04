@@ -15,7 +15,6 @@
 
 <button
   class="tag"
-  title="why this is outdated"
   aria-haspopup="dialog"
   use:shadowPulse
   onclick={() => (open = true)}>deprecated</button

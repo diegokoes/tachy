@@ -53,7 +53,7 @@
         {/if}
       {/each}
     </nav>
-    <span class="legend" title="searchable entries per component">
+    <span class="legend">
       <span class="swatch hollow"></span>0
       {#each RAMP_STEPS as s (s)}
         <span class="swatch" style="background: {toneMix('accent', s)}"></span>

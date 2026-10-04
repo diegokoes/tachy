@@ -367,7 +367,6 @@
     size="sm"
     icon="run"
     disabled={dirty || !raw}
-    title={dirty ? "save first" : "open this form in the composer"}
     onclick={tryIt}>try it</Button
   >
   <Button
@@ -420,11 +419,7 @@
         {#each offered as name, i (name)}
           {@const t = typeByName.get(name)}
           <span class="type" class:current={name === type}>
-            <button
-              class="name"
-              onclick={() => (type = name)}
-              use:tip={"edit this type's form"}
-            >
+            <button class="name" onclick={() => (type = name)}>
               <span
                 class="glyph"
                 style:color={typeColor(t?.color) ?? undefined}
@@ -457,11 +452,7 @@
           </span>
         {/each}
         {#each unoffered as t (t.name)}
-          <button
-            class="type off"
-            onclick={() => toggleType(t.name)}
-            use:tip={"offer it"}
-          >
+          <button class="type off" onclick={() => toggleType(t.name)}>
             <Icon name="plus" size="0.85em" />
             {t.name}
           </button>
@@ -488,7 +479,7 @@
               {@const ref = f.reference_name}
               {@const label = labelOf(raw, f)}
               {@const own = adminDefault(ref) !== undefined}
-              <Row {label} about={ref}>
+              <Row {label}>
                 {#snippet mark()}
                   {#if f.required}<Badge tone="warn">required</Badge>{/if}
                 {/snippet}
@@ -525,11 +516,7 @@
                         ><Icon name="reset" size="0.85em" /></button
                       >
                     {:else if hasSource(ref)}
-                      <span
-                        class="from"
-                        use:tip={`what ${sourceName} starts it at; change it to set the team's own`}
-                        >{sourceName}</span
-                      >
+                      <span class="from">{sourceName}</span>
                     {/if}
                   </span>
                   <Choice
@@ -557,7 +544,6 @@
                         class="me"
                         class:on={cur === ME}
                         aria-pressed={cur === ME}
-                        use:tip={"whoever creates the ticket, each person themselves"}
                         onclick={() => setDefault(ref, cur === ME ? null : ME)}
                         >me</button
                       >

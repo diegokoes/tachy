@@ -140,7 +140,6 @@
         {#if c.op === "in"}
           <input
             aria-label="Values"
-            title="separated by commas"
             value={listText(c.value)}
             oninput={(e) =>
               onchange({

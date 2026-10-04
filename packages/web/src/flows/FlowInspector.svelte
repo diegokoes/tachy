@@ -279,9 +279,7 @@
             ? "if / else"
             : "only if"}</span
       >
-      <span class="id" title="later steps read this one as steps.{s.id}"
-        >{s.id}</span
-      >
+      <span class="id">{s.id}</span>
     </header>
     {#if action?.description}<Note>{action.description}</Note>{/if}
     {#if s.kind === "action" && !action}

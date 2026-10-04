@@ -688,11 +688,7 @@
       {#if chat.uploads.length || chat.artifact || draftWaiting}
         <div class="attachments">
           {#if draftWaiting}
-            <button
-              class="attach draft-chip"
-              use:tip={"Reopen the work item you were writing"}
-              onclick={() => openComposer()}
-            >
+            <button class="attach draft-chip" onclick={() => openComposer()}>
               <Icon name="review" size="1em" />
               draft {composer.type?.name ?? "work item"}{composer.title.trim()
                 ? `: ${composer.title.trim()}`
