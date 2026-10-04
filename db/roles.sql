@@ -13,6 +13,13 @@ do $$ begin
 exception when duplicate_object then null;
 end $$;
 
+-- tachy-watch, from inside the postgres container. It has no password, so it
+-- logs in only where pg_hba trusts: the container's own socket and loopback.
+do $$ begin
+    create role tachy_watch login;
+exception when duplicate_object then null;
+end $$;
+
 alter role tachy_app set statement_timeout = '60s';
 
 do $$
@@ -28,5 +35,7 @@ begin
 end $$;
 
 grant pg_read_all_data to tachy_backup;
+-- Connection counts and the oldest transaction, across every session.
+grant pg_monitor to tachy_watch;
 -- Admin > System counts connections per process from pg_stat_activity.
 grant pg_read_all_stats to tachy_app;
