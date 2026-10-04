@@ -1,4 +1,4 @@
-import { gsap, SplitText, reducedMotion } from "./gsap";
+import { gsap, Flip, SplitText, reducedMotion } from "./gsap";
 
 /**
  * Character-shatter: chars fall, tumble and fade, then the block collapses.
@@ -618,5 +618,38 @@ export function unfold(o: {
       tl?.kill();
       gsap.killTweensOf([win, plate, scrim, blob, ...parts]);
     },
+  };
+}
+
+/**
+ * Smooth resizing for a layout change. Call it while the nodes still sit where
+ * they were, make the change, then call what it returns once the DOM has the
+ * new layout: each node travels from its old box to its new one.
+ *
+ * Width and height are tweened, not a scale, so text inside a node reflows
+ * rather than stretching. A node the change hides (`display: none`) fades out
+ * where it stood, and one it reveals fades in.
+ *
+ * The nodes are positioned absolutely for the length of the tween. A flex item
+ * with a zero basis ignores an inline height, so left in flow it would jump to
+ * its final size and only its offset would animate.
+ */
+export function reflow(
+  targets: (Element | null | undefined)[],
+  o: { duration?: number; ease?: string } = {},
+): () => void {
+  const nodes = targets.filter((t): t is Element => Boolean(t));
+  if (reducedMotion() || !nodes.length) return () => {};
+  const state = Flip.getState(nodes);
+  const duration = o.duration ?? 0.35;
+  return () => {
+    Flip.from(state, {
+      duration,
+      ease: o.ease ?? "power2.inOut",
+      absolute: true,
+      onEnter: (els) =>
+        gsap.fromTo(els, { opacity: 0 }, { opacity: 1, duration }),
+      onLeave: (els) => gsap.to(els, { opacity: 0, duration: duration / 2 }),
+    });
   };
 }

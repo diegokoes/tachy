@@ -37,6 +37,9 @@ export const themeState = $state({
   accentCustomized: false,
   fontScale: DEFAULT_SCALE as number,
   navLabels: "text" as NavLabels,
+  navHidden: false,
+  /** Only takes effect while the nav is hidden too. */
+  subnavHidden: false,
 });
 
 function applyAccent(v: string) {
@@ -83,6 +86,17 @@ export function setNavLabels(v: NavLabels) {
   localStorage.setItem("tachy-nav-labels", v);
 }
 
+export function setSubnavHidden(v: boolean) {
+  themeState.subnavHidden = v;
+  localStorage.setItem("tachy-subnav-hidden", v ? "1" : "0");
+}
+
+/** Takes the top bar away. Its shortcuts stay bound. */
+export function setNavHidden(v: boolean) {
+  themeState.navHidden = v;
+  localStorage.setItem("tachy-nav-hidden", v ? "1" : "0");
+}
+
 export function loadThemeFromStorage() {
   const savedTheme = localStorage.getItem("tachy-theme") as Theme | null;
   if (savedTheme === "light" || savedTheme === "dark") {
@@ -111,4 +125,7 @@ export function loadThemeFromStorage() {
   const labels = localStorage.getItem("tachy-nav-labels");
   if (NAV_LABELS.includes(labels as NavLabels))
     themeState.navLabels = labels as NavLabels;
+
+  themeState.navHidden = localStorage.getItem("tachy-nav-hidden") === "1";
+  themeState.subnavHidden = localStorage.getItem("tachy-subnav-hidden") === "1";
 }
