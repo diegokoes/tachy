@@ -5,7 +5,12 @@ import {
   embedQueryLiteral,
   toVectorLiteral,
 } from "../search/embeddings";
-import { writeEmbeddings } from "../search/backfill";
+import {
+  currentVector,
+  needsVector,
+  writeEmbeddings,
+} from "../search/backfill";
+import { EMBEDDING_MODEL } from "../search/model";
 import {
   CANDIDATES,
   clampLimit,
@@ -217,7 +222,7 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
          issue_summary, symptoms, signals, tags,
          root_cause, resolution, resolution_pattern, component_id, product_area, confidence,
          cloud, resolution_clarity, hidden_fix, affected_version, fixed_version,
-         structured, embedding)
+         structured, embedding, embedding_model)
       values
         (${i.workItemId ?? null}, ${productId}, ${teamId}, ${customerId ?? null},
          ${customerUnitId}, ${i.createdById ?? null},
@@ -225,7 +230,8 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
          ${i.rootCause ?? null}, ${i.resolution ?? null}, ${i.resolutionPattern ?? null}, ${componentId}, ${productArea},
          ${confidence}, ${i.cloud ?? null}, ${i.resolutionClarity ?? null}, ${i.hiddenFix ?? null},
          ${affectedVersion}, ${i.fixedVersion ?? null},
-         ${jsonb(structured)}, ${embedding}::vector)
+         ${jsonb(structured)}, ${embedding}::vector,
+         ${embedding ? EMBEDDING_MODEL : null})
       returning id, version, ${REVISION_COLUMNS}
     `;
     await syncLinks(
@@ -345,7 +351,7 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
              row_number() over (order by embedding <=> ${qvec}::vector) as rnk,
              1 - (embedding <=> ${qvec}::vector) as cos_sim
       from knowledge_entries
-      where ${filters} and embedding is not null
+      where ${filters} and embedding is not null and ${currentVector()}
         and 1 - (embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
       order by embedding <=> ${qvec}::vector
       limit ${CANDIDATES}
@@ -668,7 +674,7 @@ export async function updateKnowledgeEntry(
       fixed_version      = ${merged.fixedVersion ?? null},
       structured         = ${jsonb(merged.structured ?? {})},
       version            = version + 1
-      ${contentChanged ? (vec ? sql`, embedding = ${vec}::vector` : sql`, embedding = null`) : sql``}
+      ${contentChanged ? (vec ? sql`, embedding = ${vec}::vector, embedding_model = ${EMBEDDING_MODEL}` : sql`, embedding = null, embedding_model = null`) : sql``}
     where id = ${id} and version = ${current.version}
     returning id, version, ${REVISION_COLUMNS}
   `;
@@ -695,7 +701,7 @@ export async function backfillEmbeddings(
     select id, issue_summary, root_cause, resolution, resolution_pattern,
            product_area, symptoms, signals, tags
     from knowledge_entries
-    ${opts.all ? sql`` : sql`where embedding is null`}
+    ${opts.all ? sql`` : sql`where ${needsVector()}`}
   `;
 
   const patternDescriptions = new Map<string, string>();

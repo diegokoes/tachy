@@ -32,6 +32,23 @@ describe("EmbedQueue", () => {
     expect(r.batches).toEqual([["a", "aa"], ["aaa", "aaaa"], ["aaaaa"]]);
   });
 
+  it("closes a passage batch at its character budget, and never leaves one empty", async () => {
+    const r = recorder();
+    const q = new EmbedQueue(r.run, {
+      passageBatch: 8,
+      queryBatch: 32,
+      passageChars: 10,
+    });
+    const texts = ["aaaa", "bbbb", "cccc", "d".repeat(25), "ee"];
+    const out = await q.embed("passage", texts);
+    expect(out).toEqual([[4], [4], [4], [25], [2]]);
+    expect(r.batches).toEqual([
+      ["ee", "aaaa", "bbbb"],
+      ["cccc"],
+      ["d".repeat(25)],
+    ]);
+  });
+
   it("runs a waiting query before the next passage batch", async () => {
     const r = recorder();
     const q = new EmbedQueue(r.run, { passageBatch: 1, queryBatch: 32 });

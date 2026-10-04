@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { env, issueFlag, sql, type IssueList } from "@tachy/core/infra";
 import { vaultState } from "@tachy/core/config";
-import { type EmbedQueueDepth } from "@tachy/core/search";
+import { type EmbedQueueDepth, staleVectors } from "@tachy/core/search";
 import { uploadTtlMs } from "@tachy/core/chat";
 import { jobIssues } from "@tachy/core/jobs";
 import { lifecycle, readiness } from "./lifecycle";
@@ -163,7 +163,7 @@ async function jobHealth(): Promise<Record<string, number> | null> {
 
 /** Current values only; nothing here is stored. */
 export async function runtimeSnapshot() {
-  const [mem, postgres, status, history, ready, sizes, sec, jobs] =
+  const [mem, postgres, status, history, ready, sizes, sec, jobs, stale] =
     await Promise.all([
       memory(),
       postgresConnections(),
@@ -173,6 +173,7 @@ export async function runtimeSnapshot() {
       tableSizes(),
       security(),
       jobHealth(),
+      staleVectors().catch(() => []),
     ]);
   return {
     draining: lifecycle.draining,
@@ -187,6 +188,7 @@ export async function runtimeSnapshot() {
     embed: embedDepth?.() ?? (await externalDepth()),
     postgres,
     jobs,
+    staleVectors: stale,
     status,
     history,
     uptimeSeconds: Math.round(process.uptime()),
@@ -264,6 +266,9 @@ export function systemIssues(
     ),
     "watch.fail": byState("fail"),
     "watch.warn": byState("warn"),
+    "search.stale_vectors": named(
+      r.staleVectors.map((t) => `${t.table}: ${t.rows}`),
+    ),
     "vault.old_keys": named(
       r.security.vault.enabled
         ? r.security.vault.by_key

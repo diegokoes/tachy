@@ -36,7 +36,16 @@ export class EmbedQueue {
 
   constructor(
     private readonly run: EmbedRunner,
-    private readonly opts = { passageBatch: 8, queryBatch: 32 },
+    private readonly opts: {
+      passageBatch: number;
+      queryBatch: number;
+      /**
+       * Characters one passage batch may hold. A batch occupies the model for
+       * as long as its text is, and a search waits behind it; a model with a
+       * long window makes eight full chunks a six-second wait.
+       */
+      passageChars?: number;
+    } = { passageBatch: 8, queryBatch: 32 },
   ) {}
 
   embed(
@@ -129,7 +138,17 @@ export class EmbedQueue {
     const caller = rotation.shift()!;
     const jobs = this.passages.get(caller)!;
     const job = jobs[0];
-    const idx = job.order.slice(job.next, job.next + this.opts.passageBatch);
+    const budget = this.opts.passageChars ?? Infinity;
+    const idx: number[] = [];
+    let chars = 0;
+    for (const i of job.order.slice(
+      job.next,
+      job.next + this.opts.passageBatch,
+    )) {
+      if (idx.length && chars + job.texts[i].length > budget) break;
+      idx.push(i);
+      chars += job.texts[i].length;
+    }
     let failed = false;
     try {
       const vectors = await this.run(idx.map((i) => job.texts[i]));

@@ -2,7 +2,8 @@ import { matchesGlob } from "node:path";
 import { sql } from "../infra/db";
 import { log } from "../infra/log";
 import { embedPassages, toVectorLiteral } from "../search/embeddings";
-import { writeEmbeddings } from "../search/backfill";
+import { needsVector, writeEmbeddings } from "../search/backfill";
+import { EMBEDDING_MODEL, EMBEDDING_SPEC } from "../search/model";
 import { chunkCode } from "./chunk-code";
 import { chunkSymbols } from "./symbols";
 
@@ -263,7 +264,9 @@ async function embedAndStoreFile(
   token: string | undefined,
 ): Promise<void> {
   const content = await readBlob(repo.slug, file.blobSha, token);
-  const chunks = content.includes("\0") ? [] : chunkCode(content);
+  const chunks = content.includes("\0")
+    ? []
+    : chunkCode(content, EMBEDDING_SPEC.codeChunkChars - file.path.length - 4);
   const vectors = chunks.length
     ? await embedPassages(chunks.map((c) => `// ${file.path}\n${c.text}`))
     : [];
@@ -277,9 +280,10 @@ async function embedAndStoreFile(
     if (chunks.length)
       await t`
         insert into code_blob_chunks
-          (repo_id, blob_sha, ordinal, start_line, end_line, chunk_text, search_tsv, embedding)
+          (repo_id, blob_sha, ordinal, start_line, end_line, chunk_text, search_tsv,
+           embedding, embedding_model)
         select ${line.repo_id}, ${file.blobSha}, u.ordinal, u.start_line, u.end_line,
-               u.chunk_text, ${CODE_TSV}, u.embedding::vector
+               u.chunk_text, ${CODE_TSV}, u.embedding::vector, ${EMBEDDING_MODEL}
         from unnest(
           ${chunks.map((c) => c.ordinal)}::int[],
           ${chunks.map((c) => c.startLine)}::int[],
@@ -316,6 +320,12 @@ export interface IndexOptions {
   token?: string;
   /** Index only this line; every tracked line when absent. */
   line?: string;
+  /**
+   * Cut and embed every file again, changed or not. What a reindex otherwise
+   * skips is exactly what a new chunk size or a new embedding model has to
+   * redo.
+   */
+  full?: boolean;
   signal?: AbortSignal;
   /** `at` places the line among those this call indexes; files done/total are per line. */
   onProgress?: (
@@ -331,6 +341,7 @@ async function indexLine(
   line: RepoLine,
   opts: IndexOptions,
   at: { index: number; count: number },
+  redone: Set<string>,
 ): Promise<LineIndexResult> {
   const { token, signal } = opts;
   let done = 0;
@@ -360,15 +371,20 @@ async function indexLine(
       .filter((e) => !wantedByPath.has(e.path) || e.size_bytes > maxBytes)
       .map((e) => e.path);
     const shaByPath = new Map(existing.map((e) => [e.path, e.blob_sha]));
-    const changed = wanted.filter((f) => shaByPath.get(f.path) !== f.blobSha);
+    const changed = opts.full
+      ? wanted
+      : wanted.filter((f) => shaByPath.get(f.path) !== f.blobSha);
 
+    // Blobs whose chunks are already in place: another line holds them, or on
+    // a full pass an earlier line of this run has just redone them.
     const known = new Map<string, number>();
     const changedShas = [...new Set(changed.map((f) => f.blobSha))];
     for (const r of await sql`
       select distinct blob_sha, size_bytes from repo_line_files
       where repo_id = ${line.repo_id} and blob_sha = any(${changedShas})
     `)
-      known.set(r.blob_sha, r.size_bytes);
+      if (!opts.full || redone.has(r.blob_sha))
+        known.set(r.blob_sha, r.size_bytes);
 
     const unseen = changedShas.filter((sha) => !known.has(sha));
     await prefetchBlobs(repo.slug, unseen, token);
@@ -400,6 +416,7 @@ async function indexLine(
         const size = sizes.get(file.blobSha) ?? 0;
         await embedAndStoreFile(repo, line, file, size, token);
         known.set(file.blobSha, size);
+        redone.add(file.blobSha);
         embedded++;
       }
       done++;
@@ -480,9 +497,10 @@ export async function indexRepo(
   if (opts.line && !lines.length)
     throw new Error(`Repo '${slug}' does not track '${opts.line}'`);
   const results: LineIndexResult[] = [];
+  const redone = new Set<string>();
   for (const [index, line] of lines.entries())
     results.push(
-      await indexLine(repo, line, opts, { index, count: lines.length }),
+      await indexLine(repo, line, opts, { index, count: lines.length }, redone),
     );
   return { slug, lines: results };
 }
@@ -567,7 +585,7 @@ export async function backfillCodeEmbeddings(
            (select min(f.path) from repo_line_files f
             where f.repo_id = c.repo_id and f.blob_sha = c.blob_sha) as path
     from code_blob_chunks c
-    ${opts.all ? sql`` : sql`where c.embedding is null`}
+    ${opts.all ? sql`` : sql`where ${needsVector("c")}`}
     order by c.repo_id, c.blob_sha, c.ordinal
   `;
   return writeEmbeddings(
