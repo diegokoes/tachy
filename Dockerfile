@@ -14,9 +14,8 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# node:24-slim ships npm 11.x. Pin the version explicitly so the image does not
-# drift with the base image, and so it matches what the lockfile is maintained
-# with locally.
+# Pinned so the image's npm does not drift with the base image, and matches
+# what the lockfile is maintained with locally.
 RUN npm i -g npm@12.0.2
 
 # k6, for the load runs an admin starts from the tests page (§11.3).
@@ -100,7 +99,7 @@ ENV TACHY_MCP_ARGS=dist/mcp.js
 ENV TACHY_REPO_DIR=/app/data/repos
 ENV TACHY_AGENT_HOME=/home/node/.claude
 
-# node:24-slim already carries an unprivileged `node` (uid 1000). Everything the
+# The base image already carries an unprivileged `node` (uid 1000). Everything the
 # server writes at runtime is created and handed over here, because Docker only
 # chowns a named volume it creates itself - an existing one keeps the ownership
 # it was populated with. See README > Operations for the one-time chown an
