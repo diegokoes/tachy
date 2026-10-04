@@ -42,15 +42,17 @@ const REAL_KINDS: Record<EmbedMode, Set<string>> = {
 };
 
 /**
- * Measured on a 20-core workstation, fp32 bge-base through onnxruntime-node,
- * against the text this seeder actually writes. The model saturates the cores
- * it is given, so batching changes the constant and not the order: this is
- * throughput, not overhead, and the estimate below is honest about that.
+ * Measured on a 20-core workstation with fp32 bge-base through
+ * onnxruntime-node, against the text this seeder actually writes, then scaled
+ * by 0.45: what gte-modernbert-base manages beside bge-base on code chunks.
+ * The model saturates the cores it is given, so batching changes the constant
+ * and not the order: this is throughput, not overhead, and the estimate below
+ * is honest about that.
  */
 const ROWS_PER_SECOND: Record<string, number> = {
-  knowledge_entry: 33,
-  reference_doc_chunk: 25,
-  code_chunk: 20,
+  knowledge_entry: 15,
+  reference_doc_chunk: 11,
+  code_chunk: 9,
 };
 
 /** Roughly how long the real model will take, so an hour is never a surprise. */

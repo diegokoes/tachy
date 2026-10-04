@@ -195,6 +195,22 @@ describe("code search by name", () => {
     expect((await paths("schedule due runs"))[0]).toBe("scheduler.ts");
   });
 
+  it("redoes every file on a full index, and only then", async () => {
+    const [same] = (await indexRepo("searchrepo")).lines;
+    expect(same.upToDate).toBe(true);
+    expect(same.filesEmbedded).toBe(0);
+
+    const [{ n: before }] = await sql`
+      select count(*)::int as n from code_blob_chunks c
+      join repos r on r.id = c.repo_id where r.slug = 'searchrepo'
+    `;
+    const [full] = (await indexRepo("searchrepo", { full: true })).lines;
+    expect(full.filesIndexed).toBe(5);
+    expect(full.filesEmbedded).toBe(5);
+    expect(full.chunkCount).toBe(before);
+    expect((await paths("scheduleDueRuns"))[0]).toBe("scheduler.ts");
+  });
+
   it("returns nothing for words no file holds", async () => {
     expect(await paths("zzzzqqqq")).toEqual([]);
   });

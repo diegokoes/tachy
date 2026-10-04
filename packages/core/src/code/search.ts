@@ -9,7 +9,8 @@ import {
   RRF_K,
   withSearchSession,
 } from "../search/rank";
-import { SEM_FLOOR, withRelevance } from "../search/relevance";
+import { currentVector } from "../search/backfill";
+import { CODE_SEM_FLOOR, withRelevance } from "../search/relevance";
 import { getRepoBySlug, getRepoLine } from "./repos";
 import { readBlob, readFileAt, resolveRef } from "./git";
 import { resolveVersion } from "./versions";
@@ -129,8 +130,8 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
         from (
           select c.id, c.repo_id, c.blob_sha, c.embedding <=> ${qvec}::vector as dist
           from code_blob_chunks c
-          where c.embedding is not null
-            and 1 - (c.embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
+          where c.embedding is not null and ${currentVector("c")}
+            and 1 - (c.embedding <=> ${qvec}::vector) >= ${CODE_SEM_FLOOR}
             and ${holds}
           order by c.embedding <=> ${qvec}::vector
           limit ${CANDIDATES * NEAREST}

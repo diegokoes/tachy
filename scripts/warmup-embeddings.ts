@@ -1,6 +1,7 @@
 // Reaches past @tachy/core to the model registry alone, so the Dockerfile can
-// run this before it copies the source: the layer holding the 417MB download
-// then survives every change that isn't a change of model.
+// run this before it copies the source: the layer holding the model, a
+// download of about 570 MB, then survives every change that isn't a change of
+// model.
 import { model, EMBEDDING_MODEL } from "../packages/core/src/search/model";
 
 await model();

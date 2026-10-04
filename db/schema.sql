@@ -503,6 +503,10 @@ create table knowledge_entries (
     structured          jsonb not null default '{}'::jsonb,
 
     embedding           vector(768),
+    -- The model that made the vector. Search reads only vectors of the model
+    -- in use, and the backfill re-embeds the rest. Null: made before rows
+    -- named their model, by bge-base-en-v1.5.
+    embedding_model     text,
 
     -- cloud and affected_version are in here so they are searchable as words:
     -- typing "prod printer error" narrows by environment without spending a
@@ -873,6 +877,7 @@ create table reference_doc_chunks (
     ordinal     integer not null,
     chunk_text  text not null,
     embedding   vector(768),
+    embedding_model text,
     unique (doc_id, ordinal)
 );
 
@@ -1055,6 +1060,7 @@ create table code_blob_chunks (
     end_line    integer not null,
     chunk_text  text not null,
     embedding   vector(768),
+    embedding_model text,
     -- The words of the chunk, with the names it defines weighted A and its
     -- body D, so a search for a name finds where it is defined before the
     -- places that use it. Written by the indexer, which finds the names
@@ -1149,6 +1155,7 @@ create table bucket_doc_chunks (
     ordinal     integer not null,
     chunk_text  text not null,
     embedding   vector(768),
+    embedding_model text,
     unique (doc_id, ordinal)
 );
 

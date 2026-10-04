@@ -47,7 +47,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: .model-cache
-          key: model-Xenova-bge-base-en-v1.5
+          key: model-Alibaba-NLP-gte-modernbert-base
 
       - run: npx tsx scripts/warmup-embeddings.ts
 
