@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { gsap, SplitText, reducedMotion } from "./gsap";
 
-  let { text }: { text: string } = $props();
+  let { text, caret = true }: { text: string; caret?: boolean } = $props();
 
   let p = $state<HTMLParagraphElement>();
   let handle = $state<HTMLSpanElement>();
@@ -15,10 +15,14 @@
     const typeTime = n * 0.03;
 
     const tl = gsap.timeline();
-    tl.from(split.chars, { autoAlpha: 0, duration: 0.001, stagger: 0.03 }, 0)
-      .to(handle!, { x: width, duration: typeTime, ease: `steps(${n})` }, 0)
-      .fromTo(
-        handle!,
+    tl.from(split.chars, { autoAlpha: 0, duration: 0.001, stagger: 0.03 }, 0);
+    if (handle)
+      tl.to(
+        handle,
+        { x: width, duration: typeTime, ease: `steps(${n})` },
+        0,
+      ).fromTo(
+        handle,
         { autoAlpha: 0 },
         { autoAlpha: 1, duration: 0.4, repeat: -1, yoyo: true },
       );
@@ -32,7 +36,9 @@
 
 <span class="typeline">
   <p bind:this={p}>{text}</p>
-  <span class="handle" bind:this={handle} aria-hidden="true"></span>
+  {#if caret}
+    <span class="handle" bind:this={handle} aria-hidden="true"></span>
+  {/if}
 </span>
 
 <style>

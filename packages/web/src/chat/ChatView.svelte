@@ -79,6 +79,24 @@
   let dockEl = $state<HTMLDivElement>();
   let pinned = true;
 
+  /* Where the composer's text is scrolled to, and how much of its width a
+     scrollbar has taken: the resting caret is laid out over it to match. */
+  let rest = $state({ scroll: 0, gutter: 0 });
+
+  function restSync() {
+    const el = composerEl;
+    if (!el) return;
+    rest = {
+      scroll: el.scrollTop,
+      gutter: el.offsetWidth - el.clientWidth - el.clientLeft * 2,
+    };
+  }
+
+  $effect(() => {
+    void chat.input;
+    restSync();
+  });
+
   const empty = $derived(chat.entries.length === 0);
 
   /* A pre effect, so the dock is read where it still sits: centred before the
@@ -550,8 +568,17 @@
 
   function onClear() {
     if (chat.busy || !chat.entries.length) return;
-    if (clearArmed) confirmClear();
-    else armClear();
+    if (clearArmed) {
+      confirmClear();
+      composerEl?.focus();
+    } else armClear();
+  }
+
+  /* Both marks leave once they have nothing to act on, and focus would go
+     with them. */
+  function sendClick() {
+    void send();
+    composerEl?.focus();
   }
 </script>
 
@@ -719,32 +746,56 @@
           <Icon name="attach" label="Attach a document" />
           <input type="file" onchange={onFile} />
         </label>
-        <textarea
-          bind:this={composerEl}
-          aria-label="Message the assistant, / for commands"
-          bind:value={chat.input}
-          rows="2"
-          onkeydown={composerKeydown}></textarea>
+        <span class="field">
+          <textarea
+            bind:this={composerEl}
+            aria-label="Message the assistant, / for commands"
+            bind:value={chat.input}
+            rows="2"
+            onscroll={restSync}
+            onkeydown={composerKeydown}></textarea>
+          <span
+            class="rest"
+            aria-hidden="true"
+            style:padding-right="calc(var(--pad-3) + {rest.gutter}px)"
+            ><span class="rest-line" style:translate="0 {-rest.scroll}px"
+              ><span class="typed">{chat.input}</span><span
+                class="mark"
+                class:leading={!/\S/.test(chat.input.slice(-1))}><Caret /></span
+              ></span
+            ></span
+          >
+        </span>
         <div class="send-col">
-          <Button
-            variant={clearArmed ? "danger" : "ghost"}
-            icon={clearArmed ? "confirm" : "clear"}
-            morph
-            disabled={chat.busy || !chat.entries.length}
-            aria-label="Clear the conversation"
-            title={clearArmed
-              ? "click again to clear"
-              : "Clear the conversation"}
-            onclick={onClear}
-          />
-          <Button
-            variant="ghost"
-            icon="send"
-            disabled={chat.busy || !chat.input.trim()}
-            aria-label="Send"
-            title="Send"
-            onclick={send}
-          />
+          <span class="slot">
+            {#if chat.entries.length}
+              <Button
+                variant={clearArmed ? "danger" : "ghost"}
+                icon={clearArmed ? "confirm" : "clear"}
+                iconSize="1.25em"
+                morph
+                disabled={chat.busy}
+                aria-label="Clear the conversation"
+                title={clearArmed
+                  ? "click again to clear"
+                  : "Clear the conversation"}
+                onclick={onClear}
+              />
+            {/if}
+          </span>
+          <span class="slot">
+            {#if chat.input.trim()}
+              <Button
+                variant="ghost"
+                icon="send"
+                iconSize="1.25em"
+                disabled={chat.busy}
+                aria-label="Send"
+                title="Send"
+                onclick={sendClick}
+              />
+            {/if}
+          </span>
         </div>
       </div>
     </div>
@@ -776,9 +827,8 @@
     pointer-events: none; /* keep drag events landing on .chat */
   }
 
-  /* Stretch with the composer row so Clear+Send always equal the textarea's
-     height exactly, splitting it between them. */
-  /* Fixed width so arming Clear ("?") can't reflow the column. */
+  /* The upload mark's mirror: the same column on the other side of the
+     textarea, its two marks as bare as that one and as far from the edge. */
   .send-col {
     display: flex;
     flex-direction: column;
@@ -787,23 +837,33 @@
     flex: none;
     width: var(--side-w);
   }
+  /* Each mark keeps its half of the column whether or not it is there, so
+     one appearing never moves the other. */
+  .slot {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
   .send-col :global(.btn) {
-    width: 100%;
+    --btn-edge: transparent;
     flex: 1;
     min-height: 0;
     padding: 0;
+    justify-content: flex-start;
+    font-size: 1.1rem;
+    background: transparent;
   }
-  /* Ghost has no border of its own; these two need the composer's edge to
-     read as controls sitting beside the textarea. */
-  .send-col :global(.btn.ghost) {
-    border-color: var(--border);
-    background: var(--panel-bg);
+  .send-col :global(.btn.ghost:hover:not(:disabled)),
+  .send-col :global(.btn.ghost:focus-visible:not(:disabled)) {
+    color: var(--accent);
   }
-  /* Armed Clear inverts to a solid block, the same move .btn.primary makes on
-     hover - the label rides on --bg so it reads in either theme. */
-  .send-col :global(.btn.danger) {
-    background: var(--danger);
-    color: var(--bg);
+  .send-col :global(.btn:hover:not(:disabled) svg),
+  .send-col :global(.btn:focus-visible:not(:disabled) svg) {
+    filter: brightness(1.35);
+  }
+  .send-col :global(.btn:focus-visible:not(:disabled)) {
+    border-color: transparent;
+    box-shadow: none;
   }
 
   /* Momentary RGB-split while the clear glitch timeline jitters the blocks. */
@@ -1083,10 +1143,56 @@
     gap: var(--composer-gap);
     align-items: stretch;
   }
+  .field {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+  }
   .composer textarea {
     flex: 1;
     resize: none;
     background: var(--panel-bg);
+  }
+  .composer textarea:not(:focus-visible) {
+    border-color: var(--border-bare);
+  }
+  /* The caret kept at the end of the text while the composer is not focused,
+     so it reads as writeable before it is clicked. The text is laid out again
+     over the textarea, unseen, to carry the caret to where it ends. */
+  .rest {
+    position: absolute;
+    inset: 0;
+    padding: var(--pad-2) var(--pad-3);
+    border: 1px solid transparent;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .field:focus-within .rest {
+    display: none;
+  }
+  .rest-line {
+    display: block;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+  .typed {
+    visibility: hidden;
+  }
+  /* A line tall and centred in it, which is where tui/CaretHost puts the
+     focused caret. Left on the baseline it sat higher, and dropped on focus. */
+  .mark {
+    display: inline-flex;
+    align-items: center;
+    height: 1lh;
+    vertical-align: top;
+    width: 0;
+    margin-left: -0.115em;
+    color: var(--accent);
+    opacity: 0.55;
+  }
+  .mark.leading {
+    margin-left: -0.25em;
   }
   /* A <label>, not a <button> - it has to wrap the file input - so it borrows
      the mark's hover language rather than inheriting it from Button. */
