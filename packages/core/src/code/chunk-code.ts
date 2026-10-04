@@ -6,16 +6,23 @@ export interface CodeChunk {
 }
 
 const TARGET_LINES = 60;
-const MAX_CHARS = 2400;
+export const MAX_CHUNK_CHARS = 2400;
 const OVERLAP_LINES = 10;
 const BOUNDARY_LOOKBACK = 20;
 
 const BOUNDARY_RE =
   /^\s*(export\s+)?(default\s+)?(async\s+)?(function\s|class\s|def\s|func\s|fn\s|impl\s|interface\s|trait\s|struct\s|enum\s|module\s|type\s+\w+\s*=|(public|private|protected|internal)\s|(static\s+)?[A-Za-z_][\w<>,\s[\]]*\s+[A-Za-z_]\w*\s*\()/;
 
-/** Split source code into overlapping line windows, preferring to cut at
- * symbol-boundary lines so definitions stay whole-ish. */
-export function chunkCode(content: string): CodeChunk[] {
+/**
+ * Split source code into overlapping line windows, preferring to cut at
+ * symbol-boundary lines so definitions stay whole-ish. `maxChars` is what the
+ * embedding model reads of one chunk: past it, a chunk's tail is stored and
+ * never embedded.
+ */
+export function chunkCode(
+  content: string,
+  maxChars = MAX_CHUNK_CHARS,
+): CodeChunk[] {
   const lines = content.split("\n");
   const chunks: CodeChunk[] = [];
   let start = 0;
@@ -37,7 +44,7 @@ export function chunkCode(content: string): CodeChunk[] {
     }
 
     let text = lines.slice(start, end).join("\n");
-    while (text.length > MAX_CHARS && end - start > 5) {
+    while (text.length > maxChars && end - start > 5) {
       end = start + Math.max(5, Math.floor((end - start) / 2));
       text = lines.slice(start, end).join("\n");
     }

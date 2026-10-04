@@ -4,6 +4,49 @@ import { log } from "../infra/log";
 import { embedPassages, toVectorLiteral } from "../search/embeddings";
 import { writeEmbeddings } from "../search/backfill";
 import { chunkCode } from "./chunk-code";
+import { chunkSymbols } from "./symbols";
+
+/** search_tsv of a row `u` carrying `symbols` and `chunk_text`. */
+const CODE_TSV = sql`
+  setweight(to_tsvector('simple', tachy_code_words(u.symbols)), 'A') ||
+  setweight(to_tsvector('simple', tachy_code_words(u.chunk_text)), 'D')
+`;
+
+/**
+ * Chunks indexed before search_tsv existed have none, and are invisible to the
+ * lexical leg until they get one. Needs no fetch and no embedding, so every
+ * reindex of a repo finishes whatever is left.
+ */
+export async function backfillCodeWords(repoId: string): Promise<number> {
+  let done = 0;
+  for (;;) {
+    const rows = await sql`
+      select c.id, c.ordinal, c.chunk_text,
+             (select f.path from repo_line_files f
+              where f.repo_id = c.repo_id and f.blob_sha = c.blob_sha
+              order by f.path limit 1) as path
+      from code_blob_chunks c
+      where c.repo_id = ${repoId} and c.search_tsv is null
+      limit 500
+    `;
+    if (!rows.length) return done;
+    await sql`
+      update code_blob_chunks c set search_tsv = ${CODE_TSV}
+      from (
+        select unnest(${rows.map((r) => r.id)}::uuid[]) as id,
+               unnest(${rows.map((r) => r.chunk_text)}::text[]) as chunk_text,
+               unnest(${rows.map((r) =>
+                 chunkSymbols(r.path ?? "", {
+                   ordinal: r.ordinal,
+                   text: r.chunk_text,
+                 }),
+               )}::text[]) as symbols
+      ) u
+      where c.id = u.id
+    `;
+    done += rows.length;
+  }
+}
 import {
   blobSizes,
   describeRelease,
@@ -234,16 +277,17 @@ async function embedAndStoreFile(
     if (chunks.length)
       await t`
         insert into code_blob_chunks
-          (repo_id, blob_sha, ordinal, start_line, end_line, chunk_text, embedding)
+          (repo_id, blob_sha, ordinal, start_line, end_line, chunk_text, search_tsv, embedding)
         select ${line.repo_id}, ${file.blobSha}, u.ordinal, u.start_line, u.end_line,
-               u.chunk_text, u.embedding::vector
+               u.chunk_text, ${CODE_TSV}, u.embedding::vector
         from unnest(
           ${chunks.map((c) => c.ordinal)}::int[],
           ${chunks.map((c) => c.startLine)}::int[],
           ${chunks.map((c) => c.endLine)}::int[],
           ${chunks.map((c) => c.text)}::text[],
+          ${chunks.map((c) => chunkSymbols(file.path, c))}::text[],
           ${vectors.map(toVectorLiteral)}::text[]
-        ) as u(ordinal, start_line, end_line, chunk_text, embedding)
+        ) as u(ordinal, start_line, end_line, chunk_text, symbols, embedding)
       `;
     await upsertFile(t, line, file, sizeBytes);
   });
@@ -304,6 +348,7 @@ async function indexLine(
       indexingCommit: head,
     });
 
+    await backfillCodeWords(line.repo_id);
     const wanted = indexableFiles(await listTree(repo.slug, head), repo.config);
     const wantedByPath = new Map(wanted.map((f) => [f.path, f]));
     const maxBytes = maxFileBytes(repo.config);
