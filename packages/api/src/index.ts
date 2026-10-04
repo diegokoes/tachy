@@ -3,10 +3,7 @@ import { existsSync } from "node:fs";
 import { serve } from "@hono/node-server";
 import { backgroundSettled, env, log, sql } from "@tachy/core/infra";
 import { setEmbedBackend, startEmbedHost } from "@tachy/core/search";
-import {
-  sweepInterruptedIndexes,
-  adoptSupersededIndex,
-} from "@tachy/core/code";
+import { sweepInterruptedIndexes } from "@tachy/core/code";
 import { startJobProcess } from "@tachy/core/jobs";
 import { registerAgentFlowActions } from "@tachy/agent";
 import { createApp } from "./app";
@@ -75,8 +72,6 @@ const app = createApp({
 
 startTurnHousekeeping();
 
-const adopted = await adoptSupersededIndex();
-if (adopted) log("info", "repo_index_adopted", { repos: adopted });
 const swept = await sweepInterruptedIndexes();
 if (swept) log("info", "repo_index_sweep", { interrupted: swept });
 
