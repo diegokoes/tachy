@@ -12,7 +12,7 @@
 
   $effect(() => {
     const s = String(schedule ?? "").trim();
-    const tz = String(timezone || "UTC");
+    const tz = String(timezone ?? "").trim();
     next = [];
     error = null;
     if (!s) return;
@@ -21,7 +21,7 @@
         next = (
           await api.post<{ next: string[] }>("/jobs/schedule-preview", {
             schedule: s,
-            timezone: tz,
+            ...(tz ? { timezone: tz } : {}),
           })
         ).next;
       } catch (e) {

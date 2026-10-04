@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { z } from "zod";
+import { orgTimezone } from "../config/settings";
 import { sql, jsonb } from "../infra/db";
 import { badInput, conflict, notFound } from "../infra/errors";
 import { env } from "../infra/env";
@@ -42,11 +43,22 @@ export function loadTargets(): LoadTarget[] {
     .filter((t) => t.name && t.url);
 }
 
-/** Weekdays 19:00–07:00 and weekends, in the server's timezone. */
-export function inLoadWindow(now = new Date()): boolean {
-  const day = now.getDay();
-  const hour = now.getHours();
-  return day === 0 || day === 6 || hour >= 19 || hour < 7;
+/**
+ * Weekdays 19:00–07:00 and weekends, on the organisation's clock. The process's
+ * own is UTC in a container, which in Madrid let a production run start until
+ * 09:00 in summer.
+ */
+export function inLoadWindow(now: Date, timezone: string): boolean {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    weekday: "short",
+    hour: "numeric",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value;
+  const weekend = part("weekday") === "Sat" || part("weekday") === "Sun";
+  const hour = Number(part("hour"));
+  return weekend || hour >= 19 || hour < 7;
 }
 
 export interface TestRun {
@@ -104,9 +116,14 @@ export async function startTestRun(i: {
     );
   if (i.profile === "stress" && !target.dev)
     throw badInput("PROFILE=stress runs only against a dev target");
-  if (!target.dev && !rules.anyTime && !inLoadWindow(i.now))
+  const timezone = await orgTimezone();
+  if (
+    !target.dev &&
+    !rules.anyTime &&
+    !inLoadWindow(i.now ?? new Date(), timezone)
+  )
     throw badInput(
-      `${script} may only run against ${target.name} outside working hours (weekdays 19:00–07:00, or weekends)`,
+      `${script} may only run against ${target.name} outside working hours (weekdays 19:00–07:00, or weekends, ${timezone})`,
     );
 
   const [row] = await sql`

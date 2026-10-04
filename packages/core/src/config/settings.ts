@@ -17,6 +17,17 @@ import { badInput } from "../infra/errors";
 export { AGENT_PROVIDERS, AGENT_EFFORTS, DEPLOYMENT_PROFILES };
 export type { AgentProvider, AgentEffort, DeploymentProfile };
 
+/** Whether `tz` is a zone this runtime knows, e.g. Europe/Madrid. */
+export function isTimezone(tz: string | undefined): tz is string {
+  if (!tz) return false;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const SETTING_SCHEMAS = {
   redaction_global: z.boolean(),
   agent_provider: z.enum(AGENT_PROVIDERS),
@@ -28,6 +39,9 @@ const SETTING_SCHEMAS = {
   agent_slot_cap: z.number().int().min(1).max(500),
   copilot_slot_weight: z.number().int().min(1).max(32),
   agent_queue_max: z.number().int().min(0).max(500),
+  org_timezone: z
+    .string()
+    .refine(isTimezone, "not an IANA timezone, e.g. Europe/Madrid"),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;
@@ -94,6 +108,7 @@ export interface EffectiveSettings {
   agent_slot_cap: { value: number; source: SettingSource };
   copilot_slot_weight: { value: number; source: SettingSource };
   agent_queue_max: { value: number; source: SettingSource };
+  org_timezone: { value: string; source: SettingSource };
 }
 
 export async function effectiveSettings(): Promise<EffectiveSettings> {
@@ -149,7 +164,22 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
     agent_slot_cap: pick(db.agent_slot_cap, undefined, 15),
     copilot_slot_weight: pick(db.copilot_slot_weight, undefined, 4),
     agent_queue_max: pick(db.agent_queue_max, undefined, 10),
+    org_timezone: pick(
+      db.org_timezone,
+      isTimezone(process.env.TACHY_TIMEZONE)
+        ? process.env.TACHY_TIMEZONE
+        : undefined,
+      "UTC",
+    ),
   };
+}
+
+/**
+ * The zone the organisation's clock is read in: what a schedule means when its
+ * definition names no zone, and when "outside working hours" is.
+ */
+export async function orgTimezone(): Promise<string> {
+  return (await effectiveSettings()).org_timezone.value;
 }
 
 /**
