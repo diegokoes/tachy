@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../packages/api/src/app";
+import { saveReferenceDoc } from "../../packages/core/src/reference";
 import { json } from "../http";
 import { resetData, sql } from "../database";
 
@@ -127,6 +128,51 @@ describe("API reference docs", () => {
     const res = await app.request("/api/reference");
     expect(res.status).toBe(200);
     expect(Array.isArray(await res.json())).toBe(true);
+  });
+
+  it("narrows the list and the search to a shelf with kind", async () => {
+    const save = async (body: Record<string, unknown>) =>
+      (
+        await (
+          await app.request(
+            "/api/reference",
+            json({ status: "approved", ...body }),
+          )
+        ).json()
+      ).id as string;
+    const doc = await save({
+      title: "Spooler install guide",
+      body: "How the spooler service is installed.",
+    });
+    const { id: article } = await saveReferenceDoc({
+      title: "Spooler overview",
+      body: "What the spooler service does.",
+      status: "approved",
+      kind: "wiki",
+      slug: "spooler-overview",
+    });
+
+    const ids = async (path: string) =>
+      ((await (await app.request(path)).json()) as { id: string }[]).map(
+        (r) => r.id,
+      );
+
+    expect(await ids("/api/reference")).toEqual([doc]);
+    expect(await ids("/api/reference?kind=bogus")).toEqual([doc]);
+    expect(await ids("/api/reference?kind=wiki")).toEqual([article]);
+    expect((await ids("/api/reference?kind=any")).sort()).toEqual(
+      [doc, article].sort(),
+    );
+
+    expect(await ids("/api/reference/search?q=spooler&kind=wiki")).toEqual([
+      article,
+    ]);
+    expect(await ids("/api/reference/search?q=spooler&kind=reference")).toEqual(
+      [doc],
+    );
+    expect(
+      (await ids("/api/reference/search?q=spooler&kind=any")).sort(),
+    ).toEqual([doc, article].sort());
   });
 });
 
