@@ -16,5 +16,7 @@ is in [DEPLOYMENT-ARCHITECTURE.md](../../DEPLOYMENT-ARCHITECTURE.md).
 | [replace-host.md](replace-host.md)               | The laptop is lost or dead                                |
 | [upgrades.md](upgrades.md)                       | Postgres, pgvector, the embedding model                   |
 | [investigation.md](investigation.md)             | Slow search, a stuck turn, a failed sync or index         |
+| [jobs-and-flows.md](jobs-and-flows.md)           | A job or a flow keeps failing, or nothing is running them |
+| [onboarding.md](onboarding.md)                   | Adding a team, a source, a linked repo or a bucket        |
 | [load-window.md](load-window.md)                 | Measuring the laptop outside working hours                |
 | [housekeeping.md](housekeeping.md)               | Certificates, retention, who owns an incident             |
