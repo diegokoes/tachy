@@ -1,12 +1,11 @@
 <script lang="ts">
-  import { tip } from "../tui";
   import type { Origin } from "./prefs.svelte";
 
   let { of }: { of: Origin | null } = $props();
 </script>
 
 {#if of}
-  <span class="origin" class:mine={of.mine} use:tip={of.tip}>{of.label}</span>
+  <span class="origin" class:mine={of.mine}>{of.label}</span>
 {/if}
 
 <style>
@@ -17,7 +16,6 @@
     font-size: var(--fs-xs);
     color: var(--muted);
     white-space: nowrap;
-    cursor: help;
   }
   .origin.mine {
     border-style: solid;

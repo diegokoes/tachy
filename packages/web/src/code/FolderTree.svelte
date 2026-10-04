@@ -80,11 +80,6 @@
       checked={on}
       disabled={locked}
       label={`index ${d.path}`}
-      about={d.skipped
-        ? "always skipped"
-        : inherited(d.path)
-          ? "a folder above it is off"
-          : undefined}
       {depth}
       share={on && whole ? d.admitted / whole : 0}
       count={countOf(d)}

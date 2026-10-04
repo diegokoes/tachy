@@ -36,7 +36,7 @@
   use:fitRows={{ row: ROW_REM, gap: GAP_REM, onfit: (n) => (rows = n) }}
 >
   {#each shown as c (c.key)}
-    <li class={c.tone} title={c.title ? `${c.label}: ${c.title}` : c.label}>
+    <li class={c.tone}>
       {#if onpick}
         <button class="pick" onclick={() => onpick(c)}>
           <span class="lbl">{c.label}</span>
@@ -47,7 +47,7 @@
     </li>
   {/each}
   {#if rest.length}
-    <li class="more" title={rest.map((c) => c.label).join(", ")}>
+    <li class="more">
       <span class="lbl">+{rest.length} more</span>
     </li>
   {/if}

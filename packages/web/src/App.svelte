@@ -11,7 +11,7 @@
   import NotificationHost from "./notifications/NotificationHost.svelte";
   import { session, initSession } from "./access/session.svelte";
   import { navItems } from "./shell/nav";
-  import { wipeIn, jellyPress, reflow } from "./motion/motion";
+  import { jellyPress, reflow } from "./motion/motion";
   import StarField from "./motion/StarField.svelte";
   import Wordmark from "./motion/Wordmark.svelte";
   import { loadThemeFromStorage, themeState } from "./theme/theme.svelte";
@@ -64,10 +64,8 @@
     localStorage.setItem("tachy-skip-wizard", "1");
   }
 
-  let navEl = $state<HTMLElement>();
   let topbarEl = $state<HTMLElement>();
   let mainEl = $state<HTMLElement>();
-  let navRevealed = $state(false);
   let subEl = $state<HTMLElement>();
   let windowEl = $state<HTMLElement>();
   let subH = $state(0);
@@ -219,11 +217,6 @@
     void tick().then(play);
   });
 
-  $effect(() => {
-    if (!navEl || navRevealed) return;
-    wipeIn(navEl.querySelectorAll("button"), () => (navRevealed = true));
-  });
-
   // Hidden: four more entries would crowd the hint rule. Settings › keybinds
   // lists them.
   $effect(() => {
@@ -324,7 +317,7 @@
       bind:this={topbarEl}
     >
       <div class="mark"><Wordmark /></div>
-      <div class="navbar" bind:this={navEl} class:unrevealed={!navRevealed}>
+      <div class="navbar">
         <Panel>
           <Tabs
             items={nav}
@@ -688,8 +681,7 @@
   /* No box of its own - the recess is the box. A second bordered pill hung
      under the nav's read as chrome about chrome; bare labels in a cut let the
      window's own edge do the framing, and cost the row a border and two steps
-     of padding on the way. Its padding is what the Panel used to supply, so
-     the labels still clear the recess floor.
+     of padding on the way.
 
      Centred on the window's centre line - the same one the nav pill sits on,
      so the two stack. */
@@ -699,11 +691,19 @@
     left: 50%;
     transform: translateX(-50%);
     z-index: 2;
-    padding: var(--pad-2) var(--pad-3);
+    /* No block padding: --sub-air already clears the labels off the recess
+       floor. The floor is the least the corner needs to fit a full-height
+       control, and what a section with no tabs is cut to. */
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    min-height: var(--row-h);
+    padding: 0 var(--pad-3);
   }
   .subnav.hidden {
     opacity: 0;
   }
+
   /* The window's own top row, right of the recess - space the carve opens up
      and nothing else was using. Aligned to the Panel's content edge so it
      reads as part of the page, and capped short of the recess mouth so it can
@@ -766,17 +766,6 @@
      while a view has put some there. */
   .window:has(.subnav.hidden):not(:has(.top-acts > :global(*))) .shell {
     padding-top: 0;
-  }
-
-  /* Wiped out until the GSAP reveal takes over (its inline clip-path wins).
-     The tab indicator is anchored to a layout box, which exists from the first
-     frame - so it has to be held back too, or it draws under a label that has
-     not wiped in yet. */
-  .navbar.unrevealed :global(button) {
-    clip-path: inset(0 100% 0 0);
-  }
-  .navbar.unrevealed :global(.tabs::before) {
-    opacity: 0;
   }
 
   .content {

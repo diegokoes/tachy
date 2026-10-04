@@ -515,7 +515,7 @@ export function themeWipe(
   transition.finished.then(done, done);
 }
 
-/** Horizontal clip-path wipe, staggered - the nav reveal. */
+/** Horizontal clip-path wipe, staggered. */
 export function wipeIn(nodes: ArrayLike<Element>, onStart?: () => void) {
   if (reducedMotion()) {
     onStart?.();

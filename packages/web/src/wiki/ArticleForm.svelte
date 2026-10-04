@@ -388,7 +388,6 @@
   <FormActions
     form="wiki-form"
     {saving}
-    title={editing ? "save changes" : "create article"}
     create={!editing}
     oncancel={onCancel}
   />

@@ -64,7 +64,6 @@
     placeholder={missing.length
       ? `pick ${missing.join(", ")} first`
       : placeholder}
-    title={error ?? undefined}
     oninput={(e) => onchange((e.target as HTMLInputElement).value)}
   />
   <datalist {id}>
@@ -81,7 +80,6 @@
       : error
         ? "could not read the list"
         : placeholder}
-    title={error ?? undefined}
     aria-label={label}
     onchange={(v) => onchange(String(v ?? ""))}
   />

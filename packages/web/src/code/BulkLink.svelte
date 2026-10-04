@@ -499,7 +499,6 @@
                 class:away={!matches(r)}
                 disabled={taken}
                 aria-pressed={taken || picked.has(r.url)}
-                use:tip={taken ? `${r.name} · already linked` : r.url}
                 onclick={() => toggle(r)}
               >
                 <span class="frame" aria-hidden="true"></span>

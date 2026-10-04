@@ -47,11 +47,9 @@
   {#each cut.shown as r (r.key)}
     <div class="row" style="--tone-color: {toneVar(r.tone)}">
       {#if onpick}
-        <button class="lbl pick" title={r.label} onclick={() => onpick(r)}
-          >{r.label}</button
-        >
+        <button class="lbl pick" onclick={() => onpick(r)}>{r.label}</button>
       {:else}
-        <span class="lbl" title={r.label}>{r.label}</span>
+        <span class="lbl">{r.label}</span>
       {/if}
       <span class="track">
         <span

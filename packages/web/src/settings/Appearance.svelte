@@ -115,7 +115,7 @@
           role="radio"
           aria-checked={!custom && current === c.hex}
           style="background: {c.hex}"
-          title="{c.name} · {c.hex}"
+          use:tip={c.name}
           aria-label={c.name}
           onclick={() => selectAccent(c.hex)}
         ></button>

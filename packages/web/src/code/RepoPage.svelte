@@ -24,9 +24,7 @@
     Note,
     Select,
     Spinner,
-    tip,
   } from "../tui";
-  import { INFO } from "../admin/help";
   import type { Customer, Product } from "../catalog/rows";
   import type { Repo } from "./rows";
   import type { SourceProject } from "../sources/rows";
@@ -362,9 +360,6 @@
       tone={dirty ? "accent" : undefined}
       busy={saving || indexing === "*"}
       disabled={!dirty && busy}
-      title={dirty
-        ? "save the changes"
-        : "clone this repo and re-read its files into the code index"}
       onclick={() => (dirty ? save() : reindex())}
       >{dirty ? "save" : "index"}</Button
     >
@@ -399,10 +394,7 @@
             {/if}
           {/snippet}
           <div class="pairs">
-            <Row
-              label="project"
-              about="Owning project. Its connection supplies clone credentials."
-            >
+            <Row label="project">
               <Select
                 value={d.source_project_id}
                 options={projectOptions}
@@ -423,7 +415,7 @@
                 />
               </Row>
             {/if}
-            <Row label="component" about={INFO.repoComponent}>
+            <Row label="component">
               <Select
                 value={d.component_slug}
                 options={componentOptions}
@@ -433,10 +425,7 @@
                 onchange={(v) => (d.component_slug = String(v ?? ""))}
               />
             </Row>
-            <Row
-              label="customer"
-              about="Customer addon repos only. Empty: shared code, included in customer-scoped search."
-            >
+            <Row label="customer">
               <Select
                 value={d.customer_slug}
                 options={customerOptions}
@@ -446,10 +435,7 @@
                 onchange={(v) => (d.customer_slug = String(v ?? ""))}
               />
             </Row>
-            <Row
-              label="clone URL"
-              about="Cloned with the project connection's token."
-            >
+            <Row label="clone URL">
               <input
                 bind:value={d.url}
                 disabled={!canEdit}
@@ -470,10 +456,7 @@
             : undefined}
         >
           <Rows>
-            <Row
-              label="default branch"
-              about="Where releases land, usually master. Searched by default."
-            >
+            <Row label="default branch">
               {#if refsHere}
                 <Select
                   value={d.default_branch}
@@ -493,12 +476,7 @@
               {/if}
             </Row>
           </Rows>
-          <p
-            class="sub"
-            use:tip={"A ticket's version is searched on the line for its minor; any release can be read at its tag without one."}
-          >
-            release lines
-          </p>
+          <p class="sub">release lines</p>
           {#if probing && !refsHere}
             <p class="quiet">reading branches…</p>
           {:else if refsError && !refsHere}
@@ -666,10 +644,7 @@
               onchange={(next) => (d.exclude = next)}
             />
             <Rows>
-              <Row
-                label="patterns"
-                about="Paths or globs left out as well, comma separated, such as scripts/**/*.json. Folders are switched off above."
-              >
+              <Row label="patterns">
                 <input
                   value={patternText}
                   placeholder="scripts/**/*.json"

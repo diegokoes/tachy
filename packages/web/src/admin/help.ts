@@ -23,5 +23,4 @@ export const INFO = {
   project:
     "Source project: ADO project, Freshdesk group, or GitHub owner/repo. Maps its items, wiki, code.",
   area: "ADO area path prefix. Items under it file here; longest prefix wins.",
-  repoComponent: "Implemented component. Narrows code search.",
 };

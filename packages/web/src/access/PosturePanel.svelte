@@ -50,25 +50,21 @@
       key: "active",
       label: "active 7 d",
       value: usage.active_7d,
-      title: "people with an agent turn in the last 7 days",
     },
     {
       key: "turns",
       label: `turns ${usage.days} d`,
       text: compact(usage.turns),
-      title: `agent turns, last ${usage.days} days`,
     },
     {
       key: "tokens",
       label: `tokens ${usage.days} d`,
       text: compact(usage.input_tokens + usage.output_tokens),
-      title: `${compact(usage.input_tokens)} in · ${compact(usage.output_tokens)} out`,
     },
     {
       key: "cost",
       label: `cost ${usage.days} d`,
       text: usd(usage.cost_usd),
-      title: "estimated at list price where the provider reported none",
     },
   ]);
 

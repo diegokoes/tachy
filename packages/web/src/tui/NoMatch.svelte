@@ -56,7 +56,7 @@
 
 <p class="none" bind:this={box}>
   <span class="ghost" class:hunting bind:this={ghost}
-    ><Icon name="noMatch" size="1.3em" label="no matches" /></span
+    ><Icon name="noMatch" size="1.5em" label="no matches" /></span
   >
   <span class="word" aria-hidden="true"
     >{#each LETTERS as ch}<span class="ch">{ch}</span>{/each}</span
@@ -72,7 +72,7 @@
     margin: 0;
     padding: var(--pad-3);
     overflow: hidden;
-    font-size: var(--fs-xs);
+    font-size: var(--fs-md);
     letter-spacing: 0.08em;
     white-space: pre;
     color: var(--muted);

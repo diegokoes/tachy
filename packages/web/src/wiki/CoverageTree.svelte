@@ -56,21 +56,20 @@
   <li style="--depth: {depth}">
     <div class="line">
       <button class="name" onclick={() => drill(n)}>{n.name}</button>
-      <span class="counts" title="entries · docs · articles (this node)">
+      <span class="counts">
         {n.entries} · {n.docs} · {n.articles}
       </span>
       {#if n.children.length}
-        <span class="sub" title="rolled up over the subtree">
+        <span class="sub">
           ({n.subtree.entries} · {n.subtree.docs} · {n.subtree.articles})
         </span>
       {/if}
       {#if n.subtree.reads}
-        <span class="reads" title="reads">{n.subtree.reads} reads</span>
+        <span class="reads">{n.subtree.reads} reads</span>
       {/if}
       {#if isCurator()}
         <button
           class="act"
-          title="move under…"
           onclick={() => {
             moving = n;
             moveTo = "";

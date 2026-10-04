@@ -206,11 +206,7 @@
     {#if f.required}<span class="req" aria-label="required">*</span>{/if}
     {#if origin}<Badge tone="muted">{ORIGIN[origin]}</Badge>{/if}
     {#if flagged}
-      <button
-        class="flag"
-        use:tip={"tachy flagged this"}
-        onclick={() => (side = "review")}
-      >
+      <button class="flag" onclick={() => (side = "review")}>
         <Icon name="review" size="0.9em" />{flagged}
       </button>
     {/if}
@@ -294,7 +290,6 @@
         variant="ghost"
         icon="attach"
         aria-pressed={showContext}
-        title="source items this is raised from; the review reads them too"
         onclick={() => (showContext = !showContext)}
         >context{composer.context.length
           ? ` · ${composer.context.length}`
@@ -305,14 +300,12 @@
         icon="test"
         busy={composer.checking}
         disabled={!form}
-        title="ask Azure DevOps whether it would accept this, without creating it"
         onclick={validate}>check</Button
       >
       <Button
         icon="review"
         busy={composer.reviewing}
         disabled={!form || !composer.title.trim()}
-        title="tachy reviews your ticket as the developer picking it up"
         onclick={review}>ask tachy</Button
       >
       <Button
@@ -320,7 +313,6 @@
         icon="create"
         busy={composer.creating}
         disabled={!form || missing.length > 0}
-        title="create it in Azure DevOps (ctrl+enter)"
         onclick={submit}>create</Button
       >
       <span class="rule" aria-hidden="true"></span>

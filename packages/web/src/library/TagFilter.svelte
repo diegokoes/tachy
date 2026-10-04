@@ -68,7 +68,6 @@
     {/each}
     <CaretInput
       bind:value={query}
-      title="Filter by tag, right click to remove"
       aria-label="filter by tag"
       onfocus={() => (focused = true)}
       onkeydown={onKey}

@@ -207,7 +207,7 @@
   {#if r.lines.length}
     <span class="lines">
       {#each r.lines as l (l.id)}
-        <span class="line" title={l.ref}>
+        <span class="line">
           {@render statusBadge(l.index_status)}
           {#if r.lines.length > 1}<span class="ref">{l.ref}</span>{/if}
           {#if l.version_label}<span class="ver">{l.version_label}</span>{/if}
@@ -267,7 +267,6 @@
       variant="ghost"
       size="sm"
       icon="index"
-      title="clone this repo and re-read its files into the code index"
       busy={indexing === r.slug}
       disabled={busyRepo(r)}
       onclick={() => reindex(r)}>index</Button
@@ -302,7 +301,6 @@
       variant="ghost"
       size="sm"
       icon="index"
-      title="queue a reindex of every linked repo, including ones never indexed; one at a time, after any you start by hand"
       busy={indexingAll}
       disabled={indexingAll}
       onclick={reindexAll}>index all</Button

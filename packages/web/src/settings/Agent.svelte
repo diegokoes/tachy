@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { PROVIDER_OPTIONS } from "../vocab";
   import { AGENT_EFFORTS } from "@tachy/contract";
-  import { Button, Note, Select, tip } from "../tui";
+  import { Button, Note, Select } from "../tui";
   import {
     agentPrefs,
     loadAgent,
@@ -127,9 +127,7 @@
       {/if}
       {#snippet actions()}
         {#if typed && list?.error}
-          <span class="warn" use:tip={`couldn't list models: ${list.error}`}
-            >?</span
-          >
+          <span class="warn">?</span>
         {/if}
         <Origin of={origin(prefs.agent_model.source, "default")} />
         {#if typed && draftChanged}
@@ -155,9 +153,7 @@
 
     <Row label="effort">
       {#if current && !current.efforts.length}
-        <span class="fixed" use:tip={`${current.label} takes no effort setting`}
-          >fixed</span
-        >
+        <span class="fixed">fixed</span>
       {:else}
         <Select
           aria-label="effort"

@@ -200,9 +200,7 @@
     />
   {/if}
   {#if isCurator()}
-    <Button size="sm" tone="info" icon="edit" title="edit" onclick={edit}
-      >edit</Button
-    >
+    <Button size="sm" tone="info" icon="edit" onclick={edit}>edit</Button>
   {/if}
 {/snippet}
 

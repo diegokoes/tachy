@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { roleLabel } from "../terms";
-  import { Badge, DataTable, Icon, Note, tip, type Column } from "../tui";
+  import { Badge, DataTable, Icon, Note, type Column } from "../tui";
   import { fmtDate } from "../dates.svelte";
   import {
     reloadRoster,
@@ -58,7 +58,7 @@
     : u.disabled
       ? "disabled"
       : "no way in"}
-  <span class="mark" class:on use:tip={why}>
+  <span class="mark" class:on>
     <Icon
       name={on ? "success" : "reject"}
       size="1.05em"

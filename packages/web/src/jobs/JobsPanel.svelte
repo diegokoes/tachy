@@ -378,9 +378,7 @@
   {@const queue = d.queue ?? kindOf(d.kind)?.queue}
   {#if queue}
     {@const cls = jobQueue(queue).class}
-    <Badge tone={cls === "heavy" ? "danger" : "info"} title={`${cls} pool`}
-      >{queue}</Badge
-    >
+    <Badge tone={cls === "heavy" ? "danger" : "info"}>{queue}</Badge>
   {:else}
     <span class="dim">-</span>
   {/if}
@@ -440,7 +438,6 @@
                   size="sm"
                   tone="danger"
                   icon="stop"
-                  title="stop this run; it finishes its current step first"
                   onclick={() => cancel(r)}>stop</Button
                 >
               {/if}
@@ -668,7 +665,7 @@
   >
     <Tabs
       items={[
-        { key: "runs", label: "RUNS", tip: "kept 90 days, failures 180" },
+        { key: "runs", label: "RUNS" },
         { key: "changes", label: "CHANGES" },
       ]}
       active={historyTab}

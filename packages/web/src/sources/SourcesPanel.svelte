@@ -366,11 +366,7 @@
 
 {#snippet lockCell(r: Connection)}
   {@const on = redactionOn(r)}
-  <span
-    class="lock"
-    class:on
-    title={on ? "PII scrubbed before the model" : "unscrubbed"}
-  >
+  <span class="lock" class:on>
     <Icon
       name={on ? "lockOn" : "lockOff"}
       size="1em"
@@ -392,11 +388,6 @@
     {size}
     icon="test"
     tone={probeTone(r)}
-    title={probes[r.slug]
-      ? probes[r.slug].ok
-        ? "connected, test again"
-        : (probes[r.slug].error ?? "failed, test again")
-      : "test connection"}
     aria-label="test connection"
     busy={testing === r.slug}
     disabled={testing === r.slug}
@@ -438,7 +429,6 @@
           {:else}
             <Chip
               tone="default"
-              title={g.key}
               onclick={admin ? () => openClaim(r.slug, g) : undefined}
               >{g.name}</Chip
             >

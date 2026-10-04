@@ -13,6 +13,7 @@ import type { IconName } from "../tui/icons";
 export type SubnavItem = { key: string; label: string; icon?: IconName };
 
 export type Subnav = {
+  /** Empty for a section with no places of its own: the recess stays, bare. */
   items: SubnavItem[];
   active: string;
   onpick: (key: string) => void;
