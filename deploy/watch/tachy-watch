@@ -166,14 +166,14 @@ check_jobs() {
 }
 
 pg() {
-  dc exec -T postgres psql -At -U "$(app_env POSTGRES_USER tachy)" -d "$(app_env POSTGRES_DB tachy)" -c "$1" </dev/null 2>/dev/null
+  dc exec -T postgres psql -At -U "${WATCH_PG_USER:-tachy_watch}" -d "$(app_env POSTGRES_DB tachy)" -c "$1" </dev/null 2>/dev/null
 }
 
 check_postgres() {
   local row used max pct longest
   row=$(pg "select count(*), current_setting('max_connections') from pg_stat_activity")
   if [ -z "$row" ]; then
-    result pg_connections fail "down" "Postgres did not answer"
+    result pg_connections fail "down" "Postgres did not answer as ${WATCH_PG_USER:-tachy_watch}"
     result pg_long_transaction skip "" "Postgres did not answer"
     return
   fi
