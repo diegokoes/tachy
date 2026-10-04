@@ -177,6 +177,9 @@
 :root {
   --panel-line-w: 2px;
   --panel-line: var(--panel-line-w) solid var(--muted);
+  /* The edge of a control that sits straight on the wallpaper with no panel
+     around it, where --border is too faint to mark it out at rest. */
+  --border-bare: color-mix(in srgb, var(--muted) 55%, transparent);
 }
 
 /* ── Type scale ───────────────────────────────────────────────────────────

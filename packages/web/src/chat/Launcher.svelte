@@ -4,7 +4,7 @@
 
 <div class="launcher">
   <p class="lede">
-    <TypeLine text="Ask anything, or type / for commands." />
+    <TypeLine text="Ask anything, or type / for commands." caret={false} />
   </p>
 </div>
 

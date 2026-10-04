@@ -730,8 +730,8 @@
     overflow: visible;
   }
   .frame polygon {
-    fill: var(--bg);
-    stroke: var(--border);
+    fill: var(--panel-bg);
+    stroke: var(--border-bare);
     stroke-width: 3;
     stroke-linejoin: round;
   }
