@@ -20,9 +20,10 @@
   import Row from "./Row.svelte";
   import Rows from "./Rows.svelte";
 
-  // black/grey are invisible on dark backgrounds; white/light-grey on light ones
+  // black/grey are invisible on dark backgrounds; white/light-grey and the
+  // yellows on light ones
   const DARK_HIDDEN = new Set(["#000000", "#666666"]);
-  const LIGHT_HIDDEN = new Set(["#e5e5e5", "#ffffff"]);
+  const LIGHT_HIDDEN = new Set(["#e5e5e5", "#ffffff", "#e5e510", "#f5f543"]);
   const accents = $derived(
     ANSI16.filter(
       (c) => !(th.theme === "dark" ? DARK_HIDDEN : LIGHT_HIDDEN).has(c.hex),
