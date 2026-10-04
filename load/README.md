@@ -71,8 +71,18 @@ driver inside `api-load` so it reads that container's cgroup memory:
 ```sh
 docker compose -f load/turns.compose.yml up -d
 docker compose -f load/turns.compose.yml exec api-load node load/turns.mjs
+docker compose -f load/turns.compose.yml exec api-load node load/oneshots.mjs
 docker compose -f load/turns.compose.yml down -v
 ```
+
+`oneshots.mjs` does the same for model calls outside turns: report review,
+ticket review and a flow's `agent.ask` step, which run Claude Code with no
+tools and no MCP child and take no chat slot. It makes `LEVELS` (default
+`1,2,4`) calls at once and reports what they add to the container.
+
+Both report memory from the container's cgroup. Summed RSS reads about twice
+as high, because every Claude Code process counts the binary's pages as its
+own and the container holds them once. A `mem_limit` is the cgroup's figure.
 
 ## Reading the results
 
@@ -124,10 +134,10 @@ best cosine similarity achieved:   0.1214
 So the vector leg of hybrid search contributes **nothing**, and every result
 you see came from the lexical and trigram legs. Concretely:
 
-- **Latency is still meaningful.** The ONNX embedding still runs on the API
-  event loop, and the HNSW probe still happens; the scan is bounded by
-  `hnsw.max_scan_tuples`, so it does not spin. This is what the suite measures,
-  and it is the real bottleneck.
+- **Latency is still meaningful.** The query is still embedded, and the HNSW
+  probe still happens; the scan is bounded by `hnsw.max_scan_tuples`, so it
+  does not spin. This is what the suite measures, and it is the real
+  bottleneck.
 - **Result counts and relevance are not meaningful.** Do not use these runs to
   judge search quality. `test/search/quality.test.ts` is what does that.
 
