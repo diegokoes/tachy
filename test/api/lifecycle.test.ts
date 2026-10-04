@@ -1,8 +1,8 @@
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createApp } from "../../packages/api/src/app";
-import { lifecycle } from "../../packages/api/src/lifecycle";
+import { lifecycle, watchPool } from "../../packages/api/src/lifecycle";
 import { json } from "../http";
 import { sql } from "../database";
 
@@ -103,5 +103,43 @@ describe("draining", () => {
       lifecycle.embedderUrl = undefined;
       server.close();
     }
+  });
+});
+
+describe("the pool watchdog", () => {
+  afterEach(() => vi.useRealTimers());
+  const never = () => new Promise<never>(() => {});
+
+  it("fires once after enough probes in a row found no connection", async () => {
+    vi.useFakeTimers();
+    let fired = 0;
+    watchPool({
+      onStuck: () => fired++,
+      probe: never,
+      everyMs: 1_000,
+      timeoutMs: 100,
+      strikes: 3,
+    });
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(fired).toBe(0);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(fired).toBe(1);
+  });
+
+  it("counts an answer of any kind as a connection, and starts over on one", async () => {
+    vi.useFakeTimers();
+    let fired = 0;
+    let n = 0;
+    const stop = watchPool({
+      onStuck: () => fired++,
+      probe: () =>
+        ++n % 3 === 0 ? Promise.reject(new Error("ECONNREFUSED")) : never(),
+      everyMs: 1_000,
+      timeoutMs: 100,
+      strikes: 3,
+    });
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(fired).toBe(0);
+    stop();
   });
 });
