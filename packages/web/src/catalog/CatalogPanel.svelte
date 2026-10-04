@@ -1,6 +1,5 @@
 <script lang="ts">
   import { fmtDate } from "../dates.svelte";
-  import { onMount } from "svelte";
   import { api } from "../api";
   import { createResource } from "../resource.svelte";
   import { navigate } from "../shell/router.svelte";
@@ -119,7 +118,11 @@
     () => api.get<ComponentCoverage[]>("/overview/components"),
     [],
   );
-  onMount(() => void coverage.reload());
+  /* Follows the census: a dialog section over this overview changes products
+     without unmounting it, and the census is what gets recounted on close. */
+  $effect(() => {
+    if (!census.loading) void coverage.reload();
+  });
   const map = $derived(coverageTree(coverage.data, t("products")));
 
   /* Ordered as an entry moves through its life, not by size, so the chart

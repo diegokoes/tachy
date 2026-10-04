@@ -43,6 +43,10 @@
     padding: var(--view-pad-y) var(--view-pad-x) calc(var(--pad-4) * 1.5);
     min-width: 0;
     container-type: inline-size;
+    /* Counters and charts are for reading at a glance and clicking through,
+       so a drag across them must not start a text selection. */
+    user-select: none;
+    cursor: default;
   }
 
   .tiles {
@@ -58,6 +62,8 @@
     margin: 0;
     font-size: var(--fs-xs);
     color: var(--danger);
+    user-select: text;
+    cursor: auto;
   }
 
   /* Narrow windows trade the one-screen rule for legible charts: two columns

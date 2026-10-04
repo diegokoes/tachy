@@ -107,7 +107,7 @@
     width: 2px;
     margin-left: -1px;
     border-radius: 1px;
-    background: var(--accent);
+    background: var(--accent-fill);
   }
   .n {
     font-family: var(--font-mono);

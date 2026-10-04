@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import ChatView from "./chat/ChatView.svelte";
   import LibraryView from "./library/LibraryView.svelte";
   import WikiView from "./wiki/WikiView.svelte";
@@ -11,7 +11,7 @@
   import NotificationHost from "./notifications/NotificationHost.svelte";
   import { session, initSession } from "./access/session.svelte";
   import { navItems } from "./shell/nav";
-  import { wipeIn, jellyPress } from "./motion/motion";
+  import { wipeIn, jellyPress, reflow } from "./motion/motion";
   import StarField from "./motion/StarField.svelte";
   import Wordmark from "./motion/Wordmark.svelte";
   import { loadThemeFromStorage, themeState } from "./theme/theme.svelte";
@@ -48,6 +48,8 @@
   const view = $derived(section("chat"));
 
   const sub = $derived(subnav());
+  const acts = $derived(sub ? (topActions() ?? sub.actions) : undefined);
+  const subHidden = $derived(themeState.navHidden && themeState.subnavHidden);
 
   let wizardSkipped = $state(localStorage.getItem("tachy-skip-wizard") === "1");
   const showWizard = $derived(session.bootstrapped === false && !wizardSkipped);
@@ -63,6 +65,7 @@
   }
 
   let navEl = $state<HTMLElement>();
+  let topbarEl = $state<HTMLElement>();
   let mainEl = $state<HTMLElement>();
   let navRevealed = $state(false);
   let subEl = $state<HTMLElement>();
@@ -208,6 +211,14 @@
 
   $effect(() => setScrollport(mainEl ?? null));
 
+  /* A pre effect, so the boxes are read while the bar is still where it was;
+     the tween starts once the DOM has caught up with the setting. */
+  $effect.pre(() => {
+    void themeState.navHidden;
+    const play = untrack(() => reflow([topbarEl, windowEl]));
+    void tick().then(play);
+  });
+
   $effect(() => {
     if (!navEl || navRevealed) return;
     wipeIn(navEl.querySelectorAll("button"), () => (navRevealed = true));
@@ -307,7 +318,11 @@
   <FeedbackView />
 {:else}
   <div class="app" data-scene>
-    <div class="topbar">
+    <div
+      class="topbar"
+      class:hidden={themeState.navHidden}
+      bind:this={topbarEl}
+    >
       <div class="mark"><Wordmark /></div>
       <div class="navbar" bind:this={navEl} class:unrevealed={!navRevealed}>
         <Panel>
@@ -370,23 +385,33 @@
     <div
       class="window"
       bind:this={windowEl}
-      class:carved={sub}
+      class:carved={sub && !subHidden}
       style="--sub-h-raw: {subH}px; --sub-mouth: {carveW}px; --sub-mask: {carveMask}"
     >
       <!-- Rendered before the window so its hotkey scope is pushed first and
            the view's scope stays innermost - otherwise this bar's (all hidden)
            bindings would sit on top and blank the hint rule. -->
       {#if sub}
-        <svg
-          class="notch"
-          width={carveW}
-          height={carveH}
-          viewBox="0 0 {carveW} {carveH}"
-          aria-hidden="true"
+        {#if !subHidden}
+          <svg
+            class="notch"
+            width={carveW}
+            height={carveH}
+            viewBox="0 0 {carveW} {carveH}"
+            aria-hidden="true"
+          >
+            <path d={carveOutline} />
+          </svg>
+        {/if}
+        <!-- Hidden rather than unmounted: the bar owns its tabs' shortcuts,
+             and its height still sizes the row the top actions sit in. -->
+        <div
+          class="subnav"
+          class:settling
+          class:hidden={subHidden}
+          inert={subHidden}
+          bind:this={subEl}
         >
-          <path d={carveOutline} />
-        </svg>
-        <div class="subnav" class:settling bind:this={subEl}>
           <Tabs
             items={sub.items}
             active={sub.active}
@@ -396,7 +421,6 @@
             onpick={sub.onpick}
           />
         </div>
-        {@const acts = topActions() ?? sub.actions}
         {#if acts}
           <div class="top-acts">{@render acts()}</div>
         {/if}
@@ -509,6 +533,9 @@
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
     gap: var(--gap);
+  }
+  .topbar.hidden {
+    display: none;
   }
   .mark {
     display: flex;
@@ -666,6 +693,9 @@
     z-index: 2;
     padding: var(--pad-2) var(--pad-3);
   }
+  .subnav.hidden {
+    opacity: 0;
+  }
   /* The window's own top row, right of the recess - space the carve opens up
      and nothing else was using. Aligned to the Panel's content edge so it
      reads as part of the page, and capped short of the recess mouth so it can
@@ -722,6 +752,12 @@
       0px,
       calc(var(--sub-depth) - var(--pad-3) + var(--sub-air))
     );
+  }
+
+  /* With the bar hidden the row is kept only for the top actions, and only
+     while a view has put some there. */
+  .window:has(.subnav.hidden):not(:has(.top-acts > :global(*))) .shell {
+    padding-top: 0;
   }
 
   /* Wiped out until the GSAP reveal takes over (its inline clip-path wins).
