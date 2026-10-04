@@ -7,6 +7,8 @@
     setTheme,
     setFontScale,
     setNavLabels,
+    setNavHidden,
+    setSubnavHidden,
     NAV_LABELS,
     TEXT_SIZES,
   } from "../theme/theme.svelte";
@@ -29,6 +31,10 @@
     { value: "light", label: "light" },
   ] as const;
   const SIZES = TEXT_SIZES.map((t) => ({ value: t.scale, label: t.key }));
+  const SHOWN = [
+    { value: "shown", label: "shown" },
+    { value: "hidden", label: "hidden" },
+  ] as const;
   const LABELS = NAV_LABELS.map((l) => ({ value: l, label: l }));
 </script>
 
@@ -47,6 +53,26 @@
       onpick={setFontScale}
     />
   </Row>
+
+  <Row label="nav bar">
+    <Choice
+      label="nav bar"
+      options={SHOWN}
+      value={th.navHidden ? "hidden" : "shown"}
+      onpick={(v) => setNavHidden(v === "hidden")}
+    />
+  </Row>
+
+  {#if th.navHidden}
+    <Row label="subnav">
+      <Choice
+        label="subnav"
+        options={SHOWN}
+        value={th.subnavHidden ? "hidden" : "shown"}
+        onpick={(v) => setSubnavHidden(v === "hidden")}
+      />
+    </Row>
+  {/if}
 
   <Row label="nav labels">
     <Choice
