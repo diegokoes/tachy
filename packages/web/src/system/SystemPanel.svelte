@@ -28,6 +28,7 @@
       agent_slot_cap: String(system.settings.agent_slot_cap.value),
       copilot_slot_weight: String(system.settings.copilot_slot_weight.value),
       agent_queue_max: String(system.settings.agent_queue_max.value),
+      org_timezone: system.settings.org_timezone.value,
     };
   }
 
@@ -270,6 +271,25 @@
         <td
           ><span class="badge src-{system.settings.agent_queue_max.source}"
             >{system.settings.agent_queue_max.source}</span
+          ></td
+        >
+      </tr>
+      <tr>
+        <td class="tip">Timezone</td>
+        <td class="edit-cell">
+          <input bind:value={draft.org_timezone} placeholder="Europe/Madrid" />
+          {#if draft.org_timezone.trim() && draft.org_timezone.trim() !== system.settings.org_timezone.value}
+            <Button
+              size="sm"
+              onclick={() =>
+                saveSetting("org_timezone", draft.org_timezone.trim())}
+              >apply</Button
+            >
+          {/if}
+        </td>
+        <td
+          ><span class="badge src-{system.settings.org_timezone.source}"
+            >{system.settings.org_timezone.source}</span
           ></td
         >
       </tr>

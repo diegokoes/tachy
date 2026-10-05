@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createUser } from "@tachy/core/access";
+import { clearSettingsCache, setSetting } from "@tachy/core/config";
 import { createApp } from "../../packages/api/src/app";
 import { json, loginCookie } from "../http";
 import { resetData, sql, resetJobs } from "../database";
@@ -86,6 +87,24 @@ describe("jobs API", () => {
     expect(
       (await call("/schedule-preview", "POST", { schedule: "nope" })).status,
     ).toBe(400);
+  });
+
+  it("previews a schedule in the organisation's timezone when none is given", async () => {
+    await setSetting("org_timezone", "Asia/Tokyo");
+    try {
+      expect((await (await call("/kinds")).json()).timezone).toBe("Asia/Tokyo");
+      const next = async (body: Record<string, string>) =>
+        (await (await call("/schedule-preview", "POST", body)).json())
+          .next[0] as string;
+      // 09:00 in Tokyo is midnight UTC.
+      expect(await next({ schedule: "0 9 * * *" })).toMatch(/T00:00:00/);
+      expect(await next({ schedule: "0 9 * * *", timezone: "UTC" })).toMatch(
+        /T09:00:00/,
+      );
+    } finally {
+      await sql`delete from settings where key = 'org_timezone'`;
+      clearSettingsCache();
+    }
   });
 
   it("starts a one-off run of a kind without a definition", async () => {
