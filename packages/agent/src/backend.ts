@@ -1,14 +1,6 @@
-// One list of providers and efforts, the contract's: a second copy here makes
-// adding a backend a two-place change. The contract has no dependencies, so
-// importing it costs nothing.
-import type { AgentProvider, AgentEffort } from "@tachy/contract";
+import type { AgentEffort } from "@tachy/contract";
 
-export {
-  AGENT_PROVIDERS,
-  AGENT_EFFORTS,
-  type AgentProvider,
-  type AgentEffort,
-} from "@tachy/contract";
+export { AGENT_EFFORTS, type AgentEffort } from "@tachy/contract";
 
 /** Why a turn failed, when the cause is known and the user can act on it. */
 export type AgentErrorKind =
@@ -16,13 +8,11 @@ export type AgentErrorKind =
 
 /** Resolved credential for a turn. Mirrors the shape `@tachy/core` produces. */
 export interface AgentAuth {
-  kind: "anthropic_api_key" | "anthropic_oauth" | "copilot_token";
+  kind: "anthropic_api_key" | "anthropic_oauth";
   value: string;
 }
 
 export interface AgentConfig {
-  provider: AgentProvider;
-
   mcpCommand: string;
   mcpArgs: string[];
   mcpEnv: Record<string, string>;
@@ -33,26 +23,18 @@ export interface AgentConfig {
    */
   cwd: string;
 
-  /**
-   * An empty directory the Copilot session runs from. The Copilot runtime reads
-   * CLAUDE.md, AGENTS.md and .github/copilot-instructions.md from its working
-   * directory into the system prompt, and none of them are written for the agent.
-   */
-  sessionCwd: string;
-
   model?: string;
 
   allowedModels?: string[];
 
   effort?: AgentEffort;
 
-  /** The whole system prompt on Claude; appended to the runtime's own on Copilot. */
+  /** The whole system prompt. */
   systemPrompt: string;
 
   /**
-   * Per-user state directory: Claude Code's credentials and transcripts, and
-   * the Copilot runtime's session state under `copilot/`. Must be stable for a
-   * user across turns: a fresh directory mints a new machine identity and
+   * Per-user state directory: Claude Code's credentials and transcripts. Must
+   * be stable for a user across turns: a fresh directory mints a new machine identity and
    * orphans what `resume` needs.
    */
   configDir?: string;
@@ -80,7 +62,6 @@ export function effectiveModel(
 export interface TurnUsage {
   inputTokens: number | null;
   outputTokens: number | null;
-  premiumRequests?: number;
 }
 
 export type AgentEvent =

@@ -13,8 +13,7 @@ import { setSetting, setCredential } from "@tachy/core/config";
 import { addTeam, addProduct } from "@tachy/core/catalog";
 import {
   AGENT_EFFORTS,
-  AGENT_CREDENTIALS,
-  AGENT_PROVIDERS,
+  ANTHROPIC_API_KEY_CREDENTIAL,
   DEPLOYMENT_PROFILES,
   MIN_PASSWORD_LENGTH,
   ANTHROPIC_OAUTH_CREDENTIAL,
@@ -35,7 +34,6 @@ const setupSchema = z.object({
   settings: z
     .object({
       redaction_global: z.boolean().optional(),
-      agent_provider: z.enum(AGENT_PROVIDERS).optional(),
       agent_model: z.string().min(1).optional(),
       agent_effort: z.enum(AGENT_EFFORTS).optional(),
       allowed_models: z.array(z.string().min(1)).optional(),
@@ -111,11 +109,9 @@ export const setup = new Hono()
     if (body.agent_key && secretsEnabled()) {
       const admin = await getUserByEmail(body.email);
       if (admin) {
-        const provider = body.settings?.agent_provider ?? "claude";
-        const name =
-          provider === "claude" && body.agent_key.startsWith(OAUTH_PREFIX)
-            ? ANTHROPIC_OAUTH_CREDENTIAL
-            : AGENT_CREDENTIALS[provider];
+        const name = body.agent_key.startsWith(OAUTH_PREFIX)
+          ? ANTHROPIC_OAUTH_CREDENTIAL
+          : ANTHROPIC_API_KEY_CREDENTIAL;
         // The wizard's key is the first admin's own, not the deployment's:
         // every other user brings theirs under Settings > keys.
         await setCredential(admin.id, "user", admin.id, name, body.agent_key);

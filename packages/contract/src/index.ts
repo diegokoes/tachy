@@ -169,15 +169,13 @@ export { GOOD, STRONG, grade } from "./relevance";
 export type { Grade } from "./relevance";
 
 export {
-  AGENT_PROVIDERS,
-  AGENT_CREDENTIALS,
+  ANTHROPIC_API_KEY_CREDENTIAL,
   ANTHROPIC_OAUTH_CREDENTIAL,
   OAUTH_PREFIX,
   API_KEY_PREFIX,
   API_KEY_EXAMPLE,
   validateCredential,
 } from "./credentials";
-export type { AgentProvider } from "./credentials";
 
 export {
   TABLE_CELL_TYPES,

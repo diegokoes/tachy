@@ -13,7 +13,7 @@ Folders are named for the domain they own, never `utils` / `helpers` / `common`.
 | `packages/core`      | Everything with logic: `knowledge`, `reference`, `wiki`, `library`, `search`, `work-items`, `code`, `catalog`, `buckets`, `flows`, `chat`, `reports`, `notifications`, `access`, `config`, `compliance`, `exports`, `analytics`, `sources`, `jobs`, `diagnostics`, `infra` |
 | `packages/sources/*` | One connector each: `freshdesk`, `github`, `azure-devops`                                                                                                                                                                                                                  |
 | `packages/mcp`       | The MCP server - every tool the agent can call                                                                                                                                                                                                                             |
-| `packages/agent`     | Backends (`claude.ts`, `copilot.ts`), turn plumbing, `prompt.md`, and the one-shot review prompts                                                                                                                                                                          |
+| `packages/agent`     | The Claude backend (`claude.ts`), turn plumbing, `prompt.md`, and the one-shot review prompts                                                                                                                                                                              |
 | `packages/api`       | HTTP routes, auth, slash-command expansion                                                                                                                                                                                                                                 |
 | `packages/web`       | Svelte SPA                                                                                                                                                                                                                                                                 |
 | `packages/worker`    | The job worker service: works runs of the job kinds core defines                                                                                                                                                                                                           |
@@ -47,9 +47,8 @@ added lines. Raise a package's floor when its coverage rises; never lower one.
 
 ## The agent prompt is a per-request cost
 
-`packages/agent/prompt.md` is the system prompt of **every** agent turn: the
-whole of it on Claude, appended to the runtime's own on Copilot. Adding a paragraph there is a bill paid on every message
-the product ever sends, so it holds only what shapes reasoning _before_ a tool
+`packages/agent/prompt.md` is the whole system prompt of **every** agent turn.
+Adding a paragraph there is a bill paid on every message the product ever sends, so it holds only what shapes reasoning _before_ a tool
 call: identity, invariants, mode playbooks.
 
 Anything about how to call one tool correctly belongs to that tool instead -
@@ -59,11 +58,9 @@ that needs it. `withCompaction` and `unresolvedCustomer` in
 `packages/mcp/src/context.ts`, and `NO_MATCHES` in `packages/mcp/src/results.ts`,
 are the pattern to copy.
 
-Nothing else reaches the agent. `claudeOptions` and `copilotSessionConfig` in
-`packages/agent/src` pin what each backend reads: no settings, CLAUDE.md or
-`.mcp.json` on Claude, and an empty working directory on Copilot, whose runtime
-otherwise loads this file and any `AGENTS.md` into the prompt. Their tests fail
-if either starts reading from disk again.
+Nothing else reaches the agent. `claudeOptions` in `packages/agent/src` pins
+what the backend reads: no settings, CLAUDE.md or `.mcp.json`. Its tests fail
+if it starts reading from disk again.
 
 ## Conventions
 

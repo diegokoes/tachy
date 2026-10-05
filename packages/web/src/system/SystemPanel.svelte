@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { PROVIDER_OPTIONS } from "../vocab";
   import { AGENT_EFFORTS } from "@tachy/contract";
   import { onMount } from "svelte";
   import { api } from "../api";
@@ -26,7 +25,6 @@
       allowed_models: system.settings.allowed_models.value.join(", "),
       org_name: system.settings.org_name.value ?? "",
       agent_slot_cap: String(system.settings.agent_slot_cap.value),
-      copilot_slot_weight: String(system.settings.copilot_slot_weight.value),
       agent_queue_max: String(system.settings.agent_queue_max.value),
       org_timezone: system.settings.org_timezone.value,
     };
@@ -130,21 +128,6 @@
         >
       </tr>
       <tr>
-        <td class="tip">Agent provider</td>
-        <td>
-          <AsciiSelect
-            value={system.settings.agent_provider.value}
-            options={PROVIDER_OPTIONS}
-            onchange={(v) => saveSetting("agent_provider", v)}
-          />
-        </td>
-        <td
-          ><span class="badge src-{system.settings.agent_provider.source}"
-            >{system.settings.agent_provider.source}</span
-          ></td
-        >
-      </tr>
-      <tr>
         <td>Agent model</td>
         <td class="edit-cell">
           <input bind:value={draft.agent_model} />
@@ -231,27 +214,6 @@
         <td
           ><span class="badge src-{system.settings.agent_slot_cap.source}"
             >{system.settings.agent_slot_cap.source}</span
-          ></td
-        >
-      </tr>
-      <tr>
-        <td class="tip">Copilot turn weight</td>
-        <td class="edit-cell">
-          <input inputmode="numeric" bind:value={draft.copilot_slot_weight} />
-          {#if draft.copilot_slot_weight !== String(system.settings.copilot_slot_weight.value) && draft.copilot_slot_weight !== ""}
-            <Button
-              size="sm"
-              onclick={() =>
-                saveSetting(
-                  "copilot_slot_weight",
-                  Number(draft.copilot_slot_weight),
-                )}>apply</Button
-            >
-          {/if}
-        </td>
-        <td
-          ><span class="badge src-{system.settings.copilot_slot_weight.source}"
-            >{system.settings.copilot_slot_weight.source}</span
           ></td
         >
       </tr>

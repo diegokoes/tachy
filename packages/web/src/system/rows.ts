@@ -1,4 +1,4 @@
-import type { AgentProvider, DeploymentProfile } from "@tachy/contract";
+import type { DeploymentProfile } from "@tachy/contract";
 
 export type Setting<T> = { value: T; source: "db" | "env" | "default" };
 export type RuntimeInfo = {
@@ -29,7 +29,7 @@ export type RuntimeInfo = {
     slotCap: number;
     queued: number;
     rejectedSinceBoot: number;
-    running: Record<string, number>;
+    running: number;
     pendingApprovals: number;
     oldestApprovalAgeSeconds: number | null;
   };
@@ -56,21 +56,18 @@ export type RuntimeInfo = {
 export type SystemInfo = {
   settings: {
     redaction_global: Setting<boolean>;
-    agent_provider: Setting<AgentProvider>;
     agent_model: Setting<string>;
     agent_effort: Setting<string>;
     allowed_models: Setting<string[]>;
     org_name: Setting<string | null>;
     deployment_profile: Setting<DeploymentProfile>;
     agent_slot_cap: Setting<number>;
-    copilot_slot_weight: Setting<number>;
     agent_queue_max: Setting<number>;
     org_timezone: Setting<string>;
   };
   credentials: {
     vault_enabled: boolean;
     anthropic_api_key: "global" | "env" | null;
-    copilot_token: "global" | "env" | null;
   };
   /** Admin-only: the server withholds it from a member. */
   env?: {
@@ -81,7 +78,6 @@ export type SystemInfo = {
     api_token_set: boolean;
     session_secret_set: boolean;
     anthropic_api_key_set: boolean;
-    copilot_token_set: boolean;
     env_badge: string | null;
     commit: string | null;
   };

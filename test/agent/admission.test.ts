@@ -30,12 +30,12 @@ describe("Admission", () => {
 
   it("weighs a heavy turn by its slots, clamped to the cap", async () => {
     const a = new Admission(() => ({ cap: 4, queueMax: 5 }));
-    const copilot = a.admit(4);
-    expect(copilot.position).toBe(0);
-    const claude = a.admit(1);
-    expect(claude.position).toBe(1);
-    copilot.release();
-    await claude.granted;
+    const heavy = a.admit(4);
+    expect(heavy.position).toBe(0);
+    const light = a.admit(1);
+    expect(light.position).toBe(1);
+    heavy.release();
+    await light.granted;
 
     const huge = new Admission(() => ({ cap: 3, queueMax: 0 })).admit(10);
     expect(huge.position).toBe(0);
