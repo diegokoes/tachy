@@ -14,6 +14,15 @@
       APT::Periodic::Unattended-Upgrade "1";
     mode: "0644"
 
+- name: Drop-in directories a minimal install lacks
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /etc/systemd/journald.conf.d
+    - /etc/systemd/logind.conf.d
+
 - name: Journald keeps at most 1 GB
   ansible.builtin.copy:
     dest: /etc/systemd/journald.conf.d/10-tachy.conf
