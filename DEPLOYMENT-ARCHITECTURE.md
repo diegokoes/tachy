@@ -355,8 +355,9 @@ child is what made 15 possible (§5.4).
 | **Global cap**                                                | **15** |
 
 At the budgeted figure the 7.4 GB hold 13 turns, and at the measured one 43.
-The cap stays at 15: it was set before the container was measured, and a load
-window on the laptop decides whether to raise it (§13).
+The cap is still 15, set before the container was measured. The laptop's load
+window held 40 short turns (§3.1), so raising it is a choice about latency and
+longer conversations, made in Admin › system.
 
 A heavy job run isn't in the first table: it holds 3 chat slots while it runs
 (§5.3.4), so it comes out of the turn budget.
