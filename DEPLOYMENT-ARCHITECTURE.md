@@ -219,8 +219,27 @@ that processes share once. Measured 2026-10-04 on the workstation with
   to its container. A 400 KB prompt made that 112.
 - So the 0.55 GB budgeted for a turn (§3.2) is close to four times what a
   short turn costs its container. These are short conversations with small
-  tool results, and a turn grows with both. The cap stays at 15 until a load
-  window measures the laptop (§13).
+  tool results, and a turn grows with both.
+
+**The same on the laptop,** measured 2026-10-05 with `load/turns.mjs` in the
+load window (§11.1), beside the idle production stack, the cap raised to 40 in
+the scratch database:
+
+| At once | A turn adds | First event, p95 | Whole turn, p95 | Postgres connections |
+| ------: | ----------: | ---------------: | --------------: | -------------------: |
+|       1 |     169 MiB |            1.2 s |           3.5 s |                   17 |
+|       5 |     166 MiB |            1.6 s |           4.0 s |                   21 |
+|      10 |     147 MiB |            2.4 s |           4.9 s |                   26 |
+|      15 |     147 MiB |            3.4 s |           5.8 s |                   31 |
+|      25 |     143 MiB |            5.5 s |           8.2 s |                   41 |
+|      40 |     138 MiB |            9.8 s |          12.2 s |                   51 |
+
+- Every turn finished at every level. Memory is not what limits the laptop:
+  40 turns added 5.5 GiB. Its 4 cores are: 40 turns starting at once wait 10 s
+  for their first event.
+- A one-shot call added 110 MiB at 1, 2 and 4 at once.
+- With the default cap of 15, turns 16 to 25 queued and finished, and past the
+  queue of 10 the rest were refused, as designed.
 
 **The model itself** is gte-modernbert-base (§5.4). Measured 2026-10-05 on the
 workstation in the production image, fp32, on tachý's own code chunks at their
@@ -262,9 +281,10 @@ and 2560 MB, which on that host is 6 threads (§3.3).
   19 MiB to the first, and nothing was killed.
 - bge-base-en-v1.5, the model until then, embedded the same chunks at about
   twice the rate (§5.15).
-- **The laptop is not measured with this model.** With bge-base it embedded at
-  about 65% of the workstation's rate, so expect a little over 1 full chunk a
-  second.
+- **On the laptop,** measured 2026-10-05 in the running embedder: 1.08 full
+  chunks a second on the runtime's own 4 threads, 3.2 texts of 1000 characters
+  and 8.6 of 350, one query in 26 ms, 1533 MiB at peak, nothing throttled, and
+  89 °C while it ran.
 
 **Why batches are small,** measured 2026-09-17 with bge-base (on the
 workstation, in one process):
@@ -403,8 +423,7 @@ about 90% of its peak frequency (§12).
 - The embedder is capped at 6 CPUs. It runs one batch at a time, queries
   first, so a search never waits behind more than one passage batch: 0.43 s
   for a full code chunk on the workstation and up to 0.8 s for an input of
-  1024 tokens, which is about 0.7 s and 1.2 s on the laptop (not measured
-  there). A burst of searches from 15 turns costs about 16 ms each.
+  1024 tokens, and about 0.9 s for a full code chunk on the laptop. A burst of searches from 15 turns costs about 16 ms each.
 - **The model's threads follow the CPU limit** (`core/src/search/threads.ts`).
   ONNX Runtime starts one thread per physical core of the host and pins each
   to its core, whatever the container's quota or mask
@@ -2659,9 +2678,10 @@ All in `deploy/runbooks/`. `README.md` there is the index.
 
 None of these blocks a deploy.
 
-- **The slot cap is sized from summed RSS** (§3.1). A short turn costs its
-  container about a quarter of what is budgeted for it. Raising the cap waits
-  for a load window on the laptop.
+- **The slot cap is still 15.** The laptop's load window (§3.1) held 40 short
+  turns in memory, with first events slowing from 3.4 s at 15 to 5.5 s at 25.
+  Raising it is a setting in Admin › system; real conversations are longer
+  than the test's.
 - **One-shot model calls take no slot** (§2.4). In the api each adds about
   100 MiB outside the turn budget.
 - **`tachy_owner` does not exist** (§5.9), so the schema is applied as the
