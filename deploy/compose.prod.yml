@@ -31,7 +31,8 @@ services:
       - "443:443"
     environment:
       TACHY_HOSTNAME: ${TACHY_HOSTNAME:?set TACHY_HOSTNAME in .env}
-      TACHY_HOST_ALIASES: ${TACHY_HOST_ALIASES:-}
+      TACHY_HOST_IP: ${TACHY_HOST_IP:-}
+      TACHY_DEFAULT_SNI: ${TACHY_HOST_IP:-${TACHY_HOSTNAME}}
       TACHY_TLS: ${TACHY_TLS:-internal}
     volumes:
       - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
