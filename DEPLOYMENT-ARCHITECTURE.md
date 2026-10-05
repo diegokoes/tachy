@@ -50,7 +50,7 @@ api            node dist/api.js
 |           event-loop sampler (60 s), pool watchdog (30 s)
 |-- one-shot model calls (report and ticket review): Claude Code, no tools
 `-- one tree per chat turn:
-    Claude Code CLI (agent SDK query())  or  Copilot runtime (CopilotClient)
+    Claude Code CLI (agent SDK query())
     `-- MCP server: node dist/mcp.js
         |-- a postgres.js pool of 2, as tachy_app
         `-- embeds over HTTP at the embedder
@@ -62,10 +62,9 @@ cli            profile "tools", ad hoc: sync, backup, restore, reembed, seed
 ```
 
 - **A turn** starts at `POST /api/agent/chat` (`api/src/routes/agent.ts`).
-  - The Claude backend calls `query()` (`agent/src/claude.ts`).
-  - The Copilot backend constructs a `CopilotClient` per turn
-    (`agent/src/copilot.ts`).
-  - Both get the MCP server as a stdio command, built in
+  - It calls the agent SDK's `query()` (`agent/src/claude.ts`), which starts
+    Claude Code.
+  - Claude Code gets the MCP server as a stdio command, built in
     `api/src/turn-config.ts`.
 - **The MCP child** gets an environment built for that turn (`mcpConfig` in
   `api/src/turn-config.ts`):
@@ -116,7 +115,6 @@ differently:
 | Active turns, approvals, admission queue | in-process `Map`s (`api/src/turns.ts`, `api/src/admission.ts`); resolvers in `agent/src/turn.ts`           | no; a restart drains for up to 180 s | **breaks**: `/approve` must reach the owning process       |
 | Maintenance switch                       | an in-process flag (`api/src/lifecycle.ts`)                                                                | no; a restart clears it              | per replica                                                |
 | Claude session transcripts               | `tachy-agent-home` volume, `users/<id>`; pruned after 90 days                                              | yes                                  | **breaks** `resume` unless shared or routed sticky by user |
-| Copilot session state                    | `tachy-agent-home` volume, `users/<id>/copilot`; pruned after 90 days                                      | yes                                  | **breaks** `resume` unless shared or routed sticky by user |
 | Throttles                                | `Map`s (`api/src/throttle.ts`): failed logins by email, failed ingest tokens by bucket and address         | no                                   | weaken to per replica                                      |
 | Settings                                 | `settings` table; each process re-reads it within 15 s (`core/src/config/settings.ts`)                     | yes                                  | fine                                                       |
 | Permission cache                         | 60 s `Map` (`core/src/access/permissions.ts`)                                                              | no                                   | a role change is stale for up to 60 s elsewhere            |
@@ -156,19 +154,15 @@ second.
 Most likely first. Each was read in the code and not run, unless it says
 otherwise. §15.2 lists what is known to be unfinished.
 
-1. **Copilot turns are unproven on the production overlay.** The runtime's
-   state goes to the caller's directory on the `tachy-agent-home` volume
-   (§2.2), because the api's root filesystem is read-only. No Copilot turn has
-   run there with a real token: **to verify**.
-2. **Model calls outside turns take no slot.** Each one-shot call (§2.1)
+1. **Model calls outside turns take no slot.** Each one-shot call (§2.1)
    starts a Claude Code process, and adds about 100 MiB to its container
    (§3.1). `worker-light` runs at most 4 flows at once: 4 calls at once peaked
    at 424 to 448 MiB of its 512 MB, and 6 were OOM-killed. So
    `TACHY_WORKER_LIGHT_CONCURRENCY` and `TACHY_WORKER_LIGHT_MEM_LIMIT` move
    together, at about 100 MiB a run.
-3. **Connections, once the cap rises.** At 40 slots the pools need 110 of
+2. **Connections, once the cap rises.** At 40 slots the pools need 110 of
    Postgres's 100 connections (§4.6).
-4. **State that dies with the api process:** active turns, pending approvals,
+3. **State that dies with the api process:** active turns, pending approvals,
    the maintenance switch and the throttles (§2.2).
 
 ## 3. Capacity model (profile A)
@@ -202,9 +196,6 @@ The figures are the peak RSS of the whole process tree, sampled every 250 ms.
   and tool results, so the budget below assumes 400 MB.
 - **Production runs the third column.** The compiled child measured 107 MB
   once it shipped.
-- **Copilot turns are unmeasured.** A developer report showed its runtime at
-  4.7 GB. Until `load/turns.mjs` measures one, a Copilot turn counts as 4
-  slots.
 
 **What the container is charged.** The table above sums the RSS of each
 process. A `mem_limit` is the cgroup's figure, and the cgroup holds the pages
@@ -228,8 +219,27 @@ that processes share once. Measured 2026-10-04 on the workstation with
   to its container. A 400 KB prompt made that 112.
 - So the 0.55 GB budgeted for a turn (§3.2) is close to four times what a
   short turn costs its container. These are short conversations with small
-  tool results, and a turn grows with both. The cap stays at 15 until a load
-  window measures the laptop (§13).
+  tool results, and a turn grows with both.
+
+**The same on the laptop,** measured 2026-10-05 with `load/turns.mjs` in the
+load window (§11.1), beside the idle production stack, the cap raised to 40 in
+the scratch database:
+
+| At once | A turn adds | First event, p95 | Whole turn, p95 | Postgres connections |
+| ------: | ----------: | ---------------: | --------------: | -------------------: |
+|       1 |     169 MiB |            1.2 s |           3.5 s |                   17 |
+|       5 |     166 MiB |            1.6 s |           4.0 s |                   21 |
+|      10 |     147 MiB |            2.4 s |           4.9 s |                   26 |
+|      15 |     147 MiB |            3.4 s |           5.8 s |                   31 |
+|      25 |     143 MiB |            5.5 s |           8.2 s |                   41 |
+|      40 |     138 MiB |            9.8 s |          12.2 s |                   51 |
+
+- Every turn finished at every level. Memory is not what limits the laptop:
+  40 turns added 5.5 GiB. Its 4 cores are: 40 turns starting at once wait 10 s
+  for their first event.
+- A one-shot call added 110 MiB at 1, 2 and 4 at once.
+- With the default cap of 15, turns 16 to 25 queued and finished, and past the
+  queue of 10 the rest were refused, as designed.
 
 **The model itself** is gte-modernbert-base (§5.4). Measured 2026-10-05 on the
 workstation in the production image, fp32, on tachý's own code chunks at their
@@ -271,9 +281,10 @@ and 2560 MB, which on that host is 6 threads (§3.3).
   19 MiB to the first, and nothing was killed.
 - bge-base-en-v1.5, the model until then, embedded the same chunks at about
   twice the rate (§5.15).
-- **The laptop is not measured with this model.** With bge-base it embedded at
-  about 65% of the workstation's rate, so expect a little over 1 full chunk a
-  second.
+- **On the laptop,** measured 2026-10-05 in the running embedder: 1.08 full
+  chunks a second on the runtime's own 4 threads, 3.2 texts of 1000 characters
+  and 8.6 of 350, one query in 26 ms, 1533 MiB at peak, nothing throttled, and
+  89 °C while it ran.
 
 **Why batches are small,** measured 2026-09-17 with bge-base (on the
 workstation, in one process):
@@ -344,8 +355,9 @@ child is what made 15 possible (§5.4).
 | **Global cap**                                                | **15** |
 
 At the budgeted figure the 7.4 GB hold 13 turns, and at the measured one 43.
-The cap stays at 15: it was set before the container was measured, and a load
-window on the laptop decides whether to raise it (§13).
+The cap is still 15, set before the container was measured. The laptop's load
+window held 40 short turns (§3.1), so raising it is a choice about latency and
+longer conversations, made in Admin › system.
 
 A heavy job run isn't in the first table: it holds 3 chat slots while it runs
 (§5.3.4), so it comes out of the turn budget.
@@ -379,7 +391,6 @@ ceilings, and each is a variable in `.env` (§4.3):
   the cap goes to 18.
 - `tachy-watch` warns when the api container passes 85% of its limit (§8.2).
   An operator then lowers the cap; nothing lowers it automatically.
-- Copilot turns count as 4 slots until they are measured.
 - The cap counts slots, not turns, and it lives in one setting, so it can be
   changed without a deploy.
 
@@ -413,8 +424,7 @@ about 90% of its peak frequency (§12).
 - The embedder is capped at 6 CPUs. It runs one batch at a time, queries
   first, so a search never waits behind more than one passage batch: 0.43 s
   for a full code chunk on the workstation and up to 0.8 s for an input of
-  1024 tokens, which is about 0.7 s and 1.2 s on the laptop (not measured
-  there). A burst of searches from 15 turns costs about 16 ms each.
+  1024 tokens, and about 0.9 s for a full code chunk on the laptop. A burst of searches from 15 turns costs about 16 ms each.
 - **The model's threads follow the CPU limit** (`core/src/search/threads.ts`).
   ONNX Runtime starts one thread per physical core of the host and pins each
   to its core, whatever the container's quota or mask
@@ -1019,8 +1029,7 @@ never runs on an event loop that serves requests.
 **Built, in the api process:**
 
 - **A global cap of 15 slots,** held in a setting (`core/src/config/settings.ts`).
-  A Claude turn is 1 slot and a Copilot turn 4, until one is measured (§3.2).
-  A running heavy job takes 3 slots from the same cap (`api/src/turns.ts`).
+  A turn is 1 slot. A running heavy job takes 3 slots from the same cap (`api/src/turns.ts`).
 - **One active turn per user.** A new message from a user with a turn still
   running returns 409 with that turn's id, and the UI offers to stop it
   (`api/src/routes/agent.ts`).
@@ -1337,8 +1346,7 @@ of them:
 
 - The agent has no shell, file or web tools. On Claude that is an allowlist:
   `tools: ["ToolSearch"]`, `settingSources: []` and `strictMcpConfig`, plus a
-  deny for anything that isn't a tachý tool (`agent/src/claude.ts`). On
-  Copilot it is `availableTools: ["mcp:*"]` (`agent/src/copilot.ts`). So a
+  deny for anything that isn't a tachý tool (`agent/src/claude.ts`). So a
   turn can't read `/proc/<pid>/environ` of another turn's child, although
   every child runs as the same `node` user. Keep it that way: it is what makes
   same-uid children acceptable.
@@ -1356,7 +1364,7 @@ integrations, flows, workers and system.
 
 | Area        | Shown                                                            | Configurable                                                                                    | Host or `.env` only                                   |
 | ----------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Chats       | active and queued against the cap, refused, api memory           | slot cap, Copilot weight, queue length                                                          | api `mem_limit`, approval timeout                     |
+| Chats       | active and queued against the cap, refused, api memory           | slot cap, queue length                                                                          | api `mem_limit`, approval timeout                     |
 | Embeddings  | query and passage queue depth; vectors made by another model     | -                                                                                               | the model (`TACHY_EMBED_MODEL`)                       |
 | Jobs        | runs, progress, log tail, failures, next fire times, workers     | definitions: kind, params, schedule, timezone, queue, timeout, overlap, notify; run now; cancel | worker pool sizes and limits                          |
 | Sources     | traffic, rate limits, auth failures                              | sync cadence, as a `source.sync` definition                                                     | -                                                     |
@@ -2004,17 +2012,17 @@ and the SFTP pull keeps working as it is.
 - **Retention** is the `retention.sweep` job, daily at 03:30 UTC
   (`core/src/compliance/retention.ts`):
 
-  | Data                                 | Kept                                           |
-  | ------------------------------------ | ---------------------------------------------- |
-  | exports, chat uploads                | 24 h                                           |
-  | Claude transcripts, Copilot sessions | 90 days from last activity                     |
-  | `library_views`, `mcp_tool_calls`    | per person per day for 13 months, then monthly |
-  | job runs                             | 90 days, failed ones 180                       |
-  | orphaned library images              | 7 days                                         |
-  | container logs                       | 200 MB per container (§8.1)                    |
-  | `source_calls`, `analysis_runs`      | forever: they hold counts, not content         |
-  | flow runs                            | 90 days, failed ones 180                       |
-  | notifications                        | 90 days once opened, 180 if never              |
+  | Data                              | Kept                                           |
+  | --------------------------------- | ---------------------------------------------- |
+  | exports, chat uploads             | 24 h                                           |
+  | Claude transcripts                | 90 days from last activity                     |
+  | `library_views`, `mcp_tool_calls` | per person per day for 13 months, then monthly |
+  | job runs                          | 90 days, failed ones 180                       |
+  | orphaned library images           | 7 days                                         |
+  | container logs                    | 200 MB per container (§8.1)                    |
+  | `source_calls`, `analysis_runs`   | forever: they hold counts, not content         |
+  | flow runs                         | 90 days, failed ones 180                       |
+  | notifications                     | 90 days once opened, 180 if never              |
 
   `turn_events` (profile B) will keep 24–72 h.
 
@@ -2032,7 +2040,7 @@ and the SFTP pull keeps working as it is.
   who can run `docker compose logs`. Bodies and tokens
   are never logged, and that must stay true.
 - Egress the host needs:
-  - the model providers (Anthropic, GitHub Copilot);
+  - the model provider (Anthropic);
   - the sources (Freshdesk, GitHub, Azure DevOps) and the linked git remotes;
   - GHCR, to pull images;
   - the Teams workflow URLs and healthchecks.io;
@@ -2279,11 +2287,15 @@ So promoting a digest from dev to main needs no rebuild.
 10. append commit, image, schema result, whether smoke ran, and the outcome to
     `/srv/tachy/deploy.log` and to the status files the admin page reads.
 
+**Deploy by itself.** `tachy-update` (`deploy/host/tachy-update`) runs from a
+timer at 01:15 and 04:45 and calls `tachy-deploy` with the head of
+`TACHY_UPDATE_BRANCH` when that is not what runs. It is off until the branch
+is set. The host pulls, so nothing has to reach it. It waits for CI's image,
+and it does not try again a commit that was refused or rolled back:
+tachy-watch's `update` check fails until someone looks.
+
 Rollback is `tachy-deploy <previous commit>`. It is safe only when the previous
 image accepts the current schema, which is what expand and contract is for.
-
-Deploys are manual. A systemd timer can follow `main` once automatic rollback
-has proved itself.
 
 **Dev stack.** The same flow, from `dev`, on its own machine (§15.1), with
 `TACHY_ENV_BADGE=dev` in its `.env`. It doesn't run on the office laptop.
@@ -2323,7 +2335,6 @@ has proved itself.
     turns, and Postgres connections: the per-turn figure for §3 and the cap.
   - It is a Node driver, not a k6 script, because k6 reads a whole SSE body
     and so can't time the first event.
-  - Whether the Copilot runtime can be pointed at a mock is **to verify**.
 - **`contention.js` is the test that proves the embedder and worker
   separation.** It hasn't run on the laptop.
 - **Logins.** The scripts sign in with a password (`load/session.js`), as
@@ -2549,8 +2560,7 @@ downloaders, an Entra registration for SSO, and the load windows that produce
 the laptop's own numbers.
 
 **To verify on the laptop:** the sshd log wording `tachy-watch` parses for
-downloads, `Get-TachyBackup.ps1` under Windows PowerShell 5.1, and one Copilot
-turn with a real token (§2.4).
+downloads, and `Get-TachyBackup.ps1` under Windows PowerShell 5.1.
 
 ### Phase 3: department server (profile B)
 
@@ -2673,11 +2683,10 @@ All in `deploy/runbooks/`. `README.md` there is the index.
 
 None of these blocks a deploy.
 
-- **Copilot is unproven on the overlay** (§2.4). It needs one turn with a real
-  token.
-- **The slot cap is sized from summed RSS** (§3.1). A short turn costs its
-  container about a quarter of what is budgeted for it. Raising the cap waits
-  for a load window on the laptop.
+- **The slot cap is still 15.** The laptop's load window (§3.1) held 40 short
+  turns in memory, with first events slowing from 3.4 s at 15 to 5.5 s at 25.
+  Raising it is a setting in Admin › system; real conversations are longer
+  than the test's.
 - **One-shot model calls take no slot** (§2.4). In the api each adds about
   100 MiB outside the turn budget.
 - **`tachy_owner` does not exist** (§5.9), so the schema is applied as the

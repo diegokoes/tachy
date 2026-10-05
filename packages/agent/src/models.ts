@@ -1,14 +1,7 @@
 import { createHash } from "node:crypto";
 import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
-import { CopilotClient } from "@github/copilot-sdk";
 import { claudeEnv } from "./claude";
-import { copilotHome } from "./state";
-import {
-  AGENT_EFFORTS,
-  type AgentAuth,
-  type AgentEffort,
-  type AgentProvider,
-} from "./backend";
+import { AGENT_EFFORTS, type AgentAuth, type AgentEffort } from "./backend";
 
 /** A model the caller's runtime offers, with the efforts it accepts. */
 export interface ModelChoice {
@@ -20,12 +13,9 @@ export interface ModelChoice {
 }
 
 export interface ModelListConfig {
-  provider: AgentProvider;
   agentAuth?: AgentAuth;
-  /** Claude only: the caller's Claude Code state directory. */
+  /** The caller's Claude Code state directory. */
   configDir?: string;
-  /** Copilot only: an empty directory the runtime starts in. */
-  sessionCwd?: string;
 }
 
 const TTL_MS = 10 * 60_000;
@@ -50,13 +40,11 @@ export function listModels(cfg: ModelListConfig): Promise<ModelChoice[]> {
         .digest("hex")
         .slice(0, 16)
     : "server";
-  const key = `${cfg.provider}:${who}`;
+  const key = who;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.list;
 
-  const list = withTimeout(
-    cfg.provider === "copilot" ? copilotModels(cfg) : claudeModels(cfg),
-  );
+  const list = withTimeout(claudeModels(cfg));
   cache.set(key, { at: Date.now(), list });
   list.catch(() => cache.delete(key));
   return list;
@@ -113,36 +101,5 @@ async function claudeModels(cfg: ModelListConfig): Promise<ModelChoice[]> {
   } finally {
     abortController.abort();
     q.close();
-  }
-}
-
-async function copilotModels(cfg: ModelListConfig): Promise<ModelChoice[]> {
-  const client = new CopilotClient({
-    ...(cfg.sessionCwd ? { workingDirectory: cfg.sessionCwd } : {}),
-    ...(cfg.agentAuth ? { gitHubToken: cfg.agentAuth.value } : {}),
-    baseDirectory: await copilotHome(cfg.configDir),
-    logLevel: "error",
-  });
-  try {
-    await client.start();
-    const rows = await client.listModels();
-    return rows
-      .filter((m) => m.policy?.state !== "disabled")
-      .map((m) => {
-        const levels = m.capabilities.supports.reasoningEffort
-          ? efforts(m.supportedReasoningEfforts)
-          : [];
-        const fallback = m.defaultReasoningEffort;
-        return {
-          id: m.id,
-          label: m.name || m.id,
-          efforts: levels,
-          ...(fallback && levels.includes(fallback)
-            ? { defaultEffort: fallback }
-            : {}),
-        };
-      });
-  } finally {
-    await client.stop().catch(() => {});
   }
 }

@@ -27,7 +27,7 @@ describe("probeTally", () => {
         probe("embedding", "warn"),
         probe("vault", "pass"),
         probe("source eng-ado", "fail"),
-        probe("agent copilot", "skip"),
+        probe("source old-fd", "skip"),
       ]),
     ).toEqual({ total: 5, passing: 2, warning: 1, failing: 1, skipped: 1 });
   });

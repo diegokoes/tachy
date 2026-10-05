@@ -15,7 +15,7 @@ archived only after a human approves it, is tied to a per-product component
 glossary, and is deprecated rather than deleted when superseded. Search is
 hybrid (keyword, trigram, pgvector) over an index kept free of customer identity.
 tachý does no reasoning itself: an MCP client (Claude Code, Codex CLI) or the
-built-in chat agent (Claude or Copilot backend, approval required before any
+built-in chat agent (Claude, approval required before any
 write) calls its 40+ tools. Credentials are kept in an AES-256-GCM vault scoped
 per user, team or instance; login is password, bearer token or OIDC, with
 optional PII redaction before tool results reach a model.

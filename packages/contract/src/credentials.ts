@@ -1,10 +1,4 @@
-export const AGENT_PROVIDERS = ["claude", "copilot"] as const;
-export type AgentProvider = (typeof AGENT_PROVIDERS)[number];
-
-export const AGENT_CREDENTIALS: Record<AgentProvider, string> = {
-  claude: "anthropic_api_key",
-  copilot: "copilot_token",
-};
+export const ANTHROPIC_API_KEY_CREDENTIAL = "anthropic_api_key";
 
 /**
  * Claude Code OAuth token minted by `claude setup-token`. Authenticates as the
@@ -26,7 +20,7 @@ export const API_KEY_EXAMPLE = "sk-ant-api03-";
  * never reach storage by another route.
  */
 export function validateCredential(name: string, value: string): string | null {
-  if (name === AGENT_CREDENTIALS.claude) {
+  if (name === ANTHROPIC_API_KEY_CREDENTIAL) {
     if (value.startsWith(OAUTH_PREFIX))
       return `${OAUTH_PREFIX} is a Claude Code OAuth token, not an API key. Save it under 'Claude subscription token', or get a key (${API_KEY_EXAMPLE}…) from console.anthropic.com`;
     if (!value.startsWith(API_KEY_PREFIX) || /\s/.test(value))
@@ -37,13 +31,5 @@ export function validateCredential(name: string, value: string): string | null {
     (!value.startsWith(OAUTH_PREFIX) || /\s/.test(value))
   )
     return `a Claude subscription token starts with ${OAUTH_PREFIX}. Run 'claude setup-token' to mint one, or save an API key under 'Anthropic API key' instead`;
-  /*
-   * GitHub mints several prefixes and keeps adding them, so there is no shape
-   * here worth asserting - only that a credential is one value. Anything
-   * narrower risks rejecting a token that works, which is worse than not
-   * checking.
-   */
-  if (name === AGENT_CREDENTIALS.copilot && /\s/.test(value))
-    return "a GitHub token is a single value with no spaces; copy all of it, e.g. from 'gh auth token'";
   return null;
 }
