@@ -1,5 +1,5 @@
 import {
-  AGENT_CREDENTIALS,
+  ANTHROPIC_API_KEY_CREDENTIAL,
   ANTHROPIC_OAUTH_CREDENTIAL,
   resolveAgentAuth,
 } from "../config/credentials";
@@ -98,34 +98,24 @@ export async function runSystemChecks(): Promise<Check[]> {
     }
   }
 
-  const settings = await effectiveSettings();
-  for (const provider of ["claude", "copilot"] as const) {
-    // Agent keys are each user's own, so there is no key to resolve without a
-    // user to be. The environment's fallback counts for everyone; otherwise
-    // the question is whether anyone has brought one.
-    const auth = await resolveAgentAuth(provider, {});
-    const names =
-      provider === "claude"
-        ? [AGENT_CREDENTIALS.claude, ANTHROPIC_OAUTH_CREDENTIAL]
-        : [AGENT_CREDENTIALS.copilot];
-    const [{ n: byUser }] = await sql<{ n: number }[]>`
-      select count(*)::int as n from credentials
-      where scope = 'user' and name = any(${names})
-    `;
-    const inUse = settings.agent_provider.value === provider;
-    const have = Boolean(auth) || byUser > 0;
-    add(
-      `agent ${provider}`,
-      have ? "pass" : inUse ? "fail" : "skip",
-      auth
-        ? `credential available (${auth.kind})`
-        : byUser > 0
-          ? `${byUser} user(s) hold their own credential`
-          : inUse
-            ? `no credential, and ${provider} is the configured backend`
-            : "no credential; not the configured backend",
-    );
-  }
+  // Agent keys are each user's own, so there is no key to resolve without a
+  // user to be. The environment's fallback counts for everyone; otherwise the
+  // question is whether anyone has brought one.
+  const auth = await resolveAgentAuth({});
+  const [{ n: byUser }] = await sql<{ n: number }[]>`
+    select count(*)::int as n from credentials
+    where scope = 'user'
+      and name = any(${[ANTHROPIC_API_KEY_CREDENTIAL, ANTHROPIC_OAUTH_CREDENTIAL]})
+  `;
+  add(
+    "agent",
+    auth || byUser > 0 ? "pass" : "fail",
+    auth
+      ? `credential available (${auth.kind})`
+      : byUser > 0
+        ? `${byUser} user(s) hold their own credential`
+        : "no credential for the model",
+  );
 
   return checks;
 }

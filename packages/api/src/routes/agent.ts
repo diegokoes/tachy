@@ -167,11 +167,9 @@ export const agent = new Hono()
       cap: settings.agent_slot_cap.value,
       queueMax: settings.agent_queue_max.value,
     });
-    const weight =
-      cfg.provider === "copilot" ? settings.copilot_slot_weight.value : 1;
     let ticket;
     try {
-      ticket = admission.admit(weight);
+      ticket = admission.admit(1);
     } catch (err) {
       if (!(err instanceof QueueFull)) throw err;
       c.header("Retry-After", "30");
@@ -238,7 +236,6 @@ export const agent = new Hono()
         turn = startTurn(prompt, cfg, sessionId ? { resume: sessionId } : {});
         turns.set(turnId, {
           turn,
-          provider: cfg.provider,
           email: userEmail,
           startedAt: Date.now(),
           leave,
@@ -252,13 +249,9 @@ export const agent = new Hono()
               inputTokens: ev.usage?.inputTokens ?? undefined,
               outputTokens: ev.usage?.outputTokens ?? undefined,
               meta: {
-                provider: cfg.provider,
                 turn_id: turnId,
                 session_id: ev.sessionId,
                 cost_usd: ev.costUsd,
-                ...(ev.usage?.premiumRequests != null
-                  ? { premium_requests: ev.usage.premiumRequests }
-                  : {}),
               },
             }).catch(() => {});
           }

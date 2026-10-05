@@ -96,7 +96,7 @@ create table credentials (
     id               uuid primary key default gen_random_uuid(),
     scope            text not null check (scope in ('global','user')),
     user_id          uuid references users(id) on delete cascade,
-    -- e.g. 'anthropic_api_key', 'copilot_token', 'freshdesk_token:<slug>'
+    -- e.g. 'anthropic_api_key', 'freshdesk_token:<slug>'
     name             text not null,
     value_ciphertext bytea not null,
     nonce            bytea not null,

@@ -123,10 +123,6 @@
     const s = info.settings;
     const creds = info.credentials;
     const env = info.env;
-    const key =
-      s.agent_provider.value === "copilot"
-        ? "copilot_token"
-        : "anthropic_api_key";
     const out: Cell[] = [
       {
         key: "vault",
@@ -139,10 +135,10 @@
       {
         key: "agent",
         label: "agent key",
-        tone: creds[key] ? "ok" : "muted",
-        title: creds[key]
-          ? `${s.agent_provider.value} · ${s.agent_model.value}, fallback key from ${creds[key]}`
-          : `no ${key} in the environment: each user brings their own in Settings › Keys`,
+        tone: creds.anthropic_api_key ? "ok" : "muted",
+        title: creds.anthropic_api_key
+          ? `${s.agent_model.value}, fallback key from ${creds.anthropic_api_key}`
+          : "no anthropic_api_key in the environment: each user brings their own in Settings › Keys",
       },
     ];
     if (admin)

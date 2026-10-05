@@ -1,18 +1,12 @@
 import { api } from "../api";
 import { errText } from "../resource.svelte";
 
-import type {
-  AgentEffort,
-  AgentProvider,
-  Clock,
-  DateOrder,
-} from "@tachy/contract";
+import type { AgentEffort, Clock, DateOrder } from "@tachy/contract";
 
 export type PrefSource = "user" | "team" | "db" | "env" | "default";
 export type Pref<T> = { value: T; source: PrefSource };
 
 export type Prefs = {
-  agent_provider: Pref<AgentProvider>;
   agent_model: Pref<string>;
   agent_effort: Pref<string>;
   date_order: Pref<DateOrder>;
@@ -27,7 +21,6 @@ export type MyCreds = {
   effective: Record<string, KeyScope | null>;
   /** The credential a chat turn would pick right now. */
   agent: {
-    provider: AgentProvider;
     in_use: string | null;
     source: KeyScope | null;
   };
@@ -41,7 +34,6 @@ export type ModelChoice = {
 };
 
 export type ModelList = {
-  provider: AgentProvider;
   /** Empty when the runtime could not be asked and no allow-list applies. */
   models: ModelChoice[];
   restricted: boolean;
@@ -65,7 +57,7 @@ export const agentPrefs = $state({
 });
 
 /** Asked of the runtime, so slow next to a preference read: it lands on its
- *  own and is fetched again only when the provider it describes changes. */
+ *  own, once. */
 async function loadModels() {
   agentPrefs.modelsLoading = true;
   try {
@@ -88,8 +80,7 @@ export async function loadAgent() {
     ]);
     agentPrefs.prefs = p;
     agentPrefs.creds = c;
-    if (agentPrefs.models?.provider !== p.agent_provider.value)
-      void loadModels();
+    if (!agentPrefs.models) void loadModels();
   } catch (e) {
     agentPrefs.error = errText(e);
   } finally {

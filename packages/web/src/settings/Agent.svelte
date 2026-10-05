@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { PROVIDER_OPTIONS } from "../vocab";
   import { AGENT_EFFORTS } from "@tachy/contract";
   import { Button, Note, Select } from "../tui";
   import {
@@ -17,9 +16,7 @@
 
   const prefs = $derived(agentPrefs.prefs);
   const list = $derived(agentPrefs.models);
-  const listed = $derived(
-    list && list.provider === prefs?.agent_provider.value ? list.models : [],
-  );
+  const listed = $derived(list?.models ?? []);
 
   const current = $derived(
     listed.find((m) => m.id === prefs?.agent_model.value),
@@ -92,19 +89,6 @@
 
 {#if prefs}
   <Rows>
-    <Row label="provider">
-      <Select
-        aria-label="provider"
-        value={prefs.agent_provider.value}
-        options={PROVIDER_OPTIONS}
-        onchange={(v) => setPref("agent_provider", v)}
-      />
-      {#snippet actions()}
-        <Origin of={origin(prefs.agent_provider.source, "default")} />
-        {@render reset("provider", prefs.agent_provider)}
-      {/snippet}
-    </Row>
-
     <Row
       label="model"
       hint={list?.restricted ? "limited by your org" : undefined}

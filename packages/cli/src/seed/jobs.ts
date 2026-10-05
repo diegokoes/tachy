@@ -93,7 +93,6 @@ const PROFILES: Record<string, KindProfile> = {
       flow_runs: intBetween(rng, 0, 60),
       notifications: intBetween(rng, 0, 20),
       transcripts: intBetween(rng, 0, 80),
-      copilot_sessions: intBetween(rng, 0, 10),
       assets: intBetween(rng, 0, 5),
       usage: intBetween(rng, 0, 3),
     }),

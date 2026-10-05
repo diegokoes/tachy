@@ -437,12 +437,6 @@
       x.source === "default" ? undefined : x.source;
     return [
       {
-        key: "provider",
-        label: "agent",
-        value: String(settings.agent_provider.value),
-        detail: src(settings.agent_provider),
-      },
-      {
         key: "model",
         label: "model",
         value: String(settings.agent_model.value),

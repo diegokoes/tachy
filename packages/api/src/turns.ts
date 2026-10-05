@@ -6,7 +6,6 @@ import { Admission, type AdmissionLimits } from "./admission";
 /** A chat turn this process is running, and who it belongs to. */
 export interface TurnEntry {
   turn: AgentTurn;
-  provider: string;
   email?: string;
   startedAt: number;
   leave: () => void;
@@ -35,12 +34,12 @@ export const admission = new Admission(() => ({
 export const setAdmissionLimits = (next: AdmissionLimits) => (limits = next);
 
 export function turnStats() {
-  const byProvider: Record<string, number> = {};
+  let running = 0;
   let pendingApprovals = 0;
   let oldestApprovalAt: number | null = null;
-  for (const { turn, provider } of turns.values()) {
+  for (const { turn } of turns.values()) {
     if (turn.finished) continue;
-    byProvider[provider] = (byProvider[provider] ?? 0) + 1;
+    running++;
     pendingApprovals += turn.pendingApprovals;
     const at = turn.oldestPendingApprovalAt;
     if (at !== null && (oldestApprovalAt === null || at < oldestApprovalAt))
@@ -48,7 +47,7 @@ export function turnStats() {
   }
   return {
     ...admission.stats,
-    running: byProvider,
+    running,
     pendingApprovals,
     oldestApprovalAgeSeconds:
       oldestApprovalAt === null

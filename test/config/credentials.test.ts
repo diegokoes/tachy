@@ -137,11 +137,10 @@ describe("scoped credential resolution (user > global > env)", () => {
 
   it("upserts instead of duplicating within one scope", async () => {
     const { alice } = await seedPeople();
-    await setCredential(alice.id, "user", alice.id, "copilot_token", "one");
-    await setCredential(alice.id, "user", alice.id, "copilot_token", "two");
-    expect(await resolveCredential("copilot_token", { userId: alice.id })).toBe(
-      "two",
-    );
+    const name = "freshdesk_token:acme";
+    await setCredential(alice.id, "user", alice.id, name, "one");
+    await setCredential(alice.id, "user", alice.id, name, "two");
+    expect(await resolveCredential(name, { userId: alice.id })).toBe("two");
     expect(await listCredentials("user", alice.id)).toHaveLength(1);
   });
 
@@ -274,32 +273,32 @@ describe("scoped preferences", () => {
     const ctx = { userId: alice.id, teamId };
 
     clearSettingsCache();
-    expect((await resolvePref("agent_provider", ctx)).value).toBe("claude");
+    expect((await resolvePref("agent_effort", ctx)).value).toBe("medium");
 
-    await setSetting("agent_provider", "copilot");
+    await setSetting("agent_effort", "high");
     clearSettingsCache();
-    expect(await resolvePref("agent_provider", ctx)).toMatchObject({
-      value: "copilot",
+    expect(await resolvePref("agent_effort", ctx)).toMatchObject({
+      value: "high",
       source: "db",
     });
 
-    await setPref(alice.id, "team", teamId, "agent_provider", "claude");
-    expect(await resolvePref("agent_provider", ctx)).toMatchObject({
-      value: "claude",
+    await setPref(alice.id, "team", teamId, "agent_effort", "medium");
+    expect(await resolvePref("agent_effort", ctx)).toMatchObject({
+      value: "medium",
       source: "team",
     });
 
-    await setPref(alice.id, "user", alice.id, "agent_provider", "copilot");
-    expect(await resolvePref("agent_provider", ctx)).toMatchObject({
-      value: "copilot",
+    await setPref(alice.id, "user", alice.id, "agent_effort", "low");
+    expect(await resolvePref("agent_effort", ctx)).toMatchObject({
+      value: "low",
       source: "user",
     });
 
     await expect(
-      setPref(admin.id, "user", alice.id, "agent_provider", "claude"),
+      setPref(admin.id, "user", alice.id, "agent_effort", "medium"),
     ).rejects.toThrow(/your own/);
     await expect(
-      setPref(alice.id, "user", alice.id, "agent_provider", "gpt"),
+      setPref(alice.id, "user", alice.id, "agent_effort", "turbo"),
     ).rejects.toThrow(/invalid value/);
   });
 });
@@ -370,8 +369,8 @@ describe("API never leaks plaintext or ciphertext", () => {
       admin.id,
       "global",
       undefined,
-      "copilot_token",
-      "super-secret-global-token",
+      "anthropic_oauth_token",
+      "sk-ant-oat01-super-secret-global-token",
     );
 
     for (const [path, c] of [
@@ -395,7 +394,7 @@ describe("API never leaks plaintext or ciphertext", () => {
     };
     expect(body.mine.map((m) => m.name)).toContain("anthropic_api_key");
     expect(body.effective.anthropic_api_key).toBe("user");
-    expect(body.effective.copilot_token).toBe("global");
+    expect(body.effective.anthropic_oauth_token).toBe("global");
   });
 
   it("offers no route for writing anyone else's credential", async () => {
@@ -409,7 +408,7 @@ describe("API never leaks plaintext or ciphertext", () => {
           : {
               body: JSON.stringify({
                 scope: "global",
-                name: "copilot_token",
+                name: "anthropic_api_key",
                 value: "x",
               }),
             }),
@@ -424,28 +423,28 @@ describe("API never leaks plaintext or ciphertext", () => {
     const cookie = await login("alice@example.com");
     const headers = { "Content-Type": "application/json", cookie };
 
-    const put = await app.request("/api/me/preferences/agent_provider", {
+    const put = await app.request("/api/me/preferences/agent_effort", {
       method: "PUT",
-      body: JSON.stringify({ value: "copilot" }),
+      body: JSON.stringify({ value: "high" }),
       headers,
     });
     expect(put.status).toBe(200);
     let prefs = await (
       await app.request("/api/me/preferences", { headers: { cookie } })
     ).json();
-    expect(prefs.agent_provider).toMatchObject({
-      value: "copilot",
+    expect(prefs.agent_effort).toMatchObject({
+      value: "high",
       source: "user",
     });
 
-    const bad = await app.request("/api/me/preferences/agent_provider", {
+    const bad = await app.request("/api/me/preferences/agent_effort", {
       method: "PUT",
-      body: JSON.stringify({ value: "gpt" }),
+      body: JSON.stringify({ value: "turbo" }),
       headers,
     });
     expect(bad.status).toBe(400);
 
-    const del = await app.request("/api/me/preferences/agent_provider", {
+    const del = await app.request("/api/me/preferences/agent_effort", {
       method: "DELETE",
       headers: { cookie },
     });
@@ -454,8 +453,8 @@ describe("API never leaks plaintext or ciphertext", () => {
     prefs = await (
       await app.request("/api/me/preferences", { headers: { cookie } })
     ).json();
-    expect(prefs.agent_provider.value).toBe("claude");
-    expect(prefs.agent_provider.source).not.toBe("user");
+    expect(prefs.agent_effort.value).toBe("medium");
+    expect(prefs.agent_effort.source).not.toBe("user");
   });
 
   it("me credentials DELETE removes the override and falls back", async () => {

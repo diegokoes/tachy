@@ -1,5 +1,4 @@
 import { ClaudeTurn } from "./claude";
-import { CopilotTurn } from "./copilot";
 import type { AgentConfig, AgentTurn } from "./backend";
 
 export {
@@ -17,8 +16,7 @@ export {
   BUILTIN_TOOLS,
   explainFailure,
 } from "./claude";
-export { copilotPermission, copilotSessionConfig } from "./copilot";
-export { copilotHome, userStateDir } from "./state";
+export { userStateDir } from "./state";
 export { completeOnce } from "./complete";
 export { runAdvisory, firstJsonObject, type Advisory } from "./advisory";
 export { reviewTicket, type ReviewRequest } from "./ticket-review";
@@ -29,9 +27,7 @@ export type { ModelChoice, ModelListConfig } from "./models";
 export type { CompletionConfig, CompletionResult } from "./complete";
 export type { ApprovalGate } from "./turn";
 export {
-  AGENT_PROVIDERS,
   effectiveModel,
-  type AgentProvider,
   type AgentConfig,
   type AgentAuth,
   type AgentErrorKind,
@@ -47,7 +43,5 @@ export function startTurn(
   cfg: AgentConfig,
   opts: { resume?: string } = {},
 ): AgentTurn {
-  return cfg.provider === "copilot"
-    ? new CopilotTurn(prompt, cfg, opts)
-    : new ClaudeTurn(prompt, cfg, opts);
+  return new ClaudeTurn(prompt, cfg, opts);
 }

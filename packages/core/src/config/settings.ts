@@ -1,21 +1,13 @@
 import { z } from "zod";
-import {
-  AGENT_PROVIDERS,
-  AGENT_EFFORTS,
-  DEPLOYMENT_PROFILES,
-} from "@tachy/contract";
-import type {
-  AgentProvider,
-  AgentEffort,
-  DeploymentProfile,
-} from "@tachy/contract";
+import { AGENT_EFFORTS, DEPLOYMENT_PROFILES } from "@tachy/contract";
+import type { AgentEffort, DeploymentProfile } from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
 import { badInput } from "../infra/errors";
 
 // Owned by the contract, because the SPA offers them and the API validates
 // them; re-exported so server code still reaches them through @tachy/core.
-export { AGENT_PROVIDERS, AGENT_EFFORTS, DEPLOYMENT_PROFILES };
-export type { AgentProvider, AgentEffort, DeploymentProfile };
+export { AGENT_EFFORTS, DEPLOYMENT_PROFILES };
+export type { AgentEffort, DeploymentProfile };
 
 /** Whether `tz` is a zone this runtime knows, e.g. Europe/Madrid. */
 export function isTimezone(tz: string | undefined): tz is string {
@@ -30,14 +22,12 @@ export function isTimezone(tz: string | undefined): tz is string {
 
 const SETTING_SCHEMAS = {
   redaction_global: z.boolean(),
-  agent_provider: z.enum(AGENT_PROVIDERS),
   agent_model: z.string().min(1),
   agent_effort: z.enum(AGENT_EFFORTS),
   allowed_models: z.array(z.string().min(1)),
   org_name: z.string().min(1),
   deployment_profile: z.enum(DEPLOYMENT_PROFILES),
   agent_slot_cap: z.number().int().min(1).max(500),
-  copilot_slot_weight: z.number().int().min(1).max(32),
   agent_queue_max: z.number().int().min(0).max(500),
   org_timezone: z
     .string()
@@ -96,7 +86,6 @@ export type SettingSource = "db" | "env" | "default";
 
 export interface EffectiveSettings {
   redaction_global: { value: boolean; source: SettingSource };
-  agent_provider: { value: AgentProvider; source: SettingSource };
   agent_model: { value: string; source: SettingSource };
   agent_effort: {
     value: (typeof AGENT_EFFORTS)[number];
@@ -106,7 +95,6 @@ export interface EffectiveSettings {
   org_name: { value: string | null; source: SettingSource };
   deployment_profile: { value: DeploymentProfile; source: SettingSource };
   agent_slot_cap: { value: number; source: SettingSource };
-  copilot_slot_weight: { value: number; source: SettingSource };
   agent_queue_max: { value: number; source: SettingSource };
   org_timezone: { value: string; source: SettingSource };
 }
@@ -141,13 +129,6 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
       process.env.TACHY_REDACT === "true" ? true : undefined,
       false,
     ),
-    agent_provider: pick<AgentProvider>(
-      db.agent_provider,
-      AGENT_PROVIDERS.includes(process.env.TACHY_AGENT_PROVIDER as never)
-        ? (process.env.TACHY_AGENT_PROVIDER as AgentProvider)
-        : undefined,
-      "claude",
-    ),
     agent_model: pick(
       db.agent_model,
       process.env.TACHY_AGENT_MODEL || undefined,
@@ -162,7 +143,6 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
       "support",
     ),
     agent_slot_cap: pick(db.agent_slot_cap, undefined, 15),
-    copilot_slot_weight: pick(db.copilot_slot_weight, undefined, 4),
     agent_queue_max: pick(db.agent_queue_max, undefined, 10),
     org_timezone: pick(
       db.org_timezone,
