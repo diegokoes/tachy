@@ -2,7 +2,8 @@
 # Backups on the host (DEPLOYMENT-ARCHITECTURE.md §6.1). Run by systemd timers:
 #
 #   tachy-backup db [--restore-test]   dump, optionally restore-test, encrypt, publish
-#   tachy-backup files                 agent-home and Caddy's CA, encrypted
+#   tachy-backup files                 agent-home, Caddy's CA and the deploy log,
+#                                      encrypted
 #   tachy-backup prune                 apply retention to the export directory
 #
 # Plaintext exists only in the root-only staging directory and is deleted as
@@ -17,7 +18,7 @@ HERE=$(dirname "$(readlink -f "$0")")
 STAGING=${TACHY_BACKUP_STAGING:-$TACHY_SRV/backups/staging}
 EXPORT=${TACHY_BACKUP_EXPORT:-$TACHY_SRV/backup-export}
 RECIPIENTS=${TACHY_BACKUP_RECIPIENTS:-/etc/tachy/backup-recipients.txt}
-PG_IMAGE=${TACHY_PG_IMAGE:-pgvector/pgvector:0.8.6-pg16}
+DEPLOY_LOG=${TACHY_DEPLOY_LOG:-$TACHY_SRV/deploy.log}
 ROW_TOLERANCE_PCT=${TACHY_RESTORE_ROW_TOLERANCE_PCT:-1}
 
 umask 077
@@ -65,12 +66,14 @@ null_embeddings() {
 # restore_test <dump>: restores into a throwaway Postgres with no network and
 # compares it with production. Prints a JSON object; fails on any mismatch.
 restore_test() {
-  local dump=$1 name="tachy-restore-test-$$" started ended
+  local dump=$1 name="tachy-restore-test-$$" started ended image
   local problems=()
+  # The image production runs, so a pgvector bump cannot leave the test behind.
+  image=${TACHY_PG_IMAGE:-$(dc config --format json | jq -r '.services.postgres.image')}
   started=$(date +%s)
   docker run -d --rm --name "$name" --network none --shm-size 1g \
     --memory "${TACHY_RESTORE_MEM_LIMIT:-1g}" \
-    -e POSTGRES_PASSWORD=restore-test -e POSTGRES_DB=tachy "$PG_IMAGE" >/dev/null
+    -e POSTGRES_PASSWORD=restore-test -e POSTGRES_DB=tachy "$image" >/dev/null
   for _ in $(seq 60); do
     docker exec "$name" pg_isready -U postgres -d tachy >/dev/null 2>&1 && break
     sleep 1
@@ -181,6 +184,11 @@ cmd_files() {
       tar -C /data -cf - . | zstd -q -T0 -o "$plain"
     publish "$plain" "tachy-$vol-$ts.tar.zst" >/dev/null
   done
+  # What was deployed and when: the record of what can be rolled back to.
+  if [ -s "$DEPLOY_LOG" ]; then
+    cp "$DEPLOY_LOG" "$STAGING/tachy-deploy-log-$ts.jsonl"
+    publish "$STAGING/tachy-deploy-log-$ts.jsonl" "tachy-deploy-log-$ts.jsonl" >/dev/null
+  fi
   cmd_prune >/dev/null
   log "file backups published"
 }
@@ -190,7 +198,7 @@ cmd_files() {
 cmd_prune() {
   local now
   now=$(date -u +%s)
-  for family in tachy-db tachy-tachy-agent-home tachy-caddy-data; do
+  for family in tachy-db tachy-tachy-agent-home tachy-caddy-data tachy-deploy-log; do
     local seen_days="" seen_weeks=""
     # newest first, so the first file of a day or week is the one kept
     while IFS= read -r f; do

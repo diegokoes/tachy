@@ -21,8 +21,10 @@
    `chmod 600 .env`, and set `TACHY_IMAGE` (a digest from CI),
    `TACHY_HOSTNAME`, `POSTGRES_PASSWORD`, `TACHY_APP_DB_PASSWORD`,
    `TACHY_BACKUP_DB_PASSWORD`, `TACHY_SECRET_KEY`, `TACHY_SESSION_SECRET`,
-   `TACHY_API_TOKEN` (tachy-watch reads the runtime block with it). Generate
-   each with `openssl rand -base64 32` and store it in the password manager.
+   `TACHY_INTERNAL_SECRET`, `TACHY_API_TOKEN` (tachy-watch reads the runtime
+   block with it). Generate each with `openssl rand -base64 32` and store it in
+   the password manager. The memory and CPU limits default to the 16 GB
+   laptop's; on another host set the `Host sizing` block of `.env.example`.
 7. **Registry login.** As `tachy`:
    `docker login ghcr.io -u <github user>` with a classic token carrying only
    `read:packages`.

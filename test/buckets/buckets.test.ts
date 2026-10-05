@@ -174,6 +174,36 @@ describe("ingest", () => {
     expect((await push("other", token, batch([EOID]))).status).toBe(401);
   });
 
+  it("stops answering an address that keeps sending bad tokens, for that bucket only", async () => {
+    const guarded = await createBucket(
+      { slug: "guarded", name: "Guarded" },
+      null,
+    );
+    const from = (address: string, bearer: string) =>
+      app.request("/ingest/buckets/guarded/batches", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${bearer}`,
+          "X-Forwarded-For": address,
+        },
+        body: JSON.stringify(batch([EOID])),
+      });
+
+    for (let i = 0; i < 10; i++)
+      expect(
+        (await from("10.0.0.7", `${INGEST_TOKEN_PREFIX}guess-${i}`)).status,
+      ).toBe(401);
+    const refused = await from("10.0.0.7", guarded.token);
+    expect(refused.status).toBe(429);
+    expect(refused.headers.get("Retry-After")).toBe("60");
+
+    expect((await from("10.0.0.8", guarded.token)).status).toBe(200);
+    expect((await push("track-and-trace", token, batch([EOID]))).status).toBe(
+      200,
+    );
+  });
+
   it("is not opened by a session cookie", async () => {
     const res = await app.request("/ingest/buckets/track-and-trace/batches", {
       method: "POST",

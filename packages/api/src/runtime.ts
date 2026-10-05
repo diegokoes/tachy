@@ -5,6 +5,7 @@ import { env, issueFlag, sql, type IssueList } from "@tachy/core/infra";
 import { vaultState } from "@tachy/core/config";
 import { type EmbedQueueDepth } from "@tachy/core/search";
 import { uploadTtlMs } from "@tachy/core/chat";
+import { jobIssues } from "@tachy/core/jobs";
 import { lifecycle, readiness } from "./lifecycle";
 import { turnStats } from "./turns";
 
@@ -143,10 +144,27 @@ async function security() {
   };
 }
 
+/**
+ * How many definitions, runs and queues need a hand, by issue. The host's watch
+ * script reads it: a job that fails with `notify` off alerts nobody otherwise.
+ */
+async function jobHealth(): Promise<Record<string, number> | null> {
+  return jobIssues()
+    .then((issues) =>
+      Object.fromEntries(
+        Object.entries(issues).map(([key, list]) => [
+          key.replace(/^jobs\./, ""),
+          list.n,
+        ]),
+      ),
+    )
+    .catch(() => null);
+}
+
 /** Current values only; nothing here is stored. */
 export async function runtimeSnapshot() {
-  const [mem, postgres, status, history, ready, sizes, sec] = await Promise.all(
-    [
+  const [mem, postgres, status, history, ready, sizes, sec, jobs] =
+    await Promise.all([
       memory(),
       postgresConnections(),
       hostStatus(),
@@ -154,8 +172,8 @@ export async function runtimeSnapshot() {
       readiness(),
       tableSizes(),
       security(),
-    ],
-  );
+      jobHealth(),
+    ]);
   return {
     draining: lifecycle.draining,
     refusingChats: lifecycle.refusingChats,
@@ -168,6 +186,7 @@ export async function runtimeSnapshot() {
     eventLoopP99Ms: Math.round(loopP99Ms * 10) / 10,
     embed: embedDepth?.() ?? (await externalDepth()),
     postgres,
+    jobs,
     status,
     history,
     uptimeSeconds: Math.round(process.uptime()),

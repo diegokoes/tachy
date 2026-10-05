@@ -58,4 +58,17 @@ describe("database roles", () => {
       ),
     ).rejects.toThrow(/permission denied/);
   });
+
+  it("lets tachy_watch count sessions and read no table", async () => {
+    await asRole("tachy_watch", async (tx) => {
+      const [row] = await tx`
+        select count(*)::int as n from pg_stat_activity where query is not null
+      `;
+      expect(row.n).toBeGreaterThan(0);
+    });
+    // Without usage on the schema a table is not even visible.
+    await expect(
+      asRole("tachy_watch", (tx) => tx`select count(*) from teams`.then()),
+    ).rejects.toThrow(/permission denied|does not exist/);
+  });
 });

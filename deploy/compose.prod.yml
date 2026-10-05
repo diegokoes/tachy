@@ -175,12 +175,29 @@ services:
       - ${TACHY_POSTGRES_CONF:-./deploy/postgres/postgresql.conf}:/etc/postgresql/postgresql.conf:ro
     mem_limit: ${TACHY_POSTGRES_MEM_LIMIT:-2g}
     cpu_shares: 2048
+    # One process per connection, plus the background and parallel workers.
+    pids_limit: ${TACHY_POSTGRES_PIDS_LIMIT:-512}
+    # What the image's entrypoint needs to own its data directory and step
+    # down from root to postgres.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
     security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: [/tmp, /var/run/postgresql]
     logging: *logging
 
+  # As tachy_app: sync, rotate-key and reembed need no more. `backup` and
+  # `restore` here need the owner, passed for that one run with
+  # -e DATABASE_URL=...; production backs up with tachy-backup instead.
   cli:
     init: true
+    environment:
+      DATABASE_URL: postgres://tachy_app:${TACHY_APP_DB_PASSWORD:?set TACHY_APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-tachy}
+    pids_limit: 256
+    cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: [/tmp]
     logging: *logging
 
 volumes:

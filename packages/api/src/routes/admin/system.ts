@@ -19,9 +19,8 @@ export const system = new Hono()
   /*
    * Members read this: the settings and whether the environment supplies a
    * fallback agent key are what the app renders its own chrome from. The `env`
-   * block is different - which secrets are configured, where uploads land, what
-   * the API port is - and only Admin > System renders it, so it travels only to
-   * an admin. `upload_dir` in particular is a path the ingest tools read from.
+   * block is different - which secrets are configured, what the API port is -
+   * and only Admin > System renders it, so it travels only to an admin.
    */
   .get("/system", async (c) =>
     c.json({

@@ -60,3 +60,14 @@ export async function markRead(userId: string, ids: string[]): Promise<void> {
     where user_id = ${userId} and id = any(${ids}) and read_at is null
   `;
 }
+
+/** Notifications keep 90 days once opened, 180 if nobody opened them. */
+export async function sweepNotifications(): Promise<number> {
+  const rows = await sql`
+    delete from notifications
+    where created_at
+          < now() - case when read_at is null then interval '180 days' else interval '90 days' end
+    returning id
+  `;
+  return rows.length;
+}

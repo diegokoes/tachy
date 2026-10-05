@@ -189,3 +189,15 @@ export async function runFlow(o: RunFlowOptions): Promise<{
     throw e;
   }
 }
+
+/** Flow runs keep 90 days, failed ones 180, as job runs do. */
+export async function sweepFlowRuns(): Promise<number> {
+  const rows = await sql`
+    delete from flow_runs
+    where status <> 'running'
+      and coalesce(finished_at, started_at)
+          < now() - case when status = 'failed' then interval '180 days' else interval '90 days' end
+    returning id
+  `;
+  return rows.length;
+}

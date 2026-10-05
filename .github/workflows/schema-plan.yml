@@ -8,11 +8,6 @@ name: Schema plan
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
-    paths:
-      - db/schema.sql
-      - db/roles.sql
-      - scripts/schema-plan.sh
-      - .github/workflows/schema-plan.yml
 
 permissions:
   contents: read
@@ -22,7 +17,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The path filter lives in a job, not under `on:`. A workflow that a path
+  # filter skips leaves its check pending, which blocks a pull request once the
+  # check is required; a job that a condition skips reports success.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      relevant: ${{ steps.diff.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if git diff --name-only "origin/$BASE_REF...HEAD" | grep -qE '^(db/schema\.sql|db/roles\.sql|scripts/schema-plan\.sh|\.github/workflows/schema-plan\.yml)$'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+
   schema-plan:
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     services:

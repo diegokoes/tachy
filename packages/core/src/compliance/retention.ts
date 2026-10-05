@@ -7,6 +7,8 @@ import { sql } from "../infra/db";
 import { sweepUploads } from "../chat/uploads";
 import { defineJob } from "../jobs/registry";
 import { sweepJobRuns } from "../jobs/runs";
+import { sweepFlowRuns } from "../flows/run";
+import { sweepNotifications } from "../notifications/notifications";
 
 const DAY = 86_400_000;
 
@@ -156,7 +158,7 @@ export function defineRetentionJobs() {
     kind: "retention.sweep",
     title: "Apply retention",
     description:
-      "Deletes expired exports and uploads, old job runs, chat transcripts past their age, orphaned wiki images, and rolls old usage counters up to months without people.",
+      "Deletes expired exports and uploads, old job and flow runs, old notifications, chat transcripts past their age, orphaned wiki images, and rolls old usage counters up to months without people.",
     params: z.object({
       transcript_days: z.number().int().min(1).default(90),
       usage_months: z.number().int().min(1).default(13),
@@ -168,6 +170,8 @@ export function defineRetentionJobs() {
         outputs: await sweepExpiredOutputs(),
         uploads: await sweepUploads(),
         job_runs: await sweepJobRuns(),
+        flow_runs: await sweepFlowRuns(),
+        notifications: await sweepNotifications(),
         transcripts: await sweepTranscripts(p.transcript_days),
         copilot_sessions: await sweepCopilotSessions(p.transcript_days),
         assets: await sweepOrphanAssets(),
