@@ -13,6 +13,7 @@ const EMPTY: Activity = {
     active: 0,
     per_day: [],
     by_model: [],
+    flows: { calls: 0, tokens: 0, cost_usd: 0, by_flow: [] },
   },
   tools: { days: 30, reads: 0, writes: 0, tools: [], per_day: [] },
   traffic: { days: 14, connections: [], per_day: [] },

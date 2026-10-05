@@ -1,14 +1,15 @@
 <script lang="ts">
   import { untrack, type Snippet } from "svelte";
-  import type {
-    Flow,
-    FlowActionInfo,
-    FlowGraph,
-    FlowOption,
-    FlowRun,
-    FlowStep,
-    FlowStepStatus,
-    FlowTrigger,
+  import {
+    FLOW_MODEL_CALLS_PER_DAY,
+    type Flow,
+    type FlowActionInfo,
+    type FlowGraph,
+    type FlowOption,
+    type FlowRun,
+    type FlowStep,
+    type FlowStepStatus,
+    type FlowTrigger,
   } from "@tachy/contract";
   import { api } from "../api";
   import { setPageActions } from "../admin/pageActions.svelte";
@@ -51,6 +52,8 @@
     team: string | null;
     enabled: boolean;
     graph: FlowGraph;
+    /** Kept as typed, so a half-typed number is not rewritten under the caret. */
+    modelCalls: string;
   }
 
   let flows = $state<Flow[]>([]);
@@ -96,6 +99,7 @@
       triggers: [{ id: "by-hand", kind: "manual", params: {} }],
       steps: [],
     },
+    modelCalls: String(FLOW_MODEL_CALLS_PER_DAY),
   });
 
   $effect(() => {
@@ -111,6 +115,7 @@
               team: f.team_slug,
               enabled: f.enabled,
               graph: f.graph,
+              modelCalls: String(f.model_calls_per_day),
             }
           : null;
     draft = next;
@@ -222,8 +227,21 @@
   let saving = $state(false);
   let error = $state<string | null>(null);
 
+  const modelCalls = $derived(
+    draft && /^\d+$/.test(draft.modelCalls.trim())
+      ? Number(draft.modelCalls)
+      : null,
+  );
+  const callsToday = $derived(
+    flows.find((f) => f.id === draft?.id)?.model_calls_today ?? 0,
+  );
+
   async function save() {
     if (!draft) return;
+    if (modelCalls === null) {
+      error = "model calls a day must be a whole number, 0 or more";
+      return;
+    }
     saving = true;
     error = null;
     const body = {
@@ -231,6 +249,7 @@
       team: draft.team || null,
       enabled: draft.enabled,
       graph: draft.graph,
+      model_calls_per_day: modelCalls ?? undefined,
     };
     try {
       const f = draft.id
@@ -352,6 +371,16 @@
         />
       </span>
     </span>
+    <label class="field">
+      <span class="k">model calls a day</span>
+      <input
+        class="calls"
+        inputmode="numeric"
+        bind:value={d.modelCalls}
+        aria-label="Model calls a day"
+      />
+      {#if d.id}<span class="k">{callsToday} used</span>{/if}
+    </label>
     <span class="end loud">
       <Button
         variant="ghost"
@@ -512,6 +541,9 @@
   }
   .name {
     width: 12rem;
+  }
+  .calls {
+    width: 4.5rem;
   }
   .work {
     flex: 1;

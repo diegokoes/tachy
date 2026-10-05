@@ -22,6 +22,7 @@ export {
   deleteFlow,
   listFlowRuns,
   getFlowRun,
+  assertModelCallAllowed,
   type FlowInput,
 } from "./definitions";
 export { runFlow, ownerScope, sweepFlowRuns } from "./run";

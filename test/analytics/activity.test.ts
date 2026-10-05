@@ -101,6 +101,37 @@ describe("overview activity", () => {
       const u = await agentUsageCensus(30);
       expect(u.cost_usd).toBeCloseTo(3, 6);
     });
+
+    it("counts what flows spent apart from turns, the costliest flow first", async () => {
+      const [cheap] =
+        await sql`insert into flows (name) values ('cheap') returning id`;
+      const [dear] =
+        await sql`insert into flows (name) values ('dear') returning id`;
+      const ask = (flowId: string, inputTokens: number) =>
+        recordRun({
+          mode: "flow",
+          model: "claude-sonnet-5",
+          inputTokens,
+          outputTokens: 0,
+          meta: { flow_id: flowId },
+        });
+      await ask(cheap.id, 1_000);
+      await ask(dear.id, 1_000_000);
+      await ask(dear.id, 1_000_000);
+      await ask("00000000-0000-4000-8000-000000000000", 500);
+      await recordRun({ mode: "chat", model: "claude-sonnet-5" });
+
+      const u = await agentUsageCensus(30);
+      expect(u.turns).toBe(1);
+      expect(u.flows.calls).toBe(4);
+      expect(u.flows.tokens).toBe(2_001_500);
+      expect(u.flows.cost_usd).toBeCloseTo(6.0045, 4);
+      expect(u.flows.by_flow.map((f) => [f.name, f.calls])).toEqual([
+        ["dear", 2],
+        ["cheap", 1],
+        ["(deleted flow)", 1],
+      ]);
+    });
   });
 
   describe("tool use", () => {

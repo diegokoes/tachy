@@ -20,6 +20,22 @@ export interface AgentUsage {
     models: Record<string, number>;
   }[];
   by_model: { model: string; turns: number; tokens: number }[];
+  /**
+   * Model calls made by flows, which no person started. Counted apart from the
+   * turns above; the flows that spent most come first.
+   */
+  flows: {
+    calls: number;
+    tokens: number;
+    cost_usd: number;
+    by_flow: {
+      id: string | null;
+      name: string;
+      calls: number;
+      tokens: number;
+      cost_usd: number;
+    }[];
+  };
   /** Heaviest users first. Omitted by the route for anyone not an app admin. */
   top_users?: {
     email: string;
