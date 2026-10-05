@@ -221,7 +221,6 @@ async function seedPreferences(
       value: tx.json(value as never),
     });
 
-  push("global", "", "", "agent_provider", "claude");
   for (const t of teams) push("team", t.id, "", "agent_effort", "medium");
   // rngFor("pref", i), not ("pref", 0): a fresh generator with a constant seed
   // is re-seeded every iteration, so all twelve users drew the same value.

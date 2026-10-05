@@ -54,16 +54,6 @@ export async function systemPrompt(): Promise<string> {
 }
 
 /**
- * Kept empty: the Copilot runtime reads instruction files from the directory
- * its session runs in, and nothing in the repo root is written for the agent.
- */
-export async function emptySessionDir(): Promise<string> {
-  const dir = join(tmpdir(), "tachy-agent-empty");
-  await mkdir(dir, { recursive: true, mode: 0o700 });
-  return dir;
-}
-
-/**
  * Per-user Claude Code state directory. Without it every turn falls back to
  * whatever login the server itself holds, so users share one identity and one
  * pool of session transcripts. Created once and reused: a fresh directory
@@ -165,23 +155,19 @@ export async function mcpConfig(
   const prefs = user
     ? await effectivePrefs(ctx)
     : {
-        agent_provider: settings.agent_provider,
         agent_model: settings.agent_model,
         agent_effort: settings.agent_effort,
       };
-  const provider = prefs.agent_provider.value;
-  const agentAuth = await resolveAgentAuth(provider, ctx);
+  const agentAuth = await resolveAgentAuth(ctx);
   const configDir = await userConfigDir(user?.id);
   mcpEnv.TACHY_UPLOAD_OWNER = user?.id ?? ANONYMOUS_UPLOADS;
 
   const allowedModels = settings.allowed_models.value;
   return {
-    provider,
     mcpCommand: command,
     mcpArgs: args,
     mcpEnv,
     cwd: process.cwd(),
-    sessionCwd: await emptySessionDir(),
     configDir,
     model: prefs.agent_model.value,
     effort: prefs.agent_effort.value as AgentConfig["effort"],

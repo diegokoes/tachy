@@ -1,12 +1,10 @@
 <script lang="ts">
-  import { PROVIDER_OPTIONS } from "../vocab";
   import { api } from "../api";
   import {
     AGENT_EFFORTS,
     MIN_PASSWORD_LENGTH,
     OAUTH_PREFIX,
   } from "@tachy/contract";
-  import type { AgentProvider } from "@tachy/contract";
   import { csv } from "../tui/fields";
   import { initSession } from "./session.svelte";
   import { errText } from "../resource.svelte";
@@ -49,12 +47,9 @@
     { id: nextProductId++, name: "" },
   ]);
   let redaction = $state(false);
-  let agentProvider = $state<AgentProvider>("claude");
   let agentKey = $state("");
   let agentModel = $state("claude-sonnet-5");
-  const agentKeyIsOAuth = $derived(
-    agentProvider === "claude" && agentKey.startsWith(OAUTH_PREFIX),
-  );
+  const agentKeyIsOAuth = $derived(agentKey.startsWith(OAUTH_PREFIX));
   let agentEffort = $state("medium");
   let allowedModels = $state("");
 
@@ -122,7 +117,6 @@
         settings: {
           deployment_profile: profile,
           redaction_global: redaction,
-          agent_provider: agentProvider,
           agent_model: agentModel.trim() || "claude-sonnet-5",
           agent_effort: agentEffort,
           ...(allowedModels.trim()
@@ -260,17 +254,12 @@
         {:else if STEPS[step] === "agent"}
           <h2>Global agent config</h2>
           <div class="grid">
-            <Field label="provider">
-              <Select bind:value={agentProvider} options={PROVIDER_OPTIONS} />
-            </Field>
             <Field label="model">
               <input bind:value={agentModel} />
             </Field>
             <Field
               label="api key or token"
-              info={agentProvider === "claude"
-                ? "API key (console.anthropic.com) or subscription token (claude setup-token). Stored encrypted."
-                : "Stored encrypted."}
+              info="API key (console.anthropic.com) or subscription token (claude setup-token). Stored encrypted."
             >
               <input type="password" autocomplete="off" bind:value={agentKey} />
             </Field>

@@ -140,7 +140,7 @@ describe("first-run setup with an agent key", () => {
       json({
         email: "keyed@example.com",
         password: "a-long-password",
-        settings: { agent_provider: "claude" },
+        settings: { agent_effort: "high" },
         agent_key: "sk-ant-from-wizard",
       }),
     );

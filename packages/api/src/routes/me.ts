@@ -17,7 +17,7 @@ import {
 import { userSoleTeamId } from "@tachy/core/access";
 import { listSourceConnections } from "@tachy/core/sources";
 import {
-  AGENT_CREDENTIALS,
+  ANTHROPIC_API_KEY_CREDENTIAL,
   AGENT_EFFORTS,
   ANTHROPIC_OAUTH_CREDENTIAL,
 } from "@tachy/core";
@@ -28,7 +28,7 @@ import {
 } from "@tachy/core/notifications";
 import { listModels, type ModelChoice } from "@tachy/agent";
 import { requireCaller } from "../authz";
-import { emptySessionDir, userConfigDir } from "../turn-config";
+import { userConfigDir } from "../turn-config";
 
 const valueSchema = z.object({ value: z.string().min(1) });
 const prefSchema = z.object({ value: z.unknown() });
@@ -37,7 +37,7 @@ const prefSchema = z.object({ value: z.unknown() });
 async function knownCredentialNames(): Promise<string[]> {
   const connections = await listSourceConnections();
   return [
-    ...Object.values(AGENT_CREDENTIALS),
+    ANTHROPIC_API_KEY_CREDENTIAL,
     ANTHROPIC_OAUTH_CREDENTIAL,
     ...connections.map((s) => sourceCredentialName(s.source_type, s.slug)),
   ];
@@ -56,15 +56,12 @@ export const me = new Hono()
 
     // Which credential a chat turn would actually pick, so a user with both an
     // API key and a subscription token can see which one is answering.
-    const prefs = await effectivePrefs({ userId, teamId });
-    const provider = prefs.agent_provider.value;
-    const auth = await resolveAgentAuth(provider, { userId, teamId });
+    const auth = await resolveAgentAuth({ userId, teamId });
     const inUse =
       auth &&
       {
-        anthropic_api_key: AGENT_CREDENTIALS.claude,
+        anthropic_api_key: ANTHROPIC_API_KEY_CREDENTIAL,
         anthropic_oauth: ANTHROPIC_OAUTH_CREDENTIAL,
-        copilot_token: AGENT_CREDENTIALS.copilot,
       }[auth.kind];
 
     return c.json({
@@ -72,7 +69,6 @@ export const me = new Hono()
       mine: secretsEnabled() ? await listCredentials("user", userId) : [],
       effective,
       agent: {
-        provider,
         in_use: inUse ?? null,
         source: auth?.source ?? null,
       },
@@ -113,22 +109,16 @@ export const me = new Hono()
     const userId = await requireCaller(c);
     const teamId = (await userSoleTeamId(userId)) ?? undefined;
     const ctx = { userId, teamId };
-    const [settings, prefs] = await Promise.all([
-      effectiveSettings(),
-      effectivePrefs(ctx),
-    ]);
-    const provider = prefs.agent_provider.value;
+    const settings = await effectiveSettings();
     const allowed = settings.allowed_models.value;
 
     let models: ModelChoice[] = [];
     let error: string | null = null;
     try {
-      const agentAuth = await resolveAgentAuth(provider, ctx);
+      const agentAuth = await resolveAgentAuth(ctx);
       models = await listModels({
-        provider,
         ...(agentAuth ? { agentAuth } : {}),
         configDir: await userConfigDir(userId),
-        sessionCwd: await emptySessionDir(),
       });
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -141,7 +131,7 @@ export const me = new Hono()
           offered.get(id) ?? { id, label: id, efforts: [...AGENT_EFFORTS] },
       );
     }
-    return c.json({ provider, models, restricted: allowed.length > 0, error });
+    return c.json({ models, restricted: allowed.length > 0, error });
   })
 
   .put("/preferences/:key", zValidator("json", prefSchema), async (c) => {

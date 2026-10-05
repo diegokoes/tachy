@@ -46,41 +46,6 @@ export async function sweepTranscripts(
 }
 
 /**
- * The Copilot runtime keeps a directory per session under the caller's
- * `copilot/session-state`, with the same content a Claude transcript holds. A
- * session goes whole, once nothing in it has been written for `days`.
- */
-export async function sweepCopilotSessions(
-  days: number,
-  now = Date.now(),
-): Promise<number> {
-  const root = join(agentHome(), "users");
-  const newest = async (path: string): Promise<number> => {
-    const s = await stat(path);
-    if (!s.isDirectory()) return s.mtimeMs;
-    let latest = s.mtimeMs;
-    for (const e of await readdir(path))
-      latest = Math.max(latest, await newest(join(path, e)));
-    return latest;
-  };
-  let removed = 0;
-  for (const user of await readdir(root, { withFileTypes: true }).catch(
-    () => [],
-  )) {
-    if (!user.isDirectory()) continue;
-    const sessions = join(root, user.name, "copilot", "session-state");
-    for (const name of await readdir(sessions).catch(() => [])) {
-      const path = join(sessions, name);
-      if (now - (await newest(path)) > days * DAY) {
-        await rm(path, { recursive: true, force: true });
-        removed++;
-      }
-    }
-  }
-  return removed;
-}
-
-/**
  * Per-person, per-day usage rows older than `months` become one row per item or
  * tool per month, with no person: enough to compare a month with the same month
  * a year earlier, without keeping who read what forever.
@@ -173,7 +138,6 @@ export function defineRetentionJobs() {
         flow_runs: await sweepFlowRuns(),
         notifications: await sweepNotifications(),
         transcripts: await sweepTranscripts(p.transcript_days),
-        copilot_sessions: await sweepCopilotSessions(p.transcript_days),
         assets: await sweepOrphanAssets(),
         usage: await rollUpUsage(p.usage_months),
       };

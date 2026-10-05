@@ -147,7 +147,7 @@ describe("load run guardrails", () => {
 });
 
 describe("system checks", () => {
-  it("reports the database, the embedding model and the agent backends", async () => {
+  it("reports the database, the embedding model and the agent", async () => {
     const checks = await runSystemChecks();
     const byName = Object.fromEntries(checks.map((c) => [c.name, c]));
     expect(byName.database.state).toBe("pass");
@@ -155,7 +155,7 @@ describe("system checks", () => {
     // a broken model. The dimension in the detail is what proves it answered.
     expect(["pass", "warn"]).toContain(byName.embedding.state);
     expect(byName.embedding.detail).toMatch(/768-dim/);
-    expect(byName["agent claude"]).toBeDefined();
+    expect(byName.agent).toBeDefined();
     expect(
       checks.every((c) => ["pass", "warn", "fail", "skip"].includes(c.state)),
     ).toBe(true);

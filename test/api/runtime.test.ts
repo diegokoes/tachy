@@ -104,7 +104,7 @@ describe("Admin > System runtime", () => {
     expect(runtime.turns).toMatchObject({
       slotsUsed: 0,
       queued: 0,
-      running: {},
+      running: 0,
       pendingApprovals: 0,
       oldestApprovalAgeSeconds: null,
     });

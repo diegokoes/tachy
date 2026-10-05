@@ -115,9 +115,7 @@
         <td>Chat slots</td>
         <td>{r.turns.slotsUsed} / {r.turns.slotCap}</td>
         <td class="muted"
-          >running {Object.entries(r.turns.running)
-            .map(([p, n]) => `${p} ${n}`)
-            .join(", ") || "none"} · queued {r.turns.queued} · refused since boot
+          >running {r.turns.running} · queued {r.turns.queued} · refused since boot
           {r.turns.rejectedSinceBoot}</td
         >
       </tr>
