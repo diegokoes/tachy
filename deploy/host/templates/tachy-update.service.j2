@@ -1,0 +1,11 @@
+[Unit]
+Description=Deploy the followed branch when it has moved
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User={{ tachy_user }}
+ExecStart=/usr/local/bin/tachy-update
+TimeoutStartSec=30min
