@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg" alt="License: AGPL-3.0-or-later"></a>
-  <img src="https://img.shields.io/badge/node-24.18%2B-brightgreen.svg" alt="Node 24.18+">
+  <img src="https://img.shields.io/badge/node-26.10%2B-brightgreen.svg" alt="Node 26.10+">
   <img src="https://img.shields.io/badge/postgres-14%2B-blue.svg" alt="Postgres 14+">
   <img src="https://img.shields.io/badge/protocol-MCP-orange.svg" alt="MCP">
 </p>
@@ -28,7 +28,7 @@ docker compose up -d --build
 ```
 
 The first visit to the web UI on `:8787` runs the setup wizard; until an admin
-exists the server listens on `127.0.0.1` only. Without Docker: Node 24.18+,
+exists the server listens on `127.0.0.1` only. Without Docker: Node 26.10+,
 PostgreSQL 14+ with `vector`, `pg_trgm` and `pgcrypto`, and `git` on PATH, then
 `psql -f db/schema.sql` and `npm run web:build && npm run api`. MCP clients pick
 up `.mcp.json` (Claude Code) or `.vscode/mcp.json` (VS Code); others run
