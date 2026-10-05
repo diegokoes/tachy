@@ -65,6 +65,7 @@ export type SystemInfo = {
     agent_slot_cap: Setting<number>;
     copilot_slot_weight: Setting<number>;
     agent_queue_max: Setting<number>;
+    org_timezone: Setting<string>;
   };
   credentials: {
     vault_enabled: boolean;

@@ -42,6 +42,7 @@
   type KindsInfo = {
     kinds: JobKindInfo[];
     chat_slot_cap: number;
+    timezone: string;
     class_chat_slots: Record<string, number>;
     queues: JobQueue[];
   };
@@ -50,6 +51,7 @@
   const info = createResource(() => api.get<KindsInfo>("/jobs/kinds"), {
     kinds: [],
     chat_slot_cap: 0,
+    timezone: "UTC",
     class_chat_slots: {},
     queues: [],
   } as KindsInfo);
@@ -130,7 +132,7 @@
       label: "timezone",
       formOnly: true,
       edit: "text",
-      initial: "UTC",
+      initial: info.data.timezone,
     },
     {
       key: "queue",
@@ -212,7 +214,7 @@
     return {
       name: String(d.name ?? "").trim(),
       schedule: blank(d.schedule),
-      timezone: blank(d.timezone) ?? "UTC",
+      timezone: blank(d.timezone) ?? undefined,
       queue: blank(d.queue),
       timeout: blank(d.timeout),
       overlap: blank(d.overlap),
@@ -364,7 +366,7 @@
   {#if d.schedule}
     <span class="sched"
       >{d.schedule}<span class="dim"
-        >{d.timezone === "UTC" ? "" : ` ${d.timezone}`}</span
+        >{d.timezone === info.data.timezone ? "" : ` ${d.timezone}`}</span
       ></span
     >
     {#if d.next_run}<span class="dim small">next <Time at={d.next_run} /></span

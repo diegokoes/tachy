@@ -11,6 +11,7 @@ import {
   runSystemChecks,
   startTestRun,
 } from "@tachy/core/diagnostics";
+import { orgTimezone } from "@tachy/core/config";
 import { requireAdmin } from "../auth";
 import { callerUserId } from "../authz";
 
@@ -29,7 +30,7 @@ export const diagnostics = new Hono()
         any_time: rules.anyTime,
         dev_only: "devOnly" in rules && rules.devOnly,
       })),
-      in_window: inLoadWindow(),
+      in_window: inLoadWindow(new Date(), await orgTimezone()),
     }),
   )
 

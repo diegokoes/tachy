@@ -1,10 +1,19 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { createApp } from "../../packages/api/src/app";
 import {
   getSettings,
   setSetting,
   effectiveSettings,
   clearSettingsCache,
+  orgTimezone,
 } from "@tachy/core/config";
 import { createUser } from "@tachy/core/access";
 import { AppError } from "@tachy/core/infra";
@@ -38,6 +47,21 @@ describe("settings store", () => {
     });
   });
 
+  it("picks up a setting another process saved, within seconds", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      await setSetting("redaction_global", false);
+      expect((await getSettings()).redaction_global).toBe(false);
+      // What the api's save looks like from a worker: the row changes under it.
+      await sql`update settings set value = 'true'::jsonb where key = 'redaction_global'`;
+      expect((await getSettings()).redaction_global).toBe(false);
+      vi.advanceTimersByTime(15_001);
+      expect((await getSettings()).redaction_global).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("rejects unknown keys and invalid values", async () => {
     await expect(setSetting("nope", 1)).rejects.toThrow(AppError);
     await expect(setSetting("agent_effort", "turbo")).rejects.toThrow(AppError);
@@ -59,6 +83,33 @@ describe("settings store", () => {
       value: "engineering",
       source: "db",
     });
+  });
+
+  it("reads the organisation's timezone from the setting, then TACHY_TIMEZONE, then UTC", async () => {
+    await sql`delete from settings`;
+    clearSettingsCache();
+    try {
+      expect((await effectiveSettings()).org_timezone).toEqual({
+        value: "UTC",
+        source: "default",
+      });
+
+      process.env.TACHY_TIMEZONE = "Not/AZone";
+      expect((await effectiveSettings()).org_timezone.source).toBe("default");
+      process.env.TACHY_TIMEZONE = "Europe/Madrid";
+      expect((await effectiveSettings()).org_timezone).toEqual({
+        value: "Europe/Madrid",
+        source: "env",
+      });
+
+      await expect(setSetting("org_timezone", "Madrid")).rejects.toThrow(
+        /not an IANA timezone/,
+      );
+      await setSetting("org_timezone", "Asia/Tokyo");
+      expect(await orgTimezone()).toBe("Asia/Tokyo");
+    } finally {
+      delete process.env.TACHY_TIMEZONE;
+    }
   });
 
   it("precedence: db > env > default", async () => {

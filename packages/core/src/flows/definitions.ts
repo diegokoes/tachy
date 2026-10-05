@@ -1,5 +1,6 @@
 import type { Flow, FlowGraph, FlowRun } from "@tachy/contract";
 import type { EntryScope } from "../access/permissions";
+import { orgTimezone } from "../config/settings";
 import { sql, jsonb } from "../infra/db";
 import { badInput, notFound } from "../infra/errors";
 import {
@@ -115,6 +116,7 @@ async function syncSchedules(flowId: string, by: string | null) {
       .filter((t) => t.kind === "schedule")
       .map((t) => [t.id, t]),
   );
+  const timezone = await orgTimezone();
   for (const d of await scheduleDefinitions(flowId)) {
     const t = wanted.get(d.trigger_id);
     if (!t) {
@@ -122,16 +124,21 @@ async function syncSchedules(flowId: string, by: string | null) {
       continue;
     }
     wanted.delete(d.trigger_id);
-    await updateJobDefinition(d.id, definitionOf(flow, t.id, t.params), by);
+    await updateJobDefinition(
+      d.id,
+      definitionOf(flow, t.id, t.params, timezone),
+      by,
+    );
   }
   for (const t of wanted.values())
-    await createJobDefinition(definitionOf(flow, t.id, t.params), by);
+    await createJobDefinition(definitionOf(flow, t.id, t.params, timezone), by);
 }
 
 function definitionOf(
   flow: Flow,
   triggerId: string,
   params: Record<string, unknown>,
+  timezone: string,
 ) {
   return {
     kind: "flow.run",
@@ -139,7 +146,7 @@ function definitionOf(
     params: { flow_id: flow.id, trigger_id: triggerId },
     enabled: flow.enabled,
     schedule: String(params.cron),
-    timezone: String(params.timezone ?? "UTC"),
+    timezone: String(params.timezone || timezone),
     notify: "never" as const,
   };
 }
