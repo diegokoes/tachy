@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# Deploys the head of a branch when it has moved, from a timer in the night
+# (DEPLOYMENT-ARCHITECTURE.md §10). Off until TACHY_UPDATE_BRANCH is set in
+# /etc/tachy/tachy.env. The host pulls: nothing reaches into it.
+#
+#   tachy-update            deploy the branch's head if it is not what runs
+#   tachy-update --check    say what it would do, and do nothing
+#
+# It leaves the work to tachy-deploy, which backs up, plans the schema, rolls,
+# checks and rolls back. What this adds is when not to call it:
+#   - the branch's head is what already runs;
+#   - CI has not published that commit's image yet (the next run tries again);
+#   - that commit was already tried and refused or rolled back. A commit that
+#     failed once fails the same way every night, each time with an outage, so
+#     it waits for a newer commit or for a deploy by hand.
+set -euo pipefail
+
+HERE=$(dirname "$(readlink -f "$0")")
+# shellcheck source=common.sh
+. "${TACHY_COMMON:-$HERE/common.sh}"
+
+BRANCH=${TACHY_UPDATE_BRANCH:-}
+IMAGE_REPO=${TACHY_IMAGE_REPO:-ghcr.io/diegokoes/tachy}
+DEPLOY_LOG=${TACHY_DEPLOY_LOG:-$TACHY_SRV/deploy.log}
+DEPLOY=${TACHY_DEPLOY_BIN:-tachy-deploy}
+CHECK=false
+[ "${1:-}" = --check ] && CHECK=true
+
+# finish <result> <commit> <detail>: what the admin page and tachy-watch read
+finish() {
+  log "update: $1${2:+ ${2:0:12}}${3:+: $3}"
+  $CHECK || write_status update "$(jq -nc --arg at "$(utc_now)" --arg branch "$BRANCH" \
+    --arg result "$1" --arg commit "$2" --arg detail "$3" \
+    '{at: $at, branch: $branch, result: $result, commit: $commit, detail: $detail}')"
+}
+
+if [ -z "$BRANCH" ]; then
+  log "update: off, TACHY_UPDATE_BRANCH is not set in $TACHY_ENV_FILE"
+  exit 0
+fi
+
+git -C "$TACHY_DIR" fetch -q --prune origin
+TARGET=$(git -C "$TACHY_DIR" rev-parse -q --verify "origin/$BRANCH^{commit}") || {
+  finish failed "" "origin has no branch $BRANCH"
+  exit 1
+}
+CURRENT=$(git -C "$TACHY_DIR" rev-parse HEAD)
+
+if [ "$TARGET" = "$CURRENT" ]; then
+  finish current "$CURRENT" ""
+  exit 0
+fi
+
+TRIED=$(jq -rs --arg c "$TARGET" 'map(select(.commit == $c)) | last | .result // empty' "$DEPLOY_LOG" 2>/dev/null || true)
+case "$TRIED" in
+refused | rolled_back | rollback_failed)
+  finish held "$TARGET" "this commit was already tried: $TRIED. Deploy it by hand, or merge a fix."
+  exit 1
+  ;;
+esac
+
+if ! docker pull -q "$IMAGE_REPO:sha-${TARGET:0:12}" >/dev/null 2>&1; then
+  finish waiting "$TARGET" "CI has not published its image yet"
+  exit 0
+fi
+
+if $CHECK; then
+  finish would_deploy "$TARGET" "from ${CURRENT:0:12}"
+  exit 0
+fi
+
+args=("$TARGET")
+[ "${TACHY_UPDATE_SMOKE:-run}" = skip ] && args+=(--skip-smoke)
+if "$DEPLOY" "${args[@]}"; then
+  finish deployed "$TARGET" "from ${CURRENT:0:12}"
+else
+  finish failed "$TARGET" "tachy-deploy did not finish; see $DEPLOY_LOG and journalctl -u tachy-update"
+  exit 1
+fi

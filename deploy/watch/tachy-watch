@@ -217,6 +217,25 @@ check_backups() {
 # Downloads show up in sshd's journal as internal-sftp INFO lines. A session's
 # pid ties its "close ... bytes read N" lines to the login that opened it.
 # The exact wording is checked against Debian 13's OpenSSH in the runbook.
+check_update() {
+  local f="$TACHY_STATUS_DIR/update.json" outcome commit detail
+  if [ -z "${TACHY_UPDATE_BRANCH:-}" ]; then
+    result update skip "" "TACHY_UPDATE_BRANCH is not set: deploys are by hand"
+    return
+  fi
+  if [ ! -s "$f" ]; then
+    result update ok "none" "no update run yet; it follows ${TACHY_UPDATE_BRANCH}"
+    return
+  fi
+  outcome=$(jq -r .result "$f")
+  commit=$(jq -r '.commit[0:12]' "$f")
+  detail=$(jq -r .detail "$f")
+  case "$outcome" in
+  failed | held) result update fail "$outcome" "$commit: $detail" ;;
+  *) result update ok "$outcome" "$commit on ${TACHY_UPDATE_BRANCH}" ;;
+  esac
+}
+
 check_downloads() {
   [ "${WATCH_DOWNLOADS:-1}" = 1 ] || { result laptop_downloads skip "" "WATCH_DOWNLOADS=0"; return; }
   local people
@@ -348,7 +367,7 @@ post_teams() {
 }
 
 fetch_runtime
-for check in readyz 5xx memory turns_queued jobs postgres disk backups downloads certificate thermal power nvme; do
+for check in readyz 5xx memory turns_queued jobs postgres disk backups update downloads certificate thermal power nvme; do
   "check_$check" || result "$check" warn "" "the check itself errored"
 done
 

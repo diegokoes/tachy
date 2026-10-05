@@ -1,0 +1,10 @@
+[Unit]
+Description=tachy-update in the night, twice, so a late image is not a day late
+
+[Timer]
+OnCalendar=*-*-* 01:15:00
+OnCalendar=*-*-* 04:45:00
+Persistent=false
+
+[Install]
+WantedBy=timers.target
