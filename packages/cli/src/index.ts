@@ -69,11 +69,11 @@ async function embedBackfill(all: boolean) {
     );
 }
 
-async function indexRepoCmd(slug: string) {
+async function indexRepoCmd(slug: string, full: boolean) {
   const repo = await getRepoBySlug(slug);
   const token = await repoToken(slug);
-  console.log(`indexing ${slug} (${repo.url})...`);
-  const res = await indexRepo(slug, { token });
+  console.log(`indexing ${slug} (${repo.url})${full ? ", every file" : ""}...`);
+  const res = await indexRepo(slug, { token, full });
   for (const l of res.lines)
     console.log(
       l.upToDate
@@ -156,7 +156,8 @@ const USAGE = `usage:
   sync <source-slug> [--since=ISO] [--group=KEY]   pull & store work items
   embed-backfill                                   embed rows missing a vector
   reembed                                          re-embed EVERYTHING (after a model change)
-  index-repo <repo-slug>                           clone/fetch a linked repo and (re)index its code
+  index-repo <repo-slug> [--full]                  clone/fetch a linked repo and (re)index its code;
+                                                   --full redoes every file (new chunk size or model)
   backup [--out=DIR]                               pg_dump -Fc to DIR (default ./backups)
   restore --file=PATH [--yes]                      pg_restore (overwrites the DB)
   seed [--scale=NAME] [--reset] [--yes]            fill a dev database with plausible data
@@ -208,7 +209,7 @@ async function main() {
       } catch {
         /* settings table may not exist yet */
       }
-      return indexRepoCmd(positional[0]);
+      return indexRepoCmd(positional[0], !!args.full);
     }
     case "backup":
       return backup({ out: args.out });

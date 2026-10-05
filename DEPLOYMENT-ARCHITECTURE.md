@@ -1,6 +1,6 @@
 # tachý deployment architecture
 
-Describes the system as of 2026-10-04. File references are paths in that
+Describes the system as of 2026-10-05. File references are paths in that
 tree. Where a claim depends on a third party's behaviour, the source is
 linked or the claim is marked **to verify**. Measurements keep the date they
 were taken.
@@ -232,7 +232,25 @@ that processes share once. Measured 2026-10-04 on the workstation with
   tool results, and a turn grows with both. The cap stays at 15 until a load
   window measures the laptop (§13).
 
-**The model itself,** measured the same way (8 CPUs, in one process):
+**The model itself** is gte-modernbert-base (§5.4). Measured 2026-10-05 on the
+workstation, pinned to 8 CPUs, fp32, on tachý's own code chunks: 1660
+characters on average and 2400 at most.
+
+| One passage batch of                 | Holds the model for | Chunks a second | RSS at peak |
+| ------------------------------------ | ------------------: | --------------: | ----------: |
+| 8 full chunks                        |               5.8 s |             1.5 |      2.5 GB |
+| 4                                    |               2.9 s |             1.6 |      1.8 GB |
+| 2, which the 5000-character cap sets |               1.4 s |             1.8 |      1.7 GB |
+
+- Loaded and idle it holds 1.1 GB. One query takes 18 ms.
+- A batch is at most eight texts and at most 5000 characters (`batchChars` in
+  `core/src/search/model.ts`). The smaller batch is faster, uses less memory,
+  and is what a search can find itself waiting behind (§3.3).
+- bge-base-en-v1.5, the model until then, embedded the same chunks at 4.2 a
+  second and peaked at 1.5 GB. The laptop embeds at about 65% of these rates.
+
+**Why batches are small,** measured 2026-09-17 with bge-base (8 CPUs, in one
+process):
 
 | Work                             | Time    | Longest event-loop block | RSS after (from 770 MB warm) |
 | -------------------------------- | ------- | -----------------------: | ---------------------------: |
@@ -286,19 +304,22 @@ child is what made 15 possible (§5.4).
 | OS, Docker, journald, page-cache floor                          |     1.5 |
 | postgres (`shared_buffers` 1 GB; the database was 148 MB)       |     2.0 |
 | caddy, the api without its turns, worker-light                  |     0.9 |
-| embedder: one model, batches of 8                               |     1.0 |
+| embedder: one model                                             |     1.8 |
 | backup and weekly restore test (a scratch Postgres, night only) |     0.6 |
 | headroom (the kernel, bursts, a deploy overlapping a drain)     |     1.1 |
-| **left for turns**                                              | **8.2** |
+| **left for turns**                                              | **7.4** |
 
 §4.6 carries the same table for bigger hosts.
 
-| Per turn, budgeted                   |     GB |
-| ------------------------------------ | -----: |
-| Claude Code, allowing for long chats |   0.40 |
-| MCP child, compiled, no model        |   0.15 |
-| **Per Claude turn**                  |   0.55 |
-| **Global cap**                       | **15** |
+| Per turn                                                      |     GB |
+| ------------------------------------------------------------- | -----: |
+| budgeted: Claude Code 0.40, the MCP child 0.15, summed as RSS |   0.55 |
+| measured: what a short turn adds to the container (§3.1)      |   0.17 |
+| **Global cap**                                                | **15** |
+
+At the budgeted figure the 7.4 GB hold 13 turns, and at the measured one 43.
+The cap stays at 15: it was set before the container was measured, and a load
+window on the laptop decides whether to raise it (§13).
 
 A heavy job run isn't in the first table: it holds 3 chat slots while it runs
 (§5.3.4), so it comes out of the turn budget.
@@ -308,9 +329,9 @@ ceilings, and each is a variable in `.env` (§4.3):
 
 | Service      | `mem_limit` |
 | ------------ | ----------: |
-| api          |          8g |
+| api          |          7g |
 | postgres     |          2g |
-| embedder     |       1536m |
+| embedder     |       2560m |
 | worker-heavy |       1536m |
 | worker-light |        512m |
 | caddy        |        256m |
@@ -319,18 +340,16 @@ ceilings, and each is a variable in `.env` (§4.3):
 - That is what the laptop has left after 1.5 GB for the OS. The restore test's
   scratch Postgres has a 1 GB limit of its own and runs at night, in the
   headroom.
-- The api's 8g is under its 8.5 GB of budget: 0.3 GB of its own and 15 turns
-  at 0.55 GB. The limits have to fit the host, and a heavy run's limit is one
-  of them, although a heavy run holds 3 slots and so never peaks with a full
-  cap.
-- At the measured figure (§3.1), 15 turns stay well inside it.
+- The api's 7g holds its own 0.3 GB and 15 turns at 0.44 GB each, which is
+  between the two figures above.
+- The embedder's 2560m is its 1.7 GB peak with room for a longer batch. It
+  has not been measured inside the container.
 
 **Admission.**
 
-- The global cap starts at **15** Claude turns (8.5 ÷ 0.55), with **1 per
-  user** (§5.5).
+- The global cap starts at **15** Claude turns, with **1 per user** (§5.5).
 - `load/turns.mjs` then runs on the laptop itself, in a load window (§11.1),
-  with realistic tool results. If the p95 per-turn peak stays under 0.45 GB,
+  with realistic tool results. If the p95 per-turn peak stays under 0.35 GB,
   the cap goes to 18.
 - `tachy-watch` warns when the api container passes 85% of its limit (§8.2).
   An operator then lowers the cap; nothing lowers it automatically.
@@ -366,9 +385,9 @@ about 90% of its peak frequency (§12).
 
 - `postgres`, `api` and `embedder` each get 2048 `cpu_shares`.
 - The embedder is capped at 6 CPUs. It runs one batch at a time, queries
-  first, so a search never waits behind more than one passage batch: about
-  0.7 s behind code chunks and up to about 1.6 s behind the longest passages on
-  the laptop. A burst of searches from 15 turns costs about 11 ms each.
+  first, so a search never waits behind more than one passage batch: up to
+  1.4 s on the workstation, which is about 2.2 s on the laptop (not measured
+  there). A burst of searches from 15 turns costs about 18 ms each.
 - `worker-heavy` is capped at 4 CPUs. Its embedding happens in the embedder,
   at low priority, so the cap covers git and SQL work.
 - Nothing sets `nice` or an ONNX thread count. Both were planned and neither
@@ -435,8 +454,8 @@ value shown is its default, the laptop's. `0` lifts a memory or CPU limit
 | Service      | mem_limit                              | CPU                                               | pids_limit                        | Other                                                                               |
 | ------------ | -------------------------------------- | ------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------- |
 | caddy        | 256m (`TACHY_CADDY_MEM_LIMIT`)         | 1024 shares                                       | 256                               | the only published ports, 80 and 443                                                |
-| api          | 8g (`TACHY_API_MEM_LIMIT`)             | 2048 shares, no cap                               | 2048 (`TACHY_API_PIDS_LIMIT`)     | `init: true`, `stop_grace_period` 210 s (the drain plus 30 s)                       |
-| embedder     | 1536m (`TACHY_EMBEDDER_MEM_LIMIT`)     | `cpus: 6` (`TACHY_EMBEDDER_CPUS`), 2048 shares    | 256                               | healthcheck on its `/readyz`                                                        |
+| api          | 7g (`TACHY_API_MEM_LIMIT`)             | 2048 shares, no cap                               | 2048 (`TACHY_API_PIDS_LIMIT`)     | `init: true`, `stop_grace_period` 210 s (the drain plus 30 s)                       |
+| embedder     | 2560m (`TACHY_EMBEDDER_MEM_LIMIT`)     | `cpus: 6` (`TACHY_EMBEDDER_CPUS`), 2048 shares    | 256                               | healthcheck on its `/readyz`                                                        |
 | worker-light | 512m (`TACHY_WORKER_LIGHT_MEM_LIMIT`)  | `cpus: 1` (`TACHY_WORKER_LIGHT_CPUS`), 512 shares | 256                               | 4 runs at once (`TACHY_WORKER_LIGHT_CONCURRENCY`), `stop_grace_period` 90 s         |
 | worker-heavy | 1536m (`TACHY_WORKER_HEAVY_MEM_LIMIT`) | `cpus: 4` (`TACHY_WORKER_HEAVY_CPUS`), 256 shares | 256                               | 1 run at a time (`TACHY_WORKER_HEAVY_CONCURRENCY`); runs k6 for `load.test` (§11.3) |
 | postgres     | 2g (`TACHY_POSTGRES_MEM_LIMIT`)        | 2048 shares                                       | 512 (`TACHY_POSTGRES_PIDS_LIMIT`) | `shm_size: 1gb`; its conf (§5.9) is replaced with `TACHY_POSTGRES_CONF`             |
@@ -514,16 +533,18 @@ instead of being listed here.
 | OS, Docker, journald, page-cache floor       |     1.5 |    1.5 |      2.0 |      2.0 |
 | postgres                                     |     2.0 |    2.0 | own host | own host |
 | caddy, api (two replicas on B), worker-light |     0.9 |    0.9 |      1.2 |      1.2 |
-| embedder (models below)                      |     1.0 |    2.0 |      4.0 |      4.0 |
+| embedder (models below)                      |     1.8 |    2.0 |      4.0 |      4.0 |
 | backup and restore test                      |     0.6 |    0.6 | own host | own host |
 | headroom                                     |     1.1 |    2.0 |      4.0 |      4.0 |
-| **left for turns**                           | **8.2** | **22** |  **~50** |  **~50** |
-| **slots at 0.55 GB**                         |  **15** | **40** |  **~90** |  **~90** |
+| **left for turns**                           | **7.4** | **22** |  **~50** |  **~50** |
+| **slots at 0.55 GB**                         |  **13** | **40** |  **~90** |  **~90** |
+
+The A+ and B columns were costed with bge-base: each embedder instance is
+0.8 GB larger with gte-modernbert-base, and the code model in them is no longer
+planned. Tier A's cap stays at 15 (§3.2).
 
 The B-gpu embedder row is host memory for the process that drives the GPU,
-**to verify** on the card chosen. The B-cpu row includes a code model whose
-footprint is unmeasured (about 1.2 GB by its 137M parameters against
-bge-base's 110M and 925 MiB, **to verify**).
+**to verify** on the card chosen.
 
 **What runs on each tier:**
 
@@ -532,11 +553,10 @@ bge-base's 110M and 925 MiB, **to verify**).
 | chat slot cap              | 15                                      | 40                                     | set from demand; memory allows ~90                              | same as B-cpu                                              |
 | Postgres `max_connections` | 100                                     | 150                                    | 250, or PgBouncer in front of MCP children only                 | same as B-cpu                                              |
 | Postgres memory            | §5.9                                    | §5.9                                   | `shared_buffers` 25% of the database host's RAM                 | same as B-cpu                                              |
-| embedder instances         | one, queries ahead of passages          | two: one for queries, one for passages | two text instances, the code model, the reranker                | one GPU process for all models                             |
+| embedder instances         | one, queries ahead of passages          | two: one for queries, one for passages | two instances and the reranker                                  | one GPU process for all models                             |
 | runtime                    | transformers.js on CPU, fp32            | same                                   | same                                                            | TEI's CUDA image, or transformers.js with `device: "cuda"` |
-| passage batch              | 8                                       | 8                                      | 8                                                               | measured on the card                                       |
-| text model                 | bge-base-en-v1.5                        | same                                   | same, or a long-context model that wins the golden set          | same as B-cpu                                              |
-| code model                 | bge-base-en-v1.5                        | same                                   | jina-embeddings-v2-base-code                                    | same as B-cpu                                              |
+| passage batch              | 8 texts or 5000 characters              | same                                   | same                                                            | measured on the card                                       |
+| text and code model        | gte-modernbert-base                     | same                                   | same                                                            | same                                                       |
 | reranker (§5.14)           | none                                    | none                                   | ms-marco-MiniLM-L-6-v2 over the top 20, text cut to ~256 tokens | bge-reranker-base over the top 30                          |
 | candidates per leg         | 50 (`search/rank.ts`)                   | same                                   | same                                                            | same                                                       |
 | HNSW                       | m 16, ef_construction 64, ef_search 100 | same                                   | same                                                            | same                                                       |
@@ -577,19 +597,10 @@ On A+ raising `max_connections` is enough.
     listed in §5.13 but not built yet (§5.14).
 - **Slot cap 40 and `max_connections` 150 (A+).** The §15.1 module swap,
   costed with Phase 2's services. The two changes ship together.
-- **A code model (B-cpu).** `code_blob_chunks` is embedded today by a model
-  trained on prose.
-  - jina-embeddings-v2-base-code is 768-dimensional (`hidden_size` in its
-    [config](https://huggingface.co/jinaai/jina-embeddings-v2-base-code/raw/main/config.json)),
-    so `vector(768)` stays. It reads "8192 sequence length" and is mean-pooled
-    ([model card](https://huggingface.co/jinaai/jina-embeddings-v2-base-code)).
-  - It needs the per-surface model support in §5.15 first.
-  - There is no golden set for code, so its gain is unmeasured until one
-    exists.
 - **A reranker (B-cpu, B-gpu).** Measured in §5.14. On CPU only the small
   model over short text fits a search's latency; bge-reranker-base needs the
   GPU.
-- **A GPU runtime (B-gpu).** Bulk embedding (reembed, repo reindex) and
+- **A GPU runtime (B-gpu).** Bulk embedding (backfill, repo reindex) and
   reranking leave the CPU. There are two routes:
   - **[TEI](https://huggingface.co/docs/text-embeddings-inference/supported_models).**
     It runs on "CPU, Turing (T4, RTX 2000 series, ...), Ampere ..., Ada
@@ -608,13 +619,7 @@ On A+ raising `max_connections` is enough.
     a CUDA 12 base and that variable at `npm ci`. The workstation's install
     holds only `libonnxruntime.so.1`.
   - Latency and throughput on a card: **to verify**.
-- **A long-context text model (B).** bge-base reads 512 tokens, and
-  `prepare()` cuts every text at 2000 characters (`search/model.ts`).
-  Cost grows faster than length: on the rerankers in §5.14, about 5× the
-  tokens took 5 to 7.5× the time. Worth it only if many knowledge entries pass 2000
-  characters of embed text. Count them before choosing.
-
-**The same on every tier:**
+    **The same on every tier:**
 
 - The agent's output limits:
   - search returns 8 by default (`clampLimit(opts.limit, 8)`);
@@ -630,25 +635,15 @@ On A+ raising `max_connections` is enough.
   ef_search 40 ([README](https://github.com/pgvector/pgvector)); tachý searches
   at 100. At 148 MB of data, recall is close to exact. Revisit only when a
   golden query misses in the vector leg and a larger `ef_search` finds it.
-- A passage batch of 8 on CPU, which was also the fastest on the laptop
-  (§3.1).
+- A passage batch capped by characters on CPU (§3.1).
+- One model for tickets and code, and the lexical leg of code search (§5.15).
 
-**Findings that hold on every tier.** None of these needs hardware:
-
-- **Large code chunks are only partly embedded.** `chunkCode` allows 2400
-  characters (`code/chunk-code.ts`), and indexing prepends a `// path` line
-  (`code/indexer.ts`). Then `prepare()` cuts at 2000, and the tokenizer at
-  the model's 512 tokens: the pipeline tokenizes with `truncation: true`
-  (`node_modules/@huggingface/transformers/src/pipelines/feature-extraction.js`).
-  The tail of a large chunk reaches the trigram leg and never the vector.
-  Chunk code to the model's window.
-- **Code search has no lexical leg.** The `lex` CTE is empty
-  (`code/search.ts`). A tsvector that splits camelCase and snake_case
-  identifiers would give an exact identifier a second way in besides trigrams.
-- **The golden set has 14 queries** (`test/fixtures/search-corpus.ts`). That is
-  too few to choose a model or a reranker by. Load runs on a synthetic seed
-  don't help: there "the vector leg of hybrid search contributes **nothing**"
-  (`load/README.md`).
+**The golden sets are small.** Tickets have 14 queries
+(`test/fixtures/search-corpus.ts`) and code has 45 questions about tachý's own
+source (`test/fixtures/code-golden.ts`). Both were written by the people who
+built the search, which is the weakest kind. Load runs on a synthetic seed
+don't help: there "the vector leg of hybrid search contributes **nothing**"
+(`load/README.md`).
 
 ## 5. Decisions
 
@@ -943,8 +938,9 @@ never runs on an event loop that serves requests.
 - **In production** the model lives in the `embedder` service
   (`api/src/embedder.ts`). It serves `POST /internal/embed` on the Compose
   network only, and Caddy answers 404 for `/internal`.
+- **The model is gte-modernbert-base,** for tickets and code alike (§5.15).
 - **One queue** (`core/src/search/embed-queue.ts`): queries always go first,
-  and passages go in batches of 8, one batch per caller in turn. Background
+  and passages go in small batches (§3.1), one batch per caller in turn. Background
   jobs send theirs at low priority (`TACHY_EMBED_PRIORITY`).
 - **`TACHY_EMBED_URL` is the switch** (`core/src/search/embeddings.ts`).
   - With it set, embedding goes over HTTP. The api, both workers and every MCP
@@ -958,18 +954,6 @@ never runs on an event loop that serves requests.
   makes up a per-boot secret only when the variable is unset
   (`api/src/index.ts`).
 
-**Impact, measured (§3.1):**
-
-| What                          | Before                                              | After                                           |
-| ----------------------------- | --------------------------------------------------- | ----------------------------------------------- |
-| Memory per turn               | ~1.38 GB                                            | ~0.39 GB (0.55 GB budgeted)                     |
-| Memory, whole host            | one model per searching process                     | one model, 925 MiB, loaded at boot              |
-| First search in a turn        | ~1.5 s model load, then ~0.8 s                      | ~11 ms embed plus an HTTP hop, then the query   |
-| A reference save or reindex   | freezes whichever process runs it for 3.7 s a batch | freezes nothing; queries jump the passage queue |
-| Search results                | -                                                   | unchanged: same model, same vectors, same SQL   |
-| Throughput for bulk embedding | 64 passages in 7.4 s                                | 7.3 s, in batches of 8                          |
-| API boot                      | model loads on first search                         | `/readyz` waits for the embedder to answer (§9) |
-
 **What got worse:**
 
 - **One queue for everyone.** A 500-chunk reference document saved by one turn
@@ -982,7 +966,7 @@ never runs on an event loop that serves requests.
   it restarts (`embed-host.ts`). Searches fail with a retryable 503 until it is
   back, and `/readyz` goes red. A model that fails to load three times exits
   the process.
-- **The model is always in memory,** about 1 GB even when nobody searches.
+- **The model is always in memory,** about 1.1 GB even when nobody searches.
 
 §4.6 says what changes on bigger hosts, and §5.15 how to change the model.
 
@@ -1189,9 +1173,8 @@ image, and the `schema-plan` CI job runs `scripts/schema-plan.sh`.
   to it, and drop the old one in a later release.
 - On Postgres 16, changing a generated column's expression means dropping and
   re-adding the column.
-- Changing the embedding model or vector dimension is a reembed in a window,
-  or a new column backfilled and then swapped in (§5.15). A dimension change
-  needs the vectors nulled before the plan runs.
+- Changing the embedding model needs no schema change. Changing the vector
+  dimension needs the vectors nulled before the plan runs (§5.15).
 - Profile B's two-replica deploys need every schema change to be compatible
   with both the old and the new image. Expand and contract becomes the norm.
 
@@ -1214,7 +1197,8 @@ fallback (`deploy/runbooks/schema-change.md`).
   build stages are pinned by tag only. The base is Node 26; CI tests on Node
   24 (§15.2);
 - k6 and pg-schema-diff 1.0.9 copied in, for `load.test` and the deploy's
-  schema plan.
+  schema plan;
+- the embedding model baked in, a layer of about 570 MB.
 
 **Pipeline:**
 
@@ -1329,7 +1313,7 @@ integrations, flows, workers and system.
 | Area        | Shown                                                            | Configurable                                                                                    | Host or `.env` only                                   |
 | ----------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | Chats       | active and queued against the cap, refused, api memory           | slot cap, Copilot weight, queue length                                                          | api `mem_limit`, approval timeout                     |
-| Embeddings  | query and passage queue depth                                    | -                                                                                               | -                                                     |
+| Embeddings  | query and passage queue depth; vectors made by another model     | -                                                                                               | the model (`TACHY_EMBED_MODEL`)                       |
 | Jobs        | runs, progress, log tail, failures, next fire times, workers     | definitions: kind, params, schedule, timezone, queue, timeout, overlap, notify; run now; cancel | worker pool sizes and limits                          |
 | Sources     | traffic, rate limits, auth failures                              | sync cadence, as a `source.sync` definition                                                     | -                                                     |
 | Buckets     | documents, last batch, token hint                                | create, teams that may read, rotate the ingest token                                            | -                                                     |
@@ -1492,148 +1476,133 @@ query with no candidates returns zero rows and costs no rerank.
 **Revisit** when a B-gpu host exists. Measure bge-reranker-base on that card,
 through TEI's `/rerank` or transformers.js on CUDA (§4.6).
 
-### 5.15 Changing the embedding model
+### 5.15 The embedding model, and changing it
 
-**Decision.** A model change is a planned operation, and every stored vector
-records the model that made it. Tiers A and A+ change in place, in a window.
-From tier B, a shadow column is filled while the old model keeps serving.
+**Decision.** One model embeds tickets and code: gte-modernbert-base, 768
+dimensions, an 8192-token window, fp32 through transformers.js on CPU. Every
+stored vector names the model that made it, so changing the model is a deploy
+and a backfill, with no window.
 
-**What makes it possible.** Vectors are derived data. Each embedded table
-keeps the text its vectors came from, and `npm run sync reembed` (or the
-`embeddings.backfill` job with `all: true`) rebuilds all four tables:
+**Why this model.** Measured 2026-10-05 on tachý's own repository at `dev`
+(766 files), with the 45 questions of `test/fixtures/code-golden.ts`, each
+naming the file that answers it. The vector leg alone, by file:
 
-| Table                  | Re-embedded from                                                          |
-| ---------------------- | ------------------------------------------------------------------------- |
-| `knowledge_entries`    | its columns, through `buildEmbedText` (`core/src/knowledge/knowledge.ts`) |
-| `reference_doc_chunks` | `chunk_text`                                                              |
-| `bucket_doc_chunks`    | `chunk_text`                                                              |
-| `code_blob_chunks`     | `chunk_text` under a `// path` line (`core/src/code/indexer.ts`)          |
+| Model                            | Right file first | In the top 3 | In the top 8 | Chunks a second |
+| -------------------------------- | ---------------: | -----------: | -----------: | --------------: |
+| bge-base-en-v1.5, chunks of 2400 |               12 |           16 |           23 |             4.2 |
+| bge-base-en-v1.5, chunks of 1300 |               12 |           24 |           32 |             4.8 |
+| jina-embeddings-v2-base-code     |               16 |           28 |           38 |             2.2 |
+| gte-modernbert-base              |               28 |           37 |           42 |             1.9 |
 
-**How long it takes:** rows divided by the rate.
+- bge-base reads 512 tokens, and code runs about 3 characters a token: half of
+  the 2400-character chunks were cut short. Chunks of 1300 fit its window.
+- A model trained on code (jina) scored below a general model with a long
+  window, which also needs neither a second model in memory nor a model name
+  in every request.
+- All three score 13 of 13 on the ticket set (`scripts/eval-embeddings.ts`).
+  gte-modernbert-base separates nonsense from real matches by 0.114 there,
+  against 0.087 for bge-base.
+- gte-modernbert-base and jina-embeddings-v2-base-code are Apache-2.0. The
+  newer code models (jina-code-embeddings, SFR-Embedding-Code) are CC-BY-NC
+  and were not candidates.
+- The cost is speed: half of bge-base's rate (§3.1).
+- **Its floors are measured, per kind of text.** Against tickets nonsense
+  reaches 0.541 and a terse paraphrase 0.592, so the vector leg's floor is
+  0.57. Against code nonsense reaches 0.579 and a question's own file 0.637 at
+  the 25th percentile, so code search's floor is 0.6
+  (`semFloor`, `codeSemFloor`).
 
-| Host                | Rate                                                                       | Source           |
-| ------------------- | -------------------------------------------------------------------------- | ---------------- |
-| laptop, batch 8     | about 13 code chunks or 5 long passages a second                           | §3.1             |
-| 20-core workstation | about 33 knowledge entries, 25 reference chunks or 20 code chunks a second | `load/README.md` |
+**Code search, end to end** (`scripts/eval-code-search.ts`, the same 45
+questions through `searchCode`):
 
-Code is most of it.
+| Kind of question                  | Before: first / on the page | Now: first / on the page |
+| --------------------------------- | --------------------------: | -----------------------: |
+| a symbol as written (10)          |                       1 / 2 |                  10 / 10 |
+| the symbol typed as words (10)    |                       1 / 7 |                  10 / 10 |
+| a description in other words (20) |                      6 / 12 |                  11 / 17 |
+| a file asked for by name (5)      |                       3 / 4 |                    2 / 5 |
+| **all 45**                        |                 **11 / 25** |              **33 / 42** |
 
-**Gaps, found 2026-10-03:**
+Three things changed between the columns:
 
-1. **A dimension change fails at the schema step.** On pgvector 0.8.6,
-   `alter table … alter column embedding type vector(N)` on a populated
-   column fails with `expected 4 dimensions, not 3` (a 3-dim table altered to
-   4, run in a throwaway container). After `update … set embedding = null`
-   the same statement succeeds.
-2. **Nothing records which model made a vector.** If `TACHY_EMBED_MODEL`
-   changes to a model of the same dimension and the reembed is skipped, every
-   search is wrong and nothing errors.
-3. **`reembed` overwrites in place and can't resume.** If a run dies halfway:
-   - run again without `all`, and it finds nothing to do, since every row has
-     a vector;
-   - run again with `all`, and it starts over.
-4. **A chunking change is not a reembed.** New chunk sizes mean new chunk rows:
-   - reference docs are re-saved from `reference_docs.body`;
-   - buckets are re-ingested from `bucket_docs`;
-   - repos are reindexed from their clones.
-5. **The maintenance switch refuses new chats, and only that.** It is also
-   held in the api process (`refusingChats` in `api/src/lifecycle.ts`), so a
-   deploy clears it. Library search keeps answering from a mix of old and new
-   vectors until the reembed ends.
+- **The model,** above.
+- **A lexical leg.** `code_blob_chunks.search_tsv` holds each chunk's words
+  with identifiers split (`tachy_code_words`: camelCase, acronyms, snake_case,
+  paths). The names a chunk defines, and for a file's first chunk the file's
+  own name, are weighted above the body (`core/src/code/symbols.ts`), and a
+  chunk whose symbols hold every word of the query is boosted by what one
+  leg's first place is worth. Before, an identifier scored the same in every
+  chunk that contained it, and a test that called a function outranked the
+  function.
+- **A file contributes two chunks at most,** to each leg's candidates and to
+  the page. A long document that repeated a name took all fifty candidate
+  places, and the file that defined it never reached the fusion.
 
-**Prerequisites, on any tier:**
+The chunker also fills its budget now and repeats a quarter of a short chunk
+at most: cut to 1300 characters, the old one produced 7394 chunks from this
+repository, and the new one 4675.
 
-- **A stamp.** An `embedding_model text` column beside every `embedding`,
-  written with each vector. The backfill then selects
-  `where embedding_model is distinct from $current`, which makes it resumable.
-  The admin issues list can show "N rows from another model". This closes
-  gaps 2 and 3.
-- **A golden set of 50 or more queries** taken from real tickets, against
-  today's 14. Plus a real-model seed (`--embed=search`) for load numbers.
-- **The candidate measured.** Run `scripts/eval-embeddings.ts` against it, and
-  re-derive `SEM_FLOOR` and `SEM_CEIL` (`search/relevance.ts`). By design,
-  `test/search/quality.test.ts` fails until they are re-derived.
-- **The model described.** An entry in `EMBEDDING_MODELS`
-  (`search/model.ts`), cached in the image by the Dockerfile's warmup step.
-  The entry can't express every model yet:
-  - nomic-embed-text-v1.5 takes `search_query: ` and `search_document: `
-    prefixes, which the entry has fields for;
-  - it also applies `layer_norm` before normalizing
-    ([model card](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5)),
-    which the entry can't express.
-- **Room for the dimension.** HNSW indexes `vector` "up to 2,000 dimensions"
-  and `halfvec` "up to 4,000" ([pgvector](https://github.com/pgvector/pgvector)).
-  bge-m3, at 1024 dimensions and 8192 tokens
-  ([model card](https://huggingface.co/BAAI/bge-m3)), stays a `vector`.
+**How a vector names its model.** `embedding_model` sits beside every
+`embedding`, on `knowledge_entries`, `reference_doc_chunks`,
+`bucket_doc_chunks` and `code_blob_chunks`. A row with none was made by
+bge-base, the only model before the column existed.
 
-**In place (tiers A and A+).** The release carries the new model and its
-measured `SEM_FLOOR` and `SEM_CEIL`. `tachy-deploy` applies the schema as part
-of the deploy (§5.10), so anything the schema step needs happens before it.
+- **Search reads only the current model's vectors** (`currentVector` in
+  `core/src/search/backfill.ts`). Vectors of two models share no space, and a
+  query embedded by one ranks the other's at random with nothing to show for
+  it. A row not yet embedded again is found by its words.
+- **The backfill embeds what is missing or another model's.**
+  `embeddings.backfill` with no parameters does that for all four tables, and
+  a run that died is picked up by the next. `all: true` still redoes
+  everything.
+- **The admin page says what is left:** "vectors from another embedding
+  model", with a count per table.
 
-1. Take `tachy-backup db --restore-test`.
-2. Switch maintenance on.
-3. **Only if the dimension changes:** set the `embedding` columns of the four
-   tables above to null. Until step 5 ends, search runs on its lexical legs
-   alone.
-4. Run `tachy-deploy <commit>`. Its plan applies the new `vector(N)`.
-   - Which hazards pg-schema-diff attaches to that type change is **to
-     verify**. If one is destructive, the deploy refuses and needs
-     `--allow-destructive`.
-   - The restart clears the switch, so switch it on again.
-5. Drop the four HNSW indexes, then run `reembed`. pgvector: "it's faster to
-   create an index after loading your initial data".
-6. Recreate the indexes with their `create index` statements from
-   `schema.sql`.
-   - A schema plan comes back empty once they exist.
-   - The admin page's schema check can't catch a missing index: it compares
-     a hash of `schema.sql` with the one stamped at deploy
-     (`core/src/infra/schema-stamp.ts`).
-   - `maintenance_work_mem` (§5.9) and `shm_size: 1gb` (`docker-compose.yml`)
-     are sized for this build.
-7. Switch maintenance off.
+**Changing the model** (same dimension): `deploy/runbooks/upgrades.md`.
 
-From step 4 until step 6 ends, search is wrong, not just slow. To serve
-nothing wrong instead, stop the api through steps 5 and 6
-(`deploy/runbooks/maintenance.md`); the library goes down with it.
-`deploy/runbooks/upgrades.md` holds these steps.
+1. The release names the model: `TACHY_EMBED_MODEL`, or the default in
+   `core/src/search/model.ts`. Its entry in `EMBEDDING_MODELS` carries pooling,
+   prefixes, window, batch size, and the floor and ceiling
+   `scripts/eval-embeddings.ts` prints. `test/search/quality.test.ts` fails
+   until they fit.
+2. Deploy. From then on meaning-based search finds only what has been embedded
+   again.
+3. Run `embeddings.backfill`. Rows divided by the rate (§3.1) is how long it
+   takes; code is most of it.
+4. For code, a full reindex (`repos.refresh` with `full: true`) also cuts the
+   chunks again to the new model's window. A reindex otherwise skips files
+   that did not change.
 
-**Shadow column (tier B):** expand and contract (§5.10).
+A chunking change for prose is not a backfill: reference docs are re-saved
+from `reference_docs.body`, and buckets are re-ingested from `bucket_docs`.
 
-1. Add `embedding_next` with its own model stamp and HNSW index. This is an
-   additive schema change.
-2. The embedder loads both models. Saves write both columns, and the backfill
-   fills `embedding_next` at low priority while searches read the old one.
-3. When no row lacks `embedding_next`, a setting moves searches and query
-   embedding to the new column and model. Moving the setting back is the
-   rollback.
-4. A later release drops the old column.
+**Changing the dimension** still needs a window. On pgvector 0.8.6,
+`alter table … alter column embedding type vector(N)` on a populated column
+fails with `expected 4 dimensions, not 3` (a 3-dim table altered to 4, run in a
+throwaway container), and succeeds once the vectors are null. The steps are in
+the runbook: backup, maintenance on, null the four columns, deploy, drop the
+HNSW indexes, backfill, recreate the indexes, maintenance off.
 
-On CPU each extra copy of a model costs about a gigabyte, which is why this
-waits for tier B. None of it is built:
-
-- the embedder holds exactly one model;
-- the column a search reads is fixed in SQL.
+- Which hazards pg-schema-diff attaches to the type change is **to verify**.
+- The maintenance switch refuses new chats and only that, and a deploy clears
+  it (`refusingChats` in `api/src/lifecycle.ts`).
+- HNSW indexes `vector` "up to 2,000 dimensions" and `halfvec` "up to 4,000"
+  ([pgvector](https://github.com/pgvector/pgvector)).
 
 **Keep in mind:**
 
 - **A runtime swap still needs a check.** Moving the same model between
   runtimes (transformers.js to TEI, CPU to GPU, fp32 to a quantized file)
-  keeps the weights but not the arithmetic. Compare vectors for a sample of
-  stored texts against a cosine threshold chosen beforehand, before deciding
-  a reembed can be skipped.
-- **A restore can cross a model change.** A dump taken before a change
-  carries the old vectors. Restored under a new model's image, it needs a reembed, and the
-  stamp is what shows that.
-- **Per-surface models need the model named in every request.** A code model
-  beside the text model (§4.6) needs more than a second entry:
-  - `EMBEDDING_SPEC` and `EMBEDDING_DIM` are single values
-    (`search/model.ts`), and an embed request carries only `kind` and
-    `texts` (`search/embed-thread.ts`). A model name has to travel in the
-    request and in the stamp.
-  - Code search then embeds its query with the code model.
-  - The vector `get_context` shares between knowledge and reference search
-    (`mcp/src/tools/work-items.ts`) stays a text-model vector.
-- **Each model adds to the image.** bge-base alone is 417 MB (§2.1).
+  keeps the weights and the name but not the arithmetic. Compare vectors for a
+  sample of stored texts against a cosine threshold chosen beforehand, before
+  deciding a backfill can be skipped.
+- **A restore can cross a model change.** A dump taken before a change carries
+  the old vectors, and the stamp is what shows that.
+- **The model entry can't express every model.** nomic-embed-text-v1.5 applies
+  `layer_norm` before normalizing
+  ([model card](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5)).
+- **Not built:** a second model beside the first. `EMBEDDING_SPEC` is one
+  value, and an embed request carries only `kind` and `texts`.
 
 ## 6. Durability, backup, restore
 
@@ -2537,7 +2506,7 @@ turn with a real token (§2.4).
 - Postgres on its own host, with pgBackRest;
 - a replacement-host drill;
 - the search tier for the host bought (§4.6), one step at a time. Each step
-  (query instance, code model, reranker, GPU runtime) ships only after it beats
+  (query instance, reranker, GPU runtime) ships only after it beats
   the step before on the golden set (§5.15).
 
 **Exit when:**
@@ -2638,9 +2607,9 @@ All in `deploy/runbooks/`. `README.md` there is the index.
 - **A GPU for profile B.** It decides between tier B-cpu and B-gpu (§4.6), and
   so whether bge-reranker-base is affordable at all (§5.14).
 - **Languages in tickets.** If tickets arrive in languages other than English,
-  a multilingual model (bge-m3, §5.15) becomes a candidate. bge-base-en-v1.5
-  and bge-reranker-base are not; BAAI lists the reranker for Chinese and
-  English.
+  a multilingual model such as bge-m3 becomes a candidate (§5.15).
+  gte-modernbert-base is an English model, and BAAI lists bge-reranker-base
+  for Chinese and English.
 - **The golden set.** Who collects 50 or more real queries with their expected
   answers (§5.15). Every model and reranker decision waits on it.
 

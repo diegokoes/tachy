@@ -170,6 +170,13 @@ const MESSAGES: Record<string, Message> = {
     head: () => "not ready",
     item: (l) => l,
   },
+  "search.stale_vectors": {
+    tone: "warn",
+    section: "runtime",
+    head: () =>
+      "vectors from another embedding model: found by words only until the embeddings backfill has run",
+    item: (l) => l,
+  },
   "backups.failed": {
     tone: "danger",
     section: "host",

@@ -1,4 +1,5 @@
 export { chunkCode } from "./chunk-code";
+export { chunkSymbols, definedSymbols, fileStem } from "./symbols";
 export type { CodeChunk } from "./chunk-code";
 export { repoDir, listRemoteRefs, releaseBranch, removeClone } from "./git";
 export type { TreeEntry, CommitSummary } from "./git";
@@ -22,7 +23,12 @@ export type {
   RepoLineRow,
   RepoIndexStatus,
 } from "./repos";
-export { indexRepo, previewIndex, backfillCodeEmbeddings } from "./indexer";
+export {
+  indexRepo,
+  previewIndex,
+  backfillCodeEmbeddings,
+  backfillCodeWords,
+} from "./indexer";
 export type { IndexResult, LineIndexResult } from "./indexer";
 export type { IndexPreview, PreviewDir, PreviewType } from "@tachy/contract";
 export { fileIconOf, fileIconPath } from "./file-icons";
