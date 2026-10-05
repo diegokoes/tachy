@@ -12,7 +12,6 @@ export {
   repoScope,
   deleteRepo,
   sweepInterruptedIndexes,
-  adoptSupersededIndex,
   repoCensus,
   repoIssues,
 } from "./repos";
