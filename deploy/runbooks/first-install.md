@@ -12,6 +12,16 @@
 4. **Playbook.**
    `ansible-playbook -i deploy/host/inventory.yml deploy/host/playbook.yml --ask-become-pass`.
    It fails early if the account running it is not in `admin_users`.
+   - It can run on the host itself, from a clone of the repository: add
+     `ansible_connection: local` to the host in the inventory.
+   - It turns password SSH off. To keep it until keys are in place, write
+     `PasswordAuthentication yes` to `/etc/ssh/sshd_config.d/05-password-login.conf`
+     first; sshd keeps the first value it reads. Delete the file to finish.
+   - A host that ran Docker before may hold old volumes under `/srv/docker`,
+     which become visible once the playbook moves Docker's data there. A
+     `tachy_tachy-postgres-data` from an earlier install is not a fresh
+     volume: Postgres skips its init scripts and the api cannot log in.
+     `docker volume ls` before the first start, and remove what is stale.
 5. **Host settings.** `sudoedit /etc/tachy/tachy.env`: `TEAMS_WEBHOOK_URL`,
    the `HC_*_URL` healthchecks.io ping URLs (one check each: backup every 6 h
    with a 1 h grace, restore test weekly, watch every minute with 5 min grace),
@@ -19,13 +29,14 @@
    have downloaded.
 6. **App settings.** As `tachy`, in `/opt/tachy`: `cp .env.example .env`,
    `chmod 600 .env`, and set `TACHY_IMAGE` (a digest from CI),
-   `TACHY_HOSTNAME`, `POSTGRES_PASSWORD`, `TACHY_APP_DB_PASSWORD`,
+   `TACHY_HOSTNAME` (without DNS, `tachy.local` resolves by mDNS on most
+   clients, and `TACHY_HOST_ALIASES` adds the host's IP), `POSTGRES_PASSWORD`, `TACHY_APP_DB_PASSWORD`,
    `TACHY_BACKUP_DB_PASSWORD`, `TACHY_SECRET_KEY`, `TACHY_SESSION_SECRET`,
    `TACHY_INTERNAL_SECRET`, `TACHY_API_TOKEN` (tachy-watch reads the runtime
    block with it). Generate each with `openssl rand -base64 32` and store it in
    the password manager. The memory and CPU limits default to the 16 GB
    laptop's; on another host set the `Host sizing` block of `.env.example`.
-7. **Registry login.** As `tachy`:
+7. **Registry login.** Only if the image package is private. As `tachy`:
    `docker login ghcr.io -u <github user>` with a classic token carrying only
    `read:packages`.
 8. **Start.** `sudo systemctl start tachy`. A fresh volume applies

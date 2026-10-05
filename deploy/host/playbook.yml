@@ -3,6 +3,8 @@
 - name: Tachy host
   hosts: all
   become: true
+  # A run that fails late has still changed sshd, Docker and the firewall.
+  force_handlers: true
   handlers:
     - name: Restart ssh
       ansible.builtin.systemd_service:
