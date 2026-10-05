@@ -3,10 +3,12 @@
 # TACHY_HOSTNAME  the name clients use, e.g. tachy.office.lan, or tachy.local
 #                 where mDNS is all there is. Never an IP: the OIDC redirect
 #                 and the host scripts bind to it.
-# TACHY_HOST_ALIASES  more addresses the same site answers on, space separated.
-#                 An IP belongs here, for clients that cannot resolve the name
-#                 yet. Works with TACHY_TLS=internal only: a certificate issued
-#                 elsewhere covers the names it was issued for.
+# TACHY_HOST_IP   the host's address, for clients that cannot resolve the name
+#                 yet: the site answers on it too. A client sends no server
+#                 name for an IP, so that certificate is also the one served
+#                 when none is sent. Works with TACHY_TLS=internal only: a
+#                 certificate issued elsewhere covers the names it was issued
+#                 for.
 # TACHY_TLS       `internal` (default): Caddy's own CA signs the certificate and
 #                 renews it; clients install its root once (deploy/runbooks).
 #                 `/certs/tachy.crt /certs/tachy.key`: a certificate issued
@@ -14,9 +16,10 @@
 {
 	admin off
 	skip_install_trust
+	default_sni {$TACHY_DEFAULT_SNI}
 }
 
-{$TACHY_HOSTNAME} {$TACHY_HOST_ALIASES} {
+{$TACHY_HOSTNAME} {$TACHY_HOST_IP} {
 	tls {$TACHY_TLS:internal}
 
 	header {
