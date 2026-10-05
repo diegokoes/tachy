@@ -87,6 +87,7 @@ services:
     environment:
       NODE_ENV: production
       TACHY_INTERNAL_SECRET: ${TACHY_INTERNAL_SECRET:?set TACHY_INTERNAL_SECRET}
+      TACHY_EMBED_THREADS: ${TACHY_EMBED_THREADS:-}
     healthcheck:
       test:
         [

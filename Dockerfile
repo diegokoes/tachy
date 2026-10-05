@@ -45,10 +45,10 @@ RUN npm ci
 
 # Pre-download the embedding model at build time so a freshly pulled container
 # doesn't need network access (or a multi-second stall) on its first embed.
-# Ahead of `COPY . .` and given only the two files it reads, so an ordinary
+# Ahead of `COPY . .` and given only the files it reads, so an ordinary
 # source change reuses the download instead of refetching it from HuggingFace.
 ENV TACHY_MODEL_CACHE=/app/.model-cache
-COPY packages/core/src/search/model.ts packages/core/src/search/model.ts
+COPY packages/core/src/search/model.ts packages/core/src/search/threads.ts packages/core/src/search/
 COPY scripts/warmup-embeddings.ts scripts/warmup-embeddings.ts
 RUN npx tsx scripts/warmup-embeddings.ts
 
