@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   probeTally,
   type Probe,
-} from "../../packages/web/src/lib/admin/systemState.svelte";
+} from "../../packages/web/src/system/systemState.svelte";
 
 const probe = (name: string, state: string): Probe => ({
   name,

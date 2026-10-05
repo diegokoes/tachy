@@ -2,31 +2,25 @@ import { readFile } from "node:fs/promises";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { assertGlobalAdmin, type EntryScope } from "@tachy/core/access";
+import { badInput, notFound, sql } from "@tachy/core/infra";
+import { getProductIdBySlug, getCustomerIdBySlug } from "@tachy/core/catalog";
 import {
-  assertGlobalAdmin,
-  badInput,
-  getProductIdBySlug,
-  getCustomerIdBySlug,
   getRepoBySlug,
-  enqueueRun,
   linkRepo,
   listRepos,
   deleteRepo,
   repoScope,
-  sourceProjectScope,
-  getSourceProject,
   connectionToken,
   listRemoteRefs,
   previewIndex,
   fileIconPath,
-  notFound,
-  inFlightRun,
   activeReindexes,
   repoToken,
-  sql,
-  RELEASE_TAG_RE,
-  type EntryScope,
-} from "@tachy/core";
+} from "@tachy/core/code";
+import { enqueueRun, inFlightRun } from "@tachy/core/jobs";
+import { sourceProjectScope, getSourceProject } from "@tachy/core/sources";
+import { RELEASE_TAG_RE } from "@tachy/core";
 import {
   assertScopeEditor,
   callerScope,
@@ -92,7 +86,7 @@ const bulkLinkSchema = z.object({
 });
 
 /**
- * Where a repo lands, and — on the slug-keyed upsert — where it currently is:
+ * Where a repo lands, and - on the slug-keyed upsert - where it currently is:
  * without the second check a team admin could re-point another team's repo.
  */
 async function assertCanWriteRepo(

@@ -1,7 +1,6 @@
 import { z } from "zod";
+import { getProductIdBySlug, getTeamIdBySlug } from "@tachy/core/catalog";
 import {
-  getProductIdBySlug,
-  getTeamIdBySlug,
   listSourceConnections,
   addSourceConnection,
   listSourceProjects,
@@ -9,7 +8,7 @@ import {
   setProjectAreaMap,
   sourceProjectScope,
   resolveProjectContext,
-} from "@tachy/core";
+} from "@tachy/core/sources";
 import { tool } from "../server";
 import { out } from "../results";
 import {
@@ -26,7 +25,7 @@ tool(
   "list_source_connections",
   {
     description:
-      "List all configured source connections (Freshdesk tenants, GitHub orgs, Azure DevOps organizations). Each connection's 'slug' is what every other tool's 'source' parameter takes — call this first whenever you only know the source type.",
+      "List all configured source connections (Freshdesk tenants, GitHub orgs, Azure DevOps organizations). Each connection's 'slug' is what every other tool's 'source' parameter takes - call this first whenever you only know the source type.",
     inputSchema: {},
     annotations: { readOnlyHint: true },
   },
@@ -37,7 +36,7 @@ tool(
   "add_source_connection",
   {
     description:
-      'Register a new source connection. source_type is \'freshdesk\', \'github\', or \'azure-devops\'. slug is a short unique identifier (e.g. \'my-freshdesk\') — it also determines the env var for the API token: FRESHDESK_TOKEN_<SLUG_UPPERCASED>, GITHUB_TOKEN_<SLUG_UPPERCASED>, or AZURE_DEVOPS_TOKEN_<SLUG_UPPERCASED> (non-alphanumerics become underscores). For Freshdesk: set base_url to your tenant root URL (e.g. https://your-domain.freshdesk.com). For GitHub: omit base_url and set config to {"repos":["owner/repo"]}. For Azure DevOps: base_url is the org URL (https://dev.azure.com/<org>), config is {"projects":["ProjectA","ProjectB"]}, and the token is a PAT (scopes: Work Items Read, plus Read & Write for ticket creation, Wiki Read for wikis, Code Read for repos). The token never passes through this tool: the user stores it under Admin › Org › sources (the encrypted vault), and the env var above is only the server-wide fallback.',
+      'Register a new source connection. source_type is \'freshdesk\', \'github\', or \'azure-devops\'. slug is a short unique identifier (e.g. \'my-freshdesk\') - it also determines the env var for the API token: FRESHDESK_TOKEN_<SLUG_UPPERCASED>, GITHUB_TOKEN_<SLUG_UPPERCASED>, or AZURE_DEVOPS_TOKEN_<SLUG_UPPERCASED> (non-alphanumerics become underscores). For Freshdesk: set base_url to your tenant root URL (e.g. https://your-domain.freshdesk.com). For GitHub: omit base_url and set config to {"repos":["owner/repo"]}. For Azure DevOps: base_url is the org URL (https://dev.azure.com/<org>), config is {"projects":["ProjectA","ProjectB"]}, and the token is a PAT (scopes: Work Items Read, plus Read & Write for ticket creation, Wiki Read for wikis, Code Read for repos). The token never passes through this tool: the user stores it under Admin › Org › sources (the encrypted vault), and the env var above is only the server-wide fallback.',
     inputSchema: {
       source_type: z.enum(["freshdesk", "github", "azure-devops"]),
       slug: z.string(),
@@ -62,7 +61,7 @@ tool(
   "list_source_projects",
   {
     description:
-      "List the registered projects of one or all source connections. A project is the source's own grouping — an Azure DevOps project, a Freshdesk group (numeric id as text), a GitHub 'owner/repo'. One with a product_slug holds knowledge and can own wikis, repos and area→component rules; one without is only a place work items are created or reassigned in. Any registered project is a valid create_ado_work_item target.",
+      "List the registered projects of one or all source connections. A project is the source's own grouping - an Azure DevOps project, a Freshdesk group (numeric id as text), a GitHub 'owner/repo'. One with a product_slug holds knowledge and can own wikis, repos and area→component rules; one without is only a place work items are created or reassigned in. Any registered project is a valid create_ado_work_item target.",
     inputSchema: {
       source_slug: z.string().optional(),
       product_slug: z.string().optional(),
@@ -84,7 +83,7 @@ tool(
   "get_project_context",
   {
     description:
-      "Everything configured about a project in one call: its connection and source-native key, the product and team it belongs to, its wikis (`wiki` is the default one, `wikis` lists them all — an ADO project usually has several), its repos with the component each implements and the customer each belongs to (null = shared product code), and its area→component rules. Resolve by product_slug, by work_item_id, or by (source_slug + external_key). Call this before search_code, /ingest-wiki or create_ado_work_item so you use the right repo, wiki and project instead of guessing.",
+      "Everything configured about a project in one call: its connection and source-native key, the product and team it belongs to, its wikis (`wiki` is the default one, `wikis` lists them all - an ADO project usually has several), its repos with the component each implements and the customer each belongs to (null = shared product code), and its area→component rules. Resolve by product_slug, by work_item_id, or by (source_slug + external_key). Call this before search_code, /ingest-wiki or create_ado_work_item so you use the right repo, wiki and project instead of guessing.",
     inputSchema: {
       product_slug: z.string().optional(),
       work_item_id: z.string().optional(),
@@ -119,7 +118,7 @@ tool(
         .string()
         .optional()
         .describe(
-          "Set ONLY when the whole project exists for one customer (their own ADO project). Every item ingested from it is then theirs by configuration, which beats guessing at the sender's domain. Leave it off for a product project that serves many customers — a wrong value here mis-files everything in it.",
+          "Set ONLY when the whole project exists for one customer (their own ADO project). Every item ingested from it is then theirs by configuration, which beats guessing at the sender's domain. Leave it off for a product project that serves many customers - a wrong value here mis-files everything in it.",
         ),
       wikis: z
         .array(
@@ -133,7 +132,7 @@ tool(
         )
         .optional()
         .describe(
-          "The project's wikis, from list_ado_wikis — an ADO project usually has several (one project wiki plus a code wiki per repo). Flag one 'default': that is the one every wiki tool uses when no wiki is named, and the first is taken if you flag none. Needs a product_slug.",
+          "The project's wikis, from list_ado_wikis - an ADO project usually has several (one project wiki plus a code wiki per repo). Flag one 'default': that is the one every wiki tool uses when no wiki is named, and the first is taken if you flag none. Needs a product_slug.",
         ),
       notes: z.string().optional(),
     },

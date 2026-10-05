@@ -10,7 +10,7 @@ export function defineSearchJobs() {
     kind: "embeddings.backfill",
     title: "Embed missing vectors",
     description:
-      "Embeds knowledge entries, reference chunks, code chunks and bucket chunks that have no vector. With 'all', re-embeds everything (after a model change).",
+      "Embeds knowledge entries, reference chunks, code chunks and bucket chunks that have no vector, or one made by another embedding model. Run it after a model change; it picks up where an interrupted run stopped. With 'all', re-embeds everything.",
     params: z.object({ all: z.boolean().default(false) }),
     queue: "embed",
     timeout: "6h",

@@ -3,7 +3,7 @@ import {
   libraryItemPath,
   movedWikiPath,
   wikiPath,
-} from "../../packages/web/src/lib/wiki/paths";
+} from "../../packages/web/src/wiki/paths";
 
 const seg = (path: string) => path.slice(1).split("/");
 

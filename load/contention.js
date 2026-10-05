@@ -1,7 +1,7 @@
 import http from "k6/http";
 import { check, fail } from "k6";
-import { BASE_URL, headers, setupSession, pick } from "./lib/session.js";
-import { QUERIES } from "./lib/corpus.js";
+import { BASE_URL, headers, setupSession, pick } from "./session.js";
+import { QUERIES } from "./corpus.js";
 
 /**
  * Search while the host embeds in bulk. Proves the separation in

@@ -31,7 +31,7 @@ export async function ingestWorkItem(
 
   /*
    * A project that exists for one customer settles the question by configuration,
-   * and beats the sender's domain — which partners, freemail and internally-filed
+   * and beats the sender's domain - which partners, freemail and internally-filed
    * tickets all defeat. A disagreement is reported rather than swallowed: it means
    * either the project is not really single-customer, or the domain belongs on a
    * different customer's row, and both are worth someone's attention.

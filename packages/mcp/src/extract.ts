@@ -1,5 +1,5 @@
 import { extractText } from "unpdf";
-import { readUpload } from "@tachy/core";
+import { readUpload } from "@tachy/core/chat";
 
 export function isPdf(path: string, buf: Buffer): boolean {
   return (

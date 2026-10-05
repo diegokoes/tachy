@@ -1,0 +1,155 @@
+export type Theme = "dark" | "light";
+
+const ACCENT_DEFAULTS: Record<Theme, string> = {
+  dark: "#6ea8fe",
+  light: "#31589e",
+};
+
+const OPPOSITE_ACCENTS: Record<string, string> = {
+  "#000000": "#ffffff",
+  "#666666": "#e5e5e5",
+  "#e5e5e5": "#666666",
+  "#ffffff": "#000000",
+};
+
+/* The fluid clamp in tokens.css tops out at 18px and saturates around a
+   1571px viewport, so width alone cannot tell a 27" 1440p display from a 32"
+   4K one - only pixel density can, and CSS cannot read it. These steps are the
+   knob that covers the difference, so the top one has to reach far enough to. */
+export const TEXT_SIZES = [
+  { key: "small", scale: 0.9 },
+  { key: "normal", scale: 1 },
+  { key: "large", scale: 1.35 },
+] as const;
+
+export type TextSize = (typeof TEXT_SIZES)[number]["key"];
+
+const DEFAULT_SCALE = 1;
+
+/** How the nav and subnav tabs are labelled. One setting covers both bars. */
+export const NAV_LABELS = ["text", "both", "icons"] as const;
+
+export type NavLabels = (typeof NAV_LABELS)[number];
+
+export const themeState = $state({
+  theme: "dark" as Theme,
+  accentColor: ACCENT_DEFAULTS.dark,
+  /** The far end of the gradient, when the accent is one. */
+  accentColor2: null as string | null,
+  accentCustomized: false,
+  fontScale: DEFAULT_SCALE as number,
+  navLabels: "text" as NavLabels,
+  navHidden: false,
+  /** Only takes effect while the nav is hidden too. */
+  subnavHidden: false,
+});
+
+const HEX = /^#[0-9a-f]{6}$/i;
+
+export function isHexColor(v: string): boolean {
+  return HEX.test(v);
+}
+
+function applyAccent(
+  v: string,
+  second: string | null = themeState.accentColor2,
+) {
+  const root = document.documentElement.style;
+  themeState.accentColor = v;
+  themeState.accentColor2 = second;
+  root.setProperty("--accent", v);
+  if (second)
+    root.setProperty(
+      "--accent-fill",
+      `linear-gradient(90deg, ${v}, ${second})`,
+    );
+  else root.removeProperty("--accent-fill");
+}
+
+/** A second colour makes the accent a gradient running from the first to it. */
+export function selectAccent(hex: string, second: string | null = null) {
+  themeState.accentCustomized = true;
+  applyAccent(hex, second);
+  localStorage.setItem("tachy-accent", hex);
+  if (second) localStorage.setItem("tachy-accent-2", second);
+  else localStorage.removeItem("tachy-accent-2");
+}
+
+export function resetAccent() {
+  themeState.accentCustomized = false;
+  localStorage.removeItem("tachy-accent");
+  localStorage.removeItem("tachy-accent-2");
+  applyAccent(ACCENT_DEFAULTS[themeState.theme], null);
+}
+
+export function setTheme(t: Theme) {
+  const changed = themeState.theme !== t;
+  themeState.theme = t;
+  document.documentElement.dataset.theme = t;
+  localStorage.setItem("tachy-theme", t);
+  if (!themeState.accentCustomized) applyAccent(ACCENT_DEFAULTS[t]);
+  else if (changed) {
+    const opposite = OPPOSITE_ACCENTS[themeState.accentColor.toLowerCase()];
+    if (opposite) {
+      applyAccent(opposite);
+      localStorage.setItem("tachy-accent", opposite);
+    }
+  }
+}
+
+export function setFontScale(v: number) {
+  const s = TEXT_SIZES.some((t) => t.scale === v) ? v : DEFAULT_SCALE;
+  themeState.fontScale = s;
+  document.documentElement.style.setProperty("--font-scale", String(s));
+  localStorage.setItem("tachy-font-scale", String(s));
+}
+
+export function setNavLabels(v: NavLabels) {
+  themeState.navLabels = v;
+  localStorage.setItem("tachy-nav-labels", v);
+}
+
+export function setSubnavHidden(v: boolean) {
+  themeState.subnavHidden = v;
+  localStorage.setItem("tachy-subnav-hidden", v ? "1" : "0");
+}
+
+/** Takes the top bar away. Its shortcuts stay bound. */
+export function setNavHidden(v: boolean) {
+  themeState.navHidden = v;
+  localStorage.setItem("tachy-nav-hidden", v ? "1" : "0");
+}
+
+export function loadThemeFromStorage() {
+  const savedTheme = localStorage.getItem("tachy-theme") as Theme | null;
+  if (savedTheme === "light" || savedTheme === "dark") {
+    themeState.theme = savedTheme;
+    document.documentElement.dataset.theme = savedTheme;
+  }
+  const savedAccent = localStorage.getItem("tachy-accent");
+  if (savedAccent) {
+    const second = localStorage.getItem("tachy-accent-2");
+    themeState.accentCustomized = true;
+    applyAccent(savedAccent, second && isHexColor(second) ? second : null);
+  } else {
+    applyAccent(ACCENT_DEFAULTS[themeState.theme]);
+  }
+
+  // The old control was a 0.05-step slider, so a stored value is very unlikely
+  // to land on one of the three steps - snap it to the nearest.
+  const saved = Number(localStorage.getItem("tachy-font-scale"));
+  const nearest =
+    Number.isFinite(saved) && saved > 0
+      ? TEXT_SIZES.reduce((a, b) =>
+          Math.abs(b.scale - saved) < Math.abs(a.scale - saved) ? b : a,
+        ).scale
+      : DEFAULT_SCALE;
+  setFontScale(nearest);
+
+  const labels = localStorage.getItem("tachy-nav-labels");
+  if (NAV_LABELS.includes(labels as NavLabels))
+    themeState.navLabels = labels as NavLabels;
+
+  themeState.navHidden = localStorage.getItem("tachy-nav-hidden") === "1";
+  themeState.subnavHidden = localStorage.getItem("tachy-subnav-hidden") === "1";
+}

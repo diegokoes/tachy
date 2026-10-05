@@ -14,6 +14,9 @@ interface Job {
   reject: (err: unknown) => void;
 }
 
+const byteLength = (texts: string[]) =>
+  texts.reduce((n, t) => n + Buffer.byteLength(t), 0);
+
 export interface EmbedQueueDepth {
   queries: number;
   passages: number;
@@ -36,7 +39,19 @@ export class EmbedQueue {
 
   constructor(
     private readonly run: EmbedRunner,
-    private readonly opts = { passageBatch: 8, queryBatch: 32 },
+    private readonly opts: {
+      passageBatch: number;
+      queryBatch: number;
+      /**
+       * UTF-8 bytes one batch may hold, of queries or of passages. A token is
+       * at least a byte, so this bounds a batch's tokens whatever the script,
+       * where a character count does not: Chinese runs past one token a
+       * character. A batch occupies the model for as long as its text is, and
+       * a search waits behind it; a model with a long window makes eight full
+       * chunks a six-second wait.
+       */
+      batchBytes?: number;
+    } = { passageBatch: 8, queryBatch: 32 },
   ) {}
 
   embed(
@@ -102,16 +117,20 @@ export class EmbedQueue {
   }
 
   private async runQueries(): Promise<void> {
+    const budget = this.opts.batchBytes ?? Infinity;
     const batch: Job[] = [];
     let size = 0;
+    let bytes = 0;
     while (
       this.queries.length &&
       (batch.length === 0 ||
-        size + this.queries[0].texts.length <= this.opts.queryBatch)
+        (size + this.queries[0].texts.length <= this.opts.queryBatch &&
+          bytes + byteLength(this.queries[0].texts) <= budget))
     ) {
       const job = this.queries.shift()!;
       batch.push(job);
       size += job.texts.length;
+      bytes += byteLength(job.texts);
     }
     try {
       const vectors = await this.run(batch.flatMap((j) => j.texts));
@@ -129,7 +148,18 @@ export class EmbedQueue {
     const caller = rotation.shift()!;
     const jobs = this.passages.get(caller)!;
     const job = jobs[0];
-    const idx = job.order.slice(job.next, job.next + this.opts.passageBatch);
+    const budget = this.opts.batchBytes ?? Infinity;
+    const idx: number[] = [];
+    let bytes = 0;
+    for (const i of job.order.slice(
+      job.next,
+      job.next + this.opts.passageBatch,
+    )) {
+      const size = Buffer.byteLength(job.texts[i]);
+      if (idx.length && bytes + size > budget) break;
+      idx.push(i);
+      bytes += size;
+    }
     let failed = false;
     try {
       const vectors = await this.run(idx.map((i) => job.texts[i]));

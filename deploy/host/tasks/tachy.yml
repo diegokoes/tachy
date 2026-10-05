@@ -26,7 +26,8 @@
     # Written by root (backups, watch) and by tachy (deploys); mounted
     # read-only into the api container.
     - { path: "{{ tachy_srv }}/status", owner: root, group: "{{ tachy_user }}", mode: "2775" }
-    - { path: /etc/tachy, owner: root, group: root, mode: "0700" }
+    # tachy-deploy runs as tachy and reads tachy.env from here.
+    - { path: /etc/tachy, owner: root, group: "{{ tachy_user }}", mode: "0750" }
     - { path: /var/lib/tachy-watch, owner: root, group: root, mode: "0700" }
     - { path: "{{ tachy_dir }}", owner: "{{ tachy_user }}", group: "{{ tachy_user }}", mode: "0750" }
 

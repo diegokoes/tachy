@@ -5,20 +5,20 @@ import { createInterface } from "node:readline/promises";
 import {
   registerSource,
   syncSource,
-  repoToken,
   setSourceOrigin,
-  backfillEmbeddings,
-  backfillReferenceEmbeddings,
+} from "@tachy/core/sources";
+import {
+  repoToken,
   backfillCodeEmbeddings,
-  embedBucketChunks,
-  EMBEDDING_MODEL,
-  env,
-  sql,
-  loadSettingsIntoEnv,
-  rotateVaultKey,
   getRepoBySlug,
   indexRepo,
-} from "@tachy/core";
+} from "@tachy/core/code";
+import { backfillEmbeddings } from "@tachy/core/knowledge";
+import { backfillReferenceEmbeddings } from "@tachy/core/reference";
+import { embedBucketChunks } from "@tachy/core/buckets";
+import { EMBEDDING_MODEL } from "@tachy/core/search";
+import { env, sql } from "@tachy/core/infra";
+import { loadSettingsIntoEnv, rotateVaultKey } from "@tachy/core/config";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
 import { createAzureDevopsSource } from "@tachy/source-azure-devops";
@@ -69,11 +69,11 @@ async function embedBackfill(all: boolean) {
     );
 }
 
-async function indexRepoCmd(slug: string) {
+async function indexRepoCmd(slug: string, full: boolean) {
   const repo = await getRepoBySlug(slug);
   const token = await repoToken(slug);
-  console.log(`indexing ${slug} (${repo.url})...`);
-  const res = await indexRepo(slug, { token });
+  console.log(`indexing ${slug} (${repo.url})${full ? ", every file" : ""}...`);
+  const res = await indexRepo(slug, { token, full });
   for (const l of res.lines)
     console.log(
       l.upToDate
@@ -84,7 +84,7 @@ async function indexRepoCmd(slug: string) {
 
 /**
  * The connection string carries the password, and argv is world-readable via
- * /proc — so it travels in the child's environment instead, and is never printed
+ * /proc - so it travels in the child's environment instead, and is never printed
  * back. `redactedDbUrl` is what a prompt or a log line gets.
  */
 function pgEnv(): NodeJS.ProcessEnv {
@@ -156,7 +156,8 @@ const USAGE = `usage:
   sync <source-slug> [--since=ISO] [--group=KEY]   pull & store work items
   embed-backfill                                   embed rows missing a vector
   reembed                                          re-embed EVERYTHING (after a model change)
-  index-repo <repo-slug>                           clone/fetch a linked repo and (re)index its code
+  index-repo <repo-slug> [--full]                  clone/fetch a linked repo and (re)index its code;
+                                                   --full redoes every file (new chunk size or model)
   backup [--out=DIR]                               pg_dump -Fc to DIR (default ./backups)
   restore --file=PATH [--yes]                      pg_restore (overwrites the DB)
   seed [--scale=NAME] [--reset] [--yes]            fill a dev database with plausible data
@@ -208,7 +209,7 @@ async function main() {
       } catch {
         /* settings table may not exist yet */
       }
-      return indexRepoCmd(positional[0]);
+      return indexRepoCmd(positional[0], !!args.full);
     }
     case "backup":
       return backup({ out: args.out });

@@ -22,8 +22,9 @@ export {
   deleteFlow,
   listFlowRuns,
   getFlowRun,
+  assertModelCallAllowed,
   type FlowInput,
 } from "./definitions";
-export { runFlow, ownerScope } from "./run";
+export { runFlow, ownerScope, sweepFlowRuns } from "./run";
 export { itemTriggers, scheduledItems, type ItemEvent } from "./triggers";
 export { loadSubject, type FlowSubject } from "./subject";

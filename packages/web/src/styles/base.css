@@ -1,4 +1,4 @@
-/* Element defaults. Only bare elements are styled here — every named class
+/* Element defaults. Only bare elements are styled here - every named class
    lives in a component. */
 
 * {
@@ -53,12 +53,34 @@ select {
   border-radius: var(--radius-control);
   padding: var(--pad-2) var(--pad-3);
   min-height: var(--control-h);
-  /* Terminal caret everywhere: accent-colored; block shape where supported. */
+  /* What a field falls back to where tui/CaretHost does not draw its caret:
+     the same upright stroke, in the same colour. */
   caret-color: var(--accent);
-  caret-shape: block;
+  caret-shape: bar;
 }
 
-/* Focus ring drawn INSIDE the box (border + inset shadow) — outlines render
+/* The drawn caret's flash: lit most of the time, a short dip that springs
+   back a hair tall. One beat per loop, so no cycle differs from the next. */
+@keyframes caret-beat {
+  0%,
+  42%,
+  87%,
+  100% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+  48%,
+  72% {
+    opacity: 0.12;
+    transform: scaleY(0.6);
+  }
+  81% {
+    opacity: 1;
+    transform: scaleY(1.12);
+  }
+}
+
+/* Focus ring drawn INSIDE the box (border + inset shadow) - outlines render
    outside and get clipped when a control touches the scroll container's edge. */
 input:focus-visible,
 textarea:focus-visible,
@@ -69,7 +91,7 @@ button:focus-visible {
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
-/* Readable measure for running prose only — containers stay full-frame so the
+/* Readable measure for running prose only - containers stay full-frame so the
    list → detail transition never changes width.
 
    ch is the width of "0" in the inherited face, so this stays a character-count
@@ -192,4 +214,35 @@ details.callout[open] > summary.callout-title::after {
 }
 .hljs-strong {
   font-weight: 700;
+}
+
+/* The theme wipe, driven from motion.ts. Both snapshots hold still at full
+   strength, the new one on top and cut to the travelling edge. */
+:root[data-theme-wipe]::view-transition-old(root),
+:root[data-theme-wipe]::view-transition-new(root),
+:root[data-theme-wipe]::view-transition-new(theme-wipe) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+:root[data-theme-wipe]::view-transition-new(root) {
+  clip-path: var(--theme-wipe);
+}
+
+.theme-wipe {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2147483647;
+  pointer-events: none;
+  view-transition-name: theme-wipe;
+}
+
+.theme-wipe path:first-child {
+  fill: var(--accent);
+}
+
+.theme-wipe path:last-child {
+  fill: color-mix(in srgb, var(--accent) 45%, var(--bg));
 }

@@ -1,4 +1,8 @@
-import { schemaStampStatus, sql, type SchemaStampStatus } from "@tachy/core";
+import {
+  schemaStampStatus,
+  sql,
+  type SchemaStampStatus,
+} from "@tachy/core/infra";
 
 /**
  * What /readyz answers from. The server flips `modelRequired` and `modelReady`
@@ -54,4 +58,41 @@ export async function readiness(): Promise<Readiness> {
     model,
     draining: lifecycle.draining,
   };
+}
+
+/**
+ * Calls `onStuck` once the pool has had no connection free for `strikes`
+ * probes in a row. A probe that waits past `timeoutMs` is queued behind a full
+ * pool; one that fails has been answered, since Postgres being down fails at
+ * once. Docker restarts a container that exits, not one that is unhealthy, so
+ * a pool that never frees up otherwise leaves the process serving nothing.
+ */
+export function watchPool(o: {
+  onStuck: () => void;
+  probe?: () => Promise<unknown>;
+  everyMs?: number;
+  timeoutMs?: number;
+  strikes?: number;
+}): () => void {
+  const probe = o.probe ?? (() => sql`select 1`);
+  const everyMs = o.everyMs ?? 30_000;
+  const timeoutMs = o.timeoutMs ?? 10_000;
+  const strikes = o.strikes ?? 6;
+  let stuck = 0;
+  const timer = setInterval(() => {
+    void Promise.race([
+      probe().then(
+        () => true,
+        () => true,
+      ),
+      new Promise<false>((r) => setTimeout(() => r(false), timeoutMs).unref()),
+    ]).then((answered) => {
+      stuck = answered ? 0 : stuck + 1;
+      if (stuck < strikes) return;
+      clearInterval(timer);
+      o.onStuck();
+    });
+  }, everyMs);
+  timer.unref();
+  return () => clearInterval(timer);
 }

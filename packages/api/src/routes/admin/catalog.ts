@@ -29,9 +29,8 @@ import {
   deleteLabel,
   labelRenameImpact,
   renameLabel,
-  CATALOG_SLUG_RE,
-  CATALOG_SLUG_HINT,
-} from "@tachy/core";
+} from "@tachy/core/catalog";
+import { CATALOG_SLUG_RE, CATALOG_SLUG_HINT } from "@tachy/core";
 import { requireAdmin } from "../../auth";
 import {
   assertAnyTeamAdminApi,

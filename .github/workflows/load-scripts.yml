@@ -24,7 +24,8 @@ jobs:
 
       - name: Validate k6 scripts
         run: |
-          for f in load/*.js; do
-            docker run --rm -v "$PWD/load:/load:ro" grafana/k6:2.2.0 \
+          k6=$(sed -n 's/^ *image: *\(grafana\/k6:[^ ]*\) *$/\1/p' load/k6.compose.yml)
+          for f in $(grep -l '^export default' load/*.js); do
+            docker run --rm -v "$PWD/load:/load:ro" "$k6" \
               archive "/load/$(basename "$f")" -O /dev/null
           done

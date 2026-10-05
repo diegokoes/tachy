@@ -6,7 +6,7 @@ import { sql } from "../infra/db";
 import { log } from "../infra/log";
 import { defineSearchJobs } from "../search/jobs";
 import { defineSourceJobs } from "../sources/jobs";
-import { defineLoadTestJobs } from "../testing/load-runs";
+import { defineLoadTestJobs } from "../diagnostics/load-runs";
 import { defineWikiJobs } from "../wiki/jobs";
 import { createJobDefinition } from "./definitions";
 import { notifyRunFinished } from "./notify";
@@ -73,7 +73,7 @@ async function jobTablesExist(): Promise<boolean> {
  * cancel signal past the grace period restarts the process, the only way to
  * stop code already running in it.
  *
- * An image can reach a database whose schema has not been applied yet — a
+ * An image can reach a database whose schema has not been applied yet - a
  * deploy in flight, or a checkout someone started by hand. Jobs then wait for
  * their tables instead of taking the process down with them; everything else
  * keeps serving, and /readyz already reports the schema mismatch.

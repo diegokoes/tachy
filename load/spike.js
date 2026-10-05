@@ -1,7 +1,7 @@
 import http from "k6/http";
 import { check } from "k6";
-import { BASE_URL, headers, setupSession, pick } from "./lib/session.js";
-import { QUERIES } from "./lib/corpus.js";
+import { BASE_URL, headers, setupSession, pick } from "./session.js";
+import { QUERIES } from "./corpus.js";
 
 /**
  * The morning login burst: 0 to 30 requests a second in 10 seconds, held, then

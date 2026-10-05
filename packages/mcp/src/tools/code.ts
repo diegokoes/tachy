@@ -1,16 +1,18 @@
 import { z } from "zod";
+import { resolveCurrentUserId } from "@tachy/core/access";
+import { recordRun } from "@tachy/core/analytics";
 import {
-  resolveCurrentUserId,
-  recordRun,
   getCustomerIdBySlug,
+  resolveComponentStrict,
+} from "@tachy/core/catalog";
+import {
   listRepos,
   searchCode,
   readCodeFile,
   codeChangesBetween,
   repoToken,
-  resolveComponentStrict,
-  badInput,
-} from "@tachy/core";
+} from "@tachy/core/code";
+import { badInput } from "@tachy/core/infra";
 import { tool } from "../server";
 import { GRADE_NOTE, out, outScrubbed, searchOut } from "../results";
 import { resolveScopeIds } from "../context";
@@ -23,7 +25,7 @@ tool(
   "list_repos",
   {
     description:
-      "List linked git repositories available for code search, with the component each one implements, the customer it belongs to (null = shared product code), and its index freshness. index_status 'error' or a stale last_indexed_at means results may not reflect current code — say so when citing. `lines` are the branches indexed, the default first; each line's version_label is the newest release on it, so an older line (legacy/master-1-50 at v1.50.49) is where a customer on that minor should be searched. Filter by product or component to find the repo that actually holds the area you are asking about, or by customer to find their addon.",
+      "List linked git repositories available for code search, with the component each one implements, the customer it belongs to (null = shared product code), and its index freshness. index_status 'error' or a stale last_indexed_at means results may not reflect current code - say so when citing. `lines` are the branches indexed, the default first; each line's version_label is the newest release on it, so an older line (legacy/master-1-50 at v1.50.49) is where a customer on that minor should be searched. Filter by product or component to find the repo that actually holds the area you are asking about, or by customer to find their addon.",
     inputSchema: {
       product_slug: z.string().optional(),
       component: z.string().optional(),
@@ -75,7 +77,7 @@ tool(
 tool(
   "search_code",
   {
-    description: `Hybrid (semantic + trigram) search over the indexed code of linked repositories. Returns the top-matching chunks with path, line range, the line (branch) and the commit they were indexed at. Search with symptom terms, symbol names, or error strings; then use read_code_file to read narrowly around a hit. Results reflect the indexed commit, not necessarily the latest code — always cite path:start-end @ commit and mention index age when advising; a hit with partial: true comes from an index still being written or interrupted. ${GRADE_NOTE}`,
+    description: `Hybrid (semantic + trigram) search over the indexed code of linked repositories. Returns the top-matching chunks with path, line range, the line (branch) and the commit they were indexed at. Search with symptom terms, symbol names, or error strings; then use read_code_file to read narrowly around a hit. Results reflect the indexed commit, not necessarily the latest code - always cite path:start-end @ commit and mention index age when advising; a hit with partial: true comes from an index still being written or interrupted. ${GRADE_NOTE}`,
     inputSchema: {
       query: z.string(),
       repo: z.string().optional().describe("Repo slug from list_repos"),
@@ -84,13 +86,13 @@ tool(
         .string()
         .optional()
         .describe(
-          "Component slug — searches only the repos that implement it. Needs product_slug.",
+          "Component slug - searches only the repos that implement it. Needs product_slug.",
         ),
       customer: z
         .string()
         .optional()
         .describe(
-          "Customer slug — searches their addon repos AND the shared ones, since an addon sits on shared product code. Another customer's addon is excluded.",
+          "Customer slug - searches their addon repos AND the shared ones, since an addon sits on shared product code. Another customer's addon is excluded.",
         ),
       version: z
         .string()
@@ -167,7 +169,7 @@ tool(
   "read_code_file",
   {
     description:
-      "Read a bounded slice of a file from a linked repo (max 400 lines per call): by default at its default line's index, so a search_code hit opens exactly as found. Use after search_code to see the surrounding context of a hit. Never paste whole files into answers or saved knowledge entries — quote only the relevant lines.",
+      "Read a bounded slice of a file from a linked repo (max 400 lines per call): by default at its default line's index, so a search_code hit opens exactly as found. Use after search_code to see the surrounding context of a hit. Never paste whole files into answers or saved knowledge entries - quote only the relevant lines.",
     inputSchema: {
       repo: z.string(),
       path: z.string(),

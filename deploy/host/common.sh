@@ -1,11 +1,18 @@
 # shellcheck shell=bash
 # Shared by the host scripts (tachy-backup, tachy-watch, tachy-deploy).
-# Settings come from /etc/tachy/tachy.env (root-owned, 0600); see
+# Settings come from /etc/tachy/tachy.env (root:tachy 0640); see
 # deploy/host/tachy.env.example.
 
 TACHY_ENV_FILE=${TACHY_ENV_FILE:-/etc/tachy/tachy.env}
-# shellcheck disable=SC1090
-[ -r "$TACHY_ENV_FILE" ] && . "$TACHY_ENV_FILE"
+TACHY_ENV_DIR=$(dirname "$TACHY_ENV_FILE")
+if [ -r "$TACHY_ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$TACHY_ENV_FILE"
+elif [ -e "$TACHY_ENV_FILE" ] || { [ -d "$TACHY_ENV_DIR" ] && [ ! -x "$TACHY_ENV_DIR" ]; }; then
+  # A file that is there and unreadable must not look like a file that is absent.
+  echo "$(id -un) cannot read $TACHY_ENV_FILE" >&2
+  exit 1
+fi
 
 TACHY_DIR=${TACHY_DIR:-/opt/tachy}
 TACHY_SRV=${TACHY_SRV:-/srv/tachy}

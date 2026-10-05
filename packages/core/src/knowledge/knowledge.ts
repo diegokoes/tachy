@@ -5,7 +5,12 @@ import {
   embedQueryLiteral,
   toVectorLiteral,
 } from "../search/embeddings";
-import { writeEmbeddings } from "../search/backfill";
+import {
+  currentVector,
+  needsVector,
+  writeEmbeddings,
+} from "../search/backfill";
+import { EMBEDDING_MODEL } from "../search/model";
 import {
   CANDIDATES,
   clampLimit,
@@ -71,7 +76,7 @@ export interface KnowledgeInput extends KnowledgeFacets {
   workItemId?: string | null;
   productId?: string | null;
   teamId?: string | null;
-  /** Whose install this describes. Never inherited from the work item — see
+  /** Whose install this describes. Never inherited from the work item - see
    *  saveKnowledgeEntry. Absent/null means the lesson is general. */
   customerSlug?: string | null;
   /** Which part of their estate, by unit slug/alias. Needs customerSlug. */
@@ -126,7 +131,7 @@ async function resolvePatternDescription(
 /**
  * Must stay in step with the generated search_text column: a field the vector
  * cannot see is only findable by exact words. `resolution` is the one that
- * matters — a query phrased as the fix ("restart the label cache service")
+ * matters - a query phrased as the fix ("restart the label cache service")
  * otherwise has no semantic representation at all.
  */
 function buildEmbedText(
@@ -168,7 +173,7 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
    * it was is a fact; whose behaviour it describes is a judgement, so it has to
    * be stated.
    *
-   * The UNIT, by contrast, IS inherited — but only once the customer above has
+   * The UNIT, by contrast, IS inherited - but only once the customer above has
    * been stated and matches the ticket's. That keeps the rule intact: the
    * judgement "this entry is about ITG" is still made by a person, and saying
    * "…on the line the ticket was already filed against" adds no claim the
@@ -217,7 +222,7 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
          issue_summary, symptoms, signals, tags,
          root_cause, resolution, resolution_pattern, component_id, product_area, confidence,
          cloud, resolution_clarity, hidden_fix, affected_version, fixed_version,
-         structured, embedding)
+         structured, embedding, embedding_model)
       values
         (${i.workItemId ?? null}, ${productId}, ${teamId}, ${customerId ?? null},
          ${customerUnitId}, ${i.createdById ?? null},
@@ -225,7 +230,8 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
          ${i.rootCause ?? null}, ${i.resolution ?? null}, ${i.resolutionPattern ?? null}, ${componentId}, ${productArea},
          ${confidence}, ${i.cloud ?? null}, ${i.resolutionClarity ?? null}, ${i.hiddenFix ?? null},
          ${affectedVersion}, ${i.fixedVersion ?? null},
-         ${jsonb(structured)}, ${embedding}::vector)
+         ${jsonb(structured)}, ${embedding}::vector,
+         ${embedding ? EMBEDDING_MODEL : null})
       returning id, version, ${REVISION_COLUMNS}
     `;
     await syncLinks(
@@ -282,7 +288,7 @@ export type FacetKey =
 
 /**
  * `except` drops one predicate, so counting a facet's own options is not
- * narrowed by the value already chosen for it — otherwise picking "high"
+ * narrowed by the value already chosen for it - otherwise picking "high"
  * leaves "high" as the only option you could ever pick again.
  */
 function facetSql(o: KnowledgeFilters, except?: FacetKey) {
@@ -305,14 +311,14 @@ export interface SearchOptions extends KnowledgeFilters {
   productId?: string;
   teamId?: string;
   /** Also match rows with NO product/team (org-wide) when a scope filter is
-   *  set — for agent consults, where global lessons still apply. */
+   *  set - for agent consults, where global lessons still apply. */
   includeUnscoped?: boolean;
   limit?: number;
   /** Pre-embedded query, so a caller searching two surfaces embeds once. */
   queryVector?: string;
   /**
    * Rank this customer's entries above equally-relevant general ones, without
-   * excluding anything. Distinct from `customerId`, which narrows to them — the
+   * excluding anything. Distinct from `customerId`, which narrows to them - the
    * cross-customer lesson is frequently the one that solves the ticket.
    */
   boostCustomerId?: string;
@@ -345,7 +351,7 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
              row_number() over (order by embedding <=> ${qvec}::vector) as rnk,
              1 - (embedding <=> ${qvec}::vector) as cos_sim
       from knowledge_entries
-      where ${filters} and embedding is not null
+      where ${filters} and embedding is not null and ${currentVector()}
         and 1 - (embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
       order by embedding <=> ${qvec}::vector
       limit ${CANDIDATES}
@@ -457,7 +463,7 @@ export type FacetCount = { value: string; count: number };
 
 /**
  * What each facet could still be narrowed to, counted under the filters
- * currently in force — so the library never offers a value with no rows behind
+ * currently in force - so the library never offers a value with no rows behind
  * it. A facet is counted with its own selection lifted (see `facetSql`), which
  * is what keeps its other options reachable once one is picked.
  */
@@ -495,7 +501,7 @@ export async function listKnowledgeFacets(
     `;
   };
 
-  /** Counted by slug, not id — that is what the filter and the URL carry. */
+  /** Counted by slug, not id - that is what the filter and the URL carry. */
   const customerRows = async (): Promise<FacetCount[]> => {
     return sql<FacetCount[]>`
       select cu.slug as value, count(*)::int as count
@@ -668,7 +674,7 @@ export async function updateKnowledgeEntry(
       fixed_version      = ${merged.fixedVersion ?? null},
       structured         = ${jsonb(merged.structured ?? {})},
       version            = version + 1
-      ${contentChanged ? (vec ? sql`, embedding = ${vec}::vector` : sql`, embedding = null`) : sql``}
+      ${contentChanged ? (vec ? sql`, embedding = ${vec}::vector, embedding_model = ${EMBEDDING_MODEL}` : sql`, embedding = null, embedding_model = null`) : sql``}
     where id = ${id} and version = ${current.version}
     returning id, version, ${REVISION_COLUMNS}
   `;
@@ -695,7 +701,7 @@ export async function backfillEmbeddings(
     select id, issue_summary, root_cause, resolution, resolution_pattern,
            product_area, symptoms, signals, tags
     from knowledge_entries
-    ${opts.all ? sql`` : sql`where embedding is null`}
+    ${opts.all ? sql`` : sql`where ${needsVector()}`}
   `;
 
   const patternDescriptions = new Map<string, string>();
@@ -729,7 +735,7 @@ export async function backfillEmbeddings(
  * rewrite: it advances the version and appends a revision of its own, so the
  * revert is itself part of the history.
  *
- * product_id and product_area are skipped — the first is not something an update
+ * product_id and product_area are skipped - the first is not something an update
  * may change, the second is derived from the component at write time.
  */
 export async function revertKnowledgeEntry(
@@ -764,7 +770,7 @@ export async function revertKnowledgeEntry(
 /**
  * For the admin index: how much of the corpus there is, and how much of it the
  * component tree actually describes. `by_status` is left as whatever statuses
- * are present rather than padded out to the vocabulary — a band with a zero
+ * are present rather than padded out to the vocabulary - a band with a zero
  * segment in it draws a legend key for nothing.
  */
 export async function knowledgeCensus(): Promise<KnowledgeCensus> {

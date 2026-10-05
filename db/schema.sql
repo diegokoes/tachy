@@ -7,6 +7,17 @@ create or replace function tachy_join(arr text[]) returns text
     language sql immutable parallel safe
     as $$ select array_to_string(arr, ' ') $$;
 
+-- The words inside identifiers and paths: scheduleDueRuns and
+-- schedule_due_runs both become "schedule due runs", so a tsvector built from
+-- this matches a symbol typed either way, or as words.
+create or replace function tachy_code_words(t text) returns text
+    language sql immutable parallel safe
+    as $$ select regexp_replace(
+              regexp_replace(
+                regexp_replace(t, '([a-z0-9])([A-Z])', '\1 \2', 'g'),
+                '([A-Z]+)([A-Z][a-z])', '\1 \2', 'g'),
+              '[^A-Za-z0-9]+', ' ', 'g') $$;
+
 -- One row: the sha256 of the schema.sql this database was built from, written by
 -- whatever applied it. /readyz compares it with the schema.sql in the image.
 create table schema_meta (
@@ -79,8 +90,8 @@ create table team_members (
 -- never leaves the server process.
 --
 -- A credential belongs to one person. The global scope is not a way to share
--- one: it holds the deployment's own machine tokens — a source connection's
--- token, the job webhook — which the worker resolves with no user to be.
+-- one: it holds the deployment's own machine tokens - a source connection's
+-- token, the job webhook - which the worker resolves with no user to be.
 create table credentials (
     id               uuid primary key default gen_random_uuid(),
     scope            text not null check (scope in ('global','user')),
@@ -193,7 +204,7 @@ create table customers (
     aliases     text[] not null default '{}',
     -- domains whose senders are this customer, including partners who front for
     -- them (a distributor raising tickets on their behalf). A domain registered
-    -- to two customers resolves to neither — see resolveCustomerByEmail.
+    -- to two customers resolves to neither - see resolveCustomerByEmail.
     email_domains text[] not null default '{}',
     notes       text,
     created_at  timestamptz not null default now()
@@ -203,8 +214,8 @@ create index customers_aliases_idx on customers using gin (aliases);
 create index customers_domains_idx on customers using gin (email_domains);
 
 -- A named part of one customer's estate: a site, a production line, a tenant.
--- The second axis of the customer model — customers say WHO, units say WHICH OF
--- THEIRS — because most of what is true of a big account is true of one place in
+-- The second axis of the customer model - customers say WHO, units say WHICH OF
+-- THEIRS - because most of what is true of a big account is true of one place in
 -- it rather than of the account.
 --
 -- `kind` is a deployment-specific vocabulary exactly like customer_facts.kind
@@ -216,7 +227,7 @@ create table customer_units (
     -- Containment: a line is inside a site.
     parent_id    uuid references customer_units(id) on delete cascade,
     -- Sharing WITHOUT containment: a unit whose facts this one inherits without
-    -- being part of it — the layout several production lines conform to. Set
+    -- being part of it - the layout several production lines conform to. Set
     -- null on delete rather than cascade: losing a template must not delete the
     -- lines that referenced it.
     profile_id   uuid references customer_units(id) on delete set null,
@@ -255,7 +266,7 @@ create table source_projects (
     -- guessing at the sender's domain, which partners and freemail defeat. Null
     -- means the project serves many, and each ticket is resolved on its own.
     customer_id           uuid references customers(id) on delete set null,
-    -- [{identifier, name, type, root_path, default}] — an ADO project routinely
+    -- [{identifier, name, type, root_path, default}] - an ADO project routinely
     -- has several wikis (one project wiki plus a code wiki per repo). Exactly one
     -- carries default:true; that is the one every tool uses with no wiki argument.
     wikis                 jsonb not null default '[]'::jsonb,
@@ -386,7 +397,7 @@ create index customer_components_component_idx on customer_components(component_
 
 -- Everything about a customer's install that is not an entity in its own right:
 -- the version they run, their line layout, an integration they depend on. Their
--- repos, projects and components are edges instead — those are real records.
+-- repos, projects and components are edges instead - those are real records.
 --
 -- `kind` is a deployment-specific vocabulary, exactly like knowledge_entries.cloud:
 -- no lookup table, because what counts as a customer specific differs per
@@ -405,7 +416,7 @@ create table customer_facts (
     unit_id      uuid references customer_units(id) on delete cascade,
     value        text not null,
     notes        text,
-    -- Where this was learned — a ticket URL, a wiki page, a person.
+    -- Where this was learned - a ticket URL, a wiki page, a person.
     source       text,
     component_id uuid references components(id) on delete set null,
     created_at   timestamptz not null default now(),
@@ -413,7 +424,7 @@ create table customer_facts (
 );
 
 -- `nulls not distinct` so a customer-level fact (unit_id null) still upserts in
--- place rather than piling up a row per set — the idiom
+-- place rather than piling up a row per set - the idiom
 -- work_item_links_external_idx uses.
 create unique index customer_facts_key_idx
     on customer_facts(customer_id, unit_id, kind, label) nulls not distinct;
@@ -466,13 +477,13 @@ create table knowledge_entries (
     tags                text[] not null default '{}',
     -- component is the validated taxonomy anchor; product_area is DERIVED from the
     -- component hierarchy at write time (kept as a column so the generated search
-    -- columns below can reference it — they can't join other tables).
+    -- columns below can reference it - they can't join other tables).
     component_id        uuid references components(id) on delete set null,
     product_area        text,
     -- confidence and resolution_clarity answer two different questions and are
     -- deliberately not collapsed: confidence is about THIS ROW ("is what we
     -- wrote here correct?"), resolution_clarity is about the WORLD ("did the
-    -- ticket actually end in a fix?"). They come apart in both directions — a
+    -- ticket actually end in a fix?"). They come apart in both directions - a
     -- restart that verifiably fixed it with nobody knowing why is clear/low;
     -- a customer who went silent on a cause we fully understand is unclear/high.
     confidence          text check (confidence is null or confidence in ('low','medium','high')),
@@ -492,6 +503,10 @@ create table knowledge_entries (
     structured          jsonb not null default '{}'::jsonb,
 
     embedding           vector(768),
+    -- The model that made the vector. Search reads only vectors of the model
+    -- in use, and the backfill re-embeds the rest. Null: made before rows
+    -- named their model, by bge-base-en-v1.5.
+    embedding_model     text,
 
     -- cloud and affected_version are in here so they are searchable as words:
     -- typing "prod printer error" narrows by environment without spending a
@@ -628,7 +643,7 @@ create table reference_docs (
     source_project_id uuid references source_projects(id) on delete set null,
     external_key      text,
     -- Same taxonomy anchor as knowledge_entries: a doc scoped to a product may
-    -- also name the component it documents. Optional on purpose — a general
+    -- also name the component it documents. Optional on purpose - a general
     -- product doc (onboarding, release process) belongs to the product and to
     -- no single component. product_area is DERIVED from the component hierarchy
     -- at write time, kept as a column so the generated search columns below can
@@ -648,12 +663,12 @@ create table reference_docs (
     doc_version   text,
     superseded_by uuid references reference_docs(id) on delete set null,
     -- 'wiki' = an article authored here, placed by wiki_article_categories and
-    -- addressed by slug. NOT an imported Azure DevOps wiki page — those are
+    -- addressed by slug. NOT an imported Azure DevOps wiki page - those are
     -- 'reference', with source_project_id/external_key set.
     kind        text not null default 'reference'
                     check (kind in ('reference','wiki')),
     -- Stable address for an article. Articles are linked by slug, so it has to
-    -- survive an edit — which is why they are updated in place and never
+    -- survive an edit - which is why they are updated in place and never
     -- superseded. Null for imported docs.
     slug        text,
 
@@ -862,6 +877,7 @@ create table reference_doc_chunks (
     ordinal     integer not null,
     chunk_text  text not null,
     embedding   vector(768),
+    embedding_model text,
     unique (doc_id, ordinal)
 );
 
@@ -987,15 +1003,6 @@ create table repos (
     customer_id     uuid references customers(id) on delete set null,
     default_branch  text not null default 'main',
     config          jsonb not null default '{}'::jsonb,
-    -- Superseded by repo_lines, and unread. Kept so the previous release still
-    -- runs against this schema; dropped with repo_files and code_chunks.
-    index_status    text not null default 'idle'
-                        check (index_status in ('idle','cloning','indexing','ready','error')),
-    indexed_commit  text,
-    index_error     text,
-    file_count      integer not null default 0,
-    chunk_count     integer not null default 0,
-    last_indexed_at timestamptz,
     created_at      timestamptz not null default now()
 );
 
@@ -1053,44 +1060,19 @@ create table code_blob_chunks (
     end_line    integer not null,
     chunk_text  text not null,
     embedding   vector(768),
+    embedding_model text,
+    -- The words of the chunk, with the names it defines weighted A and its
+    -- body D, so a search for a name finds where it is defined before the
+    -- places that use it. Written by the indexer, which finds the names
+    -- (core/src/code/symbols.ts); null until it has.
+    search_tsv  tsvector,
     unique (repo_id, blob_sha, ordinal)
 );
 
 create index code_blob_chunks_embedding_idx on code_blob_chunks using hnsw (embedding vector_cosine_ops)
     with (m = 16, ef_construction = 64);
 create index code_blob_chunks_trgm_idx      on code_blob_chunks using gin (chunk_text gin_trgm_ops);
-
--- Superseded by repo_line_files and code_blob_chunks, and unread. Kept so the
--- previous release still runs against this schema.
-create table repo_files (
-    id          uuid primary key default gen_random_uuid(),
-    repo_id     uuid not null references repos(id) on delete cascade,
-    path        text not null,
-    lang        text,
-    blob_sha    text not null,
-    size_bytes  integer not null,
-    unique (repo_id, path)
-);
-
-create index repo_files_repo_idx      on repo_files(repo_id);
-create index repo_files_path_trgm_idx on repo_files using gin (path gin_trgm_ops);
-
-create table code_chunks (
-    id          uuid primary key default gen_random_uuid(),
-    repo_id     uuid not null references repos(id) on delete cascade,
-    file_id     uuid not null references repo_files(id) on delete cascade,
-    ordinal     integer not null,
-    start_line  integer not null,
-    end_line    integer not null,
-    chunk_text  text not null,
-    embedding   vector(768),
-    unique (file_id, ordinal)
-);
-
-create index code_chunks_repo_idx      on code_chunks(repo_id);
-create index code_chunks_embedding_idx on code_chunks using hnsw (embedding vector_cosine_ops)
-    with (m = 16, ef_construction = 64);
-create index code_chunks_trgm_idx      on code_chunks using gin (chunk_text gin_trgm_ops);
+create index code_blob_chunks_tsv_idx       on code_blob_chunks using gin (search_tsv);
 
 -- A bucket is a collection of documents maintained outside tachy and pushed in
 -- by a script that holds the token, e.g. a Document360 knowledge base synced
@@ -1173,6 +1155,7 @@ create table bucket_doc_chunks (
     ordinal     integer not null,
     chunk_text  text not null,
     embedding   vector(768),
+    embedding_model text,
     unique (doc_id, ordinal)
 );
 
@@ -1298,6 +1281,9 @@ create table flows (
     team_id         uuid references teams(id) on delete cascade,
     enabled         boolean not null default false,
     graph           jsonb not null default '{"triggers":[],"steps":[]}'::jsonb,
+    -- Model calls its steps may make in any 24 hours. A flow runs with nobody
+    -- approving its steps, so this is what bounds its spend. 0 allows none.
+    model_calls_per_day integer not null default 100 check (model_calls_per_day >= 0),
     run_as_user_id  uuid references users(id) on delete set null,
     created_by      uuid references users(id) on delete set null,
     created_at      timestamptz not null default now(),

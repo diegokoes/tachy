@@ -5,7 +5,7 @@ import { unitVector, vectorLiteral } from "./deterministic";
  * model on a batch of one, awaited inside the row loop; batching is worth about
  * 1.15x, measured, because the model is throughput-bound rather than
  * overhead-bound. What actually moves the number is not embedding a corpus at
- * all — see EMBED_MODES.
+ * all - see EMBED_MODES.
  *
  * `offset` is the index of the window's first row in its table, so the synthetic
  * side stays keyed to the row rather than to its position in the window.
@@ -42,15 +42,17 @@ const REAL_KINDS: Record<EmbedMode, Set<string>> = {
 };
 
 /**
- * Measured on a 20-core workstation, fp32 bge-base through onnxruntime-node,
- * against the text this seeder actually writes. The model saturates the cores
- * it is given, so batching changes the constant and not the order: this is
- * throughput, not overhead, and the estimate below is honest about that.
+ * Measured on a 20-core workstation with fp32 bge-base through
+ * onnxruntime-node, against the text this seeder actually writes, then scaled
+ * by 0.45: what gte-modernbert-base manages beside bge-base on code chunks.
+ * The model saturates the cores it is given, so batching changes the constant
+ * and not the order: this is throughput, not overhead, and the estimate below
+ * is honest about that.
  */
 const ROWS_PER_SECOND: Record<string, number> = {
-  knowledge_entry: 33,
-  reference_doc_chunk: 25,
-  code_chunk: 20,
+  knowledge_entry: 15,
+  reference_doc_chunk: 11,
+  code_chunk: 9,
 };
 
 /** Roughly how long the real model will take, so an hour is never a surprise. */
@@ -79,7 +81,7 @@ export async function realEmbedder(
   mode: EmbedMode,
   onProgress?: (kind: string, done: number) => void,
 ): Promise<Embedder> {
-  const { embedPassages, toVectorLiteral } = await import("@tachy/core");
+  const { embedPassages, toVectorLiteral } = await import("@tachy/core/search");
   const done: Record<string, number> = {};
 
   return async (kind, texts, offset) => {

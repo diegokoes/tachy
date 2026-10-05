@@ -6,17 +6,6 @@ name: Image gates
 # image or the stack it starts in pay for the build.
 on:
   pull_request:
-    paths:
-      - Dockerfile
-      - .dockerignore
-      - docker-compose.yml
-      - package.json
-      - package-lock.json
-      - packages/**
-      - db/**
-      - load/**
-      - scripts/**
-      - .github/workflows/image-gates.yml
 
 permissions:
   contents: read
@@ -26,7 +15,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The path filter lives in a job, not under `on:`. A workflow that a path
+  # filter skips leaves its check pending, which blocks a pull request once the
+  # check is required; a job that a condition skips reports success.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      relevant: ${{ steps.diff.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if git diff --name-only "origin/$BASE_REF...HEAD" | grep -qE '^(Dockerfile|\.dockerignore|docker-compose\.yml|package\.json|package-lock\.json|packages/|db/|load/|scripts/|\.github/workflows/image-gates\.yml)'; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+
   image-gates:
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

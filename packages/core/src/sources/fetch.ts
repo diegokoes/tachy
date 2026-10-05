@@ -3,13 +3,13 @@ import { countSourceCall } from "./traffic";
 /**
  * How long one call to a source system may take. Without a deadline a hung
  * upstream hangs the tool call, the agent turn and the SSE stream behind it,
- * indefinitely and silently — nothing further up has a timeout of its own.
+ * indefinitely and silently - nothing further up has a timeout of its own.
  */
 export const SOURCE_TIMEOUT_MS = 30_000;
 
 /**
  * A sync walks thousands of items, so meeting a rate limit is ordinary rather
- * than exceptional — and every adapter throws on any non-2xx, which without
+ * than exceptional - and every adapter throws on any non-2xx, which without
  * this aborts the whole run. The CLI keeps no watermark, so the retry then
  * restarts from wherever the operator's `--since` pointed.
  */
@@ -24,7 +24,7 @@ function isRateLimited(res: Response): boolean {
 
 /**
  * How long to wait before the next attempt. `Retry-After` is authoritative when
- * the server sends one — as seconds or as a date — and GitHub instead names the
+ * the server sends one - as seconds or as a date - and GitHub instead names the
  * epoch second its budget refills at.
  */
 function retryDelayMs(res: Response, attempt: number): number {
@@ -105,7 +105,7 @@ export async function sourceFetch(
  * Blocks that must never be reachable from a URL someone typed into the product
  * or a model composed from ticket text: loopback, link-local (which includes the
  * cloud metadata endpoint at 169.254.169.254), and the private ranges the server
- * itself sits in. Deliberately not applied to `sourceFetch` — a self-hosted
+ * itself sits in. Deliberately not applied to `sourceFetch` - a self-hosted
  * GitHub Enterprise or Azure DevOps server is legitimately on a private address.
  */
 function isBlockedAddress(ip: string): boolean {
@@ -137,7 +137,7 @@ function isBlockedAddress(ip: string): boolean {
 const MAX_REDIRECTS = 3;
 
 /**
- * `fetch` for a URL the product did not choose — a paste into the ingest box, a
+ * `fetch` for a URL the product did not choose - a paste into the ingest box, a
  * link a model lifted out of a ticket. Every hop is re-checked, because a public
  * host is free to redirect to a private one.
  *

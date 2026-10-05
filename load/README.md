@@ -71,8 +71,18 @@ driver inside `api-load` so it reads that container's cgroup memory:
 ```sh
 docker compose -f load/turns.compose.yml up -d
 docker compose -f load/turns.compose.yml exec api-load node load/turns.mjs
+docker compose -f load/turns.compose.yml exec api-load node load/oneshots.mjs
 docker compose -f load/turns.compose.yml down -v
 ```
+
+`oneshots.mjs` does the same for model calls outside turns: report review,
+ticket review and a flow's `agent.ask` step, which run Claude Code with no
+tools and no MCP child and take no chat slot. It makes `LEVELS` (default
+`1,2,4`) calls at once and reports what they add to the container.
+
+Both report memory from the container's cgroup. Summed RSS reads about twice
+as high, because every Claude Code process counts the binary's pages as its
+own and the container holds them once. A `mem_limit` is the cgroup's figure.
 
 ## Reading the results
 
@@ -83,7 +93,7 @@ Every request is tagged, so the per-endpoint rows are the ones that matter:
 ```
 
 To chase a slow request, take its `x-request-id` response header and grep the
-API log — every request logs one JSON line carrying the same id:
+API log - every request logs one JSON line carrying the same id:
 
 ```sh
 docker compose logs api | grep <request-id>
@@ -98,12 +108,12 @@ knowledge entries, 21k vectors), at 10 rps:
 
 The office laptop is slower than this, so treat it as an upper bound on what
 good looks like rather than a target. The thresholds in `search.js` are set
-well above it deliberately — they are there to catch a regression that changes
+well above it deliberately - they are there to catch a regression that changes
 the shape of the curve, not to grade the hardware.
 
 ## What is deliberately not tested
 
-- **Uploads and `work-items/:source/:id/fetch`** — both call third-party APIs.
+- **Uploads and `work-items/:source/:id/fetch`** - both call third-party APIs.
 - **All writes.** `POST /api/knowledge` runs another embedding and grows the
   database, so a second run would not measure the same thing as the first.
 
@@ -124,12 +134,12 @@ best cosine similarity achieved:   0.1214
 So the vector leg of hybrid search contributes **nothing**, and every result
 you see came from the lexical and trigram legs. Concretely:
 
-- **Latency is still meaningful.** The ONNX embedding still runs on the API
-  event loop, and the HNSW probe still happens; the scan is bounded by
-  `hnsw.max_scan_tuples`, so it does not spin. This is what the suite measures,
-  and it is the real bottleneck.
+- **Latency is still meaningful.** The query is still embedded, and the HNSW
+  probe still happens; the scan is bounded by `hnsw.max_scan_tuples`, so it
+  does not spin. This is what the suite measures, and it is the real
+  bottleneck.
 - **Result counts and relevance are not meaningful.** Do not use these runs to
-  judge search quality. `test/search-quality.test.ts` is what does that.
+  judge search quality. `test/search/quality.test.ts` is what does that.
 
 For numbers that reflect real vector search, seed with `--embed`:
 
@@ -138,8 +148,8 @@ docker compose run --rm cli npm run sync -- seed --scale=medium --reset --yes --
 ```
 
 `--embed=search` embeds what a search reads: knowledge entries and reference
-chunks. `--embed` (or `--embed=all`) adds `code_chunks`, which no scenario here
-touches and which is most of the cost — measured on a 20-core workstation the
+chunks. `--embed` (or `--embed=all`) adds `code_blob_chunks`, which no scenario here
+touches and which is most of the cost - measured on a 20-core workstation the
 model manages roughly 33 knowledge entries, 25 reference chunks or 20 code
 chunks a second, so at `--scale=large` that is about 23 minutes for `search`
 against 73 for `all`. The model saturates the cores it is given; the seeder

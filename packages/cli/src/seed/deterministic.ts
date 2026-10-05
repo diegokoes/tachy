@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { EMBEDDING_DIM } from "@tachy/core";
+import { EMBEDDING_DIM } from "@tachy/core/search";
 
 /**
  * Ids are derived from a hash of what they identify, never drawn from the PRNG

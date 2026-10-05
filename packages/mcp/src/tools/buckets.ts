@@ -5,7 +5,7 @@ import {
   readableBucket,
   readableBuckets,
   searchBucket,
-} from "@tachy/core";
+} from "@tachy/core/buckets";
 import { tool } from "../server";
 import { GRADE_NOTE, outScrubbed, searchOut } from "../results";
 import { gateUserId } from "../permissions";

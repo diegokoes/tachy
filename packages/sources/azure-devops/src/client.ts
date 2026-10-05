@@ -1,4 +1,5 @@
-import { azureDevopsToken, badInput, sourceFetch } from "@tachy/core";
+import { azureDevopsToken, badInput } from "@tachy/core/infra";
+import { sourceFetch } from "@tachy/core/sources";
 
 /** The released Azure DevOps REST version. Everything in 7.2 is still preview. */
 const API_VERSION = "7.1";
@@ -6,7 +7,7 @@ const API_VERSION = "7.1";
 //   work item comments -> the 7.1 reference itself documents 7.1-preview.4
 //   connectionData     -> not in the public REST reference at all
 /**
- * At $top=200 this is 20k comments on one work item — far past anything real,
+ * At $top=200 this is 20k comments on one work item - far past anything real,
  * and the point at which a continuation token that never clears is a bug rather
  * than a big ticket.
  */
@@ -400,7 +401,7 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     if (!res.ok) {
       const hint =
         res.status === 401 || res.status === 403 || res.status === 203
-          ? " — check that the PAT is valid and has the required scopes (Work Items, Wiki, Code)"
+          ? " - check that the PAT is valid and has the required scopes (Work Items, Wiki, Code)"
           : "";
       throw new Error(
         `Azure DevOps ${method} ${path} -> ${res.status} ${trimmed.slice(0, 2000)}${hint}`,
@@ -409,7 +410,7 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     if (!trimmed) return {} as T;
     if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
       throw new Error(
-        `Azure DevOps ${method} ${path} -> ${res.status} returned non-JSON — check that the PAT is valid and has the required scopes (Work Items, Wiki, Code)`,
+        `Azure DevOps ${method} ${path} -> ${res.status} returned non-JSON - check that the PAT is valid and has the required scopes (Work Items, Wiki, Code)`,
       );
     }
     return JSON.parse(text) as T;
@@ -698,7 +699,7 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     /**
      * The id a wiki URL carries (.../_wiki/wikis/foo.wiki/1648/Start). Worth its
      * own call because the trailing segment of that URL is a display slug, not
-     * the page path — dashes where the path has spaces — so it does not round-trip
+     * the page path - dashes where the path has spaces - so it does not round-trip
      * through the path endpoint.
      */
     async getWikiPageById(project, wiki, id) {

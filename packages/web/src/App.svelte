@@ -1,38 +1,39 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import ChatView from "./lib/ChatView.svelte";
-  import LibraryView from "./lib/library/LibraryView.svelte";
-  import WikiView from "./lib/wiki/WikiView.svelte";
-  import AdminView from "./lib/admin/AdminView.svelte";
-  import SettingsView from "./lib/settings/SettingsView.svelte";
-  import FeedbackView from "./lib/feedback/FeedbackView.svelte";
-  import SetupWizard from "./lib/SetupWizard.svelte";
-  import LoginView from "./lib/LoginView.svelte";
-  import NotificationHost from "./lib/NotificationHost.svelte";
-  import { session, initSession } from "./lib/session.svelte";
-  import { navItems } from "./lib/nav";
-  import { wipeIn, jellyPress } from "./lib/motion";
-  import StarField from "./lib/StarField.svelte";
-  import Wordmark from "./lib/Wordmark.svelte";
-  import { loadThemeFromStorage, themeState } from "./lib/theme.svelte";
-  import { loadFonts } from "./lib/fonts.svelte";
-  import { loadDateFormat } from "./lib/dates.svelte";
+  import { onMount, tick, untrack } from "svelte";
+  import ChatView from "./chat/ChatView.svelte";
+  import LibraryView from "./library/LibraryView.svelte";
+  import WikiView from "./wiki/WikiView.svelte";
+  import AdminView from "./admin/AdminView.svelte";
+  import SettingsView from "./settings/SettingsView.svelte";
+  import FeedbackView from "./reports/FeedbackView.svelte";
+  import SetupWizard from "./access/SetupWizard.svelte";
+  import LoginView from "./access/LoginView.svelte";
+  import NotificationHost from "./notifications/NotificationHost.svelte";
+  import { session, initSession } from "./access/session.svelte";
+  import { navItems } from "./shell/nav";
+  import { jellyPress, reflow } from "./motion/motion";
+  import StarField from "./motion/StarField.svelte";
+  import Wordmark from "./motion/Wordmark.svelte";
+  import { loadThemeFromStorage, themeState } from "./theme/theme.svelte";
+  import { loadFonts } from "./theme/fonts.svelte";
+  import { loadDateFormat } from "./dates.svelte";
   import {
     router,
     openSection,
     section,
     startRouter,
-  } from "./lib/router.svelte";
+  } from "./shell/router.svelte";
   import {
     refreshNotifications,
     startNotifications,
-  } from "./lib/notify.svelte";
-  import { hints, pushScope, startKeys } from "./lib/keys.svelte";
-  import { navKey, actionKey } from "./lib/keys/bindings.svelte";
-  import { loadVim, vimState, scrollBindings } from "./lib/vim.svelte";
-  import { subnav, topActions } from "./lib/subnav.svelte";
-  import { setScrollport } from "./lib/scrollport.svelte";
+  } from "./notifications/notify.svelte";
+  import { hints, pushScope, startKeys } from "./keys/keys.svelte";
+  import { navKey, actionKey } from "./keys/bindings.svelte";
+  import { loadVim, vimState, scrollBindings } from "./keys/vim.svelte";
+  import { subnav, topActions } from "./shell/subnav.svelte";
+  import { setScrollport } from "./shell/scrollport.svelte";
   import {
+    CaretHost,
     HintRule,
     Icon,
     Panel,
@@ -40,13 +41,15 @@
     Tabs,
     TipHost,
     tip,
-  } from "./lib/tui";
+  } from "./tui";
 
   const nav = $derived(navItems());
 
   const view = $derived(section("chat"));
 
   const sub = $derived(subnav());
+  const acts = $derived(sub ? (topActions() ?? sub.actions) : undefined);
+  const subHidden = $derived(themeState.navHidden && themeState.subnavHidden);
 
   let wizardSkipped = $state(localStorage.getItem("tachy-skip-wizard") === "1");
   const showWizard = $derived(session.bootstrapped === false && !wizardSkipped);
@@ -61,9 +64,8 @@
     localStorage.setItem("tachy-skip-wizard", "1");
   }
 
-  let navEl = $state<HTMLElement>();
+  let topbarEl = $state<HTMLElement>();
   let mainEl = $state<HTMLElement>();
-  let navRevealed = $state(false);
   let subEl = $state<HTMLElement>();
   let windowEl = $state<HTMLElement>();
   let subH = $state(0);
@@ -97,7 +99,7 @@
    * The right end keeps the floor's inward round and a mouth that rounds
    * outward, so the window's top rule sweeps down into the recess instead of
    * stopping at a square shoulder. A CSS border cannot turn that way, which is
-   * why the outline is stroked from the same path the mask is filled from —
+   * why the outline is stroked from the same path the mask is filled from -
    * generating them separately is how a cut and the line drawn on it drift
    * apart.
    *
@@ -126,7 +128,7 @@
   }
 
   /* Measured, not guessed. The recess is cut to the bar's size and the content
-     below has to clear it — but the bar's box moves with the text size AND with
+     below has to clear it - but the bar's box moves with the text size AND with
      whichever interface font is picked, so hardcoded rems would drift out of
      true the moment someone changed either. The tokens are resolved through the
      window itself for the same reason: they stay the single source of truth. */
@@ -161,7 +163,7 @@
       const round = cssPx(host, "var(--radius)");
 
       // Open to within `reserve` of the right edge, but never tighter than the
-      // centred bar's own right edge plus its air — which is what happens on a
+      // centred bar's own right edge plus its air - which is what happens on a
       // window too narrow for both.
       const wall = Math.max(avail / 2 + w / 2 + air, avail - reserve);
       const h = h0 + air;
@@ -207,9 +209,12 @@
 
   $effect(() => setScrollport(mainEl ?? null));
 
-  $effect(() => {
-    if (!navEl || navRevealed) return;
-    wipeIn(navEl.querySelectorAll("button"), () => (navRevealed = true));
+  /* A pre effect, so the boxes are read while the bar is still where it was;
+     the tween starts once the DOM has caught up with the setting. */
+  $effect.pre(() => {
+    void themeState.navHidden;
+    const play = untrack(() => reflow([topbarEl, windowEl]));
+    void tick().then(play);
   });
 
   // Hidden: four more entries would crowd the hint rule. Settings › keybinds
@@ -306,9 +311,13 @@
   <FeedbackView />
 {:else}
   <div class="app" data-scene>
-    <div class="topbar">
+    <div
+      class="topbar"
+      class:hidden={themeState.navHidden}
+      bind:this={topbarEl}
+    >
       <div class="mark"><Wordmark /></div>
-      <div class="navbar" bind:this={navEl} class:unrevealed={!navRevealed}>
+      <div class="navbar">
         <Panel>
           <Tabs
             items={nav}
@@ -369,23 +378,33 @@
     <div
       class="window"
       bind:this={windowEl}
-      class:carved={sub}
+      class:carved={sub && !subHidden}
       style="--sub-h-raw: {subH}px; --sub-mouth: {carveW}px; --sub-mask: {carveMask}"
     >
       <!-- Rendered before the window so its hotkey scope is pushed first and
-           the view's scope stays innermost — otherwise this bar's (all hidden)
+           the view's scope stays innermost - otherwise this bar's (all hidden)
            bindings would sit on top and blank the hint rule. -->
       {#if sub}
-        <svg
-          class="notch"
-          width={carveW}
-          height={carveH}
-          viewBox="0 0 {carveW} {carveH}"
-          aria-hidden="true"
+        {#if !subHidden}
+          <svg
+            class="notch"
+            width={carveW}
+            height={carveH}
+            viewBox="0 0 {carveW} {carveH}"
+            aria-hidden="true"
+          >
+            <path d={carveOutline} />
+          </svg>
+        {/if}
+        <!-- Hidden rather than unmounted: the bar owns its tabs' shortcuts,
+             and its height still sizes the row the top actions sit in. -->
+        <div
+          class="subnav"
+          class:settling
+          class:hidden={subHidden}
+          inert={subHidden}
+          bind:this={subEl}
         >
-          <path d={carveOutline} />
-        </svg>
-        <div class="subnav" class:settling bind:this={subEl}>
           <Tabs
             items={sub.items}
             active={sub.active}
@@ -395,7 +414,6 @@
             onpick={sub.onpick}
           />
         </div>
-        {@const acts = topActions() ?? sub.actions}
         {#if acts}
           <div class="top-acts">{@render acts()}</div>
         {/if}
@@ -432,16 +450,17 @@
 {/if}
 
 <TipHost />
+<CaretHost />
 
 <style>
   /* Two objects on one centre line: a top row carrying the wordmark and the
      nav, and the window they sit above. The nav is no longer chrome bolted to
-     a document — it reads as the object you steer the document with.
+     a document - it reads as the object you steer the document with.
 
      The bottom gutter is the widest of the three: the window's lower edge is
      the one nothing else sits against, so it needs air to read as a floating
      object rather than as content jammed into the viewport. The gap is now the
-     narrowest, for the opposite reason — the nav and the subnav in the recess
+     narrowest, for the opposite reason - the nav and the subnav in the recess
      below it are one control in two registers, and reading as a pair means
      sitting closer to each other than either does to anything else. */
   /* The app blurs behind an open dialog. A filter on the scene rather than a
@@ -469,7 +488,7 @@
   }
 
   /* The cap is in px, not rem. max-width in rem multiplies by --font-scale, so
-     picking a larger text size used to widen the box itself — at 175% it filled
+     picking a larger text size used to widen the box itself - at 175% it filled
      95% of a 1920 screen. Character count per line should track the text size;
      the frame around it should not. */
   .topbar,
@@ -490,13 +509,21 @@
     min-width: 0;
   }
 
-  /* The floating surfaces let the sky through, just barely — enough that a
+  /* The floating surfaces let the sky through, just barely - enough that a
      star crossing behind them stays perceptible, not enough to cost any
      contrast against the text on top. Panels nested INSIDE keep --panel-bg
      opaque, so their inline titles still mask the rule they straddle. */
   .window > :global(section),
   .navbar :global(> section) {
     background: var(--window-bg);
+  }
+
+  /* Chat has no window: the conversation sits on the sky, inside the bounds
+     the other sections fill. The rule turns transparent rather than going
+     away, so the box keeps its size. */
+  .window:has(main > :global(.chat.bare)) > :global(section) {
+    background: transparent;
+    border-color: transparent;
   }
 
   /* Three tracks, and the outer two are equal: the pill stays on the frame's
@@ -508,14 +535,17 @@
     align-items: center;
     gap: var(--gap);
   }
+  .topbar.hidden {
+    display: none;
+  }
   .mark {
     display: flex;
     align-items: center;
     min-width: 0;
   }
 
-  /* A lone tab, styled like one of Tabs.svelte's own — same bracketed label,
-     same hover/focus behaviour — but with none of the machinery that only
+  /* A lone tab, styled like one of Tabs.svelte's own - same bracketed label,
+     same hover/focus behaviour - but with none of the machinery that only
      makes sense among siblings: no anchor-positioned indicator to slide
      between entries, since there is only ever this one. Pinned to the
      viewport's lower-left corner with its line box on the window's bottom
@@ -604,8 +634,8 @@
   .window {
     --sub-air: var(--pad-2);
     /* The air `main` keeps above and below its content. Named because a
-       sticky child cannot rise above its containing block — `main`'s content
-       box — so it pins this far down the scrollport and has to paint the
+       sticky child cannot rise above its containing block - `main`'s content
+       box - so it pins this far down the scrollport and has to paint the
        strip left over it. See .bar in LibraryView. */
     --main-air: calc(var(--fs-xs) * 0.9);
     /* Right edge to recess wall: the corner the carved row keeps for its own
@@ -648,13 +678,12 @@
     stroke-width: var(--panel-line-w);
   }
 
-  /* No box of its own — the recess is the box. A second bordered pill hung
+  /* No box of its own - the recess is the box. A second bordered pill hung
      under the nav's read as chrome about chrome; bare labels in a cut let the
      window's own edge do the framing, and cost the row a border and two steps
-     of padding on the way. Its padding is what the Panel used to supply, so
-     the labels still clear the recess floor.
+     of padding on the way.
 
-     Centred on the window's centre line — the same one the nav pill sits on,
+     Centred on the window's centre line - the same one the nav pill sits on,
      so the two stack. */
   .subnav {
     position: absolute;
@@ -662,9 +691,20 @@
     left: 50%;
     transform: translateX(-50%);
     z-index: 2;
-    padding: var(--pad-2) var(--pad-3);
+    /* No block padding: --sub-air already clears the labels off the recess
+       floor. The floor is the least the corner needs to fit a full-height
+       control, and what a section with no tabs is cut to. */
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    min-height: var(--row-h);
+    padding: 0 var(--pad-3);
   }
-  /* The window's own top row, right of the recess — space the carve opens up
+  .subnav.hidden {
+    opacity: 0;
+  }
+
+  /* The window's own top row, right of the recess - space the carve opens up
      and nothing else was using. Aligned to the Panel's content edge so it
      reads as part of the page, and capped short of the recess mouth so it can
      never collide with it. */
@@ -676,7 +716,7 @@
     /* The band down to where page content actually starts, not down to the
        recess floor. `.shell` clears the floor by another --sub-air and the
        Panel's own rule sits above that, so a row the depth of the recess
-       centres too high — six pixels of air above it against fourteen below,
+       centres too high - six pixels of air above it against fourteen below,
        which reads as pinned to the top edge rather than centred in the row. */
     height: calc(var(--sub-depth) + var(--sub-air) + var(--panel-line-w));
     /* Sized to the corner rather than to its contents, so the row centres in
@@ -722,15 +762,10 @@
     );
   }
 
-  /* Wiped out until the GSAP reveal takes over (its inline clip-path wins).
-     The tab indicator is anchored to a layout box, which exists from the first
-     frame — so it has to be held back too, or it draws under a label that has
-     not wiped in yet. */
-  .navbar.unrevealed :global(button) {
-    clip-path: inset(0 100% 0 0);
-  }
-  .navbar.unrevealed :global(.tabs::before) {
-    opacity: 0;
+  /* With the bar hidden the row is kept only for the top actions, and only
+     while a view has put some there. */
+  .window:has(.subnav.hidden):not(:has(.top-acts > :global(*))) .shell {
+    padding-top: 0;
   }
 
   .content {
@@ -760,11 +795,11 @@
     user-select: none;
   }
 
-  /* Native bar hidden — the drawn scrollbar beside it takes over.
+  /* Native bar hidden - the drawn scrollbar beside it takes over.
      The block padding is not cosmetic: a Panel's title and hint straddle its
      own rule at translateY(±50%), so half of each sits OUTSIDE the panel. A
      titled panel flush against this scroll box lost the top half of its label
-     to `overflow: auto` — visible on admin, whose pages open straight onto
+     to `overflow: auto` - visible on admin, whose pages open straight onto
      one. Half a label's line box is the clearance that costs. */
   main {
     flex: 1;
@@ -802,7 +837,7 @@
 
   /* Its own top spacing rather than a gap on .shell, so that when the row has
      nothing to print it takes up nothing at all. Almost every scope now marks
-     its bindings hidden — Settings › keybinds is the discovery surface — so a
+     its bindings hidden - Settings › keybinds is the discovery surface - so a
      permanently reserved row was a dead band above the window's lower edge on
      every view. */
   .hintrow {

@@ -39,6 +39,12 @@ export function defineCodeJobs() {
     params: z.object({
       repo: z.string().min(1),
       line: z.string().min(1).optional(),
+      full: z
+        .boolean()
+        .optional()
+        .describe(
+          "Cut and embed every file again, not only what changed. For after a change of chunk size or embedding model.",
+        ),
     }),
     queue: "index",
     dedupeKey: (p) => p.repo,
@@ -47,6 +53,7 @@ export function defineCodeJobs() {
       ctx.log(`indexing ${p.repo}${p.line ? ` ${p.line}` : ""}`);
       const res = await indexRepo(p.repo, {
         line: p.line,
+        full: p.full,
         token: await repoToken(p.repo, ctx.requestedBy),
         signal: ctx.signal,
         onProgress: (done, total, ref, at) =>
@@ -66,6 +73,12 @@ export function defineCodeJobs() {
       "Queues a reindex of each linked repository not being indexed already, as runs of their own under this one. With scope 'indexed' (the nightly default) it skips repositories never indexed, which wait for someone to index them; 'all' takes those too. A repo with no new commits costs a fetch and a tree diff.",
     params: z.object({
       scope: z.enum(["indexed", "all"]).default("indexed"),
+      full: z
+        .boolean()
+        .optional()
+        .describe(
+          "Cut and embed every file of every repository again. For after a change of chunk size or embedding model; takes as long as the first index did.",
+        ),
     }),
     defaultSchedule: "40 2 * * *",
     dedupeKey: () => "all",
@@ -85,7 +98,13 @@ export function defineCodeJobs() {
           neverIndexed++;
           continue;
         }
-        if (await ctx.enqueue("repo.reindex", { repo: repo.slug })) queued++;
+        if (
+          await ctx.enqueue("repo.reindex", {
+            repo: repo.slug,
+            ...(p.full ? { full: true } : {}),
+          })
+        )
+          queued++;
         else skipped++;
       }
       ctx.log(

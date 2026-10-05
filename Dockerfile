@@ -14,9 +14,8 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# node:24-slim ships npm 11.x. Pin the version explicitly so the image does not
-# drift with the base image, and so it matches what the lockfile is maintained
-# with locally.
+# Pinned so the image's npm does not drift with the base image, and matches
+# what the lockfile is maintained with locally.
 RUN npm i -g npm@12.0.2
 
 # k6, for the load runs an admin starts from the tests page (§11.3).
@@ -46,10 +45,10 @@ RUN npm ci
 
 # Pre-download the embedding model at build time so a freshly pulled container
 # doesn't need network access (or a multi-second stall) on its first embed.
-# Ahead of `COPY . .` and given only the two files it reads, so an ordinary
+# Ahead of `COPY . .` and given only the files it reads, so an ordinary
 # source change reuses the download instead of refetching it from HuggingFace.
 ENV TACHY_MODEL_CACHE=/app/.model-cache
-COPY packages/core/src/search/model.ts packages/core/src/search/model.ts
+COPY packages/core/src/search/model.ts packages/core/src/search/threads.ts packages/core/src/search/
 COPY scripts/warmup-embeddings.ts scripts/warmup-embeddings.ts
 RUN npx tsx scripts/warmup-embeddings.ts
 
@@ -95,14 +94,14 @@ RUN npm pkg set scripts.api="node dist/api.js" scripts.sync="node dist/cli.js" s
 ENV TACHY_MODEL_CACHE=/app/.model-cache
 ENV TACHY_MCP_ARGS=dist/mcp.js
 
-# Linked-repo clones for code search live here — mount a volume to keep them
+# Linked-repo clones for code search live here - mount a volume to keep them
 # across redeploys (otherwise the first reindex re-clones, which is fine too).
 ENV TACHY_REPO_DIR=/app/data/repos
 ENV TACHY_AGENT_HOME=/home/node/.claude
 
-# node:24-slim already carries an unprivileged `node` (uid 1000). Everything the
+# The base image already carries an unprivileged `node` (uid 1000). Everything the
 # server writes at runtime is created and handed over here, because Docker only
-# chowns a named volume it creates itself — an existing one keeps the ownership
+# chowns a named volume it creates itself - an existing one keeps the ownership
 # it was populated with. See README > Operations for the one-time chown an
 # already-running deployment needs.
 RUN mkdir -p /app/data/repos /app/backups /home/node/.claude \

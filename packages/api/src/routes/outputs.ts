@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { getOutput, listOutputs, deleteOutput } from "@tachy/core";
+import { getOutput, listOutputs, deleteOutput } from "@tachy/core/exports";
 import { requireCaller } from "../authz";
 
 /** RFC 5987, so a filename with non-ASCII survives the header. */

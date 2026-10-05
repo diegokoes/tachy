@@ -1,0 +1,81 @@
+import { api } from "../api";
+import { navigate } from "../shell/router.svelte";
+import type { ProductRow } from "@tachy/contract";
+import { libraryItemPath, ORG_WIDE } from "./paths";
+
+export interface OutboundLink {
+  target: string;
+  to_doc_id: string | null;
+  to_entry_id: string | null;
+  to_slug: string | null;
+  to_kind: string | null;
+  to_product_id: string | null;
+}
+
+/**
+ * Where each `[[target]]` in one body actually points, and a click handler that
+ * follows it. Shared by the article, doc and entry views.
+ *
+ * Destinations come from what the SERVER resolved, not from re-deriving them in
+ * the browser: link resolution is scoped (a product's wiki first, then the
+ * org-wide one), and a client guessing at that scope would send readers to the
+ * wrong article whenever the two disagree.
+ */
+export class LinkTargets {
+  /** Targets that resolved; anything else renders as a broken link. */
+  resolved = $state<Set<string>>(new Set());
+  private to = new Map<string, string>();
+
+  async load(base: "knowledge" | "reference", id: string): Promise<void> {
+    try {
+      const [{ outbound }, products] = await Promise.all([
+        api.get<{ outbound: OutboundLink[] }>(`/${base}/${id}/links`),
+        api.get<ProductRow[]>("/products").catch(() => [] as ProductRow[]),
+      ]);
+      const scopeOf = (productId: string | null) =>
+        products.find((p) => p.id === productId)?.slug ?? ORG_WIDE;
+
+      const next = new Set<string>();
+      this.to.clear();
+      for (const l of outbound) {
+        const path = libraryItemPath({
+          entryId: l.to_entry_id,
+          docId: l.to_doc_id,
+          kind: l.to_kind,
+          slug: l.to_slug,
+          scope: scopeOf(l.to_product_id),
+        });
+        if (!path) continue;
+        next.add(l.target);
+        this.to.set(l.target, path);
+      }
+      this.resolved = next;
+    } catch {
+      this.resolved = new Set();
+      this.to.clear();
+    }
+  }
+
+  /**
+   * One delegated handler rather than one per link: the body is injected with
+   * {@html}, so there are no components to attach listeners to.
+   */
+  onClick = (e: MouseEvent): void => {
+    this.follow(e.target, e);
+  };
+
+  /** Enter and Space, so a wikilink is followable without a pointer. */
+  onKeydown = (e: KeyboardEvent): void => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    this.follow(e.target, e);
+  };
+
+  private follow(from: EventTarget | null, e: Event): void {
+    const el = (from as HTMLElement)?.closest?.("a[data-wikilink]");
+    const target = el?.getAttribute("data-wikilink");
+    if (!target) return;
+    e.preventDefault();
+    const to = this.to.get(target);
+    if (to) navigate(to);
+  }
+}

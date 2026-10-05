@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { createSequence } from "../../packages/web/src/lib/resource.svelte";
+import { createSequence } from "../../packages/web/src/resource.svelte";
 
 /**
  * The guard the hand-written views use instead of `createResource`. What it
  * protects against is a slow response landing after a fast one that was asked
- * for later — navigating A → B, where A's fetch finishes second and puts A back
+ * for later - navigating A → B, where A's fetch finishes second and puts A back
  * on screen.
  */
 describe("createSequence", () => {

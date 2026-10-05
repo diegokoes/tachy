@@ -7,7 +7,12 @@ import {
   embedQueryLiteral,
   toVectorLiteral,
 } from "../search/embeddings";
-import { writeEmbeddings } from "../search/backfill";
+import {
+  currentVector,
+  needsVector,
+  writeEmbeddings,
+} from "../search/backfill";
+import { EMBEDDING_MODEL } from "../search/model";
 import {
   CANDIDATES,
   clampLimit,
@@ -129,8 +134,8 @@ async function insertChunks(
 ): Promise<number> {
   if (!v.chunks.length) return 0;
   await db`
-    insert into reference_doc_chunks (doc_id, ordinal, chunk_text, embedding)
-    select ${docId}, u.ordinal, u.chunk_text, u.embedding::vector
+    insert into reference_doc_chunks (doc_id, ordinal, chunk_text, embedding, embedding_model)
+    select ${docId}, u.ordinal, u.chunk_text, u.embedding::vector, ${EMBEDDING_MODEL}
     from unnest(${v.ordinals}::int[], ${v.chunks}::text[], ${v.literals}::text[])
       as u(ordinal, chunk_text, embedding)
   `;
@@ -138,7 +143,7 @@ async function insertChunks(
 }
 
 /**
- * The live doc for an imported page — an *Azure DevOps* wiki page — so a
+ * The live doc for an imported page - an *Azure DevOps* wiki page - so a
  * re-import supersedes instead of duplicating. Nothing to do with kind='wiki',
  * which means an article authored here.
  */
@@ -444,7 +449,7 @@ export interface ReferenceSearchOptions {
   productId?: string;
   teamId?: string;
   /** Also match docs with NO product/team (org-wide) when a scope filter is
-   *  set — for agent consults, where global runbooks still apply. */
+   *  set - for agent consults, where global runbooks still apply. */
   includeUnscoped?: boolean;
   tags?: string[];
   componentId?: string;
@@ -458,8 +463,8 @@ export interface ReferenceSearchOptions {
   boostCustomerId?: string;
   /**
    * Narrow to imported docs or to wiki articles. Unlike the list, search spans
-   * BOTH by default: a curated article should be findable beside — and able to
-   * outrank — the material it consolidates.
+   * BOTH by default: a curated article should be findable beside - and able to
+   * outrank - the material it consolidates.
    */
   kind?: string;
 }
@@ -493,7 +498,7 @@ export async function searchReferenceDocs(
              1 - (c.embedding <=> ${qvec}::vector) as cos_sim
       from reference_doc_chunks c
       join reference_docs d on d.id = c.doc_id
-      where ${filters} and c.embedding is not null
+      where ${filters} and c.embedding is not null and ${currentVector("c")}
         and 1 - (c.embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
       order by c.embedding <=> ${qvec}::vector
       limit ${CANDIDATES}
@@ -549,7 +554,7 @@ export async function searchReferenceDocs(
 }
 
 /**
- * Re-embed reference chunks. `all: true` rebuilds every vector — required after
+ * Re-embed reference chunks. `all: true` rebuilds every vector - required after
  * a model change, since vectors from two models share no space.
  */
 export async function backfillReferenceEmbeddings(
@@ -557,7 +562,7 @@ export async function backfillReferenceEmbeddings(
 ): Promise<number> {
   const rows = await sql`
     select id, chunk_text from reference_doc_chunks
-    ${opts.all ? sql`` : sql`where embedding is null`}
+    ${opts.all ? sql`` : sql`where ${needsVector()}`}
     order by doc_id, ordinal
   `;
   return writeEmbeddings(

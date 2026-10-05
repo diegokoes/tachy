@@ -1,4 +1,4 @@
-import type { RawWorkItem } from "../types";
+import type { RawWorkItem } from "./raw";
 
 const REF_PATTERNS = [
   /\bAB#(\d+)/g,
