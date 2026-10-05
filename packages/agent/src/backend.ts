@@ -50,9 +50,10 @@ export interface AgentConfig {
   systemPrompt: string;
 
   /**
-   * Per-user Claude Code state directory (credentials, session transcripts).
-   * Must be stable for a user across turns: a fresh directory mints a new
-   * machine identity and orphans the transcripts that `resume` needs.
+   * Per-user state directory: Claude Code's credentials and transcripts, and
+   * the Copilot runtime's session state under `copilot/`. Must be stable for a
+   * user across turns: a fresh directory mints a new machine identity and
+   * orphans what `resume` needs.
    */
   configDir?: string;
 

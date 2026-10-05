@@ -36,6 +36,12 @@ export async function saveUpload(i: {
 }
 
 /**
+ * What a turn with no user behind it passes as its owner. It reads the uploads
+ * nobody owns, which are the ones such a turn can have made.
+ */
+export const ANONYMOUS_UPLOADS = "_anonymous";
+
+/**
  * The bytes behind a reference. With an owner, only that user's uploads
  * resolve: a turn's MCP child cannot read another person's attachment even
  * with its reference.
@@ -49,10 +55,12 @@ export async function readUpload(
     throw badInput(
       `'${ref}' is not an uploaded file; only chat attachments can be read`,
     );
+  const anonymous = owner === ANONYMOUS_UPLOADS;
   const [row] = await sql`
     select filename, bytes from chat_uploads
     where id = ${parsed.id} and expires_at > now()
-      and (${owner ?? null}::uuid is null or user_id = ${owner ?? null})
+      and (${owner === undefined}
+           or user_id is not distinct from ${anonymous ? null : (owner ?? null)}::uuid)
   `;
   if (!row)
     throw badInput(

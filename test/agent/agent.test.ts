@@ -6,17 +6,20 @@ import {
   claudePermission,
   claudeEnv,
   claudeOptions,
+  copilotHome,
   copilotPermission,
   copilotSessionConfig,
   effectiveModel,
   explainFailure,
+  userStateDir,
   READ_TOOLS,
   WRITE_TOOLS,
   CONDITIONAL_WRITES,
   type AgentConfig,
   type Decision,
 } from "../../packages/agent/src/index";
-import { readFileSync, readdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { AsyncQueue } from "../../packages/agent/src/queue";
@@ -540,6 +543,26 @@ describe("what each backend reads", () => {
       tools?: string[];
     };
     expect(mcp.tools).toEqual(["*"]);
+  });
+});
+
+describe("where the Copilot runtime keeps its state", () => {
+  it("is the caller's state directory, never ~/.copilot", async () => {
+    const home = mkdtempSync(join(tmpdir(), "tachy-agent-"));
+    process.env.TACHY_AGENT_HOME = home;
+    try {
+      expect(userStateDir("u1")).toBe(join(home, "users", "u1"));
+      expect(userStateDir(null)).toBe(join(home, "users", "_default"));
+
+      const mine = await copilotHome(userStateDir("u1"));
+      expect(mine).toBe(join(home, "users", "u1", "copilot"));
+      expect(readdirSync(join(home, "users", "u1"))).toEqual(["copilot"]);
+      expect(await copilotHome()).toBe(
+        join(home, "users", "_default", "copilot"),
+      );
+    } finally {
+      delete process.env.TACHY_AGENT_HOME;
+    }
   });
 });
 

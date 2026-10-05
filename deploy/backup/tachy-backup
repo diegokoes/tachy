@@ -55,10 +55,11 @@ table_counts() {
 }
 
 null_embeddings() {
-  "$@" "select format('knowledge=%s reference_chunks=%s code_chunks=%s',
+  "$@" "select format('knowledge=%s reference_chunks=%s code_chunks=%s bucket_chunks=%s',
       (select count(*) from knowledge_entries where embedding is null),
       (select count(*) from reference_doc_chunks where embedding is null),
-      (select count(*) from code_chunks where embedding is null))"
+      (select count(*) from code_blob_chunks where embedding is null),
+      (select count(*) from bucket_doc_chunks where embedding is null))"
 }
 
 # restore_test <dump>: restores into a throwaway Postgres with no network and
@@ -68,6 +69,7 @@ restore_test() {
   local problems=()
   started=$(date +%s)
   docker run -d --rm --name "$name" --network none --shm-size 1g \
+    --memory "${TACHY_RESTORE_MEM_LIMIT:-1g}" \
     -e POSTGRES_PASSWORD=restore-test -e POSTGRES_DB=tachy "$PG_IMAGE" >/dev/null
   for _ in $(seq 60); do
     docker exec "$name" pg_isready -U postgres -d tachy >/dev/null 2>&1 && break
