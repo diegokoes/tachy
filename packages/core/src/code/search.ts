@@ -6,9 +6,11 @@ import {
   CANDIDATES,
   clampLimit,
   fusedCte,
+  RRF_K,
   withSearchSession,
 } from "../search/rank";
-import { SEM_FLOOR, withRelevance } from "../search/relevance";
+import { currentVector } from "../search/backfill";
+import { CODE_SEM_FLOOR, withRelevance } from "../search/relevance";
 import { getRepoBySlug, getRepoLine } from "./repos";
 import { readBlob, readFileAt, resolveRef } from "./git";
 import { resolveVersion } from "./versions";
@@ -39,6 +41,30 @@ export interface CodeSearchOptions {
 }
 
 const GRADE_ORDER: Record<string, number> = { strong: 0, good: 1, weak: 2 };
+
+/**
+ * What defining the thing asked for is worth: as much as coming first in a leg
+ * of its own. Rank fusion rewards agreement between legs, and a definition
+ * often shows in one leg only, since a component's file never says its own
+ * name, while every file that mentions it shows in two.
+ */
+const DEFINES_BOOST = 1 / (RRF_K + 1);
+
+/**
+ * Chunks one file may put among a leg's candidates, and on a page. A long
+ * document that repeats a name otherwise fills both by itself.
+ */
+const PER_FILE = 2;
+
+/** How far past its candidates the vector leg reads to find them in enough files. */
+const NEAREST = 4;
+
+/**
+ * Weights of the lexemes in search_tsv, D to A: the body, then the names a
+ * chunk defines. A body has to repeat a name dozens of times to weigh what
+ * one definition does.
+ */
+const LEX_WEIGHTS = "{0.02, 0.2, 0.4, 1.0}";
 
 export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
   if (!query.trim()) return [];
@@ -93,53 +119,111 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
         }
       order by r.id, coalesce(${minor ? sql`${lineMinor} = ${minor}` : sql`false`}, false) desc
     ),
+    -- In every leg a file contributes its best chunks only. A long document
+    -- that repeats a name otherwise takes all the candidate places, and the
+    -- file that defines the name never reaches the fusion.
     vec as (
-      select c.id,
-             row_number() over (order by c.embedding <=> ${qvec}::vector) as rnk,
-             1 - (c.embedding <=> ${qvec}::vector) as cos_sim
-      from code_blob_chunks c
-      where c.embedding is not null
-        and 1 - (c.embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
-        and ${holds}
-      order by c.embedding <=> ${qvec}::vector
+      select id, row_number() over (order by dist, id) as rnk, 1 - dist as cos_sim
+      from (
+        select n.id, n.dist,
+               row_number() over (partition by n.repo_id, n.blob_sha order by n.dist) as nth
+        from (
+          select c.id, c.repo_id, c.blob_sha, c.embedding <=> ${qvec}::vector as dist
+          from code_blob_chunks c
+          where c.embedding is not null and ${currentVector("c")}
+            and 1 - (c.embedding <=> ${qvec}::vector) >= ${CODE_SEM_FLOOR}
+            and ${holds}
+          order by c.embedding <=> ${qvec}::vector
+          limit ${CANDIDATES * NEAREST}
+        ) n
+      ) x
+      where nth <= ${PER_FILE}
+      order by dist, id
       limit ${CANDIDATES}
     ),
-    -- Code has no tsvector; identifiers are what the trigram leg is for, so the
-    -- lexical slot stays empty rather than pretending otherwise.
-    lex as (select null::uuid as id, 0::bigint as rnk, 0::float as fts_rank where false),
+    -- Every word of the query, as a whole word or as part of an identifier.
+    -- The second query is the same words against the symbols alone: the
+    -- lexemes weighted A, which are the names a chunk defines.
+    words as (
+      select q, regexp_replace(q::text, $re$'( |$)$re$, $to$':A\\1$to$, 'g')::tsquery as defines
+      from (select websearch_to_tsquery('simple', tachy_code_words(${query})) as q) x
+    ),
+    lex as (
+      select id, row_number() over (order by score desc, id) as rnk, score as fts_rank
+      from (
+        select c.id, k.score,
+               row_number() over (
+                 partition by c.repo_id, c.blob_sha order by k.score desc, c.ordinal
+               ) as nth
+        from code_blob_chunks c, words w,
+             lateral (select ts_rank_cd(${LEX_WEIGHTS}::float4[], c.search_tsv, w.q) as score) k
+        where c.search_tsv @@ w.q and ${holds}
+      ) x
+      where nth <= ${PER_FILE}
+      order by score desc, id
+      limit ${CANDIDATES}
+    ),
+    -- An identifier scores the same in every chunk that contains it, so the
+    -- lexical score settles the tie; left alone the order is arbitrary.
     fuzzy as (
-      select c.id,
-             row_number() over (order by word_similarity(${query}, c.chunk_text) desc) as rnk,
-             word_similarity(${query}, c.chunk_text) as trgm_sim
-      from code_blob_chunks c
-      where ${query} <% c.chunk_text and ${holds}
-      order by word_similarity(${query}, c.chunk_text) desc
+      select id, row_number() over (order by sim desc, score desc, id) as rnk, sim as trgm_sim
+      from (
+        select c.id, k.sim, k.score,
+               row_number() over (
+                 partition by c.repo_id, c.blob_sha
+                 order by k.sim desc, k.score desc, c.ordinal
+               ) as nth
+        from code_blob_chunks c, words w,
+             lateral (
+               select word_similarity(${query}, c.chunk_text) as sim,
+                      ts_rank_cd(${LEX_WEIGHTS}::float4[], c.search_tsv, w.q) as score
+             ) k
+        where ${query} <% c.chunk_text and ${holds}
+      ) x
+      where nth <= ${PER_FILE}
+      order by sim desc, score desc, id
       limit ${CANDIDATES}
     ),
-    ${fusedCte()}
+    ${fusedCte()},
+    scored as (
+      select fu.id, fu.cos_sim, fu.fts_rank, fu.trgm_sim,
+             fu.rrf + case when numnode(w.defines) > 0 and c.search_tsv @@ w.defines
+                           then ${DEFINES_BOOST}::float8 else 0::float8 end as rrf
+      from fused fu
+      join code_blob_chunks c on c.id = fu.id, words w
+    ),
+    placed as (
+      select s.*, f.path, f.lang, f.line_id,
+             row_number() over (
+               partition by c.repo_id, f.path order by s.rrf desc, c.start_line
+             ) as nth_in_file
+      from scored s
+      join code_blob_chunks c on c.id = s.id
+      join lateral (
+        select f.path, f.lang, f.line_id
+        from repo_line_files f
+        join target_lines tl on tl.id = f.line_id
+        where f.repo_id = c.repo_id and f.blob_sha = c.blob_sha ${prefix}
+        order by f.path
+        limit 1
+      ) f on true
+    )
     select r.slug as repo_slug, comp.slug as component_slug, cu.slug as customer_slug,
            l.ref as line, l.version_label, l.index_status,
-           f.path, f.lang, c.start_line, c.end_line,
+           p.path, p.lang, c.start_line, c.end_line,
            left(c.chunk_text, 1200) as snippet,
-           fu.cos_sim, fu.fts_rank, fu.trgm_sim, fu.rrf,
+           p.cos_sim, p.fts_rank, p.trgm_sim, p.rrf,
            coalesce(l.indexing_commit, l.indexed_commit) as commit,
            l.last_indexed_at,
            extract(day from now() - l.last_indexed_at)::int as indexed_days_ago
-    from fused fu
-    join code_blob_chunks c on c.id = fu.id
+    from placed p
+    join code_blob_chunks c on c.id = p.id
     join repos r on r.id = c.repo_id
-    join lateral (
-      select f.path, f.lang, f.line_id
-      from repo_line_files f
-      join target_lines tl on tl.id = f.line_id
-      where f.repo_id = c.repo_id and f.blob_sha = c.blob_sha ${prefix}
-      order by f.path
-      limit 1
-    ) f on true
-    join repo_lines l on l.id = f.line_id
+    join repo_lines l on l.id = p.line_id
     left join components comp on comp.id = r.component_id
     left join customers cu on cu.id = r.customer_id
-    order by fu.rrf desc, f.path, c.start_line
+    where p.nth_in_file <= ${PER_FILE}
+    order by p.rrf desc, p.path, c.start_line
     limit ${limit}
   `,
   );

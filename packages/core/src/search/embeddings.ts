@@ -69,7 +69,11 @@ function httpBackend(url: string, secret: string): EmbedBackend {
 function defaultBackend(): EmbedBackend {
   const url = process.env.TACHY_EMBED_URL;
   if (url) return httpBackend(url, process.env.TACHY_INTERNAL_SECRET ?? "");
-  const local = new EmbedQueue(runModel);
+  const local = new EmbedQueue(runModel, {
+    passageBatch: 8,
+    queryBatch: 32,
+    passageChars: EMBEDDING_SPEC.batchChars,
+  });
   return (kind, texts, caller, priority) =>
     local.embed(kind, texts, caller, priority);
 }

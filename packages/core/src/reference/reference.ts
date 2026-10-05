@@ -7,7 +7,12 @@ import {
   embedQueryLiteral,
   toVectorLiteral,
 } from "../search/embeddings";
-import { writeEmbeddings } from "../search/backfill";
+import {
+  currentVector,
+  needsVector,
+  writeEmbeddings,
+} from "../search/backfill";
+import { EMBEDDING_MODEL } from "../search/model";
 import {
   CANDIDATES,
   clampLimit,
@@ -129,8 +134,8 @@ async function insertChunks(
 ): Promise<number> {
   if (!v.chunks.length) return 0;
   await db`
-    insert into reference_doc_chunks (doc_id, ordinal, chunk_text, embedding)
-    select ${docId}, u.ordinal, u.chunk_text, u.embedding::vector
+    insert into reference_doc_chunks (doc_id, ordinal, chunk_text, embedding, embedding_model)
+    select ${docId}, u.ordinal, u.chunk_text, u.embedding::vector, ${EMBEDDING_MODEL}
     from unnest(${v.ordinals}::int[], ${v.chunks}::text[], ${v.literals}::text[])
       as u(ordinal, chunk_text, embedding)
   `;
@@ -493,7 +498,7 @@ export async function searchReferenceDocs(
              1 - (c.embedding <=> ${qvec}::vector) as cos_sim
       from reference_doc_chunks c
       join reference_docs d on d.id = c.doc_id
-      where ${filters} and c.embedding is not null
+      where ${filters} and c.embedding is not null and ${currentVector("c")}
         and 1 - (c.embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
       order by c.embedding <=> ${qvec}::vector
       limit ${CANDIDATES}
@@ -557,7 +562,7 @@ export async function backfillReferenceEmbeddings(
 ): Promise<number> {
   const rows = await sql`
     select id, chunk_text from reference_doc_chunks
-    ${opts.all ? sql`` : sql`where embedding is null`}
+    ${opts.all ? sql`` : sql`where ${needsVector()}`}
     order by doc_id, ordinal
   `;
   return writeEmbeddings(
