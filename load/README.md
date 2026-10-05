@@ -138,7 +138,7 @@ docker compose run --rm cli npm run sync -- seed --scale=medium --reset --yes --
 ```
 
 `--embed=search` embeds what a search reads: knowledge entries and reference
-chunks. `--embed` (or `--embed=all`) adds `code_chunks`, which no scenario here
+chunks. `--embed` (or `--embed=all`) adds `code_blob_chunks`, which no scenario here
 touches and which is most of the cost - measured on a 20-core workstation the
 model manages roughly 33 knowledge entries, 25 reference chunks or 20 code
 chunks a second, so at `--scale=large` that is about 23 minutes for `search`

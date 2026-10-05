@@ -74,7 +74,7 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     ["users", "role", USER_ROLES],
     ["team_members", "role", TEAM_ROLES],
     ["work_item_links", "kind", WORK_ITEM_LINK_KINDS],
-    ["repos", "index_status", REPO_INDEX_STATUSES],
+    ["repo_lines", "index_status", REPO_INDEX_STATUSES],
     ["credentials", "scope", scopesOf("credentials")],
     ["preferences", "scope", scopesOf("preferences")],
     ["artifacts", "scope", scopesOf("artifacts")],
