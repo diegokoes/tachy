@@ -110,6 +110,13 @@ describe("Admin > System runtime", () => {
     });
     expect(runtime.postgres.max).toBeGreaterThan(0);
     expect(runtime.postgres.byProcess.length).toBeGreaterThan(0);
+    expect(runtime.jobs).toEqual({
+      overdue: 0,
+      failing: 0,
+      disabled: 0,
+      stuck: 0,
+      no_worker: 0,
+    });
     expect(runtime.status).toEqual({
       backup: { ok: true, at: "2026-09-17T06:00:00Z" },
       broken: { error: "unreadable" },

@@ -20,6 +20,8 @@ import {
   sweepTranscripts,
 } from "@tachy/core/compliance";
 import { saveAsset } from "@tachy/core/library";
+import { sweepFlowRuns } from "@tachy/core/flows";
+import { sweepNotifications } from "@tachy/core/notifications";
 import { resetData, sql, resetJobs } from "../database";
 
 afterAll(() => sql.end());
@@ -158,6 +160,42 @@ describe("retention", () => {
       [null, 4],
       [u.id, 1],
     ]);
+  });
+
+  it("deletes flow runs after 90 days, failed ones after 180, and never a running one", async () => {
+    const [flow] =
+      await sql`insert into flows (name) values ('f') returning id`;
+    const run = (status: string, days: number) =>
+      sql`insert into flow_runs (flow_id, status, started_at, finished_at)
+          values (${flow.id}, ${status}, now() - make_interval(days => ${days}),
+                  ${status === "running" ? null : sql`now() - make_interval(days => ${days})`})`;
+    await run("succeeded", 91);
+    await run("succeeded", 89);
+    await run("failed", 91);
+    await run("failed", 181);
+    await run("running", 200);
+    expect(await sweepFlowRuns()).toBe(2);
+    const left = await sql`select status from flow_runs order by started_at`;
+    expect(left.map((r) => r.status)).toEqual([
+      "running",
+      "failed",
+      "succeeded",
+    ]);
+  });
+
+  it("deletes notifications 90 days after they were opened, 180 if never", async () => {
+    const u = await createUser({ email: "notified@example.com" });
+    const note = (title: string, days: number, read: boolean) =>
+      sql`insert into notifications (user_id, kind, title, created_at, read_at)
+          values (${u.id}, 'report_reply', ${title}, now() - make_interval(days => ${days}),
+                  ${read ? sql`now()` : null})`;
+    await note("read, old", 91, true);
+    await note("read, recent", 89, true);
+    await note("unread, old", 91, false);
+    await note("unread, very old", 181, false);
+    expect(await sweepNotifications()).toBe(2);
+    const left = await sql`select title from notifications order by created_at`;
+    expect(left.map((r) => r.title)).toEqual(["unread, old", "read, recent"]);
   });
 
   it("deletes transcripts past their age and keeps recent ones", async () => {

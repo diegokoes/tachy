@@ -501,6 +501,24 @@ describe("the scheduler", () => {
     expect(runs[0].trigger).toBe("schedule");
   });
 
+  it("reports a schedule nothing queued, until a scheduler catches up", async () => {
+    const d = await createJobDefinition(
+      { kind: "test.echo", name: "every 5", schedule: "*/5 * * * *" },
+      null,
+    );
+    await createJobDefinition({ kind: "test.echo", name: "unscheduled" }, null);
+    expect((await jobIssues())["jobs.overdue"]).toEqual({ n: 0, items: [] });
+
+    await sql`update job_definitions set last_scheduled_for = ${minutesAgo(60)} where id = ${d.id}`;
+    expect((await jobIssues())["jobs.overdue"]).toEqual({
+      n: 1,
+      items: [{ key: d.id, label: "every 5" }],
+    });
+
+    await scheduleDueRuns();
+    expect((await jobIssues())["jobs.overdue"].n).toBe(0);
+  });
+
   it("runs once for everything missed during downtime, or skips it", async () => {
     const once = await createJobDefinition(
       { kind: "test.echo", name: "missed once", schedule: "*/5 * * * *" },

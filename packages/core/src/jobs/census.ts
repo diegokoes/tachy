@@ -200,6 +200,39 @@ export async function jobCensus(
   };
 }
 
+/** A slot this long past with no run queued for it means nothing is scheduling. */
+const OVERDUE_MS = 5 * 60_000;
+
+/**
+ * Schedules whose slot came and went with nobody to queue it. Every worker
+ * schedules, so this is what a host with no worker running looks like: no run
+ * waits in a queue, and no run fails.
+ */
+export async function overdueSchedules(
+  now = new Date(),
+): Promise<{ key: string; label: string }[]> {
+  const defs = await sql`
+    select id, name, kind, schedule, timezone,
+           coalesce(last_scheduled_for, created_at) as anchor
+    from job_definitions
+    where enabled and schedule is not null
+    order by name
+  `;
+  return defs
+    .filter((d) => {
+      if (!hasJobKind(d.kind)) return false;
+      try {
+        const slot = new Cron(d.schedule, { timezone: d.timezone }).nextRun(
+          new Date(d.anchor),
+        );
+        return !!slot && now.getTime() - slot.getTime() > OVERDUE_MS;
+      } catch {
+        return false;
+      }
+    })
+    .map((d) => ({ key: d.id as string, label: d.name as string }));
+}
+
 /** Definitions that need a hand, for the admin issues list. */
 export async function jobIssues(): Promise<Record<string, IssueList>> {
   const failing = await sql`
@@ -226,7 +259,12 @@ export async function jobIssues(): Promise<Record<string, IssueList>> {
     order by r.created_at limit ${ISSUE_ITEMS}
   `;
   const unserved = await unservedQueues();
+  const overdue = await overdueSchedules();
   return {
+    "jobs.overdue": {
+      n: overdue.length,
+      items: overdue.slice(0, ISSUE_ITEMS),
+    },
     "jobs.failing": issueList(failing),
     "jobs.disabled": issueList(disabled),
     "jobs.stuck": issueList(stuck),

@@ -20,6 +20,7 @@ import {
 } from "@tachy/core/access";
 import { env, log } from "@tachy/core/infra";
 import { type UserRole } from "@tachy/core";
+import { failureThrottle } from "./throttle";
 
 export interface OidcConfig {
   issuer: string;
@@ -114,37 +115,7 @@ export function markBootstrapped(): void {
   bootstrappedCache = true;
 }
 
-/**
- * Keyed on an address the caller chose, so it is only a throttle if it is also
- * bounded: without the sweep, failed logins against made-up addresses grow it
- * for as long as the process runs.
- */
-const failures = new Map<string, { count: number; resetAt: number }>();
-const MAX_TRACKED_FAILURES = 10_000;
-
-function throttled(email: string): boolean {
-  const f = failures.get(email);
-  return !!f && f.resetAt > Date.now() && f.count >= 5;
-}
-
-function recordFailure(email: string): void {
-  const f = failures.get(email);
-  if (!f || f.resetAt < Date.now())
-    failures.set(email, { count: 1, resetAt: Date.now() + 60_000 });
-  else f.count++;
-
-  if (failures.size > MAX_TRACKED_FAILURES) {
-    const now = Date.now();
-    for (const [k, v] of failures) if (v.resetAt < now) failures.delete(k);
-    // Still full means every window is live - drop the oldest insertions, which
-    // Map iterates first. Losing one is at worst a few extra tries for them.
-    if (failures.size > MAX_TRACKED_FAILURES)
-      for (const k of failures.keys()) {
-        failures.delete(k);
-        if (failures.size <= MAX_TRACKED_FAILURES) break;
-      }
-  }
-}
+const logins = failureThrottle(5);
 
 async function resolveIdentity(
   c: Context,
@@ -251,7 +222,7 @@ export function installAuth(
       zValidator("json", loginSchema),
       async (c) => {
         const { email, password } = c.req.valid("json");
-        if (throttled(email))
+        if (logins.blocked(email))
           return c.json({ error: "too many attempts; wait a minute" }, 429);
         const user = await getUserByEmail(email);
         const ok =
@@ -259,7 +230,7 @@ export function installAuth(
           !user.disabled &&
           (await verifyPassword(password, user.password_hash));
         if (!ok) {
-          recordFailure(email);
+          logins.fail(email);
           return c.json({ error: "invalid email or password" }, 401);
         }
         if (oidc && !user.password_login_allowed)

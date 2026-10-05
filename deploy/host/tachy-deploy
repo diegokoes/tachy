@@ -31,7 +31,6 @@ IMAGE_REPO=${TACHY_IMAGE_REPO:-ghcr.io/diegokoes/tachy}
 DEPLOY_LOG=${TACHY_DEPLOY_LOG:-$TACHY_SRV/deploy.log}
 READY_TIMEOUT=${TACHY_READY_TIMEOUT:-300}
 read -ra BACKUP <<<"${TACHY_BACKUP_BIN:-tachy-backup}"
-K6_IMAGE=${TACHY_K6_IMAGE:-grafana/k6:2.2.0}
 
 PULL=true
 ALLOW_DESTRUCTIVE=false
@@ -104,9 +103,12 @@ smoke() {
     log "smoke skipped: --skip-smoke"
     return 0
   fi
+  # The k6 the release's own scripts are written for.
+  local image
+  image=${TACHY_K6_IMAGE:-$(sed -n 's/^ *image: *\(grafana\/k6:[^ ]*\) *$/\1/p' "$TACHY_DIR/load/k6.compose.yml")}
   docker run --rm --network "$(project)" -v "$TACHY_DIR/load:/load:ro" \
     -e BASE_URL=http://api:8787 -e LOGIN_EMAIL="$SMOKE_EMAIL" -e LOGIN_PASSWORD="$SMOKE_PASSWORD" \
-    "$K6_IMAGE" run --quiet /load/smoke.js
+    "$image" run --quiet /load/smoke.js
 }
 
 resolve_image() {

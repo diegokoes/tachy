@@ -20,12 +20,17 @@ pending is stopped within 30 s; one waiting on an approval ends when the
 approval times out (15 min). Its cost is in `analysis_runs` by `turn_id`.
 Turn ids: `$C logs api | jq -r 'select(.turn) | .turn' | sort | uniq -c`.
 
-**A failed sync.** `$C run --rm cli npm run sync <connection>` shows the error
-directly. Admin › integrations › sources lists auth failures and rate limits per
-connection.
+**A failed sync.** Syncs are `source.sync` runs in `worker-light`. Admin ›
+workers › failed jobs has the run, its error and the tail of its log;
+`$C logs worker-light | grep <run id>` has the rest. Admin › integrations ›
+sources lists auth failures and rate limits per connection. To watch one sync
+in the foreground: `$C run --rm cli npm run sync <connection>`.
 
-**A failed index.** `$C logs api | grep repo_index`. Reindex from the repo's
-page; an index interrupted by a restart is marked as such at the next boot.
+**A failed index.** Indexing is a `repo.reindex` run in `worker-heavy`:
+`$C logs worker-heavy | grep repo_index`. Reindexing from the repo's page queues
+a new run; one interrupted by a restart is marked as such at the next boot.
+
+A job or a flow that keeps failing: [jobs-and-flows.md](jobs-and-flows.md).
 
 **Memory.** Admin › system: api memory against its limit. Each Claude turn
 costs roughly 0.4 GB; the slot cap is the lever.

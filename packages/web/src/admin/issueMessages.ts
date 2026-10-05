@@ -149,6 +149,13 @@ const MESSAGES: Record<string, Message> = {
     head: (n) => `${plural(n, "run", "runs")} waiting over 15 min for a worker`,
     item: (l) => `${l} is still queued`,
   },
+  "jobs.overdue": {
+    tone: "danger",
+    section: "jobs",
+    head: (n) =>
+      `${plural(n, "schedule", "schedules")} past due with no run queued`,
+    item: (l) => `${l}: its slot passed and nothing queued it`,
+  },
   "jobs.no_worker": {
     tone: "danger",
     section: "processes",
