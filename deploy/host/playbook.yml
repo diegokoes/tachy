@@ -3,21 +3,6 @@
 - name: Tachy host
   hosts: all
   become: true
-  vars:
-    tachy_user: tachy
-    tachy_dir: /opt/tachy
-    tachy_srv: /srv/tachy
-    tachy_lib: /usr/local/lib/tachy
-    lan_cidrs: []
-    ssh_allowed_cidrs: []
-    admin_users: []
-    backup_downloaders: []
-    backup_recipients: []
-    tailscale_enabled: false
-    tailscale_cidr: "100.64.0.0/10"
-    docker_major: "29"
-    battery_stop_threshold: 80
-    battery_start_threshold: 75
   handlers:
     - name: Restart ssh
       ansible.builtin.systemd_service:
