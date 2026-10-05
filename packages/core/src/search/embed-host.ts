@@ -3,6 +3,7 @@ import { log } from "../infra/log";
 import { EMBEDDING_DIM, EMBEDDING_SPEC } from "./model";
 import { EmbedQueue } from "./embed-queue";
 import type { EmbedReply, EmbedRequest } from "./embed-thread";
+import { embedThreads } from "./threads";
 
 export interface EmbedHost {
   queue: EmbedQueue;
@@ -65,7 +66,9 @@ export function startEmbedHost(opts: {
       if (msg.type === "ready") {
         loadFailures = 0;
         setReady(true);
-        log("info", "embedding_model_ready", {});
+        log("info", "embedding_model_ready", {
+          threads: embedThreads() ?? "runtime default",
+        });
         return;
       }
       const p = pending.get(msg.id);
@@ -116,7 +119,7 @@ export function startEmbedHost(opts: {
     {
       passageBatch: 8,
       queryBatch: 32,
-      passageChars: EMBEDDING_SPEC.batchChars,
+      batchBytes: EMBEDDING_SPEC.batchBytes,
     },
   );
 
