@@ -1257,6 +1257,9 @@ create table flows (
     team_id         uuid references teams(id) on delete cascade,
     enabled         boolean not null default false,
     graph           jsonb not null default '{"triggers":[],"steps":[]}'::jsonb,
+    -- Model calls its steps may make in any 24 hours. A flow runs with nobody
+    -- approving its steps, so this is what bounds its spend. 0 allows none.
+    model_calls_per_day integer not null default 100 check (model_calls_per_day >= 0),
     run_as_user_id  uuid references users(id) on delete set null,
     created_by      uuid references users(id) on delete set null,
     created_at      timestamptz not null default now(),

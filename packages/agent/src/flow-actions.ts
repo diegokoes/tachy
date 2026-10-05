@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defineFlowAction } from "@tachy/core/flows";
+import { assertModelCallAllowed, defineFlowAction } from "@tachy/core/flows";
 import { firstJsonObject, runAdvisory } from "./advisory";
 
 const SYSTEM = `You are one step of an automated support flow in tachy. You get an
@@ -46,6 +46,7 @@ export function registerAgentFlowActions(): void {
       json: z.record(z.string(), z.unknown()).nullable(),
     }),
     async run(ctx, p) {
+      await assertModelCallAllowed(ctx.flowId);
       const text = await runAdvisory(
         {
           system:

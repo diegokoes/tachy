@@ -66,6 +66,11 @@
       label: `cost ${usage.days} d`,
       text: usd(usage.cost_usd),
     },
+    {
+      key: "flow-cost",
+      label: `flows ${usage.days} d`,
+      text: usd(usage.flows.cost_usd),
+    },
   ]);
 
   const inTeam = $derived(Math.max(0, u.users - u.users_no_team));
