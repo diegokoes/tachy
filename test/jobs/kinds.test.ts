@@ -15,6 +15,7 @@ import {
 import { linkRepo } from "@tachy/core/code";
 import {
   rollUpUsage,
+  sweepCopilotSessions,
   sweepOrphanAssets,
   sweepTranscripts,
 } from "@tachy/core/compliance";
@@ -171,6 +172,26 @@ describe("retention", () => {
     try {
       expect(await sweepTranscripts(90)).toBe(1);
       expect(await readdir(dir)).toEqual(["new.jsonl"]);
+    } finally {
+      delete process.env.TACHY_AGENT_HOME;
+    }
+  });
+
+  it("removes a Copilot session nothing has written to, and keeps a live one", async () => {
+    const home = await mkdtemp(join(tmpdir(), "tachy-agent-"));
+    process.env.TACHY_AGENT_HOME = home;
+    const sessions = join(home, "users", "u1", "copilot", "session-state");
+    const old = new Date(Date.now() - 91 * 86_400_000);
+    for (const id of ["stale", "live"]) {
+      await mkdir(join(sessions, id, "checkpoints"), { recursive: true });
+      await writeFile(join(sessions, id, "events.jsonl"), "{}");
+      for (const path of ["events.jsonl", "checkpoints", ""])
+        await utimes(join(sessions, id, path), old, old);
+    }
+    await writeFile(join(sessions, "live", "checkpoints", "1.json"), "{}");
+    try {
+      expect(await sweepCopilotSessions(90)).toBe(1);
+      expect(await readdir(sessions)).toEqual(["live"]);
     } finally {
       delete process.env.TACHY_AGENT_HOME;
     }

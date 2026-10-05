@@ -18,6 +18,7 @@ export {
   explainFailure,
 } from "./claude";
 export { copilotPermission, copilotSessionConfig } from "./copilot";
+export { copilotHome, userStateDir } from "./state";
 export { completeOnce } from "./complete";
 export { runAdvisory, firstJsonObject, type Advisory } from "./advisory";
 export { reviewTicket, type ReviewRequest } from "./ticket-review";

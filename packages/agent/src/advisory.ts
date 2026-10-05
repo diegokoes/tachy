@@ -10,6 +10,7 @@ import {
 import { recordRun } from "@tachy/core/analytics";
 import { scrubText, TokenMap } from "@tachy/core/compliance";
 import { completeOnce } from "./complete";
+import { userStateDir } from "./state";
 
 /**
  * A cheap tier for short judgements. Only used on Claude; on Copilot the
@@ -74,7 +75,10 @@ export async function runAdvisory(
         agentAuth,
         systemPrompt: a.system,
         ...(provider === "copilot"
-          ? { sessionCwd: await emptySessionDir() }
+          ? {
+              sessionCwd: await emptySessionDir(),
+              configDir: userStateDir(userId),
+            }
           : {}),
       },
       { timeoutMs: a.timeoutMs },

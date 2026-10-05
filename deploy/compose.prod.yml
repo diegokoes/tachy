@@ -5,6 +5,11 @@
 # Needs in .env: TACHY_IMAGE (by digest), TACHY_HOSTNAME, POSTGRES_PASSWORD,
 # TACHY_APP_DB_PASSWORD, TACHY_BACKUP_DB_PASSWORD, plus the app secrets.
 #
+# Every size below is a variable whose default fits the 16 GB laptop (§3.2):
+# the memory limits sum to what that host has left after the OS. Another host
+# sets its own in .env, and 0 lifts a memory or CPU limit. .env.example lists
+# them.
+#
 # With TACHY_TLS=internal, the root clients must trust is exported with
 #   docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt tachy-root.crt
 
@@ -32,7 +37,7 @@ services:
       - ${TACHY_TLS_CERT_DIR:-./deploy/caddy/certs}:/certs:ro
       - caddy-data:/data
       - caddy-config:/config
-    mem_limit: 256m
+    mem_limit: ${TACHY_CADDY_MEM_LIMIT:-256m}
     cpu_shares: 1024
     pids_limit: 256
     cap_drop: [ALL]
@@ -57,12 +62,13 @@ services:
       # The model runs in the embedder service below, not in the api.
       TACHY_EMBED_URL: http://embedder:8790/internal/embed
       TACHY_INTERNAL_SECRET: ${TACHY_INTERNAL_SECRET:?set TACHY_INTERNAL_SECRET (openssl rand -hex 32)}
+      TACHY_DB_POOL_MAX: ${TACHY_API_DB_POOL_MAX:-15}
     volumes:
       - ${TACHY_STATUS_HOST_DIR:-/srv/tachy/status}:/status:ro
     stop_grace_period: 210s
-    mem_limit: ${TACHY_API_MEM_LIMIT:-10g}
+    mem_limit: ${TACHY_API_MEM_LIMIT:-8g}
     cpu_shares: 2048
-    pids_limit: 2048
+    pids_limit: ${TACHY_API_PIDS_LIMIT:-2048}
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     read_only: true
@@ -92,8 +98,8 @@ services:
       interval: 15s
       timeout: 5s
       start_period: 60s
-    mem_limit: 2g
-    cpus: 6
+    mem_limit: ${TACHY_EMBEDDER_MEM_LIMIT:-1536m}
+    cpus: ${TACHY_EMBEDDER_CPUS:-6}
     cpu_shares: 2048
     pids_limit: 256
     cap_drop: [ALL]
@@ -118,9 +124,9 @@ services:
       TACHY_EMBED_URL: http://embedder:8790/internal/embed
       TACHY_EMBED_PRIORITY: low
       TACHY_INTERNAL_SECRET: ${TACHY_INTERNAL_SECRET:?set TACHY_INTERNAL_SECRET}
-      TACHY_WORKER_CONCURRENCY: "4"
+      TACHY_WORKER_CONCURRENCY: ${TACHY_WORKER_LIGHT_CONCURRENCY:-4}
       TACHY_DB_APP_NAME: tachy-worker-light
-      TACHY_DB_POOL_MAX: "5"
+      TACHY_DB_POOL_MAX: ${TACHY_WORKER_DB_POOL_MAX:-5}
       TACHY_DRAIN_SECONDS: "60"
     depends_on:
       postgres:
@@ -129,8 +135,8 @@ services:
       - tachy-repo-data:/app/data
       - tachy-agent-home:/home/node/.claude
     stop_grace_period: 90s
-    mem_limit: 512m
-    cpus: 1
+    mem_limit: ${TACHY_WORKER_LIGHT_MEM_LIMIT:-512m}
+    cpus: ${TACHY_WORKER_LIGHT_CPUS:-1}
     cpu_shares: 512
     pids_limit: 256
     cap_drop: [ALL]
@@ -153,19 +159,21 @@ services:
       TACHY_EMBED_URL: http://embedder:8790/internal/embed
       TACHY_EMBED_PRIORITY: low
       TACHY_INTERNAL_SECRET: ${TACHY_INTERNAL_SECRET:?set TACHY_INTERNAL_SECRET}
-      TACHY_WORKER_CONCURRENCY: "1"
+      TACHY_WORKER_CONCURRENCY: ${TACHY_WORKER_HEAVY_CONCURRENCY:-1}
       TACHY_DB_APP_NAME: tachy-worker-heavy
-      TACHY_DB_POOL_MAX: "5"
+      TACHY_DB_POOL_MAX: ${TACHY_WORKER_DB_POOL_MAX:-5}
       TACHY_DRAIN_SECONDS: "60"
-    mem_limit: 2g
-    cpus: 4
+    mem_limit: ${TACHY_WORKER_HEAVY_MEM_LIMIT:-1536m}
+    cpus: ${TACHY_WORKER_HEAVY_CPUS:-4}
     cpu_shares: 256
 
   postgres:
     command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
     volumes:
-      - ./deploy/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-    mem_limit: 2g
+      - ${TACHY_POSTGRES_CONF:-./deploy/postgres/postgresql.conf}:/etc/postgresql/postgresql.conf:ro
+    mem_limit: ${TACHY_POSTGRES_MEM_LIMIT:-2g}
     cpu_shares: 2048
     security_opt: ["no-new-privileges:true"]
     logging: *logging
