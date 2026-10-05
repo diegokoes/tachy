@@ -2237,8 +2237,8 @@ that fails counts as answered, because Postgres being down fails at once
   filesystem and the `tachy_app` role are never exercised in CI.
 - **`schema-plan`** uploads the plan as an artifact. Destructive hazards fail
   the job unless the pull request carries the `schema-destructive` label.
-- **Only `build` is a required check** on `dev` and `main`. The image gates,
-  the schema plan and gitleaks can fail and still be merged (§15.2). Both
+- **`build`, `image-gates`, `schema-plan` and `secrets` are required checks**
+  on `dev` and `main`, in a ruleset per branch. Both
   path-filtered workflows filter in a job of their own, so their checks report
   on every pull request and can be required: GitHub leaves the check of a
   workflow skipped by a path filter pending, and counts a job skipped by a
@@ -2541,7 +2541,7 @@ system pages and tests section, and key ids for the vault.
 | the slot cap has been raised from measurements, or the reason it can't be is written | open, for the same reason                       |
 | a schema change has shipped by diff, without a dump and restore                      | done, on a live stack                           |
 | one request id can be followed across api and MCP log lines                          | done                                            |
-| both new CI jobs are required checks                                                 | open: only `build` is required (§10)            |
+| both new CI jobs are required checks                                                 | done (§10)                                      |
 
 **Still to do by hand,** for both phases: run the playbook on the laptop, the
 two Teams workflows and the healthchecks.io checks, the backup keys and the
@@ -2680,9 +2680,6 @@ None of these blocks a deploy.
   for a load window on the laptop.
 - **One-shot model calls take no slot** (§2.4). In the api each adds about
   100 MiB outside the turn budget.
-- **Only `build` is a required check** on `dev` and `main` (§10). Requiring
-  `image-gates`, `schema-plan` and `secrets` is a ruleset change, which the
-  workflows now allow. They have not run on GitHub in that shape.
 - **`tachy_owner` does not exist** (§5.9), so the schema is applied as the
   bootstrap superuser.
 - **`resource_class` is still written** on `job_definitions` and `job_runs`
