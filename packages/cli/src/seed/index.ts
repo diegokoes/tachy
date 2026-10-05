@@ -79,8 +79,6 @@ const TABLES = [
   "code_blob_chunks",
   "repo_line_files",
   "repo_lines",
-  "code_chunks",
-  "repo_files",
   "repos",
   "reference_doc_chunks",
   "reference_docs",
