@@ -2297,9 +2297,6 @@ tachy-watch's `update` check fails until someone looks.
 Rollback is `tachy-deploy <previous commit>`. It is safe only when the previous
 image accepts the current schema, which is what expand and contract is for.
 
-Deploys are manual. A systemd timer can follow `main` once automatic rollback
-has proved itself.
-
 **Dev stack.** The same flow, from `dev`, on its own machine (§15.1), with
 `TACHY_ENV_BADGE=dev` in its `.env`. It doesn't run on the office laptop.
 
