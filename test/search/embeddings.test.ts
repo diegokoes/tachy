@@ -50,6 +50,25 @@ describe("embedPassages", () => {
     expect(a).toEqual(b);
   });
 
+  /**
+   * Memory in a pass grows with the square of the longest input's tokens, and
+   * the limit is ours to set: a tokenizer may ship without one. Both texts are
+   * past the cap and differ only beyond it.
+   */
+  it("reads no further than the model's token cap", async () => {
+    const shared = "word ".repeat(EMBEDDING_SPEC.maxTokens + 50);
+    expect(shared.length + 400).toBeLessThan(EMBEDDING_SPEC.maxChars);
+    const [a, b, c] = await Promise.all([
+      embedPassage(shared + "alpha ".repeat(60)),
+      embedPassage(shared + "omega ".repeat(60)),
+      embedPassage("omega ".repeat(60) + shared),
+    ]);
+    const cos = (x: number[], y: number[]) =>
+      x.reduce((s, v, i) => s + v * y[i], 0);
+    expect(cos(a, b)).toBeCloseTo(1, 4);
+    expect(cos(a, c)).toBeLessThan(0.999);
+  });
+
   it("produces unit vectors of the schema's width", async () => {
     const [v] = await embedPassages(["scanner returns ECONNREFUSED"]);
     expect(v).toHaveLength(EMBEDDING_DIM);

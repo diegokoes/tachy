@@ -32,18 +32,59 @@ describe("EmbedQueue", () => {
     expect(r.batches).toEqual([["a", "aa"], ["aaa", "aaaa"], ["aaaaa"]]);
   });
 
-  it("closes a passage batch at its character budget, and never leaves one empty", async () => {
+  it("closes a passage batch at its byte budget, and never leaves one empty", async () => {
     const r = recorder();
     const q = new EmbedQueue(r.run, {
       passageBatch: 8,
       queryBatch: 32,
-      passageChars: 10,
+      batchBytes: 10,
     });
     const texts = ["aaaa", "bbbb", "cccc", "d".repeat(25), "ee"];
     const out = await q.embed("passage", texts);
     expect(out).toEqual([[4], [4], [4], [25], [2]]);
     expect(r.batches).toEqual([
       ["ee", "aaaa", "bbbb"],
+      ["cccc"],
+      ["d".repeat(25)],
+    ]);
+  });
+
+  /**
+   * Three bytes a character and more than one token: counted in characters,
+   * these three would share a batch.
+   */
+  it("counts the budget in bytes, so a dense script fills it sooner", async () => {
+    const r = recorder();
+    const q = new EmbedQueue(r.run, {
+      passageBatch: 8,
+      queryBatch: 32,
+      batchBytes: 10,
+    });
+    await q.embed("passage", ["扫描", "离线", "队列"]);
+    expect(r.batches).toEqual([["扫描"], ["离线"], ["队列"]]);
+  });
+
+  it("holds a query batch to the same budget", async () => {
+    const r = recorder();
+    const q = new EmbedQueue(r.run, {
+      passageBatch: 8,
+      queryBatch: 32,
+      batchBytes: 10,
+    });
+    r.hold();
+    const first = q.embed("query", ["q0"]);
+    await flush();
+    const rest = [
+      q.embed("query", ["aaaa"]),
+      q.embed("query", ["bbbb"]),
+      q.embed("query", ["cccc"]),
+      q.embed("query", ["d".repeat(25)]),
+    ];
+    r.open();
+    await Promise.all([first, ...rest]);
+    expect(r.batches).toEqual([
+      ["q0"],
+      ["aaaa", "bbbb"],
       ["cccc"],
       ["d".repeat(25)],
     ]);
