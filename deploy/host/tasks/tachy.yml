@@ -144,8 +144,11 @@
     suites: "{{ ansible_distribution_release }}"
     components: main
     signed_by: "https://pkgs.tailscale.com/stable/debian/{{ ansible_distribution_release }}.noarmor.gpg"
+  when: tailscale_enabled
 
 - name: Tailscale installed, not joined (joining is IT's decision)
   ansible.builtin.apt:
     name: tailscale
     state: present
+    update_cache: true
+  when: tailscale_enabled
