@@ -72,7 +72,7 @@ function defaultBackend(): EmbedBackend {
   const local = new EmbedQueue(runModel, {
     passageBatch: 8,
     queryBatch: 32,
-    passageChars: EMBEDDING_SPEC.batchChars,
+    batchBytes: EMBEDDING_SPEC.batchBytes,
   });
   return (kind, texts, caller, priority) =>
     local.embed(kind, texts, caller, priority);
