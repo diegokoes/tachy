@@ -1238,8 +1238,8 @@ fallback (`deploy/runbooks/schema-change.md`).
   ([docs](https://docs.docker.com/reference/compose-file/services/)), which
   matters because every turn leaves child processes behind;
 - the base image pinned by digest, with Dependabot bumping it. The k6 and Go
-  build stages are pinned by tag only. The base is Node 26; CI tests on Node
-  24 (§15.2);
+  build stages are pinned by tag only. The base is Node 26.10, which is also
+  what CI tests on (`.nvmrc`);
 - k6 and pg-schema-diff 1.0.9 copied in, for `load.test` and the deploy's
   schema plan;
 - the embedding model baked in, a layer of about 570 MB.
@@ -2683,8 +2683,6 @@ None of these blocks a deploy.
 - **Only `build` is a required check** on `dev` and `main` (§10). Requiring
   `image-gates`, `schema-plan` and `secrets` is a ruleset change, which the
   workflows now allow. They have not run on GitHub in that shape.
-- **CI tests on Node 24 and the image runs Node 26** (§5.11). `.nvmrc` and
-  `engines` say 24.
 - **`tachy_owner` does not exist** (§5.9), so the schema is applied as the
   bootstrap superuser.
 - **`resource_class` is still written** on `job_definitions` and `job_runs`
