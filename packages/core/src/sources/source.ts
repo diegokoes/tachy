@@ -5,9 +5,9 @@ import type {
   WorkItemTypeOption,
 } from "@tachy/contract";
 import type { TokenMap } from "../compliance/redaction";
-import type { RawWorkItem } from "../types";
+import type { RawWorkItem } from "../work-items/raw";
 
-export type { RawMessage, RawWorkItem } from "../types";
+export type { RawMessage, RawWorkItem } from "../work-items/raw";
 
 export interface SourceCapabilities {
   postNote: boolean;
@@ -25,11 +25,11 @@ export interface ListOptions {
 export interface SourceProbe {
   /** Who the token authenticates as, when the API reports it. */
   identity?: string;
-  /** The groups this token can see — the `external_group_key` values a product map needs. */
+  /** The groups this token can see - the `external_group_key` values a product map needs. */
   groups: { key: string; name: string }[];
   /**
    * Why `groups` is empty, when listing them failed. Group discovery is a
-   * convenience — a token that cannot list groups (a non-admin Freshdesk agent
+   * convenience - a token that cannot list groups (a non-admin Freshdesk agent
    * key, a narrow GitHub scope) still works for the fetches tachy actually
    * does, so this never fails the probe.
    */

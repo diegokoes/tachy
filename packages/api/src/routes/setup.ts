@@ -3,24 +3,22 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   sql,
-  hashPassword,
-  countAdmins,
-  setSetting,
-  addTeam,
-  addProduct,
+  conflict,
+  forbidden,
+  env,
+  secretsEnabled,
+} from "@tachy/core/infra";
+import { hashPassword, countAdmins, getUserByEmail } from "@tachy/core/access";
+import { setSetting, setCredential } from "@tachy/core/config";
+import { addTeam, addProduct } from "@tachy/core/catalog";
+import {
   AGENT_EFFORTS,
   AGENT_CREDENTIALS,
   AGENT_PROVIDERS,
   DEPLOYMENT_PROFILES,
   MIN_PASSWORD_LENGTH,
-  conflict,
-  forbidden,
-  env,
-  secretsEnabled,
   ANTHROPIC_OAUTH_CREDENTIAL,
   OAUTH_PREFIX,
-  setCredential,
-  getUserByEmail,
 } from "@tachy/core";
 import { setSessionCookie, markBootstrapped, sessionEmail } from "../auth";
 
@@ -57,7 +55,7 @@ export const setup = new Hono()
     const hash = await hashPassword(body.password);
 
     /*
-     * This route sits outside the `/api/*` identity guard — on a fresh install
+     * This route sits outside the `/api/*` identity guard - on a fresh install
      * there is nobody to authenticate yet. The admin count is therefore the only
      * thing standing between a stranger and an admin account, and on an SSO
      * deployment it never rises: `upsertUser` provisions members, so nothing

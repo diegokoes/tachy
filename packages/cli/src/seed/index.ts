@@ -1,15 +1,10 @@
 import { createInterface } from "node:readline/promises";
-import {
-  AGENT_CREDENTIALS,
-  API_KEY_EXAMPLE,
-  clearPermissionCache,
-  env,
-  secretsEnabled,
-  setCredential,
-  setSetting,
-  sql,
-  sweepWikiGaps,
-} from "@tachy/core";
+import { AGENT_CREDENTIALS, API_KEY_EXAMPLE } from "@tachy/core";
+import { clearPermissionCache } from "@tachy/core/access";
+import { env, secretsEnabled, sql } from "@tachy/core/infra";
+import { EMBEDDING_MODEL } from "@tachy/core/search";
+import { setCredential, setSetting } from "@tachy/core/config";
+import { sweepWikiGaps } from "@tachy/core/wiki";
 import type { Tx } from "./batches";
 import { SCALES, type ScaleName } from "./scale";
 import { seedOrg, ADMIN_EMAIL, DEV_PASSWORD, MEMBER_EMAIL } from "./org";
@@ -85,8 +80,6 @@ const TABLES = [
   "code_blob_chunks",
   "repo_line_files",
   "repo_lines",
-  "code_chunks",
-  "repo_files",
   "repos",
   "reference_doc_chunks",
   "reference_docs",
@@ -223,6 +216,29 @@ async function withoutBulkIndexes<T>(tx: Tx, fn: () => Promise<T>): Promise<T> {
 }
 
 /**
+ * What the app writes beside every vector and every code chunk, which the bulk
+ * load skips: the model's name, without which search takes the vectors for
+ * another model's and ignores them, and the words code search matches on.
+ */
+async function stampVectors(tx: Tx): Promise<void> {
+  for (const table of [
+    "knowledge_entries",
+    "reference_doc_chunks",
+    "bucket_doc_chunks",
+    "code_blob_chunks",
+  ])
+    await tx`
+      update ${tx(table)} set embedding_model = ${EMBEDDING_MODEL}
+      where embedding is not null
+    `;
+  await tx`
+    update code_blob_chunks
+    set search_tsv = setweight(to_tsvector('simple', tachy_code_words(chunk_text)), 'D')
+    where search_tsv is null
+  `;
+}
+
+/**
  * Elapsed time per generator. Until this existed the only number printed was
  * the total, so a seed that took an hour was something you waited through
  * rather than something you could point at.
@@ -334,6 +350,7 @@ export async function seed(opts: SeedOptions): Promise<void> {
     await phases.run("derive", async () => {
       await deriveProductAreas(tx);
       await supersede(tx);
+      await stampVectors(tx);
     });
     await phases.run("activity", async () => {
       await seedActivity(tx, v, org.users, sources.workItems, org.artifacts);
@@ -440,7 +457,7 @@ function banner(opts: SeedOptions, credentials: number): void {
   );
   if (!credentials)
     console.log(
-      "  vault disabled — skipped credentials; set TACHY_SECRET_KEY to seed them",
+      "  vault disabled - skipped credentials; set TACHY_SECRET_KEY to seed them",
     );
   const mode = embedMode(opts.embed);
   if (mode === "none")

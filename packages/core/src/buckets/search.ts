@@ -1,7 +1,11 @@
 import { sql } from "../infra/db";
 import { notFound } from "../infra/errors";
 import { embedQueryLiteral } from "../search/embeddings";
-import { writeEmbeddings } from "../search/backfill";
+import {
+  currentVector,
+  needsVector,
+  writeEmbeddings,
+} from "../search/backfill";
 import {
   CANDIDATES,
   clampLimit,
@@ -43,7 +47,7 @@ export async function searchBucket(query: string, opts: BucketSearchOptions) {
              1 - (c.embedding <=> ${qvec}::vector) as cos_sim
       from bucket_doc_chunks c
       join bucket_docs d on d.id = c.doc_id
-      where ${filters} and c.embedding is not null
+      where ${filters} and c.embedding is not null and ${currentVector("c")}
         and 1 - (c.embedding <=> ${qvec}::vector) >= ${SEM_FLOOR}
       order by c.embedding <=> ${qvec}::vector
       limit ${CANDIDATES}
@@ -152,7 +156,7 @@ export async function embedBucketChunks(
     const rows = await sql`
       select c.id, c.chunk_text from bucket_doc_chunks c
       join bucket_docs d on d.id = c.doc_id
-      where c.embedding is null ${scope}
+      where ${needsVector("c")} ${scope}
       order by c.doc_id, c.ordinal
       limit 256
     `;

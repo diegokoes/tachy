@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { CopilotClient } from "@github/copilot-sdk";
 import { claudeEnv } from "./claude";
+import { copilotHome } from "./state";
 import {
   AGENT_EFFORTS,
   type AgentAuth,
@@ -119,6 +120,7 @@ async function copilotModels(cfg: ModelListConfig): Promise<ModelChoice[]> {
   const client = new CopilotClient({
     ...(cfg.sessionCwd ? { workingDirectory: cfg.sessionCwd } : {}),
     ...(cfg.agentAuth ? { gitHubToken: cfg.agentAuth.value } : {}),
+    baseDirectory: await copilotHome(cfg.configDir),
     logLevel: "error",
   });
   try {

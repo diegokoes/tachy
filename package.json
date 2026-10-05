@@ -33,14 +33,14 @@
     "format": "prettier --write ."
   },
   "engines": {
-    "node": ">=24.18.0",
+    "node": ">=26.10.0",
     "npm": ">=10"
   },
   "overrides": {
     "tar": "7.5.19"
   },
   "devDependencies": {
-    "@testcontainers/postgresql": "^12.1.0",
+    "@testcontainers/postgresql": "^12.2.0",
     "@types/node": "^26.6.3",
     "@vitest/coverage-v8": "^5.0.1",
     "esbuild": "^0.28.2",
@@ -49,6 +49,6 @@
     "prettier-plugin-svelte": "^4.1.1",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.3"
   }
 }

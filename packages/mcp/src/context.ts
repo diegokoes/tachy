@@ -5,27 +5,30 @@
  */
 import {
   resolveSource,
+  fetchUntrustedUrl,
+  stripHtml,
+} from "@tachy/core/sources";
+import {
   ingestWorkItem,
-  resolveCurrentUserId,
-  sql,
+  extractAdoRefs,
+  compactForLlm,
+  summarizeCompaction,
+  recordAdoRefs,
+} from "@tachy/core/work-items";
+import { resolveCurrentUserId } from "@tachy/core/access";
+import { sql, badInput } from "@tachy/core/infra";
+import {
   resolveComponentFilter,
   getProductIdBySlug,
   getCustomerName,
   getCustomerProfile,
   getCustomerSlug,
-  resolveRedactionPolicy,
-  redactForLlm,
-  extractAdoRefs,
-  compactForLlm,
-  summarizeCompaction,
   getTeamIdBySlug,
-  recordAdoRefs,
-  badInput,
   listCustomerUnits,
-  fetchUntrustedUrl,
-  stripHtml,
-} from "@tachy/core";
-import type { IngestedItem, RawWorkItem } from "@tachy/core";
+} from "@tachy/core/catalog";
+import { resolveRedactionPolicy, redactForLlm } from "@tachy/core/compliance";
+import type { IngestedItem } from "@tachy/core/work-items";
+import type { RawWorkItem } from "@tachy/core/sources";
 import { extractSource } from "./extract";
 
 /**
@@ -72,14 +75,14 @@ export function withCompaction(item: RawWorkItem): Record<string, unknown> {
     transcript: shown,
     ...(turns_truncated ? { transcript_truncated: turns_truncated } : {}),
     compaction: { ...compaction, ...summarizeCompaction(compacted) },
-    next: "messages were replaced by transcript: a de-duplicated, attributed turn list with quoted chains, signatures, banners, automated mail and repeats removed. The wording is verbatim — never re-summarise or re-order it. Each turn has speaker, at, kind (reply / internal_note / quoted) and optional attachments; '[image]' marks an inline image, and a turn with empty text but attachments carried only a file. Turns with kind 'quoted' were recovered from quoted history and may predate the ticket — that is mail existing nowhere else in the system, worth reading first. This is a read-path transform and writes nothing to the ticket.",
+    next: "messages were replaced by transcript: a de-duplicated, attributed turn list with quoted chains, signatures, banners, automated mail and repeats removed. The wording is verbatim - never re-summarise or re-order it. Each turn has speaker, at, kind (reply / internal_note / quoted) and optional attachments; '[image]' marks an inline image, and a turn with empty text but attachments carried only a file. Turns with kind 'quoted' were recovered from quoted history and may predate the ticket - that is mail existing nowhere else in the system, worth reading first. This is a read-path transform and writes nothing to the ticket.",
   };
 }
 
 /**
  * The customer's own install, inline on the turn that fetched their ticket.
  * Their version and addons decide whether a general answer even applies, and the
- * model will not think to go and ask — so it arrives unasked, kept short.
+ * model will not think to go and ask - so it arrives unasked, kept short.
  */
 export async function withCustomerProfile(
   customerId: string | null | undefined,
@@ -120,7 +123,7 @@ export async function withCustomerProfile(
 }
 
 /**
- * An unresolved customer is invisible otherwise — the field is simply null, while
+ * An unresolved customer is invisible otherwise - the field is simply null, while
  * the ticket usually names the company in a domain or a signature.
  */
 export const unresolvedCustomer = (
@@ -131,8 +134,8 @@ export const unresolvedCustomer = (
     ? {}
     : {
         customer_note: ambiguity
-          ? `customer_id is null — ${ambiguity}. Read the ticket for which of them it actually concerns, then set_work_item_customer. Do not guess from the sender's domain.`
-          : "customer_id is null — no known customer matched. The sender's own company is often NOT the customer: partners and distributors raise tickets on a customer's behalf, so read who the ticket is about rather than who sent it. If it identifies one, check list_customers, add_customer if it is missing (put the partner's domain in email_domains on the customer they front for), then set_work_item_customer. Propose it in the same review step rather than asking separately.",
+          ? `customer_id is null - ${ambiguity}. Read the ticket for which of them it actually concerns, then set_work_item_customer. Do not guess from the sender's domain.`
+          : "customer_id is null - no known customer matched. The sender's own company is often NOT the customer: partners and distributors raise tickets on a customer's behalf, so read who the ticket is about rather than who sent it. If it identifies one, check list_customers, add_customer if it is missing (put the partner's domain in email_domains on the customer they front for), then set_work_item_customer. Propose it in the same review step rather than asking separately.",
       };
 
 /**
@@ -160,7 +163,7 @@ export async function unresolvedUnit(
     unit_note:
       `This customer's estate is divided into units, and the ticket names ` +
       `${named.map((u) => `'${u.slug}'`).join(", ")}. Facts recorded against a ` +
-      `unit are NOT visible on the customer as a whole — call ` +
+      `unit are NOT visible on the customer as a whole - call ` +
       `get_customer_profile with that unit before advising. If the ticket really ` +
       `is about it, propose set_work_item_customer with the unit in the same ` +
       `review step rather than assuming.`,
@@ -202,7 +205,7 @@ export async function workItemFacts(
 /**
  * Fetch the Azure DevOps items a ticket points at and record the links. They
  * carry most of the engineering context, so analysis reads them as a matter of
- * course rather than offering to. Depth 1 only — a linked item's own relations
+ * course rather than offering to. Depth 1 only - a linked item's own relations
  * already come back as summaries.
  */
 export async function withLinkedAdoItems(
@@ -276,7 +279,7 @@ export async function withLinkedAdoItems(
           linked_items_note: `${refs.length} ids referenced; the first ${wanted.length} were read. Fetch the rest with fetch_work_item if they matter.`,
         }
       : {}),
-    next: "linked_items are the Azure DevOps items this ticket references, already read and linked — treat them as part of the context and do not fetch them again. Never fetch relations of relations.",
+    next: "linked_items are the Azure DevOps items this ticket references, already read and linked - treat them as part of the context and do not fetch them again. Never fetch relations of relations.",
   };
 }
 

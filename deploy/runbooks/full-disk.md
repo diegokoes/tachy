@@ -35,4 +35,4 @@ docker compose exec -T postgres psql -U tachy -d tachy -c \
   "select relname, pg_size_pretty(pg_total_relation_size(oid)) from pg_class where relkind='r' order by pg_total_relation_size(oid) desc limit 10"
 ```
 
-`code_chunks` is most of the database; unlinking a large repository frees it.
+`code_blob_chunks` is most of the database; unlinking a large repository frees it.

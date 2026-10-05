@@ -1,6 +1,7 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { CopilotClient } from "@github/copilot-sdk";
 import { claudeEnv } from "./claude";
+import { copilotHome } from "./state";
 import {
   effectiveModel,
   type AgentAuth,
@@ -22,6 +23,8 @@ export interface CompletionConfig {
   effort?: AgentEffort;
   /** Copilot only: an empty directory the session runs from. */
   sessionCwd?: string;
+  /** Copilot only: the caller's state directory, which holds the runtime's own. */
+  configDir?: string;
 }
 
 export interface CompletionResult {
@@ -31,7 +34,7 @@ export interface CompletionResult {
 }
 
 /**
- * One prompt in, one answer out — no tools, no MCP subprocess, no streaming to a
+ * One prompt in, one answer out - no tools, no MCP subprocess, no streaming to a
  * caller. For utility calls (classifying, reviewing a draft) that would be
  * wasteful to run through the full agent loop. Credential handling matches the
  * turn path: `claudeEnv` strips every outranking credential before setting the
@@ -108,6 +111,7 @@ async function completeCopilot(
 ): Promise<CompletionResult> {
   const client = new CopilotClient({
     ...(cfg.sessionCwd ? { workingDirectory: cfg.sessionCwd } : {}),
+    baseDirectory: await copilotHome(cfg.configDir),
     logLevel: "error",
   });
   try {

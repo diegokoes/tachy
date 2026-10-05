@@ -19,7 +19,7 @@ export interface BuiltinCommand {
 const argsLine = (args: string) =>
   args.trim()
     ? `User arguments: ${args.trim()}`
-    : "User arguments: (none — ask for what's missing)";
+    : "User arguments: (none - ask for what's missing)";
 
 /**
  * Each expansion names its mode and adds only what the command changes about it.
@@ -52,7 +52,7 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
     description: "Rebuild a repetitive ticket as a de-duplicated script",
     expand: (args) =>
       [
-        "Run COMPACT MODE as defined in your instructions, calling compact_work_item for the ticket. Posting the transcript back as a private note is the point of this command — leave post_note at its default so it posts, and only pass post_note: false if the user's arguments include --no-note.",
+        "Run COMPACT MODE as defined in your instructions, calling compact_work_item for the ticket. Posting the transcript back as a private note is the point of this command - leave post_note at its default so it posts, and only pass post_note: false if the user's arguments include --no-note.",
         "Do NOT pass return_turns. The transcript belongs on the ticket, not in this conversation.",
         "Then STOP and answer in at most four lines: the ticket title, messages in → turns out, what was dropped, and that the private note was posted (say how many notes).",
         argsLine(args),
@@ -157,7 +157,7 @@ export const findCommand = (name: string): BuiltinCommand | undefined =>
 /**
  * Writes a slash command exists to perform, so typing it is the authorisation
  * and no approval box is raised for that one tool. Keyed on the command the
- * user typed — never on anything the model chooses.
+ * user typed - never on anything the model chooses.
  */
 const COMMAND_AUTO_APPROVE: Record<string, string[]> = {
   compact: ["compact_work_item"],

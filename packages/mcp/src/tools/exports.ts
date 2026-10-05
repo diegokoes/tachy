@@ -1,16 +1,13 @@
 import { z } from "zod";
+import { resolveCurrentUserId, userSoleTeamId } from "@tachy/core/access";
 import {
-  resolveCurrentUserId,
   getArtifactBySlug,
-  userSoleTeamId,
   createOutput,
   renderTable,
-  parseDateFormat,
-  outputFilename,
   tableColumnSchema,
-  TABLE_FORMATS,
-  badInput,
-} from "@tachy/core";
+} from "@tachy/core/exports";
+import { parseDateFormat, outputFilename, TABLE_FORMATS } from "@tachy/core";
+import { badInput } from "@tachy/core/infra";
 import { tool } from "../server";
 import { out } from "../results";
 
@@ -22,7 +19,7 @@ tool(
   "export_table",
   {
     description:
-      "Generate a downloadable spreadsheet (xlsx) or CSV from rows you produce, and return a download link. When the user attached an artifact that declares output columns, pass its artifact_slug and fill EXACTLY those columns — extra columns, renamed keys or missing required values are rejected with the reason, so fix the rows and call again. Without an artifact, pass columns yourself. Never print the table into the chat and never restate the rows afterwards: the user gets the file. The result carries only a descriptor (id, filename, size, url), never the file contents.",
+      "Generate a downloadable spreadsheet (xlsx) or CSV from rows you produce, and return a download link. When the user attached an artifact that declares output columns, pass its artifact_slug and fill EXACTLY those columns - extra columns, renamed keys or missing required values are rejected with the reason, so fix the rows and call again. Without an artifact, pass columns yourself. Never print the table into the chat and never restate the rows afterwards: the user gets the file. The result carries only a descriptor (id, filename, size, url), never the file contents.",
     inputSchema: {
       artifact_slug: z
         .string()
@@ -114,7 +111,7 @@ tool(
         url: `/api/outputs/${meta.id}/download`,
         expires_at: meta.expires_at,
       },
-      next: "The file is ready and the user sees a download card. Say one line about what it contains — do not restate the rows.",
+      next: "The file is ready and the user sees a download card. Say one line about what it contains - do not restate the rows.",
     });
   },
 );

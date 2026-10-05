@@ -6,6 +6,20 @@ import {
   searchKnowledge,
   updateKnowledgeEntry,
   revertKnowledgeEntry,
+  getKnowledgeEntry,
+  listKnowledgeEntries,
+  listEnvironments,
+  listKnowledgeFacets,
+  addFeedback,
+  listFeedback,
+  cloudSchema,
+  resolutionClaritySchema,
+  knowledgeStatusSchema,
+  confidenceSchema,
+  feedbackKindSchema,
+  runModeSchema,
+} from "@tachy/core/knowledge";
+import {
   listRevisions,
   getRevision,
   countView,
@@ -13,25 +27,15 @@ import {
   outboundLinks,
   viewStats,
   viewHistory,
-  getKnowledgeEntry,
-  listKnowledgeEntries,
-  listEnvironments,
-  listKnowledgeFacets,
-  addFeedback,
-  listFeedback,
-  recordRun,
-  sql,
-  notFound,
+} from "@tachy/core/library";
+import { recordRun } from "@tachy/core/analytics";
+import { sql, notFound } from "@tachy/core/infra";
+import {
   resolveComponentFilter,
   getCustomerIdBySlug,
-  cloudSchema,
-  resolutionClaritySchema,
-  knowledgeStatusSchema,
-  confidenceSchema,
-  feedbackKindSchema,
-  runModeSchema,
-} from "@tachy/core";
-import type { EntryScope, RunInput } from "@tachy/core";
+} from "@tachy/core/catalog";
+import type { EntryScope } from "@tachy/core/access";
+import type { RunInput } from "@tachy/core/analytics";
 import {
   assertScopeEditor,
   callerActor,
@@ -96,7 +100,7 @@ const feedbackSchema = z.object({
 
 type QueryCtx = { req: { query(k: string): string | undefined } };
 
-/** `hidden_fix` is the one boolean facet — absent means "don't filter". */
+/** `hidden_fix` is the one boolean facet - absent means "don't filter". */
 function boolParam(v: string | undefined): boolean | undefined {
   return v === undefined || v === "" ? undefined : v === "true";
 }

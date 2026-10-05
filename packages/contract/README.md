@@ -3,7 +3,7 @@
 What the browser and the server must agree on: the controlled vocabularies, the
 relevance grades, the credential shapes, the export naming rules.
 
-The SPA cannot import `@tachy/core` — core opens Postgres and reads the
+The SPA cannot import `@tachy/core` - core opens Postgres and reads the
 filesystem on import. Before this package existed the shared rules were copied
 into `packages/web` by hand and kept in step by comments, which is how
 `validateCredential` and the admin panel came to disagree about what a valid

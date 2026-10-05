@@ -3,27 +3,23 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import {
   catalogCensus,
-  bucketCensus,
-  userCensus,
-  sourceCensus,
-  repoCensus,
-  knowledgeCensus,
-  knowledgeByComponent,
   listComponentTree,
-  reportsCensus,
-  agentUsageCensus,
-  toolUsageCensus,
-  sourceTrafficCensus,
-  libraryEngagementCensus,
-  sourceIssues,
-  repoIssues,
   catalogIssues,
-  userIssues,
-  jobIssues,
-  forbidden,
-  ISSUE_ITEMS,
-  type IssueList,
-} from "@tachy/core";
+} from "@tachy/core/catalog";
+import { bucketCensus } from "@tachy/core/buckets";
+import { userCensus, userIssues } from "@tachy/core/access";
+import {
+  sourceCensus,
+  sourceTrafficCensus,
+  sourceIssues,
+} from "@tachy/core/sources";
+import { repoCensus, repoIssues } from "@tachy/core/code";
+import { knowledgeCensus, knowledgeByComponent } from "@tachy/core/knowledge";
+import { reportsCensus } from "@tachy/core/reports";
+import { agentUsageCensus, toolUsageCensus } from "@tachy/core/analytics";
+import { libraryEngagementCensus } from "@tachy/core/library";
+import { jobIssues } from "@tachy/core/jobs";
+import { forbidden, ISSUE_ITEMS, type IssueList } from "@tachy/core/infra";
 import { callerScope, isAdminIdentity } from "../../authz";
 import { runtimeSnapshot, systemIssues } from "../../runtime";
 import { untokenedConnections } from "./sources";
@@ -100,8 +96,8 @@ export const overview = new Hono()
    * route so the rail's counts stay one cheap query: these scan day buckets and
    * the run log, and only the overviews render them.
    *
-   * Everything is aggregate except two lists that name people — who spends the
-   * most tokens, who has the agent change the most — and those travel only to an
+   * Everything is aggregate except two lists that name people - who spends the
+   * most tokens, who has the agent change the most - and those travel only to an
    * app admin, for the same reason `/system` keeps its `env` block back.
    */
   .get("/overview/activity", async (c) => {

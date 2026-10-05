@@ -1,14 +1,16 @@
 import { z } from "zod";
 import {
   resolveSource,
-  resolveCurrentUserId,
+  resolveProjectContextStrict,
+  matchWiki,
+} from "@tachy/core/sources";
+import { resolveCurrentUserId } from "@tachy/core/access";
+import {
   resolveRedactionPolicy,
   scrubText,
   TokenMap,
-  resolveProjectContextStrict,
-  matchWiki,
-  badInput,
-} from "@tachy/core";
+} from "@tachy/core/compliance";
+import { badInput } from "@tachy/core/infra";
 import {
   createAdoClient,
   createWorkItem,
@@ -21,7 +23,7 @@ import { out } from "../results";
 import { sourceSlug } from "../fields";
 
 /**
- * Azure DevOps beyond work-item ingest — its wikis, and creating items in it.
+ * Azure DevOps beyond work-item ingest - its wikis, and creating items in it.
  */
 
 async function resolveAdoClient(sourceSlug: string): Promise<{
@@ -31,7 +33,7 @@ async function resolveAdoClient(sourceSlug: string): Promise<{
   const { conn } = await resolveSource(sourceSlug);
   if (conn.sourceType !== "azure-devops")
     throw badInput(
-      `Source '${sourceSlug}' is type '${conn.sourceType}' — this tool needs an azure-devops connection (see list_source_connections)`,
+      `Source '${sourceSlug}' is type '${conn.sourceType}' - this tool needs an azure-devops connection (see list_source_connections)`,
     );
   return {
     conn,
@@ -45,7 +47,7 @@ async function resolveAdoClient(sourceSlug: string): Promise<{
 
 /**
  * Every ADO tool takes either the raw (source, project) pair or a product_slug
- * that resolves to a registered project — with its wiki and defaults attached.
+ * that resolves to a registered project - with its wiki and defaults attached.
  */
 async function resolveAdoTarget(a: {
   source?: string;
@@ -65,7 +67,7 @@ async function resolveAdoTarget(a: {
   });
   if (context.connection.source_type !== "azure-devops")
     throw badInput(
-      `project '${context.project.external_key}' belongs to a ${context.connection.source_type} connection — this tool needs azure-devops`,
+      `project '${context.project.external_key}' belongs to a ${context.connection.source_type} connection - this tool needs azure-devops`,
     );
   return {
     sourceSlug: context.connection.slug,
@@ -90,8 +92,8 @@ function resolveWikiId(
   if (fallback) return fallback;
   throw badInput(
     registered.length
-      ? "this project's registered wikis have no default — name one with `wiki`"
-      : "no wiki given and this project has none registered — call list_ado_wikis, or set them on the project",
+      ? "this project's registered wikis have no default - name one with `wiki`"
+      : "no wiki given and this project has none registered - call list_ado_wikis, or set them on the project",
   );
 }
 
@@ -157,7 +159,7 @@ tool(
   "list_ado_wiki_pages",
   {
     description:
-      "List page paths of an Azure DevOps wiki (flattened page tree). Use get_ado_wiki_page to fetch a page's content. With product_slug, the project and its default wiki are resolved for you — pass wiki only to reach one of its other wikis. A big wiki runs to hundreds of pages, so narrow with path_prefix rather than raising limit.",
+      "List page paths of an Azure DevOps wiki (flattened page tree). Use get_ado_wiki_page to fetch a page's content. With product_slug, the project and its default wiki are resolved for you - pass wiki only to reach one of its other wikis. A big wiki runs to hundreds of pages, so narrow with path_prefix rather than raising limit.",
     inputSchema: {
       source: sourceSlug.optional(),
       project: z.string().optional(),
@@ -187,7 +189,7 @@ tool(
       pages: paths.slice(0, max),
       ...(paths.length > max
         ? {
-            next: "only the first page paths are shown — narrow with path_prefix to see the rest of the tree rather than raising limit.",
+            next: "only the first page paths are shown - narrow with path_prefix to see the rest of the tree rather than raising limit.",
           }
         : {}),
     });
@@ -198,7 +200,7 @@ tool(
   "get_ado_wiki_page",
   {
     description:
-      "Fetch one Azure DevOps wiki page's markdown content. READ ONLY — it never saves. To persist the knowledge, classify it (incident lesson → save_knowledge_entry; freeform doc/runbook → save_reference_doc with source set to the page URL, plus the source_project_id and external_key returned here so a re-import supersedes it instead of duplicating). The save call is gated by its own review box.",
+      "Fetch one Azure DevOps wiki page's markdown content. READ ONLY - it never saves. To persist the knowledge, classify it (incident lesson → save_knowledge_entry; freeform doc/runbook → save_reference_doc with source set to the page URL, plus the source_project_id and external_key returned here so a re-import supersedes it instead of duplicating). The save call is gated by its own review box.",
     inputSchema: {
       source: sourceSlug.optional(),
       project: z.string().optional(),
@@ -219,7 +221,7 @@ tool(
         .union([z.string(), z.number()])
         .optional()
         .describe(
-          "The numeric id in a wiki URL — .../_wiki/wikis/<wiki>/1648/Start means page_id 1648. Use it when the user pasted a link; it needs no path guessing.",
+          "The numeric id in a wiki URL - .../_wiki/wikis/<wiki>/1648/Start means page_id 1648. Use it when the user pasted a link; it needs no path guessing.",
         ),
       max_chars: z.number().int().positive().optional(),
     },
@@ -252,10 +254,10 @@ tool(
       ...(redact
         ? {
             redaction:
-              "Placeholders like [EMAIL_1]/[SECRET_1] are intentional redactions — treat them as opaque, never guess the originals.",
+              "Placeholders like [EMAIL_1]/[SECRET_1] are intentional redactions - treat them as opaque, never guess the originals.",
           }
         : {}),
-      next: "Say where this belongs (reference doc, knowledge entry, or component), then call the matching save — its review box is the approval. Cite remote_url as the doc's source.",
+      next: "Say where this belongs (reference doc, knowledge entry, or component), then call the matching save - its review box is the approval. Cite remote_url as the doc's source.",
     });
   },
 );
@@ -264,7 +266,7 @@ tool(
   "get_ado_work_item_schema",
   {
     description:
-      "Discover what an Azure DevOps project requires to create a work item. Without type: lists the project's work item types. With type: returns each field's reference name, whether it is required, allowed values, and defaults, plus the defaults configured on the registered project (config.defaults[type]) or on the connection (config.defaults[project][type]). ALWAYS call this before create_ado_work_item — required fields differ per project and type. Pass either source + project, or product_slug.",
+      "Discover what an Azure DevOps project requires to create a work item. Without type: lists the project's work item types. With type: returns each field's reference name, whether it is required, allowed values, and defaults, plus the defaults configured on the registered project (config.defaults[type]) or on the connection (config.defaults[project][type]). ALWAYS call this before create_ado_work_item - required fields differ per project and type. Pass either source + project, or product_slug.",
     inputSchema: {
       source: sourceSlug.optional(),
       project: z.string().optional(),
@@ -305,7 +307,7 @@ tool(
   "create_ado_work_item",
   {
     description:
-      "Create a work item (Bug, Task, User Story, ...) in an Azure DevOps project. Call get_ado_work_item_schema FIRST and fill every required field — requirements differ per project/type; never guess. Pass either source + project (any project the PAT can see; registering it is not required), or product_slug to use a registered project and its defaults. fields is keyed by ADO reference names (e.g. 'System.AreaPath', 'Microsoft.VSTS.Common.Severity'); the project's configured defaults are applied underneath. description is plain text/HTML — ADO renders System.Description as HTML, markdown will NOT render. Pass work_item_id when raising this from a ticket, so the ticket records what tracks it. The review box shows the full field set for the user to edit, so draft it and call; a denial means they want changes, not a retry. Requires a PAT with Work Items Read & Write.",
+      "Create a work item (Bug, Task, User Story, ...) in an Azure DevOps project. Call get_ado_work_item_schema FIRST and fill every required field - requirements differ per project/type; never guess. Pass either source + project (any project the PAT can see; registering it is not required), or product_slug to use a registered project and its defaults. fields is keyed by ADO reference names (e.g. 'System.AreaPath', 'Microsoft.VSTS.Common.Severity'); the project's configured defaults are applied underneath. description is plain text/HTML - ADO renders System.Description as HTML, markdown will NOT render. Pass work_item_id when raising this from a ticket, so the ticket records what tracks it. The review box shows the full field set for the user to edit, so draft it and call; a denial means they want changes, not a retry. Requires a PAT with Work Items Read & Write.",
     inputSchema: {
       source: sourceSlug.optional(),
       project: z.string().optional(),

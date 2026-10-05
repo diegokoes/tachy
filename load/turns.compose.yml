@@ -7,6 +7,8 @@
 #   (optional) restore the latest dump into pg-load
 #   docker compose -p tachy-load -f load/turns.compose.yml exec api-load \
 #     node load/turns.mjs
+#   docker compose -p tachy-load -f load/turns.compose.yml exec api-load \
+#     node load/oneshots.mjs
 #   docker compose -p tachy-load -f load/turns.compose.yml down -v
 #
 # Run inside api-load so the driver reads that container's cgroup memory.
@@ -23,7 +25,7 @@ services:
     volumes:
       - ../db/schema.sql:/docker-entrypoint-initdb.d/10-schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U tachy -d tachy"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U tachy -d tachy"]
       interval: 5s
       retries: 20
 
@@ -57,3 +59,4 @@ services:
       BASE_URL: http://127.0.0.1:8787
     volumes:
       - ./turns.mjs:/app/load/turns.mjs:ro
+      - ./oneshots.mjs:/app/load/oneshots.mjs:ro

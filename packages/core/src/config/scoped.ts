@@ -37,7 +37,7 @@ export interface ScopedHit<S extends Scope = Scope> {
 /**
  * Most-specific-wins walk over a scoped table: user row, then team row, then
  * global row. Returns the winning row and which scope it came from. A table
- * that has no team scope never gets the team branch — its column is not there.
+ * that has no team scope never gets the team branch - its column is not there.
  */
 export async function resolveScoped<T extends ScopedTable>(
   table: T,

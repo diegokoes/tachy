@@ -19,18 +19,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      # Full history, so the pull request's base is there to diff against.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version: 26
           cache: npm
 
       - run: npm ci
 
       - run: npm run typecheck
 
-      # `typecheck` excludes packages/web, which has its own tsconfig — this is
+      # `typecheck` excludes packages/web, which has its own tsconfig - this is
       # what holds the SPA to the shapes in @tachy/contract.
       - run: npm run web:check
 
@@ -44,7 +47,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: .model-cache
-          key: model-Xenova-bge-base-en-v1.5
+          key: model-Alibaba-NLP-gte-modernbert-base
 
       - run: npx tsx scripts/warmup-embeddings.ts
 
@@ -53,6 +56,14 @@ jobs:
       # `coverage` runs the same suite as `npm test` and adds the thresholds, so
       # running both would pay for the suite twice.
       - run: npm run coverage
+
+      # The thresholds hold what each package already has. This holds what the
+      # pull request adds: the share of its new lines the suite ran. A pull
+      # request into main is a release of lines that each passed this on their
+      # way into dev, and it also counts every line a rename or a reformat
+      # touched since the last release.
+      - if: github.event_name == 'pull_request' && github.base_ref != 'main'
+        run: npx tsx scripts/coverage-diff.ts
 
   # Built once per commit that passed the tests, and pulled by digest on the
   # host; the host never builds. `dev` and `main` are convenience tags only.

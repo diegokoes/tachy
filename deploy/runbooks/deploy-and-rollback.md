@@ -13,6 +13,10 @@ the stack (the api drains running chat turns for up to 3 minutes), waits for
 `/readyz` through Caddy and runs `smoke.js`. If readiness or smoke fails, it
 rolls back to the previous commit and digest by itself and exits 1.
 
+The smoke run logs in as `SMOKE_EMAIL` from `/etc/tachy/tachy.env`. Without
+that account the deploy refuses to start; `--skip-smoke` deploys anyway and
+the log records `"smoke": "skipped"`.
+
 **Roll back by hand:** `tachy-deploy <previous commit>`. Safe while the older
 image accepts the current schema, which is what expand and contract is for.
 

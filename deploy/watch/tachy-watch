@@ -101,17 +101,33 @@ check_memory() {
   fi
 }
 
+# The api's runtime block, fetched once for the checks that read it. Sets
+# RUNTIME, or RUNTIME_SKIP to why there is none.
+fetch_runtime() {
+  local token host
+  RUNTIME="" RUNTIME_SKIP=""
+  if [ -n "${WATCH_RUNTIME_FILE:-}" ]; then
+    RUNTIME=$(jq -c '.runtime // empty' "$WATCH_RUNTIME_FILE" 2>/dev/null)
+  else
+    token=$(app_env TACHY_API_TOKEN)
+    if [ -z "$token" ]; then
+      RUNTIME_SKIP="TACHY_API_TOKEN is not set in .env"
+      return
+    fi
+    host=$(app_env TACHY_HOSTNAME localhost)
+    RUNTIME=$(curl -s -m 10 -k --resolve "$host:443:127.0.0.1" -H "authorization: Bearer $token" \
+      "https://$host/api/system" | jq -c '.runtime // empty' 2>/dev/null)
+  fi
+  [ -n "$RUNTIME" ] || RUNTIME_SKIP="the runtime block did not answer"
+}
+
 check_turns_queued() {
-  local token queued since
-  token=$(app_env TACHY_API_TOKEN)
-  if [ -z "$token" ]; then
-    result turns_queued skip "" "TACHY_API_TOKEN is not set in .env"
+  local queued since
+  if [ -z "$RUNTIME" ]; then
+    result turns_queued skip "" "$RUNTIME_SKIP"
     return
   fi
-  local host
-  host=$(app_env TACHY_HOSTNAME localhost)
-  queued=$(curl -s -m 10 -k --resolve "$host:443:127.0.0.1" -H "authorization: Bearer $token" \
-    "https://$host/api/system" | jq -r '.runtime.turns.queued // empty')
+  queued=$(jq -r '.turns.queued // empty' <<<"$RUNTIME")
   if [ -z "$queued" ]; then
     result turns_queued skip "" "the runtime block did not answer"
     return
@@ -128,15 +144,36 @@ check_turns_queued() {
     "$queued" "turns have queued for $minutes min; warn >2, fail >5"
 }
 
+# A job that fails with notify off, and a schedule nothing fires, are otherwise
+# visible only on the admin page.
+check_jobs() {
+  local jobs overdue no_worker failing stuck disabled summary
+  jobs=$(jq -c '.jobs // empty' <<<"${RUNTIME:-null}")
+  if [ -z "$jobs" ]; then
+    result jobs skip "" "${RUNTIME_SKIP:-this release reports no job health}"
+    return
+  fi
+  read -r overdue no_worker failing stuck disabled < <(jq -r \
+    '[.overdue, .no_worker, .failing, .stuck, .disabled] | map(. // 0) | @tsv' <<<"$jobs")
+  summary="$failing failing, $stuck stuck, $disabled disabled, $overdue overdue, $no_worker queues without a worker"
+  if [ "$overdue" -gt 0 ] || [ "$no_worker" -gt 0 ]; then
+    result jobs fail "$((overdue + no_worker))" "$summary; fail when a schedule is overdue or a queue has no worker"
+  elif [ "$failing" -gt 0 ] || [ "$stuck" -gt 0 ] || [ "$disabled" -gt 0 ]; then
+    result jobs warn "$((failing + stuck + disabled))" "$summary; warn when a job's last run failed, a run waits over 15 min, or a definition was disabled"
+  else
+    result jobs ok 0 "no job needs a hand"
+  fi
+}
+
 pg() {
-  dc exec -T postgres psql -At -U "$(app_env POSTGRES_USER tachy)" -d "$(app_env POSTGRES_DB tachy)" -c "$1" </dev/null 2>/dev/null
+  dc exec -T postgres psql -At -U "${WATCH_PG_USER:-tachy_watch}" -d "$(app_env POSTGRES_DB tachy)" -c "$1" </dev/null 2>/dev/null
 }
 
 check_postgres() {
   local row used max pct longest
   row=$(pg "select count(*), current_setting('max_connections') from pg_stat_activity")
   if [ -z "$row" ]; then
-    result pg_connections fail "down" "Postgres did not answer"
+    result pg_connections fail "down" "Postgres did not answer as ${WATCH_PG_USER:-tachy_watch}"
     result pg_long_transaction skip "" "Postgres did not answer"
     return
   fi
@@ -310,7 +347,8 @@ post_teams() {
     --data-binary @- "$TEAMS_WEBHOOK_URL"
 }
 
-for check in readyz 5xx memory turns_queued postgres disk backups downloads certificate thermal power nvme; do
+fetch_runtime
+for check in readyz 5xx memory turns_queued jobs postgres disk backups downloads certificate thermal power nvme; do
   "check_$check" || result "$check" warn "" "the check itself errored"
 done
 

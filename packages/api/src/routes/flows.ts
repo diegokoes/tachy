@@ -2,22 +2,22 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { badInput } from "@tachy/core/infra";
 import {
-  badInput,
   createFlow,
   deleteFlow,
-  enqueueRun,
   flowActionCatalog,
   flowScope,
   getFlow,
   getFlowRun,
-  getTeamIdBySlug,
   listFlowRuns,
   listFlows,
   listOptions,
   updateFlow,
-  userTeams,
-} from "@tachy/core";
+} from "@tachy/core/flows";
+import { enqueueRun } from "@tachy/core/jobs";
+import { getTeamIdBySlug } from "@tachy/core/catalog";
+import { userTeams } from "@tachy/core/access";
 import {
   assertAnyTeamAdminApi,
   assertScopeEditor,
@@ -33,6 +33,7 @@ const flowSchema = z.object({
   team: z.string().nullable(),
   enabled: z.boolean().default(false),
   graph: z.unknown(),
+  model_calls_per_day: z.number().int().min(0).max(100_000).optional(),
 });
 
 const runSchema = z.object({
@@ -49,6 +50,7 @@ async function input(c: Context, body: z.infer<typeof flowSchema>) {
     team_id,
     enabled: body.enabled,
     graph: body.graph,
+    model_calls_per_day: body.model_calls_per_day,
   };
 }
 

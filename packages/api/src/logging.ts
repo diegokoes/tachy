@@ -1,4 +1,4 @@
-import { log, runWithLogContext } from "@tachy/core";
+import { log, runWithLogContext } from "@tachy/core/infra";
 import type { Context, Next } from "hono";
 import { getIdentity } from "./auth";
 

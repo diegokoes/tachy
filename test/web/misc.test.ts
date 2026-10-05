@@ -2,13 +2,13 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it } from "vitest";
-import { slugify, uniqueSlug } from "../../packages/web/src/lib/slug";
-import { ANSI16 } from "../../packages/web/src/lib/accent-palette";
+import { slugify, uniqueSlug } from "../../packages/web/src/slug";
+import { ANSI16 } from "../../packages/web/src/settings/accent-palette";
 import {
   CONFIDENCES,
   KNOWLEDGE_STATUSES,
   RESOLUTION_CLARITIES,
-} from "../../packages/web/src/lib/vocab";
+} from "../../packages/web/src/vocab";
 import * as contract from "@tachy/contract";
 
 describe("slugify", () => {
@@ -24,7 +24,7 @@ describe("slugify", () => {
 
   /**
    * Accented characters are dropped, not transliterated, so a name that is
-   * mostly non-ascii slugs to very little — worth knowing before naming a
+   * mostly non-ascii slugs to very little - worth knowing before naming a
    * product in one. `uniqueSlug` is what keeps two such names from colliding.
    */
   it("drops non-ascii rather than transliterating it", () => {

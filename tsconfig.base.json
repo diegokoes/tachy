@@ -13,6 +13,7 @@
     "paths": {
       "@tachy/contract": ["./packages/contract/src/index.ts"],
       "@tachy/core": ["./packages/core/src/index.ts"],
+      "@tachy/core/*": ["./packages/core/src/*/index.ts"],
       "@tachy/agent": ["./packages/agent/src/index.ts"],
       "@tachy/source-freshdesk": ["./packages/sources/freshdesk/src/index.ts"],
       "@tachy/source-github": ["./packages/sources/github/src/index.ts"]

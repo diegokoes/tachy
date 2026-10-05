@@ -8,6 +8,7 @@ import {
 import { classifyCall, qualify, MCP_SERVER } from "./tools";
 import { effectiveModel, type AgentConfig } from "./backend";
 import { TurnBase, type ApprovalGate } from "./turn";
+import { copilotHome } from "./state";
 
 export async function copilotPermission(
   request: PermissionRequest,
@@ -111,6 +112,7 @@ export class CopilotTurn extends TurnBase {
     try {
       client = new CopilotClient({
         workingDirectory: cfg.sessionCwd,
+        baseDirectory: await copilotHome(cfg.configDir),
         logLevel: "error",
       });
       this.client = client;
@@ -143,7 +145,7 @@ export class CopilotTurn extends TurnBase {
             const args = event.data.arguments ?? {};
             toolNames.set(event.data.toolCallId, base);
             // execution_start already means permitted, so every tachy tool that
-            // actually runs is announced — writes included.
+            // actually runs is announced - writes included.
             this.q.push({
               type: "tool_use",
               tool: base,

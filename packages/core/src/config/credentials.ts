@@ -27,7 +27,7 @@ import {
 /*
  * The prefixes travel with the names. packages/api imports only from
  * @tachy/core, so leaving them out of this line is what forced
- * routes/setup.ts to write "sk-ant-oat01-" out by hand — the second copy of a
+ * routes/setup.ts to write "sk-ant-oat01-" out by hand - the second copy of a
  * rule the contract exists to hold once.
  */
 export {
@@ -42,7 +42,7 @@ export {
 /**
  * The scopes a credential can be stored at. There is no team scope: a secret
  * belongs to one person, and the global rows are the deployment's own machine
- * tokens — a source connection's token, the job webhook — which background
+ * tokens - a source connection's token, the job webhook - which background
  * work resolves with no user to be.
  */
 export type CredentialScope = "user" | "global";
@@ -81,7 +81,7 @@ export function envCredential(name: string): string | undefined {
 
 /**
  * Which row a ciphertext belongs to: its scope, whose it is, and what it is
- * called — exactly the columns the unique indexes are built on, so no two rows
+ * called - exactly the columns the unique indexes are built on, so no two rows
  * share one. Moving a value to another row changes this, and the open fails.
  */
 function credentialAad(row: Record<string, unknown>): string {
@@ -92,7 +92,7 @@ function credentialAad(row: Record<string, unknown>): string {
 
 /**
  * Most-specific-wins credential lookup: user > global > env var.
- * Returns plaintext — never expose the result through an API response.
+ * Returns plaintext - never expose the result through an API response.
  */
 export async function resolveCredential(
   name: string,
@@ -114,7 +114,7 @@ export async function resolveCredential(
   return envCredential(name);
 }
 
-/** Availability without decryption — safe to report through the API. */
+/** Availability without decryption - safe to report through the API. */
 export async function credentialSource(
   name: string,
   ctx: ScopeContext,
@@ -226,7 +226,7 @@ export interface CredentialMeta {
   updated_at: string;
 }
 
-/** Metadata only — never the value. Route callers enforce read authz. */
+/** Metadata only - never the value. Route callers enforce read authz. */
 export async function listCredentials(
   scope: CredentialScope,
   scopeId?: string,

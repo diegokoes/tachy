@@ -3,13 +3,14 @@
   "type": "module",
   "main": "src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./*": "./src/*/index.ts"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.0",
     "@tachy/contract": "*",
     "croner": "^10.0.1",
-    "dotenv": "^18.0.4",
+    "dotenv": "^18.0.5",
     "fflate": "^0.8.2",
     "material-icon-theme": "^5.38.1",
     "postgres": "^3.4.5",

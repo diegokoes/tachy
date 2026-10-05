@@ -1,23 +1,16 @@
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { serve } from "@hono/node-server";
-import {
-  backgroundSettled,
-  env,
-  log,
-  setEmbedBackend,
-  sql,
-  startEmbedHost,
-  sweepInterruptedIndexes,
-  adoptSupersededIndex,
-  startJobProcess,
-} from "@tachy/core";
+import { backgroundSettled, env, log, sql } from "@tachy/core/infra";
+import { setEmbedBackend, startEmbedHost } from "@tachy/core/search";
+import { sweepInterruptedIndexes } from "@tachy/core/code";
+import { startJobProcess } from "@tachy/core/jobs";
 import { registerAgentFlowActions } from "@tachy/agent";
 import { createApp } from "./app";
 import { isBootstrapped } from "./auth";
 import { setInternalEndpoint } from "./internal-endpoint";
 import type { InternalOptions } from "./routes/internal";
-import { lifecycle } from "./lifecycle";
+import { lifecycle, watchPool } from "./lifecycle";
 import { setEmbedDepth } from "./runtime";
 import { abortAllTurns, activeTurnCount, startTurnHousekeeping } from "./turns";
 
@@ -79,8 +72,6 @@ const app = createApp({
 
 startTurnHousekeeping();
 
-const adopted = await adoptSupersededIndex();
-if (adopted) log("info", "repo_index_adopted", { repos: adopted });
 const swept = await sweepInterruptedIndexes();
 if (swept) log("info", "repo_index_sweep", { interrupted: swept });
 
@@ -105,7 +96,7 @@ const DRAIN_MS = (Number(process.env.TACHY_DRAIN_SECONDS) || 180) * 1000;
  * container's stop_grace_period must exceed TACHY_DRAIN_SECONDS, or Docker
  * SIGKILLs the turns this is waiting for.
  */
-async function drain(signal: string) {
+async function drain(signal: string, exitCode = 0) {
   if (lifecycle.draining) return;
   lifecycle.draining = true;
   log("info", "drain_start", { signal, turns: activeTurnCount() });
@@ -124,10 +115,18 @@ async function drain(signal: string) {
   ]);
   await sql.end({ timeout: 5 });
   log("info", "drain_done", { aborted });
-  process.exit(0);
+  process.exit(exitCode);
 }
 process.once("SIGTERM", () => void drain("SIGTERM"));
 process.once("SIGINT", () => void drain("SIGINT"));
+watchPool({
+  onStuck: () => {
+    log("error", "pool_exhausted", {
+      detail: "no connection has been free for 3 minutes; exiting to restart",
+    });
+    void drain("pool_exhausted", 1);
+  },
+});
 console.log(
   `tachy api listening on :${env.port} [auth=${env.authMode}]${serveWeb ? ` (serving SPA from ${webRoot})` : ""}`,
 );

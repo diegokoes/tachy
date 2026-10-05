@@ -1,15 +1,14 @@
 import {
   resolveCurrentUserId,
-  sql,
   countAdmins,
-  forbidden,
   canManageTeam,
   assertCanEditScope,
   assertAnyTeamAdmin,
   assertGlobalAdmin,
-  env,
-} from "@tachy/core";
-import type { ActorRef, EntryScope } from "@tachy/core";
+} from "@tachy/core/access";
+import { sql, forbidden, env } from "@tachy/core/infra";
+import type { ActorRef } from "@tachy/core/library";
+import type { EntryScope } from "@tachy/core/access";
 
 /** Who is calling, and whether they may. */
 export let enforcementCache = false;
@@ -20,8 +19,8 @@ export async function enforcementActive(): Promise<boolean> {
 }
 
 /**
- * Who this subprocess is writing as. The user is the same either way — the API
- * builds this env per turn from the caller's session — so `actor` is what says
+ * Who this subprocess is writing as. The user is the same either way - the API
+ * builds this env per turn from the caller's session - so `actor` is what says
  * whether an edit came from an agent turn or from someone's own MCP client.
  */
 export async function mcpActor(): Promise<ActorRef> {
@@ -91,7 +90,7 @@ export async function newEntryScope(i: {
 
 /*
  * Named once, used by both save_knowledge_entry and update_knowledge_entry.
- * The update tool's copies were bare — no description at all — so the model got
+ * The update tool's copies were bare - no description at all - so the model got
  * the guidance on the call that creates an entry and none on the call that
  * rewrites one. Naming them is also what stops the two drifting.
  */

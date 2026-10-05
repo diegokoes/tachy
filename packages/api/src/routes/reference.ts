@@ -8,6 +8,9 @@ import {
   saveReferenceDoc,
   updateReferenceDoc,
   revertReferenceDoc,
+  referenceDocLineage,
+} from "@tachy/core/reference";
+import {
   listRevisions,
   getRevision,
   countView,
@@ -15,11 +18,12 @@ import {
   outboundLinks,
   viewStats,
   viewHistory,
-  referenceDocLineage,
-  referenceStatusSchema,
+} from "@tachy/core/library";
+import { referenceStatusSchema } from "@tachy/core/knowledge";
+import {
   resolveComponentFilter,
   getCustomerIdBySlug,
-} from "@tachy/core";
+} from "@tachy/core/catalog";
 import { assertScopeEditor, callerActor, callerUserId } from "../authz";
 import { csv } from "../query";
 
@@ -60,7 +64,7 @@ async function listFilters(c: QueryCtx) {
   const component = c.req.query("component");
   const productId = c.req.query("product_id");
   const customerSlug = c.req.query("customer");
-  // Component slugs resolve within a product, so the pair is required — same
+  // Component slugs resolve within a product, so the pair is required - same
   // rule the knowledge route follows.
   const f =
     component && productId
@@ -81,12 +85,21 @@ async function listFilters(c: QueryCtx) {
   };
 }
 
+/** Which shelf a list or search is narrowed to; anything else is ignored. */
+function shelf(c: QueryCtx) {
+  const kind = c.req.query("kind");
+  return kind === "reference" || kind === "wiki" || kind === "any"
+    ? kind
+    : undefined;
+}
+
 export const reference = new Hono()
   .get("/search", async (c) => {
-    const rows = await searchReferenceDocs(
-      c.req.query("q") ?? "",
-      await listFilters(c),
-    );
+    const kind = shelf(c);
+    const rows = await searchReferenceDocs(c.req.query("q") ?? "", {
+      ...(await listFilters(c)),
+      kind: kind === "any" ? undefined : kind,
+    });
     return c.json(rows);
   })
   .get("/:id/lineage", async (c) =>
@@ -154,6 +167,7 @@ export const reference = new Hono()
   .get("/", async (c) => {
     const rows = await listReferenceDocs({
       status: c.req.query("status"),
+      kind: shelf(c),
       ...(await listFilters(c)),
     });
     return c.json(rows);

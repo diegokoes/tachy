@@ -1,35 +1,27 @@
 import { GOOD, STRONG, grade } from "@tachy/contract";
 import type { Grade } from "@tachy/contract";
+import { EMBEDDING_SPEC } from "./model";
 
 export { GOOD, STRONG, grade };
 export type { Grade };
 
 /**
- * Raw cosine is not a relevance percentage, and it never starts at zero.
- * Contrastively-trained embedding models compress their similarity range: BAAI
+ * The vector leg's floor and where real matches top out, for the model in
+ * use (EMBEDDING_MODELS in model.ts says how each pair was measured). BAAI
  * document bge's own distribution as "about in the interval [0.6, 1]" and say
  * plainly that "what matters is the relative order of the scores, not the
  * absolute value ... select an appropriate similarity threshold based on the
  * similarity distribution on your data".
  *
- * So the numbers below are measurements, not opinions, and `scripts/eval-embeddings.ts`
- * re-derives them. `test/search-quality.test.ts` asserts them, so changing
- * TACHY_EMBED_MODEL fails the build instead of silently skewing every gauge.
- *
- * Measured for Xenova/bge-base-en-v1.5 over the golden corpus:
- *
- *   nonsense ("ñ", "zzzzzz", "asdfgh", "...")   <= 0.567
- *   genuine paraphrase/resolution matches       >= 0.654, topping out at 0.720
- *
- * FLOOR sits in that gap; CEIL is where real matches actually top out, so a
- * strong paraphrase can still reach the top of the scale. FLOOR gates the
- * VECTOR LEG ONLY, which is what makes a gap this narrow safe: an identifier
- * query like "ECONNREFUSED" scores only ~0.56 semantically — below the floor —
- * and is meant to arrive through the trigram and tsvector legs instead. Raising
- * FLOOR therefore costs paraphrase recall and never exact-match recall.
+ * FLOOR gates the VECTOR LEG ONLY, which is what makes a narrow gap safe: an
+ * identifier query like "ECONNREFUSED" has almost no meaning to match, scores
+ * below the floor, and is meant to arrive through the trigram and tsvector
+ * legs instead. Raising FLOOR therefore costs paraphrase recall and never
+ * exact-match recall.
  */
-export const SEM_FLOOR = 0.6;
-export const SEM_CEIL = 0.75;
+export const SEM_FLOOR = EMBEDDING_SPEC.semFloor;
+export const SEM_CEIL = EMBEDDING_SPEC.semCeil;
+export const CODE_SEM_FLOOR = EMBEDDING_SPEC.codeSemFloor;
 
 export interface Ranked {
   cos_sim?: number | null;
@@ -50,7 +42,7 @@ export function relevance(r: Ranked): number {
   );
   // Either arm can reach STRONG alone. A paraphrase nobody worded the same way
   // is a real hit; so is a bare error code in an entry whose prose is otherwise
-  // unrelated — that second case is the entire reason lexical is in the mix.
+  // unrelated - that second case is the entire reason lexical is in the mix.
   return clamp01(0.85 * sem + 0.72 * lex);
 }
 
@@ -58,7 +50,7 @@ export const gradeOf = (r: Ranked): Grade => grade(relevance(r));
 
 /**
  * Attach relevance + grade to a search row. Raw signals are not comparable
- * across surfaces — an interleaved knowledge/reference list needs these.
+ * across surfaces - an interleaved knowledge/reference list needs these.
  */
 export function withRelevance<T extends Record<string, unknown>>(row: T) {
   const r = relevance(row as Ranked);

@@ -11,7 +11,7 @@ import {
   releaseTip,
   tip,
   tipState,
-} from "../../packages/web/src/lib/tui/tip.svelte";
+} from "../../packages/web/src/tui/tip.svelte";
 
 const pointer = (type: string, pointerType = "mouse") =>
   Object.assign(new Event(type), { pointerType });

@@ -1,18 +1,20 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { resolveSource } from "@tachy/core/sources";
 import {
-  resolveSource,
   ingestWorkItem,
-  recordRun,
+  workItemScope,
+  externalWorkItemScope,
+} from "@tachy/core/work-items";
+import { recordRun } from "@tachy/core/analytics";
+import {
   getCustomerName,
   getCustomerIdBySlug,
   setWorkItemCustomer,
   setObservedVersion,
-  badInput,
-  workItemScope,
-  externalWorkItemScope,
-} from "@tachy/core";
+} from "@tachy/core/catalog";
+import { badInput } from "@tachy/core/infra";
 import { assertScopeEditor, callerScope } from "../authz";
 
 const customerSchema = z.object({
@@ -46,7 +48,7 @@ export const workItems = new Hono()
   })
   /*
    * A note goes onto the customer's own ticket, under the org's shared
-   * credential — the most externally visible thing this API does, so it is held
+   * credential - the most externally visible thing this API does, so it is held
    * to the same scope check as editing the item it hangs off.
    */
   .post("/:source/:id/notes", zValidator("json", noteSchema), async (c) => {

@@ -3,7 +3,7 @@ import { log } from "./log";
 const pending = new Set<Promise<unknown>>();
 
 /**
- * Run bookkeeping nobody waits for — a view count, a tool-call count — while
+ * Run bookkeeping nobody waits for - a view count, a tool-call count - while
  * keeping hold of it. The request never waits; something that is about to take
  * the tables away from under it can, which is what `backgroundSettled` is for.
  * A failure is logged under `event` and swallowed: failing to count is not

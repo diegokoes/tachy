@@ -17,6 +17,17 @@ import { badInput } from "../infra/errors";
 export { AGENT_PROVIDERS, AGENT_EFFORTS, DEPLOYMENT_PROFILES };
 export type { AgentProvider, AgentEffort, DeploymentProfile };
 
+/** Whether `tz` is a zone this runtime knows, e.g. Europe/Madrid. */
+export function isTimezone(tz: string | undefined): tz is string {
+  if (!tz) return false;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const SETTING_SCHEMAS = {
   redaction_global: z.boolean(),
   agent_provider: z.enum(AGENT_PROVIDERS),
@@ -28,6 +39,9 @@ const SETTING_SCHEMAS = {
   agent_slot_cap: z.number().int().min(1).max(500),
   copilot_slot_weight: z.number().int().min(1).max(32),
   agent_queue_max: z.number().int().min(0).max(500),
+  org_timezone: z
+    .string()
+    .refine(isTimezone, "not an IANA timezone, e.g. Europe/Madrid"),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;
@@ -37,10 +51,17 @@ export type SettingsMap = {
   [K in SettingKey]?: z.infer<(typeof SETTING_SCHEMAS)[K]>;
 };
 
-let cache: SettingsMap | undefined;
+/**
+ * How long a process trusts what it last read. A setting is saved in the api,
+ * and the workers are other processes: without an expiry a worker kept the
+ * values it started with, so redaction switched on in the admin page did not
+ * reach a flow's model call until the worker restarted.
+ */
+const CACHE_MS = 15_000;
+let cache: { at: number; value: SettingsMap } | undefined;
 
 export async function getSettings(): Promise<SettingsMap> {
-  if (cache) return cache;
+  if (cache && Date.now() - cache.at < CACHE_MS) return cache.value;
   const rows = await sql`select key, value from settings`;
   const out: SettingsMap = {};
   for (const row of rows) {
@@ -50,7 +71,7 @@ export async function getSettings(): Promise<SettingsMap> {
       if (parsed.success) (out as Record<string, unknown>)[key] = parsed.data;
     }
   }
-  cache = out;
+  cache = { at: Date.now(), value: out };
   return out;
 }
 
@@ -87,6 +108,7 @@ export interface EffectiveSettings {
   agent_slot_cap: { value: number; source: SettingSource };
   copilot_slot_weight: { value: number; source: SettingSource };
   agent_queue_max: { value: number; source: SettingSource };
+  org_timezone: { value: string; source: SettingSource };
 }
 
 export async function effectiveSettings(): Promise<EffectiveSettings> {
@@ -142,13 +164,28 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
     agent_slot_cap: pick(db.agent_slot_cap, undefined, 15),
     copilot_slot_weight: pick(db.copilot_slot_weight, undefined, 4),
     agent_queue_max: pick(db.agent_queue_max, undefined, 10),
+    org_timezone: pick(
+      db.org_timezone,
+      isTimezone(process.env.TACHY_TIMEZONE)
+        ? process.env.TACHY_TIMEZONE
+        : undefined,
+      "UTC",
+    ),
   };
+}
+
+/**
+ * The zone the organisation's clock is read in: what a schedule means when its
+ * definition names no zone, and when "outside working hours" is.
+ */
+export async function orgTimezone(): Promise<string> {
+  return (await effectiveSettings()).org_timezone.value;
 }
 
 /**
  * Both directions, deliberately: `globalRedactionEnabled()` reads the variable
  * at call time, so setting it and never clearing it left the admin panel
- * reporting redaction off from the database while every scrub path still ran —
+ * reporting redaction off from the database while every scrub path still ran -
  * and the MCP subprocess inherited that.
  */
 export async function loadSettingsIntoEnv(): Promise<void> {

@@ -12,7 +12,7 @@ const zero = (): CoverageCounts => ({
 
 /**
  * Which parts of a product have lessons recorded and nothing written about them.
- * A report over the component tree — deliberately not the wiki's navigation,
+ * A report over the component tree - deliberately not the wiki's navigation,
  * which is its categories.
  *
  * Counts are computed per component and rolled up in memory rather than with a

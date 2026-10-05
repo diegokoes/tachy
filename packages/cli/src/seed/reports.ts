@@ -192,8 +192,8 @@ const FOLLOW_UPS = [
 ];
 
 /**
- * A queue of bugs and feature requests at every stage — waiting, being worked
- * on, fixed, and turned down — with the threads and notifications each stage
+ * A queue of bugs and feature requests at every stage - waiting, being worked
+ * on, fixed, and turned down - with the threads and notifications each stage
  * leaves behind. Every report carries the AI review the form now always runs.
  * The first is forced resolved so the message and notification tables are
  * never empty at any scale. The second is an open one filed by the dev admin,

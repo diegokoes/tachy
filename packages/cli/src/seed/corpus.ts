@@ -1,7 +1,7 @@
 /**
  * The text the seeded rows are built from. It reads like a support desk for an
  * industrial print product because the lexical search legs actually match on
- * it: `load/lib/corpus.js` draws its k6 queries from the same words.
+ * it: `load/corpus.js` draws its k6 queries from the same words.
  */
 
 export const PRODUCTS = [
@@ -44,7 +44,7 @@ export const SYMPTOMS = [
   "device drops off the registry overnight",
   "colour profile reverts to default",
   // Everything below is extra surface area. The twelve above are matched
-  // verbatim by load/lib/corpus.js, so they stay first and unaltered.
+  // verbatim by load/corpus.js, so they stay first and unaltered.
   "print head parks mid-job and will not resume",
   "the reject gate fires on good product",
   "weight readings jump by a factor of ten",
@@ -67,7 +67,7 @@ export const SYMPTOMS = [
 
 /**
  * ROOT_CAUSES[n] and RESOLUTIONS[n] are a matched pair: the fix addresses that
- * cause. Draw them with one index, never two, or the corpus reads as nonsense —
+ * cause. Draw them with one index, never two, or the corpus reads as nonsense -
  * "timestamps drift after DST" fixed by "widen the column to int32" is not
  * something a reader can judge a search result against.
  */
@@ -194,7 +194,7 @@ export const CLOUDS = ["prod", "qa", "demo", "preprod", "dev"];
 /**
  * Fragments that combine with the lists above. The point is combinatorial
  * reach: composing one symptom with one cause and one resolution gives a few
- * hundred distinct bodies, which is not enough to exercise a vector index —
+ * hundred distinct bodies, which is not enough to exercise a vector index -
  * every row ends up sharing a handful of embeddings. Adding independent
  * dimensions multiplies instead of adding.
  */
@@ -254,7 +254,7 @@ export const DOC_TITLES = [
   "Device onboarding checklist",
   "Retention and audit policy",
   "Upgrade runbook",
-  // Extra titles, beyond the eight load/lib/corpus.js queries against.
+  // Extra titles, beyond the eight load/corpus.js queries against.
   "Line commissioning checklist",
   "Aggregation and serialisation overview",
   "PLC integration reference",

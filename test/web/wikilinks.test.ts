@@ -4,16 +4,16 @@
 import { describe, expect, it, vi } from "vitest";
 
 const navigated: string[] = [];
-vi.mock("../../packages/web/src/lib/router.svelte", () => ({
+vi.mock("../../packages/web/src/shell/router.svelte", () => ({
   navigate: (to: string) => navigated.push(to),
 }));
 
 const { LinkTargets } =
-  await import("../../packages/web/src/lib/wikilinks.svelte");
+  await import("../../packages/web/src/wiki/wikilinks.svelte");
 
 /**
- * The anchors carry no href — the route is only known once the server has
- * resolved the target — so the delegated handlers are the whole of how a
+ * The anchors carry no href - the route is only known once the server has
+ * resolved the target - so the delegated handlers are the whole of how a
  * wikilink is followed. A pointer-only version of that is a wiki no keyboard
  * user can navigate.
  */

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   ISSUE_KEYS,
   issueGroups,
-} from "../../packages/web/src/lib/admin/issueMessages";
+} from "../../packages/web/src/admin/issueMessages";
 import {
   age,
   bytes,
@@ -15,25 +15,21 @@ import {
   pct,
   ratio,
   span,
-} from "../../packages/web/src/lib/admin/overview";
+} from "../../packages/web/src/admin/overview";
 import {
   OWN,
   coverageTree,
   trailTo,
-} from "../../packages/web/src/lib/admin/coverage";
-import type { ComponentCoverage } from "../../packages/web/src/lib/admin/rows";
+} from "../../packages/web/src/catalog/coverage";
+import type { ComponentCoverage } from "../../packages/web/src/catalog/rows";
 import {
   endpointP95,
   loadSummary,
   runP95,
   type TestRun,
-} from "../../packages/web/src/lib/admin/loadRuns";
-import {
-  fitRows,
-  fitted,
-  measureBox,
-} from "../../packages/web/src/lib/tui/fit";
-import { portal } from "../../packages/web/src/lib/tui/portal";
+} from "../../packages/web/src/diagnostics/loadRuns";
+import { fitRows, fitted, measureBox } from "../../packages/web/src/tui/fit";
+import { portal } from "../../packages/web/src/tui/portal";
 
 describe("issue groups", () => {
   it("words each open issue, worst first, and drops what is clear or unknown", () => {

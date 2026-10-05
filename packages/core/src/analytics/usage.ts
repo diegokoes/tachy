@@ -7,7 +7,7 @@ export type { AgentUsage };
 /**
  * Rows grouped by model with the tokens no provider priced split out. A backend
  * records `cost_usd: 0` when its SDK reports nothing, so zero means "unknown",
- * not "free" — those tokens are priced here with the same table `recordRun`
+ * not "free" - those tokens are priced here with the same table `recordRun`
  * estimates from, and rows written before the estimate existed get one too.
  */
 interface Priced {
@@ -27,6 +27,57 @@ const costOf = (rows: Priced[]) =>
   );
 
 const REPORTED = sql`nullif((meta->>'cost_usd')::numeric, 0)`;
+
+/**
+ * What flows spent on the model: each `agent.ask` step records a run of mode
+ * `flow` naming its flow. A flow deleted since still counts, under no name.
+ */
+async function flowUsage(days: number): Promise<AgentUsage["flows"]> {
+  const rows = (await sql`
+    select f.id, coalesce(f.name, '(deleted flow)') as name, r.model,
+      count(*)::int as calls,
+      coalesce(sum(coalesce(r.input_tokens, 0) + coalesce(r.output_tokens, 0)), 0)::bigint::float8
+        as tokens,
+      coalesce(sum(${REPORTED}), 0)::float8 as reported,
+      coalesce(sum(r.input_tokens) filter (where ${REPORTED} is null), 0)::bigint::float8
+        as unpriced_in,
+      coalesce(sum(r.output_tokens) filter (where ${REPORTED} is null), 0)::bigint::float8
+        as unpriced_out
+    from analysis_runs r
+    left join flows f on f.id::text = r.meta->>'flow_id'
+    where r.mode = 'flow' and r.created_at > now() - make_interval(days => ${days})
+    group by f.id, f.name, r.model
+  `) as unknown as (Priced & {
+    id: string | null;
+    name: string;
+    calls: number;
+    tokens: number;
+  })[];
+  const byFlow = new Map<string, AgentUsage["flows"]["by_flow"][number]>();
+  for (const r of rows) {
+    const key = r.id ?? "";
+    const f = byFlow.get(key) ?? {
+      id: r.id,
+      name: r.name,
+      calls: 0,
+      tokens: 0,
+      cost_usd: 0,
+    };
+    f.calls += r.calls;
+    f.tokens += r.tokens;
+    f.cost_usd += costOf([r]);
+    byFlow.set(key, f);
+  }
+  const by_flow = [...byFlow.values()].sort(
+    (a, b) => b.cost_usd - a.cost_usd || b.calls - a.calls,
+  );
+  return {
+    calls: by_flow.reduce((n, f) => n + f.calls, 0),
+    tokens: by_flow.reduce((n, f) => n + f.tokens, 0),
+    cost_usd: by_flow.reduce((n, f) => n + f.cost_usd, 0),
+    by_flow: by_flow.slice(0, 10),
+  };
+}
 
 /**
  * Agent consumption over the last `days` days, from `analysis_runs`.
@@ -139,6 +190,7 @@ export async function agentUsageCensus(days = 30): Promise<AgentUsage> {
       models: models.get(d.day) ?? {},
     })),
     by_model: [...by_model] as unknown as AgentUsage["by_model"],
+    flows: await flowUsage(days),
     top_users,
   };
 }
