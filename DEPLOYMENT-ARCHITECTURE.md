@@ -179,11 +179,10 @@ since a turn spends most of its time waiting on the model provider.
 
 ### 3.1 What a turn costs, measured
 
-Measured 2026-09-17 on the workstation, pinned to 8 CPUs to match the laptop.
-Claude Code ran against a mock Anthropic API (`ANTHROPIC_BASE_URL`), and each
-turn made one `search_knowledge` call through the real MCP server against a
-real database. The figures are the peak RSS of the whole process tree, sampled
-every 250 ms.
+Measured 2026-09-17 on the workstation. Claude Code ran against a mock
+Anthropic API (`ANTHROPIC_BASE_URL`), and each turn made one
+`search_knowledge` call through the real MCP server against a real database.
+The figures are the peak RSS of the whole process tree, sampled every 250 ms.
 
 | Process in one turn                     | Before (tsx, own model) | Model moved out | Model moved out, compiled |
 | --------------------------------------- | ----------------------: | --------------: | ------------------------: |
@@ -233,24 +232,51 @@ that processes share once. Measured 2026-10-04 on the workstation with
   window measures the laptop (§13).
 
 **The model itself** is gte-modernbert-base (§5.4). Measured 2026-10-05 on the
-workstation, pinned to 8 CPUs, fp32, on tachý's own code chunks: 1660
-characters on average and 2400 at most.
+workstation in the production image, fp32, on tachý's own code chunks at their
+longest, 2400 characters. The embedder ran under the overlay's limits, 6 CPUs
+and 2560 MB, which on that host is 6 threads (§3.3).
 
-| One passage batch of                 | Holds the model for | Chunks a second | RSS at peak |
-| ------------------------------------ | ------------------: | --------------: | ----------: |
-| 8 full chunks                        |               5.8 s |             1.5 |      2.5 GB |
-| 4                                    |               2.9 s |             1.6 |      1.8 GB |
-| 2, which the 5000-character cap sets |               1.4 s |             1.8 |      1.7 GB |
+| The embedder service                                    | Container at peak | Full chunks a second |
+| ------------------------------------------------------- | ----------------: | -------------------: |
+| loaded and idle                                         |          1283 MiB |                    - |
+| embedding 192 full chunks, a search every few seconds   |          1551 MiB |                  2.3 |
+| the same on 4 threads, the laptop's count               |          1552 MiB |                  1.8 |
+| the heaviest input the queue admits, two rounds (below) |          1757 MiB |                    - |
 
-- Loaded and idle it holds 1.1 GB. One query takes 18 ms.
-- A batch is at most eight texts and at most 5000 characters (`batchChars` in
-  `core/src/search/model.ts`). The smaller batch is faster, uses less memory,
-  and is what a search can find itself waiting behind (§3.3).
-- bge-base-en-v1.5, the model until then, embedded the same chunks at 4.2 a
-  second and peaked at 1.5 GB. The laptop embeds at about 65% of these rates.
+- One query alone takes 16 ms. The CPU quota throttled nothing.
+- **An input is read for 1024 tokens** (`maxTokens` in
+  `core/src/search/model.ts`). Attention costs memory by the square of an
+  input's tokens, and the model's own files set no limit: 8000 characters are
+  1551 tokens of prose, 5945 of base64 and 13442 of Chinese. Uncapped, forty
+  code passages of 8000 characters had the embedder OOM-killed at 2560 MB.
+  Of this repository's 3089 code chunks one is longer than 1024 tokens.
+- **A batch is at most eight texts and 2500 bytes** (`batchBytes`), queries
+  and passages alike. Bytes, because a token is at least a byte and can be
+  less than a character. A full code chunk goes alone:
 
-**Why batches are small,** measured 2026-09-17 with bge-base (8 CPUs, in one
-process):
+  | One batch of full chunks | Holds the model for | Chunks a second | Container at peak |
+  | -----------------------: | ------------------: | --------------: | ----------------: |
+  |                        8 |               4.6 s |             1.8 |          2288 MiB |
+  |                        4 |               2.1 s |             1.9 |          1640 MiB |
+  |                        2 |              0.95 s |             2.1 |          1268 MiB |
+  |                        1 |              0.43 s |             2.4 |          1100 MiB |
+
+  That table is a bare process on 6 threads; the service holds about 390 MiB
+  more. Shorter texts gain too: 1000 characters embed at 6.2 a second two at
+  a time against 5.4 in fives, and 600 at 9.8 in fours against 8.7 in eights.
+
+- **The heaviest input** was 40 code passages of 8000 characters, 24 of
+  Chinese and 24 of base64 at 8000 characters and again cut to fill a batch
+  exactly, and 32 queries of 8000 characters at once. The second round added
+  19 MiB to the first, and nothing was killed.
+- bge-base-en-v1.5, the model until then, embedded the same chunks at about
+  twice the rate (§5.15).
+- **The laptop is not measured with this model.** With bge-base it embedded at
+  about 65% of the workstation's rate, so expect a little over 1 full chunk a
+  second.
+
+**Why batches are small,** measured 2026-09-17 with bge-base (on the
+workstation, in one process):
 
 | Work                             | Time    | Longest event-loop block | RSS after (from 770 MB warm) |
 | -------------------------------- | ------- | -----------------------: | ---------------------------: |
@@ -262,10 +288,10 @@ process):
 | 1 query while a batch of 32 runs | 3704 ms |                        - |                            - |
 
 - Queries are cheap. Passages are not, and the cost is in how they're batched.
-- Passages went 32 at a time when this was measured. The queue now takes 8
-  (`search/embed-queue.ts`). On 8 threads, batches of 8 are just as fast,
-  hold the event loop for a quarter as long, and use 700 MB less, because the
-  ONNX arena grows to fit the largest batch and never shrinks.
+- Passages went 32 at a time when this was measured. The queue now takes 8 at
+  most (`search/embed-queue.ts`). Batches of 8 are just as fast, hold the
+  event loop for a quarter as long, and use 700 MB less, because the ONNX
+  arena grows to fit the largest batch and never shrinks.
 
 **Batch size on the laptop itself,** 256 passages per run, in a throwaway
 container from the production image (`--network none`, no database), measured
@@ -342,8 +368,8 @@ ceilings, and each is a variable in `.env` (§4.3):
   headroom.
 - The api's 7g holds its own 0.3 GB and 15 turns at 0.44 GB each, which is
   between the two figures above.
-- The embedder's 2560m is its 1.7 GB peak with room for a longer batch. It
-  has not been measured inside the container.
+- The embedder's 2560m holds its 1757 MiB peak on the heaviest input its
+  queue admits, measured in the container (§3.1), with 800 MiB to spare.
 
 **Admission.**
 
@@ -385,13 +411,31 @@ about 90% of its peak frequency (§12).
 
 - `postgres`, `api` and `embedder` each get 2048 `cpu_shares`.
 - The embedder is capped at 6 CPUs. It runs one batch at a time, queries
-  first, so a search never waits behind more than one passage batch: up to
-  1.4 s on the workstation, which is about 2.2 s on the laptop (not measured
-  there). A burst of searches from 15 turns costs about 18 ms each.
+  first, so a search never waits behind more than one passage batch: 0.43 s
+  for a full code chunk on the workstation and up to 0.8 s for an input of
+  1024 tokens, which is about 0.7 s and 1.2 s on the laptop (not measured
+  there). A burst of searches from 15 turns costs about 16 ms each.
+- **The model's threads follow the CPU limit** (`core/src/search/threads.ts`).
+  ONNX Runtime starts one thread per physical core of the host and pins each
+  to its core, whatever the container's quota or mask
+  ([threading](https://onnxruntime.ai/docs/performance/tune-performance/threading.html):
+  "INTRA Threads Total = Number of physical CPU Cores"). On the 14-core
+  workstation under the 6-CPU limit that made 8 full chunks take 68 s, against
+  3.9 s with no limit.
+  - When the limit is below the host's cores, the model gets as many threads
+    as the limit: the quota in whole CPUs, or the cores a CPU mask leaves,
+    whichever is smaller.
+  - The laptop has 4 cores under a 6-CPU limit, so the runtime keeps its
+    default of 4. Six threads on 4 cores measured slower than four.
+  - `TACHY_EMBED_THREADS` sets the count outright. The embedder logs the
+    count it loaded with (`embedding_model_ready`).
+  - Waiting threads do not spin (`session.intra_op.allow_spinning` "0").
+    Spinning counts against a quota: 6 threads under 6 CPUs embedded at 1.25
+    chunks a second with it and 2.19 without. With no limit it bought 3% for a
+    quarter more CPU.
 - `worker-heavy` is capped at 4 CPUs. Its embedding happens in the embedder,
   at low priority, so the cap covers git and SQL work.
-- Nothing sets `nice` or an ONNX thread count. Both were planned and neither
-  is built (§5.13).
+- Nothing sets `nice`.
 
 ### 3.4 Disk
 
@@ -451,14 +495,14 @@ value shown is its default, the laptop's. `0` lifts a memory or CPU limit
 (checked on Docker Compose 5.6: the container's `memory.max` and `cpu.max` read
 `max`).
 
-| Service      | mem_limit                              | CPU                                               | pids_limit                        | Other                                                                               |
-| ------------ | -------------------------------------- | ------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------- |
-| caddy        | 256m (`TACHY_CADDY_MEM_LIMIT`)         | 1024 shares                                       | 256                               | the only published ports, 80 and 443                                                |
-| api          | 7g (`TACHY_API_MEM_LIMIT`)             | 2048 shares, no cap                               | 2048 (`TACHY_API_PIDS_LIMIT`)     | `init: true`, `stop_grace_period` 210 s (the drain plus 30 s)                       |
-| embedder     | 2560m (`TACHY_EMBEDDER_MEM_LIMIT`)     | `cpus: 6` (`TACHY_EMBEDDER_CPUS`), 2048 shares    | 256                               | healthcheck on its `/readyz`                                                        |
-| worker-light | 512m (`TACHY_WORKER_LIGHT_MEM_LIMIT`)  | `cpus: 1` (`TACHY_WORKER_LIGHT_CPUS`), 512 shares | 256                               | 4 runs at once (`TACHY_WORKER_LIGHT_CONCURRENCY`), `stop_grace_period` 90 s         |
-| worker-heavy | 1536m (`TACHY_WORKER_HEAVY_MEM_LIMIT`) | `cpus: 4` (`TACHY_WORKER_HEAVY_CPUS`), 256 shares | 256                               | 1 run at a time (`TACHY_WORKER_HEAVY_CONCURRENCY`); runs k6 for `load.test` (§11.3) |
-| postgres     | 2g (`TACHY_POSTGRES_MEM_LIMIT`)        | 2048 shares                                       | 512 (`TACHY_POSTGRES_PIDS_LIMIT`) | `shm_size: 1gb`; its conf (§5.9) is replaced with `TACHY_POSTGRES_CONF`             |
+| Service      | mem_limit                              | CPU                                                                                  | pids_limit                        | Other                                                                               |
+| ------------ | -------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------- | ----------------------------------------------------------------------------------- |
+| caddy        | 256m (`TACHY_CADDY_MEM_LIMIT`)         | 1024 shares                                                                          | 256                               | the only published ports, 80 and 443                                                |
+| api          | 7g (`TACHY_API_MEM_LIMIT`)             | 2048 shares, no cap                                                                  | 2048 (`TACHY_API_PIDS_LIMIT`)     | `init: true`, `stop_grace_period` 210 s (the drain plus 30 s)                       |
+| embedder     | 2560m (`TACHY_EMBEDDER_MEM_LIMIT`)     | `cpus: 6` (`TACHY_EMBEDDER_CPUS`), 2048 shares; the model's threads follow it (§3.3) | 256                               | healthcheck on its `/readyz`                                                        |
+| worker-light | 512m (`TACHY_WORKER_LIGHT_MEM_LIMIT`)  | `cpus: 1` (`TACHY_WORKER_LIGHT_CPUS`), 512 shares                                    | 256                               | 4 runs at once (`TACHY_WORKER_LIGHT_CONCURRENCY`), `stop_grace_period` 90 s         |
+| worker-heavy | 1536m (`TACHY_WORKER_HEAVY_MEM_LIMIT`) | `cpus: 4` (`TACHY_WORKER_HEAVY_CPUS`), 256 shares                                    | 256                               | 1 run at a time (`TACHY_WORKER_HEAVY_CONCURRENCY`); runs k6 for `load.test` (§11.3) |
+| postgres     | 2g (`TACHY_POSTGRES_MEM_LIMIT`)        | 2048 shares                                                                          | 512 (`TACHY_POSTGRES_PIDS_LIMIT`) | `shm_size: 1gb`; its conf (§5.9) is replaced with `TACHY_POSTGRES_CONF`             |
 
 - The memory limits sum to 13.75 GiB (§3.2).
 - `pids_limit` is 2048 on the api because 15 turn trees each hold dozens of
@@ -555,7 +599,7 @@ The B-gpu embedder row is host memory for the process that drives the GPU,
 | Postgres memory            | §5.9                                    | §5.9                                   | `shared_buffers` 25% of the database host's RAM                 | same as B-cpu                                              |
 | embedder instances         | one, queries ahead of passages          | two: one for queries, one for passages | two instances and the reranker                                  | one GPU process for all models                             |
 | runtime                    | transformers.js on CPU, fp32            | same                                   | same                                                            | TEI's CUDA image, or transformers.js with `device: "cuda"` |
-| passage batch              | 8 texts or 5000 characters              | same                                   | same                                                            | measured on the card                                       |
+| passage batch              | 8 texts or 2500 bytes                   | same                                   | same                                                            | measured on the card                                       |
 | text and code model        | gte-modernbert-base                     | same                                   | same                                                            | same                                                       |
 | reranker (§5.14)           | none                                    | none                                   | ms-marco-MiniLM-L-6-v2 over the top 20, text cut to ~256 tokens | bge-reranker-base over the top 30                          |
 | candidates per leg         | 50 (`search/rank.ts`)                   | same                                   | same                                                            | same                                                       |
@@ -589,12 +633,12 @@ On A+ raising `max_connections` is enough.
 **Impact of each change:**
 
 - **A query instance of its own (A+).** A search never waits behind a passage
-  batch. Today it can wait about 0.7 s behind code chunks and up to about
-  1.6 s behind the longest passages (§3.3).
+  batch. Today it can wait about 0.7 s behind a code chunk and up to about
+  1.2 s behind the longest passage (§3.3).
   - Costs about 0.9 GB.
-  - The two instances still share 8 threads, so each needs an explicit ONNX
-    thread count: about 2 for queries, the rest for passages. The setting is
-    listed in §5.13 but not built yet (§5.14).
+  - The two instances still share 8 threads, so each needs an explicit
+    thread count: about 2 for queries, the rest for passages.
+    `TACHY_EMBED_THREADS` sets it per instance (§3.3).
 - **Slot cap 40 and `max_connections` 150 (A+).** The §15.1 module swap,
   costed with Phase 2's services. The two changes ship together.
 - **A reranker (B-cpu, B-gpu).** Measured in §5.14. On CPU only the small
@@ -1330,9 +1374,10 @@ integrations, flows, workers and system.
 
 Planned here and not built:
 
-- a passage batch size and an ONNX thread count in settings. The batch is
-  fixed at 8 (`core/src/search/embed-queue.ts`), and no thread option
-  reaches the model;
+- a passage batch size and a thread count in settings. The batch is a
+  property of the model (`batchBytes` in `core/src/search/model.ts`) and the
+  thread count follows the container's CPU limit or `TACHY_EMBED_THREADS`
+  (§3.3); neither is editable in the UI;
 - abandoned turns on the chats panel;
 - a link to the CI run for the deployed commit, and the deploy log's history;
 - a real diff between the live database and `schema.sql`. The panel compares
@@ -1364,8 +1409,8 @@ using constants measured by hand (`search/relevance.ts`).
 
 **Measured** 2026-10-03, on the workstation:
 
-- **Setup:** i7-12700H pinned to 8 CPUs, transformers.js 4.3.0,
-  onnxruntime-node 1.30.0, fp32.
+- **Setup:** i7-12700H, transformers.js 4.3.0, onnxruntime-node 1.30.0, fp32,
+  the runtime's default of one thread per core: 14.
 - **Run:** one query against N candidates, as `text_pair` inputs with
   `truncation: true`, in batches of 8. Median of 5 after a warm-up.
 - **Text:** "short" is about 350 characters (a code chunk), "mid" is 1000,
@@ -1400,17 +1445,25 @@ using constants measured by hand (`search/relevance.ts`).
   about 0.27 s, which is where B-cpu's 256-token cut comes from.
 - **Cost grows faster than length.** About 5× the tokens took 5.3–5.6× the
   time on bge-reranker-base, and 7.2–7.5× on MiniLM.
-- **More cores don't help at these sizes.**
-  - Pinned to 4 CPUs, every time was within 20% of the 8-CPU figure.
-  - Pinned to 1 CPU, MiniLM over 30 long candidates took 1062 ms, against
-    1349 ms on 8.
-  - So ONNX Runtime's default threading gains nothing here. A rerank costs
-    about one core, and a bigger host runs more of them at once rather than
-    each one faster.
-  - What thread count onnxruntime-node picks under a CPU mask is **to
-    verify**. §5.13 lists an ONNX threads setting, but it isn't built: no
-    thread option reaches the pipeline in `search/model.ts`. Build it before
-    sizing reranking by cores.
+- **Threads help up to about six.** MiniLM over 30 candidates, with an
+  explicit thread count on the workstation's performance cores, measured
+  2026-10-05 on code text, which runs more tokens to the character than the
+  table's:
+
+  | Threads | 350 characters | 1000 characters | 2000 characters |
+  | ------: | -------------: | --------------: | --------------: |
+  |       1 |         927 ms |         2586 ms |         3817 ms |
+  |       2 |         506 ms |         1422 ms |         2135 ms |
+  |       4 |         307 ms |          965 ms |         1551 ms |
+  |       6 |         228 ms |          764 ms |         1213 ms |
+  |      14 |         210 ms |          783 ms |         1255 ms |
+  - A rerank and a passage batch want the same threads. On B-cpu the reranker
+    gets its own thread count (`TACHY_EMBED_THREADS`, §3.3), sized from this
+    table.
+  - `taskset` does not hold the runtime to a CPU mask: left to its default it
+    pins one thread to each core of the host, mask or not. A measurement by
+    cores has to set the thread count.
+
 - **Batches of 8 bound memory and cost no time,** as with the embedder (§3.1).
 
 **What it introduces:**
@@ -1479,7 +1532,8 @@ through TEI's `/rerank` or transformers.js on CUDA (§4.6).
 ### 5.15 The embedding model, and changing it
 
 **Decision.** One model embeds tickets and code: gte-modernbert-base, 768
-dimensions, an 8192-token window, fp32 through transformers.js on CPU. Every
+dimensions, read for 1024 of its 8192 tokens (§3.1), fp32 through
+transformers.js on CPU. Every
 stored vector names the model that made it, so changing the model is a deploy
 and a backfill, with no window.
 
@@ -1505,7 +1559,9 @@ naming the file that answers it. The vector leg alone, by file:
 - gte-modernbert-base and jina-embeddings-v2-base-code are Apache-2.0. The
   newer code models (jina-code-embeddings, SFR-Embedding-Code) are CC-BY-NC
   and were not candidates.
-- The cost is speed: half of bge-base's rate (§3.1).
+- The cost is speed: half of bge-base's rate. The rates in the table are
+  batches of eight on all 14 cores of the workstation, to compare the models;
+  §3.1 has the rate in service.
 - **Its floors are measured, per kind of text.** Against tickets nonsense
   reaches 0.541 and a terse paraphrase 0.592, so the vector leg's floor is
   0.57. Against code nonsense reaches 0.579 and a question's own file 0.637 at
