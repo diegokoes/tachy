@@ -8,7 +8,7 @@ import {
   credentialSource,
   envCredential,
 } from "@tachy/core/config";
-import { AGENT_CREDENTIALS } from "@tachy/core";
+import { ANTHROPIC_API_KEY_CREDENTIAL } from "@tachy/core";
 import { requireAdmin } from "../../auth";
 import { isAdminIdentity } from "../../authz";
 import { runtimeSnapshot } from "../../runtime";
@@ -30,9 +30,7 @@ export const system = new Hono()
         // Availability with no user to be, so: the environment's fallback, or
         // null. Each person's own keys are under /me/credentials.
         anthropic_api_key:
-          (await credentialSource(AGENT_CREDENTIALS.claude, {})) ?? null,
-        copilot_token:
-          (await credentialSource(AGENT_CREDENTIALS.copilot, {})) ?? null,
+          (await credentialSource(ANTHROPIC_API_KEY_CREDENTIAL, {})) ?? null,
       },
       ...(isAdminIdentity(c)
         ? {
@@ -44,10 +42,7 @@ export const system = new Hono()
               api_token_set: Boolean(env.apiToken),
               session_secret_set: Boolean(env.sessionSecret),
               anthropic_api_key_set: Boolean(
-                envCredential(AGENT_CREDENTIALS.claude),
-              ),
-              copilot_token_set: Boolean(
-                envCredential(AGENT_CREDENTIALS.copilot),
+                envCredential(ANTHROPIC_API_KEY_CREDENTIAL),
               ),
               env_badge: env.envBadge ?? null,
               commit: env.commit ?? null,

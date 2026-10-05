@@ -6,9 +6,6 @@ import {
   claudePermission,
   claudeEnv,
   claudeOptions,
-  copilotHome,
-  copilotPermission,
-  copilotSessionConfig,
   effectiveModel,
   explainFailure,
   userStateDir,
@@ -24,7 +21,6 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { AsyncQueue } from "../../packages/agent/src/queue";
 import { TurnBase } from "../../packages/agent/src/turn";
-import type { PermissionRequest } from "@github/copilot-sdk";
 
 describe("agent tool allowlist (security boundary)", () => {
   it("classifies read tools as auto-run", () => {
@@ -257,77 +253,6 @@ describe("claudePermission (approval gate)", () => {
   });
 });
 
-const mcpRequest = (
-  toolName: string,
-  overrides: Partial<Extract<PermissionRequest, { kind: "mcp" }>> = {},
-): PermissionRequest =>
-  ({
-    kind: "mcp",
-    serverName: "tachy",
-    toolName,
-    toolTitle: toolName,
-    readOnly: false,
-    toolCallId: "call1",
-    args: { a: 1 },
-    ...overrides,
-  }) as PermissionRequest;
-
-describe("copilotPermission (approval gate)", () => {
-  it("rejects non-mcp and foreign-server requests without the gate", async () => {
-    const gate = gateWith({ approve: true });
-    expect(
-      await copilotPermission(
-        { kind: "shell", command: "rm -rf" } as unknown as PermissionRequest,
-        gate,
-      ),
-    ).toMatchObject({ kind: "reject" });
-    expect(
-      await copilotPermission(
-        mcpRequest("save_knowledge_entry", { serverName: "other" }),
-        gate,
-      ),
-    ).toMatchObject({ kind: "reject" });
-    expect(gate).not.toHaveBeenCalled();
-  });
-
-  it("approves read tools without the gate", async () => {
-    const gate = gateWith({ approve: true });
-    expect(
-      await copilotPermission(mcpRequest("search_knowledge"), gate),
-    ).toEqual({ kind: "approve-once" });
-    expect(gate).not.toHaveBeenCalled();
-  });
-
-  it("gates write tools: approve-once on plain approval", async () => {
-    const gate = gateWith({ approve: true });
-    expect(
-      await copilotPermission(mcpRequest("save_knowledge_entry"), gate),
-    ).toEqual({ kind: "approve-once" });
-    expect(gate).toHaveBeenCalledWith(
-      "call1",
-      qualify("save_knowledge_entry"),
-      { a: 1 },
-    );
-  });
-
-  it("rejects with feedback on denial", async () => {
-    const gate = gateWith({ approve: false, message: "not now" });
-    expect(
-      await copilotPermission(mcpRequest("save_knowledge_entry"), gate),
-    ).toEqual({ kind: "reject", feedback: "not now" });
-  });
-
-  it("relays edited input as a retry instruction (no input rewrite in Copilot)", async () => {
-    const gate = gateWith({ approve: true, updatedInput: { a: 2 } });
-    const res = await copilotPermission(
-      mcpRequest("save_knowledge_entry"),
-      gate,
-    );
-    expect(res.kind).toBe("reject");
-    expect((res as { feedback: string }).feedback).toContain('{"a":2}');
-  });
-});
-
 describe("AsyncQueue", () => {
   it("delivers pushed items in order then ends on close", async () => {
     const q = new AsyncQueue<number>();
@@ -401,12 +326,10 @@ describe("TurnBase approval lifecycle", () => {
 
 describe("claude subprocess environment (per-user credential isolation)", () => {
   const base: AgentConfig = {
-    provider: "claude",
     mcpCommand: "node",
     mcpArgs: [],
     mcpEnv: {},
     cwd: "/tmp",
-    sessionCwd: "/tmp/empty",
     systemPrompt: "",
   };
 
@@ -484,22 +407,19 @@ describe("claude subprocess environment (per-user credential isolation)", () => 
 });
 
 /**
- * What reaches the model besides the conversation. Each SDK defaults to
+ * What reaches the model besides the conversation. The SDK defaults to
  * reading instructions, settings and servers from disk, and a file picked up
  * that way is paid for on every turn without anyone having written it for the
  * agent.
  */
-describe("what each backend reads", () => {
+describe("what the agent reads", () => {
   const cfg: AgentConfig = {
-    provider: "claude",
     mcpCommand: "node",
     mcpArgs: ["packages/mcp/src/index.ts"],
     mcpEnv: {},
     cwd: "/app",
-    sessionCwd: "/tmp/tachy-agent-empty",
     systemPrompt: "the prompt",
   };
-  const allow = async () => ({ approve: true });
 
   it("gives Claude the prompt as its whole system prompt, and nothing from disk", () => {
     const o = claudeOptions(cfg, {}, new AbortController(), async () => ({
@@ -522,44 +442,15 @@ describe("what each backend reads", () => {
     }));
     expect(o.tools).toEqual(["ToolSearch"]);
   });
-
-  it("runs the Copilot session from the empty directory and the MCP server from the repo", () => {
-    const c = copilotSessionConfig(cfg, allow);
-    expect(c.workingDirectory).toBe("/tmp/tachy-agent-empty");
-    expect(c.skipCustomInstructions).toBe(true);
-    expect(c.availableTools).toEqual(["mcp:*"]);
-    expect(c.systemMessage).toEqual({ mode: "append", content: "the prompt" });
-    const mcp = c.mcpServers?.tachy as {
-      workingDirectory?: string;
-      tools?: string[];
-    };
-    expect(mcp.workingDirectory).toBe("/app");
-  });
-
-  // The typings call `tools` optional; the runtime logs "No tools specified
-  // for server" and starts the session without the server.
-  it("names the tools Copilot takes from the tachy server", () => {
-    const mcp = copilotSessionConfig(cfg, allow).mcpServers?.tachy as {
-      tools?: string[];
-    };
-    expect(mcp.tools).toEqual(["*"]);
-  });
 });
 
-describe("where the Copilot runtime keeps its state", () => {
-  it("is the caller's state directory, never ~/.copilot", async () => {
+describe("where a caller's agent state lives", () => {
+  it("is one directory per user under the agent home", () => {
     const home = mkdtempSync(join(tmpdir(), "tachy-agent-"));
     process.env.TACHY_AGENT_HOME = home;
     try {
       expect(userStateDir("u1")).toBe(join(home, "users", "u1"));
       expect(userStateDir(null)).toBe(join(home, "users", "_default"));
-
-      const mine = await copilotHome(userStateDir("u1"));
-      expect(mine).toBe(join(home, "users", "u1", "copilot"));
-      expect(readdirSync(join(home, "users", "u1"))).toEqual(["copilot"]);
-      expect(await copilotHome()).toBe(
-        join(home, "users", "_default", "copilot"),
-      );
     } finally {
       delete process.env.TACHY_AGENT_HOME;
     }

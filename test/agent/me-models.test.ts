@@ -42,16 +42,15 @@ beforeEach(async () => {
 });
 
 describe("GET /me/models", () => {
-  it("returns what the caller's runtime offers, for their provider", async () => {
+  it("returns what the caller's runtime offers", async () => {
     listModels.mockResolvedValue(OFFERED);
     const body = await models();
     expect(body).toMatchObject({
-      provider: "claude",
       models: OFFERED,
       restricted: false,
       error: null,
     });
-    expect(listModels.mock.calls[0][0].provider).toBe("claude");
+    expect(listModels).toHaveBeenCalledOnce();
   });
 
   it("holds the list to the org's allow-list, keeping allowed ids it cannot describe", async () => {

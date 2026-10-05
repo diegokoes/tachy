@@ -5,11 +5,6 @@ const claude = vi.hoisted(() => ({
   close: vi.fn(),
   options: [] as Record<string, unknown>[],
 }));
-const copilot = vi.hoisted(() => ({
-  listModels: vi.fn(),
-  stop: vi.fn(async () => {}),
-  options: [] as Record<string, unknown>[],
-}));
 
 vi.mock("@anthropic-ai/claude-agent-sdk", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@anthropic-ai/claude-agent-sdk")>()),
@@ -18,25 +13,12 @@ vi.mock("@anthropic-ai/claude-agent-sdk", async (importOriginal) => ({
     return { supportedModels: claude.supportedModels, close: claude.close };
   },
 }));
-vi.mock("@github/copilot-sdk", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@github/copilot-sdk")>()),
-  CopilotClient: class {
-    constructor(opts: Record<string, unknown>) {
-      copilot.options.push(opts);
-    }
-    start = async () => {};
-    listModels = copilot.listModels;
-    stop = copilot.stop;
-  },
-}));
 
 const { listModels } = await import("../../packages/agent/src/models");
 
 let n = 0;
-const auth = (
-  kind: "anthropic_api_key" | "copilot_token" = "anthropic_api_key",
-) => ({
-  kind,
+const auth = () => ({
+  kind: "anthropic_api_key" as const,
   value: `secret-${++n}`,
 });
 
@@ -45,11 +27,9 @@ afterEach(() => {
   claude.supportedModels.mockReset();
   claude.close.mockReset();
   claude.options.length = 0;
-  copilot.listModels.mockReset();
-  copilot.options.length = 0;
 });
 
-describe("listModels on Claude", () => {
+describe("listModels", () => {
   it("names models by their wire id and keeps only the efforts tachy knows", async () => {
     claude.supportedModels.mockResolvedValue([
       {
@@ -71,7 +51,7 @@ describe("listModels on Claude", () => {
       { value: "claude-haiku-4-5", displayName: "", description: "" },
       { value: "default", displayName: "Default", description: "" },
     ]);
-    const models = await listModels({ provider: "claude", agentAuth: auth() });
+    const models = await listModels({ agentAuth: auth() });
     expect(models).toEqual([
       { id: "claude-opus-5-5", label: "Opus 5.5", efforts: ["low", "max"] },
       { id: "claude-haiku-4-5", label: "claude-haiku-4-5", efforts: [] },
@@ -83,7 +63,6 @@ describe("listModels on Claude", () => {
     claude.supportedModels.mockResolvedValue([]);
     const a = auth();
     await listModels({
-      provider: "claude",
       agentAuth: a,
       configDir: "/tmp/u1",
     });
@@ -99,86 +78,27 @@ describe("listModels on Claude", () => {
   it("serves a repeat ask from cache, but not one under another credential", async () => {
     claude.supportedModels.mockResolvedValue([]);
     const a = auth();
-    await listModels({ provider: "claude", agentAuth: a });
-    await listModels({ provider: "claude", agentAuth: a });
+    await listModels({ agentAuth: a });
+    await listModels({ agentAuth: a });
     expect(claude.supportedModels).toHaveBeenCalledTimes(1);
-    await listModels({ provider: "claude", agentAuth: auth() });
+    await listModels({ agentAuth: auth() });
     expect(claude.supportedModels).toHaveBeenCalledTimes(2);
   });
 
   it("forgets a failure, so the next ask tries again", async () => {
     const a = auth();
     claude.supportedModels.mockRejectedValueOnce(new Error("boom"));
-    await expect(
-      listModels({ provider: "claude", agentAuth: a }),
-    ).rejects.toThrow("boom");
+    await expect(listModels({ agentAuth: a })).rejects.toThrow("boom");
     claude.supportedModels.mockResolvedValue([]);
-    await expect(
-      listModels({ provider: "claude", agentAuth: a }),
-    ).resolves.toEqual([]);
+    await expect(listModels({ agentAuth: a })).resolves.toEqual([]);
   });
 
   it("gives up on a runtime that never answers", async () => {
     vi.useFakeTimers();
     claude.supportedModels.mockReturnValue(new Promise(() => {}));
-    const pending = listModels({ provider: "claude", agentAuth: auth() });
+    const pending = listModels({ agentAuth: auth() });
     const verdict = expect(pending).rejects.toThrow(/in time/);
     await vi.advanceTimersByTimeAsync(31_000);
     await verdict;
-  });
-});
-
-describe("listModels on Copilot", () => {
-  it("drops models the org disabled and keeps a default effort only if offered", async () => {
-    copilot.listModels.mockResolvedValue([
-      {
-        id: "gpt-5",
-        name: "GPT-5",
-        capabilities: {
-          supports: { vision: true, reasoningEffort: true },
-          limits: {},
-        },
-        supportedReasoningEfforts: ["low", "medium", "high"],
-        defaultReasoningEffort: "medium",
-      },
-      {
-        id: "claude-sonnet-4.6",
-        name: "",
-        capabilities: {
-          supports: { vision: true, reasoningEffort: false },
-          limits: {},
-        },
-        defaultReasoningEffort: "high",
-      },
-      {
-        id: "locked",
-        name: "Locked",
-        capabilities: {
-          supports: { vision: false, reasoningEffort: false },
-          limits: {},
-        },
-        policy: { state: "disabled", terms: "" },
-      },
-    ]);
-    const a = auth("copilot_token");
-    const models = await listModels({
-      provider: "copilot",
-      agentAuth: a,
-      sessionCwd: "/tmp/e",
-    });
-    expect(models).toEqual([
-      {
-        id: "gpt-5",
-        label: "GPT-5",
-        efforts: ["low", "medium", "high"],
-        defaultEffort: "medium",
-      },
-      { id: "claude-sonnet-4.6", label: "claude-sonnet-4.6", efforts: [] },
-    ]);
-    expect(copilot.options[0]).toMatchObject({
-      gitHubToken: a.value,
-      workingDirectory: "/tmp/e",
-    });
-    expect(copilot.stop).toHaveBeenCalled();
   });
 });

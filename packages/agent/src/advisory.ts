@@ -1,6 +1,3 @@
-import { mkdir } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import {
   effectiveSettings,
   effectivePrefs,
@@ -10,21 +7,12 @@ import {
 import { recordRun } from "@tachy/core/analytics";
 import { scrubText, TokenMap } from "@tachy/core/compliance";
 import { completeOnce } from "./complete";
-import { userStateDir } from "./state";
 
 /**
- * A cheap tier for short judgements. Only used on Claude; on Copilot the
- * caller's own model answers, since a Claude id would be rejected there.
- * `allowed_models`, when an org sets it, still clamps this away in
- * `effectiveModel`.
+ * A cheap tier for short judgements. `allowed_models`, when an org sets it,
+ * still clamps this away in `effectiveModel`.
  */
-const CHEAP_MODEL_CLAUDE = "claude-haiku-4-5-20251001";
-
-async function emptySessionDir(): Promise<string> {
-  const dir = join(tmpdir(), "tachy-agent-empty");
-  await mkdir(dir, { recursive: true, mode: 0o700 });
-  return dir;
-}
+const CHEAP_MODEL = "claude-haiku-4-5-20251001";
 
 export interface Advisory {
   system: string;
@@ -52,34 +40,23 @@ export async function runAdvisory(
     effectiveSettings(),
     effectivePrefs(ctx),
   ]);
-  const provider = prefs.agent_provider.value;
-  const agentAuth = await resolveAgentAuth(provider, ctx);
+  const agentAuth = await resolveAgentAuth(ctx);
   if (!agentAuth) return null;
 
   const tokens = new TokenMap();
   const scrub = (s: string) =>
     settings.redaction_global.value ? scrubText(s, tokens) : s;
-  const model =
-    a.tier === "cheap" && provider === "claude"
-      ? CHEAP_MODEL_CLAUDE
-      : prefs.agent_model.value;
+  const model = a.tier === "cheap" ? CHEAP_MODEL : prefs.agent_model.value;
   const allowedModels = settings.allowed_models.value;
 
   try {
     const res = await completeOnce(
       a.prompt(scrub),
       {
-        provider,
         model,
         ...(allowedModels.length ? { allowedModels } : {}),
         agentAuth,
         systemPrompt: a.system,
-        ...(provider === "copilot"
-          ? {
-              sessionCwd: await emptySessionDir(),
-              configDir: userStateDir(userId),
-            }
-          : {}),
       },
       { timeoutMs: a.timeoutMs },
     );

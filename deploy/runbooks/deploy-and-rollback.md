@@ -17,6 +17,20 @@ The smoke run logs in as `SMOKE_EMAIL` from `/etc/tachy/tachy.env`. Without
 that account the deploy refuses to start; `--skip-smoke` deploys anyway and
 the log records `"smoke": "skipped"`.
 
+**By itself, at night.** With `TACHY_UPDATE_BRANCH=main` in
+`/etc/tachy/tachy.env`, `tachy-update` runs at 01:15 and 04:45 and deploys the
+branch's head when it is not what runs. Merging into that branch is the
+release.
+
+- It does nothing while CI has not published the commit's image; the next run
+  tries again.
+- A commit that was refused (a destructive schema plan) or rolled back is not
+  tried again: tachy-watch reports `update` as failing until a newer commit
+  arrives or someone deploys by hand.
+- `tachy-update --check` says what it would do. `journalctl -u tachy-update`
+  has the last run, and Admin › system shows its result.
+- `TACHY_UPDATE_SMOKE=skip` is for a host with no smoke account yet.
+
 **Roll back by hand:** `tachy-deploy <previous commit>`. Safe while the older
 image accepts the current schema, which is what expand and contract is for.
 
