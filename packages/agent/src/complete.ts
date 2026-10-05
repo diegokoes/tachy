@@ -1,13 +1,6 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import { CopilotClient } from "@github/copilot-sdk";
 import { claudeEnv } from "./claude";
-import { copilotHome } from "./state";
-import {
-  effectiveModel,
-  type AgentAuth,
-  type AgentEffort,
-  type AgentProvider,
-} from "./backend";
+import { effectiveModel, type AgentAuth, type AgentEffort } from "./backend";
 
 /**
  * The subset of a turn's config a bare completion needs: no MCP server, no cwd,
@@ -15,16 +8,11 @@ import {
  * have to assemble the MCP plumbing a one-shot call never touches.
  */
 export interface CompletionConfig {
-  provider: AgentProvider;
   model?: string;
   allowedModels?: string[];
   agentAuth?: AgentAuth;
   systemPrompt?: string;
   effort?: AgentEffort;
-  /** Copilot only: an empty directory the session runs from. */
-  sessionCwd?: string;
-  /** Copilot only: the caller's state directory, which holds the runtime's own. */
-  configDir?: string;
 }
 
 export interface CompletionResult {
@@ -44,16 +32,6 @@ export async function completeOnce(
   prompt: string,
   cfg: CompletionConfig,
   opts: { timeoutMs?: number } = {},
-): Promise<CompletionResult> {
-  return cfg.provider === "copilot"
-    ? completeCopilot(prompt, cfg, opts)
-    : completeClaude(prompt, cfg, opts);
-}
-
-async function completeClaude(
-  prompt: string,
-  cfg: CompletionConfig,
-  opts: { timeoutMs?: number },
 ): Promise<CompletionResult> {
   const controller = new AbortController();
   const timer = opts.timeoutMs
@@ -101,55 +79,5 @@ async function completeClaude(
     return { text, costUsd, usage };
   } finally {
     if (timer) clearTimeout(timer);
-  }
-}
-
-async function completeCopilot(
-  prompt: string,
-  cfg: CompletionConfig,
-  opts: { timeoutMs?: number },
-): Promise<CompletionResult> {
-  const client = new CopilotClient({
-    ...(cfg.sessionCwd ? { workingDirectory: cfg.sessionCwd } : {}),
-    baseDirectory: await copilotHome(cfg.configDir),
-    logLevel: "error",
-  });
-  try {
-    await client.start();
-    const session = await client.createSession({
-      ...(cfg.agentAuth ? { gitHubToken: cfg.agentAuth.value } : {}),
-      model: effectiveModel(cfg),
-      ...(cfg.sessionCwd ? { workingDirectory: cfg.sessionCwd } : {}),
-      ...(cfg.systemPrompt
-        ? { systemMessage: { mode: "append", content: cfg.systemPrompt } }
-        : {}),
-      skipCustomInstructions: true,
-      availableTools: [],
-    });
-
-    let text = "";
-    let inputTokens = 0;
-    let outputTokens = 0;
-    let sawUsage = false;
-    session.on((event) => {
-      if (event.type === "assistant.message" && event.data.content)
-        text = event.data.content;
-      else if (event.type === "assistant.usage") {
-        sawUsage = true;
-        inputTokens += event.data.inputTokens ?? 0;
-        outputTokens += event.data.outputTokens ?? 0;
-      }
-    });
-    await session.sendAndWait({ prompt }, opts.timeoutMs ?? 60_000);
-    return {
-      text,
-      costUsd: 0,
-      usage: {
-        inputTokens: sawUsage ? inputTokens : null,
-        outputTokens: sawUsage ? outputTokens : null,
-      },
-    };
-  } finally {
-    await client.stop().catch(() => {});
   }
 }

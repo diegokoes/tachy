@@ -14,9 +14,8 @@ import {
   upsertScoped,
   type ScopeContext,
 } from "./scoped";
-import type { AgentProvider } from "./settings";
 import {
-  AGENT_CREDENTIALS,
+  ANTHROPIC_API_KEY_CREDENTIAL,
   ANTHROPIC_OAUTH_CREDENTIAL,
   API_KEY_EXAMPLE,
   API_KEY_PREFIX,
@@ -31,7 +30,7 @@ import {
  * rule the contract exists to hold once.
  */
 export {
-  AGENT_CREDENTIALS,
+  ANTHROPIC_API_KEY_CREDENTIAL,
   ANTHROPIC_OAUTH_CREDENTIAL,
   API_KEY_EXAMPLE,
   API_KEY_PREFIX,
@@ -67,13 +66,6 @@ export function envCredential(name: string): string | undefined {
   if (name === "anthropic_api_key") return process.env.ANTHROPIC_API_KEY;
   if (name === ANTHROPIC_OAUTH_CREDENTIAL)
     return process.env.CLAUDE_CODE_OAUTH_TOKEN;
-  if (name === "copilot_token")
-    return (
-      process.env.COPILOT_GITHUB_TOKEN ||
-      process.env.GH_TOKEN ||
-      process.env.GITHUB_TOKEN ||
-      undefined
-    );
   const m = name.match(/^([a-z0-9_-]+)_token:(.+)$/);
   if (m) return sourceTokenOptional(m[1], m[2]);
   return undefined;
@@ -129,7 +121,7 @@ export async function credentialSource(
 
 /** How a turn authenticates to the model provider. */
 export interface AgentAuth {
-  kind: "anthropic_api_key" | "anthropic_oauth" | "copilot_token";
+  kind: "anthropic_api_key" | "anthropic_oauth";
   value: string;
   source: CredentialSource;
 }
@@ -147,7 +139,6 @@ const SOURCE_RANK: Record<CredentialSource, number> = {
  * an API key wins an exact tie.
  */
 export async function resolveAgentAuth(
-  provider: AgentProvider,
   ctx: ScopeContext,
 ): Promise<AgentAuth | undefined> {
   const read = async (
@@ -161,12 +152,9 @@ export async function resolveAgentAuth(
     return value && source ? { kind, value, source } : undefined;
   };
 
-  if (provider === "copilot")
-    return read(AGENT_CREDENTIALS.copilot, "copilot_token");
-
   const candidates = (
     await Promise.all([
-      read(AGENT_CREDENTIALS.claude, "anthropic_api_key"),
+      read(ANTHROPIC_API_KEY_CREDENTIAL, "anthropic_api_key"),
       read(ANTHROPIC_OAUTH_CREDENTIAL, "anthropic_oauth"),
     ])
   ).filter((c): c is AgentAuth => c !== undefined);

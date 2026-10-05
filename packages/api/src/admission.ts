@@ -39,8 +39,8 @@ export interface Ticket {
 
 /**
  * Chat turns are bounded by memory, not CPU: each is a CLI process and an MCP
- * child. Slots count that cost (a Copilot turn weighs more than a Claude one),
- * turns wait in arrival order, and past a short queue the caller is refused.
+ * child. Slots count that cost, turns wait in arrival order, and past a short
+ * queue the caller is refused.
  */
 export class Admission {
   private used = 0;

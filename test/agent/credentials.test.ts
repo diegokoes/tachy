@@ -123,26 +123,6 @@ describe("per-turn agent config isolation (cross-user token safety)", () => {
     expect(cfg.mcpEnv[TOKEN_VAR]).toBeUndefined();
   });
 
-  it("per-user provider preference selects the backend for that turn only", async () => {
-    const settings = await effectiveSettings();
-    await setPref(bob.id, "user", bob.id, "agent_provider", "copilot");
-    await setCredential(bob.id, "user", bob.id, "copilot_token", "bob-gh");
-
-    const bobCfg = await mcpConfig("bob@example.com", settings);
-    expect(bobCfg.provider).toBe("copilot");
-    expect(bobCfg.agentAuth).toMatchObject({
-      kind: "copilot_token",
-      value: "bob-gh",
-    });
-
-    const aliceCfg = await mcpConfig("alice@example.com", settings);
-    expect(aliceCfg.provider).toBe("claude");
-    expect(aliceCfg.agentAuth).toMatchObject({
-      kind: "anthropic_api_key",
-      value: "sk-ant-api03-alice",
-    });
-  });
-
   it("gives each caller their own config dir, so logins and transcripts never mix", async () => {
     const settings = await effectiveSettings();
     const aliceCfg = await mcpConfig("alice@example.com", settings);
@@ -192,13 +172,11 @@ describe("Claude credential selection (API key vs subscription token)", () => {
       ANTHROPIC_OAUTH_CREDENTIAL,
       OAUTH,
     );
-    expect(await resolveAgentAuth("claude", { userId: dana.id })).toMatchObject(
-      {
-        kind: "anthropic_oauth",
-        value: OAUTH,
-        source: "user",
-      },
-    );
+    expect(await resolveAgentAuth({ userId: dana.id })).toMatchObject({
+      kind: "anthropic_oauth",
+      value: OAUTH,
+      source: "user",
+    });
   });
 
   it("prefers a user's token over the deployment fallback key", async () => {
@@ -209,12 +187,10 @@ describe("Claude credential selection (API key vs subscription token)", () => {
       "anthropic_api_key",
       "sk-ant-api03-fallback",
     );
-    expect(await resolveAgentAuth("claude", { userId: dana.id })).toMatchObject(
-      {
-        kind: "anthropic_oauth",
-        source: "user",
-      },
-    );
+    expect(await resolveAgentAuth({ userId: dana.id })).toMatchObject({
+      kind: "anthropic_oauth",
+      source: "user",
+    });
   });
 
   it("falls back to the deployment key for a user with nothing of their own", async () => {
@@ -222,7 +198,7 @@ describe("Claude credential selection (API key vs subscription token)", () => {
       email: "eve@example.com",
       password: "a-long-password",
     });
-    expect(await resolveAgentAuth("claude", { userId: eve.id })).toMatchObject({
+    expect(await resolveAgentAuth({ userId: eve.id })).toMatchObject({
       kind: "anthropic_api_key",
       value: "sk-ant-api03-fallback",
       source: "global",
@@ -248,9 +224,10 @@ describe("Claude credential selection (API key vs subscription token)", () => {
       "anthropic_api_key",
       "sk-ant-api03-frank",
     );
-    expect(
-      await resolveAgentAuth("claude", { userId: frank.id }),
-    ).toMatchObject({ kind: "anthropic_api_key", source: "user" });
+    expect(await resolveAgentAuth({ userId: frank.id })).toMatchObject({
+      kind: "anthropic_api_key",
+      source: "user",
+    });
   });
 });
 
@@ -282,7 +259,6 @@ describe("credential shape validation", () => {
   });
 
   it("leaves credentials it has no shape for alone", () => {
-    expect(validateCredential("copilot_token", "ghu_whatever")).toBeNull();
     expect(
       validateCredential("freshdesk_token:acme", "anything at all"),
     ).toBeNull();
@@ -322,13 +298,11 @@ describe("server-env credential is the lowest rung (deployment-wide fallback)", 
   });
 
   it("answers for a user who has nothing of their own", async () => {
-    expect(await resolveAgentAuth("claude", { userId: user.id })).toMatchObject(
-      {
-        kind: "anthropic_api_key",
-        value: "server-env-key",
-        source: "env",
-      },
-    );
+    expect(await resolveAgentAuth({ userId: user.id })).toMatchObject({
+      kind: "anthropic_api_key",
+      value: "server-env-key",
+      source: "env",
+    });
   });
 
   it("loses to that user's own subscription token", async () => {
@@ -339,12 +313,10 @@ describe("server-env credential is the lowest rung (deployment-wide fallback)", 
       ANTHROPIC_OAUTH_CREDENTIAL,
       OAUTH,
     );
-    expect(await resolveAgentAuth("claude", { userId: user.id })).toMatchObject(
-      {
-        kind: "anthropic_oauth",
-        source: "user",
-      },
-    );
+    expect(await resolveAgentAuth({ userId: user.id })).toMatchObject({
+      kind: "anthropic_oauth",
+      source: "user",
+    });
   });
 
   it("points the MCP child at the server's internal endpoints", async () => {

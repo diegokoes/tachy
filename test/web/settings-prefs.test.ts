@@ -9,9 +9,8 @@ vi.mock("../../packages/web/src/api", async (importOriginal) => ({
 const { agentPrefs, loadAgent, origin } =
   await import("../../packages/web/src/settings/prefs.svelte");
 
-const prefsFor = (provider: string) => ({
-  agent_provider: { value: provider, source: "user" },
-  agent_model: { value: "m", source: "default" },
+const prefs = () => ({
+  agent_model: { value: "m", source: "user" },
   agent_effort: { value: "medium", source: "default" },
   date_order: { value: "dmy", source: "default" },
   clock: { value: "24h", source: "default" },
@@ -46,42 +45,36 @@ describe("loadAgent", () => {
     agentPrefs.error = null;
   });
 
-  function serve(provider: string) {
+  function serve() {
     get.mockImplementation(async (path: string) => {
-      if (path === "/me/preferences") return prefsFor(provider);
+      if (path === "/me/preferences") return prefs();
       if (path === "/me/credentials")
         return { vault_enabled: true, mine: [], effective: {}, agent: {} };
       if (path === "/me/models")
-        return { provider, models: [], restricted: false, error: null };
+        return { models: [], restricted: false, error: null };
       throw new Error(path);
     });
   }
   const modelCalls = () =>
     get.mock.calls.filter(([p]) => p === "/me/models").length;
 
-  it("asks for models again only when the provider changes", async () => {
-    serve("claude");
+  it("asks the runtime for its models once, not on every reload", async () => {
+    serve();
     await loadAgent();
-    await vi.waitFor(() => expect(agentPrefs.models?.provider).toBe("claude"));
+    await vi.waitFor(() => expect(agentPrefs.models).not.toBeNull());
     await loadAgent();
     expect(modelCalls()).toBe(1);
-
-    serve("copilot");
-    await loadAgent();
-    await vi.waitFor(() => expect(agentPrefs.models?.provider).toBe("copilot"));
-    expect(modelCalls()).toBe(2);
   });
 
   it("keeps the preferences when the model list fails", async () => {
-    serve("claude");
     get.mockImplementation(async (path: string) => {
       if (path === "/me/models") throw new Error("no runtime");
-      if (path === "/me/preferences") return prefsFor("claude");
+      if (path === "/me/preferences") return prefs();
       return { vault_enabled: true, mine: [], effective: {}, agent: {} };
     });
     await loadAgent();
     await vi.waitFor(() => expect(agentPrefs.modelsLoading).toBe(false));
-    expect(agentPrefs.prefs?.agent_provider.value).toBe("claude");
+    expect(agentPrefs.prefs?.agent_model.value).toBe("m");
     expect(agentPrefs.models).toBeNull();
     expect(agentPrefs.error).toBe("no runtime");
   });

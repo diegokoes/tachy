@@ -9,7 +9,6 @@ import { sql, jsonb } from "../infra/db";
 import { badInput } from "../infra/errors";
 import {
   AGENT_EFFORTS,
-  AGENT_PROVIDERS,
   effectiveSettings,
   type SettingSource,
 } from "./settings";
@@ -27,7 +26,6 @@ import {
  * except the personal ones below.
  */
 const PREF_SCHEMAS = {
-  agent_provider: z.enum(AGENT_PROVIDERS),
   agent_model: z.string().min(1),
   agent_effort: z.enum(AGENT_EFFORTS),
   date_order: z.enum(DATE_ORDERS),
@@ -101,15 +99,13 @@ export async function resolvePref<K extends PrefKey>(
 export async function effectivePrefs(
   ctx: ScopeContext,
 ): Promise<{ [K in PrefKey]: { value: PrefValue<K>; source: PrefSource } }> {
-  const [agent_provider, agent_model, agent_effort, date_order, clock] =
-    await Promise.all([
-      resolvePref("agent_provider", ctx),
-      resolvePref("agent_model", ctx),
-      resolvePref("agent_effort", ctx),
-      resolvePref("date_order", ctx),
-      resolvePref("clock", ctx),
-    ]);
-  return { agent_provider, agent_model, agent_effort, date_order, clock };
+  const [agent_model, agent_effort, date_order, clock] = await Promise.all([
+    resolvePref("agent_model", ctx),
+    resolvePref("agent_effort", ctx),
+    resolvePref("date_order", ctx),
+    resolvePref("clock", ctx),
+  ]);
+  return { agent_model, agent_effort, date_order, clock };
 }
 
 export async function dateFormatOf(ctx: ScopeContext): Promise<DateFormat> {

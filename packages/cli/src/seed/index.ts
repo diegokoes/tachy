@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline/promises";
-import { AGENT_CREDENTIALS, API_KEY_EXAMPLE } from "@tachy/core";
+import { ANTHROPIC_API_KEY_CREDENTIAL, API_KEY_EXAMPLE } from "@tachy/core";
 import { clearPermissionCache } from "@tachy/core/access";
 import { env, secretsEnabled, sql } from "@tachy/core/infra";
 import { EMBEDDING_MODEL } from "@tachy/core/search";
@@ -404,7 +404,6 @@ async function seedSettings(): Promise<void> {
   await setSetting("org_name", "Seeded Dev Org");
   await setSetting("deployment_profile", "support");
   await setSetting("redaction_global", false);
-  await setSetting("agent_provider", "claude");
   await setSetting("agent_model", "claude-sonnet-5");
   await setSetting("agent_effort", "medium");
   await setSetting("allowed_models", ["claude-opus-5", "claude-sonnet-5"]);
@@ -422,8 +421,10 @@ async function seedCredentials(): Promise<number> {
   if (!admin) return 0;
 
   const values: [string, string][] = [
-    [AGENT_CREDENTIALS.claude, `${API_KEY_EXAMPLE}${"seeded".padEnd(95, "0")}`],
-    [AGENT_CREDENTIALS.copilot, `ghu_${"seeded".padEnd(36, "0")}`],
+    [
+      ANTHROPIC_API_KEY_CREDENTIAL,
+      `${API_KEY_EXAMPLE}${"seeded".padEnd(95, "0")}`,
+    ],
   ];
   let n = 0;
   for (const [name, value] of values) {

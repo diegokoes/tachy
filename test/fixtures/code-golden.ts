@@ -103,7 +103,6 @@ export const CODE_GOLDEN: CodeQuestion[] = [
     "decide whether an agent tool call needs the user's approval",
     "packages/agent/src/tools.ts",
     "packages/agent/src/claude.ts",
-    "packages/agent/src/copilot.ts",
   ),
   q(
     "meaning",
