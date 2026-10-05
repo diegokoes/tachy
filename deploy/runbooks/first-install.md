@@ -30,7 +30,7 @@
 6. **App settings.** As `tachy`, in `/opt/tachy`: `cp .env.example .env`,
    `chmod 600 .env`, and set `TACHY_IMAGE` (a digest from CI),
    `TACHY_HOSTNAME` (without DNS, `tachy.local` resolves by mDNS on most
-   clients, and `TACHY_HOST_ALIASES` adds the host's IP), `POSTGRES_PASSWORD`, `TACHY_APP_DB_PASSWORD`,
+   clients, and `TACHY_HOST_IP` adds the host's address), `POSTGRES_PASSWORD`, `TACHY_APP_DB_PASSWORD`,
    `TACHY_BACKUP_DB_PASSWORD`, `TACHY_SECRET_KEY`, `TACHY_SESSION_SECRET`,
    `TACHY_INTERNAL_SECRET`, `TACHY_API_TOKEN` (tachy-watch reads the runtime
    block with it). Generate each with `openssl rand -base64 32` and store it in
