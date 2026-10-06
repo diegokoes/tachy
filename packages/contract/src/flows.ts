@@ -226,8 +226,10 @@ export function readPath(from: unknown, path: string): unknown {
 const TOKEN = /\{\{\s*([\w.-]+)\s*\}\}/g;
 const ONLY_TOKEN = /^\{\{\s*([\w.-]+)\s*\}\}$/;
 
-const asText = (v: unknown) =>
-  v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+function asText(value: unknown): string {
+  if (value == null) return "";
+  return typeof value === "object" ? JSON.stringify(value) : String(value);
+}
 
 /**
  * Fills `{{path}}` from the run's context. A value that is one token and
