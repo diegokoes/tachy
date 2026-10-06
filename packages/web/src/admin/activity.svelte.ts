@@ -1,5 +1,6 @@
 import { api } from "../api";
 import { createResource } from "../resource.svelte";
+import { followPeriod, periodQuery } from "./period.svelte";
 import type { Activity } from "./rows";
 
 const EMPTY: Activity = {
@@ -37,7 +38,9 @@ const EMPTY: Activity = {
  * an older API must lose a figure, not the panel.
  */
 export const activity = createResource(async () => {
-  const got = await api.get<Partial<Activity>>("/overview/activity");
+  const got = await api.get<Partial<Activity>>(
+    `/overview/activity${periodQuery()}`,
+  );
   return {
     usage: { ...EMPTY.usage, ...got.usage },
     tools: { ...EMPTY.tools, ...got.tools },
@@ -45,3 +48,5 @@ export const activity = createResource(async () => {
     library: { ...EMPTY.library, ...got.library },
   };
 }, EMPTY);
+
+followPeriod(() => void activity.reload());

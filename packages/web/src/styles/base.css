@@ -229,6 +229,58 @@ details.callout[open] > summary.callout-title::after {
   clip-path: var(--theme-wipe);
 }
 
+/* A chart tile taking the window, or giving it back. The tile's own box grows
+   between its two sizes while what was in it fades out and what replaces it
+   fades in, scaled to the box rather than stretched. The page around it only
+   dims. */
+:root[data-tile-morph]::view-transition-group(tile) {
+  animation-duration: 0.5s;
+  animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+:root[data-tile-morph]::view-transition-old(tile),
+:root[data-tile-morph]::view-transition-new(tile) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  mix-blend-mode: normal;
+  animation-duration: 0.5s;
+  animation-fill-mode: both;
+}
+
+:root[data-tile-morph]::view-transition-old(tile) {
+  animation-name: tile-out;
+}
+
+:root[data-tile-morph]::view-transition-new(tile) {
+  animation-name: tile-in;
+}
+
+@keyframes tile-out {
+  0% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes tile-in {
+  0%,
+  20% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+:root[data-tile-morph]::view-transition-old(root),
+:root[data-tile-morph]::view-transition-new(root) {
+  animation-duration: 0.25s;
+}
+
 .theme-wipe {
   position: fixed;
   inset: 0;
