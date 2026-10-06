@@ -2,10 +2,9 @@ import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 import { embedThreads } from "./threads";
 
 /**
- * Pooling and prefixes are per-model facts, not library defaults. Getting them
- * wrong does not fail - it silently collapses every vector toward a narrow cone,
- * so unrelated text scores as high as a real match. They live here, in data, so
- * a model swap is a table entry rather than a hidden assumption.
+ * Per-model facts the library does not default correctly. Wrong pooling or
+ * prefixes raise no error: every vector collapses toward a narrow cone and
+ * unrelated text scores as high as a match.
  */
 export interface EmbeddingModelSpec {
   dim: number;
@@ -29,9 +28,8 @@ export interface EmbeddingModelSpec {
    */
   batchBytes: number;
   /**
-   * The longest code chunk the model reads whole, its path line included.
-   * Code runs about 3 characters a token, 2.7 at the tenth percentile
-   * (measured on tachý's own source), so a 512-token window holds about 1350.
+   * The longest code chunk the model reads whole, its path line included:
+   * under `maxTokens` at 2.7 characters a token, code's tenth percentile.
    * Past this a chunk's tail is stored and never embedded.
    */
   codeChunkChars: number;
@@ -52,55 +50,36 @@ export interface EmbeddingModelSpec {
 }
 
 export const EMBEDDING_MODELS: Record<string, EmbeddingModelSpec> = {
-  // The default. A general text model that also ranks code well, so tickets
-  // and code share one model. It takes 8192 tokens, of which 1024 are read:
-  // a whole code chunk, or about 5000 characters of prose. CLS-pooled, no
-  // prefixes (https://huggingface.co/Alibaba-NLP/gte-modernbert-base). On the
-  // 45 questions of test/fixtures/code-golden.ts its vectors alone put the
-  // right file first 28 times, against 12 for bge-base and 16 for
-  // jina-embeddings-v2-base-code; all three score 13 of 13 on the ticket set.
-  // It embeds at about half bge-base's rate.
-  //
-  // Nonsense scores <= 0.541 against the golden corpus and genuine matches
-  // >= 0.655, topping out at 0.769. A terse paraphrase scores lower than the
-  // golden set's: "scanner offline" reaches a barcode-reader entry at 0.592,
-  // so the floor sits between that and what nonsense reaches. Against code,
-  // nonsense reaches 0.579 and a question's own file 0.637 at the 25th
-  // percentile.
+  /**
+   * The default: a general text model that also ranks code, so tickets and
+   * code share one. CLS-pooled, no prefixes
+   * (https://huggingface.co/Alibaba-NLP/gte-modernbert-base). Its figures
+   * against the other models are in DEPLOYMENT-ARCHITECTURE.md.
+   */
   "Alibaba-NLP/gte-modernbert-base": {
     dim: 768,
     pooling: "cls",
     queryPrefix: "",
     passagePrefix: "",
     maxChars: 8000,
-    // Its tokenizer_config.json sets model_max_length to 1e30, so nothing
-    // else truncates. 8000 characters are 1551 tokens of prose, 5945 of
-    // base64 and 13442 of Chinese, and forty passages of 2900 tokens take the
-    // embedder past 2560 MB. Of this repository's 3089 code chunks one is
-    // longer than 1024 tokens.
+    // Its tokenizer_config.json sets model_max_length to 1e30, so nothing else
+    // truncates, and base64 or CJK input runs past one token a character.
+    // Unbounded, a batch of long passages outgrows the embedder's memory limit.
     maxTokens: 1024,
-    // One full code chunk. With this model a smaller batch is faster at
-    // every length measured: full chunks embed at 2.4 a second one at a
-    // time, 2.1 in twos and 1.8 in eights, on 6 threads. A search waits
-    // behind 0.43 s instead of 0.95 s, and the heaviest input the queue
-    // admits peaks at 1757 MiB instead of 2198.
+    // One full code chunk: this model embeds faster in smaller batches, and a
+    // search waits behind one batch at most.
     batchBytes: 2500,
     codeChunkChars: 2400,
     semFloor: 0.57,
     semCeil: 0.8,
     codeSemFloor: 0.6,
   },
-  // CLS-pooled, no prefix on either side. The model card offers an optional
-  // query instruction ("Represent this sentence for searching relevant
-  // passages: ") and says omitting it costs "a slight degradation". On this
-  // corpus the instruction hurts: a constant prefix dominates the vector of a
-  // content-free query and pulls nonsense toward every entry. With it, "ñ"
-  // scores 0.487 against a real entry and a true identifier match 0.460.
-  // Without it, vector-only top-1 on the golden set is 13/13, against 12/13.
-  // Re-run scripts/eval-embeddings.ts before adding a prefix.
-  //
-  // Its window is 512 tokens. Nonsense scores <= 0.567 against the golden
-  // corpus and genuine matches >= 0.654, topping out at 0.720.
+  /**
+   * CLS-pooled, 512-token window. No query prefix: the instruction its model
+   * card offers dominates the vector of a content-free query and pulls
+   * nonsense toward every entry. Run `scripts/eval-embeddings.ts` before
+   * adding one.
+   */
   "Xenova/bge-base-en-v1.5": {
     dim: 768,
     pooling: "cls",
@@ -114,8 +93,10 @@ export const EMBEDDING_MODELS: Record<string, EmbeddingModelSpec> = {
     semCeil: 0.75,
     codeSemFloor: 0.6,
   },
-  // Mean-pooled, symmetric, no prefixes on either side. Its floor and ceiling
-  // are bge-base's, not measured: re-run the eval before selecting it.
+  /**
+   * Mean-pooled, symmetric. Its floor and ceiling are copied from bge-base:
+   * run `scripts/eval-embeddings.ts` before selecting it.
+   */
   "Xenova/gte-base": {
     dim: 768,
     pooling: "mean",
@@ -129,8 +110,10 @@ export const EMBEDDING_MODELS: Record<string, EmbeddingModelSpec> = {
     semCeil: 0.75,
     codeSemFloor: 0.6,
   },
-  // Mean-pooled. Kept as the reference small model; 384-dim, so it needs the
-  // vector columns narrowed before it can be selected.
+  /**
+   * Mean-pooled reference small model. 384-dim: the vector columns must be
+   * narrowed before it can be selected.
+   */
   "Xenova/all-MiniLM-L6-v2": {
     dim: 384,
     pooling: "mean",
@@ -149,10 +132,7 @@ export const EMBEDDING_MODELS: Record<string, EmbeddingModelSpec> = {
 export const EMBEDDING_MODEL =
   process.env.TACHY_EMBED_MODEL ?? "Alibaba-NLP/gte-modernbert-base";
 
-/**
- * What made every vector stored before rows named their model. A row with no
- * `embedding_model` is taken to be this one's.
- */
+/** A row with no `embedding_model` holds a vector from this model. */
 export const LEGACY_EMBEDDING_MODEL = "Xenova/bge-base-en-v1.5";
 
 export const EMBEDDING_SPEC: EmbeddingModelSpec = (() => {
@@ -176,10 +156,9 @@ if (EMBEDDING_SPEC.dim !== EMBEDDING_DIM)
 let modelPromise: Promise<FeatureExtractionPipeline> | undefined;
 
 export function model(): Promise<FeatureExtractionPipeline> {
-  // A rejected promise must not be memoized: one transient download failure
-  // would otherwise disable embeddings for the whole process lifetime.
-  // Imported here, not at the top: a process that embeds over HTTP never loads
-  // the ONNX runtime at all.
+  // A rejected promise is not memoized: one failed download would disable
+  // embeddings for the life of the process. Imported here so a process that
+  // embeds over HTTP never loads the ONNX runtime.
   modelPromise ??= import("@huggingface/transformers")
     .then(async ({ pipeline, env: hfEnv }) => {
       hfEnv.cacheDir = process.env.TACHY_MODEL_CACHE ?? ".model-cache";
@@ -188,10 +167,8 @@ export function model(): Promise<FeatureExtractionPipeline> {
         dtype: "fp32",
         session_options: {
           ...(threads && { intraOpNumThreads: threads }),
-          // A thread with nothing to do spins before it sleeps, and a CPU
-          // quota counts that as use: six threads under a six-CPU quota
-          // embedded at 1.25 chunks a second spinning and 2.19 not. With no
-          // quota spinning bought 3% for a quarter more CPU.
+          // An idle thread spins before it sleeps, and a CPU quota counts the
+          // spin as use.
           extra: { session: { intra_op: { allow_spinning: "0" } } },
         },
       });

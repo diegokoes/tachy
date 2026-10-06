@@ -1,9 +1,9 @@
 /**
  * Path segments an article slug may not take, because the wiki's own routes
  * use them. The server refuses them on write and the SPA routes on them, so the
- * list is written once. 'toc' and 'coverage' are the names those pages had
- * under /library/wiki; they stay reserved so an old link still redirects
- * instead of resolving to an article someone wrote since.
+ * list is written once. 'toc' and 'coverage' are those pages' former addresses
+ * under /library/wiki, reserved so an old link redirects instead of resolving
+ * to a newer article.
  */
 export const WIKI_RESERVED_SLUGS = [
   "toc",

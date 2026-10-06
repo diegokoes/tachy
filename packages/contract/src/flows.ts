@@ -1,7 +1,7 @@
 /**
  * How a team shapes one creation form, stored per registered project and item
  * type. Source-agnostic: fields are the source's own field ids, and a source
- * with no such form simply has no config.
+ * with no such form has no config.
  */
 
 /**
@@ -40,8 +40,6 @@ export interface FormDisplay {
 }
 
 export const FIELD_SHOWS: readonly FieldShow[] = ["form", "fold", "hidden"];
-
-/* ---- complex flows ------------------------------------------------------- */
 
 /**
  * A flow is triggers and a tree of steps. Each list of steps runs in order; an
