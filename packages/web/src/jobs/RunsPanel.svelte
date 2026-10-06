@@ -1,30 +1,31 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import {
-    JOB_QUEUES,
-    JOB_STATUSES,
-    JOB_TRIGGERS,
-    jobQueue,
-  } from "@tachy/contract";
+  import { JOB_QUEUES, JOB_STATUSES } from "@tachy/contract";
   import { api } from "../api";
   import { keep, recall } from "../shell/kept";
   import { createSequence, errText } from "../resource.svelte";
   import {
-    Badge,
     Button,
     DataTable,
     FilterBar,
+    Icon,
     Meter,
     Modal,
     Note,
     Select,
     Time,
     isActive,
-    toneOf,
+    tip,
     type Column,
   } from "../tui";
-  import { shadowPulse } from "../motion/motion";
   import { duration } from "../admin/overview";
+  import {
+    STATUS_MARK,
+    hasLog,
+    startedBy,
+    statusMark,
+    waitingText,
+  } from "./status";
   import type { JobKindInfo, JobRunListedRow } from "./rows";
   import { jobs as census } from "./census.svelte";
 
@@ -122,7 +123,7 @@
     const q = filter.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((r) =>
-      `${r.definition_name ?? ""} ${r.kind} ${summary(r.params)} ${r.requested_by_name ?? ""} ${r.error ?? ""}`
+      `${r.definition_name ?? ""} ${titleOf(r.kind)} ${r.subject ?? ""} ${startedBy(r, titleOf).who} ${r.outcome ?? ""} ${r.error ?? ""}`
         .toLowerCase()
         .includes(q),
     );
@@ -150,11 +151,9 @@
   });
   onDestroy(() => clearTimeout(timer));
 
-  function summary(params: Record<string, unknown>) {
-    return Object.entries(params)
-      .map(([k, v]) => `${k}=${typeof v === "string" ? v : JSON.stringify(v)}`)
-      .join(" ");
-  }
+  const titleOf = (kind: string) =>
+    kinds.find((k) => k.kind === kind)?.title ?? kind;
+  const nameOf = (r: JobRunListedRow) => r.definition_name ?? titleOf(r.kind);
 
   function elapsed(r: JobRunListedRow) {
     if (!r.started_at) return "";
@@ -166,45 +165,56 @@
   }
 
   const columns: Column<JobRunListedRow>[] = [
-    { key: "status", label: "status", width: "7rem", cell: statusCell },
-    { key: "job", label: "job", width: "15rem", cell: jobCell },
-    { key: "trigger", label: "queued by", width: "11rem", cell: triggerCell },
-    { key: "detail", label: "progress", cell: detailCell },
-    { key: "took", label: "took", width: "5rem", align: "end", cell: tookCell },
-    { key: "acts", label: "", width: "5rem", align: "end", cell: actsCell },
+    { key: "status", label: "", width: "2.5rem", cell: statusCell },
+    { key: "job", label: "job", width: "22%", cell: jobCell },
+    { key: "by", label: "started by", width: "20%", cell: byCell },
+    { key: "result", label: "result", cell: resultCell },
+    {
+      key: "took",
+      label: "took",
+      width: "4.5rem",
+      align: "end",
+      cell: tookCell,
+    },
+    { key: "acts", label: "", width: "5.5rem", align: "end", cell: actsCell },
   ];
 </script>
 
 {#snippet statusCell(r: JobRunListedRow)}
-  {#if r.status === "running"}
-    <span class="live" use:shadowPulse={{ loop: true }}
-      ><Badge tone={toneOf(r.status)}>{r.status}</Badge></span
-    >
-  {:else}
-    <Badge tone={toneOf(r.status)}>{r.status.replace("_", " ")}</Badge>
-  {/if}
+  {@const m = statusMark(r.status)}
+  <span
+    class="mark {m.tone}"
+    class:spin={r.status === "running"}
+    use:tip={m.label}
+  >
+    <Icon name={m.icon} size="1.25em" label={m.label} />
+  </span>
 {/snippet}
 
 {#snippet jobCell(r: JobRunListedRow)}
-  <span class="name">{r.definition_name ?? r.kind}</span>
-  <span class="dim small"
-    ><span class="queue">{r.queue ?? r.resource_class}</span>
-    {r.definition_name ? `${r.kind} ` : ""}{summary(r.params)}</span
-  >
+  <span class="name">{nameOf(r)}</span>
+  {#if r.definition_name && r.definition_name !== titleOf(r.kind)}
+    <span class="dim small"
+      >{titleOf(r.kind)}{r.subject ? ` · ${r.subject}` : ""}</span
+    >
+  {:else if r.subject}
+    <span class="dim small">{r.subject}</span>
+  {/if}
 {/snippet}
 
-{#snippet triggerCell(r: JobRunListedRow)}
-  <span class="name"
-    >{r.trigger}{r.requested_by_name ? ` · ${r.requested_by_name}` : ""}</span
+{#snippet byCell(r: JobRunListedRow)}
+  {@const by = startedBy(r, titleOf)}
+  <span class="name by"
+    ><Icon name={by.icon} size="1.1em" /><span>{by.who}</span></span
   >
   <span class="dim small"><Time at={r.created_at} /></span>
 {/snippet}
 
-{#snippet detailCell(r: JobRunListedRow)}
+{#snippet resultCell(r: JobRunListedRow)}
   {#if r.children}
     {@const c = r.children}
     <button class="link" onclick={() => (parent = r)}>
-      {c.succeeded + c.failed}/{c.total} queued runs done{c.running
+      {c.succeeded + c.failed} of {c.total} done{c.running
         ? ` · ${c.running} running`
         : ""}{c.failed ? ` · ${c.failed} failed` : ""}
     </button>
@@ -214,52 +224,56 @@
       <Meter value={r.progress ?? 0} width={12} label="progress" />
       <span class="pct">{Math.round((r.progress ?? 0) * 100)}%</span>
     </span>
-    <span class="dim small">
-      {r.progress_note ?? "starting"}{r.locked_by ? ` · ${r.locked_by}` : ""}
+    <span class="dim small" use:tip={r.locked_by ?? undefined}>
+      {r.progress_note ?? "starting"}
       {#if r.cancel_requested}<span class="warn"> · stopping</span>{/if}
     </span>
   {:else if r.status === "queued"}
-    <span class="dim"
-      >waiting{r.attempts
-        ? ` to retry (attempt ${r.attempts + 1}/${r.max_attempts})`
-        : ""}</span
-    >
+    <span class="dim">{waitingText(r, now)}</span>
   {:else if r.error}
     <span class="err">{r.error}</span>
-  {:else if r.output}
-    <span class="dim small">{summary(r.output)}</span>
+  {:else if r.outcome}
+    <span class="small">{r.outcome}</span>
+  {:else if r.status === "cancelled"}
+    <span class="dim">stopped</span>
   {/if}
 {/snippet}
 
 {#snippet tookCell(r: JobRunListedRow)}
-  <span class="dim">{elapsed(r)}</span>
+  <span class="dim took">{elapsed(r)}</span>
 {/snippet}
 
+<!-- Both slots are always there, so stop stays under stop whether or not a
+     run has a log worth opening. -->
 {#snippet actsCell(r: JobRunListedRow)}
   <span class="acts">
-    {#if r.log_tail}
-      <Button
-        variant="ghost"
-        square
-        iconSize="1.2em"
-        icon="file"
-        title="log"
-        aria-label={`log of ${r.definition_name ?? r.kind}`}
-        onclick={() => (logOf = r.id)}
-      />
-    {/if}
-    {#if isActive(r.status) && !r.cancel_requested}
-      <Button
-        variant="ghost"
-        square
-        iconSize="1.2em"
-        icon="stop"
-        tone="danger"
-        title="stop; a running run finishes its current step first"
-        aria-label={`stop ${r.definition_name ?? r.kind}`}
-        onclick={() => cancel(r)}
-      />
-    {/if}
+    <span class="slot">
+      {#if hasLog(r.log_tail)}
+        <Button
+          variant="ghost"
+          square
+          iconSize="1.2em"
+          icon="file"
+          title="log"
+          aria-label={`log of ${nameOf(r)}`}
+          onclick={() => (logOf = r.id)}
+        />
+      {/if}
+    </span>
+    <span class="slot">
+      {#if isActive(r.status) && !r.cancel_requested}
+        <Button
+          variant="ghost"
+          square
+          iconSize="1.2em"
+          icon="stop"
+          tone="danger"
+          title="stop; a running run finishes its current step first"
+          aria-label={`stop ${nameOf(r)}`}
+          onclick={() => cancel(r)}
+        />
+      {/if}
+    </span>
   </span>
 {/snippet}
 
@@ -270,14 +284,13 @@
     bind:value={filter}
     shown={shown.length}
     total={rows.length}
-    placeholder="filter by job, params, person or error…"
-    label="filter runs"
+    label="search runs"
   />
   <Select
     bind:value={status}
     options={[
-      { value: "active", label: "queued or running" },
-      ...JOB_STATUSES.map((s) => ({ value: s, label: s.replace("_", " ") })),
+      { value: "active", label: "waiting or running" },
+      ...JOB_STATUSES.map((s) => ({ value: s, label: STATUS_MARK[s].label })),
     ]}
     placeholder="any status"
     clearable
@@ -287,12 +300,12 @@
   />
   <Select
     bind:value={kind}
-    options={kinds.map((k) => ({ value: k.kind, label: k.kind }))}
-    placeholder="any kind"
+    options={kinds.map((k) => ({ value: k.kind, label: k.title }))}
+    placeholder="any job"
     clearable
     keepOpen
     active={!!kind}
-    aria-label="filter by kind"
+    aria-label="filter by job"
   />
   <Select
     bind:value={queue}
@@ -309,18 +322,22 @@
   />
   <Select
     bind:value={trigger}
-    options={JOB_TRIGGERS.map((t) => ({ value: t, label: t }))}
-    placeholder="any trigger"
+    options={[
+      { value: "schedule", label: "schedule" },
+      { value: "manual", label: "a person" },
+      { value: "event", label: "an event" },
+    ]}
+    placeholder="started by"
     clearable
     keepOpen
     active={!!trigger}
-    aria-label="filter by trigger"
+    aria-label="filter by who started it"
   />
 </div>
 
 {#if parent}
   <Note>
-    Runs queued by {parent.definition_name ?? parent.kind}, started
+    Runs queued by {nameOf(parent)}, started
     <Time at={parent.created_at} />.
     <button class="link" onclick={() => (parent = null)}>show all runs</button>
   </Note>
@@ -343,7 +360,7 @@
 
 {#if logRun}
   <Modal
-    title={`${logRun.definition_name ?? logRun.kind} · log`}
+    title={`${nameOf(logRun)} · log`}
     width="56rem"
     cancelLabel="close"
     onCancel={() => (logOf = null)}
@@ -384,6 +401,9 @@
     max-width: 100%;
     overflow: hidden;
   }
+  .took {
+    white-space: nowrap;
+  }
   .pct {
     font-variant-numeric: tabular-nums;
   }
@@ -403,12 +423,45 @@
     gap: var(--pad-1);
     white-space: nowrap;
   }
-  .live {
+  .slot {
+    display: inline-flex;
+    justify-content: center;
+    min-width: var(--control-h);
+  }
+  .mark {
+    display: inline-flex;
+    color: var(--muted);
+  }
+  .mark.ok {
+    color: var(--ok);
+  }
+  .mark.danger {
+    color: var(--danger);
+  }
+  .mark.accent {
     color: var(--accent);
   }
-  .queue {
-    font-family: var(--font-mono);
-    margin-right: var(--pad-1);
+  .mark.spin :global(svg) {
+    animation: spin 1.4s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mark.spin :global(svg) {
+      animation: none;
+    }
+  }
+  .by {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+  }
+  .by span {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .link {
     display: block;

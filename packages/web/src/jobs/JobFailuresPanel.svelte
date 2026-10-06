@@ -11,8 +11,7 @@
      says how many. What it cannot say is whether that is one job failing
      every night or eight jobs failing once. */
   const columns: Column<Failure>[] = [
-    { key: "name", label: "job", width: "14rem" },
-    { key: "kind", label: "kind", width: "11rem" },
+    { key: "name", label: "job", width: "18rem", cell: nameCell },
     { key: "runs", label: "failed", width: "5rem", align: "end" },
     {
       key: "last_at",
@@ -25,6 +24,13 @@
 
   onMount(() => void jobs.reload());
 </script>
+
+{#snippet nameCell(f: Failure)}
+  {f.definition_id ? f.name : f.title}
+  {#if f.definition_id && f.name !== f.title}
+    <span class="dim small">{f.title}</span>
+  {/if}
+{/snippet}
 
 {#snippet errorCell(f: Failure)}
   {#if f.last_error}
@@ -60,6 +66,10 @@
   }
   .dim {
     color: var(--muted);
+  }
+  .small {
+    display: block;
+    font-size: var(--fs-xs);
   }
   .link {
     background: none;

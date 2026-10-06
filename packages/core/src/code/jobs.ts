@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { RepoIndexRun } from "@tachy/contract";
 import { sql } from "../infra/db";
+import { count, num } from "../jobs/present";
 import { defineJob } from "../jobs/registry";
 import { indexRepo } from "./indexer";
 import { listRepos } from "./repos";
@@ -33,7 +34,7 @@ export async function activeReindexes(): Promise<Map<string, RepoIndexRun>> {
 export function defineCodeJobs() {
   defineJob({
     kind: "repo.reindex",
-    title: "Reindex a linked repository",
+    title: "Index repository",
     description:
       "Fetches the repository's tracked lines and embeds the files that changed since the last index.",
     params: z.object({
@@ -48,6 +49,33 @@ export function defineCodeJobs() {
     }),
     queue: "index",
     dedupeKey: (p) => p.repo,
+    subject: (p) =>
+      `${p.repo}${p.line ? ` @ ${p.line}` : ""}${p.full ? " (full)" : ""}`,
+    outcome: (o) => {
+      const lines = (o.lines ?? []) as {
+        ref: string;
+        upToDate: boolean;
+        filesIndexed: number;
+        filesEmbedded: number;
+        filesDeleted: number;
+        versionLabel?: string | null;
+      }[];
+      const said = lines.map((l) =>
+        l.upToDate
+          ? `up to date${l.versionLabel ? ` at ${l.versionLabel}` : ""}`
+          : [
+              `${count(l.filesIndexed, "file")} indexed`,
+              l.filesEmbedded ? `${num(l.filesEmbedded)} embedded` : "",
+              l.filesDeleted ? `${num(l.filesDeleted)} removed` : "",
+            ]
+              .filter(Boolean)
+              .join(", "),
+      );
+      if (!said.length) return null;
+      return said.length === 1
+        ? said[0]
+        : lines.map((l, i) => `${l.ref}: ${said[i]}`).join(" · ");
+    },
     timeout: "8h",
     run: async (ctx, p) => {
       ctx.log(`indexing ${p.repo}${p.line ? ` ${p.line}` : ""}`);
@@ -68,7 +96,7 @@ export function defineCodeJobs() {
 
   defineJob({
     kind: "repos.refresh",
-    title: "Reindex linked repositories",
+    title: "Index all repositories",
     description:
       "Queues a reindex of each linked repository not being indexed already, as runs of their own under this one. With scope 'indexed' (the nightly default) it skips repositories never indexed, which wait for someone to index them; 'all' takes those too. A repo with no new commits costs a fetch and a tree diff.",
     params: z.object({
@@ -82,6 +110,15 @@ export function defineCodeJobs() {
     }),
     defaultSchedule: "40 2 * * *",
     dedupeKey: () => "all",
+    subject: (p) => (p.scope === "all" ? "including never indexed" : null),
+    outcome: (o) =>
+      [
+        `${count(Number(o.queued ?? 0), "repository", "repositories")} queued`,
+        o.skipped ? `${o.skipped} already running` : "",
+        o.never_indexed ? `${o.never_indexed} never indexed` : "",
+      ]
+        .filter(Boolean)
+        .join(", "),
     timeout: "10m",
     run: async (ctx, p) => {
       let queued = 0;

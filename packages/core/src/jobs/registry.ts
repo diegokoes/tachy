@@ -39,6 +39,10 @@ export interface JobKind<P extends z.ZodType = z.ZodType> {
    * going hands back the existing run instead.
    */
   dedupeKey?: (params: z.infer<P>) => string;
+  /** What a run is about, shown under the job's name: a repo, a connection. */
+  subject?: (params: z.infer<P>) => string | null;
+  /** How a finished run went, in a line, from what `run` returned. */
+  outcome?: (output: Record<string, unknown>) => string | null;
   overlap: JobOverlap;
   missed: JobMissed;
   timeout: string;

@@ -12,6 +12,7 @@ import {
 } from "@tachy/contract";
 import { sql, type Db, jsonb } from "../infra/db";
 import { badInput, notFound } from "../infra/errors";
+import { presentRun } from "./present";
 import { getJobKind, type JobKind } from "./registry";
 
 export type { JobRun, JobRunListed };
@@ -258,9 +259,10 @@ export async function listJobRuns(opts: {
   limit?: number;
 }): Promise<JobRunListed[]> {
   const limit = Math.min(opts.limit ?? 50, 500);
-  return (await sql`
+  const rows = await sql`
     select r.*, d.name as definition_name,
            coalesce(u.display_name, u.email) as requested_by_name,
+           p.kind as parent_kind, pd.name as parent_name,
            case when ch.total > 0 then json_build_object(
              'total', ch.total, 'queued', ch.queued, 'running', ch.running,
              'succeeded', ch.succeeded, 'failed', ch.failed) end as children
@@ -280,6 +282,8 @@ export async function listJobRuns(opts: {
     ) r
     left join job_definitions d on d.id = r.definition_id
     left join users u on u.id = r.requested_by
+    left join job_runs p on p.id = r.parent_id
+    left join job_definitions pd on pd.id = p.definition_id
     left join lateral (
       select count(*)::int as total,
              count(*) filter (where c.status = 'queued')::int as queued,
@@ -289,7 +293,11 @@ export async function listJobRuns(opts: {
       from job_runs c where c.parent_id = r.id
     ) ch on true
     order by r.created_at desc
-  `) as never;
+  `;
+  return rows.map((r) => ({
+    ...r,
+    ...presentRun(r.kind, r.params, r.output),
+  })) as never;
 }
 
 /** Runs keep 90 days, failed ones 180. */

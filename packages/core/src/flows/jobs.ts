@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { count } from "../jobs/present";
 import { defineJob } from "../jobs/registry";
 import { getFlow } from "./definitions";
 import { runFlow } from "./run";
@@ -7,7 +8,7 @@ import { scheduledItems } from "./triggers";
 export function defineFlowJobs(): void {
   defineJob({
     kind: "flow.run",
-    title: "Run a flow",
+    title: "Run flow",
     description:
       "One pass of a flow over one item, or a schedule's pass that queues one per matching item.",
     queue: "flows",
@@ -19,6 +20,13 @@ export function defineFlowJobs(): void {
     }),
     dedupeKey: (p) =>
       `flow:${p.flow_id}:${p.work_item_id ?? p.trigger_id ?? "none"}${p.dry_run ? ":dry" : ""}`,
+    subject: (p) => (p.dry_run ? "dry run" : null),
+    outcome: (o) => {
+      if (typeof o.skipped === "string") return `skipped: ${o.skipped}`;
+      if (o.matched !== undefined)
+        return `${o.queued} of ${count(Number(o.matched), "item")} queued`;
+      return o.status ? String(o.status) : null;
+    },
     timeout: "15m",
     async run(ctx, p) {
       const flow = await getFlow(p.flow_id);
