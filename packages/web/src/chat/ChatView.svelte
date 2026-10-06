@@ -26,7 +26,7 @@
   import OutputCard, { type OutputFile } from "./OutputCard.svelte";
   import Approval from "./Approval.svelte";
   import Launcher from "./Launcher.svelte";
-  import { ArtifactMark, Button, Caret, G, Icon, tip } from "../tui";
+  import { ArtifactMark, Button, Caret, caretSide, G, Icon, tip } from "../tui";
   import { pushScope } from "../keys/keys.svelte";
   import type { WorkItemTypeOption, CreatedTicket } from "@tachy/contract";
   import TicketComposer from "../work-items/TicketComposer.svelte";
@@ -755,9 +755,8 @@
             aria-hidden="true"
             style:padding-right="calc(var(--pad-3) + {rest.gutter}px)"
             ><span class="rest-line" style:translate="0 {-rest.scroll}px"
-              ><span class="typed">{chat.input}</span><span
-                class="mark"
-                class:leading={!/\S/.test(chat.input.slice(-1))}><Caret /></span
+              ><span class="typed">{chat.input}</span><span class="mark"
+                ><Caret side={caretSide(chat.input, chat.input.length)} /></span
               ></span
             ></span
           >
@@ -874,8 +873,8 @@
   .md.streaming > :global(:last-child)::after {
     display: inline-block;
     width: 0.165em;
-    height: 1.05em;
-    margin-left: 0.15em;
+    height: 1.09em;
+    margin-left: 0.06em;
     vertical-align: text-bottom;
     border-radius: 1em;
     background: var(--text);
@@ -1186,9 +1185,6 @@
     margin-left: -0.115em;
     color: var(--accent);
     opacity: 0.55;
-  }
-  .mark.leading {
-    margin-left: -0.25em;
   }
   /* A <label>, not a <button> - it has to wrap the file input - so it borrows
      the mark's hover language rather than inheriting it from Button. */

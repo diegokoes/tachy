@@ -1,34 +1,47 @@
 <script lang="ts">
   import type { HTMLInputAttributes } from "svelte/elements";
-  import Caret from "./Caret.svelte";
+  import Caret, { caretSide, type CaretSide } from "./Caret.svelte";
+  import type { IconName } from "./icons";
 
   /**
    * A bare text input that draws its own caret, and keeps it at the end of
    * what was typed while it is not focused, so a filter reads as writeable
    * before it is clicked. The box around it belongs to whoever mounts it.
+   *
+   * With `icon` and `hint` it stands in for a placeholder instead: empty and
+   * unfocused it shows the mark and the word, the caret morphs out of the mark
+   * on focus, and with text in it the caret only shows while focused.
    */
   let {
     value = $bindable(""),
     el = $bindable(),
+    icon,
+    hint,
     ...rest
   }: Omit<HTMLInputAttributes, "value" | "placeholder" | "type"> & {
     value?: string;
     el?: HTMLInputElement;
+    icon?: IconName;
+    hint?: string;
   } = $props();
 
   let at = $state(0);
   let scroll = $state(0);
   let ranged = $state(false);
   let beat = $state(0);
-  let leading = $state(true);
+  let side = $state<CaretSide>("bare");
+  let focused = $state(false);
+
+  const idle = $derived(!!icon && !focused && value === "");
+  const dim = $derived(!!icon && !focused && value !== "");
 
   function sync() {
     if (!el) return;
-    const focused = document.activeElement === el;
+    focused = document.activeElement === el;
     const next = focused ? (el.selectionStart ?? value.length) : value.length;
     ranged = focused && el.selectionEnd !== el.selectionStart;
     scroll = focused ? el.scrollLeft : 0;
-    leading = !/\S/.test(value.charAt(next - 1));
+    side = caretSide(value, next);
     if (next !== at) beat++;
     at = next;
   }
@@ -67,7 +80,9 @@
     <span class="line" style:translate="{-scroll}px 0"
       ><span class="typed">{value.slice(0, at)}</span>{#if !ranged}<span
           class="mark"
-          class:leading><Caret {beat} /></span
+          class:dim><Caret {beat} {side} {icon} {idle} /></span
+        >{/if}{#if hint && value === ""}<span class="hint" class:idle
+          >{hint}</span
         >{/if}</span
     >
   </span>
@@ -98,11 +113,11 @@
   }
 
   .over {
-    /* Wider than the input on the left: at the start of the text the caret
+    /* Wider than the input on both sides: at either end of the text the caret
        stands just outside it, and would be clipped away. */
     position: absolute;
-    inset: 0 0 0 -0.4em;
-    padding-left: 0.4em;
+    inset: 0 -0.4em;
+    padding: 0 0.4em;
     display: flex;
     align-items: center;
     overflow: hidden;
@@ -126,11 +141,29 @@
     color: var(--accent);
     opacity: 0.55;
   }
-  .mark.leading {
-    margin-left: -0.25em;
-    padding-right: 0.25em;
-  }
   .ci:focus-within .mark {
     opacity: 1;
+  }
+  .mark.dim {
+    opacity: 0;
+  }
+  .mark {
+    transition: opacity 0.16s ease;
+  }
+  .hint {
+    /* Past the mark, which has no width of its own to push it. */
+    margin-left: 1.3em;
+    color: var(--muted);
+    opacity: 0;
+    transition: opacity 0.16s ease;
+  }
+  .hint.idle {
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mark,
+    .hint {
+      transition: none;
+    }
   }
 </style>
