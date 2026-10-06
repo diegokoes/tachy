@@ -10,24 +10,25 @@
   import { api } from "../api";
   import { createResource, errText } from "../resource.svelte";
   import {
-    Badge,
     Button,
     Checkbox,
     CrudTable,
     Field,
     FilterBar,
     GroupHead,
+    Icon,
     Modal,
     Note,
     Select,
     Tabs,
     isActive,
-    toneOf,
+    tip,
     type Column,
     type Draft,
     Time,
   } from "../tui";
-  import { shadowPulse } from "../motion/motion";
+  import { describeSchedule } from "./cron";
+  import { lastResult, statusMark } from "./status";
   import type {
     JobChange,
     JobDefinitionRow,
@@ -95,10 +96,11 @@
   });
 
   const columns: Column<JobDefinitionRow>[] = $derived([
+    { key: "health", label: "last run", width: "8rem", cell: healthCell },
     {
       key: "name",
-      label: "name",
-      width: "14rem",
+      label: "job",
+      width: "18rem",
       edit: "text",
       required: true,
       cell: nameCell,
@@ -106,21 +108,19 @@
     },
     {
       key: "kind",
-      label: "kind",
-      width: "11rem",
+      label: "type",
+      formOnly: true,
+      only: "create",
       edit: "select",
       required: true,
       editable: () => false,
-      options: info.data.kinds.map((k) => ({
-        value: k.kind,
-        label: `${k.kind}: ${k.title}`,
-      })),
-      info: "Job kind. Defined in code.",
+      options: info.data.kinds.map((k) => ({ value: k.kind, label: k.title })),
+      info: "What the job does. Types are defined in code.",
     },
     {
       key: "schedule",
       label: "schedule",
-      width: "10rem",
+      width: "14rem",
       edit: "text",
       placeholder: "0 2 * * *",
       value: (d) => d.schedule ?? "",
@@ -137,13 +137,13 @@
     {
       key: "queue",
       label: "queue",
-      width: "8rem",
+      width: "9rem",
       edit: "select",
       value: (d) => d.queue ?? "",
       options: (dr) => [
         {
           value: "",
-          label: `kind default (${kindOf(dr.kind)?.queue ?? "?"})`,
+          label: `type default (${kindOf(dr.kind)?.queue ?? "?"})`,
         },
         ...info.data.queues.map((q) => ({
           value: q.name,
@@ -151,7 +151,7 @@
         })),
       ],
       cell: queueCell,
-      info: "The lane its runs wait in. Each queue belongs to the light or heavy worker pool, whose sizes are set in Compose.",
+      info: "The line its runs wait in. Each queue belongs to the light or heavy worker pool, whose sizes are set in Compose.",
     },
     {
       key: "timeout",
@@ -160,7 +160,7 @@
       edit: "text",
       value: (d) => d.timeout ?? "",
       placeholder: (dr) => kindOf(dr.kind)?.timeout ?? "1h",
-      info: "Like 90s, 15m, 2h. Blank uses the kind's.",
+      info: "Like 90s, 15m, 2h. Blank uses the type's.",
     },
     {
       key: "overlap",
@@ -169,7 +169,7 @@
       edit: "select",
       value: (d) => d.overlap ?? "",
       options: (dr) =>
-        opt(JOB_OVERLAP, `kind default (${kindOf(dr.kind)?.overlap ?? "?"})`),
+        opt(JOB_OVERLAP, `type default (${kindOf(dr.kind)?.overlap ?? "?"})`),
       info: "Overlap policy: skip or queue.",
     },
     {
@@ -183,16 +183,16 @@
     },
     {
       key: "enabled",
-      label: "on",
-      width: "4rem",
+      label: "active",
+      formOnly: true,
       edit: "checkbox",
       initial: true,
-      cell: enabledCell,
+      info: "A paused job keeps its schedule but does not fire.",
     },
-    { key: "last", label: "last run", width: "11rem", cell: lastCell },
-    /* Running and pausing are what people come to this list to do, so they
-       sit on the row rather than one dialog away. */
-    { key: "acts", label: "", width: "8rem", align: "end", cell: actsCell },
+    /* The toggle is what people come to this list to use, so it sits on the
+       row rather than one dialog away. */
+    { key: "toggle", label: "active", width: "5rem", cell: toggleCell },
+    { key: "acts", label: "", width: "3.5rem", align: "end", cell: actsCell },
   ]);
 
   function defaultsFor(schema: JsonSchema | undefined) {
@@ -344,63 +344,60 @@
   }
 </script>
 
-{#snippet nameCell(d: JobDefinitionRow)}
-  {#if d.last_run?.status === "running"}
-    <span class="live" use:shadowPulse={{ loop: true }}>{d.name}</span>
+{#snippet healthCell(d: JobDefinitionRow)}
+  {#if d.disabled_reason}
+    <span class="mark inline danger" use:tip={d.disabled_reason}
+      ><Icon name="alert" size="1.1em" />invalid</span
+    >
+  {:else if d.last_run}
+    {@const l = lastResult(d.last_run, Date.now())}
+    <span
+      class="mark inline {l.tone}"
+      class:spin={d.last_run.status === "running"}
+      ><Icon name={l.icon} size="1.1em" />
+      <span class="dim">{l.short}</span></span
+    >
   {:else}
-    {d.name}
+    <span class="dim">never</span>
+  {/if}
+{/snippet}
+
+{#snippet nameCell(d: JobDefinitionRow)}
+  {@const title = kindOf(d.kind)?.title ?? d.kind}
+  <span class="name">{d.name}</span>
+  {#if d.name !== title || d.subject}
+    <span class="dim small"
+      >{d.name !== title ? title : ""}{d.name !== title && d.subject
+        ? " · "
+        : ""}{d.subject ?? ""}</span
+    >
   {/if}
 {/snippet}
 
 {#snippet statusBadge(status: string)}
-  {#if status === "running"}
-    <span class="live" use:shadowPulse={{ loop: true }}
-      ><Badge tone={toneOf(status)}>{status}</Badge></span
-    >
-  {:else}
-    <Badge tone={toneOf(status)}>{status}</Badge>
-  {/if}
+  {@const m = statusMark(status)}
+  <span class="mark inline {m.tone}" class:spin={status === "running"}>
+    <Icon name={m.icon} size="1.1em" />{m.label}
+  </span>
 {/snippet}
 
 {#snippet scheduleCell(d: JobDefinitionRow)}
   {#if d.schedule}
-    <span class="sched"
-      >{d.schedule}<span class="dim"
-        >{d.timezone === info.data.timezone ? "" : ` ${d.timezone}`}</span
-      ></span
+    <span class="name" use:tip={d.schedule}
+      >{describeSchedule(d.schedule)}{d.timezone === info.data.timezone
+        ? ""
+        : ` ${d.timezone}`}</span
     >
     {#if d.next_run}<span class="dim small">next <Time at={d.next_run} /></span
       >{/if}
   {:else}
-    <span class="dim">by hand</span>
+    <span class="dim">manual only</span>
   {/if}
 {/snippet}
 
 {#snippet queueCell(d: JobDefinitionRow)}
   {@const queue = d.queue ?? kindOf(d.kind)?.queue}
-  {#if queue}
-    {@const cls = jobQueue(queue).class}
-    <Badge tone={cls === "heavy" ? "danger" : "info"}>{queue}</Badge>
-  {:else}
-    <span class="dim">-</span>
-  {/if}
-{/snippet}
-
-{#snippet enabledCell(d: JobDefinitionRow)}
-  {#if d.disabled_reason}
-    <Badge tone="danger">disabled</Badge>
-  {:else}
-    <Badge tone={d.enabled ? "ok" : "muted"}>{d.enabled ? "on" : "off"}</Badge>
-  {/if}
-{/snippet}
-
-{#snippet lastCell(d: JobDefinitionRow)}
-  {#if d.last_run}
-    {@render statusBadge(d.last_run.status)}
-    <span class="dim small"><Time at={d.last_run.created_at} /></span>
-  {:else}
-    <span class="dim">never</span>
-  {/if}
+  <span class="mono">{queue ?? "-"}</span>
 {/snippet}
 
 {#snippet runList(runs: JobRunRow[])}
@@ -535,7 +532,12 @@
     String(f.draft.queue || kind?.queue || "maintenance"),
   ).class}
   {#if kind}
-    {#if kind.description}<Note>{kind.description}</Note>{/if}
+    {#if f.mode === "edit" || kind.description}
+      <Note
+        >{#if f.mode === "edit"}<strong>{kind.title}.</strong>
+        {/if}{kind.description ?? ""}</Note
+      >
+    {/if}
     {#if Object.keys(kind.params_schema.properties ?? {}).length}
       <GroupHead label="parameters" />
       {#each Object.entries(kind.params_schema.properties ?? {}) as [name, p] (name)}
@@ -563,10 +565,27 @@
     >{/if}
 {/snippet}
 
-<!-- Running and pausing happen on the row; the dialog is for editing, so it
-     carries only the way into runs and changes. Pause stays lit while a job
-     is paused, so the state is on the button that changes it. -->
-{#snippet controls(d: JobDefinitionRow)}
+<!-- Pausing happens on the row, as one button that is the job's state: a
+     check while it is active, a pause while it is not, one morphing into the
+     other. Not marked busy, which would swap the icon out mid-tween. Running
+     now lives in the dialog, where the job's settings and history are. -->
+{#snippet toggle(d: JobDefinitionRow)}
+  <Button
+    variant="ghost"
+    square
+    iconSize="1.4em"
+    icon={d.enabled ? "active" : "pause"}
+    morph
+    tone={d.enabled ? "ok" : "warn"}
+    aria-pressed={!d.enabled}
+    title={d.enabled ? "active, click to pause" : "paused, click to resume"}
+    aria-label={d.enabled ? `pause ${d.name}` : `resume ${d.name}`}
+    disabled={pausing === d.id}
+    onclick={() => pause(d)}
+  />
+{/snippet}
+
+{#snippet dialogActions(d: JobDefinitionRow)}
   <Button
     variant="ghost"
     square
@@ -578,23 +597,6 @@
     busy={running === d.id}
     disabled={running === d.id}
     onclick={() => runNow(d)}
-  />
-  <Button
-    variant="ghost"
-    square
-    iconSize="1.4em"
-    icon="pause"
-    tone={d.enabled ? undefined : "warn"}
-    aria-pressed={!d.enabled}
-    title={d.enabled
-      ? d.schedule
-        ? "pause the schedule"
-        : "pause"
-      : "paused, click to resume"}
-    aria-label={d.enabled ? `pause ${d.name}` : `resume ${d.name}`}
-    busy={pausing === d.id}
-    disabled={pausing === d.id}
-    onclick={() => pause(d)}
   />
   {@render historyButton(d)}
 {/snippet}
@@ -611,8 +613,12 @@
   />
 {/snippet}
 
+{#snippet toggleCell(d: JobDefinitionRow)}
+  {@render toggle(d)}
+{/snippet}
+
 {#snippet actsCell(d: JobDefinitionRow)}
-  <span class="acts">{@render controls(d)}</span>
+  <span class="acts">{@render historyButton(d)}</span>
 {/snippet}
 
 {#if error}<Note tone="danger">{error}</Note>{/if}
@@ -622,8 +628,7 @@
   bind:value={filter}
   shown={filtered.length}
   total={defs.data.length}
-  placeholder="filter jobs…"
-  label="filter jobs"
+  label="search jobs"
 />
 
 <CrudTable
@@ -638,7 +643,7 @@
   noun="job"
   editTitle={(d) => d.name}
   width="48rem"
-  extraActions={historyButton}
+  extraActions={dialogActions}
   {formExtra}
   onform={(f) => {
     openedForm(f);
@@ -706,8 +711,54 @@
     display: block;
     font-size: 0.85em;
   }
-  .sched {
+  .mono {
     font-family: var(--font-mono);
+  }
+  .name {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .by {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+  }
+  .by span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mark {
+    display: inline-flex;
+    color: var(--muted);
+  }
+  .mark.inline {
+    align-items: center;
+    gap: var(--pad-1);
+  }
+  .mark.ok {
+    color: var(--ok);
+  }
+  .mark.danger {
+    color: var(--danger);
+  }
+  .mark.accent {
+    color: var(--accent);
+  }
+  .mark.spin :global(svg) {
+    animation: spin 1.4s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mark.spin :global(svg) {
+      animation: none;
+    }
   }
   .runs {
     width: 100%;
@@ -732,8 +783,5 @@
     border: 1px dashed var(--border);
     white-space: pre-wrap;
     font-size: 0.85em;
-  }
-  .live {
-    color: var(--accent);
   }
 </style>

@@ -163,7 +163,7 @@ const TAIL = 8_000;
 export function defineLoadTestJobs() {
   defineJob({
     kind: "load.test",
-    title: "Run a load script",
+    title: "Load test",
     description:
       "Runs one k6 script from load/ against a configured target. Started from the admin page, never by a schedule.",
     params: z.object({ test_run_id: z.string().uuid() }),

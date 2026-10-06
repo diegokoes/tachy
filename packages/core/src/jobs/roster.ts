@@ -5,6 +5,7 @@ import {
   type JobWorkerRow,
 } from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
+import { kindTitle, presentRun } from "./present";
 
 export type { JobLive, JobWorkerRow };
 
@@ -93,7 +94,9 @@ export async function jobLive(): Promise<JobLive> {
   const queues = JOB_QUEUES.map((q) => {
     const of = (status: string) =>
       counts.find((c) => c.lane === q.name && c.status === status);
-    const serving = alive.filter((w) => (w.queues as string[]).includes(q.name));
+    const serving = alive.filter((w) =>
+      (w.queues as string[]).includes(q.name),
+    );
     return {
       name: q.name,
       class: q.class as JobResourceClass,
@@ -115,7 +118,19 @@ export async function jobLive(): Promise<JobLive> {
       ),
     };
   });
-  return { workers: workers as never, queues };
+  return {
+    workers: workers.map((w) => ({
+      ...w,
+      runs: (w.runs as { kind: string; params: Record<string, unknown> }[]).map(
+        (r) => ({
+          ...r,
+          kind_title: kindTitle(r.kind),
+          subject: presentRun(r.kind, r.params, null).subject,
+        }),
+      ),
+    })) as never,
+    queues,
+  };
 }
 
 /** Queues with runs due and no live worker to claim them. */
