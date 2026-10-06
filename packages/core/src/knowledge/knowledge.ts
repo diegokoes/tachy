@@ -1,4 +1,8 @@
-import type { ComponentKnowledge, KnowledgeCensus } from "@tachy/contract";
+import type {
+  ComponentKnowledge,
+  KnowledgeCensus,
+  KnowledgeStale,
+} from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
 import {
   embedPassage,
@@ -806,4 +810,65 @@ export async function knowledgeByComponent(): Promise<ComponentKnowledge[]> {
     where component_id is not null
     group by component_id
   `;
+}
+
+/**
+ * What in the approved library has gone stale, and how long drafts have waited.
+ * Reads are the day buckets in `library_views`, so "unread" is the last 90
+ * days of them, and an entry that was never filed a view counts.
+ */
+export async function knowledgeStale(): Promise<KnowledgeStale> {
+  const drafts = await sql<
+    { age: KnowledgeStale["drafts"][number]["age"]; n: number }[]
+  >`
+    select case
+             when created_at > now() - interval '7 days' then 'week'
+             when created_at > now() - interval '30 days' then 'month'
+             when created_at > now() - interval '90 days' then 'quarter'
+             else 'older'
+           end as age,
+           count(*)::int as n
+    from knowledge_entries
+    where status = 'draft'
+    group by 1
+  `;
+  const [row] = await sql<
+    { untouched: number; unread: number; doubtful: number }[]
+  >`
+    select
+      count(*) filter (where e.updated_at < now() - interval '365 days')::int as untouched,
+      count(*) filter (where not exists (
+        select 1 from library_views v
+        where v.knowledge_entry_id = e.id and v.day > current_date - 90
+      ))::int as unread,
+      count(*) filter (
+        where e.confidence = 'low' or e.resolution_clarity = 'unclear'
+      )::int as doubtful
+    from knowledge_entries e
+    where e.status = 'approved'
+  `;
+  const weakest = await sql<KnowledgeStale["weakest"]>`
+    select e.id, coalesce(e.issue_summary, '') as title,
+           avg(f.rating)::float8 as rating, count(f.id)::int as ratings,
+           coalesce((
+             select sum(v.views) from library_views v
+             where v.knowledge_entry_id = e.id and v.day > current_date - 90
+           ), 0)::int as reads
+    from knowledge_entries e
+    join knowledge_feedback f
+      on f.knowledge_entry_id = e.id and f.kind = 'rating' and f.rating is not null
+    where e.status in ('approved', 'deprecated')
+    group by e.id
+    order by avg(f.rating), 5 desc
+    limit 8
+  `;
+  const ORDER = ["week", "month", "quarter", "older"] as const;
+  return {
+    drafts: ORDER.map((age) => ({
+      age,
+      n: drafts.find((d) => d.age === age)?.n ?? 0,
+    })),
+    ...row,
+    weakest: [...weakest],
+  };
 }

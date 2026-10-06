@@ -32,6 +32,14 @@ beforeEach(async () => {
 });
 
 describe("jobs API", () => {
+  it("takes a window for the census, within a quarter", async () => {
+    expect((await (await call("/census")).json()).days).toBe(14);
+    const wide = await (await call("/census?days=90")).json();
+    expect(wide.days).toBe(90);
+    expect(wide.per_day).toHaveLength(90);
+    expect((await call("/census?days=1")).status).toBe(400);
+  });
+
   it("describes kinds with their params schema and the chat cap", async () => {
     const body = await (await call("/kinds")).json();
     const sync = body.kinds.find((k: any) => k.kind === "source.sync");

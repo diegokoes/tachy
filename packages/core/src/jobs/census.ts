@@ -12,6 +12,7 @@ import {
 } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
+import { kindTitle } from "./present";
 import { hasJobKind, getJobKind } from "./registry";
 import { unservedQueues } from "./roster";
 import type { JobCensus } from "@tachy/contract";
@@ -54,7 +55,7 @@ export async function jobCensus(
     }
   }
 
-  const perDayWindow = Math.min(days, 14);
+  const perDayWindow = Math.min(days, 90);
   const daily = await sql`
     select to_char(d.day, 'YYYY-MM-DD') as day, r.status, count(r.id)::int as n
     from generate_series(current_date - ${perDayWindow - 1}::int, current_date, interval '1 day') as d(day)
@@ -77,7 +78,15 @@ export async function jobCensus(
       count(*) filter (where status = 'succeeded')::int as succeeded,
       count(*) filter (where status = any(${FAILED}))::int as failed,
       (avg(extract(epoch from finished_at - started_at))
-        filter (where started_at is not null and finished_at is not null))::float8 as avg_seconds
+        filter (where started_at is not null and finished_at is not null))::float8 as avg_seconds,
+      (percentile_cont(0.5) within group (
+        order by extract(epoch from finished_at - started_at)
+      ) filter (where started_at is not null and finished_at is not null))::float8 as p50_seconds,
+      (percentile_cont(0.95) within group (
+        order by extract(epoch from finished_at - started_at)
+      ) filter (where started_at is not null and finished_at is not null))::float8 as p95_seconds,
+      max(timeout_ms)::int as timeout_ms,
+      count(*) filter (where attempts > 1)::int as retried
     from job_runs where ${window}
     group by kind
     order by 2 desc, 1
@@ -90,6 +99,14 @@ export async function jobCensus(
     from job_runs
     where ${window} and queue is not null and started_at is not null
     group by queue
+  `;
+  const waitDays = await sql`
+    select to_char(started_at::date, 'YYYY-MM-DD') as day, queue,
+      avg(extract(epoch from started_at - created_at))::float8 as avg_wait_seconds
+    from job_runs
+    where ${window} and queue is not null and started_at is not null
+    group by started_at::date, queue
+    order by started_at::date, queue
   `;
   const by_queue = JOB_QUEUES.map((q) => {
     const w = waits.find((r) => r.queue === q.name);
@@ -179,8 +196,12 @@ export async function jobCensus(
     by_trigger,
     by_class,
     per_day: [...days_.values()],
-    by_kind: [...by_kind] as unknown as JobCensus["by_kind"],
+    by_kind: by_kind.map((k) => ({
+      ...k,
+      title: kindTitle(k.kind),
+    })) as unknown as JobCensus["by_kind"],
     by_queue,
+    wait_per_day: waitDays as unknown as JobCensus["wait_per_day"],
     success,
     now: current,
     definitions: {
@@ -191,6 +212,7 @@ export async function jobCensus(
       definition_id: f.definition_id,
       name: f.name,
       kind: f.kind,
+      title: kindTitle(f.kind),
       runs: f.runs,
       last_at: new Date(f.last_at).toISOString(),
       last_error: f.last_error,

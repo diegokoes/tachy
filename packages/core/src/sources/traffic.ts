@@ -84,7 +84,9 @@ export async function sourceTrafficCensus(days = 14): Promise<SourceTraffic> {
     select to_char(d.day, 'YYYY-MM-DD') as day,
       coalesce(sum(t.calls) filter (where t.origin = 'agent'), 0)::int as agent,
       coalesce(sum(t.calls) filter (where t.origin = 'sync'), 0)::int as sync,
-      coalesce(sum(t.calls) filter (where t.origin = 'app'), 0)::int as app
+      coalesce(sum(t.calls) filter (where t.origin = 'app'), 0)::int as app,
+      coalesce(sum(t.rate_limited), 0)::int as rate_limited,
+      coalesce(sum(t.auth_failures), 0)::int as auth_failures
     from generate_series(current_date - ${since}::int, current_date, interval '1 day') as d(day)
     left join source_calls t on t.day = d.day::date
     group by d.day

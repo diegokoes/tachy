@@ -6,15 +6,20 @@ import {
   listComponentTree,
   catalogIssues,
 } from "@tachy/core/catalog";
-import { bucketCensus } from "@tachy/core/buckets";
+import { bucketCensus, bucketFreshness } from "@tachy/core/buckets";
 import { userCensus, userIssues } from "@tachy/core/access";
 import {
   sourceCensus,
   sourceTrafficCensus,
   sourceIssues,
+  sourceFreshness,
 } from "@tachy/core/sources";
-import { repoCensus, repoIssues } from "@tachy/core/code";
-import { knowledgeCensus, knowledgeByComponent } from "@tachy/core/knowledge";
+import { repoCensus, repoIssues, repoFreshness } from "@tachy/core/code";
+import {
+  knowledgeCensus,
+  knowledgeByComponent,
+  knowledgeStale,
+} from "@tachy/core/knowledge";
 import { reportsCensus } from "@tachy/core/reports";
 import { agentUsageCensus, toolUsageCensus } from "@tachy/core/analytics";
 import { libraryEngagementCensus } from "@tachy/core/library";
@@ -23,6 +28,11 @@ import { forbidden, ISSUE_ITEMS, type IssueList } from "@tachy/core/infra";
 import { callerScope, isAdminIdentity } from "../../authz";
 import { runtimeSnapshot, systemIssues } from "../../runtime";
 import { untokenedConnections } from "./sources";
+
+/** How far back an overview's detail view looks, when it is not the default. */
+const periodQuery = z.object({
+  days: z.coerce.number().int().min(7).max(90).optional(),
+});
 
 /** The admin overview: counts, activity and what needs fixing per page. */
 export const overview = new Hono()
@@ -100,12 +110,13 @@ export const overview = new Hono()
    * most tokens, who has the agent change the most - and those travel only to an
    * app admin, for the same reason `/system` keeps its `env` block back.
    */
-  .get("/overview/activity", async (c) => {
+  .get("/overview/activity", zValidator("query", periodQuery), async (c) => {
+    const { days } = c.req.valid("query");
     const [usage, tools, traffic, library] = await Promise.all([
-      agentUsageCensus(30),
-      toolUsageCensus(30),
-      sourceTrafficCensus(14),
-      libraryEngagementCensus(30),
+      agentUsageCensus(days ?? 30),
+      toolUsageCensus(days ?? 30),
+      sourceTrafficCensus(days ?? 14),
+      libraryEngagementCensus(days ?? 30),
     ]);
     if (!isAdminIdentity(c)) {
       delete usage.top_users;
@@ -113,6 +124,18 @@ export const overview = new Hono()
     }
     return c.json({ usage, tools, traffic, library });
   })
+
+  /** When each source, repo and bucket was last brought up to date, oldest first. */
+  .get("/overview/freshness", async (c) => {
+    const [sources, repos, buckets] = await Promise.all([
+      sourceFreshness(),
+      repoFreshness(),
+      bucketFreshness(),
+    ]);
+    return c.json([...sources, ...repos, ...buckets]);
+  })
+
+  .get("/overview/stale", async (c) => c.json(await knowledgeStale()))
 
   /**
    * Every component with its entries, for the structure overview's map. Its

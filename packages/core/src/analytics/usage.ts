@@ -98,7 +98,7 @@ export async function agentUsageCensus(days = 30): Promise<AgentUsage> {
     from analysis_runs
     where mode = 'chat' and created_at > now() - make_interval(days => ${days})
   `;
-  const perDayWindow = Math.min(days, 14);
+  const perDayWindow = Math.min(days, 90);
   const per_day = await sql`
     select to_char(d.day, 'YYYY-MM-DD') as day,
       count(r.id)::int as turns,
@@ -174,7 +174,7 @@ export async function agentUsageCensus(days = 30): Promise<AgentUsage> {
   }
   const top_users = [...people.values()]
     .sort((a, b) => b.tokens - a.tokens || a.email.localeCompare(b.email))
-    .slice(0, 5);
+    .slice(0, 25);
   return {
     days,
     turns: totals.turns as number,

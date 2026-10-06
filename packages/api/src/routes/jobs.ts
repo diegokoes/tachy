@@ -23,12 +23,18 @@ import {
   listJobDefinitionChanges,
   listJobDefinitions,
   listJobRuns,
+  presentRun,
   previewSchedule,
   updateJobDefinition,
 } from "@tachy/core/jobs";
 import { effectiveSettings, orgTimezone } from "@tachy/core/config";
 import { requireAdmin } from "../auth";
 import { callerUserId } from "../authz";
+
+/** How far back the census looks; the overview asks for 14, a detail view for more. */
+const periodQuery = z.object({
+  days: z.coerce.number().int().min(7).max(90).optional(),
+});
 
 const previewSchema = z.object({
   schedule: z.string().min(1),
@@ -53,7 +59,9 @@ export const jobs = new Hono()
     });
   })
 
-  .get("/census", async (c) => c.json(await jobCensus(14)))
+  .get("/census", zValidator("query", periodQuery), async (c) =>
+    c.json(await jobCensus(c.req.valid("query").days ?? 14)),
+  )
 
   .get("/live", async (c) => c.json(await jobLive()))
 
@@ -83,7 +91,12 @@ export const jobs = new Hono()
           try {
             next = previewSchedule(d.schedule, d.timezone, 1)[0] ?? null;
           } catch {}
-        return { ...d, next_run: next, last_run: byDef.get(d.id) ?? null };
+        return {
+          ...d,
+          subject: presentRun(d.kind, d.params, null).subject,
+          next_run: next,
+          last_run: byDef.get(d.id) ?? null,
+        };
       }),
     );
   })

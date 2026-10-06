@@ -4,6 +4,7 @@ import {
   SLUG_RE,
   type BucketRow,
   type BucketWithToken,
+  type Freshness,
 } from "@tachy/contract";
 import { sql, type Db } from "../infra/db";
 import { badInput, conflict, notFound } from "../infra/errors";
@@ -171,4 +172,20 @@ export async function bucketCensus(): Promise<{
            (select count(*)::int from bucket_docs) as docs
   `;
   return { buckets: row.buckets, docs: row.docs };
+}
+
+/** When each bucket last received a batch, oldest first. */
+export async function bucketFreshness(): Promise<Freshness[]> {
+  const rows = await sql<{ slug: string; name: string; last: Date | null }[]>`
+    select slug, name, last_batch_at as last
+    from buckets
+    order by last_batch_at nulls first, slug
+  `;
+  return rows.map((r) => ({
+    kind: "bucket",
+    key: r.slug,
+    label: r.name,
+    last_at: r.last ? r.last.toISOString() : null,
+    error: null,
+  }));
 }
