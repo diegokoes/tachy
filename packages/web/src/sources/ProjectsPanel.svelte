@@ -555,7 +555,6 @@
     bind:value={filter}
     shown={filtered.length}
     total={projects.data.length}
-    placeholder="filter projects…"
     label="filter projects"
   />
   <Button
