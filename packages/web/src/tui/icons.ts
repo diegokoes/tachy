@@ -300,6 +300,7 @@ export const ICONS = {
   theme: Wallpaper,
   keybinds: Keyboard,
   agent: KeyRound,
+  token: KeyRound,
 
   /* ── Reach ────────────────────────────────────────────────────────────── */
   user: UserRound,
