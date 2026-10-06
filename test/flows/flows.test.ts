@@ -109,7 +109,6 @@ describe("applyFormConfig", () => {
 describe("offeredTypes", () => {
   const all = ["Bug", "Epic", "Task", "User Story"].map((name) => ({
     name,
-    description: null,
     color: null,
     icon: null,
   }));

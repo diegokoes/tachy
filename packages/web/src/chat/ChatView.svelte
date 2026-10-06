@@ -216,13 +216,13 @@
           param: "type",
           desc: "what you are raising",
           empty: typesNote(azCtx.project.id),
+          grid: true,
         },
         options: typesOf(azCtx.project.id)
           .filter((t) => matches(azCtx.query, t.name))
           .map((t) => ({
             value: t.name,
             label: t.name,
-            desc: t.description ?? "",
             icon: typeIcon(t.icon),
             color: typeColor(t.color),
           })),

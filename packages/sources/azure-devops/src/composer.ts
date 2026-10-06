@@ -51,7 +51,6 @@ export async function creatableTypes(
     .filter((t) => !t.isDisabled && !hidden.has(t.name))
     .map((t) => ({
       name: t.name,
-      description: t.description || null,
       color: t.color || null,
       icon: t.icon?.id || null,
     }))
