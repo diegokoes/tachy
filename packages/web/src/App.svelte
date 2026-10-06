@@ -49,7 +49,6 @@
 
   const sub = $derived(subnav());
   const acts = $derived(sub ? (topActions() ?? sub.actions) : undefined);
-  const subHidden = $derived(themeState.navHidden && themeState.subnavHidden);
 
   let wizardSkipped = $state(localStorage.getItem("tachy-skip-wizard") === "1");
   const showWizard = $derived(session.bootstrapped === false && !wizardSkipped);
@@ -378,33 +377,23 @@
     <div
       class="window"
       bind:this={windowEl}
-      class:carved={sub && !subHidden}
+      class:carved={sub}
       style="--sub-h-raw: {subH}px; --sub-mouth: {carveW}px; --sub-mask: {carveMask}"
     >
       <!-- Rendered before the window so its hotkey scope is pushed first and
            the view's scope stays innermost - otherwise this bar's (all hidden)
            bindings would sit on top and blank the hint rule. -->
       {#if sub}
-        {#if !subHidden}
-          <svg
-            class="notch"
-            width={carveW}
-            height={carveH}
-            viewBox="0 0 {carveW} {carveH}"
-            aria-hidden="true"
-          >
-            <path d={carveOutline} />
-          </svg>
-        {/if}
-        <!-- Hidden rather than unmounted: the bar owns its tabs' shortcuts,
-             and its height still sizes the row the top actions sit in. -->
-        <div
-          class="subnav"
-          class:settling
-          class:hidden={subHidden}
-          inert={subHidden}
-          bind:this={subEl}
+        <svg
+          class="notch"
+          width={carveW}
+          height={carveH}
+          viewBox="0 0 {carveW} {carveH}"
+          aria-hidden="true"
         >
+          <path d={carveOutline} />
+        </svg>
+        <div class="subnav" class:settling bind:this={subEl}>
           <Tabs
             items={sub.items}
             active={sub.active}
@@ -700,9 +689,6 @@
     min-height: var(--row-h);
     padding: 0 var(--pad-3);
   }
-  .subnav.hidden {
-    opacity: 0;
-  }
 
   /* The window's own top row, right of the recess - space the carve opens up
      and nothing else was using. Aligned to the Panel's content edge so it
@@ -760,12 +746,6 @@
       0px,
       calc(var(--sub-depth) - var(--pad-3) + var(--sub-air))
     );
-  }
-
-  /* With the bar hidden the row is kept only for the top actions, and only
-     while a view has put some there. */
-  .window:has(.subnav.hidden):not(:has(.top-acts > :global(*))) .shell {
-    padding-top: 0;
   }
 
   .content {
