@@ -158,7 +158,7 @@ const MESSAGES: Record<string, Message> = {
   },
   "jobs.no_worker": {
     tone: "danger",
-    section: "processes",
+    section: "queues",
     head: (n) =>
       `${plural(n, "queue", "queues")} with runs waiting and no live worker`,
     item: (l) => `${l}: no running worker claims from it`,

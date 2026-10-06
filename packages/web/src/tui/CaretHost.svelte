@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Caret from "./Caret.svelte";
+  import Caret, { caretSide, type CaretSide } from "./Caret.svelte";
   import { portal } from "./portal";
 
   /**
@@ -38,9 +38,7 @@
   let size = $state(16);
   let shown = $state(false);
   let beat = $state(0);
-  /** Nothing but space before the caret, so it can stand clear of the letter
-   *  after it instead of straddling the point between two. */
-  let leading = $state(true);
+  let side = $state<CaretSide>("bare");
 
   let held: Field | null = null;
   let frame = 0;
@@ -91,7 +89,7 @@
     mirror.replaceChildren(el.value.slice(0, pos), tail);
 
     size = parseFloat(cs.fontSize);
-    leading = !/\S/.test(el.value.charAt(pos - 1));
+    side = caretSide(el.value, pos);
     /* Rects, not offsetLeft: that one rounds to a whole pixel, and padding
        set in rem rarely is one. */
     const box = mirror.getBoundingClientRect();
@@ -177,12 +175,11 @@
 {#if shown}
   <span
     class="caret"
-    class:leading
     aria-hidden="true"
     use:portal
     style:left="{x}px"
     style:top="{y}px"
-    style:font-size="{size}px"><Caret {beat} /></span
+    style:font-size="{size}px"><Caret {beat} {side} /></span
   >
 {/if}
 
@@ -195,11 +192,5 @@
     margin-left: -0.115em;
     color: var(--accent);
     pointer-events: none;
-  }
-  /* Centred on the point between two letters it covers a sliver of each. With
-     no letter before it there is room to step back, so the first letter typed
-     lands beside the caret rather than under it. */
-  .caret.leading {
-    margin-left: -0.25em;
   }
 </style>

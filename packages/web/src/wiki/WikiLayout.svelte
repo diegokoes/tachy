@@ -49,7 +49,8 @@
 
   /* The column is as tall as what scrolls beside it. A viewport-height guess
      would stop short of the page's last line, by however much chrome sits
-     above the scroller. */
+     above the scroller - and, before the first measurement lands, would be
+     taller than the scroller, flashing its bar. */
   $effect(() => {
     const port = scrollport();
     const root = rootEl;
@@ -121,7 +122,7 @@
     flex-direction: column;
     gap: var(--pad-3);
     min-width: 0;
-    height: calc(var(--port-h, 100vh) - var(--main-air, 0px) * 2);
+    height: calc(var(--port-h, 0px) - var(--main-air, 0px) * 2);
     padding-block: var(--pad-2);
   }
   .switch {

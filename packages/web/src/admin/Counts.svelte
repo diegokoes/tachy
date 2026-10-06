@@ -1,17 +1,6 @@
 <script lang="ts">
   import { RAMP } from "../tui";
-  import { showSection } from "./overview";
-
-  export type Count = {
-    key: string;
-    label: string;
-    value?: number;
-    /** Printed instead of `value`: a state, an age, a compacted figure. */
-    text?: string;
-    tone?: "accent" | "ok" | "warn" | "danger" | "muted";
-    /** The section on this page this figure is the count of. */
-    to?: string;
-  };
+  import { groupCounts, showSection, type Count } from "./overview";
 
   let {
     items,
@@ -20,9 +9,16 @@
     items: Count[];
     loading?: boolean;
   } = $props();
+
+  const groups = $derived(groupCounts(items));
+
+  /* A breakdown that goes where its parent goes adds no target of its own, so
+     the whole group is one click rather than buttons inside a button. */
+  const merged = (head: Count, parts: Count[]) =>
+    parts.every((p) => !p.to || p.to === head.to);
 </script>
 
-{#snippet body(it: Count)}
+{#snippet figure(it: Count)}
   {#if loading}
     <span class="n skeleton" aria-label="loading">{RAMP[0].repeat(4)}</span>
   {:else}
@@ -33,36 +29,99 @@
   <span class="lbl">{it.label}</span>
 {/snippet}
 
+{#snippet part(it: Count)}
+  <span class="pn {it.tone ?? 'accent'}"
+    >{loading
+      ? RAMP[0].repeat(2)
+      : (it.text ?? (it.value ?? 0).toLocaleString())}</span
+  >
+  <span class="pl">{it.label}</span>
+{/snippet}
+
+{#snippet parts(list: Count[])}
+  <span class="parts">
+    {#each list as p (p.key)}
+      {#if p.to}
+        {@const to = p.to}
+        <button class="part go" onclick={() => showSection(to)}
+          >{@render part(p)}</button
+        >
+      {:else}
+        <span class="part">{@render part(p)}</span>
+      {/if}
+    {/each}
+  </span>
+{/snippet}
+
+{#snippet plain(list: Count[])}
+  <span class="parts">
+    {#each list as p (p.key)}
+      <span class="part">{@render part(p)}</span>
+    {/each}
+  </span>
+{/snippet}
+
 <div class="counts">
-  {#each items as it (it.key)}
-    {#if it.to}
-      {@const to = it.to}
-      <button class="cell go" onclick={() => showSection(to)}>
-        {@render body(it)}
-      </button>
-    {:else}
-      <div class="cell">{@render body(it)}</div>
-    {/if}
+  {#each groups as g (g.head.key)}
+    {@const head = g.head}
+    {@const to = head.to}
+    <div
+      class="group"
+      class:split={g.parts.length > 0}
+      style="--w: {1 + g.parts.length * 0.35}"
+    >
+      {#if g.parts.length && to && merged(head, g.parts)}
+        <button class="cell go" onclick={() => showSection(to)}>
+          <span class="main">{@render figure(head)}</span>
+          {@render plain(g.parts)}
+        </button>
+      {:else}
+        {#if to}
+          <button class="cell go" onclick={() => showSection(to)}>
+            <span class="main">{@render figure(head)}</span>
+          </button>
+        {:else}
+          <div class="cell">
+            <span class="main">{@render figure(head)}</span>
+          </div>
+        {/if}
+        {#if g.parts.length}{@render parts(g.parts)}{/if}
+      {/if}
+    </div>
   {/each}
 </div>
 
 <style>
-  /* One row, never two: every counter gets an equal share of the width and a
-     label that does not fit is cut, not wrapped onto a second line. */
+  /* One row, never two: every counter gets a share of the width and a label
+     that does not fit is cut, not wrapped onto a second line. A counter with a
+     breakdown takes the room of the figures beside it. */
   .counts {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 1fr);
+    display: flex;
     gap: var(--pad-4);
     width: 100%;
     min-width: 0;
   }
 
+  .group {
+    flex: var(--w) 1 0;
+    min-width: 0;
+    display: flex;
+    align-items: stretch;
+  }
+  .group.split {
+    gap: var(--pad-2);
+    padding-left: var(--pad-3);
+    border-left: 1px solid color-mix(in srgb, var(--muted) 28%, transparent);
+  }
+  .group.split:first-child {
+    padding-left: 0;
+    border-left: none;
+  }
+
   .cell {
     display: flex;
-    flex-direction: column;
     align-items: flex-start;
-    gap: var(--pad-1);
+    gap: var(--pad-3);
     min-width: 0;
     padding: var(--pad-1) var(--pad-2);
     margin-left: calc(var(--pad-2) * -1);
@@ -73,11 +132,30 @@
     font: inherit;
     text-align: left;
   }
-  .cell.go {
+  .group:not(.split) .cell {
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: var(--pad-1);
+  }
+  .group.split .cell {
+    flex: 1 1 0;
+    align-items: center;
+  }
+  .main {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--pad-1);
+    min-width: 0;
+  }
+  .cell.go,
+  .part.go {
     cursor: pointer;
   }
   .cell.go:hover,
-  .cell.go:focus-visible {
+  .cell.go:focus-visible,
+  .part.go:hover,
+  .part.go:focus-visible {
     background: color-mix(in srgb, var(--muted) 12%, transparent);
   }
 
@@ -122,10 +200,48 @@
     white-space: nowrap;
   }
 
+  .parts {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    min-width: 0;
+  }
+  .part {
+    display: flex;
+    align-items: baseline;
+    gap: var(--pad-2);
+    min-width: 0;
+    padding: 0 var(--pad-1);
+    border: none;
+    border-radius: var(--radius);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+  }
+  .pn {
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .pl {
+    font-size: var(--fs-xs);
+    letter-spacing: var(--label-spacing);
+    text-transform: uppercase;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   @container (max-width: 36rem) {
     .counts {
-      grid-auto-flow: row;
-      grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
+      flex-wrap: wrap;
+    }
+    .group {
+      flex: 1 1 6rem;
     }
   }
 </style>

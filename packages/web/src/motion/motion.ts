@@ -769,3 +769,103 @@ export function reflow(
     });
   };
 }
+
+/**
+ * Takes `tile` to the size of the window, or back: the browser morphs the
+ * tile's box between the two layouts as a view transition. `swap` changes the
+ * layout and returns when the DOM shows it.
+ *
+ * The name is on the tile for the length of the transition only: two elements
+ * with the same name abort it, and a name left behind makes a snapshot of a
+ * node nobody is animating.
+ */
+export function morphTile(
+  tile: HTMLElement | null | undefined,
+  swap: () => void | Promise<void>,
+) {
+  const root = document.documentElement;
+  if (!tile || reducedMotion() || !document.startViewTransition) {
+    void swap();
+    return;
+  }
+  root.dataset.tileMorph = "";
+  tile.style.viewTransitionName = "tile";
+  const transition = document.startViewTransition(async () => {
+    await swap();
+  });
+  const done = () => {
+    tile.style.viewTransitionName = "";
+    delete root.dataset.tileMorph;
+  };
+  transition.ready.catch(() => {});
+  transition.finished.then(done, done);
+}
+
+/**
+ * Small marks along each rail that drift left without end, one step of the
+ * pattern at a time, so a board at rest still shows time going by. The marks
+ * are a repeating pattern `step` px wide, so the loop has no seam. Returns
+ * what stops it.
+ */
+export function driftMarks(rails: Element[], step: number): () => void {
+  if (reducedMotion() || !rails.length) return () => {};
+  const tweens = rails.map((rail) =>
+    gsap.fromTo(
+      rail,
+      { x: 0 },
+      { x: -step, duration: step / 3.5, ease: "none", repeat: -1 },
+    ),
+  );
+  return () => {
+    tweens.forEach((t) => t.kill());
+    gsap.set(rails, { clearProps: "transform" });
+  };
+}
+
+/** A tick that breathes: a long, shallow swell in width and light. Returns what stops it. */
+export function breathe(ticks: Element[]): () => void {
+  if (reducedMotion() || !ticks.length) return () => {};
+  const tweens = ticks.map((tick, i) =>
+    gsap.to(tick, {
+      scaleX: 1.9,
+      opacity: 0.6,
+      duration: 1.7,
+      ease: "sine.inOut",
+      yoyo: true,
+      repeat: -1,
+      delay: i * 0.25,
+      transformOrigin: "50% 50%",
+    }),
+  );
+  return () => {
+    tweens.forEach((t) => t.kill());
+    gsap.set(ticks, { clearProps: "transform,opacity" });
+  };
+}
+
+/**
+ * Brings one lane forward: its ticks rise a little on a soft overshoot and
+ * every other lane steps back. `null` lets them all settle.
+ */
+export function focusLane(
+  lanes: Element[],
+  active: Element | null,
+  ticksOf: (lane: Element) => Element[],
+) {
+  if (reducedMotion()) return;
+  for (const lane of lanes) {
+    const on = lane === active;
+    gsap.to(lane, {
+      opacity: active && !on ? 0.4 : 1,
+      duration: 0.3,
+      ease: "power2.out",
+      overwrite: "auto",
+    });
+    gsap.to(ticksOf(lane), {
+      scaleY: on ? 1.4 : 1,
+      duration: on ? 0.35 : 0.25,
+      ease: on ? "back.out(2)" : "power2.out",
+      overwrite: "auto",
+    });
+  }
+}

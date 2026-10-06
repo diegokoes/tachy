@@ -638,6 +638,8 @@
     >
       <CaretInput
         bind:el={searchEl}
+        icon="search"
+        hint="Search"
         aria-label="Search symptoms, error codes, root causes, docs"
         bind:value={q}
         onkeydown={(e) => {

@@ -499,3 +499,48 @@ describe("overview issues", () => {
     expect((await get("/api/overview/issues?page=nowhere")).status).toBe(400);
   });
 });
+
+describe("overview detail routes", () => {
+  it("takes a window for the activity figures, within a quarter", async () => {
+    const body = await (await get("/api/overview/activity?days=90")).json();
+    expect(body.usage.per_day).toHaveLength(90);
+    expect(body.tools.days).toBe(90);
+    expect(body.traffic.days).toBe(90);
+
+    const dflt = await (await get("/api/overview/activity")).json();
+    expect(dflt.usage.days).toBe(30);
+    expect(dflt.traffic.days).toBe(14);
+
+    expect((await get("/api/overview/activity?days=3")).status).toBe(400);
+    expect((await get("/api/overview/activity?days=400")).status).toBe(400);
+  });
+
+  it("says when each source, repo and bucket was last brought up to date", async () => {
+    const res = await get("/api/overview/freshness");
+    expect(res.status).toBe(200);
+    const rows = await res.json();
+    expect(Array.isArray(rows)).toBe(true);
+    for (const r of rows)
+      expect(r).toEqual({
+        kind: expect.stringMatching(/^(source|repo|bucket)$/),
+        key: expect.any(String),
+        label: expect.any(String),
+        last_at: expect.toSatisfy(
+          (v: unknown) => v === null || typeof v === "string",
+        ),
+        error: null,
+      });
+  });
+
+  it("reports what has gone stale in the library", async () => {
+    const body = await (await get("/api/overview/stale")).json();
+    expect(body.drafts.map((d: { age: string }) => d.age)).toEqual([
+      "week",
+      "month",
+      "quarter",
+      "older",
+    ]);
+    expect(body).toMatchObject({ untouched: 0, unread: 0, doubtful: 0 });
+    expect(body.weakest).toEqual([]);
+  });
+});

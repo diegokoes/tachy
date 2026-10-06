@@ -134,6 +134,7 @@ export type {
   SourceCensus,
   SourceConnectionRow,
   SourceTraffic,
+  Freshness,
 } from "./sources";
 export {
   INGEST_TOKEN_PREFIX,
@@ -145,7 +146,11 @@ export {
 } from "./buckets";
 export type { BucketRow, BucketWithToken } from "./buckets";
 export type { AgentUsage, ToolUsage } from "./analytics";
-export type { ComponentKnowledge, KnowledgeCensus } from "./knowledge";
+export type {
+  ComponentKnowledge,
+  KnowledgeCensus,
+  KnowledgeStale,
+} from "./knowledge";
 export type {
   ReportInput,
   ReportReview,
