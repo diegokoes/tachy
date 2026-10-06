@@ -60,9 +60,9 @@ export function startEmbedHost(opts: {
   };
 
   const start = () => {
-    const w = spawn();
-    worker = w;
-    w.on("message", (msg: EmbedReply) => {
+    const thread = spawn();
+    worker = thread;
+    thread.on("message", (msg: EmbedReply) => {
       if (msg.type === "ready") {
         loadFailures = 0;
         setReady(true);
@@ -71,10 +71,10 @@ export function startEmbedHost(opts: {
         });
         return;
       }
-      const p = pending.get(msg.id);
-      if (!p) return;
+      const request = pending.get(msg.id);
+      if (!request) return;
       pending.delete(msg.id);
-      if (msg.type === "error") return p.reject(new Error(msg.error));
+      if (msg.type === "error") return request.reject(new Error(msg.error));
       const vectors: number[][] = [];
       for (let r = 0; r < msg.rows; r++)
         vectors.push(
@@ -82,12 +82,12 @@ export function startEmbedHost(opts: {
             msg.data.subarray(r * EMBEDDING_DIM, (r + 1) * EMBEDDING_DIM),
           ),
         );
-      p.resolve(vectors);
+      request.resolve(vectors);
     });
-    w.on("error", (err) =>
+    thread.on("error", (err) =>
       log("error", "embedding_thread_error", { error: String(err) }),
     );
-    w.on("exit", (code) => {
+    thread.on("exit", (code) => {
       const wasReady = ready;
       setReady(false);
       for (const p of pending.values())

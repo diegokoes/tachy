@@ -163,7 +163,7 @@ export function model(): Promise<FeatureExtractionPipeline> {
     .then(async ({ pipeline, env: hfEnv }) => {
       hfEnv.cacheDir = process.env.TACHY_MODEL_CACHE ?? ".model-cache";
       const threads = embedThreads();
-      const pipe = await pipeline("feature-extraction", EMBEDDING_MODEL, {
+      const extractor = await pipeline("feature-extraction", EMBEDDING_MODEL, {
         dtype: "fp32",
         session_options: {
           ...(threads && { intraOpNumThreads: threads }),
@@ -174,10 +174,10 @@ export function model(): Promise<FeatureExtractionPipeline> {
       });
       // The pipeline truncates at the tokenizer's model_max_length and takes
       // no other length.
-      Object.defineProperty(pipe.tokenizer, "model_max_length", {
+      Object.defineProperty(extractor.tokenizer, "model_max_length", {
         value: EMBEDDING_SPEC.maxTokens,
       });
-      return pipe;
+      return extractor;
     })
     .catch((e) => {
       modelPromise = undefined;

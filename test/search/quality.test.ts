@@ -13,35 +13,34 @@ import {
 
 afterAll(() => sql.end());
 
-/** key -> id, so a golden expectation names an entry rather than a uuid. */
-const ids = new Map<string, string>();
+const idByKey = new Map<string, string>();
 
 beforeAll(async () => {
   await resetData();
   const productId = await tpdProductId();
-  for (const e of KNOWLEDGE) {
+  for (const entry of KNOWLEDGE) {
     const row = await saveKnowledgeEntry({
       productId,
       status: "approved",
-      issueSummary: e.issueSummary,
-      symptoms: e.symptoms,
-      signals: e.signals,
-      rootCause: e.rootCause,
-      resolution: e.resolution,
-      cloud: e.cloud,
-      affectedVersion: e.affectedVersion,
-      tags: e.tags,
+      issueSummary: entry.issueSummary,
+      symptoms: entry.symptoms,
+      signals: entry.signals,
+      rootCause: entry.rootCause,
+      resolution: entry.resolution,
+      cloud: entry.cloud,
+      affectedVersion: entry.affectedVersion,
+      tags: entry.tags,
     });
-    ids.set(e.key, row.id as string);
+    idByKey.set(entry.key, row.id as string);
   }
-  for (const d of REFERENCE) {
+  for (const doc of REFERENCE) {
     const row = await saveReferenceDoc({
       productId,
-      title: d.title,
-      body: d.body,
+      title: doc.title,
+      body: doc.body,
       status: "approved",
     });
-    ids.set(d.key, row.id as string);
+    idByKey.set(doc.key, row.id as string);
   }
 }, 300_000);
 
@@ -61,15 +60,15 @@ describe("golden query set", () => {
   it.each(GOLDEN)("[$why] $q -> $expect", async ({ q, expect: key }) => {
     const rows = await searchKnowledge(q);
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows[0].id).toBe(ids.get(key));
+    expect(rows[0].id).toBe(idByKey.get(key));
   });
 
   it("holds recall@3 and MRR above their floors", async () => {
     let hits = 0;
     let reciprocalRankSum = 0;
-    for (const g of GOLDEN) {
-      const rows = await searchKnowledge(g.q);
-      const rank = rows.findIndex((r) => r.id === ids.get(g.expect));
+    for (const golden of GOLDEN) {
+      const rows = await searchKnowledge(golden.q);
+      const rank = rows.findIndex((r) => r.id === idByKey.get(golden.expect));
       if (rank >= 0 && rank < 3) hits++;
       if (rank >= 0) reciprocalRankSum += 1 / (rank + 1);
     }
@@ -82,7 +81,7 @@ describe("golden query set", () => {
 
   it("finds a reference doc by a phrase only its body contains", async () => {
     const rows = await searchReferenceDocs("queue does not drain");
-    expect(rows[0]?.id).toBe(ids.get("deploy-runbook"));
+    expect(rows[0]?.id).toBe(idByKey.get("deploy-runbook"));
     expect(rows[0].grade).not.toBe("weak");
   });
 });
@@ -101,7 +100,7 @@ describe("grading", () => {
 
   it("ranks an unrelated-but-admitted row below a real match", async () => {
     const rows = await searchKnowledge("printer label problem");
-    expect(rows[0].id).toBe(ids.get("printer-023"));
+    expect(rows[0].id).toBe(idByKey.get("printer-023"));
     for (const r of rows.slice(1)) expect(r.relevance).toBeLessThan(GOOD);
   });
 });
@@ -111,8 +110,8 @@ describe("calibration constants", () => {
   // that does not re-derive them skews every gauge and grade with no error.
   it("separates the noise floor from real matches", async () => {
     let worstTrue = 1;
-    for (const g of GOLDEN) {
-      const [top] = await searchKnowledge(g.q);
+    for (const golden of GOLDEN) {
+      const [top] = await searchKnowledge(golden.q);
       if (top?.cos_sim) worstTrue = Math.min(worstTrue, Number(top.cos_sim));
     }
     expect(SEM_FLOOR).toBeLessThan(SEM_CEIL);
