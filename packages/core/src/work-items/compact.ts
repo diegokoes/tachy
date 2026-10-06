@@ -66,7 +66,7 @@ export interface CompactOptions {
   keepAutomated?: boolean;
 }
 
-const HEADER =
+const MAIL_HEADER_LINE =
   /^\s*(De|From|Von|Da|Van|Enviado(\s+el)?|Sent|Gesendet(\s+am)?|Verzonden|Para|To|An|Aan|Cc|CC|CCO|Bcc|Asunto|Subject|Betreff|Onderwerp|Fecha|Date|Datum|Responder a|Reply-To|Importancia|Priority)\s*:/i;
 const WROTE_VERBS =
   "escribió|escreveu|wrote|schrieb|schreef|a écrit|ha scritto|napisał\\(a\\)|napisał|написал\\(а\\)|написал|skrev";
@@ -85,7 +85,7 @@ const QUOTED_LINE = /^\s*>/;
 const FROM_LINE = /^\s*(De|From|Von|Da|Van)\s*:\s*(.+)$/i;
 const WHEN_LINE =
   /^\s*(Enviado(\s+el)?|Sent|Gesendet(\s+am)?|Fecha|Date|Datum|Verzonden)\s*:\s*(.+)$/i;
-const RULE = /^[_\-\u2014=*·]{4,}$/;
+const HORIZONTAL_RULE = /^[_\-\u2014=*·]{4,}$/;
 /** Placeholder left where an image was, so a reader knows one existed. */
 export const IMAGE_MARK = "[image]";
 
@@ -162,7 +162,7 @@ const MONTHS: Record<string, number> = {
   dezember: 11,
 };
 
-const str = (v: unknown): string | undefined =>
+const nonEmpty = (v: unknown): string | undefined =>
   typeof v === "string" && v.trim() ? v.trim() : undefined;
 
 /**
@@ -172,38 +172,47 @@ const str = (v: unknown): string | undefined =>
  */
 export function normalizeAttachments(input: unknown): CompactAttachment[] {
   if (!Array.isArray(input)) return [];
-  const out: CompactAttachment[] = [];
-  for (const a of input) {
-    if (!a || typeof a !== "object") continue;
-    const r = a as Record<string, unknown>;
-    const name = str(r.name) ?? str(r.filename) ?? str(r.file_name);
+  const attachments: CompactAttachment[] = [];
+  for (const entry of input) {
+    if (!entry || typeof entry !== "object") continue;
+    const fields = entry as Record<string, unknown>;
+    const name =
+      nonEmpty(fields.name) ??
+      nonEmpty(fields.filename) ??
+      nonEmpty(fields.file_name);
     if (!name) continue;
-    const size = typeof r.size === "number" && r.size >= 0 ? r.size : undefined;
+    const size =
+      typeof fields.size === "number" && fields.size >= 0
+        ? fields.size
+        : undefined;
     const type =
-      str(r.content_type) ??
-      str(r.contentType) ??
-      str(r.mimeType) ??
-      str(r.mime_type);
-    out.push({
+      nonEmpty(fields.content_type) ??
+      nonEmpty(fields.contentType) ??
+      nonEmpty(fields.mimeType) ??
+      nonEmpty(fields.mime_type);
+    attachments.push({
       name,
       ...(size != null ? { size } : {}),
       ...(type ? { type } : {}),
     });
   }
-  return out;
+  return attachments;
 }
 
-export function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export const describeAttachment = (a: CompactAttachment): string => {
-  const meta = [a.size != null ? formatBytes(a.size) : null, a.type]
+export const describeAttachment = (attachment: CompactAttachment): string => {
+  const meta = [
+    attachment.size != null ? formatBytes(attachment.size) : null,
+    attachment.type,
+  ]
     .filter(Boolean)
     .join(", ");
-  return meta ? `${a.name} (${meta})` : a.name;
+  return meta ? `${attachment.name} (${meta})` : attachment.name;
 };
 
 const decode = (u: string) => {
@@ -215,8 +224,8 @@ const decode = (u: string) => {
 };
 
 /** Recover the real target from corporate link-rewriting wrappers. */
-function unwrapLinks(s: string): string {
-  return s
+function unwrapLinks(text: string): string {
+  return text
     .replace(
       /https?:\/\/[\w.-]*safelinks\.protection\.outlook\.com\/[^\s<>"]*[?&]url=([^&\s<>"]+)[^\s<>"]*/gi,
       (_m, u) => decode(u),
@@ -264,40 +273,50 @@ export function normalizeBody(input: string | undefined): string {
 
 export function parseMailDate(input: string | undefined): Date | null {
   if (!input) return null;
-  const s = input.trim();
-  const es =
+  const text = input.trim();
+  const spanish =
     /(\d{1,2})\s+de\s+([a-záéíóúü]+)\s+de\s+(\d{4})(?:[,\s]+(\d{1,2})[:.](\d{2}))?/i.exec(
-      s,
+      text,
     );
-  if (es && MONTHS[es[2].toLowerCase()] != null)
+  if (spanish && MONTHS[spanish[2].toLowerCase()] != null)
     return new Date(
       Date.UTC(
-        +es[3],
-        MONTHS[es[2].toLowerCase()],
-        +es[1],
-        +(es[4] ?? 0),
-        +(es[5] ?? 0),
+        +spanish[3],
+        MONTHS[spanish[2].toLowerCase()],
+        +spanish[1],
+        +(spanish[4] ?? 0),
+        +(spanish[5] ?? 0),
       ),
     );
-  const de =
-    /(\d{1,2})\.\s*([A-Za-zäöü]+)\s+(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/.exec(s);
-  if (de && MONTHS[de[2].toLowerCase()] != null)
+  const german =
+    /(\d{1,2})\.\s*([A-Za-zäöü]+)\s+(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/.exec(
+      text,
+    );
+  if (german && MONTHS[german[2].toLowerCase()] != null)
     return new Date(
       Date.UTC(
-        +de[3],
-        MONTHS[de[2].toLowerCase()],
-        +de[1],
-        +(de[4] ?? 0),
-        +(de[5] ?? 0),
+        +german[3],
+        MONTHS[german[2].toLowerCase()],
+        +german[1],
+        +(german[4] ?? 0),
+        +(german[5] ?? 0),
       ),
     );
-  const dmy = /(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/.exec(s);
-  if (dmy)
+  const numeric = /(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/.exec(
+    text,
+  );
+  if (numeric)
     return new Date(
-      Date.UTC(+dmy[3], +dmy[2] - 1, +dmy[1], +(dmy[4] ?? 0), +(dmy[5] ?? 0)),
+      Date.UTC(
+        +numeric[3],
+        +numeric[2] - 1,
+        +numeric[1],
+        +(numeric[4] ?? 0),
+        +(numeric[5] ?? 0),
+      ),
     );
-  const iso = new Date(s);
-  return Number.isNaN(iso.getTime()) ? null : iso;
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 interface Block {
@@ -314,24 +333,24 @@ interface Block {
  */
 export function splitQuotedBlocks(text: string, depth = 0): Block[] {
   const lines = text.split("\n");
-  const out: Block[] = [];
-  let buf: string[] = [];
+  const blocks: Block[] = [];
+  let pending: string[] = [];
   let from: string | null = null;
   let when: Date | null = null;
   let quoted = false;
 
   const flush = () => {
-    const t = buf.join("\n").trim();
-    if (t) out.push({ quoted, from, when, text: t });
-    buf = [];
+    const joined = pending.join("\n").trim();
+    if (joined) blocks.push({ quoted, from, when, text: joined });
+    pending = [];
   };
 
   const isHeaderRun = (i: number) => {
-    if (!HEADER.test(lines[i])) return false;
-    let n = 0;
+    if (!MAIL_HEADER_LINE.test(lines[i])) return false;
+    let headerLines = 0;
     for (let j = i; j < Math.min(lines.length, i + 6); j++)
-      if (HEADER.test(lines[j])) n++;
-    return n >= 2;
+      if (MAIL_HEADER_LINE.test(lines[j])) headerLines++;
+    return headerLines >= 2;
   };
 
   for (let i = 0; i < lines.length; i++) {
@@ -349,12 +368,12 @@ export function splitQuotedBlocks(text: string, depth = 0): Block[] {
         .slice(i, j)
         .map((l) => l.replace(/^\s*>\s?/, ""))
         .join("\n");
-      for (const b of splitQuotedBlocks(inner, depth + 1))
-        out.push({
-          ...b,
+      for (const nested of splitQuotedBlocks(inner, depth + 1))
+        blocks.push({
+          ...nested,
           quoted: true,
-          from: b.from ?? from,
-          when: b.when ?? when,
+          from: nested.from ?? from,
+          when: nested.when ?? when,
         });
       i = j - 1;
       quoted = true;
@@ -364,38 +383,38 @@ export function splitQuotedBlocks(text: string, depth = 0): Block[] {
       flush();
       quoted = true;
       let j = i;
-      let f: string | null = null;
-      let w: string | null = null;
+      let sender: string | null = null;
+      let dateText: string | null = null;
       if (WROTE.test(lines[i])) {
-        f = lines[i]
+        sender = lines[i]
           .replace(/^\s*(El|On|Am|Op|Le|Il|Em|W dniu)\s+/i, "")
           .replace(WROTE_TAIL, "");
-        w = f;
+        dateText = sender;
         j = i + 1;
       } else {
         while (
           j < lines.length &&
-          (HEADER.test(lines[j]) || !lines[j].trim())
+          (MAIL_HEADER_LINE.test(lines[j]) || !lines[j].trim())
         ) {
-          const a = FROM_LINE.exec(lines[j]);
-          if (a && !f) f = a[2].trim();
-          const b = WHEN_LINE.exec(lines[j]);
-          if (b && !w) w = b[4].trim();
+          const fromMatch = FROM_LINE.exec(lines[j]);
+          if (fromMatch && !sender) sender = fromMatch[2].trim();
+          const whenMatch = WHEN_LINE.exec(lines[j]);
+          if (whenMatch && !dateText) dateText = whenMatch[4].trim();
           j++;
         }
       }
-      from = f;
-      when = parseMailDate(w ?? undefined);
+      from = sender;
+      when = parseMailDate(dateText ?? undefined);
       i = j - 1;
       continue;
     }
-    buf.push(lines[i]);
+    pending.push(lines[i]);
   }
   flush();
-  return out;
+  return blocks;
 }
 
-const CODEISH =
+const CODE_LIKE_LINE =
   /^\s*[{}[\]]|^\s*"[^"]*"\s*:|^\s*<\/?\w|^\s*(?:function|const|let|var|import|def|class|SELECT|INSERT|UPDATE|<\?xml)\b|^\s{2,}\S|[;,{}]\s*$/;
 
 /**
@@ -406,7 +425,7 @@ const CODEISH =
 export function looksStructured(paragraph: string): boolean {
   const lines = paragraph.split("\n").filter((l) => l.trim());
   if (lines.length < 3) return false;
-  const hits = lines.filter((l) => CODEISH.test(l)).length;
+  const hits = lines.filter((l) => CODE_LIKE_LINE.test(l)).length;
   return hits / lines.length >= 0.6;
 }
 
@@ -421,22 +440,23 @@ const tokens = (s: string) =>
     .split(" ")
     .filter(Boolean);
 
-function shingles(s: string, n = 5): Set<string> {
-  const t = tokens(s);
-  const out = new Set<string>();
-  for (let i = 0; i + n <= t.length; i++) out.add(t.slice(i, i + n).join(" "));
-  return out;
+function shingles(s: string, size = 5): Set<string> {
+  const words = tokens(s);
+  const grams = new Set<string>();
+  for (let i = 0; i + size <= words.length; i++)
+    grams.add(words.slice(i, i + size).join(" "));
+  return grams;
 }
 
 const blockKey = (s: string) => tokens(s).join(" ");
 
 function displayName(raw: string): string {
   const quotedName = /^"?([^"<]+?)"?\s*</.exec(raw);
-  let v = (quotedName?.[1] ?? raw).replace(/<[^>]*>/g, "").trim();
-  if (v.includes("@")) return v.toLowerCase();
-  if (v.includes(","))
-    v = v.split(",").reverse().join(" ").replace(/\s+/g, " ").trim();
-  return v || "unknown";
+  let name = (quotedName?.[1] ?? raw).replace(/<[^>]*>/g, "").trim();
+  if (name.includes("@")) return name.toLowerCase();
+  if (name.includes(","))
+    name = name.split(",").reverse().join(" ").replace(/\s+/g, " ").trim();
+  return name || "unknown";
 }
 
 export interface CompactMeta {
@@ -467,16 +487,16 @@ export function compactMessages(
   const lineFreq = new Map<string, number>();
   const urlFreq = new Map<string, number>();
   for (const blocks of blocksPerMessage)
-    for (const b of blocks) {
+    for (const block of blocks) {
       const seen = new Set<string>();
-      for (const line of b.text.split("\n")) {
-        const k = lineKey(line);
-        if (k.length < 10 || seen.has(k)) continue;
-        seen.add(k);
-        lineFreq.set(k, (lineFreq.get(k) ?? 0) + 1);
+      for (const line of block.text.split("\n")) {
+        const key = lineKey(line);
+        if (key.length < 10 || seen.has(key)) continue;
+        seen.add(key);
+        lineFreq.set(key, (lineFreq.get(key) ?? 0) + 1);
       }
-      for (const m of b.text.matchAll(/<(https?:\/\/[^>]+)>/g))
-        urlFreq.set(m[1], (urlFreq.get(m[1]) ?? 0) + 1);
+      for (const link of block.text.matchAll(/<(https?:\/\/[^>]+)>/g))
+        urlFreq.set(link[1], (urlFreq.get(link[1]) ?? 0) + 1);
     }
   const boilerplate = new Set(
     [...lineFreq].filter(([, n]) => n >= boilerplateThreshold).map(([k]) => k),
@@ -508,41 +528,41 @@ export function compactMessages(
    * every later mail quotes it, and the original must survive.
    */
   const isNoise = (line: string) => {
-    const s = line.trim();
-    if (!s) return false;
-    if (BANNERS.some((r) => r.test(s))) return true;
-    if (RULE.test(s)) return true;
-    if (POSTAL.test(s)) return true;
-    if (SIGNATURE_LINE.test(s) && PHONE.test(s)) return true;
-    const k = lineKey(s);
-    if (boilerplate.has(k)) {
-      if (emitted.has(k)) return true;
-      emitted.add(k);
+    const text = line.trim();
+    if (!text) return false;
+    if (BANNERS.some((r) => r.test(text))) return true;
+    if (HORIZONTAL_RULE.test(text)) return true;
+    if (POSTAL.test(text)) return true;
+    if (SIGNATURE_LINE.test(text) && PHONE.test(text)) return true;
+    const key = lineKey(text);
+    if (boilerplate.has(key)) {
+      if (emitted.has(key)) return true;
+      emitted.add(key);
     }
     return false;
   };
 
   const seenBlocks = new Set<string>();
   const seenShingles = new Set<string>();
-  const keepBlock = (s: string, structured = false) => {
-    const k = blockKey(s);
-    if (!k) return false;
-    if (seenBlocks.has(k)) {
+  const keepBlock = (text: string, structured = false) => {
+    const key = blockKey(text);
+    if (!key) return false;
+    if (seenBlocks.has(key)) {
       dropped.exact_duplicate_blocks++;
       return false;
     }
-    seenBlocks.add(k);
+    seenBlocks.add(key);
     if (structured) return true;
-    const sh = shingles(s);
-    if (sh.size >= 3) {
-      let hit = 0;
-      for (const g of sh) if (seenShingles.has(g)) hit++;
-      if (hit / sh.size >= nearRatio) {
+    const grams = shingles(text);
+    if (grams.size >= 3) {
+      let repeated = 0;
+      for (const g of grams) if (seenShingles.has(g)) repeated++;
+      if (repeated / grams.size >= nearRatio) {
         dropped.near_duplicate_blocks++;
         return false;
       }
     }
-    for (const g of sh) seenShingles.add(g);
+    for (const g of grams) seenShingles.add(g);
     return true;
   };
 
@@ -573,13 +593,13 @@ export function compactMessages(
     for (const block of blocksPerMessage[idx]) {
       const paragraphs = block.text
         .split(/\n\s*\n/)
-        .map((p) => {
-          if (looksStructured(p)) return p.replace(/\s+$/, "");
-          return detrack(p)
+        .map((paragraph) => {
+          if (looksStructured(paragraph)) return paragraph.replace(/\s+$/, "");
+          return detrack(paragraph)
             .split("\n")
             .map(detrack)
-            .filter((l) => {
-              if (!isNoise(l)) return true;
+            .filter((line) => {
+              if (!isNoise(line)) return true;
               dropped.boilerplate_lines++;
               return false;
             })
@@ -719,19 +739,21 @@ export function compactForLlm(
  * Quoted turns older than the work item itself came from mail that predates the
  * ticket and exists nowhere else, so they read as their own timeline.
  */
-export function splitPrologue(c: CompactedWorkItem): {
+export function splitPrologue(compacted: CompactedWorkItem): {
   prologue: CompactTurn[];
   thread: CompactTurn[];
 } {
-  const opened = c.ticket.opened ? Date.parse(c.ticket.opened) : NaN;
-  if (Number.isNaN(opened)) return { prologue: [], thread: c.turns };
+  const opened = compacted.ticket.opened
+    ? Date.parse(compacted.ticket.opened)
+    : NaN;
+  if (Number.isNaN(opened)) return { prologue: [], thread: compacted.turns };
   const prologue: CompactTurn[] = [];
   const thread: CompactTurn[] = [];
-  for (const t of c.turns) {
-    const at = Date.parse(t.at);
-    if (t.kind === "quoted" && !Number.isNaN(at) && at < opened)
-      prologue.push(t);
-    else thread.push(t);
+  for (const turn of compacted.turns) {
+    const at = Date.parse(turn.at);
+    if (turn.kind === "quoted" && !Number.isNaN(at) && at < opened)
+      prologue.push(turn);
+    else thread.push(turn);
   }
   prologue.sort((a, b) => a.at.localeCompare(b.at));
   return { prologue, thread };
@@ -746,109 +768,109 @@ const tag = (t: CompactTurn) =>
       ? " ·internal"
       : "";
 
-export function renderCompactScript(c: CompactedWorkItem): string {
-  const { prologue, thread } = splitPrologue(c);
-  const s = summarizeCompaction(c);
-  const out: string[] = [
-    `# ${c.ticket.title ?? "Work item"}   [#${c.ticket.external_id}]`,
+export function renderCompactScript(compacted: CompactedWorkItem): string {
+  const { prologue, thread } = splitPrologue(compacted);
+  const summary = summarizeCompaction(compacted);
+  const lines: string[] = [
+    `# ${compacted.ticket.title ?? "Work item"}   [#${compacted.ticket.external_id}]`,
     "",
-    `${s.headline} · ${day(c.ticket.opened ?? "")} → ${day(c.ticket.updated ?? "")}`,
-    [s.removed, s.recovered, s.files].filter(Boolean).join(" "),
+    `${summary.headline} · ${day(compacted.ticket.opened ?? "")} → ${day(compacted.ticket.updated ?? "")}`,
+    [summary.removed, summary.recovered, summary.files]
+      .filter(Boolean)
+      .join(" "),
     "",
   ];
-  const line = (t: CompactTurn, withTag: boolean) =>
-    `${t.speaker} (${day(t.at)})${withTag ? tag(t) : ""}:${
-      t.text ? ` ${t.text.replace(/\n/g, "\n    ")}` : ""
+  const renderTurn = (turn: CompactTurn, withTag: boolean) =>
+    `${turn.speaker} (${day(turn.at)})${withTag ? tag(turn) : ""}:${
+      turn.text ? ` ${turn.text.replace(/\n/g, "\n    ")}` : ""
     }\n` +
-    (t.attachments?.length
-      ? `    ↳ files: ${t.attachments.map(describeAttachment).join("; ")}\n`
+    (turn.attachments?.length
+      ? `    ↳ files: ${turn.attachments.map(describeAttachment).join("; ")}\n`
       : "");
   if (prologue.length) {
-    out.push(
+    lines.push(
       `## Earlier mail, recovered from quoted replies - ${prologue.length} message${prologue.length === 1 ? "" : "s"} that appear nowhere else on this ticket`,
       "",
     );
-    for (const t of prologue) out.push(line(t, false));
-    out.push(`## The ticket thread`, "");
+    for (const t of prologue) lines.push(renderTurn(t, false));
+    lines.push(`## The ticket thread`, "");
   }
-  for (const t of thread) out.push(line(t, true));
-  return out.join("\n");
+  for (const t of thread) lines.push(renderTurn(t, true));
+  return lines.join("\n");
 }
 
-const esc = (s: string) =>
+const escapeHtml = (s: string) =>
   s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 
-const COLORS: Record<CompactTurn["kind"], string> = {
+const SPEAKER_COLOR: Record<CompactTurn["kind"], string> = {
   reply: "#1a1a1a",
   internal_note: "#8a5a00",
   quoted: "#5a5a7a",
 };
 
-const kb = (n: number) => `${Math.max(1, Math.round(n / 1024))} KB`;
+const roundedKb = (n: number) => `${Math.max(1, Math.round(n / 1024))} KB`;
 
 /**
  * Plain-language accounting of what changed. "Turns" and "blocks" are internal
  * vocabulary - a reader wants to know how much less there is to read, what was
  * taken away, and what was found.
  */
-export function summarizeCompaction(c: CompactedWorkItem): {
+export function summarizeCompaction(compacted: CompactedWorkItem): {
   headline: string;
   removed: string;
   recovered: string;
   files: string;
 } {
-  const {
-    raw_chars,
-    compact_chars,
-    source_messages,
-    dropped: d,
-  } = c.compaction;
+  const { raw_chars, compact_chars, source_messages, dropped } =
+    compacted.compaction;
   const saved = raw_chars
     ? Math.max(0, Math.round((100 * (raw_chars - compact_chars)) / raw_chars))
     : 0;
-  const bits: string[] = [];
-  const repeats = d.exact_duplicate_blocks + d.near_duplicate_blocks;
+  const removals: string[] = [];
+  const repeats =
+    dropped.exact_duplicate_blocks + dropped.near_duplicate_blocks;
   if (repeats)
-    bits.push(`${repeats} repeated quote${repeats === 1 ? "" : "s"}`);
-  if (d.boilerplate_lines)
-    bits.push(`${d.boilerplate_lines} signature/footer lines`);
-  const auto = d.automated + d.auto_reply;
-  if (auto) bits.push(`${auto} automated mail${auto === 1 ? "" : "s"}`);
-  if (d.prior_transcript) bits.push("an earlier transcript");
-  const files = c.compaction.attachments;
+    removals.push(`${repeats} repeated quote${repeats === 1 ? "" : "s"}`);
+  if (dropped.boilerplate_lines)
+    removals.push(`${dropped.boilerplate_lines} signature/footer lines`);
+  const automated = dropped.automated + dropped.auto_reply;
+  if (automated)
+    removals.push(`${automated} automated mail${automated === 1 ? "" : "s"}`);
+  if (dropped.prior_transcript) removals.push("an earlier transcript");
+  const files = compacted.compaction.attachments;
   return {
-    headline: `${source_messages} messages · ${kb(compact_chars)} to read instead of ${kb(raw_chars)} (${saved}% less)`,
+    headline: `${source_messages} messages · ${roundedKb(compact_chars)} to read instead of ${roundedKb(raw_chars)} (${saved}% less)`,
     files: files
       ? `${files} file${files === 1 ? "" : "s"} referenced by name - open them on the ticket.`
       : "",
-    removed: bits.length ? `Removed ${bits.join(", ")}.` : "",
-    recovered: c.compaction.recovered_earlier
-      ? `Recovered ${c.compaction.recovered_earlier} older message${c.compaction.recovered_earlier === 1 ? "" : "s"} that survive only inside quoted replies.`
+    removed: removals.length ? `Removed ${removals.join(", ")}.` : "",
+    recovered: compacted.compaction.recovered_earlier
+      ? `Recovered ${compacted.compaction.recovered_earlier} older message${compacted.compaction.recovered_earlier === 1 ? "" : "s"} that survive only inside quoted replies.`
       : "",
   };
 }
 
 /** Freshdesk note bodies render HTML, so the script ships as markup, not markdown. */
-export function renderCompactHtml(c: CompactedWorkItem): string {
-  const { prologue, thread } = splitPrologue(c);
-  const s = summarizeCompaction(c);
-  const turn = (t: CompactTurn, withTag: boolean) =>
-    `<p style="margin:0 0 10px 0"><strong style="color:${COLORS[t.kind]}">${esc(t.speaker)}</strong> ` +
-    `<span style="color:#888">(${day(t.at)})${withTag ? esc(tag(t)) : ""}</span>:${t.text ? " " : ""}` +
-    `${esc(t.text)
+export function renderCompactHtml(compacted: CompactedWorkItem): string {
+  const { prologue, thread } = splitPrologue(compacted);
+  const summary = summarizeCompaction(compacted);
+  const renderTurn = (turn: CompactTurn, withTag: boolean) =>
+    `<p style="margin:0 0 10px 0"><strong style="color:${SPEAKER_COLOR[turn.kind]}">${escapeHtml(turn.speaker)}</strong> ` +
+    `<span style="color:#888">(${day(turn.at)})${withTag ? escapeHtml(tag(turn)) : ""}</span>:${turn.text ? " " : ""}` +
+    `${escapeHtml(turn.text)
       .replace(/\n\s*\n/g, "<br><br>")
       .replace(/\n/g, "<br>")}` +
-    (t.attachments?.length
-      ? `<br><span style="color:#777">↳ files: ${esc(t.attachments.map(describeAttachment).join("; "))}</span>`
+    (turn.attachments?.length
+      ? `<br><span style="color:#777">↳ files: ${escapeHtml(turn.attachments.map(describeAttachment).join("; "))}</span>`
       : "") +
     `</p>`;
   const parts: string[] = [
-    `<div><p><strong>Compacted transcript - ${esc(c.ticket.title ?? "")} [#${esc(c.ticket.external_id)}]</strong></p>`,
-    `<p style="color:#666">${esc(s.headline)}<br>${esc([s.removed, s.recovered, s.files].filter(Boolean).join(" "))}<br>` +
+    `<div><p><strong>Compacted transcript - ${escapeHtml(compacted.ticket.title ?? "")} [#${escapeHtml(compacted.ticket.external_id)}]</strong></p>`,
+    `<p style="color:#666">${escapeHtml(summary.headline)}<br>${escapeHtml([summary.removed, summary.recovered, summary.files].filter(Boolean).join(" "))}<br>` +
       `Every word below is quoted verbatim - nothing was summarised or reworded. ` +
       `Generated by tachy ${TRANSCRIPT_MARKER}</p><hr>`,
   ];
@@ -856,10 +878,10 @@ export function renderCompactHtml(c: CompactedWorkItem): string {
     parts.push(
       `<p><strong>Earlier mail, recovered from quoted replies</strong> - ${prologue.length} message${prologue.length === 1 ? "" : "s"} that appear nowhere else on this ticket</p>`,
     );
-    for (const t of prologue) parts.push(turn(t, false));
+    for (const t of prologue) parts.push(renderTurn(t, false));
     parts.push(`<hr><p><strong>The ticket thread</strong></p>`);
   }
-  for (const t of thread) parts.push(turn(t, true));
+  for (const t of thread) parts.push(renderTurn(t, true));
   parts.push("</div>");
   return parts.join("\n");
 }
@@ -873,23 +895,23 @@ export function splitNoteBody(html: string, maxChars = 60000): string[] {
   if (html.length <= maxChars) return [html];
   const paragraphs = html.split("\n");
   const parts: string[] = [];
-  let buf: string[] = [];
+  let pending: string[] = [];
   let size = 0;
-  for (const p of paragraphs) {
-    if (size + p.length > maxChars && buf.length) {
-      parts.push(buf.join("\n"));
-      buf = [];
+  for (const paragraph of paragraphs) {
+    if (size + paragraph.length > maxChars && pending.length) {
+      parts.push(pending.join("\n"));
+      pending = [];
       size = 0;
     }
-    buf.push(p);
-    size += p.length + 1;
+    pending.push(paragraph);
+    size += paragraph.length + 1;
   }
-  if (buf.length) parts.push(buf.join("\n"));
+  if (pending.length) parts.push(pending.join("\n"));
   // Every part carries the marker. Without it parts 2..n come back as
   // ordinary messages, are missed by `prior_transcript_ids`, and
   // `replace_previous` deletes part 1 only.
   return parts.map(
-    (p, i) =>
-      `<p style="color:#888">[compacted transcript ${i + 1}/${parts.length}] ${TRANSCRIPT_MARKER}</p>\n${p}`,
+    (part, i) =>
+      `<p style="color:#888">[compacted transcript ${i + 1}/${parts.length}] ${TRANSCRIPT_MARKER}</p>\n${part}`,
   );
 }

@@ -63,13 +63,13 @@ const EMBEDDED_TABLES: EmbeddedTable[] = [
 export async function staleVectors(): Promise<
   { table: EmbeddedTable; rows: number }[]
 > {
-  const out: { table: EmbeddedTable; rows: number }[] = [];
+  const stale: { table: EmbeddedTable; rows: number }[] = [];
   for (const table of EMBEDDED_TABLES) {
     const [{ n }] = await sql`
       select count(*)::int as n from ${sql(table)}
       where embedding is not null and not ${currentVector()}
     `;
-    if (n) out.push({ table, rows: n });
+    if (n) stale.push({ table, rows: n });
   }
-  return out;
+  return stale;
 }

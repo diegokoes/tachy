@@ -28,10 +28,12 @@ const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
  * Either arm alone can reach `strong`: a paraphrase that shares no words, or
  * an exact error code in an entry whose prose is otherwise unrelated.
  */
-export function relevance(r: Ranked): number {
-  const sem = clamp01(((r.cos_sim ?? 0) - SEM_FLOOR) / (SEM_CEIL - SEM_FLOOR));
+export function relevance(signals: Ranked): number {
+  const sem = clamp01(
+    ((signals.cos_sim ?? 0) - SEM_FLOOR) / (SEM_CEIL - SEM_FLOOR),
+  );
   const lex = clamp01(
-    Math.min(r.fts_rank ?? 0, 1) * 2 + (r.trgm_sim ?? 0) * 0.8,
+    Math.min(signals.fts_rank ?? 0, 1) * 2 + (signals.trgm_sim ?? 0) * 0.8,
   );
   return clamp01(0.85 * sem + 0.72 * lex);
 }
@@ -43,6 +45,6 @@ export const gradeOf = (r: Ranked): Grade => grade(relevance(r));
  * across surfaces - an interleaved knowledge/reference list needs these.
  */
 export function withRelevance<T extends Record<string, unknown>>(row: T) {
-  const r = relevance(row as Ranked);
-  return { ...row, relevance: Number(r.toFixed(4)), grade: grade(r) };
+  const score = relevance(row as Ranked);
+  return { ...row, relevance: Number(score.toFixed(4)), grade: grade(score) };
 }

@@ -33,12 +33,12 @@
   } = $props();
 
   function step(delta: number) {
-    const i = items.findIndex((it) => it.key === active);
-    const next = items[Math.min(items.length - 1, Math.max(0, i + delta))];
+    const index = items.findIndex((item) => item.key === active);
+    const next = items[Math.min(items.length - 1, Math.max(0, index + delta))];
     if (next && next.key !== active) onpick(next.key);
   }
 
-  const activeMatches = $derived(items.some((it) => it.key === active));
+  const activeMatches = $derived(items.some((item) => item.key === active));
 
   // `active` may name no item (settings is not a tab). The anchor then stays on
   // the last tab that was active, hidden by opacity, so the indicator's next
@@ -53,11 +53,11 @@
     if (hotkeys !== "shift") return;
     const pick = onpick;
     return pushScope([
-      ...items.slice(0, 9).map((it, i) => ({
+      ...items.slice(0, 9).map((item, i) => ({
         key: subnavKey(i),
-        label: it.label,
+        label: item.label,
         hidden: true,
-        run: () => pick(it.key),
+        run: () => pick(item.key),
       })),
       ...(vimState.enabled
         ? [
@@ -70,21 +70,21 @@
 </script>
 
 <nav class="tabs" style="--tab-anchor: {anchor}">
-  {#each items as it}
-    {@const on = it.key === active}
+  {#each items as item}
+    {@const on = item.key === active}
     {@const anchorHost =
-      it.key === (activeMatches ? active : (stickyKey ?? items[0]?.key))}
-    {@const icon = labels === "text" ? undefined : it.icon}
+      item.key === (activeMatches ? active : (stickyKey ?? items[0]?.key))}
+    {@const icon = labels === "text" ? undefined : item.icon}
     {@const bare = labels === "icons" && icon !== undefined}
     <button
       class="tab"
       class:on
       class:anchor-host={anchorHost}
       aria-current={on ? "page" : undefined}
-      aria-label={bare ? it.label : undefined}
-      use:tip={bare ? it.label : undefined}
+      aria-label={bare ? item.label : undefined}
+      use:tip={bare ? item.label : undefined}
       onclick={(e) => {
-        onpick(it.key);
+        onpick(item.key);
         // After a pointer click the button keeps focus without :focus-visible,
         // and a later keypress upgrades it and moves the indicator off the
         // active tab. A keyboard click (detail 0) keeps its focus ring.
@@ -95,7 +95,7 @@
       <span class="lbl"
         ><span class="br" aria-hidden="true">[</span>{#if icon}<span class="ico"
             ><Icon name={icon} weight={7} /></span
-          >{/if}{#if !bare}<span class="txt">{it.label}</span>{/if}<span
+          >{/if}{#if !bare}<span class="txt">{item.label}</span>{/if}<span
           class="br"
           aria-hidden="true">]</span
         ></span

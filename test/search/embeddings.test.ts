@@ -48,21 +48,21 @@ describe("embedPassages", () => {
   it("reads no further than the model's token cap", async () => {
     const shared = "word ".repeat(EMBEDDING_SPEC.maxTokens + 50);
     expect(shared.length + 400).toBeLessThan(EMBEDDING_SPEC.maxChars);
-    const [a, b, c] = await Promise.all([
+    const [alpha, omega, omegaFirst] = await Promise.all([
       embedPassage(shared + "alpha ".repeat(60)),
       embedPassage(shared + "omega ".repeat(60)),
       embedPassage("omega ".repeat(60) + shared),
     ]);
     const cos = (x: number[], y: number[]) =>
       x.reduce((s, v, i) => s + v * y[i], 0);
-    expect(cos(a, b)).toBeCloseTo(1, 4);
-    expect(cos(a, c)).toBeLessThan(0.999);
+    expect(cos(alpha, omega)).toBeCloseTo(1, 4);
+    expect(cos(alpha, omegaFirst)).toBeLessThan(0.999);
   });
 
   it("produces unit vectors of the schema's width", async () => {
-    const [v] = await embedPassages(["scanner returns ECONNREFUSED"]);
-    expect(v).toHaveLength(EMBEDDING_DIM);
-    const norm = Math.sqrt(v.reduce((s, x) => s + x * x, 0));
+    const [vector] = await embedPassages(["scanner returns ECONNREFUSED"]);
+    expect(vector).toHaveLength(EMBEDDING_DIM);
+    const norm = Math.sqrt(vector.reduce((s, x) => s + x * x, 0));
     expect(norm).toBeCloseTo(1, 3);
   });
 });
@@ -91,10 +91,10 @@ describe("the model spec", () => {
 
 describe("query vs passage", () => {
   it("embeds a query into the same space as its passage", async () => {
-    const q = await embedQuery("printer stops mid-batch");
-    const p = await embedPassage("printer stops mid-batch");
-    expect(q).toHaveLength(EMBEDDING_DIM);
-    const cos = q.reduce((s, x, i) => s + x * p[i], 0);
+    const query = await embedQuery("printer stops mid-batch");
+    const passage = await embedPassage("printer stops mid-batch");
+    expect(query).toHaveLength(EMBEDDING_DIM);
+    const cos = query.reduce((s, x, i) => s + x * passage[i], 0);
     expect(cos).toBeGreaterThan(0.9);
   });
 });
@@ -105,8 +105,8 @@ describe("toVectorLiteral", () => {
   });
 
   it("round-trips a real vector's width", async () => {
-    const v = await embedPassage("ink level reads negative");
-    const literal = toVectorLiteral(v);
+    const vector = await embedPassage("ink level reads negative");
+    const literal = toVectorLiteral(vector);
     expect(literal.startsWith("[")).toBe(true);
     expect(literal.endsWith("]")).toBe(true);
     expect(literal.slice(1, -1).split(",")).toHaveLength(EMBEDDING_DIM);

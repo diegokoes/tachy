@@ -75,9 +75,9 @@ export interface JobQueue {
 export const JOB_QUEUE_NAMES = JOB_QUEUES.map((q) => q.name);
 
 export function jobQueue(name: string): JobQueue {
-  const q = JOB_QUEUES.find((x) => x.name === name);
-  if (!q) throw new Error(`unknown job queue '${name}'`);
-  return q;
+  const queue = JOB_QUEUES.find((x) => x.name === name);
+  if (!queue) throw new Error(`unknown job queue '${name}'`);
+  return queue;
 }
 
 /**
@@ -114,13 +114,13 @@ export const JOB_FINISHED: readonly JobStatus[] = [
 
 /** "90s", "15m", "2h", "1d" → milliseconds. */
 export function parseDuration(text: string): number {
-  const m = /^(\d+)\s*(s|m|h|d)$/.exec(text.trim());
-  if (!m)
+  const parts = /^(\d+)\s*(s|m|h|d)$/.exec(text.trim());
+  if (!parts)
     throw new Error(`'${text}' is not a duration like 90s, 15m, 2h or 1d`);
   const unit = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 }[
-    m[2] as "s" | "m" | "h" | "d"
+    parts[2] as "s" | "m" | "h" | "d"
   ];
-  return Number(m[1]) * unit;
+  return Number(parts[1]) * unit;
 }
 
 export interface JobCensus {
