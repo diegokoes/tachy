@@ -44,11 +44,9 @@ export class EmbedQueue {
       queryBatch: number;
       /**
        * UTF-8 bytes one batch may hold, of queries or of passages. A token is
-       * at least a byte, so this bounds a batch's tokens whatever the script,
-       * where a character count does not: Chinese runs past one token a
-       * character. A batch occupies the model for as long as its text is, and
-       * a search waits behind it; a model with a long window makes eight full
-       * chunks a six-second wait.
+       * at least a byte, so this bounds a batch's tokens in any script, where a
+       * character count does not: CJK runs past one token a character. A
+       * search waits behind the batch for as long as its text is.
        */
       batchBytes?: number;
     } = { passageBatch: 8, queryBatch: 32 },

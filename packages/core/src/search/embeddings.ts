@@ -113,7 +113,6 @@ async function embed(kind: EmbedKind, texts: string[]): Promise<number[][]> {
   return vectors;
 }
 
-/** Embed a stored document (knowledge entry text). */
 export async function embedPassage(text: string): Promise<number[]> {
   const [v] = await embed("passage", [
     prepare(text, EMBEDDING_SPEC.passagePrefix),
@@ -121,17 +120,13 @@ export async function embedPassage(text: string): Promise<number[]> {
   return v;
 }
 
-/**
- * Embed many passages (doc chunks). The queue batches them by length, eight at
- * a time, and answers in the caller's order.
- */
+/** Vectors in the caller's order; the queue batches the passages by length. */
 export const embedPassages = (texts: string[]): Promise<number[][]> =>
   embed(
     "passage",
     texts.map((t) => prepare(t, EMBEDDING_SPEC.passagePrefix)),
   );
 
-/** Embed a search query. */
 export async function embedQuery(text: string): Promise<number[]> {
   const [v] = await embed("query", [prepare(text, EMBEDDING_SPEC.queryPrefix)]);
   return v;

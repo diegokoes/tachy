@@ -9,22 +9,16 @@ import {
   toVectorLiteral,
 } from "@tachy/core/search";
 
-/**
- * No database here. What these guard is the layer whose failures are silent:
- * a batch that comes back in the wrong order, or a spec that disagrees with the
- * vector(N) columns, both produce vectors that are the right shape and the
- * wrong meaning - search then ranks nonsense above matches with nothing failing.
- */
+// No database. These guard failures that raise nothing: a batch answered in
+// the wrong order, or a spec that disagrees with the vector(N) columns, gives
+// vectors of the right shape and the wrong meaning.
 describe("embedPassages", () => {
   it("returns nothing for nothing", async () => {
     expect(await embedPassages([])).toEqual([]);
   });
 
-  /**
-   * The batcher sorts by length to avoid paying for padding, so the mapping
-   * back to input order is the part that can silently break. Lengths here are
-   * deliberately shuffled and span a batch boundary.
-   */
+  // The batcher sorts by length to avoid padding, so the lengths here differ
+  // and span a batch boundary.
   it("answers in the caller's order, not the order it batched in", async () => {
     const texts = Array.from({ length: 35 }, (_, i) =>
       // Lengths run long -> short, so sorted order is the exact reverse.
@@ -50,11 +44,7 @@ describe("embedPassages", () => {
     expect(a).toEqual(b);
   });
 
-  /**
-   * Memory in a pass grows with the square of the longest input's tokens, and
-   * the limit is ours to set: a tokenizer may ship without one. Both texts are
-   * past the cap and differ only beyond it.
-   */
+  // The first two texts differ only beyond the cap; the third differs before it.
   it("reads no further than the model's token cap", async () => {
     const shared = "word ".repeat(EMBEDDING_SPEC.maxTokens + 50);
     expect(shared.length + 400).toBeLessThan(EMBEDDING_SPEC.maxChars);
@@ -78,11 +68,8 @@ describe("embedPassages", () => {
 });
 
 describe("the model spec", () => {
-  /**
-   * The vector(768) columns in db/schema.sql and this constant have to move
-   * together; embeddings.ts throws on import if they do not, which is why this
-   * asserts the pair rather than either alone.
-   */
+  // The vector(768) columns in db/schema.sql and the constant move together,
+  // so the pair is asserted.
   it("matches the width the schema stores", () => {
     expect(EMBEDDING_SPEC.dim).toBe(EMBEDDING_DIM);
     expect(EMBEDDING_DIM).toBe(768);
@@ -94,7 +81,6 @@ describe("the model spec", () => {
     expect(EMBEDDING_MODEL).toBeTruthy();
   });
 
-  /** Truncation is silent by design; what matters is that it happens at all. */
   it("truncates a passage past maxChars instead of overrunning the window", async () => {
     const long = "x".repeat(EMBEDDING_SPEC.maxChars + 5000);
     const [a] = await embedPassages([long]);

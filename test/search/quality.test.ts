@@ -46,9 +46,8 @@ beforeAll(async () => {
 }, 300_000);
 
 describe("nonsense queries return nothing", () => {
-  // The defect this whole design exists for: with a blended score computed in
-  // the SELECT list and a cosine that floors around 0.6, `score > 0.02` could
-  // not reject anything, so "ñ" returned a full page of confident-looking rows.
+  // Raw cosine never starts at zero, so these are rejected by the vector leg's
+  // floor and by having no lexical candidates, not by a score threshold.
   it.each(NONSENSE)("knowledge: %j", async (q) => {
     expect(await searchKnowledge(q)).toEqual([]);
   });
@@ -76,7 +75,7 @@ describe("golden query set", () => {
     }
     const recallAt3 = hits / GOLDEN.length;
     const mrr = reciprocalRankSum / GOLDEN.length;
-    // Floors, not targets. They fail loudly if a change regresses retrieval.
+    // Floors: a change that regresses retrieval fails here.
     expect(recallAt3).toBeGreaterThanOrEqual(0.9);
     expect(mrr).toBeGreaterThanOrEqual(0.9);
   });
@@ -108,9 +107,8 @@ describe("grading", () => {
 });
 
 describe("calibration constants", () => {
-  // These are measurements of one model's distribution. Changing
-  // TACHY_EMBED_MODEL without re-deriving them silently skews every gauge and
-  // every agent-facing grade, so it has to fail here instead.
+  // The constants are measured for one model. A change of `TACHY_EMBED_MODEL`
+  // that does not re-derive them skews every gauge and grade with no error.
   it("separates the noise floor from real matches", async () => {
     let worstTrue = 1;
     for (const g of GOLDEN) {
@@ -134,10 +132,8 @@ describe("calibration constants", () => {
 });
 
 describe("index usage", () => {
-  // REVIEW.md B2: all three searches computed their blend in the SELECT list,
-  // which left the planner no indexable predicate. Correct but linear. These
-  // assert the query SHAPES stay index-eligible; on a small table the planner
-  // may still prefer a scan on cost, which is why seqscan is disabled here.
+  // These assert the query shapes stay index-eligible. On a small table the
+  // planner still prefers a scan on cost, so seqscan is disabled.
   const planOf = async (q: string) => {
     const rows = await sql.unsafe(`explain (format json) ${q}`);
     return JSON.stringify(rows);

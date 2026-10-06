@@ -51,8 +51,8 @@ export function navigate(to: string, { replace = false } = {}) {
 const landings = new Map<string, () => string>();
 
 /**
- * Where a section's landing really is, for one whose bare path only redirects
- * onward. Going straight there keeps the address bar from passing through it.
+ * A section's landing, for one whose bare path only redirects onward. Going
+ * straight there keeps the address bar from passing through the bare path.
  */
 export function setLanding(key: string, to: () => string) {
   landings.set(key, to);

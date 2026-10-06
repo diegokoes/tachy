@@ -10,7 +10,7 @@ const ALL: NavItem[] = [
   { key: "admin", label: "admin", icon: "admin" },
 ];
 
-/** The tab bar, in hotkey order - 1..n. */
+/** The tab bar's items, in hotkey order. */
 export function navItems(): NavItem[] {
   return !isCurator() && session.me
     ? ALL.filter((n) => n.key !== "admin")

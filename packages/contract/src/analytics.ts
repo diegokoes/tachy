@@ -12,7 +12,10 @@ export interface AgentUsage {
   active_7d: number;
   /** Distinct people with a turn anywhere in the window. */
   active: number;
-  /** Tokens and turns per day, oldest first, gaps filled; `models` splits the tokens. */
+  /**
+   * Tokens and turns per day, oldest first, gaps filled; `models` splits the
+   * tokens.
+   */
   per_day: {
     day: string;
     turns: number;
