@@ -109,13 +109,16 @@
     align-items: stretch;
   }
   .group.split {
-    gap: var(--pad-2);
+    --part-gap: calc(var(--pad-4) * 1.5);
     padding-left: var(--pad-3);
-    border-left: 1px solid color-mix(in srgb, var(--muted) 28%, transparent);
   }
   .group.split:first-child {
     padding-left: 0;
-    border-left: none;
+  }
+  /* The strip ends on its last breakdown, so that group sits against the
+     right edge instead of leaving the slack after it. */
+  .group.split:last-child {
+    justify-content: flex-end;
   }
 
   .cell {
@@ -138,8 +141,9 @@
     gap: var(--pad-1);
   }
   .group.split .cell {
-    flex: 1 1 0;
+    flex: 0 1 auto;
     align-items: center;
+    gap: 0;
   }
   .main {
     display: flex;
@@ -206,6 +210,10 @@
     justify-content: center;
     gap: 0;
     min-width: 0;
+    padding-left: var(--part-gap);
+  }
+  .group.split > .parts {
+    padding-left: calc(var(--part-gap) - var(--pad-2));
   }
   .part {
     display: flex;
