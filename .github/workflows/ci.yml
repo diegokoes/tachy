@@ -37,6 +37,8 @@ jobs:
       # what holds the SPA to the shapes in @tachy/contract.
       - run: npm run web:check
 
+      - run: npm run comments:check
+
       # The image runs these bundles; a bundling error should fail here, not in
       # production.
       - run: npm run build:server
