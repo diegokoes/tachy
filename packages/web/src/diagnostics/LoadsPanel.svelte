@@ -167,7 +167,7 @@
     <span><b>{summary.stress}</b> under stress</span>
   </div>
   <GroupHead label="by script" />
-  <div class="bars"><Bars rows={byScript} limit={8} /></div>
+  <div class="bars"><Bars rows={byScript} cap={8} /></div>
 {/if}
 
 <GroupHead label="runs" />
