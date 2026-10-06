@@ -7,7 +7,13 @@ import {
   it,
   vi,
 } from "vitest";
-import { addFeedback, saveKnowledgeEntry } from "@tachy/core/knowledge";
+import {
+  addFeedback,
+  knowledgeStale,
+  saveKnowledgeEntry,
+} from "@tachy/core/knowledge";
+import { bucketFreshness, createBucket } from "@tachy/core/buckets";
+import { repoFreshness } from "@tachy/core/code";
 import {
   agentUsageCensus,
   recordRun,
@@ -20,6 +26,7 @@ import {
   recordSourceCall,
   setSourceOrigin,
   sourceFetch,
+  sourceFreshness,
   sourceTrafficCensus,
 } from "@tachy/core/sources";
 import { resetData, sql, tpdProductId } from "../database";
@@ -38,7 +45,7 @@ describe("overview activity", () => {
     it("is all zeroes with a filled run of days when nothing has run", async () => {
       const u = await agentUsageCensus(30);
       expect(u).toMatchObject({ turns: 0, input_tokens: 0, output_tokens: 0 });
-      expect(u.per_day).toHaveLength(14);
+      expect(u.per_day).toHaveLength(30);
       expect(u.per_day.every((d) => d.tokens === 0)).toBe(true);
       expect(u.per_day.every((d) => Object.keys(d.models).length === 0)).toBe(
         true,
@@ -163,7 +170,7 @@ describe("overview activity", () => {
         t.tools.find((x) => x.tool === "save_knowledge_entry"),
       ).toMatchObject({ failures: 1, misuse: 1 });
       expect(t.writers).toEqual([{ email: "writer@test.local", writes: 1 }]);
-      expect(t.per_day).toHaveLength(14);
+      expect(t.per_day).toHaveLength(30);
       expect(t.per_day.at(-1)).toMatchObject({ reads: 2, writes: 1 });
       expect(
         t.per_day.slice(0, -1).every((d) => d.reads + d.writes === 0),
@@ -204,7 +211,13 @@ describe("overview activity", () => {
 
       const t = await sourceTrafficCensus(14);
       expect(t.per_day).toHaveLength(14);
-      expect(t.per_day.at(-1)).toMatchObject({ agent: 1, sync: 2, app: 0 });
+      expect(t.per_day.at(-1)).toMatchObject({
+        agent: 1,
+        sync: 2,
+        app: 0,
+        rate_limited: 1,
+        auth_failures: 1,
+      });
       expect(t.connections).toHaveLength(1);
       expect(t.connections[0]).toMatchObject({
         slug: "test-freshdesk",
@@ -326,7 +339,7 @@ describe("overview activity", () => {
       });
 
       const l = await libraryEngagementCensus(30);
-      expect(l.edits_per_day).toHaveLength(14);
+      expect(l.edits_per_day).toHaveLength(30);
       expect(l.edits_per_day.at(-1)).toMatchObject({
         people: 1,
         agent: 2,
@@ -337,6 +350,95 @@ describe("overview activity", () => {
           .slice(0, -1)
           .every((d) => d.people + d.agent + d.ingest === 0),
       ).toBe(true);
+    });
+  });
+  describe("freshness", () => {
+    it("lists what has never been brought up to date first, then oldest first", async () => {
+      await sql`update source_connections set last_synced_at = now() - interval '3 days' where slug = 'test-freshdesk'`;
+      await createBucket({ slug: "docs", name: "Docs" }, null);
+      await sql`update buckets set last_batch_at = now() - interval '1 hour' where slug = 'docs'`;
+      await createBucket({ slug: "stale", name: "Stale docs" }, null);
+
+      const buckets = await bucketFreshness();
+      expect(buckets.map((b) => b.key)).toEqual(["stale", "docs"]);
+      expect(buckets[0]).toMatchObject({
+        kind: "bucket",
+        label: "Stale docs",
+        last_at: null,
+      });
+
+      const sources = await sourceFreshness();
+      const synced = sources.find((x) => x.key === "test-freshdesk")!;
+      expect(synced).toMatchObject({ kind: "source", label: "test-freshdesk" });
+      expect(Date.parse(synced.last_at!)).toBeLessThan(Date.now());
+      const nulls = sources.filter((x) => x.last_at === null).length;
+      expect(sources.slice(0, nulls).every((x) => x.last_at === null)).toBe(
+        true,
+      );
+      await sql`update source_connections set last_synced_at = null where slug = 'test-freshdesk'`;
+      expect(await repoFreshness()).toEqual([]);
+    });
+  });
+
+  describe("stale knowledge", () => {
+    it("counts what waits for review and what nobody has read", async () => {
+      const productId = await tpdProductId();
+      const reader = await createUser({ email: "rater@test.local" });
+      const entry = (summary: string) =>
+        saveKnowledgeEntry({
+          productId,
+          issueSummary: summary,
+          resolution: "r",
+        });
+      const fresh = await entry("fresh draft");
+      const old = await entry("old draft");
+      const read = await entry("approved and read");
+      const idle = await entry("approved and idle");
+      await sql`update knowledge_entries set status = 'draft' where id in (${fresh.id}, ${old.id})`;
+      await sql`update knowledge_entries set created_at = now() - interval '120 days' where id = ${old.id}`;
+      await sql`alter table knowledge_entries disable trigger knowledge_entries_updated_at`;
+      await sql`
+        update knowledge_entries
+        set status = 'approved', updated_at = now() - interval '400 days',
+            confidence = 'low'
+        where id in (${read.id}, ${idle.id})
+      `;
+      await sql`alter table knowledge_entries enable trigger knowledge_entries_updated_at`;
+      await recordView({ entryId: read.id }, reader.id);
+      await addFeedback({
+        knowledgeEntryId: idle.id,
+        userId: reader.id,
+        kind: "rating",
+        rating: 1,
+      });
+
+      const s = await knowledgeStale();
+      expect(s.drafts).toEqual([
+        { age: "week", n: 1 },
+        { age: "month", n: 0 },
+        { age: "quarter", n: 0 },
+        { age: "older", n: 1 },
+      ]);
+      expect(s).toMatchObject({ untouched: 2, unread: 1, doubtful: 2 });
+      expect(s.weakest).toEqual([
+        expect.objectContaining({
+          id: idle.id,
+          title: "approved and idle",
+          rating: 1,
+          ratings: 1,
+          reads: 0,
+        }),
+      ]);
+      expect(fresh.id).toBeTruthy();
+    });
+  });
+
+  describe("longer windows", () => {
+    it("fills a day for every day asked for, up to 90", async () => {
+      expect((await agentUsageCensus(90)).per_day).toHaveLength(90);
+      expect((await toolUsageCensus(60)).per_day).toHaveLength(60);
+      expect((await libraryEngagementCensus(7)).per_day).toHaveLength(7);
+      expect((await sourceTrafficCensus(30)).per_day).toHaveLength(30);
     });
   });
 });
