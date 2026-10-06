@@ -95,10 +95,9 @@ describe("creatable types", () => {
       },
     });
     expect(await creatableTypes(client(), "ProjA")).toEqual([
-      { name: "Bug", description: null, color: "CC293D", icon: "icon_insect" },
+      { name: "Bug", color: "CC293D", icon: "icon_insect" },
       {
         name: "Task",
-        description: null,
         color: "F2CB1D",
         icon: "icon_clipboard",
       },

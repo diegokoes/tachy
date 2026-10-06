@@ -5,6 +5,7 @@
   import { createResource } from "../resource.svelte";
   import { t } from "../terms";
   import {
+    Icon,
     Button,
     Checkbox,
     CrudTable,
@@ -37,6 +38,8 @@
 
   const ingestUrl = (slug: string) =>
     `${location.origin}${bucketIngestPath(slug)}`;
+  const request = (slug: string, token: string) =>
+    `POST ${ingestUrl(slug)}\nAuthorization: Bearer ${token}\nContent-Type: application/json`;
 
   const columns: Column<Bucket>[] = $derived([
     {
@@ -166,7 +169,6 @@
   loading={buckets.loading}
   error={buckets.error ?? teams.error}
   emptyTitle="No buckets yet."
-  emptyDetail="A bucket holds documents a sync script pushes in from somewhere tachy cannot reach, such as a Document360 knowledge base."
   addLabel="add bucket"
   noun="bucket"
   editTitle={(b) => b.name}
@@ -204,9 +206,9 @@
     onConfirm={() => (issued = null)}
     onCancel={() => (issued = null)}
   >
-    <p>
-      This is the only time the token is shown. Anyone holding it can write to
-      <strong>{b.name}</strong> and to nothing else.
+    <p class="line warn">
+      <Icon name="alert" size="1em" />
+      Copy it now. It won't be shown again.
     </p>
     <div class="secret">
       <code>{tok}</code>
@@ -218,20 +220,18 @@
         onclick={() => copy("token", tok)}
       />
     </div>
-    <p class="dim">For the Document360 sync script, in PowerShell:</p>
+    <p class="line dim">
+      <Icon name="token" size="1em" />
+      Bearer token
+    </p>
     <div class="secret">
-      <pre>{`$env:TACHY_INGEST_TOKEN = '${tok}'
-.\\Sync-Document360.ps1 -TargetUrl '${ingestUrl(b.slug)}'`}</pre>
+      <pre>{request(b.slug, tok)}</pre>
       <Button
         variant="ghost"
         size="sm"
-        icon={copied === "script" ? "confirm" : "copy"}
-        title="copy both lines"
-        onclick={() =>
-          copy(
-            "script",
-            `$env:TACHY_INGEST_TOKEN = '${tok}'\n.\\Sync-Document360.ps1 -TargetUrl '${ingestUrl(b.slug)}'`,
-          )}
+        icon={copied === "request" ? "confirm" : "copy"}
+        title="copy the request"
+        onclick={() => copy("request", request(b.slug, tok))}
       />
     </div>
   </Modal>
@@ -268,6 +268,14 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     user-select: all;
+  }
+  .line {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+  }
+  .warn {
+    color: var(--warn);
   }
   .dim {
     color: var(--muted);

@@ -58,15 +58,7 @@
   });
 
   $effect(() =>
-    pushScope([
-      { key: "esc", label: "close", run: closeComposer },
-      {
-        key: "ctrl+⏎",
-        label: "create",
-        inFields: true,
-        run: () => void submit(),
-      },
-    ]),
+    pushScope([{ key: "esc", label: "", hidden: true, run: closeComposer }]),
   );
 
   const types = $derived(composer.project ? typesOf(composer.project.id) : []);
@@ -390,8 +382,6 @@
                 <Icon name={typeIcon(t.icon)} size="1.4em" />
               </span>
               <span class="name">{t.name}</span>
-              {#if t.description}<span class="dim desc">{t.description}</span
-                >{/if}
             </button>
           {/each}
         </div>
@@ -658,13 +648,6 @@
   .card:hover,
   .card:focus-visible {
     border-color: var(--accent);
-  }
-  .card .desc {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
   }
   .glyph {
     display: inline-flex;
