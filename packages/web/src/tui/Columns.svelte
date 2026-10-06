@@ -1,9 +1,10 @@
 <script lang="ts">
   import Axis from "./Axis.svelte";
+  import Legend from "./Legend.svelte";
   import Plot from "./Plot.svelte";
-  import type { Col } from "./marks";
+  import { getView } from "./view";
+  import type { Col, LegendItem } from "./marks";
   import { stackParts, toneVar } from "./scale";
-  import type { Tone } from "./tone";
 
   let {
     rows,
@@ -22,7 +23,7 @@
     /** How a column's count is printed - compact, for figures in the millions. */
     format?: (n: number) => string;
     /** The stacked parts, named once under the plot. */
-    legend?: { key: string; label: string; tone: Tone }[];
+    legend?: LegendItem[];
   } = $props();
 
   /* Capped rather than stretched: three categories across a full-width panel
@@ -34,14 +35,17 @@
   const CUT = 2;
 
   const peak = $derived(Math.max(0, ...rows.map((r) => r.value)));
-  const top = $derived(max ?? peak);
+  const top = $derived(
+    max ?? Math.max(peak, ...rows.map((r) => r.behind ?? 0)),
+  );
   const keys = $derived(rows.map((r) => r.key));
   const labels = $derived(new Map(rows.map((r) => [r.key, r.label])));
 
   /* The axis carries the scale, so a number over every column would be
      saying it twice. The peak and the latest still get one: those are the two
      a reader looks for by name rather than off the axis. */
-  const dense = $derived(rows.length > 8);
+  const view = getView();
+  const dense = $derived(rows.length > (view.expanded ? 24 : 8));
   const count = (r: Col, i: number) =>
     r.text ??
     (r.value && (!dense || i === rows.length - 1 || r.value === peak)
@@ -67,17 +71,30 @@
       />
 
       {#each rows as r, i (r.key)}
-        {@const x = f.bandAt(r.key) + (f.band - cap) / 2}
+        {@const edge = f.bandAt(r.key) + (f.band - cap) / 2}
+        {@const inset = r.behind === undefined ? 0 : Math.min(4, cap / 4)}
+        {@const x = edge + inset}
+        {@const width = cap - inset * 2}
         {@const parts = stackParts(r.parts)}
         {@const n = count(r, i)}
         <g>
           <title>{r.title ?? r.label}: {r.text ?? format(r.value)}</title>
+          {#if r.behind !== undefined}
+            <rect
+              class="behind"
+              x={edge}
+              y={f.at(r.behind)}
+              width={cap}
+              height={Math.max(1, f.up(r.behind))}
+              rx="2"
+            />
+          {/if}
           {#if parts.length}
             {#each parts as p (p.key)}
               <rect
                 {x}
                 y={f.at(p.offset + p.size)}
-                width={cap}
+                {width}
                 height={Math.max(1, f.up(p.size) - CUT)}
                 rx="2"
                 style="fill: {toneVar(p.tone)}"
@@ -87,16 +104,28 @@
             <rect
               {x}
               y={f.at(r.value)}
-              width={cap}
+              {width}
               height={Math.max(1, f.up(r.value))}
               rx="2"
               style="fill: {toneVar(r.tone)}"
             />
           {/if}
+          {#each stackParts(r.inner) as p (p.key)}
+            {@const w = Math.max(3, Math.round(width * 0.4))}
+            <rect
+              class="inner"
+              x={x + (width - w) / 2}
+              y={f.at(p.offset + p.size)}
+              width={w}
+              height={Math.max(3, f.up(p.size))}
+              rx="1"
+              style="fill: {toneVar(p.tone)}"
+            />
+          {/each}
           {#if n}
             <text
               class="n"
-              x={x + cap / 2}
+              x={edge + cap / 2}
               y={f.at(r.value) - f.fs * 0.45}
               text-anchor="middle">{n}</text
             >
@@ -106,15 +135,7 @@
     {/snippet}
   </Plot>
 
-  {#if legend?.length}
-    <div class="legend">
-      {#each legend as l (l.key)}
-        <span class="key" style="--tone-color: {toneVar(l.tone)}"
-          >{l.label}</span
-        >
-      {/each}
-    </div>
-  {/if}
+  {#if legend?.length}<Legend items={legend} />{/if}
 </div>
 
 <style>
@@ -132,11 +153,19 @@
   }
   /* Hung below the tile rather than taken out of it, so the axis lines up
      with a neighbour that has no legend. The grid gap has room for it. */
-  .chart.fill .legend {
+  .chart.fill > :global(.legend) {
     position: absolute;
     top: calc(100% + var(--pad-2));
     left: 0;
     right: 0;
+  }
+
+  .inner {
+    stroke: var(--panel-solid);
+    stroke-width: 1.5;
+  }
+  .behind {
+    fill: color-mix(in srgb, var(--muted) 22%, transparent);
   }
 
   .n {
@@ -144,24 +173,5 @@
     font-family: var(--font-mono);
     font-size: var(--fs-xs);
     font-variant-numeric: tabular-nums;
-  }
-
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 0 var(--pad-3);
-    font-size: var(--fs-xs);
-    color: var(--muted);
-  }
-  .key::before {
-    content: "";
-    display: inline-block;
-    width: 0.42em;
-    height: 0.85em;
-    margin-right: var(--pad-1);
-    vertical-align: middle;
-    border-radius: 1px;
-    background: var(--tone-color);
   }
 </style>

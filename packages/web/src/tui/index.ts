@@ -21,6 +21,28 @@ export { default as Plot, getPlot, type Frame } from "./Plot.svelte";
 export { default as Axis } from "./Axis.svelte";
 export { default as Columns } from "./Columns.svelte";
 export { default as Bars } from "./Bars.svelte";
+export { default as Legend } from "./Legend.svelte";
+export { default as ChartGroup } from "./ChartGroup.svelte";
+export { default as Lines } from "./Lines.svelte";
+export { default as Highlight } from "./Highlight.svelte";
+export { default as Tooltip } from "./Tooltip.svelte";
+export { default as Waffle, type WaffleItem } from "./Waffle.svelte";
+export { default as WaffleBars } from "./WaffleBars.svelte";
+export { default as Radar } from "./Radar.svelte";
+export { default as Figures, type FigureItem } from "./Figures.svelte";
+export { default as Units } from "./Units.svelte";
+export { default as LineChart } from "./LineChart.svelte";
+export { default as AnnotationLine } from "./AnnotationLine.svelte";
+export { default as AnnotationPoint } from "./AnnotationPoint.svelte";
+export { default as AnnotationRange } from "./AnnotationRange.svelte";
+export {
+  createChartGroup,
+  getChartGroup,
+  type ChartGroup as ChartGroupState,
+} from "./chartGroup.svelte";
+export type { Series, SeriesPoint } from "./series";
+export { default as Ratios } from "./Ratios.svelte";
+export { getView, VIEW_KEY, type TileView } from "./view";
 export { default as Band } from "./Band.svelte";
 export { default as Cells } from "./Cells.svelte";
 export { default as Timeline, type Lane } from "./Timeline.svelte";
@@ -44,14 +66,24 @@ export { default as FormActions } from "./FormActions.svelte";
 
 /* Kept where they are until their last legacy call site is migrated. */
 export { default as Select } from "./AsciiSelect.svelte";
-export { default as Caret } from "./Caret.svelte";
+export { default as Caret, caretSide } from "./Caret.svelte";
 export { default as CaretHost } from "./CaretHost.svelte";
 export { default as CaretInput } from "./CaretInput.svelte";
 export { default as NoMatch } from "./NoMatch.svelte";
 export { default as Spinner } from "./Spinner.svelte";
 export { default as Scrollbar } from "./Scrollbar.svelte";
 
-export type { Bar, Block, Cell, Col, Day, Part, Segment } from "./marks";
+export type {
+  Bar,
+  Block,
+  Cell,
+  Col,
+  Day,
+  LegendItem,
+  Part,
+  Ratio,
+  Segment,
+} from "./marks";
 export {
   heatFill,
   hottest,
