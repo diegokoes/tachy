@@ -22,6 +22,8 @@
     desc?: string;
     /** Said instead of rows when there are none: loading, or why not. */
     empty?: string;
+    /** Rows are short names: lay them out in columns, read top to bottom. */
+    grid?: boolean;
   }
 
   export type CommandPick =
@@ -108,11 +110,19 @@
             })),
   );
 
+  const GRID_COLUMNS = 3;
+  const grid = $derived(mode === "options" && !!crumb?.grid);
+  const gridRows = $derived(Math.ceil(items.length / GRID_COLUMNS));
+
   let idx = $state(0);
+  let rows = $state<HTMLElement>();
   $effect(() => {
     void query;
     void mode;
     idx = 0;
+  });
+  $effect(() => {
+    rows?.children[idx]?.scrollIntoView({ block: "nearest" });
   });
 
   export function empty(): boolean {
@@ -146,25 +156,32 @@
         {#if crumb.desc}<span class="cmd-desc">{crumb.desc}</span>{/if}
       </div>
     {/if}
-    {#each items as item, i (item.key)}
-      <button
-        class="cmd-row"
-        class:active={i === idx}
-        role="option"
-        aria-selected={i === idx}
-        onmouseenter={() => (idx = i)}
-        onclick={() => onpick(item.pick)}
-      >
-        {#if item.icon}
-          <span class="cmd-icon" style:color={item.color ?? undefined}>
-            <Icon name={item.icon} size="1em" />
-          </span>
-        {/if}
-        <span class="cmd-label">{item.label}</span>
-        {#if item.hint}<span class="cmd-hint">{item.hint}</span>{/if}
-        {#if item.desc}<span class="cmd-desc">{item.desc}</span>{/if}
-      </button>
-    {/each}
+    <div
+      class="cmd-rows"
+      class:grid
+      style:--rows={grid ? gridRows : undefined}
+      bind:this={rows}
+    >
+      {#each items as item, i (item.key)}
+        <button
+          class="cmd-row"
+          class:active={i === idx}
+          role="option"
+          aria-selected={i === idx}
+          onmouseenter={() => (idx = i)}
+          onclick={() => onpick(item.pick)}
+        >
+          {#if item.icon}
+            <span class="cmd-icon" style:color={item.color ?? undefined}>
+              <Icon name={item.icon} size="1em" />
+            </span>
+          {/if}
+          <span class="cmd-label">{item.label}</span>
+          {#if item.hint}<span class="cmd-hint">{item.hint}</span>{/if}
+          {#if item.desc}<span class="cmd-desc">{item.desc}</span>{/if}
+        </button>
+      {/each}
+    </div>
     {#if !items.length}
       <div class="cmd-none">
         {mode === "options"
@@ -184,7 +201,6 @@
     z-index: 8;
     margin-bottom: 0.35rem;
     max-height: 14rem;
-    overflow-y: auto;
     display: flex;
     flex-direction: column;
     background: var(--panel-solid);
@@ -199,6 +215,7 @@
     padding: 0.3rem 0.55rem 0.4rem;
     border-bottom: 1px solid var(--border);
     margin-bottom: 0.25rem;
+    flex: none;
   }
   .cmd-cmd {
     flex: none;
@@ -212,6 +229,26 @@
     background: var(--accent-fill);
     border-radius: 3px;
     padding: 0.05rem 0.35rem;
+  }
+  .cmd-rows {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .cmd-rows.grid {
+    display: grid;
+    grid-auto-flow: column;
+    grid-template-rows: repeat(var(--rows), auto);
+    grid-auto-columns: minmax(0, 1fr);
+  }
+  .grid .cmd-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .cmd-none {
     padding: 0.35rem 0.55rem;
