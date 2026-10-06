@@ -277,7 +277,6 @@
     bind:value={filter}
     shown={filtered.length}
     total={users.data.length}
-    placeholder="filter by email or name…"
     label="filter users"
   />
   <Select

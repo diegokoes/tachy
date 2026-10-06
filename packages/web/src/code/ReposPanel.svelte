@@ -234,9 +234,6 @@
     <span class="run">
       {#if run.status === "queued"}
         <Badge tone="muted">queued</Badge>
-        <span class="sm"
-          >waiting in the index queue{run.line ? ` · ${run.line}` : ""}</span
-        >
       {:else}
         <Meter value={run.progress ?? 0} width={8} label="index progress" />
         <span class="sm"
@@ -293,7 +290,6 @@
     bind:value={filter}
     shown={filtered.length}
     total={repos.data.length}
-    placeholder="filter repos…"
     label="filter repositories"
   />
   {#if isGlobalAdmin() && repos.data.length}

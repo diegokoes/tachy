@@ -54,7 +54,6 @@
   bind:value={filter}
   shown={shown.length}
   total={patterns.data.length}
-  placeholder="filter patterns…"
   label="filter resolution patterns"
 />
 

@@ -1,4 +1,8 @@
-import type { SourceCensus, SourceConnectionRow } from "@tachy/contract";
+import type {
+  Freshness,
+  SourceCensus,
+  SourceConnectionRow,
+} from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { badInput, notFound } from "../infra/errors";
@@ -119,4 +123,20 @@ export async function sourceIssues(
     "sources.never_synced": issueList(neverSynced),
     "projects.no_wiki": issueList(noWiki),
   };
+}
+
+/** When each connection last synced, oldest first, so the neglected are on top. */
+export async function sourceFreshness(): Promise<Freshness[]> {
+  const rows = await sql<{ slug: string; last: Date | null }[]>`
+    select slug, last_synced_at as last
+    from source_connections
+    order by last_synced_at nulls first, slug
+  `;
+  return rows.map((r) => ({
+    kind: "source",
+    key: r.slug,
+    label: r.slug,
+    last_at: r.last ? r.last.toISOString() : null,
+    error: null,
+  }));
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { embedBucketChunks } from "../buckets/search";
 import { backfillCodeEmbeddings } from "../code/indexer";
+import { count } from "../jobs/present";
 import { defineJob } from "../jobs/registry";
 import { backfillEmbeddings } from "../knowledge/knowledge";
 import { backfillReferenceEmbeddings } from "../reference/reference";
@@ -8,11 +9,19 @@ import { backfillReferenceEmbeddings } from "../reference/reference";
 export function defineSearchJobs() {
   defineJob({
     kind: "embeddings.backfill",
-    title: "Embed missing vectors",
+    title: "Rebuild missing embeddings",
     description:
       "Embeds knowledge entries, reference chunks, code chunks and bucket chunks that have no vector, or one made by another embedding model. Run it after a model change; it picks up where an interrupted run stopped. With 'all', re-embeds everything.",
     params: z.object({ all: z.boolean().default(false) }),
     queue: "embed",
+    subject: (p) => (p.all ? "everything" : null),
+    outcome: (o) => {
+      const n = Object.values(o).reduce<number>(
+        (sum, v) => sum + (typeof v === "number" ? v : 0),
+        0,
+      );
+      return n ? `${count(n, "vector")} embedded` : "nothing missing";
+    },
     timeout: "6h",
     run: async (ctx, p) => {
       const entries = await backfillEmbeddings({ all: p.all });

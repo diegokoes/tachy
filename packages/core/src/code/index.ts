@@ -15,6 +15,7 @@ export {
   sweepInterruptedIndexes,
   repoCensus,
   repoIssues,
+  repoFreshness,
 } from "./repos";
 export type {
   RepoInput,

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Component } from "svelte";
+  import { onDestroy, type Component } from "svelte";
   import { navigate, segment } from "../shell/router.svelte";
   import { keep, recall } from "../shell/kept";
   import { scrollport } from "../shell/scrollport.svelte";
@@ -41,6 +41,7 @@
   import SystemPanel from "../system/SystemPanel.svelte";
   import JobsPanel from "../jobs/JobsPanel.svelte";
   import RunsPanel from "../jobs/RunsPanel.svelte";
+  import QueuesPanel from "../jobs/QueuesPanel.svelte";
   import WorkersPanel from "../jobs/WorkersPanel.svelte";
   import JobFailuresPanel from "../jobs/JobFailuresPanel.svelte";
   import RuntimePanel from "../system/RuntimePanel.svelte";
@@ -51,6 +52,8 @@
   import SectionModal from "./SectionModal.svelte";
   import { issues, loadIssues } from "./issues.svelte";
   import { issueGroups } from "./issueMessages";
+  import { closeTile, expandedKey } from "./expand.svelte";
+  import { setPeriod } from "./period.svelte";
   import HostPanel from "../system/HostPanel.svelte";
   import ChecksPanel from "../diagnostics/ChecksPanel.svelte";
   import LoadsPanel from "../diagnostics/LoadsPanel.svelte";
@@ -79,7 +82,7 @@
     { key: "flows", label: "flows", icon: "flows" },
     ...(isGlobalAdmin()
       ? [
-          { key: "workers", label: "workers", icon: "workers" as const },
+          { key: "workers", label: "jobs", icon: "workers" as const },
           { key: "system", label: "system", icon: "system" as const },
         ]
       : []),
@@ -103,7 +106,6 @@
         view: SourcesPanel,
         n: "sources",
         show: admin,
-        present: "modal",
       },
       {
         key: "projects",
@@ -136,14 +138,12 @@
         label: t("teams"),
         view: TeamsPanel,
         n: "teams",
-        present: "modal",
       },
       {
         key: "products",
         label: t("products"),
         view: ProductsPanel,
         n: "products",
-        present: "modal",
       },
       {
         key: "components",
@@ -163,14 +163,12 @@
         label: "labels",
         view: LabelsPanel,
         n: "labels",
-        present: "modal",
       },
       {
         key: "patterns",
         label: "resolution patterns",
         view: PatternsPanel,
         n: "patterns",
-        present: "modal",
       },
       {
         key: "customers",
@@ -193,16 +191,21 @@
         label: t("teams"),
         view: TeamRosterPanel,
         n: "teams",
-        present: "modal",
       },
       {
         key: "admins",
         label: "app admins",
         view: AppAdminsPanel,
-        present: "modal",
       },
     ],
     workers: [
+      {
+        key: "jobs",
+        label: "schedule",
+        icon: "jobs",
+        view: JobsPanel,
+        show: admin,
+      },
       {
         key: "runs",
         label: "runs",
@@ -211,17 +214,17 @@
         show: admin,
       },
       {
+        key: "queues",
+        label: "queues",
+        icon: "queues",
+        view: QueuesPanel,
+        show: admin,
+      },
+      {
         key: "processes",
         label: "workers",
         icon: "workerPool",
         view: WorkersPanel,
-        show: admin,
-      },
-      {
-        key: "jobs",
-        label: "jobs",
-        icon: "jobs",
-        view: JobsPanel,
         show: admin,
       },
       {
@@ -377,6 +380,15 @@
       navigate(`/admin/${page}`, { replace: true });
   });
 
+  const expanded = $derived(expandedKey());
+
+  /* The window a detail view was set to belongs to that view: leaving it by
+     any route, the back button or a tab, puts every overview on its default. */
+  $effect(() => {
+    if (!expanded) setPeriod(undefined);
+  });
+  onDestroy(() => setPeriod(undefined));
+
   const backToOverview = () => navigate(`/admin/${page}`);
 
   /* A page without an overview has nothing to show until a section is named,
@@ -426,12 +438,19 @@
     <Button variant="ghost" size="sm" icon="back" onclick={backToOverview}
       >overview</Button
     >
+  {:else if overview && expanded}
+    <Button
+      variant="ghost"
+      size="sm"
+      icon="back"
+      onclick={() => closeTile(page)}>overview</Button
+    >
   {/if}
   {#if detail || filled}
     {@render pageActions()?.()}
   {/if}
   <!-- Issues belong to the page as a whole, so only its overview raises them. -->
-  {#if showing && groups.length}
+  {#if showing && !expanded && groups.length}
     <Button
       variant="ghost"
       size="sm"

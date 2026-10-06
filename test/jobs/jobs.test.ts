@@ -41,6 +41,8 @@ defineJob({
   }),
   timeout: "1m",
   maxAttempts: 2,
+  subject: (p) => p.word,
+  outcome: (o) => `said ${o.said}`,
   run: async (ctx, p) => {
     ctx.log(`saying ${p.word}`);
     await ctx.progress(0.5, "half");
@@ -394,7 +396,16 @@ describe("queues", () => {
         ["test.echo", "event", 10, "succeeded"],
         ["test.echo", "event", 10, "succeeded"],
       ]);
+      expect(listed.map((r) => [r.subject, r.outcome]).sort()).toEqual([
+        ["one", "said one"],
+        ["two", "said two"],
+      ]);
+      expect(listed.map((r) => [r.parent_kind, r.parent_name])).toEqual([
+        ["test.fanout", null],
+        ["test.fanout", null],
+      ]);
       const [row] = (await listJobRuns({})).filter((r) => r.id === parent);
+      expect(row.parent_kind).toBeNull();
       expect(row.children).toEqual({
         total: 2,
         queued: 0,
@@ -472,7 +483,15 @@ describe("the worker roster", () => {
         concurrency: 1,
         alive: true,
         draining: false,
-        runs: [{ id, kind: "test.index", queue: "index" }],
+        runs: [
+          {
+            id,
+            kind: "test.index",
+            kind_title: "Holds the index queue until stopped",
+            queue: "index",
+            subject: null,
+          },
+        ],
       });
       const byName = Object.fromEntries(live.queues.map((q) => [q.name, q]));
       expect(byName.index).toMatchObject({
@@ -680,6 +699,27 @@ describe("the job census", () => {
     expect(j.by_kind).toEqual([]);
     expect(j.definitions).toMatchObject({ total: 0, scheduled: 0 });
     expect(j.upcoming).toEqual([]);
+  });
+
+  it("reports the median and the tail of each kind's run time, and what was retried", async () => {
+    for (const seconds of [10, 20, 30, 40, 100])
+      await run({ status: "succeeded", seconds });
+    await sql`update job_runs set queue = 'maintenance'`;
+    await sql`update job_runs set attempts = 2 where id = (select id from job_runs limit 1)`;
+
+    const j = await jobCensus(14);
+    const echo = j.by_kind.find((k) => k.kind === "test.echo")!;
+    expect(echo.p50_seconds).toBe(30);
+    expect(echo.p95_seconds).toBeCloseTo(88, 0);
+    expect(echo.retried).toBe(1);
+    expect(echo.timeout_ms).toBeGreaterThan(0);
+    expect(j.wait_per_day.length).toBeGreaterThan(0);
+    expect(j.wait_per_day[0]).toMatchObject({ queue: "maintenance" });
+  });
+
+  it("looks as far back as it is asked, up to a quarter", async () => {
+    expect((await jobCensus(90)).per_day).toHaveLength(90);
+    expect((await jobCensus(7)).per_day).toHaveLength(7);
   });
 
   it("splits runs by outcome, trigger and pool, and times each kind", async () => {

@@ -767,7 +767,6 @@
   bind:value={filter}
   shown={filtered.length}
   total={customers.data.length}
-  placeholder="filter customers…"
   label="filter customers"
 />
 

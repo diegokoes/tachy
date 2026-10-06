@@ -4,6 +4,7 @@ import {
   SLUG_RE,
 } from "@tachy/contract";
 import type {
+  Freshness,
   RepoCensus,
   RepoIndexStatus,
   RepoLineRow,
@@ -367,4 +368,22 @@ export async function repoIssues(): Promise<Record<string, IssueList>> {
   return Object.fromEntries(
     Object.keys(where).map((k, i) => [k, issueList(lists[i])]),
   );
+}
+
+/** When each repo's default line was last indexed, oldest first. */
+export async function repoFreshness(): Promise<Freshness[]> {
+  const rows = await sql<
+    { slug: string; last: Date | null; error: string | null }[]
+  >`
+    select r.slug, dl.last_indexed_at as last, dl.index_error as error
+    from repos r ${defaultLineJoin()}
+    order by dl.last_indexed_at nulls first, r.slug
+  `;
+  return rows.map((r) => ({
+    kind: "repo",
+    key: r.slug,
+    label: r.slug,
+    last_at: r.last ? r.last.toISOString() : null,
+    error: r.error,
+  }));
 }

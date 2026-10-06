@@ -11,12 +11,14 @@
     Cells,
     Checkbox,
     Columns,
+    DataTable,
     Modal,
     Note,
     dayOfMonth,
     type Bar,
     type Cell,
     type Col,
+    type Column,
   } from "../tui";
   import { loadSummary, runP95 } from "../diagnostics/loadRuns";
   import {
@@ -27,9 +29,12 @@
     ratio,
     showSection,
     span,
+    type Count,
     type Tone,
   } from "../admin/overview";
   import Dials, { type DialItem } from "../admin/Dials.svelte";
+  import Detail from "../admin/Detail.svelte";
+  import { ago as agoText, col } from "../admin/detail";
   import Facts, { type Fact } from "../admin/Facts.svelte";
   import Overview from "../admin/Overview.svelte";
   import Tile from "../admin/Tile.svelte";
@@ -520,6 +525,91 @@
     })),
   );
 
+  type Backup = Result & { at: string };
+  const history = $derived(
+    ((r?.history?.backup ?? []) as Result[]).filter((b): b is Backup =>
+      Boolean(b.at),
+    ),
+  );
+  const backupColumns: Column<Backup>[] = [
+    col<Backup>("at", "taken", (b) => new Date(b.at).toLocaleString()),
+    col<Backup>("age", "age", (b) => agoText(b.at), { end: true }),
+    col<Backup>("ok", "result", (b) => (b.ok === false ? "failed" : "ok")),
+    col<Backup>(
+      "size",
+      "dump",
+      (b) => (b.dump_bytes ? bytes(b.dump_bytes) : "–"),
+      { end: true },
+    ),
+    col<Backup>("error", "error", (b) => b.error ?? b.problems ?? ""),
+  ];
+  const backupFigures = $derived<Count[]>([
+    { key: "kept", label: "backups kept", value: history.length },
+    {
+      key: "failed",
+      label: "failed",
+      value: history.filter((b) => b.ok === false).length,
+      tone: history.some((b) => b.ok === false) ? "danger" : "muted",
+    },
+    {
+      key: "last",
+      label: "last good",
+      text: agoText(
+        [...history].reverse().find((b) => b.ok !== false)?.at ?? null,
+      ),
+    },
+    {
+      key: "size",
+      label: "latest dump",
+      text: bytes(history.at(-1)?.dump_bytes ?? 0),
+    },
+  ]);
+
+  type LoadRun = (typeof loads.data.runs)[number];
+  const loadColumns: Column<LoadRun>[] = [
+    col<LoadRun>("at", "run", (t) => new Date(t.created_at).toLocaleString()),
+    col<LoadRun>(
+      "script",
+      "script",
+      (t) => `${t.script}${t.profile ? ` (${t.profile})` : ""}`,
+    ),
+    col<LoadRun>("target", "target", (t) => t.target),
+    col<LoadRun>("status", "status", (t) => t.status),
+    col<LoadRun>("p95", "p95 ms", (t) => Math.round(runP95(t) ?? 0) || "–", {
+      end: true,
+    }),
+  ];
+  const loadFigures = $derived<Count[]>([
+    { key: "runs", label: "runs", value: loads.data.runs.length },
+    { key: "judged", label: "judged", value: summary.judged },
+    {
+      key: "pass",
+      label: "pass rate",
+      text:
+        summary.passRate === null ? "–" : pct(summary.passed, summary.judged),
+    },
+  ]);
+
+  const storageTotal = $derived(storage.reduce((n, x) => n + x.value, 0));
+  const storageColumns: Column<Bar>[] = [
+    col<Bar>("table", "table", (x) => x.label),
+    col<Bar>("size", "size", (x) => bytes(x.value), { end: true }),
+    col<Bar>("share", "of total", (x) => pct(x.value, storageTotal), {
+      end: true,
+    }),
+  ];
+  const storageFigures = $derived<Count[]>([
+    { key: "total", label: "tables listed", text: bytes(storageTotal) },
+    { key: "count", label: "tables", value: storage.length },
+    {
+      key: "top",
+      label: "largest",
+      text: storage[0]
+        ? `${storage[0].label} · ${pct(storage[0].value, storageTotal)}`
+        : "–",
+    },
+  ]);
+
   async function setMaintenance(refuse: boolean) {
     pausing = true;
     error = null;
@@ -555,6 +645,33 @@
       onchange={(on) => setMaintenance(on)}
     />
   {/if}
+{/snippet}
+
+{#snippet backupChart()}
+  <Columns rows={backups} format={(n) => String(Math.round(n))} fill />
+{/snippet}
+{#snippet backupTable()}
+  <DataTable
+    columns={backupColumns}
+    rows={[...history].reverse()}
+    rowKey={(b) => b.at}
+  />
+{/snippet}
+{#snippet loadChart()}
+  <Columns rows={loadTests} fill />
+{/snippet}
+{#snippet loadTable()}
+  <DataTable
+    columns={loadColumns}
+    rows={loads.data.runs}
+    rowKey={(t) => t.id}
+  />
+{/snippet}
+{#snippet storageChart()}
+  <Bars rows={storage} format={bytes} />
+{/snippet}
+{#snippet storageTable()}
+  <DataTable columns={storageColumns} rows={storage} rowKey={(x) => x.key} />
 {/snippet}
 
 <Overview
@@ -625,24 +742,40 @@
     <Facts items={settingFacts} />
   </Tile>
 
-  <Tile title="backups" meta="MiB" empty={!backups.length}>
+  <Tile title="backups" key="backups" meta="MiB" empty={!backups.length}>
     {#snippet actions()}{@render open("host", "backups and host")}{/snippet}
-    <Columns rows={backups} format={(n) => String(Math.round(n))} fill />
+    {#snippet detail()}
+      <Detail figures={backupFigures} table={backupTable}>
+        {@render backupChart()}
+      </Detail>
+    {/snippet}
+    {@render backupChart()}
   </Tile>
 
   <Tile
     title="load tests"
+    key="load-tests"
     meta={summary.passRate === null
       ? "p95 ms"
       : `p95 ms · ${pct(summary.passed, summary.judged)} pass`}
     empty={!loadTests.length}
   >
     {#snippet actions()}{@render open("loads", "every load test")}{/snippet}
-    <Columns rows={loadTests} fill />
+    {#snippet detail()}
+      <Detail figures={loadFigures} table={loadTable}>
+        {@render loadChart()}
+      </Detail>
+    {/snippet}
+    {@render loadChart()}
   </Tile>
 
-  <Tile title="storage" empty={!storage.length}>
-    <Bars rows={storage} format={bytes} fit />
+  <Tile title="storage" key="storage" expand="list" empty={!storage.length}>
+    {#snippet detail()}
+      <Detail figures={storageFigures} table={storageTable}>
+        {@render storageChart()}
+      </Detail>
+    {/snippet}
+    {@render storageChart()}
   </Tile>
 </Overview>
 

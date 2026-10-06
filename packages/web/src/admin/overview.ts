@@ -62,3 +62,32 @@ export const bytes = (n: number) => {
   }
   return `${v >= 10 || i === 0 ? Math.round(v) : v.toFixed(1)} ${UNITS[i]}`;
 };
+
+export type Count = {
+  key: string;
+  label: string;
+  value?: number;
+  /** Printed instead of `value`: a state, an age, a compacted figure. */
+  text?: string;
+  tone?: "accent" | "ok" | "warn" | "danger" | "muted";
+  /** The section on this page this figure is the count of. */
+  to?: string;
+  /** The key of the counter this one breaks down; it must follow it. */
+  of?: string;
+};
+
+export type CountGroup = { head: Count; parts: Count[] };
+
+/**
+ * Counters in the order given, each one followed by the counters that break
+ * it down. A part whose parent is not the counter before it stands alone.
+ */
+export const groupCounts = (items: Count[]): CountGroup[] => {
+  const groups: CountGroup[] = [];
+  for (const it of items) {
+    const last = groups[groups.length - 1];
+    if (it.of && last?.head.key === it.of) last.parts.push(it);
+    else groups.push({ head: it, parts: [] });
+  }
+  return groups;
+};

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { sweepExpiredOutputs } from "../exports/outputs";
 import { sql } from "../infra/db";
 import { sweepUploads } from "../chat/uploads";
+import { count } from "../jobs/present";
 import { defineJob } from "../jobs/registry";
 import { sweepJobRuns } from "../jobs/runs";
 import { sweepFlowRuns } from "../flows/run";
@@ -121,7 +122,7 @@ export async function sweepOrphanAssets(): Promise<number> {
 export function defineRetentionJobs() {
   defineJob({
     kind: "retention.sweep",
-    title: "Apply retention",
+    title: "Clean up old data",
     description:
       "Deletes expired exports and uploads, old job and flow runs, old notifications, chat transcripts past their age, orphaned wiki images, and rolls old usage counters up to months without people.",
     params: z.object({
@@ -129,6 +130,13 @@ export function defineRetentionJobs() {
       usage_months: z.number().int().min(1).default(13),
     }),
     defaultSchedule: "30 3 * * *",
+    outcome: (o) => {
+      const n = Object.values(o).reduce<number>(
+        (sum, v) => sum + (typeof v === "number" ? v : 0),
+        0,
+      );
+      return n ? `${count(n, "item")} removed` : "nothing to remove";
+    },
     timeout: "1h",
     run: async (ctx, p) => {
       const out = {

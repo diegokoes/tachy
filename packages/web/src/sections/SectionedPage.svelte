@@ -123,8 +123,12 @@
 
     <!-- Air under the last section so it can be scrolled to the top like any
          other. Blank space is the price; the rail landing somewhere different
-         depending on how many rows the last table holds was the alternative. -->
-    <div class="tail" style="height: {spy.tail}px" aria-hidden="true"></div>
+         depending on how many rows the last table holds was the alternative.
+         A page of one section has no rail to land anywhere, so no air: it
+         would only add a scrollbar to a short table. -->
+    {#if railed}
+      <div class="tail" style="height: {spy.tail}px" aria-hidden="true"></div>
+    {/if}
   </div>
 </div>
 
