@@ -22,7 +22,11 @@ export interface Ranked {
   trgm_sim?: number | null;
 }
 
-const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+/** The most each arm contributes. Both reach `STRONG`, so either does alone. */
+const SEM_WEIGHT = 0.85;
+const LEX_WEIGHT = 0.72;
 
 /**
  * Either arm alone can reach `strong`: a paraphrase that shares no words, or
@@ -35,7 +39,7 @@ export function relevance(signals: Ranked): number {
   const lex = clamp01(
     Math.min(signals.fts_rank ?? 0, 1) * 2 + (signals.trgm_sim ?? 0) * 0.8,
   );
-  return clamp01(0.85 * sem + 0.72 * lex);
+  return clamp01(SEM_WEIGHT * sem + LEX_WEIGHT * lex);
 }
 
 export const gradeOf = (r: Ranked): Grade => grade(relevance(r));

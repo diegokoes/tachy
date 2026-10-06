@@ -1,8 +1,7 @@
 const SERVER_SEGMENTS = new Set(["api", "auth", "health", "assets"]);
 
 function normalizePath(path: string): string {
-  const p = ("/" + path.replace(/^\/+|\/+$/g, "")).replace(/\/{2,}/g, "/");
-  return p === "/" ? "/" : p;
+  return ("/" + path.replace(/^\/+|\/+$/g, "")).replace(/\/{2,}/g, "/");
 }
 
 export const router = $state({ path: normalizePath(window.location.pathname) });

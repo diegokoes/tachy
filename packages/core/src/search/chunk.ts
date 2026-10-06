@@ -3,6 +3,9 @@ export interface ChunkOptions {
   overlap?: number;
 }
 
+/** A packed chunk up to this many times `maxChars` is kept whole. */
+const OVERSIZE_FACTOR = 1.5;
+
 function hardSplit(text: string, maxChars: number, overlap: number): string[] {
   const pieces: string[] = [];
   let start = 0;
@@ -40,6 +43,8 @@ export function chunkText(text: string, opts: ChunkOptions = {}): string[] {
   if (current.trim()) packed.push(current);
 
   return packed.flatMap((c) =>
-    c.length <= maxChars * 1.5 ? [c] : hardSplit(c, maxChars, overlap),
+    c.length <= maxChars * OVERSIZE_FACTOR
+      ? [c]
+      : hardSplit(c, maxChars, overlap),
   );
 }
