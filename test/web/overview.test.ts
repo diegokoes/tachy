@@ -10,6 +10,7 @@ import {
   age,
   bytes,
   duration,
+  groupCounts,
   grade,
   load,
   pct,
@@ -357,5 +358,27 @@ describe("coverage map", () => {
     expect(keys(trailTo(root, "ink/printer"))).toEqual(["", "ink"]);
     expect(keys(trailTo(root, "nowhere"))).toEqual([""]);
     expect(keys(trailTo(coverageTree([], "all"), ""))).toEqual([""]);
+  });
+});
+
+describe("groupCounts", () => {
+  const c = (key: string, of?: string) => ({ key, label: key, of });
+
+  it("gathers the counters that break one down behind it", () => {
+    const groups = groupCounts([
+      c("jobs"),
+      c("scheduled", "jobs"),
+      c("manual", "jobs"),
+      c("queued"),
+    ]);
+    expect(groups.map((g) => [g.head.key, g.parts.map((p) => p.key)])).toEqual([
+      ["jobs", ["scheduled", "manual"]],
+      ["queued", []],
+    ]);
+  });
+
+  it("leaves a part whose parent is not the counter before it standing alone", () => {
+    const groups = groupCounts([c("a"), c("b"), c("x", "a")]);
+    expect(groups.map((g) => g.head.key)).toEqual(["a", "b", "x"]);
   });
 });

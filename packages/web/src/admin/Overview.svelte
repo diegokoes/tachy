@@ -1,6 +1,10 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import Counts, { type Count } from "./Counts.svelte";
+  import Counts from "./Counts.svelte";
+  import type { Count } from "./overview";
+  import { expandedKey } from "./expand.svelte";
+  import { navigate, segment } from "../shell/router.svelte";
+  import { tick } from "svelte";
 
   let {
     figures,
@@ -19,6 +23,19 @@
     rows?: number;
     children: Snippet;
   } = $props();
+
+  const expanded = $derived(expandedKey());
+  let grid: HTMLElement | undefined = $state();
+
+  /* A link to a chart that is not there - a stale key, a tile the viewer may
+     not see - lands on the overview rather than on an empty window. */
+  $effect(() => {
+    if (!expanded || loading) return;
+    void tick().then(() => {
+      if (grid && !grid.querySelector(".tile.open"))
+        navigate(`/admin/${segment(1) ?? "integrations"}`, { replace: true });
+    });
+  });
 </script>
 
 <!-- Every overview is this and nothing else: a row of counters, then a grid of
@@ -26,8 +43,10 @@
      Air on every side rather than a frame - the window is the frame. -->
 <div class="overview" style="--cols: {cols}; --rows: {rows}">
   {#if error}<p class="error">{error}</p>{/if}
-  <Counts items={figures} {loading} />
-  <div class="tiles">{@render children()}</div>
+  {#if !expanded}<Counts items={figures} {loading} />{/if}
+  <div class="tiles" class:whole={Boolean(expanded)} bind:this={grid}>
+    {@render children()}
+  </div>
 </div>
 
 <style>
@@ -56,6 +75,25 @@
     grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
     grid-template-rows: repeat(var(--rows), minmax(0, 1fr));
     gap: calc(var(--pad-4) * 2) calc(var(--pad-4) * 2.25);
+  }
+
+  /* One tile, the whole window. The others stay mounted, hidden, so their
+     data and the tile that is going back to its place are not rebuilt. */
+  .tiles.whole {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .tiles.whole > :global(.tile:not(.open)),
+  .tiles.whole > :global(.stack:not(:has(.tile.open))) {
+    display: none;
+  }
+  .tiles.whole > :global(.tile.open),
+  .tiles.whole > :global(.stack:has(.tile.open)) {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .tiles.whole :global(.stack > .tile:not(.open)) {
+    display: none;
   }
 
   .error {
