@@ -11,7 +11,6 @@
     setFontScale,
     setNavLabels,
     setNavHidden,
-    setSubnavHidden,
     NAV_LABELS,
     TEXT_SIZES,
   } from "../theme/theme.svelte";
@@ -85,17 +84,6 @@
       onpick={(v) => setNavHidden(v === "hidden")}
     />
   </Row>
-
-  {#if th.navHidden}
-    <Row label="subnav">
-      <Choice
-        label="subnav"
-        options={SHOWN}
-        value={th.subnavHidden ? "hidden" : "shown"}
-        onpick={(v) => setSubnavHidden(v === "hidden")}
-      />
-    </Row>
-  {/if}
 
   <Row label="nav labels">
     <Choice

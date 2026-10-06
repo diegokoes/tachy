@@ -40,8 +40,6 @@ export const themeState = $state({
   fontScale: DEFAULT_SCALE as number,
   navLabels: "text" as NavLabels,
   navHidden: false,
-  /** Only takes effect while the nav is hidden too. */
-  subnavHidden: false,
 });
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -109,11 +107,6 @@ export function setNavLabels(v: NavLabels) {
   localStorage.setItem("tachy-nav-labels", v);
 }
 
-export function setSubnavHidden(v: boolean) {
-  themeState.subnavHidden = v;
-  localStorage.setItem("tachy-subnav-hidden", v ? "1" : "0");
-}
-
 /** Takes the top bar away. Its shortcuts stay bound. */
 export function setNavHidden(v: boolean) {
   themeState.navHidden = v;
@@ -151,5 +144,4 @@ export function loadThemeFromStorage() {
     themeState.navLabels = labels as NavLabels;
 
   themeState.navHidden = localStorage.getItem("tachy-nav-hidden") === "1";
-  themeState.subnavHidden = localStorage.getItem("tachy-subnav-hidden") === "1";
 }

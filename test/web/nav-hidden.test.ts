@@ -25,7 +25,6 @@ import { reflow } from "../../packages/web/src/motion/motion";
 import {
   loadThemeFromStorage,
   setNavHidden,
-  setSubnavHidden,
   themeState,
 } from "../../packages/web/src/theme/theme.svelte";
 
@@ -53,23 +52,6 @@ describe("the hidden nav bar", () => {
     setNavHidden(false);
     loadThemeFromStorage();
     expect(themeState.navHidden).toBe(false);
-  });
-});
-
-describe("the hidden subnav", () => {
-  it("is remembered on its own, whatever the nav is set to", () => {
-    loadThemeFromStorage();
-    expect(themeState.subnavHidden).toBe(false);
-
-    setSubnavHidden(true);
-    themeState.subnavHidden = false;
-    loadThemeFromStorage();
-    expect(themeState.subnavHidden).toBe(true);
-    expect(themeState.navHidden).toBe(false);
-
-    setSubnavHidden(false);
-    loadThemeFromStorage();
-    expect(themeState.subnavHidden).toBe(false);
   });
 });
 
