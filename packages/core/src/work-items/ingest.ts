@@ -74,22 +74,24 @@ export async function ingestWorkItem(
     `;
 
     if (raw.messages.length) {
-      const m = raw.messages;
+      const messages = raw.messages;
       await tx`
         insert into work_item_messages
           (work_item_id, external_id, author, visibility, direction, body_text, attachments, created_at)
         select ${item.id}, u.external_id, u.author, u.visibility, u.direction,
                u.body_text, u.attachments::jsonb, u.created_at::timestamptz
         from unnest(
-          ${m.map((x) => x.externalId ?? null)}::text[],
-          ${m.map((x) => x.author ?? null)}::text[],
-          ${m.map((x) => x.visibility)}::text[],
-          ${m.map((x) => x.direction)}::text[],
-          ${m.map((x) => x.bodyText)}::text[],
-          ${m.map((x) => JSON.stringify(x.attachments ?? []))}::text[],
-          ${m.map((x) => {
-            const d = toDate(x.createdAt);
-            return d && !Number.isNaN(d.getTime()) ? d.toISOString() : null;
+          ${messages.map((x) => x.externalId ?? null)}::text[],
+          ${messages.map((x) => x.author ?? null)}::text[],
+          ${messages.map((x) => x.visibility)}::text[],
+          ${messages.map((x) => x.direction)}::text[],
+          ${messages.map((x) => x.bodyText)}::text[],
+          ${messages.map((x) => JSON.stringify(x.attachments ?? []))}::text[],
+          ${messages.map((x) => {
+            const created = toDate(x.createdAt);
+            return created && !Number.isNaN(created.getTime())
+              ? created.toISOString()
+              : null;
           })}::text[]
         ) as u(external_id, author, visibility, direction, body_text, attachments, created_at)
         on conflict (work_item_id, external_id) do update set

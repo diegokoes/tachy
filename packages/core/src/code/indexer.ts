@@ -192,9 +192,10 @@ function excludedBy(patterns: string[]): (path: string) => boolean {
   const tests = patterns
     .map((p) => p.trim().replace(/^\/+/, ""))
     .filter(Boolean)
-    .map((p) => {
-      if (GLOB_CHARS_RE.test(p)) return (path: string) => matchesGlob(path, p);
-      const dir = p.replace(/\/+$/, "");
+    .map((pattern) => {
+      if (GLOB_CHARS_RE.test(pattern))
+        return (path: string) => matchesGlob(path, pattern);
+      const dir = pattern.replace(/\/+$/, "");
       return (path: string) => path === dir || path.startsWith(`${dir}/`);
     });
   return (path) => tests.some((t) => t(path));
@@ -223,13 +224,13 @@ export function indexableFiles(
   const excluded = excludedBy(
     Array.isArray(config.exclude) ? (config.exclude as string[]) : [],
   );
-  return tree.filter((f) => {
-    const e = ext(f.path);
+  return tree.filter((file) => {
+    const extension = ext(file.path);
     return (
-      !EXCLUDED_DIR_RE.test(f.path) &&
-      extensions.has(e) &&
-      !BINARY_EXTENSIONS.has(e) &&
-      !excluded(f.path)
+      !EXCLUDED_DIR_RE.test(file.path) &&
+      extensions.has(extension) &&
+      !BINARY_EXTENSIONS.has(extension) &&
+      !excluded(file.path)
     );
   });
 }
@@ -272,13 +273,13 @@ async function embedAndStoreFile(
     : [];
 
   await sql.begin(async (tx) => {
-    const t = tx as unknown as typeof sql;
-    await t`
+    const db = tx as unknown as typeof sql;
+    await db`
       delete from code_blob_chunks
       where repo_id = ${line.repo_id} and blob_sha = ${file.blobSha}
     `;
     if (chunks.length)
-      await t`
+      await db`
         insert into code_blob_chunks
           (repo_id, blob_sha, ordinal, start_line, end_line, chunk_text, search_tsv,
            embedding, embedding_model)
@@ -293,7 +294,7 @@ async function embedAndStoreFile(
           ${vectors.map(toVectorLiteral)}::text[]
         ) as u(ordinal, start_line, end_line, chunk_text, symbols, embedding)
       `;
-    await upsertFile(t, line, file, sizeBytes);
+    await upsertFile(db, line, file, sizeBytes);
   });
 }
 
@@ -381,12 +382,12 @@ async function indexLine(
     // a full pass an earlier line of this run has just redone them.
     const known = new Map<string, number>();
     const changedShas = [...new Set(changed.map((f) => f.blobSha))];
-    for (const r of await sql`
+    for (const held of await sql`
       select distinct blob_sha, size_bytes from repo_line_files
       where repo_id = ${line.repo_id} and blob_sha = any(${changedShas})
     `)
-      if (!opts.full || redone.has(r.blob_sha))
-        known.set(r.blob_sha, r.size_bytes);
+      if (!opts.full || redone.has(held.blob_sha))
+        known.set(held.blob_sha, held.size_bytes);
 
     const unseen = changedShas.filter((sha) => !known.has(sha));
     await prefetchBlobs(repo.slug, unseen, token);
@@ -540,21 +541,21 @@ export function countTree(
     const parts = path.split("/");
     for (let i = 1; i < parts.length; i++) {
       const dir = parts.slice(0, i).join("/");
-      const d = dirs.get(dir) ?? {
+      const dirCount = dirs.get(dir) ?? {
         path: dir,
         files: 0,
         admitted: 0,
         skipped: EXCLUDED_DIR_RE.test(dir),
       };
-      d.files++;
-      if (ok) d.admitted++;
-      dirs.set(dir, d);
+      dirCount.files++;
+      if (ok) dirCount.admitted++;
+      dirs.set(dir, dirCount);
     }
     if (EXCLUDED_DIR_RE.test(path)) continue;
-    const t = types.get(ext(path)) ?? { files: 0, admitted: 0 };
-    t.files++;
-    if (ok) t.admitted++;
-    types.set(ext(path), t);
+    const typeCount = types.get(ext(path)) ?? { files: 0, admitted: 0 };
+    typeCount.files++;
+    if (ok) typeCount.admitted++;
+    types.set(ext(path), typeCount);
   }
 
   return {

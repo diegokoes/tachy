@@ -51,8 +51,8 @@ export function defineCodeJobs() {
     dedupeKey: (p) => p.repo,
     subject: (p) =>
       `${p.repo}${p.line ? ` @ ${p.line}` : ""}${p.full ? " (full)" : ""}`,
-    outcome: (o) => {
-      const lines = (o.lines ?? []) as {
+    outcome: (output) => {
+      const lines = (output.lines ?? []) as {
         ref: string;
         upToDate: boolean;
         filesIndexed: number;
@@ -77,12 +77,12 @@ export function defineCodeJobs() {
         : lines.map((l, i) => `${l.ref}: ${said[i]}`).join(" · ");
     },
     timeout: "8h",
-    run: async (ctx, p) => {
-      ctx.log(`indexing ${p.repo}${p.line ? ` ${p.line}` : ""}`);
-      const res = await indexRepo(p.repo, {
-        line: p.line,
-        full: p.full,
-        token: await repoToken(p.repo, ctx.requestedBy),
+    run: async (ctx, params) => {
+      ctx.log(`indexing ${params.repo}${params.line ? ` ${params.line}` : ""}`);
+      const indexed = await indexRepo(params.repo, {
+        line: params.line,
+        full: params.full,
+        token: await repoToken(params.repo, ctx.requestedBy),
         signal: ctx.signal,
         onProgress: (done, total, ref, at) =>
           void ctx.progress(
@@ -90,7 +90,7 @@ export function defineCodeJobs() {
             `${ref}${at.count > 1 ? ` (${at.index + 1}/${at.count})` : ""}: ${total ? `${done}/${total} files` : "fetching"}`,
           ),
       });
-      return { ...res };
+      return { ...indexed };
     },
   });
 
@@ -120,16 +120,16 @@ export function defineCodeJobs() {
         .filter(Boolean)
         .join(", "),
     timeout: "10m",
-    run: async (ctx, p) => {
+    run: async (ctx, params) => {
       let queued = 0;
       let skipped = 0;
       let neverIndexed = 0;
       const repos = await listRepos();
-      for (const [i, repo] of repos.entries()) {
+      for (const [index, repo] of repos.entries()) {
         ctx.signal.throwIfAborted();
-        await ctx.progress(i / repos.length, repo.slug);
+        await ctx.progress(index / repos.length, repo.slug);
         if (
-          p.scope !== "all" &&
+          params.scope !== "all" &&
           !repo.lines.some((l) => l.indexed_commit || l.indexing_commit)
         ) {
           neverIndexed++;
@@ -138,7 +138,7 @@ export function defineCodeJobs() {
         if (
           await ctx.enqueue("repo.reindex", {
             repo: repo.slug,
-            ...(p.full ? { full: true } : {}),
+            ...(params.full ? { full: true } : {}),
           })
         )
           queued++;

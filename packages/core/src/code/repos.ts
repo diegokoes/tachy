@@ -41,18 +41,18 @@ export interface RepoInput {
   config?: Record<string, unknown>;
 }
 
-export async function linkRepo(i: RepoInput) {
-  if (!SLUG_RE.test(i.slug))
+export async function linkRepo(input: RepoInput) {
+  if (!SLUG_RE.test(input.slug))
     throw badInput(
-      `invalid repo slug '${i.slug}' (lowercase letters, digits, hyphens)`,
+      `invalid repo slug '${input.slug}' (lowercase letters, digits, hyphens)`,
     );
-  let productId = i.productSlug
-    ? await getProductIdBySlug(i.productSlug)
+  let productId = input.productSlug
+    ? await getProductIdBySlug(input.productSlug)
     : null;
-  let sourceSlug = i.sourceSlug ?? null;
+  let sourceSlug = input.sourceSlug ?? null;
 
-  if (i.sourceProjectId) {
-    const project = await getSourceProject(i.sourceProjectId);
+  if (input.sourceProjectId) {
+    const project = await getSourceProject(input.sourceProjectId);
     if (!project.product_id)
       throw badInput(
         `project '${project.external_key}' has no product, so it holds no code and no repos`,
@@ -72,35 +72,36 @@ export async function linkRepo(i: RepoInput) {
   }
 
   let componentId: string | null = null;
-  if (i.componentSlug) {
+  if (input.componentSlug) {
     if (!productId)
       throw badInput(
         "a repo needs a product to implement a component: pass product or a project",
       );
-    componentId = (await resolveComponentStrict(productId, i.componentSlug)).id;
+    componentId = (await resolveComponentStrict(productId, input.componentSlug))
+      .id;
   }
 
-  const customerId = i.customerSlug
-    ? await getCustomerIdBySlug(i.customerSlug)
+  const customerId = input.customerSlug
+    ? await getCustomerIdBySlug(input.customerSlug)
     : null;
 
   // Checked here as well as at the spawn: a value that cannot be cloned should
   // be refused in the form the operator typed it into, not on a later reindex.
-  assertRepoUrl(i.url);
-  const defaultBranch = assertBranchName(i.defaultBranch || "main");
-  const extraLines = [...new Set(i.lines ?? [])]
+  assertRepoUrl(input.url);
+  const defaultBranch = assertBranchName(input.defaultBranch || "main");
+  const extraLines = [...new Set(input.lines ?? [])]
     .map(assertBranchName)
     .filter((ref) => ref !== defaultBranch);
 
   const [previous] = await sql`
-    select default_branch from repos where slug = ${i.slug}
+    select default_branch from repos where slug = ${input.slug}
   `;
   const [row] = await sql`
     insert into repos (slug, url, product_id, source_slug, source_project_id, component_id,
                        customer_id, default_branch, config)
-    values (${i.slug}, ${i.url}, ${productId}, ${sourceSlug},
-            ${i.sourceProjectId ?? null}, ${componentId}, ${customerId},
-            ${defaultBranch}, ${jsonb(i.config ?? {})})
+    values (${input.slug}, ${input.url}, ${productId}, ${sourceSlug},
+            ${input.sourceProjectId ?? null}, ${componentId}, ${customerId},
+            ${defaultBranch}, ${jsonb(input.config ?? {})})
     on conflict (slug) do update set
       url = excluded.url,
       product_id = excluded.product_id,
@@ -118,7 +119,7 @@ export async function linkRepo(i: RepoInput) {
     select ${row.id}, unnest(${[defaultBranch, ...extraLines]}::text[])
     on conflict (repo_id, ref) do nothing
   `;
-  const dropped = i.lines
+  const dropped = input.lines
     ? await sql`
         delete from repo_lines
         where repo_id = ${row.id} and ref <> all(${[defaultBranch, ...extraLines]}::text[])

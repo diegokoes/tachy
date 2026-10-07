@@ -102,13 +102,13 @@ export async function syncLinks(
     rows.push({ target: link.target, label: link.label, ...to });
   }
 
-  for (const r of rows)
+  for (const row of rows)
     await db`
       insert into library_links
         (from_doc_id, from_entry_id, to_doc_id, to_entry_id, kind, target, label)
       values
         (${source.docId ?? null}, ${source.entryId ?? null},
-         ${r.toDocId}, ${r.toEntryId}, 'mentions', ${r.target}, ${r.label})
+         ${row.toDocId}, ${row.toEntryId}, 'mentions', ${row.target}, ${row.label})
     `;
   return rows.length;
 }
@@ -232,15 +232,15 @@ export async function setComposedFrom(
   `;
   const seen = new Set<string>();
   let n = 0;
-  for (const s of sources) {
-    const key = s.entryId ?? s.docId ?? "";
-    if (!key || seen.has(key) || s.docId === pageId) continue;
+  for (const source of sources) {
+    const key = source.entryId ?? source.docId ?? "";
+    if (!key || seen.has(key) || source.docId === pageId) continue;
     seen.add(key);
     await db`
       insert into library_links
         (from_doc_id, from_entry_id, to_doc_id, to_entry_id, kind, target, label)
       values
-        (${pageId}, null, ${s.docId ?? null}, ${s.entryId ?? null},
+        (${pageId}, null, ${source.docId ?? null}, ${source.entryId ?? null},
          'composed_from', ${key}, null)
     `;
     n++;

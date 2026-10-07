@@ -19,9 +19,9 @@ const MAX_SYMBOLS = 40;
 
 export function definedSymbols(text: string): string[] {
   const names = new Set<string>();
-  for (const re of DECLARATIONS)
-    for (const m of text.matchAll(re)) {
-      if (m[1].length > 1) names.add(m[1]);
+  for (const declaration of DECLARATIONS)
+    for (const match of text.matchAll(declaration)) {
+      if (match[1].length > 1) names.add(match[1]);
       if (names.size >= MAX_SYMBOLS) return [...names];
     }
   return [...names];

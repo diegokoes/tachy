@@ -20,19 +20,20 @@ export function extractAdoRefs(raw: RawWorkItem): string[] {
   const scan = (text: string) => {
     for (const pattern of REF_PATTERNS) {
       pattern.lastIndex = 0;
-      for (const m of text.matchAll(pattern)) ids.add(m[1]);
+      for (const match of text.matchAll(pattern)) ids.add(match[1]);
     }
   };
 
   const payload = raw.raw as Record<string, any> | null | undefined;
-  const cf = payload?.custom_fields;
-  if (cf && typeof cf === "object") {
-    const direct = (cf as Record<string, unknown>).cf_devops_work_item;
+  const customFields = payload?.custom_fields;
+  if (customFields && typeof customFields === "object") {
+    const direct = (customFields as Record<string, unknown>)
+      .cf_devops_work_item;
     if (direct != null && String(direct).trim()) {
-      const m = String(direct).match(/(\d+)/);
-      if (m) ids.add(m[1]);
+      const digits = String(direct).match(/(\d+)/);
+      if (digits) ids.add(digits[1]);
     }
-    scan(JSON.stringify(cf));
+    scan(JSON.stringify(customFields));
   }
   if (raw.title) scan(raw.title);
   for (const msg of raw.messages) scan(msg.bodyText);
