@@ -19,7 +19,7 @@ import { scheduleDueRuns } from "./scheduler";
 import {
   beatWorker,
   markWorkerDraining,
-  pruneWorkers,
+  sweepWorkers,
   retireWorker,
   type WorkerCard,
 } from "./roster";
@@ -256,7 +256,7 @@ export async function startJobWorker(
     reapExpiredRuns()
       .then((n) => n && log("warn", "job_runs_reaped", { count: n }))
       .catch((err) => log("error", "job_reap_failed", { error: String(err) }));
-    pruneWorkers().catch((err) =>
+    sweepWorkers().catch((err) =>
       log("error", "job_workers_prune_failed", { error: String(err) }),
     );
   }, opts.scheduleMs ?? 30_000);
