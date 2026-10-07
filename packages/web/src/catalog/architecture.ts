@@ -131,8 +131,8 @@ export function build(all: ComponentNode[], f: Filters): ArchNode {
 
   for (const r of rows) {
     const node = nodes.get(r.id)!;
-    /* A parent outside the surviving set means the chain was broken by a
-       filter, so the node hangs off its product instead of vanishing. */
+    // A parent outside the surviving set means the chain was broken by a
+    // filter, so the node hangs off its product instead of vanishing.
     const parent =
       (r.parent_id && byId.has(r.parent_id) && nodes.get(r.parent_id)) ||
       products.get(`${r.team_slug}/${r.product_slug}`);
@@ -164,9 +164,9 @@ export type Graph = { nodes: GraphNode[]; links: GraphLink[] };
 
 /**
  * Flattens the tree into what a force simulation takes: products and their
- * components. The root and the teams are not drawn. A team hub tied every
- * product to one point and read as clutter, and the team filter already says
- * whose products these are. The result is one island per product.
+ * components, one island per product. The root and the teams are not drawn: a
+ * team hub would tie every product to one point, and the team filter already
+ * says whose products these are.
  */
 export function toGraph(root: ArchNode): Graph {
   const nodes: GraphNode[] = [];
@@ -275,22 +275,11 @@ export function separate(nodes: Placed[], passes = 80): void {
 }
 
 /**
- * Places one product's tree around the origin.
- *
- * Every leaf gets a slot on the ring for its depth, in depth-first order, so
- * a branch keeps to one wedge; a node with children sits in the middle of
- * the wedge its leaves span. The rings are ovals. Across, each ring clears
- * the widest label on the ring inside it, because labels are horizontal and
- * face outwards; down, rings are close, because a label is only a line
- * tall. So links run long only where a label needs the room.
- *
- * Neighbouring slots are spaced for the labels actually there: far enough
- * apart vertically where the ring runs up and down, horizontally where it
- * runs across. When the leaves do not fit round the product, every ring
- * grows until they do, which is what keeps a large product legible.
- *
- * A thin sector to the right is left empty for the product's own label, so
- * no link crosses it.
+ * Places one product's tree around the origin. Each leaf gets a slot on its
+ * depth's ring in depth-first order, so a branch keeps to one wedge with its
+ * parent in the middle. The rings are ovals, wide enough to clear the labels of
+ * the ring inside. Every ring grows when the leaves do not fit. A thin sector
+ * on the right is left for the product's label.
  */
 export function radialLayout(
   root: Placed,
@@ -365,9 +354,9 @@ export function radialLayout(
       grow *= 1.12;
       continue;
     }
-    /* Slack is added to every gap equally rather than in proportion, so
-       the gaps that were tight get as much of it as the loose ones and the
-       leaves end up evenly spread all the way round. */
+    // Slack is added to every gap equally, not in proportion, so tight gaps get
+    // as much as loose ones and the leaves end up evenly spread all the way
+    // round.
     const slack =
       leaves.length > 1 ? Math.max(0, room - used) / (leaves.length - 1) : 0;
     angles = new Map();
@@ -446,10 +435,9 @@ export function packIslands(
     return { rows, w, h };
   };
 
-  /* Islands vary too much in shape for one guessed row width: long labels
-     make some several times wider than tall. Every width from one island per
-     row to all in one row is tried, and the arrangement that needs the
-     window scaled down least wins. */
+  // Islands vary too much in shape for one guessed row width: long labels make
+  // some several times wider than tall. Every width from one island per row to
+  // all in one row is tried, and the least scaled-down wins.
   const byWidth = [...frames].sort((a, b) => b.w - a.w);
   let best = shelve(Infinity);
   let limit = 0;
@@ -552,9 +540,9 @@ export function holdStill(
     if (n) for (const m of branchOf(n, links)) held.add(m);
   };
 
-  /* Where a dropped branch lands is where it lives now: its homes move with
-     it, whatever it landed on is moved aside, and the springs carry every
-     node to its new home rather than it jumping there. */
+  // Where a dropped branch lands is where it lives now: its homes move with it,
+  // whatever it landed on is moved aside, and the springs carry every node to
+  // its new home rather than it jumping there.
   const drop = (n: SimNode) => {
     const was = at.get(n)!;
     const dx = (n.x ?? 0) - was.x;
@@ -632,12 +620,11 @@ export function branchOf<N extends SimNode>(n: N, links: SimLink[]): Set<N> {
 }
 
 /**
- * New homes that clear a dropped branch. Anything whose label box overlaps
- * the branch is moved out of it, away from where it landed, taking its own
- * branch with it, and whatever that lands on is moved in turn. A node moved earlier
- * outranks one moved later, so the ripple runs outwards; two moved in the
- * same round settle it between themselves. The branch
- * itself never moves: it is where the person put it.
+ * New homes that clear a dropped branch. Anything whose label box overlaps the
+ * branch is moved out of it, away from where it landed, taking its own branch
+ * with it, and whatever that lands on is moved in turn. A node moved sooner
+ * outranks one moved later, so the ripple runs outwards. The branch itself
+ * never moves: it is where the person put it.
  */
 export function makeRoom(
   nodes: SimNode[],
@@ -745,7 +732,8 @@ export function forceFollow(links: SimLink[], strength = 0.25) {
     }
   }
 
-  /** Takes each child's offset from the given homes instead of from where it settled. */
+  // Takes each child's offset from the given homes instead of from where it
+  // settled.
   force.rebase = (homes: Map<SimNode, { x: number; y: number }>) => {
     rest = rest.map(({ s, t }) => {
       const hs = homes.get(s)!;

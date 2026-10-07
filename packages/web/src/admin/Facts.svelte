@@ -15,8 +15,8 @@
   import type { Snippet } from "svelte";
   import { fitRows, fitted } from "../tui/fit";
 
-  /* A line of readout, not a control: the same rhythm as Bars' rows, so a
-     facts tile and a bars tile side by side line up. */
+  // A line of readout, not a control: the same rhythm as Bars' rows, so a facts
+  // tile and a bars tile side by side line up.
   const ROW_REM = 1.3;
   const GAP_REM = 0.15;
 
@@ -30,14 +30,17 @@
   } = $props();
 
   let room = $state(0);
-  /* As many readings as the tile holds, the rest folded into one line: the
-     tile sizes with the window, and a clipped row reads as a missing one. */
+  // As many readings as the tile holds, the rest folded into one line: the tile
+  // sizes with the window, and a clipped row reads as a missing one.
   const cut = $derived(fitted(items, room));
 </script>
 
-<!-- A short list of readings, label left and value right, for the tiles that
-     report states rather than quantities. A chart of "configured / not
-     configured" is a chart of one bit. -->
+<!--
+@component
+A short list of readings, label left and value right, for the tiles that report
+states rather than quantities. A chart of "configured / not configured" is a
+chart of one bit.
+-->
 <dl
   class="facts"
   style="--row: {ROW_REM}rem; --gap: {GAP_REM}rem"

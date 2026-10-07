@@ -40,13 +40,11 @@ export const EMPTY_JOBS: JobCensus = {
 };
 
 /**
- * The workers page's census, as a module singleton for the same reason the
- * admin census is one: the overview and the failures dialog over it are
- * siblings reading one answer, and a pause or delete in the jobs list has to
- * be able to refresh it.
- *
- * Laid over EMPTY_JOBS so a newer bundle against an older API loses a figure
- * rather than the panel.
+ * The workers page's census, a module singleton for the reason the admin census
+ * is one: the overview and the failures dialog over it are siblings reading one
+ * answer, and a pause or delete in the jobs list has to be able to refresh it.
+ * Laid over EMPTY_JOBS so a newer bundle against an older API loses a figure,
+ * not the panel.
  */
 export const jobs = createResource(async () => {
   const got = await api.get<Partial<JobCensus>>(`/jobs/census${periodQuery()}`);

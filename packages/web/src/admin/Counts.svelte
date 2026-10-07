@@ -12,8 +12,8 @@
 
   const groups = $derived(groupCounts(items));
 
-  /* A breakdown that goes where its parent goes adds no target of its own, so
-     the whole group is one click rather than buttons inside a button. */
+  // A breakdown that goes where its parent goes adds no target of its own, so
+  // the whole group is one click rather than buttons inside a button.
   const merged = (head: Count, parts: Count[]) =>
     parts.every((p) => !p.to || p.to === head.to);
 </script>

@@ -145,9 +145,11 @@
     }
   }
 
-  /** Registering a wiki keeps whatever default is already set; un-registering
-   *  the default hands the flag to whatever is left, so a project never ends up
-   *  with wikis but no default for the tools to fall back on. */
+  /**
+   * Registering a wiki keeps whatever default is already set; un-registering
+   * the default hands the flag to whatever is left, so a project never ends up
+   * with wikis but no default for the tools to fall back on.
+   */
   function toggleWiki(p: SourceProject, w: Wiki, on: boolean) {
     const kept = wikisOf(p).filter((x) => x.identifier !== w.identifier);
     const next = on
@@ -361,9 +363,9 @@
   /** The project whose record dialog is open, if one is. */
   let opened = $state<SourceProject | null>(null);
 
-  /* What hangs off a project with a product - its area rules, its product's
-     components, its wikis, fetched when the dialog opens on it, and again
-     when an edit changes what it hangs off. */
+  // What hangs off a project with a product - its area rules, its product's
+  // components, its wikis, fetched when the dialog opens on it, and again when
+  // an edit changes what it hangs off.
   const hangs = $derived(
     opened ? `${opened.id} ${opened.product_slug ?? ""}` : "",
   );

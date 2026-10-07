@@ -32,8 +32,8 @@
     }
   }
 
-  /* Runs are queued jobs, so a new one shows up a moment after it is asked
-     for; the list is read again every few seconds while anything moves. */
+  // Runs are queued jobs, so a new one shows up a moment after it is asked for;
+  // the list is read again every few seconds while anything moves.
   $effect(() => {
     const id = flowId;
     refresh;

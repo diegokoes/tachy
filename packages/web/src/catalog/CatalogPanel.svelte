@@ -75,15 +75,15 @@
     () => api.get<ComponentCoverage[]>("/overview/components"),
     [],
   );
-  /* Follows the census: a dialog section over this overview changes products
-     without unmounting it, and the census is what gets recounted on close. */
+  // Follows the census: a dialog section over this overview changes products
+  // without unmounting it, and the census is what gets recounted on close.
   $effect(() => {
     if (!census.loading) void coverage.reload();
   });
   const map = $derived(coverageTree(coverage.data, t("products")));
 
-  /* Ordered as an entry moves through its life, not by size, so the chart
-     reads the same on every deployment. */
+  // Ordered as an entry moves through its life, not by size, so the chart reads
+  // the same on every deployment.
   const STATUS_TONES = {
     approved: "ok",
     draft: "accent",

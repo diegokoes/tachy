@@ -56,8 +56,10 @@ export const agentPrefs = $state({
   loading: false,
 });
 
-/** Asked of the runtime, so slow next to a preference read: it lands on its
- *  own, once. */
+/**
+ * Asked of the runtime, so slow next to a preference read: it lands on its own,
+ * once.
+ */
 async function loadModels() {
   agentPrefs.modelsLoading = true;
   try {
@@ -124,8 +126,8 @@ const INHERITED: Record<Exclude<PrefSource | KeyScope, "user">, string> = {
 };
 
 /**
- * Where a value comes from: an inherited value keeps following whoever set it
- * until you choose your own, and yours stays until you reset it.
+ * Where a value comes from: an inherited value follows whoever set it until the
+ * user chooses their own, which stays until reset.
  */
 export function origin(
   source: PrefSource | KeyScope | null,

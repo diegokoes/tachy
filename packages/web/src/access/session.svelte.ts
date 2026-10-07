@@ -49,11 +49,9 @@ export async function initSession(): Promise<void> {
     session.me = meRes.ok ? await meRes.json() : null;
     session.unreachable = false;
   } catch {
-    /*
-     * Every field, not just config: leaving `me` and `bootstrapped` at whatever
-     * they held meant a boot with the API down rendered the whole app shell as
-     * though the user were signed in.
-     */
+    // Every field, not only `config`: with `me` and `bootstrapped` left as they
+    // were, a boot with the API down renders the app shell as though the user
+    // were signed in.
     session.config = null;
     session.me = null;
     session.bootstrapped = null;
@@ -64,8 +62,8 @@ export async function initSession(): Promise<void> {
 }
 
 /**
- * Global admin. Treats "no session" as admin, matching the open-auth mode -
- * but not when boot failed, where "no session" means "we do not know".
+ * Global admin. "No session" counts as admin, matching open-auth mode, except
+ * after a failed boot, where it means the session is unknown.
  */
 export function isGlobalAdmin(): boolean {
   if (session.unreachable) return false;
@@ -98,13 +96,9 @@ export function onUnauthorized(): void {
     return;
   }
   session.me = null;
-  /*
-   * With no interactive way back in - token or open mode - App renders no login
-   * view, so clearing `me` alone left the shell up with no session and nothing
-   * the user could do. Re-deriving the whole session is the honest answer: in
-   * open mode it comes straight back, and otherwise the shell has current
-   * config to render from.
-   */
+  // With no interactive way back in (token or open mode) App renders no login
+  // view, so clearing `me` alone would leave a shell with no session.
+  // Re-deriving it brings an open-mode session straight back.
   if (!session.config?.passwordLogin && !session.config?.sso)
     void initSession();
 }

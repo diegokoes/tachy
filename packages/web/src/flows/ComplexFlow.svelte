@@ -145,8 +145,6 @@
     ),
   );
 
-  /* ---- editing ------------------------------------------------------------ */
-
   let selection = $state<Selection | null>(null);
   let palette = $state<{ anchor: HTMLElement; slot: Slot } | null>(null);
   let triggerMenu = $state<HTMLElement | null>(null);
@@ -221,8 +219,6 @@
     if (triggerMenu && !t.closest(".trigger-menu") && !triggerMenu.contains(t))
       triggerMenu = null;
   }
-
-  /* ---- saving and running -------------------------------------------------- */
 
   let saving = $state(false);
   let error = $state<string | null>(null);

@@ -4,8 +4,11 @@
   let { children }: { children: Snippet } = $props();
 </script>
 
-<!-- Two tiles in one cell of the grid: the one that sizes to its content takes
-     what it needs, the other the rest. -->
+<!--
+@component
+Two tiles in one cell of the grid: the one that sizes to its content takes what
+it needs, the other the rest.
+-->
 <div class="stack">{@render children()}</div>
 
 <style>

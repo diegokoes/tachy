@@ -18,9 +18,9 @@
     return u ? (u.display_name ?? u.email) : id;
   };
 
-  /* A read of who is where, not another place to edit it. Membership is
-     changed on the person, in the users list, because that is the record that
-     carries the rest of their account. */
+  // A read of who is where, not another place to edit it. Membership is changed
+  // on the person, in the users list, because that is the record that carries
+  // the rest of their account.
   const rows = $derived(
     [...teams.data].sort((a, b) => a.name.localeCompare(b.name)),
   );

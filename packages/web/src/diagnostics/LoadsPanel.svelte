@@ -29,9 +29,9 @@
   const runs = $derived(loads.data.runs);
   const summary = $derived(loadSummary(runs));
 
-  /* Which scripts get run, and how often each passes. The stress share rides
-     on the bar, because a script that only ever passes unstressed has not
-     been tested the way its name suggests. */
+  // Which scripts get run, and how often each passes. The stress share rides on
+  // the bar, because a script that only ever passes unstressed has not been
+  // tested the way its name suggests.
   const byScript = $derived(
     summary.byScript.map((s): Bar => ({
       key: s.script,

@@ -174,8 +174,8 @@
   const FIRST_LINES = 5;
   let allLines = $state(false);
 
-  /* Tracked lines lead, by what is saved rather than by the draft, so a row
-     never moves out from under the click that toggled it. */
+  // Tracked lines lead, by what is saved rather than by the draft, so a row
+  // never moves out from under the click that toggled it.
   const orderedLines = $derived.by(() => {
     const saved = new Set(repo?.lines.map((l) => l.ref) ?? []);
     return [...candidates].sort(
@@ -213,8 +213,8 @@
     }
   }
 
-  /* Recounted as the excludes and types change, so the effect of a toggle is
-     on screen before anything is saved. */
+  // Recounted as the excludes and types change, so the effect of a toggle is on
+  // screen before anything is saved.
   $effect(() => {
     const key = configKey;
     if (!key || !canEdit) return;
@@ -225,15 +225,15 @@
     return () => clearTimeout(timer);
   });
 
-  /* The tree owns excludes that name one of its folders; the patterns field
-     owns everything else, kept as typed while it has focus. */
+  // The tree owns excludes that name one of its folders; the patterns field
+  // owns everything else, kept as typed while it has focus.
   const dirSet = $derived(new Set(preview?.dirs.map((x) => x.path) ?? []));
   const patterns = $derived(
     draft?.exclude.filter((p) => !dirSet.has(p)).join(", ") ?? "",
   );
   let patternText = $state("");
-  /* The tree's share, taken when typing starts: a half-typed `load/k6`
-     passes through `load`, which must not stick as a folder. */
+  // The tree's share, taken when typing starts: a half-typed `load/k6` passes
+  // through `load`, which must not stick as a folder.
   let treeOwned: string[] | null = null;
   $effect(() => {
     const now = patterns;

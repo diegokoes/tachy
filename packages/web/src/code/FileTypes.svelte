@@ -25,8 +25,8 @@
   const top = $derived(Math.max(1, ...types.map((t) => t.files)));
   const shown = $derived(all ? types : types.slice(0, FIRST));
 
-  /* Starts from the whole effective set, built-in types this repo lacks
-     included, so turning one type off does not quietly drop the rest. */
+  // Starts from the whole effective set, built-in types this repo lacks
+  // included, so turning one type off does not drop the rest.
   function toggle(ext: string, on: boolean) {
     const next = new Set(chosen);
     if (on) next.add(ext);

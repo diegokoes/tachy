@@ -50,8 +50,8 @@
     products.data.filter((p) => canCurateScope({ team_slug: p.team_slug })),
   );
 
-  /* Null until someone picks, so the first project is offered rather than
-     none; "" is a deliberate pick of no project. */
+  // Null until someone picks, so the first project is offered rather than none;
+  // "" is a deliberate pick of no project.
   let projectId = $state(
     recall<string | null>("admin.repos.link.project", null),
   );

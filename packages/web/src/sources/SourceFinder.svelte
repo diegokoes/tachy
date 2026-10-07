@@ -79,9 +79,9 @@
     }
   }
 
-  /* Picked out by shape rather than by position, because Lucide reorders an
-     icon's nodes between releases: a wave is a stroke reaching above the lamp,
-     and an inner one is the shorter of each pair. */
+  // Picked out by shape rather than by position, because Lucide reorders an
+  // icon's nodes between releases: a wave is a stroke reaching above the lamp,
+  // and an inner one is the shorter of each pair.
   const waves = () =>
     tower
       ? [...tower.querySelectorAll<SVGPathElement>("path")].filter(
@@ -89,8 +89,10 @@
         )
       : [];
 
-  /** The tower calls: each wave swells out of the lamp, inner then outer, and
-   *  the call it sends passes through the label. */
+  /**
+   * The tower calls: each wave swells out of the lamp, inner then outer, and
+   * the call it sends passes through the label.
+   */
   function broadcast() {
     if (!probe || !tower || !signal || !word) return null;
     const all = waves();
@@ -254,8 +256,11 @@
   onDestroy(() => flight?.kill());
 </script>
 
-<!-- A request fired at the source, not a field: the tower is the button, and
-     what comes back lands under it. -->
+<!--
+@component
+A request fired at the source, not a field: the tower is the button, and what
+comes back lands under it.
+-->
 <div class="finder">
   <button
     bind:this={probe}

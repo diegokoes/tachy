@@ -103,8 +103,6 @@
 
   const dirty = $derived(JSON.stringify(cfg) !== saved);
 
-  /* ---- types offered ----------------------------------------------------- */
-
   /** Every type, while the team has not picked; its pick in its order after. */
   const offered = $derived(
     cfg.types?.length ? cfg.types : types.map((t) => t.name),
@@ -135,8 +133,6 @@
     [list[i], list[j]] = [list[j], list[i]];
     setTypes(list);
   }
-
-  /* ---- one type's form --------------------------------------------------- */
 
   const tc = $derived<TypeFormConfig>(cfg.forms?.[type] ?? {});
 
@@ -262,8 +258,8 @@
   });
 
   type Place = "" | "form" | "fold" | "hidden";
-  /* The first choice names what "no choice" means for this field, which is
-     what the source does with it; the rest are the team overriding that. */
+  // The first choice names what "no choice" means for this field, which is what
+  // the source does with it; the rest are the team overriding that.
   const placeOptions = (
     ref: string,
   ): { value: Place; label: string; icon: IconName }[] => [
@@ -329,8 +325,6 @@
       ...people,
     ];
   }
-
-  /* ---- save ---------------------------------------------------------------- */
 
   let saving = $state(false);
   let saveError = $state<string | null>(null);

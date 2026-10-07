@@ -7,9 +7,9 @@
 
   type Failure = (typeof jobs.data.failures)[number];
 
-  /* Which jobs failed, not how many runs did: the counter behind this already
-     says how many. What it cannot say is whether that is one job failing
-     every night or eight jobs failing once. */
+  // Which jobs failed, not how many runs did: the counter behind this already
+  // says how many. What it cannot say is whether that is one job failing every
+  // night or eight jobs failing once.
   const columns: Column<Failure>[] = [
     { key: "name", label: "job", width: "18rem", cell: nameCell },
     { key: "runs", label: "failed", width: "5rem", align: "end" },

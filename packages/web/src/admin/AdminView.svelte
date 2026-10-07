@@ -235,8 +235,8 @@
         present: "modal",
       },
     ],
-    /* All dialogs: the overview carries the summary of each, which is the
-       page, and a counter or tile opens the full detail behind it. */
+    // All dialogs: the overview carries the summary of each, which is the page,
+    // and a counter or tile opens the full detail behind it.
     system: [
       {
         key: "reports",
@@ -292,7 +292,7 @@
     system: admin ? SystemOverview : undefined,
   });
 
-  /* `connect` was the integrations page's old name; old links still land. */
+  // Links to `connect`, the integrations page's former slug, still land.
   const page = $derived(
     segment(1) === "connect" ? "integrations" : (segment(1) ?? "integrations"),
   );
@@ -346,14 +346,13 @@
     live.find((s) => s.key === at && s.present === "modal"),
   );
 
-  /* Anything that is not a window section lands on the overview: nothing
-     named, /overview, a dialog section, or a key no section has. */
+  // Anything that is not a window section lands on the overview: nothing named,
+  // /overview, a dialog section, or a key no section has.
   const showing = $derived(Boolean(overview) && !sections.length);
 
-  /* Recount on landing on a page and every time its overview comes back into
-     view with nothing over it. Sections are where rows change, and they are
-     left by a button, a dialog's close or the browser's back alike, so the
-     recount hangs on the route rather than on any one of those. */
+  // Recount on landing on a page and whenever its overview comes back into view
+  // with nothing over it. Sections are left by a button, a dialog's close or
+  // the browser's back alike, so the recount hangs on the route.
   const resting = $derived(showing && !modal);
   let counted: string | undefined;
   $effect(() => {
@@ -373,8 +372,8 @@
     segment(3) ? live.find((s) => s.detail && s.key === at) : undefined,
   );
 
-  /* Settle the explicit form back on the short one. This cannot loop: after
-     the replace, segment(2) is undefined and the condition stops holding. */
+  // Settle the explicit form back on the short one. This cannot loop: after the
+  // replace, segment(2) is undefined and the condition stops holding.
   $effect(() => {
     if (segment(2) === "overview")
       navigate(`/admin/${page}`, { replace: true });
@@ -382,8 +381,8 @@
 
   const expanded = $derived(expandedKey());
 
-  /* The window a detail view was set to belongs to that view: leaving it by
-     any route, the back button or a tab, puts every overview on its default. */
+  // The window a detail view was set to belongs to that view: leaving it by any
+  // route, the back button or a tab, puts every overview on its default.
   $effect(() => {
     if (!expanded) setPeriod(undefined);
   });
@@ -391,8 +390,8 @@
 
   const backToOverview = () => navigate(`/admin/${page}`);
 
-  /* A page without an overview has nothing to show until a section is named,
-     so it opens on its first. */
+  // A page without an overview has nothing to show until a section is named, so
+  // it opens on its first.
   $effect(() => {
     if (!overview && !segment(2) && live[0])
       navigate(`/admin/${page}/${live[0].key}`, { replace: true });
@@ -424,7 +423,7 @@
 </script>
 
 {#snippet topActions()}
-  <!-- Only on the way back. Going in is the counter you clicked, and a modal
+  <!-- Only on the way back: going in is a click on a counter, and a modal
        section carries its own close. -->
   {#if detail}
     <Button
@@ -507,8 +506,8 @@
 </div>
 
 <style>
-  /* While the overview shows, the page is exactly the window: the overview
-     shares out the height itself instead of growing past it. */
+  /* While the overview shows, the page is as tall as the window: the
+     overview shares out the height itself instead of growing past it. */
   .admin-root.fit {
     flex: 1 1 0;
     min-height: 0;
@@ -516,10 +515,9 @@
     flex-direction: column;
   }
 
-  /* Chrome for the panels still on hand-rolled tables: runtime, host and
-     settings. Keyed on a class rather than on .admin-root because those
-     panels open in dialogs, and a dialog is mounted on <body>, outside
-     .admin-root entirely. SectionModal wears the same class. */
+  /* Chrome for the panels on hand-rolled tables: runtime, host and settings.
+     Keyed on a class, not .admin-root, since those panels open in dialogs
+     mounted on <body>. SectionModal wears the class too. */
   :global(.admin-tables table) {
     width: 100%;
     border-collapse: collapse;

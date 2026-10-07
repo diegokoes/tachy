@@ -85,9 +85,9 @@
     ...values.map((v) => ({ value: v, label: v })),
   ];
 
-  /* No "failures only" toggle: each job's last run and its own run history
-     already answer "what broke", and the overview's failed counter opens
-     straight onto the jobs that did. */
+  // No "failures only" toggle: each job's last run and its own run history
+  // already answer "what broke", and the overview's failed counter opens
+  // straight onto the jobs that did.
   const filtered = $derived.by(() => {
     const q = filter.trim().toLowerCase();
     return defs.data.filter(
@@ -189,8 +189,8 @@
       initial: true,
       info: "A paused job keeps its schedule but does not fire.",
     },
-    /* The toggle is what people come to this list to use, so it sits on the
-       row rather than one dialog away. */
+    // The toggle is what people come to this list to use, so it sits on the row
+    // rather than one dialog away.
     { key: "toggle", label: "active", width: "5rem", cell: toggleCell },
     { key: "acts", label: "", width: "3.5rem", align: "end", cell: actsCell },
   ]);
@@ -248,8 +248,8 @@
     }
   }
 
-  /* Pausing is disabling: there is no separate verb on the server, and a
-     paused schedule is exactly a definition that is not enabled. */
+  // Pausing is disabling: there is no separate verb on the server, and a paused
+  // schedule is a definition that is not enabled.
   async function pause(d: JobDefinitionRow) {
     pausing = d.id;
     error = null;
@@ -305,7 +305,7 @@
     logOpen = next;
   }
 
-  /* Runs move on the server; while any shown run is active, follow it. */
+  // Runs move on the server; while any shown run is active, follow it.
   const anyActive = $derived(
     defs.data.some((d) => isActive(d.last_run?.status)) ||
       (historyRuns ?? []).some((r) => isActive(r.status)),
@@ -566,9 +566,8 @@
 {/snippet}
 
 <!-- Pausing happens on the row, as one button that is the job's state: a
-     check while it is active, a pause while it is not, one morphing into the
-     other. Not marked busy, which would swap the icon out mid-tween. Running
-     now lives in the dialog, where the job's settings and history are. -->
+     check while active, a pause while not, one morphing into the other. Not
+     marked busy, which would swap the icon out mid-tween. -->
 {#snippet toggle(d: JobDefinitionRow)}
   <Button
     variant="ghost"

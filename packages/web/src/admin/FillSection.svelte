@@ -4,8 +4,11 @@
   let { view: View }: { view: Component } = $props();
 </script>
 
-<!-- App drops the window's padding around `.bleed`, so the view runs to its
-     edges; the view carries no heading of its own. -->
+<!--
+@component
+App drops the window's padding around `.bleed`, so the view runs to its edges;
+the view carries no heading of its own.
+-->
 <div class="fill bleed"><View /></div>
 
 <style>

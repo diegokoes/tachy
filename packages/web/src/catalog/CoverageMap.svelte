@@ -22,8 +22,8 @@
   const shown = $derived(trail[trail.length - 1]);
   const top = $derived(hottest(whole));
 
-  /* The zoom is the route, so the browser's back is a zoom out and a view
-     of one product can be linked. */
+  // The zoom is the route, so the browser's back is a zoom out and a view of
+  // one product can be linked.
   const zoom = (key: string) => navigate(key ? `${BASE}/${key}` : BASE);
 
   onMount(() => {

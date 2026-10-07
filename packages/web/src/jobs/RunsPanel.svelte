@@ -68,8 +68,8 @@
     return `/jobs/runs?${q}`;
   }
 
-  /* A refresh replaces the newest page and keeps the older pages loaded
-     below it, so following live runs does not collapse a list read further down. */
+  // A refresh replaces the newest page and keeps the older pages loaded below
+  // it, so following live runs does not collapse a list read further down.
   async function load() {
     const isCurrent = current();
     try {
