@@ -52,9 +52,9 @@
     canCreate?: boolean;
     addLabel?: string;
     /**
-     * What one row is, singular - "project", "repo". It prefixes the record
-     * dialog's name, because a dialog titled with a bare slug says what you
-     * are editing but never what kind of thing it is.
+     * What one row is, singular: "project", "repo". It prefixes the record
+     * dialog's name, because a dialog titled with a bare slug says what is
+     * being edited but not what kind of thing it is.
      */
     noun?: string;
     /** Names the row in the dialog title; defaults to the row's key. */
@@ -97,7 +97,7 @@
     return hoist(offer);
   });
 
-  /* Create and edit are the same form; only the commit differs. */
+  // Create and edit are the same form; only the commit differs.
   let form = $state<{ mode: "create" | "edit"; row: T | null } | null>(null);
   let draft = $state<Draft>({});
   let armed = $state<string | null>(null);
@@ -107,9 +107,9 @@
   const NEW = "::new";
   const formKey = $derived(form ? (form.row ? rowKey(form.row) : NEW) : null);
 
-  /* An open record, draft and all, survives leaving the section, so coming
-     back finds it as it was. Closing it, or moving elsewhere inside the
-     section, forgets it as before. */
+  // An open record, draft and all, survives leaving the section, so coming back
+  // finds it as it was. Closing it, or moving elsewhere inside the section,
+  // forgets it as before.
   const memo = untrack(() => `crud:${router.path}:${noun ?? addLabel}`);
   const home = sectionNow();
   let resume = $state(recall<{ key: string; draft: Draft } | null>(memo, null));

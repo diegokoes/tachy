@@ -28,7 +28,7 @@
   let root: HTMLElement | undefined = $state();
   let now = $state(Date.now());
 
-  /* The countdowns are minutes apart, so they need no more than a slow beat. */
+  // The countdowns are minutes apart, so they need no more than a slow beat.
   onMount(() => {
     const id = setInterval(() => (now = Date.now()), 30_000);
     return () => clearInterval(id);
@@ -40,8 +40,8 @@
   const cut = $derived(
     fitted(lanes, view.expanded ? Infinity : Math.max(1, room - 1)),
   );
-  /* The right edge is left unlabelled: a clock time there crowds its
-     neighbour, and the tile's title already says how far the axis runs. */
+  // The right edge is left unlabelled: a clock time there crowds its neighbour,
+  // and the tile's title already says how far the axis runs.
   const marks = $derived([
     { at: 0, label: "now" },
     ...hourMarks(from, hours).filter((m) => m.at > 8 && m.at < 96),
@@ -60,8 +60,8 @@
   const lanesOf = () =>
     root ? [...root.querySelectorAll<Element>(".lane.live")] : [];
 
-  /* Moving while the board is on screen. Rebuilt when the lanes change, so a
-     lane that appears starts moving with the rest. */
+  // Moving while the board is on screen. Rebuilt when the lanes change, so a
+  // lane that appears starts moving with the rest.
   $effect(() => {
     void cut.shown.length;
     if (!root) return;

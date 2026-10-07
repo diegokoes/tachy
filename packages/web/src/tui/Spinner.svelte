@@ -66,8 +66,8 @@
     border-radius: var(--radius);
   }
 
-  /* Drawn, not typed - the ╔═╗ frame and █▓▒░· comet were glyphs neither
-     bundled face carries. The frame is now a real border. */
+  /* Drawn, not typed: neither bundled face carries the ╔═╗ and █▓▒░· glyphs.
+     The frame is a border. */
   .frame {
     display: flex;
     gap: 0.14em;

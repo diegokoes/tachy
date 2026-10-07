@@ -17,8 +17,8 @@
 
   let rows = $state(0);
 
-  /* Worst first, so what the tile cannot fit is only ever what is fine - and
-     the last lamp that does fit counts the rest rather than half-showing one. */
+  // Worst first, so what the tile cannot fit is only ever what is fine - and
+  // the last lamp that does fit counts the rest rather than half-showing one.
   const RANK = { danger: 0, warn: 1, ok: 2, muted: 3 };
   const sorted = $derived(
     [...cells].sort((a, b) => RANK[a.tone] - RANK[b.tone]),

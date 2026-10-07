@@ -29,8 +29,11 @@
   let boxes = $state<Record<string, { w: number; h: number }>>({});
 </script>
 
-<!-- Every item is a grid of `total` cells with `yes` of them lit: a share told
-     as a count of things, which a bar cannot do. -->
+<!--
+@component
+Every item is a grid of `total` cells with `yes` of them lit: a share told as a
+count of things, which a bar cannot do.
+-->
 <div class="waffles">
   {#each items as it (it.key)}
     {@const size = boxes[it.key] ?? { w: 0, h: 0 }}

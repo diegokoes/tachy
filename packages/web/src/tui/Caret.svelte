@@ -63,9 +63,9 @@
     svg.style.width = `${lerp(CARET.width, MARK.width, t)}em`;
   }
 
-  /* The path's `d` is owned here, not by the template, so a tween in flight
-     is not overwritten by the next render. The svg is rebuilt on every beat,
-     and a new one starts at rest on whichever side it is now. */
+  // The path's `d` is owned here, not by the template, so a tween in flight is
+  // not overwritten by the next render. The svg is rebuilt on every beat, and a
+  // new one starts at rest on whichever side it is now.
   $effect(() => {
     if (!svg || !shape || !icon) return;
     const to = idle ? 1 : 0;

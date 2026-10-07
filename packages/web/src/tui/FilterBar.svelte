@@ -16,8 +16,11 @@
   let el = $state<HTMLInputElement>();
 </script>
 
-<!-- The answer to a table that has grown past a screenful. Not pagination:
-     these lists are read by looking for one row, not by leafing through. -->
+<!--
+@component
+The answer to a table that has grown past a screenful. Not pagination: these
+lists are read by looking for one row, not by leafing through.
+-->
 <div class="bar">
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <span

@@ -44,8 +44,11 @@
   $effect(() => view.fold?.(cut.rest.length > 0));
 </script>
 
-<!-- Name, bar, count on every row: the scale is the numbers themselves, so the
-     plot needs no axis and nothing is hidden behind a hover. -->
+<!--
+@component
+Name, bar, count on every row: the scale is the numbers themselves, so the plot
+needs no axis and nothing is hidden behind a hover.
+-->
 <div
   class="list"
   class:all={view.expanded}

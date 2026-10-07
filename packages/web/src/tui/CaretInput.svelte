@@ -4,13 +4,11 @@
   import type { IconName } from "./icons";
 
   /**
-   * A bare text input that draws its own caret, and keeps it at the end of
-   * what was typed while it is not focused, so a filter reads as writeable
-   * before it is clicked. The box around it belongs to whoever mounts it.
-   *
-   * With `icon` and `hint` it stands in for a placeholder instead: empty and
-   * unfocused it shows the mark and the word, the caret morphs out of the mark
-   * on focus, and with text in it the caret only shows while focused.
+   * A bare text input that draws its own caret and keeps it at the end of the
+   * text while unfocused, so a filter reads as writeable before it is clicked.
+   * The box around it belongs to whoever mounts it. With `icon` and `hint` it
+   * stands in for a placeholder: empty and unfocused it shows the mark and the
+   * word, and the caret morphs out of the mark on focus.
    */
   let {
     value = $bindable(""),
@@ -51,8 +49,8 @@
     sync();
   });
 
-  /* Not every engine fires selectionchange on the input itself, and none
-     fires anything when an arrow key only scrolls the text. */
+  // Not every engine fires selectionchange on the input itself, and none fires
+  // anything when an arrow key only scrolls the text.
   $effect(() => {
     if (!el) return;
     const node = el;

@@ -33,7 +33,7 @@ function apply(f: DateFormat) {
   try {
     localStorage.setItem(STORAGE_KEY, encodeDateFormat(f));
   } catch {
-    /* storage blocked: the server copy still holds */
+    // storage blocked: the server copy still holds
   }
 }
 
@@ -45,7 +45,7 @@ export async function loadDateFormat() {
     const p = await api.get<DatePrefs>("/me/preferences");
     apply({ order: p.date_order.value, clock: p.clock.value });
   } catch {
-    /* keep whatever the browser last saw */
+    // keep whatever the browser last saw
   }
 }
 

@@ -2,9 +2,11 @@
   let { verb, name }: { verb: string; name: string } = $props();
 </script>
 
-<!-- The chrome draws no heading, so a dialog acting on one named thing says
-     which one here, where it reads as part of the work rather than as a label
-     on the box. -->
+<!--
+@component
+The chrome draws no heading, so a dialog acting on one named thing says which
+one here, where it reads as part of the work rather than as a label on the box.
+-->
 <p class="subject">
   <span class="k">{verb}</span><code>{name}</code>
 </p>

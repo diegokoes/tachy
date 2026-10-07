@@ -1,6 +1,7 @@
 /**
- * User overrides for the two digit key sets, section and subnav. Everything else in the app keeps its fixed binding and is
- * listed read-only in Settings › keybinds.
+ * User overrides for the two digit key sets, section and subnav. Everything
+ * else in the app keeps its fixed binding and is listed read-only in Settings ›
+ * keybinds.
  *
  * Section keys are stored per nav item, not per slot: navItems() drops `admin`
  * for non-curators, so slot 3 is `admin` for one user and `settings` for the
@@ -80,9 +81,9 @@ export function resetKeys() {
   persist();
 }
 
-/* The glyphs normalize() bakes into a stored chord, spelled out. They are the
-   right thing on a key cap and the wrong thing in a settings list: "^," is only
-   readable to someone who already knows what it says. */
+// The glyphs normalize() bakes into a stored chord, spelled out. They are the
+// right thing on a key cap and the wrong thing in a settings list: "^," is only
+// readable to someone who already knows what it says.
 const WORDS: Record<string, string> = {
   "⏎": "ENTER",
   "↑": "UP ARROW",
@@ -95,10 +96,10 @@ const WORDS: Record<string, string> = {
 const MODS = /^(shift|ctrl|alt|meta)\+/;
 
 /**
- * A stored chord as the caps a reader presses: "ctrl+," is [[CTRL, ,]] and
- * "g g" is [[G], [G]], one inner list per press. Display only - `normalize()`
- * in keys.svelte.ts still owns what a binding *is*, and every saved keymap is
- * in that spelling.
+ * A stored chord as the caps a reader presses: "ctrl+," is [[CTRL, ,]] and "g
+ * g" is [[G], [G]], one inner list per press. Display only: `normalize()` in
+ * keys.svelte.ts owns what a binding is, and every saved keymap is in that
+ * spelling.
  */
 export function keyCaps(chord: string): string[][] {
   return chord.split(" ").map((part) => {
@@ -121,8 +122,8 @@ export function keyLabel(chord: string): string {
 
 /**
  * Fixed bindings a rebind would shadow. The scope stack resolves innermost
- * first, so a collision does not error - it silently steals the key from
- * whichever view owns it, which is worth warning about before it happens.
+ * first, so a collision does not error: it takes the key from whichever view
+ * owns it, and the settings page warns first.
  */
 export const RESERVED: Record<string, string> = {
   "ctrl+k": "focus search / composer",

@@ -59,13 +59,11 @@ export function shatterAll(nodes: HTMLElement[], onComplete: () => void) {
 }
 
 /**
- * Resolves a mask of password dots into plain text - in the placeholder if the
- * node is an input, in its text otherwise. A setting the user has not set
- * themselves still resolves to something; the decode is what says so, and says
- * that typing or picking here replaces it.
- *
- * An empty string leaves an input's placeholder to the markup, and blanks a
- * text node.
+ * Resolves a mask of password dots into plain text: the placeholder of an
+ * input, the text of anything else. A setting the user has not set still
+ * resolves to something, and the decode says that typing or picking here
+ * replaces it. An empty string leaves an input's placeholder to the markup and
+ * blanks a text node.
  */
 export function decode(node: HTMLElement, text: string) {
   const MASK = "•";
@@ -209,12 +207,11 @@ export function settle(node: Element) {
 }
 
 /**
- * One discharge into a node - the far end of an arriving thread.
- *
- * drop-shadow, not box-shadow: box-shadow traces the element's border box, so
- * on a node whose visible shape is drawn rather than boxed - the artifact tab
- * is a hexagon on a borderless button - it flashes a rectangle around it.
- * drop-shadow follows what is actually painted.
+ * One discharge into a node, the far end of an arriving thread. drop-shadow,
+ * not box-shadow: box-shadow traces the element's border box, so on a node
+ * whose shape is drawn rather than boxed (the artifact tab is a hexagon on a
+ * borderless button) it flashes a rectangle around it. drop-shadow follows what
+ * is painted.
  */
 export function jolt(node: Element) {
   if (reducedMotion()) return null;
@@ -263,12 +260,9 @@ export function jellyPress(node: HTMLElement) {
 /**
  * Lifts the node towards the pointer while it hovers, its edge lit in the
  * accent as it goes up. `held` leaves a fainter edge lit once the pointer has
- * gone, for as long as whatever the click opened stays open.
- *
- * drop-shadow, not box-shadow, for the same reason as in `jolt`: a box-shadow
- * would trace the border box of a shape that is drawn rather than boxed. The
- * blur stays at a pixel or two so the light hugs the outline instead of
- * pooling around it.
+ * gone, for as long as whatever the click opened stays open. drop-shadow for
+ * the reason given on `jolt`, with a blur of a pixel or two so the light hugs
+ * the outline.
  */
 export function hoverRise(node: HTMLElement, held = false) {
   const [r, g, b] = gsap.utils.splitColor(
@@ -406,18 +400,10 @@ let wipeRun = 0;
 
 /**
  * Swaps the theme behind a wavy edge that crosses the screen, two bands of
- * accent running ahead of it. `swap` makes the change; the page as it was
- * stays put and the page as it becomes is uncovered behind the last edge, so
- * text changes colour exactly where the edge passes over it.
- *
- * The two pages are the snapshots of a view transition, which is the only way
- * to have both themes painted at once. The new one is clipped to a path that
- * GSAP rewrites every frame through `--theme-wipe` on the root. The bands sit
- * in a group of their own: left in the root snapshot they would be clipped
- * away with it, since they are always ahead of the edge.
- *
- * Each edge is ten points that leave at slightly different times, the same
- * offsets on all three edges, so the edges ripple but never cross.
+ * accent ahead of it. `swap` makes the change. Both pages are snapshots of a
+ * view transition, the only way to paint two themes at once; the new one is
+ * clipped to a path GSAP rewrites each frame through `--theme-wipe`. Each edge
+ * is ten points leaving at shared offsets, so the edges ripple and never cross.
  */
 export function themeWipe(
   swap: () => void | Promise<void>,
@@ -500,9 +486,9 @@ export function themeWipe(
     root.style.removeProperty("--theme-wipe");
   };
   transition.ready.then(() => {
-    /* A view transition ends when its pseudo-elements stop animating, and the
-       wipe is not an animation the browser can see. This one changes nothing
-       and keeps the snapshots up for as long as the timeline runs. */
+    // A view transition ends when its pseudo-elements stop animating, and the
+    // wipe is not an animation the browser can see. This one changes nothing
+    // and keeps the snapshots up for as long as the timeline runs.
     root.animate(
       { opacity: [1, 1] },
       {
@@ -547,18 +533,11 @@ export type Unfolding = {
 };
 
 /**
- * A dialog surface popping out of a blob: a small circle at the window's
- * centre grows, swells a little past the window's size while its corners
- * square off, and settles into the rounded rectangle; the contents fade up
- * once the corners are there to hold them. Closing and covering pull the
- * window back into a circle and shrink that to nothing.
- *
- * Only `plate`, the surface layer under the window's contents, is transformed.
- * The contents only fade, so their text is never rasterised at a scale and
- * never snaps sharp on landing, and the window never becomes the containing
- * block for the `position: fixed` popups inside it. The scrim is tweened on its
- * own, so a covered dialog hands its ink to the one on top even while its
- * window stays in view.
+ * A dialog surface popping out of a blob: a circle at the window's centre
+ * grows, swells past the window's size while its corners square off, and
+ * settles into the rounded rectangle. Only `plate`, the layer under the
+ * contents, is transformed: the contents only fade, so text is never rasterised
+ * at a scale and the window never contains its fixed popups.
  */
 export function unfold(o: {
   win: HTMLElement;
@@ -578,15 +557,13 @@ export function unfold(o: {
   let queued = 0;
   let tl: gsap.core.Timeline | undefined;
 
-  /* The blob is the plate at its own size, scaled on each axis. At `m` 0 it is
-     a circle of diameter `d`, at 1 the window; `k` runs its corners from an
-     ellipse of the window's proportions, which that scale turns into the
-     circle, to the window's radius. Explicit elliptical radii rather than
-     "50%": a percentage and a length do not interpolate into one another. */
+  // The blob is the plate scaled per axis: at `m` 0 a circle of diameter `d`,
+  // at 1 the window, with `k` running its corners between the two. Elliptical
+  // radii in lengths: a percentage and a length do not interpolate.
   const blob = { d: 0, m: 1, k: 0 };
 
-  /* The border draws only once the window has its shape. Scaled unevenly on
-     the two axes, a hairline changes weight every frame and ripples. */
+  // The border draws only once the window has its shape. Scaled unevenly on the
+  // two axes, a hairline changes weight every frame and ripples.
   const line = getComputedStyle(plate).borderTopColor;
   const clear = /^rgba?\(/.test(line)
     ? line.replace(/^rgba?\(([^,]+,[^,]+,[^,)]+).*$/, "rgba($1, 0)")
@@ -684,10 +661,9 @@ export function unfold(o: {
       gsap.set(plate, { opacity: 0, ...edge(clear) });
       gsap.set(parts, { opacity: 0 });
       draw();
-      /* The frame that first paints the dialog is the expensive one: its
-         layout, and the blur switching on across the app. Started any
-         earlier, the timeline counts that frame as elapsed time and the
-         first third of the pop is never seen. */
+      // The frame that first paints the dialog is the expensive one: its
+      // layout, and the blur switching on. Started sooner, the timeline counts
+      // that frame as elapsed and the first third of the pop is never seen.
       queued = requestAnimationFrame(() => {
         queued = requestAnimationFrame(forward);
       });
@@ -735,20 +711,11 @@ export function unfold(o: {
 }
 
 /**
- * Smooth resizing for a layout change. Call it while the nodes still sit where
- * they were, make the change, then call what it returns once the DOM has the
- * new layout: each node travels from its old box to its new one.
- *
- * Width and height are tweened, not a scale, so text inside a node reflows
- * rather than stretching. A node the change hides (`display: none`) fades out
- * where it stood, and one it reveals fades in.
- *
- * The nodes are positioned absolutely for the length of the tween. A flex item
- * with a zero basis ignores an inline height, so left in flow it would jump to
- * its final size and only its offset would animate.
- *
- * `absolute: false` keeps them in flow, for a node that only changes place:
- * lifted out, its neighbours would take its room and give it back at the end.
+ * Smooth resizing for a layout change. Call it in the old layout, make the
+ * change, then call what it returns: each node travels from its old box to its
+ * new one. Width and height are tweened, so text reflows, and the nodes are
+ * absolute for the tween, since a zero-basis flex item ignores an inline
+ * height. `absolute: false` keeps a node that only moves in flow.
  */
 export function reflow(
   targets: (Element | null | undefined)[],
@@ -773,11 +740,9 @@ export function reflow(
 /**
  * Takes `tile` to the size of the window, or back: the browser morphs the
  * tile's box between the two layouts as a view transition. `swap` changes the
- * layout and returns when the DOM shows it.
- *
- * The name is on the tile for the length of the transition only: two elements
- * with the same name abort it, and a name left behind makes a snapshot of a
- * node nobody is animating.
+ * layout and returns when the DOM shows it. The name is on the tile only for
+ * the transition: two elements with one name abort it, and a name left behind
+ * snapshots a node nobody animates.
  */
 export function morphTile(
   tile: HTMLElement | null | undefined,

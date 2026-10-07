@@ -24,10 +24,11 @@
   } = $props();
 </script>
 
-<!-- The index for one section of the app: what is in here, how much of it
-     there is, and which part you are looking at. It is not a third tab bar -
-     it answers "what can I configure here", which a bar of labels alone never
-     did, and it is why each part can now have the window to itself. -->
+<!--
+@component
+The index for one section of the app: what is in it, how much of each, and which
+part is open. Not a third tab bar: it answers what can be configured here.
+-->
 <nav class="rail" aria-label={label}>
   {#each items as it (it.key)}
     {@const on = it.key === active}
@@ -58,8 +59,7 @@
     flex-direction: column;
     gap: 1px;
     min-width: 0;
-    /* Sticky rather than scrolling away: losing the index the moment you use
-       it is the thing this replaces. */
+    /* Sticky: the index stays in view while it is used. */
     position: sticky;
     top: 0;
   }

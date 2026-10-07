@@ -23,7 +23,7 @@
     band: number;
     /** Where a category's band starts, in px from the plot area's left edge. */
     bandAt: (key: string) => number;
-    /** Where a value sits, in px from the plot area's TOP edge. */
+    /** Where a value sits, in px from the plot area's top edge. */
     at: (v: number) => number;
     /** How tall a span of `v` is, in px. */
     up: (v: number) => number;
@@ -109,8 +109,8 @@
       tickCount(Math.max(0, h), fs),
     );
     const pad: Pad = {
-      /* Headroom for the value a column prints above itself, the same
-         allowance the flex version reserved with its padding-top. */
+      // Headroom for the value a column prints above itself, the same allowance
+      // the flex version reserved with its padding-top.
       top: flush ? 0 : Math.round(fs * 1.6),
       right: 0,
       bottom: Math.round(fs * 1.6) + TICK_LEN,
@@ -142,8 +142,8 @@
     };
   });
 
-  /* Set once during init, as context must be. The getter is what keeps the
-     value live as the box is measured. */
+  // Set once during init, as context must be. The getter is what keeps the
+  // value live as the box is measured.
   setContext(PLOT_KEY, {
     get frame() {
       return frame;
@@ -151,9 +151,9 @@
   });
 </script>
 
-<!-- The SVG is taken out of flow on purpose. Tile's body is
-     `container-type: size`, so a child that contributed its own height back to
-     the box it is measured against would oscillate. -->
+<!-- The SVG is out of flow: Tile's body is `container-type: size`, so a
+     child that gave its height back to the box it is measured against would
+     oscillate. -->
 <div
   class="plot"
   class:fill={!height}

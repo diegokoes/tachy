@@ -13,8 +13,11 @@
   {/if}
 {/snippet}
 
-<!-- A share needs a bar and two numbers, not a ring: the row is as tall as a
-     line of text, so a handful of them fit where one dial used to sit. -->
+<!--
+@component
+A share needs a bar and two numbers, not a ring: the row is as tall as a line of
+text, so several fit in the room of one dial.
+-->
 <div class="ratios">
   {#each items as r (r.key)}
     <div

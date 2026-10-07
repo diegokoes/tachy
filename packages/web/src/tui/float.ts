@@ -31,7 +31,7 @@ const FLOOR = 96;
 /**
  * The nearest ancestor that masks its content. Fixed positioning escapes
  * overflow, but not a mask: the app window is drawn with one, and a popup
- * placed past its edge by viewport arithmetic alone was cut in half.
+ * placed past its edge by viewport arithmetic alone is cut in half.
  */
 function maskingAncestor(node: HTMLElement): HTMLElement | null {
   for (let el = node.parentElement; el; el = el.parentElement) {
@@ -68,15 +68,9 @@ export function float(node: HTMLElement, options: FloatOptions) {
 
     if (placement === "beside" && besides(a, vw, left, top, vh, gap)) return;
 
-    /* Measured with the cap off, so "how tall does it want to be" is the
-       content's answer and not the last frame's. The border box is what the
-       cap is then set against - `scrollHeight` stops at the padding box, so
-       capping with it left every bordered popup two pixels short of its own
-       content and permanently scrolling.
-
-       Taking the cap off also makes the popup's own scrollers briefly
-       non-overflowing, and the browser clamps their scrollTop to 0 on the way
-       past - so what the user had scrolled to is put back once it is on. */
+    // Measured with the cap off, so the content says how tall it wants to be.
+    // The cap is set against the border box, as `scrollHeight` stops at the
+    // padding box. Scroll positions the uncapping clamps to 0 are put back.
     const scrolled: [Element, number][] = [];
     for (const el of node.querySelectorAll("*"))
       if (el.scrollTop) scrolled.push([el, el.scrollTop]);
@@ -136,10 +130,9 @@ export function float(node: HTMLElement, options: FloatOptions) {
   node.style.left = "0";
   place();
 
-  /* Capture, so an ancestor scrolling under the popup moves it too - the
-     bubbling phase never sees a scroll on anything but the document. The
-     popup's own list is the exception: it has not moved, and re-placing on it
-     re-measures, which is the one thing that disturbs the scroll being made. */
+  // Capture, so an ancestor scrolling under the popup moves it too: bubbling
+  // only sees a scroll on the document. The popup's own list is skipped, since
+  // re-placing re-measures and disturbs the scroll being made.
   const onScroll = (e: Event) => {
     if (node.contains(e.target as Node)) return;
     place();

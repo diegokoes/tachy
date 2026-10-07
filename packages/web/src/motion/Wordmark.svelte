@@ -19,9 +19,9 @@
    */
   const DOT_RATIO = 0.33;
   /**
-   * Alpha above which a sample counts as ink. Well under half: antialiased
-   * edge pixels are most of what defines a curve, and dropping them is what
-   * made the round letters look chewed.
+   * Alpha above which a sample counts as ink. Well under half: antialiased edge
+   * pixels are most of what defines a curve, and dropping them leaves the round
+   * letters looking chewed.
    */
   const INK = 90;
   const SCATTER = 52;
@@ -50,8 +50,8 @@
     function build() {
       if (!cv || !host || !ctx) return;
       // Sample at 2x the display resolution regardless of the screen: the grid
-      // below is what sets the mark's density, and reading it off a sharper
-      // render is what keeps a curve from quantising into a staircase.
+      // sets the mark's density, and reading it off a sharper render keeps a
+      // curve from quantising into a staircase.
       dpr = Math.max(2, Math.min(window.devicePixelRatio || 1, 3));
       const w = host.clientWidth;
       const h = host.clientHeight;
@@ -73,9 +73,9 @@
       ctx.textAlign = "left";
       ctx.fillStyle = "#fff";
 
-      /* Centre on the glyphs actually drawn, not on the font's line box. The
-         box carries ascender and descender space TACHY never uses, so centring
-         on it left the mark visibly high in its slot. */
+      // Centre on the glyphs drawn, not on the font's line box: the box carries
+      // ascender and descender space TACHY never uses, and centring on it puts
+      // the mark high in its slot.
       const m = ctx.measureText(TEXT);
       const capTop = m.actualBoundingBoxAscent;
       const capBottom = m.actualBoundingBoxDescent;
@@ -204,8 +204,8 @@
 </div>
 
 <style>
-  /* Sized, not positioned - App places it at the left of the top row, on the
-     window's left edge, where it can actually receive the pointer. */
+  /* Sized, not positioned: App places it at the left of the top row, on the
+     window's left edge, where it can receive the pointer. */
   .wordmark {
     width: 11rem;
     height: 2.9rem;

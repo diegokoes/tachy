@@ -15,9 +15,9 @@
     Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0)),
   );
 
-  /* Cells are lit whole, then the one straddling the boundary carries the
-     remainder as opacity - the fractional shading the ░▒▓ ramp used to do,
-     without asking a font for three glyphs it may not have. */
+  // Cells are lit whole, then the one straddling the boundary carries the
+  // remainder as opacity: fractional shading without asking a font for glyphs
+  // it may not have.
   const cells = $derived.by(() => {
     const exact = pct * width;
     return Array.from({ length: width }, (_, i) =>

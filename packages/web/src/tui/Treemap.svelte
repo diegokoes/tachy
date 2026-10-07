@@ -33,10 +33,10 @@
     edges?: boolean;
   } = $props();
 
-  /* Line height and monospace advance, in ems of --fs-xs. */
+  // Line height and monospace advance, in ems of --fs-xs.
   const LINE = 1.4;
   const CH = 0.6;
-  /* Ramp steps from here up are dark enough to want the ground as ink. */
+  // Ramp steps from here up are dark enough to want the ground as ink.
   const INVERSE_STEP = 3;
 
   type Laid = HierarchyRectangularNode<Block>;
@@ -52,13 +52,9 @@
 
   const top = $derived(max ?? hottest(root));
 
-  /*
-   * A group is drawn, header and frame, only where its box can name it and
-   * still show what is under it; a smaller one is only its children, which
-   * keeps a crowded map from turning into nested outlines. d3 positions a
-   * node before it asks for that node's padding, so the call is made on the
-   * box the group actually got.
-   */
+  // A group gets a header and frame only where its box can name it and still
+  // show what is under it. d3 positions a node before asking for its padding,
+  // so the call is made on the box the group got.
   const laid = $derived.by(() => {
     const heads = new Set<HierarchyNode<Block>>();
     if (!(w > 0 && h > 0)) return { nodes: [] as Laid[], heads };

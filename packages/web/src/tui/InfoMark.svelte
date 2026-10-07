@@ -93,12 +93,9 @@
     outline-offset: 2px;
   }
 
-  /* Placed by the float action, in viewport coordinates. As an absolutely
-     positioned child it was cropped by whatever scrolling body it opened in,
-     which is why hovering a mark near the bottom of a dialog showed half a
-     box. It grows rightward from the mark, the way the label beside it reads,
-     and the action pulls it back when that would run off the screen. The width
-     is in ch so the measure holds at any font scale. */
+  /* Placed by the float action in viewport coordinates, so a scrolling body
+     cannot crop it. It grows rightward and is pulled back from the screen
+     edge. The width is in ch, so it holds at any font scale. */
   .tip {
     /* Not pointer-events: none - a tip long enough to scroll has to be
        scrollable, and these carry the actual rule for the field beside them. */

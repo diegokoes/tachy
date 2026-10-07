@@ -14,14 +14,10 @@ export type Column<T> = {
   width?: string;
   align?: "start" | "end";
   /**
-   * Plain display value; ignored when `cell` is given.
-   *
-   * On an editable column this is also what seeds the record form, so it must
-   * return the **stored** form - the option's `value`, not its label; a boolean,
-   * not "on"/"off". Anything a column wants to *show* differently belongs in
-   * `cell`. Returning a label here put "Freshdesk" where "freshdesk" was
-   * expected and crashed the source form on open, and made every edit of a
-   * connection turn its redaction flag on.
+   * Plain display value; ignored when `cell` is given. On an editable column
+   * this also seeds the record form, so it returns the stored form: the
+   * option's `value`, not its label; a boolean, not "on"/"off". What a column
+   * shows differently belongs in `cell`.
    */
   value?: (row: T) => unknown;
   cell?: Snippet<[T]>;

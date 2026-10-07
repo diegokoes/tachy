@@ -12,10 +12,9 @@ const OPPOSITE_ACCENTS: Record<string, string> = {
   "#ffffff": "#000000",
 };
 
-/* The fluid clamp in tokens.css tops out at 18px and saturates around a
-   1571px viewport, so width alone cannot tell a 27" 1440p display from a 32"
-   4K one - only pixel density can, and CSS cannot read it. These steps are the
-   knob that covers the difference, so the top one has to reach far enough to. */
+// The fluid clamp in tokens.css tops out at 18px, so width alone cannot tell a
+// 27" 1440p display from a 32" 4K one: only pixel density can, and CSS cannot
+// read it. These steps cover the difference.
 export const TEXT_SIZES = [
   { key: "small", scale: 0.9 },
   { key: "normal", scale: 1 },
@@ -128,8 +127,8 @@ export function loadThemeFromStorage() {
     applyAccent(ACCENT_DEFAULTS[themeState.theme]);
   }
 
-  // The old control was a 0.05-step slider, so a stored value is very unlikely
-  // to land on one of the three steps - snap it to the nearest.
+  // A stored value may come from a finer-grained control, so it snaps to the
+  // nearest step.
   const saved = Number(localStorage.getItem("tachy-font-scale"));
   const nearest =
     Number.isFinite(saved) && saved > 0

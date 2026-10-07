@@ -168,10 +168,10 @@ const MarkdownMark: LucideIconData = {
 };
 
 export const ICONS = {
-  /* ── Leaving: grey, nothing is lost ───────────────────────────────────── */
+  // Leaving: grey, nothing is lost
   close: X,
 
-  /* ── Changing records ─────────────────────────────────────────────────── */
+  // Changing records
   /** Remove or delete. Arms into `confirm` where the loss is real. */
   delete: Trash,
   /** The armed second click of a destructive action. */
@@ -187,7 +187,7 @@ export const ICONS = {
   /** Put a value on the clipboard. */
   copy: Copy,
 
-  /* ── Lifecycle ────────────────────────────────────────────────────────── */
+  // Lifecycle
   approve: CircleDashedCheck,
   /** Reject an entry, deny a tool call, and the "no" of a yes/no column. */
   reject: CircleOff,
@@ -199,7 +199,7 @@ export const ICONS = {
   /** The affected → fixed version arrow. */
   versionArrow: ArrowRightToLine,
 
-  /* ── Navigation ───────────────────────────────────────────────────────── */
+  // Navigation
   back: ArrowLeft,
   next: ArrowRight,
   /** A chart taken out of its tile to the whole window. */
@@ -213,7 +213,7 @@ export const ICONS = {
   selected: CircleSmall,
   download: Download,
 
-  /* ── Running things ───────────────────────────────────────────────────── */
+  // Running things
   run: Play,
   pause: Pause,
   /** A flow that is switched on; its off state is `pause`. */
@@ -221,8 +221,8 @@ export const ICONS = {
   stop: Square,
   test: FlaskConical,
 
-  /* ── Finding things ───────────────────────────────────────────────────── */
-  /** Searching what we already hold. */
+  // Finding things
+  /** Searching what is already held. */
   search: Search,
   /** The text caret, where the app draws its own. */
   caret: Tally1,
@@ -251,14 +251,14 @@ export const ICONS = {
   /** Anything that hands work to the model. */
   ai: Bot,
 
-  /* ── Chat ─────────────────────────────────────────────────────────────── */
+  // Chat
   send: SendHorizontal,
   attach: FileUp,
   image: ImageIcon,
   file: FileText,
   tool: Wrench,
 
-  /* ── Sections: the nav and subnav tabs ────────────────────────────────── */
+  // Sections: the nav and subnav tabs
   chat: Bot,
   library: BookOpen,
   wiki: Globe,
@@ -302,12 +302,12 @@ export const ICONS = {
   agent: KeyRound,
   token: KeyRound,
 
-  /* ── Reach ────────────────────────────────────────────────────────────── */
+  // Reach
   user: UserRound,
   team: UserRoundGroup,
   global: Globe,
 
-  /* ── Marks ────────────────────────────────────────────────────────────── */
+  // Marks
   alert: TriangleAlert,
   error: OctagonAlert,
   info: Info,
@@ -322,13 +322,13 @@ export const ICONS = {
   lockOn: LockKeyhole,
   lockOff: LockKeyholeOpen,
 
-  /* ── Feedback ─────────────────────────────────────────────────────────── */
+  // Feedback
   flag: Flag,
   bug: Bug,
   /** The idea side of the report toggle, and the tip callout. */
   lightbulb: Lightbulb,
 
-  /* ── Work items ───────────────────────────────────────────────────────── */
+  // Work items
   /** Ask tachy to review a draft someone wrote. */
   review: PencilSparkles,
   /** A field written as markdown; morphs into `eye` for its preview. */
@@ -367,7 +367,7 @@ export const ICONS = {
   placeFolded: FoldVertical,
   placeOmitted: EyeClosed,
 
-  /* ── Flows ────────────────────────────────────────────────────────────── */
+  // Flows
   /** A synced item starting a flow. */
   triggerSynced: Zap,
   triggerManual: Hand,
