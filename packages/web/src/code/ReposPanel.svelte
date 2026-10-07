@@ -76,8 +76,8 @@
     await Promise.all([repos.reload(), projects.reload(), products.reload()]);
   }
 
-  /* An Azure DevOps project routinely holds fifty repos, and the link page is
-     one repo at a time; bulk linking has a page of its own. */
+  // An Azure DevOps project can hold dozens of repos, and the link page is one
+  // repo at a time; bulk linking has a page of its own.
   const canBulk = $derived(
     knowledgeProjects.some((p) => canCurateScope({ team_slug: p.team_slug })),
   );

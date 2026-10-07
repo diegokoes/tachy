@@ -65,8 +65,8 @@
     <Choice label="mode" options={MODES} value={th.theme} onpick={pickTheme} />
   </Row>
 
-  <!-- Three steps, not a slider. Dragging one re-laid out the whole app on
-       every frame, which reads as the UI tearing rather than resizing. -->
+  <!-- Three steps, not a slider: dragging one re-lays out the whole app on
+       every frame, which reads as the UI tearing. -->
   <Row label="text size">
     <Choice
       label="text size"

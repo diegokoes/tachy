@@ -35,8 +35,7 @@ export const loads = createResource(
 /**
  * Environment probes: database, embedding, vault decrypt, one per source
  * connection, one per agent backend. Run on request, never on the overview's
- * refresh: a source probe is a call to someone else's API, and ten-second
- * polling would be a small denial of service against it.
+ * refresh: a source probe is a call to someone else's API.
  */
 let probeState = $state<{
   checks: Probe[] | null;

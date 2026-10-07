@@ -26,13 +26,13 @@
 
   const slugs = $derived(buckets.data.map((b) => b.slug));
 
-  /* Team access lives outside the draft's flat fields, so the form edits a
-     set of slugs and the save sends it whole. */
+  // Team access lives outside the draft's flat fields, so the form edits a set
+  // of slugs and the save sends it whole.
   let picked = $state<string[]>([]);
   let issued = $state<BucketWithToken | null>(null);
   let rotating = $state<string | null>(null);
-  /* A new token cuts off the pusher still holding the old one, so it takes a
-     second click, as a delete does. */
+  // A new token cuts off the pusher still holding the old one, so it takes a
+  // second click, as a delete does.
   let armed = $state<string | null>(null);
   let copied = $state<string | null>(null);
 

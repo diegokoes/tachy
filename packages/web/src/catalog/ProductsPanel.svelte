@@ -27,9 +27,9 @@
     teams.data.map((x) => ({ value: x.slug, label: x.name })),
   );
 
-  /* The table only requires (team, slug) to be unique, but getProductIdBySlug
-     resolves a slug across every team and refuses an ambiguous one - so a
-     derived slug has to clear the whole set, not just its team's. */
+  // The table requires only (team, slug) to be unique, but `getProductIdBySlug`
+  // resolves a slug across every team and refuses an ambiguous one, so a
+  // derived slug has to clear the whole set, not only its team's.
   const allSlugs = $derived(products.data.map((p) => p.slug));
 
   const mayEdit = (r: Product) => canCurateScope({ team_slug: r.team_slug });
@@ -77,8 +77,8 @@
   });
 </script>
 
-<!-- A team picker rather than a text filter: a product belongs to exactly one
-     team, so the question is always "whose", never "matching what". -->
+<!-- A team picker, not a text filter: a product belongs to one team, so the
+     question is "whose", never "matching what". -->
 <div class="bar">
   <Select
     bind:value={team}

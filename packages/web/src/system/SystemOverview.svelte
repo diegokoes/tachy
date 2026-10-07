@@ -65,8 +65,8 @@
   /** The lamp whose detail is open, if one is. */
   let lamp = $state<(Cell & { detail?: string }) | null>(null);
 
-  /* Current values only; a light refresh keeps them honest while the page is
-     open. The probes are deliberately not on this clock; see systemState. */
+  // Current values only, refreshed while the page is open. The probes are not
+  // on this clock; see `systemState`.
   let timer: ReturnType<typeof setInterval> | undefined;
   onMount(() => {
     void system.reload().then(() => (now = Date.now()));
@@ -122,7 +122,7 @@
     const commit = system.data?.env?.commit;
     const b = result(backup, 12 * HOUR);
     const rt = result(restore, 8 * 24 * HOUR);
-    /* A skipped probe ran nothing, so it is out of the denominator too. */
+    // A skipped probe ran nothing, so it is out of the denominator too.
     const counted = tally ? tally.total - tally.skipped : 0;
     const openReports = census.data.warn.reports ?? 0;
     return [
@@ -273,9 +273,9 @@
     skip: "muted",
   };
 
-  /* One board for every "is this working" answer: the runtime's own readiness
-     lamps, tachy-watch's host checks, and the on-demand probes once run. They
-     answer the same question from different distances. */
+  // One board for every "is this working" answer: the runtime's own readiness
+  // lamps, tachy-watch's host checks, and the on-demand probes once run. They
+  // answer the same question from different distances.
   const lamps = $derived.by((): (Cell & { detail?: string })[] => {
     if (!r) return [];
     const rd = r.readiness;
@@ -344,10 +344,9 @@
         tone: WATCH_TONES[c.state] ?? "muted",
         title: c.value,
       });
-    /* A probe is the deeper answer to the same question, so where both carry
-       one name (the database), only the probe is shown. Two lamps called
-       "database", one green and one red, read as the board contradicting
-       itself. */
+    // A probe is the deeper answer to the same question, so where both carry
+    // one name (the database) only the probe is shown: two lamps called
+    // "database" in different colours read as a contradiction.
     const probed = new Set((probes.checks ?? []).map((p) => p.name));
     const kept = out.filter((l) => !probed.has(l.label));
     for (const p of probes.checks ?? [])

@@ -7,9 +7,8 @@
     groupsNote?: string;
   };
 
-  /* Outlives the panel: saving a new connection tests it and then opens its
-     page, which is a fresh mount, and the result has to be there when it
-     lands. */
+  // Outlives the panel: saving a new connection tests it and then opens its
+  // page, which is a fresh mount, and the result has to be there when it lands.
   let probes = $state<Record<string, Probe>>({});
 </script>
 
@@ -103,9 +102,9 @@
 
   let testing = $state<string | null>(null);
 
-  /* Registering from the probe list, where the projects are actually in front
-     of you. Without this the discovered names are inert text and the only way
-     to act on one is to retype its key in another panel. */
+  // Registering from the probe list, where the projects are listed. Without it
+  // the discovered names are inert text, and acting on one means retyping its
+  // key in another panel.
   let claim = $state<{
     slug: string;
     key: string;
@@ -245,7 +244,7 @@
     },
     {
       key: "slug",
-      /* A connection has no name of its own; this is what people read it by. */
+      // A connection has no name of its own; this is what people read it by.
       label: "name",
       width: "12rem",
       edit: "text",
@@ -297,8 +296,8 @@
       span: "full",
       aside: formTest,
     },
-    /* Testing is per connection but reading the results is a sweep down the
-       list, so the action belongs on the row as well as in the dialog. */
+    // Testing is per connection but reading the results is a sweep down the
+    // list, so the action belongs on the row as well as in the dialog.
     { key: "probe", label: "", width: "7rem", align: "end", cell: testCell },
   ]);
 
@@ -327,9 +326,9 @@
   }
 
   /**
-   * The result lands on the connection's own page, where you are when you ask
-   * for it. `save` calls this too, so writing a connection's credentials shows
-   * you straight away whether they work and what they can see.
+   * The result lands on the connection's own page, where the test is asked for.
+   * `save` calls this too, so writing a connection's credentials shows at once
+   * whether they work and what they can see.
    */
   async function test(slug: string) {
     testing = slug;

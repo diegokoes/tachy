@@ -36,11 +36,9 @@ function group(
 /**
  * The component tree as treemap blocks: products, then components nested by
  * parent. Every component is one leaf of area, so a product's area is its
- * component count and a leaf's heat its searchable entries. A component with
- * children keeps its own entries as a leaf beside theirs.
- *
- * Keys are `product` and `product/component`: component slugs are unique
- * within a product, so a key is also the zoom's path.
+ * component count and a leaf's heat its searchable entries; a component with
+ * children keeps its own entries as a leaf beside theirs. Keys are `product`
+ * and `product/component`, which is also the zoom's path.
  */
 export function coverageTree(rows: ComponentCoverage[], label: string): Block {
   const ids = new Set(rows.map((r) => r.id));

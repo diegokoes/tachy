@@ -71,8 +71,8 @@ export function insertStep(
     const prev = at.list[at.index];
     if (prev.kind === "if") prev.then.push(step);
     else {
-      /* An if placed mid-list takes the steps after it into its then branch,
-         so the list still ends at the if. */
+      // An if placed mid-list takes the steps after it into its then branch, so
+      // the list still ends at the if.
       if (step.kind === "if") step.then = at.list.splice(at.index + 1);
       at.list.splice(at.index + 1, 0, step);
     }

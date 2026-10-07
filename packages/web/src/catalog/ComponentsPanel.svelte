@@ -52,9 +52,9 @@
   let renaming = $state<ComponentNode | null>(null);
   let error = $state<string | null>(null);
 
-  /* Create and edit are the same form, as everywhere else in admin; only the
-     commit differs. The map replaces the table, so this panel drives the
-     record dialog itself rather than through CrudTable. */
+  // Create and edit are the same form, as everywhere else in admin; only the
+  // commit differs. The map replaces the table, so this panel drives the record
+  // dialog itself rather than through CrudTable.
   let form = $state<{
     mode: "create" | "edit";
     row: ComponentNode | null;
@@ -237,8 +237,8 @@
     if (row && mayEdit(row)) startEdit(row);
   };
 
-  /* The map takes the whole window, so the filters and the add button wait
-     behind ctrl+k instead of holding a strip of it. */
+  // The map takes the whole window, so the filters and the add button wait
+  // behind ctrl+k instead of holding a strip of it.
   let finding = $state(false);
   let findEl = $state<HTMLInputElement>();
 

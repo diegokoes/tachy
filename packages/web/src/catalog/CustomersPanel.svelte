@@ -50,7 +50,8 @@
   let error = $state<string | null>(null);
   let busy = $state<string | null>(null);
 
-  /* One row of each form per customer, so two open profiles never share a draft. */
+  // One row of each form per customer, so two open profiles never share a
+  // draft.
   let factForm = $state({
     kind: "",
     label: "",
@@ -340,9 +341,8 @@
   /** The customer whose record dialog is open, if one is. */
   let opened = $state<string | null>(null);
 
-  /* Everything hanging off the customer (units, facts, component rules)
-     fetched when its dialog opens, once the products its forms offer have
-     arrived. */
+  // Everything hanging off the customer (units, facts, component rules) fetched
+  // when its dialog opens, once the products its forms offer have arrived.
   $effect(() => {
     if (!opened || products.loading) return;
     const slug = opened;

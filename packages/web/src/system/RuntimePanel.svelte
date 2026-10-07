@@ -43,7 +43,7 @@
     } | null,
   );
 
-  /* Current values only; a light refresh keeps them honest while the page is open. */
+  // Current values only, refreshed while the page is open.
   let timer: ReturnType<typeof setInterval> | undefined;
   onMount(() => {
     void load();

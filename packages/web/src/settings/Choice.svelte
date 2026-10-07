@@ -20,9 +20,9 @@
   let fill = $state<HTMLElement>();
   let placed = false;
 
-  /* One fill that travels to the picked option, rather than each option
-     painting its own: a shared shape moving says "this one instead of that
-     one", which three backgrounds swapping at once does not. */
+  // One fill that travels to the picked option, rather than each option
+  // painting its own: a shared shape moving says "this one instead of that
+  // one", which three backgrounds swapping at once does not.
   function place(animate: boolean) {
     const at = group?.querySelector<HTMLElement>('[aria-checked="true"]');
     if (!fill || !at) return;

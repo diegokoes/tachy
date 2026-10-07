@@ -17,8 +17,8 @@
     { key: "detail", label: "detail", cell: detailCell },
   ];
 
-  /* Run once on opening if nothing has been run this visit. Not on every
-     open: a source probe is a call to someone else's API. */
+  // Run once on opening if nothing has been run this visit. Not on every open:
+  // a source probe is a call to someone else's API.
   onMount(() => {
     if (!probes.checks && !probes.running) void runProbes();
   });

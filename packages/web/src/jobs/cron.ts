@@ -12,8 +12,8 @@ function weekdays(field: string): string | null {
 }
 
 /**
- * A cron expression as a person would say it, for the shapes admins actually
- * write; anything else comes back as it was typed.
+ * A cron expression as a person would say it, for the common shapes; anything
+ * else comes back as typed.
  */
 export function describeSchedule(cron: string): string {
   const f = cron.trim().split(/\s+/);

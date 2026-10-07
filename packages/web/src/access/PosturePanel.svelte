@@ -77,8 +77,8 @@
     },
   ]);
 
-  /* userCensus counts app admins and team admins among the enabled and never
-     the same person twice, so these four are the whole roll. */
+  // userCensus counts app admins and team admins among the enabled and never
+  // the same person twice, so these four are the whole roll.
   const members = $derived(
     Math.max(0, u.users - u.disabled - u.admins - u.team_admins),
   );
@@ -165,9 +165,9 @@
     return out;
   });
 
-  /* A failure is only news here when the agent caused it: "held it wrong" is
-     feedback on that tool's description. Both ride inside the bar of the calls
-     they are part of. */
+  // A failure is only news here when the agent caused it: "held it wrong" is
+  // feedback on that tool's description. Both ride inside the bar of the calls
+  // they are part of.
   const TOOL_KEY = [
     { key: "calls", label: "calls", tone: "accent" },
     { key: "failures", label: "failed", tone: "danger" },
@@ -185,8 +185,8 @@
     })),
   );
 
-  /* A model is a category: a fixed tone per rank, and past three the tail
-     folds into "other" rather than inventing a fifth colour. */
+  // A model is a category: a fixed tone per rank, and past three the tail folds
+  // into "other" rather than inventing a fifth colour.
   const MODEL_TONES = ["accent", "info", "ok"] as const;
   const models = $derived([
     ...usage.by_model

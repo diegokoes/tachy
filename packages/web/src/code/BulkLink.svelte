@@ -437,10 +437,9 @@
         </div>
       </div>
 
-      <!-- The orbit's place, centred on the window: the controls above take
-           what they need and it sits where the eye lands. Once the hole
-           closes, the names take the same place, a short list centred where
-           it was and a long one running on down from there. -->
+      <!-- The orbit's place, centred on the window, under the controls.
+           Once the hole closes the names take the same place: a short list
+           centred there, a long one running on down. -->
       <div
         class="well"
         style:margin-top="{orbGap}px"
@@ -709,8 +708,8 @@
     white-space: pre;
     cursor: pointer;
     /* The filter box dims through `filter`, never `opacity`: opacity belongs
-       to the tweens that bring tags in and out, and a transition on it
-       trailed every frame of theirs. */
+       to the tweens that bring tags in and out, and a transition on it would
+       trail every frame of theirs. */
     transition: filter 0.2s ease;
   }
   .frame {

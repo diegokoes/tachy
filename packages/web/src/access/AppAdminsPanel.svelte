@@ -14,17 +14,16 @@
 
   const sso = $derived(ssoConfigured());
 
-  /* Who can change anything, on one screen. The list is short by design, and
-     that is the point of showing it apart from the roster: an app admin that
-     nobody meant to create is invisible among two hundred members. */
+  // Shown apart from the roster because the list is short: an app admin nobody
+  // meant to create is invisible among two hundred members.
   const rows = $derived(
     users.data
       .filter((u) => u.role === "admin")
       .sort((a, b) => a.email.localeCompare(b.email)),
   );
 
-  /* Two ways to lose the keys: nobody holds them, or the only person who does
-     cannot sign in. Both are worth saying out loud. */
+  // Two ways to lose the keys: nobody holds them, or the only holder cannot
+  // sign in.
   const live = $derived(
     rows.filter(
       (u) => !u.disabled && (signIn(u, sso).password || signIn(u, sso).sso),

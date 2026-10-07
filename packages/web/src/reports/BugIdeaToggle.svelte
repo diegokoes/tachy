@@ -175,7 +175,7 @@
     border-color: var(--report-idea);
   }
 
-  /* Two halves you press to choose a side; the knob rides above them. */
+  /* Two halves, each pressed to choose its side; the knob rides above them. */
   .zone {
     position: absolute;
     top: 0;

@@ -41,9 +41,9 @@
   let zoom = $state(1);
   let panning = $state(false);
 
-  /* Where the view is heading. Wheel and refit move these, and a frame loop
-     eases the drawn transform towards them, so a zoom glides instead of
-     jumping one notch at a time. */
+  // Where the view is heading. Wheel and refit move these, and a frame loop
+  // eases the drawn transform towards them, so a zoom glides instead of jumping
+  // one notch at a time.
   let goal = { zoom: 1, tx: 0, ty: 0 };
   let frame = 0;
   let last = 0;
@@ -59,8 +59,8 @@
     y: number;
     side: 1 | -1;
   };
-  /* Plain numbers in $state.raw: d3 mutates its node objects in place, and
-     deep-proxying them on every tick is too slow to animate. */
+  // Plain numbers in $state.raw: d3 mutates its node objects in place, and
+  // deep-proxying them on every tick is too slow to animate.
   let placed = $state.raw<Dot[]>([]);
   let edges = $state.raw<
     { key: string; x1: number; y1: number; x2: number; y2: number }[]
@@ -109,8 +109,8 @@
     return dots;
   }
 
-  /* The first layout settles synchronously and is drawn once. Later motion
-     runs on d3's timer, which only runs during a drag and the ease back. */
+  // The first layout settles synchronously and is drawn once. Later motion runs
+  // on d3's timer, which only runs during a drag and the ease back.
   $effect(() => {
     shape;
     sim?.stop();
@@ -190,13 +190,13 @@
     };
   }
 
-  /* Marks the node only. The canvas takes the pointer capture, so it owns
-     every move and release, and a press that never travels stays a click. */
+  // Marks the node only. The canvas takes the pointer capture, so it owns every
+  // move and release, and a press that never travels stays a click.
   function grab(e: PointerEvent, key: string) {
     const n = byKey.get(key);
     if (!n) return;
-    /* A press must not focus the node: focus is for the keyboard, and a
-       dialog closing hands it back to whatever held it, drawing a ring. */
+    // A press must not focus the node: focus is for the keyboard, and a dialog
+    // closing hands it back to whatever held it, drawing a ring.
     e.preventDefault();
     dragged = n;
     const p = at(e);
@@ -206,9 +206,9 @@
     moved = false;
   }
 
-  /* The settled layout leaves alpha near zero, and the timer stops below
-     ALPHA_MIN, so a drag has to start above it or the timer dies after one
-     tick and the node does not follow. */
+  // The settled layout leaves alpha near zero, and the timer stops below
+  // ALPHA_MIN, so a drag has to start above it or the timer dies after one tick
+  // and the node does not follow.
   function warm() {
     sim
       ?.alphaTarget(DRAG_HEAT)
@@ -216,9 +216,9 @@
       .restart();
   }
 
-  /* Scaled by the wheel's own delta, so a trackpad's many small events and a
-     mouse's few large ones zoom by the same amount per gesture, and anchored
-     on the pointer so the point under it stays under it. */
+  // Scaled by the wheel's own delta, so a trackpad's many small events and a
+  // mouse's few large ones zoom by the same amount per gesture, and anchored on
+  // the pointer so the point under it stays under it.
   function wheel(e: WheelEvent) {
     e.preventDefault();
     if (!surface) return;
@@ -277,8 +277,8 @@
       if (hit.kind === "component") pickNode(hit.key);
       return;
     }
-    /* Full heat only keeps the timer alive: the springs do not scale with it,
-       and the tick handler stops the timer once everything is at its home. */
+    // Full heat only keeps the timer alive: the springs do not scale with it,
+    // and the tick handler stops the timer once everything is at its home.
     sim?.alphaTarget(0).alpha(1).restart();
   }
 
@@ -309,8 +309,8 @@
     const margin = 32;
     const w = Math.max(1, maxX - minX + margin * 2);
     const h = Math.max(1, maxY - minY + margin * 2);
-    /* A local, not zoom: reading zoom back here would make the effect that
-       calls fit depend on it, and every wheel turn would re-run the layout. */
+    // A local, not zoom: reading zoom back here would make the effect that
+    // calls fit depend on it, and every wheel turn would re-run the layout.
     const scale = Math.min(1.4, Math.max(0.3, Math.min(bw / w, bh / h)));
     const to = {
       zoom: scale,

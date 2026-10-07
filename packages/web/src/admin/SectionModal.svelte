@@ -19,10 +19,11 @@
   const add = $derived(sectionAction(section));
 </script>
 
-<!-- A short list opens over the overview rather than replacing it: the counters
-     behind it are the context for what you came to change, and losing them to
-     read six rows is a bad trade. No confirm: this is a workspace, and every
-     row in it saves itself. -->
+<!--
+@component
+A short list opens over the overview, not in its place: the counters behind it
+are the context for the change. No confirm: every row in it saves itself.
+-->
 <Modal title={label} width="62rem" cancelLabel="close" onCancel={onclose}>
   {#snippet barExtra()}
     {#if add}

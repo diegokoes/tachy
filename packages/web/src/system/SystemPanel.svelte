@@ -52,8 +52,8 @@
       );
       if (system) system = { ...system, settings: res.settings };
       syncDraft();
-      /* The overview behind this dialog reads its own copy; refresh it so the
-         setting shows there the moment the dialog closes. */
+      // The overview behind this dialog reads its own copy; refresh it so the
+      // setting shows there the moment the dialog closes.
       void shared.reload();
 
       if (key === "deployment_profile") await initSession();

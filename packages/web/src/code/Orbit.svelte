@@ -73,10 +73,9 @@
 
   const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
-  /* Paired by geometry once drawn, because Lucide reorders an icon's nodes
-     and may reverse a path between releases: a moon heads the tail whose end
-     it sits on, and the gradient runs from that tail's far end up to it.
-     Each pair is then one group, so nothing can pull a head off its tail. */
+  // Paired by geometry once drawn, because Lucide reorders an icon's nodes and
+  // may reverse a path between releases: a moon heads the tail whose end it
+  // sits on. Each pair is then one group.
   $effect(() => {
     if (tailEls.length !== tails.length) return;
     const at = moons.map((m) => ({ x: Number(m.cx), y: Number(m.cy) }));
@@ -111,8 +110,8 @@
     if (!swarm || !heart || cometEls.length !== tails.length) return;
     if (ends.length !== tails.length || reducedMotion()) return;
 
-    /* Once, up front: an origin given only on the "to" side of a fromTo is
-       resolved after the "from" state has already been drawn about 0 0. */
+    // Once, up front: an origin given only on the "to" side of a fromTo is
+    // resolved after the "from" state has already been drawn about 0 0.
     gsap.set([kick, ring, coreEl, voidEl, swarm, heart, ...cometEls], {
       svgOrigin: ORIGIN,
     });
@@ -153,8 +152,8 @@
     });
     loops = tl;
 
-    /* Already moving when it appears and only ever gathering speed: starting
-       from still read as frozen, and an overshoot as a stall. */
+    // Already moving when it appears and only ever gathering speed: a start
+    // from still reads as frozen, and an overshoot as a stall.
     const arrive = gsap
       .timeline()
       .fromTo(
@@ -205,8 +204,8 @@
     });
     const tl = gsap.timeline();
     tl.to(heartEl, { scale: 1.45, duration: 0.5, ease: "power2.out" }, 0);
-    /* The pull starts gentle and ends violent: the comets hold most of their
-       orbit for the first half, then the spiral tightens and quickens. */
+    // The pull starts gentle and ends violent: the comets hold most of their
+    // orbit for the first half, then the spiral tightens and quickens.
     if (orbiting)
       tl.to(swarmEl, { scale: 0, duration: SPIRAL, ease: "power2.in" }, 0)
         .to(

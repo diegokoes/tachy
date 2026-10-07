@@ -40,7 +40,7 @@
   const j = $derived(census.data);
   const failed = $derived(j.by_status.failed + j.by_status.timed_out);
 
-  /* Live counts come from the roster poll, not the census, which loads once. */
+  // Live counts come from the roster poll, not the census, which loads once.
   const running = $derived(live.data.queues.reduce((n, q) => n + q.running, 0));
   const queued = $derived(live.data.queues.reduce((n, q) => n + q.queued, 0));
   const aliveWorkers = $derived(
@@ -53,8 +53,8 @@
     live.data.queues.filter((q) => q.queued && !q.workers).length,
   );
 
-  /* In the order work flows: what is configured, what is happening now, and
-     how the window went. */
+  // In the order work flows: what is configured, what is happening now, and how
+  // the window went.
   const figures = $derived([
     {
       key: "jobs",
@@ -124,8 +124,8 @@
     },
   ]);
 
-  /* Average wait says whether a pool is big enough; the tone says what the
-     queue is doing now. */
+  // Average wait says whether a pool is big enough; the tone says what the
+  // queue is doing now.
   const queues = $derived(
     j.by_queue.flatMap((w): Bar[] => {
       const now = live.data.queues.find((q) => q.name === w.queue);

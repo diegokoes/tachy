@@ -1,10 +1,10 @@
 import type { ComponentRow } from "@tachy/contract";
 
 /**
- * Components nest arbitrarily deep via `parent_id`, but `/products/:slug/components`
- * returns them flat and slug-ordered - so a sub-component lands next to its
- * parent's siblings and the shape is invisible in a picker. Re-order the flat
- * list depth-first and indent each row by its depth.
+ * Components nest arbitrarily deep via `parent_id`, but
+ * `/products/:slug/components` returns them flat and slug-ordered, so a
+ * sub-component lands next to its parent's siblings. Re-orders the flat list
+ * depth-first and indents each row by its depth.
  */
 export function componentOptions(
   rows: Pick<ComponentRow, "id" | "slug" | "parent_id">[],
@@ -15,8 +15,8 @@ export function componentOptions(
     byParent.set(r.parent_id, [...(byParent.get(r.parent_id) ?? []), r]);
   }
 
-  // A row whose parent is not in this list (filtered, or a stale id) would
-  // otherwise vanish; treat it as a root so nothing is silently dropped.
+  // A row whose parent is not in this list (filtered, or a stale id) is treated
+  // as a root, or it would not be listed at all.
   const ids = new Set(rows.map((r) => r.id));
   const roots = rows.filter(
     (r) => r.parent_id === null || !ids.has(r.parent_id),

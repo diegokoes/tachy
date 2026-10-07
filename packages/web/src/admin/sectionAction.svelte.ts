@@ -2,18 +2,11 @@ import { untrack } from "svelte";
 import type { HeadAction } from "../sections/Section.svelte";
 
 /**
- * The buttons drawn on a section's heading line: its "add", and at most one
- * more verb beside it.
- *
- * It travels as data rather than as a snippet so that `tui` never has to know
- * about the page layout: a CrudTable offers `{ label, run }` and whoever lays
- * out the page decides where that gets drawn.
- *
- * Keyed by section, because every section of a page is mounted at once and a
- * single claim would be won by whichever panel happened to mount last.
- *
- * $state.raw, not $state, for the same reason as the subnav store: plain
- * $state would deep-proxy the object and break the identity check below.
+ * The buttons on a section's heading line: its "add" and at most one more verb.
+ * Data, not a snippet, so `tui` need not know the page layout: a CrudTable
+ * offers `{ label, run }` and the page places it. Keyed by section, since every
+ * section of a page is mounted at once. `$state.raw`, since `$state` would
+ * proxy the object and break the identity check.
  */
 export type SectionAction = HeadAction;
 
@@ -39,9 +32,9 @@ export const sectionActions = (section: string): SectionAction[] =>
     .map((slot) => claims[keyOf(section, slot)])
     .filter((a): a is SectionAction => Boolean(a));
 
-/* Claiming has to read the map to write it, and it is called from inside
-   CrudTable's $effect. Untracked, or that effect would depend on the state it
-   just wrote and re-run itself forever. */
+// Claiming reads the map to write it, and is called from inside CrudTable's
+// `$effect`. Untracked, or that effect would depend on the state it writes and
+// re-run forever.
 function edit(
   fn: (was: Record<string, SectionAction>) => Record<string, SectionAction>,
 ) {
@@ -49,9 +42,9 @@ function edit(
 }
 
 /**
- * Claim one section's action, and return the disposer that gives it back. The
- * identity check is what the `$state.raw` above is for: a panel re-offering the
- * same action must not clobber a claim made after it.
+ * Claims one section's action and returns the disposer that gives it back. The
+ * disposer checks identity: a panel re-offering the same action must not
+ * clobber a claim made after it.
  */
 export function claimSectionAction(
   section: string,

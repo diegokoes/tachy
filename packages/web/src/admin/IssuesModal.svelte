@@ -65,8 +65,8 @@
 
 <style>
   /* Capped so the dialog, centred, never reaches the window's carved top
-     edge: the carve is a mask on the window, and it cuts a dialog opened from
-     inside it just as it cuts the page. A long list scrolls here instead. */
+     edge: the carve is a mask on the window, and it cuts a dialog opened
+     from inside it as it cuts the page. A long list scrolls here instead. */
   .groups {
     list-style: none;
     margin: 0;

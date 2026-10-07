@@ -22,8 +22,8 @@
     listed.find((m) => m.id === prefs?.agent_model.value),
   );
 
-  /* The stored model stays pickable when the runtime no longer offers it, so
-     the menu never claims a value other than the one turns actually use. */
+  // The stored model stays pickable when the runtime no longer offers it, so
+  // the menu never shows a value other than the one turns use.
   const modelOptions = $derived.by(() => {
     const opts: { value: string; label: string; hint?: string }[] = listed.map(
       (m) => ({
@@ -56,8 +56,8 @@
     return opts;
   });
 
-  /* Typed by hand only when the runtime could not be asked: then there is no
-     list to pick from, and a model id is the one thing left to go on. */
+  // Typed by hand only when the runtime could not be asked: then there is no
+  // list to pick from, and a model id is the one thing left to go on.
   const typed = $derived(Boolean(list && !list.models.length));
   let modelDraft = $state("");
   const draftChanged = $derived(

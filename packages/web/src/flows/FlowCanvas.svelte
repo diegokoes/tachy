@@ -47,8 +47,8 @@
   function fit() {
     if (!viewport) return;
     const { clientWidth: w, clientHeight: h } = viewport;
-    /* Fitting a long flow whole would shrink it past reading; it starts at
-       a size that reads and the rest is a pan away. */
+    // Fitting a long flow whole would shrink it past reading; it starts at a
+    // size that reads and the rest is a pan away.
     k = Math.max(
       0.75,
       Math.min(1, (w - 48) / drawn.width, (h - 32) / drawn.height),
