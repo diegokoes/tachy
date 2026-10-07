@@ -97,15 +97,16 @@ export class EmbedQueue {
     };
   }
 
+  private nextStep() {
+    if (this.queries.length) return this.runQueries();
+    if (this.rotation.length) return this.runPassages(this.rotation);
+    if (this.lowRotation.length) return this.runPassages(this.lowRotation);
+    return undefined;
+  }
+
   private pump(): void {
     if (this.running) return;
-    const step = this.queries.length
-      ? this.runQueries()
-      : this.rotation.length
-        ? this.runPassages(this.rotation)
-        : this.lowRotation.length
-          ? this.runPassages(this.lowRotation)
-          : undefined;
+    const step = this.nextStep();
     if (!step) return;
     this.running = true;
     void step.finally(() => {
