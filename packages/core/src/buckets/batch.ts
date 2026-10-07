@@ -72,9 +72,11 @@ const bodySha = (d: BucketUpsert) =>
  * Each chunk carries the page's title and place in the tree, so a passage that
  * never names its subject still matches a query about it.
  */
-export function bucketChunks(d: Pick<BucketUpsert, "title" | "path" | "text">) {
-  const head = [d.title, breadcrumb(d.path)].filter(Boolean).join("\n");
-  const parts = chunkText(d.text);
+export function bucketChunks(
+  doc: Pick<BucketUpsert, "title" | "path" | "text">,
+) {
+  const head = [doc.title, breadcrumb(doc.path)].filter(Boolean).join("\n");
+  const parts = chunkText(doc.text);
   return parts.length ? parts.map((p) => `${head}\n\n${p}`) : [head];
 }
 
@@ -82,21 +84,21 @@ async function upsertDoc(
   tx: Db,
   bucketId: string,
   syncId: string,
-  d: BucketUpsert,
+  doc: BucketUpsert,
 ): Promise<boolean> {
-  const sha = bodySha(d);
+  const sha = bodySha(doc);
   const [prev] = await tx`
     select id, body_sha from bucket_docs
-    where bucket_id = ${bucketId} and external_key = ${d.key}
+    where bucket_id = ${bucketId} and external_key = ${doc.key}
     for update
   `;
   const fields = {
-    title: d.title,
-    url: d.url ?? null,
-    path: d.path,
-    version: d.version == null ? null : String(d.version),
-    modified_at: d.modified_at ?? null,
-    metadata: jsonb(d.metadata),
+    title: doc.title,
+    url: doc.url ?? null,
+    path: doc.path,
+    version: doc.version == null ? null : String(doc.version),
+    modified_at: doc.modified_at ?? null,
+    metadata: jsonb(doc.metadata),
     last_sync_id: syncId,
   };
   if (prev && prev.body_sha === sha) {
@@ -107,7 +109,7 @@ async function upsertDoc(
     return false;
   }
   const [row] = await tx`
-    insert into bucket_docs ${tx({ ...fields, bucket_id: bucketId, external_key: d.key, body: d.text, body_sha: sha })}
+    insert into bucket_docs ${tx({ ...fields, bucket_id: bucketId, external_key: doc.key, body: doc.text, body_sha: sha })}
     on conflict (bucket_id, external_key) do update set
       title = excluded.title, url = excluded.url, path = excluded.path,
       version = excluded.version, modified_at = excluded.modified_at,
@@ -117,7 +119,7 @@ async function upsertDoc(
     returning id
   `;
   await tx`delete from bucket_doc_chunks where doc_id = ${row.id}`;
-  const chunks = bucketChunks(d);
+  const chunks = bucketChunks(doc);
   await tx`
     insert into bucket_doc_chunks (doc_id, ordinal, chunk_text)
     select ${row.id}, u.ordinal, u.chunk_text
@@ -139,8 +141,8 @@ export async function ingestBatch(
   return sql.begin(async (tx) => {
     let upserted = 0;
     let unchanged = 0;
-    for (const d of batch.upserts) {
-      if (await upsertDoc(tx, bucket.id, batch.sync_id, d)) upserted++;
+    for (const doc of batch.upserts) {
+      if (await upsertDoc(tx, bucket.id, batch.sync_id, doc)) upserted++;
       else unchanged++;
     }
 

@@ -17,12 +17,12 @@ import { loadSubject, type FlowSubject } from "./subject";
 /** Beyond this a step's stored input or output is cut: a whole thread can be long. */
 const TRACE_CHARS = 20_000;
 
-function clip(v: unknown): unknown {
-  if (v === undefined) return undefined;
-  const s = JSON.stringify(v);
-  return s.length <= TRACE_CHARS
-    ? v
-    : { clipped: true, preview: s.slice(0, TRACE_CHARS) };
+function clip(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  const json = JSON.stringify(value);
+  return json.length <= TRACE_CHARS
+    ? value
+    : { clipped: true, preview: json.slice(0, TRACE_CHARS) };
 }
 
 export async function ownerScope(userId: string | null): Promise<ScopeContext> {
@@ -39,20 +39,20 @@ const defaults = new WeakMap<FlowAction, Record<string, unknown>>();
  * a template itself, as a search's query defaults to `{{item.title}}`, and
  * Zod only applies defaults after, when there is nothing left to fill.
  */
-function defaultsOf(a: FlowAction): Record<string, unknown> {
-  let d = defaults.get(a);
-  if (!d) {
-    const schema = z.toJSONSchema(a.params, { io: "input" }) as {
+function defaultsOf(action: FlowAction): Record<string, unknown> {
+  let known = defaults.get(action);
+  if (!known) {
+    const schema = z.toJSONSchema(action.params, { io: "input" }) as {
       properties?: Record<string, { default?: unknown }>;
     };
-    d = Object.fromEntries(
+    known = Object.fromEntries(
       Object.entries(schema.properties ?? {})
         .filter(([, p]) => p.default !== undefined)
         .map(([k, p]) => [k, p.default]),
     );
-    defaults.set(a, d);
+    defaults.set(action, known);
   }
-  return d;
+  return known;
 }
 
 export interface RunFlowOptions {
@@ -73,13 +73,13 @@ export interface RunFlowOptions {
  * be watched while it goes. A failed step fails the run and throws, so the job
  * fails with it.
  */
-export async function runFlow(o: RunFlowOptions): Promise<{
+export async function runFlow(opts: RunFlowOptions): Promise<{
   flowRunId: string;
   status: FlowRunStatus;
 }> {
   const [row] = await sql`
     insert into flow_runs (flow_id, job_run_id, trigger_id, work_item_id, dry_run)
-    values (${o.flow.id}, ${o.jobRunId}, ${o.triggerId}, ${o.workItemId}, ${o.dryRun})
+    values (${opts.flow.id}, ${opts.jobRunId}, ${opts.triggerId}, ${opts.workItemId}, ${opts.dryRun})
     returning id
   `;
   const flowRunId = row.id as string;
@@ -99,66 +99,71 @@ export async function runFlow(o: RunFlowOptions): Promise<{
   } = {
     item: null,
     steps: {},
-    flow: { id: o.flow.id, name: o.flow.name },
-    trigger: o.triggerId,
+    flow: { id: opts.flow.id, name: opts.flow.name },
+    trigger: opts.triggerId,
   };
 
   const ctx: FlowActionContext = {
-    flowId: o.flow.id,
+    flowId: opts.flow.id,
     flowRunId,
-    scope: await ownerScope(o.flow.run_as_user_id),
-    userId: o.flow.run_as_user_id,
+    scope: await ownerScope(opts.flow.run_as_user_id),
+    userId: opts.flow.run_as_user_id,
     item: null,
-    signal: o.signal,
-    log: o.log,
-    enqueue: o.enqueue,
+    signal: opts.signal,
+    log: opts.log,
+    enqueue: opts.enqueue,
   };
 
-  async function step(s: FlowStep) {
-    o.signal.throwIfAborted();
+  async function runStep(step: FlowStep) {
+    opts.signal.throwIfAborted();
     const started = Date.now();
-    const done = async (t: Omit<FlowStepTrace, "step_id" | "kind" | "ms">) => {
+    const done = async (
+      entry: Omit<FlowStepTrace, "step_id" | "kind" | "ms">,
+    ) => {
       trace.push({
-        step_id: s.id,
-        kind: s.kind,
+        step_id: step.id,
+        kind: step.kind,
         ms: Date.now() - started,
-        ...t,
+        ...entry,
       });
       await save("running");
     };
 
-    if (s.kind === "filter") {
-      const held = evaluateCondition(s.when, context);
+    if (step.kind === "filter") {
+      const held = evaluateCondition(step.when, context);
       await done({ status: "ok", held });
       if (!held) throw new Stopped();
       return;
     }
-    if (s.kind === "if") {
-      const held = evaluateCondition(s.when, context);
+    if (step.kind === "if") {
+      const held = evaluateCondition(step.when, context);
       await done({ status: "ok", held });
-      for (const next of held ? s.then : s.else) await step(next);
+      for (const next of held ? step.then : step.else) await runStep(next);
       return;
     }
 
-    const action = flowAction(s.action);
-    const input = interpolate({ ...defaultsOf(action), ...s.params }, context);
+    const action = flowAction(step.action);
+    const input = interpolate(
+      { ...defaultsOf(action), ...step.params },
+      context,
+    );
     const parsed = action.params.safeParse(input);
     if (!parsed.success) {
       const error = parsed.error.issues
         .map((i) => `${i.path.join(".") || "(params)"} ${i.message}`)
         .join("; ");
       await done({ status: "failed", input: clip(input), error });
-      throw new Error(`step '${s.id}': ${error}`);
+      throw new Error(`step '${step.id}': ${error}`);
     }
-    if (o.dryRun && action.writes) {
+    if (opts.dryRun && action.writes) {
       const output = { would: parsed.data };
-      context.steps[s.id] = output;
+      context.steps[step.id] = output;
       await done({ status: "dry", input: clip(parsed.data), output });
       return;
     }
     try {
       const output = await action.run(ctx, parsed.data);
-      context.steps[s.id] = output;
+      context.steps[step.id] = output;
       await done({
         status: "ok",
         input: clip(parsed.data),
@@ -167,17 +172,17 @@ export async function runFlow(o: RunFlowOptions): Promise<{
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);
       await done({ status: "failed", input: clip(parsed.data), error });
-      throw new Error(`step '${s.id}': ${error}`);
+      throw new Error(`step '${step.id}': ${error}`);
     }
   }
 
   try {
-    if (o.workItemId) {
-      item = await loadSubject(o.workItemId);
+    if (opts.workItemId) {
+      item = await loadSubject(opts.workItemId);
       context.item = item;
       ctx.item = item;
     }
-    for (const s of o.flow.graph.steps) await step(s);
+    for (const step of opts.flow.graph.steps) await runStep(step);
     await save("succeeded");
     return { flowRunId, status: "succeeded" };
   } catch (e) {

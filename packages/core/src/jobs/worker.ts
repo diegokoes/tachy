@@ -112,13 +112,13 @@ export async function startJobWorker(
     const heartbeat = async () => {
       beatAt = Date.now();
       try {
-        const r = await heartbeatRun(run.id, workerId, leaseMs, {
+        const beat = await heartbeatRun(run.id, workerId, leaseMs, {
           progress,
           note,
           logTail: tail.join("\n"),
         });
-        if (r.cancelRequested) stop("cancelled");
-        if (r.lost) stop("cancelled");
+        if (beat.cancelRequested) stop("cancelled");
+        if (beat.lost) stop("cancelled");
       } catch (err) {
         log("warn", "job_heartbeat_failed", {
           run: run.id,

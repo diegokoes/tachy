@@ -154,7 +154,7 @@ export interface WorkItemComposer {
   ): Promise<{ id: number | string; url: string }>;
 }
 
-export type SourceFactory = (cfg: {
+export type SourceFactory = (connection: {
   baseUrl: string;
   slug: string;
   config: Record<string, unknown>;

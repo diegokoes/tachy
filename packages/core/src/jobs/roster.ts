@@ -91,20 +91,20 @@ export async function jobLive(): Promise<JobLive> {
     group by 1, 2
   `;
   const alive = workers.filter((w) => w.alive && !w.draining);
-  const queues = JOB_QUEUES.map((q) => {
-    const of = (status: string) =>
-      counts.find((c) => c.lane === q.name && c.status === status);
+  const queues = JOB_QUEUES.map((queue) => {
+    const countOf = (status: string) =>
+      counts.find((c) => c.lane === queue.name && c.status === status);
     const serving = alive.filter((w) =>
-      (w.queues as string[]).includes(q.name),
+      (w.queues as string[]).includes(queue.name),
     );
     return {
-      name: q.name,
-      class: q.class as JobResourceClass,
-      cap: q.cap,
-      queued: of("queued")?.n ?? 0,
-      running: of("running")?.n ?? 0,
-      oldest_queued_at: of("queued")?.oldest
-        ? new Date(of("queued")!.oldest).toISOString()
+      name: queue.name,
+      class: queue.class as JobResourceClass,
+      cap: queue.cap,
+      queued: countOf("queued")?.n ?? 0,
+      running: countOf("running")?.n ?? 0,
+      oldest_queued_at: countOf("queued")?.oldest
+        ? new Date(countOf("queued")!.oldest).toISOString()
         : null,
       workers: serving.length,
       slots: serving.reduce(
@@ -112,7 +112,7 @@ export async function jobLive(): Promise<JobLive> {
           n +
           Math.min(
             w.concurrency as number,
-            (w.per_class as Record<string, number>)[q.class] ?? Infinity,
+            (w.per_class as Record<string, number>)[queue.class] ?? Infinity,
           ),
         0,
       ),

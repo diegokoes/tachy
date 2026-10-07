@@ -50,8 +50,8 @@ export async function syncSource(
       groupKey: opts.group,
       cursor,
     });
-    for (const it of items) {
-      const stored = await ingestWorkItem(conn.id, it);
+    for (const item of items) {
+      const stored = await ingestWorkItem(conn.id, item);
       if (fire && stored.changed)
         await fire(stored.id, stored.inserted ? "created" : "updated");
       total++;

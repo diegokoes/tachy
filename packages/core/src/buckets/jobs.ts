@@ -14,9 +14,9 @@ export function defineBucketJobs() {
     dedupeKey: (p) => p.bucket_id,
     outcome: (o) => `${count(Number(o.chunks ?? 0), "chunk")} embedded`,
     timeout: "2h",
-    run: async (ctx, p) => {
+    run: async (ctx, params) => {
       const chunks = await embedBucketChunks({
-        bucketId: p.bucket_id,
+        bucketId: params.bucket_id,
         signal: ctx.signal,
       });
       return { chunks };

@@ -133,10 +133,10 @@ export async function subjectFields(
   const keys = new Set<string>();
   for (const { raw } of rows) {
     if (!raw || typeof raw !== "object") continue;
-    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-      if (v && typeof v === "object" && !Array.isArray(v))
-        for (const sub of Object.keys(v)) keys.add(`${k}.${sub}`);
-      else keys.add(k);
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+      if (value && typeof value === "object" && !Array.isArray(value))
+        for (const sub of Object.keys(value)) keys.add(`${key}.${sub}`);
+      else keys.add(key);
     }
   }
   return [
@@ -155,9 +155,9 @@ export async function subjectValues(
   field: string,
 ): Promise<FlowOption[]> {
   const counts = new Map<string, number>();
-  for (const s of await recentSubjects(connection, { limit: SAMPLE })) {
-    const v = readPath({ item: s }, field);
-    for (const x of Array.isArray(v) ? v : [v]) {
+  for (const subject of await recentSubjects(connection, { limit: SAMPLE })) {
+    const value = readPath({ item: subject }, field);
+    for (const x of Array.isArray(value) ? value : [value]) {
       if (x == null || x === "" || typeof x === "object") continue;
       const key = String(x);
       counts.set(key, (counts.get(key) ?? 0) + 1);

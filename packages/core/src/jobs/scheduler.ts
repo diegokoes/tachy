@@ -25,10 +25,12 @@ export async function scheduleDueRuns(now = new Date()): Promise<number> {
       from job_definitions
       where enabled and schedule is not null
     `;
-    for (const d of due) {
-      if (!hasJobKind(d.kind)) continue;
-      const cron = new Cron(d.schedule, { timezone: d.timezone });
-      let slot = cron.nextRun(new Date(d.anchor));
+    for (const definition of due) {
+      if (!hasJobKind(definition.kind)) continue;
+      const cron = new Cron(definition.schedule, {
+        timezone: definition.timezone,
+      });
+      let slot = cron.nextRun(new Date(definition.anchor));
       if (!slot || slot > now) continue;
       for (let i = 0; i < 100_000; i++) {
         const next = cron.nextRun(slot);
@@ -36,22 +38,25 @@ export async function scheduleDueRuns(now = new Date()): Promise<number> {
         slot = next;
       }
       const late = now.getTime() - slot.getTime() > ON_TIME_MS;
-      if (!late || getJobKind(d.kind).missed === "run-once") {
+      if (!late || getJobKind(definition.kind).missed === "run-once") {
         const [def] =
-          await tx`select params from job_definitions where id = ${d.id}`;
+          await tx`select params from job_definitions where id = ${definition.id}`;
         const id = await enqueueRun({
-          kind: d.kind,
+          kind: definition.kind,
           params: def.params,
           trigger: "schedule",
-          definitionId: d.id,
+          definitionId: definition.id,
           scheduledFor: slot,
           db: tx,
         });
         if (id) inserted++;
         if (late)
-          log("info", "job_missed_run_once", { definition: d.id, slot });
+          log("info", "job_missed_run_once", {
+            definition: definition.id,
+            slot,
+          });
       }
-      await tx`update job_definitions set last_scheduled_for = ${slot} where id = ${d.id}`;
+      await tx`update job_definitions set last_scheduled_for = ${slot} where id = ${definition.id}`;
     }
     return inserted;
   }) as Promise<number>;

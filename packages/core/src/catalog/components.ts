@@ -39,14 +39,14 @@ export interface AddComponentInput {
   aliases?: string[];
 }
 
-export async function addComponent(i: AddComponentInput) {
+export async function addComponent(input: AddComponentInput) {
   let parentId: string | null = null;
-  if (i.parentSlug) {
+  if (input.parentSlug) {
     const [parent] =
-      await sql`select id from components where product_id = ${i.productId} and slug = ${i.parentSlug}`;
+      await sql`select id from components where product_id = ${input.productId} and slug = ${input.parentSlug}`;
     if (!parent)
       throw badInput(
-        `Unknown parent component '${i.parentSlug}' for this product`,
+        `Unknown parent component '${input.parentSlug}' for this product`,
       );
     parentId = parent.id;
   }
@@ -55,17 +55,17 @@ export async function addComponent(i: AddComponentInput) {
   // call, so two of them are all it takes.
   if (parentId) {
     const [existing] = await sql`
-      select id from components where product_id = ${i.productId} and slug = ${i.slug}
+      select id from components where product_id = ${input.productId} and slug = ${input.slug}
     `;
     if (existing && (await wouldCycle("components", existing.id, parentId)))
       throw badInput(
-        `'${i.parentSlug}' sits under '${i.slug}'; that would make a cycle`,
+        `'${input.parentSlug}' sits under '${input.slug}'; that would make a cycle`,
       );
   }
 
   const [row] = await sql`
     insert into components (product_id, parent_id, slug, name, description, aliases)
-    values (${i.productId}, ${parentId}, ${i.slug}, ${i.name}, ${i.description ?? null}, ${i.aliases ?? []})
+    values (${input.productId}, ${parentId}, ${input.slug}, ${input.name}, ${input.description ?? null}, ${input.aliases ?? []})
     on conflict (product_id, slug) do update set
       name = excluded.name,
       parent_id = excluded.parent_id,

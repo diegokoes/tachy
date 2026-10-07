@@ -32,11 +32,11 @@ export async function listCustomers() {
   >`select id, name, slug, aliases, email_domains, notes from customers order by name`;
 }
 
-export async function addCustomer(i: CustomerInput) {
+export async function addCustomer(input: CustomerInput) {
   const [row] = await sql`
     insert into customers (name, slug, aliases, email_domains, notes)
-    values (${i.name}, ${i.slug}, ${i.aliases ?? []},
-            ${normalizeDomains(i.emailDomains)}, ${i.notes ?? null})
+    values (${input.name}, ${input.slug}, ${input.aliases ?? []},
+            ${normalizeDomains(input.emailDomains)}, ${input.notes ?? null})
     on conflict (slug) do update set
       name = excluded.name,
       aliases = excluded.aliases,
@@ -237,24 +237,27 @@ export interface CustomerFactInput {
  * replaces it instead of leaving two answers to the same question - while the
  * same kind stated for a particular line coexists with the customer-wide one.
  */
-export async function setCustomerFact(i: CustomerFactInput) {
-  const customerId = await getCustomerIdBySlug(i.customerSlug);
-  if (!i.kind.trim()) throw badInput("kind is required");
-  if (!i.value.trim()) throw badInput("value is required");
+export async function setCustomerFact(input: CustomerFactInput) {
+  const customerId = await getCustomerIdBySlug(input.customerSlug);
+  if (!input.kind.trim()) throw badInput("kind is required");
+  if (!input.value.trim()) throw badInput("value is required");
   let componentId: string | null = null;
-  if (i.componentSlug) {
-    if (!i.productId)
+  if (input.componentSlug) {
+    if (!input.productId)
       throw badInput(
         "a component needs its product: pass product_slug with component",
       );
-    componentId = (await resolveComponentStrict(i.productId, i.componentSlug))
-      .id;
+    componentId = (
+      await resolveComponentStrict(input.productId, input.componentSlug)
+    ).id;
   }
-  const unitId = i.unit ? (await resolveUnit(customerId, i.unit)).id : null;
+  const unitId = input.unit
+    ? (await resolveUnit(customerId, input.unit)).id
+    : null;
   const [row] = await sql`
     insert into customer_facts (customer_id, unit_id, kind, label, value, notes, source, component_id)
-    values (${customerId}, ${unitId}, ${i.kind.trim()}, ${i.label?.trim() ?? ""}, ${i.value.trim()},
-            ${i.notes ?? null}, ${i.source ?? null}, ${componentId})
+    values (${customerId}, ${unitId}, ${input.kind.trim()}, ${input.label?.trim() ?? ""}, ${input.value.trim()},
+            ${input.notes ?? null}, ${input.source ?? null}, ${componentId})
     on conflict (customer_id, unit_id, kind, label) do update set
       value        = excluded.value,
       notes        = coalesce(excluded.notes, customer_facts.notes),

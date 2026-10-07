@@ -17,8 +17,8 @@ export function defineSourceJobs() {
     outcome: (o) => `${count(Number(o.total ?? 0), "item")} pulled`,
     timeout: "1h",
     maxAttempts: 3,
-    run: async (ctx, p) => {
-      const { total, since } = await syncSource(p.connection, {
+    run: async (ctx, params) => {
+      const { total, since } = await syncSource(params.connection, {
         signal: ctx.signal,
         onPage: (n) => ctx.log(`${n} item(s) so far`),
       });
