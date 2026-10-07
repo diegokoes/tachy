@@ -132,16 +132,16 @@ async function chunkVectors(body: string): Promise<ChunkVectors> {
 async function insertChunks(
   db: typeof sql | TransactionSql,
   docId: string,
-  v: ChunkVectors,
+  vectors: ChunkVectors,
 ): Promise<number> {
-  if (!v.chunks.length) return 0;
+  if (!vectors.chunks.length) return 0;
   await db`
     insert into reference_doc_chunks (doc_id, ordinal, chunk_text, embedding, embedding_model)
     select ${docId}, u.ordinal, u.chunk_text, u.embedding::vector, ${EMBEDDING_MODEL}
-    from unnest(${v.ordinals}::int[], ${v.chunks}::text[], ${v.literals}::text[])
+    from unnest(${vectors.ordinals}::int[], ${vectors.chunks}::text[], ${vectors.literals}::text[])
       as u(ordinal, chunk_text, embedding)
   `;
-  return v.chunks.length;
+  return vectors.chunks.length;
 }
 
 /**
@@ -166,8 +166,8 @@ async function currentImportedDocId(
 const DOC_NO_PRODUCT =
   "component requires a product (pass product_slug); a doc with no product cannot name one";
 
-export async function saveReferenceDoc(i: ReferenceDocInput) {
-  const structured = parseStructured(i.structured);
+export async function saveReferenceDoc(input: ReferenceDocInput) {
+  const structured = parseStructured(input.structured);
   let predecessor:
     | {
         id: string;
@@ -177,9 +177,9 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
       }
     | undefined;
   const supersedes =
-    i.supersedes ??
-    (i.sourceProjectId && i.externalKey
-      ? await currentImportedDocId(i.sourceProjectId, i.externalKey)
+    input.supersedes ??
+    (input.sourceProjectId && input.externalKey
+      ? await currentImportedDocId(input.sourceProjectId, input.externalKey)
       : undefined);
   if (supersedes) {
     const [row] = await sql`
@@ -188,22 +188,22 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
     if (!row) throw notFound(`Reference doc '${supersedes}' not found`);
     predecessor = row as typeof predecessor;
   }
-  const productId = i.productId ?? predecessor?.product_id ?? null;
+  const productId = input.productId ?? predecessor?.product_id ?? null;
   const { componentId, productArea } = await resolveFilingComponent(
     productId,
-    i.component,
+    input.component,
     DOC_NO_PRODUCT,
   );
   const { customerId, customerUnitId } = await statedCustomer(
-    i.customerSlug,
-    i.unit,
+    input.customerSlug,
+    input.unit,
   );
-  const kind = i.kind ?? "reference";
+  const kind = input.kind ?? "reference";
   if (kind === "wiki") {
-    if (!i.slug) throw badInput("a wiki article needs a slug");
-    assertArticleSlug(i.slug);
+    if (!input.slug) throw badInput("a wiki article needs a slug");
+    assertArticleSlug(input.slug);
   }
-  const vectors = await chunkVectors(i.body);
+  const vectors = await chunkVectors(input.body);
   const { doc, chunks } = await sql.begin(async (tx) => {
     const [row] = await tx<RevisedRow[]>`
       insert into reference_docs
@@ -212,20 +212,20 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
          status, structured, doc_version, kind, slug)
       values
         (${productId},
-         ${i.teamId ?? predecessor?.team_id ?? null},
-         ${i.createdById ?? null}, ${i.source ?? null},
-         ${i.sourceProjectId ?? null}, ${i.externalKey ?? null},
+         ${input.teamId ?? predecessor?.team_id ?? null},
+         ${input.createdById ?? null}, ${input.source ?? null},
+         ${input.sourceProjectId ?? null}, ${input.externalKey ?? null},
          ${componentId}, ${productArea}, ${customerId}, ${customerUnitId},
-         ${i.title}, ${i.body}, ${i.tags ?? predecessor?.tags ?? []},
-         ${i.status ?? "approved"}, ${jsonb(structured)},
-         ${i.docVersion ?? null}, ${kind}, ${kind === "wiki" ? (i.slug ?? null) : null})
+         ${input.title}, ${input.body}, ${input.tags ?? predecessor?.tags ?? []},
+         ${input.status ?? "approved"}, ${jsonb(structured)},
+         ${input.docVersion ?? null}, ${kind}, ${kind === "wiki" ? (input.slug ?? null) : null})
       returning id, version, ${REVISION_COLUMNS}
     `;
     await recordRevision(
       tx,
       { docId: row.id },
       row.version,
-      i.actor ?? { ...UNKNOWN_ACTOR, userId: i.createdById ?? null },
+      input.actor ?? { ...UNKNOWN_ACTOR, userId: input.createdById ?? null },
       snapshotOf(row),
       [],
     );
@@ -235,12 +235,12 @@ export async function saveReferenceDoc(i: ReferenceDocInput) {
         set status = 'archived', superseded_by = ${row.id}
         where id = ${predecessor.id}
       `;
-    await syncLinks(tx, { docId: row.id }, i.body, productId);
+    await syncLinks(tx, { docId: row.id }, input.body, productId);
     // Links written before this article existed were stored unresolved; now
     // that the slug is real, they stop being broken without another edit.
-    if (kind === "wiki" && i.slug) {
-      await releaseSlug(tx, productId, i.slug);
-      await relinkBySlug(tx, i.slug, row.id, productId);
+    if (kind === "wiki" && input.slug) {
+      await releaseSlug(tx, productId, input.slug);
+      await relinkBySlug(tx, input.slug, row.id, productId);
     }
     const n = await insertChunks(tx, row.id, vectors);
     return { doc: row, chunks: n };
@@ -426,19 +426,19 @@ async function carryLinks(
   to: string,
   actor: ActorRef,
 ): Promise<void> {
-  for (const d of await linkersBySlug(docId, from)) {
+  for (const linker of await linkersBySlug(docId, from)) {
     try {
       await updateReferenceDoc(
-        d.id,
+        linker.id,
         {
-          body: renameWikilinks(d.body, from, to),
-          expectedVersion: d.version,
+          body: renameWikilinks(linker.body, from, to),
+          expectedVersion: linker.version,
         },
         actor,
       );
     } catch (err) {
       log("warn", "wiki_rename_relink_failed", {
-        docId: d.id,
+        docId: linker.id,
         from,
         to,
         error: String(err),
@@ -585,18 +585,18 @@ export async function revertReferenceDoc(
   actor: ActorRef = UNKNOWN_ACTOR,
 ) {
   const { snapshot } = await getRevision({ docId: id }, version);
-  const s = snapshot as Record<string, any>;
+  const past = snapshot as Record<string, any>;
   return updateReferenceDoc(
     id,
     {
-      title: s.title,
-      body: s.body,
-      tags: s.tags ?? [],
-      status: s.status,
-      source: s.source,
-      structured: s.structured,
-      docVersion: s.doc_version,
-      ...(await filingSlugs(s)),
+      title: past.title,
+      body: past.body,
+      tags: past.tags ?? [],
+      status: past.status,
+      source: past.source,
+      structured: past.structured,
+      docVersion: past.doc_version,
+      ...(await filingSlugs(past)),
     },
     actor,
   );

@@ -261,15 +261,15 @@ async function contentFor(
   opts: ReadCodeOptions,
 ): Promise<{ content: string; ref: string; commit: string | null }> {
   if (opts.version) {
-    const v = await resolveVersion(repoSlug, opts.version);
-    if (!v.tag)
+    const resolved = await resolveVersion(repoSlug, opts.version);
+    if (!resolved.tag)
       throw notFound(
-        `Repo '${repoSlug}' has no release tag for ${v.version}; read the '${v.line.ref}' line instead`,
+        `Repo '${repoSlug}' has no release tag for ${resolved.version}; read the '${resolved.line.ref}' line instead`,
       );
     return {
-      content: await readFileAt(repoSlug, v.commit!, path, opts.token),
-      ref: v.tag,
-      commit: v.commit,
+      content: await readFileAt(repoSlug, resolved.commit!, path, opts.token),
+      ref: resolved.tag,
+      commit: resolved.commit,
     };
   }
 
@@ -328,7 +328,7 @@ export async function readCodeFile(
   );
   const end = Math.min(requestedEnd, start + MAX_LINES - 1);
 
-  let out: string[] = [];
+  let numbered: string[] = [];
   let bytes = 0;
   let byteTruncated = false;
   for (let n = start; n <= end; n++) {
@@ -338,7 +338,7 @@ export async function readCodeFile(
       byteTruncated = true;
       break;
     }
-    out.push(line);
+    numbered.push(line);
   }
   return {
     repo: repoSlug,
@@ -347,8 +347,8 @@ export async function readCodeFile(
     commit,
     total_lines: lines.length,
     start_line: start,
-    end_line: start + out.length - 1,
+    end_line: start + numbered.length - 1,
     truncated: byteTruncated || end < requestedEnd || end < lines.length,
-    content: out.join("\n"),
+    content: numbered.join("\n"),
   };
 }

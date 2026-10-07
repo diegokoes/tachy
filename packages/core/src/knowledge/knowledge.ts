@@ -141,7 +141,7 @@ async function resolvePatternDescription(
  * otherwise has no semantic representation.
  */
 function buildEmbedText(
-  i: {
+  entry: {
     issueSummary?: string;
     symptoms?: string[];
     rootCause?: string;
@@ -153,14 +153,14 @@ function buildEmbedText(
   productArea?: string | null,
 ): string {
   return [
-    i.issueSummary,
-    (i.symptoms ?? []).join(" "),
-    i.rootCause,
-    i.resolution,
+    entry.issueSummary,
+    (entry.symptoms ?? []).join(" "),
+    entry.rootCause,
+    entry.resolution,
     patternDescription,
     productArea,
-    (i.signals ?? []).join(" "),
-    (i.tags ?? []).join(" "),
+    (entry.signals ?? []).join(" "),
+    (entry.tags ?? []).join(" "),
   ]
     .filter(Boolean)
     .join(" ")
@@ -174,44 +174,44 @@ function buildEmbedText(
  * cite it as theirs. The unit is inherited once a stated customer matches the
  * ticket's.
  */
-export async function saveKnowledgeEntry(i: KnowledgeInput) {
-  let productId = i.productId ?? null;
-  let teamId = i.teamId ?? null;
-  let affectedVersion = i.affectedVersion ?? null;
-  const stated = await statedCustomer(i.customerSlug, i.unit);
+export async function saveKnowledgeEntry(input: KnowledgeInput) {
+  let productId = input.productId ?? null;
+  let teamId = input.teamId ?? null;
+  let affectedVersion = input.affectedVersion ?? null;
+  const stated = await statedCustomer(input.customerSlug, input.unit);
   const customerId = stated.customerId;
   let customerUnitId = stated.customerUnitId;
   if (
-    i.workItemId &&
+    input.workItemId &&
     (productId == null ||
       teamId == null ||
       affectedVersion == null ||
       (customerId != null && customerUnitId == null))
   ) {
-    const [wi] =
+    const [workItem] =
       await sql`select product_id, team_id, customer_id, customer_unit_id, observed_version
-                from work_items where id = ${i.workItemId}`;
-    if (wi) {
-      productId ??= wi.product_id ?? null;
-      teamId ??= wi.team_id ?? null;
-      affectedVersion ??= wi.observed_version ?? null;
-      if (customerId != null && customerId === wi.customer_id)
-        customerUnitId ??= wi.customer_unit_id ?? null;
+                from work_items where id = ${input.workItemId}`;
+    if (workItem) {
+      productId ??= workItem.product_id ?? null;
+      teamId ??= workItem.team_id ?? null;
+      affectedVersion ??= workItem.observed_version ?? null;
+      if (customerId != null && customerId === workItem.customer_id)
+        customerUnitId ??= workItem.customer_unit_id ?? null;
     }
   }
 
   const { componentId, productArea } = await resolveFilingComponent(
     productId,
-    i.component,
+    input.component,
     "component requires a product (pass product_slug or a work item mapped to one)",
   );
 
-  const confidence = i.confidence ? i.confidence.toLowerCase() : null;
-  const structured = parseStructured(i.structured);
+  const confidence = input.confidence ? input.confidence.toLowerCase() : null;
+  const structured = parseStructured(input.structured);
   const patternDescription = await resolvePatternDescription(
-    i.resolutionPattern,
+    input.resolutionPattern,
   );
-  const text = buildEmbedText(i, patternDescription, productArea);
+  const text = buildEmbedText(input, patternDescription, productArea);
   const embedding = text ? toVectorLiteral(await embedPassage(text)) : null;
 
   return sql.begin(async (tx) => {
@@ -223,12 +223,12 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
          cloud, resolution_clarity, hidden_fix, affected_version, fixed_version,
          structured, embedding, embedding_model)
       values
-        (${i.workItemId ?? null}, ${productId}, ${teamId}, ${customerId ?? null},
-         ${customerUnitId}, ${i.createdById ?? null},
-         ${i.status ?? "approved"}, ${i.issueSummary ?? null}, ${i.symptoms ?? []}, ${i.signals ?? []}, ${i.tags ?? []},
-         ${i.rootCause ?? null}, ${i.resolution ?? null}, ${i.resolutionPattern ?? null}, ${componentId}, ${productArea},
-         ${confidence}, ${i.cloud ?? null}, ${i.resolutionClarity ?? null}, ${i.hiddenFix ?? null},
-         ${affectedVersion}, ${i.fixedVersion ?? null},
+        (${input.workItemId ?? null}, ${productId}, ${teamId}, ${customerId ?? null},
+         ${customerUnitId}, ${input.createdById ?? null},
+         ${input.status ?? "approved"}, ${input.issueSummary ?? null}, ${input.symptoms ?? []}, ${input.signals ?? []}, ${input.tags ?? []},
+         ${input.rootCause ?? null}, ${input.resolution ?? null}, ${input.resolutionPattern ?? null}, ${componentId}, ${productArea},
+         ${confidence}, ${input.cloud ?? null}, ${input.resolutionClarity ?? null}, ${input.hiddenFix ?? null},
+         ${affectedVersion}, ${input.fixedVersion ?? null},
          ${jsonb(structured)}, ${embedding}::vector,
          ${embedding ? EMBEDDING_MODEL : null})
       returning id, version, ${REVISION_COLUMNS}
@@ -236,7 +236,7 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
     await syncLinks(
       tx,
       { entryId: row.id },
-      linkText(i.rootCause, i.resolution),
+      linkText(input.rootCause, input.resolution),
       productId,
     );
     // Version 1, so history is complete for everything created from here on.
@@ -244,7 +244,7 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
       tx,
       { entryId: row.id },
       row.version,
-      i.actor ?? { ...UNKNOWN_ACTOR, userId: i.createdById ?? null },
+      input.actor ?? { ...UNKNOWN_ACTOR, userId: input.createdById ?? null },
       snapshotOf(row),
       [],
     );
@@ -290,19 +290,19 @@ export type FacetKey =
  * narrowed by the value already chosen for it: picking "high" would otherwise
  * leave "high" as the only option.
  */
-function facetSql(o: KnowledgeFilters, except?: FacetKey) {
+function facetSql(filters: KnowledgeFilters, except?: FacetKey) {
   const on = (k: FacetKey) => k !== except;
   return sql`
-    ${o.tags && o.tags.length && on("tags") ? sql`and tags && ${o.tags}` : sql``}
-    ${o.componentId && on("component") ? sql`and (component_id = ${o.componentId} or tags && ${o.componentTags ?? []})` : sql``}
-    ${o.customerId && on("customer") ? sql`and customer_id = ${o.customerId}` : sql``}
-    ${o.cloud && on("cloud") ? sql`and cloud = ${o.cloud}` : sql``}
-    ${o.confidence && on("confidence") ? sql`and confidence = ${o.confidence}` : sql``}
-    ${o.resolutionClarity && on("resolution_clarity") ? sql`and resolution_clarity = ${o.resolutionClarity}` : sql``}
-    ${o.resolutionPattern && on("resolution_pattern") ? sql`and resolution_pattern = ${o.resolutionPattern}` : sql``}
-    ${o.hiddenFix != null && on("hidden_fix") ? sql`and coalesce(hidden_fix, false) = ${o.hiddenFix}` : sql``}
-    ${o.affectedVersion && on("affected_version") ? sql`and affected_version = ${o.affectedVersion}` : sql``}
-    ${o.fixedVersion && on("fixed_version") ? sql`and fixed_version = ${o.fixedVersion}` : sql``}
+    ${filters.tags && filters.tags.length && on("tags") ? sql`and tags && ${filters.tags}` : sql``}
+    ${filters.componentId && on("component") ? sql`and (component_id = ${filters.componentId} or tags && ${filters.componentTags ?? []})` : sql``}
+    ${filters.customerId && on("customer") ? sql`and customer_id = ${filters.customerId}` : sql``}
+    ${filters.cloud && on("cloud") ? sql`and cloud = ${filters.cloud}` : sql``}
+    ${filters.confidence && on("confidence") ? sql`and confidence = ${filters.confidence}` : sql``}
+    ${filters.resolutionClarity && on("resolution_clarity") ? sql`and resolution_clarity = ${filters.resolutionClarity}` : sql``}
+    ${filters.resolutionPattern && on("resolution_pattern") ? sql`and resolution_pattern = ${filters.resolutionPattern}` : sql``}
+    ${filters.hiddenFix != null && on("hidden_fix") ? sql`and coalesce(hidden_fix, false) = ${filters.hiddenFix}` : sql``}
+    ${filters.affectedVersion && on("affected_version") ? sql`and affected_version = ${filters.affectedVersion}` : sql``}
+    ${filters.fixedVersion && on("fixed_version") ? sql`and fixed_version = ${filters.fixedVersion}` : sql``}
   `;
 }
 
@@ -715,20 +715,20 @@ export async function backfillEmbeddings(
     );
 
   const texts: { id: string; text: string }[] = [];
-  for (const r of rows) {
+  for (const row of rows) {
     const text = buildEmbedText(
       {
-        issueSummary: r.issue_summary,
-        rootCause: r.root_cause,
-        resolution: r.resolution,
-        symptoms: r.symptoms,
-        signals: r.signals,
-        tags: r.tags,
+        issueSummary: row.issue_summary,
+        rootCause: row.root_cause,
+        resolution: row.resolution,
+        symptoms: row.symptoms,
+        signals: row.signals,
+        tags: row.tags,
       },
-      patternDescriptions.get(r.resolution_pattern ?? "")!,
-      r.product_area,
+      patternDescriptions.get(row.resolution_pattern ?? "")!,
+      row.product_area,
     );
-    if (text) texts.push({ id: r.id, text });
+    if (text) texts.push({ id: row.id, text });
   }
   return writeEmbeddings("knowledge_entries", texts);
 }
@@ -747,25 +747,25 @@ export async function revertKnowledgeEntry(
   actor: ActorRef = UNKNOWN_ACTOR,
 ) {
   const { snapshot } = await getRevision({ entryId: id }, version);
-  const s = snapshot as Record<string, any>;
+  const past = snapshot as Record<string, any>;
   const patch: KnowledgeUpdateInput = {
-    status: s.status,
-    issueSummary: s.issue_summary,
-    rootCause: s.root_cause,
-    resolution: s.resolution,
-    resolutionPattern: s.resolution_pattern,
-    symptoms: s.symptoms ?? [],
-    signals: s.signals ?? [],
-    tags: s.tags ?? [],
-    supersededBy: s.superseded_by,
-    confidence: s.confidence,
-    cloud: s.cloud,
-    resolutionClarity: s.resolution_clarity,
-    hiddenFix: s.hidden_fix,
-    affectedVersion: s.affected_version,
-    fixedVersion: s.fixed_version,
-    structured: s.structured,
-    ...(await filingSlugs(s)),
+    status: past.status,
+    issueSummary: past.issue_summary,
+    rootCause: past.root_cause,
+    resolution: past.resolution,
+    resolutionPattern: past.resolution_pattern,
+    symptoms: past.symptoms ?? [],
+    signals: past.signals ?? [],
+    tags: past.tags ?? [],
+    supersededBy: past.superseded_by,
+    confidence: past.confidence,
+    cloud: past.cloud,
+    resolutionClarity: past.resolution_clarity,
+    hiddenFix: past.hidden_fix,
+    affectedVersion: past.affected_version,
+    fixedVersion: past.fixed_version,
+    structured: past.structured,
+    ...(await filingSlugs(past)),
   };
   return updateKnowledgeEntry(id, patch, actor);
 }

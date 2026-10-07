@@ -119,16 +119,20 @@ async function componentGaps(
   const citedIds = new Set((cited as any[]).map((r) => r.id as string));
   const children = new Map<string | null, Component[]>();
   const ids = new Set(components.map((c) => c.id));
-  for (const c of components) {
-    const parent = c.parent_id && ids.has(c.parent_id) ? c.parent_id : null;
-    children.set(parent, [...(children.get(parent) ?? []), c]);
+  for (const component of components) {
+    const parent =
+      component.parent_id && ids.has(component.parent_id)
+        ? component.parent_id
+        : null;
+    children.set(parent, [...(children.get(parent) ?? []), component]);
   }
 
   const anchored = new Map<string, Article>();
-  for (const a of articles) {
-    if (!a.component_id) continue;
-    const had = anchored.get(a.component_id);
-    if (!had || a.updated_at > had.updated_at) anchored.set(a.component_id, a);
+  for (const article of articles) {
+    if (!article.component_id) continue;
+    const had = anchored.get(article.component_id);
+    if (!had || article.updated_at > had.updated_at)
+      anchored.set(article.component_id, article);
   }
 
   const covering = new Map<string, Article | null>();
@@ -141,13 +145,16 @@ async function componentGaps(
 
   const loose = new Map<string, Material[]>();
   const since = new Map<string, Material[]>();
-  for (const m of material) {
-    if (citedIds.has(m.id)) continue;
-    const article = covering.get(m.component_id) ?? null;
+  for (const item of material) {
+    if (citedIds.has(item.id)) continue;
+    const article = covering.get(item.component_id) ?? null;
     if (!article)
-      loose.set(m.component_id, [...(loose.get(m.component_id) ?? []), m]);
-    else if (m.created_at > article.updated_at)
-      since.set(article.id, [...(since.get(article.id) ?? []), m]);
+      loose.set(item.component_id, [
+        ...(loose.get(item.component_id) ?? []),
+        item,
+      ]);
+    else if (item.created_at > article.updated_at)
+      since.set(article.id, [...(since.get(article.id) ?? []), item]);
   }
 
   const found: WikiGapFinding[] = [];
@@ -174,18 +181,20 @@ async function componentGaps(
   for (const root of children.get(null) ?? []) roll(root);
 
   const bySlug = new Map(components.map((c) => [c.id, c.slug]));
-  for (const a of articles) {
-    const pool = since.get(a.id) ?? [];
+  for (const article of articles) {
+    const pool = since.get(article.id) ?? [];
     if (pool.length < GAP_THRESHOLD) continue;
     found.push({
       kind: "outgrown",
-      key: a.id,
-      subject: a.title,
+      key: article.id,
+      subject: article.title,
       score: pool.length,
       evidence: {
-        slug: a.slug,
-        component: a.component_id ? bySlug.get(a.component_id) : null,
-        since: a.updated_at,
+        slug: article.slug,
+        component: article.component_id
+          ? bySlug.get(article.component_id)
+          : null,
+        since: article.updated_at,
         ...tally(pool),
       },
     });
@@ -242,42 +251,42 @@ export async function findWikiGaps(
   const found = productId ? await componentGaps(db, productId, articles) : [];
   const byId = new Map(articles.map((a) => [a.id, a]));
 
-  for (const s of stale as any[]) {
-    const a = byId.get(s.id);
-    if (!a) continue;
+  for (const staleRow of stale as any[]) {
+    const article = byId.get(staleRow.id);
+    if (!article) continue;
     found.push({
       kind: "stale",
-      key: a.id,
-      subject: a.title,
-      score: s.changed,
-      evidence: { slug: a.slug, titles: s.titles },
+      key: article.id,
+      subject: article.title,
+      score: staleRow.changed,
+      evidence: { slug: article.slug, titles: staleRow.titles },
     });
   }
-  for (const w of wanted as any[])
+  for (const link of wanted as any[])
     found.push({
       kind: "wanted",
-      key: w.target,
-      subject: w.target,
-      score: w.pages,
-      evidence: { pages: w.pages, titles: w.titles },
+      key: link.target,
+      subject: link.target,
+      score: link.pages,
+      evidence: { pages: link.pages, titles: link.titles },
     });
-  for (const a of articles) {
-    if (a.status === "draft")
+  for (const article of articles) {
+    if (article.status === "draft")
       found.push({
         kind: "draft",
-        key: a.id,
-        subject: a.title,
+        key: article.id,
+        subject: article.title,
         score: 1,
-        evidence: { slug: a.slug, updated_at: a.updated_at },
+        evidence: { slug: article.slug, updated_at: article.updated_at },
       });
     // The main page is where a reader lands, not something filed under a topic.
-    if (!a.filed && a.slug !== MAIN_PAGE_SLUG)
+    if (!article.filed && article.slug !== MAIN_PAGE_SLUG)
       found.push({
         kind: "uncategorised",
-        key: a.id,
-        subject: a.title,
+        key: article.id,
+        subject: article.title,
         score: 1,
-        evidence: { slug: a.slug },
+        evidence: { slug: article.slug },
       });
   }
   return found;
@@ -294,11 +303,11 @@ async function record(
   productId: string | null,
   found: WikiGapFinding[],
 ): Promise<void> {
-  for (const g of found)
+  for (const gap of found)
     await db`
       insert into wiki_gaps (product_id, kind, key, subject, evidence, score)
-      values (${productId}, ${g.kind}, ${g.key}, ${g.subject},
-              ${jsonb(g.evidence)}, ${g.score})
+      values (${productId}, ${gap.kind}, ${gap.key}, ${gap.subject},
+              ${jsonb(gap.evidence)}, ${gap.score})
       on conflict (product_id, kind, key) do update set
         subject         = excluded.subject,
         evidence        = excluded.evidence,

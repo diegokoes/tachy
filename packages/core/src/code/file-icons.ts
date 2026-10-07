@@ -27,11 +27,11 @@ export interface FileIcon {
 
 /** The icon for files ending `.<ext>`; the theme's plain file when it has none. */
 export function fileIconOf(ext: string): FileIcon {
-  const m = theme();
+  const manifest = theme();
   const key = ext.toLowerCase();
   return {
-    icon: m.fileExtensions[key] ?? m.file,
-    icon_light: m.light?.fileExtensions?.[key] ?? null,
+    icon: manifest.fileExtensions[key] ?? manifest.file,
+    icon_light: manifest.light?.fileExtensions?.[key] ?? null,
   };
 }
 

@@ -88,7 +88,7 @@ export class EmbedQueue {
   get depth(): EmbedQueueDepth {
     let passages = 0;
     for (const jobs of this.passages.values())
-      for (const j of jobs) passages += j.texts.length - j.next;
+      for (const job of jobs) passages += job.texts.length - job.next;
     return {
       queries: this.queries.reduce((n, j) => n + j.texts.length, 0),
       passages,
@@ -147,22 +147,22 @@ export class EmbedQueue {
     const jobs = this.passages.get(caller)!;
     const job = jobs[0];
     const budget = this.opts.batchBytes ?? Infinity;
-    const idx: number[] = [];
+    const picked: number[] = [];
     let bytes = 0;
     for (const i of job.order.slice(
       job.next,
       job.next + this.opts.passageBatch,
     )) {
       const size = Buffer.byteLength(job.texts[i]);
-      if (idx.length && bytes + size > budget) break;
-      idx.push(i);
+      if (picked.length && bytes + size > budget) break;
+      picked.push(i);
       bytes += size;
     }
     let failed = false;
     try {
-      const vectors = await this.run(idx.map((i) => job.texts[i]));
-      idx.forEach((i, k) => (job.out[i] = vectors[k]));
-      job.next += idx.length;
+      const vectors = await this.run(picked.map((i) => job.texts[i]));
+      picked.forEach((i, k) => (job.out[i] = vectors[k]));
+      job.next += picked.length;
     } catch (err) {
       failed = true;
       job.reject(err);

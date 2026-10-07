@@ -27,13 +27,13 @@ export async function resolveVersion(
   slug: string,
   version: string,
 ): Promise<ResolvedVersion> {
-  const v = normalizeVersion(version);
-  if (!v)
+  const normalized = normalizeVersion(version);
+  if (!normalized)
     throw badInput(
       `'${version}' is not a version; expected major.minor or major.minor.patch`,
     );
   const repo = await getRepoBySlug(slug);
-  const minor = releaseMinor(v);
+  const minor = releaseMinor(normalized);
   const onMinor = repo.lines.find(
     (l) => l.version_label && releaseMinor(l.version_label) === minor,
   );
@@ -42,8 +42,8 @@ export async function resolveVersion(
 
   let tag: string | null = null;
   let commit: string | null = null;
-  if (v.split(".").length === 3)
-    for (const candidate of [`v${v}`, v]) {
+  if (normalized.split(".").length === 3)
+    for (const candidate of [`v${normalized}`, normalized]) {
       commit = await resolveRef(slug, `refs/tags/${candidate}`);
       if (commit) {
         tag = candidate;
@@ -51,7 +51,7 @@ export async function resolveVersion(
       }
     }
   return {
-    version: v,
+    version: normalized,
     tag,
     commit,
     line: { ref: line.ref, version_label: line.version_label },

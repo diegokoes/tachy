@@ -158,9 +158,9 @@ export async function listTree(
   slug: string,
   sha: string,
 ): Promise<TreeEntry[]> {
-  const out = await git(slug, ["ls-tree", "-r", "-z", assertOid(sha)]);
+  const stdout = await git(slug, ["ls-tree", "-r", "-z", assertOid(sha)]);
   const entries: TreeEntry[] = [];
-  for (const line of out.split("\0")) {
+  for (const line of stdout.split("\0")) {
     if (!line) continue;
     const tab = line.indexOf("\t");
     if (tab < 0) continue;
@@ -210,12 +210,12 @@ export async function blobSizes(
 ): Promise<Map<string, number>> {
   const sizes = new Map<string, number>();
   if (!oids.length) return sizes;
-  const out = await git(
+  const stdout = await git(
     slug,
     ["cat-file", "--batch-check=%(objectname) %(objectsize)"],
     { token, input: oids.map(assertOid).join("\n") + "\n" },
   );
-  for (const line of out.split("\n")) {
+  for (const line of stdout.split("\n")) {
     const [oid, size] = line.split(" ");
     if (oid && size && /^\d+$/.test(size)) sizes.set(oid, Number(size));
   }
@@ -310,7 +310,7 @@ export async function logBetween(
   to: string,
   opts: { path?: string; limit: number },
 ): Promise<CommitSummary[]> {
-  const out = await git(slug, [
+  const stdout = await git(slug, [
     "log",
     `--max-count=${opts.limit}`,
     "--format=%H%x1f%an%x1f%aI%x1f%s",
@@ -318,7 +318,7 @@ export async function logBetween(
     "--",
     ...(opts.path ? [opts.path] : []),
   ]);
-  return out
+  return stdout
     .split("\n")
     .filter(Boolean)
     .map((line) => {
@@ -333,7 +333,7 @@ export async function listRemoteRefs(
   token?: string,
   opts: { heads?: string[] } = {},
 ): Promise<RemoteRef[]> {
-  const out = await run(
+  const stdout = await run(
     [
       ...authArgs(token),
       "ls-remote",
@@ -346,7 +346,7 @@ export async function listRemoteRefs(
     { timeout: LS_REMOTE_TIMEOUT_MS },
   );
   const refs: RemoteRef[] = [];
-  for (const line of out.split("\n")) {
+  for (const line of stdout.split("\n")) {
     const name = line.split("\t")[1];
     if (name?.startsWith("refs/heads/"))
       refs.push({ name: name.slice("refs/heads/".length), kind: "branch" });
