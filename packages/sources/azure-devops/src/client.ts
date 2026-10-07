@@ -3,24 +3,22 @@ import { sourceFetch } from "@tachy/core/sources";
 
 /** The released Azure DevOps REST version. Everything in 7.2 is still preview. */
 const API_VERSION = "7.1";
-// No released version exists for these two, so they stay pinned to preview:
-//   work item comments -> the 7.1 reference itself documents 7.1-preview.4
-//   connectionData     -> not in the public REST reference at all
 /**
- * At $top=200 this is 20k comments on one work item - far past anything real,
- * and the point at which a continuation token that never clears is a bug rather
- * than a big ticket.
+ * At $top=200 this is 20k comments on one work item: past any real ticket, and
+ * the point where a continuation token that never clears is a bug.
  */
 const MAX_PAGES = 100;
 
+/** No released version: the 7.1 reference itself documents 7.1-preview.4. */
 const API_COMMENTS = "7.1-preview.4";
+/** No released version: connectionData is not in the public REST reference. */
 const API_CONNECTION_DATA = "7.1-preview.1";
 /** Project properties have no released version either. */
 const API_PROJECT_PROPERTIES = "7.1-preview.1";
 
 /**
- * Every request carries the version; only the preview endpoints above name their
- * own. Concatenated rather than built through URL/searchParams, which would
+ * Every request carries the version; only the preview endpoints name their own.
+ * Concatenated rather than built through URL/searchParams, which would
  * re-encode the `$` operators and the pre-encoded wiki page paths.
  */
 const withVersion = (path: string) =>
@@ -295,17 +293,20 @@ export interface AdoClient {
   listWorkItemTypes(project: string): Promise<AdoWorkItemType[]>;
   getTypeFields(project: string, type: string): Promise<AdoTypeField[]>;
   /**
-   * Account-wide field definitions. The per-type endpoint above returns what a
-   * type requires and allows but carries NO data type, so the widget a field
-   * deserves is only knowable by joining these two on referenceName.
+   * Account-wide field definitions. `getTypeFields` returns what a type
+   * requires and allows but no data type, so a field's widget comes from
+   * joining the two on referenceName.
    */
   listFields(): Promise<AdoField[]>;
+  /**
+   * Applies a patch to an existing item. A `test` on /rev makes it refuse a
+   * stale write.
+   */
+  updateWorkItem(id: string, patch: JsonPatchOp[]): Promise<AdoWorkItem>;
   /**
    * `validateOnly` runs the type's rules without saving, which is the only way
    * to learn about requirements that depend on other fields' values.
    */
-  /** Applies a patch to an existing item; a `test` on /rev makes it refuse a stale write. */
-  updateWorkItem(id: string, patch: JsonPatchOp[]): Promise<AdoWorkItem>;
   createWorkItem(
     project: string,
     type: string,
@@ -318,7 +319,10 @@ export interface AdoClient {
    */
   getNewItemTemplate(project: string, type: string): Promise<AdoWorkItem>;
   listTypeCategories(project: string): Promise<AdoTypeCategory[]>;
-  /** Named properties, e.g. System.ProcessTemplateType: the process the form comes from. */
+  /**
+   * Named properties, e.g. System.ProcessTemplateType: the process the form
+   * comes from.
+   */
   getProjectProperties(
     projectId: string,
     keys: string[],

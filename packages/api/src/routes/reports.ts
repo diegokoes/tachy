@@ -42,7 +42,7 @@ const submitSchema = z.object({
  */
 export const reports = new Hono()
 
-  /** The advisory the form runs on every draft before submitting it. */
+  // The advisory the form runs on every draft before submitting it.
   .post("/review", zValidator("json", reviewSchema), async (c) => {
     const userId = await requireCaller(c);
     const ctx = await callerScope(c);
@@ -69,7 +69,7 @@ export const reports = new Hono()
     return c.json(await listMyReports(userId));
   })
 
-  /* ── Admin queue ──────────────────────────────────────────────────────── */
+  // Admin queue
 
   .get(
     "/all",

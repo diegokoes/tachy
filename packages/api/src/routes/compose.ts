@@ -192,7 +192,7 @@ export const compose = new Hono()
     );
   })
 
-  /** `source_type` narrows to one source's projects, for its command group. */
+  // `source_type` narrows to one source's projects, for its command group.
   .get("/projects", async (c) => {
     const teams = await callerTeamIds(c);
     const type = c.req.query("source_type");
@@ -203,7 +203,7 @@ export const compose = new Hono()
     return c.json(rows.map(asComposerProject));
   })
 
-  /** `all=1` skips the team's type selection, for the editor that makes it. */
+  // `all=1` skips the team's type selection, for the editor that makes it.
   .get("/projects/:id/types", async (c) => {
     const { project, composer } = await composeIn(c, c.req.param("id"));
     const types = await composer.types(project.external_key);
@@ -214,7 +214,7 @@ export const compose = new Hono()
     );
   })
 
-  /** `raw=1` is the source's own form, before the team's config. */
+  // `raw=1` is the source's own form, before the team's config.
   .get("/projects/:id/form", async (c) => {
     const type = c.req.query("type");
     if (!type) throw badInput("type is required");
@@ -261,10 +261,8 @@ export const compose = new Hono()
     },
   )
 
-  /*
-   * Multipart, because pasted images travel with the draft: a `draft` JSON part
-   * and one `image:<key>` file per image the HTML fields refer to.
-   */
+  // Multipart, because pasted images travel with the draft: a `draft` JSON part
+  // and one `image:<key>` file per image the HTML fields refer to.
   .post("/projects/:id/items", async (c) => {
     const declared = Number(c.req.header("content-length") ?? 0);
     if (declared > MAX_UPLOAD_BYTES) throw tooLarge(declared);
@@ -306,7 +304,7 @@ export const compose = new Hono()
     } satisfies CreatedTicket);
   })
 
-  /** The team's form config, for the flows editor. Its editors only. */
+  // The team's form config, for the flows editor. Its editors only.
   .get("/projects/:id/config", async (c) => {
     const id = c.req.param("id");
     await assertScopeEditor(c, await sourceProjectScope(id));

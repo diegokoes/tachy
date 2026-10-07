@@ -57,18 +57,17 @@ export function capTurns<T extends { text: string }>(
 }
 
 /**
- * The ingest path reads the compacted form when compaction demonstrably helps,
- * so /analyze and /consult stop paying for quoted chains and signatures. Runs
- * AFTER redaction, so the model still never sees unscrubbed text, and never
- * writes: only compact_work_item posts a note.
+ * The compacted form of an item where `compactForLlm` produces one, so
+ * /analyze and /consult do not pay for quoted chains and signatures. Takes the
+ * item after redaction, and writes nothing: only compact_work_item posts a
+ * note.
  */
 export function withCompaction(item: RawWorkItem): Record<string, unknown> {
   const { item: forLlm, compacted } = compactForLlm(item);
   if (!compacted) return { item: forLlm };
   const { turns, compaction } = compacted;
-  // Bounded here too: compaction only fires above COMPACT_MIN_CHARS, so by
-  // construction this array is never small, and on a long ticket it is hundreds
-  // of KB going through the same ceiling capTurns exists for.
+  // Capped as well: compaction only runs above COMPACT_MIN_CHARS, so the turn
+  // list is never small.
   const { turns: shown, turns_truncated } = capTurns(turns);
   return {
     item: forLlm,
@@ -80,9 +79,9 @@ export function withCompaction(item: RawWorkItem): Record<string, unknown> {
 }
 
 /**
- * The customer's own install, inline on the turn that fetched their ticket.
- * Their version and addons decide whether a general answer even applies, and the
- * model will not think to go and ask - so it arrives unasked, kept short.
+ * The customer's own install, inline on the read that fetched their ticket.
+ * Their version and addons decide whether a general answer applies, and the
+ * model does not ask for them unprompted.
  */
 export async function withCustomerProfile(
   customerId: string | null | undefined,
@@ -123,7 +122,7 @@ export async function withCustomerProfile(
 }
 
 /**
- * An unresolved customer is invisible otherwise - the field is simply null, while
+ * Says that the customer is unresolved. The field alone is only null, while
  * the ticket usually names the company in a domain or a signature.
  */
 export const unresolvedCustomer = (
@@ -139,10 +138,9 @@ export const unresolvedCustomer = (
       };
 
 /**
- * Surface which part of a customer's estate a ticket might concern, without
- * assigning it. Same discipline as unresolvedCustomer: a confidently wrong
- * attribution files the ticket, the entry learned from it and every future
- * search hit under a place nobody chose, and is not recoverable.
+ * The units of a customer's estate a ticket names, offered without assigning
+ * one. A wrong attribution files the ticket, the entry learned from it and
+ * every later search hit under a unit nobody chose.
  */
 export async function unresolvedUnit(
   customerId: string | null | undefined,
@@ -205,7 +203,7 @@ export async function workItemFacts(
 /**
  * Fetch the Azure DevOps items a ticket points at and record the links. They
  * carry most of the engineering context, so analysis reads them as a matter of
- * course rather than offering to. Depth 1 only - a linked item's own relations
+ * course rather than offering to. Depth 1 only: a linked item's own relations
  * already come back as summaries.
  */
 export async function withLinkedAdoItems(

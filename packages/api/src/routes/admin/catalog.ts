@@ -137,9 +137,9 @@ export const catalog = new Hono()
       );
     },
   )
-  /* Every component at once, for the architecture view. Read-only and
-     unscoped: the catalogue's shape is not a secret from anyone who can
-     already list the products it hangs off. */
+  // Every component at once, for the architecture view. Read-only and unscoped:
+  // the catalogue's shape is no secret from anyone who can list the products it
+  // hangs off.
   .get("/components", async (c) => c.json(await listComponentTree()))
   .get("/products/:slug/components", async (c) => {
     return c.json(

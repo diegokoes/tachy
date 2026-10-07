@@ -1,3 +1,7 @@
+/**
+ * Wiki articles: what to draft them from, where they are filed, and what is
+ * still unwritten.
+ */
 import { z } from "zod";
 import { resolveCurrentUserId } from "@tachy/core/access";
 import { sql, AppError } from "@tachy/core/infra";
@@ -17,8 +21,6 @@ import { setComposedFrom } from "@tachy/core/library";
 import { tool } from "../server";
 import { out, outScrubbed } from "../results";
 import { mcpActor, requireCanEdit } from "../permissions";
-
-/** Wiki articles: what to draft them from, where they are filed, and what is still unwritten. */
 
 tool(
   "draft_wiki_page",
@@ -216,9 +218,8 @@ tool(
       : null;
     await requireCanEdit(productId ? { productId } : {});
 
-    // Only "no such article" takes the create branch. Swallowing every error
-    // meant a transient database failure inserted a second row at the same
-    // slug, splitting the article's links and its history.
+    // Only "no such article" takes the create branch. Any other failure
+    // rethrows, or a transient one would insert a second row at the same slug.
     const existing = await findArticle(productId, a.slug).catch((e) => {
       if (e instanceof AppError && e.code === "not_found") return null;
       throw e;

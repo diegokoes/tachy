@@ -33,20 +33,22 @@ export interface AgentConfig {
   systemPrompt: string;
 
   /**
-   * Per-user state directory: Claude Code's credentials and transcripts. Must
-   * be stable for a user across turns: a fresh directory mints a new machine identity and
-   * orphans what `resume` needs.
+   * Per-user state directory: Claude Code's credentials and transcripts. Stable
+   * for a user across turns: a fresh directory mints a new machine identity
+   * and orphans what `resume` needs.
    */
   configDir?: string;
 
-  /** Resolved agent credential. When unset, the backend falls back to the
-   *  process env / CLI login. */
+  /**
+   * The caller's credential. Unset, only a login stored under `configDir`
+   * authenticates: `claudeEnv` strips the host's own from the environment.
+   */
   agentAuth?: AgentAuth;
 
   /**
    * Base tool names whose write path this turn may take without an approval
    * box, because the user already authorised it by typing the slash command
-   * that does exactly that. Never set it from anything the model controls.
+   * that performs it. Never set it from anything the model controls.
    */
   autoApprove?: string[];
 }

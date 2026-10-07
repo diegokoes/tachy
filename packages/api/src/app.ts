@@ -109,9 +109,9 @@ export function createApp(
     });
   });
 
-  // Ahead of installAuth's `/api/*` guard, deliberately: on a fresh install
-  // there is no identity to check yet. initOidc still runs first, so the wizard
-  // can tell an operator already holding an SSO session from a stranger.
+  // Ahead of installAuth's `/api/*` guard: a fresh install has no identity to
+  // check yet. initOidc still runs first, so the wizard can tell an operator
+  // already holding an SSO session from a stranger.
   if (opts.oidc) initOidc(base, opts.oidc);
   base.route("/api/setup", setup);
 

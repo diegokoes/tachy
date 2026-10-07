@@ -31,7 +31,10 @@ import { effectiveSettings, orgTimezone } from "@tachy/core/config";
 import { requireAdmin } from "../auth";
 import { callerUserId } from "../authz";
 
-/** How far back the census looks; the overview asks for 14, a detail view for more. */
+/**
+ * How far back the census looks. The overview and its detail view ask for
+ * different spans.
+ */
 const periodQuery = z.object({
   days: z.coerce.number().int().min(7).max(90).optional(),
 });

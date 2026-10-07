@@ -1,3 +1,6 @@
+/**
+ * Azure DevOps beyond work-item ingest: its wikis, and creating items in it.
+ */
 import { z } from "zod";
 import {
   resolveSource,
@@ -21,10 +24,6 @@ import type { AdoClient } from "@tachy/source-azure-devops";
 import { tool } from "../server";
 import { out } from "../results";
 import { sourceSlug } from "../fields";
-
-/**
- * Azure DevOps beyond work-item ingest - its wikis, and creating items in it.
- */
 
 async function resolveAdoClient(sourceSlug: string): Promise<{
   conn: Awaited<ReturnType<typeof resolveSource>>["conn"];

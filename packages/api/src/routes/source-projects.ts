@@ -73,10 +73,10 @@ async function assertCanWriteProject(
   if (teamSlug) await assertTeamAdmin(c, teamSlug);
 }
 
-/** Remote calls answer with {ok:false} so the setup UI can render the reason. */
 /** Remotes asked at once which release branch they have. */
 const DISCOVER_PROBES = 8;
 
+/** Remote calls answer with {ok:false} so the setup UI can render the reason. */
 async function probe<T>(fn: () => Promise<T>) {
   try {
     return { ok: true as const, ...(await fn()) };
@@ -197,11 +197,9 @@ export const sourceProjects = new Hono()
     return c.json(await deleteProjectAreaMap(c.req.param("areaId")));
   })
 
-  /**
-   * The field schema behind the chat approval box. Guarded, unlike the
-   * discover/* routes below: those are setup-screen probes, this is read on
-   * behalf of whoever is composing a work item, and the PAT it uses is theirs.
-   */
+  // The field schema behind the chat approval box. Guarded, unlike the
+  // discover/* routes: those are setup-screen probes, this is read on behalf of
+  // whoever is composing a work item, and the PAT it uses is theirs.
   .get(
     "/source-connections/:slug/work-item-schema",
     requireAdmin,
@@ -222,14 +220,9 @@ export const sourceProjects = new Hono()
     },
   )
 
-  /*
-   * Live discovery for the setup screens. Read-only against our own database,
-   * but each one spends the connection's credential on a remote call and hands
-   * back that system's answer - including its error text, by design, so an
-   * operator can see why a connection will not come up. That is a
-   * configuration surface, so it is held to the same rights as editing the
-   * connection itself.
-   */
+  // Live discovery for the setup screens. Each spends the connection's
+  // credential on a remote call and returns that system's answer, error text
+  // included, so it is held to the same rights as editing the connection.
   .get("/source-connections/:slug/discover/projects", requireAdmin, async (c) =>
     c.json(
       await probe(async () => {

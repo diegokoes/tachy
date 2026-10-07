@@ -1,3 +1,4 @@
+/** The MCP server itself, and how a tool is declared on it. */
 import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ZodRawShape } from "zod";
 import { AppError, inBackground, log } from "@tachy/core/infra";
@@ -5,7 +6,6 @@ import { recordToolCall } from "@tachy/core/analytics";
 import { resolveCurrentUserId } from "@tachy/core/access";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-/** The MCP server itself, and how a tool is declared on it. */
 export const server = new McpServer({ name: "tachy", version: "0.1.0" });
 
 export type ToolConfig<I extends ZodRawShape> = {
@@ -15,9 +15,9 @@ export type ToolConfig<I extends ZodRawShape> = {
 };
 
 /**
- * Counted per person as well as per tool, which is the part a log scrape cannot
- * give you. The user is resolved lazily and never awaited by the tool: a slow
- * lookup must not hold the answer back.
+ * Counted per person as well as per tool. The user is resolved in the
+ * background and never awaited by the tool, so a slow lookup does not hold the
+ * answer back.
  */
 function count(name: string, writes: boolean, ok: boolean, misuse: boolean) {
   inBackground(

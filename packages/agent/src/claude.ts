@@ -22,8 +22,8 @@ interface ContentBlock {
 
 /**
  * Credential sources Claude Code consults ahead of CLAUDE_CODE_OAUTH_TOKEN.
- * Any one of these left in the inherited environment silently outranks the
- * caller's own credential and bills the wrong account.
+ * Any one left in the inherited environment outranks the caller's credential
+ * and bills the wrong account.
  */
 const OUTRANKING_CREDENTIAL_VARS = [
   "ANTHROPIC_API_KEY",
@@ -38,9 +38,8 @@ const OUTRANKING_CREDENTIAL_VARS = [
 ];
 
 /**
- * Turn a Claude Code failure string into something a chat user can act on.
- * These three arrive as ordinary errors and are otherwise indistinguishable
- * from a crash, though only one of them means anything is actually broken.
+ * A Claude Code failure string as something a chat user can act on. The three
+ * matched here arrive as ordinary errors, the same as a crash.
  */
 export function explainFailure(raw: string): {
   message: string;
@@ -71,8 +70,8 @@ export function explainFailure(raw: string): {
 
 /**
  * Environment for the spawned `claude` process. The SDK replaces the child
- * environment wholesale, so the inherited one is copied for PATH and friends,
- * then every credential source is stripped before the caller's own is set.
+ * environment wholesale, so the inherited one is copied, then every credential
+ * source is stripped before the caller's own is set.
  */
 export function claudeEnv(
   cfg: Pick<AgentConfig, "agentAuth" | "configDir">,
@@ -198,8 +197,8 @@ export class ClaudeTurn extends TurnBase {
           this.requestApproval,
           cfg.autoApprove,
         );
-        // Read tools announce themselves off the assistant block; a write only
-        // becomes real once allowed, and the UI needs to know it is running.
+        // A read is announced from its assistant block. A write is announced
+        // here, once allowed, so the UI shows it running.
         const { cls, base } = classifyCall(toolName, input);
         if (res.behavior === "allow" && cls === "write")
           this.q.push({ type: "tool_use", tool: base, input, id: toolUseID });

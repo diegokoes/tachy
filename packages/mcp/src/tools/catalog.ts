@@ -1,3 +1,8 @@
+/**
+ * The vocabularies a ticket is filed against (resolution patterns, components,
+ * and the customers and units that own an install) and who owns what: teams,
+ * their products, and the labels shared across them.
+ */
 import { z } from "zod";
 import {
   getCustomerIdBySlug,
@@ -31,12 +36,6 @@ import {
   requireGlobalAdmin,
   requireAnyTeamAdmin,
 } from "../permissions";
-
-/**
- * The vocabularies a ticket is filed against - resolution patterns, components,
- * and the customers and units that own an install - and who owns what: teams,
- * their products, and the labels shared across them.
- */
 
 tool(
   "list_resolution_patterns",

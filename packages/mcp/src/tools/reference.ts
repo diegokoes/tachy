@@ -1,3 +1,4 @@
+/** Reference docs, and the freeform context they are drafted from. */
 import { z } from "zod";
 import { resolveCurrentUserId } from "@tachy/core/access";
 import { getCustomerIdBySlug } from "@tachy/core/catalog";
@@ -27,8 +28,6 @@ import {
   resolveScopeIds,
   loadContextSources,
 } from "../context";
-
-/** Reference docs, and the freeform context they are drafted from. */
 
 tool(
   "ingest_context",

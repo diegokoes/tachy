@@ -198,7 +198,7 @@ export const agent = new Hono()
       keepalive.unref?.();
 
       // A closed stream cannot show an approval card, so a turn left with none
-      // pending is stopped rather than run to the one-hour TTL unseen.
+      // pending is stopped rather than run unseen until the TTL.
       stream.onAbort(() => {
         streamOpen = false;
         if (!turn) return leave();
@@ -289,9 +289,8 @@ export const agent = new Hono()
     const entry = turns.get(turnId);
     if (!entry) throw notFound("unknown or finished turn");
     const email = (await sessionEmail(c)) ?? env.userEmail;
-    // A turn that resolved no email is answerable by whoever started it and
-    // nobody else; without the first clause an unattributed turn was open to
-    // anyone who guessed its id.
+    // Compared even when the turn resolved no email: skipping the check for an
+    // unattributed turn would open it to anyone who guesses its id.
     if (entry.email !== email)
       throw forbidden("only the user who started this turn can approve it");
     entry.turn.approve(id, { approve, message, updatedInput });

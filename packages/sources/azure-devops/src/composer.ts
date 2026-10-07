@@ -30,9 +30,9 @@ const AREA = "System.AreaPath";
 const ITERATION = "System.IterationPath";
 
 /**
- * The types a person can actually create: not disabled, and not in the hidden
- * category (code review, test plan, shared steps and the like). A failure to
- * read the categories hides nothing rather than failing the picker.
+ * The types a person can create: not disabled, and not in the hidden category
+ * (code review, test plan, shared steps and the like). A failure to read the
+ * categories hides nothing rather than failing the picker.
  */
 export async function creatableTypes(
   client: AdoClient,
@@ -75,8 +75,10 @@ export function fieldPath(
     : `${project}\\${p}`;
 }
 
-/** Paths from names rather than each node's `path`, which also carries the
- *  `\Area` / `\Iteration` structure segment the fields do not take. */
+/**
+ * Paths from names rather than each node's `path`, which also carries the
+ * `\Area` / `\Iteration` structure segment the fields do not take.
+ */
 export function flattenTree(
   node: AdoClassificationNode | null | undefined,
 ): string[] {
@@ -115,7 +117,10 @@ const HEADER = ["System.AssignedTo", AREA, ITERATION, "System.Tags"];
 const cleanLabel = (label: string | undefined) =>
   label?.replace(/&(?!&)/g, "").trim() || undefined;
 
-/** Fields a new item cannot be given: ADO sets them, or they describe its life after. */
+/**
+ * Fields a new item cannot be given: ADO sets them, or they describe its life
+ * after.
+ */
 const SYSTEM_SET = new Set([
   "System.WorkItemType",
   "System.TeamProject",
@@ -250,7 +255,10 @@ async function whoAmI(client: AdoClient): Promise<PersonOption | null> {
     : null;
 }
 
-/** Everyone on any of the project's teams: the default team is rarely all of them. */
+/**
+ * Everyone on any of the project's teams: the default team is rarely all of
+ * them.
+ */
 async function projectPeople(
   client: AdoClient,
   project: string,
@@ -281,7 +289,7 @@ async function projectPeople(
  * schema laid out as ADO's own form, the team's areas and iterations with its
  * defaults, the people it can assign to, and its templates. Each lookup beyond
  * the schema degrades on its own, so a PAT without Project & Team read still
- * gets a form, just with fewer choices.
+ * gets a form with fewer choices.
  */
 export async function composerForm(
   client: AdoClient,
@@ -350,9 +358,9 @@ export async function composerForm(
         : value;
     prefill[ref] = { value: v, origin };
   };
-  /* The new-item template is the process's rules evaluated, so it covers
-     defaults that depend on other fields; a field's own default fills in
-     where the template could not be read. */
+  // The new-item template is the process's rules evaluated, so it covers
+  // defaults that depend on other fields; a field's own default fills in where
+  // the template could not be read.
   for (const f of schema.fields)
     if (!f.read_only) put(f.reference_name, f.default_value, "process");
   for (const [ref, raw] of Object.entries(fresh?.fields ?? {})) {

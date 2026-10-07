@@ -52,15 +52,9 @@ export const setup = new Hono()
     const body = c.req.valid("json");
     const hash = await hashPassword(body.password);
 
-    /*
-     * This route sits outside the `/api/*` identity guard - on a fresh install
-     * there is nobody to authenticate yet. The admin count is therefore the only
-     * thing standing between a stranger and an admin account, and on an SSO
-     * deployment it never rises: `upsertUser` provisions members, so nothing
-     * closes the door. Hence the second gate: where SSO can say who is calling,
-     * it has to, and the wizard promotes that person rather than anyone who
-     * asks.
-     */
+    // Outside the `/api/*` guard the admin count alone gates this, and under
+    // SSO it never rises: `upsertUser` provisions members. Where SSO can name
+    // the caller it has to, and the wizard promotes that person.
     let verified: string | undefined;
     if (env.oidc) {
       verified = await sessionEmail(c);
@@ -79,12 +73,9 @@ export const setup = new Hono()
       if ((row.n as number) > 0)
         throw conflict("already set up; log in as an admin");
 
-      /*
-       * Taking over an existing row means resetting its password and handing
-       * back a session as its owner, so it needs proof the caller is that
-       * person. SSO is the only thing that can give that proof here; without it
-       * the wizard may only create an account nobody was using.
-       */
+      // Taking over an existing row resets its password and returns a session
+      // as its owner, which needs proof the caller is that person. Only SSO
+      // gives it; otherwise the wizard only creates a new account.
       const [existing] =
         await tx`select id from users where email = ${body.email}`;
       if (existing && !verified)

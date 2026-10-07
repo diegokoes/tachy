@@ -164,7 +164,10 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
   }
 
   let agentNames: Map<string, string> | null = null;
-  /** Best-effort: a non-admin key may not list agents, and unnamed turns still read fine. */
+  /**
+   * Best-effort: a non-admin key may not list agents, and unnamed turns still
+   * read fine.
+   */
   async function loadAgentNames(): Promise<Map<string, string>> {
     if (agentNames) return agentNames;
     const names = new Map<string, string>();
@@ -181,7 +184,7 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
         if (batch.length < 100) break;
       }
     } catch {
-      /* keep whatever was collected */
+      // Keep whatever was collected.
     }
     agentNames = names;
     return names;
@@ -287,9 +290,8 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
         convos.push(...batch);
         if (batch.length < 30) break;
       }
-      // Loaded unconditionally, not just when an agent replied: redaction needs
-      // the colleagues a thread only ever *mentions*, and the map is cached for
-      // the life of the adapter, so this costs one directory read per process.
+      // Loaded even when no agent replied: redaction needs the colleagues a
+      // thread only mentions. The map is cached for the life of the adapter.
       const names = await loadAgentNames();
       const description: RawMessage = {
         externalId: `desc-${t.id}`,
@@ -339,7 +341,7 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
         { method: "DELETE", headers: { Authorization: auth } },
         { connection: cfg.slug },
       );
-      // already gone is the desired end state, not a failure
+      // Already gone is the wanted end state.
       if (!res.ok && res.status !== 404)
         throw new Error(
           `Freshdesk conversation DELETE -> ${res.status} ${await res.text()}`,

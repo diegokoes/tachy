@@ -71,7 +71,7 @@ export const flows = new Hono()
     return c.json(flowActionCatalog());
   })
 
-  /** Query params are the sibling values the list depends on. */
+  // Query params are the sibling values the list depends on.
   .get("/options/:key", async (c) => {
     await assertAnyTeamAdminApi(c);
     return c.json(
@@ -119,7 +119,7 @@ export const flows = new Hono()
     return c.json(await listFlowRuns(id));
   })
 
-  /** Dry by default: trying a flow on a ticket should not post on it. */
+  // Dry by default: trying a flow on a ticket should not post on it.
   .post("/:id/run", zValidator("json", runSchema), async (c) => {
     const id = c.req.param("id");
     await assertScopeEditor(c, await flowScope(id));

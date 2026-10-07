@@ -5,7 +5,7 @@ import { getIdentity } from "./auth";
 const STARTED_KEY = "tachyStartedAt";
 const ERROR_KEY = "tachyError";
 
-/** Probes fire every few seconds; at info level they are pure noise. */
+/** Probes fire every few seconds, so a successful one is not logged. */
 const QUIET_PATHS = new Set(["/health", "/livez", "/readyz"]);
 
 export const requestIdOf = (c: Context): string | undefined =>

@@ -35,8 +35,8 @@ import { assertScopeEditor, callerActor, callerUserId } from "../authz";
 
 /**
  * The scope segment is a product slug, or the literal 'general' for the
- * org-wide wiki. A product actually slugged 'general' wins, so an existing
- * product is never shadowed by the reserved word.
+ * org-wide wiki. A product slugged 'general' wins, so an existing product is
+ * never shadowed by the reserved word.
  */
 const ORG_WIDE = "general";
 
@@ -52,12 +52,10 @@ const wikiScope = (productId: string | null): EntryScope =>
   productId ? { productId } : {};
 
 /**
- * Re-find one wiki's gaps after an edit through here, so writing the article a
- * gap asked for clears it now rather than at the next hourly sweep. Awaited:
- * the SPA reloads the switcher's counts as soon as the save returns, and a
- * sweep still in flight would hand it the numbers from before the edit. One
- * wiki's worth of reads, and it logs rather than throws, so the edit it
- * follows cannot fail on its account.
+ * Re-finds one wiki's gaps after an edit through here, so writing the article a
+ * gap asked for clears it now, not at the next sweep. Awaited: the SPA reloads
+ * the switcher's counts as soon as the save returns. It logs instead of
+ * throwing, so the edit it follows cannot fail on its account.
  */
 const rescan = async (productId: string | null) => {
   await sweepWikiGaps({ productId });
@@ -185,7 +183,7 @@ export const wiki = new Hono()
     return c.json(await coverage(productId));
   })
 
-  // Re-parenting from the coverage view, where the shape is actually visible.
+  // Re-parenting from the coverage view, where the shape is visible.
   .patch(
     "/wiki/:scope/components/:slug",
     zValidator("json", componentPatchSchema),

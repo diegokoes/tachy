@@ -74,7 +74,10 @@ const READ = new Set<string>(READ_TOOLS);
 
 export type ToolClass = "read" | "write" | "denied";
 
-/** A tachy tool not listed as a read is a write, so an unlisted tool still gets the review box. */
+/**
+ * A tachy tool not listed as a read is a write, so an unlisted tool still gets
+ * the review box.
+ */
 export function classify(toolName: string): { cls: ToolClass; base: string } {
   const prefix = `mcp__${MCP_SERVER}__`;
   if (!toolName.startsWith(prefix)) return { cls: "denied", base: toolName };
