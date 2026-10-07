@@ -80,11 +80,10 @@ async function flowUsage(days: number): Promise<AgentUsage["flows"]> {
 }
 
 /**
- * Agent consumption over the last `days` days, from `analysis_runs`.
- *
- * Chat rows only. Tools such as `fetch_work_item` write runs of their own with
- * no token figures, and the one row per turn that the agent route records is
- * the only one that carries what the turn actually cost.
+ * Agent consumption over the last `days` days, from `analysis_runs`. Chat rows
+ * only. Tools such as `fetch_work_item` write runs of their own with no token
+ * figures, and the one row per turn that the agent route records is the only
+ * one that carries what the turn cost.
  */
 export async function agentUsageCensus(days = 30): Promise<AgentUsage> {
   const [totals] = await sql`

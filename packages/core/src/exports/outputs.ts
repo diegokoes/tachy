@@ -32,7 +32,10 @@ const META_COLUMNS = sql`
   id, user_id, artifact_id, utility, filename, mime, byte_size, meta, created_at, expires_at
 `;
 
-/** Unowned rows exist only where no user account resolves at all, so any caller may read them. */
+/**
+ * Unowned rows exist only where no user account resolves, so any caller may
+ * read them.
+ */
 const ownedBy = (userId: string) =>
   sql`(user_id = ${userId} or user_id is null)`;
 

@@ -104,9 +104,8 @@ function open(
 
 /**
  * Rows written before credentials were bound to their row carry no AAD, so a
- * failed open is retried without one. That fallback is transitional: it can go
- * once every stored credential has been saved again, and until then it only
- * ever accepts what the old code would have accepted anyway.
+ * failed open is retried without one. The fallback can go once every stored
+ * credential has been saved again.
  */
 export function decryptSecret(
   row: {

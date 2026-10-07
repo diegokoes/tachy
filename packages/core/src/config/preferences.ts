@@ -23,7 +23,7 @@ import {
 
 /**
  * Scoped (per-user/per-team) prefs; each falls back to the global setting,
- * except the personal ones below.
+ * except the ones in `PERSONAL`.
  */
 const PREF_SCHEMAS = {
   agent_model: z.string().min(1),

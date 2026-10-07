@@ -20,8 +20,8 @@ export interface Check {
 const ms = (started: number) => Math.round(performance.now() - started);
 
 /**
- * Fast checks, safe to run at any hour: what actually varies between
- * environments, as opposed to what CI already proved about the commit
+ * Fast checks, safe to run at any hour: what varies between environments, as
+ * opposed to what CI already proved about the commit
  * (DEPLOYMENT-ARCHITECTURE.md §11.3).
  */
 export async function runSystemChecks(): Promise<Check[]> {

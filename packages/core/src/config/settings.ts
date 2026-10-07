@@ -43,9 +43,9 @@ export type SettingsMap = {
 
 /**
  * How long a process trusts what it last read. A setting is saved in the api,
- * and the workers are other processes: without an expiry a worker kept the
- * values it started with, so redaction switched on in the admin page did not
- * reach a flow's model call until the worker restarted.
+ * and the workers are other processes: without an expiry a worker keeps the
+ * values it started with, and redaction switched on in the admin page does not
+ * reach a flow's model call until the worker restarts.
  */
 const CACHE_MS = 15_000;
 let cache: { at: number; value: SettingsMap } | undefined;
@@ -163,10 +163,9 @@ export async function orgTimezone(): Promise<string> {
 }
 
 /**
- * Both directions, deliberately: `globalRedactionEnabled()` reads the variable
- * at call time, so setting it and never clearing it left the admin panel
- * reporting redaction off from the database while every scrub path still ran -
- * and the MCP subprocess inherited that.
+ * Both directions: `globalRedactionEnabled()` reads the variable at call time,
+ * so one set and never cleared keeps every scrub path running, in the MCP
+ * subprocess too, while the admin panel reports redaction off.
  */
 export async function loadSettingsIntoEnv(): Promise<void> {
   const eff = await effectiveSettings();

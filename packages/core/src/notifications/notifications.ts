@@ -12,8 +12,10 @@ export interface NotifyInput {
   ref?: Record<string, unknown>;
 }
 
-/** Drop one notification in a person's inbox. The delivery seam every feature
- *  that needs to reach a user through the app goes through. */
+/**
+ * Drop one notification in a person's inbox. The delivery seam every feature
+ * that needs to reach a user through the app goes through.
+ */
 export async function notify(i: NotifyInput): Promise<NotificationRow> {
   const [row] = await sql<NotificationRow[]>`
     insert into notifications (user_id, kind, title, body_text, ref)
@@ -44,8 +46,10 @@ export async function unreadCount(userId: string): Promise<number> {
   return row?.n ?? 0;
 }
 
-/** Mark the badge-clearing timestamp; leaves read_at alone so an item still
- *  shows as unopened in the list. */
+/**
+ * Mark the badge-clearing timestamp; leaves read_at alone so an item still
+ * shows as unopened in the list.
+ */
 export async function markSeen(userId: string): Promise<void> {
   await sql`
     update notifications set seen_at = now()

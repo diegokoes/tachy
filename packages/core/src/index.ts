@@ -1,4 +1,4 @@
-/*
+/**
  * The contract, re-exported wholesale, and nothing else. A domain is imported
  * from its own subpath (`@tachy/core/knowledge`), so a file's imports say which
  * domains it depends on.
