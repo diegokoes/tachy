@@ -51,13 +51,14 @@ export async function enqueueRun(opts: {
   let timeout = kind.timeout;
   let overlap = kind.overlap;
   if (opts.definitionId) {
-    const [d] = await db`
+    const [definition] = await db`
       select queue, timeout, overlap from job_definitions where id = ${opts.definitionId}
     `;
-    if (!d) throw notFound(`job definition ${opts.definitionId} not found`);
-    queue = d.queue ?? queue;
-    timeout = d.timeout ?? timeout;
-    overlap = d.overlap ?? overlap;
+    if (!definition)
+      throw notFound(`job definition ${opts.definitionId} not found`);
+    queue = definition.queue ?? queue;
+    timeout = definition.timeout ?? timeout;
+    overlap = definition.overlap ?? overlap;
     if (overlap === "skip" && opts.trigger === "schedule") {
       const [busy] = await db`
         select 1 from job_runs

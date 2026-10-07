@@ -104,17 +104,17 @@ async function assertNoCycle(
     throw badInput(`'${label}' already sits under this unit; that would cycle`);
 }
 
-export async function addCustomerUnit(i: CustomerUnitInput) {
-  if (!UNIT_SLUG_RE.test(i.slug))
+export async function addCustomerUnit(input: CustomerUnitInput) {
+  if (!UNIT_SLUG_RE.test(input.slug))
     throw badInput(
-      `Invalid unit slug '${i.slug}': letters, digits, dot, dash and underscore only.`,
+      `Invalid unit slug '${input.slug}': letters, digits, dot, dash and underscore only.`,
     );
-  const customerId = await customerIdOf(i.customerSlug);
-  const parentId = i.parentSlug
-    ? (await resolveUnit(customerId, i.parentSlug)).id
+  const customerId = await customerIdOf(input.customerSlug);
+  const parentId = input.parentSlug
+    ? (await resolveUnit(customerId, input.parentSlug)).id
     : null;
-  const profileId = i.profileSlug
-    ? (await resolveUnit(customerId, i.profileSlug)).id
+  const profileId = input.profileSlug
+    ? (await resolveUnit(customerId, input.profileSlug)).id
     : null;
 
   // The insert cannot ring; the `do update` half re-parents an existing row,
@@ -122,17 +122,22 @@ export async function addCustomerUnit(i: CustomerUnitInput) {
   if (parentId || profileId) {
     const [existing] = await sql`
       select id from customer_units
-      where customer_id = ${customerId} and slug = ${i.slug}
+      where customer_id = ${customerId} and slug = ${input.slug}
     `;
     if (existing) {
       if (parentId)
-        await assertNoCycle(existing.id, parentId, "parent_id", i.parentSlug!);
+        await assertNoCycle(
+          existing.id,
+          parentId,
+          "parent_id",
+          input.parentSlug!,
+        );
       if (profileId)
         await assertNoCycle(
           existing.id,
           profileId,
           "profile_id",
-          i.profileSlug!,
+          input.profileSlug!,
         );
     }
   }
@@ -141,8 +146,8 @@ export async function addCustomerUnit(i: CustomerUnitInput) {
     insert into customer_units
       (customer_id, parent_id, profile_id, kind, slug, name, aliases, notes)
     values
-      (${customerId}, ${parentId}, ${profileId}, ${i.kind}, ${i.slug}, ${i.name},
-       ${i.aliases ?? []}, ${i.notes ?? null})
+      (${customerId}, ${parentId}, ${profileId}, ${input.kind}, ${input.slug}, ${input.name},
+       ${input.aliases ?? []}, ${input.notes ?? null})
     on conflict (customer_id, slug) do update set
       parent_id  = excluded.parent_id,
       profile_id = excluded.profile_id,

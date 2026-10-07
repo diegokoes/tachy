@@ -15,9 +15,12 @@ const RETRY_STATUSES = new Set([429, 502, 503, 504]);
 const MAX_RETRIES = 3;
 
 /** GitHub answers a secondary rate limit with 403 and a spent budget. */
-function isRateLimited(res: Response): boolean {
-  if (RETRY_STATUSES.has(res.status)) return true;
-  return res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0";
+function isRateLimited(response: Response): boolean {
+  if (RETRY_STATUSES.has(response.status)) return true;
+  return (
+    response.status === 403 &&
+    response.headers.get("x-ratelimit-remaining") === "0"
+  );
 }
 
 /**
@@ -25,8 +28,8 @@ function isRateLimited(res: Response): boolean {
  * the server sends one - as seconds or as a date - and GitHub instead names the
  * epoch second its budget refills at.
  */
-function retryDelayMs(res: Response, attempt: number): number {
-  const after = res.headers.get("retry-after");
+function retryDelayMs(response: Response, attempt: number): number {
+  const after = response.headers.get("retry-after");
   if (after) {
     const seconds = Number(after);
     const ms = Number.isFinite(seconds)
@@ -34,7 +37,7 @@ function retryDelayMs(res: Response, attempt: number): number {
       : Date.parse(after) - Date.now();
     if (ms > 0) return Math.min(ms, MAX_RETRY_WAIT_MS);
   }
-  const reset = Number(res.headers.get("x-ratelimit-reset"));
+  const reset = Number(response.headers.get("x-ratelimit-reset"));
   if (Number.isFinite(reset) && reset > 0) {
     const ms = reset * 1000 - Date.now();
     if (ms > 0) return Math.min(ms, MAX_RETRY_WAIT_MS);
@@ -66,9 +69,9 @@ export async function sourceFetch(
     const signal = init?.signal
       ? AbortSignal.any([init.signal, deadline])
       : deadline;
-    let res: Response;
+    let response: Response;
     try {
-      res = await fetch(url, { ...init, signal });
+      response = await fetch(url, { ...init, signal });
     } catch (e) {
       if (meter)
         countSourceCall(meter.connection, {
@@ -82,17 +85,17 @@ export async function sourceFetch(
         );
       throw e;
     }
-    const throttled = isRateLimited(res);
+    const throttled = isRateLimited(response);
     limited ||= throttled;
     if (attempt >= MAX_RETRIES || !throttled) {
       if (meter)
         countSourceCall(meter.connection, {
           rateLimited: limited,
-          authFailed: !throttled && AUTH_STATUSES.has(res.status),
+          authFailed: !throttled && AUTH_STATUSES.has(response.status),
         });
-      return res;
+      return response;
     }
-    await new Promise((r) => setTimeout(r, retryDelayMs(res, attempt)));
+    await new Promise((r) => setTimeout(r, retryDelayMs(response, attempt)));
   }
 }
 
@@ -112,20 +115,23 @@ function isBlockedAddress(ip: string): boolean {
     const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(v6);
     return mapped ? isBlockedAddress(mapped[1]) : false;
   }
-  const p = ip.split(".").map(Number);
-  if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255))
+  const octets = ip.split(".").map(Number);
+  if (
+    octets.length !== 4 ||
+    octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)
+  )
     return true;
-  const [a, b] = p;
+  const [first, second] = octets;
   return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    a >= 224
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 100 && second >= 64 && second <= 127) ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    (first === 198 && (second === 18 || second === 19)) ||
+    first >= 224
   );
 }
 
@@ -169,11 +175,11 @@ export async function fetchUntrustedUrl(
         `${label}: '${host}' resolves to a private or loopback address`,
       );
 
-    const res = await sourceFetch(label, next, { redirect: "manual" });
-    if (res.status < 300 || res.status > 399) return res;
+    const response = await sourceFetch(label, next, { redirect: "manual" });
+    if (response.status < 300 || response.status > 399) return response;
 
-    const location = res.headers.get("location");
-    if (!location) return res;
+    const location = response.headers.get("location");
+    if (!location) return response;
     next = new URL(location, next).toString();
   }
   throw new Error(`${label}: more than ${MAX_REDIRECTS} redirects`);

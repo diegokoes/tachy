@@ -15,10 +15,10 @@ interface Armed {
   trigger: FlowTrigger;
 }
 
-const eventsOf = (t: FlowTrigger): ItemEvent[] => {
-  const e = t.params.events;
-  return Array.isArray(e) && e.length
-    ? (e.filter((x) => x === "created" || x === "updated") as ItemEvent[])
+const eventsOf = (trigger: FlowTrigger): ItemEvent[] => {
+  const events = trigger.params.events;
+  return Array.isArray(events) && events.length
+    ? (events.filter((x) => x === "created" || x === "updated") as ItemEvent[])
     : ["created", "updated"];
 };
 
@@ -52,14 +52,17 @@ export async function itemTriggers(
       const item = hits.some((a) => a.trigger.where)
         ? await loadSubject(itemId)
         : null;
-      for (const a of hits) {
-        if (a.trigger.where && !evaluateCondition(a.trigger.where, { item }))
+      for (const hit of hits) {
+        if (
+          hit.trigger.where &&
+          !evaluateCondition(hit.trigger.where, { item })
+        )
           continue;
         await enqueueRun({
           kind: "flow.run",
           params: {
-            flow_id: a.flowId,
-            trigger_id: a.trigger.id,
+            flow_id: hit.flowId,
+            trigger_id: hit.trigger.id,
             work_item_id: itemId,
           },
           trigger: "event",
@@ -80,17 +83,19 @@ export async function itemTriggers(
  * it that passes the trigger's condition; the ids come back for the job to
  * queue as its children.
  */
-export async function scheduledItems(t: FlowTrigger): Promise<string[]> {
-  const connection = t.params.connection;
+export async function scheduledItems(trigger: FlowTrigger): Promise<string[]> {
+  const connection = trigger.params.connection;
   if (typeof connection !== "string" || !connection) return [];
-  const sinceDays = Number(t.params.since_days ?? 7);
-  const max = Math.min(Number(t.params.max_items ?? 50), 500);
+  const sinceDays = Number(trigger.params.since_days ?? 7);
+  const max = Math.min(Number(trigger.params.max_items ?? 50), 500);
   const items = await recentSubjects(connection, {
     sinceDays,
     limit: 2000,
   });
   return items
-    .filter((item) => !t.where || evaluateCondition(t.where, { item }))
+    .filter(
+      (item) => !trigger.where || evaluateCondition(trigger.where, { item }),
+    )
     .slice(0, max)
     .map((i) => i.id);
 }

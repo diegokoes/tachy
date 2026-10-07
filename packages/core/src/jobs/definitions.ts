@@ -123,7 +123,7 @@ export async function createJobDefinition(
   by: string | null,
 ): Promise<JobDefinition> {
   const parsed = jobDefinitionInput.parse(input);
-  const d = validateDefinition({
+  const definition = validateDefinition({
     ...parsed,
     timezone: parsed.timezone ?? (await orgTimezone()),
   });
@@ -131,15 +131,17 @@ export async function createJobDefinition(
     const [row] = await tx`
       insert into job_definitions (kind, name, params, enabled, schedule, timezone,
         queue, resource_class, timeout, overlap, notify, created_by, updated_by, last_scheduled_for)
-      values (${d.kind}, ${d.name}, ${jsonb(d.params)}, ${d.enabled}, ${d.schedule},
-        ${d.timezone}, ${d.queue}, ${classOf(d.queue)}, ${d.timeout}, ${d.overlap}, ${d.notify},
+      values (${definition.kind}, ${definition.name}, ${jsonb(definition.params)}, ${definition.enabled}, ${definition.schedule},
+        ${definition.timezone}, ${definition.queue}, ${classOf(definition.queue)}, ${definition.timeout}, ${definition.overlap}, ${definition.notify},
         ${by}, ${by}, now())
       on conflict (name) do nothing
       returning ${COLUMNS}
     `;
     if (!row)
-      throw badInput(`a job definition named '${d.name}' already exists`);
-    await recordChange(tx, row.id, by, "created", null, d);
+      throw badInput(
+        `a job definition named '${definition.name}' already exists`,
+      );
+    await recordChange(tx, row.id, by, "created", null, definition);
     return row as never;
   }) as Promise<JobDefinition>;
 }
@@ -212,28 +214,31 @@ export async function listJobDefinitionChanges(id: string) {
  */
 export async function disableInvalidDefinitions(): Promise<string[]> {
   const disabled: string[] = [];
-  for (const d of await listJobDefinitions()) {
-    if (!d.enabled) continue;
+  for (const definition of await listJobDefinitions()) {
+    if (!definition.enabled) continue;
     let reason: string | null = null;
-    if (!hasJobKind(d.kind)) reason = `kind '${d.kind}' no longer exists`;
+    if (!hasJobKind(definition.kind))
+      reason = `kind '${definition.kind}' no longer exists`;
     else {
-      const parsed = getJobKind(d.kind).params.safeParse(d.params);
+      const parsed = getJobKind(definition.kind).params.safeParse(
+        definition.params,
+      );
       if (!parsed.success)
         reason = `params no longer valid: ${parsed.error.issues.map((i) => `${i.path.join(".") || "(root)"} ${i.message}`).join("; ")}`;
     }
     if (!reason) continue;
     await sql.begin(async (tx) => {
-      await tx`update job_definitions set enabled = false, disabled_reason = ${reason} where id = ${d.id}`;
+      await tx`update job_definitions set enabled = false, disabled_reason = ${reason} where id = ${definition.id}`;
       await recordChange(
         tx,
-        d.id,
+        definition.id,
         null,
         "disabled",
         { enabled: true },
         { enabled: false, reason },
       );
     });
-    disabled.push(d.name);
+    disabled.push(definition.name);
   }
   return disabled;
 }

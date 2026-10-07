@@ -38,18 +38,20 @@ export function presentRun(
   output: Record<string, unknown> | null,
 ): { subject: string | null; outcome: string | null } {
   if (!hasJobKind(kind)) return { subject: null, outcome: null };
-  const k = getJobKind(kind);
-  const safe = <T>(fn: () => T): T | null => {
+  const known = getJobKind(kind);
+  const safe = <T>(render: () => T): T | null => {
     try {
-      return fn();
+      return render();
     } catch {
       return null;
     }
   };
   return {
-    subject: k.subject ? safe(() => k.subject!(params)) : null,
+    subject: known.subject ? safe(() => known.subject!(params)) : null,
     outcome: output
-      ? safe(() => (k.outcome ? k.outcome(output) : genericOutcome(output)))
+      ? safe(() =>
+          known.outcome ? known.outcome(output) : genericOutcome(output),
+        )
       : null,
   };
 }

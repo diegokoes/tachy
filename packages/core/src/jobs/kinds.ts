@@ -31,26 +31,26 @@ export function registerCoreJobs(): void {
  */
 export async function ensureDefaultDefinitions(): Promise<string[]> {
   const created: string[] = [];
-  for (const k of describeJobKinds()) {
-    if (!k.default_schedule) continue;
-    const name = k.title;
+  for (const kind of describeJobKinds()) {
+    if (!kind.default_schedule) continue;
+    const name = kind.title;
     const [seen] = await sql`
-      select 1 from job_definitions where kind = ${k.kind}
+      select 1 from job_definitions where kind = ${kind.kind}
       union all
       select 1 from job_definition_changes
-      where action = 'deleted' and old_value->>'kind' = ${k.kind}
+      where action = 'deleted' and old_value->>'kind' = ${kind.kind}
       limit 1
     `;
     if (seen) continue;
     try {
       await createJobDefinition(
-        { kind: k.kind, name, schedule: k.default_schedule },
+        { kind: kind.kind, name, schedule: kind.default_schedule },
         null,
       );
       created.push(name);
     } catch (err) {
       log("warn", "job_default_definition_failed", {
-        kind: k.kind,
+        kind: kind.kind,
         error: String(err),
       });
     }

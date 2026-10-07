@@ -21,19 +21,19 @@ export interface OptionRequest {
   params: Record<string, string>;
 }
 
-type OptionSource = (req: OptionRequest) => Promise<FlowOption[]>;
+type OptionSource = (request: OptionRequest) => Promise<FlowOption[]>;
 
 const sources = new Map<string, OptionSource>();
 
 /** A named list a param's choices come from; `x-options` on the param names it. */
-export function defineOptionSource(key: string, fn: OptionSource): void {
-  sources.set(key, fn);
+export function defineOptionSource(key: string, source: OptionSource): void {
+  sources.set(key, source);
 }
 
-const need = (req: OptionRequest, name: string) => {
-  const v = req.params[name];
-  if (!v) throw badInput(`'${name}' is needed first`);
-  return v;
+const need = (request: OptionRequest, name: string) => {
+  const value = request.params[name];
+  if (!value) throw badInput(`'${name}' is needed first`);
+  return value;
 };
 
 /**
@@ -43,9 +43,12 @@ const need = (req: OptionRequest, name: string) => {
  */
 async function fromSource(
   name: string,
-  req: OptionRequest,
+  request: OptionRequest,
 ): Promise<FlowOption[]> {
-  const { source } = await resolveSource(need(req, "connection"), req.scope);
+  const { source } = await resolveSource(
+    need(request, "connection"),
+    request.scope,
+  );
   if (name === "groups") {
     if (!source.verify) return [];
     const probe = await source.verify();
@@ -56,23 +59,23 @@ async function fromSource(
     }));
   }
   if (!source.options) return [];
-  return source.options(name, req.params);
+  return source.options(name, request.params);
 }
 
 export async function listOptions(
   key: string,
-  req: OptionRequest,
+  request: OptionRequest,
 ): Promise<FlowOption[]> {
-  if (key.startsWith("source.")) return fromSource(key.slice(7), req);
-  const fn = sources.get(key);
-  if (!fn) throw badInput(`unknown option source '${key}'`);
-  return fn(req);
+  if (key.startsWith("source.")) return fromSource(key.slice(7), request);
+  const source = sources.get(key);
+  if (!source) throw badInput(`unknown option source '${key}'`);
+  return source(request);
 }
 
-defineOptionSource("connections", async (req) => {
+defineOptionSource("connections", async (request) => {
   const rows = await sql`
     select slug, source_type from source_connections
-    ${req.params.source_type ? sql`where source_type = ${req.params.source_type}` : sql``}
+    ${request.params.source_type ? sql`where source_type = ${request.params.source_type}` : sql``}
     order by slug
   `;
   return rows.map((r) => ({
@@ -98,8 +101,8 @@ defineOptionSource("customers", async () =>
   (await listCustomers()).map((c) => ({ value: c.slug, label: c.name })),
 );
 
-defineOptionSource("buckets", async (req) => {
-  const ids = (await readableBuckets(req.scope.userId)).map((b) => b.id);
+defineOptionSource("buckets", async (request) => {
+  const ids = (await readableBuckets(request.scope.userId)).map((b) => b.id);
   if (!ids.length) return [];
   return (await listBuckets(ids)).map((b) => ({
     value: b.slug,
@@ -122,33 +125,36 @@ defineOptionSource("job.kinds", async () =>
     .map((k) => ({ value: k.kind, label: k.title, hint: k.kind })),
 );
 
-defineOptionSource("item.fields", async (req) =>
-  subjectFields(req.params.connection || undefined),
+defineOptionSource("item.fields", async (request) =>
+  subjectFields(request.params.connection || undefined),
 );
 
-defineOptionSource("item.values", async (req) =>
-  subjectValues(need(req, "connection"), need(req, "field")),
+defineOptionSource("item.values", async (request) =>
+  subjectValues(need(request, "connection"), need(request, "field")),
 );
 
-defineOptionSource("item.tags", async (req) =>
-  req.params.connection
-    ? subjectValues(req.params.connection, "item.tags")
+defineOptionSource("item.tags", async (request) =>
+  request.params.connection
+    ? subjectValues(request.params.connection, "item.tags")
     : [],
 );
 
-defineOptionSource("customer.properties", async (req) =>
-  customerPropertyOptions(req.params.connection || undefined, req.scope),
+defineOptionSource("customer.properties", async (request) =>
+  customerPropertyOptions(
+    request.params.connection || undefined,
+    request.scope,
+  ),
 );
 
 // Items to try a flow on, by title or the source's id.
-defineOptionSource("work_items", async (req) => {
-  const q = req.params.q?.trim() ?? "";
+defineOptionSource("work_items", async (request) => {
+  const query = request.params.q?.trim() ?? "";
   const rows = await sql`
     select wi.id, wi.external_id, wi.title, sc.slug
     from work_items wi join source_connections sc on sc.id = wi.source_connection_id
     where true
-      ${req.params.connection ? sql`and sc.slug = ${req.params.connection}` : sql``}
-      ${q ? sql`and (wi.external_id = ${q} or wi.title ilike ${"%" + q + "%"})` : sql``}
+      ${request.params.connection ? sql`and sc.slug = ${request.params.connection}` : sql``}
+      ${query ? sql`and (wi.external_id = ${query} or wi.title ilike ${"%" + query + "%"})` : sql``}
     order by wi.source_updated_at desc nulls last
     limit 50
   `;
@@ -169,9 +175,9 @@ defineOptionSource("ado.projects", async () =>
     })),
 );
 
-defineOptionSource("ado.types", async (req) => {
-  const project = await getSourceProject(need(req, "project"));
-  const { source } = await resolveSource(project.source_slug, req.scope);
+defineOptionSource("ado.types", async (request) => {
+  const project = await getSourceProject(need(request, "project"));
+  const { source } = await resolveSource(project.source_slug, request.scope);
   if (!source.composer) return [];
   return (await source.composer.types(project.external_key)).map((t) => ({
     value: t.name,

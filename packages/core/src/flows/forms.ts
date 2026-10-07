@@ -23,11 +23,11 @@ export async function getComposeConfig(
 /** Replaces the whole compose config; the rest of the project's config is kept. */
 export async function setComposeConfig(
   sourceProjectId: string,
-  cfg: ComposeConfig,
+  config: ComposeConfig,
 ): Promise<ComposeConfig> {
   const [row] = await sql`
     update source_projects
-    set config = jsonb_set(config, ${[KEY]}::text[], ${jsonb(cfg)})
+    set config = jsonb_set(config, ${[KEY]}::text[], ${jsonb(config)})
     where id = ${sourceProjectId}
     returning config -> ${KEY} as compose
   `;
@@ -38,17 +38,17 @@ export async function setComposeConfig(
 /** The types the team offers, in its order; every type when it chose none. */
 export function offeredTypes(
   all: WorkItemTypeOption[],
-  cfg: ComposeConfig,
+  config: ComposeConfig,
 ): WorkItemTypeOption[] {
-  if (!cfg.types?.length) return all;
+  if (!config.types?.length) return all;
   const byName = new Map(all.map((t) => [t.name, t]));
-  return cfg.types.flatMap((n) => byName.get(n) ?? []);
+  return config.types.flatMap((n) => byName.get(n) ?? []);
 }
 
 export const typeConfig = (
-  cfg: ComposeConfig,
+  config: ComposeConfig,
   type: string,
-): TypeFormConfig | undefined => cfg.forms?.[type];
+): TypeFormConfig | undefined => config.forms?.[type];
 
 /**
  * The team's config laid over the source's form: its defaults become prefills
@@ -58,18 +58,19 @@ export const typeConfig = (
  */
 export function applyFormConfig(
   form: ComposerForm,
-  tc: TypeFormConfig | undefined,
+  typeConfig: TypeFormConfig | undefined,
 ): ComposerForm {
-  if (!tc) return form;
+  if (!typeConfig) return form;
   const known = new Set(form.fields.map((f) => f.reference_name));
   const prefill = { ...form.prefill };
   const show: NonNullable<ComposerForm["display"]>["show"] = {};
-  for (const [ref, fc] of Object.entries(tc.fields ?? {})) {
+  for (const [ref, fieldConfig] of Object.entries(typeConfig.fields ?? {})) {
     if (!known.has(ref)) continue;
-    if (fc.show) show[ref] = fc.show;
-    const d = fc.default;
-    if (!d) continue;
-    const value = "macro" in d ? form.me?.unique_name : d.value;
+    if (fieldConfig.show) show[ref] = fieldConfig.show;
+    const fieldDefault = fieldConfig.default;
+    if (!fieldDefault) continue;
+    const value =
+      "macro" in fieldDefault ? form.me?.unique_name : fieldDefault.value;
     if (value != null && value !== "")
       prefill[ref] = { value, origin: "admin" };
   }
@@ -78,7 +79,7 @@ export function applyFormConfig(
     prefill,
     display: {
       show,
-      order: (tc.order ?? []).filter((r) => known.has(r)),
+      order: (typeConfig.order ?? []).filter((r) => known.has(r)),
     },
   };
 }
