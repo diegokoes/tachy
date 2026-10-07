@@ -203,7 +203,7 @@ async function componentGaps(
 }
 
 /** Every gap one wiki has right now. `productId` null is the org-wide wiki. */
-export async function findWikiGaps(
+export async function computeWikiGaps(
   db: Db,
   productId: string | null,
 ): Promise<WikiGapFinding[]> {
@@ -383,7 +383,7 @@ export async function sweepWikiGaps(
           `;
           if (!locked) return null;
         }
-        const found = await findWikiGaps(tx, productId);
+        const found = await computeWikiGaps(tx, productId);
         await record(tx, productId, found);
         return found.length;
       });
