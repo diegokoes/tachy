@@ -30,23 +30,23 @@ The index for one section of the app: what is in it, how much of each, and which
 part is open. Not a third tab bar: it answers what can be configured here.
 -->
 <nav class="rail" aria-label={label}>
-  {#each items as it (it.key)}
-    {@const on = it.key === active}
+  {#each items as item (item.key)}
+    {@const on = item.key === active}
     <button
       class="row"
       class:on
       aria-current={on ? "page" : undefined}
-      onclick={() => onpick(it.key)}
+      onclick={() => onpick(item.key)}
       use:jellyPress
     >
       <span class="mark" aria-hidden="true">{on ? G.marker : " "}</span>
-      <span class="lbl">{it.label}</span>
-      {#if it.count !== undefined}
+      <span class="lbl">{item.label}</span>
+      {#if item.count !== undefined}
         <span
           class="n"
-          class:pending={it.count === null}
-          class:warn={it.tone === "warn"}
-          class:danger={it.tone === "danger"}>{it.count ?? "·"}</span
+          class:pending={item.count === null}
+          class:warn={item.tone === "warn"}
+          class:danger={item.tone === "danger"}>{item.count ?? "·"}</span
         >
       {/if}
     </button>

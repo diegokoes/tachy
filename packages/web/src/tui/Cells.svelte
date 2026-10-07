@@ -35,14 +35,14 @@
   style="--row: {ROW_REM}rem; --gap: {GAP_REM}rem; --cols: {COLS}"
   use:fitRows={{ row: ROW_REM, gap: GAP_REM, onfit: (n) => (rows = n) }}
 >
-  {#each shown as c (c.key)}
-    <li class={c.tone}>
+  {#each shown as cell (cell.key)}
+    <li class={cell.tone}>
       {#if onpick}
-        <button class="pick" onclick={() => onpick(c)}>
-          <span class="lbl">{c.label}</span>
+        <button class="pick" onclick={() => onpick(cell)}>
+          <span class="lbl">{cell.label}</span>
         </button>
       {:else}
-        <span class="lbl">{c.label}</span>
+        <span class="lbl">{cell.label}</span>
       {/if}
     </li>
   {/each}

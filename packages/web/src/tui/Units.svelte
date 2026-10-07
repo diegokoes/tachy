@@ -17,17 +17,17 @@ One cell per thing, coloured by its state: a handful of items read by looking,
 with nothing to measure.
 -->
 <div class="units" class:big={view.expanded}>
-  {#each groups as g (g.key)}
+  {#each groups as group (group.key)}
     <div class="group">
-      <span class="name">{g.label}</span>
+      <span class="name">{group.label}</span>
       <span class="cells">
-        {#each g.items as u (u.key)}
+        {#each group.items as unit (unit.key)}
           <span
             class="cell"
-            style="--tone-color: {toneVar(u.tone)}"
-            title={u.title ?? u.label}
+            style="--tone-color: {toneVar(unit.tone)}"
+            title={unit.title ?? unit.label}
             role="img"
-            aria-label={u.title ?? u.label}
+            aria-label={unit.title ?? unit.label}
           ></span>
         {:else}
           <span class="none">none</span>

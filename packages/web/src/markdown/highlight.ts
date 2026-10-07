@@ -47,8 +47,11 @@ export function highlight(
   if (!lang || !hljs.getLanguage(lang))
     return { html: esc(code), language: null };
   try {
-    const out = hljs.highlight(code, { language: lang, ignoreIllegals: true });
-    return { html: out.value, language: out.language ?? lang };
+    const highlighted = hljs.highlight(code, {
+      language: lang,
+      ignoreIllegals: true,
+    });
+    return { html: highlighted.value, language: highlighted.language ?? lang };
   } catch {
     return { html: esc(code), language: null };
   }

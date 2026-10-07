@@ -43,22 +43,22 @@ export const themeState = $state({
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
-export function isHexColor(v: string): boolean {
-  return HEX.test(v);
+export function isHexColor(value: string): boolean {
+  return HEX.test(value);
 }
 
 function applyAccent(
-  v: string,
+  value: string,
   second: string | null = themeState.accentColor2,
 ) {
   const root = document.documentElement.style;
-  themeState.accentColor = v;
+  themeState.accentColor = value;
   themeState.accentColor2 = second;
-  root.setProperty("--accent", v);
+  root.setProperty("--accent", value);
   if (second)
     root.setProperty(
       "--accent-fill",
-      `linear-gradient(90deg, ${v}, ${second})`,
+      `linear-gradient(90deg, ${value}, ${second})`,
     );
   else root.removeProperty("--accent-fill");
 }
@@ -79,12 +79,12 @@ export function resetAccent() {
   applyAccent(ACCENT_DEFAULTS[themeState.theme], null);
 }
 
-export function setTheme(t: Theme) {
-  const changed = themeState.theme !== t;
-  themeState.theme = t;
-  document.documentElement.dataset.theme = t;
-  localStorage.setItem("tachy-theme", t);
-  if (!themeState.accentCustomized) applyAccent(ACCENT_DEFAULTS[t]);
+export function setTheme(theme: Theme) {
+  const changed = themeState.theme !== theme;
+  themeState.theme = theme;
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem("tachy-theme", theme);
+  if (!themeState.accentCustomized) applyAccent(ACCENT_DEFAULTS[theme]);
   else if (changed) {
     const opposite = OPPOSITE_ACCENTS[themeState.accentColor.toLowerCase()];
     if (opposite) {
@@ -94,22 +94,24 @@ export function setTheme(t: Theme) {
   }
 }
 
-export function setFontScale(v: number) {
-  const s = TEXT_SIZES.some((t) => t.scale === v) ? v : DEFAULT_SCALE;
-  themeState.fontScale = s;
-  document.documentElement.style.setProperty("--font-scale", String(s));
-  localStorage.setItem("tachy-font-scale", String(s));
+export function setFontScale(value: number) {
+  const scale = TEXT_SIZES.some((t) => t.scale === value)
+    ? value
+    : DEFAULT_SCALE;
+  themeState.fontScale = scale;
+  document.documentElement.style.setProperty("--font-scale", String(scale));
+  localStorage.setItem("tachy-font-scale", String(scale));
 }
 
-export function setNavLabels(v: NavLabels) {
-  themeState.navLabels = v;
-  localStorage.setItem("tachy-nav-labels", v);
+export function setNavLabels(value: NavLabels) {
+  themeState.navLabels = value;
+  localStorage.setItem("tachy-nav-labels", value);
 }
 
 /** Takes the top bar away. Its shortcuts stay bound. */
-export function setNavHidden(v: boolean) {
-  themeState.navHidden = v;
-  localStorage.setItem("tachy-nav-hidden", v ? "1" : "0");
+export function setNavHidden(value: boolean) {
+  themeState.navHidden = value;
+  localStorage.setItem("tachy-nav-hidden", value ? "1" : "0");
 }
 
 export function loadThemeFromStorage() {

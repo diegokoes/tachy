@@ -15,12 +15,12 @@
     weight = 6,
   }: { size?: string; spread?: number; weight?: number } = $props();
 
-  const S = Math.sqrt(3) / 2;
+  const SIN_60 = Math.sqrt(3) / 2;
   /** Unit vectors to the three vertices, apex up. */
   const DIRS: [number, number][] = [
     [0, -1],
-    [-S, 0.5],
-    [S, 0.5],
+    [-SIN_60, 0.5],
+    [SIN_60, 0.5],
   ];
 </script>
 

@@ -24,8 +24,8 @@
   } = $props();
 
   const plot = getPlot();
-  const f = $derived(plot.frame);
-  const cx = $derived(f.bandAt(at) + f.band / 2);
+  const frame = $derived(plot.frame);
+  const cx = $derived(frame.bandAt(at) + frame.band / 2);
 </script>
 
 <g
@@ -36,9 +36,12 @@
   onpointerleave={() => onhover?.(false)}
 >
   {#if details}<title>{details}</title>{/if}
-  <circle {cx} cy={f.at(value)} {r} style="fill: {toneVar(tone)}" />
-  <text x={cx} y={f.at(value)} dominant-baseline="central" text-anchor="middle"
-    >{label}</text
+  <circle {cx} cy={frame.at(value)} {r} style="fill: {toneVar(tone)}" />
+  <text
+    x={cx}
+    y={frame.at(value)}
+    dominant-baseline="central"
+    text-anchor="middle">{label}</text
   >
 </g>
 

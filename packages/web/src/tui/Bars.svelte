@@ -69,42 +69,45 @@ needs no axis and nothing is hidden behind a hover.
         ? ROW_REM * 1.5
         : ROW_REM}rem; --gap: {GAP_REM}rem"
     >
-      {#each cut.shown as r (r.key)}
+      {#each cut.shown as row (row.key)}
         <div
           class="row"
           class:with-aside={hasAside}
-          style="--tone-color: {toneVar(r.tone)}"
+          style="--tone-color: {toneVar(row.tone)}"
         >
           {#if onpick}
-            <button class="lbl pick" onclick={() => onpick(r)}>{r.label}</button
+            <button class="lbl pick" onclick={() => onpick(row)}
+              >{row.label}</button
             >
           {:else}
-            <span class="lbl">{r.label}</span>
+            <span class="lbl">{row.label}</span>
           {/if}
           <span class="track">
             <span
               class="fill"
-              class:stacked={Boolean(r.parts)}
-              style="width: {(r.value / top) * 100}%"
+              class:stacked={Boolean(row.parts)}
+              style="width: {(row.value / top) * 100}%"
             >
-              {#each (r.parts ?? []).filter((p) => p.value > 0) as p (p.key)}
+              {#each (row.parts ?? []).filter((p) => p.value > 0) as part (part.key)}
                 <span
                   class="part"
-                  style="flex-grow: {p.value}; --tone-color: {toneVar(p.tone)}"
+                  style="flex-grow: {part.value}; --tone-color: {toneVar(
+                    part.tone,
+                  )}"
                 ></span>
               {/each}
-              {#if r.inner?.length}
+              {#if row.inner?.length}
                 <span
                   class="inner"
-                  style="width: {(r.inner.reduce((n, p) => n + p.value, 0) /
-                    r.value) *
+                  style="width: {(row.inner.reduce((n, p) => n + p.value, 0) /
+                    row.value) *
                     100}%"
                 >
-                  {#each r.inner.filter((p) => p.value > 0) as p (p.key)}
+                  {#each row.inner.filter((p) => p.value > 0) as part (part.key)}
                     <span
                       class="part"
-                      style="flex-grow: {p.value}; --tone-color: {toneVar(
-                        p.tone,
+                      style="flex-grow: {part.value}; --tone-color: {toneVar(
+                        part.tone,
                       )}"
                     ></span>
                   {/each}
@@ -112,8 +115,8 @@ needs no axis and nothing is hidden behind a hover.
               {/if}
             </span>
           </span>
-          <span class="n">{format(r.value)}</span>
-          {#if hasAside}<span class="aside">{r.aside ?? ""}</span>{/if}
+          <span class="n">{format(row.value)}</span>
+          {#if hasAside}<span class="aside">{row.aside ?? ""}</span>{/if}
         </div>
       {/each}
       {#if cut.rest.length}

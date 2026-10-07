@@ -20,8 +20,8 @@
     size: number;
     dim: number;
     el?: HTMLSpanElement;
-    xTo?: (v: number) => void;
-    yTo?: (v: number) => void;
+    xTo?: (value: number) => void;
+    yTo?: (value: number) => void;
   };
 
   /** The feedback view mounts its own field with this on, so entering it reads
@@ -56,33 +56,39 @@
 
   function rebucket(w: number, h: number) {
     buckets.clear();
-    for (const s of stars) {
-      const key = `${Math.floor(((s.x / 100) * w) / REPEL)}:${Math.floor(((s.y / 100) * h) / REPEL)}`;
-      let b = buckets.get(key);
-      if (!b) buckets.set(key, (b = []));
-      b.push(s);
+    for (const star of stars) {
+      const key = `${Math.floor(((star.x / 100) * w) / REPEL)}:${Math.floor(((star.y / 100) * h) / REPEL)}`;
+      let bucket = buckets.get(key);
+      if (!bucket) buckets.set(key, (bucket = []));
+      bucket.push(star);
     }
   }
 
   onMount(() => {
     if (!root || reducedMotion()) return;
 
-    for (const s of [...stars, ...motes]) {
-      if (!s.el) continue;
-      s.xTo = gsap.quickTo(s.el, "x", { duration: 0.9, ease: "power2.out" });
-      s.yTo = gsap.quickTo(s.el, "y", { duration: 0.9, ease: "power2.out" });
+    for (const speck of [...stars, ...motes]) {
+      if (!speck.el) continue;
+      speck.xTo = gsap.quickTo(speck.el, "x", {
+        duration: 0.9,
+        ease: "power2.out",
+      });
+      speck.yTo = gsap.quickTo(speck.el, "y", {
+        duration: 0.9,
+        ease: "power2.out",
+      });
     }
 
     const ctx = gsap.context(() => {
       // Twinkle. Long, offset durations so the field never pulses in unison -
       // synchronised blinking reads as a loading state, not as sky.
-      for (const s of stars) {
-        if (!s.el) continue;
-        gsap.to(s.el, {
+      for (const star of stars) {
+        if (!star.el) continue;
+        gsap.to(star.el, {
           // A twinkle, not a blink: dipping to a quarter made half the field
           // read as flickering out rather than breathing. Intense dips further
           // and cycles faster, so the sky is visibly more alive.
-          opacity: s.dim * (intense ? rand(0.3, 0.7) : rand(0.5, 0.75)),
+          opacity: star.dim * (intense ? rand(0.3, 0.7) : rand(0.5, 0.75)),
           duration: intense ? rand(1.1, 3) : rand(3, 7),
           delay: intense ? rand(0, 2.5) : rand(0, 6),
           repeat: -1,
@@ -92,11 +98,11 @@
       }
 
       // Slow rising motes: the only thing here with a direction.
-      for (const m of motes) {
-        if (!m.el) continue;
+      for (const mote of motes) {
+        if (!mote.el) continue;
         gsap.fromTo(
-          m.el,
-          { y: 0, x: 0, opacity: m.dim },
+          mote.el,
+          { y: 0, x: 0, opacity: mote.dim },
           {
             y: rand(-150, -50),
             x: rand(-30, 30),
@@ -131,19 +137,19 @@
       const by = Math.floor(py / REPEL);
       for (let cx = bx - 1; cx <= bx + 1; cx++) {
         for (let cy = by - 1; cy <= by + 1; cy++) {
-          for (const s of buckets.get(`${cx}:${cy}`) ?? []) {
-            const dx = (s.x / 100) * w - px;
-            const dy = (s.y / 100) * h - py;
+          for (const star of buckets.get(`${cx}:${cy}`) ?? []) {
+            const dx = (star.x / 100) * w - px;
+            const dy = (star.y / 100) * h - py;
             const dist = Math.hypot(dx, dy);
             if (dist > REPEL) {
-              s.xTo?.(0);
-              s.yTo?.(0);
+              star.xTo?.(0);
+              star.yTo?.(0);
               continue;
             }
             // Push away, hardest at the centre, easing back once out of range.
             const force = ((REPEL - dist) / REPEL) * 26;
-            s.xTo?.((dx / (dist || 1)) * force);
-            s.yTo?.((dy / (dist || 1)) * force);
+            star.xTo?.((dx / (dist || 1)) * force);
+            star.yTo?.((dy / (dist || 1)) * force);
           }
         }
       }

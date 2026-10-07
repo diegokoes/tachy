@@ -50,12 +50,12 @@ export const ACTIONS = {
 
 export type Action = keyof typeof ACTIONS;
 
-export function navKey(item: string, i: number): string {
-  return keymap.nav[item] ?? defaultNavKey(i);
+export function navKey(item: string, index: number): string {
+  return keymap.nav[item] ?? defaultNavKey(index);
 }
 
-export function subnavKey(i: number): string {
-  return keymap.subnav[i] ?? defaultSubnavKey(i);
+export function subnavKey(slot: number): string {
+  return keymap.subnav[slot] ?? defaultSubnavKey(slot);
 }
 
 /** Stored in the `nav` bucket beside the tab keys, under the action's name. */
@@ -69,9 +69,9 @@ export function setNavKey(item: string, key: string | null) {
   persist();
 }
 
-export function setSubnavKey(i: number, key: string | null) {
-  if (key) keymap.subnav[i] = key;
-  else delete keymap.subnav[i];
+export function setSubnavKey(slot: number, key: string | null) {
+  if (key) keymap.subnav[slot] = key;
+  else delete keymap.subnav[slot];
   persist();
 }
 
@@ -105,9 +105,9 @@ export function keyCaps(chord: string): string[][] {
   return chord.split(" ").map((part) => {
     const mods: string[] = [];
     let rest = part;
-    for (let m = MODS.exec(rest); m; m = MODS.exec(rest)) {
-      mods.push(m[1].toUpperCase());
-      rest = rest.slice(m[0].length);
+    for (let match = MODS.exec(rest); match; match = MODS.exec(rest)) {
+      mods.push(match[1].toUpperCase());
+      rest = rest.slice(match[0].length);
     }
     return [...mods, WORDS[rest] ?? rest.toUpperCase()];
   });
@@ -155,9 +155,9 @@ export function conflicts(
     if (skip?.kind === "subnav" && skip.slot === i) continue;
     if (subnavKey(i) === key) hits.push(`sub tab ${i + 1}`);
   }
-  for (const a of Object.keys(ACTIONS) as Action[]) {
-    if (skip?.kind === "action" && skip.item === a) continue;
-    if (actionKey(a) === key) hits.push(ACTIONS[a].label);
+  for (const action of Object.keys(ACTIONS) as Action[]) {
+    if (skip?.kind === "action" && skip.item === action) continue;
+    if (actionKey(action) === key) hits.push(ACTIONS[action].label);
   }
   return hits;
 }

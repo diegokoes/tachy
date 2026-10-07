@@ -95,14 +95,19 @@ export type Stacked = {
  */
 export function stackParts(parts: Part[] | undefined): Stacked[] {
   if (!parts?.length) return [];
-  const out: Stacked[] = [];
+  const stacked: Stacked[] = [];
   let at = 0;
-  for (const p of parts) {
-    if (!(p.value > 0)) continue;
-    out.push({ key: p.key, tone: p.tone, offset: at, size: p.value });
-    at += p.value;
+  for (const part of parts) {
+    if (!(part.value > 0)) continue;
+    stacked.push({
+      key: part.key,
+      tone: part.tone,
+      offset: at,
+      size: part.value,
+    });
+    at += part.value;
   }
-  return out;
+  return stacked;
 }
 
 /**

@@ -33,10 +33,10 @@
   let box = $state<HTMLDivElement>();
 
   onMount(() => {
-    const cv = canvas;
+    const surface = canvas;
     const host = box;
-    if (!cv || !host) return;
-    const ctx = cv.getContext("2d");
+    if (!surface || !host) return;
+    const ctx = surface.getContext("2d");
     if (!ctx) return;
 
     let particles: P[] = [];
@@ -48,7 +48,7 @@
     let settled = false;
 
     function build() {
-      if (!cv || !host || !ctx) return;
+      if (!surface || !host || !ctx) return;
       // Sample at 2x the display resolution regardless of the screen: the grid
       // sets the mark's density, and reading it off a sharper render keeps a
       // curve from quantising into a staircase.
@@ -58,8 +58,8 @@
       // A hidden or not-yet-laid-out host measures zero, and getImageData
       // throws on a zero-area rect. The ResizeObserver can hit this.
       if (!w || !h) return;
-      cv.width = Math.round(w * dpr);
-      cv.height = Math.round(h * dpr);
+      surface.width = Math.round(w * dpr);
+      surface.height = Math.round(h * dpr);
 
       const face = getComputedStyle(host).getPropertyValue("--font-ui");
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -76,9 +76,9 @@
       // Centre on the glyphs drawn, not on the font's line box: the box carries
       // ascender and descender space TACHY never uses, and centring on it puts
       // the mark high in its slot.
-      const m = ctx.measureText(TEXT);
-      const capTop = m.actualBoundingBoxAscent;
-      const capBottom = m.actualBoundingBoxDescent;
+      const metrics = ctx.measureText(TEXT);
+      const capTop = metrics.actualBoundingBoxAscent;
+      const capBottom = metrics.actualBoundingBoxDescent;
       const capHeight = capTop + capBottom || h * 0.6;
       ctx.fillText(TEXT, 1, (h + capHeight) / 2 - capBottom);
 
@@ -86,11 +86,11 @@
       // glyphs back and keep one particle per inked sample.
       const step = Math.max(2, (capHeight * dpr) / ROWS);
       dot = (step / dpr) * DOT_RATIO;
-      const data = ctx.getImageData(0, 0, cv.width, cv.height).data;
+      const data = ctx.getImageData(0, 0, surface.width, surface.height).data;
       particles = [];
-      for (let y = 0; y < cv.height; y += step) {
-        const row = Math.floor(y) * cv.width;
-        for (let x = 0; x < cv.width; x += step) {
+      for (let y = 0; y < surface.height; y += step) {
+        const row = Math.floor(y) * surface.width;
+        for (let x = 0; x < surface.width; x += step) {
           if (data[(row + Math.floor(x)) * 4 + 3] > INK) {
             const ox = x / dpr;
             const oy = y / dpr;
@@ -102,34 +102,37 @@
     }
 
     function draw() {
-      if (!cv || !ctx) return;
+      if (!surface || !ctx) return;
       const ink = getComputedStyle(document.documentElement)
         .getPropertyValue("--wordmark-ink")
         .trim();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, cv.width / dpr, cv.height / dpr);
+      ctx.clearRect(0, 0, surface.width / dpr, surface.height / dpr);
       ctx.fillStyle = ink;
-      for (const p of particles) {
+      for (const particle of particles) {
         ctx.beginPath();
-        ctx.arc(p.x, p.y, dot, 0, Math.PI * 2);
+        ctx.arc(particle.x, particle.y, dot, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
     function frame() {
       let moving = false;
-      for (const p of particles) {
-        const dx = p.x - px;
-        const dy = p.y - py;
+      for (const particle of particles) {
+        const dx = particle.x - px;
+        const dy = particle.y - py;
         const dist = Math.hypot(dx, dy);
         if (dist < SCATTER) {
           const force = (SCATTER - dist) / SCATTER;
-          p.x += (dx / (dist || 1)) * force * 5;
-          p.y += (dy / (dist || 1)) * force * 5;
+          particle.x += (dx / (dist || 1)) * force * 5;
+          particle.y += (dy / (dist || 1)) * force * 5;
         }
-        p.x += (p.ox - p.x) * RETURN;
-        p.y += (p.oy - p.y) * RETURN;
-        if (Math.abs(p.ox - p.x) > 0.05 || Math.abs(p.oy - p.y) > 0.05)
+        particle.x += (particle.ox - particle.x) * RETURN;
+        particle.y += (particle.oy - particle.y) * RETURN;
+        if (
+          Math.abs(particle.ox - particle.x) > 0.05 ||
+          Math.abs(particle.oy - particle.y) > 0.05
+        )
           moving = true;
       }
       draw();
@@ -157,9 +160,9 @@
     const reduced = reducedMotion();
 
     const onMove = (e: PointerEvent) => {
-      const b = host.getBoundingClientRect();
-      px = e.clientX - b.left;
-      py = e.clientY - b.top;
+      const bounds = host.getBoundingClientRect();
+      px = e.clientX - bounds.left;
+      py = e.clientY - bounds.top;
       wake();
     };
     // Snapping home is a single decision: park the cursor out of range and let
@@ -175,11 +178,11 @@
       host.addEventListener("pointerleave", onLeave);
     }
 
-    const ro = new ResizeObserver(() => {
+    const observer = new ResizeObserver(() => {
       build();
       draw();
     });
-    ro.observe(host);
+    observer.observe(host);
 
     const theme = new MutationObserver(() => {
       if (settled || !raf) draw();
@@ -192,7 +195,7 @@
     return () => {
       host.removeEventListener("pointermove", onMove);
       host.removeEventListener("pointerleave", onLeave);
-      ro.disconnect();
+      observer.disconnect();
       theme.disconnect();
       if (raf) cancelAnimationFrame(raf);
     };
