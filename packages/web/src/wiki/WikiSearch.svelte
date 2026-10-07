@@ -20,8 +20,8 @@
     inputEl?.focus();
   });
 
-  /* Debounced, and sequenced so a slower response cannot land on top of the
-     query typed after it. */
+  // Debounced, and sequenced so a slower response cannot land on top of the
+  // query typed after it.
   $effect(() => {
     const term = q.trim();
     const isCurrent = current();

@@ -21,11 +21,9 @@
   let root = $state<HTMLElement>();
 
   /**
-   * Every extra, always, in the same order - the ones already on the row are
-   * marked rather than dropped. Picking three in a row is the normal way this
-   * menu is used, and a list that reflows under the pointer after each pick
-   * costs a misclick.
-   *
+   * Every extra, always, in the same order: the ones already on the row are
+   * marked, not dropped. Picking three in a row is the normal use of this menu,
+   * and a list that reflows under the pointer after each pick costs a misclick.
    * A filter with nothing to offer under the current scope is listed but
    * disabled, so the menu still says the property exists.
    */

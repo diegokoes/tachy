@@ -122,15 +122,15 @@ export function saveFilters(s: Stored) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
   } catch {
-    /* private mode, quota - the filters still work for this session. */
+    // private mode, quota - the filters still work for this session.
   }
 }
 
 /**
- * A stored value that the current facet counts no longer offer would silently
- * narrow the list to nothing, so it is dropped rather than kept. `enum` filters
- * are checked against their fixed list instead - an enum value with no rows
- * behind it right now is still a legitimate thing to ask for.
+ * A stored value the current facet counts do not offer would narrow the list to
+ * nothing, so it is dropped. `enum` filters are checked against their fixed
+ * list instead: an enum value with no rows behind it is still a legitimate
+ * thing to ask for.
  */
 export function pruneValues(
   shown: FacetKey[],

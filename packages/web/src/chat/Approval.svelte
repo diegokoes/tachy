@@ -32,13 +32,9 @@
 
   let raw = $state(false);
 
-  /* ---- work-item field schema -------------------------------------------
-     create_ado_work_item takes an open `fields` object keyed by ADO reference
-     names, so without a schema the box can only offer a JSON blob. Fetching the
-     project's own schema turns it into real controls with the required fields
-     marked. Best-effort by design: if the call is slow or fails, the JSON view
-     below is what the user gets, because an approval that never renders blocks
-     the turn. */
+  // create_ado_work_item takes an open `fields` object, so the project's schema
+  // turns a JSON blob into controls. A slow or failed call leaves the JSON
+  // view: an approval that never renders blocks the turn.
   let schema = $state<WorkItemSchema | null>(null);
   let schemaTried = $state(false);
 
@@ -176,7 +172,8 @@
       <div class="fields">
         {#each keys as key (key)}
           {#if key === "fields" && schema && adoFields}
-            <!-- The one per-tool branch: ADO's own schema, when we have it. -->
+            <!-- The one per-tool branch: ADO's own schema, when there is
+                 one. -->
             <div class="subfields">
               <span class="grouplabel">
                 fields

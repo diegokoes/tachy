@@ -123,7 +123,7 @@
     onchange(v === "" ? null : (original ?? v));
   }
 
-  /* The multivalue extension stores its picks as one ";"-joined string. */
+  // The multivalue extension stores its picks as one ";"-joined string.
   const picked = $derived(
     current
       .split(";")

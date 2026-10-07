@@ -185,8 +185,8 @@
     load(id);
   });
 
-  /** Same as the entry view: backspace or esc goes back while reading, not editing.
-      Hidden, because back is a button in the carved row. */
+  // Same as the entry view: backspace or esc goes back while reading, not
+  // editing. Hidden, because back is a button in the carved row.
   $effect(() => {
     if (editing || newVersion || !doc) return;
     return pushScope([
@@ -195,7 +195,7 @@
     ]);
   });
 
-  /* The carved row, while reading. The form claims it while editing. */
+  // The carved row, while reading. The form claims it while editing.
   $effect(() => {
     if (editing || newVersion || !doc) return;
     return setTopActions(readActions);

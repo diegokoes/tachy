@@ -47,7 +47,7 @@
       : "",
   );
 
-  /* Section CRUD lives on the landing, where the tree it edits is in view. */
+  // Section CRUD lives on the landing, where the tree it edits is in view.
   let editing = $state<string | null>(null);
   let form = $state({
     slug: "",
@@ -427,7 +427,6 @@
       {/if}
     </section>
 
-    <!-- Section editor, when adding or editing one. -->
     {#if isCurator() && editing !== null}
       <div class="catform">
         <div class="row">
@@ -498,7 +497,6 @@
       </div>
     {/if}
 
-    <!-- The sections: this wiki's contents, Arch-style. -->
     {#if toc}
       <section class="sections">
         <h3>Sections</h3>

@@ -4,9 +4,9 @@
   import { PULSE } from "../motion/motion";
   import { portal } from "../tui/portal";
 
-  /* Element, not HTMLElement: `to` is the tab's frame <svg>, and everything
-     done with these ends is getBoundingClientRect and ResizeObserver.observe,
-     both of which are defined on Element. */
+  // Element, not HTMLElement: `to` is the tab's frame <svg>, and everything
+  // done with these ends is getBoundingClientRect and ResizeObserver.observe,
+  // both of which are defined on Element.
   let {
     from,
     to,
@@ -31,10 +31,9 @@
   let frozen = false;
   let charge: gsap.core.Tween | undefined;
 
-  /* One packet per cycle: it runs during the first half and the wire rests
-     through the second, so every arrival still lands on a growth peak of the
-     tab icon (see PULSE). Variance lives in the packet's character - never in
-     its timing, which would break that sync. */
+  // One packet per cycle: it runs in the first half and the wire rests in the
+  // second, so each arrival lands on a growth peak of the tab icon (see PULSE).
+  // A packet varies in character, never in timing.
   const CYCLE = PULSE * 2;
 
   type Packet = {
@@ -73,10 +72,9 @@
     const x1 = a.right - o.left - 1;
     const x2 = b.left - o.left;
     const y2 = b.top + b.height / 2 - o.top;
-    /* Level with the tab, not with the dialog's own centre: the dialog is
-       centred on the viewport and the tab on the transcript, so aiming at both
-       centres left the wire running downhill. Held off the corners so the join
-       stays on the dialog's edge whatever height it is. */
+    // Level with the tab, not the dialog's centre: the dialog is centred on the
+    // viewport and the tab on the transcript, so centre to centre would slope.
+    // Held off the corners so the join stays on the dialog's edge.
     const EDGE = 10;
     const y1 = Math.min(
       Math.max(y2, a.top - o.top + EDGE),
@@ -213,11 +211,9 @@
     if (still) return;
 
     let since = 0;
-    /* Whether either endpoint has moved since the last frame. The tab's
-       open/close grow is a transform, which changes no layout box - so the
-       ResizeObserver above never fires for it and the wire would hang off the
-       hexagon's old edge until the next random flicker. Watching the client
-       rect catches it, and catches anything else that moves an end. */
+    // Whether either endpoint moved since the last frame. The tab's grow is a
+    // transform, which changes no layout box and fires no ResizeObserver, so
+    // the client rects are watched.
     let anchors = "";
     const moved = () => {
       if (!from || !to) return false;
@@ -333,15 +329,9 @@
     display: none;
   }
 
-  /* Above the picker's scrim and outside the blurred app, not in them: the
-     blur is what puts the app on a plane behind the dialog, and a wire drawn
-     into that plane reads as part of what was pushed back. It has to arrive
-     on top of the blur for the dialog and the tab to look connected.
-
-     Portaled to the body for the same reason the dialog is: `.app` opens a
-     stacking context, and no z-index inside it can rank above the scrim. At
-     the dialog's own level, a dialog opened later still covers it by coming
-     later in the body. */
+  /* Above the picker's scrim and outside the blurred app: a wire drawn into
+     the blurred plane reads as pushed back with it. Portaled to the body
+     like the dialog, since no z-index inside `.app` ranks above the scrim. */
   .thread {
     position: fixed;
     inset: 0;

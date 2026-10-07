@@ -13,13 +13,11 @@ export interface OutboundLink {
 }
 
 /**
- * Where each `[[target]]` in one body actually points, and a click handler that
- * follows it. Shared by the article, doc and entry views.
- *
- * Destinations come from what the SERVER resolved, not from re-deriving them in
- * the browser: link resolution is scoped (a product's wiki first, then the
- * org-wide one), and a client guessing at that scope would send readers to the
- * wrong article whenever the two disagree.
+ * Where each `[[target]]` in one body points, and a click handler that follows
+ * it. Shared by the article, doc and entry views. Destinations come from what
+ * the server resolved: link resolution is scoped (a product's wiki first, then
+ * the org-wide one), and a browser guessing at that scope would send readers to
+ * the wrong article where the two disagree.
  */
 export class LinkTargets {
   /** Targets that resolved; anything else renders as a broken link. */

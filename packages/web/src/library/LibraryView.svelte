@@ -56,7 +56,7 @@
     { value: "docs", label: "docs" },
     { value: "wiki", label: "wiki" },
   ];
-  /** The list segments the tabs used to live at, kept so old links resolve. */
+  /** Former list segments of the tabs, kept so old links resolve. */
   const TYPE_OF_SEGMENT: Record<string, string> = {
     entries: "knowledge",
     docs: "docs",
@@ -144,8 +144,8 @@
   let rowEls = $state<(HTMLElement | undefined)[]>([]);
   /**
    * Keyboard navigation scrolls the list under a stationary pointer, and the
-   * browser fires mouseenter for that - which would yank the cursor back to
-   * wherever the mouse happens to sit. Ignore hover until the mouse really moves.
+   * browser fires mouseenter for that, which would pull the cursor back to
+   * where the mouse sits. Hover is ignored until the mouse moves.
    */
   let pointerMoved = $state(true);
 
@@ -170,8 +170,8 @@
   const showDocFilters = $derived(type === "docs" || type === "wiki");
   /**
    * Counts hidden filters too: the entry-only ones still travel on entryQs, so
-   * a filter you cannot see must stay clearable - otherwise the list is
-   * silently narrowed with no way out.
+   * a filter that is not shown stays clearable, or the list is narrowed with no
+   * way out.
    */
   const activeFilters = $derived(
     [type, productId, component, status].filter(Boolean).length +
@@ -200,9 +200,9 @@
   };
 
   /**
-   * What the list is actually asked for. A filter put on the row with no value
-   * yet, or a prune that changes nothing, leaves this as it was, so the list
-   * is not fetched again for it.
+   * What the list is asked for. A filter put on the row with no value yet, or a
+   * prune that changes nothing, leaves this unchanged, so the list is not
+   * fetched again for it.
    */
   const request = $derived([type, status, entryQs(), docQs()].join("\n"));
 
@@ -534,15 +534,9 @@
               hidden: true,
               run: () => searchEl?.focus(),
             },
-            /*
-             * n/N step the matches, and only mean that with a query on - but
-             * the check belongs inside `run`, not in the effect body. Read out
-             * here it made `q` a dependency of the whole scope, so every
-             * keystroke in the search box tore down and re-registered all
-             * eleven bindings; and because pushScope appends while resolution
-             * runs innermost-first, each re-push promoted these above any scope
-             * opened since.
-             */
+            // n/N step the matches, and only with a query on. The check is
+            // inside `run`: read in the effect body, `q` would re-register
+            // these bindings on every keystroke, over any newer scope.
             {
               key: "n",
               label: "",
@@ -623,9 +617,9 @@
     />
   {/if}
 {:else}
-  <!-- The default row stays deliberately short. Everything else the schema can
-       be narrowed by - environment, confidence, clarity, pattern, hidden fix,
-       versions, tags - is one `+` away and remembered per browser. -->
+  <!-- The default row stays short. Everything else the schema can be
+       narrowed by (environment, confidence, clarity, pattern, hidden fix,
+       versions, tags) is one `+` away and remembered per browser. -->
   <div class="bar">
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <span
@@ -851,10 +845,9 @@
     gap: var(--pad-1);
   }
 
-  /* Pinned: the result list scrolls under it, so the query and the filters
-     that produced it are never off screen. It needs a ground of its own - the
-     rows it pins over are opaque cards, and without one they read through it.
-     Bottom-aligned: a cap is one line, a tag box is not. */
+  /* Pinned: the list scrolls under it, so the query and its filters stay on
+     screen. It needs its own ground over the opaque cards. Bottom-aligned: a
+     cap is one line, a tag box is not. */
   .bar {
     position: sticky;
     top: 0;
@@ -867,10 +860,9 @@
     padding-block: var(--pad-2);
     margin-bottom: var(--pad-2);
   }
-  /* A sticky box cannot rise above its containing block, and `main`'s content
-     box starts one --main-air below the scrollport. So the bar pins that far
-     down and rows scroll up through the strip above it. It carries its own
-     ground up over that strip; `main`'s overflow clips whatever overshoots. */
+  /* A sticky box cannot rise above its containing block, and `main`'s
+     content box starts one --main-air below the scrollport. So the bar pins
+     that far down and carries its own ground up over the strip above it. */
   .bar::before {
     content: "";
     position: absolute;
@@ -935,10 +927,9 @@
     color: var(--muted);
   }
 
-  /* An added filter travels with its own remove button, so the pair must wrap
-     as one unit however wide the row gets. The button hangs off the side of the
-     column rather than sitting in it, so the cap still centres on the control
-     and the control alone answers to the cap's width floor. */
+  /* An added filter travels with its remove button, so the pair wraps as
+     one. The button hangs off the column's side, so the cap centres on the
+     control, which alone answers to the cap's width floor. */
   .extra {
     display: inline-flex;
     align-items: end;

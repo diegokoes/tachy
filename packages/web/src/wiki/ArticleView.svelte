@@ -45,10 +45,9 @@
   let titleEl = $state<HTMLElement>();
   let pinnedEl = $state<HTMLElement>();
 
-  /* Once the title scrolls off the top it carries on in the left column, above
-     the switcher, travelling from where it was so the eye can follow it. The
-     move is scaled by font size alone: Flip would match the two boxes, and a
-     title that wraps differently in the narrow column would stretch. */
+  // Once the title scrolls off the top it carries on in the left column,
+  // travelling there so the eye can follow. Scaled by font size alone: Flip
+  // would stretch a title that wraps differently.
   $effect(() => {
     const port = scrollport();
     const from = titleEl;
