@@ -27,7 +27,10 @@ export const factKey = (kind: string, label: string) =>
 
 export const companyKey = (field: string) => `company-${slug(field)}`;
 
-/** Every property a customer can have: the facts in use, then the source's customer fields. */
+/**
+ * Every property a customer can have: the facts in use, then the source's
+ * customer fields.
+ */
 export async function customerPropertyOptions(
   connection: string | undefined,
   scope: ScopeContext,
@@ -44,7 +47,7 @@ export async function customerPropertyOptions(
   }));
   if (!connection) return own;
   const { conn, source } = await resolveSource(connection, scope);
-  /* The facts are worth offering even when the source cannot be reached. */
+  // The facts are worth offering even when the source cannot be reached.
   const fields = source.options
     ? await source.options("company_fields", {}).catch(() => [])
     : [];

@@ -14,11 +14,9 @@ export async function listComponents(productId: string) {
 }
 
 /**
- * Every component, with the product and team it hangs off.
- *
- * One query rather than one per product: the architecture view draws the whole
- * catalogue and narrows it in the browser, and twenty-five round trips to
- * assemble one picture is twenty-four too many.
+ * Every component, with the product and team it hangs off. One query rather
+ * than one per product: the architecture view draws the whole catalogue and
+ * narrows it in the browser.
  */
 export async function listComponentTree() {
   return sql<ComponentNode[]>`

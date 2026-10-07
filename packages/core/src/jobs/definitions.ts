@@ -81,7 +81,10 @@ export function previewSchedule(
 const COLUMNS = sql`id, kind, name, params, enabled, schedule, timezone, queue,
   timeout, overlap, notify, last_scheduled_for, disabled_reason, created_at, updated_at`;
 
-/** Written beside `queue` so the previous release, which reads only the class, still routes the run. */
+/**
+ * Written beside `queue`: a release that reads only the class still routes the
+ * run.
+ */
 const classOf = (queue: string | null) =>
   queue ? jobQueue(queue).class : null;
 

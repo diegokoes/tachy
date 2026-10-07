@@ -71,12 +71,8 @@ async function jobTablesExist(): Promise<boolean> {
  * What a process that runs jobs does at start: register the kinds, create the
  * default definitions, and work the given classes. A run that ignores its
  * cancel signal past the grace period restarts the process, the only way to
- * stop code already running in it.
- *
- * An image can reach a database whose schema has not been applied yet - a
- * deploy in flight, or a checkout someone started by hand. Jobs then wait for
- * their tables instead of taking the process down with them; everything else
- * keeps serving, and /readyz already reports the schema mismatch.
+ * stop code already running in it. Where the schema is not applied yet, jobs
+ * wait for their tables and everything else keeps serving.
  */
 export async function startJobProcess(opts: {
   classes: string[];

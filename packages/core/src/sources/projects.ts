@@ -162,8 +162,7 @@ async function resolveScope(
 /**
  * Drops anything without an identifier, de-duplicates, and settles the default:
  * whichever entry is flagged, else the first. Exactly one survives flagged, so
- * no caller has to cope with two - or with none, which would silently turn every
- * wiki tool into "name the wiki yourself".
+ * no caller has to handle two, or none.
  */
 export function normalizeWikis(input: unknown): ProjectWiki[] {
   const list = Array.isArray(input) ? input : [];

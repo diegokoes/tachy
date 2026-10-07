@@ -36,8 +36,8 @@ export async function addSourceConnection(i: SourceConnectionInput) {
 
 /**
  * Deleting cascades to work items and their knowledge entries, so this refuses
- * while any item is still ingested - the caller must clear them deliberately.
- * The connection's stored API tokens go with it, at every scope.
+ * while any item is still ingested: the caller clears them first. The
+ * connection's stored API tokens go with it, at every scope.
  */
 export async function deleteSourceConnection(slug: string) {
   const [conn] =

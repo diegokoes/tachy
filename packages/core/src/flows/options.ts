@@ -140,7 +140,7 @@ defineOptionSource("customer.properties", async (req) =>
   customerPropertyOptions(req.params.connection || undefined, req.scope),
 );
 
-/** Items to try a flow on, by title or the source's id. */
+// Items to try a flow on, by title or the source's id.
 defineOptionSource("work_items", async (req) => {
   const q = req.params.q?.trim() ?? "";
   const rows = await sql`

@@ -55,7 +55,10 @@ export interface JobWorker {
 }
 
 const TAIL_LINES = 200;
-/** How stale a run's progress may get in the admin view before a heartbeat is brought forward. */
+/**
+ * How stale a run's progress may get in the admin view before a heartbeat is
+ * brought forward.
+ */
 const PROGRESS_FLUSH_MS = 2_000;
 
 export async function startJobWorker(

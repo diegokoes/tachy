@@ -2,16 +2,14 @@ import { countSourceCall } from "./traffic";
 
 /**
  * How long one call to a source system may take. Without a deadline a hung
- * upstream hangs the tool call, the agent turn and the SSE stream behind it,
- * indefinitely and silently - nothing further up has a timeout of its own.
+ * upstream hangs the tool call, the agent turn and the SSE stream behind it:
+ * nothing further up has a timeout of its own.
  */
 export const SOURCE_TIMEOUT_MS = 30_000;
 
 /**
- * A sync walks thousands of items, so meeting a rate limit is ordinary rather
- * than exceptional - and every adapter throws on any non-2xx, which without
- * this aborts the whole run. The CLI keeps no watermark, so the retry then
- * restarts from wherever the operator's `--since` pointed.
+ * A sync walks thousands of items, so meeting a rate limit is ordinary. Every
+ * adapter throws on a non-2xx, which without a retry aborts the whole run.
  */
 const RETRY_STATUSES = new Set([429, 502, 503, 504]);
 const MAX_RETRIES = 3;
@@ -51,13 +49,10 @@ const AUTH_STATUSES = new Set([401, 403, 203]);
 
 /**
  * `fetch` with a deadline, and a wait when the far end asks for one. `label` is
- * what the caller would have put in its own error message, so a timeout reads
- * like the adapter's other failures rather than as a bare TimeoutError from
- * somewhere in the runtime.
- *
- * `meter` names the connection the call is spent against. It is counted once
- * per logical call, however many retries the rate limiter cost; an adapter that
- * leaves it off is simply not counted.
+ * what the caller would put in its own error message, so a timeout reads like
+ * the adapter's other failures. `meter` names the connection the call is spent
+ * against, counted once per logical call however many retries it took; without
+ * it the call is not counted.
  */
 export async function sourceFetch(
   label: string,
@@ -103,10 +98,10 @@ export async function sourceFetch(
 
 /**
  * Blocks that must never be reachable from a URL someone typed into the product
- * or a model composed from ticket text: loopback, link-local (which includes the
- * cloud metadata endpoint at 169.254.169.254), and the private ranges the server
- * itself sits in. Deliberately not applied to `sourceFetch` - a self-hosted
- * GitHub Enterprise or Azure DevOps server is legitimately on a private address.
+ * or a model composed from ticket text: loopback, link-local (which includes
+ * the cloud metadata endpoint at 169.254.169.254), and the private ranges the
+ * server itself sits in. Not applied to `sourceFetch`: a self-hosted GitHub
+ * Enterprise or Azure DevOps server is legitimately on a private address.
  */
 function isBlockedAddress(ip: string): boolean {
   if (ip.includes(":")) {
@@ -137,14 +132,11 @@ function isBlockedAddress(ip: string): boolean {
 const MAX_REDIRECTS = 3;
 
 /**
- * `fetch` for a URL the product did not choose - a paste into the ingest box, a
- * link a model lifted out of a ticket. Every hop is re-checked, because a public
- * host is free to redirect to a private one.
- *
- * The address check runs before the connection rather than on it, so a name that
- * resolves differently between the two lookups is not covered. That is the known
- * limit of doing this without pinning the socket; it is a much narrower opening
- * than the unrestricted `fetch` it replaces.
+ * `fetch` for a URL the product did not choose: a paste into the ingest box, a
+ * link a model lifted out of a ticket. Every hop is re-checked, because a
+ * public host can redirect to a private one. The address is checked before the
+ * connection, not on it, so a name that resolves differently between the two
+ * lookups is not covered.
  */
 export async function fetchUntrustedUrl(
   label: string,
