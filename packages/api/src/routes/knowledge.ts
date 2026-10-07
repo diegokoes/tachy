@@ -98,11 +98,11 @@ const feedbackSchema = z.object({
   patch: z.record(z.string(), z.any()).optional(),
 });
 
-type QueryCtx = { req: { query(k: string): string | undefined } };
+type QueryCtx = { req: { query(key: string): string | undefined } };
 
 /** `hidden_fix` is the one boolean facet - absent means "don't filter". */
-function boolParam(v: string | undefined): boolean | undefined {
-  return v === undefined || v === "" ? undefined : v === "true";
+function boolParam(value: string | undefined): boolean | undefined {
+  return value === undefined || value === "" ? undefined : value === "true";
 }
 
 /** The library filters by slug; the query wants the id. */
@@ -133,12 +133,12 @@ async function componentFilter(c: QueryCtx, tags: string[] | undefined) {
   const productId = c.req.query("product_id");
   if (!component || !productId)
     return { tags: tags?.length ? tags : undefined };
-  const f = await resolveComponentFilter(productId, component);
-  const merged = [...(tags ?? []), ...(f.extraTags ?? [])];
+  const filter = await resolveComponentFilter(productId, component);
+  const merged = [...(tags ?? []), ...(filter.extraTags ?? [])];
   return {
     tags: merged.length ? merged : undefined,
-    componentId: f.componentId,
-    componentTags: f.componentTags,
+    componentId: filter.componentId,
+    componentTags: filter.componentTags,
   };
 }
 
@@ -150,9 +150,10 @@ async function newEntryScope(body: {
   if (body.productId || body.teamId)
     return { productId: body.productId, teamId: body.teamId };
   if (body.workItemId) {
-    const [wi] =
+    const [workItem] =
       await sql`select product_id, team_id from work_items where id = ${body.workItemId}`;
-    if (wi) return { productId: wi.product_id, teamId: wi.team_id };
+    if (workItem)
+      return { productId: workItem.product_id, teamId: workItem.team_id };
   }
   return {};
 }

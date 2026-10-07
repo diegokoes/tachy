@@ -32,8 +32,8 @@ const ARTIFACT_CAP = 10;
 const SYNC_PAGE = 200;
 
 function relationWorkItemId(url: string): number | null {
-  const m = url.match(/\/workItems\/(\d+)$/i);
-  return m ? Number(m[1]) : null;
+  const match = url.match(/\/workItems\/(\d+)$/i);
+  return match ? Number(match[1]) : null;
 }
 
 /**
@@ -46,23 +46,23 @@ function parseGitArtifact(url: string): {
   repo: string;
   ref: string;
 } | null {
-  const pr = url.match(/^vstfs:\/\/\/Git\/PullRequestId\/(.+)$/i);
+  const pullRequest = url.match(/^vstfs:\/\/\/Git\/PullRequestId\/(.+)$/i);
   const commit = url.match(/^vstfs:\/\/\/Git\/Commit\/(.+)$/i);
-  const raw = pr?.[1] ?? commit?.[1];
+  const raw = pullRequest?.[1] ?? commit?.[1];
   if (!raw) return null;
   const parts = decodeURIComponent(raw).split("/");
   if (parts.length !== 3) return null;
   return {
-    kind: pr ? "pr" : "commit",
+    kind: pullRequest ? "pr" : "commit",
     project: parts[0],
     repo: parts[1],
     ref: parts[2],
   };
 }
 
-function scrubIdentity(v: unknown, map: TokenMap, name: string): void {
-  if (!v || typeof v !== "object") return;
-  const id = v as Record<string, any>;
+function scrubIdentity(identity: unknown, map: TokenMap, name: string): void {
+  if (!identity || typeof identity !== "object") return;
+  const id = identity as Record<string, any>;
   if (id.displayName != null) id.displayName = name;
   if (id.uniqueName != null && typeof id.uniqueName === "string")
     id.uniqueName = map.token("EMAIL", id.uniqueName);
@@ -78,21 +78,21 @@ function redactAdoRaw(
   map: TokenMap,
   customerSlug: string | null,
 ): unknown {
-  const t = scrubbableCopy(raw);
-  if (!t) return {};
+  const copy = scrubbableCopy(raw);
+  if (!copy) return {};
   const name = customerStandIn(customerSlug);
-  const fields = t.fields as Record<string, any> | undefined;
+  const fields = copy.fields as Record<string, any> | undefined;
   if (fields && typeof fields === "object") {
     const keys = Object.keys(fields);
-    for (const k of keys.filter((k) => IDENTITY_FIELD_RE.test(k)))
-      scrubIdentity(fields[k], map, name);
+    for (const key of keys.filter((k) => IDENTITY_FIELD_RE.test(k)))
+      scrubIdentity(fields[key], map, name);
     scrubStrings(
       fields,
       keys.filter((k) => !IDENTITY_FIELD_RE.test(k)),
       map,
     );
   }
-  const relations = t.relations as Record<string, any> | undefined;
+  const relations = copy.relations as Record<string, any> | undefined;
   if (relations && typeof relations === "object") {
     for (const group of Object.values(relations)) {
       for (const item of Array.isArray(group) ? group : [group]) {
@@ -103,7 +103,7 @@ function redactAdoRaw(
       }
     }
   }
-  return t;
+  return copy;
 }
 
 /**
@@ -112,10 +112,12 @@ function redactAdoRaw(
  * registered against this connection with a product.
  * Read-only: ADO comments have no private flag, so postNote is unsupported.
  */
-export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
-  const client = createAdoClient(cfg);
-  const configuredProjects = Array.isArray(cfg.config.projects)
-    ? (cfg.config.projects as string[])
+export const createAzureDevopsSource: SourceFactory = (
+  connection,
+): WorkItemSource => {
+  const client = createAdoClient(connection);
+  const configuredProjects = Array.isArray(connection.config.projects)
+    ? (connection.config.projects as string[])
     : [];
 
   /**
@@ -125,7 +127,7 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
    */
   async function syncProjects(): Promise<string[]> {
     const registered = await listSourceProjects({
-      sourceSlug: cfg.slug,
+      sourceSlug: connection.slug,
       hasProduct: true,
     });
     return registered.length
@@ -134,42 +136,44 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
   }
 
   function toItem(
-    wi: AdoWorkItem,
+    workItem: AdoWorkItem,
     messages: RawMessage[],
     relations?: Record<string, unknown>,
   ): RawWorkItem {
-    const f = wi.fields ?? {};
-    const createdBy = f["System.CreatedBy"];
+    const fields = workItem.fields ?? {};
+    const createdBy = fields["System.CreatedBy"];
     const uniqueName =
       typeof createdBy?.uniqueName === "string" ? createdBy.uniqueName : "";
     return {
-      externalId: String(wi.id),
+      externalId: String(workItem.id),
       externalUrl:
-        wi._links?.html?.href ??
-        `${client.orgUrl}/${encodeURIComponent(f["System.TeamProject"] ?? "")}/_workitems/edit/${wi.id}`,
+        workItem._links?.html?.href ??
+        `${client.orgUrl}/${encodeURIComponent(fields["System.TeamProject"] ?? "")}/_workitems/edit/${workItem.id}`,
       kind: "work_item",
-      title: f["System.Title"],
-      status: f["System.State"],
-      groupKey: f["System.TeamProject"],
-      areaPath: f["System.AreaPath"],
+      title: fields["System.Title"],
+      status: fields["System.State"],
+      groupKey: fields["System.TeamProject"],
+      areaPath: fields["System.AreaPath"],
       requester: createdBy?.displayName ?? uniqueName ?? undefined,
       requesterEmail: uniqueName.includes("@") ? uniqueName : undefined,
       raw: {
-        fields: f,
-        work_item_type: f["System.WorkItemType"],
+        fields,
+        work_item_type: fields["System.WorkItemType"],
         ...(relations ? { relations } : {}),
       },
-      sourceCreatedAt: f["System.CreatedDate"],
-      sourceUpdatedAt: f["System.ChangedDate"],
+      sourceCreatedAt: fields["System.CreatedDate"],
+      sourceUpdatedAt: fields["System.ChangedDate"],
       messages,
     };
   }
 
   async function resolveRelations(
-    wi: AdoWorkItem,
+    workItem: AdoWorkItem,
     project: string,
   ): Promise<Record<string, unknown>> {
-    const rels: AdoRelation[] = Array.isArray(wi.relations) ? wi.relations : [];
+    const rels: AdoRelation[] = Array.isArray(workItem.relations)
+      ? workItem.relations
+      : [];
     const parentIds: number[] = [];
     const childIds: number[] = [];
     const relatedIds: number[] = [];
@@ -207,13 +211,13 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
         "System.State",
         "System.WorkItemType",
       ]);
-      for (const s of fetched) {
-        summaries.set(Number(s.id), {
-          id: Number(s.id),
-          title: s.fields?.["System.Title"],
-          state: s.fields?.["System.State"],
-          type: s.fields?.["System.WorkItemType"],
-          url: `${client.orgUrl}/_workitems/edit/${s.id}`,
+      for (const summary of fetched) {
+        summaries.set(Number(summary.id), {
+          id: Number(summary.id),
+          title: summary.fields?.["System.Title"],
+          state: summary.fields?.["System.State"],
+          type: summary.fields?.["System.WorkItemType"],
+          url: `${client.orgUrl}/_workitems/edit/${summary.id}`,
         });
       }
     }
@@ -224,7 +228,7 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
       artifacts.map(async (art) => {
         try {
           if (art.kind === "pr") {
-            const pr = await client.getPullRequest(
+            const pullRequest = await client.getPullRequest(
               art.project,
               art.repo,
               art.ref,
@@ -232,22 +236,22 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
             return {
               kind: art.kind,
               value: {
-                id: pr.pullRequestId,
-                title: pr.title,
-                status: pr.status,
-                repository: pr.repository?.name,
-                url: `${client.orgUrl}/${encodeURIComponent(pr.repository?.project?.name ?? project)}/_git/${encodeURIComponent(pr.repository?.name ?? "")}/pullrequest/${pr.pullRequestId}`,
+                id: pullRequest.pullRequestId,
+                title: pullRequest.title,
+                status: pullRequest.status,
+                repository: pullRequest.repository?.name,
+                url: `${client.orgUrl}/${encodeURIComponent(pullRequest.repository?.project?.name ?? project)}/_git/${encodeURIComponent(pullRequest.repository?.name ?? "")}/pullrequest/${pullRequest.pullRequestId}`,
               },
             };
           }
-          const c = await client.getCommit(art.project, art.repo, art.ref);
+          const commit = await client.getCommit(art.project, art.repo, art.ref);
           return {
             kind: art.kind,
             value: {
-              sha: c.commitId,
-              comment: c.comment,
-              author: c.author?.name,
-              url: c.remoteUrl,
+              sha: commit.commitId,
+              comment: commit.comment,
+              author: commit.author?.name,
+              url: commit.remoteUrl,
             },
           };
         } catch {
@@ -268,20 +272,20 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
       .filter((r) => r.kind === "commit")
       .map((r) => r.value);
 
-    const out: Record<string, unknown> = {};
-    if (parentIds.length) out.parent = pick(parentIds)[0];
-    if (childIds.length) out.children = pick(childIds);
-    if (relatedIds.length) out.related = pick(relatedIds);
-    if (pullRequests.length) out.pull_requests = pullRequests;
-    if (commits.length) out.commits = commits;
-    return out;
+    const relationSummary: Record<string, unknown> = {};
+    if (parentIds.length) relationSummary.parent = pick(parentIds)[0];
+    if (childIds.length) relationSummary.children = pick(childIds);
+    if (relatedIds.length) relationSummary.related = pick(relatedIds);
+    if (pullRequests.length) relationSummary.pull_requests = pullRequests;
+    if (commits.length) relationSummary.commits = commits;
+    return relationSummary;
   }
 
   const defaultsFor = (
     project: string,
     type: string,
     projectConfig?: Record<string, unknown>,
-  ) => workItemDefaults(cfg.config, project, type, projectConfig);
+  ) => workItemDefaults(connection.config, project, type, projectConfig);
 
   const composer: WorkItemComposer = {
     types: (project) => creatableTypes(client, project),
@@ -339,43 +343,43 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
     },
 
     async fetchItem(externalId: string): Promise<RawWorkItem> {
-      const wi = await client.getWorkItem(externalId);
-      const f = wi.fields ?? {};
-      const project = f["System.TeamProject"];
+      const workItem = await client.getWorkItem(externalId);
+      const fields = workItem.fields ?? {};
+      const project = fields["System.TeamProject"];
       const messages: RawMessage[] = [];
 
-      const description = f["System.Description"];
+      const description = fields["System.Description"];
       if (typeof description === "string" && description.trim()) {
         messages.push({
-          externalId: `desc-${wi.id}`,
-          author: f["System.CreatedBy"]?.displayName,
+          externalId: `desc-${workItem.id}`,
+          author: fields["System.CreatedBy"]?.displayName,
           visibility: "internal",
           direction: "incoming",
           bodyText: stripHtml(description),
-          createdAt: f["System.CreatedDate"],
+          createdAt: fields["System.CreatedDate"],
         });
       }
-      const repro = f["Microsoft.VSTS.TCM.ReproSteps"];
+      const repro = fields["Microsoft.VSTS.TCM.ReproSteps"];
       if (typeof repro === "string" && repro.trim()) {
         messages.push({
-          externalId: `repro-${wi.id}`,
-          author: f["System.CreatedBy"]?.displayName,
+          externalId: `repro-${workItem.id}`,
+          author: fields["System.CreatedBy"]?.displayName,
           visibility: "internal",
           direction: "incoming",
           bodyText: `Repro steps:\n${stripHtml(repro)}`,
-          createdAt: f["System.CreatedDate"],
+          createdAt: fields["System.CreatedDate"],
         });
       }
       if (project) {
         const comments = await client.getComments(project, externalId);
-        for (const c of comments) {
+        for (const comment of comments) {
           messages.push({
-            externalId: `comment-${c.id}`,
-            author: c.createdBy?.displayName,
+            externalId: `comment-${comment.id}`,
+            author: comment.createdBy?.displayName,
             visibility: "internal",
             direction: "incoming",
-            bodyText: stripHtml(c.text ?? ""),
-            createdAt: c.createdDate,
+            bodyText: stripHtml(comment.text ?? ""),
+            createdAt: comment.createdDate,
           });
         }
       }
@@ -383,21 +387,21 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
         (a.createdAt ?? "").localeCompare(b.createdAt ?? ""),
       );
 
-      const relations = await resolveRelations(wi, project ?? "");
-      return toItem(wi, messages, relations);
+      const relations = await resolveRelations(workItem, project ?? "");
+      return toItem(workItem, messages, relations);
     },
 
     async setTags(externalId, change) {
-      const wi = await client.getWorkItem(externalId);
-      const current = String(wi.fields?.["System.Tags"] ?? "")
+      const workItem = await client.getWorkItem(externalId);
+      const current = String(workItem.fields?.["System.Tags"] ?? "")
         .split(";")
         .map((t) => t.trim())
         .filter(Boolean);
       const tags = changeTagList(current, change);
       // `add` on System.Tags appends to what is there; `replace` sets the list.
       await client.updateWorkItem(externalId, [
-        ...(wi.rev != null
-          ? [{ op: "test" as const, path: "/rev", value: wi.rev }]
+        ...(workItem.rev != null
+          ? [{ op: "test" as const, path: "/rev", value: workItem.rev }]
           : []),
         {
           op: current.length ? "replace" : "add",
@@ -427,7 +431,7 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
         SYNC_PAGE,
       );
       const fetched = ids.length ? await client.getWorkItemsBatch(ids) : [];
-      const items = fetched.map((wi) => toItem(wi, []));
+      const items = fetched.map((workItem) => toItem(workItem, []));
 
       // ChangedDate watermark cursor: the >= query re-fetches boundary items,
       // which the ingest upsert dedupes; a full page that fails to advance the
@@ -438,7 +442,9 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
           : undefined;
       if (ids.length === SYNC_PAGE) {
         const changed = fetched
-          .map((wi) => Date.parse(wi.fields?.["System.ChangedDate"] ?? ""))
+          .map((workItem) =>
+            Date.parse(workItem.fields?.["System.ChangedDate"] ?? ""),
+          )
           .filter(Number.isFinite);
         const prev = cursor.since ? Date.parse(cursor.since) : Number.NaN;
         // A full page means this project has more to walk, so the cursor stays

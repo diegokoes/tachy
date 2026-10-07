@@ -77,9 +77,9 @@ async function assertCanWriteProject(
 const DISCOVER_PROBES = 8;
 
 /** Remote calls answer with {ok:false} so the setup UI can render the reason. */
-async function probe<T>(fn: () => Promise<T>) {
+async function probe<T>(call: () => Promise<T>) {
   try {
-    return { ok: true as const, ...(await fn()) };
+    return { ok: true as const, ...(await call()) };
   } catch (e) {
     return {
       ok: false as const,
@@ -124,19 +124,19 @@ export const sourceProjects = new Hono()
   })
 
   .post("/source-projects", zValidator("json", projectSchema), async (c) => {
-    const b = c.req.valid("json");
-    await assertCanWriteProject(c, b.product_slug, b.team_slug);
+    const body = c.req.valid("json");
+    await assertCanWriteProject(c, body.product_slug, body.team_slug);
     return c.json(
       await addSourceProject({
-        sourceSlug: b.source_slug,
-        externalKey: b.external_key,
-        name: b.name,
-        productSlug: b.product_slug,
-        teamSlug: b.team_slug,
-        customerSlug: b.customer_slug,
-        wikis: b.wikis,
-        config: b.config,
-        notes: b.notes,
+        sourceSlug: body.source_slug,
+        externalKey: body.external_key,
+        name: body.name,
+        productSlug: body.product_slug,
+        teamSlug: body.team_slug,
+        customerSlug: body.customer_slug,
+        wikis: body.wikis,
+        config: body.config,
+        notes: body.notes,
       }),
     );
   })
@@ -147,19 +147,19 @@ export const sourceProjects = new Hono()
     async (c) => {
       const id = c.req.param("id");
       await assertScopeEditor(c, await sourceProjectScope(id));
-      const b = c.req.valid("json");
+      const body = c.req.valid("json");
       // Re-pointing a project needs rights on where it lands, too.
-      if (b.product_slug !== undefined || b.team_slug)
-        await assertCanWriteProject(c, b.product_slug, b.team_slug);
+      if (body.product_slug !== undefined || body.team_slug)
+        await assertCanWriteProject(c, body.product_slug, body.team_slug);
       return c.json(
         await updateSourceProject(id, {
-          name: b.name,
-          productSlug: b.product_slug,
-          teamSlug: b.team_slug,
-          customerSlug: b.customer_slug,
-          wikis: b.wikis,
-          config: b.config,
-          notes: b.notes,
+          name: body.name,
+          productSlug: body.product_slug,
+          teamSlug: body.team_slug,
+          customerSlug: body.customer_slug,
+          wikis: body.wikis,
+          config: body.config,
+          notes: body.notes,
         }),
       );
     },
@@ -266,12 +266,14 @@ export const sourceProjects = new Hono()
         let next = 0;
         const worker = async () => {
           while (next < repos.length) {
-            const r = repos[next++];
-            if (!r.url) continue;
-            r.default_branch = await releaseBranch(
-              r.url,
-              r.default_branch,
-              await connectionToken(slug, r.url, userId).catch(() => undefined),
+            const repo = repos[next++];
+            if (!repo.url) continue;
+            repo.default_branch = await releaseBranch(
+              repo.url,
+              repo.default_branch,
+              await connectionToken(slug, repo.url, userId).catch(
+                () => undefined,
+              ),
             );
           }
         };

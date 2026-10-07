@@ -90,8 +90,8 @@ export function createApp(
   if (opts.internal) base.route("/internal", internalRoutes(opts.internal));
   base.route("/ingest", ingest);
   base.get("/readyz", async (c) => {
-    const r = await readiness();
-    return c.json(r, r.ready ? 200 : 503);
+    const report = await readiness();
+    return c.json(report, report.ready ? 200 : 503);
   });
 
   const authMode = opts.oidc ? "sso" : opts.apiToken ? "token" : "open";

@@ -31,15 +31,15 @@ tool(
         ),
     },
   },
-  async (a) => {
+  async (args) => {
     const row = await recordRun({
-      mode: a.mode,
-      workItemId: a.work_item_id,
+      mode: args.mode,
+      workItemId: args.work_item_id,
       userId: await resolveCurrentUserId(),
-      model: a.model,
-      inputTokens: a.input_tokens,
-      outputTokens: a.output_tokens,
-      meta: a.meta,
+      model: args.model,
+      inputTokens: args.input_tokens,
+      outputTokens: args.output_tokens,
+      meta: args.meta,
     });
     return out({ recorded: true, id: row.id });
   },

@@ -113,8 +113,8 @@ export const setup = new Hono()
       await addTeam(body.team.slug, body.team.name);
       if (body.product)
         await addProduct(body.team.slug, body.product.slug, body.product.name);
-      for (const p of body.products ?? [])
-        await addProduct(body.team.slug, p.slug, p.name);
+      for (const product of body.products ?? [])
+        await addProduct(body.team.slug, product.slug, product.name);
     }
 
     await setSessionCookie(c, body.email);

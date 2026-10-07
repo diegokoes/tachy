@@ -52,24 +52,26 @@ tool(
     if (!sources.length)
       throw badInput("Provide at least one of: text, paths, urls");
 
-    const limit = max_chars ?? 20_000;
+    const maxChars = max_chars ?? 20_000;
     const redact = globalRedactionEnabled();
-    const map = new TokenMap();
+    const tokens = new TokenMap();
     return out({
       product_slug: product_slug ?? null,
       team_slug: team_slug ?? null,
-      sources: sources.map((s) => {
-        const truncated = s.text.length > limit;
-        const textOut = truncated ? s.text.slice(0, limit) : s.text;
+      sources: sources.map((source) => {
+        const truncated = source.text.length > maxChars;
+        const textOut = truncated
+          ? source.text.slice(0, maxChars)
+          : source.text;
         return {
-          source: s.source,
-          chars: s.text.length,
-          ...(s.pages != null ? { pages: s.pages } : {}),
+          source: source.source,
+          chars: source.text.length,
+          ...(source.pages != null ? { pages: source.pages } : {}),
           truncated,
-          text: redact ? scrubText(textOut, map) : textOut,
+          text: redact ? scrubText(textOut, tokens) : textOut,
           ...(truncated
             ? {
-                note: `Truncated at ${limit} of ${s.text.length} chars - summarize from this preview; to save the FULL text as a reference doc, call save_reference_doc with body_path.`,
+                note: `Truncated at ${maxChars} of ${source.text.length} chars - summarize from this preview; to save the FULL text as a reference doc, call save_reference_doc with body_path.`,
               }
             : {}),
         };
@@ -127,46 +129,46 @@ tool(
         ),
     },
   },
-  async (a) => {
-    if (!a.body === !a.body_path)
+  async (args) => {
+    if (!args.body === !args.body_path)
       throw badInput("Provide exactly one of body or body_path");
-    const { productId, teamId } = await resolveScopeIds(a);
-    if (productId || teamId || !a.supersedes)
+    const { productId, teamId } = await resolveScopeIds(args);
+    if (productId || teamId || !args.supersedes)
       await requireCanEdit({ productId, teamId });
-    else await requireCanEdit(await referenceDocScope(a.supersedes));
+    else await requireCanEdit(await referenceDocScope(args.supersedes));
 
-    let body = a.body;
+    let body = args.body;
     let pages: number | undefined;
-    if (a.body_path) {
-      const extracted = await extractSource(a.body_path);
+    if (args.body_path) {
+      const extracted = await extractSource(args.body_path);
       body = globalRedactionEnabled()
         ? scrubText(extracted.text, new TokenMap())
         : extracted.text;
       pages = extracted.pages;
     }
-    const row = await saveReferenceDoc({
-      title: a.title,
+    const saved = await saveReferenceDoc({
+      title: args.title,
       body: body!,
       productId,
       teamId,
       createdById: await resolveCurrentUserId(),
       actor: await mcpActor(),
-      source: a.source,
-      sourceProjectId: a.source_project_id,
-      externalKey: a.external_key,
-      tags: a.tags,
-      status: a.status ?? "approved",
-      structured: a.structured,
-      docVersion: a.doc_version,
-      supersedes: a.supersedes,
-      component: a.component,
-      customerSlug: a.customer_slug,
+      source: args.source,
+      sourceProjectId: args.source_project_id,
+      externalKey: args.external_key,
+      tags: args.tags,
+      status: args.status ?? "approved",
+      structured: args.structured,
+      docVersion: args.doc_version,
+      supersedes: args.supersedes,
+      component: args.component,
+      customerSlug: args.customer_slug,
     });
     return out({
       saved: true,
-      id: row.id,
-      status: row.status,
-      chunks: row.chunks,
+      id: saved.id,
+      status: saved.status,
+      chunks: saved.chunks,
       body_chars: body!.length,
       ...(pages != null ? { pages } : {}),
     });
@@ -306,20 +308,21 @@ tool(
       expected_version: z.number().int().optional(),
     },
   },
-  async (a) => {
-    await requireCanEdit(await referenceDocScope(a.id));
+  async (args) => {
+    await requireCanEdit(await referenceDocScope(args.id));
     const patch: ReferenceDocUpdate = {};
-    if (a.title !== undefined) patch.title = a.title;
-    if (a.body !== undefined) patch.body = a.body;
-    if (a.tags !== undefined) patch.tags = a.tags;
-    if (a.status !== undefined) patch.status = a.status;
-    if (a.source !== undefined) patch.source = a.source;
-    if (a.structured !== undefined) patch.structured = a.structured;
-    if (a.doc_version !== undefined) patch.docVersion = a.doc_version;
-    if (a.customer_slug !== undefined) patch.customerSlug = a.customer_slug;
-    if (a.expected_version !== undefined)
-      patch.expectedVersion = a.expected_version;
-    const row = await updateReferenceDoc(a.id, patch, await mcpActor());
+    if (args.title !== undefined) patch.title = args.title;
+    if (args.body !== undefined) patch.body = args.body;
+    if (args.tags !== undefined) patch.tags = args.tags;
+    if (args.status !== undefined) patch.status = args.status;
+    if (args.source !== undefined) patch.source = args.source;
+    if (args.structured !== undefined) patch.structured = args.structured;
+    if (args.doc_version !== undefined) patch.docVersion = args.doc_version;
+    if (args.customer_slug !== undefined)
+      patch.customerSlug = args.customer_slug;
+    if (args.expected_version !== undefined)
+      patch.expectedVersion = args.expected_version;
+    const row = await updateReferenceDoc(args.id, patch, await mcpActor());
     return out({
       updated: true,
       id: row.id,

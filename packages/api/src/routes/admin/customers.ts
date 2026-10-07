@@ -118,17 +118,17 @@ export const customers = new Hono()
     zValidator("json", customerUnitSchema),
     async (c) => {
       await assertAnyTeamAdminApi(c);
-      const b = c.req.valid("json");
+      const body = c.req.valid("json");
       return c.json(
         await addCustomerUnit({
           customerSlug: c.req.param("slug"),
-          slug: b.slug,
-          name: b.name,
-          kind: b.kind,
-          parentSlug: b.parent,
-          profileSlug: b.profile,
-          aliases: b.aliases,
-          notes: b.notes,
+          slug: body.slug,
+          name: body.name,
+          kind: body.kind,
+          parentSlug: body.parent,
+          profileSlug: body.profile,
+          aliases: body.aliases,
+          notes: body.notes,
         }),
       );
     },
@@ -138,18 +138,18 @@ export const customers = new Hono()
     zValidator("json", customerUnitPatchSchema),
     async (c) => {
       await assertAnyTeamAdminApi(c);
-      const b = c.req.valid("json");
+      const body = c.req.valid("json");
       return c.json(
         await updateCustomerUnit(
           await getCustomerIdBySlug(c.req.param("slug")),
           c.req.param("unit"),
           {
-            ...(b.name !== undefined ? { name: b.name } : {}),
-            ...(b.kind !== undefined ? { kind: b.kind } : {}),
-            ...("parent" in b ? { parentSlug: b.parent } : {}),
-            ...("profile" in b ? { profileSlug: b.profile } : {}),
-            ...(b.aliases !== undefined ? { aliases: b.aliases } : {}),
-            ...("notes" in b ? { notes: b.notes } : {}),
+            ...(body.name !== undefined ? { name: body.name } : {}),
+            ...(body.kind !== undefined ? { kind: body.kind } : {}),
+            ...("parent" in body ? { parentSlug: body.parent } : {}),
+            ...("profile" in body ? { profileSlug: body.profile } : {}),
+            ...(body.aliases !== undefined ? { aliases: body.aliases } : {}),
+            ...("notes" in body ? { notes: body.notes } : {}),
           },
         ),
       );
@@ -183,19 +183,19 @@ export const customers = new Hono()
     zValidator("json", customerFactSchema),
     async (c) => {
       await assertAnyTeamAdminApi(c);
-      const b = c.req.valid("json");
+      const body = c.req.valid("json");
       return c.json(
         await setCustomerFact({
           customerSlug: c.req.param("slug"),
-          unit: b.unit,
-          kind: b.kind,
-          label: b.label,
-          value: b.value,
-          notes: b.notes,
-          source: b.source,
-          componentSlug: b.component,
-          productId: b.product_slug
-            ? await getProductIdBySlug(b.product_slug)
+          unit: body.unit,
+          kind: body.kind,
+          label: body.label,
+          value: body.value,
+          notes: body.notes,
+          source: body.source,
+          componentSlug: body.component,
+          productId: body.product_slug
+            ? await getProductIdBySlug(body.product_slug)
             : null,
         }),
       );
@@ -210,13 +210,13 @@ export const customers = new Hono()
     zValidator("json", customerComponentSchema),
     async (c) => {
       await assertAnyTeamAdminApi(c);
-      const b = c.req.valid("json");
+      const body = c.req.valid("json");
       return c.json(
         await linkCustomerComponent(
           c.req.param("slug"),
-          await getProductIdBySlug(b.product_slug),
-          b.component,
-          b.notes,
+          await getProductIdBySlug(body.product_slug),
+          body.component,
+          body.notes,
         ),
       );
     },

@@ -123,17 +123,20 @@ export const flows = new Hono()
   .post("/:id/run", zValidator("json", runSchema), async (c) => {
     const id = c.req.param("id");
     await assertScopeEditor(c, await flowScope(id));
-    const p = c.req.valid("json");
+    const body = c.req.valid("json");
     const flow = await getFlow(id);
-    if (p.trigger_id && !flow.graph.triggers.some((t) => t.id === p.trigger_id))
-      throw badInput(`the flow has no trigger '${p.trigger_id}'`);
+    if (
+      body.trigger_id &&
+      !flow.graph.triggers.some((t) => t.id === body.trigger_id)
+    )
+      throw badInput(`the flow has no trigger '${body.trigger_id}'`);
     const runId = await enqueueRun({
       kind: "flow.run",
       params: {
         flow_id: id,
-        trigger_id: p.trigger_id,
-        work_item_id: p.work_item_id,
-        dry_run: p.dry_run,
+        trigger_id: body.trigger_id,
+        work_item_id: body.work_item_id,
+        dry_run: body.dry_run,
       },
       trigger: "manual",
       requestedBy: await callerUserId(c),

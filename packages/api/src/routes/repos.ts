@@ -49,14 +49,16 @@ const previewSchema = z.object({
 
 /** Newest release first; branches keep the remote's order. */
 const byReleaseDesc = (a: string, b: string) => {
-  const va = RELEASE_TAG_RE.exec(a)!.slice(1).map(Number);
-  const vb = RELEASE_TAG_RE.exec(b)!.slice(1).map(Number);
-  return vb[0] - va[0] || vb[1] - va[1] || vb[2] - va[2];
+  const partsA = RELEASE_TAG_RE.exec(a)!.slice(1).map(Number);
+  const partsB = RELEASE_TAG_RE.exec(b)!.slice(1).map(Number);
+  return (
+    partsB[0] - partsA[0] || partsB[1] - partsA[1] || partsB[2] - partsA[2]
+  );
 };
 
-async function probe<T>(fn: () => Promise<T>) {
+async function probe<T>(call: () => Promise<T>) {
   try {
-    return { ok: true as const, ...(await fn()) };
+    return { ok: true as const, ...(await call()) };
   } catch (e) {
     return {
       ok: false as const,
@@ -175,7 +177,7 @@ export const repos = new Hono()
       { productSlug: body.product, sourceProjectId: body.source_project_id },
       body.slug,
     );
-    const row = await linkRepo({
+    const linked = await linkRepo({
       slug: body.slug,
       url: body.url,
       productSlug: body.product,
@@ -187,7 +189,7 @@ export const repos = new Hono()
       lines: body.lines,
       config: body.config,
     });
-    return c.json({ ok: true, repo: row });
+    return c.json({ ok: true, repo: linked });
   })
 
   // The branches and release tags a remote offers, for the link form. Same
@@ -227,20 +229,20 @@ export const repos = new Hono()
       await sourceProjectScope(body.source_project_id),
     );
     const results = [];
-    for (const r of body.repos) {
+    for (const repo of body.repos) {
       try {
         await linkRepo({
-          slug: r.slug,
-          url: r.url,
+          slug: repo.slug,
+          url: repo.url,
           sourceProjectId: body.source_project_id,
-          componentSlug: r.component,
-          customerSlug: r.customer,
-          defaultBranch: r.branch,
+          componentSlug: repo.component,
+          customerSlug: repo.customer,
+          defaultBranch: repo.branch,
         });
-        results.push({ slug: r.slug, ok: true });
+        results.push({ slug: repo.slug, ok: true });
       } catch (e) {
         results.push({
-          slug: r.slug,
+          slug: repo.slug,
           ok: false,
           error: e instanceof Error ? e.message : String(e),
         });

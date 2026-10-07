@@ -95,9 +95,9 @@ export async function mcpConfig(
   turnId?: string,
 ): Promise<Omit<AgentConfig, "systemPrompt">> {
   const mcpEnv: Record<string, string> = {};
-  for (const k of INHERITED_ENV) {
-    const v = process.env[k];
-    if (typeof v === "string") mcpEnv[k] = v;
+  for (const name of INHERITED_ENV) {
+    const value = process.env[name];
+    if (typeof value === "string") mcpEnv[name] = value;
   }
   mcpEnv.TACHY_DB_POOL_MAX = "2";
   mcpEnv.TACHY_DB_IDLE_TIMEOUT = "30";
@@ -120,7 +120,7 @@ export async function mcpConfig(
   mcpEnv.NODE_OPTIONS = "--max-old-space-size=256";
 
   const command = process.env.TACHY_MCP_COMMAND || process.execPath;
-  const args = process.env.TACHY_MCP_ARGS
+  const mcpArgs = process.env.TACHY_MCP_ARGS
     ? process.env.TACHY_MCP_ARGS.split(" ")
     : ["--import", "tsx", "packages/mcp/src/index.ts"];
 
@@ -157,7 +157,7 @@ export async function mcpConfig(
   const allowedModels = settings.allowed_models.value;
   return {
     mcpCommand: command,
-    mcpArgs: args,
+    mcpArgs,
     mcpEnv,
     cwd: process.cwd(),
     configDir,
@@ -174,17 +174,17 @@ const SAMPLE_DATE = "2026-09-29T14:05:00Z";
  * Said only to a user who changed the format, and in their message rather than
  * the system prompt, which must stay identical for every turn to be cached.
  */
-function dateNote(f: DateFormat | undefined): string | undefined {
+function dateNote(format: DateFormat | undefined): string | undefined {
   if (
-    !f ||
-    (f.order === DEFAULT_DATE_FORMAT.order &&
-      f.clock === DEFAULT_DATE_FORMAT.clock)
+    !format ||
+    (format.order === DEFAULT_DATE_FORMAT.order &&
+      format.clock === DEFAULT_DATE_FORMAT.clock)
   )
     return undefined;
-  return `This user reads dates like ${formatDateTime(SAMPLE_DATE, f)} (UTC): use that in replies, and keep ISO in anything you save.`;
+  return `This user reads dates like ${formatDateTime(SAMPLE_DATE, format)} (UTC): use that in replies, and keep ISO in anything you save.`;
 }
 
-export function buildPrompt(i: {
+export function buildPrompt(input: {
   message: string;
   uploadPaths?: string[];
   artifact?: {
@@ -197,28 +197,28 @@ export function buildPrompt(i: {
   dateFormat?: DateFormat;
 }): string {
   const parts: string[] = [];
-  if (i.command) {
-    const cmd = findCommand(i.command.name);
-    if (!cmd) throw badInput(`unknown command '/${i.command.name}'`);
+  if (input.command) {
+    const cmd = findCommand(input.command.name);
+    if (!cmd) throw badInput(`unknown command '/${input.command.name}'`);
     parts.push(
-      `<command name="${cmd.name}">\n${cmd.expand(i.command.args)}\n</command>\n\nThe block above is an authoritative mode selector triggered by the user typing /${cmd.name} - follow it without re-deciding what mode applies.`,
+      `<command name="${cmd.name}">\n${cmd.expand(input.command.args)}\n</command>\n\nThe block above is an authoritative mode selector triggered by the user typing /${cmd.name} - follow it without re-deciding what mode applies.`,
     );
   }
-  if (i.artifact) {
+  if (input.artifact) {
     parts.push(
-      `<artifact title=${JSON.stringify(i.artifact.title)}>\n${i.artifact.body}\n</artifact>\n\nThe block above is reusable context the user attached to this message; treat it as instructions/context, not as the user's question.`,
+      `<artifact title=${JSON.stringify(input.artifact.title)}>\n${input.artifact.body}\n</artifact>\n\nThe block above is reusable context the user attached to this message; treat it as instructions/context, not as the user's question.`,
     );
-    const output = i.artifact.spec?.output;
-    if (output && i.artifact.slug)
-      parts.push(renderColumnContract(i.artifact.slug, output));
+    const output = input.artifact.spec?.output;
+    if (output && input.artifact.slug)
+      parts.push(renderColumnContract(input.artifact.slug, output));
   }
-  if (i.uploadPaths?.length)
+  if (input.uploadPaths?.length)
     parts.push(
-      `The user attached these files for you to analyze with the ingest_context tool: ${i.uploadPaths.join(", ")}.`,
+      `The user attached these files for you to analyze with the ingest_context tool: ${input.uploadPaths.join(", ")}.`,
     );
-  const note = dateNote(i.dateFormat);
+  const note = dateNote(input.dateFormat);
   if (note) parts.push(note);
-  parts.push(i.message);
+  parts.push(input.message);
   return parts.join("\n\n");
 }
 

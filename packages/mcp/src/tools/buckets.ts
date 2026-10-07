@@ -60,10 +60,10 @@ tool(
     annotations: { readOnlyHint: true },
   },
   async ({ bucket, query, path_prefix, limit }) => {
-    const b = await readableBucket(await gateUserId(), bucket);
+    const readable = await readableBucket(await gateUserId(), bucket);
     return searchOut(
       await searchBucket(query, {
-        bucketIds: [b.id],
+        bucketIds: [readable.id],
         pathPrefix: path_prefix,
         limit,
       }),
@@ -84,7 +84,7 @@ tool(
     annotations: { readOnlyHint: true },
   },
   async ({ bucket, key }) => {
-    const b = await readableBucket(await gateUserId(), bucket);
-    return outScrubbed(await getBucketDoc(b.id, key));
+    const readable = await readableBucket(await gateUserId(), bucket);
+    return outScrubbed(await getBucketDoc(readable.id, key));
   },
 );

@@ -67,17 +67,17 @@ export async function readiness(): Promise<Readiness> {
  * once. Docker restarts a container that exits, not one that is unhealthy, so
  * a pool that never frees up otherwise leaves the process serving nothing.
  */
-export function watchPool(o: {
+export function watchPool(opts: {
   onStuck: () => void;
   probe?: () => Promise<unknown>;
   everyMs?: number;
   timeoutMs?: number;
   strikes?: number;
 }): () => void {
-  const probe = o.probe ?? (() => sql`select 1`);
-  const everyMs = o.everyMs ?? 30_000;
-  const timeoutMs = o.timeoutMs ?? 10_000;
-  const strikes = o.strikes ?? 6;
+  const probe = opts.probe ?? (() => sql`select 1`);
+  const everyMs = opts.everyMs ?? 30_000;
+  const timeoutMs = opts.timeoutMs ?? 10_000;
+  const strikes = opts.strikes ?? 6;
   let stuck = 0;
   const timer = setInterval(() => {
     void Promise.race([
@@ -90,7 +90,7 @@ export function watchPool(o: {
       stuck = answered ? 0 : stuck + 1;
       if (stuck < strikes) return;
       clearInterval(timer);
-      o.onStuck();
+      opts.onStuck();
     });
   }, everyMs);
   timer.unref();

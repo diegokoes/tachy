@@ -9,19 +9,24 @@ import {
   TokenMap,
 } from "@tachy/core/compliance";
 
-export function out(obj: unknown) {
+export function out(payload: unknown) {
   return {
     content: [
       {
         type: "text" as const,
-        text: typeof obj === "string" ? obj : JSON.stringify(obj, null, 2),
+        text:
+          typeof payload === "string"
+            ? payload
+            : JSON.stringify(payload, null, 2),
       },
     ],
   };
 }
 
-export function outScrubbed(obj: unknown) {
-  return out(globalRedactionEnabled() ? scrubDeep(obj, new TokenMap()) : obj);
+export function outScrubbed(payload: unknown) {
+  return out(
+    globalRedactionEnabled() ? scrubDeep(payload, new TokenMap()) : payload,
+  );
 }
 
 /**

@@ -54,9 +54,9 @@ export interface AgentConfig {
 }
 
 export function effectiveModel(
-  cfg: Pick<AgentConfig, "model" | "allowedModels">,
+  config: Pick<AgentConfig, "model" | "allowedModels">,
 ): string | undefined {
-  const { model, allowedModels } = cfg;
+  const { model, allowedModels } = config;
   if (!allowedModels || allowedModels.length === 0) return model;
   return model && allowedModels.includes(model) ? model : allowedModels[0];
 }

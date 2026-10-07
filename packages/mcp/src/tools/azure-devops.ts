@@ -48,7 +48,7 @@ async function resolveAdoClient(sourceSlug: string): Promise<{
  * Every ADO tool takes either the raw (source, project) pair or a product_slug
  * that resolves to a registered project - with its wiki and defaults attached.
  */
-async function resolveAdoTarget(a: {
+async function resolveAdoTarget(args: {
   source?: string;
   project?: string;
   product_slug?: string;
@@ -57,12 +57,12 @@ async function resolveAdoTarget(a: {
   project: string;
   context: Awaited<ReturnType<typeof resolveProjectContextStrict>> | null;
 }> {
-  if (a.source && a.project && !a.product_slug)
-    return { sourceSlug: a.source, project: a.project, context: null };
+  if (args.source && args.project && !args.product_slug)
+    return { sourceSlug: args.source, project: args.project, context: null };
   const context = await resolveProjectContextStrict({
-    productSlug: a.product_slug,
-    sourceSlug: a.source,
-    externalKey: a.project,
+    productSlug: args.product_slug,
+    sourceSlug: args.source,
+    externalKey: args.project,
   });
   if (context.connection.source_type !== "azure-devops")
     throw badInput(
@@ -137,10 +137,10 @@ tool(
     },
     annotations: { readOnlyHint: true },
   },
-  async (a) => {
-    const { sourceSlug, project } = a.product_slug
-      ? await resolveAdoTarget(a)
-      : { sourceSlug: a.source!, project: a.project! };
+  async (args) => {
+    const { sourceSlug, project } = args.product_slug
+      ? await resolveAdoTarget(args)
+      : { sourceSlug: args.source!, project: args.project! };
     const { client } = await resolveAdoClient(sourceSlug);
     const wikis = await client.listWikis(project);
     return out(
@@ -274,10 +274,10 @@ tool(
     },
     annotations: { readOnlyHint: true },
   },
-  async (a) => {
-    const target = await resolveAdoTarget(a);
+  async (args) => {
+    const target = await resolveAdoTarget(args);
     const { project } = target;
-    const type = a.type;
+    const type = args.type;
     const { conn, client } = await resolveAdoClient(target.sourceSlug);
     if (!type) {
       const types = await client.listWorkItemTypes(project);
@@ -324,39 +324,39 @@ tool(
         .describe("The tachy work item this is raised from, if any"),
     },
   },
-  async (a) => {
-    const target = await resolveAdoTarget(a);
+  async (args) => {
+    const target = await resolveAdoTarget(args);
     const project = target.project;
     const { conn, client } = await resolveAdoClient(target.sourceSlug);
     const created = await createWorkItem(
       client,
       {
         project,
-        type: a.type,
-        title: a.title,
-        description: a.description,
-        fields: a.fields,
+        type: args.type,
+        title: args.title,
+        description: args.description,
+        fields: args.fields,
         defaults: workItemDefaults(
           conn.config,
           project,
-          a.type,
+          args.type,
           target.context?.project.config,
         ),
-        parentId: a.parent_id,
-        relatedIds: a.related_ids,
-        tags: a.tags,
+        parentId: args.parent_id,
+        relatedIds: args.related_ids,
+        tags: args.tags,
       },
       {
         sourceSlug: target.sourceSlug,
         userId: await resolveCurrentUserId(),
         sourceProjectId: target.context?.project.id ?? null,
-        workItemIds: a.work_item_id ? [a.work_item_id] : [],
+        workItemIds: args.work_item_id ? [args.work_item_id] : [],
       },
     );
     return out({
       created: true,
       id: created.id,
-      ...(a.work_item_id ? { linked_to_work_item: a.work_item_id } : {}),
+      ...(args.work_item_id ? { linked_to_work_item: args.work_item_id } : {}),
       url: created.url,
     });
   },

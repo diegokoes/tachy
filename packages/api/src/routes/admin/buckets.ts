@@ -53,10 +53,10 @@ export const buckets = new Hono()
   })
   .get("/buckets/:slug/docs", async (c) => {
     const bucket = await getBucket(c.req.param("slug"));
-    const q = c.req.query("q")?.trim();
+    const query = c.req.query("q")?.trim();
     return c.json(
-      q
-        ? await searchBucket(q, { bucketIds: [bucket.id], limit: 20 })
+      query
+        ? await searchBucket(query, { bucketIds: [bucket.id], limit: 20 })
         : await listBucketDocs(bucket.id),
     );
   });

@@ -1,20 +1,20 @@
 export class AsyncQueue<T> {
   private items: T[] = [];
-  private resolvers: ((r: IteratorResult<T>) => void)[] = [];
+  private resolvers: ((result: IteratorResult<T>) => void)[] = [];
   private closed = false;
 
   push(item: T): void {
     if (this.closed) return;
-    const r = this.resolvers.shift();
-    if (r) r({ value: item, done: false });
+    const resolver = this.resolvers.shift();
+    if (resolver) resolver({ value: item, done: false });
     else this.items.push(item);
   }
 
   close(): void {
     this.closed = true;
-    let r: ((r: IteratorResult<T>) => void) | undefined;
-    while ((r = this.resolvers.shift()))
-      r({ value: undefined as never, done: true });
+    let resolver: ((result: IteratorResult<T>) => void) | undefined;
+    while ((resolver = this.resolvers.shift()))
+      resolver({ value: undefined as never, done: true });
   }
 
   async *iterator(): AsyncGenerator<T> {
@@ -24,11 +24,11 @@ export class AsyncQueue<T> {
         continue;
       }
       if (this.closed) return;
-      const res = await new Promise<IteratorResult<T>>((rs) =>
-        this.resolvers.push(rs),
+      const next = await new Promise<IteratorResult<T>>((resolve) =>
+        this.resolvers.push(resolve),
       );
-      if (res.done) return;
-      yield res.value;
+      if (next.done) return;
+      yield next.value;
     }
   }
 }
