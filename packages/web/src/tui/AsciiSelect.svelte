@@ -67,12 +67,9 @@
   let open = $state(false);
   let cursor = $state(0);
   let query = $state("");
-  /*
-   * When the list is short enough to skip the filter input, focus stays on the
-   * trigger - so the trigger is what has to name the option the arrow keys are
-   * on. That needs ids, and ids have to be unique per instance because this is
-   * every dropdown in the product.
-   */
+  // With a list short enough to skip the filter input, focus stays on the
+  // trigger, so the trigger names the option the arrow keys are on. That needs
+  // ids, unique per instance.
   const uid = $props.id();
   const listId = `asel-${uid}`;
   const optId = (i: number) => `${listId}-opt-${i}`;
@@ -159,7 +156,7 @@
         open ? choose(cursor) : openPanel();
         break;
       case " ":
-        /* Once a filter box has focus, space is a character. */
+        // Once a filter box has focus, space is a character.
         if (open && filterable) break;
         e.preventDefault();
         open ? choose(cursor) : openPanel();
@@ -182,8 +179,8 @@
     if (open && root && !root.contains(e.target as Node)) close();
   }
 
-  /* A filtered list is a different list: the cursor has to land back on
-     something that exists, or Enter commits whatever index it was left on. */
+  // A filtered list is a different list: the cursor has to land back on
+  // something that exists, or Enter commits whatever index it was left on.
   $effect(() => {
     query;
     if (cursor >= shown.length) cursor = Math.max(0, shown.length - 1);
@@ -342,7 +339,7 @@
   }
 
   /* Placed by the float action, in viewport coordinates: as a child of the
-     trigger this list was cropped by whatever dialog body it opened inside. */
+     trigger this list is cropped by whatever dialog body it opens inside. */
   .panel {
     z-index: calc(var(--z-overlay) + 1);
     display: flex;

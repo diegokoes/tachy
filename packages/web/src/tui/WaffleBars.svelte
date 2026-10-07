@@ -71,8 +71,11 @@
     s.length > maxChars ? `${s.slice(0, maxChars - 1)}…` : s;
 </script>
 
-<!-- Every cell is `unit` of the thing: a count read by counting, and the axis
-     is the same number written out. -->
+<!--
+@component
+Every cell is `unit` of the thing: a count read by counting, and the axis is the
+same number written out.
+-->
 <div
   class="waffle-bars"
   use:measureBox={(nw, nh) => {

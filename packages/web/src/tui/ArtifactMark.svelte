@@ -1,14 +1,13 @@
 <script lang="ts">
   /**
-   * Three rings on an equilateral triangle, centred on the rotation point.
+   * Three rings on an equilateral triangle, centred on the rotation point. The
+   * centroid sits at (50,50), not where a bounding-box centring would put it,
+   * because this mark spins: the swept circle has to be centred, or the
+   * triangle orbits the middle instead of turning in place.
    *
-   * The centroid sits at (50,50) rather than where a bounding-box centring
-   * would put it, because this mark spins: the swept circle has to be centred,
-   * or the triangle orbits the middle instead of turning in place.
-   *
-   * `spread` is the circumradius. Growing it moves the rings apart without
-   * touching their radius - which is the whole point, since the frame around
-   * them scales and the rings must not.
+   * `spread` is the circumradius: growing it moves the rings apart without
+   * touching their radius, since the frame around them scales and the rings
+   * must not.
    */
   let {
     size = "1em",

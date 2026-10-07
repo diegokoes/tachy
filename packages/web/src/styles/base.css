@@ -80,8 +80,9 @@ select {
   }
 }
 
-/* Focus ring drawn INSIDE the box (border + inset shadow) - outlines render
-   outside and get clipped when a control touches the scroll container's edge. */
+/* Focus ring drawn inside the box (border + inset shadow): outlines render
+   outside and get clipped when a control touches the scroll container's
+   edge. */
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
@@ -91,11 +92,9 @@ button:focus-visible {
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
-/* Readable measure for running prose only - containers stay full-frame so the
-   list → detail transition never changes width.
-
-   ch is the width of "0" in the inherited face, so this stays a character-count
-   measure whichever reading font is picked. */
+/* Readable measure for running prose only: containers stay full-frame so the
+   list → detail transition never changes width. ch is the width of "0" in
+   the inherited face, so this is a character count in any reading font. */
 .prose-measure {
   font-family: var(--font-prose);
   max-width: 60ch;
@@ -229,10 +228,9 @@ details.callout[open] > summary.callout-title::after {
   clip-path: var(--theme-wipe);
 }
 
-/* A chart tile taking the window, or giving it back. The tile's own box grows
-   between its two sizes while what was in it fades out and what replaces it
-   fades in, scaled to the box rather than stretched. The page around it only
-   dims. */
+/* A chart tile taking the window, or giving it back. The tile's box grows
+   between its two sizes while its old contents fade out and the new fade in,
+   scaled to the box and not stretched. The page around it only dims. */
 :root[data-tile-morph]::view-transition-group(tile) {
   animation-duration: 0.5s;
   animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);

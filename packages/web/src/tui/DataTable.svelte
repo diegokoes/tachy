@@ -29,9 +29,9 @@
     canOpen?: (row: T) => boolean;
   } = $props();
 
-  /* A row is a target, not a link: a click that landed on a control inside it
-     belongs to that control, and one that ended a drag was selecting text to
-     copy, not asking to open anything. */
+  // A row is a target, not a link: a click that landed on a control inside it
+  // belongs to that control, and one that ended a drag was selecting text to
+  // copy, not asking to open anything.
   function opens(e: MouseEvent): boolean {
     const el = e.target as HTMLElement | null;
     if (el?.closest("button,a,input,select,textarea,label")) return false;
@@ -105,8 +105,8 @@
     overflow-x: auto;
   }
 
-  /* Fixed layout is the whole point: a cell that switches to an <input> keeps
-     the column width it already had, so nothing reflows mid-edit. */
+  /* Fixed layout: a cell that switches to an <input> keeps the column width
+     it had, so nothing reflows mid-edit. */
   table {
     width: 100%;
     table-layout: fixed;
@@ -147,9 +147,8 @@
     background: var(--accent-dim);
   }
 
-  /* The row is the button. A rank of marks that only appeared under the
-     pointer was three things to aim at where there is one thing to open, and
-     it hid on every row a keyboard user was not already inside. */
+  /* The row is the button: one thing to open, in reach of a keyboard user on
+     every row. */
   tbody tr.open {
     cursor: pointer;
   }

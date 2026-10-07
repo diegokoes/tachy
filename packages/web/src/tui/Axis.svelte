@@ -19,8 +19,8 @@
   const plot = getPlot();
   const f = $derived(plot.frame);
 
-  /* A day-of-month label is the widest thing the bottom axis carries, and two
-     of them touching is what makes a 14-column chart unreadable. */
+  // A day-of-month label is the widest thing the bottom axis carries, and two
+  // of them touching is what makes a 14-column chart unreadable.
   const stride = $derived(labelStride(categories.length, f.iw, f.fs * 2.2));
 </script>
 

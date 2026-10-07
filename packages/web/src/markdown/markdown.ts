@@ -8,21 +8,18 @@ import { highlight } from "./highlight";
 marked.setOptions({ gfm: true, breaks: true });
 
 /**
- * [[wikilinks]] as a real inline token, so they compose with the rest of
- * markdown instead of being string-replaced into it. The parser is the
- * contract's, the same one the server extracts edges with - two parsers that
- * could disagree would let a rendered link have no stored edge.
- *
- * The output is a plain anchor carrying its target in a data attribute; nothing
- * executes, and DOMPurify still sees ordinary HTML. Resolution happens at click
- * time, in the view that knows which wiki it is in.
+ * [[wikilinks]] as an inline token, so they compose with the rest of markdown.
+ * The parser is the contract's, the one the server extracts edges with, so a
+ * rendered link always has a stored edge. The output is a plain anchor carrying
+ * its target in a data attribute: nothing executes, DOMPurify sees ordinary
+ * HTML, and resolution happens at click time in the view that knows its wiki.
  */
 const esc = (v: string) =>
   v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 
 /**
  * Exported so it can be exercised without a DOM: the tokenizer and renderer are
- * this codebase's logic, while the sanitize step below is DOMPurify's.
+ * this codebase's logic, while the sanitize step is DOMPurify's.
  */
 export const wikilinkExtension = {
   name: "wikilink",
@@ -34,13 +31,9 @@ export const wikilinkExtension = {
     return { type: "wikilink", raw: m[0], ...parseWikilink(m[1], m[2]) };
   },
   renderer(token: any) {
-    /*
-     * role and tabindex, because there is no href to give it: the route a
-     * target resolves to is only known once the server has answered, and until
-     * then an anchor without href is not focusable and is not announced as a
-     * link. LinkTargets.onKeydown is the other half - without it these would be
-     * reachable by keyboard and still not followable.
-     */
+    // role and tabindex, because there is no href: the route is known only once
+    // the server answers, and an anchor without href is neither focusable nor
+    // announced as a link. `LinkTargets.onKeydown` follows them by keyboard.
     return `<a class="wikilink" role="link" tabindex="0" data-wikilink="${esc(token.target)}">${esc(token.label)}</a>`;
   },
 };
@@ -158,7 +151,7 @@ marked.use({
 });
 
 /**
- * The renderer above only sees markdown images. A body can also carry a raw
+ * `imageRenderer` only sees markdown images. A body can also carry a raw
  * `<img>`, which marked passes through untouched, so the same rule is applied
  * again to what the sanitizer is about to keep.
  */
@@ -176,10 +169,9 @@ export function renderMarkdown(src: string): string {
   DOMPurify.addHook("afterSanitizeAttributes", firstPartyImagesOnly);
   try {
     return DOMPurify.sanitize(marked.parse(src, { async: false }), {
-      // DOMPurify allows every data-* attribute by default. Article bodies are
-      // untrusted, so close that and re-open only the one the wikilink renderer
-      // emits - ADD_ATTR extends ALLOWED_ATTR, which is checked independently
-      // of the data-* rule.
+      // DOMPurify allows every data-* attribute by default. Bodies are
+      // untrusted, so that is closed and only the wikilink attribute re-opened:
+      // ADD_ATTR extends ALLOWED_ATTR, checked apart from the data-* rule.
       ALLOW_DATA_ATTR: false,
       ADD_ATTR: ["data-wikilink", "role", "tabindex", "loading"],
     });
@@ -189,8 +181,8 @@ export function renderMarkdown(src: string): string {
 }
 
 /**
- * Mark links whose target does not resolve, so a rename is visible instead of
- * silently dead. `resolved` is the set of targets the server found a row for.
+ * Mark links whose target does not resolve, so a rename shows as a broken link.
+ * `resolved` is the set of targets the server found a row for.
  */
 export function markBrokenLinks(html: string, resolved: Set<string>): string {
   // Rewrites only the class and leaves the a11y attributes between it and

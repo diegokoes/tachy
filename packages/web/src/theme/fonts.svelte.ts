@@ -59,7 +59,7 @@ export const FAMILIES: Record<FontAxis, Family[]> = {
   ],
   prose: [
     // Reading defaults to whatever the interface face is, so the app reads as
-    // one thing until someone deliberately splits it.
+    // one thing until someone splits it.
     { key: "match", label: "Match interface", stack: "var(--font-ui)" },
     {
       key: "source-serif",

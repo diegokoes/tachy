@@ -36,9 +36,9 @@
     x: rand(0, 100),
     y: rand(0, 100),
     size: rand(0.6, 1.25),
-    // Floor raised off 0.35: multiplied into --star-ink and then again by the
-    // twinkle, the faintest stars were landing near 5% alpha - present in the
-    // DOM, invisible on screen.
+    // The floor is this high because it multiplies into --star-ink and again
+    // into the twinkle: lower, the faintest stars are in the DOM and invisible
+    // on screen.
     dim: rand(0.6, 1),
   }));
 
@@ -101,8 +101,8 @@
             y: rand(-150, -50),
             x: rand(-30, 30),
             opacity: 0,
-            // Much slower than a normal particle emitter. At emitter speed this
-            // reads as weather; at this speed you only notice it if you look.
+            // Much slower than a particle emitter: at emitter speed this reads
+            // as weather, at this speed it is noticed only when looked at.
             duration: rand(14, 26),
             delay: rand(0, 18),
             repeat: -1,

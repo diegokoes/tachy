@@ -26,12 +26,12 @@
     legend?: LegendItem[];
   } = $props();
 
-  /* Capped rather than stretched: three categories across a full-width panel
-     would otherwise be three slabs, and a saturated fill that big reads as a
-     colour field rather than a measurement. */
+  // Capped rather than stretched: three categories across a full-width panel
+  // would otherwise be three slabs, and a saturated fill that big reads as a
+  // colour field rather than a measurement.
   const CAP_REM = 3.25;
-  /* Cut between stacked slices. The ground showing through is the separator:
-     a stroke around each would add ink that is not data. */
+  // Cut between stacked slices. The ground showing through is the separator: a
+  // stroke around each would add ink that is not data.
   const CUT = 2;
 
   const peak = $derived(Math.max(0, ...rows.map((r) => r.value)));
@@ -41,9 +41,9 @@
   const keys = $derived(rows.map((r) => r.key));
   const labels = $derived(new Map(rows.map((r) => [r.key, r.label])));
 
-  /* The axis carries the scale, so a number over every column would be
-     saying it twice. The peak and the latest still get one: those are the two
-     a reader looks for by name rather than off the axis. */
+  // The axis carries the scale, so a number over every column would be saying
+  // it twice. The peak and the latest still get one: those are the two a reader
+  // looks for by name rather than off the axis.
   const view = getView();
   const dense = $derived(rows.length > (view.expanded ? 24 : 8));
   const count = (r: Col, i: number) =>

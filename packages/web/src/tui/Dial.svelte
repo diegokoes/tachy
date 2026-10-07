@@ -30,10 +30,9 @@
     Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0)),
   );
 
-  /* Meter's algorithm in polar coordinates: whole ticks light, and the one
-     straddling the boundary carries the remainder as a mix towards the track.
-     Ticks are drawn rather than typed for the same reason Meter's cells are -
-     neither bundled face carries a block glyph. */
+  // Meter's algorithm in polar coordinates: whole ticks light, and the one
+  // straddling the boundary carries the remainder as a mix towards the track.
+  // Drawn, since neither bundled face has a block glyph.
   const lit = $derived.by(() => {
     const exact = pct * segments;
     return Array.from({ length: segments }, (_, i) =>

@@ -56,9 +56,12 @@
   const lone = $derived(series.length === 1);
 </script>
 
-<!-- One spoke per category and a ring per round number: the shape says where
-     the weight is, and every spoke carries its own figure so nothing has to be
-     read off the grid. -->
+<!--
+@component
+One spoke per category and a ring per round number: the shape says where the
+weight is, and every spoke carries its own figure so nothing has to be read off
+the grid.
+-->
 <div
   class="radar"
   use:measureBox={(nw, nh) => {

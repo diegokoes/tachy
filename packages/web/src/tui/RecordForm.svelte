@@ -33,10 +33,8 @@
       : false;
   }
 
-  /* A derived value is not the user's to set, so on the way in there is nothing
-     to show them - the slug they cannot influence was only ever noise on an
-     add form. In edit mode it stays, because that is where it carries the
-     rename action. */
+  // A derived value is not the user's to set, so an add form does not show it.
+  // In edit mode it stays, because that is where it carries the rename action.
   const fields = $derived(
     columns.filter(
       (c) =>
@@ -48,8 +46,8 @@
     ),
   );
 
-  /* Runs of fields under their group label, in first-seen order. One group
-     means the list named none, and the label is dropped. */
+  // Runs of fields under their group label, in first-seen order. One group
+  // means the list named none, and the label is dropped.
   const groups = $derived.by(() => {
     const out: { label: string; cols: Column<T>[] }[] = [];
     for (const c of fields) {
@@ -71,11 +69,9 @@
     }
   });
 
-  /* A select whose options depend on another field is holding a stale value the
-     moment that field changes - the control renders blank (nothing matches) while
-     the draft still carries the old one, and the form submits what was never on
-     screen. Clearing it makes the required-check catch it here instead of the
-     server rejecting a value the user never chose. */
+  // A select whose options depend on another field holds a stale value once
+  // that field changes: the control renders blank while the draft carries the
+  // old one. Clearing it lets the required-check catch it here.
   $effect(() => {
     for (const c of fields) {
       if (c.edit !== "select" || readOnly(c)) continue;
@@ -184,9 +180,8 @@
 
 <style>
   /* Two tracks where there is room and one where there is not, so a short
-     field stops eating a whole row and a select sizes to its cell instead of
-     to the dialog. The minimum is a real one: below it a label and its control
-     stop fitting side by side at font scale 175%. */
+     field does not take a whole row. Under the minimum a label and its
+     control stop fitting side by side at the largest font scale. */
   .form {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));

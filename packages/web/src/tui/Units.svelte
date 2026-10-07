@@ -11,8 +11,11 @@
   const view = getView();
 </script>
 
-<!-- One cell per thing, coloured by its state: a handful of items read by
-     looking, with nothing to measure. -->
+<!--
+@component
+One cell per thing, coloured by its state: a handful of items read by looking,
+with nothing to measure.
+-->
 <div class="units" class:big={view.expanded}>
   {#each groups as g (g.key)}
     <div class="group">

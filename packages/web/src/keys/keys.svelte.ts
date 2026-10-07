@@ -78,10 +78,9 @@ export function normalize(e: KeyboardEvent, ctrl = false): string {
 }
 
 export function startKeys() {
-  /* Keys typed so far towards a multi-key binding. A lone `g` is not a binding
-     on its own, so it has to be held until either its partner arrives or the
-     window lapses - and it must lapse, or a stray `g` would arm the next
-     unrelated keystroke indefinitely. */
+  // Keys typed so far towards a multi-key binding. A lone `g` is held until its
+  // partner arrives or the window lapses, and it has to lapse, or a stray `g`
+  // would arm the next unrelated keystroke.
   let pending: string[] = [];
   let lapse: ReturnType<typeof setTimeout> | undefined;
 
@@ -91,10 +90,9 @@ export function startKeys() {
     lapse = undefined;
   };
 
-  /* Innermost scope wins, and it wins whole: a scope that has a sequence
-     starting with this chord claims it, even if an outer scope binds the same
-     chord on its own. Otherwise a modal's `g g` would be shadowed by the
-     view's `g` and never complete. */
+  // Innermost scope wins whole: a scope with a sequence starting with this
+  // chord claims it even if an outer scope binds the chord alone, or a modal's
+  // `g g` would be shadowed by the view's `g`.
   const match = (chord: string, field: boolean): Binding | "partial" | null => {
     for (let i = scopes.length - 1; i >= 0; i--) {
       let exact: Binding | undefined;

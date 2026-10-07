@@ -5,11 +5,9 @@
   /**
    * Draws the app's caret over whichever text field has focus. A native caret
    * takes a colour and a shape and nothing else, so the field's own is made
-   * transparent and this one is placed where it would have been.
-   *
-   * Fields that do not report a selection (email, number, date) and password
-   * fields, whose text is not what is drawn, keep the native caret. So does
-   * anything marked `data-caret="own"`.
+   * transparent and this one is placed where it would be. Fields that report no
+   * selection (email, number, date), password fields and anything marked
+   * `data-caret="own"` keep the native caret.
    */
   type Field = HTMLInputElement | HTMLTextAreaElement;
 
@@ -60,8 +58,8 @@
     seen = { pos: -1, width: -1, value: "" };
   }
 
-  /* The field's text laid out again in a block that can be measured: same
-     face, same padding, same wrapping, cut at the caret. */
+  // The field's text laid out again in a block that can be measured: same face,
+  // same padding, same wrapping, cut at the caret.
   function measure(el: Field, pos: number) {
     const cs = getComputedStyle(el);
     if (!mirror) {
@@ -90,8 +88,8 @@
 
     size = parseFloat(cs.fontSize);
     side = caretSide(el.value, pos);
-    /* Rects, not offsetLeft: that one rounds to a whole pixel, and padding
-       set in rem rarely is one. */
+    // Rects, not offsetLeft: that one rounds to a whole pixel, and padding set
+    // in rem rarely is one.
     const box = mirror.getBoundingClientRect();
     const start = tail.getClientRects()[0] ?? box;
     at = {
@@ -117,9 +115,9 @@
       top + at.line <= r.bottom + 1;
   }
 
-  /* Every frame while a field is held: the field can move under a tween, a
-     scroll or a resize with no event that says so. Only the placing is done
-     each time; the measuring waits for the text or the caret to change. */
+  // Every frame while a field is held: the field can move under a tween, a
+  // scroll or a resize with no event that says so. Only the placing is done
+  // each time; the measuring waits for the text or the caret to change.
   function sync() {
     const el = document.activeElement;
     if (el !== held) {
@@ -151,8 +149,8 @@
     frame = held ? requestAnimationFrame(tick) : 0;
   }
 
-  /* Typing and caret moves are also followed as they happen: left to the
-     frame loop alone, the caret reached a new letter one frame after it. */
+  // Typing and caret moves are also followed as they happen: left to the frame
+  // loop alone, the caret reached a new letter one frame after it.
   function now() {
     sync();
     if (held && !frame) frame = requestAnimationFrame(tick);

@@ -6,18 +6,10 @@ export function errText(e: unknown): string {
 }
 
 /**
- * The sequence guard out of `createResource`, for the views that load by hand
- * rather than through it. Call the returned function at the top of a load; the
- * predicate it gives back is false once a newer load has started, so a slow
- * response cannot overwrite a fast one that came after it.
- *
- *   const current = createSequence();
- *   async function load() {
- *     const isCurrent = current();
- *     const next = await api.get(…);
- *     if (!isCurrent()) return;
- *     …
- *   }
+ * The sequence guard out of `createResource`, for views that load by hand. Call
+ * the returned function at the top of a load: the predicate it gives back is
+ * false once a newer load has started, so a slow response cannot overwrite a
+ * faster one that came after it.
  */
 export function createSequence(): () => () => boolean {
   let seq = 0;

@@ -6,8 +6,8 @@
     controls,
   }: { target: HTMLElement | undefined; controls?: string } = $props();
 
-  /* Must stay equal to the --row height below: the row maths here and the
-     cells painted there have to agree, at every font scale. */
+  // Must stay equal to the --row height in this file's styles: the row maths
+  // and the painted cells have to agree at every font scale.
   const ROW_REM = 0.9;
   const rowPx = () =>
     ROW_REM * parseFloat(getComputedStyle(document.documentElement).fontSize);
@@ -63,17 +63,14 @@
   $effect(() => {
     const el = target;
     if (!el) return;
-    /* Read so a font-scale change re-runs this: it moves the row height without
-       necessarily resizing the target, so neither observer below would fire. */
+    // Read so a font-scale change re-runs this: it moves the row height without
+    // necessarily resizing the target, so neither observer would fire.
     themeState.fontScale;
     update();
 
-    /*
-     * `update` reads getComputedStyle plus four layout properties. The observers
-     * below fire on every mutation of the subtree - for the chat transcript that
-     * is once per streamed token - so they are coalesced onto a frame rather
-     * than made to measure synchronously in the middle of a paint.
-     */
+    // `update` reads getComputedStyle and four layout properties. The observers
+    // fire on every mutation of the subtree, once per streamed token in the
+    // chat transcript, so they are coalesced onto a frame.
     let frame = 0;
     const schedule = () => {
       if (frame) return;
@@ -99,7 +96,7 @@
 </script>
 
 {#if visible}
-  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -- it really is a scrollbar -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -- it is a scrollbar -->
   <div
     bind:this={bar}
     class="scrollbar"
@@ -126,10 +123,8 @@
 {/if}
 
 <style>
-  /* Drawn, not typed. This was a ▲░█▼ column on --font-mono, and neither
-     bundled face carries those glyphs - every row came from whatever fallback
-     the OS supplied, so the track drifted out of step with the row maths
-     above on any machine whose fallback had different metrics. */
+  /* Drawn, not typed: neither bundled face carries ▲░█▼, and an OS
+     fallback's metrics would put the track out of step with the row maths. */
   .scrollbar {
     --row: 0.9rem;
     display: flex;
@@ -162,9 +157,9 @@
     background: var(--accent-fill);
   }
 
-  /* Triangles from borders - the same reason as above, one step further: no
-     glyph at all, so nothing to substitute. The cap keeps its full row height
-     so the arrow slots stay exactly one ROW, which is what down() measures. */
+  /* Triangles from borders, for the same reason: no glyph, so nothing to
+     substitute. The cap keeps its full row height so each arrow slot is one
+     row, which is what down() measures. */
   .cap {
     width: 0.6rem;
     display: grid;
