@@ -15,11 +15,16 @@ const ROOT = new URL("..", import.meta.url).pathname;
 
 /** Repo-relative path prefixes already brought under the convention. */
 export const SWEPT = [
+  "packages/agent",
+  "packages/api",
   "packages/contract",
   "packages/core/src/search",
   "packages/core/src/work-items/compact.ts",
+  "packages/mcp",
+  "packages/sources",
   "packages/web/src/shell",
   "packages/web/src/tui/Tabs.svelte",
+  "packages/worker",
   "test/search/embeddings.test.ts",
   "test/search/quality.test.ts",
 ];

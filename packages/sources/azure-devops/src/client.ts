@@ -8,6 +8,7 @@ const API_VERSION = "7.1";
  * the point where a continuation token that never clears is a bug.
  */
 const MAX_PAGES = 100;
+const WORK_ITEM_BATCH_SIZE = 200;
 
 /** No released version: the 7.1 reference itself documents 7.1-preview.4. */
 const API_COMMENTS = "7.1-preview.4";
@@ -450,8 +451,8 @@ export function createAdoClient(connection: AdoCfg): AdoClient {
 
     async getWorkItemsBatch(ids, fields) {
       const workItems: AdoWorkItem[] = [];
-      for (let i = 0; i < ids.length; i += 200) {
-        const chunk = ids.slice(i, i + 200);
+      for (let i = 0; i < ids.length; i += WORK_ITEM_BATCH_SIZE) {
+        const chunk = ids.slice(i, i + WORK_ITEM_BATCH_SIZE);
         const params = new URLSearchParams({
           ids: chunk.join(","),
           errorPolicy: "omit",

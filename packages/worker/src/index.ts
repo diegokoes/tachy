@@ -23,11 +23,13 @@ const queues = commaSeparated(process.env.TACHY_WORKER_QUEUES);
 for (const queue of queues)
   if (!JOB_QUEUE_NAMES.includes(queue as never))
     throw new Error(`TACHY_WORKER_QUEUES: unknown queue '${queue}'`);
-const classes = process.env.TACHY_WORKER_CLASSES
-  ? commaSeparated(process.env.TACHY_WORKER_CLASSES)
-  : queues.length
-    ? [...new Set(queues.map((q) => jobQueue(q).class))]
-    : ["light"];
+function workerClasses(): string[] {
+  if (process.env.TACHY_WORKER_CLASSES)
+    return commaSeparated(process.env.TACHY_WORKER_CLASSES);
+  if (queues.length) return [...new Set(queues.map((q) => jobQueue(q).class))];
+  return ["light"];
+}
+const classes = workerClasses();
 for (const resourceClass of classes)
   if (!(JOB_RESOURCE_CLASSES as readonly string[]).includes(resourceClass))
     throw new Error(`TACHY_WORKER_CLASSES: unknown class '${resourceClass}'`);

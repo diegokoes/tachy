@@ -15,6 +15,13 @@ import type {
   SourceFactory,
 } from "@tachy/core/sources";
 
+const PER_PAGE = 100;
+/** Conversations page at the API default: `per_page` is unreliable there. */
+const CONVERSATIONS_PER_PAGE = 30;
+const MAX_AGENT_PAGES = 5;
+const MAX_CONVERSATION_PAGES = 500;
+const MAX_COMPANY_PAGES = 20;
+
 function redactFreshdeskRaw(
   raw: unknown,
   map: TokenMap,
@@ -140,13 +147,13 @@ export function fieldChoices(choices: unknown): FlowOption[] {
   if (Array.isArray(choices))
     return choices.map((c) => ({ value: String(c), label: String(c) }));
   if (!choices || typeof choices !== "object") return [];
-  return Object.entries(choices).map(([k, v]) =>
-    Array.isArray(v)
-      ? { value: k, label: String(v[0] ?? k) }
-      : typeof v === "number" || typeof v === "string"
-        ? { value: String(v), label: k }
-        : { value: k, label: k },
-  );
+  return Object.entries(choices).map(([key, choice]) => {
+    if (Array.isArray(choice))
+      return { value: key, label: String(choice[0] ?? key) };
+    if (typeof choice === "number" || typeof choice === "string")
+      return { value: String(choice), label: key };
+    return { value: key, label: key };
+  });
 }
 
 /** Freshdesk adapter. Uses *_text fields, so no HTML stripping is needed. */
@@ -181,16 +188,16 @@ export const createFreshdeskSource: SourceFactory = (
     if (agentNames) return agentNames;
     const names = new Map<string, string>();
     try {
-      for (let page = 1; page <= 5; page++) {
+      for (let page = 1; page <= MAX_AGENT_PAGES; page++) {
         const batch = await get<FreshdeskAgent[]>(
-          `/agents?per_page=100&page=${page}`,
+          `/agents?per_page=${PER_PAGE}&page=${page}`,
         );
         if (!Array.isArray(batch) || batch.length === 0) break;
         for (const agent of batch) {
           const name = agent?.contact?.name;
           if (agent?.id != null && name) names.set(String(agent.id), name);
         }
-        if (batch.length < 100) break;
+        if (batch.length < PER_PAGE) break;
       }
     } catch {
       // Keep whatever was collected.
@@ -270,7 +277,9 @@ export const createFreshdeskSource: SourceFactory = (
       // /groups is admin-only; a plain agent key 403s here and still reads
       // tickets fine, so the failure is reported, not thrown.
       try {
-        const groups = await get<FreshdeskGroup[]>("/groups?per_page=100");
+        const groups = await get<FreshdeskGroup[]>(
+          `/groups?per_page=${PER_PAGE}`,
+        );
         return {
           identity,
           groups: (Array.isArray(groups) ? groups : []).map((g) => ({
@@ -294,16 +303,14 @@ export const createFreshdeskSource: SourceFactory = (
       const ticket = await get<FreshdeskTicket>(
         `/tickets/${ticketId}?include=requester`,
       );
-      // Conversations page at 30 (the API default); per_page is unreliable on
-      // some endpoints, so the loop keys on the observed default instead.
       const convos: FreshdeskConversation[] = [];
-      for (let page = 1; page <= 500; page++) {
+      for (let page = 1; page <= MAX_CONVERSATION_PAGES; page++) {
         const batch = await get<FreshdeskConversation[]>(
           `/tickets/${ticketId}/conversations?page=${page}`,
         );
         if (!Array.isArray(batch) || batch.length === 0) break;
         convos.push(...batch);
-        if (batch.length < 30) break;
+        if (batch.length < CONVERSATIONS_PER_PAGE) break;
       }
       // Loaded even when no agent replied: redaction needs the colleagues a
       // thread only mentions. The map is cached for the life of the adapter.
@@ -331,7 +338,7 @@ export const createFreshdeskSource: SourceFactory = (
 
     async listItems(opts: ListOptions) {
       const params = new URLSearchParams();
-      params.set("per_page", "100");
+      params.set("per_page", String(PER_PAGE));
       params.set("order_by", "updated_at");
       params.set("order_type", "asc");
       if (opts.updatedSince) params.set("updated_since", opts.updatedSince);
@@ -346,7 +353,7 @@ export const createFreshdeskSource: SourceFactory = (
       if (opts.groupKey)
         items = items.filter((i) => i.groupKey === opts.groupKey);
 
-      const nextCursor = raw.length < 100 ? undefined : String(page + 1);
+      const nextCursor = raw.length < PER_PAGE ? undefined : String(page + 1);
       return { items, nextCursor };
     },
 
@@ -367,9 +374,9 @@ export const createFreshdeskSource: SourceFactory = (
     async options(name, params) {
       if (name === "companies") {
         const companies: FlowOption[] = [];
-        for (let page = 1; page <= 20; page++) {
+        for (let page = 1; page <= MAX_COMPANY_PAGES; page++) {
           const batch = await get<FreshdeskCompany[]>(
-            `/companies?per_page=100&page=${page}`,
+            `/companies?per_page=${PER_PAGE}&page=${page}`,
           );
           if (!Array.isArray(batch) || !batch.length) break;
           for (const company of batch)
@@ -377,7 +384,7 @@ export const createFreshdeskSource: SourceFactory = (
               value: String(company.id),
               label: company.name ?? String(company.id),
             });
-          if (batch.length < 100) break;
+          if (batch.length < PER_PAGE) break;
         }
         return companies.sort((a, b) => a.label.localeCompare(b.label));
       }

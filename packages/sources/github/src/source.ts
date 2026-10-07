@@ -184,7 +184,7 @@ export const createGithubSource: SourceFactory = (
       // here is tolerated.
       try {
         const repos = await get<{ full_name: string }[]>(
-          "/user/repos?per_page=100&sort=updated",
+          `/user/repos?per_page=${PER_PAGE}&sort=updated`,
         );
         return {
           identity,
@@ -208,11 +208,11 @@ export const createGithubSource: SourceFactory = (
       const comments: GithubComment[] = [];
       for (let page = 1; ; page++) {
         const batch = await get<GithubComment[]>(
-          `/repos/${repo}/issues/${number}/comments?per_page=100&page=${page}`,
+          `/repos/${repo}/issues/${number}/comments?per_page=${PER_PAGE}&page=${page}`,
         );
         const pageComments = Array.isArray(batch) ? batch : [];
         comments.push(...pageComments);
-        if (pageComments.length < 100) break;
+        if (pageComments.length < PER_PAGE) break;
       }
       const body: RawMessage = {
         externalId: `${repo}#body${issue.number}`,
@@ -255,11 +255,9 @@ export const createGithubSource: SourceFactory = (
           pageNumber,
           opts,
         );
-        const nextCursor = more
-          ? `${repoIndex}:${pageNumber + 1}`
-          : repoIndex + 1 < repos.length
-            ? `${repoIndex + 1}:1`
-            : undefined;
+        const nextRepo =
+          repoIndex + 1 < repos.length ? `${repoIndex + 1}:1` : undefined;
+        const nextCursor = more ? `${repoIndex}:${pageNumber + 1}` : nextRepo;
         if (items.length || !nextCursor) return { items, nextCursor };
         [repoIndex, pageNumber] = nextCursor.split(":").map(Number);
       }

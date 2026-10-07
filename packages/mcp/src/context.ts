@@ -175,6 +175,8 @@ export async function unresolvedUnit(
 
 export const MAX_LINKED_ITEMS = 5;
 export const LINKED_BODY_CHARS = 2000;
+/** How much of a ticket's text is searched for a unit's name. */
+const UNIT_SCAN_CHARS = 4000;
 
 /**
  * Who a work item is about and where it sits: its customer, with a customer or
@@ -188,7 +190,7 @@ export async function workItemFacts(
   const text = `${raw.title ?? ""} ${raw.messages
     .map((m) => m.bodyText ?? "")
     .join(" ")
-    .slice(0, 4000)}`;
+    .slice(0, UNIT_SCAN_CHARS)}`;
   return {
     customer_id: item.customerId,
     customer_name: await getCustomerName(item.customerId),

@@ -20,6 +20,12 @@ export function noteError(c: Context, fields: Record<string, unknown>): void {
   c.set(ERROR_KEY as never, fields as never);
 }
 
+function levelFor(status: number, path: string) {
+  if (status >= 500) return "error";
+  if (status >= 400) return "warn";
+  return QUIET_PATHS.has(path) ? "debug" : "info";
+}
+
 export async function httpLogger(c: Context, next: Next): Promise<void> {
   const started = performance.now();
   c.set(STARTED_KEY as never, started as never);
@@ -32,16 +38,7 @@ export async function httpLogger(c: Context, next: Next): Promise<void> {
     Record<string, unknown> | undefined;
   const identity = getIdentity(c);
 
-  const level =
-    status >= 500
-      ? "error"
-      : status >= 400
-        ? "warn"
-        : QUIET_PATHS.has(c.req.path)
-          ? "debug"
-          : "info";
-
-  log(level, "http", {
+  log(levelFor(status, c.req.path), "http", {
     req: requestId,
     method: c.req.method,
     path: c.req.path,

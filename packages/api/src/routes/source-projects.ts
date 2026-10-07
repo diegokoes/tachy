@@ -88,6 +88,12 @@ async function probe<T>(call: () => Promise<T>) {
   }
 }
 
+/** `has_product` as the query string spells it; anything else is no filter. */
+const QUERY_BOOLEAN = new Map([
+  ["true", true],
+  ["false", false],
+]);
+
 export const sourceProjects = new Hono()
 
   .get("/source-projects", async (c) => {
@@ -101,12 +107,7 @@ export const sourceProjects = new Hono()
           ? await getProductIdBySlug(productSlug)
           : undefined,
         teamId: teamSlug ? await getTeamIdBySlug(teamSlug) : undefined,
-        hasProduct:
-          hasProduct === "true"
-            ? true
-            : hasProduct === "false"
-              ? false
-              : undefined,
+        hasProduct: QUERY_BOOLEAN.get(hasProduct ?? ""),
       }),
     );
   })

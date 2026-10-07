@@ -42,6 +42,9 @@ import {
   workItemFacts,
 } from "../context";
 
+/** How much of the first incoming message goes into the search query. */
+const QUERY_LEAD_CHARS = 1000;
+
 tool(
   "fetch_work_item",
   {
@@ -181,7 +184,7 @@ tool(
     // tail. The lead carries the symptom.
     const firstIncoming = (
       raw.messages.find((m) => m.direction === "incoming")?.bodyText ?? ""
-    ).slice(0, 1000);
+    ).slice(0, QUERY_LEAD_CHARS);
     const query = [raw.title, firstIncoming].filter(Boolean).join(" ");
     const productId = item.productId ?? undefined;
     // Embedded once for both searches.

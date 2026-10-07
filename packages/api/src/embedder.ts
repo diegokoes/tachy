@@ -10,9 +10,13 @@ import { log } from "@tachy/core/infra";
 import { startEmbedHost } from "@tachy/core/search";
 import { internalRoutes } from "./routes/internal";
 
+const MIN_SECRET_CHARS = 32;
+
 const secret = process.env.TACHY_INTERNAL_SECRET;
-if (!secret || secret.length < 32)
-  throw new Error("TACHY_INTERNAL_SECRET (32+ characters) is required");
+if (!secret || secret.length < MIN_SECRET_CHARS)
+  throw new Error(
+    `TACHY_INTERNAL_SECRET (${MIN_SECRET_CHARS}+ characters) is required`,
+  );
 
 let ready = false;
 const host = startEmbedHost({
