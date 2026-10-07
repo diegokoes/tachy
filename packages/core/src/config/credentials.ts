@@ -62,8 +62,8 @@ export function envCredential(name: string): string | undefined {
   if (name === "anthropic_api_key") return process.env.ANTHROPIC_API_KEY;
   if (name === ANTHROPIC_OAUTH_CREDENTIAL)
     return process.env.CLAUDE_CODE_OAUTH_TOKEN;
-  const m = name.match(/^([a-z0-9_-]+)_token:(.+)$/);
-  if (m) return sourceTokenOptional(m[1], m[2]);
+  const match = name.match(/^([a-z0-9_-]+)_token:(.+)$/);
+  if (match) return sourceTokenOptional(match[1], match[2]);
   return undefined;
 }
 

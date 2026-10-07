@@ -93,33 +93,33 @@ export async function getTestRun(id: string): Promise<TestRun> {
  * script or target, a heavy script outside the dev stack, a production run
  * outside the off-hours window, or a second run while one is going.
  */
-export async function startTestRun(i: {
+export async function startTestRun(input: {
   script: string;
   profile?: string | null;
   target: string;
   requestedBy: string | null;
   now?: Date;
 }): Promise<TestRun> {
-  const script = i.script as LoadScript;
+  const script = input.script as LoadScript;
   const rules = LOAD_SCRIPTS[script];
-  if (!rules) throw badInput(`unknown script '${i.script}'`);
-  const target = loadTargets().find((t) => t.name === i.target);
+  if (!rules) throw badInput(`unknown script '${input.script}'`);
+  const target = loadTargets().find((t) => t.name === input.target);
   if (!target)
     throw badInput(
-      `unknown target '${i.target}'. Targets come from TACHY_LOAD_TARGETS.`,
+      `unknown target '${input.target}'. Targets come from TACHY_LOAD_TARGETS.`,
     );
   const heavy = "devOnly" in rules && rules.devOnly;
   if (heavy && !target.dev)
     throw badInput(
       `${script} runs only against a dev target, not '${target.name}'`,
     );
-  if (i.profile === "stress" && !target.dev)
+  if (input.profile === "stress" && !target.dev)
     throw badInput("PROFILE=stress runs only against a dev target");
   const timezone = await orgTimezone();
   if (
     !target.dev &&
     !rules.anyTime &&
-    !inLoadWindow(i.now ?? new Date(), timezone)
+    !inLoadWindow(input.now ?? new Date(), timezone)
   )
     throw badInput(
       `${script} may only run against ${target.name} outside working hours (weekdays 19:00–07:00, or weekends, ${timezone})`,
@@ -127,7 +127,7 @@ export async function startTestRun(i: {
 
   const [row] = await sql`
     insert into test_runs (script, profile, target, requested_by, image_sha)
-    select ${script}, ${i.profile ?? null}, ${target.name}, ${i.requestedBy}, ${env.commit ?? null}
+    select ${script}, ${input.profile ?? null}, ${target.name}, ${input.requestedBy}, ${env.commit ?? null}
     where not exists (select 1 from test_runs where status in ('queued','running'))
     returning *
   `;
@@ -138,7 +138,7 @@ export async function startTestRun(i: {
     kind: "load.test",
     params: { test_run_id: row.id },
     trigger: "manual",
-    requestedBy: i.requestedBy,
+    requestedBy: input.requestedBy,
   });
   await sql`update test_runs set job_run_id = ${jobRunId} where id = ${row.id}`;
   return { ...(row as never as TestRun), job_run_id: jobRunId };
@@ -168,8 +168,8 @@ export function defineLoadTestJobs() {
     params: z.object({ test_run_id: z.string().uuid() }),
     queue: "testing",
     timeout: "45m",
-    run: async (ctx, p) => {
-      const run = await getTestRun(p.test_run_id);
+    run: async (ctx, params) => {
+      const run = await getTestRun(params.test_run_id);
       const target = loadTargets().find((t) => t.name === run.target);
       if (!target)
         throw badInput(`target '${run.target}' is no longer configured`);

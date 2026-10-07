@@ -62,15 +62,15 @@ const envSchema = z
       })
       .optional(),
   })
-  .superRefine((v, ctx) => {
-    if (v.authMode === "sso" && !v.oidc)
+  .superRefine((parsed, ctx) => {
+    if (parsed.authMode === "sso" && !parsed.oidc)
       ctx.addIssue({
         code: "custom",
         path: ["oidc"],
         message:
           "authMode 'sso' requires OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET",
       });
-    if (v.oidc && !v.sessionSecret)
+    if (parsed.oidc && !parsed.sessionSecret)
       ctx.addIssue({
         code: "custom",
         path: ["sessionSecret"],

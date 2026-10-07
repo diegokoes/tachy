@@ -39,7 +39,7 @@ const META_COLUMNS = sql`
 const ownedBy = (userId: string) =>
   sql`(user_id = ${userId} or user_id is null)`;
 
-export async function createOutput(i: {
+export async function createOutput(input: {
   userId?: string | null;
   artifactId?: string | null;
   utility: string;
@@ -52,9 +52,9 @@ export async function createOutput(i: {
     insert into generated_outputs
       (user_id, artifact_id, utility, filename, mime, bytes, byte_size, meta, expires_at)
     values (
-      ${i.userId ?? null}, ${i.artifactId ?? null}, ${i.utility},
-      ${safeFilename(i.filename)}, ${i.mime}, ${Buffer.from(i.bytes)},
-      ${i.bytes.byteLength}, ${jsonb(i.meta ?? {})},
+      ${input.userId ?? null}, ${input.artifactId ?? null}, ${input.utility},
+      ${safeFilename(input.filename)}, ${input.mime}, ${Buffer.from(input.bytes)},
+      ${input.bytes.byteLength}, ${jsonb(input.meta ?? {})},
       now() + ${`${ttlHours()} hours`}::interval
     )
     returning ${META_COLUMNS}

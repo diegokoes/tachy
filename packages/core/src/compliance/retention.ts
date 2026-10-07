@@ -25,12 +25,12 @@ export async function sweepTranscripts(
   const root = join(agentHome(), "users");
   let removed = 0;
   const walk = async (dir: string): Promise<void> => {
-    for (const e of await readdir(dir, { withFileTypes: true }).catch(
+    for (const entry of await readdir(dir, { withFileTypes: true }).catch(
       () => [],
     )) {
-      const path = join(dir, e.name);
-      if (e.isDirectory()) await walk(path);
-      else if (e.isFile() && e.name.endsWith(".jsonl")) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) await walk(path);
+      else if (entry.isFile() && entry.name.endsWith(".jsonl")) {
         const { mtimeMs } = await stat(path);
         if (now - mtimeMs > days * DAY) {
           await rm(path, { force: true });
@@ -130,27 +130,27 @@ export function defineRetentionJobs() {
       usage_months: z.number().int().min(1).default(13),
     }),
     defaultSchedule: "30 3 * * *",
-    outcome: (o) => {
-      const n = Object.values(o).reduce<number>(
+    outcome: (output) => {
+      const n = Object.values(output).reduce<number>(
         (sum, v) => sum + (typeof v === "number" ? v : 0),
         0,
       );
       return n ? `${count(n, "item")} removed` : "nothing to remove";
     },
     timeout: "1h",
-    run: async (ctx, p) => {
-      const out = {
+    run: async (ctx, params) => {
+      const swept = {
         outputs: await sweepExpiredOutputs(),
         uploads: await sweepUploads(),
         job_runs: await sweepJobRuns(),
         flow_runs: await sweepFlowRuns(),
         notifications: await sweepNotifications(),
-        transcripts: await sweepTranscripts(p.transcript_days),
+        transcripts: await sweepTranscripts(params.transcript_days),
         assets: await sweepOrphanAssets(),
-        usage: await rollUpUsage(p.usage_months),
+        usage: await rollUpUsage(params.usage_months),
       };
-      ctx.log("retention applied", out);
-      return out;
+      ctx.log("retention applied", swept);
+      return swept;
     },
   });
 }

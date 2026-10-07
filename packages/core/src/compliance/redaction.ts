@@ -11,9 +11,9 @@ export class TokenMap {
     if (existing) return existing;
     const n = (this.counts.get(kind) ?? 0) + 1;
     this.counts.set(kind, n);
-    const t = `[${kind}_${n}]`;
-    this.seen.set(key, t);
-    return t;
+    const token = `[${kind}_${n}]`;
+    this.seen.set(key, token);
+    return token;
   }
 }
 
@@ -61,12 +61,12 @@ function luhnValid(candidate: string): boolean {
   let sum = 0;
   let double = false;
   for (let i = digits.length - 1; i >= 0; i--) {
-    let d = digits.charCodeAt(i) - 48;
+    let digit = digits.charCodeAt(i) - 48;
     if (double) {
-      d *= 2;
-      if (d > 9) d -= 9;
+      digit *= 2;
+      if (digit > 9) digit -= 9;
     }
-    sum += d;
+    sum += digit;
     double = !double;
   }
   return sum % 10 === 0;
@@ -78,23 +78,25 @@ function luhnValid(candidate: string): boolean {
  */
 export function scrubText(text: string | undefined, map: TokenMap): string {
   if (!text) return text ?? "";
-  let out = text.replace(PEM_RE, (m) => map.token("SECRET", m));
+  let scrubbed = text.replace(PEM_RE, (m) => map.token("SECRET", m));
 
-  out = out.replace(
+  scrubbed = scrubbed.replace(
     BEARER_RE,
     (_m, prefix, token) => `${prefix}${map.token("SECRET", token)}`,
   );
-  out = out.replace(CREDENTIAL_ASSIGN_RE, (m, key, sep, value) =>
+  scrubbed = scrubbed.replace(CREDENTIAL_ASSIGN_RE, (m, key, sep, value) =>
     value.startsWith("[") || /^bearer$/i.test(value)
       ? m
       : `${key}${sep}${map.token("SECRET", value)}`,
   );
-  for (const re of KNOWN_KEY_RES)
-    out = out.replace(re, (m) => map.token("SECRET", m));
-  out = out.replace(CARD_RE, (m) => (luhnValid(m) ? map.token("CARD", m) : m));
-  out = out.replace(EMAIL_RE, (m) => map.token("EMAIL", m));
-  out = out.replace(PHONE_RE, (m) => map.token("PHONE", m));
-  return out;
+  for (const pattern of KNOWN_KEY_RES)
+    scrubbed = scrubbed.replace(pattern, (m) => map.token("SECRET", m));
+  scrubbed = scrubbed.replace(CARD_RE, (m) =>
+    luhnValid(m) ? map.token("CARD", m) : m,
+  );
+  scrubbed = scrubbed.replace(EMAIL_RE, (m) => map.token("EMAIL", m));
+  scrubbed = scrubbed.replace(PHONE_RE, (m) => map.token("PHONE", m));
+  return scrubbed;
 }
 
 /** What stands in for the customer's own name in redacted text. */
@@ -113,12 +115,13 @@ export function scrubbableCopy(raw: unknown): Record<string, any> | null {
 
 /** Scrub each of `keys` on `obj` whose value is a string. */
 export function scrubStrings(
-  obj: Record<string, any>,
+  target: Record<string, any>,
   keys: Iterable<string>,
   map: TokenMap,
 ): void {
-  for (const k of keys)
-    if (typeof obj[k] === "string") obj[k] = scrubText(obj[k], map);
+  for (const key of keys)
+    if (typeof target[key] === "string")
+      target[key] = scrubText(target[key], map);
 }
 
 const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -172,7 +175,7 @@ export function scrubKnownNames(
   // A run of adjacent known parts is one person, so it becomes one token.
   // Matching them separately turns "Javier Baños" into "[USER_1] [USER_1]",
   // which reads as two people talking.
-  const re = new RegExp(
+  const anyName = new RegExp(
     `(?<![\\p{L}\\p{N}])(?:${alternation})(?:\\s+(?:${alternation}))*(?![\\p{L}\\p{N}])`,
     "giu",
   );
@@ -187,7 +190,7 @@ export function scrubKnownNames(
     return words.join(" ");
   };
 
-  return text.replace(re, (hit) => map.token("USER", canonical(hit)));
+  return text.replace(anyName, (hit) => map.token("USER", canonical(hit)));
 }
 
 /**
@@ -203,10 +206,10 @@ export function scrubDeep<T>(value: T, map: TokenMap): T {
     typeof value === "object" &&
     value.constructor === Object
   ) {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>))
-      out[k] = scrubDeep(v, map);
-    return out as T;
+    const copy: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>))
+      copy[key] = scrubDeep(entry, map);
+    return copy as T;
   }
   return value;
 }
@@ -289,8 +292,8 @@ export interface RedactionPolicy {
  * object) so tests and long-lived processes can toggle it.
  */
 export function globalRedactionEnabled(): boolean {
-  const v = process.env.TACHY_REDACT;
-  return v === "true" || v === "1";
+  const flag = process.env.TACHY_REDACT;
+  return flag === "true" || flag === "1";
 }
 
 /**
@@ -301,6 +304,12 @@ export function resolveRedactionPolicy(
   config: Record<string, unknown> | null | undefined,
 ): RedactionPolicy {
   if (globalRedactionEnabled()) return { enabled: true };
-  const r = (config ?? {})["redaction"] as { enabled?: unknown } | undefined;
-  return { enabled: r != null && typeof r === "object" && r.enabled === true };
+  const redaction = (config ?? {})["redaction"] as
+    { enabled?: unknown } | undefined;
+  return {
+    enabled:
+      redaction != null &&
+      typeof redaction === "object" &&
+      redaction.enabled === true,
+  };
 }

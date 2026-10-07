@@ -2,8 +2,8 @@ import postgres from "postgres";
 import type { TransactionSql } from "postgres";
 import { env } from "./env";
 
-const positiveInt = (v: string | undefined) => {
-  const n = Number(v);
+const positiveInt = (value: string | undefined) => {
+  const n = Number(value);
   return Number.isInteger(n) && n > 0 ? n : undefined;
 };
 
@@ -29,8 +29,8 @@ export const sql = postgres(env.databaseUrl, {
   },
 });
 
-function toDate(v?: string | null): Date | null {
-  return v ? new Date(v) : null;
+function toDate(value?: string | null): Date | null {
+  return value ? new Date(value) : null;
 }
 export { toDate };
 
