@@ -94,7 +94,8 @@ export function createApp(
     return c.json(report, report.ready ? 200 : 503);
   });
 
-  const authMode = opts.oidc ? "sso" : opts.apiToken ? "token" : "open";
+  const tokenMode = opts.apiToken ? "token" : "open";
+  const authMode = opts.oidc ? "sso" : tokenMode;
   base.get("/auth/config", async (c) => {
     let profile = "support";
     try {

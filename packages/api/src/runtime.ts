@@ -81,6 +81,9 @@ async function hostStatus() {
   return statuses;
 }
 
+/** Entries returned per history, the newest. */
+const HISTORY_ENTRIES = 60;
+
 /**
  * The same scripts append each result to `<name>.jsonl` beside the status file,
  * keeping the last few dozen, which is the only history a backup or a deploy
@@ -104,7 +107,7 @@ export async function hostHistory(dir = process.env.TACHY_STATUS_DIR) {
           return [];
         }
       })
-      .slice(-60);
+      .slice(-HISTORY_ENTRIES);
   }
   return histories;
 }

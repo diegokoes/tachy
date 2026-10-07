@@ -132,22 +132,21 @@ export function parseTicketReview(
     });
     if (findings.length === MAX_FINDINGS) break;
   }
+  const fallbackReadiness = findings.length ? "almost" : "ready";
   const readiness = READINESS.has(parsed?.readiness as ReviewReadiness)
     ? (parsed!.readiness as ReviewReadiness)
-    : findings.length
-      ? "almost"
-      : "ready";
+    : fallbackReadiness;
   return {
     available: true,
     readiness,
-    summary:
-      typeof parsed?.summary === "string"
-        ? parsed.summary.trim()
-        : parsed
-          ? ""
-          : "The review came back unreadable. Ask again.",
+    summary: reviewSummary(parsed),
     findings,
   };
+}
+
+function reviewSummary(parsed: Record<string, unknown> | null): string {
+  if (!parsed) return "The review came back unreadable. Ask again.";
+  return typeof parsed.summary === "string" ? parsed.summary.trim() : "";
 }
 
 /** One-shot, on the caller's own model: this judgement is the feature. */

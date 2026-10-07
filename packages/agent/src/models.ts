@@ -34,19 +34,18 @@ const efforts = (levels: readonly string[] | undefined): AgentEffort[] =>
  * list only when they share the key that decides it.
  */
 export function listModels(config: ModelListConfig): Promise<ModelChoice[]> {
-  const who = config.agentAuth
+  const cacheKey = config.agentAuth
     ? createHash("sha256")
         .update(config.agentAuth.value)
         .digest("hex")
         .slice(0, 16)
     : "server";
-  const key = who;
-  const hit = cache.get(key);
+  const hit = cache.get(cacheKey);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.list;
 
   const list = withTimeout(claudeModels(config));
-  cache.set(key, { at: Date.now(), list });
-  list.catch(() => cache.delete(key));
+  cache.set(cacheKey, { at: Date.now(), list });
+  list.catch(() => cache.delete(cacheKey));
   return list;
 }
 

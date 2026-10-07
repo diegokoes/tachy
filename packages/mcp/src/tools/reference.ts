@@ -29,6 +29,9 @@ import {
   loadContextSources,
 } from "../context";
 
+/** What `ingest_context` returns of each source when `max_chars` is not given. */
+const DEFAULT_PREVIEW_CHARS = 20_000;
+
 tool(
   "ingest_context",
   {
@@ -52,7 +55,7 @@ tool(
     if (!sources.length)
       throw badInput("Provide at least one of: text, paths, urls");
 
-    const maxChars = max_chars ?? 20_000;
+    const maxChars = max_chars ?? DEFAULT_PREVIEW_CHARS;
     const redact = globalRedactionEnabled();
     const tokens = new TokenMap();
     return out({

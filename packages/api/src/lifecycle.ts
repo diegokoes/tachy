@@ -27,6 +27,11 @@ export interface Readiness {
   draining: boolean;
 }
 
+function localModel(): Readiness["model"] {
+  if (!lifecycle.modelRequired) return "not_required";
+  return lifecycle.modelReady ? "ready" : "loading";
+}
+
 export async function readiness(): Promise<Readiness> {
   let database = false;
   let schema: Readiness["schema"] = "unknown";
@@ -35,11 +40,7 @@ export async function readiness(): Promise<Readiness> {
     database = true;
     schema = await schemaStampStatus();
   } catch {}
-  let model: Readiness["model"] = !lifecycle.modelRequired
-    ? "not_required"
-    : lifecycle.modelReady
-      ? "ready"
-      : "loading";
+  let model = localModel();
   if (lifecycle.embedderUrl)
     model = await fetch(lifecycle.embedderUrl, {
       signal: AbortSignal.timeout(2_000),

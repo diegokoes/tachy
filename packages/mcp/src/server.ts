@@ -19,11 +19,15 @@ export type ToolConfig<I extends ZodRawShape> = {
  * background and never awaited by the tool, so a slow lookup does not hold the
  * answer back.
  */
-function count(name: string, writes: boolean, ok: boolean, misuse: boolean) {
+function count(
+  name: string,
+  writes: boolean,
+  outcome: { ok: boolean; misuse: boolean },
+) {
   inBackground(
     resolveCurrentUserId()
       .catch(() => null)
-      .then((userId) => recordToolCall(name, writes, userId, { ok, misuse })),
+      .then((userId) => recordToolCall(name, writes, userId, outcome)),
     "tool_call_count_failed",
   );
 }
@@ -40,15 +44,13 @@ export async function runTool(
   try {
     const result = await handler(args, extra);
     log("info", "mcp_tool", { tool: name, ok: true, ms: Date.now() - started });
-    count(name, writes, true, false);
+    count(name, writes, { ok: true, misuse: false });
     return result;
   } catch (err) {
-    count(
-      name,
-      writes,
-      false,
-      err instanceof AppError && err.code === "bad_input",
-    );
+    count(name, writes, {
+      ok: false,
+      misuse: err instanceof AppError && err.code === "bad_input",
+    });
     const message = err instanceof Error ? err.message : String(err);
     log("error", "mcp_tool", {
       tool: name,
