@@ -33,9 +33,9 @@
       Math.max(1, Math.round((el.clientHeight / el.scrollHeight) * rows)),
     );
     const maxScroll = el.scrollHeight - el.clientHeight;
-    const p = maxScroll > 0 ? el.scrollTop / maxScroll : 0;
-    thumbStart = Math.round(p * (rows - thumbLen));
-    pct = Math.round(p * 100);
+    const progress = maxScroll > 0 ? el.scrollTop / maxScroll : 0;
+    thumbStart = Math.round(progress * (rows - thumbLen));
+    pct = Math.round(progress * 100);
   }
 
   function seek(e: PointerEvent) {
@@ -43,8 +43,8 @@
     if (!el || !bar) return;
     const row = (e.clientY - bar.getBoundingClientRect().top) / ROW - 1;
     const span = Math.max(1, rows - thumbLen);
-    const p = Math.min(1, Math.max(0, (row - thumbLen / 2) / span));
-    el.scrollTop = p * (el.scrollHeight - el.clientHeight);
+    const progress = Math.min(1, Math.max(0, (row - thumbLen / 2) / span));
+    el.scrollTop = progress * (el.scrollHeight - el.clientHeight);
   }
 
   function down(e: PointerEvent) {
@@ -81,16 +81,20 @@
     };
 
     el.addEventListener("scroll", schedule);
-    const ro = new ResizeObserver(schedule);
-    ro.observe(el);
+    const resizes = new ResizeObserver(schedule);
+    resizes.observe(el);
 
-    const mo = new MutationObserver(schedule);
-    mo.observe(el, { childList: true, subtree: true, characterData: true });
+    const mutations = new MutationObserver(schedule);
+    mutations.observe(el, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
     return () => {
       if (frame) cancelAnimationFrame(frame);
       el.removeEventListener("scroll", schedule);
-      ro.disconnect();
-      mo.disconnect();
+      resizes.disconnect();
+      mutations.disconnect();
     };
   });
 </script>

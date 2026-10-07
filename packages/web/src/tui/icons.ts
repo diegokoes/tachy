@@ -428,17 +428,17 @@ const LEADING_MOVE = new RegExp(
  * which are relative line-tos, get their `l` said out loud.
  */
 const absolute = (d: string) => {
-  const m = LEADING_MOVE.exec(d);
-  if (!m) return d;
-  const rest = d.slice(m[0].length);
-  return `M${m[1]} ${m[2]}${rest && !/^[a-zA-Z]/.test(rest) ? "l" : ""}${rest}`;
+  const match = LEADING_MOVE.exec(d);
+  if (!match) return d;
+  const rest = d.slice(match[0].length);
+  return `M${match[1]} ${match[2]}${rest && !/^[a-zA-Z]/.test(rest) ? "l" : ""}${rest}`;
 };
 
-const shapeD = ([tag, a]: LucideIconNode): string => {
-  const n = (attr: string) => Number(a[attr] ?? 0);
+const shapeD = ([tag, attrs]: LucideIconNode): string => {
+  const n = (attr: string) => Number(attrs[attr] ?? 0);
   switch (tag) {
     case "path":
-      return absolute(String(a.d ?? ""));
+      return absolute(String(attrs.d ?? ""));
     case "circle":
       return ellipseD(n("cx"), n("cy"), n("r"), n("r"));
     case "ellipse":
@@ -449,7 +449,7 @@ const shapeD = ([tag, a]: LucideIconNode): string => {
       return `M${n("x1")} ${n("y1")}L${n("x2")} ${n("y2")}`;
     case "polyline":
     case "polygon":
-      return pointsD(String(a.points ?? ""), tag === "polygon");
+      return pointsD(String(attrs.points ?? ""), tag === "polygon");
     default:
       return "";
   }

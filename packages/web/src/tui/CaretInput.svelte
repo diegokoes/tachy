@@ -56,10 +56,10 @@
     const node = el;
     const later = () => requestAnimationFrame(sync);
     const events = ["focus", "blur", "keydown", "pointerup", "select"];
-    for (const e of events) node.addEventListener(e, later);
+    for (const type of events) node.addEventListener(type, later);
     document.addEventListener("selectionchange", sync);
     return () => {
-      for (const e of events) node.removeEventListener(e, later);
+      for (const type of events) node.removeEventListener(type, later);
       document.removeEventListener("selectionchange", sync);
     };
   });

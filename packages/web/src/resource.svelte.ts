@@ -50,8 +50,8 @@ export function createResource<T>(load: () => Promise<T>, initial: T) {
   // A failed write is rethrown, never stored: `error` stays the load error
   // the list's error slot reports. Storing it too prints a rejected write's
   // message twice, once from the slot and once from whoever caught the throw.
-  async function mutate(fn: () => Promise<unknown>) {
-    await fn();
+  async function mutate(change: () => Promise<unknown>) {
+    await change();
     await reload();
   }
 
@@ -59,8 +59,8 @@ export function createResource<T>(load: () => Promise<T>, initial: T) {
     get data() {
       return data;
     },
-    set data(v: T) {
-      data = v;
+    set data(value: T) {
+      data = value;
     },
     get loading() {
       return loading;
@@ -68,8 +68,8 @@ export function createResource<T>(load: () => Promise<T>, initial: T) {
     get error() {
       return error;
     },
-    set error(v: string | null) {
-      error = v;
+    set error(value: string | null) {
+      error = value;
     },
     reload,
     mutate,

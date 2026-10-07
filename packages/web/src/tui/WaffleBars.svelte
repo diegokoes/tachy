@@ -85,21 +85,21 @@ same number written out.
 >
   {#if w > 0 && h > 0 && grid.size > 0}
     <svg viewBox="0 0 {w} {h}" role="img" aria-label="bars of {grid.unit}">
-      {#each rows as r, i (r.key)}
-        {@const n = waffleCount(r.value, grid.unit)}
+      {#each rows as row, i (row.key)}
+        {@const n = waffleCount(row.value, grid.unit)}
         {@const barH = grid.per * (grid.size + grid.gap) - grid.gap}
         {@const y0 = i * band + (band - barH) / 2}
-        <g style="--tone-color: {toneVar(r.tone)}">
-          <title>{r.label}: {format(r.value)}</title>
+        <g style="--tone-color: {toneVar(row.tone)}">
+          <title>{row.label}: {format(row.value)}</title>
           <text class="lbl" x={0} y={y0 + barH / 2} dominant-baseline="middle"
-            >{cut(r.label)}</text
+            >{cut(row.label)}</text
           >
           <g transform="translate({labelGutter}, {y0})">
-            {#each { length: n } as _, c (c)}
-              {@const p = waffleBarCell(grid, c)}
+            {#each { length: n } as _, cellIndex (cellIndex)}
+              {@const place = waffleBarCell(grid, cellIndex)}
               <rect
-                x={p.x}
-                y={p.y}
+                x={place.x}
+                y={place.y}
                 width={grid.size}
                 height={grid.size}
                 rx="1.5"
@@ -109,17 +109,17 @@ same number written out.
               class="n"
               x={Math.ceil(n / grid.per) * (grid.size + grid.gap) + 4}
               y={barH / 2}
-              dominant-baseline="middle">{format(r.value)}</text
+              dominant-baseline="middle">{format(row.value)}</text
             >
           </g>
         </g>
       {/each}
       <g transform="translate({labelGutter}, {h - axisH})" aria-hidden="true">
         <line class="rule" x1="0" x2={x(span)} y1="0" y2="0" />
-        {#each axis as t (t)}
-          <line class="tick" x1={x(t)} x2={x(t)} y1="0" y2="3" />
-          <text class="tl" x={x(t)} y={fs + 4} text-anchor="middle"
-            >{format(t)}</text
+        {#each axis as tick (tick)}
+          <line class="tick" x1={x(tick)} x2={x(tick)} y1="0" y2="3" />
+          <text class="tl" x={x(tick)} y={fs + 4} text-anchor="middle"
+            >{format(tick)}</text
           >
         {/each}
       </g>

@@ -37,10 +37,10 @@ export function pushScope(bindings: Binding[]) {
   };
 }
 
-function inTextField(t: EventTarget | null): boolean {
-  if (!(t instanceof HTMLElement)) return false;
-  if (t.isContentEditable) return true;
-  const tag = t.tagName;
+function inTextField(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
@@ -50,9 +50,9 @@ function inTextField(t: EventTarget | null): boolean {
  * closes on it instead.
  */
 function leaveField(e: KeyboardEvent) {
-  const t = e.target as HTMLElement;
-  if (e.defaultPrevented || t.closest('[role="dialog"]')) return;
-  t.blur();
+  const target = e.target as HTMLElement;
+  if (e.defaultPrevented || target.closest('[role="dialog"]')) return;
+  target.blur();
 }
 
 /** Exported so the rebind UI captures exactly the shape dispatch matches on. */
@@ -97,10 +97,10 @@ export function startKeys() {
     for (let i = scopes.length - 1; i >= 0; i--) {
       let exact: Binding | undefined;
       let partial = false;
-      for (const b of scopes[i].bindings) {
-        if (field && !b.inFields) continue;
-        if (b.key === chord) exact ??= b;
-        else if (b.key.startsWith(`${chord} `)) partial = true;
+      for (const binding of scopes[i].bindings) {
+        if (field && !binding.inFields) continue;
+        if (binding.key === chord) exact ??= binding;
+        else if (binding.key.startsWith(`${chord} `)) partial = true;
       }
       if (partial) return "partial";
       if (exact) return exact;

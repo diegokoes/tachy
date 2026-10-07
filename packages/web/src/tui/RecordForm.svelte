@@ -49,23 +49,23 @@
   // Runs of fields under their group label, in first-seen order. One group
   // means the list named none, and the label is dropped.
   const groups = $derived.by(() => {
-    const out: { label: string; cols: Column<T>[] }[] = [];
-    for (const c of fields) {
-      const label = c.group ?? "";
-      const last = out[out.length - 1];
-      if (last && last.label === label) last.cols.push(c);
-      else out.push({ label, cols: [c] });
+    const grouped: { label: string; cols: Column<T>[] }[] = [];
+    for (const column of fields) {
+      const label = column.group ?? "";
+      const last = grouped[grouped.length - 1];
+      if (last && last.label === label) last.cols.push(column);
+      else grouped.push({ label, cols: [column] });
     }
-    return out;
+    return grouped;
   });
   const grouped = $derived(groups.length > 1);
 
   $effect(() => {
     if (mode !== "create") return;
-    for (const c of columns) {
-      if (!c.derive) continue;
-      const next = c.derive(draft);
-      if (draft[c.key] !== next) draft[c.key] = next;
+    for (const column of columns) {
+      if (!column.derive) continue;
+      const next = column.derive(draft);
+      if (draft[column.key] !== next) draft[column.key] = next;
     }
   });
 
@@ -73,11 +73,12 @@
   // that field changes: the control renders blank while the draft carries the
   // old one. Clearing it lets the required-check catch it here.
   $effect(() => {
-    for (const c of fields) {
-      if (c.edit !== "select" || readOnly(c)) continue;
-      const current = draft[c.key];
+    for (const column of fields) {
+      if (column.edit !== "select" || readOnly(column)) continue;
+      const current = draft[column.key];
       if (current === "" || current == null) continue;
-      if (!optionsOf(c).some((o) => o.value === current)) draft[c.key] = "";
+      if (!optionsOf(column).some((o) => o.value === current))
+        draft[column.key] = "";
     }
   });
 
@@ -95,23 +96,23 @@
 </script>
 
 <div class="form">
-  {#each groups as g, gi (gi)}
-    {#if grouped && g.label}
-      <div class="ghead"><GroupHead label={g.label} /></div>
+  {#each groups as group, groupIndex (groupIndex)}
+    {#if grouped && group.label}
+      <div class="ghead"><GroupHead label={group.label} /></div>
     {/if}
 
-    {#each g.cols as c (c.key)}
+    {#each group.cols as column (column.key)}
       <Field
-        label={c.label}
-        info={infoOf(c)}
-        required={c.required}
-        plain={readOnly(c) || Boolean(c.aside)}
-        wide={wide(c)}
+        label={column.label}
+        info={infoOf(column)}
+        required={column.required}
+        plain={readOnly(column) || Boolean(column.aside)}
+        wide={wide(column)}
       >
-        {#if readOnly(c)}
-          <span class="ro">{shown(draft[c.key])}</span>
-          {#if mode === "edit" && c.action && row !== undefined}
-            {@const act = c.action}
+        {#if readOnly(column)}
+          <span class="ro">{shown(draft[column.key])}</span>
+          {#if mode === "edit" && column.action && row !== undefined}
+            {@const act = column.action}
             {@const target = row}
             <Button
               variant="ghost"
@@ -126,51 +127,52 @@
               }}>{act.label}</Button
             >
           {/if}
-        {:else if c.edit === "select"}
+        {:else if column.edit === "select"}
           <Select
-            value={(draft[c.key] ?? "") as string}
-            options={optionsOf(c)}
-            searchable={c.searchable}
-            aria-label={c.label}
-            onchange={(v) => (draft[c.key] = v)}
+            value={(draft[column.key] ?? "") as string}
+            options={optionsOf(column)}
+            searchable={column.searchable}
+            aria-label={column.label}
+            onchange={(v) => (draft[column.key] = v)}
           />
-        {:else if c.edit === "checkbox"}
+        {:else if column.edit === "checkbox"}
           <Checkbox
-            ariaLabel={c.label}
-            checked={Boolean(draft[c.key])}
-            onchange={(checked) => (draft[c.key] = checked)}
+            ariaLabel={column.label}
+            checked={Boolean(draft[column.key])}
+            onchange={(checked) => (draft[column.key] = checked)}
           />
-        {:else if c.edit === "secret"}
+        {:else if column.edit === "secret"}
           <input
             class="mono secret"
             type="password"
             autocomplete="off"
-            aria-label={c.label}
-            placeholder={placeholderOf(c)}
-            value={String(draft[c.key] ?? "")}
-            oninput={(e) => (draft[c.key] = e.currentTarget.value)}
+            aria-label={column.label}
+            placeholder={placeholderOf(column)}
+            value={String(draft[column.key] ?? "")}
+            oninput={(e) => (draft[column.key] = e.currentTarget.value)}
           />
-        {:else if c.edit === "textarea"}
+        {:else if column.edit === "textarea"}
           <textarea
             rows="3"
-            aria-label={c.label}
-            placeholder={placeholderOf(c)}
-            value={String(draft[c.key] ?? "")}
-            oninput={(e) => (draft[c.key] = e.currentTarget.value)}></textarea>
+            aria-label={column.label}
+            placeholder={placeholderOf(column)}
+            value={String(draft[column.key] ?? "")}
+            oninput={(e) => (draft[column.key] = e.currentTarget.value)}
+          ></textarea>
         {:else}
           <input
-            class:mono={Boolean(c.transform)}
+            class:mono={Boolean(column.transform)}
             type="text"
-            aria-label={c.label}
-            placeholder={placeholderOf(c)}
-            value={String(draft[c.key] ?? "")}
+            aria-label={column.label}
+            placeholder={placeholderOf(column)}
+            value={String(draft[column.key] ?? "")}
             oninput={(e) =>
-              (draft[c.key] = c.transform
-                ? c.transform(e.currentTarget.value)
+              (draft[column.key] = column.transform
+                ? column.transform(e.currentTarget.value)
                 : e.currentTarget.value)}
           />
         {/if}
-        {#if c.aside}{@render c.aside({ draft, mode })}{/if}
+        {#if column.aside}{@render column.aside({ draft, mode })}{/if}
       </Field>
     {/each}
   {/each}

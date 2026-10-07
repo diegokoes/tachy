@@ -47,15 +47,15 @@
 <div class="wrap">
   <table>
     <colgroup>
-      {#each columns as c}<col
-          style={c.width ? `width: ${c.width}` : ""}
+      {#each columns as column}<col
+          style={column.width ? `width: ${column.width}` : ""}
         />{/each}
     </colgroup>
 
     <thead>
       <tr>
-        {#each columns as c}
-          <th class={c.align === "end" ? "end" : ""}>{c.label}</th>
+        {#each columns as column}
+          <th class={column.align === "end" ? "end" : ""}>{column.label}</th>
         {/each}
       </tr>
     </thead>
@@ -76,10 +76,10 @@
               openRow(row);
             })}
         >
-          {#each columns as c}
-            <td class={c.align === "end" ? "end" : ""}>
-              {#if c.cell}{@render c.cell(row)}
-              {:else}<span class="v">{cellText(c, row)}</span>{/if}
+          {#each columns as column}
+            <td class={column.align === "end" ? "end" : ""}>
+              {#if column.cell}{@render column.cell(row)}
+              {:else}<span class="v">{cellText(column, row)}</span>{/if}
             </td>
           {/each}
         </tr>

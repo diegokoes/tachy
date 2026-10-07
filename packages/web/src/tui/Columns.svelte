@@ -61,8 +61,8 @@
     height={fill ? undefined : height}
     padding={dense ? 0.16 : 0.34}
   >
-    {#snippet children(f)}
-      {@const cap = Math.min(f.band, CAP_REM * f.rem)}
+    {#snippet children(frame)}
+      {@const cap = Math.min(frame.band, CAP_REM * frame.rem)}
       <Axis side="left" grid format={(v) => format(Number(v))} />
       <Axis
         side="bottom"
@@ -70,63 +70,65 @@
         format={(k) => labels.get(String(k)) ?? String(k)}
       />
 
-      {#each rows as r, i (r.key)}
-        {@const edge = f.bandAt(r.key) + (f.band - cap) / 2}
-        {@const inset = r.behind === undefined ? 0 : Math.min(4, cap / 4)}
+      {#each rows as row, i (row.key)}
+        {@const edge = frame.bandAt(row.key) + (frame.band - cap) / 2}
+        {@const inset = row.behind === undefined ? 0 : Math.min(4, cap / 4)}
         {@const x = edge + inset}
         {@const width = cap - inset * 2}
-        {@const parts = stackParts(r.parts)}
-        {@const n = count(r, i)}
+        {@const parts = stackParts(row.parts)}
+        {@const n = count(row, i)}
         <g>
-          <title>{r.title ?? r.label}: {r.text ?? format(r.value)}</title>
-          {#if r.behind !== undefined}
+          <title
+            >{row.title ?? row.label}: {row.text ?? format(row.value)}</title
+          >
+          {#if row.behind !== undefined}
             <rect
               class="behind"
               x={edge}
-              y={f.at(r.behind)}
+              y={frame.at(row.behind)}
               width={cap}
-              height={Math.max(1, f.up(r.behind))}
+              height={Math.max(1, frame.up(row.behind))}
               rx="2"
             />
           {/if}
           {#if parts.length}
-            {#each parts as p (p.key)}
+            {#each parts as part (part.key)}
               <rect
                 {x}
-                y={f.at(p.offset + p.size)}
+                y={frame.at(part.offset + part.size)}
                 {width}
-                height={Math.max(1, f.up(p.size) - CUT)}
+                height={Math.max(1, frame.up(part.size) - CUT)}
                 rx="2"
-                style="fill: {toneVar(p.tone)}"
+                style="fill: {toneVar(part.tone)}"
               />
             {/each}
           {:else}
             <rect
               {x}
-              y={f.at(r.value)}
+              y={frame.at(row.value)}
               {width}
-              height={Math.max(1, f.up(r.value))}
+              height={Math.max(1, frame.up(row.value))}
               rx="2"
-              style="fill: {toneVar(r.tone)}"
+              style="fill: {toneVar(row.tone)}"
             />
           {/if}
-          {#each stackParts(r.inner) as p (p.key)}
+          {#each stackParts(row.inner) as part (part.key)}
             {@const w = Math.max(3, Math.round(width * 0.4))}
             <rect
               class="inner"
               x={x + (width - w) / 2}
-              y={f.at(p.offset + p.size)}
+              y={frame.at(part.offset + part.size)}
               width={w}
-              height={Math.max(3, f.up(p.size))}
+              height={Math.max(3, frame.up(part.size))}
               rx="1"
-              style="fill: {toneVar(p.tone)}"
+              style="fill: {toneVar(part.tone)}"
             />
           {/each}
           {#if n}
             <text
               class="n"
               x={edge + cap / 2}
-              y={f.at(r.value) - f.fs * 0.45}
+              y={frame.at(row.value) - frame.fs * 0.45}
               text-anchor="middle">{n}</text
             >
           {/if}

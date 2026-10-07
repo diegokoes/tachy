@@ -30,12 +30,15 @@ export function waffleGrid(
 }
 
 /** Top left of cell `i`, counted from the bottom left and row by row upward. */
-export function waffleCell(g: WaffleGrid, i: number): { x: number; y: number } {
-  const col = i % g.cols;
-  const row = Math.floor(i / g.cols);
+export function waffleCell(
+  grid: WaffleGrid,
+  i: number,
+): { x: number; y: number } {
+  const col = i % grid.cols;
+  const row = Math.floor(i / grid.cols);
   return {
-    x: col * (g.size + g.gap),
-    y: (g.rows - 1 - row) * (g.size + g.gap),
+    x: col * (grid.size + grid.gap),
+    y: (grid.rows - 1 - row) * (grid.size + grid.gap),
   };
 }
 
@@ -62,7 +65,7 @@ const UNITS = [1, 2, 5];
 export function niceUnit(x: number): number {
   if (!(x > 1)) return 1;
   const pow = 10 ** Math.floor(Math.log10(x));
-  for (const m of UNITS) if (m * pow >= x) return m * pow;
+  for (const multiple of UNITS) if (multiple * pow >= x) return multiple * pow;
   return 10 * pow;
 }
 
@@ -95,9 +98,9 @@ export const waffleCount = (value: number, unit: number) =>
   value > 0 ? Math.max(1, Math.round(value / unit)) : 0;
 
 /** Top left of cell `i` of a bar, filled down a column and then across. */
-export function waffleBarCell(g: BarsGrid, i: number) {
+export function waffleBarCell(grid: BarsGrid, i: number) {
   return {
-    x: Math.floor(i / g.per) * (g.size + g.gap),
-    y: (i % g.per) * (g.size + g.gap),
+    x: Math.floor(i / grid.per) * (grid.size + grid.gap),
+    y: (i % grid.per) * (grid.size + grid.gap),
   };
 }

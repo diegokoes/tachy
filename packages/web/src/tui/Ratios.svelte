@@ -5,11 +5,11 @@
   let { items }: { items: Ratio[] } = $props();
 </script>
 
-{#snippet name(r: Ratio)}
-  {#if r.onclick}
-    <button class="lbl pick" onclick={r.onclick}>{r.label}</button>
+{#snippet name(ratio: Ratio)}
+  {#if ratio.onclick}
+    <button class="lbl pick" onclick={ratio.onclick}>{ratio.label}</button>
   {:else}
-    <span class="lbl">{r.label}</span>
+    <span class="lbl">{ratio.label}</span>
   {/if}
 {/snippet}
 
@@ -19,30 +19,30 @@ A share needs a bar and two numbers, not a ring: the row is as tall as a line of
 text, so several fit in the room of one dial.
 -->
 <div class="ratios">
-  {#each items as r (r.key)}
+  {#each items as ratio (ratio.key)}
     <div
       class="row"
-      style="--tone-color: {toneVar(r.tone)}; --rest-color: {toneVar(
-        r.rest ?? r.tone,
+      style="--tone-color: {toneVar(ratio.tone)}; --rest-color: {toneVar(
+        ratio.rest ?? ratio.tone,
       )}"
-      class:split={Boolean(r.rest)}
+      class:split={Boolean(ratio.rest)}
     >
-      {@render name(r)}
+      {@render name(ratio)}
       <span
         class="track"
         role="meter"
-        aria-label={r.title ?? r.label}
+        aria-label={ratio.title ?? ratio.label}
         aria-valuemin="0"
         aria-valuemax="100"
-        aria-valuenow={Math.round(r.value * 100)}
+        aria-valuenow={Math.round(ratio.value * 100)}
       >
         <span
           class="fill"
-          style="width: {Math.max(0, Math.min(1, r.value)) * 100}%"
+          style="width: {Math.max(0, Math.min(1, ratio.value)) * 100}%"
         ></span>
       </span>
-      <span class="n">{r.center}</span>
-      {#if r.sub}<span class="sub">{r.sub}</span>{/if}
+      <span class="n">{ratio.center}</span>
+      {#if ratio.sub}<span class="sub">{ratio.sub}</span>{/if}
     </div>
   {/each}
 </div>

@@ -51,7 +51,7 @@
     clearable?: boolean;
     /** Where the list opens. Below the trigger unless told otherwise. */
     placement?: Placement;
-    onchange?: (v: Val) => void;
+    onchange?: (value: Val) => void;
     "aria-label"?: string;
   } = $props();
 
@@ -82,10 +82,10 @@
 
   const filterable = $derived(searchable || opts.length > FILTERABLE);
   const shown = $derived.by(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return opts;
+    const needle = query.trim().toLowerCase();
+    if (!needle) return opts;
     return opts.filter((o) =>
-      `${o.label} ${o.hint ?? ""}`.toLowerCase().includes(q),
+      `${o.label} ${o.hint ?? ""}`.toLowerCase().includes(needle),
     );
   });
 
@@ -108,10 +108,11 @@
     open = false;
     query = "";
   }
-  function choose(i: number) {
-    const o = shown[i];
-    if (!o || o.disabled) return;
-    const next = keepOpen && canClear && o.value === value ? "" : o.value;
+  function choose(index: number) {
+    const option = shown[index];
+    if (!option || option.disabled) return;
+    const next =
+      keepOpen && canClear && option.value === value ? "" : option.value;
     value = next;
     onchange?.(next);
     if (!keepOpen) close();
@@ -245,16 +246,16 @@
             aria-label={ariaLabel}
             bind:this={scrollEl}
           >
-            {#each shown as o, i (o.value)}
+            {#each shown as option, i (option.value)}
               <div
                 class="opt"
                 id={optId(i)}
                 class:cursor={i === cursor}
-                class:selected={o.value === value}
-                class:disabled={o.disabled}
+                class:selected={option.value === value}
+                class:disabled={option.disabled}
                 role="option"
                 tabindex="-1"
-                aria-selected={o.value === value}
+                aria-selected={option.value === value}
                 onpointerenter={() => (cursor = i)}
                 onpointerdown={(e) => {
                   e.preventDefault();
@@ -262,10 +263,10 @@
                 }}
               >
                 <span class="mark" aria-hidden="true"
-                  >{o.value === value ? "›" : " "}</span
+                  >{option.value === value ? "›" : " "}</span
                 >
-                <span class="txt">{o.label}</span>
-                {#if o.hint}<span class="hint">{o.hint}</span>{/if}
+                <span class="txt">{option.label}</span>
+                {#if option.hint}<span class="hint">{option.hint}</span>{/if}
               </div>
             {/each}
             {#if !shown.length}

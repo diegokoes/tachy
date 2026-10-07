@@ -73,9 +73,9 @@ export function decode(node: HTMLElement, text: string) {
   const rand = () => CHARS[Math.floor(Math.random() * CHARS.length)];
   let shown: string | null = null;
 
-  const show = (s: string) => {
-    if (input) input.placeholder = s;
-    else node.textContent = s;
+  const show = (text: string) => {
+    if (input) input.placeholder = text;
+    else node.textContent = text;
   };
 
   const run = (value: string) => {
@@ -90,17 +90,17 @@ export function decode(node: HTMLElement, text: string) {
       show(value);
       return;
     }
-    const len = Math.max(value.length, 10);
+    const length = Math.max(value.length, 10);
     state.i = 0;
-    show(MASK.repeat(len));
+    show(MASK.repeat(length));
     gsap.to(state, {
-      i: len,
+      i: length,
       duration: 1.1,
       ease: "none",
       onUpdate: () => {
         const n = Math.floor(state.i);
         show(
-          value.slice(0, n) + Array.from({ length: len - n }, rand).join(""),
+          value.slice(0, n) + Array.from({ length: length - n }, rand).join(""),
         );
       },
       onComplete: () => show(value),
@@ -126,9 +126,9 @@ export function glow(node: Element) {
   const [r, g, b] = gsap.utils.splitColor(accent) as number[];
   const state = { t: 0 };
   const paint = () => {
-    const c = `rgba(${r}, ${g}, ${b}, ${state.t})`;
+    const colour = `rgba(${r}, ${g}, ${b}, ${state.t})`;
     gsap.set(node, {
-      filter: `drop-shadow(0 0 ${5 * state.t}px ${c}) drop-shadow(0 0 ${9 * state.t}px ${c})`,
+      filter: `drop-shadow(0 0 ${5 * state.t}px ${colour}) drop-shadow(0 0 ${9 * state.t}px ${colour})`,
     });
   };
   paint();
@@ -322,8 +322,8 @@ export function hoverRise(node: HTMLElement, held = false) {
 export function tweenValue(
   from: number,
   to: number,
-  set: (v: number) => void,
-  o: { duration?: number; delay?: number; ease?: string } = {},
+  set: (value: number) => void,
+  opts: { duration?: number; delay?: number; ease?: string } = {},
 ) {
   if (reducedMotion()) {
     set(to);
@@ -332,9 +332,9 @@ export function tweenValue(
   const box = { v: from };
   return gsap.to(box, {
     v: to,
-    delay: o.delay ?? 0,
-    duration: o.duration ?? 0.4,
-    ease: o.ease ?? "power2.out",
+    delay: opts.delay ?? 0,
+    duration: opts.duration ?? 0.4,
+    ease: opts.ease ?? "power2.out",
     onUpdate: () => set(box.v),
   });
 }
@@ -346,7 +346,7 @@ export function tweenValue(
  */
 export function ripple(
   chars: Element[],
-  o: { from?: "start" | "end"; delay?: number } = {},
+  opts: { from?: "start" | "end"; delay?: number } = {},
 ) {
   if (reducedMotion() || !chars.length) return null;
   gsap.killTweensOf(chars);
@@ -354,8 +354,8 @@ export function ripple(
   return gsap.to(chars, {
     keyframes: { yPercent: [0, -28, 0], easeEach: "sine.inOut" },
     duration: 0.42,
-    delay: o.delay ?? 0,
-    stagger: { each: 0.05, from: o.from ?? "start" },
+    delay: opts.delay ?? 0,
+    stagger: { each: 0.05, from: opts.from ?? "start" },
   });
 }
 
@@ -426,11 +426,11 @@ export function themeWipe(
   );
   const last = edges[EDGES - 1];
 
-  const NS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(NS, "svg");
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(SVG_NS, "svg");
   svg.classList.add("theme-wipe");
   const bands = edges.slice(1).map(() => {
-    const path = document.createElementNS(NS, "path");
+    const path = document.createElementNS(SVG_NS, "path");
     svg.append(path);
     return path;
   });
@@ -440,8 +440,8 @@ export function themeWipe(
     for (let n = 0; n < POINTS - 1; n++) {
       const j = back ? POINTS - 1 - n : n;
       const k = back ? j - 1 : j + 1;
-      const cp = ((j + k) / 2) * step;
-      d += ` C ${cp} ${ys[j]} ${cp} ${ys[k]} ${k * step} ${ys[k]}`;
+      const control = ((j + k) / 2) * step;
+      d += ` C ${control} ${ys[j]} ${control} ${ys[k]} ${k * step} ${ys[k]}`;
     }
     return d;
   };
@@ -539,13 +539,13 @@ export type Unfolding = {
  * contents, is transformed: the contents only fade, so text is never rasterised
  * at a scale and the window never contains its fixed popups.
  */
-export function unfold(o: {
+export function unfold(opts: {
   win: HTMLElement;
   plate: HTMLElement;
   parts: Element[];
   scrim: HTMLElement;
 }): Unfolding {
-  const { win, plate, parts, scrim } = o;
+  const { win, plate, parts, scrim } = opts;
   const still = reducedMotion();
   const BACK = 1.6;
   const radius = parseFloat(getComputedStyle(plate).borderTopLeftRadius) || 0;
@@ -584,9 +584,9 @@ export function unfold(o: {
     if (!w || !h) return;
     const sx = (blob.d / w) * (1 - blob.m) + blob.m;
     const sy = (blob.d / h) * (1 - blob.m) + blob.m;
-    const k = Math.min(Math.max(blob.k, 0), 1);
-    const rx = radius + (w / 2 - radius) * k;
-    const ry = radius + (h / 2 - radius) * k;
+    const corner = Math.min(Math.max(blob.k, 0), 1);
+    const rx = radius + (w / 2 - radius) * corner;
+    const ry = radius + (h / 2 - radius) * corner;
     plate.style.transform = `scale(${sx}, ${sy})`;
     plate.style.borderRadius = `${rx}px / ${ry}px`;
   };
@@ -719,17 +719,17 @@ export function unfold(o: {
  */
 export function reflow(
   targets: (Element | null | undefined)[],
-  o: { duration?: number; ease?: string; absolute?: boolean } = {},
+  opts: { duration?: number; ease?: string; absolute?: boolean } = {},
 ): () => void {
   const nodes = targets.filter((t): t is Element => Boolean(t));
   if (reducedMotion() || !nodes.length) return () => {};
   const state = Flip.getState(nodes);
-  const duration = o.duration ?? 0.35;
+  const duration = opts.duration ?? 0.35;
   return () => {
     Flip.from(state, {
       duration,
-      ease: o.ease ?? "power2.inOut",
-      absolute: o.absolute ?? true,
+      ease: opts.ease ?? "power2.inOut",
+      absolute: opts.absolute ?? true,
       onEnter: (els) =>
         gsap.fromTo(els, { opacity: 0 }, { opacity: 1, duration }),
       onLeave: (els) => gsap.to(els, { opacity: 0, duration: duration / 2 }),

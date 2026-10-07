@@ -26,9 +26,13 @@ export const wikilinkExtension = {
   level: "inline" as const,
   start: (src: string) => src.indexOf("[["),
   tokenizer(src: string) {
-    const m = new RegExp(WIKILINK_RE.source).exec(src);
-    if (!m || m.index !== 0) return undefined;
-    return { type: "wikilink", raw: m[0], ...parseWikilink(m[1], m[2]) };
+    const match = new RegExp(WIKILINK_RE.source).exec(src);
+    if (!match || match.index !== 0) return undefined;
+    return {
+      type: "wikilink",
+      raw: match[0],
+      ...parseWikilink(match[1], match[2]),
+    };
   },
   renderer(token: any) {
     // role and tabindex, because there is no href: the route is known only once
@@ -116,9 +120,9 @@ const iconSvg = (name: IconName) =>
  */
 export const calloutRenderer = {
   blockquote({ text }: Tokens.Blockquote): string | false {
-    const m = /^\[!([\w-]+)\]([+-]?)[ \t]*([^\n]*)\n?([\s\S]*)$/.exec(text);
-    if (!m) return false;
-    const [, type, fold, title, body] = m;
+    const match = /^\[!([\w-]+)\]([+-]?)[ \t]*([^\n]*)\n?([\s\S]*)$/.exec(text);
+    if (!match) return false;
+    const [, type, fold, title, body] = match;
     const [tone, icon] = CALLOUTS[type.toLowerCase()] ?? CALLOUTS.note;
     const name = title.trim()
       ? marked.parseInline(title, { async: false })

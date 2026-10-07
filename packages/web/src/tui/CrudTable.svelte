@@ -78,7 +78,7 @@
     extraActions?: Snippet<[T]>;
     rowClass?: (row: T) => string | undefined;
     /** Fires as the record form opens and closes, for state `formExtra` needs. */
-    onform?: (f: { mode: "create" | "edit"; row: T | null } | null) => void;
+    onform?: (form: { mode: "create" | "edit"; row: T | null } | null) => void;
     /**
      * Offers the add action to whoever lays out the page, which draws it on
      * the section heading. Given one, the bar under the table goes away.
@@ -162,11 +162,11 @@
     onform?.(null);
   }
 
-  async function run(key: string, fn: () => Promise<void> | void) {
+  async function run(key: string, action: () => Promise<void> | void) {
     busy = key;
     opError = null;
     try {
-      await fn();
+      await action();
       return true;
     } catch (e) {
       opError = e instanceof Error ? e.message : String(e);
@@ -232,36 +232,36 @@
 {/if}
 
 {#if form}
-  {@const f = form}
-  {@const named = f.row ? (editTitle?.(f.row) ?? rowKey(f.row)) : null}
-  {@const key = f.row ? rowKey(f.row) : NEW}
+  {@const open = form}
+  {@const named = open.row ? (editTitle?.(open.row) ?? rowKey(open.row)) : null}
+  {@const key = open.row ? rowKey(open.row) : NEW}
   <RecordModal
     title={named ? (noun ? `${noun}: ${named}` : named) : addLabel}
     {columns}
     {draft}
     {width}
-    mode={f.mode}
-    row={f.row ?? undefined}
+    mode={open.mode}
+    row={open.row ?? undefined}
     busy={busy === formKey}
     error={opError}
     onConfirm={commit}
-    destructive={f.row && ondelete && canDelete(f.row)
+    destructive={open.row && ondelete && canDelete(open.row)
       ? {
           label: armed === key ? "click again to confirm" : "delete",
           icon: armed === key ? "confirm" : "delete",
           busy: busy === key,
-          onclick: () => f.row && confirmDelete(f.row),
+          onclick: () => open.row && confirmDelete(open.row),
         }
       : undefined}
     onCancel={close}
   >
     {#snippet barExtra()}
-      {#if extraActions && f.row}{@render extraActions(f.row)}{/if}
+      {#if extraActions && open.row}{@render extraActions(open.row)}{/if}
     {/snippet}
     {#snippet extra()}
       {#if formExtra}{@render formExtra({
-          mode: f.mode,
-          row: f.row,
+          mode: open.mode,
+          row: open.row,
           draft,
         })}{/if}
     {/snippet}

@@ -13,23 +13,29 @@
   } = $props();
 
   const plot = getPlot();
-  const f = $derived(plot.frame);
-  const slot = (k: string) => f.bandAt(k) - (f.step - f.band) / 2;
+  const frame = $derived(plot.frame);
+  const slot = (k: string) => frame.bandAt(k) - (frame.step - frame.band) / 2;
 </script>
 
 {#if active && categories.includes(active)}
-  <rect class="band" x={slot(active)} y={0} width={f.step} height={f.ih} />
+  <rect
+    class="band"
+    x={slot(active)}
+    y={0}
+    width={frame.step}
+    height={frame.ih}
+  />
 {/if}
-{#each categories as k (k)}
+{#each categories as category (category)}
   <rect
     class="hit"
-    x={slot(k)}
+    x={slot(category)}
     y={0}
-    width={f.step}
-    height={f.ih}
+    width={frame.step}
+    height={frame.ih}
     role="presentation"
-    onpointerenter={() => onhover?.(k)}
-    onpointermove={() => onhover?.(k)}
+    onpointerenter={() => onhover?.(category)}
+    onpointermove={() => onhover?.(category)}
     onpointerleave={() => onhover?.(null)}
   />
 {/each}

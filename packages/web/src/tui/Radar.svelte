@@ -72,35 +72,35 @@ the grid.
   {#if w > 0 && h > 0 && n >= 3 && radius > 0}
     <svg viewBox="0 0 {w} {h}" role="img" aria-label="radar of {n} values">
       <g transform="translate({w / 2}, {h / 2})">
-        {#each grid as t (t)}
-          <path class="ring" d={radarRing(n, (t / max) * radius)} />
+        {#each grid as ring (ring)}
+          <path class="ring" d={radarRing(n, (ring / max) * radius)} />
         {/each}
-        {#each axes as a, i (a.key)}
+        {#each axes as axis, i (axis.key)}
           {@const tip = radarPoint(i, n, radius)}
           <line class="spoke" x1="0" y1="0" x2={tip.x} y2={tip.y} />
         {/each}
 
-        {#each series as s (s.key)}
-          <g style="--tone-color: {toneVar(s.tone)}">
-            <path class="area" d={radarPath(s.values, max, radius)} />
-            {#each s.values as v, i (axes[i].key)}
-              {@const p = radarPoint(i, n, (v / (max || 1)) * radius)}
+        {#each series as line (line.key)}
+          <g style="--tone-color: {toneVar(line.tone)}">
+            <path class="area" d={radarPath(line.values, max, radius)} />
+            {#each line.values as value, i (axes[i].key)}
+              {@const point = radarPoint(i, n, (value / (max || 1)) * radius)}
               <circle
                 class="dot"
-                cx={p.x}
-                cy={p.y}
+                cx={point.x}
+                cy={point.y}
                 r="3.2"
                 style={lone && axes[i].tone
                   ? `fill: ${toneVar(axes[i].tone)}`
                   : undefined}
               >
-                <title>{axes[i].label}: {format(v)}</title>
+                <title>{axes[i].label}: {format(value)}</title>
               </circle>
             {/each}
           </g>
         {/each}
 
-        {#each axes as a, i (a.key)}
+        {#each axes as axis, i (axis.key)}
           {@const end = radarPoint(i, n, radius + fs * 0.9)}
           {@const anchor = radarAnchor(i, n)}
           <text
@@ -114,7 +114,7 @@ the grid.
                 ? "hanging"
                 : "middle"}
           >
-            {shown(a.label)}
+            {shown(axis.label)}
             {#if lone}
               <tspan class="val" x={end.x} dy={fs * 1.15}
                 >{format(series[0].values[i])}</tspan

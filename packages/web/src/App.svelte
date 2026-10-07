@@ -160,10 +160,10 @@
     };
 
     read();
-    const ro = new ResizeObserver(read);
-    ro.observe(el);
-    ro.observe(host);
-    return () => ro.disconnect();
+    const observer = new ResizeObserver(read);
+    observer.observe(el);
+    observer.observe(host);
+    return () => observer.disconnect();
   });
 
   // The subnav bar outlives a section change (see `setSubnav`), so its
