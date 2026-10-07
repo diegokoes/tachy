@@ -1,7 +1,7 @@
 /** Who is calling, and whether they may. */
 import {
   resolveCurrentUserId,
-  countAdmins,
+  adminCount,
   canManageTeam,
   assertCanEditScope,
   assertAnyTeamAdmin,
@@ -14,7 +14,7 @@ import type { EntryScope } from "@tachy/core/access";
 export let enforcementCache = false;
 export async function enforcementActive(): Promise<boolean> {
   if (enforcementCache) return true;
-  enforcementCache = (await countAdmins()) > 0;
+  enforcementCache = (await adminCount()) > 0;
   return enforcementCache;
 }
 

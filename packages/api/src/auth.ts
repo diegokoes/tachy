@@ -13,7 +13,7 @@ import {
 import {
   upsertUser,
   getUserByEmail,
-  countAdmins,
+  adminCount,
   verifyPassword,
   teamAdminTeams,
   userTeams,
@@ -107,7 +107,7 @@ export async function sessionEmail(c: Context): Promise<string | undefined> {
 let bootstrappedCache = false;
 export async function isBootstrapped(): Promise<boolean> {
   if (bootstrappedCache) return true;
-  bootstrappedCache = (await countAdmins()) > 0;
+  bootstrappedCache = (await adminCount()) > 0;
   return bootstrappedCache;
 }
 export function markBootstrapped(): void {
