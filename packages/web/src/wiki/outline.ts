@@ -40,7 +40,7 @@ function anchorId(text: string, seen: Map<string, number>): string {
  */
 export function outline(body: string): OutlineItem[] {
   const seen = new Map<string, number>();
-  const out: OutlineItem[] = [];
+  const headings: OutlineItem[] = [];
   const open: { depth: number; n: number }[] = [];
   for (const token of marked.lexer(body ?? "")) {
     if (token.type !== "heading") continue;
@@ -51,7 +51,7 @@ export function outline(body: string): OutlineItem[] {
     const top = open[open.length - 1];
     if (top?.depth === depth) top.n++;
     else open.push({ depth, n: closed ? closed.n + 1 : 1 });
-    out.push({
+    headings.push({
       depth,
       text,
       id: anchorId(text, seen),
@@ -59,16 +59,16 @@ export function outline(body: string): OutlineItem[] {
       level: open.length - 1,
     });
   }
-  return out;
+  return headings;
 }
 
 /** The outline as a tree, for a contents list whose branches fold. */
 export function outlineTree(items: OutlineItem[]): OutlineNode[] {
   const roots: OutlineNode[] = [];
   const path: OutlineNode[] = [];
-  for (const it of items) {
-    const node: OutlineNode = { ...it, children: [] };
-    path.length = it.level;
+  for (const item of items) {
+    const node: OutlineNode = { ...item, children: [] };
+    path.length = item.level;
     (path[path.length - 1]?.children ?? roots).push(node);
     path.push(node);
   }

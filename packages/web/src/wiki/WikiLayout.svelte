@@ -54,11 +54,11 @@
     const port = scrollport();
     const root = rootEl;
     if (!port || !root) return;
-    const ro = new ResizeObserver(() =>
+    const observer = new ResizeObserver(() =>
       root.style.setProperty("--port-h", `${port.clientHeight}px`),
     );
-    ro.observe(port);
-    return () => ro.disconnect();
+    observer.observe(port);
+    return () => observer.disconnect();
   });
 
   function switchTo(next: string) {

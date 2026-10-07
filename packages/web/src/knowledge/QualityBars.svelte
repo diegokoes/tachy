@@ -39,11 +39,11 @@
       ] as const
     )
       .filter(([, v]) => v && STEPS[v])
-      .map(([label, v]) => {
-        const step = STEPS[v as string];
+      .map(([label, value]) => {
+        const step = STEPS[value as string];
         return {
           label,
-          value: v as string,
+          value: value as string,
           step,
           frac: step / 3,
           tone: tone(step),
@@ -64,16 +64,16 @@
 
 {#if rows.length}
   <dl class="bars" bind:this={el}>
-    {#each rows as r (r.label)}
-      <dt>{r.label}</dt>
+    {#each rows as row (row.label)}
+      <dt>{row.label}</dt>
       <!-- The bar already says how far along the scale this sits; the word
            would only repeat it. It stays in the tooltip and the aria label. -->
-      <dd class="bar" title="{r.label}: {r.value}">
+      <dd class="bar" title="{row.label}: {row.value}">
         <Meter
-          value={r.frac}
+          value={row.frac}
           width={8}
-          tone={r.tone}
-          label="{r.label} {r.value}"
+          tone={row.tone}
+          label="{row.label} {row.value}"
         />
       </dd>
     {/each}

@@ -19,7 +19,7 @@
     value: unknown;
     form: ComposerForm;
     invalid?: boolean;
-    onchange: (v: unknown) => void;
+    onchange: (next: unknown) => void;
   } = $props();
 
   type Kind =
@@ -118,9 +118,9 @@
   ]);
 
   /** Allowed values arrive as strings or numbers; send back what ADO listed. */
-  function pickChoice(v: string) {
-    const original = spec.allowed_values?.find((a) => String(a) === v);
-    onchange(v === "" ? null : (original ?? v));
+  function pickChoice(choice: string) {
+    const original = spec.allowed_values?.find((a) => String(a) === choice);
+    onchange(choice === "" ? null : (original ?? choice));
   }
 
   // The multivalue extension stores its picks as one ";"-joined string.
@@ -135,16 +135,17 @@
       ? [...widget.values, ...picked.filter((p) => !widget.values.includes(p))]
       : [],
   );
-  function toggle(v: string) {
-    const next = picked.includes(v)
-      ? picked.filter((p) => p !== v)
-      : [...picked, v];
+  function toggle(choice: string) {
+    const next = picked.includes(choice)
+      ? picked.filter((p) => p !== choice)
+      : [...picked, choice];
     onchange(next.length ? next.join(";") : null);
   }
   let custom = $state("");
   function addCustom() {
-    const v = custom.trim();
-    if (v && !picked.includes(v)) onchange([...picked, v].join(";"));
+    const typed = custom.trim();
+    if (typed && !picked.includes(typed))
+      onchange([...picked, typed].join(";"));
     custom = "";
   }
 </script>
@@ -193,12 +194,12 @@
   </div>
 {:else if kind === "multi" && widget?.kind === "multi"}
   <div class="multi" role="group" aria-label={label}>
-    {#each multiValues as v (v)}
+    {#each multiValues as chosen (chosen)}
       <button
         class="opt"
-        class:on={picked.includes(v)}
-        aria-pressed={picked.includes(v)}
-        onclick={() => toggle(v)}>{v}</button
+        class:on={picked.includes(chosen)}
+        aria-pressed={picked.includes(chosen)}
+        onclick={() => toggle(chosen)}>{chosen}</button
       >
     {/each}
     {#if widget.allow_custom}
@@ -225,7 +226,8 @@
   />
   {#if widget?.kind === "suggest" && widget.values.length}
     <datalist id={`${id}-list`}>
-      {#each widget.values as v (v)}<option value={v}></option>{/each}
+      {#each widget.values as choice (choice)}<option value={choice}
+        ></option>{/each}
     </datalist>
   {/if}
 {:else if kind === "choice"}

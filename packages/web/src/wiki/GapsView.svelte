@@ -35,11 +35,11 @@
    * whole subtree of every component it links.
    */
   const sectionByComponent = $derived.by(() => {
-    const m = new Map<string, string>();
-    if (!toc || !data?.coverage) return m;
+    const sections = new Map<string, string>();
+    if (!toc || !data?.coverage) return sections;
     const bySlug = new Map<string, CoverageNode>();
-    const index = (ns: CoverageNode[]) => {
-      for (const n of ns) {
+    const index = (nodes: CoverageNode[]) => {
+      for (const n of nodes) {
         bySlug.set(n.slug, n);
         index(n.children);
       }
@@ -50,11 +50,11 @@
       const dfs = (n: CoverageNode) => {
         if (seen.has(n.slug)) return;
         seen.add(n.slug);
-        if (!m.has(n.slug)) m.set(n.slug, name);
+        if (!sections.has(n.slug)) sections.set(n.slug, name);
         n.children.forEach(dfs);
       };
-      for (const s of compSlugs) {
-        const n = bySlug.get(s);
+      for (const slug of compSlugs) {
+        const n = bySlug.get(slug);
         if (n) dfs(n);
       }
     };
@@ -64,7 +64,7 @@
           sec.components.map((c) => c.slug),
           sec.name,
         );
-    return m;
+    return sections;
   });
 
   const sectionOf = (g: WikiGap): string | null =>
@@ -145,11 +145,11 @@
     }
   }
 
-  async function dismiss(g: WikiGap) {
-    acting = g.id;
+  async function dismiss(gap: WikiGap) {
+    acting = gap.id;
     error = null;
     try {
-      await api.post(`/library/wiki/${scope}/gaps/${g.id}/dismiss`, {});
+      await api.post(`/library/wiki/${scope}/gaps/${gap.id}/dismiss`, {});
       await load();
       void loadWikis();
     } catch (e) {
@@ -164,24 +164,25 @@
    * is the go-ahead, the turn runs on the reader's own credentials, and the
    * article still lands behind a review box.
    */
-  function draftWithAgent(g: WikiGap) {
+  function draftWithAgent(gap: WikiGap) {
     const parts = [`/wiki-draft ${scope}`];
-    if (g.evidence.component) parts.push(`component=${g.evidence.component}`);
-    if (g.evidence.slug) parts.push(`article=${g.evidence.slug}`);
+    if (gap.evidence.component)
+      parts.push(`component=${gap.evidence.component}`);
+    if (gap.evidence.slug) parts.push(`article=${gap.evidence.slug}`);
     chat.input = parts.join(" ");
     navigate("/chat");
   }
 
-  function write(g: WikiGap) {
-    if (g.kind === "wanted") {
-      navigate(wikiPath(scope, "new", slugify(g.key)));
+  function write(gap: WikiGap) {
+    if (gap.kind === "wanted") {
+      navigate(wikiPath(scope, "new", slugify(gap.key)));
       return;
     }
     seedArticle({
-      title: g.subject,
-      component: g.evidence.component ?? undefined,
+      title: gap.subject,
+      component: gap.evidence.component ?? undefined,
     });
-    navigate(wikiPath(scope, "new", g.evidence.component ?? ""));
+    navigate(wikiPath(scope, "new", gap.evidence.component ?? ""));
   }
 
   const open = (g: WikiGap) =>
@@ -192,25 +193,27 @@
     scope !== ORG_WIDE &&
     (g.kind === "unwritten" || g.kind === "outgrown" || g.kind === "stale");
 
-  function evidenceLine(g: WikiGap): string {
-    const e = g.evidence;
-    switch (g.kind) {
+  function evidenceLine(gap: WikiGap): string {
+    const evidence = gap.evidence;
+    switch (gap.kind) {
       case "unwritten":
       case "outgrown": {
         const bits = [
-          e.entries
-            ? `${e.entries} ${e.entries === 1 ? "lesson" : "lessons"}`
+          evidence.entries
+            ? `${evidence.entries} ${evidence.entries === 1 ? "lesson" : "lessons"}`
             : "",
-          e.docs ? `${e.docs} ${e.docs === 1 ? "doc" : "docs"}` : "",
+          evidence.docs
+            ? `${evidence.docs} ${evidence.docs === 1 ? "doc" : "docs"}`
+            : "",
         ].filter(Boolean);
-        return `${bits.join(" · ")}${g.kind === "outgrown" ? ` since ${fmtDate(e.since)}` : ""}`;
+        return `${bits.join(" · ")}${gap.kind === "outgrown" ? ` since ${fmtDate(evidence.since)}` : ""}`;
       }
       case "stale":
-        return `${g.score} changed: ${(e.titles ?? []).join(" · ")}`;
+        return `${gap.score} changed: ${(evidence.titles ?? []).join(" · ")}`;
       case "wanted":
-        return `linked from ${(e.titles ?? []).join(" · ")}`;
+        return `linked from ${(evidence.titles ?? []).join(" · ")}`;
       case "draft":
-        return `last edited ${fmtDate(e.updated_at)}`;
+        return `last edited ${fmtDate(evidence.updated_at)}`;
       default:
         return "";
     }
@@ -254,77 +257,77 @@
             <h3>{HEADS[kind].title} <span class="n">{gaps.length}</span></h3>
             <p class="detail">{HEADS[kind].detail}</p>
             <ul>
-              {#each gaps as g (g.id)}
+              {#each gaps as gap (gap.id)}
                 <li>
                   <div class="what">
-                    {#if g.evidence.slug}
+                    {#if gap.evidence.slug}
                       <a
-                        href={wikiPath(scope, g.evidence.slug)}
+                        href={wikiPath(scope, gap.evidence.slug)}
                         onclick={(e) => {
                           e.preventDefault();
-                          open(g);
-                        }}>{g.subject}</a
+                          open(gap);
+                        }}>{gap.subject}</a
                       >
                     {:else}
-                      <strong>{g.subject}</strong>
+                      <strong>{gap.subject}</strong>
                     {/if}
-                    {#if sectionOf(g)}
-                      <span class="sec">in {sectionOf(g)}</span>
+                    {#if sectionOf(gap)}
+                      <span class="sec">in {sectionOf(gap)}</span>
                     {/if}
-                    <span class="line">{evidenceLine(g)}</span>
-                    {#if g.evidence.items?.length}
+                    <span class="line">{evidenceLine(gap)}</span>
+                    {#if gap.evidence.items?.length}
                       <span class="items">
-                        {#each g.evidence.items as it (it.id)}
+                        {#each gap.evidence.items as item (item.id)}
                           <a
-                            href="/library/{it.kind === 'entry'
+                            href="/library/{item.kind === 'entry'
                               ? 'entries'
-                              : 'docs'}/{it.id}"
+                              : 'docs'}/{item.id}"
                             onclick={(e) => {
                               e.preventDefault();
                               navigate(
-                                `/library/${it.kind === "entry" ? "entries" : "docs"}/${it.id}`,
+                                `/library/${item.kind === "entry" ? "entries" : "docs"}/${item.id}`,
                               );
-                            }}>{it.title}</a
+                            }}>{item.title}</a
                           >
                         {/each}
                       </span>
                     {/if}
                     <span class="since">
-                      seen since <Time at={g.first_seen_at} date />
-                      {#if g.dismissed_at}
-                        · back after being dismissed at {g.dismissed_score}
+                      seen since <Time at={gap.first_seen_at} date />
+                      {#if gap.dismissed_at}
+                        · back after being dismissed at {gap.dismissed_score}
                       {/if}
                     </span>
                   </div>
                   {#if isCurator()}
                     <span class="acts">
-                      {#if agentCan(g)}
+                      {#if agentCan(gap)}
                         <Button
                           size="sm"
                           variant="ghost"
                           tone="accent"
                           icon="ai"
-                          onclick={() => draftWithAgent(g)}
-                          >{g.kind === "unwritten"
+                          onclick={() => draftWithAgent(gap)}
+                          >{gap.kind === "unwritten"
                             ? "draft"
                             : "refresh"}</Button
                         >
                       {/if}
-                      {#if g.kind === "unwritten" || g.kind === "wanted"}
+                      {#if gap.kind === "unwritten" || gap.kind === "wanted"}
                         <Button
                           size="sm"
                           variant="ghost"
                           icon="edit"
-                          onclick={() => write(g)}>write</Button
+                          onclick={() => write(gap)}>write</Button
                         >
                       {/if}
-                      {#if g.kind === "unwritten" || g.kind === "outgrown" || g.kind === "wanted"}
+                      {#if gap.kind === "unwritten" || gap.kind === "outgrown" || gap.kind === "wanted"}
                         <Button
                           size="sm"
                           variant="ghost"
                           icon="close"
-                          busy={acting === g.id}
-                          onclick={() => dismiss(g)}>dismiss</Button
+                          busy={acting === gap.id}
+                          onclick={() => dismiss(gap)}>dismiss</Button
                         >
                       {/if}
                     </span>

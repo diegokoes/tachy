@@ -23,11 +23,11 @@
 
   /** Collapsed summary once decided - the longest string field reads best. */
   const peek = $derived.by(() => {
-    const s = Object.values(entry.input)
+    const longest = Object.values(entry.input)
       .filter((v): v is string => typeof v === "string")
       .sort((a, b) => b.length - a.length)[0];
-    const t = (s ?? JSON.stringify(entry.input)).replace(/\s+/g, " ");
-    return t.length > 120 ? t.slice(0, 120) + "…" : t;
+    const flat = (longest ?? JSON.stringify(entry.input)).replace(/\s+/g, " ");
+    return flat.length > 120 ? flat.slice(0, 120) + "…" : flat;
   });
 
   let raw = $state(false);
@@ -80,8 +80,8 @@
       : [],
   );
 
-  function setField(ref: string, v: unknown) {
-    set("fields", { ...(adoFields ?? {}), [ref]: v });
+  function setField(ref: string, value: unknown) {
+    set("fields", { ...(adoFields ?? {}), [ref]: value });
   }
   let adopting = $state(false);
   let adoptNote = $state<string | null>(null);
@@ -184,12 +184,12 @@
                   required and empty: {missing.join(", ")}
                 </p>
               {/if}
-              {#each schema.fields.filter((f) => !f.read_only && (f.required || f.reference_name in adoFields)) as f (f.reference_name)}
+              {#each schema.fields.filter((f) => !f.read_only && (f.required || f.reference_name in adoFields)) as field (field.reference_name)}
                 <ApprovalField
-                  name={f.reference_name}
-                  spec={f}
-                  value={adoFields[f.reference_name] ?? null}
-                  onchange={(v) => setField(f.reference_name, v)}
+                  name={field.reference_name}
+                  spec={field}
+                  value={adoFields[field.reference_name] ?? null}
+                  onchange={(v) => setField(field.reference_name, v)}
                 />
               {/each}
             </div>

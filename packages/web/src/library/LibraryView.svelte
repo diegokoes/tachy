@@ -107,7 +107,7 @@
     productId: "",
     component: "",
   });
-  let q = $state(left.q);
+  let search = $state(left.q);
   /** "" = any. */
   let type = $state(left.type ?? "");
   let status = $state(left.status);
@@ -115,7 +115,7 @@
   let component = $state(left.component);
 
   $effect(() =>
-    keep("library.search", { q, type, status, productId, component }),
+    keep("library.search", { q: search, type, status, productId, component }),
   );
 
   let products = $state<ProductRow[]>([]);
@@ -178,25 +178,25 @@
       shown.filter((k) => extras[k]).length,
   );
 
-  function scopeQs(p: URLSearchParams) {
-    p.set("limit", String(MAX_PAGE));
-    if (q.trim()) p.set("q", q.trim());
-    if (productId) p.set("product_id", productId);
-    if (productId && component) p.set("component", component);
-    if (status && !q.trim()) p.set("status", status);
-    return p;
+  function scopeQs(params: URLSearchParams) {
+    params.set("limit", String(MAX_PAGE));
+    if (search.trim()) params.set("q", search.trim());
+    if (productId) params.set("product_id", productId);
+    if (productId && component) params.set("component", component);
+    if (status && !search.trim()) params.set("status", status);
+    return params;
   }
 
   const entryQs = () =>
     applyExtras(scopeQs(new URLSearchParams()), shown, extras).toString();
   /** Browsing lists imported docs only unless asked, so "any" has to say so. */
   const docQs = () => {
-    const p = scopeQs(new URLSearchParams());
-    p.set(
+    const params = scopeQs(new URLSearchParams());
+    params.set(
       "kind",
       type === "wiki" ? "wiki" : type === "docs" ? "reference" : "any",
     );
-    return p.toString();
+    return params.toString();
   };
 
   /**
@@ -219,7 +219,7 @@
     slowTimer = setTimeout(() => {
       if (mine === seq && loading) slow = true;
     }, 400);
-    mode = q.trim() ? "search" : "browse";
+    mode = search.trim() ? "search" : "browse";
     const searching = mode === "search";
 
     try {
@@ -240,7 +240,7 @@
       if (mine !== seq) return;
       capped = ents.length >= MAX_PAGE || docs.length >= MAX_PAGE;
 
-      const query = searching ? q.trim() : "";
+      const query = searching ? search.trim() : "";
       let merged = [
         ...ents.map((e) => toEntry(e, query)),
         ...docs.map((d) => toDoc(d, query)),
@@ -290,13 +290,13 @@
     // two loads, and the slower must not overwrite the newer options with
     // values that have no rows.
     const isCurrent = currentFacets();
-    const p = new URLSearchParams();
-    if (productId) p.set("product_id", productId);
-    if (productId && component) p.set("component", component);
-    if (status) p.set("status", status);
-    applyExtras(p, shown, extras);
+    const params = new URLSearchParams();
+    if (productId) params.set("product_id", productId);
+    if (productId && component) params.set("component", component);
+    if (status) params.set("status", status);
+    applyExtras(params, shown, extras);
     try {
-      const next = await api.get<Facets>(`/knowledge/facets?${p}`);
+      const next = await api.get<Facets>(`/knowledge/facets?${params}`);
       if (!isCurrent()) return;
       facets = next;
     } catch {
@@ -376,9 +376,9 @@
       node.style.minWidth = `${Math.ceil(cap.offsetWidth * 1.25)}px`;
     };
     apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(cap);
-    return { destroy: () => ro.disconnect() };
+    const observer = new ResizeObserver(apply);
+    observer.observe(cap);
+    return { destroy: () => observer.disconnect() };
   }
 
   /** A status carried over from a type that does not have it matches nothing. */
@@ -429,14 +429,17 @@
   const createDoc = create("/reference", "docs");
 
   /** Opens narrowed to what another page asked for; see `presetScope`. */
-  async function applyPreset(p: ScopePreset) {
-    const id = products.find((x) => x.slug === p.product)?.id as
+  async function applyPreset(preset: ScopePreset) {
+    const id = products.find((x) => x.slug === preset.product)?.id as
       string | undefined;
     if (!id) return;
     productId = id;
     await onProductChange(id);
-    if (p.component && components.some((c) => c.slug === p.component)) {
-      component = p.component;
+    if (
+      preset.component &&
+      components.some((c) => c.slug === preset.component)
+    ) {
+      component = preset.component;
       await loadFacets();
     }
   }
@@ -541,13 +544,13 @@
               key: "n",
               label: "",
               hidden: true,
-              run: () => q.trim() && moveCursor(1),
+              run: () => search.trim() && moveCursor(1),
             },
             {
               key: "shift+n",
               label: "",
               hidden: true,
-              run: () => q.trim() && moveCursor(-1),
+              run: () => search.trim() && moveCursor(-1),
             },
           ]
         : []),
@@ -635,7 +638,7 @@
         icon="search"
         hint="Search"
         aria-label="Search symptoms, error codes, root causes, docs"
-        bind:value={q}
+        bind:value={search}
         onkeydown={(e) => {
           if (e.key === "Enter") {
             clearTimeout(timer);
@@ -804,13 +807,13 @@
     class:empty-list={!loading && !error && items.length === 0}
     onmousemove={() => (pointerMoved = true)}
   >
-    {#each items as it, i (it.kind + it.id)}
+    {#each items as item, i (item.kind + item.id)}
       <li>
         <ResultRow
-          item={it}
+          {item}
           selected={i === cursor}
           bind:el={rowEls[i]}
-          onopen={() => openItem(it)}
+          onopen={() => openItem(item)}
           onfocus={() => (cursor = i)}
           onhover={() => pointerMoved && (cursor = i)}
         />
@@ -828,7 +831,7 @@
                 ? "wiki"
                 : "library"}
           title={mode === "search"
-            ? `No matches for “${q}”.`
+            ? `No matches for “${search}”.`
             : "The library is empty."}
           detail={mode === "search"
             ? "Searches summaries, symptoms, signals, root causes, tags, doc bodies."

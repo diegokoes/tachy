@@ -121,9 +121,9 @@
     <div class="block">
       <h4>Environment</h4>
       <dl>
-        {#each Object.entries(environment) as [k, v]}
-          <dt>{labelize(k)}</dt>
-          <dd>{String(v)}</dd>
+        {#each Object.entries(environment) as [key, value]}
+          <dt>{labelize(key)}</dt>
+          <dd>{String(value)}</dd>
         {/each}
       </dl>
     </div>
@@ -133,9 +133,9 @@
     <div class="block">
       <h4>Key signals</h4>
       <dl>
-        {#each Object.entries(keySignals) as [k, v]}
-          <dt>{labelize(k)}</dt>
-          <dd>{String(v)}</dd>
+        {#each Object.entries(keySignals) as [key, value]}
+          <dt>{labelize(key)}</dt>
+          <dd>{String(value)}</dd>
         {/each}
       </dl>
     </div>
@@ -145,9 +145,9 @@
     <div class="block">
       <h4>Technical analysis</h4>
       <dl>
-        {#each Object.entries(analysis) as [k, v]}
-          <dt>{labelize(k)}</dt>
-          <dd>{String(v)}</dd>
+        {#each Object.entries(analysis) as [key, value]}
+          <dt>{labelize(key)}</dt>
+          <dd>{String(value)}</dd>
         {/each}
       </dl>
     </div>
@@ -157,7 +157,7 @@
     <div class="block">
       <h4>Investigation steps</h4>
       <ol>
-        {#each steps as s}<li>{s}</li>{/each}
+        {#each steps as step}<li>{step}</li>{/each}
       </ol>
     </div>
   {/if}
@@ -173,7 +173,7 @@
     <div class="block">
       <h4>Constraints &amp; rules</h4>
       <ul>
-        {#each rules as r}<li>{r}</li>{/each}
+        {#each rules as rule}<li>{rule}</li>{/each}
       </ul>
     </div>
   {/if}
@@ -182,7 +182,7 @@
     <div class="block">
       <h4>Related configuration</h4>
       <ul>
-        {#each config as f}<li><code>{f}</code></li>{/each}
+        {#each config as field}<li><code>{field}</code></li>{/each}
       </ul>
     </div>
   {/if}
@@ -191,12 +191,13 @@
     <div class="block">
       <h4>Related links</h4>
       <ul>
-        {#each links as l}
+        {#each links as link}
           <li>
-            {#if /^https?:\/\//.test(l)}
-              <a href={l} target="_blank" rel="noopener noreferrer">{l}</a>
+            {#if /^https?:\/\//.test(link)}
+              <a href={link} target="_blank" rel="noopener noreferrer">{link}</a
+              >
             {:else}
-              {l}
+              {link}
             {/if}
           </li>
         {/each}

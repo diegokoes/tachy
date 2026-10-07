@@ -79,19 +79,19 @@
 
   /** Every article in this wiki, for the lead-article picker. */
   const articles = $derived.by(() => {
-    const out: WikiArticleRef[] = [];
-    const walk = (ns: WikiTocNode[]) => {
-      for (const n of ns) {
-        for (const a of n.articles) if (a.slug) out.push(a);
+    const found: WikiArticleRef[] = [];
+    const walk = (nodes: WikiTocNode[]) => {
+      for (const n of nodes) {
+        for (const ref of n.articles) if (ref.slug) found.push(ref);
         walk(n.children);
       }
     };
     if (toc) {
       walk(toc.categories);
-      for (const a of toc.uncategorised) if (a.slug) out.push(a);
+      for (const ref of toc.uncategorised) if (ref.slug) found.push(ref);
     }
     const seen = new Set<string>();
-    return out.filter((a) => a.slug && !seen.has(a.slug) && seen.add(a.slug));
+    return found.filter((a) => a.slug && !seen.has(a.slug) && seen.add(a.slug));
   });
 
   const leadOptions = $derived([
@@ -101,15 +101,15 @@
 
   /** Coverage nodes by component slug, for section badges and the strip. */
   const covBySlug = $derived.by(() => {
-    const m = new Map<string, CoverageNode>();
-    const walk = (ns: CoverageNode[]) => {
-      for (const n of ns) {
-        m.set(n.slug, n);
+    const bySlug = new Map<string, CoverageNode>();
+    const walk = (nodes: CoverageNode[]) => {
+      for (const n of nodes) {
+        bySlug.set(n.slug, n);
         walk(n.children);
       }
     };
     if (coverage) walk(coverage.nodes);
-    return m;
+    return bySlug;
   });
 
   const componentList = $derived([...covBySlug.values()]);
@@ -122,8 +122,8 @@
       seen.add(n.slug);
       n.children.forEach(walk);
     };
-    for (const s of componentSlugs) {
-      const n = covBySlug.get(s);
+    for (const slug of componentSlugs) {
+      const n = covBySlug.get(slug);
       if (n) walk(n);
     }
     return seen;
@@ -137,14 +137,14 @@
     if (!comps.length || !coverage) return null;
     const covered = coveredSlugs(comps.map((c) => c.slug));
     let articles = 0;
-    for (const s of covered) articles += covBySlug.get(s)?.articles ?? 0;
-    const g = gaps.filter(
+    for (const slug of covered) articles += covBySlug.get(slug)?.articles ?? 0;
+    const open = gaps.filter(
       (x) =>
         (x.kind === "unwritten" || x.kind === "outgrown") &&
         x.evidence.component &&
         covered.has(String(x.evidence.component)),
     ).length;
-    return { articles, gaps: g };
+    return { articles, gaps: open };
   }
 
   /** A section opens its lead article when it has one, else its plain page. */
@@ -313,11 +313,11 @@
   >
 {/snippet}
 
-{#snippet article(a: WikiArticleRef)}
-  <button class="art" onclick={() => openArticle(a)}>{a.title}</button>
-  {#if a.status === "draft"}<Badge tone="accent">draft</Badge>{/if}
-  {#if a.stale}
-    <Badge tone="warn">{a.stale} changed</Badge>
+{#snippet article(ref: WikiArticleRef)}
+  <button class="art" onclick={() => openArticle(ref)}>{ref.title}</button>
+  {#if ref.status === "draft"}<Badge tone="accent">draft</Badge>{/if}
+  {#if ref.stale}
+    <Badge tone="warn">{ref.stale} changed</Badge>
   {/if}
 {/snippet}
 
@@ -365,9 +365,9 @@
     </div>
     {#if node.articles.length}
       <span class="arts" class:under={depth > 0}>
-        {#each node.articles as a, i (a.id)}
+        {#each node.articles as ref, i (ref.id)}
           {#if i > 0}<span class="dot">·</span>{/if}
-          {@render article(a)}
+          {@render article(ref)}
         {/each}
       </span>
     {/if}
@@ -469,17 +469,18 @@
           <div class="comps">
             <span class="lbl">covers components</span>
             <div class="checks">
-              {#each componentList as c (c.id)}
+              {#each componentList as component (component.id)}
                 <span class="ck">
                   <Checkbox
-                    checked={form.componentSlugs.includes(c.slug)}
-                    ariaLabel={c.name}
-                    onchange={() => toggleComponent(c.slug)}
+                    checked={form.componentSlugs.includes(component.slug)}
+                    ariaLabel={component.name}
+                    onchange={() => toggleComponent(component.slug)}
                   />
                   <button
                     type="button"
                     class="cklbl"
-                    onclick={() => toggleComponent(c.slug)}>{c.name}</button
+                    onclick={() => toggleComponent(component.slug)}
+                    >{component.name}</button
                   >
                 </span>
               {/each}
@@ -520,9 +521,9 @@
           <div class="loose">
             <h4>Uncategorised ({toc.uncategorised.length})</h4>
             <span class="arts">
-              {#each toc.uncategorised as a, i (a.id)}
+              {#each toc.uncategorised as ref, i (ref.id)}
                 {#if i > 0}<span class="dot">·</span>{/if}
-                {@render article(a)}
+                {@render article(ref)}
               {/each}
             </span>
           </div>

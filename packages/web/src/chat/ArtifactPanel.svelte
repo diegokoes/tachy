@@ -148,7 +148,7 @@
     }
     const tweens = spin(icon);
     return () => {
-      for (const t of tweens) t.kill();
+      for (const tween of tweens) tween.kill();
       settle(icon);
     };
   });
@@ -355,14 +355,14 @@
 
   // The prompt is fetched before the modal opens, so it comes up filled instead
   // of blinking its content in a beat later.
-  async function openEdit(a: ArtifactMeta) {
+  async function openEdit(artifact: ArtifactMeta) {
     if (fetching) return;
-    fetching = a.id;
+    fetching = artifact.id;
     let body = "";
     let failed: string | null = null;
     try {
       const full = await api.get<ArtifactMeta & { body: string }>(
-        `/artifacts/${a.id}`,
+        `/artifacts/${artifact.id}`,
       );
       body = full.body;
     } catch (e) {
@@ -370,16 +370,16 @@
     }
     fetching = null;
     editorMode = "edit";
-    fAudience = audienceOf(a);
+    fAudience = audienceOf(artifact);
     fWasAudience = fAudience;
-    fEditId = a.id;
-    fEditSlug = a.slug;
-    fTitle = a.title;
-    fDescription = a.description ?? "";
+    fEditId = artifact.id;
+    fEditSlug = artifact.slug;
+    fTitle = artifact.title;
+    fDescription = artifact.description ?? "";
     fPrompt = body;
-    fHasOutput = !!a.spec?.output;
-    fOutput = a.spec?.output
-      ? { sheet: "", filename: "", ...a.spec.output }
+    fHasOutput = !!artifact.spec?.output;
+    fOutput = artifact.spec?.output
+      ? { sheet: "", filename: "", ...artifact.spec.output }
       : blankOutput();
     editorError = failed;
     editorOpen = true;
@@ -443,20 +443,20 @@
     }
   }
 
-  async function remove(a: ArtifactMeta) {
-    if (armedDelete !== a.id) {
-      armedDelete = a.id;
+  async function remove(artifact: ArtifactMeta) {
+    if (armedDelete !== artifact.id) {
+      armedDelete = artifact.id;
       return;
     }
     armedDelete = null;
     try {
-      const teamSlug = teamSlugFor(a.team_id);
+      const teamSlug = teamSlugFor(artifact.team_id);
       await api.delete("/artifacts", {
-        scope: a.scope,
-        ...(a.scope === "team" ? { team: teamSlug } : {}),
-        slug: a.slug,
+        scope: artifact.scope,
+        ...(artifact.scope === "team" ? { team: teamSlug } : {}),
+        slug: artifact.slug,
       });
-      if (chat.artifact?.id === a.id) chat.artifact = undefined;
+      if (chat.artifact?.id === artifact.id) chat.artifact = undefined;
       await load();
       window.dispatchEvent(new Event("artifacts-changed"));
     } catch (e) {
@@ -537,32 +537,33 @@
       {:else if items.length === 0 && !error}
         <p class="muted empty">No artifacts yet</p>
       {/if}
-      {#each grouped as g (g.scope)}
+      {#each grouped as group (group.scope)}
         <div class="scope-head">
-          <Icon name={SCOPE_ICONS[g.scope]} size="0.95em" />
-          {SCOPE_LABELS[g.scope]}
+          <Icon name={SCOPE_ICONS[group.scope]} size="0.95em" />
+          {SCOPE_LABELS[group.scope]}
         </div>
         <ul class="art-list">
-          {#each g.rows as a (a.id)}
+          {#each group.rows as artifact (artifact.id)}
             <li
               class="art-row"
-              class:selected={chat.artifact?.id === a.id}
-              class:armed={armedDelete === a.id}
+              class:selected={chat.artifact?.id === artifact.id}
+              class:armed={armedDelete === artifact.id}
             >
-              <button class="art-pick" onclick={() => select(a)}>
+              <button class="art-pick" onclick={() => select(artifact)}>
                 <span class="art-title">
-                  {#if chat.artifact?.id === a.id}<span class="sel"
+                  {#if chat.artifact?.id === artifact.id}<span class="sel"
                       ><Icon name="selected" size="0.7em" weight={10} /></span
-                    >{/if}{a.title}
-                  {#if a.spec?.output}<span class="art-out"
+                    >{/if}{artifact.title}
+                  {#if artifact.spec?.output}<span class="art-out"
                       ><Icon name="download" size="0.9em" />
-                      {a.spec.output.format}</span
+                      {artifact.spec.output.format}</span
                     >{/if}
                 </span>
-                {#if a.description}<span class="art-desc">{a.description}</span
+                {#if artifact.description}<span class="art-desc"
+                    >{artifact.description}</span
                   >{/if}
               </button>
-              {#if canWrite(a)}
+              {#if canWrite(artifact)}
                 <span class="art-actions">
                   <Button
                     variant="ghost"
@@ -572,21 +573,21 @@
                     iconSize="1.5em"
                     title="edit"
                     aria-label="edit"
-                    busy={fetching === a.id}
-                    onclick={() => openEdit(a)}
+                    busy={fetching === artifact.id}
+                    onclick={() => openEdit(artifact)}
                   />
                   <Button
                     variant="ghost"
                     tone="danger"
                     square
-                    icon={armedDelete === a.id ? "confirm" : "delete"}
+                    icon={armedDelete === artifact.id ? "confirm" : "delete"}
                     morph
                     iconSize="1.5em"
-                    title={armedDelete === a.id
+                    title={armedDelete === artifact.id
                       ? "click again to delete"
                       : "delete"}
                     aria-label="delete"
-                    onclick={() => remove(a)}
+                    onclick={() => remove(artifact)}
                   />
                 </span>
               {/if}

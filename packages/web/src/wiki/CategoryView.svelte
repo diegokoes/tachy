@@ -99,10 +99,11 @@
         <h3>Articles</h3>
         {#if node.articles.length}
           <ul>
-            {#each node.articles as a (a.id)}
+            {#each node.articles as article (article.id)}
               <li>
-                <button onclick={() => open(a)}>{a.title}</button>
-                {#if a.status === "draft"}<Badge tone="accent">draft</Badge
+                <button onclick={() => open(article)}>{article.title}</button>
+                {#if article.status === "draft"}<Badge tone="accent"
+                    >draft</Badge
                   >{/if}
               </li>
             {/each}

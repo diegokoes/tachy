@@ -52,8 +52,8 @@
     </span>
     {#if item.snippet}
       <span class="snippet"
-        >{#each item.snippet as s}{#if s.hit}<mark>{s.t}</mark
-            >{:else}{s.t}{/if}{/each}</span
+        >{#each item.snippet as piece}{#if piece.hit}<mark>{piece.t}</mark
+            >{:else}{piece.t}{/if}{/each}</span
       >
     {/if}
     <span class="foot">

@@ -42,9 +42,9 @@
     artifacts: CommandArtifactMeta[],
     query: string,
   ): CommandArtifactMeta[] {
-    const q = query.trim().toLowerCase();
+    const needle = query.trim().toLowerCase();
     return artifacts.filter(
-      (a) => !q || `${a.slug} ${a.title}`.toLowerCase().includes(q),
+      (a) => !needle || `${a.slug} ${a.title}`.toLowerCase().includes(needle),
     );
   }
 </script>
