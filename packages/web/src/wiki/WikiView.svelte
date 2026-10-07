@@ -38,19 +38,14 @@
   const second = $derived(segment(2));
   const third = $derived(segment(3));
 
-  const page = $derived(
-    !second
-      ? "overview"
-      : renamedPage(second) !== undefined
-        ? "redirect"
-        : second === "gaps" || second === "new"
-          ? second
-          : second === "c"
-            ? "category"
-            : third === "edit"
-              ? "edit"
-              : "article",
-  );
+  function pageOf(second: string | undefined, third: string | undefined) {
+    if (!second) return "overview";
+    if (renamedPage(second) !== undefined) return "redirect";
+    if (second === "gaps" || second === "new") return second;
+    if (second === "c") return "category";
+    return third === "edit" ? "edit" : "article";
+  }
+  const page = $derived(pageOf(second, third));
 
   const PLACES: SubnavItem[] = [
     { key: "overview", label: "overview", icon: "overview" },

@@ -42,21 +42,20 @@
     `${l.doc_version ? `v${l.doc_version}` : fmtDate(l.created_at) || l.id.slice(0, 8)} · ${l.status}`;
 
   /** A doc with no recorded lineage is still one version - its own. */
-  const versions = $derived<ReferenceLineageRow[]>(
-    lineage.length
-      ? lineage
-      : doc
-        ? [
-            {
-              id: doc.id,
-              title: doc.title,
-              doc_version: doc.doc_version,
-              status: doc.status,
-              created_at: doc.created_at,
-            },
-          ]
-        : [],
+  const ownVersion = $derived<ReferenceLineageRow[]>(
+    doc
+      ? [
+          {
+            id: doc.id,
+            title: doc.title,
+            doc_version: doc.doc_version,
+            status: doc.status,
+            created_at: doc.created_at,
+          },
+        ]
+      : [],
   );
+  const versions = $derived(lineage.length ? lineage : ownVersion);
 
   /** The doc lifecycle, as the left rail draws it. See EntryDetail. */
   function actionsFor(doc: ReferenceRow): StatusAction[] {

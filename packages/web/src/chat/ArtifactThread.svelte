@@ -49,6 +49,7 @@
   const roll = (): Packet => {
     const back = Math.random() < 0.16;
     const weak = !back && Math.random() < 0.28;
+    const strongFlash = back ? 0.5 : 1;
     return {
       back,
       idle: !back && Math.random() < 0.12,
@@ -56,7 +57,7 @@
       tail: weak ? 0.05 : gsap.utils.random(0.1, 0.26),
       ease: gsap.utils.random(["none", "power1.in", "power1.out", "power2.in"]),
       alpha: weak ? 0.45 : 1,
-      flash: weak ? 0 : back ? 0.5 : 1,
+      flash: weak ? 0 : strongFlash,
     };
   };
 
@@ -86,11 +87,9 @@
     const nx = -dy / length;
     const ny = dx / length;
     // Mostly a taut wire; now and then it cracks wide for one frame.
-    const amp = still
-      ? 0
-      : Math.random() < 0.09
-        ? 10 + Math.random() * 8
-        : 3 + Math.random() * 4;
+    const cracked = () =>
+      Math.random() < 0.09 ? 10 + Math.random() * 8 : 3 + Math.random() * 4;
+    const amp = still ? 0 : cracked();
 
     let path = `M${x1.toFixed(1)} ${y1.toFixed(1)}`;
     for (let i = 1; i < JAGS; i++) {

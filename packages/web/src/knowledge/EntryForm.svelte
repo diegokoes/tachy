@@ -97,8 +97,8 @@
         return null;
       }
     }
-    const text = (v: string) =>
-      v.trim() ? v.trim() : mode === "edit" ? null : undefined;
+    const blank = mode === "edit" ? null : undefined;
+    const text = (v: string) => v.trim() || blank;
     const payload: Record<string, unknown> = {
       issueSummary: text(issueSummary),
       rootCause: text(rootCause),

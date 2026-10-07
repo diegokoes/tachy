@@ -90,12 +90,11 @@
     [...findingsFor.values()].reduce((a, b) => a + b, 0),
   );
 
-  const fieldName = (ref: string) =>
-    ref === TITLE
-      ? "Title"
-      : ref === "general"
-        ? "Overall"
-        : (form?.labels[ref] ?? specs.get(ref)?.name ?? ref);
+  function fieldName(ref: string) {
+    if (ref === TITLE) return "Title";
+    if (ref === "general") return "Overall";
+    return form?.labels[ref] ?? specs.get(ref)?.name ?? ref;
+  }
 
   const ORIGIN: Record<string, string> = {
     process: "process default",

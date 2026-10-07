@@ -58,14 +58,13 @@
     const blocks = Array.isArray(result)
       ? result
       : (result as { content?: unknown })?.content;
-    const text = Array.isArray(blocks)
-      ? (
-          blocks.find((b) => (b as { type?: string })?.type === "text") as
-            { text?: string } | undefined
-        )?.text
-      : typeof result === "string"
-        ? result
-        : undefined;
+    const firstText = (found: unknown[]) =>
+      (
+        found.find((b) => (b as { type?: string })?.type === "text") as
+          { text?: string } | undefined
+      )?.text;
+    const plain = typeof result === "string" ? result : undefined;
+    const text = Array.isArray(blocks) ? firstText(blocks) : plain;
     if (!text) return undefined;
     try {
       return JSON.parse(text) as Record<string, unknown>;
@@ -168,6 +167,13 @@
     if (azCtx?.stage === "type") ensureTypes(azCtx.project.id);
   });
 
+  function projectsEmpty() {
+    if (!az.projects) return "loading projects…";
+    return az.projects.length
+      ? "no project matches"
+      : "none of your teams has an Azure DevOps project registered";
+  }
+
   const azMenu = $derived.by(
     (): { options: MenuOption[]; crumb: MenuCrumb } | null => {
       if (!azCtx) return null;
@@ -193,13 +199,7 @@
             cmd: "/az new",
             param: "project",
             desc: "your team's Azure DevOps projects",
-            empty:
-              az.projectsError ??
-              (az.projects
-                ? az.projects.length
-                  ? "no project matches"
-                  : "none of your teams has an Azure DevOps project registered"
-                : "loading projects…"),
+            empty: az.projectsError ?? projectsEmpty(),
           },
           options: (az.projects ?? [])
             .filter((p) => matches(azCtx.query, p.name, p.external_key))

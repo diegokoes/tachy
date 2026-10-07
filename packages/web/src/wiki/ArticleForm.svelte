@@ -256,8 +256,10 @@
     const to = el?.selectionEnd ?? from;
     const before = body.slice(0, from);
     const after = body.slice(to);
-    const gap = (edge: string, full: boolean) =>
-      !edge || full ? "" : edge === "\n" ? "\n" : "\n\n";
+    const gap = (edge: string, full: boolean) => {
+      if (!edge || full) return "";
+      return edge === "\n" ? "\n" : "\n\n";
+    };
     const lead = gap(before.slice(-1), !before || before.endsWith("\n\n"));
     const trail = gap(after.slice(0, 1), !after || after.startsWith("\n\n"));
     body = before + lead + text + trail + after;

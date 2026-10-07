@@ -60,12 +60,10 @@
     if (path) navigate(path);
   }
 
-  const what = (l: Link) =>
-    l.from_kind === "wiki"
-      ? "article"
-      : l.from_kind === "entry"
-        ? "entry"
-        : "doc";
+  function what(link: Link) {
+    if (link.from_kind === "wiki") return "article";
+    return link.from_kind === "entry" ? "entry" : "doc";
+  }
 </script>
 
 {#if inbound.length}
