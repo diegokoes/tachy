@@ -37,6 +37,7 @@ npm run api                      # server on :8787
 npm run web:dev                  # SPA dev server
 npm test                         # the suite without the coverage ratchet
 npm run format                   # prettier
+npm run comments:check           # the comment rules under Conventions
 ```
 
 Tests need Docker (testcontainers spins up Postgres).
@@ -64,8 +65,18 @@ if it starts reading from disk again.
 
 ## Conventions
 
-- **No AI-written inline comments.** Comment only where the _why_ is genuinely
-  non-obvious, in prose a maintainer would have written. Terse JSDoc at most.
+- **A comment states what the code cannot**: a reason, a constraint, an
+  external fact, or a contract detail the signature lacks (unit, range, order,
+  what null means). Present tense; no history, incidents, measured numbers or
+  emphasis. At most 3 lines in a body, 5 on a declaration, 12 for one file
+  header. `/** */` on declarations, `//` in bodies, `/* */` in CSS only.
+  `npm run comments:check` holds the mechanical part.
+- **A name carries what a comment would.** Length follows lifetime: one letter
+  only for a loop index, a one-expression callback or a fixed idiom (`c`, `tx`,
+  `e`). A collection is named for its contents, a bare number carries its unit
+  (`timeoutMs`), a threshold is a named constant, a verb keeps one meaning.
+- **Flow**: guard clauses first, no nested ternaries, no positional booleans in
+  a new signature. A block that needs a label becomes a named function.
 - **`db/schema.sql` is the source of truth** - edit it directly. There is no
   migrations directory, deliberately; see CONTRIBUTING.md.
 - **Credentials** live in the encrypted vault (`TACHY_SECRET_KEY`). The MCP

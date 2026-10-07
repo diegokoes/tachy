@@ -26,6 +26,7 @@
     "web:dev": "npm run dev --workspace @tachy/web",
     "web:build": "npm run build --workspace @tachy/web",
     "web:check": "node scripts/check-runes.mjs && npm run check --workspace @tachy/web",
+    "comments:check": "node scripts/check-comments.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
