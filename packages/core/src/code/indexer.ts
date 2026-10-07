@@ -525,11 +525,11 @@ export async function previewIndex(
     (await resolveRef(slug, `refs/heads/${ref}`)) ??
     (await fetchLine(slug, ref, opts.token));
   const tree = await listTree(slug, commit);
-  return { ref, commit, ...countTree(tree, opts.config ?? repo.config) };
+  return { ref, commit, ...treeCounts(tree, opts.config ?? repo.config) };
 }
 
 /** A tree's files by directory and by extension, against what `config` admits. */
-export function countTree(
+export function treeCounts(
   tree: TreeEntry[],
   config: Record<string, unknown>,
 ): Omit<IndexPreview, "ref" | "commit"> {
