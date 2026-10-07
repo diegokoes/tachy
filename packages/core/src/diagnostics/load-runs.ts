@@ -45,8 +45,7 @@ export function loadTargets(): LoadTarget[] {
 
 /**
  * Weekdays 19:00–07:00 and weekends, on the organisation's clock. The process's
- * own is UTC in a container, which in Madrid let a production run start until
- * 09:00 in summer.
+ * own is UTC in a container, which shifts the window by the zone's offset.
  */
 export function inLoadWindow(now: Date, timezone: string): boolean {
   const parts = new Intl.DateTimeFormat("en-US", {

@@ -34,9 +34,9 @@ export const tableOutputSchema = z.object({
 });
 
 /**
- * The schemas above are only the parser; @tachy/contract owns the shape, so the
- * editor in the SPA and the renderer here cannot disagree about it. This stops
- * compiling if the two drift apart.
+ * The Zod schemas here are only the parser; @tachy/contract owns the shape, so
+ * the editor in the SPA and the renderer here cannot disagree about it. This
+ * stops compiling if the two drift apart.
  */
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 const _shapesMatch: [
@@ -154,13 +154,10 @@ const CSV_BOM = "\uFEFF";
 
 /**
  * Cell text is composed by the model out of ticket content, so a cell can begin
- * with a character Excel and Sheets read as the start of a formula - a pasted
- * `=HYPERLINK("http://…"&A1)` becomes live in the download. A leading apostrophe
- * is the spreadsheet convention for "this is text": it is consumed on the way
- * in and does not show in the cell.
- *
- * The xlsx path needs none of this, because an inline string is already
- * unambiguously a string there.
+ * with a character Excel and Sheets read as the start of a formula: a pasted
+ * `=HYPERLINK("http://…"&A1)` becomes live in the download. A leading
+ * apostrophe is the spreadsheet convention for text, consumed on the way in.
+ * The xlsx path needs none of this: an inline string is a string there.
  */
 const FORMULA_LEAD = /^[=+\-@\t\r]/;
 
@@ -214,7 +211,10 @@ export function renderTable(i: {
   return { bytes, mime: MIME_BY_FORMAT[i.format], format: i.format };
 }
 
-/** The column contract injected into a turn when the attached artifact declares one. */
+/**
+ * The column contract injected into a turn when the attached artifact declares
+ * one.
+ */
 export function renderColumnContract(
   slug: string,
   output: TableOutput,

@@ -23,12 +23,8 @@ import {
   validateCredential,
 } from "@tachy/contract";
 
-/*
- * The prefixes travel with the names. packages/api imports only from
- * @tachy/core, so leaving them out of this line is what forced
- * routes/setup.ts to write "sk-ant-oat01-" out by hand - the second copy of a
- * rule the contract exists to hold once.
- */
+// The prefixes travel with the names: packages/api imports only from
+// @tachy/core, and would otherwise spell them out a second time.
 export {
   ANTHROPIC_API_KEY_CREDENTIAL,
   ANTHROPIC_OAUTH_CREDENTIAL,
@@ -73,12 +69,12 @@ export function envCredential(name: string): string | undefined {
 
 /**
  * Which row a ciphertext belongs to: its scope, whose it is, and what it is
- * called - exactly the columns the unique indexes are built on, so no two rows
- * share one. Moving a value to another row changes this, and the open fails.
+ * called, the columns the unique indexes are built on, so no two rows share
+ * one. Moving a value to another row changes this, and the open fails.
  */
 function credentialAad(row: Record<string, unknown>): string {
-  // The empty field is where team_id used to sit. Keep it: dropping it would
-  // change the AAD of every row already written and none would open again.
+  // The empty field is a retired team_id slot. Dropping it would change the AAD
+  // of every stored row, and none would open.
   return [row.scope, row.user_id ?? "", "", row.name].join("\u0000");
 }
 

@@ -1,4 +1,7 @@
-/** One kind of thing an admin has to fix: how many there are, and the first few by name. */
+/**
+ * One kind of thing an admin has to fix: how many there are, and the first few
+ * by name.
+ */
 export interface IssueList {
   n: number;
   items: { key: string; label: string }[];
@@ -7,7 +10,10 @@ export interface IssueList {
 /** How many offenders an issue names before it says "and N more". */
 export const ISSUE_ITEMS = 12;
 
-/** From a query selecting `key`, `label` and `count(*) over () as total`, limited to ISSUE_ITEMS. */
+/**
+ * From a query selecting `key`, `label` and `count(*) over () as total`,
+ * limited to ISSUE_ITEMS.
+ */
 export const issueList = (
   rows: readonly Record<string, unknown>[],
 ): IssueList => ({

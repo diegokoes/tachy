@@ -21,10 +21,10 @@ const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 
 /**
  * The first two branches carry their own evidence (a country code, an area code
- * in brackets). The third is bare digit groups, which in a support ticket are far
- * more often the identifiers the ticket is *about* - UIDs, serials, order numbers
- * - than a phone number, so it only fires behind a word that announces one.
- * Tokenizing those identifiers is privacy-neutral and destroys the case.
+ * in brackets). The third is bare digit groups, which in a support ticket are
+ * more often what the ticket is about (UIDs, serials, order numbers) than a
+ * phone number, so it only fires behind a word that announces one. Tokenizing
+ * those identifiers protects nobody and destroys the case.
  */
 const PHONE_WORD = String.raw`(?:tel|telephone|tele?fono|tfno|tlf|phone|mobile|m[oó]vil|cell|fax|whatsapp)`;
 
@@ -72,7 +72,10 @@ function luhnValid(candidate: string): boolean {
   return sum % 10 === 0;
 }
 
-/** Replace secrets, card numbers, emails, and phone numbers in free text with stable tokens. */
+/**
+ * Replace secrets, card numbers, emails, and phone numbers in free text with
+ * stable tokens.
+ */
 export function scrubText(text: string | undefined, map: TokenMap): string {
   if (!text) return text ?? "";
   let out = text.replace(PEM_RE, (m) => map.token("SECRET", m));
@@ -127,20 +130,11 @@ const flatten = (s: string) => s.replace(/\s+/g, " ").trim();
 const NAME_PART_MIN = 4;
 
 /**
- * Tokenize known person names wherever they appear in free text - same USER
- * kind as the author fields, so mentions map to the same token. Best-effort:
- * only names the item declares, or that the source could name for it, are found.
- *
- * Each name's own parts are matched too, mapping to the token of the full name
- * they came from: people are addressed by first name far more often than by the
- * full one their account is registered under ("Hola Javier," opening a mail from
- * Javier Baños).
- *
- * One alternation over one pass, rather than a replace per name - a long ticket
- * against a full agent directory is hundreds of names across hundreds of KB, and
- * that many sequential scans is the difference between milliseconds and seconds.
- * Longest first, so the full name wins wherever both could match and a part never
- * eats half of one.
+ * Tokenizes known person names wherever they appear in free text, as the USER
+ * kind the author fields use, so mentions map to the same token. Only names the
+ * item declares, or the source could name for it, are found. A name's parts
+ * match too and map to the full name's token, since people are addressed by
+ * first name. One pass, longest first, so a full name wins over its parts.
  */
 export function scrubKnownNames(
   text: string | undefined,
@@ -234,9 +228,9 @@ export function redactNormalized(
   const { customerSlug, map } = opts;
   const customerToken = customerStandIn(customerSlug);
 
-  // authorLabel is where the display names actually live: `requester` and
-  // `author` are account ids on most sources (a Freshdesk user id, an ADO
-  // descriptor), and feeding those to the name scrubber matches nothing.
+  // authorLabel holds the display names: `requester` and `author` are account
+  // ids on most sources (a Freshdesk user id, an ADO descriptor), and feeding
+  // those to the name scrubber matches nothing.
   const knownNames = [
     item.requester,
     item.requesterName,
@@ -299,7 +293,10 @@ export function globalRedactionEnabled(): boolean {
   return v === "true" || v === "1";
 }
 
-/** Read the redaction switch off a source connection's `config` jsonb (the global flag overrides). */
+/**
+ * Read the redaction switch off a source connection's `config` jsonb (the
+ * global flag overrides).
+ */
 export function resolveRedactionPolicy(
   config: Record<string, unknown> | null | undefined,
 ): RedactionPolicy {
