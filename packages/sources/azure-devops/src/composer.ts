@@ -66,13 +66,13 @@ export function fieldPath(
   raw: string | null | undefined,
 ): string | null {
   if (!raw) return null;
-  const p = raw.replace(/^\\+/, "");
-  if (!p) return project;
-  const lower = p.toLowerCase();
+  const relative = raw.replace(/^\\+/, "");
+  if (!relative) return project;
+  const lower = relative.toLowerCase();
   const root = project.toLowerCase();
   return lower === root || lower.startsWith(`${root}\\`)
-    ? p
-    : `${project}\\${p}`;
+    ? relative
+    : `${project}\\${relative}`;
 }
 
 /**
@@ -82,26 +82,26 @@ export function fieldPath(
 export function flattenTree(
   node: AdoClassificationNode | null | undefined,
 ): string[] {
-  const out: string[] = [];
-  const walk = (n: AdoClassificationNode, prefix: string) => {
-    const here = prefix ? `${prefix}\\${n.name}` : n.name;
-    out.push(here);
-    for (const c of n.children ?? []) walk(c, here);
+  const paths: string[] = [];
+  const walk = (current: AdoClassificationNode, prefix: string) => {
+    const here = prefix ? `${prefix}\\${current.name}` : current.name;
+    paths.push(here);
+    for (const child of current.children ?? []) walk(child, here);
   };
   if (node?.name) walk(node, "");
-  return out;
+  return paths;
 }
 
 function mergePaths(first: PathOption[], rest: string[]): PathOption[] {
   const seen = new Set(first.map((o) => o.path.toLowerCase()));
-  const out = [...first];
+  const merged = [...first];
   for (const path of rest) {
-    if (out.length >= MAX_PATHS) break;
+    if (merged.length >= MAX_PATHS) break;
     if (seen.has(path.toLowerCase())) continue;
     seen.add(path.toLowerCase());
-    out.push({ path });
+    merged.push({ path });
   }
-  return out;
+  return merged;
 }
 
 const soft = <T>(p: Promise<T>, fallback: T): Promise<T> =>
@@ -132,9 +132,9 @@ const SYSTEM_SET = new Set([
 ]);
 
 /** An identity arrives as an object; the field takes its unique name. */
-function templateValue(v: unknown): unknown {
-  if (v == null || typeof v !== "object") return v;
-  const unique = (v as { uniqueName?: unknown }).uniqueName;
+function templateValue(value: unknown): unknown {
+  if (value == null || typeof value !== "object") return value;
+  const unique = (value as { uniqueName?: unknown }).uniqueName;
   return typeof unique === "string" ? unique : undefined;
 }
 
@@ -160,21 +160,21 @@ export function projectLayout(
   const body: string[] = [];
   const groups: FormGroup[] = [];
 
-  const take = (c: AdoLayoutControl): string | null => {
-    if (c.visible === false) return null;
-    const inputs = c.contribution?.inputs ?? {};
+  const take = (control: AdoLayoutControl): string | null => {
+    if (control.visible === false) return null;
+    const inputs = control.contribution?.inputs ?? {};
     const ref =
-      c.isContribution && typeof inputs.FieldName === "string"
+      control.isContribution && typeof inputs.FieldName === "string"
         ? inputs.FieldName
-        : (c.id ?? "");
+        : (control.id ?? "");
     const spec = specs.get(ref);
     if (!spec || spec.read_only || placed.has(ref)) return null;
     placed.add(ref);
-    const label = cleanLabel(c.label);
+    const label = cleanLabel(control.label);
     if (label && label !== spec.name) labels[ref] = label;
     if (
-      c.isContribution &&
-      /multivalue/i.test(c.contribution?.contributionId ?? "")
+      control.isContribution &&
+      /multivalue/i.test(control.contribution?.contributionId ?? "")
     )
       widgets[ref] = {
         kind: "multi",
@@ -189,8 +189,10 @@ export function projectLayout(
 
   const header: string[] = [];
   for (const ref of HEADER) {
-    const c = layout.systemControls?.find((x) => x.id === ref) ?? { id: ref };
-    const taken = take(c);
+    const control = layout.systemControls?.find((x) => x.id === ref) ?? {
+      id: ref,
+    };
+    const taken = take(control);
     if (taken) header.push(taken);
   }
   if (header.length) groups.push({ label: null, fields: header });
@@ -198,17 +200,17 @@ export function projectLayout(
   for (const page of layout.pages ?? []) {
     if (page.pageType !== "custom" || page.visible === false) continue;
     for (const section of page.sections ?? [])
-      for (const g of section.groups ?? []) {
-        if (g.visible === false || g.isContribution) continue;
+      for (const group of section.groups ?? []) {
+        if (group.visible === false || group.isContribution) continue;
         const here: string[] = [];
-        for (const c of g.controls ?? []) {
-          const ref = take(c);
+        for (const control of group.controls ?? []) {
+          const ref = take(control);
           if (!ref) continue;
           if (specs.get(ref)?.type === "html") body.push(ref);
           else here.push(ref);
         }
         if (here.length)
-          groups.push({ label: cleanLabel(g.label) ?? null, fields: here });
+          groups.push({ label: cleanLabel(group.label) ?? null, fields: here });
       }
   }
   return { layout: { body, groups }, labels, widgets };
@@ -221,13 +223,13 @@ export function projectLayout(
 function suggestionFields(
   fields: readonly FieldSpec[],
 ): Record<string, FieldWidget> {
-  const out: Record<string, FieldWidget> = {};
-  for (const f of fields) {
-    const values = (f.allowed_values ?? []).map(String);
+  const widgets: Record<string, FieldWidget> = {};
+  for (const field of fields) {
+    const values = (field.allowed_values ?? []).map(String);
     if (values.length && values.every((v) => v === "<None>"))
-      out[f.reference_name] = { kind: "suggest", values: [] };
+      widgets[field.reference_name] = { kind: "suggest", values: [] };
   }
-  return out;
+  return widgets;
 }
 
 async function readLayout(
@@ -248,10 +250,10 @@ async function readLayout(
 }
 
 async function whoAmI(client: AdoClient): Promise<PersonOption | null> {
-  const u = (await client.getConnectionData()).authenticatedUser;
-  const email = u?.properties?.Account?.$value;
+  const user = (await client.getConnectionData()).authenticatedUser;
+  const email = user?.properties?.Account?.$value;
   return email
-    ? { name: u?.providerDisplayName || email, unique_name: email }
+    ? { name: user?.providerDisplayName || email, unique_name: email }
     : null;
 }
 
@@ -269,12 +271,13 @@ async function projectPeople(
     teams.map((t) => soft(client.listTeamMembers(project, t.name), [])),
   );
   const byName = new Map<string, PersonOption>();
-  for (const m of lists.flat()) {
-    const i = m.identity;
-    if (!i?.uniqueName || i.isContainer || i.inactive) continue;
-    byName.set(i.uniqueName.toLowerCase(), {
-      name: i.displayName || i.uniqueName,
-      unique_name: i.uniqueName,
+  for (const member of lists.flat()) {
+    const identity = member.identity;
+    if (!identity?.uniqueName || identity.isContainer || identity.inactive)
+      continue;
+    byName.set(identity.uniqueName.toLowerCase(), {
+      name: identity.displayName || identity.uniqueName,
+      unique_name: identity.uniqueName,
     });
   }
   if (me) byName.delete(me.unique_name.toLowerCase());
@@ -352,17 +355,18 @@ export async function composerForm(
   const put = (ref: string, value: unknown, origin: PrefillOrigin) => {
     if (value == null || value === "") return;
     // Process defaults for booleans arrive as "0"/"1".
-    const v =
+    const coerced =
       specs.get(ref)?.type === "boolean" && typeof value === "string"
         ? value === "1" || value.toLowerCase() === "true"
         : value;
-    prefill[ref] = { value: v, origin };
+    prefill[ref] = { value: coerced, origin };
   };
   // The new-item template is the process's rules evaluated, so it covers
   // defaults that depend on other fields; a field's own default fills in where
   // the template could not be read.
-  for (const f of schema.fields)
-    if (!f.read_only) put(f.reference_name, f.default_value, "process");
+  for (const field of schema.fields)
+    if (!field.read_only)
+      put(field.reference_name, field.default_value, "process");
   for (const [ref, raw] of Object.entries(fresh?.fields ?? {})) {
     const spec = specs.get(ref);
     if (!spec || spec.read_only || SYSTEM_SET.has(ref)) continue;
@@ -411,9 +415,9 @@ export async function templateValues(
   team: string,
   id: string,
 ): Promise<Record<string, unknown>> {
-  const t = await client.getTemplate(project, team, id);
+  const template = await client.getTemplate(project, team, id);
   return Object.fromEntries(
-    Object.entries(t.fields ?? {}).filter(
+    Object.entries(template.fields ?? {}).filter(
       ([k, v]) => !SYSTEM_SET.has(k) && v != null && typeof v !== "object",
     ),
   );

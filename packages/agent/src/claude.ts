@@ -74,19 +74,19 @@ export function explainFailure(raw: string): {
  * source is stripped before the caller's own is set.
  */
 export function claudeEnv(
-  cfg: Pick<AgentConfig, "agentAuth" | "configDir">,
+  config: Pick<AgentConfig, "agentAuth" | "configDir">,
 ): Record<string, string> {
   const env: Record<string, string> = {};
-  for (const [k, v] of Object.entries(process.env))
-    if (typeof v === "string") env[k] = v;
-  for (const k of OUTRANKING_CREDENTIAL_VARS) delete env[k];
+  for (const [name, value] of Object.entries(process.env))
+    if (typeof value === "string") env[name] = value;
+  for (const name of OUTRANKING_CREDENTIAL_VARS) delete env[name];
 
-  if (cfg.agentAuth?.kind === "anthropic_api_key")
-    env.ANTHROPIC_API_KEY = cfg.agentAuth.value;
-  else if (cfg.agentAuth?.kind === "anthropic_oauth")
-    env.CLAUDE_CODE_OAUTH_TOKEN = cfg.agentAuth.value;
+  if (config.agentAuth?.kind === "anthropic_api_key")
+    env.ANTHROPIC_API_KEY = config.agentAuth.value;
+  else if (config.agentAuth?.kind === "anthropic_oauth")
+    env.CLAUDE_CODE_OAUTH_TOKEN = config.agentAuth.value;
 
-  if (cfg.configDir) env.CLAUDE_CONFIG_DIR = cfg.configDir;
+  if (config.configDir) env.CLAUDE_CONFIG_DIR = config.configDir;
   env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = "1";
   // A subscription token with the right scope would otherwise attach the
   // caller's personal claude.ai connectors to the turn.
@@ -109,17 +109,17 @@ export const BUILTIN_TOOLS = ["ToolSearch"];
  * picked up from disk.
  */
 export function claudeOptions(
-  cfg: AgentConfig,
+  config: AgentConfig,
   opts: { resume?: string },
   abortController: AbortController,
   canUseTool: CanUseTool,
 ): Options {
   return {
     abortController,
-    model: effectiveModel(cfg),
-    ...(cfg.effort ? { effort: cfg.effort } : {}),
-    cwd: cfg.cwd,
-    systemPrompt: cfg.systemPrompt,
+    model: effectiveModel(config),
+    ...(config.effort ? { effort: config.effort } : {}),
+    cwd: config.cwd,
+    systemPrompt: config.systemPrompt,
     settingSources: [],
     strictMcpConfig: true,
     tools: BUILTIN_TOOLS,
@@ -130,15 +130,15 @@ export function claudeOptions(
     mcpServers: {
       [MCP_SERVER]: {
         type: "stdio",
-        command: cfg.mcpCommand,
-        args: cfg.mcpArgs,
-        env: cfg.mcpEnv,
+        command: config.mcpCommand,
+        args: config.mcpArgs,
+        env: config.mcpEnv,
       },
     },
     canUseTool,
     includePartialMessages: false,
     ...(opts.resume ? { resume: opts.resume } : {}),
-    env: claudeEnv(cfg),
+    env: claudeEnv(config),
   };
 }
 
@@ -169,11 +169,11 @@ export class ClaudeTurn extends TurnBase {
 
   constructor(
     prompt: string,
-    cfg: AgentConfig,
+    config: AgentConfig,
     opts: { resume?: string } = {},
   ) {
     super();
-    void this.pump(prompt, cfg, opts);
+    void this.pump(prompt, config, opts);
   }
 
   protected onAbort(): void {
@@ -182,41 +182,46 @@ export class ClaudeTurn extends TurnBase {
 
   private async pump(
     prompt: string,
-    cfg: AgentConfig,
+    config: AgentConfig,
     opts: { resume?: string },
   ): Promise<void> {
     const options = claudeOptions(
-      cfg,
+      config,
       opts,
       this.controller,
       async (toolName, input, { toolUseID }) => {
-        const res = await claudePermission(
+        const permission = await claudePermission(
           toolName,
           input,
           toolUseID,
           this.requestApproval,
-          cfg.autoApprove,
+          config.autoApprove,
         );
         // A read is announced from its assistant block. A write is announced
         // here, once allowed, so the UI shows it running.
         const { cls, base } = classifyCall(toolName, input);
-        if (res.behavior === "allow" && cls === "write")
-          this.q.push({ type: "tool_use", tool: base, input, id: toolUseID });
-        return res;
+        if (permission.behavior === "allow" && cls === "write")
+          this.queue.push({
+            type: "tool_use",
+            tool: base,
+            input,
+            id: toolUseID,
+          });
+        return permission;
       },
     );
 
     const pending = new Map<string, string>();
     try {
-      for await (const msg of query({ prompt, options })) {
-        if (msg.type === "assistant") {
-          for (const block of msg.message.content as ContentBlock[]) {
+      for await (const sdkMessage of query({ prompt, options })) {
+        if (sdkMessage.type === "assistant") {
+          for (const block of sdkMessage.message.content as ContentBlock[]) {
             if (block.type === "text" && block.text) {
-              this.q.push({ type: "text", text: block.text });
+              this.queue.push({ type: "text", text: block.text });
             } else if (block.type === "tool_use") {
               const { cls, base } = classifyCall(block.name ?? "", block.input);
               if (cls === "read") {
-                this.q.push({
+                this.queue.push({
                   type: "tool_use",
                   tool: base,
                   input: block.input,
@@ -226,9 +231,9 @@ export class ClaudeTurn extends TurnBase {
               if (block.id) pending.set(block.id, base);
             }
           }
-        } else if (msg.type === "user") {
-          const content = (msg as { message?: { content?: unknown } }).message
-            ?.content;
+        } else if (sdkMessage.type === "user") {
+          const content = (sdkMessage as { message?: { content?: unknown } })
+            .message?.content;
           if (Array.isArray(content))
             for (const block of content as ContentBlock[]) {
               if (block.type !== "tool_result") continue;
@@ -236,35 +241,35 @@ export class ClaudeTurn extends TurnBase {
               const tool = pending.get(id);
               if (!tool) continue;
               pending.delete(id);
-              this.q.push({
+              this.queue.push({
                 type: "tool_result",
                 tool,
                 id,
                 result: (block as { content?: unknown }).content,
               });
             }
-        } else if (msg.type === "result") {
-          const r = msg as {
+        } else if (sdkMessage.type === "result") {
+          const resultMessage = sdkMessage as {
             result?: string;
             total_cost_usd?: number;
             session_id: string;
             usage?: { input_tokens?: number; output_tokens?: number };
           };
-          this.q.push({
+          this.queue.push({
             type: "result",
-            result: r.result ?? "",
-            costUsd: r.total_cost_usd ?? 0,
-            sessionId: r.session_id,
+            result: resultMessage.result ?? "",
+            costUsd: resultMessage.total_cost_usd ?? 0,
+            sessionId: resultMessage.session_id,
             usage: {
-              inputTokens: r.usage?.input_tokens ?? null,
-              outputTokens: r.usage?.output_tokens ?? null,
+              inputTokens: resultMessage.usage?.input_tokens ?? null,
+              outputTokens: resultMessage.usage?.output_tokens ?? null,
             },
           });
         }
       }
     } catch (e) {
       const raw = e instanceof Error ? e.message : String(e);
-      this.q.push({ type: "error", ...explainFailure(raw) });
+      this.queue.push({ type: "error", ...explainFailure(raw) });
     } finally {
       this.finish();
     }

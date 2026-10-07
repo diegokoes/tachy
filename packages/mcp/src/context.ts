@@ -43,10 +43,10 @@ export function capTurns<T extends { text: string }>(
 ): { turns: T[]; turns_truncated?: { shown: number; of: number } } {
   let used = 0;
   const kept: T[] = [];
-  for (const t of turns) {
-    if (used + t.text.length > maxChars) continue;
-    used += t.text.length;
-    kept.push(t);
+  for (const turn of turns) {
+    if (used + turn.text.length > maxChars) continue;
+    used += turn.text.length;
+    kept.push(turn);
   }
   return kept.length === turns.length
     ? { turns: kept }
@@ -89,12 +89,12 @@ export async function withCustomerProfile(
   if (!customerId) return {};
   const profile = await getCustomerProfile(customerId);
   if (!profile) return {};
-  const has =
+  const hasContent =
     profile.facts.length ||
     profile.components.length ||
     profile.repos.length ||
     profile.projects.length;
-  if (!has) return {};
+  if (!hasContent) return {};
   return {
     customer_profile: {
       slug: profile.slug,
@@ -226,7 +226,7 @@ export async function withLinkedAdoItems(
   const wanted = refs.slice(0, MAX_LINKED_ITEMS);
   const { conn, source: src } = await resolveSource(ado.slug as string);
   const redact = resolveRedactionPolicy(conn.config).enabled;
-  const items: Record<string, unknown>[] = [];
+  const linkedItems: Record<string, unknown>[] = [];
 
   for (const externalId of wanted) {
     try {
@@ -241,7 +241,7 @@ export async function withLinkedAdoItems(
         : linkedRaw;
       const fields = (forLlm.raw as { fields?: Record<string, unknown> })
         ?.fields;
-      items.push({
+      linkedItems.push({
         external_id: externalId,
         work_item_id: stored.id,
         title: forLlm.title,
@@ -257,7 +257,7 @@ export async function withLinkedAdoItems(
         message_count: forLlm.messages.length,
       });
     } catch (e) {
-      items.push({
+      linkedItems.push({
         external_id: externalId,
         error: e instanceof Error ? e.message : String(e),
       });
@@ -271,7 +271,7 @@ export async function withLinkedAdoItems(
 
   return {
     linked_ado_refs: refs,
-    linked_items: items,
+    linked_items: linkedItems,
     ...(refs.length > wanted.length
       ? {
           linked_items_note: `${refs.length} ids referenced; the first ${wanted.length} were read. Fetch the rest with fetch_work_item if they matter.`,
@@ -306,10 +306,10 @@ export async function componentIntoFilter(
   let componentId: string | undefined;
   let componentTags: string[] | undefined;
   if (component && productId) {
-    const f = await resolveComponentFilter(productId, component);
-    componentId = f.componentId;
-    componentTags = f.componentTags;
-    if (f.extraTags) tagFilter.push(...f.extraTags);
+    const filter = await resolveComponentFilter(productId, component);
+    componentId = filter.componentId;
+    componentTags = filter.componentTags;
+    if (filter.extraTags) tagFilter.push(...filter.extraTags);
   }
   return {
     tags: tagFilter.length ? tagFilter : undefined,
@@ -325,18 +325,19 @@ export async function loadContextSources(input: {
 }) {
   const sources: { source: string; text: string; pages?: number }[] = [];
   if (input.text?.trim()) sources.push({ source: "inline", text: input.text });
-  for (const p of input.paths ?? []) {
-    const { text, pages } = await extractSource(p);
-    sources.push({ source: p, text, ...(pages != null ? { pages } : {}) });
+  for (const path of input.paths ?? []) {
+    const { text, pages } = await extractSource(path);
+    sources.push({ source: path, text, ...(pages != null ? { pages } : {}) });
   }
-  for (const u of input.urls ?? []) {
-    const res = await fetchUntrustedUrl("ingest_context", u);
-    if (!res.ok) throw badInput(`Failed to fetch ${u}: HTTP ${res.status}`);
-    const raw = await res.text();
-    const ct = res.headers.get("content-type") ?? "";
+  for (const url of input.urls ?? []) {
+    const response = await fetchUntrustedUrl("ingest_context", url);
+    if (!response.ok)
+      throw badInput(`Failed to fetch ${url}: HTTP ${response.status}`);
+    const raw = await response.text();
+    const contentType = response.headers.get("content-type") ?? "";
     sources.push({
-      source: u,
-      text: ct.includes("html") ? stripHtml(raw) : raw,
+      source: url,
+      text: contentType.includes("html") ? stripHtml(raw) : raw,
     });
   }
   return sources;

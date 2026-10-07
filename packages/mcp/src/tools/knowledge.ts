@@ -70,7 +70,7 @@ tool(
       product_slug,
       team_slug,
     });
-    const rows = await searchKnowledge(query, {
+    const hits = await searchKnowledge(query, {
       productId,
       teamId,
       includeUnscoped: true,
@@ -83,7 +83,7 @@ tool(
       fixedVersion: fixed_version,
       limit,
     });
-    return searchOut(rows, "search_knowledge");
+    return searchOut(hits, "search_knowledge");
   },
 );
 
@@ -192,39 +192,39 @@ tool(
       structured: structuredField,
     },
   },
-  async (a) => {
-    const resolved = await resolveScopeIds(a);
-    const productId = a.product_id ?? resolved.productId;
-    const teamId = a.team_id ?? resolved.teamId;
+  async (args) => {
+    const resolved = await resolveScopeIds(args);
+    const productId = args.product_id ?? resolved.productId;
+    const teamId = args.team_id ?? resolved.teamId;
     await requireCanEdit(
-      await newEntryScope({ productId, teamId, workItemId: a.work_item_id }),
+      await newEntryScope({ productId, teamId, workItemId: args.work_item_id }),
     );
-    const row = await saveKnowledgeEntry({
-      workItemId: a.work_item_id,
+    const saved = await saveKnowledgeEntry({
+      workItemId: args.work_item_id,
       productId,
       teamId,
-      customerSlug: a.customer_slug,
-      unit: a.unit,
+      customerSlug: args.customer_slug,
+      unit: args.unit,
       createdById: await resolveCurrentUserId(),
       actor: await mcpActor(),
-      status: a.status ?? "approved",
-      issueSummary: a.issue_summary,
-      symptoms: a.symptoms,
-      signals: a.signals,
-      rootCause: a.root_cause,
-      resolution: a.resolution,
-      resolutionPattern: a.resolution_pattern,
-      component: a.component,
-      confidence: a.confidence,
-      tags: a.tags,
-      cloud: a.cloud,
-      resolutionClarity: a.resolution_clarity,
-      hiddenFix: a.hidden_fix,
-      affectedVersion: a.affected_version,
-      fixedVersion: a.fixed_version,
-      structured: a.structured,
+      status: args.status ?? "approved",
+      issueSummary: args.issue_summary,
+      symptoms: args.symptoms,
+      signals: args.signals,
+      rootCause: args.root_cause,
+      resolution: args.resolution,
+      resolutionPattern: args.resolution_pattern,
+      component: args.component,
+      confidence: args.confidence,
+      tags: args.tags,
+      cloud: args.cloud,
+      resolutionClarity: args.resolution_clarity,
+      hiddenFix: args.hidden_fix,
+      affectedVersion: args.affected_version,
+      fixedVersion: args.fixed_version,
+      structured: args.structured,
     });
-    return out({ saved: true, id: row.id, status: row.status });
+    return out({ saved: true, id: saved.id, status: saved.status });
   },
 );
 
@@ -246,15 +246,15 @@ tool(
         ),
     },
   },
-  async (a) => {
-    await requireCanEdit(await knowledgeEntryScope(a.knowledge_entry_id));
+  async (args) => {
+    await requireCanEdit(await knowledgeEntryScope(args.knowledge_entry_id));
     const row = await addFeedback({
-      knowledgeEntryId: a.knowledge_entry_id,
+      knowledgeEntryId: args.knowledge_entry_id,
       userId: await resolveCurrentUserId(),
-      kind: a.kind,
-      rating: a.rating,
-      comment: a.comment,
-      patch: a.patch,
+      kind: args.kind,
+      rating: args.rating,
+      comment: args.comment,
+      patch: args.patch,
     });
     return out({ added: true, id: row.id, kind: row.kind });
   },
@@ -307,33 +307,37 @@ tool(
       expected_version: z.number().int().optional(),
     },
   },
-  async (a) => {
-    await requireCanEdit(await knowledgeEntryScope(a.id));
+  async (args) => {
+    await requireCanEdit(await knowledgeEntryScope(args.id));
     const patch: KnowledgeUpdateInput = {};
-    if (a.status !== undefined) patch.status = a.status;
-    if (a.issue_summary !== undefined) patch.issueSummary = a.issue_summary;
-    if (a.root_cause !== undefined) patch.rootCause = a.root_cause;
-    if (a.resolution !== undefined) patch.resolution = a.resolution;
-    if (a.resolution_pattern !== undefined)
-      patch.resolutionPattern = a.resolution_pattern;
-    if (a.symptoms !== undefined) patch.symptoms = a.symptoms;
-    if (a.signals !== undefined) patch.signals = a.signals;
-    if (a.tags !== undefined) patch.tags = a.tags;
-    if (a.component !== undefined) patch.component = a.component;
-    if (a.customer_slug !== undefined) patch.customerSlug = a.customer_slug;
-    if (a.superseded_by !== undefined) patch.supersededBy = a.superseded_by;
-    if (a.confidence !== undefined) patch.confidence = a.confidence;
-    if (a.cloud !== undefined) patch.cloud = a.cloud;
-    if (a.resolution_clarity !== undefined)
-      patch.resolutionClarity = a.resolution_clarity;
-    if (a.hidden_fix !== undefined) patch.hiddenFix = a.hidden_fix;
-    if (a.affected_version !== undefined)
-      patch.affectedVersion = a.affected_version;
-    if (a.fixed_version !== undefined) patch.fixedVersion = a.fixed_version;
-    if (a.structured !== undefined) patch.structured = a.structured;
-    if (a.expected_version !== undefined)
-      patch.expectedVersion = a.expected_version;
-    const row = await updateKnowledgeEntry(a.id, patch, await mcpActor());
+    if (args.status !== undefined) patch.status = args.status;
+    if (args.issue_summary !== undefined)
+      patch.issueSummary = args.issue_summary;
+    if (args.root_cause !== undefined) patch.rootCause = args.root_cause;
+    if (args.resolution !== undefined) patch.resolution = args.resolution;
+    if (args.resolution_pattern !== undefined)
+      patch.resolutionPattern = args.resolution_pattern;
+    if (args.symptoms !== undefined) patch.symptoms = args.symptoms;
+    if (args.signals !== undefined) patch.signals = args.signals;
+    if (args.tags !== undefined) patch.tags = args.tags;
+    if (args.component !== undefined) patch.component = args.component;
+    if (args.customer_slug !== undefined)
+      patch.customerSlug = args.customer_slug;
+    if (args.superseded_by !== undefined)
+      patch.supersededBy = args.superseded_by;
+    if (args.confidence !== undefined) patch.confidence = args.confidence;
+    if (args.cloud !== undefined) patch.cloud = args.cloud;
+    if (args.resolution_clarity !== undefined)
+      patch.resolutionClarity = args.resolution_clarity;
+    if (args.hidden_fix !== undefined) patch.hiddenFix = args.hidden_fix;
+    if (args.affected_version !== undefined)
+      patch.affectedVersion = args.affected_version;
+    if (args.fixed_version !== undefined)
+      patch.fixedVersion = args.fixed_version;
+    if (args.structured !== undefined) patch.structured = args.structured;
+    if (args.expected_version !== undefined)
+      patch.expectedVersion = args.expected_version;
+    const row = await updateKnowledgeEntry(args.id, patch, await mcpActor());
     return out({
       updated: true,
       id: row.id,

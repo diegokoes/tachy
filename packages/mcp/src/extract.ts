@@ -1,10 +1,10 @@
 import { extractText } from "unpdf";
 import { readUpload } from "@tachy/core/chat";
 
-export function isPdf(path: string, buf: Buffer): boolean {
+export function isPdf(path: string, bytes: Buffer): boolean {
   return (
     path.toLowerCase().endsWith(".pdf") ||
-    buf.subarray(0, 5).toString("latin1") === "%PDF-"
+    bytes.subarray(0, 5).toString("latin1") === "%PDF-"
   );
 }
 
@@ -26,15 +26,15 @@ function normalizeText(text: string): string {
  * path on the host, and inside a turn only the turn's own user's.
  */
 export async function extractSource(ref: string): Promise<ExtractedSource> {
-  const { filename, bytes: buf } = await readUpload(
+  const { filename, bytes } = await readUpload(
     ref,
     process.env.TACHY_UPLOAD_OWNER || undefined,
   );
-  if (isPdf(filename, buf)) {
-    const { totalPages, text } = await extractText(new Uint8Array(buf), {
+  if (isPdf(filename, bytes)) {
+    const { totalPages, text } = await extractText(new Uint8Array(bytes), {
       mergePages: true,
     });
     return { text: normalizeText(text), pages: totalPages };
   }
-  return { text: buf.toString("utf8") };
+  return { text: bytes.toString("utf8") };
 }

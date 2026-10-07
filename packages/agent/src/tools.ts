@@ -110,12 +110,12 @@ export function classifyCall(
   toolName: string,
   input: unknown,
 ): { cls: ToolClass; base: string } {
-  const c = classify(toolName);
-  const needsReview = CONDITIONAL_WRITES[c.base];
-  if (c.cls === "denied" || !needsReview) return c;
+  const classified = classify(toolName);
+  const needsReview = CONDITIONAL_WRITES[classified.base];
+  if (classified.cls === "denied" || !needsReview) return classified;
   const writes =
     typeof input === "object" &&
     input !== null &&
     needsReview(input as Record<string, unknown>);
-  return { cls: writes ? "write" : "read", base: c.base };
+  return { cls: writes ? "write" : "read", base: classified.base };
 }

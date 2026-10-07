@@ -30,7 +30,7 @@ function count(name: string, writes: boolean, ok: boolean, misuse: boolean) {
 
 export async function runTool(
   name: string,
-  cb: (args: unknown, extra: unknown) => unknown,
+  handler: (args: unknown, extra: unknown) => unknown,
   args: unknown,
   extra: unknown,
   /** Whether the tool changes anything - its readOnlyHint, inverted. */
@@ -38,10 +38,10 @@ export async function runTool(
 ) {
   const started = Date.now();
   try {
-    const res = await cb(args, extra);
+    const result = await handler(args, extra);
     log("info", "mcp_tool", { tool: name, ok: true, ms: Date.now() - started });
     count(name, writes, true, false);
-    return res;
+    return result;
   } catch (err) {
     count(
       name,
@@ -75,14 +75,14 @@ const CACHES_ONLY = new Set(["fetch_work_item", "get_context"]);
 export function tool<I extends ZodRawShape>(
   name: string,
   config: ToolConfig<I>,
-  cb: ToolCallback<I>,
+  handler: ToolCallback<I>,
 ): void {
   const writes =
     config.annotations?.readOnlyHint !== true && !CACHES_ONLY.has(name);
   const wrapped = ((args: unknown, extra: unknown) =>
     runTool(
       name,
-      cb as (a: unknown, e: unknown) => unknown,
+      handler as (args: unknown, extra: unknown) => unknown,
       args,
       extra,
       writes,

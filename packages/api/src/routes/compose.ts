@@ -159,17 +159,17 @@ const asComposerProject = (p: SourceProjectRow): ComposerProject => ({
 
 function toNewItem(
   project: SourceProjectRow,
-  d: Draft,
+  draft: Draft,
   images: PastedImage[] = [],
 ): NewWorkItem {
   return {
     project: project.external_key,
-    type: d.type,
-    title: d.title,
-    fields: d.fields,
-    tags: d.tags,
-    parentId: d.parent_id,
-    relatedIds: d.related_ids,
+    type: draft.type,
+    title: draft.title,
+    fields: draft.fields,
+    tags: draft.tags,
+    parentId: draft.parent_id,
+    relatedIds: draft.related_ids,
     images,
   };
 }

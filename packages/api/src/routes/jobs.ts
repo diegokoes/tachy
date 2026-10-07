@@ -88,17 +88,19 @@ export const jobs = new Hono()
     `;
     const byDef = new Map(last.map((r) => [r.definition_id as string, r]));
     return c.json(
-      defs.map((d) => {
+      defs.map((definition) => {
         let next: string | null = null;
-        if (d.enabled && d.schedule)
+        if (definition.enabled && definition.schedule)
           try {
-            next = previewSchedule(d.schedule, d.timezone, 1)[0] ?? null;
+            next =
+              previewSchedule(definition.schedule, definition.timezone, 1)[0] ??
+              null;
           } catch {}
         return {
-          ...d,
-          subject: presentRun(d.kind, d.params, null).subject,
+          ...definition,
+          subject: presentRun(definition.kind, definition.params, null).subject,
           next_run: next,
-          last_run: byDef.get(d.id) ?? null,
+          last_run: byDef.get(definition.id) ?? null,
         };
       }),
     );
@@ -134,12 +136,12 @@ export const jobs = new Hono()
   )
 
   .post("/definitions/:id/run", async (c) => {
-    const d = await getJobDefinition(c.req.param("id"));
+    const definition = await getJobDefinition(c.req.param("id"));
     const id = await enqueueRun({
-      kind: d.kind,
-      params: d.params,
+      kind: definition.kind,
+      params: definition.params,
       trigger: "manual",
-      definitionId: d.id,
+      definitionId: definition.id,
       requestedBy: await callerUserId(c),
     });
     return c.json({ run_id: id }, 202);
@@ -165,18 +167,18 @@ export const jobs = new Hono()
       }),
     ),
     async (c) => {
-      const q = c.req.valid("query");
+      const query = c.req.valid("query");
       return c.json(
         await listJobRuns({
-          definitionId: q.definition_id,
-          parentId: q.parent_id,
-          status: q.status,
-          kind: q.kind,
-          queue: q.queue,
-          trigger: q.trigger,
-          active: q.active,
-          before: q.before,
-          limit: q.limit,
+          definitionId: query.definition_id,
+          parentId: query.parent_id,
+          status: query.status,
+          kind: query.kind,
+          queue: query.queue,
+          trigger: query.trigger,
+          active: query.active,
+          before: query.before,
+          limit: query.limit,
         }),
       );
     },

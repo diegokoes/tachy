@@ -287,15 +287,15 @@ export const catalog = new Hono()
     async (c) => {
       const productId = await getProductIdBySlug(c.req.param("slug"));
       await assertScopeEditor(c, { productId });
-      const b = c.req.valid("json");
+      const body = c.req.valid("json");
       // Moving a product needs rights on the team it lands in, too.
-      if (b.team_slug) await assertTeamAdmin(c, b.team_slug);
+      if (body.team_slug) await assertTeamAdmin(c, body.team_slug);
       return c.json(
         await updateProduct(productId, {
-          name: b.name,
-          aliases: b.aliases,
-          slug: b.slug,
-          teamSlug: b.team_slug,
+          name: body.name,
+          aliases: body.aliases,
+          slug: body.slug,
+          teamSlug: body.team_slug,
         }),
       );
     },

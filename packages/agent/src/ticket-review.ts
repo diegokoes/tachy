@@ -19,8 +19,8 @@ export interface ReviewRequest {
 }
 
 const MAX_FINDINGS = 8;
-const MAX_FIELD = 6000;
-const MAX_CONTEXT = 6000;
+const MAX_FIELD_CHARS = 6000;
+const MAX_CONTEXT_CHARS = 6000;
 
 const SYSTEM = `You are the developer who will pick this Azure DevOps work item up tomorrow morning, with no chance to ask the person who wrote it. Read it the way that developer would, and point at what they would have to come back and ask.
 
@@ -50,42 +50,47 @@ const CHECKLISTS = {
 };
 
 export function checklistFor(type: string): string {
-  const t = type.toLowerCase();
-  if (/bug|defect|incident|issue|problem/.test(t)) return CHECKLISTS.bug;
-  if (/story|feature|requirement|backlog|epic/.test(t)) return CHECKLISTS.story;
-  if (/change/.test(t)) return CHECKLISTS.change;
-  if (/task/.test(t)) return CHECKLISTS.task;
+  const lowered = type.toLowerCase();
+  if (/bug|defect|incident|issue|problem/.test(lowered)) return CHECKLISTS.bug;
+  if (/story|feature|requirement|backlog|epic/.test(lowered))
+    return CHECKLISTS.story;
+  if (/change/.test(lowered)) return CHECKLISTS.change;
+  if (/task/.test(lowered)) return CHECKLISTS.task;
   return CHECKLISTS.generic;
 }
 
-const clip = (s: string, n: number) =>
-  s.length > n ? `${s.slice(0, n)}\n[… cut at ${n} characters]` : s;
+const clip = (text: string, maxChars: number) =>
+  text.length > maxChars
+    ? `${text.slice(0, maxChars)}\n[… cut at ${maxChars} characters]`
+    : text;
 
 export function reviewPrompt(
-  r: ReviewRequest,
-  scrub: (s: string) => string = (s) => s,
+  request: ReviewRequest,
+  scrub: (text: string) => string = (s) => s,
 ): string {
   const parts = [
-    checklistFor(r.type),
-    ...(r.guidance?.trim()
-      ? [`The team that owns this project also asks: ${r.guidance.trim()}`]
+    checklistFor(request.type),
+    ...(request.guidance?.trim()
+      ? [
+          `The team that owns this project also asks: ${request.guidance.trim()}`,
+        ]
       : []),
-    `Work item type: ${r.type}`,
-    `[System.Title] ${scrub(r.title) || "(empty)"}`,
-    ...r.fields.map(
-      (f) => `[${f.ref}] ${f.name}:\n${scrub(clip(f.value, MAX_FIELD))}`,
+    `Work item type: ${request.type}`,
+    `[System.Title] ${scrub(request.title) || "(empty)"}`,
+    ...request.fields.map(
+      (f) => `[${f.ref}] ${f.name}:\n${scrub(clip(f.value, MAX_FIELD_CHARS))}`,
     ),
   ];
-  if (r.images)
+  if (request.images)
     parts.push(
-      `The author pasted ${r.images} image(s) you cannot see. Do not ask for screenshots.`,
+      `The author pasted ${request.images} image(s) you cannot see. Do not ask for screenshots.`,
     );
-  if (r.context.length)
+  if (request.context.length)
     parts.push(
       "Context items the author attached:",
-      ...r.context.map(
+      ...request.context.map(
         (c) =>
-          `--- ${c.source} #${c.external_id}: ${scrub(c.title)}\n${scrub(clip(c.text, MAX_CONTEXT))}`,
+          `--- ${c.source} #${c.external_id}: ${scrub(c.title)}\n${scrub(clip(c.text, MAX_CONTEXT_CHARS))}`,
       ),
     );
   return parts.join("\n\n");
@@ -102,22 +107,25 @@ export function parseTicketReview(
   const parsed = firstJsonObject(raw);
   const known = new Set(["System.Title", "general", ...knownFields]);
   const findings: ReviewFinding[] = [];
-  for (const f of Array.isArray(parsed?.findings) ? parsed.findings : []) {
-    if (!f || typeof f !== "object") continue;
-    const o = f as Record<string, unknown>;
-    const message = typeof o.message === "string" ? o.message.trim() : "";
+  for (const entry of Array.isArray(parsed?.findings) ? parsed.findings : []) {
+    if (!entry || typeof entry !== "object") continue;
+    const finding = entry as Record<string, unknown>;
+    const message =
+      typeof finding.message === "string" ? finding.message.trim() : "";
     if (!message) continue;
     const field =
-      typeof o.field === "string" && known.has(o.field) ? o.field : "general";
+      typeof finding.field === "string" && known.has(finding.field)
+        ? finding.field
+        : "general";
     const suggestion =
-      typeof o.suggestion === "string" && o.suggestion.trim()
-        ? o.suggestion.trim()
+      typeof finding.suggestion === "string" && finding.suggestion.trim()
+        ? finding.suggestion.trim()
         : undefined;
     findings.push({
       id: `f${findings.length + 1}`,
       field,
-      kind: KINDS.has(o.kind as ReviewFindingKind)
-        ? (o.kind as ReviewFindingKind)
+      kind: KINDS.has(finding.kind as ReviewFindingKind)
+        ? (finding.kind as ReviewFindingKind)
         : "improve",
       message,
       ...(suggestion ? { suggestion } : {}),
@@ -144,18 +152,22 @@ export function parseTicketReview(
 
 /** One-shot, on the caller's own model: this judgement is the feature. */
 export async function reviewTicket(
-  r: ReviewRequest,
+  request: ReviewRequest,
   ctx: ScopeContext,
   userId: string | null,
 ): Promise<TicketReview> {
   const text = await runAdvisory(
     {
       system: SYSTEM,
-      prompt: (scrub) => reviewPrompt(r, scrub),
+      prompt: (scrub) => reviewPrompt(request, scrub),
       tier: "caller",
       timeoutMs: 90_000,
       mode: "review",
-      meta: { review: "ado_ticket", type: r.type, context: r.context.length },
+      meta: {
+        review: "ado_ticket",
+        type: request.type,
+        context: request.context.length,
+      },
     },
     ctx,
     userId,
@@ -164,6 +176,6 @@ export async function reviewTicket(
     return { available: false, readiness: "almost", summary: "", findings: [] };
   return parseTicketReview(
     text,
-    r.fields.map((f) => f.ref),
+    request.fields.map((f) => f.ref),
   );
 }

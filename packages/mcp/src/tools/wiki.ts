@@ -36,13 +36,17 @@ tool(
     },
     annotations: { readOnlyHint: true },
   },
-  async (a) => {
-    const productId = await getProductIdBySlug(a.product_slug);
-    const sources = await draftSources(productId, a.component, a.limit ?? 40);
+  async (args) => {
+    const productId = await getProductIdBySlug(args.product_slug);
+    const sources = await draftSources(
+      productId,
+      args.component,
+      args.limit ?? 40,
+    );
     if (!sources.length)
       return out({
         sources: [],
-        note: `Nothing is recorded under '${a.component}' yet, so there is nothing to consolidate. Say so rather than writing an article from general knowledge.`,
+        note: `Nothing is recorded under '${args.component}' yet, so there is nothing to consolidate. Say so rather than writing an article from general knowledge.`,
       });
     return outScrubbed({
       sources,
@@ -59,9 +63,9 @@ tool(
     inputSchema: { product_slug: z.string().optional() },
     annotations: { readOnlyHint: true },
   },
-  async (a) => {
-    const productId = a.product_slug
-      ? await getProductIdBySlug(a.product_slug)
+  async (args) => {
+    const productId = args.product_slug
+      ? await getProductIdBySlug(args.product_slug)
       : null;
     return out(await wikiToc(productId));
   },
@@ -75,9 +79,9 @@ tool(
     inputSchema: { product_slug: z.string().optional() },
     annotations: { readOnlyHint: true },
   },
-  async (a) => {
-    const productId = a.product_slug
-      ? await getProductIdBySlug(a.product_slug)
+  async (args) => {
+    const productId = args.product_slug
+      ? await getProductIdBySlug(args.product_slug)
       : null;
     const gaps = await listWikiGaps(productId);
     return out({
@@ -128,20 +132,20 @@ tool(
         ),
     },
   },
-  async (a) => {
-    const productId = a.product_slug
-      ? await getProductIdBySlug(a.product_slug)
+  async (args) => {
+    const productId = args.product_slug
+      ? await getProductIdBySlug(args.product_slug)
       : null;
     await requireCanEdit(productId ? { productId } : {});
     return out(
       await addWikiCategory({
         productId,
-        slug: a.slug,
-        name: a.name,
-        parentSlug: a.parent ?? null,
-        description: a.description ?? null,
-        leadSlug: a.lead ?? null,
-        componentSlugs: a.components,
+        slug: args.slug,
+        name: args.name,
+        parentSlug: args.parent ?? null,
+        description: args.description ?? null,
+        leadSlug: args.lead ?? null,
+        componentSlugs: args.components,
       }),
     );
   },
@@ -158,8 +162,8 @@ tool(
         .describe("The product whose components seed the sections."),
     },
   },
-  async (a) => {
-    const productId = await getProductIdBySlug(a.product_slug);
+  async (args) => {
+    const productId = await getProductIdBySlug(args.product_slug);
     await requireCanEdit({ productId });
     const { created } = await seedSectionsFromComponents(productId);
     return out({
@@ -212,29 +216,31 @@ tool(
       doc_version: z.string().optional(),
     },
   },
-  async (a) => {
-    const productId = a.product_slug
-      ? await getProductIdBySlug(a.product_slug)
+  async (args) => {
+    const productId = args.product_slug
+      ? await getProductIdBySlug(args.product_slug)
       : null;
     await requireCanEdit(productId ? { productId } : {});
 
     // Only "no such article" takes the create branch. Any other failure
     // rethrows, or a transient one would insert a second row at the same slug.
-    const existing = await findArticle(productId, a.slug).catch((e) => {
+    const existing = await findArticle(productId, args.slug).catch((e) => {
       if (e instanceof AppError && e.code === "not_found") return null;
       throw e;
     });
     const actor = await mcpActor();
-    const row = existing
+    const saved = existing
       ? await updateReferenceDoc(
           existing.id as string,
           {
-            title: a.title,
-            body: a.body,
-            status: a.status ?? "draft",
-            ...(a.component !== undefined ? { component: a.component } : {}),
-            ...(a.doc_version !== undefined
-              ? { docVersion: a.doc_version }
+            title: args.title,
+            body: args.body,
+            status: args.status ?? "draft",
+            ...(args.component !== undefined
+              ? { component: args.component }
+              : {}),
+            ...(args.doc_version !== undefined
+              ? { docVersion: args.doc_version }
               : {}),
           },
           actor,
@@ -242,34 +248,34 @@ tool(
       : await saveReferenceDoc({
           productId,
           kind: "wiki",
-          slug: a.slug,
-          title: a.title,
-          body: a.body,
-          status: a.status ?? "draft",
-          component: a.component,
-          docVersion: a.doc_version,
+          slug: args.slug,
+          title: args.title,
+          body: args.body,
+          status: args.status ?? "draft",
+          component: args.component,
+          docVersion: args.doc_version,
           createdById: await resolveCurrentUserId(),
           actor,
         });
 
-    if (a.categories)
-      await setArticleCategories(productId, row.id, a.categories);
-    if (a.sources?.length)
+    if (args.categories)
+      await setArticleCategories(productId, saved.id, args.categories);
+    if (args.sources?.length)
       await setComposedFrom(
         sql,
-        row.id,
-        a.sources.map((s) =>
+        saved.id,
+        args.sources.map((s) =>
           s.kind === "entry" ? { entryId: s.id } : { docId: s.id },
         ),
       );
 
     return out({
       saved: true,
-      id: row.id,
-      slug: a.slug,
-      status: row.status,
+      id: saved.id,
+      slug: args.slug,
+      status: saved.status,
       updated: !!existing,
-      next: `The article is at /wiki/${a.product_slug ?? "general"}/${a.slug}. It is a ${row.status}; tell the user where it is rather than pasting it back.`,
+      next: `The article is at /wiki/${args.product_slug ?? "general"}/${args.slug}. It is a ${saved.status}; tell the user where it is rather than pasting it back.`,
     });
   },
 );

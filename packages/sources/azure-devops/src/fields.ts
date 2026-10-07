@@ -28,16 +28,18 @@ export function projectFields(
   accountFields: AdoField[] = [],
 ): FieldSpec[] {
   const byRef = new Map<string, AdoField>();
-  for (const f of accountFields)
-    if (f?.referenceName) byRef.set(f.referenceName, f);
+  for (const field of accountFields)
+    if (field?.referenceName) byRef.set(field.referenceName, field);
 
-  return typeFields.map((f) => {
-    const values = Array.isArray(f.allowedValues) ? f.allowedValues : [];
-    const account = byRef.get(f.referenceName);
+  return typeFields.map((field) => {
+    const values = Array.isArray(field.allowedValues)
+      ? field.allowedValues
+      : [];
+    const account = byRef.get(field.referenceName);
     return {
-      reference_name: f.referenceName,
-      name: f.name,
-      required: f.alwaysRequired === true,
+      reference_name: field.referenceName,
+      name: field.name,
+      required: field.alwaysRequired === true,
       ...(values.length
         ? {
             allowed_values: values.slice(0, MAX_ALLOWED_VALUES),
@@ -46,11 +48,13 @@ export function projectFields(
               : {}),
           }
         : {}),
-      ...(f.defaultValue != null ? { default_value: f.defaultValue } : {}),
+      ...(field.defaultValue != null
+        ? { default_value: field.defaultValue }
+        : {}),
       ...(account?.type ? { type: account.type as AdoFieldType } : {}),
       ...(account?.readOnly === true ? { read_only: true as const } : {}),
       ...(account?.isIdentity === true ? { is_identity: true as const } : {}),
-      ...(f.helpText ? { help_text: f.helpText } : {}),
+      ...(field.helpText ? { help_text: field.helpText } : {}),
     };
   });
 }

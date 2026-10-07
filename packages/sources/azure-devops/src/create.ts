@@ -12,12 +12,12 @@ export type {
 
 const ATTACHMENT_RE = /attachment:([A-Za-z0-9_-]+)/g;
 
-const HTML_RE =
+const HTML_TAG_RE =
   /<\/?(p|div|br|ul|ol|li|b|i|em|strong|a|span|h[1-6]|table|tr|td|img|pre|code|blockquote)\b/i;
 
 /** Plain text is escaped and line-broken, so ADO's HTML field shows it as typed. */
 export function asHtml(text: string): string {
-  return HTML_RE.test(text)
+  return HTML_TAG_RE.test(text)
     ? text
     : `<div>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>")}</div>`;
 }
@@ -25,9 +25,9 @@ export function asHtml(text: string): string {
 /** Keys the fields refer to, so an image the user deleted is not uploaded. */
 export function referencedKeys(fields: Record<string, unknown>): Set<string> {
   const keys = new Set<string>();
-  for (const v of Object.values(fields))
-    if (typeof v === "string")
-      for (const m of v.matchAll(ATTACHMENT_RE)) keys.add(m[1]);
+  for (const value of Object.values(fields))
+    if (typeof value === "string")
+      for (const match of value.matchAll(ATTACHMENT_RE)) keys.add(match[1]);
   return keys;
 }
 
@@ -157,9 +157,10 @@ export function explainAdoError(raw: string): TicketValidation {
     message = raw.replace(/^Azure DevOps \S+ \S+ -> \d+ /, "");
   }
   const fields = new Set<string>();
-  for (const m of message.matchAll(/field '([^']+)'/g)) fields.add(m[1]);
-  for (const m of message.matchAll(/for field ([^.'"]+?)\./g))
-    fields.add(m[1].trim());
+  for (const match of message.matchAll(/field '([^']+)'/g))
+    fields.add(match[1]);
+  for (const match of message.matchAll(/for field ([^.'"]+?)\./g))
+    fields.add(match[1].trim());
   return {
     ok: false,
     message,

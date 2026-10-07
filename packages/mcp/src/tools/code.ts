@@ -124,7 +124,7 @@ tool(
     const { productId } = await resolveScopeIds({ product_slug });
     if (component && !productId)
       throw badInput("component needs product_slug to resolve against");
-    const rows = await searchCode(query, {
+    const hits = await searchCode(query, {
       repoSlug: repo,
       productId,
       componentId:
@@ -140,10 +140,10 @@ tool(
     await recordRun({
       userId: await resolveCurrentUserId(),
       mode: "code",
-      meta: { query, repo: repo ?? null, hits: rows.length },
+      meta: { query, repo: repo ?? null, hits: hits.length },
     });
     return searchOut(
-      rows.map((r: any) => ({
+      hits.map((r: any) => ({
         repo: r.repo_slug,
         component: r.component_slug,
         customer: r.customer_slug,

@@ -136,7 +136,7 @@ export const overview = new Hono()
       listComponentTree(),
       knowledgeByComponent(),
     ]);
-    const by = new Map(filed.map((f) => [f.component_id, f]));
+    const filedByComponent = new Map(filed.map((f) => [f.component_id, f]));
     return c.json(
       tree.map((n) => ({
         id: n.id,
@@ -145,8 +145,8 @@ export const overview = new Hono()
         name: n.name,
         product_slug: n.product_slug,
         product_name: n.product_name,
-        entries: by.get(n.id)?.entries ?? 0,
-        searchable: by.get(n.id)?.searchable ?? 0,
+        entries: filedByComponent.get(n.id)?.entries ?? 0,
+        searchable: filedByComponent.get(n.id)?.searchable ?? 0,
       })),
     );
   })

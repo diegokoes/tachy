@@ -23,9 +23,9 @@ export function noteError(c: Context, fields: Record<string, unknown>): void {
 export async function httpLogger(c: Context, next: Next): Promise<void> {
   const started = performance.now();
   c.set(STARTED_KEY as never, started as never);
-  const req = requestIdOf(c);
+  const requestId = requestIdOf(c);
 
-  await runWithLogContext({ req }, () => next());
+  await runWithLogContext({ req: requestId }, () => next());
 
   const status = c.res.status;
   const failure = c.get(ERROR_KEY as never) as
@@ -42,7 +42,7 @@ export async function httpLogger(c: Context, next: Next): Promise<void> {
           : "info";
 
   log(level, "http", {
-    req,
+    req: requestId,
     method: c.req.method,
     path: c.req.path,
     status,

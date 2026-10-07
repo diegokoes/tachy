@@ -41,12 +41,12 @@ export interface Identity {
 export const sessionSecret: string =
   env.sessionSecret ??
   (() => {
-    const s = randomBytes(32).toString("hex");
+    const ephemeral = randomBytes(32).toString("hex");
     log("warn", "session_secret_missing", {
       detail:
         "TACHY_SESSION_SECRET unset: using an ephemeral secret, sessions reset on restart",
     });
-    return s;
+    return ephemeral;
   })();
 
 /**

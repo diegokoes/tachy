@@ -7,18 +7,20 @@ export type ApprovalGate = (
   input: unknown,
 ) => Promise<Decision>;
 
-const APPROVAL_TIMEOUT_DEFAULT = 15 * 60_000;
+const DEFAULT_APPROVAL_TIMEOUT_MS = 15 * 60_000;
 
 function approvalTimeoutMs(): number {
-  const v = Number(process.env.TACHY_APPROVAL_TIMEOUT_MS);
-  return Number.isFinite(v) && v > 0 ? v : APPROVAL_TIMEOUT_DEFAULT;
+  const configured = Number(process.env.TACHY_APPROVAL_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_APPROVAL_TIMEOUT_MS;
 }
 
 export abstract class TurnBase implements AgentTurn {
-  protected q = new AsyncQueue<AgentEvent>();
+  protected queue = new AsyncQueue<AgentEvent>();
   private pending = new Map<
     string,
-    { resolve: (d: Decision) => void; at: number }
+    { resolve: (decision: Decision) => void; at: number }
   >();
   finished = false;
 
@@ -34,7 +36,7 @@ export abstract class TurnBase implements AgentTurn {
   }
 
   events(): AsyncGenerator<AgentEvent> {
-    return this.q.iterator();
+    return this.queue.iterator();
   }
 
   approve(id: string, decision: Decision): void {
@@ -60,15 +62,15 @@ export abstract class TurnBase implements AgentTurn {
       }, approvalTimeoutMs());
       timer.unref?.();
       this.pending.set(id, {
-        resolve: (d) => {
+        resolve: (answer) => {
           clearTimeout(timer);
-          resolve(d);
+          resolve(answer);
         },
         at: Date.now(),
       });
-      this.q.push({ type: "approval_request", tool, input, id });
+      this.queue.push({ type: "approval_request", tool, input, id });
     });
-    this.q.push({
+    this.queue.push({
       type: "approval_resolved",
       id,
       approved: decision.approve,
@@ -85,6 +87,6 @@ export abstract class TurnBase implements AgentTurn {
   protected finish(): void {
     this.settlePending();
     this.finished = true;
-    this.q.close();
+    this.queue.close();
   }
 }
