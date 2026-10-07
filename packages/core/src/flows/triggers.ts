@@ -6,7 +6,7 @@ import {
 import { jsonb, sql } from "../infra/db";
 import { log } from "../infra/log";
 import { enqueueRun } from "../jobs/runs";
-import { loadSubject, recentSubjects } from "./subject";
+import { getSubject, recentSubjects } from "./subject";
 
 export type ItemEvent = "created" | "updated";
 
@@ -50,7 +50,7 @@ export async function itemTriggers(
       const hits = armed.filter((a) => eventsOf(a.trigger).includes(event));
       if (!hits.length) return;
       const item = hits.some((a) => a.trigger.where)
-        ? await loadSubject(itemId)
+        ? await getSubject(itemId)
         : null;
       for (const hit of hits) {
         if (

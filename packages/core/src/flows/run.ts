@@ -12,7 +12,7 @@ import type { ScopeContext } from "../config/scoped";
 import { sql, jsonb } from "../infra/db";
 import type { FlowAction, FlowActionContext } from "./actions";
 import { flowAction } from "./catalog";
-import { loadSubject, type FlowSubject } from "./subject";
+import { getSubject, type FlowSubject } from "./subject";
 
 /** Beyond this a step's stored input or output is cut: a whole thread can be long. */
 const TRACE_CHARS = 20_000;
@@ -178,7 +178,7 @@ export async function runFlow(opts: RunFlowOptions): Promise<{
 
   try {
     if (opts.workItemId) {
-      item = await loadSubject(opts.workItemId);
+      item = await getSubject(opts.workItemId);
       context.item = item;
       ctx.item = item;
     }
