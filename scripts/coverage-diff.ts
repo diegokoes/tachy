@@ -1,18 +1,23 @@
 /**
- * Fails when too few of the lines a branch adds are run by the suite.
+ * Fails when too few of the lines a branch changes are run by the suite.
  *
  *   npm run coverage && npx tsx scripts/coverage-diff.ts [base-ref]
  *
  * The thresholds in vitest.config.ts hold what a package already has; this
  * holds new code, which a large package can otherwise absorb without the total
  * moving. Files the coverage report does not measure (components, anything
- * outside packages/<name>/src) are skipped, as they are there.
+ * outside packages/<name>/src) are skipped, as they are there. A changed line
+ * that holds the code its base had, with locals renamed or the layout changed,
+ * counts as run whether or not a test reaches it: `renamed-lines.ts` proves
+ * which those are.
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { relative } from "node:path";
+import { parseHunks, renamedLines, type Hunk } from "./renamed-lines";
 
 const MIN_PERCENT = 80;
+const SCRIPT_RE = /\.[cm]?[jt]s$/;
 
 interface FileCoverage {
   statementMap: Record<string, { start: { line: number } }>;
@@ -41,10 +46,16 @@ function measuredLines(): Map<string, Map<number, boolean>> {
   return files;
 }
 
-function addedLines(): Map<string, number[]> {
-  const diff = execFileSync(
-    "git",
-    [
+const git = (args: string[], stderr: "inherit" | "ignore" = "inherit") =>
+  execFileSync("git", args, {
+    encoding: "utf8",
+    maxBuffer: 256 * 1024 * 1024,
+    stdio: ["ignore", "pipe", stderr],
+  });
+
+function changedHunks(): Map<string, Hunk[]> {
+  return parseHunks(
+    git([
       "diff",
       "--unified=0",
       "--no-color",
@@ -52,53 +63,70 @@ function addedLines(): Map<string, number[]> {
       `${base}...HEAD`,
       "--",
       "packages",
-    ],
-    { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 },
+    ]),
   );
-  const files = new Map<string, number[]>();
-  let current: number[] | undefined;
-  for (const line of diff.split("\n")) {
-    if (line.startsWith("+++ b/")) {
-      current = [];
-      files.set(line.slice(6), current);
-      continue;
-    }
-    const hunk = /^@@ -\S+ \+(\d+)(?:,(\d+))? @@/.exec(line);
-    if (!hunk || !current) continue;
-    const start = Number(hunk[1]);
-    const count = hunk[2] === undefined ? 1 : Number(hunk[2]);
-    for (let i = 0; i < count; i++) current.push(start + i);
+}
+
+/**
+ * The changed lines of `path` that hold its base's code. None for a file the
+ * base does not have, where `git show` fails.
+ */
+function sameCodeLines(
+  path: string,
+  hunks: Hunk[],
+  mergeBase: string,
+): Set<number> {
+  if (!SCRIPT_RE.test(path)) return new Set();
+  try {
+    return renamedLines(
+      path,
+      git(["show", `${mergeBase}:${path}`], "ignore"),
+      git(["show", `HEAD:${path}`], "ignore"),
+      hunks,
+    );
+  } catch {
+    return new Set();
   }
-  return files;
 }
 
 const measured = measuredLines();
+const mergeBase = git(["merge-base", base, "HEAD"]).trim();
 let total = 0;
 let covered = 0;
+let sameCodeTotal = 0;
 const missed: string[] = [];
 
-for (const [path, lines] of addedLines()) {
+for (const [path, hunks] of changedHunks()) {
   const file = measured.get(path);
   if (!file) continue;
+  const sameCode = sameCodeLines(path, hunks, mergeBase);
   const unrun: number[] = [];
-  for (const line of lines) {
-    const ran = file.get(line);
-    if (ran === undefined) continue;
-    total++;
-    if (ran) covered++;
-    else unrun.push(line);
+  for (const hunk of hunks) {
+    for (let i = 0; i < hunk.headCount; i++) {
+      const line = hunk.headStart + i;
+      const ran = file.get(line);
+      if (ran === undefined) continue;
+      total++;
+      if (sameCode.has(line)) sameCodeTotal++;
+      if (ran || sameCode.has(line)) covered++;
+      else unrun.push(line);
+    }
   }
   if (unrun.length) missed.push(`  ${path}: ${unrun.join(", ")}`);
 }
 
 if (total === 0) {
-  console.log(`coverage-diff: no measured lines added since ${base}`);
+  console.log(`coverage-diff: no measured lines changed since ${base}`);
   process.exit(0);
 }
 
 const percent = (100 * covered) / total;
 console.log(
-  `coverage-diff: ${covered}/${total} added lines run (${percent.toFixed(1)}%), minimum ${MIN_PERCENT}%, base ${base}`,
+  `coverage-diff: ${covered}/${total} changed lines run (${percent.toFixed(1)}%), minimum ${MIN_PERCENT}%, base ${base}`,
 );
+if (sameCodeTotal)
+  console.log(
+    `${sameCodeTotal} of them hold their base's code and count as run`,
+  );
 if (missed.length) console.log(`not run:\n${missed.join("\n")}`);
 if (percent < MIN_PERCENT) process.exit(1);
