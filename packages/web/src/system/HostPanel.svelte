@@ -105,10 +105,10 @@
             : ""}</td
         >
       </tr>
-      {#each Object.entries(status.downloads?.people ?? {}) as [name, d] (name)}
+      {#each Object.entries(status.downloads?.people ?? {}) as [name, person] (name)}
         <tr
-          ><td>Downloaded by {name}</td><td>{ago(d.last_download)}</td><td
-            class="muted">{d.file}</td
+          ><td>Downloaded by {name}</td><td>{ago(person.last_download)}</td><td
+            class="muted">{person.file}</td
           ></tr
         >
       {:else}
@@ -125,11 +125,11 @@
   {#if status.watch}
     <table>
       <tbody>
-        {#each Object.entries(status.watch.checks) as [name, c] (name)}
+        {#each Object.entries(status.watch.checks) as [name, check] (name)}
           <tr
             ><td>{name}</td><td
-              ><Badge tone={toneOf(c.state)}>{c.state}</Badge></td
-            ><td class="muted">{c.value}</td></tr
+              ><Badge tone={toneOf(check.state)}>{check.state}</Badge></td
+            ><td class="muted">{check.value}</td></tr
           >
         {/each}
       </tbody>

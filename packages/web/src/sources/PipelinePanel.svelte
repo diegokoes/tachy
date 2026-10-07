@@ -26,10 +26,10 @@
   import Overview from "../admin/Overview.svelte";
   import Tile from "../admin/Tile.svelte";
 
-  const d = $derived(census.data.detail.sources);
+  const sources = $derived(census.data.detail.sources);
 
   onMount(() => void freshness.reload());
-  const r = $derived(census.data.detail.repos);
+  const repos = $derived(census.data.detail.repos);
   const traffic = $derived(activity.data.traffic);
 
   // Whose traffic it is (the agent reading on someone's behalf, sync, or the
@@ -199,20 +199,30 @@
   ]);
 
   const figures = $derived([
-    { key: "sources", label: "sources", value: d.connections, to: "sources" },
-    { key: "projects", label: "projects", value: d.projects, to: "projects" },
-    { key: "repos", label: "repos", value: r.repos, to: "repos" },
+    {
+      key: "sources",
+      label: "sources",
+      value: sources.connections,
+      to: "sources",
+    },
+    {
+      key: "projects",
+      label: "projects",
+      value: sources.projects,
+      to: "projects",
+    },
+    { key: "repos", label: "repos", value: repos.repos, to: "repos" },
     {
       key: "files",
       label: "files",
-      text: compact(r.files),
+      text: compact(repos.files),
       to: "repos",
       of: "repos",
     },
     {
       key: "chunks",
       label: "chunks",
-      text: compact(r.chunks),
+      text: compact(repos.chunks),
       to: "repos",
       of: "repos",
     },

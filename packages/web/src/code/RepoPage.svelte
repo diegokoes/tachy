@@ -128,18 +128,19 @@
     probing = true;
     refsError = null;
     try {
-      const q = new URLSearchParams({ url: asked });
+      const query = new URLSearchParams({ url: asked });
       if (draft?.source_project_id)
-        q.set("source_project_id", draft.source_project_id);
-      else if (product) q.set("product", product);
-      const res = await api.get<
+        query.set("source_project_id", draft.source_project_id);
+      else if (product) query.set("product", product);
+      const answer = await api.get<
         { ok: boolean; error?: string } & Partial<Refs>
-      >(`/repos/refs?${q}`);
-      if (!res.ok) throw new Error(res.error ?? "could not list branches");
+      >(`/repos/refs?${query}`);
+      if (!answer.ok)
+        throw new Error(answer.error ?? "could not list branches");
       refs = {
         url: asked,
-        branches: res.branches ?? [],
-        releases: res.releases ?? [],
+        branches: answer.branches ?? [],
+        releases: answer.releases ?? [],
       };
     } catch (e) {
       refsError = errText(e);
@@ -201,12 +202,13 @@
   async function count(config: Record<string, unknown>) {
     const current = sequence();
     try {
-      const res = await api.post<
+      const answer = await api.post<
         { ok: boolean; error?: string } & Partial<IndexPreview>
       >(`/repos/${slug}/preview`, { config });
       if (!current()) return;
-      if (!res.ok) throw new Error(res.error ?? "could not read the files");
-      preview = res as IndexPreview;
+      if (!answer.ok)
+        throw new Error(answer.error ?? "could not read the files");
+      preview = answer as IndexPreview;
       previewError = null;
     } catch (e) {
       if (current()) previewError = errText(e);
@@ -378,7 +380,7 @@
       <button class="link" onclick={() => navigate(LIST)}>All repos</button>
     </Note>
   {:else}
-    {@const d = draft}
+    {@const edited = draft}
     <div class="layout">
       <div class="wide">
         <Group label="source" icon="source">
@@ -396,48 +398,48 @@
           <div class="pairs">
             <Row label="project">
               <Select
-                value={d.source_project_id}
+                value={edited.source_project_id}
                 options={projectOptions}
                 searchable
                 disabled={!canEdit}
                 aria-label="project"
-                onchange={(v) => (d.source_project_id = String(v ?? ""))}
+                onchange={(v) => (edited.source_project_id = String(v ?? ""))}
               />
             </Row>
-            {#if !d.source_project_id}
+            {#if !edited.source_project_id}
               <Row label={t("product")}>
                 <Select
-                  value={d.product_slug}
+                  value={edited.product_slug}
                   options={productOptions}
                   disabled={!canEdit}
                   aria-label={t("product")}
-                  onchange={(v) => (d.product_slug = String(v ?? ""))}
+                  onchange={(v) => (edited.product_slug = String(v ?? ""))}
                 />
               </Row>
             {/if}
             <Row label="component">
               <Select
-                value={d.component_slug}
+                value={edited.component_slug}
                 options={componentOptions}
                 searchable
                 disabled={!canEdit}
                 aria-label="component"
-                onchange={(v) => (d.component_slug = String(v ?? ""))}
+                onchange={(v) => (edited.component_slug = String(v ?? ""))}
               />
             </Row>
             <Row label="customer">
               <Select
-                value={d.customer_slug}
+                value={edited.customer_slug}
                 options={customerOptions}
                 searchable
                 disabled={!canEdit}
                 aria-label="customer"
-                onchange={(v) => (d.customer_slug = String(v ?? ""))}
+                onchange={(v) => (edited.customer_slug = String(v ?? ""))}
               />
             </Row>
             <Row label="clone URL">
               <input
-                bind:value={d.url}
+                bind:value={edited.url}
                 disabled={!canEdit}
                 aria-label="clone URL"
                 spellcheck="false"
@@ -459,16 +461,16 @@
             <Row label="default branch">
               {#if refsHere}
                 <Select
-                  value={d.default_branch}
+                  value={edited.default_branch}
                   options={branchOptions}
                   searchable
                   disabled={!canEdit}
                   aria-label="default branch"
-                  onchange={(v) => (d.default_branch = String(v ?? ""))}
+                  onchange={(v) => (edited.default_branch = String(v ?? ""))}
                 />
               {:else}
                 <input
-                  bind:value={d.default_branch}
+                  bind:value={edited.default_branch}
                   disabled={!canEdit}
                   aria-label="default branch"
                   spellcheck="false"
@@ -485,16 +487,16 @@
               <button class="link" onclick={loadRefs}>retry</button>
             </p>
           {/if}
-          {#each shownLines as b (b)}
-            {@const line = repo.lines.find((l) => l.ref === b)}
+          {#each shownLines as branch (branch)}
+            {@const line = repo.lines.find((l) => l.ref === branch)}
             <ToggleRow
-              checked={d.lines.includes(b)}
+              checked={edited.lines.includes(branch)}
               disabled={!canEdit}
-              label={`index ${b}`}
-              onchange={(on) => toggleLine(b, on)}
+              label={`index ${branch}`}
+              onchange={(on) => toggleLine(branch, on)}
             >
               {#snippet icon()}<Icon name="branch" size="1em" />{/snippet}
-              {b}
+              {branch}
               {#snippet end()}
                 {#if line}
                   {#if line.version_label}<span class="quiet"
@@ -509,10 +511,10 @@
                       size="sm"
                       square
                       icon="index"
-                      title={`index ${b} only`}
-                      aria-label={`index ${b}`}
-                      busy={indexing === b}
-                      onclick={() => reindex(b)}
+                      title={`index ${branch} only`}
+                      aria-label={`index ${branch}`}
+                      busy={indexing === branch}
+                      onclick={() => reindex(branch)}
                     />
                   {/if}
                 {/if}
@@ -541,17 +543,19 @@
 
         <Group label="index" icon="index">
           <Rows>
-            {#each repo.lines.filter((l) => l.ref === repo.default_branch) as l (l.id)}
+            {#each repo.lines.filter((l) => l.ref === repo.default_branch) as line (line.id)}
               <Row label="status">
                 <span class="inline">
-                  {#if l.version_label}<span class="quiet"
-                      >{l.version_label}</span
+                  {#if line.version_label}<span class="quiet"
+                      >{line.version_label}</span
                     >{/if}
-                  <Badge tone={tone(l.index_status)}>{l.index_status}</Badge>
-                  {#if l.index_error}
+                  <Badge tone={tone(line.index_status)}
+                    >{line.index_status}</Badge
+                  >
+                  {#if line.index_error}
                     <ErrorMark
-                      message={l.index_error}
-                      label={`${l.ref} index`}
+                      message={line.index_error}
+                      label={`${line.ref} index`}
                     />
                   {/if}
                 </span>
@@ -600,7 +604,7 @@
                   type="number"
                   min="1"
                   placeholder="200"
-                  bind:value={d.max_file_kb}
+                  bind:value={edited.max_file_kb}
                   disabled={!canEdit}
                   aria-label="max file size in KB"
                 />
@@ -608,8 +612,11 @@
               </span>
             </Row>
           </Rows>
-          {#each repo.lines.filter((l) => l.index_error && l.ref !== repo.default_branch) as l (l.id)}
-            <ErrorMark message={l.index_error ?? ""} label={`${l.ref} index`} />
+          {#each repo.lines.filter((l) => l.index_error && l.ref !== repo.default_branch) as line (line.id)}
+            <ErrorMark
+              message={line.index_error ?? ""}
+              label={`${line.ref} index`}
+            />
           {/each}
         </Group>
       </div>
@@ -621,7 +628,7 @@
           {:else if previewError && !preview}
             <p class="quiet">
               <span class="bad">{previewError}</span>
-              <button class="link" onclick={() => count(configOf(d))}
+              <button class="link" onclick={() => count(configOf(edited))}
                 >retry</button
               >
             </p>
@@ -640,8 +647,8 @@
               {slug}
               dirs={preview.dirs}
               admitted={preview.files_admitted}
-              exclude={d.exclude}
-              onchange={(next) => (d.exclude = next)}
+              exclude={edited.exclude}
+              onchange={(next) => (edited.exclude = next)}
             />
             <Rows>
               <Row label="patterns">
@@ -663,26 +670,26 @@
           <Group
             label="file types"
             icon="fileTypes"
-            hint={d.extensions
+            hint={edited.extensions
               ? "Found in this repo. This repo's own set is on."
               : "Found in this repo. The built-in set is on."}
           >
             {#snippet action()}
-              {#if d.extensions}
+              {#if edited.extensions}
                 <Button
                   variant="ghost"
                   size="sm"
                   square
                   icon="reset"
                   title="back to the built-in set"
-                  onclick={() => (d.extensions = null)}
+                  onclick={() => (edited.extensions = null)}
                 />
               {/if}
             {/snippet}
             <FileTypes
               types={preview.types}
-              extensions={d.extensions}
-              onchange={(next) => (d.extensions = next)}
+              extensions={edited.extensions}
+              onchange={(next) => (edited.extensions = next)}
             />
           </Group>
         {/if}

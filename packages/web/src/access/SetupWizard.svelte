@@ -61,7 +61,7 @@
       products: "repositories",
     },
   } as const;
-  const wt = $derived(WIZ_TERMS[profile]);
+  const wizardTerms = $derived(WIZ_TERMS[profile]);
 
   const namedProducts = $derived(products.filter((p) => p.name.trim()));
 
@@ -206,7 +206,7 @@
               <input bind:value={orgName} />
             </Field>
             <Field
-              label={wt.team}
+              label={wizardTerms.team}
               info={teamName
                 ? `Its machine id will be ${slugify(teamName)}.`
                 : undefined}
@@ -216,18 +216,20 @@
           </div>
 
           <div class="list">
-            <span class="ll">{wt.products}</span>
+            <span class="ll">{wizardTerms.products}</span>
             <!-- Keyed: the list is spliced from the middle, and binding by
                  index into an unkeyed block shifts values under the cursor of
                  whoever is typing in a later row. -->
-            {#each products as p, i (p.id)}
+            {#each products as product, i (product.id)}
               <div class="prow">
                 <input
                   bind:value={products[i].name}
                   disabled={!teamName.trim()}
-                  placeholder={i === 0 ? `first ${wt.product}` : ""}
+                  placeholder={i === 0 ? `first ${wizardTerms.product}` : ""}
                 />
-                <span class="slug">{p.name ? slugify(p.name) : ""}</span>
+                <span class="slug"
+                  >{product.name ? slugify(product.name) : ""}</span
+                >
                 {#if products.length > 1}
                   <DeleteButton
                     label="remove"
@@ -244,8 +246,8 @@
                 square
                 icon="plus"
                 iconSize={NAV_ICON}
-                title={`add another ${wt.product}`}
-                aria-label={`add another ${wt.product}`}
+                title={`add another ${wizardTerms.product}`}
+                aria-label={`add another ${wizardTerms.product}`}
                 disabled={!teamName.trim()}
                 onclick={() => products.push({ id: nextProductId++, name: "" })}
               />

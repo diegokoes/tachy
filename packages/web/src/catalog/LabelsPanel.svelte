@@ -122,14 +122,14 @@
 {/if}
 
 {#if renaming}
-  {@const r = renaming}
+  {@const target = renaming}
   <SlugRename
-    title={`rename ${r.slug}`}
-    current={r.slug}
+    title={`rename ${target.slug}`}
+    current={target.slug}
     taken={labels.data.map((l) => l.slug)}
-    impact={`/products/${product}/labels/${r.slug}`}
+    impact={`/products/${product}/labels/${target.slug}`}
     onRename={(to) =>
-      api.post(`/products/${product}/labels/${r.slug}/rename`, { to })}
+      api.post(`/products/${product}/labels/${target.slug}/rename`, { to })}
     onDone={async () => {
       renaming = null;
       await labels.reload();
@@ -138,7 +138,8 @@
   >
     {#snippet message(impact, to)}
       <p>
-        Renaming <strong>{r.slug}</strong> to <strong>{to}</strong> rewrites
+        Renaming <strong>{target.slug}</strong> to <strong>{to}</strong>
+        rewrites
         {impact.entries} entries{#if impact.docs != null}
           and {impact.docs} docs{/if}.
       </p>

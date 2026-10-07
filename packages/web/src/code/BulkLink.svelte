@@ -51,7 +51,7 @@
   /** The first answer is in: the hole has closed and only the names are left. */
   let landed = $state(false);
   let failure = $state<string | null>(null);
-  let list = $state<FoundRepo[]>([]);
+  let offered = $state<FoundRepo[]>([]);
   let picked = $state(new Set<string>());
   let filter = $state("");
   let linking = $state(false);
@@ -74,11 +74,12 @@
 
   const mode = $derived(seeking ? "seek" : landed ? "gone" : "idle");
 
-  const q = $derived(filter.trim().toLowerCase());
-  const matches = (r: FoundRepo) => !q || r.name.toLowerCase().includes(q);
-  const open = $derived(list.filter((r) => !linked.has(r.url)));
+  const needle = $derived(filter.trim().toLowerCase());
+  const matches = (r: FoundRepo) =>
+    !needle || r.name.toLowerCase().includes(needle);
+  const open = $derived(offered.filter((r) => !linked.has(r.url)));
   const openShown = $derived(open.filter(matches));
-  const pickedCount = $derived(list.filter((r) => picked.has(r.url)).length);
+  const pickedCount = $derived(offered.filter((r) => picked.has(r.url)).length);
 
   const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const byName = (a: FoundRepo, b: FoundRepo) =>
@@ -87,34 +88,34 @@
       numeric: true,
     });
 
-  async function discover(p: SourceProject) {
-    const res = await api.get<{
+  async function discover(sourceProject: SourceProject) {
+    const answer = await api.get<{
       ok: boolean;
       error?: string;
       repos?: FoundRepo[];
     }>(
-      `/source-connections/${p.source_slug}/discover/repos?project=${encodeURIComponent(p.external_key)}`,
+      `/source-connections/${sourceProject.source_slug}/discover/repos?project=${encodeURIComponent(sourceProject.external_key)}`,
     );
-    if (!res.ok) throw new Error(res.error ?? "discovery failed");
-    found[p.id] = [...(res.repos ?? [])].sort(byName);
+    if (!answer.ok) throw new Error(answer.error ?? "discovery failed");
+    found[sourceProject.id] = [...(answer.repos ?? [])].sort(byName);
   }
 
   async function choose(id: string) {
-    const p = mine.find((m) => m.id === id);
-    if (!p || p.id === project?.id || seeking || fetching) return;
-    project = p;
+    const wanted = mine.find((m) => m.id === id);
+    if (!wanted || wanted.id === project?.id || seeking || fetching) return;
+    project = wanted;
     failure = null;
     rejected = [];
     filter = "";
     picked = new Set();
-    if (landed) return swap(p);
+    if (landed) return swap(wanted);
     seeking = true;
     try {
       await Promise.all([
-        found[p.id] ? null : discover(p),
+        found[wanted.id] ? null : discover(wanted),
         wait(reducedMotion() ? 0 : (orbit?.holdFor() ?? 0)),
       ]);
-      list = found[p.id] ?? [];
+      offered = found[wanted.id] ?? [];
       landed = true;
       seeking = false;
       await tick();
@@ -130,19 +131,19 @@
    * out at once while the source is asked, and the new ones settle in as soon
    * as it answers: one fade each way.
    */
-  async function swap(p: SourceProject) {
+  async function swap(sourceProject: SourceProject) {
     fetching = true;
-    const out = Promise.all([rewind(), fadeOut()]);
+    const cleared = Promise.all([rewind(), fadeOut()]);
     let next: FoundRepo[] = [];
     try {
-      if (!found[p.id]) await discover(p);
-      next = found[p.id] ?? [];
+      if (!found[sourceProject.id]) await discover(sourceProject);
+      next = found[sourceProject.id] ?? [];
     } catch (e) {
       failure = errText(e);
     }
-    const had = list.length > 0;
-    await out;
-    list = next;
+    const had = offered.length > 0;
+    await cleared;
+    offered = next;
     fetching = false;
     await tick();
     fadeIn();
@@ -181,48 +182,48 @@
     );
   }
 
-  function toggle(r: FoundRepo) {
-    if (linked.has(r.url) || linking) return;
+  function toggle(repo: FoundRepo) {
+    if (linked.has(repo.url) || linking) return;
     const next = new Set(picked);
-    if (next.has(r.url)) next.delete(r.url);
-    else next.add(r.url);
+    if (next.has(repo.url)) next.delete(repo.url);
+    else next.add(repo.url);
     picked = next;
   }
 
   /** Acts on what the filter leaves lit, so "…-api" then "all" is two actions. */
   function pickShown(on: boolean) {
     const next = new Set(picked);
-    for (const r of openShown) {
-      if (on) next.add(r.url);
-      else next.delete(r.url);
+    for (const repo of openShown) {
+      if (on) next.add(repo.url);
+      else next.delete(repo.url);
     }
     picked = next;
   }
 
   async function link() {
     if (!project) return;
-    const hits = list.filter((r) => picked.has(r.url) && !linked.has(r.url));
+    const hits = offered.filter((r) => picked.has(r.url) && !linked.has(r.url));
     if (!hits.length) return;
     linking = true;
     failure = null;
     try {
       const taken = repos.data.map((r) => r.slug);
-      const payload = hits.map((r) => {
-        const slug = uniqueSlug(slugify(r.name), taken);
+      const payload = hits.map((hit) => {
+        const slug = uniqueSlug(slugify(hit.name), taken);
         taken.push(slug);
-        return { slug, url: r.url, branch: r.default_branch || "main" };
+        return { slug, url: hit.url, branch: hit.default_branch || "main" };
       });
-      const res = await api.put<{
+      const answer = await api.put<{
         ok: boolean;
         results: { slug: string; ok: boolean; error?: string }[];
       }>("/repos/bulk", { source_project_id: project.id, repos: payload });
       await repos.reload();
-      rejected = res.results.filter((r) => !r.ok);
+      rejected = answer.results.filter((r) => !r.ok);
       const bad = new Set(rejected.map((r) => r.slug));
       picked = new Set(
         payload.filter((p) => bad.has(p.slug)).map((p) => p.url),
       );
-      const n = res.results.length - rejected.length;
+      const n = answer.results.length - rejected.length;
       if (n)
         toast(
           `linked ${n} repo${n === 1 ? "" : "s"} from ${project.external_key}`,
@@ -259,17 +260,17 @@
 
     const n = movers.length;
     const home = movers.map((el) => {
-      const r = el.getBoundingClientRect();
+      const rect = el.getBoundingClientRect();
       return {
-        x: from.x - (r.left + r.width / 2),
-        y: from.y - (r.top + r.height / 2),
+        x: from.x - (rect.left + rect.width / 2),
+        y: from.y - (rect.top + rect.height / 2),
       };
     });
     const reach = Math.min(150, 50 + 5 * Math.sqrt(n));
     const fling = movers.map((_, i) => {
-      const a = i * 2.39996 + Math.random() * 0.6;
-      const r = reach * (0.45 + 0.55 * Math.random());
-      return { x: r * Math.cos(a), y: r * Math.sin(a) };
+      const angle = i * 2.39996 + Math.random() * 0.6;
+      const radius = reach * (0.45 + 0.55 * Math.random());
+      return { x: radius * Math.cos(angle), y: radius * Math.sin(angle) };
     });
 
     const tl = gsap.timeline({ onComplete: () => (flight = null) });
@@ -402,8 +403,9 @@
     <div class="inner">
       <div class="top" bind:clientHeight={topH}>
         <h1 class="heading rise" aria-label={HEADING}>
-          {#each [...HEADING] as ch, i (i)}<span class="ch" aria-hidden="true"
-              >{ch}</span
+          {#each [...HEADING] as letter, i (i)}<span
+              class="ch"
+              aria-hidden="true">{letter}</span
             >{/each}
         </h1>
 
@@ -425,7 +427,7 @@
         </div>
 
         <div class="find rise">
-          {#if list.length}
+          {#if offered.length}
             <input
               bind:this={search}
               placeholder="filter repos…"
@@ -451,7 +453,7 @@
 
         {#if landed && failure}
           <p class="quiet danger" aria-live="polite">{failure}</p>
-        {:else if landed && project && !list.length && !fetching}
+        {:else if landed && project && !offered.length && !fetching}
           <p class="quiet">
             {project.external_key} shows no repos to this token
           </p>
@@ -461,7 +463,7 @@
           <!-- Hung above the names rather than stacked in the column: it sits
                by what it acts on, and taking a row of its own would push them
                down from where the hole was. -->
-          {#if list.length && open.length}
+          {#if offered.length && open.length}
             <div class="dock" bind:this={dock}>
               <Button
                 variant="ghost"
@@ -489,20 +491,21 @@
           {/if}
 
           <div class="cloud" bind:this={cloud}>
-            {#each list as r (r.url)}
-              {@const taken = linked.has(r.url)}
+            {#each offered as repo (repo.url)}
+              {@const taken = linked.has(repo.url)}
               <button
                 type="button"
                 class="tag"
-                class:on={picked.has(r.url)}
-                class:away={!matches(r)}
+                class:on={picked.has(repo.url)}
+                class:away={!matches(repo)}
                 disabled={taken}
-                aria-pressed={taken || picked.has(r.url)}
-                onclick={() => toggle(r)}
+                aria-pressed={taken || picked.has(repo.url)}
+                onclick={() => toggle(repo)}
               >
                 <span class="frame" aria-hidden="true"></span>
                 <span class="name"
-                  >{#each [...r.name] as ch, i (i)}<span class="ch">{ch}</span
+                  >{#each [...repo.name] as letter, i (i)}<span class="ch"
+                      >{letter}</span
                     >{/each}</span
                 >
               </button>

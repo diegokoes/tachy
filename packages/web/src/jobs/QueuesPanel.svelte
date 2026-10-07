@@ -23,38 +23,44 @@
   ];
 </script>
 
-{#snippet nameCell(q: Queue)}
-  <span class="mono" use:tip={`${q.class} pool`}>{q.name}</span>
-  <span class="dim small">{jobQueue(q.name).description}</span>
+{#snippet nameCell(queue: Queue)}
+  <span class="mono" use:tip={`${queue.class} pool`}>{queue.name}</span>
+  <span class="dim small">{jobQueue(queue.name).description}</span>
 {/snippet}
 
-{#snippet runningCell(q: Queue)}
-  {#if q.cap}
+{#snippet runningCell(queue: Queue)}
+  {#if queue.cap}
     <span class="slots">
-      <Meter value={q.running / q.cap} width={q.cap} label="running" />
-      <span>{q.running} of {q.cap}</span>
+      <Meter
+        value={queue.running / queue.cap}
+        width={queue.cap}
+        label="running"
+      />
+      <span>{queue.running} of {queue.cap}</span>
     </span>
   {:else}
-    {q.running}
+    {queue.running}
   {/if}
 {/snippet}
 
-{#snippet waitingCell(q: Queue)}
-  {#if q.queued}
-    {q.queued}
-    <span class="dim small">oldest {since(q.oldest_queued_at)}</span>
+{#snippet waitingCell(queue: Queue)}
+  {#if queue.queued}
+    {queue.queued}
+    <span class="dim small">oldest {since(queue.oldest_queued_at)}</span>
   {:else}
     <span class="dim">0</span>
   {/if}
 {/snippet}
 
-{#snippet servedCell(q: Queue)}
-  {#if q.workers}
-    {q.workers}
-    {q.workers === 1 ? "worker" : "workers"}
-    <span class="dim">· {q.slots} {q.slots === 1 ? "slot" : "slots"}</span>
+{#snippet servedCell(queue: Queue)}
+  {#if queue.workers}
+    {queue.workers}
+    {queue.workers === 1 ? "worker" : "workers"}
+    <span class="dim"
+      >· {queue.slots} {queue.slots === 1 ? "slot" : "slots"}</span
+    >
   {:else}
-    <Badge tone={q.queued ? "danger" : "muted"}>no worker</Badge>
+    <Badge tone={queue.queued ? "danger" : "muted"}>no worker</Badge>
   {/if}
 {/snippet}
 

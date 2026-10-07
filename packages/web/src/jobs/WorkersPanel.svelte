@@ -20,47 +20,48 @@
   ];
 </script>
 
-{#snippet workerName(w: JobWorkerRow)}
-  <span class="mono" use:tip={`pid ${w.pid}`}>{w.host}</span>
-  <span class="dim small">up {since(w.started_at)}</span>
+{#snippet workerName(worker: JobWorkerRow)}
+  <span class="mono" use:tip={`pid ${worker.pid}`}>{worker.host}</span>
+  <span class="dim small">up {since(worker.started_at)}</span>
 {/snippet}
 
-{#snippet workerQueues(w: JobWorkerRow)}
+{#snippet workerQueues(worker: JobWorkerRow)}
   <span class="chips">
-    {#each w.queues as q (q)}<span class="chip mono">{q}</span>{/each}
+    {#each worker.queues as queue (queue)}<span class="chip mono">{queue}</span
+      >{/each}
   </span>
 {/snippet}
 
-{#snippet workerSlots(w: JobWorkerRow)}
+{#snippet workerSlots(worker: JobWorkerRow)}
   <span
     class="slots"
-    use:tip={Object.keys(w.per_class).length
-      ? Object.entries(w.per_class)
+    use:tip={Object.keys(worker.per_class).length
+      ? Object.entries(worker.per_class)
           .map(([c, n]) => `${n} ${c}`)
           .join(", ")
       : undefined}
   >
     <Meter
-      value={w.runs.length / Math.max(1, slotsOf(w))}
-      width={Math.max(1, slotsOf(w))}
+      value={worker.runs.length / Math.max(1, slotsOf(worker))}
+      width={Math.max(1, slotsOf(worker))}
       label="slots in use"
     />
-    <span class="dim">{w.runs.length} of {slotsOf(w)}</span>
+    <span class="dim">{worker.runs.length} of {slotsOf(worker)}</span>
   </span>
 {/snippet}
 
-{#snippet workerRuns(w: JobWorkerRow)}
-  {#each w.runs as r (r.id)}
+{#snippet workerRuns(worker: JobWorkerRow)}
+  {#each worker.runs as run (run.id)}
     <div class="run">
       <span class="name"
-        >{r.definition_name ?? r.kind_title}
-        {#if r.subject}<span class="dim">{r.subject}</span>{/if}</span
+        >{run.definition_name ?? run.kind_title}
+        {#if run.subject}<span class="dim">{run.subject}</span>{/if}</span
       >
       <span class="progress">
-        <Meter value={r.progress ?? 0} width={8} label="progress" />
+        <Meter value={run.progress ?? 0} width={8} label="progress" />
         <span class="dim small"
-          >{Math.round((r.progress ?? 0) * 100)}%{r.progress_note
-            ? ` · ${r.progress_note}`
+          >{Math.round((run.progress ?? 0) * 100)}%{run.progress_note
+            ? ` · ${run.progress_note}`
             : ""}</span
         >
       </span>
@@ -70,12 +71,14 @@
   {/each}
 {/snippet}
 
-{#snippet workerState(w: JobWorkerRow)}
-  {#if !w.alive}
-    <span class="state danger" use:tip={`seen ${since(w.last_seen_at)} ago`}
+{#snippet workerState(worker: JobWorkerRow)}
+  {#if !worker.alive}
+    <span
+      class="state danger"
+      use:tip={`seen ${since(worker.last_seen_at)} ago`}
       ><Icon name="runFailed" size="1.1em" />gone</span
     >
-  {:else if w.draining}
+  {:else if worker.draining}
     <span class="state warn"><Icon name="pause" size="1.1em" />draining</span>
   {:else}
     <span class="state ok"><Icon name="success" size="1.1em" />live</span>

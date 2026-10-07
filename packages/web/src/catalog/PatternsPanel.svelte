@@ -20,10 +20,10 @@
   $effect(() => keep("admin.patterns.filter", filter));
 
   const shown = $derived.by(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return patterns.data;
+    const needle = filter.trim().toLowerCase();
+    if (!needle) return patterns.data;
     return patterns.data.filter((p) =>
-      `${p.slug} ${p.description ?? ""}`.toLowerCase().includes(q),
+      `${p.slug} ${p.description ?? ""}`.toLowerCase().includes(needle),
     );
   });
 
@@ -86,13 +86,14 @@
 />
 
 {#if renaming}
-  {@const r = renaming}
+  {@const target = renaming}
   <SlugRename
-    title={`rename ${r.slug}`}
-    current={r.slug}
+    title={`rename ${target.slug}`}
+    current={target.slug}
     taken={patterns.data.map((p) => p.slug)}
-    impact={`/resolution-patterns/${r.slug}`}
-    onRename={(to) => api.post(`/resolution-patterns/${r.slug}/rename`, { to })}
+    impact={`/resolution-patterns/${target.slug}`}
+    onRename={(to) =>
+      api.post(`/resolution-patterns/${target.slug}/rename`, { to })}
     onDone={async () => {
       renaming = null;
       await patterns.reload();
@@ -101,7 +102,8 @@
   >
     {#snippet message(impact, to)}
       <p>
-        Renaming <strong>{r.slug}</strong> to <strong>{to}</strong> rewrites
+        Renaming <strong>{target.slug}</strong> to <strong>{to}</strong>
+        rewrites
         {impact.entries} knowledge {impact.entries === 1 ? "entry" : "entries"}.
       </p>
     {/snippet}

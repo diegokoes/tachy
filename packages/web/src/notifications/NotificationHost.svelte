@@ -60,9 +60,9 @@
 
 {#if notifyState.toasts.length}
   <div class="toasts" use:portal aria-live="polite">
-    {#each notifyState.toasts as t (t.id)}
-      <button class="toast {t.tone}" onclick={() => dismissToast(t.id)}>
-        {t.text}
+    {#each notifyState.toasts as toast (toast.id)}
+      <button class="toast {toast.tone}" onclick={() => dismissToast(toast.id)}>
+        {toast.text}
       </button>
     {/each}
   </div>

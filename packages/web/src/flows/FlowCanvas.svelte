@@ -31,7 +31,7 @@
     selected: Selection | null;
     /** A run's outcome per step, when one is being looked at. */
     statuses?: Map<string, FlowStepStatus | "held" | "not held"> | null;
-    onselect: (s: Selection | null) => void;
+    onselect: (selection: Selection | null) => void;
     onslot: (slot: Slot, anchor: HTMLElement) => void;
     onaddtrigger: (anchor: HTMLElement) => void;
   } = $props();
@@ -41,7 +41,7 @@
   let viewport = $state<HTMLElement>();
   let x = $state(24);
   let y = $state(16);
-  let k = $state(1);
+  let scale = $state(1);
   let fitted = false;
 
   function fit() {
@@ -49,12 +49,12 @@
     const { clientWidth: w, clientHeight: h } = viewport;
     // Fitting a long flow whole would shrink it past reading; it starts at a
     // size that reads and the rest is a pan away.
-    k = Math.max(
+    scale = Math.max(
       0.75,
       Math.min(1, (w - 48) / drawn.width, (h - 32) / drawn.height),
     );
     x = 24;
-    y = Math.max(16, (h - drawn.height * k) / 2);
+    y = Math.max(16, (h - drawn.height * scale) / 2);
   }
   $effect(() => {
     drawn;
@@ -66,20 +66,24 @@
 
   function zoom(by: number, cx?: number, cy?: number) {
     if (!viewport) return;
-    const r = viewport.getBoundingClientRect();
-    const px = cx ?? r.width / 2;
-    const py = cy ?? r.height / 2;
-    const next = Math.max(0.35, Math.min(1.8, k * by));
-    x = px - ((px - x) * next) / k;
-    y = py - ((py - y) * next) / k;
-    k = next;
+    const rect = viewport.getBoundingClientRect();
+    const px = cx ?? rect.width / 2;
+    const py = cy ?? rect.height / 2;
+    const next = Math.max(0.35, Math.min(1.8, scale * by));
+    x = px - ((px - x) * next) / scale;
+    y = py - ((py - y) * next) / scale;
+    scale = next;
   }
 
   function onwheel(e: WheelEvent) {
     e.preventDefault();
-    const r = viewport!.getBoundingClientRect();
+    const rect = viewport!.getBoundingClientRect();
     if (e.ctrlKey || e.metaKey)
-      zoom(Math.exp(-e.deltaY / 300), e.clientX - r.left, e.clientY - r.top);
+      zoom(
+        Math.exp(-e.deltaY / 300),
+        e.clientX - rect.left,
+        e.clientY - rect.top,
+      );
     else {
       x -= e.deltaX;
       y -= e.deltaY;
@@ -118,28 +122,28 @@
     create: "flowCreate",
   };
 
-  function stepFace(s: FlowStep): {
+  function stepFace(step: FlowStep): {
     icon: IconName;
     title: string;
     line: string;
   } {
-    if (s.kind === "if")
+    if (step.kind === "if")
       return {
         icon: "flowIf",
-        title: s.label || "if / else",
-        line: describeCondition(s.when),
+        title: step.label || "if / else",
+        line: describeCondition(step.when),
       };
-    if (s.kind === "filter")
+    if (step.kind === "filter")
       return {
         icon: "flowFilter",
-        title: s.label || "only if",
-        line: describeCondition(s.when),
+        title: step.label || "only if",
+        line: describeCondition(step.when),
       };
-    const a = actions.get(s.action);
+    const action = actions.get(step.action);
     return {
-      icon: a ? CATEGORY_ICONS[a.category] : "flowRead",
-      title: s.label || a?.title || s.action,
-      line: s.id,
+      icon: action ? CATEGORY_ICONS[action.category] : "flowRead",
+      title: step.label || action?.title || step.action,
+      line: step.id,
     };
   }
 
@@ -159,37 +163,42 @@
 >
   <div
     class="world"
-    style:transform={`translate(${x}px, ${y}px) scale(${k})`}
+    style:transform={`translate(${x}px, ${y}px) scale(${scale})`}
     style:width={`${drawn.width}px`}
     style:height={`${drawn.height}px`}
   >
     <svg width={drawn.width} height={drawn.height} aria-hidden="true">
-      {#each drawn.links as l (l.key)}
-        <path d={linkPath(l.from, l.to)} class:else={l.branch === "else"} />
-        {#if l.branch}
-          <text x={l.from[0] + 10} y={l.to[1] - 6} class="branch"
-            >{l.branch}</text
+      {#each drawn.links as link (link.key)}
+        <path
+          d={linkPath(link.from, link.to)}
+          class:else={link.branch === "else"}
+        />
+        {#if link.branch}
+          <text x={link.from[0] + 10} y={link.to[1] - 6} class="branch"
+            >{link.branch}</text
           >
         {/if}
       {/each}
     </svg>
 
-    {#each drawn.triggers as t (t.trigger.id)}
+    {#each drawn.triggers as placed (placed.trigger.id)}
       <button
         class="card trigger"
-        class:sel={isSel("trigger", t.trigger.id)}
-        style:left={`${t.x}px`}
-        style:top={`${t.y}px`}
-        style:width={`${t.w}px`}
-        style:height={`${t.h}px`}
-        onclick={() => onselect({ kind: "trigger", id: t.trigger.id })}
+        class:sel={isSel("trigger", placed.trigger.id)}
+        style:left={`${placed.x}px`}
+        style:top={`${placed.y}px`}
+        style:width={`${placed.w}px`}
+        style:height={`${placed.h}px`}
+        onclick={() => onselect({ kind: "trigger", id: placed.trigger.id })}
       >
         <span class="glyph"
-          ><Icon name={TRIGGER_ICONS[t.trigger.kind]} size="1em" /></span
+          ><Icon name={TRIGGER_ICONS[placed.trigger.kind]} size="1em" /></span
         >
         <span class="text">
-          <span class="title">{TRIGGER_TITLES[t.trigger.kind]}</span>
-          <span class="line">{describeTrigger(t.trigger) || t.trigger.id}</span>
+          <span class="title">{TRIGGER_TITLES[placed.trigger.kind]}</span>
+          <span class="line"
+            >{describeTrigger(placed.trigger) || placed.trigger.id}</span
+          >
         </span>
       </button>
     {/each}
@@ -205,14 +214,14 @@
       ><Icon name="plus" size="0.85em" /></button
     >
 
-    {#each drawn.nodes as p (p.node.key)}
-      {#if p.node.kind === "start"}
+    {#each drawn.nodes as placed (placed.node.key)}
+      {#if placed.node.kind === "start"}
         <div
           class="card start"
-          style:left={`${p.x}px`}
-          style:top={`${p.y}px`}
-          style:width={`${p.w}px`}
-          style:height={`${p.h}px`}
+          style:left={`${placed.x}px`}
+          style:top={`${placed.y}px`}
+          style:width={`${placed.w}px`}
+          style:height={`${placed.h}px`}
         >
           <span class="glyph"><Icon name="flows" size="1em" /></span>
           <span class="text">
@@ -224,43 +233,43 @@
             >
           </span>
         </div>
-      {:else if p.node.kind === "slot"}
-        {@const slot = p.node.slot}
+      {:else if placed.node.kind === "slot"}
+        {@const slot = placed.node.slot}
         <button
           class="slot"
-          style:left={`${p.x}px`}
-          style:top={`${p.y}px`}
-          style:width={`${p.w}px`}
-          style:height={`${p.h}px`}
+          style:left={`${placed.x}px`}
+          style:top={`${placed.y}px`}
+          style:width={`${placed.w}px`}
+          style:height={`${placed.h}px`}
           aria-label="Add a step here"
           use:tip={"add a step"}
           onclick={(e) => onslot(slot, e.currentTarget)}
           ><Icon name="plus" size="0.85em" /></button
         >
       {:else}
-        {@const s = p.node.step}
-        {@const face = stepFace(s)}
-        {@const st = statuses?.get(s.id)}
+        {@const step = placed.node.step}
+        {@const face = stepFace(step)}
+        {@const status = statuses?.get(step.id)}
         <button
-          class="card step {s.kind}"
-          class:sel={isSel("step", s.id)}
-          class:ok={st === "ok" || st === "held"}
-          class:failed={st === "failed"}
-          class:dry={st === "dry"}
-          class:off={st === "not held"}
-          class:unrun={statuses && !st}
-          style:left={`${p.x}px`}
-          style:top={`${p.y}px`}
-          style:width={`${p.w}px`}
-          style:height={`${p.h}px`}
-          onclick={() => onselect({ kind: "step", id: s.id })}
+          class="card step {step.kind}"
+          class:sel={isSel("step", step.id)}
+          class:ok={status === "ok" || status === "held"}
+          class:failed={status === "failed"}
+          class:dry={status === "dry"}
+          class:off={status === "not held"}
+          class:unrun={statuses && !status}
+          style:left={`${placed.x}px`}
+          style:top={`${placed.y}px`}
+          style:width={`${placed.w}px`}
+          style:height={`${placed.h}px`}
+          onclick={() => onselect({ kind: "step", id: step.id })}
         >
           <span class="glyph"><Icon name={face.icon} size="1em" /></span>
           <span class="text">
             <span class="title">{face.title}</span>
             <span class="line">{face.line}</span>
           </span>
-          {#if s.kind === "action" && actions.get(s.action)?.writes}
+          {#if step.kind === "action" && actions.get(step.action)?.writes}
             <span class="writes">w</span>
           {/if}
         </button>

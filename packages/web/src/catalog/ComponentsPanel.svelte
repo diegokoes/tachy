@@ -85,9 +85,13 @@
     const ids = new Set([row.id]);
     for (let grew = true; grew;) {
       grew = false;
-      for (const c of tree.data)
-        if (c.parent_id && ids.has(c.parent_id) && !ids.has(c.id)) {
-          ids.add(c.id);
+      for (const component of tree.data)
+        if (
+          component.parent_id &&
+          ids.has(component.parent_id) &&
+          !ids.has(component.id)
+        ) {
+          ids.add(component.id);
           grew = true;
         }
     }
@@ -128,11 +132,11 @@
       label: "parent",
       edit: "select",
       info: INFO.parent,
-      options: (d) => {
+      options: (draft) => {
         const blocked = subtree(form?.row ?? null);
         return [
           { value: "", label: "(top level)" },
-          ...siblings(productOf(d))
+          ...siblings(productOf(draft))
             .filter((c) => !blocked.has(c.id))
             .map((c) => ({ value: c.slug, label: c.name })),
         ];
@@ -174,11 +178,11 @@
     armed = false;
   }
 
-  async function run(fn: () => Promise<unknown>) {
+  async function run(action: () => Promise<unknown>) {
     busy = true;
     error = null;
     try {
-      await fn();
+      await action();
       await tree.reload();
       return true;
     } catch (e) {
@@ -267,16 +271,16 @@
 {#snippet whereExtra()}
   {#if form?.row}
     {@const row = form.row}
-    {@const rs = reposOf(row)}
+    {@const linked = reposOf(row)}
     <div class="where">
       <span class="dim">
         {row.team_name} › {row.product_name}
       </span>
-      {#if rs.length}
+      {#if linked.length}
         <span class="chips">
-          {#each rs as r (r.id)}
-            <Chip tone={r.index_status === "ready" ? "default" : "warn"}
-              >{r.slug}</Chip
+          {#each linked as repo (repo.id)}
+            <Chip tone={repo.index_status === "ready" ? "default" : "warn"}
+              >{repo.slug}</Chip
             >
           {/each}
         </span>
@@ -370,18 +374,18 @@
 {/if}
 
 {#if form}
-  {@const f = form}
+  {@const open = form}
   <RecordModal
-    title={f.row ? `component: ${f.row.name}` : "add component"}
+    title={open.row ? `component: ${open.row.name}` : "add component"}
     {columns}
     {draft}
-    mode={f.mode}
-    row={f.row ?? undefined}
+    mode={open.mode}
+    row={open.row ?? undefined}
     {busy}
     {error}
     width="44rem"
     extra={whereExtra}
-    destructive={f.row && mayEdit(f.row)
+    destructive={open.row && mayEdit(open.row)
       ? {
           label: armed ? "click again to confirm" : "delete",
           icon: armed ? "confirm" : "delete",
@@ -395,16 +399,19 @@
 {/if}
 
 {#if renaming}
-  {@const r = renaming}
+  {@const target = renaming}
   <SlugRename
-    title={`rename ${r.name}`}
-    current={r.slug}
-    taken={siblings(r.product_slug).map((c) => c.slug)}
-    impact={`/products/${r.product_slug}/components/${r.slug}`}
+    title={`rename ${target.name}`}
+    current={target.slug}
+    taken={siblings(target.product_slug).map((c) => c.slug)}
+    impact={`/products/${target.product_slug}/components/${target.slug}`}
     onRename={(to) =>
-      api.post(`/products/${r.product_slug}/components/${r.slug}/rename`, {
-        to,
-      })}
+      api.post(
+        `/products/${target.product_slug}/components/${target.slug}/rename`,
+        {
+          to,
+        },
+      )}
     onDone={async () => {
       renaming = null;
       close();
@@ -414,7 +421,8 @@
   >
     {#snippet message(impact, to)}
       <p>
-        Renaming <strong>{r.slug}</strong> to <strong>{to}</strong> rewrites
+        Renaming <strong>{target.slug}</strong> to <strong>{to}</strong>
+        rewrites
         {impact.entries} knowledge {impact.entries === 1 ? "entry" : "entries"}.
       </p>
     {/snippet}

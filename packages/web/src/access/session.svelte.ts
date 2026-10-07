@@ -104,13 +104,14 @@ export function onUnauthorized(): void {
 }
 
 export async function login(email: string, password: string): Promise<void> {
-  const res = await fetch("/auth/password/login", {
+  const response = await fetch("/auth/password/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error ?? `login failed (${res.status})`);
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok)
+    throw new Error(body.error ?? `login failed (${response.status})`);
   session.me = {
     email: body.email,
     name: body.name ?? null,

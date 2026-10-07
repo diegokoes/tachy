@@ -40,7 +40,7 @@ const EVENT_SOURCE: Record<string, string> = {
  * something did.
  */
 export function startedBy(
-  r: Pick<
+  run: Pick<
     JobRunListed,
     | "trigger"
     | "kind"
@@ -51,30 +51,31 @@ export function startedBy(
   >,
   titleOf: (kind: string) => string,
 ): { icon: IconName; who: string } {
-  const icon = TRIGGER_ICON[r.trigger];
-  if (r.trigger === "schedule") return { icon, who: "schedule" };
-  if (r.trigger === "manual")
-    return { icon, who: r.requested_by_name ?? "someone" };
-  if (r.parent_id)
+  const icon = TRIGGER_ICON[run.trigger];
+  if (run.trigger === "schedule") return { icon, who: "schedule" };
+  if (run.trigger === "manual")
+    return { icon, who: run.requested_by_name ?? "someone" };
+  if (run.parent_id)
     return {
       icon,
       who:
-        r.parent_name ??
-        (r.parent_kind ? titleOf(r.parent_kind) : "another run"),
+        run.parent_name ??
+        (run.parent_kind ? titleOf(run.parent_kind) : "another run"),
     };
-  return { icon, who: EVENT_SOURCE[r.kind] ?? "an event" };
+  return { icon, who: EVENT_SOURCE[run.kind] ?? "an event" };
 }
 
 /** The result cell of a run that has not started: how long, and which try. */
 export function waitingText(
-  r: Pick<
+  run: Pick<
     JobRunListed,
     "run_after" | "created_at" | "attempts" | "max_attempts"
   >,
   now: number,
 ): string {
-  if (r.attempts > 0) return `retry ${r.attempts + 1} of ${r.max_attempts}`;
-  const from = Date.parse(r.run_after || r.created_at);
+  if (run.attempts > 0)
+    return `retry ${run.attempts + 1} of ${run.max_attempts}`;
+  const from = Date.parse(run.run_after || run.created_at);
   const ms = Number.isFinite(from) ? now - from : 0;
   return ms < 60_000 ? "waiting" : `waiting ${span(ms)}`;
 }
@@ -91,14 +92,14 @@ export function lastResult(
       text: "never run",
       short: "never",
     };
-  const m = statusMark(last.status);
+  const mark = statusMark(last.status);
   const at = Date.parse(last.created_at);
   const ago = Number.isFinite(at) ? `${span(now - at)} ago` : "";
   const running = last.status === "running";
   return {
-    icon: m.icon,
-    tone: m.tone,
-    text: running ? "running" : `${m.label} ${ago}`.trim(),
+    icon: mark.icon,
+    tone: mark.tone,
+    text: running ? "running" : `${mark.label} ${ago}`.trim(),
     short: running ? "running" : ago,
   };
 }

@@ -34,8 +34,8 @@
 
   const graph = $derived(toGraph(build(rows, filters)));
 
-  let bw = $state(0);
-  let bh = $state(0);
+  let boxWidth = $state(0);
+  let boxHeight = $state(0);
   let tx = $state(0);
   let ty = $state(0);
   let zoom = $state(1);
@@ -95,15 +95,15 @@
       y: n.y ?? 0,
     }));
     placed = dots;
-    edges = links.map((l) => {
-      const s = l.source as SimNode;
-      const t = l.target as SimNode;
+    edges = links.map((link) => {
+      const source = link.source as SimNode;
+      const target = link.target as SimNode;
       return {
-        key: `${s.key}->${t.key}`,
-        x1: s.x ?? 0,
-        y1: s.y ?? 0,
-        x2: t.x ?? 0,
-        y2: t.y ?? 0,
+        key: `${source.key}->${target.key}`,
+        x1: source.x ?? 0,
+        y1: source.y ?? 0,
+        x2: target.x ?? 0,
+        y2: target.y ?? 0,
       };
     });
     return dots;
@@ -119,7 +119,11 @@
       edges = [];
       return;
     }
-    const made = simulate(graph, LAYOUT, bw && bh ? bw / bh : 2);
+    const made = simulate(
+      graph,
+      LAYOUT,
+      boxWidth && boxHeight ? boxWidth / boxHeight : 2,
+    );
     sim = made.sim;
     hold = made.hold;
     drop = made.drop;
@@ -147,10 +151,10 @@
   function glide(now: number) {
     const dt = last ? Math.min(64, now - last) : 16;
     last = now;
-    const k = 1 - Math.exp(-dt / EASE_MS);
-    zoom += (goal.zoom - zoom) * k;
-    tx += (goal.tx - tx) * k;
-    ty += (goal.ty - ty) * k;
+    const blend = 1 - Math.exp(-dt / EASE_MS);
+    zoom += (goal.zoom - zoom) * blend;
+    tx += (goal.tx - tx) * blend;
+    ty += (goal.ty - ty) * blend;
     const done =
       Math.abs(goal.zoom - zoom) < 1e-4 * goal.zoom &&
       Math.abs(goal.tx - tx) < 0.1 &&
@@ -185,8 +189,8 @@
     if (!surface) return { x: 0, y: 0 };
     const box = surface.getBoundingClientRect();
     return {
-      x: (e.clientX - box.left - bw / 2 - tx) / zoom,
-      y: (e.clientY - box.top - bh / 2 - ty) / zoom,
+      x: (e.clientX - box.left - boxWidth / 2 - tx) / zoom,
+      y: (e.clientY - box.top - boxHeight / 2 - ty) / zoom,
     };
   }
 
@@ -199,9 +203,9 @@
     // closing hands it back to whatever held it, drawing a ring.
     e.preventDefault();
     dragged = n;
-    const p = at(e);
-    n.fx = p.x;
-    n.fy = p.y;
+    const point = at(e);
+    n.fx = point.x;
+    n.fy = point.y;
     from = { x: e.clientX, y: e.clientY };
     moved = false;
   }
@@ -228,8 +232,8 @@
       Math.max(0.25, goal.zoom * Math.exp(-px * 0.0015)),
     );
     const box = surface.getBoundingClientRect();
-    const sx = e.clientX - box.left - bw / 2;
-    const sy = e.clientY - box.top - bh / 2;
+    const sx = e.clientX - box.left - boxWidth / 2;
+    const sy = e.clientY - box.top - boxHeight / 2;
     const gx = (sx - goal.tx) / goal.zoom;
     const gy = (sy - goal.ty) / goal.zoom;
     steer({ zoom: next, tx: sx - gx * next, ty: sy - gy * next });
@@ -252,9 +256,9 @@
         warm();
       }
       if (travelled) moved = true;
-      const p = at(e);
-      dragged.fx = p.x;
-      dragged.fy = p.y;
+      const point = at(e);
+      dragged.fx = point.x;
+      dragged.fy = point.y;
       return;
     }
     if (travelled) moved = true;
@@ -284,34 +288,37 @@
 
   /** Frames the settled graph, labels included, in the measured box. */
   function fit(dots: Dot[], smooth = false) {
-    if (!dots.length || !bw || !bh) return;
+    if (!dots.length || !boxWidth || !boxHeight) return;
     let minX = Infinity;
     let maxX = -Infinity;
     let minY = Infinity;
     let maxY = -Infinity;
-    for (const d of dots) {
-      const b = boxOf(
+    for (const dot of dots) {
+      const box = boxOf(
         {
-          key: d.key,
-          kind: d.kind,
-          label: d.label,
+          key: dot.key,
+          kind: dot.kind,
+          label: dot.label,
           weight: 0,
-          depth: d.depth,
-          side: d.side,
+          depth: dot.depth,
+          side: dot.side,
         },
         0,
       );
-      minX = Math.min(minX, d.x - b.left);
-      maxX = Math.max(maxX, d.x + b.right);
-      minY = Math.min(minY, d.y - b.up);
-      maxY = Math.max(maxY, d.y + b.down);
+      minX = Math.min(minX, dot.x - box.left);
+      maxX = Math.max(maxX, dot.x + box.right);
+      minY = Math.min(minY, dot.y - box.up);
+      maxY = Math.max(maxY, dot.y + box.down);
     }
     const margin = 32;
     const w = Math.max(1, maxX - minX + margin * 2);
     const h = Math.max(1, maxY - minY + margin * 2);
     // A local, not zoom: reading zoom back here would make the effect that
     // calls fit depend on it, and every wheel turn would re-run the layout.
-    const scale = Math.min(1.4, Math.max(0.3, Math.min(bw / w, bh / h)));
+    const scale = Math.min(
+      1.4,
+      Math.max(0.3, Math.min(boxWidth / w, boxHeight / h)),
+    );
     const to = {
       zoom: scale,
       tx: -((minX + maxX) / 2) * scale,
@@ -359,11 +366,14 @@
     onpointercancel={panUp}
     ondblclick={reset}
     use:measureBox={(w, h) => {
-      bw = w;
-      bh = h;
+      boxWidth = w;
+      boxHeight = h;
     }}
   >
-    <svg viewBox="{-bw / 2} {-bh / 2} {bw} {bh}" role="presentation">
+    <svg
+      viewBox="{-boxWidth / 2} {-boxHeight / 2} {boxWidth} {boxHeight}"
+      role="presentation"
+    >
       <!-- Declared inside the svg so its elements get the SVG namespace. -->
       {#snippet body(n: Dot)}
         <title>{n.kind}: {n.label}</title>
@@ -377,8 +387,14 @@
         >
       {/snippet}
       <g transform="translate({tx}, {ty}) scale({zoom})">
-        {#each edges as e (e.key)}
-          <line class="link" x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} />
+        {#each edges as edge (edge.key)}
+          <line
+            class="link"
+            x1={edge.x1}
+            y1={edge.y1}
+            x2={edge.x2}
+            y2={edge.y2}
+          />
         {/each}
 
         {#each placed as n (n.key)}

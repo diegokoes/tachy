@@ -55,22 +55,21 @@
 {#if error}<Note tone="danger">{error}</Note>{/if}
 
 {#if system?.runtime}
-  {@const r = system.runtime}
+  {@const runtime = system.runtime}
   <GroupHead label="state" />
   <table>
     <tbody>
       <tr>
         <td>Readiness</td>
         <td
-          ><Badge tone={r.readiness.ready ? "ok" : "danger"}
-            >{r.readiness.ready ? "ready" : "not ready"}</Badge
+          ><Badge tone={runtime.readiness.ready ? "ok" : "danger"}
+            >{runtime.readiness.ready ? "ready" : "not ready"}</Badge
           ></td
         >
         <td class="muted"
-          >database {r.readiness.database ? "up" : "down"} · schema {r.readiness
-            .schema} · model {r.readiness.model}{r.draining
-            ? " · draining"
-            : ""}</td
+          >database {runtime.readiness.database ? "up" : "down"} · schema {runtime
+            .readiness.schema} · model {runtime.readiness
+            .model}{runtime.draining ? " · draining" : ""}</td
         >
       </tr>
       <tr>
@@ -89,8 +88,8 @@
       <tr>
         <td>Maintenance</td>
         <td>
-          <Badge tone={r.refusingChats ? "warn" : "muted"}
-            >{r.refusingChats ? "chats paused" : "off"}</Badge
+          <Badge tone={runtime.refusingChats ? "warn" : "muted"}
+            >{runtime.refusingChats ? "chats paused" : "off"}</Badge
           >
         </td>
         <td>
@@ -98,8 +97,10 @@
             variant="ghost"
             size="sm"
             {busy}
-            onclick={() => setMaintenance(!r.refusingChats)}
-            >{r.refusingChats ? "resume chats" : "pause new chats"}</Button
+            onclick={() => setMaintenance(!runtime.refusingChats)}
+            >{runtime.refusingChats
+              ? "resume chats"
+              : "pause new chats"}</Button
           >
           <span class="muted">refuses new chats; running turns finish</span>
         </td>
@@ -113,67 +114,68 @@
     <tbody>
       <tr>
         <td>Chat slots</td>
-        <td>{r.turns.slotsUsed} / {r.turns.slotCap}</td>
+        <td>{runtime.turns.slotsUsed} / {runtime.turns.slotCap}</td>
         <td class="muted"
-          >running {r.turns.running} · queued {r.turns.queued} · refused since boot
-          {r.turns.rejectedSinceBoot}</td
+          >running {runtime.turns.running} · queued {runtime.turns.queued} · refused
+          since boot
+          {runtime.turns.rejectedSinceBoot}</td
         >
       </tr>
       <tr>
         <td>Approvals waiting</td>
-        <td>{r.turns.pendingApprovals}</td>
+        <td>{runtime.turns.pendingApprovals}</td>
         <td class="muted"
-          >{r.turns.oldestApprovalAgeSeconds === null
+          >{runtime.turns.oldestApprovalAgeSeconds === null
             ? "none"
-            : `oldest ${Math.round(r.turns.oldestApprovalAgeSeconds / 60)} min`}</td
+            : `oldest ${Math.round(runtime.turns.oldestApprovalAgeSeconds / 60)} min`}</td
         >
       </tr>
       <tr>
         <td>API memory</td>
         <td
-          >{r.memory
-            ? `${mib(r.memory.currentBytes)}${r.memory.maxBytes ? ` / ${mib(r.memory.maxBytes)}` : ""}`
+          >{runtime.memory
+            ? `${mib(runtime.memory.currentBytes)}${runtime.memory.maxBytes ? ` / ${mib(runtime.memory.maxBytes)}` : ""}`
             : "unknown"}</td
         >
         <td class="muted"
-          >{r.memory?.percent != null
-            ? `${r.memory.percent}% of container limit`
+          >{runtime.memory?.percent != null
+            ? `${runtime.memory.percent}% of container limit`
             : "no cgroup limit"}</td
         >
       </tr>
       <tr>
         <td>Event loop delay</td>
-        <td>{r.eventLoopP99Ms} ms</td>
+        <td>{runtime.eventLoopP99Ms} ms</td>
         <td class="muted">p99, last 60 s</td>
       </tr>
       <tr>
         <td>Embedding queue</td>
         <td
-          >{r.embed
-            ? `${r.embed.queries} queries · ${r.embed.passages} passages`
+          >{runtime.embed
+            ? `${runtime.embed.queries} queries · ${runtime.embed.passages} passages`
             : "unknown"}</td
         >
         <td class="muted"
-          >{r.embed
-            ? `${r.embed.callers} waiting · ${r.embed.running ? "busy" : "idle"}`
+          >{runtime.embed
+            ? `${runtime.embed.callers} waiting · ${runtime.embed.running ? "busy" : "idle"}`
             : ""}</td
         >
       </tr>
-      {#if "error" in r.postgres}
+      {#if "error" in runtime.postgres}
         <tr
           ><td>Postgres connections</td><td>unknown</td><td class="muted"
-            >{r.postgres.error}</td
+            >{runtime.postgres.error}</td
           ></tr
         >
       {:else}
         <tr>
           <td>Postgres connections</td>
           <td
-            >{r.postgres.byProcess.reduce((n, p) => n + p.n, 0)} / {r.postgres
-              .max}</td
+            >{runtime.postgres.byProcess.reduce((n, p) => n + p.n, 0)} / {runtime
+              .postgres.max}</td
           >
           <td class="muted"
-            >{r.postgres.byProcess
+            >{runtime.postgres.byProcess
               .map((p) => `${p.name} ${p.state} ${p.n}`)
               .join(" · ")}</td
           >
@@ -187,29 +189,31 @@
     <tbody>
       <tr
         ><td>Single sign-on</td><td
-          >{r.security.sso_configured ? "configured" : "not configured"}</td
+          >{runtime.security.sso_configured
+            ? "configured"
+            : "not configured"}</td
         ><td class="muted"
-          >{r.security.sso_configured
-            ? `password allowed: ${r.security.password_login_under_sso} account(s)`
+          >{runtime.security.sso_configured
+            ? `password allowed: ${runtime.security.password_login_under_sso} account(s)`
             : "password only"}</td
         ></tr
       >
       <tr>
         <td>Credential vault</td>
         <td
-          >{r.security.vault.enabled
-            ? (r.security.vault.current_key ?? "on")
+          >{runtime.security.vault.enabled
+            ? (runtime.security.vault.current_key ?? "on")
             : "disabled"}</td
         >
         <td class="muted">
-          {#if r.security.vault.enabled}
-            {r.security.vault.by_key
+          {#if runtime.security.vault.enabled}
+            {runtime.security.vault.by_key
               .map(
                 (k) =>
                   `${k.key_id ?? "no key id"}: ${k.count}${k.current ? " (current)" : ""}`,
               )
               .join(" · ") || "nothing stored"}
-            {#if r.security.vault.by_key.some((k) => !k.current)}
+            {#if runtime.security.vault.by_key.some((k) => !k.current)}
               · run npm run sync rotate-key
             {/if}
           {:else}TACHY_SECRET_KEY unset{/if}
@@ -217,8 +221,9 @@
       </tr>
       <tr
         ><td>Accounts with a password</td><td
-          >{r.security.users_with_password}</td
-        ><td class="muted">{r.security.service_accounts} service account(s)</td
+          >{runtime.security.users_with_password}</td
+        ><td class="muted"
+          >{runtime.security.service_accounts} service account(s)</td
         ></tr
       >
     </tbody>
@@ -228,18 +233,18 @@
   <table>
     <thead><tr><th>table</th><th>size</th><th>rows (estimate)</th></tr></thead>
     <tbody>
-      {#each r.tableSizes as t (t.table)}
+      {#each runtime.tableSizes as tableSize (tableSize.table)}
         <tr
-          ><td>{t.table}</td><td>{mib(t.bytes)}</td><td class="muted"
-            >{Math.max(0, Math.round(t.rows))}</td
+          ><td>{tableSize.table}</td><td>{mib(tableSize.bytes)}</td><td
+            class="muted">{Math.max(0, Math.round(tableSize.rows))}</td
           ></tr
         >
       {/each}
     </tbody>
   </table>
   <Note
-    >uploads: {r.uploadTtlHours} h. transcripts, usage counters: retention.sweep (workers
-    › jobs)</Note
+    >uploads: {runtime.uploadTtlHours} h. transcripts, usage counters: retention.sweep
+    (workers › jobs)</Note
   >
 {:else if !error}
   <p class="muted">Loading…</p>

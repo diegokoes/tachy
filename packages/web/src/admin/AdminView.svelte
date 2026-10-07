@@ -316,16 +316,16 @@
           present: _present,
           fill: _fill,
           detail: _detail,
-          ...s
+          ...rest
         }): PageSection => ({
-          ...s,
+          ...rest,
           count: n
             ? census.loading
               ? null
               : (census.data.counts[n] ?? 0)
             : undefined,
           tone: n && census.data.warn[n] ? ("warn" as const) : undefined,
-          actions: sectionActions(s.key),
+          actions: sectionActions(rest.key),
         }),
       ),
   );

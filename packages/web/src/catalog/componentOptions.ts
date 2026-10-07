@@ -11,8 +11,8 @@ export function componentOptions(
 ): { value: string; label: string }[] {
   type Row = (typeof rows)[number];
   const byParent = new Map<string | null, Row[]>();
-  for (const r of rows) {
-    byParent.set(r.parent_id, [...(byParent.get(r.parent_id) ?? []), r]);
+  for (const row of rows) {
+    byParent.set(row.parent_id, [...(byParent.get(row.parent_id) ?? []), row]);
   }
 
   // A row whose parent is not in this list (filtered, or a stale id) is treated
@@ -22,14 +22,14 @@ export function componentOptions(
     (r) => r.parent_id === null || !ids.has(r.parent_id),
   );
 
-  const out: { value: string; label: string }[] = [];
+  const options: { value: string; label: string }[] = [];
   const walk = (row: Row, depth: number) => {
-    out.push({
+    options.push({
       value: row.slug,
       label: depth ? `${" ".repeat(depth * 2)}↳ ${row.slug}` : row.slug,
     });
     for (const child of byParent.get(row.id) ?? []) walk(child, depth + 1);
   };
-  for (const r of roots) walk(r, 0);
-  return out;
+  for (const root of roots) walk(root, 0);
+  return options;
 }
