@@ -15,7 +15,7 @@ import {
   createFlow,
   listFlowRuns,
   listOptions,
-  loadSubject,
+  getSubject,
   runFlow,
 } from "@tachy/core/flows";
 import { ingestWorkItem } from "@tachy/core/work-items";
@@ -337,7 +337,7 @@ describe("tags on ADO items", () => {
       await connId(),
       rawItem({ raw: { fields: { "System.Tags": "Plant-3; urgent ;" } } }),
     );
-    expect((await loadSubject(item.id)).tags).toEqual(["Plant-3", "urgent"]);
+    expect((await getSubject(item.id)).tags).toEqual(["Plant-3", "urgent"]);
   });
 });
 

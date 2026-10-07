@@ -78,7 +78,7 @@ function toSubject(row: Record<string, unknown>): FlowSubject {
   };
 }
 
-export async function loadSubject(workItemId: string): Promise<FlowSubject> {
+export async function getSubject(workItemId: string): Promise<FlowSubject> {
   const [row] = await sql`${SELECT} where wi.id = ${workItemId}`;
   if (!row) throw notFound(`work item ${workItemId} not found`);
   return toSubject(row);
