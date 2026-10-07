@@ -10,10 +10,10 @@ export { AGENT_EFFORTS, DEPLOYMENT_PROFILES };
 export type { AgentEffort, DeploymentProfile };
 
 /** Whether `tz` is a zone this runtime knows, e.g. Europe/Madrid. */
-export function isTimezone(tz: string | undefined): tz is string {
-  if (!tz) return false;
+export function isTimezone(zone: string | undefined): zone is string {
+  if (!zone) return false;
   try {
-    new Intl.DateTimeFormat("en", { timeZone: tz });
+    new Intl.DateTimeFormat("en", { timeZone: zone });
     return true;
   } catch {
     return false;
@@ -53,16 +53,17 @@ let cache: { at: number; value: SettingsMap } | undefined;
 export async function getSettings(): Promise<SettingsMap> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.value;
   const rows = await sql`select key, value from settings`;
-  const out: SettingsMap = {};
+  const settings: SettingsMap = {};
   for (const row of rows) {
     const key = row.key as string;
     if (key in SETTING_SCHEMAS) {
       const parsed = SETTING_SCHEMAS[key as SettingKey].safeParse(row.value);
-      if (parsed.success) (out as Record<string, unknown>)[key] = parsed.data;
+      if (parsed.success)
+        (settings as Record<string, unknown>)[key] = parsed.data;
     }
   }
-  cache = { at: Date.now(), value: out };
-  return out;
+  cache = { at: Date.now(), value: settings };
+  return settings;
 }
 
 export async function setSetting(key: string, value: unknown): Promise<void> {

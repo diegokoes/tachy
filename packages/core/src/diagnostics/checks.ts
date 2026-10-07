@@ -29,7 +29,7 @@ export async function runSystemChecks(): Promise<Check[]> {
   const add = (name: string, state: Check["state"], detail: string) =>
     checks.push({ name, state, detail });
 
-  const t0 = performance.now();
+  const dbStarted = performance.now();
   try {
     await sql`select 1`;
     const stamp = await schemaStampStatus();
@@ -37,23 +37,23 @@ export async function runSystemChecks(): Promise<Check[]> {
       "database",
       stamp === "mismatch" ? "fail" : "pass",
       stamp === "match"
-        ? `answers in ${ms(t0)} ms, schema matches the image`
+        ? `answers in ${ms(dbStarted)} ms, schema matches the image`
         : stamp === "unstamped"
-          ? `answers in ${ms(t0)} ms, schema not stamped yet`
+          ? `answers in ${ms(dbStarted)} ms, schema not stamped yet`
           : "the live schema is not the one this image expects",
     );
   } catch (err) {
     add("database", "fail", String(err));
   }
 
-  const t1 = performance.now();
+  const embedStarted = performance.now();
   try {
-    const v = await embedQuery("a health check query");
-    const took = ms(t1);
+    const vector = await embedQuery("a health check query");
+    const took = ms(embedStarted);
     add(
       "embedding",
       took > 2_000 ? "warn" : "pass",
-      `${v.length}-dim vector in ${took} ms`,
+      `${vector.length}-dim vector in ${took} ms`,
     );
   } catch (err) {
     add("embedding", "fail", String(err));
@@ -85,13 +85,13 @@ export async function runSystemChecks(): Promise<Check[]> {
   }
 
   for (const conn of await listSourceConnections()) {
-    const t = performance.now();
+    const started = performance.now();
     try {
       const { source } = await resolveSource(conn.slug);
       if (!source.verify) add(`source ${conn.slug}`, "skip", "no test call");
       else {
         await source.verify();
-        add(`source ${conn.slug}`, "pass", `answers in ${ms(t)} ms`);
+        add(`source ${conn.slug}`, "pass", `answers in ${ms(started)} ms`);
       }
     } catch (err) {
       add(`source ${conn.slug}`, "fail", String(err));

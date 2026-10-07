@@ -76,25 +76,27 @@ function convert(column: TableColumn, raw: unknown): Converted {
     }
     case "boolean": {
       if (typeof raw === "boolean") return { value: raw };
-      const s = String(raw).trim().toLowerCase();
-      if (s === "true" || s === "yes" || s === "1") return { value: true };
-      if (s === "false" || s === "no" || s === "0") return { value: false };
+      const text = String(raw).trim().toLowerCase();
+      if (text === "true" || text === "yes" || text === "1")
+        return { value: true };
+      if (text === "false" || text === "no" || text === "0")
+        return { value: false };
       return {
         problem: `column "${column.key}" expects a boolean, got ${JSON.stringify(raw)}`,
       };
     }
     case "date": {
-      const d =
+      const date =
         raw instanceof Date
           ? raw
           : typeof raw === "number"
             ? new Date(raw)
             : new Date(String(raw));
-      return Number.isNaN(d.getTime())
+      return Number.isNaN(date.getTime())
         ? {
             problem: `column "${column.key}" expects a date, got ${JSON.stringify(raw)}`,
           }
-        : { value: d };
+        : { value: date };
     }
     default:
       return {
@@ -119,15 +121,15 @@ export function validateRows(
   const known = new Set(columns.map((c) => c.key));
   const allowed = columns.map((c) => c.key).join(", ");
 
-  rows.slice(0, MAX_TABLE_ROWS).forEach((row, i) => {
+  rows.slice(0, MAX_TABLE_ROWS).forEach((row, index) => {
     for (const key of Object.keys(row))
       if (!known.has(key))
         problems.push(
-          `row ${i + 1}: unknown column "${key}" (allowed: ${allowed})`,
+          `row ${index + 1}: unknown column "${key}" (allowed: ${allowed})`,
         );
     for (const column of columns) {
       const got = convert(column, row[column.key]);
-      if ("problem" in got) problems.push(`row ${i + 1}: ${got.problem}`);
+      if ("problem" in got) problems.push(`row ${index + 1}: ${got.problem}`);
     }
   });
 
@@ -188,27 +190,27 @@ export interface RenderedTable {
   format: TableFormat;
 }
 
-export function renderTable(i: {
+export function renderTable(input: {
   format: TableFormat;
   sheet?: string;
   columns: TableColumn[];
   rows: TableRow[];
   dateFormat?: DateFormat;
 }): RenderedTable {
-  const problems = validateRows(i.columns, i.rows);
+  const problems = validateRows(input.columns, input.rows);
   if (problems.length) throw badInput(problems.join("\n"));
 
-  const cells = coerceRows(i.columns, i.rows);
+  const cells = coerceRows(input.columns, input.rows);
   const bytes =
-    i.format === "csv"
-      ? renderCsv(i.columns, cells)
-      : renderXlsx(i.sheet, i.columns, cells, i.dateFormat);
+    input.format === "csv"
+      ? renderCsv(input.columns, cells)
+      : renderXlsx(input.sheet, input.columns, cells, input.dateFormat);
 
   if (bytes.byteLength > MAX_OUTPUT_BYTES)
     throw badInput(
       `generated file is ${bytes.byteLength} bytes, over the ${MAX_OUTPUT_BYTES} limit; export fewer rows`,
     );
-  return { bytes, mime: MIME_BY_FORMAT[i.format], format: i.format };
+  return { bytes, mime: MIME_BY_FORMAT[input.format], format: input.format };
 }
 
 /**

@@ -19,9 +19,9 @@ const context = new AsyncLocalStorage<Record<string, unknown>>();
  */
 export function runWithLogContext<T>(
   fields: Record<string, unknown>,
-  fn: () => T,
+  run: () => T,
 ): T {
-  return context.run({ ...context.getStore(), ...fields }, fn);
+  return context.run({ ...context.getStore(), ...fields }, run);
 }
 
 export const logContext = (): Readonly<Record<string, unknown>> | undefined =>

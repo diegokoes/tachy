@@ -17,22 +17,25 @@ const REF_RE = /^upload:([0-9a-f-]{36})(?:\/(.*))?$/;
 export function parseUploadRef(
   ref: string,
 ): { id: string; filename: string } | null {
-  const m = REF_RE.exec(ref.trim());
-  return m ? { id: m[1], filename: m[2] ?? "" } : null;
+  const match = REF_RE.exec(ref.trim());
+  return match ? { id: match[1], filename: match[2] ?? "" } : null;
 }
 
-export async function saveUpload(i: {
+export async function saveUpload(input: {
   userId: string | null;
   filename: string;
   bytes: Uint8Array;
 }): Promise<{ id: string; ref: string }> {
   const [row] = await sql`
     insert into chat_uploads (user_id, filename, byte_size, bytes, expires_at)
-    values (${i.userId}, ${i.filename}, ${i.bytes.byteLength}, ${i.bytes},
+    values (${input.userId}, ${input.filename}, ${input.bytes.byteLength}, ${input.bytes},
             now() + ${uploadTtlMs()} * interval '1 millisecond')
     returning id
   `;
-  return { id: row.id as string, ref: uploadRef(row.id as string, i.filename) };
+  return {
+    id: row.id as string,
+    ref: uploadRef(row.id as string, input.filename),
+  };
 }
 
 /**
