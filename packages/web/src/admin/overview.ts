@@ -37,30 +37,30 @@ export const span = (ms: number) => {
 };
 
 export const age = (iso: string | null | undefined, now = Date.now()) => {
-  const t = iso ? Date.parse(iso) : NaN;
-  return Number.isFinite(t) ? span(now - t) : null;
+  const atMs = iso ? Date.parse(iso) : NaN;
+  return Number.isFinite(atMs) ? span(now - atMs) : null;
 };
 
 /** "2m 10s", "45s", "1h 5m". */
 export const duration = (seconds: number) => {
-  const s = Math.round(seconds);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${s % 60}s`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
+  const whole = Math.round(seconds);
+  if (whole < 60) return `${whole}s`;
+  const minutes = Math.floor(whole / 60);
+  if (minutes < 60) return `${minutes}m ${whole % 60}s`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 };
 
 const UNITS = ["B", "KiB", "MiB", "GiB", "TiB"];
 
 /** 1536 → "1.5 KiB". */
 export const bytes = (n: number) => {
-  let v = n;
+  let value = n;
   let i = 0;
-  while (v >= 1024 && i < UNITS.length - 1) {
-    v /= 1024;
+  while (value >= 1024 && i < UNITS.length - 1) {
+    value /= 1024;
     i++;
   }
-  return `${v >= 10 || i === 0 ? Math.round(v) : v.toFixed(1)} ${UNITS[i]}`;
+  return `${value >= 10 || i === 0 ? Math.round(value) : value.toFixed(1)} ${UNITS[i]}`;
 };
 
 export type Count = {
@@ -82,12 +82,12 @@ export type CountGroup = { head: Count; parts: Count[] };
  * Counters in the order given, each one followed by the counters that break
  * it down. A part whose parent is not the counter before it stands alone.
  */
-export const groupCounts = (items: Count[]): CountGroup[] => {
+export const groupCounts = (counts: Count[]): CountGroup[] => {
   const groups: CountGroup[] = [];
-  for (const it of items) {
+  for (const count of counts) {
     const last = groups[groups.length - 1];
-    if (it.of && last?.head.key === it.of) last.parts.push(it);
-    else groups.push({ head: it, parts: [] });
+    if (count.of && last?.head.key === count.of) last.parts.push(count);
+    else groups.push({ head: count, parts: [] });
   }
   return groups;
 };

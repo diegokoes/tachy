@@ -40,9 +40,10 @@
   $effect(() => {
     api
       .get<ComposerProject[]>("/compose/projects")
-      .then((p) => {
-        projects = p;
-        if (!p.some((x) => x.id === projectId)) projectId = p[0]?.id ?? "";
+      .then((loaded) => {
+        projects = loaded;
+        if (!loaded.some((x) => x.id === projectId))
+          projectId = loaded[0]?.id ?? "";
       })
       .catch((e) => (projectsError = errText(e)));
   });
@@ -59,7 +60,7 @@
   );
 
   let types = $state<WorkItemTypeOption[]>([]);
-  let cfg = $state<ComposeConfig>({});
+  let config = $state<ComposeConfig>({});
   let saved = $state("{}");
   let loadError = $state<string | null>(null);
   let type = $state("");
@@ -73,12 +74,12 @@
       api.get<WorkItemTypeOption[]>(`/compose/projects/${id}/types?all=1`),
       api.get<ComposeConfig>(`/compose/projects/${id}/config`),
     ])
-      .then(([t, c]) => {
+      .then(([loadedTypes, loadedConfig]) => {
         if (id !== projectId) return;
-        types = t;
-        cfg = c ?? {};
-        saved = JSON.stringify(cfg);
-        type = offered[0] ?? t[0]?.name ?? "";
+        types = loadedTypes;
+        config = loadedConfig ?? {};
+        saved = JSON.stringify(config);
+        type = offered[0] ?? loadedTypes[0]?.name ?? "";
       })
       .catch((e) => (loadError = errText(e)));
   });
@@ -87,25 +88,25 @@
   let formError = $state<string | null>(null);
   $effect(() => {
     const id = projectId;
-    const ty = type;
+    const forType = type;
     raw = null;
     formError = null;
-    if (!id || !ty) return;
+    if (!id || !forType) return;
     api
       .get<ComposerForm>(
-        `/compose/projects/${id}/form?type=${encodeURIComponent(ty)}&raw=1`,
+        `/compose/projects/${id}/form?type=${encodeURIComponent(forType)}&raw=1`,
       )
-      .then((f) => {
-        if (id === projectId && ty === type) raw = f;
+      .then((loaded) => {
+        if (id === projectId && forType === type) raw = loaded;
       })
       .catch((e) => (formError = errText(e)));
   });
 
-  const dirty = $derived(JSON.stringify(cfg) !== saved);
+  const dirty = $derived(JSON.stringify(config) !== saved);
 
   /** Every type, while the team has not picked; its pick in its order after. */
   const offered = $derived(
-    cfg.types?.length ? cfg.types : types.map((t) => t.name),
+    config.types?.length ? config.types : types.map((t) => t.name),
   );
   const typeByName = $derived(new Map(types.map((t) => [t.name, t])));
   const unoffered = $derived(types.filter((t) => !offered.includes(t.name)));
@@ -118,7 +119,7 @@
   );
 
   function setTypes(next: string[]) {
-    cfg = { ...cfg, types: next };
+    config = { ...config, types: next };
   }
   function toggleType(name: string) {
     if (offered.includes(name)) {
@@ -126,35 +127,35 @@
     } else setTypes([...offered, name]);
   }
   function moveType(name: string, by: -1 | 1) {
-    const list = [...offered];
-    const i = list.indexOf(name);
-    const j = i + by;
-    if (i < 0 || j < 0 || j >= list.length) return;
-    [list[i], list[j]] = [list[j], list[i]];
-    setTypes(list);
+    const order = [...offered];
+    const from = order.indexOf(name);
+    const to = from + by;
+    if (from < 0 || to < 0 || to >= order.length) return;
+    [order[from], order[to]] = [order[to], order[from]];
+    setTypes(order);
   }
 
-  const tc = $derived<TypeFormConfig>(cfg.forms?.[type] ?? {});
+  const typeConfig = $derived<TypeFormConfig>(config.forms?.[type] ?? {});
 
   function setTc(next: TypeFormConfig) {
-    const forms = { ...(cfg.forms ?? {}) };
+    const forms = { ...(config.forms ?? {}) };
     const empty =
       !Object.keys(next.fields ?? {}).length &&
       !next.order?.length &&
       !next.guidance?.trim();
     if (empty) delete forms[type];
     else forms[type] = next;
-    cfg = { ...cfg, forms };
+    config = { ...config, forms };
   }
 
   function setField(ref: string, patch: Partial<FieldFormConfig>) {
-    const fields = { ...(tc.fields ?? {}) };
+    const fields = { ...(typeConfig.fields ?? {}) };
     const next: FieldFormConfig = { ...(fields[ref] ?? {}), ...patch };
     if (!next.show) delete next.show;
     if (!next.default) delete next.default;
     if (Object.keys(next).length) fields[ref] = next;
     else delete fields[ref];
-    setTc({ ...tc, fields });
+    setTc({ ...typeConfig, fields });
   }
 
   /** The form as the composer will draw it with the config as it stands now. */
@@ -162,18 +163,21 @@
     if (!raw) return null;
     const prefill = { ...raw.prefill };
     const show: Record<string, "form" | "fold" | "hidden"> = {};
-    for (const [ref, fc] of Object.entries(tc.fields ?? {})) {
-      if (fc.show) show[ref] = fc.show;
-      if (fc.default)
+    for (const [ref, fieldConfig] of Object.entries(typeConfig.fields ?? {})) {
+      if (fieldConfig.show) show[ref] = fieldConfig.show;
+      if (fieldConfig.default)
         prefill[ref] = {
-          value: "macro" in fc.default ? fc.default.macro : fc.default.value,
+          value:
+            "macro" in fieldConfig.default
+              ? fieldConfig.default.macro
+              : fieldConfig.default.value,
           origin: "admin",
         };
     }
     return arrange({
       ...raw,
       prefill,
-      display: { show, order: tc.order ?? [] },
+      display: { show, order: typeConfig.order ?? [] },
     });
   });
 
@@ -192,7 +196,7 @@
         ...effective.hidden,
       ].map((f) => f.reference_name),
     );
-    const out: Block[] = [
+    const laidOut: Block[] = [
       { key: "body", title: "written", fields: effective.body },
       ...effective.groups.map((g, i) => ({
         key: `g${i}`,
@@ -221,20 +225,20 @@
         ),
       },
     ];
-    return out.filter((b) => b.fields.length);
+    return laidOut.filter((b) => b.fields.length);
   });
 
   /** Order is the drawn order, read back after a move within one block. */
   function move(block: Block, ref: string, by: -1 | 1) {
-    const i = block.fields.findIndex((f) => f.reference_name === ref);
-    const j = i + by;
-    if (i < 0 || j < 0 || j >= block.fields.length) return;
+    const from = block.fields.findIndex((f) => f.reference_name === ref);
+    const to = from + by;
+    if (from < 0 || to < 0 || to >= block.fields.length) return;
     const order = blocks.flatMap((b) => {
       const refs = b.fields.map((f) => f.reference_name);
-      if (b.key === block.key) [refs[i], refs[j]] = [refs[j], refs[i]];
+      if (b.key === block.key) [refs[from], refs[to]] = [refs[to], refs[from]];
       return refs;
     });
-    setTc({ ...tc, order });
+    setTc({ ...typeConfig, order });
   }
 
   const SOURCE_NAMES: Record<string, string> = {
@@ -249,9 +253,9 @@
   /** What the source's own form does with each field, before any config. */
   const sourceShows = $derived.by(() => {
     if (!raw) return new Set<string>();
-    const a = arrange(raw);
+    const arranged = arrange(raw);
     return new Set(
-      [...a.body, ...a.groups.flatMap((g) => g.fields)].map(
+      [...arranged.body, ...arranged.groups.flatMap((g) => g.fields)].map(
         (f) => f.reference_name,
       ),
     );
@@ -282,32 +286,35 @@
   ];
 
   const isPerson = (f: FieldSpec) => !!f.is_identity || f.type === "identity";
-  const ME = "@me";
+  const ME_MACRO = "@me";
 
   /** The value the source starts the field at, before the team's default. */
   const sourceValue = (ref: string): unknown => {
-    const p = raw?.prefill[ref];
-    return p && p.origin !== "admin" ? p.value : undefined;
+    const prefilled = raw?.prefill[ref];
+    return prefilled && prefilled.origin !== "admin"
+      ? prefilled.value
+      : undefined;
   };
   const hasSource = (ref: string) => {
-    const v = sourceValue(ref);
-    return v != null && v !== "";
+    const value = sourceValue(ref);
+    return value != null && value !== "";
   };
 
   function adminDefault(ref: string): unknown {
-    const d = tc.fields?.[ref]?.default;
-    if (!d) return undefined;
-    return "macro" in d ? d.macro : d.value;
+    const configured = typeConfig.fields?.[ref]?.default;
+    if (!configured) return undefined;
+    return "macro" in configured ? configured.macro : configured.value;
   }
   /** What the field starts as: the team's default, else the source's. */
   const startsAs = (ref: string) => adminDefault(ref) ?? sourceValue(ref);
 
   /** Picking the source's own value again keeps following the source. */
-  function setDefault(ref: string, v: unknown) {
-    if (v == null || v === "" || v === sourceValue(ref))
+  function setDefault(ref: string, value: unknown) {
+    if (value == null || value === "" || value === sourceValue(ref))
       setField(ref, { default: undefined });
-    else if (v === ME) setField(ref, { default: { macro: "@me" } });
-    else setField(ref, { default: { value: v as string | number | boolean } });
+    else if (value === ME_MACRO) setField(ref, { default: { macro: "@me" } });
+    else
+      setField(ref, { default: { value: value as string | number | boolean } });
   }
 
   function personOptions(current: string) {
@@ -318,8 +325,10 @@
     }));
     return [
       { value: "", label: "(no default)" },
-      { value: ME, label: "me", hint: "whoever creates it" },
-      ...(current && current !== ME && !people.some((p) => p.value === current)
+      { value: ME_MACRO, label: "me", hint: "whoever creates it" },
+      ...(current &&
+      current !== ME_MACRO &&
+      !people.some((p) => p.value === current)
         ? [{ value: current, label: current }]
         : []),
       ...people,
@@ -333,11 +342,11 @@
     saving = true;
     saveError = null;
     try {
-      cfg = await api.put<ComposeConfig>(
+      config = await api.put<ComposeConfig>(
         `/compose/projects/${projectId}/config`,
-        cfg,
+        config,
       );
-      saved = JSON.stringify(cfg);
+      saved = JSON.stringify(config);
     } catch (e) {
       saveError = errText(e);
     } finally {
@@ -346,10 +355,10 @@
   }
 
   function tryIt() {
-    const t = typeByName.get(type);
-    if (!project || !t) return;
+    const typeOption = typeByName.get(type);
+    if (!project || !typeOption) return;
     navigate("/chat");
-    openComposer(project, t);
+    openComposer(project, typeOption);
   }
 
   $effect(() => setPageActions(actions));
@@ -411,14 +420,14 @@
     <Group label="types offered">
       <div class="chips">
         {#each offered as name, i (name)}
-          {@const t = typeByName.get(name)}
+          {@const typeOption = typeByName.get(name)}
           <span class="type" class:current={name === type}>
             <button class="name" onclick={() => (type = name)}>
               <span
                 class="glyph"
-                style:color={typeColor(t?.color) ?? undefined}
+                style:color={typeColor(typeOption?.color) ?? undefined}
               >
-                <Icon name={typeIcon(t?.icon)} size="1em" />
+                <Icon name={typeIcon(typeOption?.icon)} size="1em" />
               </span>
               {name}
             </button>
@@ -445,16 +454,16 @@
             >
           </span>
         {/each}
-        {#each unoffered as t (t.name)}
-          <button class="type off" onclick={() => toggleType(t.name)}>
+        {#each unoffered as typeOption (typeOption.name)}
+          <button class="type off" onclick={() => toggleType(typeOption.name)}>
             <Icon name="plus" size="0.85em" />
-            {t.name}
+            {typeOption.name}
           </button>
         {/each}
-        {#if cfg.types?.length}
+        {#if config.types?.length}
           <button
             class="link"
-            onclick={() => (cfg = { ...cfg, types: undefined })}
+            onclick={() => (config = { ...config, types: undefined })}
             >offer every type</button
           >
         {/if}
@@ -466,32 +475,32 @@
     {:else if !raw}
       <Note>reading {project.name}'s {type} form…</Note>
     {:else}
-      {#each blocks as b (b.key)}
-        <Group label={b.title} hint={b.hint}>
+      {#each blocks as block (block.key)}
+        <Group label={block.title} hint={block.hint}>
           <Rows>
-            {#each b.fields as f, i (f.reference_name)}
-              {@const ref = f.reference_name}
-              {@const label = labelOf(raw, f)}
+            {#each block.fields as field, i (field.reference_name)}
+              {@const ref = field.reference_name}
+              {@const label = labelOf(raw, field)}
               {@const own = adminDefault(ref) !== undefined}
               <Row {label}>
                 {#snippet mark()}
-                  {#if f.required}<Badge tone="warn">required</Badge>{/if}
+                  {#if field.required}<Badge tone="warn">required</Badge>{/if}
                 {/snippet}
                 {#snippet actions()}
-                  {#if b.key !== "out"}
+                  {#if block.key !== "out"}
                     <span class="order">
                       <button
                         class="tiny"
                         aria-label={`Move ${label} up`}
                         disabled={i === 0}
-                        onclick={() => move(b, ref, -1)}
+                        onclick={() => move(block, ref, -1)}
                         ><Icon name="moveUp" size="0.85em" /></button
                       >
                       <button
                         class="tiny"
                         aria-label={`Move ${label} down`}
-                        disabled={i === b.fields.length - 1}
-                        onclick={() => move(b, ref, 1)}
+                        disabled={i === block.fields.length - 1}
+                        onclick={() => move(block, ref, 1)}
                         ><Icon name="moveDown" size="0.85em" /></button
                       >
                     </span>
@@ -516,7 +525,7 @@
                   <Choice
                     label={`Where ${label} shows`}
                     options={placeOptions(ref)}
-                    value={(tc.fields?.[ref]?.show ?? "") as Place}
+                    value={(typeConfig.fields?.[ref]?.show ?? "") as Place}
                     onpick={(v) =>
                       setField(ref, {
                         show: (v || undefined) as FieldFormConfig["show"],
@@ -524,7 +533,7 @@
                   />
                 {/snippet}
                 <div class="field">
-                  {#if isPerson(f)}
+                  {#if isPerson(field)}
                     {@const cur = String(startsAs(ref) ?? "")}
                     <span class="person">
                       <Select
@@ -536,16 +545,17 @@
                       />
                       <button
                         class="me"
-                        class:on={cur === ME}
-                        aria-pressed={cur === ME}
-                        onclick={() => setDefault(ref, cur === ME ? null : ME)}
+                        class:on={cur === ME_MACRO}
+                        aria-pressed={cur === ME_MACRO}
+                        onclick={() =>
+                          setDefault(ref, cur === ME_MACRO ? null : ME_MACRO)}
                         >me</button
                       >
                     </span>
                   {:else}
                     <FieldInput
                       id={`def-${ref}`}
-                      spec={f}
+                      spec={field}
                       label={`Default for ${label}`}
                       value={startsAs(ref) ?? null}
                       form={raw}
@@ -564,10 +574,10 @@
           class="guidance"
           rows="4"
           aria-label={`Guidance for tachy's review of a ${type}`}
-          value={tc.guidance ?? ""}
+          value={typeConfig.guidance ?? ""}
           oninput={(e) =>
             setTc({
-              ...tc,
+              ...typeConfig,
               guidance: (e.target as HTMLTextAreaElement).value || undefined,
             })}></textarea>
       </Group>

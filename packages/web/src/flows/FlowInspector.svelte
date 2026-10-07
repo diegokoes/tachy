@@ -42,8 +42,8 @@
     connection: string;
     /** What the selected step did in the run being looked at. */
     trace?: FlowStepTrace | null;
-    onchange: (g: FlowGraph) => void;
-    onselect: (s: Selection | null) => void;
+    onchange: (graph: FlowGraph) => void;
+    onselect: (selection: Selection | null) => void;
   } = $props();
 
   const trigger = $derived(
@@ -73,23 +73,25 @@
   const upstream = $derived.by<FlowOption[]>(() => {
     if (!step) return [];
     return stepsBefore(graph.steps, step.id)
-      .flatMap((s) => {
-        if (s.kind !== "action") return [];
-        const a = actions.get(s.action);
-        const out = a?.output_schema as Schema | undefined;
-        return Object.entries(out?.properties ?? {}).flatMap(([k, p]) => {
-          const from = p["x-keys-from"];
-          const keys =
-            from && Array.isArray(s.params[from])
-              ? (s.params[from] as unknown[]).map(String)
-              : [];
-          const at = (path: string) => ({
-            value: `steps.${s.id}.${path}`,
-            label: `${s.id}.${path}`,
-            hint: a?.title,
-          });
-          return [...keys.map((key) => at(`${k}.${key}`)), at(k)];
-        });
+      .flatMap((earlier) => {
+        if (earlier.kind !== "action") return [];
+        const action = actions.get(earlier.action);
+        const output = action?.output_schema as Schema | undefined;
+        return Object.entries(output?.properties ?? {}).flatMap(
+          ([name, property]) => {
+            const from = property["x-keys-from"];
+            const keys =
+              from && Array.isArray(earlier.params[from])
+                ? (earlier.params[from] as unknown[]).map(String)
+                : [];
+            const at = (path: string) => ({
+              value: `steps.${earlier.id}.${path}`,
+              label: `${earlier.id}.${path}`,
+              hint: action?.title,
+            });
+            return [...keys.map((key) => at(`${name}.${key}`)), at(name)];
+          },
+        );
       })
       .reverse();
   });
@@ -112,17 +114,17 @@
   const KINDS = (Object.keys(TRIGGER_TITLES) as FlowTrigger["kind"][]).map(
     (k) => ({ value: k, label: TRIGGER_TITLES[k] }),
   );
-  const str = (v: unknown) => (v == null ? "" : String(v));
+  const asText = (v: unknown) => (v == null ? "" : String(v));
   const events = (t: FlowTrigger): string[] =>
     Array.isArray(t.params.events) && t.params.events.length
       ? (t.params.events as string[])
       : ["created", "updated"];
-  function toggleEvent(t: FlowTrigger, e: string, on: boolean) {
-    const now = new Set(events(t));
-    if (on) now.add(e);
-    else now.delete(e);
+  function toggleEvent(target: FlowTrigger, eventName: string, on: boolean) {
+    const now = new Set(events(target));
+    if (on) now.add(eventName);
+    else now.delete(eventName);
     if (!now.size) return;
-    setTrigger({ ...t, params: { ...t.params, events: [...now] } });
+    setTrigger({ ...target, params: { ...target.params, events: [...now] } });
   }
   const setParam = (t: FlowTrigger, k: string, v: unknown) =>
     setTrigger({
@@ -133,14 +135,14 @@
         ),
       ),
     });
-  const setWhere = (t: FlowTrigger, where: Condition | undefined) => {
-    const next = { ...t };
+  const setWhere = (target: FlowTrigger, where: Condition | undefined) => {
+    const next = { ...target };
     if (where) next.where = where;
     else delete next.where;
     setTrigger(next);
   };
   const triggerConnection = (t: FlowTrigger) =>
-    str(t.params.connection) || connection;
+    asText(t.params.connection) || connection;
 
   const show = (v: unknown) =>
     typeof v === "string" ? v : JSON.stringify(v, null, 2);
@@ -148,19 +150,19 @@
 
 <div class="inspector">
   {#if trigger}
-    {@const t = trigger}
+    {@const openTrigger = trigger}
     <header>
       <span class="what">trigger</span>
-      <span class="id">{t.id}</span>
+      <span class="id">{openTrigger.id}</span>
     </header>
     <Field label="trigger">
       <Select
-        value={t.kind}
+        value={openTrigger.kind}
         options={KINDS}
         aria-label="Trigger kind"
         onchange={(k) =>
           setTrigger({
-            id: t.id,
+            id: openTrigger.id,
             kind: k as FlowTrigger["kind"],
             params:
               k === "schedule"
@@ -171,65 +173,66 @@
           })}
       />
     </Field>
-    {#if t.kind === "item.synced" || t.kind === "schedule"}
+    {#if openTrigger.kind === "item.synced" || openTrigger.kind === "schedule"}
       <Field
         label="connection"
-        required={t.kind === "item.synced"}
-        info={t.kind === "schedule"
+        required={openTrigger.kind === "item.synced"}
+        info={openTrigger.kind === "schedule"
           ? "With one, the flow runs once per recent item of it that passes the condition; without, once on its own."
           : undefined}
       >
         <OptionSelect
           source="connections"
-          value={str(t.params.connection)}
+          value={asText(openTrigger.params.connection)}
           label="Connection"
-          onchange={(v) => setParam(t, "connection", v)}
+          onchange={(v) => setParam(openTrigger, "connection", v)}
         />
       </Field>
     {/if}
-    {#if t.kind === "item.synced"}
+    {#if openTrigger.kind === "item.synced"}
       <Field label="events" plain>
         <span class="events">
-          {#each ["created", "updated"] as e (e)}
+          {#each ["created", "updated"] as eventName (eventName)}
             <span class="event">
               <Checkbox
-                checked={events(t).includes(e)}
-                ariaLabel={e}
-                onchange={(on) => toggleEvent(t, e, on)}
+                checked={events(openTrigger).includes(eventName)}
+                ariaLabel={eventName}
+                onchange={(on) => toggleEvent(openTrigger, eventName, on)}
               />
-              {e}
+              {eventName}
             </span>
           {/each}
         </span>
       </Field>
-    {:else if t.kind === "schedule"}
+    {:else if openTrigger.kind === "schedule"}
       <Field
         label="schedule"
         required
         info="cron: minute hour day month weekday"
       >
         <input
-          value={str(t.params.cron)}
-          oninput={(e) => setParam(t, "cron", e.currentTarget.value)}
+          value={asText(openTrigger.params.cron)}
+          oninput={(e) => setParam(openTrigger, "cron", e.currentTarget.value)}
         />
       </Field>
       <Field label="timezone">
         <input
-          value={str(t.params.timezone ?? "UTC")}
-          oninput={(e) => setParam(t, "timezone", e.currentTarget.value)}
+          value={asText(openTrigger.params.timezone ?? "UTC")}
+          oninput={(e) =>
+            setParam(openTrigger, "timezone", e.currentTarget.value)}
         />
       </Field>
-      {#if t.params.connection}
+      {#if openTrigger.params.connection}
         <Field
           label="lookback days"
           info="only items changed within this many days"
         >
           <input
             inputmode="numeric"
-            value={str(t.params.since_days ?? 7)}
+            value={asText(openTrigger.params.since_days ?? 7)}
             oninput={(e) =>
               setParam(
-                t,
+                openTrigger,
                 "since_days",
                 Number(e.currentTarget.value) || undefined,
               )}
@@ -238,10 +241,10 @@
         <Field label="max items" info="per run">
           <input
             inputmode="numeric"
-            value={str(t.params.max_items ?? 50)}
+            value={asText(openTrigger.params.max_items ?? 50)}
             oninput={(e) =>
               setParam(
-                t,
+                openTrigger,
                 "max_items",
                 Number(e.currentTarget.value) || undefined,
               )}
@@ -249,78 +252,80 @@
         </Field>
       {/if}
     {/if}
-    {#if t.kind !== "manual"}
+    {#if openTrigger.kind !== "manual"}
       <Group label="filter" hint="runs only for items that match">
-        {#if t.where}
+        {#if openTrigger.where}
           <ConditionEditor
-            value={t.where}
-            connection={triggerConnection(t)}
-            onchange={(c) => setWhere(t, c)}
-            onremove={() => setWhere(t, undefined)}
+            value={openTrigger.where}
+            connection={triggerConnection(openTrigger)}
+            onchange={(c) => setWhere(openTrigger, c)}
+            onremove={() => setWhere(openTrigger, undefined)}
           />
         {:else}
           <Button
             size="sm"
             variant="ghost"
             icon="plus"
-            onclick={() => setWhere(t, { all: [newCondition()] })}
+            onclick={() => setWhere(openTrigger, { all: [newCondition()] })}
             >add a condition</Button
           >
         {/if}
       </Group>
     {/if}
   {:else if step}
-    {@const s = step}
+    {@const openStep = step}
     <header>
       <span class="what"
-        >{s.kind === "action"
-          ? (action?.title ?? s.action)
-          : s.kind === "if"
+        >{openStep.kind === "action"
+          ? (action?.title ?? openStep.action)
+          : openStep.kind === "if"
             ? "if / else"
             : "only if"}</span
       >
-      <span class="id">{s.id}</span>
+      <span class="id">{openStep.id}</span>
     </header>
     {#if action?.description}<Note>{action.description}</Note>{/if}
-    {#if s.kind === "action" && !action}
-      <Note tone="danger">'{s.action}' is not in the library any more.</Note>
+    {#if openStep.kind === "action" && !action}
+      <Note tone="danger"
+        >'{openStep.action}' is not in the library any more.</Note
+      >
     {/if}
     <Field
       label="name"
       info="what the canvas shows; the step's kind when empty"
     >
       <input
-        value={s.label ?? ""}
+        value={openStep.label ?? ""}
         oninput={(e) =>
-          setStep({ ...s, label: e.currentTarget.value || undefined })}
+          setStep({ ...openStep, label: e.currentTarget.value || undefined })}
       />
     </Field>
-    {#if s.kind === "action" && action}
+    {#if openStep.kind === "action" && action}
       {#if Object.keys((action.params_schema as Schema).properties ?? {}).length}
         <Group label="settings">
           <SchemaForm
             schema={action.params_schema as Schema}
-            value={s.params}
+            value={openStep.params}
             {variables}
             context={connection ? { connection } : {}}
-            onchange={(params) => setStep({ ...s, params })}
+            onchange={(params) => setStep({ ...openStep, params })}
           />
         </Group>
       {/if}
-    {:else if s.kind === "if" || s.kind === "filter"}
+    {:else if openStep.kind === "if" || openStep.kind === "filter"}
       <Group
-        label={s.kind === "if" ? "condition" : "continue when"}
-        hint={s.kind === "if"
+        label={openStep.kind === "if" ? "condition" : "continue when"}
+        hint={openStep.kind === "if"
           ? "matches go to then, the rest to else; both end the flow"
           : "the run stops here when this does not match"}
       >
         <ConditionEditor
-          value={"all" in s.when || "any" in s.when
-            ? s.when
-            : { all: [s.when] }}
+          value={"all" in openStep.when || "any" in openStep.when
+            ? openStep.when
+            : { all: [openStep.when] }}
           {connection}
           fields={upstream}
-          onchange={(when) => setStep({ ...s, when })}
+          onchange={(when) => setStep({ ...openStep, when })}
         />
       </Group>
     {/if}

@@ -96,47 +96,49 @@
   }
 
   async function discover(slug: string) {
-    const res = await api.get<{
+    const answer = await api.get<{
       ok: boolean;
       error?: string;
       projects?: Found[];
     }>(`/source-connections/${slug}/discover/projects`);
-    if (!res.ok) throw new Error(res.error ?? "discovery failed");
-    found[slug] = res.projects ?? [];
+    if (!answer.ok) throw new Error(answer.error ?? "discovery failed");
+    found[slug] = answer.projects ?? [];
   }
 
-  async function loadWikis(p: SourceProject) {
-    if (wikisFor[p.id]) return;
+  async function loadWikis(project: SourceProject) {
+    if (wikisFor[project.id]) return;
     try {
-      const res = await api.get<{ ok: boolean; wikis?: Wiki[] }>(
-        `/source-connections/${p.source_slug}/discover/wikis?project=${encodeURIComponent(p.external_key)}`,
+      const answer = await api.get<{ ok: boolean; wikis?: Wiki[] }>(
+        `/source-connections/${project.source_slug}/discover/wikis?project=${encodeURIComponent(project.external_key)}`,
       );
-      wikisFor[p.id] = res.ok ? (res.wikis ?? []) : [];
+      wikisFor[project.id] = answer.ok ? (answer.wikis ?? []) : [];
     } catch {
-      wikisFor[p.id] = [];
+      wikisFor[project.id] = [];
     }
   }
 
-  async function openProject(p: SourceProject) {
+  async function openProject(project: SourceProject) {
     areaForm = { prefix: "", component: "" };
-    if (!p.product_id) return;
+    if (!project.product_id) return;
     try {
-      areas[p.id] = await api.get<AreaRule[]>(`/source-projects/${p.id}/areas`);
-      if (p.product_slug && !components[p.product_slug])
-        components[p.product_slug] = await api.get<Component[]>(
-          `/products/${p.product_slug}/components`,
+      areas[project.id] = await api.get<AreaRule[]>(
+        `/source-projects/${project.id}/areas`,
+      );
+      if (project.product_slug && !components[project.product_slug])
+        components[project.product_slug] = await api.get<Component[]>(
+          `/products/${project.product_slug}/components`,
         );
     } catch (e) {
       error = errText(e);
     }
-    if (p.source_type === "azure-devops") await loadWikis(p);
+    if (project.source_type === "azure-devops") await loadWikis(project);
   }
 
-  async function saveWikis(p: SourceProject, next: ProjectWiki[]) {
-    busy = p.id;
+  async function saveWikis(project: SourceProject, next: ProjectWiki[]) {
+    busy = project.id;
     error = null;
     try {
-      await api.patch(`/source-projects/${p.id}`, { wikis: next });
+      await api.patch(`/source-projects/${project.id}`, { wikis: next });
       await projects.reload();
     } catch (e) {
       error = errText(e);
@@ -150,41 +152,53 @@
    * the default hands the flag to whatever is left, so a project never ends up
    * with wikis but no default for the tools to fall back on.
    */
-  function toggleWiki(p: SourceProject, w: Wiki, on: boolean) {
-    const kept = wikisOf(p).filter((x) => x.identifier !== w.identifier);
+  function toggleWiki(project: SourceProject, wiki: Wiki, on: boolean) {
+    const kept = wikisOf(project).filter(
+      (x) => x.identifier !== wiki.identifier,
+    );
     const next = on
-      ? [...kept, { identifier: w.identifier, name: w.name, type: w.type }]
+      ? [
+          ...kept,
+          { identifier: wiki.identifier, name: wiki.name, type: wiki.type },
+        ]
       : kept;
     if (next.length && !next.some((x) => x.default)) next[0].default = true;
-    return saveWikis(p, next);
+    return saveWikis(project, next);
   }
 
-  function makeDefault(p: SourceProject, identifier: string) {
+  function makeDefault(project: SourceProject, identifier: string) {
     return saveWikis(
-      p,
-      wikisOf(p).map((w) => ({ ...w, default: w.identifier === identifier })),
+      project,
+      wikisOf(project).map((w) => ({
+        ...w,
+        default: w.identifier === identifier,
+      })),
     );
   }
 
-  async function addArea(p: SourceProject) {
+  async function addArea(project: SourceProject) {
     error = null;
     try {
-      await api.put(`/source-projects/${p.id}/areas`, {
+      await api.put(`/source-projects/${project.id}/areas`, {
         area_prefix: areaForm.prefix.trim(),
         component_slug: areaForm.component,
       });
       areaForm = { prefix: "", component: "" };
-      areas[p.id] = await api.get<AreaRule[]>(`/source-projects/${p.id}/areas`);
+      areas[project.id] = await api.get<AreaRule[]>(
+        `/source-projects/${project.id}/areas`,
+      );
     } catch (e) {
       error = errText(e);
     }
   }
 
-  async function delArea(p: SourceProject, id: string) {
+  async function delArea(project: SourceProject, id: string) {
     error = null;
     try {
-      await api.delete(`/source-projects/${p.id}/areas/${id}`);
-      areas[p.id] = await api.get<AreaRule[]>(`/source-projects/${p.id}/areas`);
+      await api.delete(`/source-projects/${project.id}/areas/${id}`);
+      areas[project.id] = await api.get<AreaRule[]>(
+        `/source-projects/${project.id}/areas`,
+      );
     } catch (e) {
       error = errText(e);
     }
@@ -254,11 +268,13 @@
       key: "wikis",
       label: "wikis",
       width: "11rem",
-      value: (p) => {
-        const list = wikisOf(p);
-        if (!list.length) return "";
-        const rest = list.length - 1;
-        return rest ? `${defaultWikiOf(p)} +${rest}` : defaultWikiOf(p);
+      value: (project) => {
+        const wikis = wikisOf(project);
+        if (!wikis.length) return "";
+        const rest = wikis.length - 1;
+        return rest
+          ? `${defaultWikiOf(project)} +${rest}`
+          : defaultWikiOf(project);
       },
     },
     {
@@ -270,14 +286,15 @@
     },
   ]);
 
-  function payload(d: Draft) {
-    const product = d.product_slug ? String(d.product_slug) : "";
+  function payload(draft: Draft) {
+    const product = draft.product_slug ? String(draft.product_slug) : "";
     return {
-      name: String(d.name ?? "").trim() || String(d.external_key).trim(),
-      customer_slug: d.customer_slug ? String(d.customer_slug) : null,
+      name:
+        String(draft.name ?? "").trim() || String(draft.external_key).trim(),
+      customer_slug: draft.customer_slug ? String(draft.customer_slug) : null,
       ...(product
         ? { product_slug: product }
-        : { product_slug: null, team_slug: String(d.team_slug ?? "") }),
+        : { product_slug: null, team_slug: String(draft.team_slug ?? "") }),
     };
   }
 
@@ -293,9 +310,9 @@
       head: Omit<CoverageGroup, "key" | "gaps">,
       gap: CoverageGap,
     ) => {
-      const g = groups.get(key) ?? { key, ...head, gaps: [] };
-      g.gaps.push(gap);
-      groups.set(key, g);
+      const group = groups.get(key) ?? { key, ...head, gaps: [] };
+      group.gaps.push(gap);
+      groups.set(key, group);
     };
     const byId = new Map(projects.data.map((p) => [p.id, p]));
     const headOf = (p: SourceProject) => ({
@@ -306,38 +323,46 @@
       filter: p.external_key,
     });
 
-    for (const p of projects.data) {
-      if (!p.product_id) continue;
-      if (p.source_type === "azure-devops" && !wikisOf(p).length)
-        add(p.id, headOf(p), { text: "no wiki set", tone: "warn" });
-      if (!reposOf(p).length)
-        add(p.id, headOf(p), { text: "no repos linked", tone: "warn" });
-    }
-
-    for (const r of repos.data) {
-      const p = r.source_project_id ? byId.get(r.source_project_id) : undefined;
-      const key = p?.id ?? r.source_project_id ?? "::none";
-      const head = p
-        ? headOf(p)
-        : { label: r.project_key ?? "no project", detail: r.source_slug ?? "" };
-      if (!r.component_id)
-        add(key, head, {
-          text: `repo ${r.slug} has no component`,
+    for (const project of projects.data) {
+      if (!project.product_id) continue;
+      if (project.source_type === "azure-devops" && !wikisOf(project).length)
+        add(project.id, headOf(project), { text: "no wiki set", tone: "warn" });
+      if (!reposOf(project).length)
+        add(project.id, headOf(project), {
+          text: "no repos linked",
           tone: "warn",
         });
-      if (r.index_status === "error")
+    }
+
+    for (const repo of repos.data) {
+      const project = repo.source_project_id
+        ? byId.get(repo.source_project_id)
+        : undefined;
+      const key = project?.id ?? repo.source_project_id ?? "::none";
+      const head = project
+        ? headOf(project)
+        : {
+            label: repo.project_key ?? "no project",
+            detail: repo.source_slug ?? "",
+          };
+      if (!repo.component_id)
         add(key, head, {
-          text: `repo ${r.slug} index failing`,
+          text: `repo ${repo.slug} has no component`,
+          tone: "warn",
+        });
+      if (repo.index_status === "error")
+        add(key, head, {
+          text: `repo ${repo.slug} index failing`,
           tone: "danger",
         });
     }
 
-    for (const [slug, list] of Object.entries(found))
-      for (const g of list)
-        if (!registered.has(`${slug} ${g.key}`))
+    for (const [slug, hits] of Object.entries(found))
+      for (const hit of hits)
+        if (!registered.has(`${slug} ${hit.key}`))
           add(
-            `found ${slug} ${g.key}`,
-            { label: g.key, detail: slug },
+            `found ${slug} ${hit.key}`,
+            { label: hit.key, detail: slug },
             { text: "discovered, not registered", tone: "warn" },
           );
 
@@ -377,8 +402,8 @@
   let filter = $state(recall("admin.projects.filter", ""));
   $effect(() => keep("admin.projects.filter", filter));
   const filtered = $derived.by(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return projects.data;
+    const needle = filter.trim().toLowerCase();
+    if (!needle) return projects.data;
     return projects.data.filter((p) =>
       [
         p.external_key ?? "",
@@ -389,22 +414,22 @@
       ]
         .join(" ")
         .toLowerCase()
-        .includes(q),
+        .includes(needle),
     );
   });
 </script>
 
-{#snippet productCell(p: SourceProject)}
-  {#if p.product_slug}
-    <Badge tone="accent">{p.product_slug}</Badge>
+{#snippet productCell(project: SourceProject)}
+  {#if project.product_slug}
+    <Badge tone="accent">{project.product_slug}</Badge>
   {:else}
     <span class="dim">none</span>
   {/if}
 {/snippet}
 
-{#snippet detail(p: SourceProject)}
+{#snippet detail(project: SourceProject)}
   {#if error}<Note tone="danger">{error}</Note>{/if}
-  {#if !p.product_id}
+  {#if !project.product_id}
     <p class="dim">
       A ticket target only. Nothing is filed under it. Give it a {t("product")}
       to ingest its items and attach wikis, repos and area rules.
@@ -413,35 +438,37 @@
     <div class="detail">
       <div class="block">
         <span class="dim">wikis</span>
-        {#if p.source_type === "azure-devops"}
-          {#each wikisFor[p.id] ?? [] as w (w.identifier)}
-            {@const on = wikisOf(p).some((x) => x.identifier === w.identifier)}
-            {@const isDefault = on && defaultWikiOf(p) === w.identifier}
+        {#if project.source_type === "azure-devops"}
+          {#each wikisFor[project.id] ?? [] as w (w.identifier)}
+            {@const on = wikisOf(project).some(
+              (x) => x.identifier === w.identifier,
+            )}
+            {@const isDefault = on && defaultWikiOf(project) === w.identifier}
             <div class="wrow">
               <Checkbox
                 ariaLabel={`register ${w.name}`}
                 checked={on}
-                disabled={!canEditProject(p) || busy === p.id}
-                onchange={(checked) => toggleWiki(p, w, checked)}
+                disabled={!canEditProject(project) || busy === project.id}
+                onchange={(checked) => toggleWiki(project, w, checked)}
               />
               <span class:muted={!on}>{w.name}</span>
               {#if w.type}<span class="dim sm">{w.type}</span>{/if}
               {#if isDefault}
                 <Badge tone="accent">default</Badge>
-              {:else if on && canEditProject(p)}
+              {:else if on && canEditProject(project)}
                 <Button
                   variant="ghost"
                   size="sm"
-                  disabled={busy === p.id}
-                  onclick={() => makeDefault(p, w.identifier)}
+                  disabled={busy === project.id}
+                  onclick={() => makeDefault(project, w.identifier)}
                   >make default</Button
                 >
               {/if}
             </div>
           {/each}
-          {#if !(wikisFor[p.id] ?? []).length}
+          {#if !(wikisFor[project.id] ?? []).length}
             <span class="dim sm">no wikis readable with this token</span>
-          {:else if !wikisOf(p).length}
+          {:else if !wikisOf(project).length}
             <span class="dim sm">
               none registered. Tick the ones this {t("product")} should search.
             </span>
@@ -453,12 +480,12 @@
 
       <div class="block">
         <span class="dim">repos</span>
-        {#if reposOf(p).length}
+        {#if reposOf(project).length}
           <div class="chips">
-            {#each reposOf(p) as r (r.id)}
-              <Chip tone={r.component_slug ? "default" : "warn"}>
-                {r.slug}{r.component_slug
-                  ? ` → ${r.component_slug}`
+            {#each reposOf(project) as repo (repo.id)}
+              <Chip tone={repo.component_slug ? "default" : "warn"}>
+                {repo.slug}{repo.component_slug
+                  ? ` → ${repo.component_slug}`
                   : " (no component)"}
               </Chip>
             {/each}
@@ -470,37 +497,37 @@
 
       <div class="block wide">
         <span class="dim">area path → component</span>
-        {#each areas[p.id] ?? [] as a (a.id)}
+        {#each areas[project.id] ?? [] as area (area.id)}
           <div class="arow">
-            <code>{a.area_prefix}</code>
-            <span>→ {a.component_slug}</span>
-            {#if canEditProject(p)}
+            <code>{area.area_prefix}</code>
+            <span>→ {area.component_slug}</span>
+            {#if canEditProject(project)}
               <DeleteButton
                 label="remove rule"
-                onclick={() => delArea(p, a.id)}
+                onclick={() => delArea(project, area.id)}
               />
             {/if}
           </div>
         {/each}
-        {#if !(areas[p.id] ?? []).length}
+        {#if !(areas[project.id] ?? []).length}
           <span class="dim sm">
             No rules. Items keep whatever component the analysis infers.
           </span>
         {/if}
 
-        {#if canEditProject(p) && p.product_slug}
+        {#if canEditProject(project) && project.product_slug}
           <div class="arow add">
             <input
               aria-label="area prefix"
               bind:value={areaForm.prefix}
-              onkeydown={(e) => e.key === "Enter" && addArea(p)}
+              onkeydown={(e) => e.key === "Enter" && addArea(project)}
             />
             <Select
               bind:value={areaForm.component}
               aria-label="component"
               options={[
                 { value: "", label: "component…" },
-                ...(components[p.product_slug] ?? []).map((c) => ({
+                ...(components[project.product_slug] ?? []).map((c) => ({
                   value: c.slug,
                   label: `${c.name} (${c.slug})`,
                 })),
@@ -514,7 +541,7 @@
               title="add rule"
               aria-label="add rule"
               disabled={!areaForm.component || !areaForm.prefix.trim()}
-              onclick={() => addArea(p)}
+              onclick={() => addArea(project)}
             />
           </div>
         {/if}
@@ -523,30 +550,30 @@
   {/if}
 {/snippet}
 
-{#snippet formExtra(f: {
+{#snippet formExtra(form: {
   mode: "create" | "edit";
   row: SourceProject | null;
   draft: Draft;
 })}
-  {#if f.mode === "create"}
-    {@const slug = String(f.draft.source_slug ?? "")}
+  {#if form.mode === "create"}
+    {@const slug = String(form.draft.source_slug ?? "")}
     {#key slug}
       <SourceFinder
         source={slug}
         label="fetch projects"
         empty="{slug} shows no projects to this token"
         hits={found[slug]}
-        picked={String(f.draft.external_key ?? "")}
+        picked={String(form.draft.external_key ?? "")}
         registered={(key) => registered.has(`${slug} ${key}`)}
         onfetch={() => discover(slug)}
         onpick={(g) => {
-          f.draft.external_key = g.key;
-          if (!f.draft.name) f.draft.name = g.name;
+          form.draft.external_key = g.key;
+          if (!form.draft.name) form.draft.name = g.name;
         }}
       />
     {/key}
-  {:else if f.row}
-    <div class="probe">{@render detail(f.row)}</div>
+  {:else if form.row}
+    <div class="probe">{@render detail(form.row)}</div>
   {/if}
 {/snippet}
 

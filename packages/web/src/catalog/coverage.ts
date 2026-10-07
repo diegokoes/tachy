@@ -44,12 +44,12 @@ export function coverageTree(rows: ComponentCoverage[], label: string): Block {
   const ids = new Set(rows.map((r) => r.id));
   const under = new Map<string, ComponentCoverage[]>();
   const products = new Map<string, ComponentCoverage[]>();
-  for (const r of rows) {
+  for (const row of rows) {
     const [into, at] =
-      r.parent_id && ids.has(r.parent_id)
-        ? [under, r.parent_id]
-        : [products, r.product_slug];
-    into.set(at, [...(into.get(at) ?? []), r]);
+      row.parent_id && ids.has(row.parent_id)
+        ? [under, row.parent_id]
+        : [products, row.product_slug];
+    into.set(at, [...(into.get(at) ?? []), row]);
   }
 
   const build = (c: ComponentCoverage, trail: string): Built => {
@@ -89,11 +89,11 @@ export function coverageTree(rows: ComponentCoverage[], label: string): Block {
  * the root, which is where a stale link ends up.
  */
 export function trailTo(root: Block, key: string): Block[] {
-  const walk = (b: Block): Block[] | null => {
-    if (b.key === key) return [b];
-    for (const c of b.children ?? []) {
-      const found = walk(c);
-      if (found) return [b, ...found];
+  const walk = (block: Block): Block[] | null => {
+    if (block.key === key) return [block];
+    for (const child of block.children ?? []) {
+      const found = walk(child);
+      if (found) return [block, ...found];
     }
     return null;
   };

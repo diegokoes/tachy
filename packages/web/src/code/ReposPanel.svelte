@@ -45,11 +45,11 @@
 
   const knowledgeProjects = $derived(projects.data.filter((p) => p.product_id));
 
-  const canEditRepo = (r: Repo) => {
-    const project = projects.data.find((p) => p.id === r.source_project_id);
+  const canEditRepo = (repo: Repo) => {
+    const project = projects.data.find((p) => p.id === repo.source_project_id);
     const team =
       project?.team_slug ??
-      products.data.find((p) => p.slug === r.product_slug)?.team_slug ??
+      products.data.find((p) => p.slug === repo.product_slug)?.team_slug ??
       null;
     return canCurateScope({ team_slug: team });
   };
@@ -64,10 +64,10 @@
     r.lines.some((l) => working(l.index_status));
   const busyIndex = $derived(repos.data.some(busyRepo) || queuedAll);
 
-  const freshness = (r: Repo) => {
-    if (!r.last_indexed_at) return "never";
+  const freshness = (repo: Repo) => {
+    if (!repo.last_indexed_at) return "never";
     const days = Math.floor(
-      (Date.now() - new Date(r.last_indexed_at).getTime()) / 86_400_000,
+      (Date.now() - new Date(repo.last_indexed_at).getTime()) / 86_400_000,
     );
     return days === 0 ? "today" : `${days}d ago`;
   };
@@ -120,11 +120,11 @@
     { key: "indexed", label: "indexed", width: "10rem", cell: freshnessCell },
   ];
 
-  async function reindex(r: Repo, line?: string) {
-    indexing = line ? `${r.slug}:${line}` : r.slug;
+  async function reindex(repo: Repo, line?: string) {
+    indexing = line ? `${repo.slug}:${line}` : repo.slug;
     error = null;
     try {
-      await api.post(`/repos/${r.slug}/reindex`, line ? { line } : {});
+      await api.post(`/repos/${repo.slug}/reindex`, line ? { line } : {});
       await repos.reload();
     } catch (e) {
       error = errText(e);
@@ -168,8 +168,8 @@
   let filter = $state(recall("admin.repos.filter", ""));
   $effect(() => keep("admin.repos.filter", filter));
   const filtered = $derived.by(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return repos.data;
+    const needle = filter.trim().toLowerCase();
+    if (!needle) return repos.data;
     return repos.data.filter((r) =>
       [
         r.slug ?? "",
@@ -180,19 +180,19 @@
       ]
         .join(" ")
         .toLowerCase()
-        .includes(q),
+        .includes(needle),
     );
   });
 </script>
 
-{#snippet projectCell(r: Repo)}
-  <span class:dim={!r.project_key}>{r.project_key ?? "-"}</span>
+{#snippet projectCell(repo: Repo)}
+  <span class:dim={!repo.project_key}>{repo.project_key ?? "-"}</span>
 {/snippet}
 
-{#snippet repoCell(r: Repo)}
+{#snippet repoCell(repo: Repo)}
   <span class="repo">
-    {r.slug}
-    <span class="url">{r.url}</span>
+    {repo.slug}
+    <span class="url">{repo.url}</span>
   </span>
 {/snippet}
 
@@ -203,34 +203,35 @@
   >
 {/snippet}
 
-{#snippet indexCell(r: Repo)}
-  {#if r.lines.length}
+{#snippet indexCell(repo: Repo)}
+  {#if repo.lines.length}
     <span class="lines">
-      {#each r.lines as l (l.id)}
+      {#each repo.lines as line (line.id)}
         <span class="line">
-          {@render statusBadge(l.index_status)}
-          {#if r.lines.length > 1}<span class="ref">{l.ref}</span>{/if}
-          {#if l.version_label}<span class="ver">{l.version_label}</span>{/if}
-          {#if r.lines.length > 1 && canEditRepo(r) && !busyRepo(r)}
+          {@render statusBadge(line.index_status)}
+          {#if repo.lines.length > 1}<span class="ref">{line.ref}</span>{/if}
+          {#if line.version_label}<span class="ver">{line.version_label}</span
+            >{/if}
+          {#if repo.lines.length > 1 && canEditRepo(repo) && !busyRepo(repo)}
             <Button
               variant="ghost"
               size="sm"
               square
               icon="index"
-              title={`index ${l.ref} only`}
-              aria-label={`index ${r.slug} ${l.ref}`}
-              busy={indexing === `${r.slug}:${l.ref}`}
-              onclick={() => reindex(r, l.ref)}
+              title={`index ${line.ref} only`}
+              aria-label={`index ${repo.slug} ${line.ref}`}
+              busy={indexing === `${repo.slug}:${line.ref}`}
+              onclick={() => reindex(repo, line.ref)}
             />
           {/if}
         </span>
       {/each}
     </span>
   {:else}
-    {@render statusBadge(r.index_status)}
+    {@render statusBadge(repo.index_status)}
   {/if}
-  {#if r.active_run}
-    {@const run = r.active_run}
+  {#if repo.active_run}
+    {@const run = repo.active_run}
     <span class="run">
       {#if run.status === "queued"}
         <Badge tone="muted">queued</Badge>
@@ -249,34 +250,36 @@
   {/if}
 {/snippet}
 
-{#snippet freshnessCell(r: Repo)}
+{#snippet freshnessCell(repo: Repo)}
   <span class="fresh">
-    {freshness(r)}
-    {#if r.file_count}
-      <span class="counts">{r.file_count} files / {r.chunk_count} chunks</span>
+    {freshness(repo)}
+    {#if repo.file_count}
+      <span class="counts"
+        >{repo.file_count} files / {repo.chunk_count} chunks</span
+      >
     {/if}
   </span>
 {/snippet}
 
-{#snippet reindexAction(r: Repo)}
-  {#if canEditRepo(r)}
+{#snippet reindexAction(repo: Repo)}
+  {#if canEditRepo(repo)}
     <Button
       variant="ghost"
       size="sm"
       icon="index"
-      busy={indexing === r.slug}
-      disabled={busyRepo(r)}
-      onclick={() => reindex(r)}>index</Button
+      busy={indexing === repo.slug}
+      disabled={busyRepo(repo)}
+      onclick={() => reindex(repo)}>index</Button
     >
   {/if}
 {/snippet}
 
 {#snippet indexErrors()}
-  {#each repos.data as r (r.id)}
-    {#each r.lines.filter((l) => l.index_error) as l (l.id)}
+  {#each repos.data as repo (repo.id)}
+    {#each repo.lines.filter((l) => l.index_error) as line (line.id)}
       <ErrorMark
-        message={l.index_error ?? ""}
-        label={`${r.slug} ${l.ref} index`}
+        message={line.index_error ?? ""}
+        label={`${repo.slug} ${line.ref} index`}
       />
     {/each}
   {/each}

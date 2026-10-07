@@ -39,15 +39,15 @@ export type Filters = {
 export const EMPTY_FILTERS: Filters = { team: "", product: "", query: "" };
 
 /** Which components survive the filters, before the tree is assembled. */
-export function pick(rows: ComponentNode[], f: Filters): ComponentNode[] {
-  const q = f.query.trim().toLowerCase();
+export function pick(rows: ComponentNode[], filters: Filters): ComponentNode[] {
+  const needle = filters.query.trim().toLowerCase();
   return rows.filter(
     (r) =>
-      (!f.team || r.team_slug === f.team) &&
-      (!f.product || r.product_slug === f.product) &&
-      (!q ||
-        r.name.toLowerCase().includes(q) ||
-        r.slug.toLowerCase().includes(q)),
+      (!filters.team || r.team_slug === filters.team) &&
+      (!filters.product || r.product_slug === filters.product) &&
+      (!needle ||
+        r.name.toLowerCase().includes(needle) ||
+        r.slug.toLowerCase().includes(needle)),
   );
 }
 
@@ -62,8 +62,8 @@ function withAncestors(
 ): ComponentNode[] {
   const byId = new Map(all.map((r) => [r.id, r]));
   const keep = new Map<string, ComponentNode>();
-  for (const r of rows) {
-    let at: ComponentNode | undefined = r;
+  for (const row of rows) {
+    let at: ComponentNode | undefined = row;
     while (at && !keep.has(at.id)) {
       keep.set(at.id, at);
       at = at.parent_id ? byId.get(at.parent_id) : undefined;
@@ -77,8 +77,8 @@ function withAncestors(
  * surviving components is dropped, and so is a team with no surviving
  * products: an empty branch is a line to nowhere.
  */
-export function build(all: ComponentNode[], f: Filters): ArchNode {
-  const rows = withAncestors(pick(all, f), all);
+export function build(all: ComponentNode[], filters: Filters): ArchNode {
+  const rows = withAncestors(pick(all, filters), all);
   const byId = new Map(rows.map((r) => [r.id, r]));
 
   const root: ArchNode = {
@@ -91,51 +91,51 @@ export function build(all: ComponentNode[], f: Filters): ArchNode {
   const products = new Map<string, ArchNode>();
   const nodes = new Map<string, ArchNode>();
 
-  for (const r of rows) {
-    let team = teams.get(r.team_slug);
+  for (const row of rows) {
+    let team = teams.get(row.team_slug);
     if (!team) {
       team = {
-        key: `team:${r.team_slug}`,
+        key: `team:${row.team_slug}`,
         kind: "team",
-        label: r.team_name,
-        teamSlug: r.team_slug,
+        label: row.team_name,
+        teamSlug: row.team_slug,
         children: [],
       };
-      teams.set(r.team_slug, team);
+      teams.set(row.team_slug, team);
       root.children.push(team);
     }
-    const pKey = `${r.team_slug}/${r.product_slug}`;
+    const pKey = `${row.team_slug}/${row.product_slug}`;
     let product = products.get(pKey);
     if (!product) {
       product = {
         key: `product:${pKey}`,
         kind: "product",
-        label: r.product_name,
-        productSlug: r.product_slug,
-        teamSlug: r.team_slug,
+        label: row.product_name,
+        productSlug: row.product_slug,
+        teamSlug: row.team_slug,
         children: [],
       };
       products.set(pKey, product);
       team.children.push(product);
     }
-    nodes.set(r.id, {
-      key: r.id,
+    nodes.set(row.id, {
+      key: row.id,
       kind: "component",
-      label: r.name,
-      slug: r.slug,
-      productSlug: r.product_slug,
-      teamSlug: r.team_slug,
+      label: row.name,
+      slug: row.slug,
+      productSlug: row.product_slug,
+      teamSlug: row.team_slug,
       children: [],
     });
   }
 
-  for (const r of rows) {
-    const node = nodes.get(r.id)!;
+  for (const row of rows) {
+    const node = nodes.get(row.id)!;
     // A parent outside the surviving set means the chain was broken by a
     // filter, so the node hangs off its product instead of vanishing.
     const parent =
-      (r.parent_id && byId.has(r.parent_id) && nodes.get(r.parent_id)) ||
-      products.get(`${r.team_slug}/${r.product_slug}`);
+      (row.parent_id && byId.has(row.parent_id) && nodes.get(row.parent_id)) ||
+      products.get(`${row.team_slug}/${row.product_slug}`);
     parent?.children.push(node);
   }
 
@@ -189,7 +189,7 @@ export function toGraph(root: ArchNode): Graph {
       });
       if (drawn(parent)) links.push({ source: parent!.key, target: n.key });
     }
-    for (const c of n.children) walk(c, n, here ? depth + 1 : 0);
+    for (const child of n.children) walk(child, n, here ? depth + 1 : 0);
   };
   walk(root, null, 0);
 
@@ -243,20 +243,20 @@ export function separate(nodes: Placed[], passes = 80): void {
     let moved = false;
     for (let i = 0; i < nodes.length; i++) {
       const a = nodes[i];
-      const ba = boxes[i];
+      const boxA = boxes[i];
       for (let j = i + 1; j < nodes.length; j++) {
         const b = nodes[j];
-        const bb = boxes[j];
+        const boxB = boxes[j];
         const ax = a.x ?? 0;
         const ay = a.y ?? 0;
         const bx = b.x ?? 0;
         const by = b.y ?? 0;
         const ox =
-          Math.min(ax + ba.right, bx + bb.right) -
-          Math.max(ax - ba.left, bx - bb.left);
+          Math.min(ax + boxA.right, bx + boxB.right) -
+          Math.max(ax - boxA.left, bx - boxB.left);
         const oy =
-          Math.min(ay + ba.down, by + bb.down) -
-          Math.max(ay - ba.up, by - bb.up);
+          Math.min(ay + boxA.down, by + boxB.down) -
+          Math.max(ay - boxA.up, by - boxB.up);
         if (ox <= 0 || oy <= 0) continue;
         moved = true;
         if (oy < ox) {
@@ -284,7 +284,7 @@ export function separate(nodes: Placed[], passes = 80): void {
 export function radialLayout(
   root: Placed,
   childrenOf: Map<Placed, Placed[]>,
-  f: typeof LAYOUT,
+  layout: typeof LAYOUT,
 ): void {
   const kids = (n: Placed) => childrenOf.get(n) ?? [];
   const leaves: Placed[] = [];
@@ -296,7 +296,7 @@ export function radialLayout(
       groupOf.set(n, group ?? n);
       if (!kids(n).length) leaves.push(n);
     }
-    for (const c of kids(n)) walk(c, n === root ? c : group);
+    for (const child of kids(n)) walk(child, n === root ? child : group);
   };
   walk(root, null);
   root.x = 0;
@@ -311,7 +311,7 @@ export function radialLayout(
       ? 0
       : Math.max(0, ...(rs ?? []).filter((n) => kids(n).length).map(reach)),
   );
-  const tall = f.spacing.v;
+  const tall = layout.spacing.v;
 
   let grow = 1;
   let angles = new Map<Placed, number>();
@@ -320,12 +320,12 @@ export function radialLayout(
   for (let attempt = 0; attempt < 40; attempt++) {
     rx = [0];
     ry = [0];
-    for (let d = 1; d <= deepest; d++) {
-      ry[d] = (f.ring.y + (d - 1) * f.ring.stepY) * grow;
-      rx[d] =
-        d === 1
-          ? Math.max(ry[1], radius(root) + f.ring.x * grow)
-          : rx[d - 1] + widest[d - 1] + f.ring.gapX * grow;
+    for (let depth = 1; depth <= deepest; depth++) {
+      ry[depth] = (layout.ring.y + (depth - 1) * layout.ring.stepY) * grow;
+      rx[depth] =
+        depth === 1
+          ? Math.max(ry[1], radius(root) + layout.ring.x * grow)
+          : rx[depth - 1] + widest[depth - 1] + layout.ring.gapX * grow;
     }
     const sector = Math.asin(
       Math.min(1, (labelFont(root) * 0.7 + tall) / ry[1]),
@@ -333,13 +333,15 @@ export function radialLayout(
     const room = Math.PI * 2 - 2 * sector;
 
     const need = (a: Placed, b: Placed, at: number) => {
-      const d = Math.max(a.depth, b.depth);
-      const vertical = tall / (ry[d] * Math.abs(Math.cos(at)) + 1e-6);
+      const depth = Math.max(a.depth, b.depth);
+      const vertical = tall / (ry[depth] * Math.abs(Math.cos(at)) + 1e-6);
       const across =
-        (Math.max(reach(a), reach(b)) + f.spacing.h) /
-        (rx[d] * Math.abs(Math.sin(at)) + 1e-6);
+        (Math.max(reach(a), reach(b)) + layout.spacing.h) /
+        (rx[depth] * Math.abs(Math.sin(at)) + 1e-6);
       const step = Math.min(vertical, across);
-      return groupOf.get(a) === groupOf.get(b) ? step : step * (1 + f.groupGap);
+      return groupOf.get(a) === groupOf.get(b)
+        ? step
+        : step * (1 + layout.groupGap);
     };
 
     const steps: number[] = [0];
@@ -376,12 +378,12 @@ export function radialLayout(
     angles.set(n, mid);
     return mid;
   };
-  for (let d = 1; d <= deepest; d++)
-    for (const n of ring[d] ?? []) {
-      const t = angle(n);
-      n.x = rx[d] * Math.cos(t);
-      n.y = ry[d] * Math.sin(t);
-      n.side = Math.cos(t) < 0 ? -1 : 1;
+  for (let depth = 1; depth <= deepest; depth++)
+    for (const n of ring[depth] ?? []) {
+      const bearing = angle(n);
+      n.x = rx[depth] * Math.cos(bearing);
+      n.y = ry[depth] * Math.sin(bearing);
+      n.side = Math.cos(bearing) < 0 ? -1 : 1;
     }
 }
 
@@ -399,8 +401,8 @@ export function packIslands(
 ): void {
   const groups = new Map<number, Placed[]>();
   for (const n of nodes) {
-    const k = islandOf(n);
-    groups.set(k, [...(groups.get(k) ?? []), n]);
+    const island = islandOf(n);
+    groups.set(island, [...(groups.get(island) ?? []), n]);
   }
   const frames = [...groups.values()].map((members) => {
     let left = Infinity;
@@ -408,11 +410,11 @@ export function packIslands(
     let up = Infinity;
     let down = -Infinity;
     for (const n of members) {
-      const b = boxOf(n, 0);
-      left = Math.min(left, (n.x ?? 0) - b.left);
-      right = Math.max(right, (n.x ?? 0) + b.right);
-      up = Math.min(up, (n.y ?? 0) - b.up);
-      down = Math.max(down, (n.y ?? 0) + b.down);
+      const box = boxOf(n, 0);
+      left = Math.min(left, (n.x ?? 0) - box.left);
+      right = Math.max(right, (n.x ?? 0) + box.right);
+      up = Math.min(up, (n.y ?? 0) - box.up);
+      down = Math.max(down, (n.y ?? 0) + box.down);
     }
     return { members, left, up, w: right - left, h: down - up };
   });
@@ -422,13 +424,13 @@ export function packIslands(
   type Row = { items: typeof frames; w: number; h: number };
   const shelve = (limit: number) => {
     const rows: Row[] = [];
-    for (const f of frames) {
+    for (const frame of frames) {
       const row = rows[rows.length - 1];
-      if (row && row.w + gap + f.w <= limit) {
-        row.items.push(f);
-        row.w += gap + f.w;
-        row.h = Math.max(row.h, f.h);
-      } else rows.push({ items: [f], w: f.w, h: f.h });
+      if (row && row.w + gap + frame.w <= limit) {
+        row.items.push(frame);
+        row.w += gap + frame.w;
+        row.h = Math.max(row.h, frame.h);
+      } else rows.push({ items: [frame], w: frame.w, h: frame.h });
     }
     const w = Math.max(...rows.map((r) => r.w));
     const h = rows.reduce((sum, r) => sum + r.h, 0) + gap * (rows.length - 1);
@@ -441,8 +443,8 @@ export function packIslands(
   const byWidth = [...frames].sort((a, b) => b.w - a.w);
   let best = shelve(Infinity);
   let limit = 0;
-  for (const f of byWidth) {
-    limit += (limit ? gap : 0) + f.w;
+  for (const frame of byWidth) {
+    limit += (limit ? gap : 0) + frame.w;
     const tried = shelve(limit);
     if (Math.max(tried.w / aspect, tried.h) < Math.max(best.w / aspect, best.h))
       best = tried;
@@ -453,14 +455,14 @@ export function packIslands(
   let y = -total / 2;
   for (const row of rows) {
     let x = -row.w / 2;
-    for (const f of row.items) {
-      const dx = x - f.left;
-      const dy = y + (row.h - f.h) / 2 - f.up;
-      for (const n of f.members) {
+    for (const frame of row.items) {
+      const dx = x - frame.left;
+      const dy = y + (row.h - frame.h) / 2 - frame.up;
+      for (const n of frame.members) {
         n.x = (n.x ?? 0) + dx;
         n.y = (n.y ?? 0) + dy;
       }
-      x += f.w + gap;
+      x += frame.w + gap;
     }
     y += row.h + gap;
   }
@@ -472,13 +474,13 @@ export function overlaps(nodes: Placed[]): number {
   const boxes = nodes.map((n) => boxOf(n, 0));
   for (let i = 0; i < nodes.length; i++)
     for (let j = i + 1; j < nodes.length; j++) {
-      const [a, b, ba, bb] = [nodes[i], nodes[j], boxes[i], boxes[j]];
+      const [a, b, boxA, boxB] = [nodes[i], nodes[j], boxes[i], boxes[j]];
       const ox =
-        Math.min((a.x ?? 0) + ba.right, (b.x ?? 0) + bb.right) -
-        Math.max((a.x ?? 0) - ba.left, (b.x ?? 0) - bb.left);
+        Math.min((a.x ?? 0) + boxA.right, (b.x ?? 0) + boxB.right) -
+        Math.max((a.x ?? 0) - boxA.left, (b.x ?? 0) - boxB.left);
       const oy =
-        Math.min((a.y ?? 0) + ba.down, (b.y ?? 0) + bb.down) -
-        Math.max((a.y ?? 0) - ba.up, (b.y ?? 0) - bb.up);
+        Math.min((a.y ?? 0) + boxA.down, (b.y ?? 0) + boxB.down) -
+        Math.max((a.y ?? 0) - boxA.up, (b.y ?? 0) - boxB.up);
       if (ox > 0 && oy > 0) count++;
     }
   return count;
@@ -488,9 +490,10 @@ export function overlaps(nodes: Placed[]): number {
 export function options(products: ProductRow[], team: string) {
   const teams = new Map<string, string>();
   const named = new Map<string, string>();
-  for (const p of products) {
-    teams.set(p.team_slug, p.team_name);
-    if (!team || p.team_slug === team) named.set(p.slug, p.name);
+  for (const product of products) {
+    teams.set(product.team_slug, product.team_name);
+    if (!team || product.team_slug === team)
+      named.set(product.slug, product.name);
   }
   const sorted = (m: Map<string, string>) =>
     [...m].sort((a, b) => a[1].localeCompare(b[1]));
@@ -513,7 +516,7 @@ export type SimLink = SimulationLinkDatum<SimNode>;
 export function holdStill(
   sim: Simulation<SimNode, SimLink>,
   links: SimLink[],
-  f: { home: number; follow: number; friction: number },
+  strength: { home: number; follow: number; friction: number },
 ): {
   restless: () => number;
   hold: (n: SimNode | null) => void;
@@ -521,23 +524,23 @@ export function holdStill(
 } {
   const nodes = sim.nodes();
   const at = new Map(nodes.map((n) => [n, { x: n.x ?? 0, y: n.y ?? 0 }]));
-  const follow = forceFollow(links, f.follow);
+  const follow = forceFollow(links, strength.follow);
   for (const n of nodes) {
     n.vx = 0;
     n.vy = 0;
   }
   sim
-    .velocityDecay(f.friction)
+    .velocityDecay(strength.friction)
     .force("follow", follow)
     .force(
       "home",
-      forceHome(at, f.home, (n) => held.has(n)),
+      forceHome(at, strength.home, (n) => held.has(n)),
     );
 
   const held = new Set<SimNode>();
   const hold = (n: SimNode | null) => {
     held.clear();
-    if (n) for (const m of branchOf(n, links)) held.add(m);
+    if (n) for (const member of branchOf(n, links)) held.add(member);
   };
 
   // Where a dropped branch lands is where it lives now: its homes move with it,
@@ -548,11 +551,12 @@ export function holdStill(
     const dx = (n.x ?? 0) - was.x;
     const dy = (n.y ?? 0) - was.y;
     const branch = branchOf(n, links);
-    for (const m of branch) {
-      const h = at.get(m)!;
-      at.set(m, { x: h.x + dx, y: h.y + dy });
+    for (const member of branch) {
+      const home = at.get(member)!;
+      at.set(member, { x: home.x + dx, y: home.y + dy });
     }
-    for (const [m, h] of makeRoom(nodes, links, at, branch)) at.set(m, h);
+    for (const [member, home] of makeRoom(nodes, links, at, branch))
+      at.set(member, home);
     follow.rebase(at);
   };
 
@@ -587,10 +591,10 @@ function awayFrom(
 ): { x: number; y: number } {
   let ux = b.x - cx;
   let uy = b.y - cy;
-  const len = Math.hypot(ux, uy);
-  if (len < 1e-6) return { x: 0, y: oy };
-  ux /= len;
-  uy /= len;
+  const length = Math.hypot(ux, uy);
+  if (length < 1e-6) return { x: 0, y: oy };
+  ux /= length;
+  uy /= length;
   const tx =
     (b.x - a.x) * ux > 0 && Math.abs(ux) > 1e-3 ? ox / Math.abs(ux) : Infinity;
   const ty =
@@ -607,16 +611,16 @@ function awayFrom(
 
 /** A node and everything that hangs below it. */
 export function branchOf<N extends SimNode>(n: N, links: SimLink[]): Set<N> {
-  const out = new Set<N>([n]);
+  const branch = new Set<N>([n]);
   for (let grew = true; grew;) {
     grew = false;
-    for (const l of links)
-      if (out.has(l.source as N) && !out.has(l.target as N)) {
-        out.add(l.target as N);
+    for (const link of links)
+      if (branch.has(link.source as N) && !branch.has(link.target as N)) {
+        branch.add(link.target as N);
         grew = true;
       }
   }
-  return out;
+  return branch;
 }
 
 /**
@@ -647,32 +651,32 @@ export function makeRoom(
   for (let pass = 1; pass <= passes; pass++) {
     let moved = false;
     for (const a of nodes) {
-      const ra = rank.get(a);
-      if (ra === undefined) continue;
-      const pa = at.get(a)!;
-      const ba = boxes.get(a)!;
+      const rankA = rank.get(a);
+      if (rankA === undefined) continue;
+      const atA = at.get(a)!;
+      const boxA = boxes.get(a)!;
       for (const b of nodes) {
         if (a === b) continue;
-        const rb = rank.get(b);
-        if (rb !== undefined && (rb < ra || rb === 0)) continue;
-        const pb = at.get(b)!;
-        const bb = boxes.get(b)!;
+        const rankB = rank.get(b);
+        if (rankB !== undefined && (rankB < rankA || rankB === 0)) continue;
+        const atB = at.get(b)!;
+        const boxB = boxes.get(b)!;
         const ox =
-          Math.min(pa.x + ba.right, pb.x + bb.right) -
-          Math.max(pa.x - ba.left, pb.x - bb.left);
+          Math.min(atA.x + boxA.right, atB.x + boxB.right) -
+          Math.max(atA.x - boxA.left, atB.x - boxB.left);
         const oy =
-          Math.min(pa.y + ba.down, pb.y + bb.down) -
-          Math.max(pa.y - ba.up, pb.y - bb.up);
+          Math.min(atA.y + boxA.down, atB.y + boxB.down) -
+          Math.max(atA.y - boxA.up, atB.y - boxB.up);
         if (ox <= 0 || oy <= 0) continue;
-        const shift = awayFrom(cx, cy, pa, pb, ox, oy);
+        const shift = awayFrom(cx, cy, atA, atB, ox, oy);
         const carried = branchOf(b, links);
         const group = [...carried].some((m) => rank.has(m) && m !== b)
           ? [b]
           : [...carried];
-        for (const m of group) {
-          const h = at.get(m)!;
-          at.set(m, { x: h.x + shift.x, y: h.y + shift.y });
-          if (!rank.has(m)) rank.set(m, pass);
+        for (const member of group) {
+          const home = at.get(member)!;
+          at.set(member, { x: home.x + shift.x, y: home.y + shift.y });
+          if (!rank.has(member)) rank.set(member, pass);
         }
         moved = true;
       }
@@ -689,20 +693,20 @@ export function makeRoom(
  */
 export function forceHome(
   at: Map<SimNode, { x: number; y: number }>,
-  k: number,
+  strength: number,
   exempt: (n: SimNode) => boolean = () => false,
 ) {
   let nodes: SimNode[] = [];
   function force() {
     for (const n of nodes) {
-      const h = at.get(n);
-      if (!h || n.fx != null || exempt(n)) continue;
-      n.vx = (n.vx ?? 0) + (h.x - (n.x ?? 0)) * k;
-      n.vy = (n.vy ?? 0) + (h.y - (n.y ?? 0)) * k;
+      const home = at.get(n);
+      if (!home || n.fx != null || exempt(n)) continue;
+      n.vx = (n.vx ?? 0) + (home.x - (n.x ?? 0)) * strength;
+      n.vy = (n.vy ?? 0) + (home.y - (n.y ?? 0)) * strength;
     }
   }
-  force.initialize = (ns: SimNode[]) => {
-    nodes = ns;
+  force.initialize = (given: SimNode[]) => {
+    nodes = given;
   };
   return force;
 }
@@ -778,7 +782,7 @@ export const LAYOUT = {
  */
 export function simulate(
   graph: Graph,
-  f: typeof LAYOUT = LAYOUT,
+  layout: typeof LAYOUT = LAYOUT,
   aspect = 2,
 ): {
   sim: Simulation<SimNode, SimLink>;
@@ -802,17 +806,17 @@ export function simulate(
 
   const childrenOf = new Map<Placed, Placed[]>();
   const parentOf = new Map<SimNode, SimNode>();
-  for (const l of links) {
-    const p = l.source as SimNode;
-    const c = l.target as SimNode;
-    childrenOf.set(p, [...(childrenOf.get(p) ?? []), c]);
-    parentOf.set(c, p);
+  for (const link of links) {
+    const parent = link.source as SimNode;
+    const child = link.target as SimNode;
+    childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), child]);
+    parentOf.set(child, parent);
   }
   const roots = nodes.filter((n) => !parentOf.has(n));
   const islandOf = new Map<SimNode, number>();
-  roots.forEach((r, i) => {
-    for (const n of branchOf(r, links)) islandOf.set(n, i);
-    radialLayout(r, childrenOf, f);
+  roots.forEach((root, i) => {
+    for (const n of branchOf(root, links)) islandOf.set(n, i);
+    radialLayout(root, childrenOf, layout);
   });
   for (let i = 0; i < roots.length; i++)
     separate(nodes.filter((n) => islandOf.get(n) === i));
@@ -820,14 +824,14 @@ export function simulate(
     nodes,
     (n) => islandOf.get(n as SimNode) ?? 0,
     aspect,
-    f.islandGap,
+    layout.islandGap,
   );
 
   const sim = forceSimulation<SimNode, SimLink>(nodes)
     .force("collide", forceCollide<SimNode>((d) => radius(d) + 6).strength(0.9))
     .alpha(0)
     .stop();
-  const { restless, hold, drop } = holdStill(sim, links, f.still);
+  const { restless, hold, drop } = holdStill(sim, links, layout.still);
   sim.alphaMin(ALPHA_MIN);
   return { sim, nodes, links, restless, hold, drop };
 }

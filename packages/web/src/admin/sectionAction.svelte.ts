@@ -36,9 +36,9 @@ export const sectionActions = (section: string): SectionAction[] =>
 // `$effect`. Untracked, or that effect would depend on the state it writes and
 // re-run forever.
 function edit(
-  fn: (was: Record<string, SectionAction>) => Record<string, SectionAction>,
+  change: (was: Record<string, SectionAction>) => Record<string, SectionAction>,
 ) {
-  untrack(() => (claims = fn(claims)));
+  untrack(() => (claims = change(claims)));
 }
 
 /**

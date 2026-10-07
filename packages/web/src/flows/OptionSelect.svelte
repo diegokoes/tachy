@@ -26,7 +26,7 @@
     extra?: FlowOption[];
     label: string;
     placeholder?: string;
-    onchange: (v: string) => void;
+    onchange: (value: string) => void;
   } = $props();
 
   let options = $state<FlowOption[]>([]);
@@ -42,8 +42,8 @@
     }
     error = null;
     fetchOptions(source, deps)
-      .then((o) => {
-        if (want === JSON.stringify([source, deps])) options = o;
+      .then((loaded) => {
+        if (want === JSON.stringify([source, deps])) options = loaded;
       })
       .catch((e) => (error = e instanceof Error ? e.message : String(e)));
   });
@@ -67,7 +67,9 @@
     oninput={(e) => onchange((e.target as HTMLInputElement).value)}
   />
   <datalist {id}>
-    {#each all as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+    {#each all as option (option.value)}<option value={option.value}
+        >{option.label}</option
+      >{/each}
   </datalist>
 {:else}
   <Select

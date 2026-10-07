@@ -64,8 +64,8 @@ export async function runProbes() {
   probeState.running = true;
   probeState.error = null;
   try {
-    const res = await api.get<{ checks: Probe[] }>("/tests/checks");
-    probeState.checks = res.checks;
+    const answer = await api.get<{ checks: Probe[] }>("/tests/checks");
+    probeState.checks = answer.checks;
     probeState.at = Date.now();
   } catch (e) {
     probeState.error = e instanceof Error ? e.message : String(e);

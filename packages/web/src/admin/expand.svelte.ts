@@ -12,7 +12,7 @@ export const expandedKey = (): string | undefined =>
 export const tilePath = (page: string, key?: string) =>
   key ? `/admin/${page}/${SEGMENT}/${key}` : `/admin/${page}`;
 
-const go = (el: HTMLElement | null, to: string) =>
+const morphTo = (el: HTMLElement | null, to: string) =>
   morphTile(el, async () => {
     setPeriod(undefined);
     navigate(to);
@@ -20,7 +20,7 @@ const go = (el: HTMLElement | null, to: string) =>
   });
 
 export const openTile = (page: string, key: string, el: HTMLElement | null) =>
-  go(el, tilePath(page, key));
+  morphTo(el, tilePath(page, key));
 
 export const closeTile = (page: string) =>
-  go(document.querySelector<HTMLElement>(".tile.open"), tilePath(page));
+  morphTo(document.querySelector<HTMLElement>(".tile.open"), tilePath(page));

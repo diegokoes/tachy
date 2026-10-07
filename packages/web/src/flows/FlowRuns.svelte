@@ -56,16 +56,16 @@
 
 <div class="runs">
   {#if error}<Note tone="danger">{error}</Note>{/if}
-  {#each runs as r (r.id)}
+  {#each runs as run (run.id)}
     <button
       class="run"
-      class:sel={r.id === selected}
-      onclick={() => onpick(r.id === selected ? null : r)}
+      class:sel={run.id === selected}
+      onclick={() => onpick(run.id === selected ? null : run)}
     >
-      <Badge tone={TONES[r.status]}>{r.status}</Badge>
-      {#if r.dry_run}<Badge tone="warn">dry</Badge>{/if}
-      <span class="when"><Time at={r.started_at} /></span>
-      <span class="trig">{r.trigger_id ?? "by hand"}</span>
+      <Badge tone={TONES[run.status]}>{run.status}</Badge>
+      {#if run.dry_run}<Badge tone="warn">dry</Badge>{/if}
+      <span class="when"><Time at={run.started_at} /></span>
+      <span class="trig">{run.trigger_id ?? "by hand"}</span>
     </button>
   {:else}
     <p class="none">No runs yet. Try it on an item with test run.</p>

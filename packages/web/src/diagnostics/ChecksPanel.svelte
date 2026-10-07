@@ -24,12 +24,12 @@
   });
 </script>
 
-{#snippet stateCell(p: Probe)}
-  <Badge tone={toneOf(p.state)}>{p.state}</Badge>
+{#snippet stateCell(probe: Probe)}
+  <Badge tone={toneOf(probe.state)}>{probe.state}</Badge>
 {/snippet}
 
-{#snippet detailCell(p: Probe)}
-  <span class="detail">{p.detail}</span>
+{#snippet detailCell(probe: Probe)}
+  <span class="detail">{probe.detail}</span>
 {/snippet}
 
 <div class="bar">

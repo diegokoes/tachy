@@ -47,14 +47,14 @@
   onMount(() => void system.reload());
 </script>
 
-{#snippet signInCell(u: UserRow)}
-  {@const how = signIn(u, sso)}
-  {@const on = !u.disabled && (how.password || how.sso)}
+{#snippet signInCell(user: UserRow)}
+  {@const how = signIn(user, sso)}
+  {@const on = !user.disabled && (how.password || how.sso)}
   {@const why = on
     ? [how.password ? "password" : "", how.sso ? "SSO" : ""]
         .filter(Boolean)
         .join(" · ")
-    : u.disabled
+    : user.disabled
       ? "disabled"
       : "no way in"}
   <span class="mark" class:on>
@@ -67,10 +67,10 @@
   </span>
 {/snippet}
 
-{#snippet stateCell(u: UserRow)}
-  {#if u.disabled}
+{#snippet stateCell(user: UserRow)}
+  {#if user.disabled}
     <Badge tone="danger">disabled</Badge>
-  {:else if u.service_account}
+  {:else if user.service_account}
     <Badge>service</Badge>
   {/if}
 {/snippet}

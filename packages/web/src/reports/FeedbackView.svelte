@@ -168,8 +168,8 @@
             A few things that would help whoever picks this up - add them, or
             send as it is:
             <ul class="tips">
-              {#each review.suggestions as s}
-                <li>{s}</li>
+              {#each review.suggestions as suggestion}
+                <li>{suggestion}</li>
               {/each}
             </ul>
           </Note>

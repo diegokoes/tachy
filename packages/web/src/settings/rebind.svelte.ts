@@ -47,29 +47,29 @@ export function open(target: Target | null, label = "") {
 
 export const close = () => open(null);
 
-export function boundKey(t: Target): string {
-  if (t.kind === "subnav") return subnavKey(t.slot);
-  if (t.kind === "action") return actionKey(t.item);
+export function boundKey(target: Target): string {
+  if (target.kind === "subnav") return subnavKey(target.slot);
+  if (target.kind === "action") return actionKey(target.item);
   return navKey(
-    t.item,
-    navItems().findIndex((n) => n.key === t.item),
+    target.item,
+    navItems().findIndex((n) => n.key === target.item),
   );
 }
 
-export function defaultKey(t: Target): string {
-  if (t.kind === "subnav") return defaultSubnavKey(t.slot);
-  if (t.kind === "action") return ACTIONS[t.item].key;
-  return defaultNavKey(navItems().findIndex((n) => n.key === t.item));
+export function defaultKey(target: Target): string {
+  if (target.kind === "subnav") return defaultSubnavKey(target.slot);
+  if (target.kind === "action") return ACTIONS[target.item].key;
+  return defaultNavKey(navItems().findIndex((n) => n.key === target.item));
 }
 
-export function customized(t: Target): boolean {
-  if (t.kind === "subnav") return t.slot in keymap.subnav;
-  return t.item in keymap.nav;
+export function customized(target: Target): boolean {
+  if (target.kind === "subnav") return target.slot in keymap.subnav;
+  return target.item in keymap.nav;
 }
 
-function write(t: Target, key: string | null) {
-  if (t.kind === "subnav") setSubnavKey(t.slot, key);
-  else setNavKey(t.item, key);
+function write(target: Target, key: string | null) {
+  if (target.kind === "subnav") setSubnavKey(target.slot, key);
+  else setNavKey(target.item, key);
 }
 
 const MODIFIERS = ["Shift", "Control", "Alt", "Meta"];

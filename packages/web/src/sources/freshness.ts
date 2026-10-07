@@ -70,13 +70,13 @@ export function freshnessGroups(rows: Freshness[], now = Date.now()) {
     label: k.label,
     items: rows
       .filter((r) => r.kind === k.key)
-      .map((r) => {
-        const state = freshnessState(r.last_at, now);
+      .map((row) => {
+        const state = freshnessState(row.last_at, now);
         return {
-          key: `${r.kind}:${r.key}`,
-          label: r.label,
+          key: `${row.kind}:${row.key}`,
+          label: row.label,
           tone: FRESHNESS_STATES.find((s) => s.key === state)!.tone,
-          title: `${r.label}: ${r.last_at ? new Date(r.last_at).toLocaleString() : "never"}`,
+          title: `${row.label}: ${row.last_at ? new Date(row.last_at).toLocaleString() : "never"}`,
         };
       }),
   }));

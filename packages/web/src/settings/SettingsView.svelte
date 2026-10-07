@@ -116,9 +116,9 @@
 {/snippet}
 
 {#snippet column(sections: Section[])}
-  {#each sections as s (s.label)}
-    {@const View = s.view}
-    <Group label={s.label} hint={s.hint}><View /></Group>
+  {#each sections as section (section.label)}
+    {@const View = section.view}
+    <Group label={section.label} hint={section.hint}><View /></Group>
   {/each}
 {/snippet}
 

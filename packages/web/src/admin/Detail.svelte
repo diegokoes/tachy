@@ -32,12 +32,12 @@
     <Counts items={figures} {loading} />
     {#if windowed}
       <div class="period" role="group" aria-label="period">
-        {#each PERIODS as d (d)}
+        {#each PERIODS as choice (choice)}
           <button
             type="button"
-            class:on={now === d}
-            aria-pressed={now === d}
-            onclick={() => setPeriod(d)}>{d} d</button
+            class:on={now === choice}
+            aria-pressed={now === choice}
+            onclick={() => setPeriod(choice)}>{choice} d</button
           >
         {/each}
       </div>

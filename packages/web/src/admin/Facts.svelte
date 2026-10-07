@@ -46,14 +46,14 @@ chart of one bit.
   style="--row: {ROW_REM}rem; --gap: {GAP_REM}rem"
   use:fitRows={{ row: ROW_REM, gap: GAP_REM, onfit: (n) => (room = n) }}
 >
-  {#each cut.shown as f (f.key)}
+  {#each cut.shown as fact (fact.key)}
     <div class="row">
-      <dt>{f.label}</dt>
-      <dd class={f.tone ?? ""}>
-        <span class="v">{f.value}</span>
-        {#if f.detail}<span class="d">{f.detail}</span>{/if}
+      <dt>{fact.label}</dt>
+      <dd class={fact.tone ?? ""}>
+        <span class="v">{fact.value}</span>
+        {#if fact.detail}<span class="d">{fact.detail}</span>{/if}
       </dd>
-      {#if extra}<span class="x">{@render extra(f)}</span>{/if}
+      {#if extra}<span class="x">{@render extra(fact)}</span>{/if}
     </div>
   {/each}
   {#if cut.rest.length}

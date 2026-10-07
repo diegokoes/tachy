@@ -47,12 +47,13 @@ export const ssoConfigured = (): boolean | null =>
  * with `password_login_allowed`, so holding a hash is not the same as being
  * able to use it.
  */
-export function signIn(u: UserRow, sso: boolean | null) {
+export function signIn(user: UserRow, sso: boolean | null) {
   return {
-    password: u.has_password && (sso !== true || u.password_login_allowed),
+    password:
+      user.has_password && (sso !== true || user.password_login_allowed),
     // SSO is a deployment-wide setting, so it is on for everyone or no one.
     // Service accounts authenticate with a token instead.
-    sso: sso === true && !u.service_account,
+    sso: sso === true && !user.service_account,
   };
 }
 

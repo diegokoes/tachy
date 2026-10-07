@@ -76,12 +76,12 @@ export async function loadAgent() {
   agentPrefs.loading = true;
   agentPrefs.error = null;
   try {
-    const [p, c] = await Promise.all([
+    const [prefs, creds] = await Promise.all([
       api.get<Prefs>("/me/preferences"),
       api.get<MyCreds>("/me/credentials"),
     ]);
-    agentPrefs.prefs = p;
-    agentPrefs.creds = c;
+    agentPrefs.prefs = prefs;
+    agentPrefs.creds = creds;
     if (!agentPrefs.models) void loadModels();
   } catch (e) {
     agentPrefs.error = errText(e);
@@ -91,10 +91,10 @@ export async function loadAgent() {
 }
 
 /** Runs `fn`, then re-reads - every write here changes what is effective. */
-async function write(fn: () => Promise<unknown>) {
+async function write(change: () => Promise<unknown>) {
   agentPrefs.error = null;
   try {
-    await fn();
+    await change();
     await loadAgent();
   } catch (e) {
     agentPrefs.error = errText(e);

@@ -33,7 +33,7 @@
     registered: (key: string) => boolean;
     /** Asks the source and stores what it said; throws on failure. */
     onfetch: () => Promise<void>;
-    onpick: (g: Found) => void;
+    onpick: (hit: Found) => void;
     /** Swirl only under the tower, for a finder with no room above it. */
     below?: boolean;
   } = $props();
@@ -141,11 +141,11 @@
       { x: x1, opacity: 0, scale: 1.5, duration: travel, ease: "none" },
       launch,
     );
-    for (const ch of letters) {
-      const r = ch.getBoundingClientRect();
-      const at = (r.left + r.width / 2 - box.left - x0) / (x1 - x0);
+    for (const letter of letters) {
+      const rect = letter.getBoundingClientRect();
+      const at = (rect.left + rect.width / 2 - box.left - x0) / (x1 - x0);
       tl.to(
-        ch,
+        letter,
         {
           "--lit": 1,
           y: "-0.2em",
@@ -194,14 +194,17 @@
     const cy = mast.top + mast.height / 2;
     const n = movers.length;
     const home = movers.map((el) => {
-      const r = el.getBoundingClientRect();
-      return { x: cx - (r.left + r.width / 2), y: cy - (r.top + r.height / 2) };
+      const rect = el.getBoundingClientRect();
+      return {
+        x: cx - (rect.left + rect.width / 2),
+        y: cy - (rect.top + rect.height / 2),
+      };
     });
     const radius = Math.min(70, 6 * Math.sqrt(n));
     const swirl = (i: number) => {
-      const r = 8 + radius * Math.sqrt(i / n);
-      const y = r * Math.sin(i * 2.4);
-      return { x: r * Math.cos(i * 2.4), y: below ? Math.abs(y) : y };
+      const reach = 8 + radius * Math.sqrt(i / n);
+      const y = reach * Math.sin(i * 2.4);
+      return { x: reach * Math.cos(i * 2.4), y: below ? Math.abs(y) : y };
     };
 
     const tl = gsap.timeline({ onComplete: () => (flight = null) });
@@ -289,7 +292,8 @@ comes back lands under it.
       {/each}
     </svg>
     <span class="word" class:gone={landed} bind:this={word} aria-hidden="true"
-      >{#each [...label] as ch, i (i)}<span class="ch">{ch}</span>{/each}</span
+      >{#each [...label] as letter, i (i)}<span class="ch">{letter}</span
+        >{/each}</span
     >
     <svg
       bind:this={signal}
@@ -308,19 +312,19 @@ comes back lands under it.
   {/if}
 
   <div class="cloud" bind:this={cloud}>
-    {#each list as g (g.key)}
-      {@const taken = registered(g.key)}
+    {#each list as hit (hit.key)}
+      {@const taken = registered(hit.key)}
       <button
         type="button"
         class="tag"
-        class:on={picked === g.key}
+        class:on={picked === hit.key}
         disabled={taken}
-        aria-pressed={picked === g.key}
-        onclick={() => onpick(g)}
+        aria-pressed={picked === hit.key}
+        onclick={() => onpick(hit)}
       >
         <span class="frame" aria-hidden="true"></span>
         <span class="name"
-          >{#each [...g.name] as ch, i (i)}<span class="ch">{ch}</span
+          >{#each [...hit.name] as letter, i (i)}<span class="ch">{letter}</span
             >{/each}</span
         >
       </button>
