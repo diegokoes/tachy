@@ -51,7 +51,7 @@ export async function retireWorker(id: string): Promise<void> {
   await sql`delete from job_workers where id = ${id}`;
 }
 
-export async function pruneWorkers(): Promise<number> {
+export async function sweepWorkers(): Promise<number> {
   const rows = await sql`
     delete from job_workers
     where last_seen_at < now() - ${FORGET_MS} * interval '1 millisecond'
