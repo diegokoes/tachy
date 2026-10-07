@@ -85,12 +85,11 @@ export async function patchedFiling(
           componentId: current.component_id,
           productArea: current.product_area,
         };
-  const customerId =
-    "customerSlug" in patch
-      ? patch.customerSlug
-        ? await getCustomerIdBySlug(patch.customerSlug)
-        : null
-      : current.customer_id;
+  let customerId = current.customer_id;
+  if ("customerSlug" in patch)
+    customerId = patch.customerSlug
+      ? await getCustomerIdBySlug(patch.customerSlug)
+      : null;
   let customerUnitId =
     customerId === current.customer_id ? current.customer_unit_id : null;
   if ("unit" in patch) {

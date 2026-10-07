@@ -102,6 +102,13 @@ export async function ingestWorkItem(
       `;
     }
 
+    // Only when routing decided the stored value. The upsert leaves an
+    // existing attribution alone, so on a re-fetch the stored customer_id
+    // did not come from this routing and there is no conflict to report.
+    const routed = item.customer_id === customerId;
+    const unsettled = route.customerId ? undefined : match.reason;
+    const customerAmbiguity = routed ? (conflict ?? unsettled) : undefined;
+
     return {
       id: item.id,
       sourceProjectId: item.source_project_id,
@@ -109,16 +116,7 @@ export async function ingestWorkItem(
       teamId: item.team_id,
       customerId: item.customer_id,
       customerUnitId: item.customer_unit_id ?? null,
-      // Only when routing decided the stored value. The upsert leaves an
-      // existing attribution alone, so on a re-fetch the stored customer_id
-      // did not come from this routing and there is no conflict to report.
-      ...(item.customer_id !== customerId
-        ? {}
-        : conflict
-          ? { customerAmbiguity: conflict }
-          : match.reason && !route.customerId
-            ? { customerAmbiguity: match.reason }
-            : {}),
+      ...(customerAmbiguity ? { customerAmbiguity } : {}),
       observedVersion: item.observed_version,
       componentSlug: route.componentSlug,
       inserted: item.inserted,

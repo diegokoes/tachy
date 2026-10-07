@@ -337,10 +337,18 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
 
   // Deprecated entries are included: a flagged stale lesson beats the model
   // re-deriving it. Consumers warn on status='deprecated'.
+  const inProduct = (id: string) =>
+    opts.includeUnscoped
+      ? sql`and (product_id = ${id} or product_id is null)`
+      : sql`and product_id = ${id}`;
+  const inTeam = (id: string) =>
+    opts.includeUnscoped
+      ? sql`and (team_id = ${id} or team_id is null)`
+      : sql`and team_id = ${id}`;
   const filters = sql`
     status in ('approved', 'deprecated')
-    ${opts.productId ? (opts.includeUnscoped ? sql`and (product_id = ${opts.productId} or product_id is null)` : sql`and product_id = ${opts.productId}`) : sql``}
-    ${opts.teamId ? (opts.includeUnscoped ? sql`and (team_id = ${opts.teamId} or team_id is null)` : sql`and team_id = ${opts.teamId}`) : sql``}
+    ${opts.productId ? inProduct(opts.productId) : sql``}
+    ${opts.teamId ? inTeam(opts.teamId) : sql``}
     ${facetSql(opts)}
   `;
 
@@ -653,6 +661,9 @@ export async function updateKnowledgeEntry(
     vec = text ? toVectorLiteral(await embedPassage(text)) : null;
   }
 
+  const embeddingUpdate = vec
+    ? sql`, embedding = ${vec}::vector, embedding_model = ${EMBEDDING_MODEL}`
+    : sql`, embedding = null, embedding_model = null`;
   return sql.begin(async (tx) => {
     const [row] = await tx<RevisedRow[]>`
     update knowledge_entries set
@@ -677,7 +688,7 @@ export async function updateKnowledgeEntry(
       fixed_version      = ${merged.fixedVersion ?? null},
       structured         = ${jsonb(merged.structured ?? {})},
       version            = version + 1
-      ${contentChanged ? (vec ? sql`, embedding = ${vec}::vector, embedding_model = ${EMBEDDING_MODEL}` : sql`, embedding = null, embedding_model = null`) : sql``}
+      ${contentChanged ? embeddingUpdate : sql``}
     where id = ${id} and version = ${current.version}
     returning id, version, ${REVISION_COLUMNS}
   `;

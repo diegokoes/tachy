@@ -481,11 +481,19 @@ export async function searchReferenceDocs(
   if (!query.trim()) return [];
   const qvec = opts.queryVector ?? (await embedQueryLiteral(query));
 
+  const inProduct = (id: string) =>
+    opts.includeUnscoped
+      ? sql`and (d.product_id = ${id} or d.product_id is null)`
+      : sql`and d.product_id = ${id}`;
+  const inTeam = (id: string) =>
+    opts.includeUnscoped
+      ? sql`and (d.team_id = ${id} or d.team_id is null)`
+      : sql`and d.team_id = ${id}`;
   const filters = sql`
     d.status = 'approved'
     ${opts.kind ? sql`and d.kind = ${opts.kind}` : sql``}
-    ${opts.productId ? (opts.includeUnscoped ? sql`and (d.product_id = ${opts.productId} or d.product_id is null)` : sql`and d.product_id = ${opts.productId}`) : sql``}
-    ${opts.teamId ? (opts.includeUnscoped ? sql`and (d.team_id = ${opts.teamId} or d.team_id is null)` : sql`and d.team_id = ${opts.teamId}`) : sql``}
+    ${opts.productId ? inProduct(opts.productId) : sql``}
+    ${opts.teamId ? inTeam(opts.teamId) : sql``}
     ${opts.componentId ? sql`and (d.component_id = ${opts.componentId} or d.tags && ${opts.componentTags ?? []})` : sql``}
     ${opts.customerId ? sql`and d.customer_id = ${opts.customerId}` : sql``}
     ${opts.docVersion ? sql`and d.doc_version = ${opts.docVersion}` : sql``}

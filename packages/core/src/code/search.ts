@@ -86,11 +86,14 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
     : sql``;
   const lineMinor = sql`substring(l.version_label from '^v?(\\d+\\.\\d+)\\.')`;
 
-  const lineChoice = opts.line
-    ? sql`and l.ref = ${opts.line}`
-    : minor
-      ? sql`and (l.ref = r.default_branch or ${lineMinor} = ${minor})`
-      : sql`and l.ref = r.default_branch`;
+  const versionLine = minor
+    ? sql`and (l.ref = r.default_branch or ${lineMinor} = ${minor})`
+    : sql`and l.ref = r.default_branch`;
+  const lineChoice = opts.line ? sql`and l.ref = ${opts.line}` : versionLine;
+  const ofCustomer = (id: string) =>
+    opts.includeShared === false
+      ? sql`and r.customer_id = ${id}`
+      : sql`and (r.customer_id = ${id} or r.customer_id is null)`;
 
   const holds = sql`
     exists (
@@ -113,13 +116,7 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
         ${opts.productId ? sql`and r.product_id = ${opts.productId}` : sql``}
         ${opts.componentId ? sql`and r.component_id = ${opts.componentId}` : sql``}
         ${opts.sourceProjectId ? sql`and r.source_project_id = ${opts.sourceProjectId}` : sql``}
-        ${
-          opts.customerId
-            ? opts.includeShared === false
-              ? sql`and r.customer_id = ${opts.customerId}`
-              : sql`and (r.customer_id = ${opts.customerId} or r.customer_id is null)`
-            : sql``
-        }
+        ${opts.customerId ? ofCustomer(opts.customerId) : sql``}
       order by r.id, coalesce(${minor ? sql`${lineMinor} = ${minor}` : sql`false`}, false) desc
     ),
     -- In every leg a file contributes its best chunks only. A long document

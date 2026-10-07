@@ -119,19 +119,19 @@ export async function linkRepo(input: RepoInput) {
     select ${row.id}, unnest(${[defaultBranch, ...extraLines]}::text[])
     on conflict (repo_id, ref) do nothing
   `;
-  const dropped = input.lines
-    ? await sql`
-        delete from repo_lines
-        where repo_id = ${row.id} and ref <> all(${[defaultBranch, ...extraLines]}::text[])
-        returning id
-      `
-    : previous && previous.default_branch !== defaultBranch
-      ? await sql`
-          delete from repo_lines
-          where repo_id = ${row.id} and ref = ${previous.default_branch}
-          returning id
-        `
-      : [];
+  let dropped: readonly unknown[] = [];
+  if (input.lines)
+    dropped = await sql`
+      delete from repo_lines
+      where repo_id = ${row.id} and ref <> all(${[defaultBranch, ...extraLines]}::text[])
+      returning id
+    `;
+  else if (previous && previous.default_branch !== defaultBranch)
+    dropped = await sql`
+      delete from repo_lines
+      where repo_id = ${row.id} and ref = ${previous.default_branch}
+      returning id
+    `;
   if (dropped.length) await collectOrphanChunks(row.id);
   return row;
 }
@@ -203,19 +203,17 @@ export async function listRepos(
   opts: ListReposOptions = {},
 ): Promise<RepoRow[]> {
   const shared = opts.includeShared !== false;
+  const ofCustomer = (id: string) =>
+    shared
+      ? sql`and (r.customer_id = ${id} or r.customer_id is null)`
+      : sql`and r.customer_id = ${id}`;
   return sql<RepoRow[]>`
     ${repoSelect()}
     where 1=1
       ${opts.productId ? sql`and r.product_id = ${opts.productId}` : sql``}
       ${opts.componentId ? sql`and r.component_id = ${opts.componentId}` : sql``}
       ${opts.sourceProjectId ? sql`and r.source_project_id = ${opts.sourceProjectId}` : sql``}
-      ${
-        opts.customerId
-          ? shared
-            ? sql`and (r.customer_id = ${opts.customerId} or r.customer_id is null)`
-            : sql`and r.customer_id = ${opts.customerId}`
-          : sql``
-      }
+      ${opts.customerId ? ofCustomer(opts.customerId) : sql``}
     order by r.slug
   `;
 }
