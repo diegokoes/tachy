@@ -7,6 +7,8 @@ import { getJobKind, hasJobKind } from "./registry";
 /** A firing this late is a missed one, subject to the kind's `missed` policy. */
 const ON_TIME_MS = 2 * 60_000;
 const LOCK_KEY = 7_311_902_451;
+/** Slots stepped over to reach the latest due one before giving up. */
+const MAX_SLOTS_SKIPPED = 100_000;
 
 /**
  * Inserts the runs that are due. Every worker may call it; the advisory lock
@@ -32,7 +34,7 @@ export async function scheduleDueRuns(now = new Date()): Promise<number> {
       });
       let slot = cron.nextRun(new Date(definition.anchor));
       if (!slot || slot > now) continue;
-      for (let i = 0; i < 100_000; i++) {
+      for (let i = 0; i < MAX_SLOTS_SKIPPED; i++) {
         const next = cron.nextRun(slot);
         if (!next || next > now) break;
         slot = next;

@@ -49,26 +49,30 @@ const SELECT = sql`
   left join source_projects sp on sp.id = wi.source_project_id
 `;
 
-const iso = (v: unknown) =>
-  v instanceof Date ? v.toISOString() : v == null ? null : String(v);
+function iso(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString();
+  return value == null ? null : String(value);
+}
 
-function toSubject(row: Record<string, unknown>): FlowSubject {
-  const raw = (row.raw ?? {}) as Record<string, unknown>;
+/** A source's tags: a `tags` array, or ADO's `System.Tags`, split on `;`. */
+function tagsOf(raw: Record<string, unknown>): string[] {
+  if (Array.isArray(raw.tags)) return raw.tags.map(String);
   const adoTags = (raw.fields as Record<string, unknown> | undefined)?.[
     "System.Tags"
   ];
-  const tags = Array.isArray(raw.tags)
-    ? raw.tags.map(String)
-    : typeof adoTags === "string"
-      ? adoTags
-          .split(";")
-          .map((t) => t.trim())
-          .filter(Boolean)
-      : [];
+  if (typeof adoTags !== "string") return [];
+  return adoTags
+    .split(";")
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+function toSubject(row: Record<string, unknown>): FlowSubject {
+  const raw = (row.raw ?? {}) as Record<string, unknown>;
   return {
     ...(row as unknown as FlowSubject),
     raw,
-    tags,
+    tags: tagsOf(raw),
     created_at: iso(row.created_at),
     updated_at: iso(row.updated_at),
   };
