@@ -1,0 +1,2 @@
+# Commits that only reword or remove comments. GitHub's blame view reads this
+# file; locally: git config blame.ignoreRevsFile .git-blame-ignore-revs
