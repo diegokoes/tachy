@@ -8,7 +8,7 @@ import {
   env,
   secretsEnabled,
 } from "@tachy/core/infra";
-import { hashPassword, countAdmins, getUserByEmail } from "@tachy/core/access";
+import { hashPassword, adminCount, getUserByEmail } from "@tachy/core/access";
 import { setSetting, setCredential } from "@tachy/core/config";
 import { addTeam, addProduct } from "@tachy/core/catalog";
 import {
@@ -45,7 +45,7 @@ const setupSchema = z.object({
 
 export const setup = new Hono()
   .get("/status", async (c) =>
-    c.json({ bootstrapped: (await countAdmins()) > 0 }),
+    c.json({ bootstrapped: (await adminCount()) > 0 }),
   )
 
   .post("/", zValidator("json", setupSchema), async (c) => {

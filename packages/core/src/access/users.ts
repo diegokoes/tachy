@@ -48,7 +48,7 @@ export async function resolveCurrentUserId(): Promise<string | null> {
   return cachedUserId;
 }
 
-export async function countAdmins(): Promise<number> {
+export async function adminCount(): Promise<number> {
   const [row] =
     await sql`select count(*)::int as n from users where role = 'admin' and not disabled`;
   return row.n as number;
@@ -120,7 +120,7 @@ export async function setUserRole(id: string, role: UserRole): Promise<void> {
     role !== "admin" &&
     current.role === "admin" &&
     !current.disabled &&
-    (await countAdmins()) <= 1
+    (await adminCount()) <= 1
   )
     throw badInput("cannot demote the last admin");
   await sql`update users set role = ${role} where id = ${id}`;
@@ -164,7 +164,7 @@ export async function setUserDisabled(
     disabled &&
     current.role === "admin" &&
     !current.disabled &&
-    (await countAdmins()) <= 1
+    (await adminCount()) <= 1
   )
     throw badInput("cannot disable the last admin");
   await sql`update users set disabled = ${disabled} where id = ${id}`;
