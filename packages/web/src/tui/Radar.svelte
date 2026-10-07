@@ -44,7 +44,9 @@
   const n = $derived(axes.length);
   const max = $derived(radarMax(series.flatMap((s) => s.values)));
   const grid = $derived(radarTicks(max, rings));
-  const shown = (s: string) => (s.length > 11 ? `${s.slice(0, 10)}…` : s);
+  const LABEL_CHARS = 11;
+  const shown = (s: string) =>
+    s.length > LABEL_CHARS ? `${s.slice(0, LABEL_CHARS - 1)}…` : s;
   const labelW = $derived(
     Math.ceil(
       Math.max(0, ...axes.map((a) => shown(a.label).length)) * CH_EM * fs,

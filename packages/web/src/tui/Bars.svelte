@@ -35,9 +35,8 @@
   let room = $state(0);
 
   const top = $derived(Math.max(1, ...rows.map((r) => r.value)));
-  const cut = $derived(
-    fitted(rows, view.expanded ? Infinity : view.tiled ? room : cap),
-  );
+  const limit = $derived(view.tiled ? room : cap);
+  const cut = $derived(fitted(rows, view.expanded ? Infinity : limit));
   const hasAside = $derived(rows.some((r) => r.aside));
   const restTotal = $derived(cut.rest.reduce((n, r) => n + r.value, 0));
 

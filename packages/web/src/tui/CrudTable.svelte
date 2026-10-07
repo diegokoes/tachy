@@ -105,7 +105,8 @@
   let opError = $state<string | null>(null);
 
   const NEW = "::new";
-  const formKey = $derived(form ? (form.row ? rowKey(form.row) : NEW) : null);
+  const keyOf = (row: T | null) => (row ? rowKey(row) : NEW);
+  const formKey = $derived(form ? keyOf(form.row) : null);
 
   // An open record, draft and all, survives leaving the section, so coming back
   // finds it as it was. Closing it, or moving elsewhere inside the section,
