@@ -61,6 +61,11 @@
     entries: "knowledge",
     docs: "docs",
   };
+  /** The reference `kind` a type tab lists; any other tab lists both. */
+  const KIND_OF_TYPE = new Map([
+    ["wiki", "wiki"],
+    ["docs", "reference"],
+  ]);
 
   // From vocab.ts, so they are offered in the order the contract documents.
   const STATUSES = KNOWLEDGE_STATUSES;
@@ -192,10 +197,7 @@
   /** Browsing lists imported docs only unless asked, so "any" has to say so. */
   const docQs = () => {
     const params = scopeQs(new URLSearchParams());
-    params.set(
-      "kind",
-      type === "wiki" ? "wiki" : type === "docs" ? "reference" : "any",
-    );
+    params.set("kind", KIND_OF_TYPE.get(type) ?? "any");
     return params.toString();
   };
 

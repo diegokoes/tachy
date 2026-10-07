@@ -27,12 +27,11 @@
   type Kind = "enum" | "bool" | "number" | "list" | "text" | "line" | "json";
 
   /** Choices for this field, from a passed spec or the built-in vocabularies. */
+  const builtIn = $derived(name in ENUM_FIELDS ? ENUM_FIELDS[name] : undefined);
   const choices = $derived<readonly string[] | undefined>(
     spec?.allowed_values?.length
       ? (spec.allowed_values.map(String) as string[])
-      : name in ENUM_FIELDS
-        ? ENUM_FIELDS[name]
-        : undefined,
+      : builtIn,
   );
 
   /** ADO's FieldType, mapped onto the widgets this box has. */

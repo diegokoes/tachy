@@ -6,16 +6,12 @@ import type { IconName } from "../tui";
  * docs cannot, so a doc never reaches those arms, and the two views cannot
  * colour a status differently.
  */
-export const statusTone = (s: string) =>
-  s === "approved"
-    ? "ok"
-    : s === "draft"
-      ? "accent"
-      : s === "rejected"
-        ? "danger"
-        : s === "deprecated"
-          ? "warn"
-          : "muted";
+export function statusTone(status: string) {
+  if (status === "approved") return "ok";
+  if (status === "draft") return "accent";
+  if (status === "rejected") return "danger";
+  return status === "deprecated" ? "warn" : "muted";
+}
 
 /** One lifecycle action on a library item, as the left rail draws it. */
 export type StatusAction = {

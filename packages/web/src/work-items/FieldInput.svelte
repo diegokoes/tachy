@@ -72,12 +72,17 @@
       : opts;
 
   /** Every path starts with the project; saying it on each row is noise. */
-  const shortPath = (path: string) =>
-    path === form.project
-      ? `${form.project} (root)`
-      : path.startsWith(`${form.project}\\`)
-        ? path.slice(form.project.length + 1)
-        : path;
+  function shortPath(path: string) {
+    if (path === form.project) return `${form.project} (root)`;
+    return path.startsWith(`${form.project}\\`)
+      ? path.slice(form.project.length + 1)
+      : path;
+  }
+
+  function pathHint(option: { current?: boolean; team?: boolean }) {
+    if (option.current) return "current";
+    return option.team ? "team" : undefined;
+  }
 
   const pathOptions = $derived(
     withCurrent(
@@ -85,7 +90,7 @@
         (p) => ({
           value: p.path,
           label: shortPath(p.path),
-          hint: p.current ? "current" : p.team ? "team" : undefined,
+          hint: pathHint(p),
         }),
       ),
     ),

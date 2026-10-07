@@ -85,17 +85,18 @@
   }
 
   /** The door, not the person - an agent edit is still made by a human. */
-  const doorTone = (actor: string) =>
-    actor === "agent" ? "warn" : actor === "web" ? "ok" : "muted";
+  function doorTone(actor: string) {
+    if (actor === "agent") return "warn";
+    return actor === "web" ? "ok" : "muted";
+  }
 
-  const show = (v: unknown): string =>
-    v == null
-      ? "-"
-      : Array.isArray(v)
-        ? v.join(", ") || "-"
-        : typeof v === "object"
-          ? JSON.stringify(v, null, 2)
-          : String(v);
+  function show(value: unknown): string {
+    if (value == null) return "-";
+    if (Array.isArray(value)) return value.join(", ") || "-";
+    return typeof value === "object"
+      ? JSON.stringify(value, null, 2)
+      : String(value);
+  }
 </script>
 
 <section class="history">

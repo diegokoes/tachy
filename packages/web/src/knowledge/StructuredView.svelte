@@ -55,19 +55,23 @@
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;");
+  function jsonKind(
+    key?: string,
+    string?: string,
+    boolean?: string,
+    nil?: string,
+  ) {
+    if (key) return "json-key";
+    if (string) return "json-string";
+    if (boolean) return "json-boolean";
+    return nil ? "json-null" : "json-number";
+  }
+
   const highlightedJson = $derived(
     jsonText.replace(
       /("(?:\\.|[^"\\])*")(?=\s*:)|("(?:\\.|[^"\\])*")|\b(true|false)\b|\b(null)\b|-?\b\d+(?:\.\d+)?\b/g,
       (match, key, string, boolean, nil) => {
-        const kind = key
-          ? "json-key"
-          : string
-            ? "json-string"
-            : boolean
-              ? "json-boolean"
-              : nil
-                ? "json-null"
-                : "json-number";
+        const kind = jsonKind(key, string, boolean, nil);
         return `<span class="${kind}">${escapeHtml(match)}</span>`;
       },
     ),

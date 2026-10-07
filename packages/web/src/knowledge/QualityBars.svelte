@@ -24,12 +24,10 @@
     clear: 3,
   };
 
-  const tone = (step: number) =>
-    step >= 3
-      ? ("ok" as const)
-      : step === 2
-        ? ("warn" as const)
-        : ("muted" as const);
+  function tone(step: number) {
+    if (step >= 3) return "ok" as const;
+    return step === 2 ? ("warn" as const) : ("muted" as const);
+  }
 
   const rows = $derived(
     (
