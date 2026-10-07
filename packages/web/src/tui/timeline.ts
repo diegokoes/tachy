@@ -1,7 +1,9 @@
+const MINUTE_MS = 60_000;
+
 /** How far off a firing is, in the shortest words that stay exact: "now", "12 min", "3 h 05", "2 d". */
 export function until(ms: number): string {
-  if (ms < 60_000) return "now";
-  const min = Math.round(ms / 60_000);
+  if (ms < MINUTE_MS) return "now";
+  const min = Math.round(ms / MINUTE_MS);
   if (min < 60) return `${min} min`;
   const h = Math.floor(min / 60);
   if (h < 24) return `${h} h ${String(min % 60).padStart(2, "0")}`;

@@ -117,14 +117,11 @@ export function float(node: HTMLElement, options: FloatOptions) {
     node.style.maxHeight = `${vh - top - 2 * MARGIN}px`;
     const w = node.offsetWidth;
     const h = node.offsetHeight;
-    const x =
-      anchorRect.right + gap + w <= vw - MARGIN
-        ? anchorRect.right + gap
-        : anchorRect.left - gap - w >= left + MARGIN
-          ? anchorRect.left - gap - w
-          : null;
-    if (x === null) return false;
-    node.style.left = `${x}px`;
+    const toRight = anchorRect.right + gap;
+    const toLeft = anchorRect.left - gap - w;
+    const fitsRight = toRight + w <= vw - MARGIN;
+    if (!fitsRight && toLeft < left + MARGIN) return false;
+    node.style.left = `${fitsRight ? toRight : toLeft}px`;
     node.style.top = `${clamp(anchorRect.top, top + MARGIN, vh - h - MARGIN)}px`;
     return true;
   }

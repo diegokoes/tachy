@@ -55,25 +55,23 @@ function leaveField(e: KeyboardEvent) {
   target.blur();
 }
 
-/** Exported so the rebind UI captures exactly the shape dispatch matches on. */
+/** Keys a chord spells by their cap, where `KeyboardEvent.key` names them. */
+const KEY_CAPS = new Map([
+  [" ", "space"],
+  ["Enter", "⏎"],
+  ["Escape", "esc"],
+  ["ArrowUp", "↑"],
+  ["ArrowDown", "↓"],
+]);
+
+/** Exported so the rebind UI captures the shape dispatch matches on. */
 export function normalize(e: KeyboardEvent, ctrl = false): string {
   if (e.shiftKey && /^Digit[1-9]$/.test(e.code))
     return `shift+${e.code.slice(5)}`;
   // Shifted letters are their own binding - vim's G is not its j.
   if (e.shiftKey && /^Key[A-Z]$/.test(e.code))
     return `shift+${e.code.slice(3).toLowerCase()}`;
-  const base =
-    e.key === " "
-      ? "space"
-      : e.key === "Enter"
-        ? "⏎"
-        : e.key === "Escape"
-          ? "esc"
-          : e.key === "ArrowUp"
-            ? "↑"
-            : e.key === "ArrowDown"
-              ? "↓"
-              : e.key.toLowerCase();
+  const base = KEY_CAPS.get(e.key) ?? e.key.toLowerCase();
   return ctrl ? `ctrl+${base}` : base;
 }
 

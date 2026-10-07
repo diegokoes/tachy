@@ -79,12 +79,8 @@ export function draftFrom<T>(columns: Column<T>[], row: T): Draft {
     const value = column.value
       ? column.value(row)
       : (row as Record<string, unknown>)[column.key];
-    draft[column.key] =
-      column.edit === "checkbox"
-        ? Boolean(value)
-        : value == null
-          ? ""
-          : (value as string | number);
+    if (column.edit === "checkbox") draft[column.key] = Boolean(value);
+    else draft[column.key] = value == null ? "" : (value as string | number);
   }
   return draft;
 }

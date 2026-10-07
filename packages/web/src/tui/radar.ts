@@ -35,10 +35,14 @@ export function radarTicks(max: number, count = 3): number[] {
   return max > 0 ? ticks(0, max, count).filter((t) => t > 0) : [];
 }
 
+/** Past this cosine a spoke leans far enough sideways for its label to sit beside it. */
+const SIDE_COSINE = 0.25;
+
 /** Which side of its spoke's end a label sits on, so it reads away from the centre. */
 export function radarAnchor(i: number, n: number): "start" | "middle" | "end" {
   const cosine = Math.cos(radarAngle(i, n));
-  return cosine > 0.25 ? "start" : cosine < -0.25 ? "end" : "middle";
+  if (cosine > SIDE_COSINE) return "start";
+  return cosine < -SIDE_COSINE ? "end" : "middle";
 }
 
 /** The top of the scale: the largest value, rounded up to the last ring. */

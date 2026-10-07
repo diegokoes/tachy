@@ -47,14 +47,11 @@
     ...hourMarks(from, hours).filter((m) => m.at > 8 && m.at < 96),
   ]);
 
-  const tickClass = (iso: string, next: boolean) =>
-    next
-      ? "next"
-      : Date.parse(iso) < now
-        ? "past"
-        : isSoon(iso, now)
-          ? "soon"
-          : "";
+  function tickClass(iso: string, next: boolean): string {
+    if (next) return "next";
+    if (Date.parse(iso) < now) return "past";
+    return isSoon(iso, now) ? "soon" : "";
+  }
 
   const ticksOf = (lane: Element) => [...lane.querySelectorAll(".tick")];
   const lanesOf = () =>

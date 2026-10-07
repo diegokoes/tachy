@@ -136,8 +136,8 @@
           moving = true;
       }
       draw();
-      // Park the loop once everything is home - this is decoration, and it has
-      // no business holding a rAF open for the life of the session.
+      // Park the loop once everything is home: decoration does not hold a rAF
+      // open for the life of the session.
       if (!moving && px < -1e5) {
         settled = true;
         raf = 0;
