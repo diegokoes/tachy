@@ -13,9 +13,9 @@ import type { IngestBucket } from "./buckets";
 const key = z.string().min(1).max(500);
 
 /**
- * What a pusher sends. Generic on purpose: anything source-specific travels in
- * `metadata`, so a second source needs a script, not a schema change. Unknown
- * fields are dropped.
+ * What a pusher sends. Generic: anything source-specific travels in `metadata`,
+ * so a second source needs a script, not a schema change. Unknown fields are
+ * dropped.
  */
 export const bucketBatchSchema = z.object({
   version: z.literal(BUCKET_BATCH_VERSION, {

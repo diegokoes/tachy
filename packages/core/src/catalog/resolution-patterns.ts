@@ -2,14 +2,20 @@ import type { PatternRow } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { conflict, notFound } from "../infra/errors";
 
-/** The full controlled vocabulary, for Claude to pick from before tagging an entry. */
+/**
+ * The full controlled vocabulary, for the agent to pick from before tagging an
+ * entry.
+ */
 export async function listResolutionPatterns() {
   return sql<
     PatternRow[]
   >`select slug, description from resolution_patterns order by slug`;
 }
 
-/** Deliberately add a new pattern. Separate from saving a knowledge entry on purpose. */
+/**
+ * Adds a pattern to the vocabulary. Never a side effect of saving a knowledge
+ * entry.
+ */
 export async function addResolutionPattern(slug: string, description: string) {
   const [row] = await sql`
     insert into resolution_patterns (slug, description)

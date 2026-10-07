@@ -7,8 +7,8 @@ import { badInput, notFound } from "../infra/errors";
 export type { CustomerUnitRow, ResolvedFact };
 
 /**
- * Deliberately not `getCustomerIdBySlug` from ./customers: that module imports
- * resolveUnit from here, and one-way is worth a two-line query.
+ * Not `getCustomerIdBySlug` from ./customers: that module imports `resolveUnit`
+ * from here, and a two-line query keeps the import one-way.
  */
 async function customerIdOf(slug: string): Promise<string> {
   const [row] = await sql<{ id: string }[]>`
@@ -39,9 +39,8 @@ export interface CustomerUnitPatch {
 }
 
 /**
- * Deliberately looser than the contract's SLUG_RE, and case-insensitive: unit
- * slugs are transcribed off equipment labels - TLC191, acme.eu - rather than
- * typed as identifiers.
+ * Looser than the contract's SLUG_RE, and case-insensitive: unit slugs are
+ * transcribed off equipment labels (TLC191, acme.eu), not typed as identifiers.
  */
 const UNIT_SLUG_RE = /^[a-z0-9][a-z0-9._-]*$/i;
 
@@ -223,23 +222,11 @@ export async function deleteCustomerUnit(customerId: string, slug: string) {
 }
 
 /**
- * Every fact that applies to one unit, most-specific first, each carrying where
- * it came from. The precedence ladder:
- *
- *     the unit's own facts
- *       -> the unit's profile's
- *         -> its parent's
- *           -> its parent's profile's
- *             -> ... up to the root
- *               -> the customer's
- *
- * The origin is the point: it lets an answer say "true of every line on layout
- * 3" instead of "true of TLC191", which is the difference between a fact a
- * reader can generalise and one they cannot.
- *
- * Rank is `depth * 2` for a unit in the containment chain and `depth * 2 + 1`
- * for that unit's profile, so a profile always loses to the unit that names it
- * and beats anything further up.
+ * Every fact that applies to one unit, most specific first, each carrying where
+ * it came from: the unit's own, its profile's, then the same pair for each
+ * parent up to the root, then the customer's. Rank is `depth * 2` for a unit in
+ * the containment chain and `depth * 2 + 1` for its profile, so a profile loses
+ * to the unit that names it and beats anything further up.
  */
 export async function resolveUnitFacts(
   unitId: string,

@@ -92,12 +92,10 @@ export interface CustomerMatch {
 
 /**
  * Sender domain → customer, including partners who front for one (a distributor
- * raising tickets on their behalf lists its domain on the customer's row).
- *
- * A domain registered to more than one customer resolves to NEITHER. Picking one
- * would file the ticket, the entry learned from it and every future search hit
- * under a customer nobody chose - an unresolved item that says why is recoverable,
- * a confidently wrong one is not.
+ * raising tickets on their behalf lists its domain on the customer's row). A
+ * domain registered to more than one customer resolves to neither: picking one
+ * would file the ticket, the entry learned from it and every later search hit
+ * under a customer nobody chose.
  */
 export async function resolveCustomerByEmail(
   email: string | undefined,
@@ -129,10 +127,10 @@ export interface ResolvedCustomer {
 }
 
 /**
- * Slug, then alias, then a trigram-ranked hint on a miss - the same ladder
- * resolveComponentStrict offers, so the other names an account trades under
- * resolve rather than merely being stored. Slugs are unique but aliases are not,
- * so an alias claimed by two customers is ambiguous rather than a coin toss.
+ * Slug, then alias, then a trigram-ranked hint on a miss: the ladder
+ * `resolveComponentStrict` offers, so the other names an account trades under
+ * resolve too. Slugs are unique but aliases are not, so an alias claimed by two
+ * customers is reported as ambiguous.
  */
 export async function resolveCustomer(
   slugOrAlias: string,
@@ -174,16 +172,9 @@ export async function setWorkItemCustomer(
   customerId: string | null,
   unit?: string | null,
 ) {
-  /*
-   * An absent `unit` is "leave it alone", an explicit null is "clear it". The
-   * common call sets the customer with no unit and must keep the line the
-   * ticket was narrowed to: db/schema.sql notes a wrong attribution there is
-   * not recoverable.
-   *
-   * It survives only while the customer is unchanged. Moving the ticket to a
-   * different customer, or clearing it, clears the unit with it: a unit belongs
-   * to one customer, so any other pairing cannot be read back sensibly.
-   */
+  // An absent `unit` leaves it alone and an explicit null clears it: the common
+  // call sets the customer alone and keeps the line the ticket was narrowed to.
+  // It survives only while the customer is unchanged.
   const [current] =
     await sql`select customer_id from work_items where id = ${workItemId}`;
   const keepUnit =
@@ -294,8 +285,9 @@ export async function listCustomerFacts(customerId: string) {
 
 /**
  * The `kind` values already in use, with counts. Same idea as listEnvironments:
- * the vocabulary is whatever this deployment needs, so it is reported rather than
- * enumerated, and callers reuse a value instead of coining a near-duplicate.
+ * the vocabulary is whatever this deployment needs, so it is reported rather
+ * than enumerated, and callers reuse a value instead of coining a
+ * near-duplicate.
  */
 export async function listCustomerFactKinds(): Promise<
   { kind: string; count: number }[]
@@ -352,13 +344,10 @@ export async function listCustomerComponents(customerId: string) {
 
 /**
  * Everything configured about one customer, in one read: the specifics of their
- * install plus the records that belong to them. This is what a ticket turn needs
- * BEFORE it reasons - their version and addons decide whether a general answer
- * even applies to them.
- *
- * With `unit`, the facts are the RESOLVED ladder for
- * that part of their estate - each one carrying where it came from - rather
- * than the flat list, so an answer can say which level it is true of.
+ * install plus the records that belong to them. A ticket turn needs it before
+ * it reasons, since their version and addons decide whether a general answer
+ * applies. With `unit`, the facts are the resolved ladder for that part of
+ * their estate, each carrying where it came from.
  */
 export async function getCustomerProfile(
   customerId: string,

@@ -140,10 +140,9 @@ export async function jobCensus(
     from job_definitions
   `;
 
-  /* The effective queue lives half in the row and half in code: a null queue
-     means "whatever the kind defaults to", and that default is in the
-     registry, not the database. A definition for a kind this process does not
-     know counts under maintenance, which is what defineJob defaults to. */
+  // The effective queue is half in the row and half in code: a null queue means
+  // the kind's default, which the registry holds. A definition for a kind this
+  // process does not know counts under maintenance, defineJob's default.
   const queues = await sql`select kind, queue from job_definitions`;
   const defsByClass = zeroes(JOB_RESOURCE_CLASSES);
   for (const d of queues) {

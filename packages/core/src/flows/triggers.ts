@@ -43,8 +43,8 @@ export async function itemTriggers(
   );
   if (!armed.length) return null;
 
-  /* A flow must never fail the sync that fed it: a bad condition or a full
-     queue is logged, and the item is stored all the same. */
+  // A flow must never fail the sync that fed it: a bad condition or a full
+  // queue is logged, and the item is stored all the same.
   return async (itemId, event) => {
     try {
       const hits = armed.filter((a) => eventsOf(a.trigger).includes(event));

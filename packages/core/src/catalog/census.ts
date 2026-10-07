@@ -4,11 +4,8 @@ import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 
 /**
  * One row for the admin index: how much of each thing the catalog holds, and
- * how much of it is only half-filled-in.
- *
- * The description counts are not tidiness. A label or component with no
- * description is one the agent has nothing to match a question against, so it
- * is dead weight in the taxonomy rather than an incomplete row.
+ * how much of it is half filled in. Descriptions are counted because a label or
+ * component without one gives the agent nothing to match a question against.
  */
 export async function catalogCensus(): Promise<CatalogCensus> {
   const [row] = await sql<Omit<CatalogCensus, "components_by_product">[]>`
@@ -35,8 +32,8 @@ export async function catalogCensus(): Promise<CatalogCensus> {
         as customers_no_domains,
       (select count(*)::int from customer_units) as customer_units
   `;
-  /* The shape of the tree, not just its size: which products carry it and
-     which have a slug and nothing under it. */
+  // The shape of the tree as well as its size: which products carry it and
+  // which have a slug and nothing under it.
   const perProduct = await sql<CatalogCensus["components_by_product"]>`
     select p.slug, p.name, count(c.id)::int as n
     from products p
