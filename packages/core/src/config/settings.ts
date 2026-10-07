@@ -106,12 +106,11 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
     dbVal: T | undefined,
     envVal: T | undefined,
     dflt: T,
-  ): { value: T; source: SettingSource } =>
-    dbVal !== undefined
-      ? { value: dbVal, source: "db" }
-      : envVal !== undefined
-        ? { value: envVal, source: "env" }
-        : { value: dflt, source: "default" };
+  ): { value: T; source: SettingSource } => {
+    if (dbVal !== undefined) return { value: dbVal, source: "db" };
+    if (envVal !== undefined) return { value: envVal, source: "env" };
+    return { value: dflt, source: "default" };
+  };
 
   const envEffort = AGENT_EFFORTS.includes(
     process.env.TACHY_AGENT_EFFORT as never,

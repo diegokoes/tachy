@@ -18,6 +18,19 @@ export interface Check {
 }
 
 const ms = (started: number) => Math.round(performance.now() - started);
+/** An embedding slower than this passes with a warning. */
+const SLOW_EMBED_MS = 2_000;
+
+function databaseDetail(
+  stamp: Awaited<ReturnType<typeof schemaStampStatus>>,
+  tookMs: number,
+): string {
+  if (stamp === "match")
+    return `answers in ${tookMs} ms, schema matches the image`;
+  if (stamp === "unstamped")
+    return `answers in ${tookMs} ms, schema not stamped yet`;
+  return "the live schema is not the one this image expects";
+}
 
 /**
  * Fast checks, safe to run at any hour: what varies between environments, as
@@ -36,11 +49,7 @@ export async function runSystemChecks(): Promise<Check[]> {
     add(
       "database",
       stamp === "mismatch" ? "fail" : "pass",
-      stamp === "match"
-        ? `answers in ${ms(dbStarted)} ms, schema matches the image`
-        : stamp === "unstamped"
-          ? `answers in ${ms(dbStarted)} ms, schema not stamped yet`
-          : "the live schema is not the one this image expects",
+      databaseDetail(stamp, ms(dbStarted)),
     );
   } catch (err) {
     add("database", "fail", String(err));
@@ -52,7 +61,7 @@ export async function runSystemChecks(): Promise<Check[]> {
     const took = ms(embedStarted);
     add(
       "embedding",
-      took > 2_000 ? "warn" : "pass",
+      took > SLOW_EMBED_MS ? "warn" : "pass",
       `${vector.length}-dim vector in ${took} ms`,
     );
   } catch (err) {
@@ -107,14 +116,14 @@ export async function runSystemChecks(): Promise<Check[]> {
     where scope = 'user'
       and name = any(${[ANTHROPIC_API_KEY_CREDENTIAL, ANTHROPIC_OAUTH_CREDENTIAL]})
   `;
+  const ownCredentials =
+    byUser > 0
+      ? `${byUser} user(s) hold their own credential`
+      : "no credential for the model";
   add(
     "agent",
     auth || byUser > 0 ? "pass" : "fail",
-    auth
-      ? `credential available (${auth.kind})`
-      : byUser > 0
-        ? `${byUser} user(s) hold their own credential`
-        : "no credential for the model",
+    auth ? `credential available (${auth.kind})` : ownCredentials,
   );
 
   return checks;

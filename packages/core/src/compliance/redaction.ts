@@ -54,10 +54,13 @@ const KNOWN_KEY_RES = [
 ];
 
 const CARD_RE = /\b\d(?:[ -]?\d){12,18}\b/g;
+const CARD_MIN_DIGITS = 13;
+const CARD_MAX_DIGITS = 19;
 
 function luhnValid(candidate: string): boolean {
   const digits = candidate.replace(/[ -]/g, "");
-  if (digits.length < 13 || digits.length > 19) return false;
+  if (digits.length < CARD_MIN_DIGITS || digits.length > CARD_MAX_DIGITS)
+    return false;
   let sum = 0;
   let double = false;
   for (let i = digits.length - 1; i >= 0; i--) {
@@ -131,6 +134,7 @@ const flatten = (s: string) => s.replace(/\s+/g, " ").trim();
 
 /** Parts short enough to collide with ordinary words are left alone. */
 const NAME_PART_MIN = 4;
+const NAME_MIN_CHARS = 3;
 
 /**
  * Tokenizes known person names wherever they appear in free text, as the USER
@@ -155,14 +159,14 @@ export function scrubKnownNames(
   };
   for (const name of names) {
     const n = flatten(name ?? "");
-    if (n.length < 3) continue;
+    if (n.length < NAME_MIN_CHARS) continue;
     add(n, n);
   }
   // Parts in a second pass, so a full name is never shadowed by a part of
   // another name that happened to be listed first.
   for (const name of names) {
     const n = flatten(name ?? "");
-    if (n.length < 3) continue;
+    if (n.length < NAME_MIN_CHARS) continue;
     for (const part of n.split(/[\s,]+/))
       if (part.length >= NAME_PART_MIN && /^\p{L}+$/u.test(part)) add(part, n);
   }

@@ -96,11 +96,9 @@ export async function assertCanWriteScope(
 
 /** WHERE fragment matching one exact scope row (for writes/deletes). */
 export function scopeCondition(scope: Scope, scopeId?: string) {
-  return scope === "user"
-    ? sql`scope = 'user' and user_id = ${scopeId!}`
-    : scope === "team"
-      ? sql`scope = 'team' and team_id = ${scopeId!}`
-      : sql`scope = 'global'`;
+  if (scope === "user") return sql`scope = 'user' and user_id = ${scopeId!}`;
+  if (scope === "team") return sql`scope = 'team' and team_id = ${scopeId!}`;
+  return sql`scope = 'global'`;
 }
 
 /** Upsert one scoped row, targeting the partial unique index for its scope. */

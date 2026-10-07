@@ -59,6 +59,9 @@ export const MIME_BY_FORMAT: Record<TableFormat, string> = {
 
 type Converted = { value: CellValue } | { problem: string };
 
+const toDate = (raw: unknown) =>
+  new Date(typeof raw === "number" ? raw : String(raw));
+
 function convert(column: TableColumn, raw: unknown): Converted {
   if (raw === null || raw === undefined || raw === "")
     return column.required
@@ -86,12 +89,7 @@ function convert(column: TableColumn, raw: unknown): Converted {
       };
     }
     case "date": {
-      const date =
-        raw instanceof Date
-          ? raw
-          : typeof raw === "number"
-            ? new Date(raw)
-            : new Date(String(raw));
+      const date = raw instanceof Date ? raw : toDate(raw);
       return Number.isNaN(date.getTime())
         ? {
             problem: `column "${column.key}" expects a date, got ${JSON.stringify(raw)}`,
