@@ -43,6 +43,17 @@ export function loadTargets(): LoadTarget[] {
     .filter((t) => t.name && t.url);
 }
 
+const WINDOW_OPENS_HOUR = 19;
+const WINDOW_CLOSES_HOUR = 7;
+/** k6 exits with this when a threshold fails; any other non-zero is an error. */
+const K6_THRESHOLDS_FAILED = 99;
+
+function runStatus(cancelled: boolean, exitCode: number) {
+  if (cancelled) return "cancelled";
+  if (exitCode === 0) return "passed";
+  return exitCode === K6_THRESHOLDS_FAILED ? "failed" : "error";
+}
+
 /**
  * Weekdays 19:00–07:00 and weekends, on the organisation's clock. The process's
  * own is UTC in a container, which shifts the window by the zone's offset.
@@ -57,7 +68,7 @@ export function inLoadWindow(now: Date, timezone: string): boolean {
   const part = (type: string) => parts.find((p) => p.type === type)?.value;
   const weekend = part("weekday") === "Sat" || part("weekday") === "Sun";
   const hour = Number(part("hour"));
-  return weekend || hour >= 19 || hour < 7;
+  return weekend || hour >= WINDOW_OPENS_HOUR || hour < WINDOW_CLOSES_HOUR;
 }
 
 export interface TestRun {
@@ -206,13 +217,7 @@ export function defineLoadTestJobs() {
       const summary = await readFile("/tmp/k6-summary.json", "utf8")
         .then((s) => JSON.parse(s) as Record<string, unknown>)
         .catch(() => null);
-      const status = ctx.signal.aborted
-        ? "cancelled"
-        : code === 0
-          ? "passed"
-          : code === 99
-            ? "failed"
-            : "error";
+      const status = runStatus(ctx.signal.aborted, code);
       await sql`
         update test_runs set status = ${status}, finished_at = now(),
           summary = ${summary ? jsonb(summary) : null}, output_tail = ${tail}

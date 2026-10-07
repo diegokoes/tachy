@@ -9,6 +9,7 @@ import { badInput } from "./errors";
 
 const ALGO: CipherGCMTypes = "aes-256-gcm";
 const NONCE_BYTES = 12;
+const KEY_BYTES = 32;
 
 export interface VaultKey {
   id: string;
@@ -19,9 +20,9 @@ let cachedKeys: VaultKey[] | undefined;
 
 const parseKey = (raw: string, name: string): VaultKey => {
   const bytes = Buffer.from(raw.trim(), "base64");
-  if (bytes.length !== 32)
+  if (bytes.length !== KEY_BYTES)
     throw badInput(
-      `${name} must be 32 bytes of base64 (openssl rand -base64 32)`,
+      `${name} must be ${KEY_BYTES} bytes of base64 (openssl rand -base64 ${KEY_BYTES})`,
     );
   return { id: keyId(bytes), bytes };
 };
