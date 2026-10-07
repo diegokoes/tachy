@@ -56,7 +56,10 @@ const DEFINES_BOOST = 1 / (RRF_K + 1);
  */
 const PER_FILE = 2;
 
-/** How far past its candidates the vector leg reads to find them in enough files. */
+/**
+ * How far past its candidates the vector leg reads to find them in enough
+ * files.
+ */
 const NEAREST = 4;
 
 /**

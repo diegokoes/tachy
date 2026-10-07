@@ -11,7 +11,10 @@ export interface ResolvedVersion {
   commit: string | null;
   /** The tracked line this version belongs to, else the default line. */
   line: { ref: string; version_label: string | null };
-  /** False when no tracked line is on this version's minor and the default stood in. */
+  /**
+   * False when no tracked line is on this version's minor and the default stood
+   * in.
+   */
   line_matches: boolean;
 }
 

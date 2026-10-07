@@ -75,16 +75,11 @@ const item = ({ kind, id, title }: Material): WikiGapItem => ({
 });
 
 /**
- * Where the material under a product's components has not been written up.
- *
- * An article anchored at a component covers that component's whole subtree,
- * and an item any article cites is covered wherever it sits. What is left over
- * is grouped by component and rolled up post-order, so the gap is raised at the
- * most specific part of the product that has enough on its own - a parent is
- * only flagged for what its flagged children did not already account for.
- *
- * Uncited material that arrived after the covering article was last written is
- * the other half: the article exists, but the lessons have moved past it.
+ * Where the material under a product's components has not been written up. An
+ * article anchored at a component covers its subtree, and an item any article
+ * cites is covered wherever it sits. The rest is grouped by component and
+ * rolled up post-order, so a gap is raised at the most specific part with
+ * enough of its own. Uncited material newer than its article is the other kind.
  */
 async function componentGaps(
   db: Db,
@@ -343,17 +338,11 @@ export interface SweepResult {
 }
 
 /**
- * Re-find every wiki's gaps, or one wiki's when `productId` is given (null for
- * the org-wide one). One transaction per wiki under a transaction-scoped
- * advisory lock, so two API processes - or an hourly run and a rescan after an
- * edit - never write the same wiki at once; whoever loses skips it rather than
- * waiting, since the winner is computing the same answer.
- *
- * `wait` queues behind a sweep already running instead, for a curator who asked
- * for the answer as of now.
- *
- * The lock key carries the schema, because advisory locks are database-wide
- * and the org-wide wiki has no id of its own to tell deployments apart by.
+ * Re-finds every wiki's gaps, or one wiki's when `productId` is given (null for
+ * the org-wide one). One transaction per wiki under an advisory lock, so two
+ * sweeps never write the same wiki: the loser skips it, or queues behind it
+ * with `wait`. The lock key carries the schema, because advisory locks are
+ * database-wide.
  */
 export async function sweepWikiGaps(
   opts: { productId?: string | null; wait?: boolean } = {},

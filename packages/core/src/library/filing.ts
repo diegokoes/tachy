@@ -28,7 +28,7 @@ export interface FiledRow {
 
 /**
  * Component slugs resolve within a product, so naming one without a product is
- * ambiguous rather than merely incomplete. `noProduct` is the error for that.
+ * ambiguous, not incomplete. `noProduct` is the error for that.
  */
 export async function resolveFilingComponent(
   productId: string | null,

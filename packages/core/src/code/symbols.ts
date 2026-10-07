@@ -3,9 +3,9 @@
  * asking for a symbol finds where it is defined before the places that use it:
  * a test that calls a function ten times otherwise outranks the function.
  *
- * Deliberately shallow. It reads declarations a line at a time across the
- * languages a support team's repos are written in, and a name it misses is
- * still found in the body.
+ * Shallow: it reads declarations a line at a time across the languages a
+ * support team's repos are written in, and a name it misses is still found in
+ * the body.
  */
 const DECLARATIONS = [
   /(?:^|[\s(])(?:function\*?|class|interface|enum|struct|trait|impl|module|namespace|def|func|fn|type)\s+([A-Za-z_$][\w$]*)/g,

@@ -55,7 +55,8 @@ const inScope = (productId: string | null) =>
 /**
  * One category shape everywhere: the row plus its lead article's slug/title and
  * the components it covers. The lateral aggregate keeps components as a single
- * jsonb array so a category is one row rather than a join to fan out and regroup.
+ * jsonb array so a category is one row rather than a join to fan out and
+ * regroup.
  */
 function categoryRows(productId: string | null, slug?: string) {
   return sql<WikiCategoryRow[]>`
@@ -192,9 +193,10 @@ export async function updateWikiCategory(
 }
 
 /**
- * Replace a section's covered components. Whole-set, like article categories: the
- * editor sends the list it wants. Components belong to a product, so the org-wide
- * wiki has none to link and an empty list is the only valid input there.
+ * Replace a section's covered components. Whole-set, like article categories:
+ * the editor sends the list it wants. Components belong to a product, so the
+ * org-wide wiki has none to link and an empty list is the only valid input
+ * there.
  */
 export async function setCategoryComponents(
   productId: string | null,
@@ -222,10 +224,10 @@ export async function setCategoryComponents(
 }
 
 /**
- * Seed sections from the product's top-level components - the one-click start for
- * a new wiki. One section per top-level component, linked to it, appended after
- * any sections already there. Re-runnable: a slug that already exists is skipped,
- * so it never clobbers curation.
+ * Seed sections from the product's top-level components - the one-click start
+ * for a new wiki. One section per top-level component, linked to it, appended
+ * after any sections already there. Re-runnable: a slug that already exists is
+ * skipped, so it never clobbers curation.
  */
 export async function seedSectionsFromComponents(productId: string) {
   const tops = await sql<{ slug: string; name: string }[]>`
@@ -427,9 +429,9 @@ export async function findArticle(productId: string | null, slug: string) {
 
 /**
  * In-wiki quick search for the Ctrl+K palette. Scoped to this one wiki and,
- * unlike the library's reference search, it includes drafts - a curator navigates
- * their own unfinished pages - and stays lightweight (title/slug/body match) since
- * it answers keystroke by keystroke.
+ * unlike the library's reference search, it includes drafts - a curator
+ * navigates their own unfinished pages - and stays lightweight (title/slug/body
+ * match) since it answers keystroke by keystroke.
  */
 export async function searchWikiArticles(
   productId: string | null,
@@ -477,7 +479,7 @@ export { MAIN_PAGE_SLUG };
 
 /**
  * Null rather than throwing when the main page does not exist yet, so the route
- * can offer to create one instead of 404ing a wiki that is simply new.
+ * can offer to create one instead of answering 404 for a new wiki.
  */
 export async function findMainPage(productId: string | null) {
   try {

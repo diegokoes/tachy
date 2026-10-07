@@ -82,8 +82,10 @@ export interface ReferenceDocInput {
   structured?: Record<string, unknown>;
   docVersion?: string | null;
   supersedes?: string;
-  /** Component slug/alias, resolved within productId. Optional: a general
-   *  product doc belongs to the product and to no single component. */
+  /**
+   * Component slug/alias, resolved within productId. Optional: a general
+   * product doc belongs to the product and to no single component.
+   */
   component?: string | null;
   /** Whose install this documents. Absent/null = general to every customer. */
   customerSlug?: string | null;
@@ -143,9 +145,9 @@ async function insertChunks(
 }
 
 /**
- * The live doc for an imported page - an *Azure DevOps* wiki page - so a
- * re-import supersedes instead of duplicating. Nothing to do with kind='wiki',
- * which means an article authored here.
+ * The live doc for an imported Azure DevOps wiki page, so a re-import
+ * supersedes instead of duplicating. Unrelated to kind='wiki', which is an
+ * article authored here.
  */
 async function currentImportedDocId(
   sourceProjectId: string,
@@ -448,8 +450,10 @@ async function carryLinks(
 export interface ReferenceSearchOptions {
   productId?: string;
   teamId?: string;
-  /** Also match docs with NO product/team (org-wide) when a scope filter is
-   *  set - for agent consults, where global runbooks still apply. */
+  /**
+   * Also match docs with no product or team (org-wide) when a scope filter is
+   * set: for agent consults, where global runbooks still apply.
+   */
   includeUnscoped?: boolean;
   tags?: string[];
   componentId?: string;
@@ -463,8 +467,8 @@ export interface ReferenceSearchOptions {
   boostCustomerId?: string;
   /**
    * Narrow to imported docs or to wiki articles. Unlike the list, search spans
-   * BOTH by default: a curated article should be findable beside - and able to
-   * outrank - the material it consolidates.
+   * both by default: a curated article is findable beside, and can outrank, the
+   * material it consolidates.
    */
   kind?: string;
 }
@@ -571,7 +575,10 @@ export async function backfillReferenceEmbeddings(
   );
 }
 
-/** Restore a doc to a past revision, as an ordinary edit that appends its own revision. */
+/**
+ * Restore a doc to a past revision, as an ordinary edit that appends its own
+ * revision.
+ */
 export async function revertReferenceDoc(
   id: string,
   version: number,
