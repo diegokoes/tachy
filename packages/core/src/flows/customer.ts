@@ -61,14 +61,11 @@ export async function customerPropertyOptions(
   ];
 }
 
-const asText = (v: unknown): string | null =>
-  v == null || v === ""
-    ? null
-    : Array.isArray(v)
-      ? v.map(String).join(", ")
-      : typeof v === "object"
-        ? JSON.stringify(v)
-        : String(v);
+function asText(value: unknown): string | null {
+  if (value == null || value === "") return null;
+  if (Array.isArray(value)) return value.map(String).join(", ");
+  return typeof value === "object" ? JSON.stringify(value) : String(value);
+}
 
 /**
  * The asked-for properties of an item's customer, null where it has none.

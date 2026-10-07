@@ -75,12 +75,12 @@ const projectJoins = () => sql`
   left join customers cu on cu.id = sp.customer_id
 `;
 
-const hasProductFilter = (hasProduct: boolean | undefined) =>
-  hasProduct === undefined
-    ? sql``
-    : hasProduct
-      ? sql`and sp.product_id is not null`
-      : sql`and sp.product_id is null`;
+function hasProductFilter(hasProduct: boolean | undefined) {
+  if (hasProduct === undefined) return sql``;
+  return hasProduct
+    ? sql`and sp.product_id is not null`
+    : sql`and sp.product_id is null`;
+}
 
 export async function listSourceProjects(
   opts: {
@@ -271,12 +271,11 @@ export async function updateSourceProject(
     patch.wikis !== undefined ? patch.wikis : current.wikis,
   );
   assertWikiAllowed(scope.productId, wikis);
-  const customerId =
-    patch.customerSlug === undefined
-      ? current.customer_id
-      : patch.customerSlug
-        ? await getCustomerIdBySlug(patch.customerSlug)
-        : null;
+  let customerId = current.customer_id;
+  if (patch.customerSlug !== undefined)
+    customerId = patch.customerSlug
+      ? await getCustomerIdBySlug(patch.customerSlug)
+      : null;
 
   if (!scope.productId && current.product_id) {
     const [refs] = await sql`

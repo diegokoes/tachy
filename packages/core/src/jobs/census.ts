@@ -23,6 +23,9 @@ const zeroes = <K extends string>(keys: readonly K[]) =>
   Object.fromEntries(keys.map((k) => [k, 0])) as Record<K, number>;
 
 const FAILED: JobStatus[] = ["failed", "timed_out"];
+const DAY_MS = 86_400_000;
+/** The most firings listed for one definition in the day ahead. */
+const UPCOMING_PER_DEFINITION = 96;
 
 /** What the job workers have been doing over the last `days` days. */
 export async function jobCensus(
@@ -173,7 +176,7 @@ export async function jobCensus(
     where enabled and schedule is not null
     order by name
   `;
-  const horizon = now.getTime() + 86_400_000;
+  const horizon = now.getTime() + DAY_MS;
   const upcoming = scheduled.flatMap((definition) => {
     const at: string[] = [];
     try {
@@ -182,7 +185,9 @@ export async function jobCensus(
       });
       for (
         let slot = cron.nextRun(now);
-        slot && slot.getTime() <= horizon && at.length < 96;
+        slot &&
+        slot.getTime() <= horizon &&
+        at.length < UPCOMING_PER_DEFINITION;
         slot = cron.nextRun(slot)
       )
         at.push(slot.toISOString());
