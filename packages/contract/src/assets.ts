@@ -2,8 +2,8 @@
  * Images placed in library bodies. The server sniffs and stores them; the SPA
  * offers them to the file picker and decides which `<img>` a body may render.
  *
- * SVG is absent on purpose: it is a document that can carry script, not a
- * picture, and it would be served from this origin.
+ * SVG is excluded: it is a document that can carry script, and it would be
+ * served from this origin.
  */
 export const LIBRARY_ASSET_TYPES = [
   "image/png",

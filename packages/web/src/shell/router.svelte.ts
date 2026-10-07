@@ -1,19 +1,17 @@
-const RESERVED = new Set(["api", "auth", "health", "assets"]);
+const SERVER_SEGMENTS = new Set(["api", "auth", "health", "assets"]);
 
-function clean(path: string): string {
-  const p = ("/" + path.replace(/^\/+|\/+$/g, "")).replace(/\/{2,}/g, "/");
-  return p === "/" ? "/" : p;
+function normalizePath(path: string): string {
+  return ("/" + path.replace(/^\/+|\/+$/g, "")).replace(/\/{2,}/g, "/");
 }
 
-export const router = $state({ path: clean(window.location.pathname) });
+export const router = $state({ path: normalizePath(window.location.pathname) });
 
-/** The path each section was last on, so going back to one resumes there. */
-const lastIn = new Map<string, string>();
-let at = "";
+const lastPathBySection = new Map<string, string>();
+let currentSection = "";
 
 function visit(path: string) {
-  at = path.slice(1).split("/")[0] ?? "";
-  if (at) lastIn.set(at, path);
+  currentSection = path.slice(1).split("/")[0] ?? "";
+  if (currentSection) lastPathBySection.set(currentSection, path);
 }
 
 /**
@@ -21,18 +19,18 @@ function visit(path: string) {
  * reads state as it was before the change that tore it down, so `segments()`
  * there names the section being left, never the one being entered.
  */
-export const sectionNow = () => at;
+export const sectionNow = () => currentSection;
 
 visit(router.path);
 
 export const segments = () => {
-  const p = router.path;
-  return p === "/" ? [] : p.slice(1).split("/");
+  const path = router.path;
+  return path === "/" ? [] : path.slice(1).split("/");
 };
 
 export function section(fallback: string): string {
-  const s = segments()[0];
-  return !s || RESERVED.has(s) ? fallback : s;
+  const first = segments()[0];
+  return !first || SERVER_SEGMENTS.has(first) ? fallback : first;
 }
 
 export function segment(i: number): string | undefined {
@@ -40,8 +38,8 @@ export function segment(i: number): string | undefined {
 }
 
 export function navigate(to: string, { replace = false } = {}) {
-  const path = clean(to);
-  if (RESERVED.has(path.slice(1).split("/")[0] ?? "")) return;
+  const path = normalizePath(to);
+  if (SERVER_SEGMENTS.has(path.slice(1).split("/")[0] ?? "")) return;
   if (path === router.path) return;
   history[replace ? "replaceState" : "pushState"]({}, "", path);
   router.path = path;
@@ -51,8 +49,8 @@ export function navigate(to: string, { replace = false } = {}) {
 const landings = new Map<string, () => string>();
 
 /**
- * Where a section's landing really is, for one whose bare path only redirects
- * onward. Going straight there keeps the address bar from passing through it.
+ * A section's landing, for one whose bare path only redirects onward. Going
+ * straight there keeps the address bar from passing through the bare path.
  */
 export function setLanding(key: string, to: () => string) {
   landings.set(key, to);
@@ -66,18 +64,20 @@ const landing = (key: string) => landings.get(key)?.() ?? `/${key}`;
  */
 export function openSection(key: string) {
   navigate(
-    segments()[0] === key ? landing(key) : (lastIn.get(key) ?? landing(key)),
+    segments()[0] === key
+      ? landing(key)
+      : (lastPathBySection.get(key) ?? landing(key)),
   );
 }
 
 export function isActive(prefix: string): boolean {
-  const p = clean(prefix);
-  return router.path === p || router.path.startsWith(p + "/");
+  const path = normalizePath(prefix);
+  return router.path === path || router.path.startsWith(path + "/");
 }
 
 export function startRouter() {
   const onPop = () => {
-    router.path = clean(window.location.pathname);
+    router.path = normalizePath(window.location.pathname);
     visit(router.path);
   };
   window.addEventListener("popstate", onPop);

@@ -76,14 +76,11 @@ export function cpuBudget(): CpuBudget {
 }
 
 /**
- * Threads the ONNX runtime computes with, or undefined to leave it its
- * default. The default is one per physical core of the host, each pinned to
- * its core by the runtime itself, whatever CPU limit the container has
- * (https://onnxruntime.ai/docs/performance/tune-performance/threading.html).
- * Under a limit below the core count those threads queue for the same CPUs:
- * on a 14-core host a 6-CPU quota made a batch take 17 times as long. So the
- * count follows the limit when the limit is the smaller.
- * `TACHY_EMBED_THREADS` sets it outright.
+ * Threads the ONNX runtime computes with, or undefined to leave its default:
+ * one per physical core of the host, pinned, whatever CPU limit the container
+ * has (https://onnxruntime.ai/docs/performance/tune-performance/threading.html).
+ * Under a smaller limit those threads queue for the same CPUs, so the count
+ * follows the limit. `TACHY_EMBED_THREADS` sets it outright.
  */
 export function embedThreads(
   budget: CpuBudget = cpuBudget(),

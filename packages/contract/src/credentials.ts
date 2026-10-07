@@ -11,13 +11,10 @@ export const API_KEY_PREFIX = "sk-ant-";
 export const API_KEY_EXAMPLE = "sk-ant-api03-";
 
 /**
- * Returns an error message if the value is the wrong shape for the given
- * credential name, null otherwise. Shape only: nothing observable in a token
- * says which Anthropic account or organisation minted it.
- *
- * The admin panel calls this before the PUT and the vault calls it again on the
- * way in, so a typo is caught in the field it was typed into and can still
- * never reach storage by another route.
+ * An error message when the value has the wrong shape for the credential
+ * name, else null. Shape only: nothing in a token says which Anthropic account
+ * minted it. The admin panel calls it before the PUT and the vault again on
+ * the way in, so no route stores a malformed value.
  */
 export function validateCredential(name: string, value: string): string | null {
   if (name === ANTHROPIC_API_KEY_CREDENTIAL) {

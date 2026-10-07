@@ -3,16 +3,19 @@ export interface ChunkOptions {
   overlap?: number;
 }
 
+/** A packed chunk up to this many times `maxChars` is kept whole. */
+const OVERSIZE_FACTOR = 1.5;
+
 function hardSplit(text: string, maxChars: number, overlap: number): string[] {
-  const out: string[] = [];
+  const pieces: string[] = [];
   let start = 0;
   while (start < text.length) {
     const end = Math.min(start + maxChars, text.length);
-    out.push(text.slice(start, end));
+    pieces.push(text.slice(start, end));
     if (end >= text.length) break;
     start = end - overlap;
   }
-  return out;
+  return pieces;
 }
 
 export function chunkText(text: string, opts: ChunkOptions = {}): string[] {
@@ -22,24 +25,26 @@ export function chunkText(text: string, opts: ChunkOptions = {}): string[] {
   if (!clean) return [];
   if (clean.length <= maxChars) return [clean];
 
-  const paras = clean
+  const paragraphs = clean
     .split(/\n\s*\n/)
     .map((p) => p.trim())
     .filter(Boolean);
   const packed: string[] = [];
-  let cur = "";
-  for (const p of paras) {
-    if (cur && cur.length + p.length + 2 > maxChars) {
-      packed.push(cur);
-      const tail = overlap > 0 ? cur.slice(-overlap) : "";
-      cur = tail ? `${tail}\n\n${p}` : p;
+  let current = "";
+  for (const paragraph of paragraphs) {
+    if (current && current.length + paragraph.length + 2 > maxChars) {
+      packed.push(current);
+      const tail = overlap > 0 ? current.slice(-overlap) : "";
+      current = tail ? `${tail}\n\n${paragraph}` : paragraph;
     } else {
-      cur = cur ? `${cur}\n\n${p}` : p;
+      current = current ? `${current}\n\n${paragraph}` : paragraph;
     }
   }
-  if (cur.trim()) packed.push(cur);
+  if (current.trim()) packed.push(current);
 
   return packed.flatMap((c) =>
-    c.length <= maxChars * 1.5 ? [c] : hardSplit(c, maxChars, overlap),
+    c.length <= maxChars * OVERSIZE_FACTOR
+      ? [c]
+      : hardSplit(c, maxChars, overlap),
   );
 }

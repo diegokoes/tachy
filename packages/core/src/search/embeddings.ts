@@ -31,12 +31,12 @@ const prepare = (text: string, prefix: string) =>
   prefix + text.slice(0, EMBEDDING_SPEC.maxChars);
 
 async function runModel(texts: string[]): Promise<number[][]> {
-  const m = await model();
-  const out = (await m(texts, {
+  const extractor = await model();
+  const tensor = (await extractor(texts, {
     pooling: EMBEDDING_SPEC.pooling,
     normalize: true,
   })) as { tolist(): number[][] };
-  return out.tolist();
+  return tensor.tolist();
 }
 
 /** Texts per request to the embed endpoint, so its passage queue can interleave callers. */
@@ -44,9 +44,9 @@ const HTTP_CHUNK = 64;
 
 function httpBackend(url: string, secret: string): EmbedBackend {
   return async (kind, texts, caller, priority) => {
-    const out: number[][] = [];
+    const vectors: number[][] = [];
     for (let i = 0; i < texts.length; i += HTTP_CHUNK) {
-      const res = await fetch(url, {
+      const response = await fetch(url, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -56,13 +56,15 @@ function httpBackend(url: string, secret: string): EmbedBackend {
         },
         body: JSON.stringify({ kind, texts: texts.slice(i, i + HTTP_CHUNK) }),
       });
-      if (!res.ok)
+      if (!response.ok)
         throw new Error(
-          `embedding service answered ${res.status}: ${await res.text()}`,
+          `embedding service answered ${response.status}: ${await response.text()}`,
         );
-      out.push(...((await res.json()) as { vectors: number[][] }).vectors);
+      vectors.push(
+        ...((await response.json()) as { vectors: number[][] }).vectors,
+      );
     }
-    return out;
+    return vectors;
   };
 }
 
@@ -113,7 +115,6 @@ async function embed(kind: EmbedKind, texts: string[]): Promise<number[][]> {
   return vectors;
 }
 
-/** Embed a stored document (knowledge entry text). */
 export async function embedPassage(text: string): Promise<number[]> {
   const [v] = await embed("passage", [
     prepare(text, EMBEDDING_SPEC.passagePrefix),
@@ -121,17 +122,13 @@ export async function embedPassage(text: string): Promise<number[]> {
   return v;
 }
 
-/**
- * Embed many passages (doc chunks). The queue batches them by length, eight at
- * a time, and answers in the caller's order.
- */
+/** Vectors in the caller's order; the queue batches the passages by length. */
 export const embedPassages = (texts: string[]): Promise<number[][]> =>
   embed(
     "passage",
     texts.map((t) => prepare(t, EMBEDDING_SPEC.passagePrefix)),
   );
 
-/** Embed a search query. */
 export async function embedQuery(text: string): Promise<number[]> {
   const [v] = await embed("query", [prepare(text, EMBEDDING_SPEC.queryPrefix)]);
   return v;
