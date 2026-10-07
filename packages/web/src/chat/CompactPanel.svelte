@@ -23,7 +23,7 @@
     stats = undefined,
   }: { title?: string; stats?: CompactStats } = $props();
 
-  const W = 22;
+  const WIDTH_CELLS = 22;
   const DENSE = "█▓▒░";
 
   let tick = $state(0);
@@ -39,18 +39,18 @@
    */
   const band = $derived.by(() => {
     const phase = (tick % 44) / 44;
-    const kept = Math.max(3, Math.round(W * (1 - phase * 0.72)));
-    const pad = Math.floor((W - kept) / 2);
-    let s = "";
-    for (let i = 0; i < W; i++) {
+    const kept = Math.max(3, Math.round(WIDTH_CELLS * (1 - phase * 0.72)));
+    const pad = Math.floor((WIDTH_CELLS - kept) / 2);
+    let line = "";
+    for (let i = 0; i < WIDTH_CELLS; i++) {
       if (i < pad || i >= pad + kept) {
-        s += " ";
+        line += " ";
         continue;
       }
-      const d = (i + tick) % DENSE.length;
-      s += DENSE[phase > 0.62 ? Math.min(d, 1) : d];
+      const step = (i + tick) % DENSE.length;
+      line += DENSE[phase > 0.62 ? Math.min(step, 1) : step];
     }
-    return s;
+    return line;
   });
 
   const saved = $derived(
@@ -64,7 +64,7 @@
       : 0,
   );
 
-  const kb = (n: number) => Math.round(n / 1024);
+  const roundedKb = (n: number) => Math.round(n / 1024);
 
   interface Metric {
     key: string;
@@ -75,30 +75,30 @@
 
   const metrics = $derived.by<Metric[]>(() => {
     if (!stats) return [];
-    const d = stats.dropped;
+    const dropped = stats.dropped;
     const all: Metric[] = [
       { key: "msgs", label: "messages", value: stats.source_messages },
       { key: "pct", label: "less to read", value: saved, suffix: "%" },
       {
         key: "kept",
-        label: `to read, was ${kb(stats.raw_chars)}kb`,
-        value: kb(stats.compact_chars),
+        label: `to read, was ${roundedKb(stats.raw_chars)}kb`,
+        value: roundedKb(stats.compact_chars),
         suffix: "kb",
       },
       {
         key: "dup",
         label: "repeated quotes cut",
-        value: d.exact_duplicate_blocks + d.near_duplicate_blocks,
+        value: dropped.exact_duplicate_blocks + dropped.near_duplicate_blocks,
       },
       {
         key: "boiler",
         label: "signature/footer lines cut",
-        value: d.boilerplate_lines,
+        value: dropped.boilerplate_lines,
       },
       {
         key: "auto",
         label: "automated mails cut",
-        value: d.automated + d.auto_reply,
+        value: dropped.automated + dropped.auto_reply,
       },
       {
         key: "found",
@@ -134,14 +134,14 @@
     nodes.forEach((el, i) => {
       const target = Number(el.dataset.val ?? 0);
       const suffix = el.dataset.suffix ?? "";
-      const obj = { val: 0 };
-      gsap.to(obj, {
+      const counter = { val: 0 };
+      gsap.to(counter, {
         val: target,
         duration: 2.6,
         delay: i * 0.08,
         ease: "power2.out",
         onUpdate: () => {
-          el.textContent = Math.round(obj.val).toLocaleString() + suffix;
+          el.textContent = Math.round(counter.val).toLocaleString() + suffix;
         },
       });
     });
@@ -149,10 +149,10 @@
 
   onMount(() => {
     if (reduced) return;
-    const iv = setInterval(() => {
+    const interval = setInterval(() => {
       if (!done) tick++;
     }, 70);
-    return () => clearInterval(iv);
+    return () => clearInterval(interval);
   });
 </script>
 
@@ -174,17 +174,19 @@
     {/if}
   {:else}
     <div class="grid">
-      {#each metrics as m (m.key)}
+      {#each metrics as metric (metric.key)}
         <div class="metric">
           <span
             class="val"
             style="min-width:{slot}ch"
-            data-val={m.value}
-            data-suffix={m.suffix ?? ""}
-            data-final={m.value.toLocaleString() + (m.suffix ?? "")}
-            >{reduced ? m.value.toLocaleString() + (m.suffix ?? "") : "0"}</span
+            data-val={metric.value}
+            data-suffix={metric.suffix ?? ""}
+            data-final={metric.value.toLocaleString() + (metric.suffix ?? "")}
+            >{reduced
+              ? metric.value.toLocaleString() + (metric.suffix ?? "")
+              : "0"}</span
           >
-          <span class="lbl">{m.label}</span>
+          <span class="lbl">{metric.label}</span>
         </div>
       {/each}
     </div>

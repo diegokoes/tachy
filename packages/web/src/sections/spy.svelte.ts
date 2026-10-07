@@ -73,20 +73,20 @@ export function createSpy(opts: {
     kill();
     built = true;
 
-    for (const e of ordered()) {
+    for (const entry of ordered()) {
       triggers.push(
         ScrollTrigger.create({
-          trigger: e.el,
+          trigger: entry.el,
           scroller: el,
           start: "top bottom+=600",
           once: true,
-          onEnter: () => e.mount(),
+          onEnter: () => entry.mount(),
         }),
       );
 
       triggers.push(
         ScrollTrigger.create({
-          trigger: e.el,
+          trigger: entry.el,
           scroller: el,
           start: "top 35%",
           end: "bottom 35%",
@@ -95,8 +95,8 @@ export function createSpy(opts: {
             // The edge rule of `onScroll`, applied here because a toggle fires
             // with no scroll event to correct it: a short first section puts
             // the 35% line over its neighbour before any scroll.
-            if (el.scrollTop <= 2 && ordered()[0]?.key !== e.key) return;
-            opts.onactive(e.key);
+            if (el.scrollTop <= 2 && ordered()[0]?.key !== entry.key) return;
+            opts.onactive(entry.key);
           },
         }),
       );
@@ -104,11 +104,11 @@ export function createSpy(opts: {
       if (!reducedMotion()) {
         triggers.push(
           ScrollTrigger.create({
-            trigger: e.el,
+            trigger: entry.el,
             scroller: el,
             start: "top 85%",
             once: true,
-            onEnter: () => reveal(e),
+            onEnter: () => reveal(entry),
           }),
         );
       }
@@ -142,11 +142,11 @@ export function createSpy(opts: {
       cancelAnimationFrame(holding);
       holding = 0;
       programmatic = false;
-      for (const ev of give) el.removeEventListener(ev, stop);
+      for (const type of give) el.removeEventListener(type, stop);
       window.removeEventListener("keydown", stop);
     };
-    for (const ev of give)
-      el.addEventListener(ev, stop, { passive: true, once: true });
+    for (const type of give)
+      el.addEventListener(type, stop, { passive: true, once: true });
     window.addEventListener("keydown", stop, { once: true });
 
     holdUntil = performance.now() + SETTLE;
@@ -202,7 +202,7 @@ export function createSpy(opts: {
 
   function kill() {
     port()?.removeEventListener("scroll", onScroll);
-    for (const t of triggers) t.kill();
+    for (const trigger of triggers) trigger.kill();
     triggers = [];
   }
 
@@ -227,7 +227,7 @@ export function createSpy(opts: {
       build();
       observer = new ResizeObserver(refresh);
       observer.observe(el);
-      for (const e of ordered()) observer.observe(e.el);
+      for (const entry of ordered()) observer.observe(entry.el);
       measureTail();
     },
 
@@ -243,9 +243,9 @@ export function createSpy(opts: {
       const target = entries.get(key);
       if (!el || !target) return;
 
-      for (const e of ordered()) {
-        e.mount();
-        if (e.key === key) break;
+      for (const entry of ordered()) {
+        entry.mount();
+        if (entry.key === key) break;
       }
       opts.onactive(key);
 

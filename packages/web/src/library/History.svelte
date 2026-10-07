@@ -53,28 +53,28 @@
     }
   }
 
-  async function toggle(v: number) {
-    if (openVersion === v) {
+  async function toggle(version: number) {
+    if (openVersion === version) {
       openVersion = null;
       return;
     }
-    openVersion = v;
-    if (snapshots[v]) return;
+    openVersion = version;
+    if (snapshots[version]) return;
     try {
       const rev = await api.get<{ snapshot: Record<string, unknown> }>(
-        `/${base}/${id}/revisions/${v}`,
+        `/${base}/${id}/revisions/${version}`,
       );
-      snapshots[v] = rev.snapshot;
+      snapshots[version] = rev.snapshot;
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
   }
 
-  async function revert(v: number) {
-    reverting = v;
+  async function revert(version: number) {
+    reverting = version;
     error = null;
     try {
-      await api.post(`/${base}/${id}/revert/${v}`, {});
+      await api.post(`/${base}/${id}/revert/${version}`, {});
       onReverted?.();
       await load();
     } catch (e) {
@@ -105,36 +105,37 @@
 
   {#if revisions.length}
     <ul class="revs">
-      {#each revisions as r (r.version)}
+      {#each revisions as revision (revision.version)}
         <li>
-          <button class="rev-head" onclick={() => toggle(r.version)}>
-            <span class="v">v{r.version}</span>
-            <Badge tone={doorTone(r.actor)}>{r.actor}</Badge>
-            <span class="who">{revisionAuthor(r)}</span>
-            <span class="at"><Time at={r.created_at} /></span>
-            {#if r.changed_fields.length}
+          <button class="rev-head" onclick={() => toggle(revision.version)}>
+            <span class="v">v{revision.version}</span>
+            <Badge tone={doorTone(revision.actor)}>{revision.actor}</Badge>
+            <span class="who">{revisionAuthor(revision)}</span>
+            <span class="at"><Time at={revision.created_at} /></span>
+            {#if revision.changed_fields.length}
               <span class="fields">
-                {#each r.changed_fields as f}<Chip>{f}</Chip>{/each}
+                {#each revision.changed_fields as field}<Chip>{field}</Chip
+                  >{/each}
               </span>
             {:else}
               <span class="muted sm">created</span>
             {/if}
           </button>
 
-          {#if openVersion === r.version}
+          {#if openVersion === revision.version}
             <div class="snap">
-              {#if snapshots[r.version]}
+              {#if snapshots[revision.version]}
                 <dl>
-                  {#each r.changed_fields.length ? r.changed_fields : Object.keys(snapshots[r.version]) as key}
+                  {#each revision.changed_fields.length ? revision.changed_fields : Object.keys(snapshots[revision.version]) as key}
                     <dt>{key}</dt>
-                    <dd>{show(snapshots[r.version][key])}</dd>
+                    <dd>{show(snapshots[revision.version][key])}</dd>
                   {/each}
                 </dl>
-                {#if canEdit && r.version !== version}
+                {#if canEdit && revision.version !== version}
                   <Button
                     variant="ghost"
-                    busy={reverting === r.version}
-                    onclick={() => revert(r.version)}
+                    busy={reverting === revision.version}
+                    onclick={() => revert(revision.version)}
                   >
                     restore this version
                   </Button>

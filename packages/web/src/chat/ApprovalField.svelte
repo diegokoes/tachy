@@ -15,7 +15,7 @@
     /** A schema for this field, when the caller has one. See below. */
     spec?: FieldSpec;
     disabled?: boolean;
-    onchange: (v: unknown) => void;
+    onchange: (value: unknown) => void;
   } = $props();
 
   /**
@@ -36,9 +36,9 @@
   );
 
   /** ADO's FieldType, mapped onto the widgets this box has. */
-  function fromSpec(s: FieldSpec): Kind | undefined {
+  function fromSpec(fieldSpec: FieldSpec): Kind | undefined {
     if (choices && (typeof value === "string" || value == null)) return "enum";
-    switch (s.type) {
+    switch (fieldSpec.type) {
       case "integer":
       case "double":
         return "number";
@@ -79,9 +79,9 @@
   let open = $state(false);
 
   function commitAdd() {
-    const v = adding.trim();
-    if (!v) return;
-    onchange([...list, v]);
+    const added = adding.trim();
+    if (!added) return;
+    onchange([...list, added]);
     adding = "";
   }
 

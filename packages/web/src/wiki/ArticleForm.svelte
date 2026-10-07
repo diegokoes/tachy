@@ -103,12 +103,14 @@
       const seen = new Map<string, WikiArticleRef>();
       const walk = (nodes: WikiTocNode[]) => {
         for (const n of nodes) {
-          for (const a of n.articles) if (a.slug) seen.set(a.slug, a);
+          for (const article of n.articles)
+            if (article.slug) seen.set(article.slug, article);
           walk(n.children);
         }
       };
       walk(toc.categories);
-      for (const a of toc.uncategorised) if (a.slug) seen.set(a.slug, a);
+      for (const article of toc.uncategorised)
+        if (article.slug) seen.set(article.slug, article);
       articleRefs = [...seen.values()];
     } catch {
       articleRefs = [];
@@ -116,23 +118,23 @@
   }
 
   async function refreshSuggestions() {
-    const q = queryText.trim().toLowerCase();
+    const needle = queryText.trim().toLowerCase();
     const own = articleRefs
       .filter(
         (a) =>
           a.slug !== slug &&
-          (!q ||
-            a.slug!.toLowerCase().includes(q) ||
-            a.title.toLowerCase().includes(q)),
+          (!needle ||
+            a.slug!.toLowerCase().includes(needle) ||
+            a.title.toLowerCase().includes(needle)),
       )
       .slice(0, 6)
       .map((a) => ({ insert: a.slug!, label: a.title, what: "article" }));
 
     let entries: Suggestion[] = [];
-    if (q.length >= 3) {
+    if (needle.length >= 3) {
       try {
         const rows = await api.get<KnowledgeRow[]>(
-          `/knowledge/search?q=${encodeURIComponent(q)}&limit=4`,
+          `/knowledge/search?q=${encodeURIComponent(needle)}&limit=4`,
         );
         entries = rows.map((r) => ({
           insert: `entry:${r.id}`,
@@ -160,16 +162,18 @@
     const line = before.slice(before.lastIndexOf("\n") + 1);
     const callout = /^>[ \t]*(?:\[!?([\w-]*))?$/.exec(line);
     if (callout) {
-      const q = (callout[1] ?? "").toLowerCase();
+      const typed = (callout[1] ?? "").toLowerCase();
       mode = "callout";
       armed = line.includes("[");
       picking = true;
       openAt = caret - line.length;
-      suggestions = CALLOUT_TYPES.filter((t) => t.startsWith(q)).map((t) => ({
-        insert: t,
-        label: t,
-        what: "callout",
-      }));
+      suggestions = CALLOUT_TYPES.filter((t) => t.startsWith(typed)).map(
+        (t) => ({
+          insert: t,
+          label: t,
+          what: "callout",
+        }),
+      );
       highlighted = 0;
       return;
     }
@@ -186,12 +190,12 @@
     void refreshSuggestions();
   }
 
-  function choose(s: Suggestion) {
+  function choose(suggestion: Suggestion) {
     const el = bodyEl;
     if (!el || openAt < 0) return;
     const caret = el.selectionStart ?? 0;
     if (mode === "callout") {
-      const head = `> [!${s.insert}] `;
+      const head = `> [!${suggestion.insert}] `;
       body = body.slice(0, openAt) + head + body.slice(caret);
       picking = false;
       const at = openAt + head.length;
@@ -201,7 +205,10 @@
       });
       return;
     }
-    const text = s.what === "entry" ? `${s.insert}|${s.label}` : s.insert;
+    const text =
+      suggestion.what === "entry"
+        ? `${suggestion.insert}|${suggestion.label}`
+        : suggestion.insert;
     body = body.slice(0, openAt) + `[[${text}]]` + body.slice(caret);
     picking = false;
     const pos = openAt + text.length + 4;
@@ -349,17 +356,20 @@
   /** Indented by depth so the picker shows the tree, not a flat list. */
   const laidOut = $derived.by(() => {
     const byParent = new Map<string | null, WikiCategory[]>();
-    for (const c of categories)
-      byParent.set(c.parent_id, [...(byParent.get(c.parent_id) ?? []), c]);
-    const out: { cat: WikiCategory; depth: number }[] = [];
+    for (const category of categories)
+      byParent.set(category.parent_id, [
+        ...(byParent.get(category.parent_id) ?? []),
+        category,
+      ]);
+    const flat: { cat: WikiCategory; depth: number }[] = [];
     const walk = (parent: string | null, depth: number) => {
-      for (const c of byParent.get(parent) ?? []) {
-        out.push({ cat: c, depth });
-        walk(c.id, depth + 1);
+      for (const category of byParent.get(parent) ?? []) {
+        flat.push({ cat: category, depth });
+        walk(category.id, depth + 1);
       }
     };
     walk(null, 0);
-    return out;
+    return flat;
   });
 
   $effect(() => setTopActions(formActions));
@@ -481,18 +491,18 @@
         onblur={() => setTimeout(() => (picking = false), 150)}></textarea>
       {#if picking && suggestions.length}
         <ul class="picker-pop">
-          {#each suggestions as s, i (s.insert)}
+          {#each suggestions as suggestion, i (suggestion.insert)}
             <li>
               <button
                 type="button"
                 class:on={i === highlighted}
                 onmousedown={(e) => {
                   e.preventDefault();
-                  choose(s);
+                  choose(suggestion);
                 }}
               >
-                <span class="what">{s.what}</span>
-                {s.label}
+                <span class="what">{suggestion.what}</span>
+                {suggestion.label}
               </button>
             </li>
           {/each}

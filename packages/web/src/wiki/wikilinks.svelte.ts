@@ -35,17 +35,17 @@ export class LinkTargets {
 
       const next = new Set<string>();
       this.to.clear();
-      for (const l of outbound) {
+      for (const link of outbound) {
         const path = libraryItemPath({
-          entryId: l.to_entry_id,
-          docId: l.to_doc_id,
-          kind: l.to_kind,
-          slug: l.to_slug,
-          scope: scopeOf(l.to_product_id),
+          entryId: link.to_entry_id,
+          docId: link.to_doc_id,
+          kind: link.to_kind,
+          slug: link.to_slug,
+          scope: scopeOf(link.to_product_id),
         });
         if (!path) continue;
-        next.add(l.target);
-        this.to.set(l.target, path);
+        next.add(link.target);
+        this.to.set(link.target, path);
       }
       this.resolved = next;
     } catch {

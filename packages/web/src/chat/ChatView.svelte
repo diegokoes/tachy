@@ -268,12 +268,12 @@
     if (!ctx) return;
     if (ctx.stage === "sub") chat.input = `/az ${value} `;
     else if (ctx.stage === "project") {
-      const p = az.projects?.find((x) => x.id === value);
-      if (p) chat.input = `/az new ${p.name} `;
+      const project = az.projects?.find((x) => x.id === value);
+      if (project) chat.input = `/az new ${project.name} `;
     } else {
-      const t = typesOf(ctx.project.id).find((x) => x.name === value);
+      const type = typesOf(ctx.project.id).find((x) => x.name === value);
       chat.input = "";
-      openComposer(ctx.project, t);
+      openComposer(ctx.project, type);
     }
   }
 
@@ -329,10 +329,10 @@
   function parseCommand(
     message: string,
   ): { name: string; args: string } | undefined {
-    const m = message.match(/^\/([a-z0-9-]+)(?:\s+([\s\S]*))?$/);
-    if (!m || !commands?.builtins.some((b) => b.name === m[1]))
+    const match = message.match(/^\/([a-z0-9-]+)(?:\s+([\s\S]*))?$/);
+    if (!match || !commands?.builtins.some((b) => b.name === match[1]))
       return undefined;
-    return { name: m[1], args: m[2]?.trim() ?? "" };
+    return { name: match[1], args: match[2]?.trim() ?? "" };
   }
 
   async function send() {
@@ -405,8 +405,8 @@
           >["stats"];
           if (panel && stats) {
             panel.stats = stats;
-            const t = payload?.ticket as { title?: string } | undefined;
-            if (t?.title) panel.title = t.title;
+            const ticket = payload?.ticket as { title?: string } | undefined;
+            if (ticket?.title) panel.title = ticket.title;
           }
         } else if (
           event === "tool_result" &&
@@ -432,10 +432,10 @@
             status: "pending",
           });
         else if (event === "approval_resolved") {
-          const a = chat.entries.find(
+          const approval = chat.entries.find(
             (e) => e.kind === "approval" && e.id === data.id,
           ) as Extract<Entry, { kind: "approval" }> | undefined;
-          if (a) a.status = data.approved ? "approved" : "denied";
+          if (approval) approval.status = data.approved ? "approved" : "denied";
         } else if (event === "result")
           chat.sessionId = data.sessionId as string;
         else if (event === "error")
@@ -610,15 +610,15 @@
         bind:this={transcriptEl}
         onscroll={onScroll}
       >
-        {#each chat.entries as e, i (e.key)}
-          {#if e.kind === "user"}
+        {#each chat.entries as entry, i (entry.key)}
+          {#if entry.kind === "user"}
             <div class="turn user">
               <span class="who"
                 >you<span class="mk" aria-hidden="true">{G.marker}</span></span
               >
-              <div class="body">{e.text}</div>
+              <div class="body">{entry.text}</div>
             </div>
-          {:else if e.kind === "assistant"}
+          {:else if entry.kind === "assistant"}
             <div class="turn">
               <span class="who"
                 ><span class="mk" aria-hidden="true">{G.marker}</span
@@ -628,39 +628,43 @@
                 class="body md"
                 class:streaming={chat.busy && i === chat.entries.length - 1}
               >
-                {@html renderMarkdown(e.text)}
+                {@html renderMarkdown(entry.text)}
               </div>
             </div>
-          {:else if e.kind === "tool"}
+          {:else if entry.kind === "tool"}
             <div class="tool">
               <Icon name="tool" size="1em" weight={7} />
-              {e.tool}
+              {entry.tool}
             </div>
-          {:else if e.kind === "compact"}
-            <CompactPanel title={e.title} stats={e.stats} />
-          {:else if e.kind === "output"}
-            <OutputCard file={e.file} />
-          {:else if e.kind === "ticket"}
-            <TicketCard ticket={e.ticket} icon={e.icon} color={e.color} />
-          {:else if e.kind === "error"}
+          {:else if entry.kind === "compact"}
+            <CompactPanel title={entry.title} stats={entry.stats} />
+          {:else if entry.kind === "output"}
+            <OutputCard file={entry.file} />
+          {:else if entry.kind === "ticket"}
+            <TicketCard
+              ticket={entry.ticket}
+              icon={entry.icon}
+              color={entry.color}
+            />
+          {:else if entry.kind === "error"}
             <div class="turn">
               <span class="who err">{G.marker}error</span>
-              <div class="body err">{e.text}</div>
+              <div class="body err">{entry.text}</div>
             </div>
-          {:else if e.kind === "running"}
+          {:else if entry.kind === "running"}
             <div class="turn">
               <span class="who err">{G.marker}busy</span>
               <div class="body err">
-                {#if e.stopped}stopped. send your message again.{:else}{e.text}
-                  <Button size="sm" onclick={() => stopRunning(e)}
+                {#if entry.stopped}stopped. send your message again.{:else}{entry.text}
+                  <Button size="sm" onclick={() => stopRunning(entry)}
                     >stop it</Button
                   >{/if}
               </div>
             </div>
-          {:else if e.kind === "approval"}
+          {:else if entry.kind === "approval"}
             <Approval
-              entry={e}
-              ondecide={(ok, reason) => decide(e, ok, reason)}
+              {entry}
+              ondecide={(ok, reason) => decide(entry, ok, reason)}
             />
           {/if}
         {/each}
@@ -708,11 +712,11 @@
               >
             </span>
           {/if}
-          {#each chat.uploads as u, i (u.path)}
+          {#each chat.uploads as upload, i (upload.path)}
             {#if i > 0}<span class="sep" aria-hidden="true">~~</span>{/if}
             <span class="attach">
-              <Icon name={u.image ? "image" : "file"} size="1.1em" />
-              {u.filename}
+              <Icon name={upload.image ? "image" : "file"} size="1.1em" />
+              {upload.filename}
               <button
                 class="chip-x"
                 aria-label="Remove attachment"

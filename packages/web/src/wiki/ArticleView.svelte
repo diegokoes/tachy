@@ -55,7 +55,7 @@
     if (!port || !from || !to) return;
     gsap.set(to, { autoAlpha: 0 });
     let pinned = false;
-    const io = new IntersectionObserver(
+    const observer = new IntersectionObserver(
       ([e]) => {
         const next =
           !e.isIntersecting &&
@@ -71,14 +71,19 @@
           gsap.set(to, { autoAlpha: 1, x: 0, y: 0, scale: 1 });
           return;
         }
-        const a = from.getBoundingClientRect();
-        const b = to.getBoundingClientRect();
+        const fromRect = from.getBoundingClientRect();
+        const toRect = to.getBoundingClientRect();
         const scale =
           parseFloat(getComputedStyle(from).fontSize) /
           parseFloat(getComputedStyle(to).fontSize);
         gsap.fromTo(
           to,
-          { x: a.left - b.left, y: a.top - b.top, scale, autoAlpha: 1 },
+          {
+            x: fromRect.left - toRect.left,
+            y: fromRect.top - toRect.top,
+            scale,
+            autoAlpha: 1,
+          },
           {
             x: 0,
             y: 0,
@@ -91,9 +96,9 @@
       },
       { root: port },
     );
-    io.observe(from);
+    observer.observe(from);
     return () => {
-      io.disconnect();
+      observer.disconnect();
       gsap.killTweensOf(to);
     };
   });
@@ -146,19 +151,19 @@
     mutating = true;
     mutateError = null;
     conflict = false;
-    const res = await patchLibraryItem(
+    const patched = await patchLibraryItem(
       `/library/wiki/${scope}/articles/${slug}`,
       { status: "approved" },
       article.version,
       "article",
     );
     mutating = false;
-    if (res.ok) {
+    if (patched.ok) {
       await load();
       void loadWikis();
     } else {
-      conflict = res.conflict;
-      mutateError = res.message;
+      conflict = patched.conflict;
+      mutateError = patched.message;
     }
   }
 
@@ -291,14 +296,14 @@
       <footer class="cats">
         {#if article.categories?.length}
           <span class="lbl">categories:</span>
-          {#each article.categories as c, i (c.id)}
+          {#each article.categories as category, i (category.id)}
             {#if i > 0}<span class="sep">|</span>{/if}
             <a
-              href={wikiPath(scope, "c", c.slug)}
+              href={wikiPath(scope, "c", category.slug)}
               onclick={(e) => {
                 e.preventDefault();
-                navigate(wikiPath(scope, "c", c.slug));
-              }}>{c.name}</a
+                navigate(wikiPath(scope, "c", category.slug));
+              }}>{category.name}</a
             >
           {/each}
         {:else}

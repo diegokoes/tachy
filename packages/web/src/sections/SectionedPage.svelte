@@ -112,15 +112,15 @@ is rendered.
   {/if}
 
   <div class="content">
-    {#each sections as s (s.key)}
+    {#each sections as section (section.key)}
       <Section
         {spy}
-        section={s.key}
-        label={s.label}
-        icon={s.icon}
-        view={s.view}
-        eager={s.eager}
-        actions={s.actions}
+        section={section.key}
+        label={section.label}
+        icon={section.icon}
+        view={section.view}
+        eager={section.eager}
+        actions={section.actions}
       />
     {/each}
 

@@ -216,7 +216,8 @@
         aria-invalid={cloudErr ? "true" : undefined}
       />
       <datalist id="entry-form-envs">
-        {#each environments as e}<option value={e.cloud}></option>{/each}
+        {#each environments as environment}<option value={environment.cloud}
+          ></option>{/each}
       </datalist>
     </Field>
   </div>

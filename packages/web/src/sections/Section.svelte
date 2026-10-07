@@ -57,13 +57,13 @@ refresh, and these sections grow for as long as their tables are loading.
     >
     <span class="lbl">{label}</span>
     <span class="rule" aria-hidden="true"></span>
-    {#each actions as a (a.label)}
+    {#each actions as action (action.label)}
       <Button
         variant="ghost"
-        tone={a.tone ?? "ok"}
+        tone={action.tone ?? "ok"}
         size="sm"
-        icon={a.icon ?? "plus"}
-        onclick={a.run}>{a.label}</Button
+        icon={action.icon ?? "plus"}
+        onclick={action.run}>{action.label}</Button
       >
     {/each}
   </h2>

@@ -13,8 +13,8 @@
     facets: Facets;
     /** The component the row is scoped to, for the filters that need one. */
     component: string;
-    onadd: (k: FacetKey) => void;
-    onremove: (k: FacetKey) => void;
+    onadd: (key: FacetKey) => void;
+    onremove: (key: FacetKey) => void;
   } = $props();
 
   let open = $state(false);
@@ -37,9 +37,9 @@
     })),
   );
 
-  function toggle(it: (typeof items)[number]) {
-    if (it.added) onremove(it.key);
-    else onadd(it.key);
+  function toggle(item: (typeof items)[number]) {
+    if (item.added) onremove(item.key);
+    else onadd(item.key);
   }
 </script>
 
@@ -63,21 +63,22 @@
   </Button>
   {#if open}
     <ul>
-      {#each items as it (it.key)}
+      {#each items as item (item.key)}
         <li>
           <button
             type="button"
-            class:added={it.added}
-            aria-pressed={it.added}
-            disabled={!it.added && (it.empty || it.unscoped)}
-            onclick={() => toggle(it)}
+            class:added={item.added}
+            aria-pressed={item.added}
+            disabled={!item.added && (item.empty || item.unscoped)}
+            onclick={() => toggle(item)}
           >
-            <span class="mark" aria-hidden="true">{it.added ? "›" : " "}</span>
-            <span class="t">{it.label}</span>
+            <span class="mark" aria-hidden="true">{item.added ? "›" : " "}</span
+            >
+            <span class="t">{item.label}</span>
             <!-- Always present, empty for the enums: the label centres in the
                  same slot on every row, count or no count. -->
             <span class="n"
-              >{it.kind === "enum" || it.unscoped ? "" : it.count}</span
+              >{item.kind === "enum" || item.unscoped ? "" : item.count}</span
             >
           </button>
         </li>

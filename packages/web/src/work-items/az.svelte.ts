@@ -8,7 +8,10 @@ import { api } from "../api";
 export const az = $state({
   projects: null as ComposerProject[] | null,
   projectsError: null as string | null,
-  types: {} as Record<string, WorkItemTypeOption[] | "loading" | { error: string }>,
+  types: {} as Record<
+    string,
+    WorkItemTypeOption[] | "loading" | { error: string }
+  >,
 });
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -49,14 +52,14 @@ export function ensureTypes(projectId: string): Promise<WorkItemTypeOption[]> {
 }
 
 export const typesOf = (projectId: string): WorkItemTypeOption[] => {
-  const t = az.types[projectId];
-  return Array.isArray(t) ? t : [];
+  const types = az.types[projectId];
+  return Array.isArray(types) ? types : [];
 };
 
 /** Why the type list is empty, for the menu to say instead of rows. */
 export function typesNote(projectId: string): string {
-  const t = az.types[projectId];
-  if (!t || t === "loading") return "loading types…";
-  if (!Array.isArray(t)) return t.error;
+  const types = az.types[projectId];
+  if (!types || types === "loading") return "loading types…";
+  if (!Array.isArray(types)) return types.error;
   return "no type matches; Enter opens the composer to pick one there";
 }

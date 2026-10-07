@@ -35,13 +35,13 @@ export async function getCommands(): Promise<{
   builtins: BuiltinCommandMeta[];
   artifacts: CommandArtifactMeta[];
 }> {
-  const res = await fetch("/api/agent/commands");
-  if (res.status === 401) {
+  const response = await fetch("/api/agent/commands");
+  if (response.status === 401) {
     onUnauthorized();
     return { builtins: [], artifacts: [] };
   }
-  if (!res.ok) throw new Error(`commands failed: ${res.status}`);
-  return res.json();
+  if (!response.ok) throw new Error(`commands failed: ${response.status}`);
+  return response.json();
 }
 
 /** The server declined to start a turn: 409 carries the turn already running. */
@@ -64,34 +64,34 @@ export async function* chatStream(
   body: ChatBody,
   signal?: AbortSignal,
 ): AsyncGenerator<SseFrame> {
-  const res = await fetch("/api/agent/chat", {
+  const response = await fetch("/api/agent/chat", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
     signal,
   });
-  if (res.status === 401) {
+  if (response.status === 401) {
     onUnauthorized();
     return;
   }
-  if (!res.ok) {
+  if (!response.ok) {
     const body = (await Promise.resolve()
-      .then(() => res.json())
+      .then(() => response.json())
       .catch(() => ({}))) as {
       error?: string;
       turnId?: string;
     };
     throw new ChatRefused(
-      res.status,
-      body.error ?? `agent chat failed: ${res.status}`,
+      response.status,
+      body.error ?? `agent chat failed: ${response.status}`,
       body.turnId,
     );
   }
-  if (!res.body) throw new Error(`agent chat failed: ${res.status}`);
+  if (!response.body) throw new Error(`agent chat failed: ${response.status}`);
 
-  const reader = res.body.getReader();
+  const reader = response.body.getReader();
   const dec = new TextDecoder();
-  let buf = "";
+  let buffered = "";
   // The `finally` cancels the reader: a consumer that stops early (the caller's
   // catch, the component destroyed mid-turn) leaves this generator suspended at
   // a yield, with the response body open.
@@ -99,11 +99,11 @@ export async function* chatStream(
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let idx: number;
-      while ((idx = buf.indexOf("\n\n")) >= 0) {
-        const raw = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
+      buffered += dec.decode(value, { stream: true });
+      let boundary: number;
+      while ((boundary = buffered.indexOf("\n\n")) >= 0) {
+        const raw = buffered.slice(0, boundary);
+        buffered = buffered.slice(boundary + 2);
         let event = "message";
         let data = "";
         for (const line of raw.split("\n")) {
@@ -131,7 +131,7 @@ export async function approve(
   updatedInput?: Record<string, unknown>,
   message?: string,
 ): Promise<void> {
-  const res = await fetch("/api/agent/approve", {
+  const response = await fetch("/api/agent/approve", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -142,43 +142,46 @@ export async function approve(
       message,
     }),
   });
-  if (res.status === 401) {
+  if (response.status === 401) {
     onUnauthorized();
     return;
   }
-  if (!res.ok)
+  if (!response.ok)
     throw new Error(
-      res.status === 404
+      response.status === 404
         ? "this turn already finished; the approval expired"
-        : `could not record the decision (${res.status})`,
+        : `could not record the decision (${response.status})`,
     );
 }
 
 export async function stopTurn(turnId: string): Promise<void> {
-  const res = await fetch("/api/agent/stop", {
+  const response = await fetch("/api/agent/stop", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ turnId }),
   });
-  if (res.status === 401) {
+  if (response.status === 401) {
     onUnauthorized();
     return;
   }
-  if (!res.ok && res.status !== 404)
-    throw new Error(`could not stop the turn (${res.status})`);
+  if (!response.ok && response.status !== 404)
+    throw new Error(`could not stop the turn (${response.status})`);
 }
 
 export async function uploadDoc(
   file: File,
 ): Promise<{ path: string; filename: string; image: boolean }> {
-  const fd = new FormData();
-  fd.append("file", file);
-  const res = await fetch("/api/agent/uploads", { method: "POST", body: fd });
-  if (res.status === 401) onUnauthorized();
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok)
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch("/api/agent/uploads", {
+    method: "POST",
+    body: form,
+  });
+  if (response.status === 401) onUnauthorized();
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok)
     throw new Error(
-      `could not attach ${file.name}: ${body?.error ?? `upload failed (${res.status} ${res.statusText})`}`,
+      `could not attach ${file.name}: ${body?.error ?? `upload failed (${response.status} ${response.statusText})`}`,
     );
   return { ...body, image: file.type.startsWith("image/") };
 }

@@ -59,9 +59,9 @@
   );
 
   /** The doc lifecycle, as the left rail draws it. See EntryDetail. */
-  function actionsFor(d: ReferenceRow): StatusAction[] {
+  function actionsFor(doc: ReferenceRow): StatusAction[] {
     const acts: StatusAction[] = [];
-    if (d.status !== "draft")
+    if (doc.status !== "draft")
       acts.push({
         icon: "draft",
         label: "draft",
@@ -70,7 +70,7 @@
         disabled: mutating,
         onclick: () => patch({ status: "draft" }),
       });
-    if (d.status !== "approved")
+    if (doc.status !== "approved")
       acts.push({
         icon: "approve",
         label: "approve",
@@ -78,14 +78,14 @@
         disabled: mutating,
         onclick: () => patch({ status: "approved" }),
       });
-    if (d.status !== "archived")
+    if (doc.status !== "archived")
       acts.push({
         icon: "archive",
         label: "archive",
         disabled: mutating,
         onclick: () => patch({ status: "archived" }),
       });
-    if (d.status === "approved")
+    if (doc.status === "approved")
       acts.push({
         icon: "newVersion",
         label: "new version",
@@ -154,16 +154,16 @@
     mutating = true;
     mutateError = null;
     conflict = false;
-    const res = await patchLibraryItem(
+    const patched = await patchLibraryItem(
       `/reference/${doc.id}`,
       body,
       doc.version,
       "doc",
     );
-    if (res.ok) await load(doc.id);
+    if (patched.ok) await load(doc.id);
     else {
-      conflict = res.conflict;
-      mutateError = res.message;
+      conflict = patched.conflict;
+      mutateError = patched.message;
     }
     mutating = false;
   }
