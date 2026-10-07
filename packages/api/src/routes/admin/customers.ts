@@ -72,7 +72,10 @@ const customerPatchSchema = z.object({
   notes: z.string().nullable().optional(),
 });
 
-/** Customers, the units of their estate, and the facts and components that are theirs. */
+/**
+ * Customers, the units of their estate, and the facts and components that are
+ * theirs.
+ */
 export const customers = new Hono()
   .get("/customers", async (c) => c.json(await listCustomers()))
   .post("/customers", zValidator("json", customerSchema), async (c) => {

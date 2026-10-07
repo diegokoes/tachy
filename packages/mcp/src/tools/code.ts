@@ -1,3 +1,6 @@
+/**
+ * Linked repositories: searching indexed code, and reading a file out of it.
+ */
 import { z } from "zod";
 import { resolveCurrentUserId } from "@tachy/core/access";
 import { recordRun } from "@tachy/core/analytics";
@@ -16,10 +19,6 @@ import { badInput } from "@tachy/core/infra";
 import { tool } from "../server";
 import { GRADE_NOTE, out, outScrubbed, searchOut } from "../results";
 import { resolveScopeIds } from "../context";
-
-/**
- * Linked repositories: searching indexed code, and reading a file out of it.
- */
 
 tool(
   "list_repos",

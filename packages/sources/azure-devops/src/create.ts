@@ -22,7 +22,7 @@ export function asHtml(text: string): string {
     : `<div>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/\n/g, "<br>")}</div>`;
 }
 
-/** Keys the fields actually refer to, so an image the user deleted is not uploaded. */
+/** Keys the fields refer to, so an image the user deleted is not uploaded. */
 export function referencedKeys(fields: Record<string, unknown>): Set<string> {
   const keys = new Set<string>();
   for (const v of Object.values(fields))

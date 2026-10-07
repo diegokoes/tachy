@@ -1,3 +1,6 @@
+/**
+ * The systems work items come from, and how their projects map onto products.
+ */
 import { z } from "zod";
 import { getProductIdBySlug, getTeamIdBySlug } from "@tachy/core/catalog";
 import {
@@ -16,10 +19,6 @@ import {
   requireCanManageTeam,
   requireGlobalAdmin,
 } from "../permissions";
-
-/**
- * The systems work items come from, and how their projects map onto products.
- */
 
 tool(
   "list_source_connections",

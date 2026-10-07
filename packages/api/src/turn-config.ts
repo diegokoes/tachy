@@ -28,7 +28,7 @@ import { findCommand, commandAutoApprove } from "./commands";
 
 /**
  * The review box invariant lives in prompt.md, where the tool descriptions
- * agree with it. This only names the surface it renders on - anything more
+ * agree with it. This only names the surface it renders on: anything more
  * would restate instructions the model already has, on every turn.
  */
 const UI_APPROVAL_NOTE = `
@@ -38,14 +38,11 @@ const UI_APPROVAL_NOTE = `
 The review box named in the invariants renders here as an editable form, one per write tool call. The user edits the fields before approving, and the tool runs with their edits.`;
 
 /**
- * Byte-identical on every turn, which is what lets prompt caching amortise it.
- * Never interpolate per-turn state (time, user, session) in here: a varying
- * prefix invalidates the cache and multiplies what each turn consumes.
- *
- * Deliberately not the root CLAUDE.md: that file also loads into every Claude
- * Code session opened on this repo, and contributors and the agent want
- * different text. Anything belonging to a single tool belongs in that tool's
- * MCP description instead, where it ships with the tool rather than every turn.
+ * Byte-identical on every turn, which lets prompt caching amortise it: no
+ * per-turn state (time, user, session) is interpolated, since a varying prefix
+ * invalidates the cache. Not the root CLAUDE.md, which also loads into every
+ * Claude Code session opened on this repo. What belongs to one tool goes in
+ * that tool's MCP description.
  */
 export async function systemPrompt(): Promise<string> {
   const path = join(process.cwd(), "packages/agent/prompt.md");
@@ -131,14 +128,9 @@ export async function mcpConfig(
   const ctx: ScopeContext = user
     ? { userId: user.id, teamId: (await userSoleTeamId(user.id)) ?? undefined }
     : {};
-  // Caller-scoped tokens are only safe here because this env is built fresh
-  // for each turn's MCP subprocess - never pool or share it across users.
-  //
-  // Resolved here rather than in the subprocess, and unconditionally: the child
-  // has no TACHY_SECRET_KEY, so its own resolveCredential falls straight to
-  // these variables. Left to resolve for itself it would pass an empty scope,
-  // and the `or scope = 'global'` leg of the lookup would hand every caller the
-  // org-wide row instead of their own.
+  // Caller-scoped tokens are safe only because this env is built fresh for each
+  // turn's MCP subprocess: never pool or share it across users. Resolved here:
+  // the child has no TACHY_SECRET_KEY, and an empty scope reads the org-wide row.
   for (const conn of await listSourceConnections()) {
     const token = await resolveCredential(
       sourceCredentialName(conn.source_type, conn.slug),

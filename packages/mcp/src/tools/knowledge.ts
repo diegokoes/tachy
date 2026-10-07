@@ -1,3 +1,7 @@
+/**
+ * The archive of what past work items taught: searching it, adding to it, and
+ * correcting an entry once it exists.
+ */
 import { z } from "zod";
 import {
   saveKnowledgeEntry,
@@ -32,11 +36,6 @@ import {
   tagsField,
 } from "../fields";
 import { componentIntoFilter, resolveScopeIds } from "../context";
-
-/**
- * The archive of what past work items taught: searching it, adding to it, and
- * correcting an entry once it exists.
- */
 
 tool(
   "search_knowledge",

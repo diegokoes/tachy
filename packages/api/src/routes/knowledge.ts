@@ -278,11 +278,10 @@ const runSchema = z.object({
   meta: z.record(z.string(), z.any()).optional(),
 });
 
-/*
- * These rows are the cost and usage record, so they are written as the caller
- * rather than for whoever the body claims: `userId` is deliberately not in the
- * schema. Requiring an account also stops an anonymous bearer-token client
- * filling the table.
+/**
+ * These rows are the cost and usage record, so they are written as the caller,
+ * not for whoever the body claims: `userId` is not in the schema. Requiring an
+ * account also stops an anonymous bearer-token client filling the table.
  */
 export const analysisRuns = new Hono().post(
   "/",

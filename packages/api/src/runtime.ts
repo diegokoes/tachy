@@ -25,7 +25,10 @@ const readNumber = async (path: string) => {
   return raw && raw !== "max" ? Number(raw) : null;
 };
 
-/** The container's own cgroup: turn trees live inside it, so it is the capacity signal. */
+/**
+ * The container's own cgroup: turn trees live inside it, so it is the capacity
+ * signal.
+ */
 async function memory() {
   const current = await readNumber("/sys/fs/cgroup/memory.current");
   if (current === null) return null;

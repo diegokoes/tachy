@@ -36,8 +36,10 @@ const sourceConnSchema = z.object({
   token: z.string().min(1).optional(),
 });
 
-/** Where the caller's token for a connection comes from - null when unset.
- *  Connections predating `connSlugField` may carry names the vault rejects. */
+/**
+ * Where the caller's token for a connection comes from, null when unset.
+ * Connections predating `connSlugField` may carry names the vault rejects.
+ */
 export async function tokenSource(
   sourceType: string,
   slug: string,

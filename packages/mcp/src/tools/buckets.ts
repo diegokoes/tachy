@@ -1,3 +1,7 @@
+/**
+ * Buckets: collections maintained outside tachy and pushed in by a sync
+ * script. Read-only here, and kept out of the library's own searches.
+ */
 import { z } from "zod";
 import {
   getBucketDoc,
@@ -9,11 +13,6 @@ import {
 import { tool } from "../server";
 import { GRADE_NOTE, outScrubbed, searchOut } from "../results";
 import { gateUserId } from "../permissions";
-
-/**
- * Buckets: collections maintained outside tachy and pushed in by a sync
- * script. Read-only here, and kept out of the library's own searches.
- */
 
 const ABOUT =
   "A bucket is an external document collection (e.g. a product's public knowledge base) pushed into tachy by a sync script. It is NOT the library: never mix its hits with reference docs, wiki articles or knowledge entries, and never save what it says into the library unless the user asks.";

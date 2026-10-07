@@ -1,25 +1,21 @@
+/**
+ * Azure DevOps splits what a form needs across two endpoints:
+ *
+ *   workitemtypes/{type}/fields?$expand=all  what the type requires and allows
+ *     (alwaysRequired, allowedValues, defaultValue, helpText), with no data type
+ *   _apis/wit/fields  the account-wide definitions, which carry type, readOnly
+ *     and isIdentity
+ *
+ * Joining them on referenceName gives both that a field is required and what
+ * control it takes. Per the 7.1 REST reference,
+ * `WorkItemTypeFieldWithReferences` is {allowedValues, alwaysRequired,
+ * defaultValue, dependentFields, helpText, name, referenceName, url}.
+ */
 import type { AdoFieldType, FieldSpec, WorkItemSchema } from "@tachy/core";
 import type { AdoClient, AdoField, AdoTypeField } from "./client";
 
 export type { AdoFieldType, FieldSpec, WorkItemSchema };
 
-/**
- * Azure DevOps splits what a form needs across two endpoints, and neither is
- * sufficient alone:
- *
- *   workitemtypes/{type}/fields?$expand=all  what the type REQUIRES and ALLOWS
- *                                            (alwaysRequired, allowedValues,
- *                                            defaultValue, helpText) - but
- *                                            carries no data type at all
- *   _apis/wit/fields                         the account-wide definitions, which
- *                                            DO carry type / readOnly / isIdentity
- *
- * Joining them on referenceName is the only way to know both that a field is
- * required and what kind of control it deserves. Verified against the 7.1 REST
- * reference: `WorkItemTypeFieldWithReferences` is exactly {allowedValues,
- * alwaysRequired, defaultValue, dependentFields, helpText, name, referenceName,
- * url}.
- */
 export const MAX_ALLOWED_VALUES = 50;
 
 /**

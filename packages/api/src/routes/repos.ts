@@ -65,10 +65,12 @@ async function probe<T>(fn: () => Promise<T>) {
   }
 }
 
-/** Linking a project's repos one form at a time does not scale past a handful:
- *  an Azure DevOps project routinely holds fifty. Authorization is checked once
- *  for the project everything lands in, then each repo is linked through the
- *  same linkRepo as the single-repo route, so one bad row cannot fail the rest. */
+/**
+ * Linking a project's repos one form at a time does not scale: an Azure DevOps
+ * project can hold dozens. Authorization is checked once for the project
+ * everything lands in, then each repo goes through the same `linkRepo` as the
+ * single-repo route, so one bad row cannot fail the rest.
+ */
 const bulkLinkSchema = z.object({
   source_project_id: z.string(),
   repos: z
@@ -129,7 +131,8 @@ export const repos = new Hono()
     });
   })
 
-  /** A file type's icon, by the id a preview names; only the theme's own ids resolve. */
+  // A file type's icon, by the id a preview names; only the theme's own ids
+  // resolve.
   .get("/file-icons/:file", async (c) => {
     const file = c.req.param("file");
     const path = file.endsWith(".svg") ? fileIconPath(file.slice(0, -4)) : null;
@@ -143,7 +146,7 @@ export const repos = new Hono()
     });
   })
 
-  /** Every linked repo, as one parent run fanning out a reindex per repo. */
+  // Every linked repo, as one parent run fanning out a reindex per repo.
   .post("/reindex", async (c) => {
     await assertGlobalAdmin(await requireCaller(c));
     const params = { scope: "all" };
@@ -187,11 +190,9 @@ export const repos = new Hono()
     return c.json({ ok: true, repo: row });
   })
 
-  /**
-   * The branches and release tags a remote offers, for the link form. Same
-   * authorisation as linking there, since it runs git against the URL with the
-   * project's connection token.
-   */
+  // The branches and release tags a remote offers, for the link form. Same
+  // authorisation as linking there, since it runs git against the URL with the
+  // project's connection token.
   .get("/refs", async (c) => {
     const url = c.req.query("url") ?? "";
     const sourceProjectId = c.req.query("source_project_id") || undefined;
@@ -278,7 +279,8 @@ export const repos = new Hono()
     );
   })
 
-  /** What the default line would index under a proposed config; nothing is embedded. */
+  // What the default line would index under a proposed config; nothing is
+  // embedded.
   .post("/:slug/preview", zValidator("json", previewSchema), async (c) => {
     const slug = c.req.param("slug");
     await assertCanWriteRepo(c, {}, slug);

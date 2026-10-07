@@ -41,9 +41,9 @@ function redactGithubRaw(
 }
 
 /**
- * `owner/repo#123`, checked rather than merely split: both halves are pasted
- * into a URL path, and the id reaches here from a route parameter. The slash
- * between owner and repo is the only one that belongs there.
+ * `owner/repo#123`, checked rather than split: both halves are pasted into a
+ * URL path, and the id reaches here from a route parameter. The slash between
+ * owner and repo is the only one that belongs there.
  */
 const OWNER_REPO_RE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
 
@@ -77,7 +77,8 @@ interface GithubComment {
 }
 
 /**
- * GitHub Issues adapter (PAT auth). config.repos lists repos to sync; base_url can be a GitHub Enterprise API URL.
+ * GitHub Issues adapter (PAT auth). config.repos lists repos to sync; base_url
+ * can be a GitHub Enterprise API URL.
  */
 export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
   const token = cfg.token || githubToken(cfg.slug);
@@ -174,7 +175,8 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
     async verify() {
       const me = await get<{ login?: string }>("/user");
       const identity = me?.login ?? undefined;
-      // Repo listing needs a scope the ticket reads don't; treat it as a bonus.
+      // Listing repos needs a scope that reading tickets does not, so a failure
+      // here is tolerated.
       try {
         const repos = await get<{ full_name: string }[]>(
           "/user/repos?per_page=100&sort=updated",

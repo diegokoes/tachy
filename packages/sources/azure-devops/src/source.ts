@@ -36,6 +36,10 @@ function relationWorkItemId(url: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
+/**
+ * A PR or commit link on a work item. Its last segment is the project, the
+ * repo and the id or sha, joined by encoded slashes.
+ */
 function parseGitArtifact(url: string): {
   kind: "pr" | "commit";
   project: string;
@@ -117,7 +121,7 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
   /**
    * The registry is the source of truth: a project registered in the admin UI
    * is what gets synced. `config.projects` stays as a fallback for connections
-   * that predate the registry, which would otherwise silently sync nothing.
+   * that predate the registry, which would otherwise sync nothing.
    */
   async function syncProjects(): Promise<string[]> {
     const registered = await listSourceProjects({
@@ -437,17 +441,14 @@ export const createAzureDevopsSource: SourceFactory = (cfg): WorkItemSource => {
           .map((wi) => Date.parse(wi.fields?.["System.ChangedDate"] ?? ""))
           .filter(Number.isFinite);
         const prev = cursor.since ? Date.parse(cursor.since) : Number.NaN;
-        // A full page means this project has more to walk, so the cursor
-        // stays on it; advancing to the next project would drop the rest of
-        // this one's backlog. The 1ms bump handles a page whose items all
-        // carry the same timestamp.
+        // A full page means this project has more to walk, so the cursor stays
+        // on it: moving to the next project would drop the rest of its backlog.
         let mark = changed.length ? Math.max(...changed) : prev;
         if (Number.isFinite(prev) && !(mark > prev)) mark = prev + 1;
         if (!Number.isFinite(mark))
-          // Nothing to advance to and nowhere safe to go: continuing would walk
-          // this same page forever, and skipping would lose the backlog behind
-          // it. System.ChangedDate is a required field, so this is the API
-          // misbehaving and worth saying so.
+          // Nothing to advance to: continuing would walk this page forever and
+          // skipping would lose the backlog behind it. System.ChangedDate is a
+          // required field, so this is the API misbehaving.
           throw new Error(
             `Azure DevOps returned ${SYNC_PAGE} work items for '${project}' with no readable System.ChangedDate - cannot advance the sync cursor`,
           );
