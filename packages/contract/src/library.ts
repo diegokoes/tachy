@@ -18,8 +18,8 @@ export interface CoverageNode extends CoverageCounts {
 export interface Coverage {
   nodes: CoverageNode[];
   /**
-   * Items with no component at all. The honest measure of whether the component
-   * tree describes the corpus: if most of it lands here, the tree does not.
+   * Items with no component. If most of the corpus lands here, the component
+   * tree does not describe it.
    */
   unfiled: { entries: number; docs: number; articles: number };
 }

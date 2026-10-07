@@ -4,9 +4,9 @@ import { EMBEDDING_MODEL, LEGACY_EMBEDDING_MODEL } from "./model";
 
 /**
  * True for a row whose vector the model in use made. Vectors of two models
- * share no space: a query embedded by one ranks the other's at random, with
- * nothing to show for it. So the vector legs read only these rows, and a row
- * of another model is found by its words until the backfill reaches it.
+ * share no space: a query embedded by one ranks the other's at random, with no
+ * error. The vector legs read only these rows; a row of another model is
+ * found by its words until the backfill reaches it.
  */
 export const currentVector = (alias?: string) => {
   const column = alias
@@ -59,21 +59,17 @@ const EMBEDDED_TABLES: EmbeddedTable[] = [
   "bucket_doc_chunks",
 ];
 
-/**
- * Vectors another model made, per table. They are left out of every search's
- * vector leg, so until the embeddings backfill has redone them those rows are
- * found by their words alone.
- */
+/** Vectors another model made, per table; see `currentVector`. */
 export async function staleVectors(): Promise<
   { table: EmbeddedTable; rows: number }[]
 > {
-  const out: { table: EmbeddedTable; rows: number }[] = [];
+  const stale: { table: EmbeddedTable; rows: number }[] = [];
   for (const table of EMBEDDED_TABLES) {
     const [{ n }] = await sql`
       select count(*)::int as n from ${sql(table)}
       where embedding is not null and not ${currentVector()}
     `;
-    if (n) out.push({ table, rows: n });
+    if (n) stale.push({ table, rows: n });
   }
-  return out;
+  return stale;
 }

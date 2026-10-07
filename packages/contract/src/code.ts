@@ -59,16 +59,16 @@ const VERSION_RE = /^v?(\d+)\.(\d+)(?:\.(\d+))?$/;
 
 /** `1.51.32` for `v1.51.32`, `1.51` for `1.51`; null when it is no version. */
 export function normalizeVersion(version: string): string | null {
-  const m = VERSION_RE.exec(version.trim());
-  if (!m) return null;
-  const minor = `${Number(m[1])}.${Number(m[2])}`;
-  return m[3] === undefined ? minor : `${minor}.${Number(m[3])}`;
+  const parts = VERSION_RE.exec(version.trim());
+  if (!parts) return null;
+  const minor = `${Number(parts[1])}.${Number(parts[2])}`;
+  return parts[3] === undefined ? minor : `${minor}.${Number(parts[3])}`;
 }
 
 /** The release line a version belongs to: `1.51` for `v1.51.32`. */
 export function releaseMinor(version: string): string | null {
-  const v = normalizeVersion(version);
-  return v && v.split(".").slice(0, 2).join(".");
+  const normalized = normalizeVersion(version);
+  return normalized && normalized.split(".").slice(0, 2).join(".");
 }
 
 export interface RepoLineRow {

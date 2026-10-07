@@ -14,7 +14,15 @@ import ts from "typescript";
 const ROOT = new URL("..", import.meta.url).pathname;
 
 /** Repo-relative path prefixes already brought under the convention. */
-export const SWEPT = [];
+export const SWEPT = [
+  "packages/contract",
+  "packages/core/src/search",
+  "packages/core/src/work-items/compact.ts",
+  "packages/web/src/shell",
+  "packages/web/src/tui/Tabs.svelte",
+  "test/search/embeddings.test.ts",
+  "test/search/quality.test.ts",
+];
 
 const CHECKED_FILE_RE = /\.(?:[cm]?[jt]s|svelte|css)$/;
 const SKIPPED_DIRS = new Set(["node_modules", "dist", "coverage"]);
