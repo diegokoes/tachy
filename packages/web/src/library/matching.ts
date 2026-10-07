@@ -1,11 +1,9 @@
 /**
- * Which parts of a hit's text to show on a library card.
- *
- * Match strength is NOT computed here. The server returns `relevance` (0-1) and
- * `grade`, calibrated against the embedding model's measured distribution - the
- * same numbers the MCP tools hand the agent. Duplicating that arithmetic in the
- * client is how the two drift apart on the next model change. The band edges
- * the gauge draws its tick marks at come from @tachy/contract.
+ * Which parts of a hit's text to show on a library card. Match strength is not
+ * computed here: the server returns `relevance` (0-1) and `grade`, the numbers
+ * the MCP tools hand the agent, and a second copy of that arithmetic would
+ * drift on the next model change. The band edges the gauge draws its tick marks
+ * at come from @tachy/contract.
  */
 
 export { GOOD, STRONG } from "@tachy/contract";
@@ -93,7 +91,7 @@ export function excerpt(
   return segs;
 }
 
-/** The entry field the query actually landed in - root cause, else the fix. */
+/** The entry field the query landed in: root cause, else the fix. */
 export function entryText(
   fields: (string | null | undefined)[],
   query: string,

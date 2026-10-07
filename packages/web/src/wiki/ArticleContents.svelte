@@ -7,12 +7,10 @@
 
   /**
    * An article's contents, in the left column the way the Arch Wiki keeps it:
-   * numbered and fully unfolded, with the section being read marked as you
-   * scroll. Only the arrows fold a branch; following a link just scrolls.
-   *
-   * Headings are looked up inside `.wiki-body` rather than by bare id: a
-   * heading's id is derived from its text, and "Main content" would otherwise
-   * find the app's own <main>.
+   * numbered and fully unfolded, with the section being read marked on scroll.
+   * Only the arrows fold a branch. Headings are looked up inside `.wiki-body`,
+   * not by bare id: an id is derived from the heading's text, and "Main
+   * content" would find the app's own <main>.
    */
   let { items }: { items: OutlineItem[] } = $props();
 
@@ -23,8 +21,8 @@
   let active = $state<string | null>(null);
   let nav = $state<HTMLElement>();
 
-  /* While a click's smooth scroll is under way, the headings it passes are not
-     where the reader is going: the section they picked holds until it lands. */
+  // While a click's smooth scroll is under way, the headings it passes are not
+  // where the reader is going: the section they picked holds until it lands.
   let settling = 0;
   function settle() {
     clearTimeout(settling);
@@ -33,9 +31,9 @@
 
   const isOpen = (n: OutlineNode) => !folded[n.id];
 
-  /* A long index scrolls in its own column, so the section being read has to be
-     brought along; the page it belongs to is already in view, so "nearest"
-     moves this column and nothing else. */
+  // A long index scrolls in its own column, so the section being read has to be
+  // brought along; the page it belongs to is already in view, so "nearest"
+  // moves this column and nothing else.
   $effect(() => {
     if (!active || !nav) return;
     nav
@@ -70,10 +68,9 @@
     settle();
   }
 
-  /* The section in view is the last heading that has scrolled past a line a
-     little below the top. Read on scroll rather than with an observer: a short
-     section can cross the whole viewport between two intersection callbacks
-     and never be reported as the one you are in. */
+  // The section in view is the last heading past a line just under the top.
+  // Read on scroll, not with an observer: a short section can cross the
+  // viewport between two callbacks unreported.
   $effect(() => {
     const port = scrollport();
     const ids = items.map((it) => it.id);
@@ -106,7 +103,7 @@
     };
   });
 
-  /* A link to a section, opened fresh, lands on it. */
+  // A link to a section, opened fresh, lands on it.
   onMount(() => {
     const id = decodeURIComponent(location.hash.slice(1));
     if (!id) return;

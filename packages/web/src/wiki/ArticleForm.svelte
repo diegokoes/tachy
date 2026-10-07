@@ -74,11 +74,9 @@
   /** Components belong to a product, and the org-wide wiki has none. */
   const hasComponents = $derived(scope !== ORG_WIDE);
 
-  /* ---- [[ autocomplete ---------------------------------------------------
-     Typing `[[` opens a picker over this wiki's articles and the knowledge
-     entries; choosing one inserts the link in the form that resolves. Writing
-     links by hand means remembering slugs, which is how a wiki ends up with
-     none. */
+  // `[[` autocomplete: typing it opens a picker over this wiki's articles and
+  // the knowledge entries, and choosing one inserts the link in the form that
+  // resolves, so nobody has to remember slugs.
   interface Suggestion {
     insert: string;
     label: string;
@@ -234,10 +232,9 @@
     }
   }
 
-  /* ---- images -------------------------------------------------------------
-     Pasted, dropped or picked, each goes up on its own and lands in the body
-     as ordinary markdown pointing at the stored copy. A placeholder holds its
-     place meanwhile, so typing on while it uploads does not lose the spot. */
+  // Images: pasted, dropped or picked, each uploads on its own and lands in the
+  // body as markdown pointing at the stored copy. A placeholder holds its place
+  // meanwhile, so typing on does not lose the spot.
   let uploadError = $state<string | null>(null);
   let uploads = 0;
 

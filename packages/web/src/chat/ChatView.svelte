@@ -79,8 +79,8 @@
   let dockEl = $state<HTMLDivElement>();
   let pinned = true;
 
-  /* Where the composer's text is scrolled to, and how much of its width a
-     scrollbar has taken: the resting caret is laid out over it to match. */
+  // Where the composer's text is scrolled to, and how much of its width a
+  // scrollbar has taken: the resting caret is laid out over it to match.
   let rest = $state({ scroll: 0, gutter: 0 });
 
   function restSync() {
@@ -99,8 +99,8 @@
 
   const empty = $derived(chat.entries.length === 0);
 
-  /* A pre effect, so the dock is read where it still sits: centred before the
-     first message, at the foot after it. */
+  // A pre effect, so the dock is read where it still sits: centred before the
+  // first message, at the foot after it.
   $effect.pre(() => {
     void empty;
     const play = untrack(() => reflow([dockEl], { absolute: false }));
@@ -574,8 +574,8 @@
     } else armClear();
   }
 
-  /* Both marks leave once they have nothing to act on, and focus would go
-     with them. */
+  // Both marks leave once they have nothing to act on, and focus would go with
+  // them.
   function sendClick() {
     void send();
     composerEl?.focus();
@@ -1001,12 +1001,9 @@
     padding-right: 0;
   }
 
-  /* A turn is a speaker marker over its text. The text gets a plate of its
-     own: there is no window behind it, only the sky.
-
-     The transcript is the longest thing anyone reads here, so the prose is on
-     the UI face; code, tool traces and event panels stay mono. 60ch and 46ch
-     hold the 72 and 56 characters the mono measures did. */
+  /* A turn is a speaker marker over its text, on a plate of its own: there
+     is no window behind it, only the sky. Prose is on the UI face; code,
+     tool traces and event panels stay mono. */
   .turn {
     display: flex;
     flex-direction: column;
@@ -1051,10 +1048,9 @@
     padding-left: 1ch;
   }
 
-  /* The user's turn is positioned right; its text stays left-aligned. Reading
-     returns to the left edge on every line, so ragged-left costs a re-scan -
-     which is why no chat UI right-aligns the text itself. Only the marker,
-     a single token, sits on the right. */
+  /* The user's turn is positioned right and its text stays left-aligned:
+     reading returns to the left edge on every line, so ragged-left costs a
+     re-scan. Only the marker sits on the right. */
   .turn.user {
     align-self: flex-end;
     max-width: 46ch;

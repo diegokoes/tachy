@@ -19,11 +19,10 @@
   } = $props();
 
   /**
-   * Where a schema exists it decides the widget; otherwise the widget comes from
-   * the shape of the value the model actually sent. The fallback is not a
-   * stopgap - a tool nobody anticipated still has to render, and most tools
-   * carry no schema at all. `ENUM_FIELDS` is the built-in per-key schema, and
-   * folds into the same lookup rather than sitting beside it.
+   * Where a schema exists it decides the widget; otherwise the widget comes
+   * from the shape of the value the model sent. The fallback stays: a tool
+   * nobody anticipated still has to render, and most tools carry no schema.
+   * `ENUM_FIELDS` is the built-in per-key schema, folded into the same lookup.
    */
   type Kind = "enum" | "bool" | "number" | "list" | "text" | "line" | "json";
 
@@ -36,7 +35,7 @@
         : undefined,
   );
 
-  /** ADO's FieldType, mapped onto the widgets this box actually has. */
+  /** ADO's FieldType, mapped onto the widgets this box has. */
   function fromSpec(s: FieldSpec): Kind | undefined {
     if (choices && (typeof value === "string" || value == null)) return "enum";
     switch (s.type) {

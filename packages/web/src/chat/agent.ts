@@ -92,12 +92,9 @@ export async function* chatStream(
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = "";
-  /*
-   * The `finally` is the point: a consumer that stops early - the caller's
-   * catch, or the component being destroyed mid-turn - leaves this generator
-   * suspended at a yield, and without it the reader is never cancelled and the
-   * response body stays open.
-   */
+  // The `finally` cancels the reader: a consumer that stops early (the caller's
+  // catch, the component destroyed mid-turn) leaves this generator suspended at
+  // a yield, with the response body open.
   try {
     for (;;) {
       const { done, value } = await reader.read();
@@ -123,9 +120,9 @@ export async function* chatStream(
 }
 
 /**
- * A turn that has already finished - approval timed out, or the 60-minute TTL
- * reaped it - answers 404, and the card would otherwise sit pending forever
- * with a button that silently does nothing. Surface it instead.
+ * A turn that has finished (approval timed out, or the TTL reaped it) answers
+ * 404. Thrown, so the card does not sit pending with a button that does
+ * nothing.
  */
 export async function approve(
   turnId: string,

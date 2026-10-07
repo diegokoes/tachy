@@ -11,9 +11,9 @@
   } = $props();
 
   /**
-   * Two different questions - how sure we are of the entry, and how definitely
-   * the ticket was actually resolved - that happen to share a three-step
-   * ordering, so one scale draws both.
+   * Two different questions (how sure the entry is, and how definitely the
+   * ticket was resolved) that share a three-step ordering, so one scale draws
+   * both.
    */
   const STEPS: Record<string, number> = {
     low: 1,
@@ -53,11 +53,9 @@
 
   let el = $state<HTMLElement>();
 
-  /**
-   * The same staggered left-to-right clip sweep the nav reveal uses - already
-   * reduced-motion guarded, so the bars land at full width instantly when the
-   * user asks for less movement.
-   */
+  // The same staggered left-to-right clip sweep the nav reveal uses - already
+  // reduced-motion guarded, so the bars land at full width instantly when the
+  // user asks for less movement.
   $effect(() => {
     void rows;
     if (el) wipeIn(Array.from(el.querySelectorAll<HTMLElement>(".bar")));

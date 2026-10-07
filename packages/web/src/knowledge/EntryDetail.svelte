@@ -123,11 +123,9 @@
 
   const structured = $derived(asStructured(entry?.structured));
 
-  /** Reading the entry, backspace or esc goes back. Not bound while editing, where it
-      would sit one stray keystroke away from discarding a form.
-
-      Hidden: back is a button in the carved row now, so printing it in the
-      hint rule as well says the same thing twice. */
+  // Reading the entry, backspace or esc goes back. Not bound while editing,
+  // where it would sit one keystroke from discarding a form. Hidden: back is a
+  // button in the carved row.
   $effect(() => {
     if (editing || !entry) return;
     return pushScope([
@@ -136,9 +134,9 @@
     ]);
   });
 
-  /* The carved row, while reading. Editing hands it to the form instead, which
-     claims it on mount; the disposer's identity check keeps the handover from
-     wiping whichever of the two lands second. */
+  // The carved row, while reading. Editing hands it to the form instead, which
+  // claims it on mount; the disposer's identity check keeps the handover from
+  // wiping whichever of the two lands second.
   $effect(() => {
     if (editing || !entry) return;
     return setTopActions(readActions);
@@ -523,11 +521,9 @@
 </div>
 
 <style>
-  /* One reading column: the title, the meta band and every section share the
-     same measure and the same side padding, so nothing stops half-way across
-     a frame that keeps running. The column is centred in the frame; the prose
-     inside stays left-aligned, never justified. ch tracks the reading face, so
-     the measure holds its character count whichever one is picked. */
+  /* One reading column: title, meta band and sections share one measure and
+     side padding, centred in the frame with the prose left-aligned. ch
+     tracks the reading face, so the measure holds in any font. */
   .content {
     font-family: var(--font-prose);
     max-width: 76ch;

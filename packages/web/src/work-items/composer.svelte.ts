@@ -85,7 +85,7 @@ function persist() {
       }),
     );
   } catch {
-    /* storage blocked or full: the draft lives for this tab only */
+    // storage blocked or full: the draft lives for this tab only
   }
 }
 
@@ -104,7 +104,7 @@ function restore() {
       raisedFrom: d.raisedFrom ?? [],
     });
   } catch {
-    /* a draft from an older shape is not worth an error */
+    // a draft from an older shape is not worth an error
   }
 }
 restore();
@@ -142,7 +142,7 @@ export function discardDraft() {
   try {
     localStorage.removeItem(STORE);
   } catch {
-    /* nothing stored */
+    // nothing stored
   }
 }
 
@@ -277,10 +277,13 @@ export async function create(): Promise<CreatedTicket | null> {
     body.set("draft", JSON.stringify(draft()));
     for (const img of composer.images)
       body.set(`image:${img.key}`, img.file, img.name);
-    const res = await fetch(`/api/compose/projects/${composer.project.id}/items`, {
-      method: "POST",
-      body,
-    });
+    const res = await fetch(
+      `/api/compose/projects/${composer.project.id}/items`,
+      {
+        method: "POST",
+        body,
+      },
+    );
     if (res.status === 401) {
       onUnauthorized();
       throw new ApiError(401, "unauthorized");

@@ -105,8 +105,8 @@
     template: "from template",
   };
 
-  /* The right column holds the fields; a review takes it over only once asked
-     for, and the tabs let the person go back to the fields it points at. */
+  // The right column holds the fields; a review takes it over only once asked
+  // for, and the tabs let the person go back to the fields it points at.
   let side = $state<"fields" | "review">("fields");
   let showHidden = $state(false);
   let showContext = $state(false);

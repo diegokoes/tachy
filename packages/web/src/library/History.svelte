@@ -36,7 +36,7 @@
   let error = $state<string | null>(null);
   let reverting = $state<number | null>(null);
 
-  /** Re-fetched whenever the item's version moves, so an edit shows up at once. */
+  // Re-fetched whenever the item's version moves, so an edit shows up at once.
   $effect(() => {
     void id;
     void version;

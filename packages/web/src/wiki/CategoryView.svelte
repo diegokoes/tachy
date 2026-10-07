@@ -45,8 +45,8 @@
 
   const node = $derived(toc ? find(toc.categories) : null);
 
-  /* A section with a lead page IS that page: land the reader on it rather than a
-     bare list. Sections without one keep the list below. */
+  // A section with a lead page IS that page: land the reader on it rather than
+  // a bare list. Sections without one keep the list below.
   $effect(() => {
     if (node?.lead_slug)
       navigate(wikiPath(scope, node.lead_slug), { replace: true });
