@@ -38,6 +38,8 @@ const HEADER_CAP = 12;
 /** Compiler, test-runner and formatter instructions, and JSDoc type tags. */
 const DIRECTIVE_RE =
   /^(?:@[a-z]|svelte-ignore\b|prettier-ignore\b|eslint-|(?:v8|c8|istanbul) ignore\b|[#@]__PURE__)/;
+/** Svelte shows a comment that opens with this where the component is used. */
+const COMPONENT_DOC_RE = /^\s*@component\b\s*/;
 const BANNER_RE = /([-=─━═~#*_])\1{3,}/;
 const EM_DASH = "—";
 const MARKER_RE = /(?:^|\s)(?:TODO|FIXME|HACK|XXX)\b(?:\([^)]*\))?(?::|\s|$)/;
@@ -75,6 +77,15 @@ const DECLARATION_KINDS = new Set([
 ]);
 
 const lineAt = (text, offset) => text.slice(0, offset).split("\n").length;
+
+/** A component's `@component` doc is its declaration doc, wherever it sits. */
+function capFor(comment, isComponentDoc) {
+  if (isComponentDoc) return DECLARATION_CAP;
+  if (comment.isHeader) return HEADER_CAP;
+  return comment.syntax === "jsdoc" && comment.onDeclaration
+    ? DECLARATION_CAP
+    : BODY_CAP;
+}
 
 const blockLines = (raw) =>
   raw
@@ -220,17 +231,21 @@ export function commentsIn(path, text) {
 export function violations(path, text) {
   const found = [];
   for (const comment of commentsIn(path, text)) {
-    const written = comment.lines.filter((line) => line.trim() !== "");
-    if (written.length === 0 || DIRECTIVE_RE.test(written[0].trim())) continue;
+    const lines = comment.lines.filter((line) => line.trim() !== "");
+    const isComponentDoc =
+      comment.syntax === "html" && COMPONENT_DOC_RE.test(lines[0] ?? "");
+    const written = isComponentDoc
+      ? [lines[0].replace(COMPONENT_DOC_RE, ""), ...lines.slice(1)].filter(
+          (line) => line.trim() !== "",
+        )
+      : lines;
+    if (written.length === 0) continue;
+    if (!isComponentDoc && DIRECTIVE_RE.test(written[0].trim())) continue;
     const report = (rule, message) =>
       found.push({ line: comment.line, rule, message });
     const isJsdoc = comment.syntax === "jsdoc";
 
-    const cap = comment.isHeader
-      ? HEADER_CAP
-      : isJsdoc && comment.onDeclaration
-        ? DECLARATION_CAP
-        : BODY_CAP;
+    const cap = capFor(comment, isComponentDoc);
     if (written.length > cap)
       report("length", `${written.length} lines, the cap here is ${cap}`);
 
