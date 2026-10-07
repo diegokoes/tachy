@@ -64,11 +64,9 @@ async function resolveTarget(
 
 /**
  * Replace a body's outbound links. Whole-set on every save: edges are derived
- * from the text, so recomputing is the only way they cannot drift from it.
- *
- * Only edges leaving this item are touched. Edges pointing AT it belong to
- * whoever wrote them, and deleting those here would silently unlink other
- * people's articles - the obvious bug, and the reason this is a narrow delete.
+ * from the text, so recomputing is the only way they cannot drift from it. Only
+ * edges leaving this item are touched: edges pointing at it belong to whoever
+ * wrote them.
  */
 export async function syncLinks(
   db: Db,
@@ -164,7 +162,7 @@ export interface Backlink {
   from_kind: string | null;
 }
 
-/** What points at this item. The `to_*` columns are indexed for exactly this. */
+/** What points at this item. The `to_*` columns are indexed for this. */
 export async function backlinks(target: {
   docId?: string;
   entryId?: string;
@@ -219,8 +217,8 @@ export interface ComposedSource {
 }
 
 /**
- * Record what an article was composed from. Whole-set like the mentions above,
- * and a separate `kind` so a citation the author wrote and a source the article
+ * Record what an article was composed from. Whole-set like `syncLinks`, and a
+ * separate `kind` so a citation the author wrote and a source the article
  * consolidates are not confused: the first is prose, the second is provenance.
  */
 export async function setComposedFrom(

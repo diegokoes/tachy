@@ -11,13 +11,11 @@ const zero = (): CoverageCounts => ({
 });
 
 /**
- * Which parts of a product have lessons recorded and nothing written about them.
- * A report over the component tree - deliberately not the wiki's navigation,
- * which is its categories.
- *
- * Counts are computed per component and rolled up in memory rather than with a
- * recursive CTE: a product's component tree is tens of rows, and the rollup is
- * clearer written once than expressed twice in SQL.
+ * Which parts of a product have lessons recorded and nothing written about
+ * them. A report over the component tree, not the wiki's navigation, which is
+ * its categories. Counts are computed per component and rolled up in memory: a
+ * component tree is tens of rows, and the rollup reads clearer once here than
+ * twice in SQL.
  */
 export async function coverage(productId: string): Promise<Coverage> {
   const [components, counts, reads, unfiled] = await Promise.all([
@@ -100,7 +98,7 @@ export async function coverage(productId: string): Promise<Coverage> {
   }
 
   // Post-order, so a child's subtree is complete before its parent reads it and
-  // every node is counted exactly once.
+  // every node is counted once.
   const roll = (n: CoverageNode): CoverageCounts => {
     n.subtree = {
       entries: n.entries,

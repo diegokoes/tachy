@@ -322,12 +322,14 @@ export interface IndexOptions {
   line?: string;
   /**
    * Cut and embed every file again, changed or not. What a reindex otherwise
-   * skips is exactly what a new chunk size or a new embedding model has to
-   * redo.
+   * skips is what a new chunk size or a new embedding model has to redo.
    */
   full?: boolean;
   signal?: AbortSignal;
-  /** `at` places the line among those this call indexes; files done/total are per line. */
+  /**
+   * `at` places the line among those this call indexes; files done/total are
+   * per line.
+   */
   onProgress?: (
     done: number,
     total: number,
@@ -571,9 +573,9 @@ export function countTree(
 }
 
 /**
- * Re-embed code chunks from their stored text, without touching git. `all: true`
- * rebuilds every vector after a model change - far cheaper than re-cloning and
- * re-indexing every repo just to get new vectors for text that has not changed.
+ * Re-embed code chunks from their stored text, without touching git. `all:
+ * true` rebuilds every vector after a model change, with no re-clone or
+ * re-index for text that has not changed.
  */
 export async function backfillCodeEmbeddings(
   opts: { all?: boolean } = {},

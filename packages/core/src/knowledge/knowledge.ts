@@ -80,8 +80,10 @@ export interface KnowledgeInput extends KnowledgeFacets {
   workItemId?: string | null;
   productId?: string | null;
   teamId?: string | null;
-  /** Whose install this describes. Never inherited from the work item - see
-   *  saveKnowledgeEntry. Absent/null means the lesson is general. */
+  /**
+   * Whose install this describes. Never inherited from the work item: see
+   * `saveKnowledgeEntry`. Absent or null means the lesson is general.
+   */
   customerSlug?: string | null;
   /** Which part of their estate, by unit slug/alias. Needs customerSlug. */
   unit?: string | null;
@@ -135,8 +137,8 @@ async function resolvePatternDescription(
 /**
  * Must stay in step with the generated search_text column: a field the vector
  * cannot see is only findable by exact words. `resolution` is the one that
- * matters - a query phrased as the fix ("restart the label cache service")
- * otherwise has no semantic representation at all.
+ * matters: a query phrased as the fix ("restart the label cache service")
+ * otherwise has no semantic representation.
  */
 function buildEmbedText(
   i: {
@@ -165,24 +167,17 @@ function buildEmbedText(
     .trim();
 }
 
+/**
+ * Product, team and version default from the work item; the customer does
+ * not. Most lessons learned on one customer's ticket are true of the product,
+ * and a defaulted customer narrows the entry's ranking and has every answer
+ * cite it as theirs. The unit is inherited once a stated customer matches the
+ * ticket's.
+ */
 export async function saveKnowledgeEntry(i: KnowledgeInput) {
   let productId = i.productId ?? null;
   let teamId = i.teamId ?? null;
   let affectedVersion = i.affectedVersion ?? null;
-  /*
-   * Deliberately NOT inherited from the work item, unlike product and team.
-   * Most lessons learned on one customer's ticket are true of the product, and a
-   * customer defaulted in is a claim nobody made: it narrows the entry's ranking
-   * and makes every future answer cite it as that customer's case. Whose ticket
-   * it was is a fact; whose behaviour it describes is a judgement, so it has to
-   * be stated.
-   *
-   * The UNIT, by contrast, IS inherited - but only once the customer above has
-   * been stated and matches the ticket's. That keeps the rule intact: the
-   * judgement "this entry is about ITG" is still made by a person, and saying
-   * "…on the line the ticket was already filed against" adds no claim the
-   * ticket did not record. Without a stated customer, nothing is inherited.
-   */
   const stated = await statedCustomer(i.customerSlug, i.unit);
   const customerId = stated.customerId;
   let customerUnitId = stated.customerUnitId;
@@ -258,10 +253,10 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
 }
 
 /**
- * The low-cardinality facets an entry can be NARROWED BY. Shared verbatim by
- * search, list and the facet counts, so a filter the library offers can never
- * be one the query ignores. Distinct from `KnowledgeFacets` above, which is the
- * write side: same columns, but set rather than matched.
+ * The low-cardinality facets an entry can be narrowed by. Shared by search,
+ * list and the facet counts, so a filter the library offers is never one the
+ * query ignores. `KnowledgeFacets` is the write side: the same columns, set
+ * where these are matched.
  */
 export interface KnowledgeFilters {
   tags?: string[];
@@ -292,8 +287,8 @@ export type FacetKey =
 
 /**
  * `except` drops one predicate, so counting a facet's own options is not
- * narrowed by the value already chosen for it - otherwise picking "high"
- * leaves "high" as the only option you could ever pick again.
+ * narrowed by the value already chosen for it: picking "high" would otherwise
+ * leave "high" as the only option.
  */
 function facetSql(o: KnowledgeFilters, except?: FacetKey) {
   const on = (k: FacetKey) => k !== except;
@@ -314,8 +309,10 @@ function facetSql(o: KnowledgeFilters, except?: FacetKey) {
 export interface SearchOptions extends KnowledgeFilters {
   productId?: string;
   teamId?: string;
-  /** Also match rows with NO product/team (org-wide) when a scope filter is
-   *  set - for agent consults, where global lessons still apply. */
+  /**
+   * Also match rows with no product or team (org-wide) when a scope filter is
+   * set: for agent consults, where global lessons still apply.
+   */
   includeUnscoped?: boolean;
   limit?: number;
   /** Pre-embedded query, so a caller searching two surfaces embeds once. */
@@ -326,8 +323,10 @@ export interface SearchOptions extends KnowledgeFilters {
    * cross-customer lesson is frequently the one that solves the ticket.
    */
   boostCustomerId?: string;
-  /** Lifts this unit's own entries, and a sibling on the same shared profile
-   *  less. Only meaningful alongside boostCustomerId. */
+  /**
+   * Lifts this unit's own entries, and a sibling on the same shared profile
+   * less. Only meaningful alongside boostCustomerId.
+   */
   boostUnitId?: string | null;
 }
 
@@ -336,8 +335,8 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
   if (!query.trim()) return [];
   const qvec = opts.queryVector ?? (await embedQueryLiteral(query));
 
-  // deprecated entries surface on purpose: a flagged stale lesson beats the
-  // LLM re-deriving it from scratch. Consumers must warn on status='deprecated'.
+  // Deprecated entries are included: a flagged stale lesson beats the model
+  // re-deriving it. Consumers warn on status='deprecated'.
   const filters = sql`
     status in ('approved', 'deprecated')
     ${opts.productId ? (opts.includeUnscoped ? sql`and (product_id = ${opts.productId} or product_id is null)` : sql`and product_id = ${opts.productId}`) : sql``}
@@ -773,9 +772,8 @@ export async function revertKnowledgeEntry(
 
 /**
  * For the admin index: how much of the corpus there is, and how much of it the
- * component tree actually describes. `by_status` is left as whatever statuses
- * are present rather than padded out to the vocabulary - a band with a zero
- * segment in it draws a legend key for nothing.
+ * component tree describes. `by_status` holds the statuses present, not the
+ * whole vocabulary: a band with a zero segment draws a legend key for nothing.
  */
 export async function knowledgeCensus(): Promise<KnowledgeCensus> {
   const [row] = await sql<Omit<KnowledgeCensus, "by_status">[]>`

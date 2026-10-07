@@ -3,8 +3,8 @@ import { dirname, join } from "node:path";
 
 /**
  * File-type icons from the Material Icon Theme (MIT), the set VS Code users
- * know. Its manifest is 440 KB, so it is read here and the browser is only
- * handed icon ids and the SVGs it actually draws.
+ * know. Its manifest is too large to ship, so it is read here and the browser
+ * is handed only icon ids and the SVGs it draws.
  */
 type Manifest = {
   iconDefinitions: Record<string, { iconPath: string }>;

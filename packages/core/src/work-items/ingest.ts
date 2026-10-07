@@ -29,13 +29,9 @@ export async function ingestWorkItem(
   const route = await routeIngest(connId, raw.groupKey, raw.areaPath);
   const { sourceProjectId, productId, teamId } = route;
 
-  /*
-   * A project that exists for one customer settles the question by configuration,
-   * and beats the sender's domain - which partners, freemail and internally-filed
-   * tickets all defeat. A disagreement is reported rather than swallowed: it means
-   * either the project is not really single-customer, or the domain belongs on a
-   * different customer's row, and both are worth someone's attention.
-   */
+  // A single-customer project settles it by configuration and beats the
+  // sender's domain, which partners and freemail defeat. A disagreement is
+  // reported: one of the two is filed wrong.
   const match = await resolveCustomerByEmail(raw.requesterEmail);
   const customerId = route.customerId ?? match.customerId;
   const conflict =
