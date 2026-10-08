@@ -7,7 +7,7 @@ import {
   deleteSourceConnection,
   resolveSource,
 } from "@tachy/core/sources";
-import { secretsEnabled, badInput } from "@tachy/core/infra";
+import { secretsEnabled, badInput, errorText } from "@tachy/core/infra";
 import {
   credentialSource,
   setCredential,
@@ -124,7 +124,7 @@ export const sources = new Hono()
     } catch (e) {
       return c.json({
         ok: false,
-        error: e instanceof Error ? e.message : String(e),
+        error: errorText(e),
       });
     }
   });

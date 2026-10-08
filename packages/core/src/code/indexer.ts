@@ -1,5 +1,6 @@
 import { matchesGlob } from "node:path";
 import { sql } from "../infra/db";
+import { errorText } from "../infra/known-secrets";
 import { log } from "../infra/log";
 import { embedPassages, toVectorLiteral } from "../search/embeddings";
 import { needsVector, writeEmbeddings } from "../search/backfill";
@@ -462,7 +463,7 @@ async function indexLine(
       chunkCount: counts.chunk_count,
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorText(err);
     await recountLine(line.id);
     await updateLineStatus(line.id, {
       indexStatus: "error",

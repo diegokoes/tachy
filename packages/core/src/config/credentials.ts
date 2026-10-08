@@ -1,6 +1,7 @@
 import { sql } from "../infra/db";
 import { badInput } from "../infra/errors";
 import { sourceTokenOptional } from "../infra/env";
+import { rememberSecret } from "../infra/known-secrets";
 import {
   secretsEnabled,
   encryptSecret,
@@ -90,16 +91,18 @@ export async function resolveCredential(
   if (secretsEnabled()) {
     const hit = await resolveScoped("credentials", name, ctx);
     if (hit)
-      return decryptSecret(
-        hit.row as {
-          value_ciphertext: Buffer;
-          nonce: Buffer;
-          key_id: string | null;
-        },
-        credentialAad(hit.row),
+      return rememberSecret(
+        decryptSecret(
+          hit.row as {
+            value_ciphertext: Buffer;
+            nonce: Buffer;
+            key_id: string | null;
+          },
+          credentialAad(hit.row),
+        ),
       );
   }
-  return envCredential(name);
+  return rememberSecret(envCredential(name));
 }
 
 /** Availability without decryption - safe to report through the API. */

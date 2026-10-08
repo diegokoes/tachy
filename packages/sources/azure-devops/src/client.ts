@@ -1,4 +1,4 @@
-import { azureDevopsToken, badInput } from "@tachy/core/infra";
+import { azureDevopsToken, badInput, rememberSecret } from "@tachy/core/infra";
 import { sourceFetch } from "@tachy/core/sources";
 
 /** The released Azure DevOps REST version. Everything in 7.2 is still preview. */
@@ -384,7 +384,8 @@ export function createAdoClient(connection: AdoCfg): AdoClient {
     );
   const orgUrl = connection.baseUrl.replace(/\/$/, "");
   const token = connection.token || azureDevopsToken(connection.slug);
-  const auth = "Basic " + Buffer.from(`:${token}`).toString("base64");
+  const auth =
+    "Basic " + rememberSecret(Buffer.from(`:${token}`).toString("base64"));
 
   async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const method = init?.method ?? "GET";
