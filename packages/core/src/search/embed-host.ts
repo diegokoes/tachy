@@ -51,7 +51,7 @@ export function startEmbedHost(opts: {
   let nextId = 1;
   const pending = new Map<
     number,
-    { resolve: (v: number[][]) => void; reject: (e: unknown) => void }
+    { resolve: (vectors: number[][]) => void; reject: (e: unknown) => void }
   >();
 
   const setReady = (value: boolean) => {
@@ -62,8 +62,8 @@ export function startEmbedHost(opts: {
   const start = () => {
     const thread = spawn();
     worker = thread;
-    thread.on("message", (msg: EmbedReply) => {
-      if (msg.type === "ready") {
+    thread.on("message", (reply: EmbedReply) => {
+      if (reply.type === "ready") {
         loadFailures = 0;
         setReady(true);
         log("info", "embedding_model_ready", {
@@ -71,15 +71,15 @@ export function startEmbedHost(opts: {
         });
         return;
       }
-      const request = pending.get(msg.id);
+      const request = pending.get(reply.id);
       if (!request) return;
-      pending.delete(msg.id);
-      if (msg.type === "error") return request.reject(new Error(msg.error));
+      pending.delete(reply.id);
+      if (reply.type === "error") return request.reject(new Error(reply.error));
       const vectors: number[][] = [];
-      for (let r = 0; r < msg.rows; r++)
+      for (let r = 0; r < reply.rows; r++)
         vectors.push(
           Array.from(
-            msg.data.subarray(r * EMBEDDING_DIM, (r + 1) * EMBEDDING_DIM),
+            reply.data.subarray(r * EMBEDDING_DIM, (r + 1) * EMBEDDING_DIM),
           ),
         );
       request.resolve(vectors);
@@ -90,8 +90,8 @@ export function startEmbedHost(opts: {
     thread.on("exit", (code) => {
       const wasReady = ready;
       setReady(false);
-      for (const p of pending.values())
-        p.reject(new EmbedderUnavailable("embedding thread restarted"));
+      for (const request of pending.values())
+        request.reject(new EmbedderUnavailable("embedding thread restarted"));
       pending.clear();
       if (stopped) return;
       if (!wasReady && ++loadFailures >= maxLoadFailures) {

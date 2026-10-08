@@ -62,8 +62,8 @@ export function chunkCode(
       });
     }
     if (end >= lines.length) break;
-    // A quarter of a short chunk at most: ten lines repeated out of fifteen
-    // tripled the chunks of a dense file without adding anything to find.
+    // A quarter of a short chunk at most: a longer overlap multiplies the
+    // chunks of a dense file without adding anything to find.
     const overlap = Math.min(OVERLAP_LINES, Math.floor((end - start) / 4));
     start = Math.max(end - overlap, start + 1);
   }
