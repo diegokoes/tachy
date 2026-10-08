@@ -29,13 +29,9 @@ export async function ingestWorkItem(
   const route = await routeIngest(connId, raw.groupKey, raw.areaPath);
   const { sourceProjectId, productId, teamId } = route;
 
-  /*
-   * A project that exists for one customer settles the question by configuration,
-   * and beats the sender's domain - which partners, freemail and internally-filed
-   * tickets all defeat. A disagreement is reported rather than swallowed: it means
-   * either the project is not really single-customer, or the domain belongs on a
-   * different customer's row, and both are worth someone's attention.
-   */
+  // A single-customer project settles it by configuration and beats the
+  // sender's domain, which partners and freemail defeat. A disagreement is
+  // reported: one of the two is filed wrong.
   const match = await resolveCustomerByEmail(raw.requesterEmail);
   const customerId = route.customerId ?? match.customerId;
   const conflict =
@@ -78,22 +74,24 @@ export async function ingestWorkItem(
     `;
 
     if (raw.messages.length) {
-      const m = raw.messages;
+      const messages = raw.messages;
       await tx`
         insert into work_item_messages
           (work_item_id, external_id, author, visibility, direction, body_text, attachments, created_at)
         select ${item.id}, u.external_id, u.author, u.visibility, u.direction,
                u.body_text, u.attachments::jsonb, u.created_at::timestamptz
         from unnest(
-          ${m.map((x) => x.externalId ?? null)}::text[],
-          ${m.map((x) => x.author ?? null)}::text[],
-          ${m.map((x) => x.visibility)}::text[],
-          ${m.map((x) => x.direction)}::text[],
-          ${m.map((x) => x.bodyText)}::text[],
-          ${m.map((x) => JSON.stringify(x.attachments ?? []))}::text[],
-          ${m.map((x) => {
-            const d = toDate(x.createdAt);
-            return d && !Number.isNaN(d.getTime()) ? d.toISOString() : null;
+          ${messages.map((x) => x.externalId ?? null)}::text[],
+          ${messages.map((x) => x.author ?? null)}::text[],
+          ${messages.map((x) => x.visibility)}::text[],
+          ${messages.map((x) => x.direction)}::text[],
+          ${messages.map((x) => x.bodyText)}::text[],
+          ${messages.map((x) => JSON.stringify(x.attachments ?? []))}::text[],
+          ${messages.map((x) => {
+            const created = toDate(x.createdAt);
+            return created && !Number.isNaN(created.getTime())
+              ? created.toISOString()
+              : null;
           })}::text[]
         ) as u(external_id, author, visibility, direction, body_text, attachments, created_at)
         on conflict (work_item_id, external_id) do update set
@@ -104,6 +102,13 @@ export async function ingestWorkItem(
       `;
     }
 
+    // Only when routing decided the stored value. The upsert leaves an
+    // existing attribution alone, so on a re-fetch the stored customer_id
+    // did not come from this routing and there is no conflict to report.
+    const routed = item.customer_id === customerId;
+    const unsettled = route.customerId ? undefined : match.reason;
+    const customerAmbiguity = routed ? (conflict ?? unsettled) : undefined;
+
     return {
       id: item.id,
       sourceProjectId: item.source_project_id,
@@ -111,16 +116,7 @@ export async function ingestWorkItem(
       teamId: item.team_id,
       customerId: item.customer_id,
       customerUnitId: item.customer_unit_id ?? null,
-      // Only when routing decided the stored value. The upsert leaves an
-      // existing attribution alone, so on a re-fetch the stored customer_id
-      // did not come from this routing and there is no conflict to report.
-      ...(item.customer_id !== customerId
-        ? {}
-        : conflict
-          ? { customerAmbiguity: conflict }
-          : match.reason && !route.customerId
-            ? { customerAmbiguity: match.reason }
-            : {}),
+      ...(customerAmbiguity ? { customerAmbiguity } : {}),
       observedVersion: item.observed_version,
       componentSlug: route.componentSlug,
       inserted: item.inserted,

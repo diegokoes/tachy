@@ -55,13 +55,13 @@ export const WORD_SIM_THRESHOLD = 0.35;
  * confines them to this transaction, so a pooled connection never leaks them.
  */
 export async function withSearchSession<T>(
-  fn: (tx: typeof sql) => Promise<T>,
+  search: (tx: typeof sql) => Promise<T>,
 ): Promise<T> {
   return sql.begin(async (tx) => {
     await tx`set local hnsw.ef_search = ${sql.unsafe(String(HNSW_EF_SEARCH))}`;
     await tx`set local hnsw.iterative_scan = relaxed_order`;
     await tx`set local pg_trgm.word_similarity_threshold = ${sql.unsafe(String(WORD_SIM_THRESHOLD))}`;
-    return fn(tx as unknown as typeof sql);
+    return search(tx as unknown as typeof sql);
   }) as Promise<T>;
 }
 

@@ -4,9 +4,9 @@ import type { LibraryEngagement } from "@tachy/contract";
 export type { LibraryEngagement };
 
 /**
- * What people actually read, from `library_views` and `knowledge_feedback`.
- * Human reads only - the agent reads through MCP and never reaches the route
- * that counts a view.
+ * What people read, from `library_views` and `knowledge_feedback`. Human reads
+ * only: the agent reads through MCP and never reaches the route that counts a
+ * view.
  */
 export async function libraryEngagementCensus(
   days = 30,

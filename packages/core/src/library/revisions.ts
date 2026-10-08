@@ -30,9 +30,9 @@ export interface ActorRef {
 /** For a write that reached core without saying which door it came through. */
 export const UNKNOWN_ACTOR: ActorRef = { actor: "api", userId: null };
 
-function targetWhere(t: LibraryTarget) {
-  if (t.entryId) return sql`r.knowledge_entry_id = ${t.entryId}`;
-  if (t.docId) return sql`r.reference_doc_id = ${t.docId}`;
+function targetWhere(target: LibraryTarget) {
+  if (target.entryId) return sql`r.knowledge_entry_id = ${target.entryId}`;
+  if (target.docId) return sql`r.reference_doc_id = ${target.docId}`;
   throw badInput("a library target needs an entry id or a doc id");
 }
 
@@ -50,12 +50,12 @@ export function snapshotOf(row: Record<string, any>): Record<string, unknown> {
     "updated_at",
     "embedding",
   ]);
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(row)) {
-    if (skip.has(k) || k.startsWith("search_")) continue;
-    out[k] = v;
+  const snapshot: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (skip.has(key) || key.startsWith("search_")) continue;
+    snapshot[key] = value;
   }
-  return out;
+  return snapshot;
 }
 
 /**
@@ -70,16 +70,16 @@ export function changedFields(
 ): string[] {
   const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
   const changed: string[] = [];
-  for (const k of keys) {
-    const a = before[k];
-    const b = after[k];
-    if (Array.isArray(a) || Array.isArray(b)) {
+  for (const key of keys) {
+    const old = before[key];
+    const now = after[key];
+    if (Array.isArray(old) || Array.isArray(now)) {
       const norm = (v: unknown) => (Array.isArray(v) ? v.join("\0") : "");
-      if (norm(a) !== norm(b)) changed.push(k);
+      if (norm(old) !== norm(now)) changed.push(key);
       continue;
     }
-    if (JSON.stringify(a ?? null) !== JSON.stringify(b ?? null))
-      changed.push(k);
+    if (JSON.stringify(old ?? null) !== JSON.stringify(now ?? null))
+      changed.push(key);
   }
   return changed.sort();
 }
@@ -212,7 +212,7 @@ export function revertPatch(
   allowed: readonly string[],
 ): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
-  for (const k of allowed) if (k in snapshot) patch[k] = snapshot[k];
+  for (const key of allowed) if (key in snapshot) patch[key] = snapshot[key];
   if (!Object.keys(patch).length)
     throw badInput("that revision holds no restorable fields");
   return patch;

@@ -11,13 +11,11 @@ const zero = (): CoverageCounts => ({
 });
 
 /**
- * Which parts of a product have lessons recorded and nothing written about them.
- * A report over the component tree - deliberately not the wiki's navigation,
- * which is its categories.
- *
- * Counts are computed per component and rolled up in memory rather than with a
- * recursive CTE: a product's component tree is tens of rows, and the rollup is
- * clearer written once than expressed twice in SQL.
+ * Which parts of a product have lessons recorded and nothing written about
+ * them. A report over the component tree, not the wiki's navigation, which is
+ * its categories. Counts are computed per component and rolled up in memory: a
+ * component tree is tens of rows, and the rollup reads clearer once here than
+ * twice in SQL.
  */
 export async function coverage(productId: string): Promise<Coverage> {
   const [components, counts, reads, unfiled] = await Promise.all([
@@ -68,26 +66,26 @@ export async function coverage(productId: string): Promise<Coverage> {
   ]);
 
   const countBy = new Map<string, CoverageCounts>();
-  for (const r of counts)
-    countBy.set(r.id, {
-      entries: r.entries,
-      docs: r.docs,
-      articles: r.articles,
+  for (const row of counts)
+    countBy.set(row.id, {
+      entries: row.entries,
+      docs: row.docs,
+      articles: row.articles,
       reads: 0,
     });
-  for (const r of reads) {
-    const c = countBy.get(r.component_id);
-    if (c) c.reads = r.reads;
+  for (const row of reads) {
+    const counted = countBy.get(row.component_id);
+    if (counted) counted.reads = row.reads;
   }
 
   const nodes = new Map<string, CoverageNode>();
-  for (const c of components)
-    nodes.set(c.id, {
-      id: c.id,
-      parent_id: c.parent_id,
-      slug: c.slug,
-      name: c.name,
-      ...(countBy.get(c.id) ?? zero()),
+  for (const component of components)
+    nodes.set(component.id, {
+      id: component.id,
+      parent_id: component.parent_id,
+      slug: component.slug,
+      name: component.name,
+      ...(countBy.get(component.id) ?? zero()),
       subtree: zero(),
       children: [],
     });
@@ -100,7 +98,7 @@ export async function coverage(productId: string): Promise<Coverage> {
   }
 
   // Post-order, so a child's subtree is complete before its parent reads it and
-  // every node is counted exactly once.
+  // every node is counted once.
   const roll = (n: CoverageNode): CoverageCounts => {
     n.subtree = {
       entries: n.entries,
@@ -109,15 +107,15 @@ export async function coverage(productId: string): Promise<Coverage> {
       reads: n.reads,
     };
     for (const child of n.children) {
-      const s = roll(child);
-      n.subtree.entries += s.entries;
-      n.subtree.docs += s.docs;
-      n.subtree.articles += s.articles;
-      n.subtree.reads += s.reads;
+      const childCounts = roll(child);
+      n.subtree.entries += childCounts.entries;
+      n.subtree.docs += childCounts.docs;
+      n.subtree.articles += childCounts.articles;
+      n.subtree.reads += childCounts.reads;
     }
     return n.subtree;
   };
-  for (const r of roots) roll(r);
+  for (const root of roots) roll(root);
 
   return { nodes: roots, unfiled: unfiled[0] };
 }

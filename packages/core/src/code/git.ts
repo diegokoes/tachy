@@ -28,13 +28,9 @@ function checkoutDir(slug: string): string {
 /**
  * `execFile` keeps a shell out of it, but git parses its own arguments: a
  * positional beginning with `-` becomes an option (`--upload-pack=` runs a
- * command), and the `ext::` transport is documented as running one outright. So
- * the remote has to be one of the shapes we actually clone from, not merely
- * "not shell metacharacters".
- *
- * `file://` is on the list because it cannot run anything - it reads a git
- * repository and nothing else - and it is how a local clone is indexed in
- * tests. The transports that execute are the ones missing from it.
+ * command), and the `ext::` transport runs one outright. So the remote is one
+ * of the shapes cloned from here. `file://` is among them because it only reads
+ * a repository, and it is how tests index a local clone.
  */
 const REPO_URL_RE = /^(?:https?:\/\/|ssh:\/\/|file:\/\/|git@)[A-Za-z0-9\/]/;
 
@@ -47,9 +43,8 @@ export function assertRepoUrl(url: string): string {
 }
 
 /**
- * A ref name reaches git as a positional too, so the same reasoning applies.
- * This is narrower than git's own rules deliberately - it is the set of branch
- * and tag names anyone actually has.
+ * A ref name reaches git as a positional too. Narrower than git's own rules:
+ * the branch and tag names in use.
  */
 export function assertBranchName(branch: string): string {
   if (!/^[A-Za-z0-9][A-Za-z0-9._\/-]*$/.test(branch) || branch.includes(".."))
@@ -163,9 +158,9 @@ export async function listTree(
   slug: string,
   sha: string,
 ): Promise<TreeEntry[]> {
-  const out = await git(slug, ["ls-tree", "-r", "-z", assertOid(sha)]);
+  const stdout = await git(slug, ["ls-tree", "-r", "-z", assertOid(sha)]);
   const entries: TreeEntry[] = [];
-  for (const line of out.split("\0")) {
+  for (const line of stdout.split("\0")) {
     if (!line) continue;
     const tab = line.indexOf("\t");
     if (tab < 0) continue;
@@ -215,12 +210,12 @@ export async function blobSizes(
 ): Promise<Map<string, number>> {
   const sizes = new Map<string, number>();
   if (!oids.length) return sizes;
-  const out = await git(
+  const stdout = await git(
     slug,
     ["cat-file", "--batch-check=%(objectname) %(objectsize)"],
     { token, input: oids.map(assertOid).join("\n") + "\n" },
   );
-  for (const line of out.split("\n")) {
+  for (const line of stdout.split("\n")) {
     const [oid, size] = line.split(" ");
     if (oid && size && /^\d+$/.test(size)) sizes.set(oid, Number(size));
   }
@@ -315,7 +310,7 @@ export async function logBetween(
   to: string,
   opts: { path?: string; limit: number },
 ): Promise<CommitSummary[]> {
-  const out = await git(slug, [
+  const stdout = await git(slug, [
     "log",
     `--max-count=${opts.limit}`,
     "--format=%H%x1f%an%x1f%aI%x1f%s",
@@ -323,7 +318,7 @@ export async function logBetween(
     "--",
     ...(opts.path ? [opts.path] : []),
   ]);
-  return out
+  return stdout
     .split("\n")
     .filter(Boolean)
     .map((line) => {
@@ -338,7 +333,7 @@ export async function listRemoteRefs(
   token?: string,
   opts: { heads?: string[] } = {},
 ): Promise<RemoteRef[]> {
-  const out = await run(
+  const stdout = await run(
     [
       ...authArgs(token),
       "ls-remote",
@@ -351,7 +346,7 @@ export async function listRemoteRefs(
     { timeout: LS_REMOTE_TIMEOUT_MS },
   );
   const refs: RemoteRef[] = [];
-  for (const line of out.split("\n")) {
+  for (const line of stdout.split("\n")) {
     const name = line.split("\t")[1];
     if (name?.startsWith("refs/heads/"))
       refs.push({ name: name.slice("refs/heads/".length), kind: "branch" });

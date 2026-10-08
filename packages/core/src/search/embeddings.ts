@@ -116,10 +116,10 @@ async function embed(kind: EmbedKind, texts: string[]): Promise<number[][]> {
 }
 
 export async function embedPassage(text: string): Promise<number[]> {
-  const [v] = await embed("passage", [
+  const [vector] = await embed("passage", [
     prepare(text, EMBEDDING_SPEC.passagePrefix),
   ]);
-  return v;
+  return vector;
 }
 
 /** Vectors in the caller's order; the queue batches the passages by length. */
@@ -130,8 +130,10 @@ export const embedPassages = (texts: string[]): Promise<number[][]> =>
   );
 
 export async function embedQuery(text: string): Promise<number[]> {
-  const [v] = await embed("query", [prepare(text, EMBEDDING_SPEC.queryPrefix)]);
-  return v;
+  const [vector] = await embed("query", [
+    prepare(text, EMBEDDING_SPEC.queryPrefix),
+  ]);
+  return vector;
 }
 
 /** Embed a query straight to the pgvector literal every search CTE binds. */

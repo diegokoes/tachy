@@ -35,26 +35,26 @@ export interface SavedAsset {
   byte_size: number;
 }
 
-export async function saveAsset(i: {
+export async function saveAsset(input: {
   bytes: Uint8Array;
   filename?: string | null;
   productId?: string | null;
   createdById?: string | null;
 }): Promise<SavedAsset> {
-  if (i.bytes.byteLength > MAX_ASSET_BYTES)
+  if (input.bytes.byteLength > MAX_ASSET_BYTES)
     throw badInput(`image too large (max ${MAX_ASSET_BYTES / 1024 / 1024} MB)`);
-  const type = sniffImage(i.bytes);
+  const type = sniffImage(input.bytes);
   if (!type) throw badInput("unsupported image; use PNG, JPEG, GIF or WebP");
 
-  const sha256 = createHash("sha256").update(i.bytes).digest("hex");
+  const sha256 = createHash("sha256").update(input.bytes).digest("hex");
   // The no-op update is what makes RETURNING hand back the existing row on a
   // duplicate; `do nothing` returns nothing at all.
   const [row] = await sql`
     insert into library_assets
       (product_id, created_by, sha256, content_type, byte_size, filename, bytes)
     values
-      (${i.productId ?? null}, ${i.createdById ?? null}, ${sha256}, ${type},
-       ${i.bytes.byteLength}, ${i.filename ?? null}, ${Buffer.from(i.bytes)})
+      (${input.productId ?? null}, ${input.createdById ?? null}, ${sha256}, ${type},
+       ${input.bytes.byteLength}, ${input.filename ?? null}, ${Buffer.from(input.bytes)})
     on conflict (sha256) do update set sha256 = excluded.sha256
     returning id, content_type, byte_size
   `;

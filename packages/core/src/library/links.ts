@@ -64,11 +64,9 @@ async function resolveTarget(
 
 /**
  * Replace a body's outbound links. Whole-set on every save: edges are derived
- * from the text, so recomputing is the only way they cannot drift from it.
- *
- * Only edges leaving this item are touched. Edges pointing AT it belong to
- * whoever wrote them, and deleting those here would silently unlink other
- * people's articles - the obvious bug, and the reason this is a narrow delete.
+ * from the text, so recomputing is the only way they cannot drift from it. Only
+ * edges leaving this item are touched: edges pointing at it belong to whoever
+ * wrote them.
  */
 export async function syncLinks(
   db: Db,
@@ -104,13 +102,13 @@ export async function syncLinks(
     rows.push({ target: link.target, label: link.label, ...to });
   }
 
-  for (const r of rows)
+  for (const row of rows)
     await db`
       insert into library_links
         (from_doc_id, from_entry_id, to_doc_id, to_entry_id, kind, target, label)
       values
         (${source.docId ?? null}, ${source.entryId ?? null},
-         ${r.toDocId}, ${r.toEntryId}, 'mentions', ${r.target}, ${r.label})
+         ${row.toDocId}, ${row.toEntryId}, 'mentions', ${row.target}, ${row.label})
     `;
   return rows.length;
 }
@@ -164,7 +162,7 @@ export interface Backlink {
   from_kind: string | null;
 }
 
-/** What points at this item. The `to_*` columns are indexed for exactly this. */
+/** What points at this item. The `to_*` columns are indexed for this. */
 export async function backlinks(target: {
   docId?: string;
   entryId?: string;
@@ -219,8 +217,8 @@ export interface ComposedSource {
 }
 
 /**
- * Record what an article was composed from. Whole-set like the mentions above,
- * and a separate `kind` so a citation the author wrote and a source the article
+ * Record what an article was composed from. Whole-set like `syncLinks`, and a
+ * separate `kind` so a citation the author wrote and a source the article
  * consolidates are not confused: the first is prose, the second is provenance.
  */
 export async function setComposedFrom(
@@ -234,15 +232,15 @@ export async function setComposedFrom(
   `;
   const seen = new Set<string>();
   let n = 0;
-  for (const s of sources) {
-    const key = s.entryId ?? s.docId ?? "";
-    if (!key || seen.has(key) || s.docId === pageId) continue;
+  for (const source of sources) {
+    const key = source.entryId ?? source.docId ?? "";
+    if (!key || seen.has(key) || source.docId === pageId) continue;
     seen.add(key);
     await db`
       insert into library_links
         (from_doc_id, from_entry_id, to_doc_id, to_entry_id, kind, target, label)
       values
-        (${pageId}, null, ${s.docId ?? null}, ${s.entryId ?? null},
+        (${pageId}, null, ${source.docId ?? null}, ${source.entryId ?? null},
          'composed_from', ${key}, null)
     `;
     n++;
