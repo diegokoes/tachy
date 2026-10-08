@@ -15,14 +15,9 @@ const ROOT = new URL("..", import.meta.url).pathname;
 
 /** Repo-relative path prefixes already brought under the convention. */
 export const SWEPT = [
-  "packages/agent",
-  "packages/api",
-  "packages/contract",
-  "packages/core",
-  "packages/mcp",
-  "packages/sources",
-  "packages/web",
-  "packages/worker",
+  "load",
+  "packages",
+  "scripts",
   "test/search/embeddings.test.ts",
   "test/search/quality.test.ts",
 ];
@@ -41,38 +36,39 @@ const DIRECTIVE_RE =
 const COMPONENT_DOC_RE = /^\s*@component\b\s*/;
 const BANNER_RE = /([-=─━═~#*_])\1{3,}/;
 const EM_DASH = "—";
-const MARKER_RE = /(?:^|\s)(?:TODO|FIXME|HACK|XXX)\b(?:\([^)]*\))?(?::|\s|$)/;
+const TODO_MARKER_RE =
+  /(?:^|\s)(?:TODO|FIXME|HACK|XXX)\b(?:\([^)]*\))?(?::|\s|$)/;
 const ISSUE_RE = /#\d+/;
 /** A keyword-led line ending like a statement, a bare call, an assignment, or a lone brace. */
 const CODE_LINE_RE =
   /^(?:(?:export\s+)?(?:const|let|var|function|class|import|return|throw|await|if\s*\(|for\s*\(|while\s*\(|switch\s*\()\b.*[;{]|[\w$.]+\(.*\);|[\w$.[\]]+\s*=\s*[^=\s].*;|\}(?:\s*else\s*\{)?)$/;
 
-const SK = ts.SyntaxKind;
+const SyntaxKind = ts.SyntaxKind;
 const DECLARATION_KINDS = new Set([
-  SK.FunctionDeclaration,
-  SK.ClassDeclaration,
-  SK.InterfaceDeclaration,
-  SK.TypeAliasDeclaration,
-  SK.EnumDeclaration,
-  SK.ModuleDeclaration,
-  SK.VariableStatement,
-  SK.ExportAssignment,
-  SK.ExportDeclaration,
-  SK.PropertyDeclaration,
-  SK.MethodDeclaration,
-  SK.Constructor,
-  SK.GetAccessor,
-  SK.SetAccessor,
-  SK.PropertySignature,
-  SK.MethodSignature,
-  SK.IndexSignature,
-  SK.CallSignature,
-  SK.ConstructSignature,
-  SK.EnumMember,
-  SK.PropertyAssignment,
-  SK.ShorthandPropertyAssignment,
-  SK.Parameter,
-  SK.BindingElement,
+  SyntaxKind.FunctionDeclaration,
+  SyntaxKind.ClassDeclaration,
+  SyntaxKind.InterfaceDeclaration,
+  SyntaxKind.TypeAliasDeclaration,
+  SyntaxKind.EnumDeclaration,
+  SyntaxKind.ModuleDeclaration,
+  SyntaxKind.VariableStatement,
+  SyntaxKind.ExportAssignment,
+  SyntaxKind.ExportDeclaration,
+  SyntaxKind.PropertyDeclaration,
+  SyntaxKind.MethodDeclaration,
+  SyntaxKind.Constructor,
+  SyntaxKind.GetAccessor,
+  SyntaxKind.SetAccessor,
+  SyntaxKind.PropertySignature,
+  SyntaxKind.MethodSignature,
+  SyntaxKind.IndexSignature,
+  SyntaxKind.CallSignature,
+  SyntaxKind.ConstructSignature,
+  SyntaxKind.EnumMember,
+  SyntaxKind.PropertyAssignment,
+  SyntaxKind.ShorthandPropertyAssignment,
+  SyntaxKind.Parameter,
+  SyntaxKind.BindingElement,
 ]);
 
 const lineAt = (text, offset) => text.slice(0, offset).split("\n").length;
@@ -86,6 +82,7 @@ function capFor(comment, isComponentDoc) {
     : BODY_CAP;
 }
 
+const blockSyntax = (raw) => (raw.startsWith("/**") ? "jsdoc" : "block");
 const blockLines = (raw) =>
   raw
     .replace(/^\/\*+|\*+\/$/g, "")
@@ -108,7 +105,7 @@ function scriptComments(text, { firstLine = 1, canHoldHeader = true } = {}) {
 
   const visit = (node) => {
     if (ts.isJSDoc(node)) return;
-    if (node.kind !== SK.SyntaxList) {
+    if (node.kind !== SyntaxKind.SyntaxList) {
       for (const range of ts.getLeadingCommentRanges(
         text,
         node.getFullStart(),
@@ -133,7 +130,7 @@ function scriptComments(text, { firstLine = 1, canHoldHeader = true } = {}) {
       text.slice(range.end, lineEnd === -1 ? text.length : lineEnd).trim() !==
         "";
     const line = lineAt(text, range.pos) + firstLine - 1;
-    const isLine = range.kind === SK.SingleLineCommentTrivia;
+    const isLine = range.kind === SyntaxKind.SingleLineCommentTrivia;
 
     const previous = comments.at(-1);
     if (
@@ -149,7 +146,7 @@ function scriptComments(text, { firstLine = 1, canHoldHeader = true } = {}) {
 
     comments.push({
       line,
-      syntax: isLine ? "line" : raw.startsWith("/**") ? "jsdoc" : "block",
+      syntax: isLine ? "line" : blockSyntax(raw),
       place: "script",
       lines: isLine ? [raw.replace(/^\/\/\s?/, "")] : blockLines(raw),
       sharesLine,
@@ -262,7 +259,7 @@ export function violations(path, text) {
     if (written.some((line) => line.includes(EM_DASH)))
       report("em-dash", "no em dashes");
     if (
-      written.some((line) => MARKER_RE.test(line)) &&
+      written.some((line) => TODO_MARKER_RE.test(line)) &&
       !written.some((line) => ISSUE_RE.test(line))
     )
       report("todo", "name the issue, as #123");

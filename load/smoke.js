@@ -1,9 +1,9 @@
+/** One pass over everything the suite covers. Run this after every deploy. */
 import http from "k6/http";
 import { check } from "k6";
 import { BASE_URL, headers, setupSession, pick } from "./session.js";
 import { QUERIES, DOC_QUERIES } from "./corpus.js";
 
-/** One pass over everything the suite covers. Run this after every deploy. */
 export const options = {
   vus: 1,
   iterations: 1,
@@ -18,8 +18,8 @@ export const setup = setupSession;
 
 export default function (data) {
   const h = headers(data);
-  const ok = (name, res) =>
-    check(res, { [`${name} is 200`]: (r) => r.status === 200 });
+  const ok = (name, response) =>
+    check(response, { [`${name} is 200`]: (r) => r.status === 200 });
 
   ok(
     "readyz",
@@ -139,13 +139,13 @@ export default function (data) {
     toc.body || "",
   );
   if (article) {
-    const res = http.get(
+    const response = http.get(
       `${BASE_URL}/api/library/wiki/${scope}/articles/${article[1]}`,
       { headers: h, tags: { endpoint: "wiki_article" } },
     );
-    ok("wiki article", res);
+    ok("wiki article", response);
     const asset = /\/api\/library\/assets\/([0-9a-f-]{36})/.exec(
-      res.body || "",
+      response.body || "",
     );
     if (asset)
       ok(

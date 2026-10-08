@@ -76,20 +76,20 @@ interface Outcome {
 }
 
 const outcomes: Outcome[] = [];
-for (const g of CODE_GOLDEN) {
-  const hits = await searchCode(g.q, { repoSlug, limit: PAGE });
+for (const golden of CODE_GOLDEN) {
+  const hits = await searchCode(golden.q, { repoSlug, limit: PAGE });
   const paths = hits.map((h) => (h as { path: string }).path);
-  const at = paths.findIndex((p) => g.expect.includes(p));
-  const vec = await vectorOnly(g.q);
-  const vecAt = vec.findIndex((p) => g.expect.includes(p));
+  const at = paths.findIndex((p) => golden.expect.includes(p));
+  const vec = await vectorOnly(golden.q);
+  const vecAt = vec.findIndex((p) => golden.expect.includes(p));
   outcomes.push({
-    q: g.q,
-    why: g.why,
-    expect: g.expect,
+    q: golden.q,
+    why: golden.why,
+    expect: golden.expect,
     rank: at < 0 ? null : at + 1,
     vectorRank: vecAt < 0 ? null : vecAt + 1,
     top: paths.slice(0, 3),
-    stale: !g.expect.some((p) => indexed.has(p)),
+    stale: !golden.expect.some((p) => indexed.has(p)),
   });
 }
 
@@ -131,17 +131,17 @@ if (json) {
       `  ${label.padEnd(11)} n=${String(s.n).padStart(2)}  top1 ${String(s.top1).padStart(2)}  top3 ${String(s.top3).padStart(2)}  page ${String(s.page).padStart(2)}  MRR ${s.mrr.toFixed(3)}  vector-only top3 ${String(s.vectorTop3).padStart(2)}`,
     );
   console.log("\nexpected file found, by kind of question:");
-  for (const k of kinds) row(k, summary.byKind[k]);
+  for (const kind of kinds) row(kind, summary.byKind[kind]);
   row("all", summary.overall);
 
   const misses = outcomes.filter((o) => o.rank !== 1);
   if (misses.length) console.log("\nnot first:");
-  for (const o of misses)
+  for (const miss of misses)
     console.log(
-      `  [${o.why}] ${JSON.stringify(o.q)}\n` +
-        `      rank ${o.rank ?? "-"}  vector-only rank ${o.vectorRank ?? ">50"}` +
-        `${o.stale ? "  (expected file is not in the index)" : ""}\n` +
-        `      got ${o.top[0] ?? "nothing"}`,
+      `  [${miss.why}] ${JSON.stringify(miss.q)}\n` +
+        `      rank ${miss.rank ?? "-"}  vector-only rank ${miss.vectorRank ?? ">50"}` +
+        `${miss.stale ? "  (expected file is not in the index)" : ""}\n` +
+        `      got ${miss.top[0] ?? "nothing"}`,
     );
 }
 await sql.end();

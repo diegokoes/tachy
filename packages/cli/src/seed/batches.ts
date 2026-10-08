@@ -47,17 +47,11 @@ export async function insertRows(
 const WINDOW = 2_000;
 
 /**
- * Build and insert a table a window at a time, so `fill` has a batch of rows to
- * work on between building them and writing them. That hook is the whole point:
- * it is where the embedder runs the model over a window's text at once, instead
- * of once per row inside the build loop.
- *
- * Not a memory optimisation - measured against building the array whole, peak
- * heap and wall time are the same, because `insertRows` already chunks and V8
- * reclaims the rows behind it.
- *
- * `build` is called with the row's own index, so ids stay derived from that
- * index and a window boundary cannot move them.
+ * Builds and inserts a table a window at a time, so `fill` has a batch of rows
+ * between building and writing them: the embedder runs the model over a
+ * window's text at once, not once per row. Not for memory: `insertRows` already
+ * chunks. `build` gets the row's own index, so ids stay derived from it and a
+ * window boundary cannot move them.
  */
 export async function insertWindowed(
   tx: Tx,
