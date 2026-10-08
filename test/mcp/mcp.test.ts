@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { runTool } from "../../packages/mcp/src/index";
-import { badInput } from "@tachy/core/infra";
+import { badInput, rememberSecret } from "@tachy/core/infra";
 import { saveKnowledgeEntry } from "@tachy/core/knowledge";
 import { resetData, sql } from "../database";
 
@@ -24,6 +24,32 @@ describe("runTool envelope", () => {
     )) as ToolResult;
     expect(response).toEqual(ok);
     expect(response.isError).toBeUndefined();
+  });
+
+  it("masks a secret this process holds, in a result and in an error", async () => {
+    rememberSecret("canary-secret-in-a-tool-result");
+    const result = (await runTool(
+      "leaky_result",
+      async () => ({
+        content: [
+          { type: "text" as const, text: "got canary-secret-in-a-tool-result" },
+        ],
+      }),
+      {},
+      {},
+    )) as ToolResult;
+    expect(result.content[0].text).toBe("got [SECRET]");
+
+    const failed = (await runTool(
+      "leaky_error",
+      async () => {
+        throw new Error("upstream said canary-secret-in-a-tool-result");
+      },
+      {},
+      {},
+    )) as ToolResult;
+    expect(failed.isError).toBe(true);
+    expect(failed.content[0].text).toBe("upstream said [SECRET]");
   });
 
   it("turns a thrown AppError into a clean tool error", async () => {

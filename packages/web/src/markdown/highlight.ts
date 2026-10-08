@@ -56,3 +56,30 @@ export function highlight(
     return { html: esc(code), language: null };
   }
 }
+
+/** The grammar a file is read with, from its extension; "" when none fits. */
+export function languageOf(path: string): string {
+  const extension = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+  return hljs.getLanguage(extension) ? extension : "";
+}
+
+const SPAN_TAG_RE = /<span[^>]*>|<\/span>/g;
+
+/**
+ * One markup string per line of code. A token that runs over a line break, a
+ * block comment say, is closed at the end of each line and reopened on the
+ * next, so every line stands on its own in its own element.
+ */
+export function highlightLines(code: string, lang: string): string[] {
+  const open: string[] = [];
+  return highlight(code, lang)
+    .html.split("\n")
+    .map((line) => {
+      const carried = open.join("");
+      for (const tag of line.match(SPAN_TAG_RE) ?? []) {
+        if (tag === "</span>") open.pop();
+        else open.push(tag);
+      }
+      return carried + line + "</span>".repeat(open.length);
+    });
+}

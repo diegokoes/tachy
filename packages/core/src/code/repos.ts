@@ -2,6 +2,7 @@ import {
   DEFAULT_CODE_EXTENSIONS,
   REPO_INDEX_STATUSES,
   SLUG_RE,
+  projectToken,
 } from "@tachy/contract";
 import type {
   Freshness,
@@ -13,6 +14,7 @@ import type {
 import { sql, jsonb } from "../infra/db";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { badInput, notFound } from "../infra/errors";
+import { maskSecrets } from "../infra/known-secrets";
 import { getProductIdBySlug } from "../catalog/products";
 import { getCustomerIdBySlug } from "../catalog/customers";
 import { resolveComponentStrict } from "../catalog/components";
@@ -218,6 +220,26 @@ export async function listRepos(
   `;
 }
 
+/**
+ * The repos of the project a `/code` scope word or a tool argument names: by
+ * its key or its name, in the spelling `projectToken` gives either.
+ */
+export async function reposInProject(project: string): Promise<RepoRow[]> {
+  const wanted = projectToken(project).toLowerCase();
+  const rows = await sql<RepoRow[]>`
+    ${repoSelect()}
+    where r.source_project_id is not null
+      and ${wanted} in (
+        lower(regexp_replace(btrim(sp.external_key), '\\s+', '-', 'g')),
+        lower(regexp_replace(btrim(sp.name), '\\s+', '-', 'g'))
+      )
+    order by r.slug
+  `;
+  if (!rows.length)
+    throw notFound(`No linked repo belongs to a project '${project}'`);
+  return rows;
+}
+
 export async function getRepoBySlug(slug: string): Promise<RepoRow> {
   const [row] = await sql<RepoRow[]>`${repoSelect()} where r.slug = ${slug}`;
   if (!row) throw notFound(`Repo '${slug}' not found`);
@@ -278,7 +300,7 @@ export async function updateLineStatus(
       index_status = ${keep(patch.indexStatus, "index_status")},
       indexed_commit = ${keep(patch.indexedCommit, "indexed_commit")},
       indexing_commit = ${keep(patch.indexingCommit, "indexing_commit")},
-      index_error = ${keep(patch.indexError, "index_error")},
+      index_error = ${keep(patch.indexError && maskSecrets(patch.indexError), "index_error")},
       version_label = ${keep(patch.versionLabel, "version_label")},
       last_indexed_at = ${patch.touchIndexedAt ? sql`now()` : sql`last_indexed_at`}
     where id = ${lineId}

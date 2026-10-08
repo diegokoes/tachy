@@ -71,6 +71,39 @@ export function releaseMinor(version: string): string | null {
   return normalized && normalized.split(".").slice(0, 2).join(".");
 }
 
+/** A project's key as the one word a `/code` line can carry: `Portal-Mobile`. */
+export const projectToken = (key: string): string =>
+  key.trim().replace(/\s+/g, "-");
+
+export interface CodeScope {
+  /** Repo slugs, from `@slug`. */
+  repos: string[];
+  /** Project tokens, from `@token/`; see `projectToken`. */
+  projects: string[];
+  /** The line with its scope words taken out. */
+  question: string;
+}
+
+const SCOPE_WORD_RE = /(^|\s)@([^\s@]+)/g;
+
+/**
+ * The repos and projects a `/code` line names. A scope word starts a word, so
+ * an address in the question (`a@b`) is left alone.
+ */
+export function parseCodeScope(args: string): CodeScope {
+  const repos = new Set<string>();
+  const projects = new Set<string>();
+  const question = args
+    .replace(SCOPE_WORD_RE, (_match, lead: string, word: string) => {
+      if (word.endsWith("/")) projects.add(word.slice(0, -1));
+      else repos.add(word);
+      return lead;
+    })
+    .replace(/\s+/g, " ")
+    .trim();
+  return { repos: [...repos], projects: [...projects], question };
+}
+
 export interface RepoLineRow {
   id: string;
   ref: string;
