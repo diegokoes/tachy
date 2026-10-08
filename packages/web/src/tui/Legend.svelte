@@ -17,19 +17,19 @@
 
 {#if items.length}
   <div class="legend">
-    {#each items as l (l.key)}
+    {#each items as item (item.key)}
       {#if ontoggle}
         <button
           type="button"
           class="key pick"
-          class:off={hidden.includes(l.key)}
-          aria-pressed={!hidden.includes(l.key)}
-          style="--tone-color: {toneVar(l.tone)}"
-          onclick={() => ontoggle(l.key)}>{l.label}</button
+          class:off={hidden.includes(item.key)}
+          aria-pressed={!hidden.includes(item.key)}
+          style="--tone-color: {toneVar(item.tone)}"
+          onclick={() => ontoggle(item.key)}>{item.label}</button
         >
       {:else}
-        <span class="key" style="--tone-color: {toneVar(l.tone)}"
-          >{l.label}</span
+        <span class="key" style="--tone-color: {toneVar(item.tone)}"
+          >{item.label}</span
         >
       {/if}
     {/each}

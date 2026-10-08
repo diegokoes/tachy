@@ -33,10 +33,10 @@
     edges?: boolean;
   } = $props();
 
-  /* Line height and monospace advance, in ems of --fs-xs. */
+  // Line height and monospace advance, in ems of --fs-xs.
   const LINE = 1.4;
-  const CH = 0.6;
-  /* Ramp steps from here up are dark enough to want the ground as ink. */
+  const CHAR_EM = 0.6;
+  // Ramp steps from here up are dark enough to want the ground as ink.
   const INVERSE_STEP = 3;
 
   type Laid = HierarchyRectangularNode<Block>;
@@ -52,13 +52,9 @@
 
   const top = $derived(max ?? hottest(root));
 
-  /*
-   * A group is drawn, header and frame, only where its box can name it and
-   * still show what is under it; a smaller one is only its children, which
-   * keeps a crowded map from turning into nested outlines. d3 positions a
-   * node before it asks for that node's padding, so the call is made on the
-   * box the group actually got.
-   */
+  // A group gets a header and frame only where its box can name it and still
+  // show what is under it. d3 positions a node before asking for its padding,
+  // so the call is made on the box the group got.
   const laid = $derived.by(() => {
     const heads = new Set<HierarchyNode<Block>>();
     if (!(w > 0 && h > 0)) return { nodes: [] as Laid[], heads };
@@ -73,7 +69,7 @@
         fits =
           !bare &&
           n.depth > 0 &&
-          n.x1 - n.x0 >= fs * CH * 4 + gap * 2 &&
+          n.x1 - n.x0 >= fs * CHAR_EM * 4 + gap * 2 &&
           n.y1 - n.y0 >= head + line * 2;
         judged.set(n, fits);
         if (fits) heads.add(n);
@@ -88,7 +84,7 @@
           (b.value ?? 0) - (a.value ?? 0) ||
           a.data.label.localeCompare(b.data.label),
       );
-    const out = treemap<Block>()
+    const layout = treemap<Block>()
       .size([w, h])
       .round(true)
       .paddingInner((n) => (n.depth ? gap : gap * 4))
@@ -96,7 +92,7 @@
       .paddingRight(edge)
       .paddingBottom(edge)
       .paddingTop((n) => (titled(n) ? head : 0))(tree);
-    return { nodes: out.descendants().slice(1), heads };
+    return { nodes: layout.descendants().slice(1), heads };
   });
 
   const tip = (b: Block) => b.title ?? `${b.label}: ${format(b.value)}`;
@@ -106,7 +102,7 @@
     if (bare) return 0;
     const { fs, rem } = type;
     const line = fs * LINE;
-    const wide = n.x1 - n.x0 - rem * 0.6 >= fs * CH * 3;
+    const wide = n.x1 - n.x0 - rem * 0.6 >= fs * CHAR_EM * 3;
     const tall = n.y1 - n.y0 - rem * 0.3;
     if (!wide || tall < line) return 0;
     return tall >= line * 2 ? 2 : 1;

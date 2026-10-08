@@ -50,9 +50,9 @@
     "aria-pressed"?: boolean;
   } = $props();
 
-  /* A mark with no words beside it shows its title as a tip, which hover,
-     focus and touch all reach, and takes it as its name if it has none.
-     A button with words needs neither. */
+  // A mark with no words beside it shows its title as a tip, which hover, focus
+  // and touch all reach, and takes it as its name if it has none. A button with
+  // words needs neither.
   const bare = $derived(!children);
 </script>
 

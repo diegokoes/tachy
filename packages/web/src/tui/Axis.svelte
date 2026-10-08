@@ -10,26 +10,28 @@
     categories = [],
   }: {
     side?: "left" | "bottom";
-    format?: (v: string | number) => string;
+    format?: (value: string | number) => string;
     /** Rules across the plot at each value tick. Left axis only. */
     grid?: boolean;
     categories?: string[];
   } = $props();
 
   const plot = getPlot();
-  const f = $derived(plot.frame);
+  const frame = $derived(plot.frame);
 
-  /* A day-of-month label is the widest thing the bottom axis carries, and two
-     of them touching is what makes a 14-column chart unreadable. */
-  const stride = $derived(labelStride(categories.length, f.iw, f.fs * 2.2));
+  // A day-of-month label is the widest thing the bottom axis carries, and two
+  // of them touching is what makes a 14-column chart unreadable.
+  const stride = $derived(
+    labelStride(categories.length, frame.iw, frame.fs * 2.2),
+  );
 </script>
 
 {#if side === "left"}
   <g class="axis" aria-hidden="true">
-    {#each f.ticks as t (t)}
-      {@const y = f.at(t)}
+    {#each frame.ticks as tick (tick)}
+      {@const y = frame.at(tick)}
       {#if grid}
-        <line class="grid" x1={0} x2={f.iw} y1={y} y2={y} />
+        <line class="grid" x1={0} x2={frame.iw} y1={y} y2={y} />
       {/if}
       <line class="tick" x1={-TICK_LEN} x2={0} y1={y} y2={y} />
       <text
@@ -37,21 +39,21 @@
         x={-TICK_LEN - 4}
         {y}
         dominant-baseline="middle"
-        text-anchor="end">{format(t)}</text
+        text-anchor="end">{format(tick)}</text
       >
     {/each}
-    <line class="rule" x1={0} x2={0} y1={0} y2={f.ih} />
+    <line class="rule" x1={0} x2={0} y1={0} y2={frame.ih} />
   </g>
 {:else}
   <g class="axis" aria-hidden="true">
-    <line class="rule" x1={0} x2={f.iw} y1={f.ih} y2={f.ih} />
+    <line class="rule" x1={0} x2={frame.iw} y1={frame.ih} y2={frame.ih} />
     {#each categories as key, i (key)}
-      {@const x = f.bandAt(key) + f.band / 2}
+      {@const x = frame.bandAt(key) + frame.band / 2}
       {#if i % stride === 0}
         <text
           class="lbl"
           {x}
-          y={f.ih + TICK_LEN + f.fs * 0.9}
+          y={frame.ih + TICK_LEN + frame.fs * 0.9}
           text-anchor="middle">{format(key)}</text
         >
       {/if}

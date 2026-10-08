@@ -52,9 +52,9 @@
     canCreate?: boolean;
     addLabel?: string;
     /**
-     * What one row is, singular - "project", "repo". It prefixes the record
-     * dialog's name, because a dialog titled with a bare slug says what you
-     * are editing but never what kind of thing it is.
+     * What one row is, singular: "project", "repo". It prefixes the record
+     * dialog's name, because a dialog titled with a bare slug says what is
+     * being edited but not what kind of thing it is.
      */
     noun?: string;
     /** Names the row in the dialog title; defaults to the row's key. */
@@ -78,7 +78,7 @@
     extraActions?: Snippet<[T]>;
     rowClass?: (row: T) => string | undefined;
     /** Fires as the record form opens and closes, for state `formExtra` needs. */
-    onform?: (f: { mode: "create" | "edit"; row: T | null } | null) => void;
+    onform?: (form: { mode: "create" | "edit"; row: T | null } | null) => void;
     /**
      * Offers the add action to whoever lays out the page, which draws it on
      * the section heading. Given one, the bar under the table goes away.
@@ -97,7 +97,7 @@
     return hoist(offer);
   });
 
-  /* Create and edit are the same form; only the commit differs. */
+  // Create and edit are the same form; only the commit differs.
   let form = $state<{ mode: "create" | "edit"; row: T | null } | null>(null);
   let draft = $state<Draft>({});
   let armed = $state<string | null>(null);
@@ -105,11 +105,12 @@
   let opError = $state<string | null>(null);
 
   const NEW = "::new";
-  const formKey = $derived(form ? (form.row ? rowKey(form.row) : NEW) : null);
+  const keyOf = (row: T | null) => (row ? rowKey(row) : NEW);
+  const formKey = $derived(form ? keyOf(form.row) : null);
 
-  /* An open record, draft and all, survives leaving the section, so coming
-     back finds it as it was. Closing it, or moving elsewhere inside the
-     section, forgets it as before. */
+  // An open record, draft and all, survives leaving the section, so coming back
+  // finds it as it was. Closing it, or moving elsewhere inside the section,
+  // forgets it as before.
   const memo = untrack(() => `crud:${router.path}:${noun ?? addLabel}`);
   const home = sectionNow();
   let resume = $state(recall<{ key: string; draft: Draft } | null>(memo, null));
@@ -162,11 +163,11 @@
     onform?.(null);
   }
 
-  async function run(key: string, fn: () => Promise<void> | void) {
+  async function run(key: string, action: () => Promise<void> | void) {
     busy = key;
     opError = null;
     try {
-      await fn();
+      await action();
       return true;
     } catch (e) {
       opError = e instanceof Error ? e.message : String(e);
@@ -232,36 +233,36 @@
 {/if}
 
 {#if form}
-  {@const f = form}
-  {@const named = f.row ? (editTitle?.(f.row) ?? rowKey(f.row)) : null}
-  {@const key = f.row ? rowKey(f.row) : NEW}
+  {@const open = form}
+  {@const named = open.row ? (editTitle?.(open.row) ?? rowKey(open.row)) : null}
+  {@const key = open.row ? rowKey(open.row) : NEW}
   <RecordModal
     title={named ? (noun ? `${noun}: ${named}` : named) : addLabel}
     {columns}
     {draft}
     {width}
-    mode={f.mode}
-    row={f.row ?? undefined}
+    mode={open.mode}
+    row={open.row ?? undefined}
     busy={busy === formKey}
     error={opError}
     onConfirm={commit}
-    destructive={f.row && ondelete && canDelete(f.row)
+    destructive={open.row && ondelete && canDelete(open.row)
       ? {
           label: armed === key ? "click again to confirm" : "delete",
           icon: armed === key ? "confirm" : "delete",
           busy: busy === key,
-          onclick: () => f.row && confirmDelete(f.row),
+          onclick: () => open.row && confirmDelete(open.row),
         }
       : undefined}
     onCancel={close}
   >
     {#snippet barExtra()}
-      {#if extraActions && f.row}{@render extraActions(f.row)}{/if}
+      {#if extraActions && open.row}{@render extraActions(open.row)}{/if}
     {/snippet}
     {#snippet extra()}
       {#if formExtra}{@render formExtra({
-          mode: f.mode,
-          row: f.row,
+          mode: open.mode,
+          row: open.row,
           draft,
         })}{/if}
     {/snippet}

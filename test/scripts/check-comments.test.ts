@@ -29,6 +29,13 @@ describe("comment length caps", () => {
     expect(rules("a.ts", header(13))).toEqual(["length"]);
   });
 
+  it("caps a component's @component doc like a declaration", () => {
+    const doc = (count: number) =>
+      `<script lang="ts">\n  let a = 1;\n</script>\n\n<!--\n@component\n${prose(count, "")}\n-->\n<p>{a}</p>`;
+    expect(rules("A.svelte", doc(5))).toEqual([]);
+    expect(rules("A.svelte", doc(6))).toEqual(["length"]);
+  });
+
   it("does not count blank separator lines", () => {
     const source = `import "x";\n/**\n * one\n *\n * two\n *\n * three\n * four\n * five\n */\nexport const a = 1;`;
     expect(rules("a.ts", source)).toEqual([]);

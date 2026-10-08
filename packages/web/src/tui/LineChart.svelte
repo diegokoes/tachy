@@ -38,14 +38,14 @@
 
 <div class="chart">
   <Plot {categories} max={Math.max(1, top)} {format}>
-    {#snippet children(f)}
+    {#snippet children(frame)}
       {@const hit = here && categories.includes(here) ? here : null}
       <Axis side="left" grid format={(v) => format(Number(v))} />
       <Axis side="bottom" {categories} format={(k) => labels(String(k))} />
       <Lines {series} {source} {area} {sweep} />
       {#if hit}
         <Tooltip
-          at={{ x: f.bandAt(hit) + f.band / 2, y: 0 }}
+          at={{ x: frame.bandAt(hit) + frame.band / 2, y: 0 }}
           title={labels(hit)}
           lines={shown.map((s) => ({
             label: s.label,

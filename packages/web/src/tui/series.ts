@@ -29,7 +29,7 @@ export type Run = { pts: Pt[]; dashed: boolean; tone?: Tone };
  */
 export function lineRuns(
   points: SeriesPoint[],
-  at: (p: SeriesPoint) => Pt,
+  at: (point: SeriesPoint) => Pt,
 ): Run[] {
   const runs: Run[] = [];
   for (let i = 0; i < points.length - 1; i++) {

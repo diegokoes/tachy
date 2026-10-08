@@ -15,14 +15,17 @@
   let { items }: { items: FigureItem[] } = $props();
 </script>
 
-<!-- Four numbers that are each a share of something need to be read, not
-     measured against one another: the figure, what it is, out of what. -->
+<!--
+@component
+Four numbers that are each a share of something need to be read, not measured
+against one another: the figure, what it is, out of what.
+-->
 <div class="figures">
-  {#each items as it (it.key)}
-    <div class="one" style="--tone-color: {toneVar(it.tone ?? 'accent')}">
-      <span class="v">{it.value}</span>
-      <span class="l">{it.label}</span>
-      {#if it.note}<span class="n">{it.note}</span>{/if}
+  {#each items as item (item.key)}
+    <div class="one" style="--tone-color: {toneVar(item.tone ?? 'accent')}">
+      <span class="v">{item.value}</span>
+      <span class="l">{item.label}</span>
+      {#if item.note}<span class="n">{item.note}</span>{/if}
     </div>
   {/each}
 </div>

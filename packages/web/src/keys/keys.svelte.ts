@@ -37,10 +37,10 @@ export function pushScope(bindings: Binding[]) {
   };
 }
 
-function inTextField(t: EventTarget | null): boolean {
-  if (!(t instanceof HTMLElement)) return false;
-  if (t.isContentEditable) return true;
-  const tag = t.tagName;
+function inTextField(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
@@ -50,38 +50,35 @@ function inTextField(t: EventTarget | null): boolean {
  * closes on it instead.
  */
 function leaveField(e: KeyboardEvent) {
-  const t = e.target as HTMLElement;
-  if (e.defaultPrevented || t.closest('[role="dialog"]')) return;
-  t.blur();
+  const target = e.target as HTMLElement;
+  if (e.defaultPrevented || target.closest('[role="dialog"]')) return;
+  target.blur();
 }
 
-/** Exported so the rebind UI captures exactly the shape dispatch matches on. */
+/** Keys a chord spells by their cap, where `KeyboardEvent.key` names them. */
+const KEY_CAPS = new Map([
+  [" ", "space"],
+  ["Enter", "⏎"],
+  ["Escape", "esc"],
+  ["ArrowUp", "↑"],
+  ["ArrowDown", "↓"],
+]);
+
+/** Exported so the rebind UI captures the shape dispatch matches on. */
 export function normalize(e: KeyboardEvent, ctrl = false): string {
   if (e.shiftKey && /^Digit[1-9]$/.test(e.code))
     return `shift+${e.code.slice(5)}`;
   // Shifted letters are their own binding - vim's G is not its j.
   if (e.shiftKey && /^Key[A-Z]$/.test(e.code))
     return `shift+${e.code.slice(3).toLowerCase()}`;
-  const base =
-    e.key === " "
-      ? "space"
-      : e.key === "Enter"
-        ? "⏎"
-        : e.key === "Escape"
-          ? "esc"
-          : e.key === "ArrowUp"
-            ? "↑"
-            : e.key === "ArrowDown"
-              ? "↓"
-              : e.key.toLowerCase();
+  const base = KEY_CAPS.get(e.key) ?? e.key.toLowerCase();
   return ctrl ? `ctrl+${base}` : base;
 }
 
 export function startKeys() {
-  /* Keys typed so far towards a multi-key binding. A lone `g` is not a binding
-     on its own, so it has to be held until either its partner arrives or the
-     window lapses - and it must lapse, or a stray `g` would arm the next
-     unrelated keystroke indefinitely. */
+  // Keys typed so far towards a multi-key binding. A lone `g` is held until its
+  // partner arrives or the window lapses, and it has to lapse, or a stray `g`
+  // would arm the next unrelated keystroke.
   let pending: string[] = [];
   let lapse: ReturnType<typeof setTimeout> | undefined;
 
@@ -91,18 +88,17 @@ export function startKeys() {
     lapse = undefined;
   };
 
-  /* Innermost scope wins, and it wins whole: a scope that has a sequence
-     starting with this chord claims it, even if an outer scope binds the same
-     chord on its own. Otherwise a modal's `g g` would be shadowed by the
-     view's `g` and never complete. */
+  // Innermost scope wins whole: a scope with a sequence starting with this
+  // chord claims it even if an outer scope binds the chord alone, or a modal's
+  // `g g` would be shadowed by the view's `g`.
   const match = (chord: string, field: boolean): Binding | "partial" | null => {
     for (let i = scopes.length - 1; i >= 0; i--) {
       let exact: Binding | undefined;
       let partial = false;
-      for (const b of scopes[i].bindings) {
-        if (field && !b.inFields) continue;
-        if (b.key === chord) exact ??= b;
-        else if (b.key.startsWith(`${chord} `)) partial = true;
+      for (const binding of scopes[i].bindings) {
+        if (field && !binding.inFields) continue;
+        if (binding.key === chord) exact ??= binding;
+        else if (binding.key.startsWith(`${chord} `)) partial = true;
       }
       if (partial) return "partial";
       if (exact) return exact;

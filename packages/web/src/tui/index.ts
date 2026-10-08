@@ -64,7 +64,7 @@ export { default as RecordModal } from "./RecordModal.svelte";
 export { default as RecordForm } from "./RecordForm.svelte";
 export { default as FormActions } from "./FormActions.svelte";
 
-/* Kept where they are until their last legacy call site is migrated. */
+// Kept where they are until their last legacy call site is migrated.
 export { default as Select } from "./AsciiSelect.svelte";
 export { default as Caret, caretSide } from "./Caret.svelte";
 export { default as CaretHost } from "./CaretHost.svelte";

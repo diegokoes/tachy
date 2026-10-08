@@ -12,13 +12,15 @@
   } = $props();
 
   const plot = getPlot();
-  const f = $derived(plot.frame);
-  const x = $derived(at === undefined ? null : f.bandAt(at) + f.band / 2);
-  const y = $derived(value === undefined ? null : f.at(value));
+  const frame = $derived(plot.frame);
+  const x = $derived(
+    at === undefined ? null : frame.bandAt(at) + frame.band / 2,
+  );
+  const y = $derived(value === undefined ? null : frame.at(value));
 </script>
 
-{#if x !== null}<line class="guide" x1={x} x2={x} y1={0} y2={f.ih} />{/if}
-{#if y !== null}<line class="guide" x1={0} x2={f.iw} y1={y} y2={y} />{/if}
+{#if x !== null}<line class="guide" x1={x} x2={x} y1={0} y2={frame.ih} />{/if}
+{#if y !== null}<line class="guide" x1={0} x2={frame.iw} y1={y} y2={y} />{/if}
 
 <style>
   .guide {

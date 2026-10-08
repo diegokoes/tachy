@@ -1,7 +1,9 @@
+const MINUTE_MS = 60_000;
+
 /** How far off a firing is, in the shortest words that stay exact: "now", "12 min", "3 h 05", "2 d". */
 export function until(ms: number): string {
-  if (ms < 60_000) return "now";
-  const min = Math.round(ms / 60_000);
+  if (ms < MINUTE_MS) return "now";
+  const min = Math.round(ms / MINUTE_MS);
   if (min < 60) return `${min} min`;
   const h = Math.floor(min / 60);
   if (h < 24) return `${h} h ${String(min % 60).padStart(2, "0")}`;
@@ -15,8 +17,8 @@ export function nextIndex(at: string[], now: number): number {
 
 /** Within the hour: close enough to be worth a brighter tick. */
 export const isSoon = (iso: string, now: number, within = 3_600_000) => {
-  const d = Date.parse(iso) - now;
-  return d >= 0 && d <= within;
+  const delta = Date.parse(iso) - now;
+  return delta >= 0 && delta <= within;
 };
 
 /** "14:30" in the viewer's clock, which is what a schedule is read against. */
@@ -33,16 +35,17 @@ export const clock = (d: Date) =>
  * read against a time a person would say.
  */
 export function hourMarks(from: Date, hours: number, step = 6) {
-  const out: { at: number; label: string }[] = [];
-  const t = new Date(from);
-  t.setMinutes(0, 0, 0);
-  t.setHours(Math.ceil(from.getHours() / step) * step);
-  if (t.getTime() < from.getTime()) t.setHours(t.getHours() + step);
+  const marks: { at: number; label: string }[] = [];
+  const cursor = new Date(from);
+  cursor.setMinutes(0, 0, 0);
+  cursor.setHours(Math.ceil(from.getHours() / step) * step);
+  if (cursor.getTime() < from.getTime())
+    cursor.setHours(cursor.getHours() + step);
   const end = from.getTime() + hours * 3_600_000;
-  for (; t.getTime() < end; t.setHours(t.getHours() + step))
-    out.push({
-      at: ((t.getTime() - from.getTime()) / (end - from.getTime())) * 100,
-      label: clock(t),
+  for (; cursor.getTime() < end; cursor.setHours(cursor.getHours() + step))
+    marks.push({
+      at: ((cursor.getTime() - from.getTime()) / (end - from.getTime())) * 100,
+      label: clock(cursor),
     });
-  return out;
+  return marks;
 }

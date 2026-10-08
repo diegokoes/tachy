@@ -9,11 +9,10 @@ import yaml from "highlight.js/lib/languages/yaml";
 
 /**
  * Colour for fenced code, from the few grammars this product's articles are
- * written in. highlight.js' core alone, one language at a time: the full build
- * is nearly two hundred grammars, every one of them in the SPA's bundle.
- *
- * Nothing is auto-detected. A guess on a three-line block is wrong often
- * enough to be noise, and an unfenced language simply stays plain.
+ * written in. highlight.js' core alone, one language at a time, so the full
+ * build's grammars stay out of the SPA's bundle. Nothing is auto-detected: a
+ * guess on a three-line block is wrong often enough to be noise, and an
+ * unfenced block stays plain.
  */
 const LANGUAGES = { bash, java, json, sql, typescript, xml, yaml };
 for (const [name, def] of Object.entries(LANGUAGES))
@@ -48,8 +47,11 @@ export function highlight(
   if (!lang || !hljs.getLanguage(lang))
     return { html: esc(code), language: null };
   try {
-    const out = hljs.highlight(code, { language: lang, ignoreIllegals: true });
-    return { html: out.value, language: out.language ?? lang };
+    const highlighted = hljs.highlight(code, {
+      language: lang,
+      ignoreIllegals: true,
+    });
+    return { html: highlighted.value, language: highlighted.language ?? lang };
   } catch {
     return { html: esc(code), language: null };
   }

@@ -51,7 +51,7 @@
     clearable?: boolean;
     /** Where the list opens. Below the trigger unless told otherwise. */
     placement?: Placement;
-    onchange?: (v: Val) => void;
+    onchange?: (value: Val) => void;
     "aria-label"?: string;
   } = $props();
 
@@ -67,12 +67,9 @@
   let open = $state(false);
   let cursor = $state(0);
   let query = $state("");
-  /*
-   * When the list is short enough to skip the filter input, focus stays on the
-   * trigger - so the trigger is what has to name the option the arrow keys are
-   * on. That needs ids, and ids have to be unique per instance because this is
-   * every dropdown in the product.
-   */
+  // With a list short enough to skip the filter input, focus stays on the
+  // trigger, so the trigger names the option the arrow keys are on. That needs
+  // ids, unique per instance.
   const uid = $props.id();
   const listId = `asel-${uid}`;
   const optId = (i: number) => `${listId}-opt-${i}`;
@@ -85,10 +82,10 @@
 
   const filterable = $derived(searchable || opts.length > FILTERABLE);
   const shown = $derived.by(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return opts;
+    const needle = query.trim().toLowerCase();
+    if (!needle) return opts;
     return opts.filter((o) =>
-      `${o.label} ${o.hint ?? ""}`.toLowerCase().includes(q),
+      `${o.label} ${o.hint ?? ""}`.toLowerCase().includes(needle),
     );
   });
 
@@ -111,10 +108,11 @@
     open = false;
     query = "";
   }
-  function choose(i: number) {
-    const o = shown[i];
-    if (!o || o.disabled) return;
-    const next = keepOpen && canClear && o.value === value ? "" : o.value;
+  function choose(index: number) {
+    const option = shown[index];
+    if (!option || option.disabled) return;
+    const next =
+      keepOpen && canClear && option.value === value ? "" : option.value;
     value = next;
     onchange?.(next);
     if (!keepOpen) close();
@@ -159,7 +157,7 @@
         open ? choose(cursor) : openPanel();
         break;
       case " ":
-        /* Once a filter box has focus, space is a character. */
+        // Once a filter box has focus, space is a character.
         if (open && filterable) break;
         e.preventDefault();
         open ? choose(cursor) : openPanel();
@@ -182,8 +180,8 @@
     if (open && root && !root.contains(e.target as Node)) close();
   }
 
-  /* A filtered list is a different list: the cursor has to land back on
-     something that exists, or Enter commits whatever index it was left on. */
+  // A filtered list is a different list: the cursor has to land back on
+  // something that exists, or Enter commits whatever index it was left on.
   $effect(() => {
     query;
     if (cursor >= shown.length) cursor = Math.max(0, shown.length - 1);
@@ -248,16 +246,16 @@
             aria-label={ariaLabel}
             bind:this={scrollEl}
           >
-            {#each shown as o, i (o.value)}
+            {#each shown as option, i (option.value)}
               <div
                 class="opt"
                 id={optId(i)}
                 class:cursor={i === cursor}
-                class:selected={o.value === value}
-                class:disabled={o.disabled}
+                class:selected={option.value === value}
+                class:disabled={option.disabled}
                 role="option"
                 tabindex="-1"
-                aria-selected={o.value === value}
+                aria-selected={option.value === value}
                 onpointerenter={() => (cursor = i)}
                 onpointerdown={(e) => {
                   e.preventDefault();
@@ -265,10 +263,10 @@
                 }}
               >
                 <span class="mark" aria-hidden="true"
-                  >{o.value === value ? "›" : " "}</span
+                  >{option.value === value ? "›" : " "}</span
                 >
-                <span class="txt">{o.label}</span>
-                {#if o.hint}<span class="hint">{o.hint}</span>{/if}
+                <span class="txt">{option.label}</span>
+                {#if option.hint}<span class="hint">{option.hint}</span>{/if}
               </div>
             {/each}
             {#if !shown.length}
@@ -342,7 +340,7 @@
   }
 
   /* Placed by the float action, in viewport coordinates: as a child of the
-     trigger this list was cropped by whatever dialog body it opened inside. */
+     trigger this list is cropped by whatever dialog body it opens inside. */
   .panel {
     z-index: calc(var(--z-overlay) + 1);
     display: flex;

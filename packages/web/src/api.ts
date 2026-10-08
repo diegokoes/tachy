@@ -11,18 +11,22 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const response = await fetch(`/api${path}`, {
     ...init,
     headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
   });
-  if (res.status === 401) {
+  if (response.status === 401) {
     onUnauthorized();
     throw new ApiError(401, "unauthorized");
   }
-  const text = await res.text();
+  const text = await response.text();
   const body = text ? JSON.parse(text) : undefined;
-  if (!res.ok)
-    throw new ApiError(res.status, body?.error ?? res.statusText, body);
+  if (!response.ok)
+    throw new ApiError(
+      response.status,
+      body?.error ?? response.statusText,
+      body,
+    );
   return body as T;
 }
 

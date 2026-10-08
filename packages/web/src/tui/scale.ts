@@ -37,12 +37,11 @@ export function niceDomain(max: number, count = 4): [number, number] {
 }
 
 /**
- * The values to label, inclusive of both ends where they land round.
- *
- * Fractional ticks are dropped when the top of the axis is a whole number,
- * because almost everything plotted here is a count and "0.6 repos" is not a
- * reading anyone can use. A series that really is fractional (an average
- * duration, a p95) rounds to a fractional top and keeps its steps.
+ * The values to label, inclusive of both ends where they land round. Fractional
+ * ticks are dropped when the top of the axis is a whole number, because almost
+ * everything plotted here is a count and "0.6 repos" is not a reading anyone
+ * can use. A fractional series (an average duration, a p95) rounds to a
+ * fractional top and keeps its steps.
  */
 export function tickValues(lo: number, hi: number, count = 4): number[] {
   if (!(hi > lo)) return [lo];
@@ -96,14 +95,19 @@ export type Stacked = {
  */
 export function stackParts(parts: Part[] | undefined): Stacked[] {
   if (!parts?.length) return [];
-  const out: Stacked[] = [];
+  const stacked: Stacked[] = [];
   let at = 0;
-  for (const p of parts) {
-    if (!(p.value > 0)) continue;
-    out.push({ key: p.key, tone: p.tone, offset: at, size: p.value });
-    at += p.value;
+  for (const part of parts) {
+    if (!(part.value > 0)) continue;
+    stacked.push({
+      key: part.key,
+      tone: part.tone,
+      offset: at,
+      size: part.value,
+    });
+    at += part.value;
   }
-  return out;
+  return stacked;
 }
 
 /**

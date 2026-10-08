@@ -27,33 +27,33 @@
   } = $props();
 
   const plot = getPlot();
-  const f = $derived(plot.frame);
+  const frame = $derived(plot.frame);
   const group = getChartGroup();
 
   const keys = $derived([
     ...new Set(series.flatMap((s) => s.points.map((p) => p.key))),
   ]);
   const shown = $derived(visible(series, group.hidden));
-  const x = (key: string) => f.bandAt(key) + f.band / 2;
+  const x = (key: string) => frame.bandAt(key) + frame.band / 2;
   const here = $derived(group.pointer.key);
   const clip = $props.id();
-  const reach = $derived(here && keys.includes(here) ? x(here) : f.iw);
+  const reach = $derived(here && keys.includes(here) ? x(here) : frame.iw);
   const mine = $derived(group.pointer.source === source);
 </script>
 
 {#if sweep}
   <defs>
     <clipPath id={clip}
-      ><rect x={0} y={0} width={reach} height={f.ih} /></clipPath
+      ><rect x={0} y={0} width={reach} height={frame.ih} /></clipPath
     >
   </defs>
 {/if}
 
-{#each shown as s (s.key)}
-  {@const pts = seriesPoints(s, x, f.at)}
-  <g style="--tone-color: {toneVar(s.tone)}" class:swept={sweep}>
-    {#if area}<path class="area" d={areaPath(pts, f.ih)} />{/if}
-    {#each lineRuns(s.points, (q) => [x(q.key), f.at(q.value)]) as run, ri (ri)}
+{#each shown as line (line.key)}
+  {@const pts = seriesPoints(line, x, frame.at)}
+  <g style="--tone-color: {toneVar(line.tone)}" class:swept={sweep}>
+    {#if area}<path class="area" d={areaPath(pts, frame.ih)} />{/if}
+    {#each lineRuns( line.points, (q) => [x(q.key), frame.at(q.value)] ) as run, runIndex (runIndex)}
       <path
         class="line"
         class:dashed={run.dashed}
@@ -63,16 +63,16 @@
     {/each}
     {#if sweep}
       <g clip-path="url(#{clip})">
-        {#if area}<path class="area lit" d={areaPath(pts, f.ih)} />{/if}
+        {#if area}<path class="area lit" d={areaPath(pts, frame.ih)} />{/if}
         <path class="line lit" d={linePath(pts)} />
       </g>
     {/if}
     {#if mine && here}
-      {@const p = s.points.find((q) => q.key === here)}
-      {#if p}<circle
+      {@const point = line.points.find((q) => q.key === here)}
+      {#if point}<circle
           class="dot"
-          cx={x(p.key)}
-          cy={f.at(p.value)}
+          cx={x(point.key)}
+          cy={frame.at(point.value)}
           r="3.5"
         />{/if}
     {/if}
@@ -80,19 +80,19 @@
 {/each}
 
 {#if here && keys.includes(here)}
-  <line class="rule" x1={x(here)} x2={x(here)} y1={0} y2={f.ih} />
+  <line class="rule" x1={x(here)} x2={x(here)} y1={0} y2={frame.ih} />
 {/if}
 
-{#each keys as k (k)}
+{#each keys as key (key)}
   <rect
     class="hit"
-    x={f.bandAt(k) - (f.step - f.band) / 2}
+    x={frame.bandAt(key) - (frame.step - frame.band) / 2}
     y={0}
-    width={f.step}
-    height={f.ih}
+    width={frame.step}
+    height={frame.ih}
     role="presentation"
-    onpointerenter={() => group.point(source, k)}
-    onpointermove={() => group.point(source, k)}
+    onpointerenter={() => group.point(source, key)}
+    onpointermove={() => group.point(source, key)}
     onpointerleave={() => group.leave(source)}
   />
 {/each}
