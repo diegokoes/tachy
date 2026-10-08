@@ -1,4 +1,4 @@
-# Not started by `up` -- run ad hoc, the same way the `cli` service is:
+# Not started by `up`: run ad hoc, the same way the `cli` service is:
 #   npm run load -- /load/smoke.js
 services:
   k6:
