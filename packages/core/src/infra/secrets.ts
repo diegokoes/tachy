@@ -9,6 +9,7 @@ import { badInput } from "./errors";
 
 const ALGO: CipherGCMTypes = "aes-256-gcm";
 const NONCE_BYTES = 12;
+const KEY_BYTES = 32;
 
 export interface VaultKey {
   id: string;
@@ -19,9 +20,9 @@ let cachedKeys: VaultKey[] | undefined;
 
 const parseKey = (raw: string, name: string): VaultKey => {
   const bytes = Buffer.from(raw.trim(), "base64");
-  if (bytes.length !== 32)
+  if (bytes.length !== KEY_BYTES)
     throw badInput(
-      `${name} must be 32 bytes of base64 (openssl rand -base64 32)`,
+      `${name} must be ${KEY_BYTES} bytes of base64 (openssl rand -base64 ${KEY_BYTES})`,
     );
   return { id: keyId(bytes), bytes };
 };
@@ -73,28 +74,29 @@ export function encryptSecret(
   plaintext: string,
   aad?: string,
 ): EncryptedSecret {
-  const k = key();
-  if (!k) throw badInput("credential storage disabled: set TACHY_SECRET_KEY");
+  const writeKey = key();
+  if (!writeKey)
+    throw badInput("credential storage disabled: set TACHY_SECRET_KEY");
   const nonce = randomBytes(NONCE_BYTES);
-  const cipher = createCipheriv(ALGO, k, nonce);
+  const cipher = createCipheriv(ALGO, writeKey, nonce);
   if (aad) cipher.setAAD(Buffer.from(aad, "utf8"));
   const ciphertext = Buffer.concat([
     cipher.update(plaintext, "utf8"),
     cipher.final(),
     cipher.getAuthTag(),
   ]);
-  return { ciphertext, nonce, keyId: keyId(k) };
+  return { ciphertext, nonce, keyId: keyId(writeKey) };
 }
 
 function open(
-  k: Buffer,
+  keyBytes: Buffer,
   row: { value_ciphertext: Buffer | Uint8Array; nonce: Buffer | Uint8Array },
   aad?: string,
 ): string {
   const data = Buffer.from(row.value_ciphertext);
   const tag = data.subarray(data.length - 16);
   const body = data.subarray(0, data.length - 16);
-  const decipher = createDecipheriv(ALGO, k, Buffer.from(row.nonce));
+  const decipher = createDecipheriv(ALGO, keyBytes, Buffer.from(row.nonce));
   if (aad) decipher.setAAD(Buffer.from(aad, "utf8"));
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(body), decipher.final()]).toString(
@@ -104,9 +106,8 @@ function open(
 
 /**
  * Rows written before credentials were bound to their row carry no AAD, so a
- * failed open is retried without one. That fallback is transitional: it can go
- * once every stored credential has been saved again, and until then it only
- * ever accepts what the old code would have accepted anyway.
+ * failed open is retried without one. The fallback can go once every stored
+ * credential has been saved again.
  */
 export function decryptSecret(
   row: {
@@ -128,10 +129,10 @@ export function decryptSecret(
       `no key with id ${row.key_id} is configured; add it to TACHY_SECRET_KEY_PREVIOUS`,
     );
   let last: unknown;
-  for (const k of candidates) {
+  for (const candidate of candidates) {
     for (const withAad of aad ? [aad, undefined] : [undefined]) {
       try {
-        return open(k.bytes, row, withAad);
+        return open(candidate.bytes, row, withAad);
       } catch (err) {
         last = err;
       }

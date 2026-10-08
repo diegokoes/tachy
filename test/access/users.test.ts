@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { AppError } from "@tachy/core/infra";
 import { addTeam } from "@tachy/core/catalog";
 import {
-  countAdmins,
+  adminCount,
   createUser,
   getUserByEmail,
   listMemberships,
@@ -109,7 +109,7 @@ describe("the last admin cannot be locked out", () => {
       role: "admin",
     });
     await expect(setUserRole(admin.id, "member")).rejects.toThrow(/last admin/);
-    expect(await countAdmins()).toBe(1);
+    expect(await adminCount()).toBe(1);
   });
 
   it("refuses to disable the only admin", async () => {
@@ -124,7 +124,7 @@ describe("the last admin cannot be locked out", () => {
     const first = await createUser({ email: "a@example.com", role: "admin" });
     await createUser({ email: "b@example.com", role: "admin" });
     await setUserRole(first.id, "member");
-    expect(await countAdmins()).toBe(1);
+    expect(await adminCount()).toBe(1);
   });
 
   /** A disabled admin is not a reachable one, so it does not hold the door. */
@@ -132,14 +132,14 @@ describe("the last admin cannot be locked out", () => {
     const first = await createUser({ email: "a@example.com", role: "admin" });
     const second = await createUser({ email: "b@example.com", role: "admin" });
     await setUserDisabled(second.id, true);
-    expect(await countAdmins()).toBe(1);
+    expect(await adminCount()).toBe(1);
     await expect(setUserRole(first.id, "member")).rejects.toThrow(/last admin/);
   });
 
   it("promotes a member to admin without complaint", async () => {
     const user = await createUser({ email: "a@example.com" });
     await setUserRole(user.id, "admin");
-    expect(await countAdmins()).toBe(1);
+    expect(await adminCount()).toBe(1);
   });
 });
 

@@ -23,7 +23,7 @@ import {
   repoDir,
 } from "@tachy/core/code";
 import {
-  countTree,
+  treeCounts,
   indexableFiles,
 } from "../../packages/core/src/code/indexer";
 
@@ -361,7 +361,7 @@ describe("indexableFiles", () => {
   });
 });
 
-describe("countTree", () => {
+describe("treeCounts", () => {
   const tree = [
     "api/src/a.ts",
     "api/src/b.ts",
@@ -372,7 +372,7 @@ describe("countTree", () => {
   ].map((path) => ({ path, blobSha: "0".repeat(40) }));
 
   it("counts every directory at any depth against what the config admits", () => {
-    const counts = countTree(tree, { exclude: ["api/Pods"] });
+    const counts = treeCounts(tree, { exclude: ["api/Pods"] });
     expect(counts.files_admitted).toBe(2);
     expect(counts.dirs).toEqual([
       { path: "api", files: 4, admitted: 2, skipped: false },
@@ -386,7 +386,7 @@ describe("countTree", () => {
   });
 
   it("lists extensions by name alone, outside the always-skipped directories", () => {
-    const types = countTree(tree, {}).types;
+    const types = treeCounts(tree, {}).types;
     expect(types.map((t) => [t.ext, t.files, t.admitted, t.binary])).toEqual([
       ["ts", 2, 2, false],
       ["", 1, 0, true],

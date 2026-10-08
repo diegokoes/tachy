@@ -34,9 +34,9 @@ export const tableOutputSchema = z.object({
 });
 
 /**
- * The schemas above are only the parser; @tachy/contract owns the shape, so the
- * editor in the SPA and the renderer here cannot disagree about it. This stops
- * compiling if the two drift apart.
+ * The Zod schemas here are only the parser; @tachy/contract owns the shape, so
+ * the editor in the SPA and the renderer here cannot disagree about it. This
+ * stops compiling if the two drift apart.
  */
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 const _shapesMatch: [
@@ -59,6 +59,9 @@ export const MIME_BY_FORMAT: Record<TableFormat, string> = {
 
 type Converted = { value: CellValue } | { problem: string };
 
+const toDate = (raw: unknown) =>
+  new Date(typeof raw === "number" ? raw : String(raw));
+
 function convert(column: TableColumn, raw: unknown): Converted {
   if (raw === null || raw === undefined || raw === "")
     return column.required
@@ -76,25 +79,22 @@ function convert(column: TableColumn, raw: unknown): Converted {
     }
     case "boolean": {
       if (typeof raw === "boolean") return { value: raw };
-      const s = String(raw).trim().toLowerCase();
-      if (s === "true" || s === "yes" || s === "1") return { value: true };
-      if (s === "false" || s === "no" || s === "0") return { value: false };
+      const text = String(raw).trim().toLowerCase();
+      if (text === "true" || text === "yes" || text === "1")
+        return { value: true };
+      if (text === "false" || text === "no" || text === "0")
+        return { value: false };
       return {
         problem: `column "${column.key}" expects a boolean, got ${JSON.stringify(raw)}`,
       };
     }
     case "date": {
-      const d =
-        raw instanceof Date
-          ? raw
-          : typeof raw === "number"
-            ? new Date(raw)
-            : new Date(String(raw));
-      return Number.isNaN(d.getTime())
+      const date = raw instanceof Date ? raw : toDate(raw);
+      return Number.isNaN(date.getTime())
         ? {
             problem: `column "${column.key}" expects a date, got ${JSON.stringify(raw)}`,
           }
-        : { value: d };
+        : { value: date };
     }
     default:
       return {
@@ -119,15 +119,15 @@ export function validateRows(
   const known = new Set(columns.map((c) => c.key));
   const allowed = columns.map((c) => c.key).join(", ");
 
-  rows.slice(0, MAX_TABLE_ROWS).forEach((row, i) => {
+  rows.slice(0, MAX_TABLE_ROWS).forEach((row, index) => {
     for (const key of Object.keys(row))
       if (!known.has(key))
         problems.push(
-          `row ${i + 1}: unknown column "${key}" (allowed: ${allowed})`,
+          `row ${index + 1}: unknown column "${key}" (allowed: ${allowed})`,
         );
     for (const column of columns) {
       const got = convert(column, row[column.key]);
-      if ("problem" in got) problems.push(`row ${i + 1}: ${got.problem}`);
+      if ("problem" in got) problems.push(`row ${index + 1}: ${got.problem}`);
     }
   });
 
@@ -154,13 +154,10 @@ const CSV_BOM = "\uFEFF";
 
 /**
  * Cell text is composed by the model out of ticket content, so a cell can begin
- * with a character Excel and Sheets read as the start of a formula - a pasted
- * `=HYPERLINK("http://…"&A1)` becomes live in the download. A leading apostrophe
- * is the spreadsheet convention for "this is text": it is consumed on the way
- * in and does not show in the cell.
- *
- * The xlsx path needs none of this, because an inline string is already
- * unambiguously a string there.
+ * with a character Excel and Sheets read as the start of a formula: a pasted
+ * `=HYPERLINK("http://…"&A1)` becomes live in the download. A leading
+ * apostrophe is the spreadsheet convention for text, consumed on the way in.
+ * The xlsx path needs none of this: an inline string is a string there.
  */
 const FORMULA_LEAD = /^[=+\-@\t\r]/;
 
@@ -191,30 +188,33 @@ export interface RenderedTable {
   format: TableFormat;
 }
 
-export function renderTable(i: {
+export function renderTable(input: {
   format: TableFormat;
   sheet?: string;
   columns: TableColumn[];
   rows: TableRow[];
   dateFormat?: DateFormat;
 }): RenderedTable {
-  const problems = validateRows(i.columns, i.rows);
+  const problems = validateRows(input.columns, input.rows);
   if (problems.length) throw badInput(problems.join("\n"));
 
-  const cells = coerceRows(i.columns, i.rows);
+  const cells = coerceRows(input.columns, input.rows);
   const bytes =
-    i.format === "csv"
-      ? renderCsv(i.columns, cells)
-      : renderXlsx(i.sheet, i.columns, cells, i.dateFormat);
+    input.format === "csv"
+      ? renderCsv(input.columns, cells)
+      : renderXlsx(input.sheet, input.columns, cells, input.dateFormat);
 
   if (bytes.byteLength > MAX_OUTPUT_BYTES)
     throw badInput(
       `generated file is ${bytes.byteLength} bytes, over the ${MAX_OUTPUT_BYTES} limit; export fewer rows`,
     );
-  return { bytes, mime: MIME_BY_FORMAT[i.format], format: i.format };
+  return { bytes, mime: MIME_BY_FORMAT[input.format], format: input.format };
 }
 
-/** The column contract injected into a turn when the attached artifact declares one. */
+/**
+ * The column contract injected into a turn when the attached artifact declares
+ * one.
+ */
 export function renderColumnContract(
   slug: string,
   output: TableOutput,
