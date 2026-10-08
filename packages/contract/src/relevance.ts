@@ -11,5 +11,8 @@ export const STRONG = 0.7;
 
 export type Grade = "strong" | "good" | "weak";
 
-export const grade = (v: number): Grade =>
-  v >= STRONG ? "strong" : v >= GOOD ? "good" : "weak";
+export function grade(relevance: number): Grade {
+  if (relevance >= STRONG) return "strong";
+  if (relevance >= GOOD) return "good";
+  return "weak";
+}

@@ -56,8 +56,10 @@ export const agentPrefs = $state({
   loading: false,
 });
 
-/** Asked of the runtime, so slow next to a preference read: it lands on its
- *  own, once. */
+/**
+ * Asked of the runtime, so slow next to a preference read: it lands on its own,
+ * once.
+ */
 async function loadModels() {
   agentPrefs.modelsLoading = true;
   try {
@@ -74,12 +76,12 @@ export async function loadAgent() {
   agentPrefs.loading = true;
   agentPrefs.error = null;
   try {
-    const [p, c] = await Promise.all([
+    const [prefs, creds] = await Promise.all([
       api.get<Prefs>("/me/preferences"),
       api.get<MyCreds>("/me/credentials"),
     ]);
-    agentPrefs.prefs = p;
-    agentPrefs.creds = c;
+    agentPrefs.prefs = prefs;
+    agentPrefs.creds = creds;
     if (!agentPrefs.models) void loadModels();
   } catch (e) {
     agentPrefs.error = errText(e);
@@ -89,10 +91,10 @@ export async function loadAgent() {
 }
 
 /** Runs `fn`, then re-reads - every write here changes what is effective. */
-async function write(fn: () => Promise<unknown>) {
+async function write(change: () => Promise<unknown>) {
   agentPrefs.error = null;
   try {
-    await fn();
+    await change();
     await loadAgent();
   } catch (e) {
     agentPrefs.error = errText(e);
@@ -124,8 +126,8 @@ const INHERITED: Record<Exclude<PrefSource | KeyScope, "user">, string> = {
 };
 
 /**
- * Where a value comes from: an inherited value keeps following whoever set it
- * until you choose your own, and yours stays until you reset it.
+ * Where a value comes from: an inherited value follows whoever set it until the
+ * user chooses their own, which stays until reset.
  */
 export function origin(
   source: PrefSource | KeyScope | null,

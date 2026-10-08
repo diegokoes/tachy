@@ -25,12 +25,14 @@ const REPORT_COLS = sql`
   r.created_at, r.updated_at
 `;
 
-export async function createReport(i: CreateReportInput): Promise<ReportRow> {
+export async function createReport(
+  input: CreateReportInput,
+): Promise<ReportRow> {
   const [row] = await sql<ReportRow[]>`
     insert into reports (reporter_id, type, title, body_text, context, ai_review)
     values
-      (${i.reporterId ?? null}, ${i.type}, ${i.title ?? null}, ${i.body},
-       ${jsonb(i.context ?? {})}, ${i.aiReview ? jsonb(i.aiReview) : null})
+      (${input.reporterId ?? null}, ${input.type}, ${input.title ?? null}, ${input.body},
+       ${jsonb(input.context ?? {})}, ${input.aiReview ? jsonb(input.aiReview) : null})
     returning id, reporter_id, type, status, title, body_text, context,
               ai_review, created_at, updated_at
   `;
@@ -79,7 +81,7 @@ export async function getReport(id: string): Promise<ReportRow> {
   return { ...row, messages };
 }
 
-export async function addReportMessage(i: {
+export async function addReportMessage(input: {
   reportId: string;
   authorId?: string | null;
   direction: ReportDirection;
@@ -87,10 +89,10 @@ export async function addReportMessage(i: {
 }): Promise<ReportMessageRow> {
   const [row] = await sql<ReportMessageRow[]>`
     insert into report_messages (report_id, author_id, direction, body_text)
-    values (${i.reportId}, ${i.authorId ?? null}, ${i.direction}, ${i.body})
+    values (${input.reportId}, ${input.authorId ?? null}, ${input.direction}, ${input.body})
     returning id, report_id, author_id, direction, body_text, created_at
   `;
-  await sql`update reports set updated_at = now() where id = ${i.reportId}`;
+  await sql`update reports set updated_at = now() where id = ${input.reportId}`;
   return row;
 }
 

@@ -50,16 +50,16 @@ const dateSerial = (d: Date) => d.getTime() / MS_PER_DAY + EXCEL_EPOCH_OFFSET;
 function cell(ref: string, value: CellValue, style: number): string {
   if (value instanceof Date)
     return `<c r="${ref}" s="${STYLE_DATE}"><v>${dateSerial(value)}</v></c>`;
-  const s = style === STYLE_DEFAULT ? "" : ` s="${style}"`;
-  if (value === null) return `<c r="${ref}"${s}/>`;
+  const styleAttr = style === STYLE_DEFAULT ? "" : ` s="${style}"`;
+  if (value === null) return `<c r="${ref}"${styleAttr}/>`;
   if (typeof value === "number")
     return Number.isFinite(value)
-      ? `<c r="${ref}"${s}><v>${value}</v></c>`
-      : `<c r="${ref}"${s}/>`;
+      ? `<c r="${ref}"${styleAttr}><v>${value}</v></c>`
+      : `<c r="${ref}"${styleAttr}/>`;
   if (typeof value === "boolean")
-    return `<c r="${ref}"${s} t="b"><v>${value ? 1 : 0}</v></c>`;
+    return `<c r="${ref}"${styleAttr} t="b"><v>${value ? 1 : 0}</v></c>`;
   const preserve = value !== value.trim() ? ' xml:space="preserve"' : "";
-  return `<c r="${ref}"${s} t="inlineStr"><is><t${preserve}>${esc(value)}</t></is></c>`;
+  return `<c r="${ref}"${styleAttr} t="inlineStr"><is><t${preserve}>${esc(value)}</t></is></c>`;
 }
 
 function cellWidth(value: CellValue): number {
@@ -69,11 +69,11 @@ function cellWidth(value: CellValue): number {
 }
 
 function cols(columns: TableColumn[], rows: CellValue[][]): string {
-  const entries = columns.map((column, i) => {
+  const entries = columns.map((column, index) => {
     let max = columnHeading(column).length;
-    for (const row of rows) max = Math.max(max, cellWidth(row[i]));
+    for (const row of rows) max = Math.max(max, cellWidth(row[index]));
     const width = Math.min(60, Math.max(8, max + 2));
-    return `<col min="${i + 1}" max="${i + 1}" width="${width}" customWidth="1"/>`;
+    return `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`;
   });
   return `<cols>${entries.join("")}</cols>`;
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Component } from "svelte";
+  import { onDestroy, type Component } from "svelte";
   import { navigate, segment } from "../shell/router.svelte";
   import { keep, recall } from "../shell/kept";
   import { scrollport } from "../shell/scrollport.svelte";
@@ -41,6 +41,7 @@
   import SystemPanel from "../system/SystemPanel.svelte";
   import JobsPanel from "../jobs/JobsPanel.svelte";
   import RunsPanel from "../jobs/RunsPanel.svelte";
+  import QueuesPanel from "../jobs/QueuesPanel.svelte";
   import WorkersPanel from "../jobs/WorkersPanel.svelte";
   import JobFailuresPanel from "../jobs/JobFailuresPanel.svelte";
   import RuntimePanel from "../system/RuntimePanel.svelte";
@@ -51,6 +52,8 @@
   import SectionModal from "./SectionModal.svelte";
   import { issues, loadIssues } from "./issues.svelte";
   import { issueGroups } from "./issueMessages";
+  import { closeTile, expandedKey } from "./expand.svelte";
+  import { setPeriod } from "./period.svelte";
   import HostPanel from "../system/HostPanel.svelte";
   import ChecksPanel from "../diagnostics/ChecksPanel.svelte";
   import LoadsPanel from "../diagnostics/LoadsPanel.svelte";
@@ -79,7 +82,7 @@
     { key: "flows", label: "flows", icon: "flows" },
     ...(isGlobalAdmin()
       ? [
-          { key: "workers", label: "workers", icon: "workers" as const },
+          { key: "workers", label: "jobs", icon: "workers" as const },
           { key: "system", label: "system", icon: "system" as const },
         ]
       : []),
@@ -103,7 +106,6 @@
         view: SourcesPanel,
         n: "sources",
         show: admin,
-        present: "modal",
       },
       {
         key: "projects",
@@ -136,14 +138,12 @@
         label: t("teams"),
         view: TeamsPanel,
         n: "teams",
-        present: "modal",
       },
       {
         key: "products",
         label: t("products"),
         view: ProductsPanel,
         n: "products",
-        present: "modal",
       },
       {
         key: "components",
@@ -163,14 +163,12 @@
         label: "labels",
         view: LabelsPanel,
         n: "labels",
-        present: "modal",
       },
       {
         key: "patterns",
         label: "resolution patterns",
         view: PatternsPanel,
         n: "patterns",
-        present: "modal",
       },
       {
         key: "customers",
@@ -193,21 +191,33 @@
         label: t("teams"),
         view: TeamRosterPanel,
         n: "teams",
-        present: "modal",
       },
       {
         key: "admins",
         label: "app admins",
         view: AppAdminsPanel,
-        present: "modal",
       },
     ],
     workers: [
+      {
+        key: "jobs",
+        label: "schedule",
+        icon: "jobs",
+        view: JobsPanel,
+        show: admin,
+      },
       {
         key: "runs",
         label: "runs",
         icon: "runs",
         view: RunsPanel,
+        show: admin,
+      },
+      {
+        key: "queues",
+        label: "queues",
+        icon: "queues",
+        view: QueuesPanel,
         show: admin,
       },
       {
@@ -218,13 +228,6 @@
         show: admin,
       },
       {
-        key: "jobs",
-        label: "jobs",
-        icon: "jobs",
-        view: JobsPanel,
-        show: admin,
-      },
-      {
         key: "failures",
         label: "failed jobs",
         view: JobFailuresPanel,
@@ -232,8 +235,8 @@
         present: "modal",
       },
     ],
-    /* All dialogs: the overview carries the summary of each, which is the
-       page, and a counter or tile opens the full detail behind it. */
+    // All dialogs: the overview carries the summary of each, which is the page,
+    // and a counter or tile opens the full detail behind it.
     system: [
       {
         key: "reports",
@@ -289,7 +292,7 @@
     system: admin ? SystemOverview : undefined,
   });
 
-  /* `connect` was the integrations page's old name; old links still land. */
+  // Links to `connect`, the integrations page's former slug, still land.
   const page = $derived(
     segment(1) === "connect" ? "integrations" : (segment(1) ?? "integrations"),
   );
@@ -297,6 +300,12 @@
   const live = $derived(
     (SECTIONS[page] ?? SECTIONS.integrations).filter((s) => s.show !== false),
   );
+
+  /** Undefined for a section that counts nothing, null while the census loads. */
+  function countOf(key: string | undefined) {
+    if (!key) return undefined;
+    return census.loading ? null : (census.data.counts[key] ?? 0);
+  }
 
   /**
    * The one section open in the window, when the route names one that opens
@@ -313,16 +322,12 @@
           present: _present,
           fill: _fill,
           detail: _detail,
-          ...s
+          ...rest
         }): PageSection => ({
-          ...s,
-          count: n
-            ? census.loading
-              ? null
-              : (census.data.counts[n] ?? 0)
-            : undefined,
+          ...rest,
+          count: countOf(n),
           tone: n && census.data.warn[n] ? ("warn" as const) : undefined,
-          actions: sectionActions(s.key),
+          actions: sectionActions(rest.key),
         }),
       ),
   );
@@ -343,14 +348,13 @@
     live.find((s) => s.key === at && s.present === "modal"),
   );
 
-  /* Anything that is not a window section lands on the overview: nothing
-     named, /overview, a dialog section, or a key no section has. */
+  // Anything that is not a window section lands on the overview: nothing named,
+  // /overview, a dialog section, or a key no section has.
   const showing = $derived(Boolean(overview) && !sections.length);
 
-  /* Recount on landing on a page and every time its overview comes back into
-     view with nothing over it. Sections are where rows change, and they are
-     left by a button, a dialog's close or the browser's back alike, so the
-     recount hangs on the route rather than on any one of those. */
+  // Recount on landing on a page and whenever its overview comes back into view
+  // with nothing over it. Sections are left by a button, a dialog's close or
+  // the browser's back alike, so the recount hangs on the route.
   const resting = $derived(showing && !modal);
   let counted: string | undefined;
   $effect(() => {
@@ -370,17 +374,26 @@
     segment(3) ? live.find((s) => s.detail && s.key === at) : undefined,
   );
 
-  /* Settle the explicit form back on the short one. This cannot loop: after
-     the replace, segment(2) is undefined and the condition stops holding. */
+  // Settle the explicit form back on the short one. This cannot loop: after the
+  // replace, segment(2) is undefined and the condition stops holding.
   $effect(() => {
     if (segment(2) === "overview")
       navigate(`/admin/${page}`, { replace: true });
   });
 
+  const expanded = $derived(expandedKey());
+
+  // The window a detail view was set to belongs to that view: leaving it by any
+  // route, the back button or a tab, puts every overview on its default.
+  $effect(() => {
+    if (!expanded) setPeriod(undefined);
+  });
+  onDestroy(() => setPeriod(undefined));
+
   const backToOverview = () => navigate(`/admin/${page}`);
 
-  /* A page without an overview has nothing to show until a section is named,
-     so it opens on its first. */
+  // A page without an overview has nothing to show until a section is named, so
+  // it opens on its first.
   $effect(() => {
     if (!overview && !segment(2) && live[0])
       navigate(`/admin/${page}/${live[0].key}`, { replace: true });
@@ -391,13 +404,10 @@
   let showIssues = $state(recall("admin.issues", false));
   $effect(() => keep("admin.issues", showIssues));
   const groups = $derived(issueGroups(issues.data));
-  const issueTone = $derived(
-    groups.some((g) => g.tone === "danger")
-      ? ("danger" as const)
-      : groups.length
-        ? ("warn" as const)
-        : undefined,
-  );
+  const issueTone = $derived.by(() => {
+    if (groups.some((g) => g.tone === "danger")) return "danger" as const;
+    return groups.length ? ("warn" as const) : undefined;
+  });
 
   function pickSection(section: string) {
     showIssues = false;
@@ -412,7 +422,7 @@
 </script>
 
 {#snippet topActions()}
-  <!-- Only on the way back. Going in is the counter you clicked, and a modal
+  <!-- Only on the way back: going in is a click on a counter, and a modal
        section carries its own close. -->
   {#if detail}
     <Button
@@ -426,12 +436,19 @@
     <Button variant="ghost" size="sm" icon="back" onclick={backToOverview}
       >overview</Button
     >
+  {:else if overview && expanded}
+    <Button
+      variant="ghost"
+      size="sm"
+      icon="back"
+      onclick={() => closeTile(page)}>overview</Button
+    >
   {/if}
   {#if detail || filled}
     {@render pageActions()?.()}
   {/if}
   <!-- Issues belong to the page as a whole, so only its overview raises them. -->
-  {#if showing && groups.length}
+  {#if showing && !expanded && groups.length}
     <Button
       variant="ghost"
       size="sm"
@@ -488,8 +505,8 @@
 </div>
 
 <style>
-  /* While the overview shows, the page is exactly the window: the overview
-     shares out the height itself instead of growing past it. */
+  /* While the overview shows, the page is as tall as the window: the
+     overview shares out the height itself instead of growing past it. */
   .admin-root.fit {
     flex: 1 1 0;
     min-height: 0;
@@ -497,10 +514,9 @@
     flex-direction: column;
   }
 
-  /* Chrome for the panels still on hand-rolled tables: runtime, host and
-     settings. Keyed on a class rather than on .admin-root because those
-     panels open in dialogs, and a dialog is mounted on <body>, outside
-     .admin-root entirely. SectionModal wears the same class. */
+  /* Chrome for the panels on hand-rolled tables: runtime, host and settings.
+     Keyed on a class, not .admin-root, since those panels open in dialogs
+     mounted on <body>. SectionModal wears the class too. */
   :global(.admin-tables table) {
     width: 100%;
     border-collapse: collapse;

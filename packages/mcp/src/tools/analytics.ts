@@ -1,11 +1,10 @@
+/** What a run cost, reported by the agent that ran it. */
 import { z } from "zod";
 import { resolveCurrentUserId } from "@tachy/core/access";
 import { recordRun } from "@tachy/core/analytics";
 import { runModeSchema } from "@tachy/core/knowledge";
 import { tool } from "../server";
 import { out } from "../results";
-
-/** What a run cost, reported by the agent that ran it. */
 
 tool(
   "record_analysis_run",
@@ -32,15 +31,15 @@ tool(
         ),
     },
   },
-  async (a) => {
+  async (args) => {
     const row = await recordRun({
-      mode: a.mode,
-      workItemId: a.work_item_id,
+      mode: args.mode,
+      workItemId: args.work_item_id,
       userId: await resolveCurrentUserId(),
-      model: a.model,
-      inputTokens: a.input_tokens,
-      outputTokens: a.output_tokens,
-      meta: a.meta,
+      model: args.model,
+      inputTokens: args.input_tokens,
+      outputTokens: args.output_tokens,
+      meta: args.meta,
     });
     return out({ recorded: true, id: row.id });
   },

@@ -31,9 +31,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function toolResultsSoFar(messages = []) {
   let n = 0;
-  for (const m of messages)
-    if (Array.isArray(m.content))
-      for (const b of m.content) if (b.type === "tool_result") n++;
+  for (const message of messages)
+    if (Array.isArray(message.content))
+      for (const block of message.content)
+        if (block.type === "tool_result") n++;
   return n;
 }
 
@@ -65,94 +66,97 @@ function plan(body) {
 
 const usage = { input_tokens: 1200, output_tokens: 1 };
 
-function messageJson(body, p) {
+function messageJson(body, planned) {
   return {
     id: `msg_${randomUUID()}`,
     type: "message",
     role: "assistant",
     model: body.model ?? "mock",
-    content: [p.block],
-    stop_reason: p.kind === "tool_use" ? "tool_use" : "end_turn",
+    content: [planned.block],
+    stop_reason: planned.kind === "tool_use" ? "tool_use" : "end_turn",
     stop_sequence: null,
     usage: { input_tokens: 1200, output_tokens: 40 },
   };
 }
 
-function sse(res, event, data) {
-  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+function sse(response, event, data) {
+  response.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
-function stream(res, body, p) {
-  res.writeHead(200, {
+function stream(response, body, planned) {
+  response.writeHead(200, {
     "content-type": "text/event-stream",
     "cache-control": "no-cache",
     connection: "keep-alive",
   });
-  const msg = messageJson(body, p);
-  sse(res, "message_start", {
+  const message = messageJson(body, planned);
+  sse(response, "message_start", {
     type: "message_start",
-    message: { ...msg, content: [], stop_reason: null, usage },
+    message: { ...message, content: [], stop_reason: null, usage },
   });
-  if (p.kind === "tool_use") {
-    sse(res, "content_block_start", {
+  if (planned.kind === "tool_use") {
+    sse(response, "content_block_start", {
       type: "content_block_start",
       index: 0,
-      content_block: { ...p.block, input: {} },
+      content_block: { ...planned.block, input: {} },
     });
-    sse(res, "content_block_delta", {
+    sse(response, "content_block_delta", {
       type: "content_block_delta",
       index: 0,
       delta: {
         type: "input_json_delta",
-        partial_json: JSON.stringify(p.block.input),
+        partial_json: JSON.stringify(planned.block.input),
       },
     });
   } else {
-    sse(res, "content_block_start", {
+    sse(response, "content_block_start", {
       type: "content_block_start",
       index: 0,
       content_block: { type: "text", text: "" },
     });
-    sse(res, "content_block_delta", {
+    sse(response, "content_block_delta", {
       type: "content_block_delta",
       index: 0,
-      delta: { type: "text_delta", text: p.block.text },
+      delta: { type: "text_delta", text: planned.block.text },
     });
   }
-  sse(res, "content_block_stop", { type: "content_block_stop", index: 0 });
-  sse(res, "message_delta", {
+  sse(response, "content_block_stop", { type: "content_block_stop", index: 0 });
+  sse(response, "message_delta", {
     type: "message_delta",
-    delta: { stop_reason: msg.stop_reason, stop_sequence: null },
+    delta: { stop_reason: message.stop_reason, stop_sequence: null },
     usage: { output_tokens: 40 },
   });
-  sse(res, "message_stop", { type: "message_stop" });
-  res.end();
+  sse(response, "message_stop", { type: "message_stop" });
+  response.end();
 }
 
-const server = createServer(async (req, res) => {
-  const url = new URL(req.url ?? "/", "http://mock");
+const server = createServer(async (request, response) => {
+  const url = new URL(request.url ?? "/", "http://mock");
   let raw = "";
-  for await (const chunk of req) raw += chunk;
+  for await (const chunk of request) raw += chunk;
   const body = raw ? JSON.parse(raw) : {};
 
-  if (req.method === "POST" && url.pathname === "/v1/messages/count_tokens") {
-    res.writeHead(200, { "content-type": "application/json" });
-    return res.end(JSON.stringify({ input_tokens: 1200 }));
+  if (
+    request.method === "POST" &&
+    url.pathname === "/v1/messages/count_tokens"
+  ) {
+    response.writeHead(200, { "content-type": "application/json" });
+    return response.end(JSON.stringify({ input_tokens: 1200 }));
   }
-  if (req.method === "POST" && url.pathname === "/v1/messages") {
+  if (request.method === "POST" && url.pathname === "/v1/messages") {
     served++;
     await sleep(DELAY_MS);
-    const p = plan(body);
-    if (body.stream) return stream(res, body, p);
-    res.writeHead(200, { "content-type": "application/json" });
-    return res.end(JSON.stringify(messageJson(body, p)));
+    const planned = plan(body);
+    if (body.stream) return stream(response, body, planned);
+    response.writeHead(200, { "content-type": "application/json" });
+    return response.end(JSON.stringify(messageJson(body, planned)));
   }
-  if (req.method === "GET" && url.pathname === "/stats") {
-    res.writeHead(200, { "content-type": "application/json" });
-    return res.end(JSON.stringify({ served }));
+  if (request.method === "GET" && url.pathname === "/stats") {
+    response.writeHead(200, { "content-type": "application/json" });
+    return response.end(JSON.stringify({ served }));
   }
-  res.writeHead(404, { "content-type": "application/json" });
-  res.end(
+  response.writeHead(404, { "content-type": "application/json" });
+  response.end(
     JSON.stringify({
       type: "error",
       error: { type: "not_found_error", message: `mock: ${url.pathname}` },

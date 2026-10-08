@@ -25,23 +25,30 @@ export function estimateCostUsd(
   if (!model || (inputTokens == null && outputTokens == null)) return undefined;
   const tier = Object.keys(PRICING).find((k) => model.includes(k));
   if (!tier) return undefined;
-  const p = PRICING[tier];
-  return ((inputTokens ?? 0) * p.in + (outputTokens ?? 0) * p.out) / 1_000_000;
+  const price = PRICING[tier];
+  return (
+    ((inputTokens ?? 0) * price.in + (outputTokens ?? 0) * price.out) /
+    1_000_000
+  );
 }
 
 /** Record an analysis run for audit + token accounting. */
-export async function recordRun(i: RunInput) {
-  const cost = estimateCostUsd(i.model, i.inputTokens, i.outputTokens);
+export async function recordRun(input: RunInput) {
+  const cost = estimateCostUsd(
+    input.model,
+    input.inputTokens,
+    input.outputTokens,
+  );
   const meta =
     cost != null
-      ? { ...(i.meta ?? {}), estimated_cost_usd: cost }
-      : (i.meta ?? {});
+      ? { ...(input.meta ?? {}), estimated_cost_usd: cost }
+      : (input.meta ?? {});
   const [row] = await sql`
     insert into analysis_runs
       (work_item_id, user_id, mode, model, input_tokens, output_tokens, meta)
     values
-      (${i.workItemId ?? null}, ${i.userId ?? null}, ${i.mode}, ${i.model ?? null},
-       ${i.inputTokens ?? null}, ${i.outputTokens ?? null}, ${jsonb(meta)})
+      (${input.workItemId ?? null}, ${input.userId ?? null}, ${input.mode}, ${input.model ?? null},
+       ${input.inputTokens ?? null}, ${input.outputTokens ?? null}, ${jsonb(meta)})
     returning id, mode, created_at
   `;
   return row;

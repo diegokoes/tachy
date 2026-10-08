@@ -11,7 +11,6 @@
     setFontScale,
     setNavLabels,
     setNavHidden,
-    setSubnavHidden,
     NAV_LABELS,
     TEXT_SIZES,
   } from "../theme/theme.svelte";
@@ -38,14 +37,14 @@
   );
   let picking = $state(false);
 
-  function pickTheme(t: Theme) {
-    if (t === th.theme) return;
+  function pickTheme(theme: Theme) {
+    if (theme === th.theme) return;
     themeWipe(
       async () => {
-        setTheme(t);
+        setTheme(theme);
         await tick();
       },
-      t === "dark" ? "top" : "bottom",
+      theme === "dark" ? "top" : "bottom",
     );
   }
 
@@ -66,8 +65,8 @@
     <Choice label="mode" options={MODES} value={th.theme} onpick={pickTheme} />
   </Row>
 
-  <!-- Three steps, not a slider. Dragging one re-laid out the whole app on
-       every frame, which reads as the UI tearing rather than resizing. -->
+  <!-- Three steps, not a slider: dragging one re-lays out the whole app on
+       every frame, which reads as the UI tearing. -->
   <Row label="text size">
     <Choice
       label="text size"
@@ -86,17 +85,6 @@
     />
   </Row>
 
-  {#if th.navHidden}
-    <Row label="subnav">
-      <Choice
-        label="subnav"
-        options={SHOWN}
-        value={th.subnavHidden ? "hidden" : "shown"}
-        onpick={(v) => setSubnavHidden(v === "hidden")}
-      />
-    </Row>
-  {/if}
-
   <Row label="nav labels">
     <Choice
       label="nav labels"
@@ -108,16 +96,16 @@
 
   <Row label="accent">
     <div class="swatches" role="radiogroup" aria-label="accent">
-      {#each accents as c}
+      {#each accents as accent}
         <button
           class="sw"
-          class:on={!custom && current === c.hex}
+          class:on={!custom && current === accent.hex}
           role="radio"
-          aria-checked={!custom && current === c.hex}
-          style="background: {c.hex}"
-          use:tip={c.name}
-          aria-label={c.name}
-          onclick={() => selectAccent(c.hex)}
+          aria-checked={!custom && current === accent.hex}
+          style="background: {accent.hex}"
+          use:tip={accent.name}
+          aria-label={accent.name}
+          onclick={() => selectAccent(accent.hex)}
         ></button>
       {/each}
       <button

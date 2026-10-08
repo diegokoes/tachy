@@ -329,23 +329,23 @@ describe("azure-devops client", () => {
       "/_apis/wiki/wikis": { value: [] },
     });
 
-    const c = client();
-    await c.getConnectionData();
-    await c.listProjects();
-    await c.getWorkItem("42");
-    await c.getWorkItemsBatch([42], ["System.Title"]);
-    await c.getComments("ProjA", "42");
-    await c.queryWorkItemIds("ProjA", "2026-01-01T00:00:00Z", 50);
-    await c.getPullRequest("ProjA", "r1", "77");
-    await c.getCommit("ProjA", "r1", "abc");
-    await c.listWorkItemTypes("ProjA");
-    await c.getTypeFields("ProjA", "Bug");
-    await c.createWorkItem("ProjA", "Bug", []);
-    await c.listWikis("ProjA");
-    await c.listWikis();
-    await c.listWikiPages("ProjA", "w");
-    await c.getWikiPage("ProjA", "w", "/Home/Setup");
-    await c.listRepos("ProjA");
+    const ado = client();
+    await ado.getConnectionData();
+    await ado.listProjects();
+    await ado.getWorkItem("42");
+    await ado.getWorkItemsBatch([42], ["System.Title"]);
+    await ado.getComments("ProjA", "42");
+    await ado.queryWorkItemIds("ProjA", "2026-01-01T00:00:00Z", 50);
+    await ado.getPullRequest("ProjA", "r1", "77");
+    await ado.getCommit("ProjA", "r1", "abc");
+    await ado.listWorkItemTypes("ProjA");
+    await ado.getTypeFields("ProjA", "Bug");
+    await ado.createWorkItem("ProjA", "Bug", []);
+    await ado.listWikis("ProjA");
+    await ado.listWikis();
+    await ado.listWikiPages("ProjA", "w");
+    await ado.getWikiPage("ProjA", "w", "/Home/Setup");
+    await ado.listRepos("ProjA");
 
     expect(calls.length).toBe(16);
     for (const call of calls) {
@@ -353,11 +353,9 @@ describe("azure-devops client", () => {
         (m) => m[1],
       );
       expect(versions, call).toHaveLength(1);
-      const expected = call.includes("/comments")
-        ? "7.1-preview.4"
-        : call.includes("/connectionData")
-          ? "7.1-preview.1"
-          : "7.1";
+      let expected = "7.1";
+      if (call.includes("/comments")) expected = "7.1-preview.4";
+      else if (call.includes("/connectionData")) expected = "7.1-preview.1";
       expect(versions[0], call).toBe(expected);
     }
   });
@@ -409,6 +407,7 @@ describe("azure-devops client", () => {
     const err = await client()
       .getWorkItem("1")
       .catch((e: Error) => e);
+    if (!(err instanceof Error)) throw new Error("getWorkItem resolved");
     expect(err.message).toContain("404");
     expect(err.message).toContain("work item does not exist");
     expect(err.message).not.toContain("PAT");
@@ -511,12 +510,9 @@ describe("azure-devops sync project list", () => {
     `;
   });
 
-  /*
-   * resetData() deliberately keeps source_connections - the fixture rows every
-   * other file builds on live there - so this one has to take its own away.
-   * Test schemas are per worker slot, not per file, so a row left behind here
-   * turns up in whatever file the pool schedules on this slot next.
-   */
+  // `resetData()` keeps source_connections, which other files build on, so this
+  // one takes its own away. Test schemas are per worker slot, not per file: a
+  // row left here turns up in whatever file runs on this slot next.
   afterAll(async () => {
     await sql`delete from source_connections where slug = 'ado'`;
   });

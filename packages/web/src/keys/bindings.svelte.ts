@@ -1,6 +1,7 @@
 /**
- * User overrides for the two digit key sets, section and subnav. Everything else in the app keeps its fixed binding and is
- * listed read-only in Settings › keybinds.
+ * User overrides for the two digit key sets, section and subnav. Everything
+ * else in the app keeps its fixed binding and is listed read-only in Settings ›
+ * keybinds.
  *
  * Section keys are stored per nav item, not per slot: navItems() drops `admin`
  * for non-curators, so slot 3 is `admin` for one user and `settings` for the
@@ -49,12 +50,12 @@ export const ACTIONS = {
 
 export type Action = keyof typeof ACTIONS;
 
-export function navKey(item: string, i: number): string {
-  return keymap.nav[item] ?? defaultNavKey(i);
+export function navKey(item: string, index: number): string {
+  return keymap.nav[item] ?? defaultNavKey(index);
 }
 
-export function subnavKey(i: number): string {
-  return keymap.subnav[i] ?? defaultSubnavKey(i);
+export function subnavKey(slot: number): string {
+  return keymap.subnav[slot] ?? defaultSubnavKey(slot);
 }
 
 /** Stored in the `nav` bucket beside the tab keys, under the action's name. */
@@ -68,9 +69,9 @@ export function setNavKey(item: string, key: string | null) {
   persist();
 }
 
-export function setSubnavKey(i: number, key: string | null) {
-  if (key) keymap.subnav[i] = key;
-  else delete keymap.subnav[i];
+export function setSubnavKey(slot: number, key: string | null) {
+  if (key) keymap.subnav[slot] = key;
+  else delete keymap.subnav[slot];
   persist();
 }
 
@@ -80,9 +81,9 @@ export function resetKeys() {
   persist();
 }
 
-/* The glyphs normalize() bakes into a stored chord, spelled out. They are the
-   right thing on a key cap and the wrong thing in a settings list: "^," is only
-   readable to someone who already knows what it says. */
+// The glyphs normalize() bakes into a stored chord, spelled out. They are the
+// right thing on a key cap and the wrong thing in a settings list: "^," is only
+// readable to someone who already knows what it says.
 const WORDS: Record<string, string> = {
   "⏎": "ENTER",
   "↑": "UP ARROW",
@@ -95,18 +96,18 @@ const WORDS: Record<string, string> = {
 const MODS = /^(shift|ctrl|alt|meta)\+/;
 
 /**
- * A stored chord as the caps a reader presses: "ctrl+," is [[CTRL, ,]] and
- * "g g" is [[G], [G]], one inner list per press. Display only - `normalize()`
- * in keys.svelte.ts still owns what a binding *is*, and every saved keymap is
- * in that spelling.
+ * A stored chord as the caps a reader presses: "ctrl+," is [[CTRL, ,]] and "g
+ * g" is [[G], [G]], one inner list per press. Display only: `normalize()` in
+ * keys.svelte.ts owns what a binding is, and every saved keymap is in that
+ * spelling.
  */
 export function keyCaps(chord: string): string[][] {
   return chord.split(" ").map((part) => {
     const mods: string[] = [];
     let rest = part;
-    for (let m = MODS.exec(rest); m; m = MODS.exec(rest)) {
-      mods.push(m[1].toUpperCase());
-      rest = rest.slice(m[0].length);
+    for (let match = MODS.exec(rest); match; match = MODS.exec(rest)) {
+      mods.push(match[1].toUpperCase());
+      rest = rest.slice(match[0].length);
     }
     return [...mods, WORDS[rest] ?? rest.toUpperCase()];
   });
@@ -121,8 +122,8 @@ export function keyLabel(chord: string): string {
 
 /**
  * Fixed bindings a rebind would shadow. The scope stack resolves innermost
- * first, so a collision does not error - it silently steals the key from
- * whichever view owns it, which is worth warning about before it happens.
+ * first, so a collision does not error: it takes the key from whichever view
+ * owns it, and the settings page warns first.
  */
 export const RESERVED: Record<string, string> = {
   "ctrl+k": "focus search / composer",
@@ -154,9 +155,9 @@ export function conflicts(
     if (skip?.kind === "subnav" && skip.slot === i) continue;
     if (subnavKey(i) === key) hits.push(`sub tab ${i + 1}`);
   }
-  for (const a of Object.keys(ACTIONS) as Action[]) {
-    if (skip?.kind === "action" && skip.item === a) continue;
-    if (actionKey(a) === key) hits.push(ACTIONS[a].label);
+  for (const action of Object.keys(ACTIONS) as Action[]) {
+    if (skip?.kind === "action" && skip.item === action) continue;
+    if (actionKey(action) === key) hits.push(ACTIONS[action].label);
   }
   return hits;
 }

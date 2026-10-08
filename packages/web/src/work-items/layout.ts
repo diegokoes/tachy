@@ -85,7 +85,7 @@ export function layoutFields(fields: readonly FieldSpec[]): FieldLayout {
   const required = usable.filter(
     (f) => f.required && !placed.has(f.reference_name),
   );
-  for (const f of required) placed.add(f.reference_name);
+  for (const field of required) placed.add(field.reference_name);
   return {
     body,
     core,
@@ -107,17 +107,17 @@ export function missingRequired(
   title: string,
   values: Record<string, unknown>,
 ): string[] {
-  const out = title.trim() ? [] : [TITLE];
-  for (const f of fields)
+  const missing = title.trim() ? [] : [TITLE];
+  for (const field of fields)
     if (
-      f.required &&
-      editable(f) &&
-      f.reference_name !== TITLE &&
-      isEmpty(values[f.reference_name]) &&
-      f.default_value == null
+      field.required &&
+      editable(field) &&
+      field.reference_name !== TITLE &&
+      isEmpty(values[field.reference_name]) &&
+      field.default_value == null
     )
-      out.push(f.reference_name);
-  return out;
+      missing.push(field.reference_name);
+  return missing;
 }
 
 /** ADO's error names a field by display or reference name; find which. */
@@ -145,20 +145,22 @@ export interface Arranged {
 /** The source's own arrangement: its layout when it has one, else a guess. */
 function sourceArrangement(form: ComposerForm): Arranged {
   if (!form.layout) {
-    const l = layoutFields(form.fields);
+    const laid = layoutFields(form.fields);
     return {
-      body: l.body,
+      body: laid.body,
       groups: [
-        { label: null, fields: l.core },
-        { label: "required", fields: l.required },
+        { label: null, fields: laid.core },
+        { label: "required", fields: laid.required },
       ].filter((g) => g.fields.length),
-      hidden: l.more,
+      hidden: laid.more,
     };
   }
   const specs = new Map(form.fields.map((f) => [f.reference_name, f]));
   const usable = (ref: string) => {
-    const f = specs.get(ref);
-    return f && f.reference_name !== TITLE && editable(f) ? [f] : [];
+    const spec = specs.get(ref);
+    return spec && spec.reference_name !== TITLE && editable(spec)
+      ? [spec]
+      : [];
   };
   const body = form.layout.body.flatMap(usable);
   const groups = form.layout.groups
@@ -197,9 +199,9 @@ export function arrange(form: ComposerForm): Arranged {
   const show = form.display?.show ?? {};
   const specs = new Map(form.fields.map((f) => [f.reference_name, f]));
   const moved = new Set(
-    Object.keys(show).filter((r) => {
-      const f = specs.get(r);
-      return f && r !== TITLE && editable(f);
+    Object.keys(show).filter((ref) => {
+      const spec = specs.get(ref);
+      return spec && ref !== TITLE && editable(spec);
     }),
   );
   const keep = (f: FieldSpec) => !moved.has(f.reference_name);
@@ -213,17 +215,17 @@ export function arrange(form: ComposerForm): Arranged {
   const added: FieldSpec[] = [];
   const excluded: FieldSpec[] = [];
   for (const ref of moved) {
-    const f = specs.get(ref)!;
-    if (show[ref] === "hidden") excluded.push(f);
-    else if (show[ref] === "fold") folded.push(f);
-    else if (isBody(f)) body.push(f);
-    else added.push(f);
+    const spec = specs.get(ref)!;
+    if (show[ref] === "hidden") excluded.push(spec);
+    else if (show[ref] === "fold") folded.push(spec);
+    else if (isBody(spec)) body.push(spec);
+    else added.push(spec);
   }
   if (added.length) groups.push({ label: "more", fields: added });
 
   const sort = byOrder(form.display?.order ?? []);
   body.sort(sort);
-  for (const g of groups) g.fields.sort(sort);
+  for (const group of groups) group.fields.sort(sort);
 
   const rest = [...folded, ...base.hidden.filter(keep)];
   const unfilled = [...rest, ...excluded].filter(

@@ -64,11 +64,12 @@ jobs:
           exit-code: "1"
 
       - name: Start the stack
+        id: stack
         run: scripts/container-smoke.sh up
 
       - name: Seed and smoke
         run: scripts/container-smoke.sh smoke
 
       - name: Logs
-        if: failure()
+        if: failure() && steps.stack.outcome != 'skipped'
         run: docker compose logs --tail 200

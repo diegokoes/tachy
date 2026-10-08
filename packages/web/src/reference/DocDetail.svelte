@@ -42,26 +42,25 @@
     `${l.doc_version ? `v${l.doc_version}` : fmtDate(l.created_at) || l.id.slice(0, 8)} · ${l.status}`;
 
   /** A doc with no recorded lineage is still one version - its own. */
-  const versions = $derived<ReferenceLineageRow[]>(
-    lineage.length
-      ? lineage
-      : doc
-        ? [
-            {
-              id: doc.id,
-              title: doc.title,
-              doc_version: doc.doc_version,
-              status: doc.status,
-              created_at: doc.created_at,
-            },
-          ]
-        : [],
+  const ownVersion = $derived<ReferenceLineageRow[]>(
+    doc
+      ? [
+          {
+            id: doc.id,
+            title: doc.title,
+            doc_version: doc.doc_version,
+            status: doc.status,
+            created_at: doc.created_at,
+          },
+        ]
+      : [],
   );
+  const versions = $derived(lineage.length ? lineage : ownVersion);
 
   /** The doc lifecycle, as the left rail draws it. See EntryDetail. */
-  function actionsFor(d: ReferenceRow): StatusAction[] {
+  function actionsFor(doc: ReferenceRow): StatusAction[] {
     const acts: StatusAction[] = [];
-    if (d.status !== "draft")
+    if (doc.status !== "draft")
       acts.push({
         icon: "draft",
         label: "draft",
@@ -70,7 +69,7 @@
         disabled: mutating,
         onclick: () => patch({ status: "draft" }),
       });
-    if (d.status !== "approved")
+    if (doc.status !== "approved")
       acts.push({
         icon: "approve",
         label: "approve",
@@ -78,14 +77,14 @@
         disabled: mutating,
         onclick: () => patch({ status: "approved" }),
       });
-    if (d.status !== "archived")
+    if (doc.status !== "archived")
       acts.push({
         icon: "archive",
         label: "archive",
         disabled: mutating,
         onclick: () => patch({ status: "archived" }),
       });
-    if (d.status === "approved")
+    if (doc.status === "approved")
       acts.push({
         icon: "newVersion",
         label: "new version",
@@ -154,16 +153,16 @@
     mutating = true;
     mutateError = null;
     conflict = false;
-    const res = await patchLibraryItem(
+    const patched = await patchLibraryItem(
       `/reference/${doc.id}`,
       body,
       doc.version,
       "doc",
     );
-    if (res.ok) await load(doc.id);
+    if (patched.ok) await load(doc.id);
     else {
-      conflict = res.conflict;
-      mutateError = res.message;
+      conflict = patched.conflict;
+      mutateError = patched.message;
     }
     mutating = false;
   }
@@ -185,8 +184,8 @@
     load(id);
   });
 
-  /** Same as the entry view: backspace or esc goes back while reading, not editing.
-      Hidden, because back is a button in the carved row. */
+  // Same as the entry view: backspace or esc goes back while reading, not
+  // editing. Hidden, because back is a button in the carved row.
   $effect(() => {
     if (editing || newVersion || !doc) return;
     return pushScope([
@@ -195,7 +194,7 @@
     ]);
   });
 
-  /* The carved row, while reading. The form claims it while editing. */
+  // The carved row, while reading. The form claims it while editing.
   $effect(() => {
     if (editing || newVersion || !doc) return;
     return setTopActions(readActions);

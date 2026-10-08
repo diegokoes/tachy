@@ -10,7 +10,7 @@
     /** Comma-joined, so it stores and travels as one query param. */
     value: string;
     options: FacetCount[];
-    onchange: (v: string) => void;
+    onchange: (value: string) => void;
   } = $props();
 
   const picked = $derived(value ? value.split(",").filter(Boolean) : []);
@@ -76,11 +76,11 @@
 
   {#if open}
     <ul class="suggest">
-      {#each matches as m (m.value)}
+      {#each matches as match (match.value)}
         <li>
-          <button type="button" onclick={() => add(m.value)}>
-            <span class="t">{m.value}</span>
-            <span class="n">{m.count}</span>
+          <button type="button" onclick={() => add(match.value)}>
+            <span class="t">{match.value}</span>
+            <span class="n">{match.count}</span>
           </button>
         </li>
       {:else}

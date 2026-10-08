@@ -30,9 +30,12 @@ const logBody = z.object({
 });
 
 const sameSecret = (given: string, want: string) => {
-  const a = Buffer.from(given);
-  const b = Buffer.from(want);
-  return a.length === b.length && timingSafeEqual(a, b);
+  const givenBytes = Buffer.from(given);
+  const wantBytes = Buffer.from(want);
+  return (
+    givenBytes.length === wantBytes.length &&
+    timingSafeEqual(givenBytes, wantBytes)
+  );
 };
 
 /**

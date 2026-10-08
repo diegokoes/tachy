@@ -71,7 +71,7 @@ export const flows = new Hono()
     return c.json(flowActionCatalog());
   })
 
-  /** Query params are the sibling values the list depends on. */
+  // Query params are the sibling values the list depends on.
   .get("/options/:key", async (c) => {
     await assertAnyTeamAdminApi(c);
     return c.json(
@@ -119,21 +119,24 @@ export const flows = new Hono()
     return c.json(await listFlowRuns(id));
   })
 
-  /** Dry by default: trying a flow on a ticket should not post on it. */
+  // Dry by default: trying a flow on a ticket should not post on it.
   .post("/:id/run", zValidator("json", runSchema), async (c) => {
     const id = c.req.param("id");
     await assertScopeEditor(c, await flowScope(id));
-    const p = c.req.valid("json");
+    const body = c.req.valid("json");
     const flow = await getFlow(id);
-    if (p.trigger_id && !flow.graph.triggers.some((t) => t.id === p.trigger_id))
-      throw badInput(`the flow has no trigger '${p.trigger_id}'`);
+    if (
+      body.trigger_id &&
+      !flow.graph.triggers.some((t) => t.id === body.trigger_id)
+    )
+      throw badInput(`the flow has no trigger '${body.trigger_id}'`);
     const runId = await enqueueRun({
       kind: "flow.run",
       params: {
         flow_id: id,
-        trigger_id: p.trigger_id,
-        work_item_id: p.work_item_id,
-        dry_run: p.dry_run,
+        trigger_id: body.trigger_id,
+        work_item_id: body.work_item_id,
+        dry_run: body.dry_run,
       },
       trigger: "manual",
       requestedBy: await callerUserId(c),

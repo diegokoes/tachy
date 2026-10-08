@@ -16,6 +16,7 @@ import {
   ArrowRightToLine,
   ArrowUpFromLine,
   Asterisk,
+  Ban,
   BookDashed,
   BookOpen,
   BookOpenText,
@@ -25,6 +26,7 @@ import {
   Bug,
   CalendarClock,
   CalendarCog,
+  CalendarSync,
   Car,
   ChartNoAxesGantt,
   Check,
@@ -34,6 +36,7 @@ import {
   CircleCheckBig,
   CircleDashedCheck,
   CircleOff,
+  CircleX,
   CircleQuestionMark,
   CircleSmall,
   ClipboardList,
@@ -69,6 +72,7 @@ import {
   Globe,
   GraduationCap,
   Hand,
+  Hourglass,
   Headphones,
   ImageIcon,
   Info,
@@ -77,6 +81,8 @@ import {
   KeyRound,
   Landmark,
   Layers,
+  ListOrdered,
+  LoaderCircle,
   Lightbulb,
   ListStart,
   ListTodo,
@@ -128,6 +134,7 @@ import {
   Tally1,
   Terminal,
   TrafficCone,
+  TimerOff,
   Trash,
   TriangleAlert,
   Trophy,
@@ -161,10 +168,10 @@ const MarkdownMark: LucideIconData = {
 };
 
 export const ICONS = {
-  /* ── Leaving: grey, nothing is lost ───────────────────────────────────── */
+  // Leaving: grey, nothing is lost
   close: X,
 
-  /* ── Changing records ─────────────────────────────────────────────────── */
+  // Changing records
   /** Remove or delete. Arms into `confirm` where the loss is real. */
   delete: Trash,
   /** The armed second click of a destructive action. */
@@ -180,7 +187,7 @@ export const ICONS = {
   /** Put a value on the clipboard. */
   copy: Copy,
 
-  /* ── Lifecycle ────────────────────────────────────────────────────────── */
+  // Lifecycle
   approve: CircleDashedCheck,
   /** Reject an entry, deny a tool call, and the "no" of a yes/no column. */
   reject: CircleOff,
@@ -192,7 +199,7 @@ export const ICONS = {
   /** The affected → fixed version arrow. */
   versionArrow: ArrowRightToLine,
 
-  /* ── Navigation ───────────────────────────────────────────────────────── */
+  // Navigation
   back: ArrowLeft,
   next: ArrowRight,
   /** A chart taken out of its tile to the whole window. */
@@ -206,7 +213,7 @@ export const ICONS = {
   selected: CircleSmall,
   download: Download,
 
-  /* ── Running things ───────────────────────────────────────────────────── */
+  // Running things
   run: Play,
   pause: Pause,
   /** A flow that is switched on; its off state is `pause`. */
@@ -214,8 +221,8 @@ export const ICONS = {
   stop: Square,
   test: FlaskConical,
 
-  /* ── Finding things ───────────────────────────────────────────────────── */
-  /** Searching what we already hold. */
+  // Finding things
+  /** Searching what is already held. */
   search: Search,
   /** The text caret, where the app draws its own. */
   caret: Tally1,
@@ -244,14 +251,14 @@ export const ICONS = {
   /** Anything that hands work to the model. */
   ai: Bot,
 
-  /* ── Chat ─────────────────────────────────────────────────────────────── */
+  // Chat
   send: SendHorizontal,
   attach: FileUp,
   image: ImageIcon,
   file: FileText,
   tool: Wrench,
 
-  /* ── Sections: the nav and subnav tabs ────────────────────────────────── */
+  // Sections: the nav and subnav tabs
   chat: Bot,
   library: BookOpen,
   wiki: Globe,
@@ -272,6 +279,20 @@ export const ICONS = {
   workerPool: Pickaxe,
   /** What runs and when: a job's kind, schedule and settings. */
   jobs: CalendarCog,
+  /** The waiting lines runs join, one per sort of work. */
+  queues: ListOrdered,
+  /** A job that is switched on; its off state is `pause`. */
+  active: Check,
+  /** How a run was started: by a schedule, by a person, by something else. */
+  startedBySchedule: CalendarSync,
+  startedByPerson: UserRound,
+  startedByEvent: Zap,
+  /** A run's status, where it is not the shared success or error mark. */
+  runQueued: Hourglass,
+  runRunning: LoaderCircle,
+  runFailed: CircleX,
+  runCancelled: Ban,
+  runTimedOut: TimerOff,
   knowledge: GraduationCap,
   refDoc: ScrollText,
   overview: Pyramid,
@@ -279,13 +300,14 @@ export const ICONS = {
   theme: Wallpaper,
   keybinds: Keyboard,
   agent: KeyRound,
+  token: KeyRound,
 
-  /* ── Reach ────────────────────────────────────────────────────────────── */
+  // Reach
   user: UserRound,
   team: UserRoundGroup,
   global: Globe,
 
-  /* ── Marks ────────────────────────────────────────────────────────────── */
+  // Marks
   alert: TriangleAlert,
   error: OctagonAlert,
   info: Info,
@@ -300,13 +322,13 @@ export const ICONS = {
   lockOn: LockKeyhole,
   lockOff: LockKeyholeOpen,
 
-  /* ── Feedback ─────────────────────────────────────────────────────────── */
+  // Feedback
   flag: Flag,
   bug: Bug,
   /** The idea side of the report toggle, and the tip callout. */
   lightbulb: Lightbulb,
 
-  /* ── Work items ───────────────────────────────────────────────────────── */
+  // Work items
   /** Ask tachy to review a draft someone wrote. */
   review: PencilSparkles,
   /** A field written as markdown; morphs into `eye` for its preview. */
@@ -345,7 +367,7 @@ export const ICONS = {
   placeFolded: FoldVertical,
   placeOmitted: EyeClosed,
 
-  /* ── Flows ────────────────────────────────────────────────────────────── */
+  // Flows
   /** A synced item starting a flow. */
   triggerSynced: Zap,
   triggerManual: Hand,
@@ -406,17 +428,17 @@ const LEADING_MOVE = new RegExp(
  * which are relative line-tos, get their `l` said out loud.
  */
 const absolute = (d: string) => {
-  const m = LEADING_MOVE.exec(d);
-  if (!m) return d;
-  const rest = d.slice(m[0].length);
-  return `M${m[1]} ${m[2]}${rest && !/^[a-zA-Z]/.test(rest) ? "l" : ""}${rest}`;
+  const match = LEADING_MOVE.exec(d);
+  if (!match) return d;
+  const rest = d.slice(match[0].length);
+  return `M${match[1]} ${match[2]}${rest && !/^[a-zA-Z]/.test(rest) ? "l" : ""}${rest}`;
 };
 
-const shapeD = ([tag, a]: LucideIconNode): string => {
-  const n = (attr: string) => Number(a[attr] ?? 0);
+const shapeD = ([tag, attrs]: LucideIconNode): string => {
+  const n = (attr: string) => Number(attrs[attr] ?? 0);
   switch (tag) {
     case "path":
-      return absolute(String(a.d ?? ""));
+      return absolute(String(attrs.d ?? ""));
     case "circle":
       return ellipseD(n("cx"), n("cy"), n("r"), n("r"));
     case "ellipse":
@@ -427,7 +449,7 @@ const shapeD = ([tag, a]: LucideIconNode): string => {
       return `M${n("x1")} ${n("y1")}L${n("x2")} ${n("y2")}`;
     case "polyline":
     case "polygon":
-      return pointsD(String(a.points ?? ""), tag === "polygon");
+      return pointsD(String(attrs.points ?? ""), tag === "polygon");
     default:
       return "";
   }

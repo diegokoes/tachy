@@ -10,6 +10,7 @@ import {
   age,
   bytes,
   duration,
+  groupCounts,
   grade,
   load,
   pct,
@@ -72,17 +73,17 @@ describe("issue groups", () => {
       ),
     );
     expect(groups.map((g) => g.key).sort()).toEqual([...ISSUE_KEYS].sort());
-    for (const g of groups) {
-      expect(g.head).not.toMatch(/undefined|NaN/);
-      for (const it of g.items) expect(it.text).toContain("alpha");
+    for (const group of groups) {
+      expect(group.head).not.toMatch(/undefined|NaN/);
+      for (const item of group.items) expect(item.text).toContain("alpha");
     }
   });
 
   it("prints a condition with no names as one line", () => {
-    const [g] = issueGroups({ "users.no_app_admin": { n: 1, items: [] } });
-    expect(g.items).toEqual([]);
-    expect(g.more).toBe(0);
-    expect(g.head).toMatch(/nobody is an app admin/);
+    const [group] = issueGroups({ "users.no_app_admin": { n: 1, items: [] } });
+    expect(group.items).toEqual([]);
+    expect(group.more).toBe(0);
+    expect(group.head).toMatch(/nobody is an app admin/);
   });
 });
 
@@ -129,8 +130,8 @@ describe("overview figures", () => {
     let observed: (() => void) | undefined;
     let disconnected = false;
     globalThis.ResizeObserver = class {
-      constructor(cb: () => void) {
-        observed = cb;
+      constructor(callback: () => void) {
+        observed = callback;
       }
       observe() {}
       disconnect() {
@@ -161,8 +162,8 @@ describe("overview figures", () => {
     let observed: (() => void) | undefined;
     let disconnected = false;
     globalThis.ResizeObserver = class {
-      constructor(cb: () => void) {
-        observed = cb;
+      constructor(callback: () => void) {
+        observed = callback;
       }
       observe() {}
       disconnect() {
@@ -175,8 +176,8 @@ describe("overview figures", () => {
     Object.defineProperty(node, "clientHeight", { get: () => box.h });
     const seen: string[] = [];
     const action = measureBox(node, (w, h) => seen.push(`${w}x${h}`));
-    /* Synchronously, before any frame: a plot in a tab nobody is looking at
-       still has to know how wide it is. */
+    // Synchronously, before any frame: a plot in a tab nobody is looking at
+    // still has to know how wide it is.
     expect(seen).toEqual(["300x150"]);
     observed?.();
     expect(seen).toEqual(["300x150"]);
@@ -191,8 +192,8 @@ describe("overview figures", () => {
     expect(disconnected).toBe(true);
   });
 
-  /* A dialog has to escape the app's stacking context, or the top nav paints
-     over any dialog tall enough to reach it. */
+  // A dialog has to escape the app's stacking context, or the top nav paints
+  // over any dialog tall enough to reach it.
   it("lifts a node out to the body and takes it away again", () => {
     const host = document.createElement("div");
     const node = document.createElement("div");
@@ -230,12 +231,12 @@ describe("load runs", () => {
   });
 
   it("reads the overall and per-endpoint p95 from k6's summary", () => {
-    const r = run({
+    const testRun = run({
       http_req_duration: { "p(95)": 212.4 },
       "http_req_duration{endpoint:search}": { "p(95)": 98.6 },
     });
-    expect(runP95(r)).toBe(212);
-    expect(endpointP95(r)).toEqual([{ endpoint: "search", ms: 99 }]);
+    expect(runP95(testRun)).toBe(212);
+    expect(endpointP95(testRun)).toEqual([{ endpoint: "search", ms: 99 }]);
     expect(runP95(run({}))).toBeNull();
   });
 
@@ -251,15 +252,15 @@ describe("load runs", () => {
   });
 
   it("rates only the runs that reached a verdict", () => {
-    const s = loadSummary([
+    const summary = loadSummary([
       ran("smoke.js", "passed"),
       ran("smoke.js", "failed"),
       ran("search.js", "error"),
       ran("search.js", "running"),
       ran("smoke.js", "cancelled"),
     ]);
-    expect(s).toMatchObject({ runs: 5, judged: 3, passed: 1 });
-    expect(s.passRate).toBeCloseTo(1 / 3);
+    expect(summary).toMatchObject({ runs: 5, judged: 3, passed: 1 });
+    expect(summary.passRate).toBeCloseTo(1 / 3);
   });
 
   it("has no pass rate rather than a zero one when nothing finished", () => {
@@ -268,15 +269,15 @@ describe("load runs", () => {
   });
 
   it("ranks scripts by use and counts the stress runs among them", () => {
-    const s = loadSummary([
+    const summary = loadSummary([
       ran("search.js", "passed", "stress"),
       ran("smoke.js", "passed"),
       ran("smoke.js", "passed"),
       ran("search.js", "failed"),
       ran("browse.js", "passed"),
     ]);
-    expect(s.stress).toBe(1);
-    expect(s.byScript).toEqual([
+    expect(summary.stress).toBe(1);
+    expect(summary.byScript).toEqual([
       { script: "search.js", runs: 2, passed: 1, stress: 1 },
       { script: "smoke.js", runs: 2, passed: 2, stress: 0 },
       { script: "browse.js", runs: 1, passed: 1, stress: 0 },
@@ -357,5 +358,27 @@ describe("coverage map", () => {
     expect(keys(trailTo(root, "ink/printer"))).toEqual(["", "ink"]);
     expect(keys(trailTo(root, "nowhere"))).toEqual([""]);
     expect(keys(trailTo(coverageTree([], "all"), ""))).toEqual([""]);
+  });
+});
+
+describe("groupCounts", () => {
+  const counter = (key: string, of?: string) => ({ key, label: key, of });
+
+  it("gathers the counters that break one down behind it", () => {
+    const groups = groupCounts([
+      counter("jobs"),
+      counter("scheduled", "jobs"),
+      counter("manual", "jobs"),
+      counter("queued"),
+    ]);
+    expect(groups.map((g) => [g.head.key, g.parts.map((p) => p.key)])).toEqual([
+      ["jobs", ["scheduled", "manual"]],
+      ["queued", []],
+    ]);
+  });
+
+  it("leaves a part whose parent is not the counter before it standing alone", () => {
+    const groups = groupCounts([counter("a"), counter("b"), counter("x", "a")]);
+    expect(groups.map((g) => g.head.key)).toEqual(["a", "b", "x"]);
   });
 });

@@ -4,14 +4,14 @@
 
   let { text, caret = true }: { text: string; caret?: boolean } = $props();
 
-  let p = $state<HTMLParagraphElement>();
+  let paragraph = $state<HTMLParagraphElement>();
   let handle = $state<HTMLSpanElement>();
 
   onMount(() => {
     if (reducedMotion()) return;
-    const split = new SplitText(p!, { type: "chars" });
+    const split = new SplitText(paragraph!, { type: "chars" });
     const n = split.chars.length;
-    const width = p!.getBoundingClientRect().width;
+    const width = paragraph!.getBoundingClientRect().width;
     const typeTime = n * 0.03;
 
     const tl = gsap.timeline();
@@ -35,7 +35,7 @@
 </script>
 
 <span class="typeline">
-  <p bind:this={p}>{text}</p>
+  <p bind:this={paragraph}>{text}</p>
   {#if caret}
     <span class="handle" bind:this={handle} aria-hidden="true"></span>
   {/if}

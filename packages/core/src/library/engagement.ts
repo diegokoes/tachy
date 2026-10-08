@@ -4,9 +4,9 @@ import type { LibraryEngagement } from "@tachy/contract";
 export type { LibraryEngagement };
 
 /**
- * What people actually read, from `library_views` and `knowledge_feedback`.
- * Human reads only - the agent reads through MCP and never reaches the route
- * that counts a view.
+ * What people read, from `library_views` and `knowledge_feedback`. Human reads
+ * only: the agent reads through MCP and never reaches the route that counts a
+ * view.
  */
 export async function libraryEngagementCensus(
   days = 30,
@@ -22,7 +22,7 @@ export async function libraryEngagementCensus(
     from knowledge_feedback
     where kind = 'correction' and created_at > now() - make_interval(days => ${days})
   `;
-  const perDayWindow = Math.min(days, 14);
+  const perDayWindow = Math.min(days, 90);
   const per_day = await sql<LibraryEngagement["per_day"]>`
     select to_char(d.day, 'YYYY-MM-DD') as day,
            coalesce(sum(v.views), 0)::int as reads
@@ -59,7 +59,7 @@ export async function libraryEngagementCensus(
       group by d.id, d.title
     ) items
     order by reads desc, title
-    limit 5
+    limit 25
   `;
   return {
     days,

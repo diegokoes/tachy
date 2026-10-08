@@ -19,9 +19,8 @@ export async function callerUserId(c: Context): Promise<string | null> {
 }
 
 /**
- * Who is making this edit, for the library revision it will produce. A bearer
- * token carries no email at all, so it is recorded as `api` rather than being
- * passed off as a person who happened to be signed in.
+ * Who is making this edit, for the library revision it produces. A bearer
+ * token carries no email, so it is recorded as `api`, not as a person.
  */
 export async function callerActor(c: Context): Promise<ActorRef> {
   const via = getIdentity(c)?.via;

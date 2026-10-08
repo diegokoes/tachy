@@ -96,15 +96,15 @@ describe("outputs API", () => {
     expect(rows.map((r) => r.id)).toEqual([meta.id]);
     expect(rows[0]).not.toHaveProperty("bytes");
 
-    const res = await app.request(`/api/outputs/${meta.id}/download`, {
+    const response = await app.request(`/api/outputs/${meta.id}/download`, {
       headers: { cookie },
     });
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toMatch(/spreadsheetml/);
-    expect(res.headers.get("content-disposition")).toContain(
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toMatch(/spreadsheetml/);
+    expect(response.headers.get("content-disposition")).toContain(
       'attachment; filename="escalations.xlsx"',
     );
-    expect(new Uint8Array(await res.arrayBuffer())).toEqual(BYTES);
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(BYTES);
   });
 
   it("percent-encodes a non-ASCII filename alongside an ASCII fallback", async () => {
@@ -112,12 +112,12 @@ describe("outputs API", () => {
     const meta = await make(alice.id, { filename: "rapport-café.csv" });
     const cookie = await login("alice@example.com");
 
-    const res = await app.request(`/api/outputs/${meta.id}/download`, {
+    const response = await app.request(`/api/outputs/${meta.id}/download`, {
       headers: { cookie },
     });
-    const cd = res.headers.get("content-disposition") ?? "";
-    expect(cd).toContain('filename="rapport-caf_.csv"');
-    expect(cd).toContain("filename*=UTF-8''rapport-caf%C3%A9.csv");
+    const disposition = response.headers.get("content-disposition") ?? "";
+    expect(disposition).toContain('filename="rapport-caf_.csv"');
+    expect(disposition).toContain("filename*=UTF-8''rapport-caf%C3%A9.csv");
   });
 
   it("404s another user and rejects a caller with no account", async () => {

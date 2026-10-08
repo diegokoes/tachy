@@ -46,11 +46,9 @@ export const workItems = new Hono()
       item: raw,
     });
   })
-  /*
-   * A note goes onto the customer's own ticket, under the org's shared
-   * credential - the most externally visible thing this API does, so it is held
-   * to the same scope check as editing the item it hangs off.
-   */
+  // A note goes onto the customer's own ticket, under the org's shared
+  // credential: the most externally visible thing this API does, so it is held
+  // to the same scope check as editing the item it hangs off.
   .post("/:source/:id/notes", zValidator("json", noteSchema), async (c) => {
     const { source, id } = c.req.param();
     const { body } = c.req.valid("json");

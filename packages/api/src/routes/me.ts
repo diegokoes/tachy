@@ -54,8 +54,8 @@ export const me = new Hono()
       effective[name] =
         (await credentialSource(name, { userId, teamId })) ?? null;
 
-    // Which credential a chat turn would actually pick, so a user with both an
-    // API key and a subscription token can see which one is answering.
+    // Which credential a chat turn would pick, so a user with both an API key
+    // and a subscription token can see which one is answering.
     const auth = await resolveAgentAuth({ userId, teamId });
     const inUse =
       auth &&
@@ -100,11 +100,9 @@ export const me = new Hono()
     return c.json(await effectivePrefs({ userId, teamId }));
   })
 
-  /**
-   * The models the caller's runtime offers under their own credential, held
-   * to the org's allow-list. A runtime that cannot be asked still gets the
-   * allow-list back, and an empty list tells the SPA to take a typed id.
-   */
+  // The models the caller's runtime offers under their own credential, held to
+  // the org's allow-list. A runtime that cannot be asked still gets the
+  // allow-list back, and an empty list tells the SPA to take a typed id.
   .get("/models", async (c) => {
     const userId = await requireCaller(c);
     const teamId = (await userSoleTeamId(userId)) ?? undefined;

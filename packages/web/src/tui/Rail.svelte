@@ -24,28 +24,29 @@
   } = $props();
 </script>
 
-<!-- The index for one section of the app: what is in here, how much of it
-     there is, and which part you are looking at. It is not a third tab bar -
-     it answers "what can I configure here", which a bar of labels alone never
-     did, and it is why each part can now have the window to itself. -->
+<!--
+@component
+The index for one section of the app: what is in it, how much of each, and which
+part is open. Not a third tab bar: it answers what can be configured here.
+-->
 <nav class="rail" aria-label={label}>
-  {#each items as it (it.key)}
-    {@const on = it.key === active}
+  {#each items as item (item.key)}
+    {@const on = item.key === active}
     <button
       class="row"
       class:on
       aria-current={on ? "page" : undefined}
-      onclick={() => onpick(it.key)}
+      onclick={() => onpick(item.key)}
       use:jellyPress
     >
       <span class="mark" aria-hidden="true">{on ? G.marker : " "}</span>
-      <span class="lbl">{it.label}</span>
-      {#if it.count !== undefined}
+      <span class="lbl">{item.label}</span>
+      {#if item.count !== undefined}
         <span
           class="n"
-          class:pending={it.count === null}
-          class:warn={it.tone === "warn"}
-          class:danger={it.tone === "danger"}>{it.count ?? "·"}</span
+          class:pending={item.count === null}
+          class:warn={item.tone === "warn"}
+          class:danger={item.tone === "danger"}>{item.count ?? "·"}</span
         >
       {/if}
     </button>
@@ -58,8 +59,7 @@
     flex-direction: column;
     gap: 1px;
     min-width: 0;
-    /* Sticky rather than scrolling away: losing the index the moment you use
-       it is the thing this replaces. */
+    /* Sticky: the index stays in view while it is used. */
     position: sticky;
     top: 0;
   }

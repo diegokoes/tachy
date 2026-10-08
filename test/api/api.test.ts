@@ -44,11 +44,11 @@ describe("API knowledge round-trip", () => {
     );
     const { id } = await created.json();
 
-    const fb = await app.request(
+    const feedback = await app.request(
       `/api/knowledge/${id}/feedback`,
       json({ kind: "rating", rating: 5, comment: "useful" }),
     );
-    expect(fb.status).toBe(200);
+    expect(feedback.status).toBe(200);
 
     const list = await app.request(`/api/knowledge/${id}/feedback`);
     expect((await list.json()).length).toBe(1);
@@ -75,35 +75,35 @@ describe("API error paths", () => {
   beforeEach(resetData);
 
   it("rejects a schema violation with 400", async () => {
-    const res = await app.request(
+    const response = await app.request(
       "/api/knowledge",
       json({ issueSummary: "x", cloud: "Not A Slug" }),
     );
-    expect(res.status).toBe(400);
+    expect(response.status).toBe(400);
   });
 
   it("rejects malformed JSON with 400", async () => {
-    const res = await app.request("/api/knowledge", {
+    const response = await app.request("/api/knowledge", {
       method: "POST",
       body: "{ not json",
       headers: { "Content-Type": "application/json" },
     });
-    expect(res.status).toBe(400);
+    expect(response.status).toBe(400);
   });
 
   it("returns 404 for an unknown knowledge id", async () => {
-    const res = await app.request(
+    const response = await app.request(
       "/api/knowledge/00000000-0000-0000-0000-000000000000",
     );
-    expect(res.status).toBe(404);
+    expect(response.status).toBe(404);
   });
 
   it("returns 400 for an unknown referenced slug (bad_input)", async () => {
-    const res = await app.request(
+    const response = await app.request(
       "/api/products",
       json({ team_slug: "nope-team", slug: "p", name: "P" }),
     );
-    expect(res.status).toBe(400);
+    expect(response.status).toBe(400);
   });
 
   it("returns 409 on a stale optimistic-lock version", async () => {
@@ -112,12 +112,12 @@ describe("API error paths", () => {
       json({ status: "approved", issueSummary: "v" }),
     );
     const { id } = await created.json();
-    const res = await app.request(`/api/knowledge/${id}`, {
+    const response = await app.request(`/api/knowledge/${id}`, {
       method: "PATCH",
       body: JSON.stringify({ issueSummary: "changed", expectedVersion: 99 }),
       headers: { "Content-Type": "application/json" },
     });
-    expect(res.status).toBe(409);
+    expect(response.status).toBe(409);
   });
 });
 
@@ -125,9 +125,9 @@ describe("API reference docs", () => {
   beforeEach(resetData);
 
   it("lists reference docs (empty on a fresh db)", async () => {
-    const res = await app.request("/api/reference");
-    expect(res.status).toBe(200);
-    expect(Array.isArray(await res.json())).toBe(true);
+    const response = await app.request("/api/reference");
+    expect(response.status).toBe(200);
+    expect(Array.isArray(await response.json())).toBe(true);
   });
 
   it("narrows the list and the search to a shelf with kind", async () => {
@@ -189,10 +189,10 @@ describe("API auth", () => {
   });
 
   it("rejects a wrong token", async () => {
-    const res = await secured.request("/api/customers", {
+    const response = await secured.request("/api/customers", {
       headers: { Authorization: "Bearer nope" },
     });
-    expect(res.status).toBe(401);
+    expect(response.status).toBe(401);
   });
 
   it("does not expose SSO routes when OIDC is unconfigured", async () => {
@@ -206,9 +206,9 @@ describe("API auth", () => {
 describe("SPA hosting", () => {
   it("serves index.html as a fallback for non-API routes when webRoot is set", async () => {
     const withWeb = createApp({ webRoot: "test/fixtures-web" });
-    const res = await withWeb.request("/some/client/route");
-    expect(res.status).toBe(200);
-    expect(await res.text()).toContain("tachy-spa-fixture");
+    const response = await withWeb.request("/some/client/route");
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("tachy-spa-fixture");
   });
 });
 
@@ -216,11 +216,11 @@ describe("API library history and reads", () => {
   beforeEach(resetData);
 
   const create = async () => {
-    const res = await app.request(
+    const response = await app.request(
       "/api/knowledge",
       json({ status: "approved", issueSummary: "spooler stalls" }),
     );
-    return (await res.json()).id as string;
+    return (await response.json()).id as string;
   };
 
   it("serves an entry's revisions, newest first", async () => {
@@ -260,7 +260,7 @@ describe("API library history and reads", () => {
     expect(views.views).toBe(1);
   });
 
-  /** EntryDetail re-loads after every edit; that reload is not a second visit. */
+  // EntryDetail re-loads after every edit; that reload is not a second visit.
   it("does not inflate the count when an edit triggers a reload", async () => {
     const id = await create();
     await app.request(`/api/knowledge/${id}`);
@@ -282,11 +282,11 @@ describe("API library history and reads", () => {
       ...json({ resolution: "wrong" }),
       method: "PATCH",
     });
-    const res = await app.request(`/api/knowledge/${id}/revert/1`, {
+    const response = await app.request(`/api/knowledge/${id}/revert/1`, {
       method: "POST",
     });
-    expect(res.status).toBe(200);
-    expect((await res.json()).version).toBe(3);
+    expect(response.status).toBe(200);
+    expect((await response.json()).version).toBe(3);
     const entry = await (await app.request(`/api/knowledge/${id}`)).json();
     expect(entry.resolution).toBeNull();
   });

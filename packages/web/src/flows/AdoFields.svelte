@@ -22,17 +22,17 @@
   let error = $state<string | null>(null);
 
   $effect(() => {
-    const p = project;
-    const t = type;
+    const forProject = project;
+    const forType = type;
     form = null;
     error = null;
-    if (!p || !t) return;
+    if (!forProject || !forType) return;
     api
       .get<ComposerForm>(
-        `/compose/projects/${p}/form?type=${encodeURIComponent(t)}`,
+        `/compose/projects/${forProject}/form?type=${encodeURIComponent(forType)}`,
       )
-      .then((f) => {
-        if (p === project && t === type) form = f;
+      .then((loaded) => {
+        if (forProject === project && forType === type) form = loaded;
       })
       .catch((e) => (error = e instanceof Error ? e.message : String(e)));
   });
@@ -54,8 +54,8 @@
       })),
   ]);
 
-  function set(ref: string, v: unknown) {
-    onchange({ ...value, [ref]: v });
+  function set(ref: string, next: unknown) {
+    onchange({ ...value, [ref]: next });
   }
   function drop(ref: string) {
     const next = { ...value };
@@ -72,23 +72,23 @@
   <Note>reading the {type} form…</Note>
 {:else}
   <div class="fields">
-    {#each chosen as f (f.reference_name)}
+    {#each chosen as field (field.reference_name)}
       <div class="row">
-        <span class="name">{labelOf(form, f)}</span>
+        <span class="name">{labelOf(form, field)}</span>
         <span class="input">
           <FieldInput
-            id={`flow-${f.reference_name}`}
-            spec={f}
-            label={labelOf(form, f)}
-            value={value[f.reference_name] ?? null}
+            id={`flow-${field.reference_name}`}
+            spec={field}
+            label={labelOf(form, field)}
+            value={value[field.reference_name] ?? null}
             {form}
-            onchange={(v) => set(f.reference_name, v)}
+            onchange={(v) => set(field.reference_name, v)}
           />
         </span>
         <button
           class="drop"
-          aria-label={`Leave ${labelOf(form, f)} to the form`}
-          onclick={() => drop(f.reference_name)}
+          aria-label={`Leave ${labelOf(form, field)} to the form`}
+          onclick={() => drop(field.reference_name)}
           ><Icon name="close" size="0.85em" /></button
         >
       </div>

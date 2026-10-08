@@ -9,10 +9,9 @@ export interface Toast {
 }
 
 /**
- * The app's one notification surface. `items` are durable, per-user rows fetched
- * from the server (an admin's reply to a report today; more kinds later);
- * `toasts` are transient, client-only confirmations. Both render through
- * NotificationHost.
+ * The app's one notification surface. `items` are durable, per-user rows
+ * fetched from the server, such as an admin's reply to a report; `toasts` are
+ * transient, client-only confirmations. Both render through NotificationHost.
  */
 export const notifyState = $state<{
   items: NotificationRow[];
@@ -61,10 +60,9 @@ export async function markNotificationsRead(ids: string[]): Promise<void> {
 }
 
 /**
- * Poll on a gentle interval - the app has no push channel, and a reply the admin
- * left is not time-critical. Every minute, and on tab refocus so a returning
- * user sees a fresh inbox. The first fetch is App's, once the session knows who
- * is signed in: at mount it does not yet, and a fetch then would find no one.
+ * Polls every minute and on tab refocus: the app has no push channel, and an
+ * admin's reply is not time-critical. The first fetch is App's, once the
+ * session knows who is signed in; a fetch at mount would find no one.
  */
 export function startNotifications(): () => void {
   const timer = setInterval(refreshNotifications, 60_000);

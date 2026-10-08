@@ -1,17 +1,14 @@
 <script lang="ts" module>
   import { scrollport } from "../shell/scrollport.svelte";
 
-  /* Dialogs stack. Escape and Enter reach the topmost one only, and only the
-     topmost one is in view: a dialog it covers folds away, or, where the caller
-     asks, stays and sinks into the blur with the app. */
+  // Dialogs stack. Escape and Enter reach the topmost one only, and only the
+  // topmost one is in view: a dialog it covers folds away, or, where the caller
+  // asks, stays and sinks into the blur with the app.
   const stack = $state<symbol[]>([]);
 
-  /* One lock for the whole stack, taken by the first dialog and handed back by
-     the last, whichever order they close in.
-
-     Both boxes, because the body is not what scrolls here: the view scrolls
-     inside `main`, so locking the body alone left the page running under the
-     dialog. Locking it anyway still matters on the surfaces that do. */
+  // One lock for the whole stack, taken by the first dialog and handed back by
+  // the last. Both boxes: the view scrolls inside `main`, so locking the body
+  // alone leaves the page running under the dialog.
   let unlock: (() => void) | null = null;
 
   function enter(id: symbol) {
@@ -116,13 +113,13 @@
 
   let motion: Unfolding | undefined;
   let released = false;
-  /* Read before the children mount: one that autofocuses its first field
-     would otherwise be what focus goes back to. */
+  // Read before the children mount: one that autofocuses its first field would
+  // otherwise be what focus goes back to.
   const restore = document.activeElement as HTMLElement | null;
 
-  /* Leaves the stack as soon as the close starts, not when the node goes, so
-     the dialog underneath comes back while this one is still folding. Focus
-     waits a tick for that dialog to be interactive again. */
+  // Leaves the stack as soon as the close starts, not when the node goes, so
+  // the dialog underneath comes back while this one is still folding. Focus
+  // waits a tick for that dialog to be interactive again.
   function release() {
     if (released) return;
     released = true;
@@ -138,9 +135,9 @@
     return { duration: motion?.close() ?? 0 };
   }
 
-  /* A click is dismissal only when the press also began on the stage. A select
-     option that hangs past the dialog's edge closes its panel on pointerdown, so
-     the release lands on the stage and the browser fires the click there. */
+  // A click is dismissal only when the press also began on the stage. A select
+  // option that hangs past the dialog's edge closes its panel on pointerdown,
+  // so the release lands on the stage and the browser fires the click there.
   let pressedStage = false;
   function onStageDown(e: PointerEvent) {
     pressedStage = e.target === e.currentTarget;
@@ -307,10 +304,9 @@
     padding: var(--pad-4);
   }
 
-  /* An app window, not a card: the same surface, rule and radius the main
-     window wears, so a dialog reads as a second one of those rather than as a
-     different material laid over the first. One width, always - a dialog that
-     shrink-wrapped its content changed shape whenever a section unfolded. */
+  /* An app window, not a card: the surface, rule and radius the main window
+     wears, so a dialog reads as a second one. One width always, so the shape
+     holds when a section unfolds. */
   .win {
     position: relative;
     isolation: isolate;
@@ -342,10 +338,9 @@
     border-color: var(--danger);
   }
 
-  /* The titlebar: what you are doing, between the buttons that end it. Three
-     columns rather than a flex row with a spacer, so the name sits at the
-     centre of the window and not at the centre of whatever is left over - the
-     two 1fr flanks are equal whether or not a destructive action is present. */
+  /* The titlebar: the action's name between the buttons that end it. Three
+     columns, not a flex row with a spacer, so the name sits at the window's
+     centre whether or not a destructive action is present. */
   .bar {
     flex: none;
     display: grid;

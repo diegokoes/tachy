@@ -8,9 +8,12 @@
   }: { left: Snippet; right: Snippet; width?: string } = $props();
 </script>
 
-<!-- Two columns held to reading width and centred, with what you change on the
-     left. Stretched to the window, a row's name and its control ended up a
-     screen apart; one column left the right half of the window empty. -->
+<!--
+@component
+Two columns held to reading width and centred, with the settings on the left.
+Stretched to the window, a row's name and its control sit a screen apart; one
+column leaves the right half of the window empty.
+-->
 <div class="cols" style="--col: {width}">
   <div class="col">{@render left()}</div>
   <div class="col">{@render right()}</div>

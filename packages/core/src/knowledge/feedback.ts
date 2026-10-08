@@ -9,13 +9,13 @@ export interface FeedbackInput {
   patch?: Record<string, unknown> | null;
 }
 
-export async function addFeedback(i: FeedbackInput) {
+export async function addFeedback(input: FeedbackInput) {
   const [row] = await sql`
     insert into knowledge_feedback
       (knowledge_entry_id, user_id, kind, rating, comment, patch)
     values
-      (${i.knowledgeEntryId}, ${i.userId ?? null}, ${i.kind ?? "note"}, ${i.rating ?? null},
-       ${i.comment ?? null}, ${i.patch ? jsonb(i.patch) : null})
+      (${input.knowledgeEntryId}, ${input.userId ?? null}, ${input.kind ?? "note"}, ${input.rating ?? null},
+       ${input.comment ?? null}, ${input.patch ? jsonb(input.patch) : null})
     returning id, kind, created_at
   `;
   return row;

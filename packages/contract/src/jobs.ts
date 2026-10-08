@@ -75,9 +75,9 @@ export interface JobQueue {
 export const JOB_QUEUE_NAMES = JOB_QUEUES.map((q) => q.name);
 
 export function jobQueue(name: string): JobQueue {
-  const q = JOB_QUEUES.find((x) => x.name === name);
-  if (!q) throw new Error(`unknown job queue '${name}'`);
-  return q;
+  const queue = JOB_QUEUES.find((x) => x.name === name);
+  if (!queue) throw new Error(`unknown job queue '${name}'`);
+  return queue;
 }
 
 /**
@@ -114,13 +114,13 @@ export const JOB_FINISHED: readonly JobStatus[] = [
 
 /** "90s", "15m", "2h", "1d" → milliseconds. */
 export function parseDuration(text: string): number {
-  const m = /^(\d+)\s*(s|m|h|d)$/.exec(text.trim());
-  if (!m)
+  const parts = /^(\d+)\s*(s|m|h|d)$/.exec(text.trim());
+  if (!parts)
     throw new Error(`'${text}' is not a duration like 90s, 15m, 2h or 1d`);
   const unit = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 }[
-    m[2] as "s" | "m" | "h" | "d"
+    parts[2] as "s" | "m" | "h" | "d"
   ];
-  return Number(m[1]) * unit;
+  return Number(parts[1]) * unit;
 }
 
 export interface JobCensus {
@@ -134,10 +134,24 @@ export interface JobCensus {
   /** Busiest kinds first. `avg_seconds` covers runs that started and finished. */
   by_kind: {
     kind: string;
+    title: string;
     runs: number;
     succeeded: number;
     failed: number;
     avg_seconds: number | null;
+    /** Median and slowest-twentieth run time, over runs that started and finished. */
+    p50_seconds: number | null;
+    p95_seconds: number | null;
+    /** The longest allowance any run of the kind was given. */
+    timeout_ms: number | null;
+    /** Runs that needed more than one attempt. */
+    retried: number;
+  }[];
+  /** Average wait per queue per day, for the days a queue started anything. */
+  wait_per_day: {
+    day: string;
+    queue: JobQueueName;
+    avg_wait_seconds: number;
   }[];
   /**
    * How long runs waited in each queue before a worker took them, over runs
@@ -173,6 +187,7 @@ export interface JobCensus {
     definition_id: string | null;
     name: string;
     kind: string;
+    title: string;
     runs: number;
     last_at: string;
     last_error: string | null;
@@ -219,6 +234,13 @@ export interface JobRun {
 export interface JobRunListed extends JobRun {
   definition_name: string | null;
   requested_by_name: string | null;
+  /** The run that queued this one, named as the admin knows it. */
+  parent_kind: string | null;
+  parent_name: string | null;
+  /** What the run is about (a repository, a connection), by its kind. */
+  subject: string | null;
+  /** How it went, in a line; null until it has an output. */
+  outcome: string | null;
   /** How the runs this one queued are doing; null when it queued none. */
   children: {
     total: number;
@@ -268,6 +290,8 @@ export interface JobWorkerRow {
     queue: JobQueueName | null;
     params: Record<string, unknown>;
     definition_name: string | null;
+    kind_title: string;
+    subject: string | null;
     progress: number | null;
     progress_note: string | null;
     started_at: string;

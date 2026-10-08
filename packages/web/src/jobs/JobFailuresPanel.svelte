@@ -7,12 +7,11 @@
 
   type Failure = (typeof jobs.data.failures)[number];
 
-  /* Which jobs failed, not how many runs did: the counter behind this already
-     says how many. What it cannot say is whether that is one job failing
-     every night or eight jobs failing once. */
+  // Which jobs failed, not how many runs did: the counter behind this already
+  // says how many. What it cannot say is whether that is one job failing every
+  // night or eight jobs failing once.
   const columns: Column<Failure>[] = [
-    { key: "name", label: "job", width: "14rem" },
-    { key: "kind", label: "kind", width: "11rem" },
+    { key: "name", label: "job", width: "18rem", cell: nameCell },
     { key: "runs", label: "failed", width: "5rem", align: "end" },
     {
       key: "last_at",
@@ -26,9 +25,16 @@
   onMount(() => void jobs.reload());
 </script>
 
-{#snippet errorCell(f: Failure)}
-  {#if f.last_error}
-    <span class="err">{f.last_error}</span>
+{#snippet nameCell(failure: Failure)}
+  {failure.definition_id ? failure.name : failure.title}
+  {#if failure.definition_id && failure.name !== failure.title}
+    <span class="dim small">{failure.title}</span>
+  {/if}
+{/snippet}
+
+{#snippet errorCell(failure: Failure)}
+  {#if failure.last_error}
+    <span class="err">{failure.last_error}</span>
   {:else}
     <span class="dim">no message</span>
   {/if}
@@ -60,6 +66,10 @@
   }
   .dim {
     color: var(--muted);
+  }
+  .small {
+    display: block;
+    font-size: var(--fs-xs);
   }
   .link {
     background: none;

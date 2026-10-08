@@ -14,16 +14,20 @@
     /** A badge set after the label, on its line. */
     mark?: Snippet;
     children: Snippet;
-    /** Reset marks, source notes: whatever qualifies the control, set just
-     *  ahead of it so the control itself keeps the right edge. */
+    /**
+     * Reset marks, source notes: whatever qualifies the control, set ahead of
+     * it so the control keeps the right edge.
+     */
     actions?: Snippet;
   } = $props();
 </script>
 
-<!-- One setting: its name against the left edge, its control against the
-     right, so every name in a group starts on one line and every control ends
-     on another. A column too narrow for both drops the control under the name,
-     still flush right. -->
+<!--
+@component
+One setting: its name against the left edge, its control against the right, so
+every name in a group starts on one line and every control ends on another. A
+column too narrow for both drops the control under the name, still flush right.
+-->
 <div class="row">
   <div class="k">
     {#if mark}

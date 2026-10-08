@@ -90,11 +90,12 @@ export function createApp(
   if (opts.internal) base.route("/internal", internalRoutes(opts.internal));
   base.route("/ingest", ingest);
   base.get("/readyz", async (c) => {
-    const r = await readiness();
-    return c.json(r, r.ready ? 200 : 503);
+    const report = await readiness();
+    return c.json(report, report.ready ? 200 : 503);
   });
 
-  const authMode = opts.oidc ? "sso" : opts.apiToken ? "token" : "open";
+  const tokenMode = opts.apiToken ? "token" : "open";
+  const authMode = opts.oidc ? "sso" : tokenMode;
   base.get("/auth/config", async (c) => {
     let profile = "support";
     try {
@@ -109,9 +110,9 @@ export function createApp(
     });
   });
 
-  // Ahead of installAuth's `/api/*` guard, deliberately: on a fresh install
-  // there is no identity to check yet. initOidc still runs first, so the wizard
-  // can tell an operator already holding an SSO session from a stranger.
+  // Ahead of installAuth's `/api/*` guard: a fresh install has no identity to
+  // check yet. initOidc still runs first, so the wizard can tell an operator
+  // already holding an SSO session from a stranger.
   if (opts.oidc) initOidc(base, opts.oidc);
   base.route("/api/setup", setup);
 

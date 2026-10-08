@@ -56,7 +56,10 @@ const DEFINES_BOOST = 1 / (RRF_K + 1);
  */
 const PER_FILE = 2;
 
-/** How far past its candidates the vector leg reads to find them in enough files. */
+/**
+ * How far past its candidates the vector leg reads to find them in enough
+ * files.
+ */
 const NEAREST = 4;
 
 /**
@@ -83,11 +86,14 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
     : sql``;
   const lineMinor = sql`substring(l.version_label from '^v?(\\d+\\.\\d+)\\.')`;
 
-  const lineChoice = opts.line
-    ? sql`and l.ref = ${opts.line}`
-    : minor
-      ? sql`and (l.ref = r.default_branch or ${lineMinor} = ${minor})`
-      : sql`and l.ref = r.default_branch`;
+  const versionLine = minor
+    ? sql`and (l.ref = r.default_branch or ${lineMinor} = ${minor})`
+    : sql`and l.ref = r.default_branch`;
+  const lineChoice = opts.line ? sql`and l.ref = ${opts.line}` : versionLine;
+  const ofCustomer = (id: string) =>
+    opts.includeShared === false
+      ? sql`and r.customer_id = ${id}`
+      : sql`and (r.customer_id = ${id} or r.customer_id is null)`;
 
   const holds = sql`
     exists (
@@ -110,13 +116,7 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
         ${opts.productId ? sql`and r.product_id = ${opts.productId}` : sql``}
         ${opts.componentId ? sql`and r.component_id = ${opts.componentId}` : sql``}
         ${opts.sourceProjectId ? sql`and r.source_project_id = ${opts.sourceProjectId}` : sql``}
-        ${
-          opts.customerId
-            ? opts.includeShared === false
-              ? sql`and r.customer_id = ${opts.customerId}`
-              : sql`and (r.customer_id = ${opts.customerId} or r.customer_id is null)`
-            : sql``
-        }
+        ${opts.customerId ? ofCustomer(opts.customerId) : sql``}
       order by r.id, coalesce(${minor ? sql`${lineMinor} = ${minor}` : sql`false`}, false) desc
     ),
     -- In every leg a file contributes its best chunks only. A long document
@@ -258,15 +258,15 @@ async function contentFor(
   opts: ReadCodeOptions,
 ): Promise<{ content: string; ref: string; commit: string | null }> {
   if (opts.version) {
-    const v = await resolveVersion(repoSlug, opts.version);
-    if (!v.tag)
+    const resolved = await resolveVersion(repoSlug, opts.version);
+    if (!resolved.tag)
       throw notFound(
-        `Repo '${repoSlug}' has no release tag for ${v.version}; read the '${v.line.ref}' line instead`,
+        `Repo '${repoSlug}' has no release tag for ${resolved.version}; read the '${resolved.line.ref}' line instead`,
       );
     return {
-      content: await readFileAt(repoSlug, v.commit!, path, opts.token),
-      ref: v.tag,
-      commit: v.commit,
+      content: await readFileAt(repoSlug, resolved.commit!, path, opts.token),
+      ref: resolved.tag,
+      commit: resolved.commit,
     };
   }
 
@@ -325,7 +325,7 @@ export async function readCodeFile(
   );
   const end = Math.min(requestedEnd, start + MAX_LINES - 1);
 
-  let out: string[] = [];
+  let numbered: string[] = [];
   let bytes = 0;
   let byteTruncated = false;
   for (let n = start; n <= end; n++) {
@@ -335,7 +335,7 @@ export async function readCodeFile(
       byteTruncated = true;
       break;
     }
-    out.push(line);
+    numbered.push(line);
   }
   return {
     repo: repoSlug,
@@ -344,8 +344,8 @@ export async function readCodeFile(
     commit,
     total_lines: lines.length,
     start_line: start,
-    end_line: start + out.length - 1,
+    end_line: start + numbered.length - 1,
     truncated: byteTruncated || end < requestedEnd || end < lines.length,
-    content: out.join("\n"),
+    content: numbered.join("\n"),
   };
 }

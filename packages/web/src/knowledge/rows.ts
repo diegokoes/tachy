@@ -28,8 +28,8 @@ export interface KnowledgeRow {
   version: number;
   created_at?: string;
   updated_at?: string;
-  /* Search only. `relevance`/`grade` are calibrated server-side against the
-     embedding model's measured distribution; the raw signals are the inputs. */
+  // Search only. `relevance`/`grade` are calibrated server-side against the
+  // embedding model's measured distribution; the raw signals are the inputs.
   relevance?: number;
   grade?: string;
   rrf?: number;

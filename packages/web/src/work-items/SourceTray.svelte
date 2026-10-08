@@ -55,11 +55,11 @@
     busy = true;
     error = null;
     try {
-      const res = await api.post<Fetched>(
+      const fetched = await api.post<Fetched>(
         `/work-items/${encodeURIComponent(source)}/${encodeURIComponent(id)}/fetch`,
         {},
       );
-      const text = (res.item.messages ?? [])
+      const text = (fetched.item.messages ?? [])
         .filter((m) => !m.automated && m.bodyText?.trim())
         .map((m) => m.bodyText!.trim())
         .join("\n---\n")
@@ -67,9 +67,9 @@
       onadd({
         source,
         external_id: id,
-        title: res.item.title ?? `${source} ${id}`,
+        title: fetched.item.title ?? `${source} ${id}`,
         text,
-        work_item_id: res.work_item_id,
+        work_item_id: fetched.work_item_id,
         source_type: typeOf(source),
       });
       externalId = "";

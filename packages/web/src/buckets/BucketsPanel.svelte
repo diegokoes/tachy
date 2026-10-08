@@ -5,6 +5,7 @@
   import { createResource } from "../resource.svelte";
   import { t } from "../terms";
   import {
+    Icon,
     Button,
     Checkbox,
     CrudTable,
@@ -25,18 +26,20 @@
 
   const slugs = $derived(buckets.data.map((b) => b.slug));
 
-  /* Team access lives outside the draft's flat fields, so the form edits a
-     set of slugs and the save sends it whole. */
+  // Team access lives outside the draft's flat fields, so the form edits a set
+  // of slugs and the save sends it whole.
   let picked = $state<string[]>([]);
   let issued = $state<BucketWithToken | null>(null);
   let rotating = $state<string | null>(null);
-  /* A new token cuts off the pusher still holding the old one, so it takes a
-     second click, as a delete does. */
+  // A new token cuts off the pusher still holding the old one, so it takes a
+  // second click, as a delete does.
   let armed = $state<string | null>(null);
   let copied = $state<string | null>(null);
 
   const ingestUrl = (slug: string) =>
     `${location.origin}${bucketIngestPath(slug)}`;
+  const request = (slug: string, token: string) =>
+    `POST ${ingestUrl(slug)}\nAuthorization: Bearer ${token}\nContent-Type: application/json`;
 
   const columns: Column<Bucket>[] = $derived([
     {
@@ -86,23 +89,26 @@
   ]);
 
   function openedForm(
-    f: { mode: "create" | "edit"; row: Bucket | null } | null,
+    form: { mode: "create" | "edit"; row: Bucket | null } | null,
   ) {
-    picked = f?.row ? f.row.teams.map((x) => x.slug) : [];
+    picked = form?.row ? form.row.teams.map((x) => x.slug) : [];
   }
 
-  async function rotate(b: Bucket) {
-    if (armed !== b.slug) {
-      armed = b.slug;
+  async function rotate(bucket: Bucket) {
+    if (armed !== bucket.slug) {
+      armed = bucket.slug;
       setTimeout(() => {
-        if (armed === b.slug) armed = null;
+        if (armed === bucket.slug) armed = null;
       }, 4000);
       return;
     }
     armed = null;
-    rotating = b.slug;
+    rotating = bucket.slug;
     try {
-      issued = await api.post<BucketWithToken>(`/buckets/${b.slug}/token`, {});
+      issued = await api.post<BucketWithToken>(
+        `/buckets/${bucket.slug}/token`,
+        {},
+      );
       await buckets.reload();
     } finally {
       rotating = null;
@@ -122,24 +128,24 @@
   onMount(() => Promise.all([buckets.reload(), teams.reload()]));
 </script>
 
-{#snippet lastBatch(r: Bucket)}
-  <Time at={r.last_batch_at} />
+{#snippet lastBatch(bucket: Bucket)}
+  <Time at={bucket.last_batch_at} />
 {/snippet}
 
 {#snippet teamPicker()}
   <div class="teams">
     <GroupHead label={`${t("teams")} that can read it`} />
-    {#each teams.data as tm (tm.slug)}
+    {#each teams.data as team (team.slug)}
       <label class="opt">
         <Checkbox
-          checked={picked.includes(tm.slug)}
-          ariaLabel={tm.name}
+          checked={picked.includes(team.slug)}
+          ariaLabel={team.name}
           onchange={(on) =>
             (picked = on
-              ? [...picked, tm.slug]
-              : picked.filter((s) => s !== tm.slug))}
+              ? [...picked, team.slug]
+              : picked.filter((s) => s !== team.slug))}
         />
-        <span>{tm.name}</span>
+        <span>{team.name}</span>
       </label>
     {:else}
       <Note>No {t("teams")} yet: only app admins will see this bucket.</Note>
@@ -147,14 +153,14 @@
   </div>
 {/snippet}
 
-{#snippet rotateAction(b: Bucket)}
+{#snippet rotateAction(bucket: Bucket)}
   <Button
     variant="ghost"
     size="sm"
-    icon={armed === b.slug ? "confirm" : "refresh"}
-    busy={rotating === b.slug}
-    onclick={() => rotate(b)}
-    >{armed === b.slug ? "replace token?" : "new token"}</Button
+    icon={armed === bucket.slug ? "confirm" : "refresh"}
+    busy={rotating === bucket.slug}
+    onclick={() => rotate(bucket)}
+    >{armed === bucket.slug ? "replace token?" : "new token"}</Button
   >
 {/snippet}
 
@@ -166,7 +172,6 @@
   loading={buckets.loading}
   error={buckets.error ?? teams.error}
   emptyTitle="No buckets yet."
-  emptyDetail="A bucket holds documents a sync script pushes in from somewhere tachy cannot reach, such as a Document360 knowledge base."
   addLabel="add bucket"
   noun="bucket"
   editTitle={(b) => b.name}
@@ -194,44 +199,42 @@
 />
 
 {#if issued}
-  {@const b = issued.bucket}
-  {@const tok = issued.token}
+  {@const bucket = issued.bucket}
+  {@const token = issued.token}
   <Modal
-    title={`ingest token: ${b.name}`}
+    title={`ingest token: ${bucket.name}`}
     confirmLabel="done"
     confirmIcon="confirm"
     width="44rem"
     onConfirm={() => (issued = null)}
     onCancel={() => (issued = null)}
   >
-    <p>
-      This is the only time the token is shown. Anyone holding it can write to
-      <strong>{b.name}</strong> and to nothing else.
+    <p class="line warn">
+      <Icon name="alert" size="1em" />
+      Copy it now. It won't be shown again.
     </p>
     <div class="secret">
-      <code>{tok}</code>
+      <code>{token}</code>
       <Button
         variant="ghost"
         size="sm"
         icon={copied === "token" ? "confirm" : "copy"}
         title="copy the token"
-        onclick={() => copy("token", tok)}
+        onclick={() => copy("token", token)}
       />
     </div>
-    <p class="dim">For the Document360 sync script, in PowerShell:</p>
+    <p class="line dim">
+      <Icon name="token" size="1em" />
+      Bearer token
+    </p>
     <div class="secret">
-      <pre>{`$env:TACHY_INGEST_TOKEN = '${tok}'
-.\\Sync-Document360.ps1 -TargetUrl '${ingestUrl(b.slug)}'`}</pre>
+      <pre>{request(bucket.slug, token)}</pre>
       <Button
         variant="ghost"
         size="sm"
-        icon={copied === "script" ? "confirm" : "copy"}
-        title="copy both lines"
-        onclick={() =>
-          copy(
-            "script",
-            `$env:TACHY_INGEST_TOKEN = '${tok}'\n.\\Sync-Document360.ps1 -TargetUrl '${ingestUrl(b.slug)}'`,
-          )}
+        icon={copied === "request" ? "confirm" : "copy"}
+        title="copy the request"
+        onclick={() => copy("request", request(bucket.slug, token))}
       />
     </div>
   </Modal>
@@ -268,6 +271,14 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     user-select: all;
+  }
+  .line {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+  }
+  .warn {
+    color: var(--warn);
   }
   .dim {
     color: var(--muted);

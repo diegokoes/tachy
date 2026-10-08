@@ -8,8 +8,10 @@ import {
   describeJobKinds,
   enqueueRun,
   ensureDefaultDefinitions,
+  genericOutcome,
   getJobKind,
   listJobDefinitions,
+  presentRun,
   registerCoreJobs,
 } from "@tachy/core/jobs";
 import { linkRepo } from "@tachy/core/code";
@@ -86,11 +88,11 @@ describe("repos.refresh", () => {
       where repo_id in (select id from repos where slug = 'old')
     `;
     const kind = getJobKind("repos.refresh");
-    const out = await kind.run(
+    const output = await kind.run(
       refreshCtx(),
       kind.params.parse({ scope: "all" }),
     );
-    expect(out).toEqual({ queued: 2, skipped: 0, never_indexed: 0 });
+    expect(output).toEqual({ queued: 2, skipped: 0, never_indexed: 0 });
   });
 
   it("queues a reindex of each indexed repo that is not already in flight", async () => {
@@ -106,7 +108,7 @@ describe("repos.refresh", () => {
       params: { repo: "busy" },
       trigger: "manual",
     });
-    const out = await getJobKind("repos.refresh").run(
+    const output = await getJobKind("repos.refresh").run(
       {
         runId: "test",
         requestedBy: null,
@@ -119,7 +121,7 @@ describe("repos.refresh", () => {
       },
       {},
     );
-    expect(out).toEqual({ queued: 1, skipped: 1, never_indexed: 1 });
+    expect(output).toEqual({ queued: 1, skipped: 1, never_indexed: 1 });
     const runs = await sql`
       select params->>'repo' as repo from job_runs
       where kind = 'repo.reindex' order by repo
@@ -130,34 +132,34 @@ describe("repos.refresh", () => {
 
 describe("retention", () => {
   it("rolls old per-person usage up to months without people", async () => {
-    const u = await createUser({ email: "reader@example.com" });
-    const [e] =
+    const user = await createUser({ email: "reader@example.com" });
+    const [entry] =
       await sql`insert into knowledge_entries (status, issue_summary) values ('approved', 'x') returning id`;
     await sql`
       insert into library_views (knowledge_entry_id, user_id, day, views) values
-        (${e.id}, ${u.id}, date_trunc('month', current_date) - interval '15 months', 2),
-        (${e.id}, null, date_trunc('month', current_date) - interval '15 months' + interval '1 day', 3),
-        (${e.id}, ${u.id}, current_date, 1)
+        (${entry.id}, ${user.id}, date_trunc('month', current_date) - interval '15 months', 2),
+        (${entry.id}, null, date_trunc('month', current_date) - interval '15 months' + interval '1 day', 3),
+        (${entry.id}, ${user.id}, current_date, 1)
     `;
     await sql`
       insert into mcp_tool_calls (tool, writes, user_id, day, calls) values
-        ('search_knowledge', false, ${u.id}, current_date - interval '14 months', 4),
-        ('search_knowledge', false, ${u.id}, current_date, 1)
+        ('search_knowledge', false, ${user.id}, current_date - interval '14 months', 4),
+        ('search_knowledge', false, ${user.id}, current_date, 1)
     `;
-    const r = await rollUpUsage(13);
-    expect(r).toEqual({ views: 2, toolCalls: 1 });
+    const rolled = await rollUpUsage(13);
+    expect(rolled).toEqual({ views: 2, toolCalls: 1 });
     const views =
       await sql`select user_id, views, day = date_trunc('month', day)::date as monthly from library_views order by day`;
     expect(views.map((v) => [v.user_id, v.views, v.monthly])).toEqual([
       [null, 5, true],
-      [u.id, 1, views[1].monthly],
+      [user.id, 1, views[1].monthly],
     ]);
     expect(await rollUpUsage(13)).toEqual({ views: 0, toolCalls: 0 });
     const calls =
       await sql`select user_id, calls from mcp_tool_calls order by day`;
     expect(calls.map((c) => [c.user_id, c.calls])).toEqual([
       [null, 4],
-      [u.id, 1],
+      [user.id, 1],
     ]);
   });
 
@@ -183,10 +185,10 @@ describe("retention", () => {
   });
 
   it("deletes notifications 90 days after they were opened, 180 if never", async () => {
-    const u = await createUser({ email: "notified@example.com" });
+    const user = await createUser({ email: "notified@example.com" });
     const note = (title: string, days: number, read: boolean) =>
       sql`insert into notifications (user_id, kind, title, created_at, read_at)
-          values (${u.id}, 'report_reply', ${title}, now() - make_interval(days => ${days}),
+          values (${user.id}, 'report_reply', ${title}, now() - make_interval(days => ${days}),
                   ${read ? sql`now()` : null})`;
     await note("read, old", 91, true);
     await note("read, recent", 89, true);
@@ -228,5 +230,117 @@ describe("retention", () => {
     const left = await sql`select id from library_assets`;
     expect(left.map((r) => r.id)).toEqual([kept.id]);
     expect(orphan.id).not.toBe(kept.id);
+  });
+});
+
+describe("how kinds present their runs", () => {
+  const line = (over: Record<string, unknown>) => ({
+    ref: "master",
+    upToDate: false,
+    filesIndexed: 2507,
+    filesEmbedded: 2499,
+    filesDeleted: 0,
+    versionLabel: "v1.51.46",
+    ...over,
+  });
+
+  it("names a repository run by its repo, line and fullness", () => {
+    expect(presentRun("repo.reindex", { repo: "portal" }, null).subject).toBe(
+      "portal",
+    );
+    expect(
+      presentRun(
+        "repo.reindex",
+        { repo: "portal", line: "dev", full: true },
+        null,
+      ).subject,
+    ).toBe("portal @ dev (full)");
+  });
+
+  it("says what an index did instead of printing its lines", () => {
+    const said = (lines: unknown[]) =>
+      presentRun("repo.reindex", { repo: "r" }, { lines }).outcome;
+    expect(said([line({})])).toBe("2,507 files indexed, 2,499 embedded");
+    expect(said([line({ upToDate: true })])).toBe("up to date at v1.51.46");
+    expect(
+      said([line({ filesIndexed: 1, filesEmbedded: 0, filesDeleted: 3 })]),
+    ).toBe("1 file indexed, 3 removed");
+    expect(
+      said([line({ upToDate: true }), line({ ref: "dev", filesIndexed: 4 })]),
+    ).toBe(
+      "master: up to date at v1.51.46 · dev: 4 files indexed, 2,499 embedded",
+    );
+    expect(said([])).toBeNull();
+  });
+
+  it("sums up a fan-out, a gap sweep and a source sync", () => {
+    expect(
+      presentRun(
+        "repos.refresh",
+        { scope: "all" },
+        {
+          queued: 4,
+          skipped: 1,
+          never_indexed: 0,
+        },
+      ).outcome,
+    ).toBe("4 repositories queued, 1 already running");
+    expect(
+      presentRun("wiki.gaps", {}, { gaps: 0, wikis: 5, failed: 0, skipped: 0 })
+        .outcome,
+    ).toBe("no gaps in 5 wikis");
+    expect(
+      presentRun("wiki.gaps", {}, { gaps: 3, wikis: 1, failed: 1, skipped: 0 })
+        .outcome,
+    ).toBe("3 gaps in 1 wiki, 1 failed");
+    expect(
+      presentRun("source.sync", { connection: "fd" }, { total: 12 }),
+    ).toEqual({ subject: "fd", outcome: "12 items pulled" });
+  });
+
+  it("totals what the sweeps and backfills removed or embedded", () => {
+    expect(
+      presentRun("retention.sweep", {}, { outputs: 2, uploads: 0, usage: 3 })
+        .outcome,
+    ).toBe("5 items removed");
+    expect(presentRun("retention.sweep", {}, { outputs: 0 }).outcome).toBe(
+      "nothing to remove",
+    );
+    expect(
+      presentRun("embeddings.backfill", { all: true }, { entries: 1, code: 2 }),
+    ).toEqual({ subject: "everything", outcome: "3 vectors embedded" });
+    expect(
+      presentRun("bucket.embed", { bucket_id: "b" }, { chunks: 1 }).outcome,
+    ).toBe("1 chunk embedded");
+  });
+
+  it("reports what a flow pass queued or why it skipped", () => {
+    const flow = (o: Record<string, unknown>) =>
+      presentRun("flow.run", { dry_run: false }, o).outcome;
+    expect(flow({ skipped: "the flow is paused" })).toBe(
+      "skipped: the flow is paused",
+    );
+    expect(flow({ matched: 5, queued: 3 })).toBe("3 of 5 items queued");
+    expect(flow({ flow_run_id: "x", status: "succeeded" })).toBe("succeeded");
+  });
+
+  it("falls back to the numbers in the output for a kind with no words of its own", () => {
+    expect(
+      genericOutcome({ rows_kept: 4, dropped: 0, note: "ok", dry: true }),
+    ).toBe("4 rows kept, note ok, dry");
+    expect(genericOutcome({ nothing: 0 })).toBeNull();
+    expect(presentRun("load.test", {}, { total_checks: 9 }).outcome).toBe(
+      "9 total checks",
+    );
+  });
+
+  it("presents nothing for a kind that is gone, and survives a throwing presenter", () => {
+    expect(presentRun("removed.kind", { a: 1 }, { b: 2 })).toEqual({
+      subject: null,
+      outcome: null,
+    });
+    expect(
+      presentRun("repo.reindex", { repo: "r" }, { lines: [null] }).outcome,
+    ).toBeNull();
   });
 });

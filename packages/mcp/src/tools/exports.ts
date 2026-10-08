@@ -1,3 +1,4 @@
+/** Turning a result set into a file the user can download. */
 import { z } from "zod";
 import { resolveCurrentUserId, userSoleTeamId } from "@tachy/core/access";
 import {
@@ -10,10 +11,6 @@ import { parseDateFormat, outputFilename, TABLE_FORMATS } from "@tachy/core";
 import { badInput } from "@tachy/core/infra";
 import { tool } from "../server";
 import { out } from "../results";
-
-/**
- * Turning a result set into a file the user can download.
- */
 
 tool(
   "export_table",
@@ -46,10 +43,9 @@ tool(
           "One object per row, keyed by column key. Dates as ISO strings and numbers as numbers, so the cells are typed and Excel sorts them properly. Leave an optional column null rather than inventing a value.",
         ),
     },
-    // Not readOnlyHint: createOutput inserts the rendered bytes as a row.
-    // The tool is in READ_TOOLS because a table the user asked for is not a
-    // change to the library, but a client deciding whether to run it
-    // unattended should know it writes.
+    // Not readOnlyHint: createOutput inserts the rendered bytes as a row. The
+    // tool is in READ_TOOLS since a table the user asked for is no change to
+    // the library, but a client running it unattended is told it writes.
     annotations: { readOnlyHint: false },
   },
   async ({ artifact_slug, format, sheet, filename, columns, rows }) => {

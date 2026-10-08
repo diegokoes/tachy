@@ -57,7 +57,7 @@ const referenceUpdateSchema = z.object({
   expectedVersion: z.number().int().optional(),
 });
 
-type QueryCtx = { req: { query(k: string): string | undefined } };
+type QueryCtx = { req: { query(key: string): string | undefined } };
 
 async function listFilters(c: QueryCtx) {
   const tags = csv(c.req.query("tags"));
@@ -66,17 +66,17 @@ async function listFilters(c: QueryCtx) {
   const customerSlug = c.req.query("customer");
   // Component slugs resolve within a product, so the pair is required - same
   // rule the knowledge route follows.
-  const f =
+  const filter =
     component && productId
       ? await resolveComponentFilter(productId, component)
       : undefined;
-  const merged = [...(tags ?? []), ...(f?.extraTags ?? [])];
+  const merged = [...(tags ?? []), ...(filter?.extraTags ?? [])];
   return {
     productId,
     teamId: c.req.query("team_id"),
     tags: merged.length ? merged : undefined,
-    componentId: f?.componentId,
-    componentTags: f?.componentTags,
+    componentId: filter?.componentId,
+    componentTags: filter?.componentTags,
     customerId: customerSlug
       ? await getCustomerIdBySlug(customerSlug)
       : undefined,

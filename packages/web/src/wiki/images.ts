@@ -9,14 +9,15 @@ export async function uploadImage(
   scope: string,
   file: File,
 ): Promise<{ id: string; url: string }> {
-  const fd = new FormData();
-  fd.append("file", file);
-  const res = await fetch(`/api/library/wiki/${scope}/assets`, {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`/api/library/wiki/${scope}/assets`, {
     method: "POST",
-    body: fd,
+    body: form,
   });
-  if (res.status === 401) onUnauthorized();
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body?.error ?? `upload failed (${res.status})`);
+  if (response.status === 401) onUnauthorized();
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok)
+    throw new Error(body?.error ?? `upload failed (${response.status})`);
   return body;
 }

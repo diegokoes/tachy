@@ -20,13 +20,13 @@
 </script>
 
 <Rows>
-  {#each AXES as a}
-    <Row label={a.title}>
+  {#each AXES as axis}
+    <Row label={axis.title}>
       <Select
-        aria-label="{a.title} font"
-        value={fontState[a.axis]}
-        options={options(a.axis)}
-        onchange={(v) => setFont(a.axis, String(v))}
+        aria-label="{axis.title} font"
+        value={fontState[axis.axis]}
+        options={options(axis.axis)}
+        onchange={(v) => setFont(axis.axis, String(v))}
       />
     </Row>
   {/each}

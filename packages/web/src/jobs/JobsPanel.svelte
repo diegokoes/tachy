@@ -10,24 +10,25 @@
   import { api } from "../api";
   import { createResource, errText } from "../resource.svelte";
   import {
-    Badge,
     Button,
     Checkbox,
     CrudTable,
     Field,
     FilterBar,
     GroupHead,
+    Icon,
     Modal,
     Note,
     Select,
     Tabs,
     isActive,
-    toneOf,
+    tip,
     type Column,
     type Draft,
     Time,
   } from "../tui";
-  import { shadowPulse } from "../motion/motion";
+  import { describeSchedule } from "./cron";
+  import { lastResult, statusMark } from "./status";
   import type {
     JobChange,
     JobDefinitionRow,
@@ -84,21 +85,22 @@
     ...values.map((v) => ({ value: v, label: v })),
   ];
 
-  /* No "failures only" toggle: each job's last run and its own run history
-     already answer "what broke", and the overview's failed counter opens
-     straight onto the jobs that did. */
+  // No "failures only" toggle: each job's last run and its own run history
+  // already answer "what broke", and the overview's failed counter opens
+  // straight onto the jobs that did.
   const filtered = $derived.by(() => {
-    const q = filter.trim().toLowerCase();
+    const needle = filter.trim().toLowerCase();
     return defs.data.filter(
-      (d) => !q || `${d.name} ${d.kind}`.toLowerCase().includes(q),
+      (d) => !needle || `${d.name} ${d.kind}`.toLowerCase().includes(needle),
     );
   });
 
   const columns: Column<JobDefinitionRow>[] = $derived([
+    { key: "health", label: "last run", width: "8rem", cell: healthCell },
     {
       key: "name",
-      label: "name",
-      width: "14rem",
+      label: "job",
+      width: "18rem",
       edit: "text",
       required: true,
       cell: nameCell,
@@ -106,21 +108,19 @@
     },
     {
       key: "kind",
-      label: "kind",
-      width: "11rem",
+      label: "type",
+      formOnly: true,
+      only: "create",
       edit: "select",
       required: true,
       editable: () => false,
-      options: info.data.kinds.map((k) => ({
-        value: k.kind,
-        label: `${k.kind}: ${k.title}`,
-      })),
-      info: "Job kind. Defined in code.",
+      options: info.data.kinds.map((k) => ({ value: k.kind, label: k.title })),
+      info: "What the job does. Types are defined in code.",
     },
     {
       key: "schedule",
       label: "schedule",
-      width: "10rem",
+      width: "14rem",
       edit: "text",
       placeholder: "0 2 * * *",
       value: (d) => d.schedule ?? "",
@@ -137,13 +137,13 @@
     {
       key: "queue",
       label: "queue",
-      width: "8rem",
+      width: "9rem",
       edit: "select",
       value: (d) => d.queue ?? "",
       options: (dr) => [
         {
           value: "",
-          label: `kind default (${kindOf(dr.kind)?.queue ?? "?"})`,
+          label: `type default (${kindOf(dr.kind)?.queue ?? "?"})`,
         },
         ...info.data.queues.map((q) => ({
           value: q.name,
@@ -151,7 +151,7 @@
         })),
       ],
       cell: queueCell,
-      info: "The lane its runs wait in. Each queue belongs to the light or heavy worker pool, whose sizes are set in Compose.",
+      info: "The line its runs wait in. Each queue belongs to the light or heavy worker pool, whose sizes are set in Compose.",
     },
     {
       key: "timeout",
@@ -160,7 +160,7 @@
       edit: "text",
       value: (d) => d.timeout ?? "",
       placeholder: (dr) => kindOf(dr.kind)?.timeout ?? "1h",
-      info: "Like 90s, 15m, 2h. Blank uses the kind's.",
+      info: "Like 90s, 15m, 2h. Blank uses the type's.",
     },
     {
       key: "overlap",
@@ -169,7 +169,7 @@
       edit: "select",
       value: (d) => d.overlap ?? "",
       options: (dr) =>
-        opt(JOB_OVERLAP, `kind default (${kindOf(dr.kind)?.overlap ?? "?"})`),
+        opt(JOB_OVERLAP, `type default (${kindOf(dr.kind)?.overlap ?? "?"})`),
       info: "Overlap policy: skip or queue.",
     },
     {
@@ -183,43 +183,43 @@
     },
     {
       key: "enabled",
-      label: "on",
-      width: "4rem",
+      label: "active",
+      formOnly: true,
       edit: "checkbox",
       initial: true,
-      cell: enabledCell,
+      info: "A paused job keeps its schedule but does not fire.",
     },
-    { key: "last", label: "last run", width: "11rem", cell: lastCell },
-    /* Running and pausing are what people come to this list to do, so they
-       sit on the row rather than one dialog away. */
-    { key: "acts", label: "", width: "8rem", align: "end", cell: actsCell },
+    // The toggle is what people come to this list to use, so it sits on the row
+    // rather than one dialog away.
+    { key: "toggle", label: "active", width: "5rem", cell: toggleCell },
+    { key: "acts", label: "", width: "3.5rem", align: "end", cell: actsCell },
   ]);
 
   function defaultsFor(schema: JsonSchema | undefined) {
-    const out: Record<string, unknown> = {};
-    for (const [k, p] of Object.entries(schema?.properties ?? {}))
-      if (p.default !== undefined) out[k] = p.default;
-    return out;
+    const defaults: Record<string, unknown> = {};
+    for (const [key, property] of Object.entries(schema?.properties ?? {}))
+      if (property.default !== undefined) defaults[key] = property.default;
+    return defaults;
   }
 
   function openedForm(
-    f: { mode: "create" | "edit"; row: JobDefinitionRow | null } | null,
+    form: { mode: "create" | "edit"; row: JobDefinitionRow | null } | null,
   ) {
-    params = f?.row ? { ...f.row.params } : {};
+    params = form?.row ? { ...form.row.params } : {};
   }
 
-  function payload(d: Draft) {
+  function payload(draft: Draft) {
     const blank = (v: unknown) =>
       String(v ?? "").trim() ? String(v).trim() : null;
     return {
-      name: String(d.name ?? "").trim(),
-      schedule: blank(d.schedule),
-      timezone: blank(d.timezone) ?? undefined,
-      queue: blank(d.queue),
-      timeout: blank(d.timeout),
-      overlap: blank(d.overlap),
-      notify: d.notify || "failure",
-      enabled: Boolean(d.enabled),
+      name: String(draft.name ?? "").trim(),
+      schedule: blank(draft.schedule),
+      timezone: blank(draft.timezone) ?? undefined,
+      queue: blank(draft.queue),
+      timeout: blank(draft.timeout),
+      overlap: blank(draft.overlap),
+      notify: draft.notify || "failure",
+      enabled: Boolean(draft.enabled),
       params,
     };
   }
@@ -231,14 +231,16 @@
     if (history?.id === id) historyRuns = runs;
   }
 
-  async function runNow(d: JobDefinitionRow) {
-    running = d.id;
+  async function runNow(definition: JobDefinitionRow) {
+    running = definition.id;
     error = null;
     try {
-      await api.post(`/jobs/definitions/${d.id}/run`, {});
+      await api.post(`/jobs/definitions/${definition.id}/run`, {});
       await Promise.all([
         defs.reload(),
-        history?.id === d.id ? loadHistoryRuns(d.id) : undefined,
+        history?.id === definition.id
+          ? loadHistoryRuns(definition.id)
+          : undefined,
       ]);
       void census.reload();
     } catch (e) {
@@ -248,13 +250,15 @@
     }
   }
 
-  /* Pausing is disabling: there is no separate verb on the server, and a
-     paused schedule is exactly a definition that is not enabled. */
-  async function pause(d: JobDefinitionRow) {
-    pausing = d.id;
+  // Pausing is disabling: there is no separate verb on the server, and a paused
+  // schedule is a definition that is not enabled.
+  async function pause(definition: JobDefinitionRow) {
+    pausing = definition.id;
     error = null;
     try {
-      await api.patch(`/jobs/definitions/${d.id}`, { enabled: !d.enabled });
+      await api.patch(`/jobs/definitions/${definition.id}`, {
+        enabled: !definition.enabled,
+      });
       await defs.reload();
       void census.reload();
     } catch (e) {
@@ -264,19 +268,19 @@
     }
   }
 
-  async function openHistory(d: JobDefinitionRow) {
-    history = d;
+  async function openHistory(definition: JobDefinitionRow) {
+    history = definition;
     historyRuns = null;
     historyChanges = [];
     historyTab = "runs";
     try {
       const [runs, changes] = await Promise.all([
         api.get<JobRunRow[]>(
-          `/jobs/runs?definition_id=${d.id}&limit=${HISTORY_LIMIT}`,
+          `/jobs/runs?definition_id=${definition.id}&limit=${HISTORY_LIMIT}`,
         ),
-        api.get<JobChange[]>(`/jobs/definitions/${d.id}/changes`),
+        api.get<JobChange[]>(`/jobs/definitions/${definition.id}/changes`),
       ]);
-      if (history?.id !== d.id) return;
+      if (history?.id !== definition.id) return;
       historyRuns = runs;
       historyChanges = changes;
     } catch (e) {
@@ -305,7 +309,7 @@
     logOpen = next;
   }
 
-  /* Runs move on the server; while any shown run is active, follow it. */
+  // Runs move on the server; while any shown run is active, follow it.
   const anyActive = $derived(
     defs.data.some((d) => isActive(d.last_run?.status)) ||
       (historyRuns ?? []).some((r) => isActive(r.status)),
@@ -332,75 +336,78 @@
     void connections.reload();
   });
 
-  async function createJob(d: Draft) {
+  async function createJob(draft: Draft) {
     await defs.mutate(() =>
       api.post<JobDefinitionRow>("/jobs/definitions", {
-        kind: d.kind,
-        ...payload(d),
-        params: { ...defaultsFor(kindOf(d.kind)?.params_schema), ...params },
+        kind: draft.kind,
+        ...payload(draft),
+        params: {
+          ...defaultsFor(kindOf(draft.kind)?.params_schema),
+          ...params,
+        },
       }),
     );
     void census.reload();
   }
 </script>
 
-{#snippet nameCell(d: JobDefinitionRow)}
-  {#if d.last_run?.status === "running"}
-    <span class="live" use:shadowPulse={{ loop: true }}>{d.name}</span>
+{#snippet healthCell(definition: JobDefinitionRow)}
+  {#if definition.disabled_reason}
+    <span class="mark inline danger" use:tip={definition.disabled_reason}
+      ><Icon name="alert" size="1.1em" />invalid</span
+    >
+  {:else if definition.last_run}
+    {@const last = lastResult(definition.last_run, Date.now())}
+    <span
+      class="mark inline {last.tone}"
+      class:spin={definition.last_run.status === "running"}
+      ><Icon name={last.icon} size="1.1em" />
+      <span class="dim">{last.short}</span></span
+    >
   {:else}
-    {d.name}
+    <span class="dim">never</span>
+  {/if}
+{/snippet}
+
+{#snippet nameCell(definition: JobDefinitionRow)}
+  {@const title = kindOf(definition.kind)?.title ?? definition.kind}
+  <span class="name">{definition.name}</span>
+  {#if definition.name !== title || definition.subject}
+    <span class="dim small"
+      >{definition.name !== title ? title : ""}{definition.name !== title &&
+      definition.subject
+        ? " · "
+        : ""}{definition.subject ?? ""}</span
+    >
   {/if}
 {/snippet}
 
 {#snippet statusBadge(status: string)}
-  {#if status === "running"}
-    <span class="live" use:shadowPulse={{ loop: true }}
-      ><Badge tone={toneOf(status)}>{status}</Badge></span
-    >
-  {:else}
-    <Badge tone={toneOf(status)}>{status}</Badge>
-  {/if}
+  {@const mark = statusMark(status)}
+  <span class="mark inline {mark.tone}" class:spin={status === "running"}>
+    <Icon name={mark.icon} size="1.1em" />{mark.label}
+  </span>
 {/snippet}
 
-{#snippet scheduleCell(d: JobDefinitionRow)}
-  {#if d.schedule}
-    <span class="sched"
-      >{d.schedule}<span class="dim"
-        >{d.timezone === info.data.timezone ? "" : ` ${d.timezone}`}</span
-      ></span
+{#snippet scheduleCell(definition: JobDefinitionRow)}
+  {#if definition.schedule}
+    <span class="name" use:tip={definition.schedule}
+      >{describeSchedule(definition.schedule)}{definition.timezone ===
+      info.data.timezone
+        ? ""
+        : ` ${definition.timezone}`}</span
     >
-    {#if d.next_run}<span class="dim small">next <Time at={d.next_run} /></span
+    {#if definition.next_run}<span class="dim small"
+        >next <Time at={definition.next_run} /></span
       >{/if}
   {:else}
-    <span class="dim">by hand</span>
+    <span class="dim">manual only</span>
   {/if}
 {/snippet}
 
-{#snippet queueCell(d: JobDefinitionRow)}
-  {@const queue = d.queue ?? kindOf(d.kind)?.queue}
-  {#if queue}
-    {@const cls = jobQueue(queue).class}
-    <Badge tone={cls === "heavy" ? "danger" : "info"}>{queue}</Badge>
-  {:else}
-    <span class="dim">-</span>
-  {/if}
-{/snippet}
-
-{#snippet enabledCell(d: JobDefinitionRow)}
-  {#if d.disabled_reason}
-    <Badge tone="danger">disabled</Badge>
-  {:else}
-    <Badge tone={d.enabled ? "ok" : "muted"}>{d.enabled ? "on" : "off"}</Badge>
-  {/if}
-{/snippet}
-
-{#snippet lastCell(d: JobDefinitionRow)}
-  {#if d.last_run}
-    {@render statusBadge(d.last_run.status)}
-    <span class="dim small"><Time at={d.last_run.created_at} /></span>
-  {:else}
-    <span class="dim">never</span>
-  {/if}
+{#snippet queueCell(definition: JobDefinitionRow)}
+  {@const queue = definition.queue ?? kindOf(definition.kind)?.queue}
+  <span class="mono">{queue ?? "-"}</span>
 {/snippet}
 
 {#snippet runList(runs: JobRunRow[])}
@@ -409,44 +416,46 @@
   {:else}
     <table class="runs">
       <tbody>
-        {#each runs as r (r.id)}
+        {#each runs as run (run.id)}
           <tr>
-            <td>{@render statusBadge(r.status)}</td>
-            <td class="dim">{r.trigger}</td>
-            <td class="dim"><Time at={r.created_at} /></td>
+            <td>{@render statusBadge(run.status)}</td>
+            <td class="dim">{run.trigger}</td>
+            <td class="dim"><Time at={run.created_at} /></td>
             <td>
-              {#if r.status === "running" && r.progress != null}
-                {Math.round(r.progress * 100)}%{r.progress_note
-                  ? ` · ${r.progress_note}`
+              {#if run.status === "running" && run.progress != null}
+                {Math.round(run.progress * 100)}%{run.progress_note
+                  ? ` · ${run.progress_note}`
                   : ""}
-              {:else if r.error}
-                <span class="err">{r.error}</span>
-              {:else if r.attempts > 1}
-                <span class="dim">attempt {r.attempts}/{r.max_attempts}</span>
+              {:else if run.error}
+                <span class="err">{run.error}</span>
+              {:else if run.attempts > 1}
+                <span class="dim"
+                  >attempt {run.attempts}/{run.max_attempts}</span
+                >
               {/if}
             </td>
             <td class="acts">
-              {#if r.log_tail}
+              {#if run.log_tail}
                 <Button
                   variant="ghost"
                   size="sm"
-                  onclick={() => toggleLog(r.id)}
-                  >{logOpen.has(r.id) ? "hide log" : "log"}</Button
+                  onclick={() => toggleLog(run.id)}
+                  >{logOpen.has(run.id) ? "hide log" : "log"}</Button
                 >
               {/if}
-              {#if isActive(r.status)}
+              {#if isActive(run.status)}
                 <Button
                   variant="ghost"
                   size="sm"
                   tone="danger"
                   icon="stop"
-                  onclick={() => cancel(r)}>stop</Button
+                  onclick={() => cancel(run)}>stop</Button
                 >
               {/if}
             </td>
           </tr>
-          {#if logOpen.has(r.id)}
-            <tr><td colspan="5"><pre class="log">{r.log_tail}</pre></td></tr>
+          {#if logOpen.has(run.id)}
+            <tr><td colspan="5"><pre class="log">{run.log_tail}</pre></td></tr>
           {/if}
         {/each}
       </tbody>
@@ -456,7 +465,7 @@
 
 {#snippet paramField(
   name: string,
-  p: JsonSchema,
+  property: JsonSchema,
   required: boolean,
   kind: JobKindInfo,
 )}
@@ -464,7 +473,7 @@
     <Field
       label={name}
       {required}
-      info={p.description ?? "The source connection this runs against."}
+      info={property.description ?? "The source connection this runs against."}
     >
       <Select
         value={String(params[name] ?? "")}
@@ -484,29 +493,34 @@
         onchange={(v) => (params[name] = String(v))}
       />
     </Field>
-  {:else if p.enum}
-    <Field label={name} {required} info={p.description}>
+  {:else if property.enum}
+    <Field label={name} {required} info={property.description}>
       <Select
-        value={String(params[name] ?? p.default ?? "")}
-        options={p.enum.map((v) => ({ value: String(v), label: String(v) }))}
+        value={String(params[name] ?? property.default ?? "")}
+        options={property.enum.map((v) => ({
+          value: String(v),
+          label: String(v),
+        }))}
         aria-label={name}
         onchange={(v) => (params[name] = v)}
       />
     </Field>
-  {:else if p.type === "boolean"}
-    <Field label={name} info={p.description} inline>
+  {:else if property.type === "boolean"}
+    <Field label={name} info={property.description} inline>
       <Checkbox
-        checked={Boolean(params[name] ?? p.default)}
+        checked={Boolean(params[name] ?? property.default)}
         ariaLabel={name}
         onchange={(v) => (params[name] = v)}
       />
     </Field>
-  {:else if p.type === "number" || p.type === "integer"}
-    <Field label={name} {required} info={p.description}>
+  {:else if property.type === "number" || property.type === "integer"}
+    <Field label={name} {required} info={property.description}>
       <input
         inputmode="numeric"
-        value={params[name] ?? p.default ?? ""}
-        placeholder={p.default !== undefined ? String(p.default) : ""}
+        value={params[name] ?? property.default ?? ""}
+        placeholder={property.default !== undefined
+          ? String(property.default)
+          : ""}
         oninput={(e) => {
           const t = e.currentTarget.value.trim();
           if (t === "") delete params[name];
@@ -515,39 +529,49 @@
       />
     </Field>
   {:else}
-    <Field label={name} {required} info={p.description}>
+    <Field label={name} {required} info={property.description}>
       <input
         value={String(params[name] ?? "")}
-        placeholder={p.default !== undefined ? String(p.default) : ""}
+        placeholder={property.default !== undefined
+          ? String(property.default)
+          : ""}
         oninput={(e) => (params[name] = e.currentTarget.value)}
       />
     </Field>
   {/if}
 {/snippet}
 
-{#snippet formExtra(f: {
+{#snippet formExtra(form: {
   mode: "create" | "edit";
   row: JobDefinitionRow | null;
   draft: Draft;
 })}
-  {@const kind = kindOf(f.draft.kind)}
+  {@const kind = kindOf(form.draft.kind)}
   {@const effectiveClass = jobQueue(
-    String(f.draft.queue || kind?.queue || "maintenance"),
+    String(form.draft.queue || kind?.queue || "maintenance"),
   ).class}
   {#if kind}
-    {#if kind.description}<Note>{kind.description}</Note>{/if}
+    {#if form.mode === "edit" || kind.description}
+      <Note
+        >{#if form.mode === "edit"}<strong>{kind.title}.</strong>
+        {/if}{kind.description ?? ""}</Note
+      >
+    {/if}
     {#if Object.keys(kind.params_schema.properties ?? {}).length}
       <GroupHead label="parameters" />
-      {#each Object.entries(kind.params_schema.properties ?? {}) as [name, p] (name)}
+      {#each Object.entries(kind.params_schema.properties ?? {}) as [name, property] (name)}
         {@render paramField(
           name,
-          p,
+          property,
           (kind.params_schema.required ?? []).includes(name),
           kind,
         )}
       {/each}
     {/if}
-    <SchedulePreview schedule={f.draft.schedule} timezone={f.draft.timezone} />
+    <SchedulePreview
+      schedule={form.draft.schedule}
+      timezone={form.draft.timezone}
+    />
     {#if (info.data.class_chat_slots[effectiveClass] ?? 0) > 0}
       <Note>
         while this runs, the chat cap is
@@ -559,14 +583,35 @@
       </Note>
     {/if}
   {/if}
-  {#if f.row?.disabled_reason}<Note tone="danger">{f.row.disabled_reason}</Note
+  {#if form.row?.disabled_reason}<Note tone="danger"
+      >{form.row.disabled_reason}</Note
     >{/if}
 {/snippet}
 
-<!-- Running and pausing happen on the row; the dialog is for editing, so it
-     carries only the way into runs and changes. Pause stays lit while a job
-     is paused, so the state is on the button that changes it. -->
-{#snippet controls(d: JobDefinitionRow)}
+<!-- Pausing happens on the row, as one button that is the job's state: a
+     check while active, a pause while not, one morphing into the other. Not
+     marked busy, which would swap the icon out mid-tween. -->
+{#snippet toggle(definition: JobDefinitionRow)}
+  <Button
+    variant="ghost"
+    square
+    iconSize="1.4em"
+    icon={definition.enabled ? "active" : "pause"}
+    morph
+    tone={definition.enabled ? "ok" : "warn"}
+    aria-pressed={!definition.enabled}
+    title={definition.enabled
+      ? "active, click to pause"
+      : "paused, click to resume"}
+    aria-label={definition.enabled
+      ? `pause ${definition.name}`
+      : `resume ${definition.name}`}
+    disabled={pausing === definition.id}
+    onclick={() => pause(definition)}
+  />
+{/snippet}
+
+{#snippet dialogActions(definition: JobDefinitionRow)}
   <Button
     variant="ghost"
     square
@@ -574,45 +619,32 @@
     icon="run"
     tone="ok"
     title="run now"
-    aria-label={`run ${d.name} now`}
-    busy={running === d.id}
-    disabled={running === d.id}
-    onclick={() => runNow(d)}
+    aria-label={`run ${definition.name} now`}
+    busy={running === definition.id}
+    disabled={running === definition.id}
+    onclick={() => runNow(definition)}
   />
-  <Button
-    variant="ghost"
-    square
-    iconSize="1.4em"
-    icon="pause"
-    tone={d.enabled ? undefined : "warn"}
-    aria-pressed={!d.enabled}
-    title={d.enabled
-      ? d.schedule
-        ? "pause the schedule"
-        : "pause"
-      : "paused, click to resume"}
-    aria-label={d.enabled ? `pause ${d.name}` : `resume ${d.name}`}
-    busy={pausing === d.id}
-    disabled={pausing === d.id}
-    onclick={() => pause(d)}
-  />
-  {@render historyButton(d)}
+  {@render historyButton(definition)}
 {/snippet}
 
-{#snippet historyButton(d: JobDefinitionRow)}
+{#snippet historyButton(definition: JobDefinitionRow)}
   <Button
     variant="ghost"
     square
     iconSize="1.4em"
     icon="history"
     title="runs and changes"
-    aria-label={`runs and changes of ${d.name}`}
-    onclick={() => openHistory(d)}
+    aria-label={`runs and changes of ${definition.name}`}
+    onclick={() => openHistory(definition)}
   />
 {/snippet}
 
-{#snippet actsCell(d: JobDefinitionRow)}
-  <span class="acts">{@render controls(d)}</span>
+{#snippet toggleCell(definition: JobDefinitionRow)}
+  {@render toggle(definition)}
+{/snippet}
+
+{#snippet actsCell(definition: JobDefinitionRow)}
+  <span class="acts">{@render historyButton(definition)}</span>
 {/snippet}
 
 {#if error}<Note tone="danger">{error}</Note>{/if}
@@ -622,8 +654,7 @@
   bind:value={filter}
   shown={filtered.length}
   total={defs.data.length}
-  placeholder="filter jobs…"
-  label="filter jobs"
+  label="search jobs"
 />
 
 <CrudTable
@@ -638,7 +669,7 @@
   noun="job"
   editTitle={(d) => d.name}
   width="48rem"
-  extraActions={historyButton}
+  extraActions={dialogActions}
   {formExtra}
   onform={(f) => {
     openedForm(f);
@@ -682,9 +713,9 @@
       {/if}
       {@render runList(historyRuns)}
     {:else}
-      {#each historyChanges as c (c.id)}
+      {#each historyChanges as change (change.id)}
         <div class="dim small">
-          <Time at={c.created_at} /> · {c.action} by {c.changed_by ??
+          <Time at={change.created_at} /> · {change.action} by {change.changed_by ??
             "the system"}
         </div>
       {:else}
@@ -706,8 +737,54 @@
     display: block;
     font-size: 0.85em;
   }
-  .sched {
+  .mono {
     font-family: var(--font-mono);
+  }
+  .name {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .by {
+    display: flex;
+    align-items: center;
+    gap: var(--pad-2);
+  }
+  .by span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mark {
+    display: inline-flex;
+    color: var(--muted);
+  }
+  .mark.inline {
+    align-items: center;
+    gap: var(--pad-1);
+  }
+  .mark.ok {
+    color: var(--ok);
+  }
+  .mark.danger {
+    color: var(--danger);
+  }
+  .mark.accent {
+    color: var(--accent);
+  }
+  .mark.spin :global(svg) {
+    animation: spin 1.4s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mark.spin :global(svg) {
+      animation: none;
+    }
   }
   .runs {
     width: 100%;
@@ -732,8 +809,5 @@
     border: 1px dashed var(--border);
     white-space: pre-wrap;
     font-size: 0.85em;
-  }
-  .live {
-    color: var(--accent);
   }
 </style>

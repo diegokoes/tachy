@@ -22,23 +22,23 @@ export interface WorkItemLinkInput {
  * tightens into a work-item link once that item is ingested, rather than
  * becoming a second row.
  */
-export async function addWorkItemLink(i: WorkItemLinkInput) {
-  if (!i.toWorkItemId && !i.toExternalId)
+export async function addWorkItemLink(input: WorkItemLinkInput) {
+  if (!input.toWorkItemId && !input.toExternalId)
     throw badInput("a link needs either to_work_item_id or to_external_id");
   return sql.begin(async (tx) => {
     const [existing] = await tx`
       select id from work_item_links
-      where from_work_item_id = ${i.fromWorkItemId} and kind = ${i.kind}
-        and (to_work_item_id = ${i.toWorkItemId ?? null}::uuid
-             or to_external_id = ${i.toExternalId ?? null}::text)
+      where from_work_item_id = ${input.fromWorkItemId} and kind = ${input.kind}
+        and (to_work_item_id = ${input.toWorkItemId ?? null}::uuid
+             or to_external_id = ${input.toExternalId ?? null}::text)
       limit 1
     `;
     if (existing) {
       const [row] = await tx`
         update work_item_links set
-          to_work_item_id      = coalesce(${i.toWorkItemId ?? null}::uuid, to_work_item_id),
-          to_source_project_id = coalesce(${i.toSourceProjectId ?? null}::uuid, to_source_project_id),
-          to_external_id       = coalesce(${i.toExternalId ?? null}::text, to_external_id)
+          to_work_item_id      = coalesce(${input.toWorkItemId ?? null}::uuid, to_work_item_id),
+          to_source_project_id = coalesce(${input.toSourceProjectId ?? null}::uuid, to_source_project_id),
+          to_external_id       = coalesce(${input.toExternalId ?? null}::text, to_external_id)
         where id = ${existing.id}
         returning id, kind
       `;
@@ -47,8 +47,8 @@ export async function addWorkItemLink(i: WorkItemLinkInput) {
     const [row] = await tx`
       insert into work_item_links
         (from_work_item_id, to_work_item_id, to_source_project_id, to_external_id, kind, created_by)
-      values (${i.fromWorkItemId}, ${i.toWorkItemId ?? null}, ${i.toSourceProjectId ?? null},
-              ${i.toExternalId ?? null}, ${i.kind}, ${i.createdById ?? null})
+      values (${input.fromWorkItemId}, ${input.toWorkItemId ?? null}, ${input.toSourceProjectId ?? null},
+              ${input.toExternalId ?? null}, ${input.kind}, ${input.createdById ?? null})
       returning id, kind
     `;
     return row;

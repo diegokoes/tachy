@@ -32,6 +32,7 @@ export type JobKindInfo = {
 export type JobRunRow = JobRun;
 export type JobRunListedRow = JobRunListed;
 export type JobDefinitionRow = JobDefinition & {
+  subject: string | null;
   next_run: string | null;
   last_run: Pick<JobRun, "id" | "status" | "created_at" | "error"> | null;
 };

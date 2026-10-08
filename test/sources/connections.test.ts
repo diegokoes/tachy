@@ -19,8 +19,8 @@ let seen: { token?: string; baseUrl: string } | null = null;
 let verifyFails = false;
 let groupsForbidden = false;
 
-const fakeFactory: SourceFactory = (cfg) => {
-  seen = { token: cfg.token, baseUrl: cfg.baseUrl };
+const fakeFactory: SourceFactory = (config) => {
+  seen = { token: config.token, baseUrl: config.baseUrl };
   return {
     type: "fake",
     capabilities: { postNote: false, incrementalSync: false },
@@ -107,11 +107,11 @@ describe("creating a connection from the admin UI", () => {
   it("rejects slugs the credential vault and env vars cannot express", async () => {
     const cookie = await adminCookie();
     for (const slug of ["ui_conn", "UI-conn", "ui.conn", "-ui"]) {
-      const res = await app.request("/api/source-connections", {
+      const response = await app.request("/api/source-connections", {
         ...json({ sourceType: "fake", slug, baseUrl: "https://x.example.com" }),
         headers: { "Content-Type": "application/json", cookie },
       });
-      expect(res.status, slug).toBe(400);
+      expect(response.status, slug).toBe(400);
     }
   });
 
@@ -203,12 +203,12 @@ describe("the test button", () => {
       headers: { "Content-Type": "application/json", cookie },
     });
 
-    const res = await app.request("/api/source-connections/ui-conn/test", {
+    const response = await app.request("/api/source-connections/ui-conn/test", {
       method: "POST",
       headers: { cookie },
     });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
       ok: true,
       identity: "svc@example.com",
       groups: [{ key: "Proj A" }],
@@ -228,11 +228,11 @@ describe("the test button", () => {
     });
     groupsForbidden = true;
 
-    const res = await app.request("/api/source-connections/ui-conn/test", {
+    const response = await app.request("/api/source-connections/ui-conn/test", {
       method: "POST",
       headers: { cookie },
     });
-    const body = (await res.json()) as {
+    const body = (await response.json()) as {
       ok: boolean;
       identity: string;
       groups: unknown[];
@@ -257,12 +257,12 @@ describe("the test button", () => {
     });
     verifyFails = true;
 
-    const res = await app.request("/api/source-connections/ui-conn/test", {
+    const response = await app.request("/api/source-connections/ui-conn/test", {
       method: "POST",
       headers: { cookie },
     });
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { ok: boolean; error: string };
     expect(body.ok).toBe(false);
     expect(body.error).toContain("401 bad token");
   });
@@ -363,7 +363,7 @@ describe("registering projects on a connection", () => {
 
 describe("the work-item field schema route", () => {
   const conn = async (cookie: string) => {
-    const res = await app.request("/api/source-connections", {
+    const response = await app.request("/api/source-connections", {
       ...json({
         sourceType: "azure-devops",
         slug: "ui-ado",
@@ -371,7 +371,7 @@ describe("the work-item field schema route", () => {
       }),
       headers: { "Content-Type": "application/json", cookie },
     });
-    expect(res.status).toBe(200);
+    expect(response.status).toBe(200);
   };
 
   it("is curator-only, unlike the neighbouring discovery probes", async () => {
@@ -388,30 +388,30 @@ describe("the work-item field schema route", () => {
       "a-long-password",
     );
 
-    const res = await app.request(
+    const response = await app.request(
       "/api/source-connections/ui-ado/work-item-schema?project=ProjA&type=Bug",
       { headers: { Cookie: theirs } },
     );
-    expect(res.status).toBe(403);
+    expect(response.status).toBe(403);
   });
 
   it("requires both project and type", async () => {
     const cookie = await adminCookie();
     await conn(cookie);
-    const res = await app.request(
+    const response = await app.request(
       "/api/source-connections/ui-ado/work-item-schema?project=ProjA",
       { headers: { Cookie: cookie } },
     );
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/project and type/);
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/project and type/);
   });
 
   it("404s an unknown connection", async () => {
     const cookie = await adminCookie();
-    const res = await app.request(
+    const response = await app.request(
       "/api/source-connections/nope/work-item-schema?project=P&type=Bug",
       { headers: { Cookie: cookie } },
     );
-    expect(res.status).toBe(404);
+    expect(response.status).toBe(404);
   });
 });

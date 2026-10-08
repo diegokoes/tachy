@@ -44,11 +44,9 @@ export class EmbedQueue {
       queryBatch: number;
       /**
        * UTF-8 bytes one batch may hold, of queries or of passages. A token is
-       * at least a byte, so this bounds a batch's tokens whatever the script,
-       * where a character count does not: Chinese runs past one token a
-       * character. A batch occupies the model for as long as its text is, and
-       * a search waits behind it; a model with a long window makes eight full
-       * chunks a six-second wait.
+       * at least a byte, so this bounds a batch's tokens in any script, where a
+       * character count does not: CJK runs past one token a character. A
+       * search waits behind the batch for as long as its text is.
        */
       batchBytes?: number;
     } = { passageBatch: 8, queryBatch: 32 },
@@ -90,7 +88,7 @@ export class EmbedQueue {
   get depth(): EmbedQueueDepth {
     let passages = 0;
     for (const jobs of this.passages.values())
-      for (const j of jobs) passages += j.texts.length - j.next;
+      for (const job of jobs) passages += job.texts.length - job.next;
     return {
       queries: this.queries.reduce((n, j) => n + j.texts.length, 0),
       passages,
@@ -99,15 +97,16 @@ export class EmbedQueue {
     };
   }
 
+  private nextStep() {
+    if (this.queries.length) return this.runQueries();
+    if (this.rotation.length) return this.runPassages(this.rotation);
+    if (this.lowRotation.length) return this.runPassages(this.lowRotation);
+    return undefined;
+  }
+
   private pump(): void {
     if (this.running) return;
-    const step = this.queries.length
-      ? this.runQueries()
-      : this.rotation.length
-        ? this.runPassages(this.rotation)
-        : this.lowRotation.length
-          ? this.runPassages(this.lowRotation)
-          : undefined;
+    const step = this.nextStep();
     if (!step) return;
     this.running = true;
     void step.finally(() => {
@@ -149,22 +148,22 @@ export class EmbedQueue {
     const jobs = this.passages.get(caller)!;
     const job = jobs[0];
     const budget = this.opts.batchBytes ?? Infinity;
-    const idx: number[] = [];
+    const picked: number[] = [];
     let bytes = 0;
     for (const i of job.order.slice(
       job.next,
       job.next + this.opts.passageBatch,
     )) {
       const size = Buffer.byteLength(job.texts[i]);
-      if (idx.length && bytes + size > budget) break;
-      idx.push(i);
+      if (picked.length && bytes + size > budget) break;
+      picked.push(i);
       bytes += size;
     }
     let failed = false;
     try {
-      const vectors = await this.run(idx.map((i) => job.texts[i]));
-      idx.forEach((i, k) => (job.out[i] = vectors[k]));
-      job.next += idx.length;
+      const vectors = await this.run(picked.map((i) => job.texts[i]));
+      picked.forEach((i, k) => (job.out[i] = vectors[k]));
+      job.next += picked.length;
     } catch (err) {
       failed = true;
       job.reject(err);

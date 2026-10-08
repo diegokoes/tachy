@@ -37,15 +37,15 @@ export async function productTagRenameImpact(
   slug: string,
 ): Promise<{ entries: number; docs: number }> {
   if (!(await tagId(table, productId, slug))) throw missing(table, slug);
-  const [e] = await sql<{ n: number }[]>`
+  const [entries] = await sql<{ n: number }[]>`
     select count(*)::int as n from knowledge_entries
     where product_id = ${productId} and ${slug} = any(tags)
   `;
-  const [d] = await sql<{ n: number }[]>`
+  const [docs] = await sql<{ n: number }[]>`
     select count(*)::int as n from reference_docs
     where product_id = ${productId} and ${slug} = any(tags)
   `;
-  return { entries: e.n, docs: d.n };
+  return { entries: entries.n, docs: docs.n };
 }
 
 export async function renameProductTag(
@@ -63,11 +63,11 @@ export async function renameProductTag(
       `${NOUN[table]} '${newSlug}' already exists for this product`,
     );
   return sql.begin(async (tx) => {
-    const e = await tx`
+    const entries = await tx`
       update knowledge_entries set tags = array_replace(tags, ${oldSlug}, ${newSlug})
       where product_id = ${productId} and ${oldSlug} = any(tags)
     `;
-    const d = await tx`
+    const docs = await tx`
       update reference_docs set tags = array_replace(tags, ${oldSlug}, ${newSlug})
       where product_id = ${productId} and ${oldSlug} = any(tags)
     `;
@@ -76,8 +76,8 @@ export async function renameProductTag(
       renamed: true,
       from: oldSlug,
       to: newSlug,
-      entries: e.count,
-      docs: d.count,
+      entries: entries.count,
+      docs: docs.count,
     };
   });
 }

@@ -158,7 +158,7 @@ const MESSAGES: Record<string, Message> = {
   },
   "jobs.no_worker": {
     tone: "danger",
-    section: "processes",
+    section: "queues",
     head: (n) =>
       `${plural(n, "queue", "queues")} with runs waiting and no live worker`,
     item: (l) => `${l}: no running worker claims from it`,
@@ -230,28 +230,45 @@ export type IssueGroup = {
   more: number;
 };
 
+const worstFirst = (
+  a: Pick<IssueGroup, "tone">,
+  b: Pick<IssueGroup, "tone">,
+) => {
+  if (a.tone === b.tone) return 0;
+  return a.tone === "danger" ? -1 : 1;
+};
+
 /** The open issues, worded, worst first. */
 export function issueGroups(issues: Issues): IssueGroup[] {
   return Object.entries(issues)
-    .flatMap(([key, v]) => {
-      const m = MESSAGES[key];
-      if (!m || !v || v.n <= 0 || (m.show && !m.show())) return [];
-      const items = m.item
-        ? v.items.map((it) => ({ key: it.key, text: m.item!(it.label) }))
+    .flatMap(([key, issue]) => {
+      const message = MESSAGES[key];
+      if (
+        !message ||
+        !issue ||
+        issue.n <= 0 ||
+        (message.show && !message.show())
+      )
+        return [];
+      const items = message.item
+        ? issue.items.map((it) => ({
+            key: it.key,
+            text: message.item!(it.label),
+          }))
         : [];
       return [
         {
           key,
-          n: v.n,
-          tone: m.tone,
-          section: m.section,
-          head: m.head(v.n),
+          n: issue.n,
+          tone: message.tone,
+          section: message.section,
+          head: message.head(issue.n),
           items,
-          more: m.item ? Math.max(0, v.n - v.items.length) : 0,
+          more: message.item ? Math.max(0, issue.n - issue.items.length) : 0,
         },
       ];
     })
-    .sort((a, b) => (a.tone === b.tone ? 0 : a.tone === "danger" ? -1 : 1));
+    .sort(worstFirst);
 }
 
 /** Every issue key the SPA can word. */

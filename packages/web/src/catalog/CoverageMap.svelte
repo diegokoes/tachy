@@ -22,8 +22,8 @@
   const shown = $derived(trail[trail.length - 1]);
   const top = $derived(hottest(whole));
 
-  /* The zoom is the route, so the browser's back is a zoom out and a view
-     of one product can be linked. */
+  // The zoom is the route, so the browser's back is a zoom out and a view of
+  // one product can be linked.
   const zoom = (key: string) => navigate(key ? `${BASE}/${key}` : BASE);
 
   onMount(() => {
@@ -44,19 +44,22 @@
 <div class="stage">
   <div class="bar">
     <nav class="trail" aria-label="zoom">
-      {#each trail as b, i (b.key)}
+      {#each trail as block, i (block.key)}
         {#if i}<span class="sep">›</span>{/if}
         {#if i < trail.length - 1}
-          <button type="button" onclick={() => zoom(b.key)}>{b.label}</button>
+          <button type="button" onclick={() => zoom(block.key)}
+            >{block.label}</button
+          >
         {:else}
-          <span class="here">{b.label}</span>
+          <span class="here">{block.label}</span>
         {/if}
       {/each}
     </nav>
     <span class="legend">
       <span class="swatch hollow"></span>0
-      {#each RAMP_STEPS as s (s)}
-        <span class="swatch" style="background: {toneMix('accent', s)}"></span>
+      {#each RAMP_STEPS as step (step)}
+        <span class="swatch" style="background: {toneMix('accent', step)}"
+        ></span>
       {/each}
       {top} searchable
     </span>

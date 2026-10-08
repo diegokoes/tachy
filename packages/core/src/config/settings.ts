@@ -10,10 +10,10 @@ export { AGENT_EFFORTS, DEPLOYMENT_PROFILES };
 export type { AgentEffort, DeploymentProfile };
 
 /** Whether `tz` is a zone this runtime knows, e.g. Europe/Madrid. */
-export function isTimezone(tz: string | undefined): tz is string {
-  if (!tz) return false;
+export function isTimezone(zone: string | undefined): zone is string {
+  if (!zone) return false;
   try {
-    new Intl.DateTimeFormat("en", { timeZone: tz });
+    new Intl.DateTimeFormat("en", { timeZone: zone });
     return true;
   } catch {
     return false;
@@ -43,9 +43,9 @@ export type SettingsMap = {
 
 /**
  * How long a process trusts what it last read. A setting is saved in the api,
- * and the workers are other processes: without an expiry a worker kept the
- * values it started with, so redaction switched on in the admin page did not
- * reach a flow's model call until the worker restarted.
+ * and the workers are other processes: without an expiry a worker keeps the
+ * values it started with, and redaction switched on in the admin page does not
+ * reach a flow's model call until the worker restarts.
  */
 const CACHE_MS = 15_000;
 let cache: { at: number; value: SettingsMap } | undefined;
@@ -53,16 +53,17 @@ let cache: { at: number; value: SettingsMap } | undefined;
 export async function getSettings(): Promise<SettingsMap> {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.value;
   const rows = await sql`select key, value from settings`;
-  const out: SettingsMap = {};
+  const settings: SettingsMap = {};
   for (const row of rows) {
     const key = row.key as string;
     if (key in SETTING_SCHEMAS) {
       const parsed = SETTING_SCHEMAS[key as SettingKey].safeParse(row.value);
-      if (parsed.success) (out as Record<string, unknown>)[key] = parsed.data;
+      if (parsed.success)
+        (settings as Record<string, unknown>)[key] = parsed.data;
     }
   }
-  cache = { at: Date.now(), value: out };
-  return out;
+  cache = { at: Date.now(), value: settings };
+  return settings;
 }
 
 export async function setSetting(key: string, value: unknown): Promise<void> {
@@ -105,12 +106,11 @@ export async function effectiveSettings(): Promise<EffectiveSettings> {
     dbVal: T | undefined,
     envVal: T | undefined,
     dflt: T,
-  ): { value: T; source: SettingSource } =>
-    dbVal !== undefined
-      ? { value: dbVal, source: "db" }
-      : envVal !== undefined
-        ? { value: envVal, source: "env" }
-        : { value: dflt, source: "default" };
+  ): { value: T; source: SettingSource } => {
+    if (dbVal !== undefined) return { value: dbVal, source: "db" };
+    if (envVal !== undefined) return { value: envVal, source: "env" };
+    return { value: dflt, source: "default" };
+  };
 
   const envEffort = AGENT_EFFORTS.includes(
     process.env.TACHY_AGENT_EFFORT as never,
@@ -163,10 +163,9 @@ export async function orgTimezone(): Promise<string> {
 }
 
 /**
- * Both directions, deliberately: `globalRedactionEnabled()` reads the variable
- * at call time, so setting it and never clearing it left the admin panel
- * reporting redaction off from the database while every scrub path still ran -
- * and the MCP subprocess inherited that.
+ * Both directions: `globalRedactionEnabled()` reads the variable at call time,
+ * so one set and never cleared keeps every scrub path running, in the MCP
+ * subprocess too, while the admin panel reports redaction off.
  */
 export async function loadSettingsIntoEnv(): Promise<void> {
   const eff = await effectiveSettings();

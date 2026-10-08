@@ -101,23 +101,21 @@
     },
     modelCalls: String(FLOW_MODEL_CALLS_PER_DAY),
   });
+  const draftOf = (flow: Flow): Draft => ({
+    id: flow.id,
+    name: flow.name,
+    team: flow.team_slug,
+    enabled: flow.enabled,
+    graph: flow.graph,
+    modelCalls: String(flow.model_calls_per_day),
+  });
 
   $effect(() => {
     const id = flowId;
-    const f = flows.find((x) => x.id === id);
-    const next: Draft | null =
-      id === NEW
-        ? blank()
-        : f
-          ? {
-              id: f.id,
-              name: f.name,
-              team: f.team_slug,
-              enabled: f.enabled,
-              graph: f.graph,
-              modelCalls: String(f.model_calls_per_day),
-            }
-          : null;
+    const stored = flows.find((x) => x.id === id);
+    let next: Draft | null = null;
+    if (id === NEW) next = blank();
+    else if (stored) next = draftOf(stored);
     draft = next;
     saved = id === NEW ? "" : JSON.stringify(next);
     selection = null;
@@ -145,16 +143,14 @@
     ),
   );
 
-  /* ---- editing ------------------------------------------------------------ */
-
   let selection = $state<Selection | null>(null);
   let palette = $state<{ anchor: HTMLElement; slot: Slot } | null>(null);
   let triggerMenu = $state<HTMLElement | null>(null);
 
   const setGraph = (g: FlowGraph) => draft && (draft.graph = g);
 
-  function newStep(p: Pick, graph: FlowGraph): FlowStep {
-    if (p.kind === "if")
+  function newStep(pick: Pick, graph: FlowGraph): FlowStep {
+    if (pick.kind === "if")
       return {
         id: freshId(graph, "if"),
         kind: "if",
@@ -162,23 +158,23 @@
         then: [],
         else: [],
       };
-    if (p.kind === "filter")
+    if (pick.kind === "filter")
       return {
         id: freshId(graph, "only-if"),
         kind: "filter",
         when: { all: [newCondition()] },
       };
     return {
-      id: freshId(graph, p.action.key.split(".").pop() ?? "step"),
+      id: freshId(graph, pick.action.key.split(".").pop() ?? "step"),
       kind: "action",
-      action: p.action.key,
+      action: pick.action.key,
       params: {},
     };
   }
 
-  function place(p: Pick) {
+  function place(pick: Pick) {
     if (!draft || !palette) return;
-    const step = newStep(p, draft.graph);
+    const step = newStep(pick, draft.graph);
     setGraph(insertStep(draft.graph, palette.slot, step));
     palette = null;
     selection = { kind: "step", id: step.id };
@@ -189,25 +185,20 @@
     manual: "triggerManual",
     schedule: "triggerSchedule",
   };
+  const TRIGGER_IDS: Record<FlowTrigger["kind"], string> = {
+    "item.synced": "synced",
+    manual: "by-hand",
+    schedule: "schedule",
+  };
+  function startParams(kind: FlowTrigger["kind"]): FlowTrigger["params"] {
+    if (kind === "schedule") return { cron: "0 7 * * 1-5", timezone: "UTC" };
+    if (kind === "item.synced" && connection) return { connection };
+    return {};
+  }
   function addTrigger(kind: FlowTrigger["kind"]) {
     if (!draft) return;
-    const id = freshId(
-      draft.graph,
-      kind === "item.synced"
-        ? "synced"
-        : kind === "schedule"
-          ? "schedule"
-          : "by-hand",
-    );
-    const firstConn = connection;
-    const params =
-      kind === "schedule"
-        ? { cron: "0 7 * * 1-5", timezone: "UTC" }
-        : kind === "item.synced"
-          ? firstConn
-            ? { connection: firstConn }
-            : {}
-          : {};
+    const id = freshId(draft.graph, TRIGGER_IDS[kind]);
+    const params = startParams(kind);
     setGraph({
       ...draft.graph,
       triggers: [...draft.graph.triggers, { id, kind, params }],
@@ -217,12 +208,14 @@
   }
 
   function outsideTriggerMenu(e: PointerEvent) {
-    const t = e.target as HTMLElement;
-    if (triggerMenu && !t.closest(".trigger-menu") && !triggerMenu.contains(t))
+    const target = e.target as HTMLElement;
+    if (
+      triggerMenu &&
+      !target.closest(".trigger-menu") &&
+      !triggerMenu.contains(target)
+    )
       triggerMenu = null;
   }
-
-  /* ---- saving and running -------------------------------------------------- */
 
   let saving = $state(false);
   let error = $state<string | null>(null);
@@ -252,10 +245,10 @@
       model_calls_per_day: modelCalls ?? undefined,
     };
     try {
-      const f = draft.id
+      const written = draft.id
         ? await api.put<Flow>(`/flows/${draft.id}`, body)
         : await api.post<Flow>("/flows", body);
-      await loadFlows(f.id);
+      await loadFlows(written.id);
       saved = JSON.stringify(draft);
     } catch (e) {
       error = errText(e);
@@ -354,20 +347,20 @@
     />
   </span>
   {#if draft && !listError}
-    {@const d = draft}
+    {@const edited = draft}
     <label class="field">
       <span class="k">name</span>
-      <input class="name" bind:value={d.name} aria-label="Flow name" />
+      <input class="name" bind:value={edited.name} aria-label="Flow name" />
     </label>
     <span class="field">
       <span class="k">team</span>
       <span class="pick">
         <Select
-          value={d.team ?? ""}
+          value={edited.team ?? ""}
           options={teamOptions}
           searchable
           aria-label="Team"
-          onchange={(v) => (d.team = String(v ?? "") || null)}
+          onchange={(v) => (edited.team = String(v ?? "") || null)}
         />
       </span>
     </span>
@@ -376,23 +369,23 @@
       <input
         class="calls"
         inputmode="numeric"
-        bind:value={d.modelCalls}
+        bind:value={edited.modelCalls}
         aria-label="Model calls a day"
       />
-      {#if d.id}<span class="k">{callsToday} used</span>{/if}
+      {#if edited.id}<span class="k">{callsToday} used</span>{/if}
     </label>
     <span class="end loud">
       <Button
         variant="ghost"
         size="sm"
-        icon={d.enabled ? "power" : "pause"}
+        icon={edited.enabled ? "power" : "pause"}
         morph
-        tone={d.enabled ? "ok" : "warn"}
-        aria-pressed={d.enabled}
-        onclick={() => (d.enabled = !d.enabled)}
-        >{d.enabled ? "on" : "paused"}</Button
+        tone={edited.enabled ? "ok" : "warn"}
+        aria-pressed={edited.enabled}
+        onclick={() => (edited.enabled = !edited.enabled)}
+        >{edited.enabled ? "on" : "paused"}</Button
       >
-      {#if d.id}
+      {#if edited.id}
         <DeleteButton label="delete flow" text="delete" onclick={remove} />
       {/if}
     </span>
@@ -458,8 +451,8 @@
     role="menu"
     use:float={{ anchor: triggerMenu, placement: "beside", gap: 8 }}
   >
-    {#each Object.keys(TRIGGER_TITLES) as k (k)}
-      {@const kind = k as FlowTrigger["kind"]}
+    {#each Object.keys(TRIGGER_TITLES) as key (key)}
+      {@const kind = key as FlowTrigger["kind"]}
       <button role="menuitem" onclick={() => addTrigger(kind)}>
         <Icon name={TRIGGER_ICONS[kind]} size="0.9em" />
         {TRIGGER_TITLES[kind]}

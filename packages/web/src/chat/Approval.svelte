@@ -23,22 +23,18 @@
 
   /** Collapsed summary once decided - the longest string field reads best. */
   const peek = $derived.by(() => {
-    const s = Object.values(entry.input)
+    const longest = Object.values(entry.input)
       .filter((v): v is string => typeof v === "string")
       .sort((a, b) => b.length - a.length)[0];
-    const t = (s ?? JSON.stringify(entry.input)).replace(/\s+/g, " ");
-    return t.length > 120 ? t.slice(0, 120) + "…" : t;
+    const flat = (longest ?? JSON.stringify(entry.input)).replace(/\s+/g, " ");
+    return flat.length > 120 ? flat.slice(0, 120) + "…" : flat;
   });
 
   let raw = $state(false);
 
-  /* ---- work-item field schema -------------------------------------------
-     create_ado_work_item takes an open `fields` object keyed by ADO reference
-     names, so without a schema the box can only offer a JSON blob. Fetching the
-     project's own schema turns it into real controls with the required fields
-     marked. Best-effort by design: if the call is slow or fails, the JSON view
-     below is what the user gets, because an approval that never renders blocks
-     the turn. */
+  // create_ado_work_item takes an open `fields` object, so the project's schema
+  // turns a JSON blob into controls. A slow or failed call leaves the JSON
+  // view: an approval that never renders blocks the turn.
   let schema = $state<WorkItemSchema | null>(null);
   let schemaTried = $state(false);
 
@@ -84,8 +80,8 @@
       : [],
   );
 
-  function setField(ref: string, v: unknown) {
-    set("fields", { ...(adoFields ?? {}), [ref]: v });
+  function setField(ref: string, value: unknown) {
+    set("fields", { ...(adoFields ?? {}), [ref]: value });
   }
   let adopting = $state(false);
   let adoptNote = $state<string | null>(null);
@@ -176,7 +172,8 @@
       <div class="fields">
         {#each keys as key (key)}
           {#if key === "fields" && schema && adoFields}
-            <!-- The one per-tool branch: ADO's own schema, when we have it. -->
+            <!-- The one per-tool branch: ADO's own schema, when there is
+                 one. -->
             <div class="subfields">
               <span class="grouplabel">
                 fields
@@ -187,12 +184,12 @@
                   required and empty: {missing.join(", ")}
                 </p>
               {/if}
-              {#each schema.fields.filter((f) => !f.read_only && (f.required || f.reference_name in adoFields)) as f (f.reference_name)}
+              {#each schema.fields.filter((f) => !f.read_only && (f.required || f.reference_name in adoFields)) as field (field.reference_name)}
                 <ApprovalField
-                  name={f.reference_name}
-                  spec={f}
-                  value={adoFields[f.reference_name] ?? null}
-                  onchange={(v) => setField(f.reference_name, v)}
+                  name={field.reference_name}
+                  spec={field}
+                  value={adoFields[field.reference_name] ?? null}
+                  onchange={(v) => setField(field.reference_name, v)}
                 />
               {/each}
             </div>

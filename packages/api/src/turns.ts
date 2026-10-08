@@ -100,6 +100,6 @@ export function startTurnHousekeeping(): () => void {
     setInterval(sweepTurns, 60_000),
     setInterval(pollJobSlots, 10_000),
   ];
-  for (const t of timers) t.unref();
+  for (const timer of timers) timer.unref();
   return () => timers.forEach(clearInterval);
 }

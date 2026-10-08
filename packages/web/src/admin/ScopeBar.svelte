@@ -13,8 +13,11 @@
   } = $props();
 </script>
 
-<!-- Deliberately not a Field: this picks which records the table below shows,
-     it does not edit anything. Records are edited in their own dialog. -->
+<!--
+@component
+Not a Field: this picks which records the table shows and edits nothing. Records
+are edited in their own dialog.
+-->
 <div class="scope">
   <span class="k">showing</span>
   <span class="l">{label}</span>

@@ -49,7 +49,6 @@
 
   const sub = $derived(subnav());
   const acts = $derived(sub ? (topActions() ?? sub.actions) : undefined);
-  const subHidden = $derived(themeState.navHidden && themeState.subnavHidden);
 
   let wizardSkipped = $state(localStorage.getItem("tachy-skip-wizard") === "1");
   const showWizard = $derived(session.bootstrapped === false && !wizardSkipped);
@@ -86,26 +85,11 @@
   }
 
   /**
-   * The recess outline, as one path.
-   *
-   * The recess opens at the window's own left edge and runs right to `wall`,
-   * which comes from the window rather than the bar: to within `--sub-reserve`
-   * of the right edge, leaving a corner for the row's own content, falling
-   * back to clearing the centred bar only when the window is too narrow for
-   * that.
-   *
-   * So the left end is not a mouth but the window's top-left corner, moved
-   * down to the recess floor and rounded like every other corner on the box.
-   * The right end keeps the floor's inward round and a mouth that rounds
-   * outward, so the window's top rule sweeps down into the recess instead of
-   * stopping at a square shoulder. A CSS border cannot turn that way, which is
-   * why the outline is stroked from the same path the mask is filled from -
-   * generating them separately is how a cut and the line drawn on it drift
-   * apart.
-   *
-   * `x0` / `y0` pull the open ends in: the stroke is centred on the path, so
-   * starting it half a line-width inside lands it exactly on the window's own
-   * left and top rules.
+   * The recess outline, as one path, from the window's left edge to `wall`. The
+   * left end is the window's top-left corner moved down to the recess floor;
+   * the right end rounds outward so the top rule sweeps into the recess. No CSS
+   * border turns that way, so the outline is stroked from the path the mask is
+   * filled from. `x0`/`y0` pull the open ends in onto the window's own rules.
    */
   function recessPath(
     wall: number,
@@ -127,11 +111,9 @@
     ].join(" ");
   }
 
-  /* Measured, not guessed. The recess is cut to the bar's size and the content
-     below has to clear it - but the bar's box moves with the text size AND with
-     whichever interface font is picked, so hardcoded rems would drift out of
-     true the moment someone changed either. The tokens are resolved through the
-     window itself for the same reason: they stay the single source of truth. */
+  // Measured: the recess is cut to the bar's size, and the bar's box moves with
+  // the text size and the interface font, so fixed rems would drift. The tokens
+  // are resolved through the window for the same reason.
   $effect(() => {
     const host = windowEl;
     const el = subEl;
@@ -147,9 +129,9 @@
       const w = el.offsetWidth;
       const h0 = el.offsetHeight;
       const avail = host.clientWidth;
-      // Nothing to redraw unless an input actually moved. Also the belt and
-      // braces against a ResizeObserver loop, since this writes state the
-      // observed elements can be laid out from.
+      // Nothing to redraw unless an input moved. Also guards against a
+      // ResizeObserver loop, since this writes state the observed elements are
+      // laid out from.
       const sig = `${w}:${h0}:${avail}`;
       if (!w || !h0 || sig === last) return;
       last = sig;
@@ -178,22 +160,15 @@
     };
 
     read();
-    const ro = new ResizeObserver(read);
-    ro.observe(el);
-    ro.observe(host);
-    return () => ro.disconnect();
+    const observer = new ResizeObserver(read);
+    observer.observe(el);
+    observer.observe(host);
+    return () => observer.disconnect();
   });
 
-  /* The subnav bar outlives a section change: the outgoing view's disposer
-     clears it a microtask late (see setSubnav), so the incoming view's tabs
-     replace it without the row blanking mid-switch. The same element is
-     reused, and its indicator would slide from wherever the old section's
-     tab happened to sit. Sliding is for moving within a section; arriving in
-     one should just be there.
-
-     Two frames, not one. The bar is centred, so the recess ResizeObserver
-     writing a new width re-centres it a frame after the switch, and the
-     indicator would take that second move as something to animate. */
+  // The subnav bar outlives a section change (see `setSubnav`), so its
+  // indicator would slide in from the old section's tab. Suppressed for two
+  // frames: the recess observer re-centres the bar a frame after the switch.
   $effect(() => {
     void view;
     settling = true;
@@ -209,8 +184,8 @@
 
   $effect(() => setScrollport(mainEl ?? null));
 
-  /* A pre effect, so the boxes are read while the bar is still where it was;
-     the tween starts once the DOM has caught up with the setting. */
+  // A pre effect, so the boxes are read while the bar is still where it was;
+  // the tween starts once the DOM has caught up with the setting.
   $effect.pre(() => {
     void themeState.navHidden;
     const play = untrack(() => reflow([topbarEl, windowEl]));
@@ -354,7 +329,6 @@
       >
     </button>
 
-    <!-- Stacked above settings: the pair of lone corner controls. -->
     <button
       class="settings-btn feedback-btn"
       class:on={view === "feedback"}
@@ -378,33 +352,23 @@
     <div
       class="window"
       bind:this={windowEl}
-      class:carved={sub && !subHidden}
+      class:carved={sub}
       style="--sub-h-raw: {subH}px; --sub-mouth: {carveW}px; --sub-mask: {carveMask}"
     >
       <!-- Rendered before the window so its hotkey scope is pushed first and
            the view's scope stays innermost - otherwise this bar's (all hidden)
            bindings would sit on top and blank the hint rule. -->
       {#if sub}
-        {#if !subHidden}
-          <svg
-            class="notch"
-            width={carveW}
-            height={carveH}
-            viewBox="0 0 {carveW} {carveH}"
-            aria-hidden="true"
-          >
-            <path d={carveOutline} />
-          </svg>
-        {/if}
-        <!-- Hidden rather than unmounted: the bar owns its tabs' shortcuts,
-             and its height still sizes the row the top actions sit in. -->
-        <div
-          class="subnav"
-          class:settling
-          class:hidden={subHidden}
-          inert={subHidden}
-          bind:this={subEl}
+        <svg
+          class="notch"
+          width={carveW}
+          height={carveH}
+          viewBox="0 0 {carveW} {carveH}"
+          aria-hidden="true"
         >
+          <path d={carveOutline} />
+        </svg>
+        <div class="subnav" class:settling bind:this={subEl}>
           <Tabs
             items={sub.items}
             active={sub.active}
@@ -453,25 +417,12 @@
 <CaretHost />
 
 <style>
-  /* Two objects on one centre line: a top row carrying the wordmark and the
-     nav, and the window they sit above. The nav is no longer chrome bolted to
-     a document - it reads as the object you steer the document with.
-
-     The bottom gutter is the widest of the three: the window's lower edge is
-     the one nothing else sits against, so it needs air to read as a floating
-     object rather than as content jammed into the viewport. The gap is now the
-     narrowest, for the opposite reason - the nav and the subnav in the recess
-     below it are one control in two registers, and reading as a pair means
-     sitting closer to each other than either does to anything else. */
-  /* The app blurs behind an open dialog. A filter on the scene rather than a
-     backdrop-filter on the scrim: under a backdrop blur, Firefox leaves some
-     pages sharp.
-
-     The blur switches on at full radius instead of transitioning, and the
-     starfield stays out of it. A blur is cheap only while its content holds
-     still. A changing radius re-blurs the whole app on every frame of the
-     unfold, and the twinkling stars would re-blur the viewport on every frame
-     the dialog is open. The scrim's ink fade carries the transition. */
+  /* Two objects on one centre line: the top row and the window under it. The
+     bottom gutter is the widest, so the window floats; the gap is the
+     narrowest, so the nav and the subnav read as one control. */
+  /* The app blurs behind an open dialog: a filter on the scene, since under
+     a backdrop blur Firefox leaves some pages sharp. No radius transition
+     and no starfield: a blur is cheap only over still content. */
   :global(:root[data-dialog] [data-scene]) {
     filter: blur(var(--scrim-blur));
   }
@@ -487,10 +438,9 @@
     padding: var(--pad-3) clamp(0.75rem, 3vw, 2.5rem) var(--pad-4);
   }
 
-  /* The cap is in px, not rem. max-width in rem multiplies by --font-scale, so
-     picking a larger text size used to widen the box itself - at 175% it filled
-     95% of a 1920 screen. Character count per line should track the text size;
-     the frame around it should not. */
+  /* The cap is in px, not rem: max-width in rem multiplies by --font-scale,
+     so a larger text size would widen the box. Characters per line track the
+     text size; the frame around them does not. */
   .topbar,
   .window {
     width: 100%;
@@ -509,10 +459,9 @@
     min-width: 0;
   }
 
-  /* The floating surfaces let the sky through, just barely - enough that a
-     star crossing behind them stays perceptible, not enough to cost any
-     contrast against the text on top. Panels nested INSIDE keep --panel-bg
-     opaque, so their inline titles still mask the rule they straddle. */
+  /* The floating surfaces let the sky through faintly, so a star crossing
+     behind stays perceptible. Panels nested inside keep --panel-bg opaque,
+     so their inline titles mask the rule they straddle. */
   .window > :global(section),
   .navbar :global(> section) {
     background: var(--window-bg);
@@ -544,12 +493,9 @@
     min-width: 0;
   }
 
-  /* A lone tab, styled like one of Tabs.svelte's own - same bracketed label,
-     same hover/focus behaviour - but with none of the machinery that only
-     makes sense among siblings: no anchor-positioned indicator to slide
-     between entries, since there is only ever this one. Pinned to the
-     viewport's lower-left corner with its line box on the window's bottom
-     edge. */
+  /* A lone tab, styled like one of Tabs.svelte's own, without the indicator
+     that only makes sense among siblings. Pinned to the viewport's
+     lower-left corner with its line box on the window's bottom edge. */
   .settings-btn {
     position: absolute;
     left: var(--pad-2);
@@ -599,9 +545,8 @@
     display: flex;
     justify-content: center;
   }
-  /* The subnav's box, not a Panel's default: the two bars sit on the same
-     centre line and stacking a taller one above a shorter one read as two
-     different objects rather than one control in two registers. */
+  /* The subnav's box, not a Panel's default: the two bars sit on one centre
+     line, and a taller one over a shorter one reads as two objects. */
   .navbar :global(> section) {
     width: max-content;
     max-width: 100%;
@@ -623,20 +568,14 @@
     }
   }
 
-  /* The bar sits in a recess cut into the window's top edge, not on a bump
-     above it. --sub-air is the empty space left around it inside the recess;
-     the starfield shows through there, because the window's fill is genuinely
-     removed rather than covered over.
-
-     Prefixed: --drop is already a global token for the shadow colour, and
-     redefining it here would silently swap a colour for a length everywhere
-     inside the window. */
+  /* The bar sits in a recess cut into the window's top edge. --sub-air is
+     the space around it inside the recess, where the starfield shows because
+     the fill is removed. Prefixed, since --drop is a global colour token. */
   .window {
     --sub-air: var(--pad-2);
     /* The air `main` keeps above and below its content. Named because a
-       sticky child cannot rise above its containing block - `main`'s content
-       box - so it pins this far down the scrollport and has to paint the
-       strip left over it. See .bar in LibraryView. */
+       sticky child cannot rise above `main`'s content box, so it pins this
+       far down and paints the strip left over it. See .bar in LibraryView. */
     --main-air: calc(var(--fs-xs) * 0.9);
     /* Right edge to recess wall: the corner the carved row keeps for its own
        content. The recess takes everything else, out to the left edge. Sized
@@ -645,9 +584,9 @@
     --sub-depth: calc(var(--sub-h-raw, 0px) + var(--sub-air));
   }
 
-  /* mask, not clip-path: clip-path would take the window's rounded corners off
-     with it, since the polygon has to be square. Subtracting a shape leaves
-     every other edge exactly as it was. */
+  /* mask, not clip-path: clip-path would take the window's rounded corners
+     off with it, since the polygon has to be square. Subtracting a shape
+     leaves every other edge untouched. */
   .window.carved > :global(section) {
     mask-image: var(--sub-mask, none), linear-gradient(#000 0 0);
     mask-size:
@@ -660,10 +599,9 @@
     mask-composite: exclude;
   }
 
-  /* The mask removes the fill AND the rule along the cut, so the recess is
-     drawn back in here: in off the top rule, down one side, across the floor,
-     up the other and back out. Stroked rather than bordered because the mouth
-     flares outward, and no CSS border can turn that way. */
+  /* The mask removes the fill and the rule along the cut, so the recess is
+     drawn back in here. Stroked, not bordered: the mouth flares outward, and
+     no CSS border turns that way. */
   .notch {
     position: absolute;
     top: 0;
@@ -678,13 +616,9 @@
     stroke-width: var(--panel-line-w);
   }
 
-  /* No box of its own - the recess is the box. A second bordered pill hung
-     under the nav's read as chrome about chrome; bare labels in a cut let the
-     window's own edge do the framing, and cost the row a border and two steps
-     of padding on the way.
-
-     Centred on the window's centre line - the same one the nav pill sits on,
-     so the two stack. */
+  /* No box of its own: the recess is the box, and the window's edge does the
+     framing. Centred on the window's centre line, the one the nav pill sits
+     on, so the two stack. */
   .subnav {
     position: absolute;
     top: 0;
@@ -700,29 +634,22 @@
     min-height: var(--row-h);
     padding: 0 var(--pad-3);
   }
-  .subnav.hidden {
-    opacity: 0;
-  }
 
-  /* The window's own top row, right of the recess - space the carve opens up
-     and nothing else was using. Aligned to the Panel's content edge so it
-     reads as part of the page, and capped short of the recess mouth so it can
-     never collide with it. */
+  /* The window's own top row, right of the recess. Aligned to the Panel's
+     content edge so it reads as part of the page, and capped short of the
+     recess mouth. */
   .top-acts {
     position: absolute;
     top: 0;
     right: var(--pad-4);
     z-index: 2;
-    /* The band down to where page content actually starts, not down to the
-       recess floor. `.shell` clears the floor by another --sub-air and the
-       Panel's own rule sits above that, so a row the depth of the recess
-       centres too high - six pixels of air above it against fourteen below,
-       which reads as pinned to the top edge rather than centred in the row. */
+    /* The band down to where page content starts, not to the recess floor:
+       `.shell` clears the floor by another --sub-air and the Panel's rule
+       sits over that, so a row the depth of the recess centres too high. */
     height: calc(var(--sub-depth) + var(--sub-air) + var(--panel-line-w));
-    /* Sized to the corner rather than to its contents, so the row centres in
-       the space the carve opens up instead of hugging the window's right
-       edge. The width is what is left of the top row once the recess mouth
-       and the Panel's own inset are taken off it. */
+    /* Sized to the corner, not to its contents, so the row centres in the
+       space the carve opens. The width is the top row less the recess mouth
+       and the Panel's inset. */
     width: calc(100% - var(--sub-mouth, 0px) - var(--pad-4));
     display: flex;
     align-items: center;
@@ -762,12 +689,6 @@
     );
   }
 
-  /* With the bar hidden the row is kept only for the top actions, and only
-     while a view has put some there. */
-  .window:has(.subnav.hidden):not(:has(.top-acts > :global(*))) .shell {
-    padding-top: 0;
-  }
-
   .content {
     flex: 1;
     display: flex;
@@ -795,12 +716,9 @@
     user-select: none;
   }
 
-  /* Native bar hidden - the drawn scrollbar beside it takes over.
-     The block padding is not cosmetic: a Panel's title and hint straddle its
-     own rule at translateY(±50%), so half of each sits OUTSIDE the panel. A
-     titled panel flush against this scroll box lost the top half of its label
-     to `overflow: auto` - visible on admin, whose pages open straight onto
-     one. Half a label's line box is the clearance that costs. */
+  /* Native bar hidden: the drawn scrollbar beside it takes over. The block
+     padding is clearance: a Panel's title and hint straddle its rule, so
+     half of each sits outside the panel and `overflow: auto` would clip it. */
   main {
     flex: 1;
     min-width: 0;
@@ -835,11 +753,9 @@
     min-height: 0;
   }
 
-  /* Its own top spacing rather than a gap on .shell, so that when the row has
-     nothing to print it takes up nothing at all. Almost every scope now marks
-     its bindings hidden - Settings › keybinds is the discovery surface - so a
-     permanently reserved row was a dead band above the window's lower edge on
-     every view. */
+  /* Its own top spacing, not a gap on .shell, so a row with nothing to print
+     takes no room. Most scopes mark their bindings hidden, and Settings ›
+     keybinds is where they are found. */
   .hintrow {
     flex: none;
     min-height: 1.2rem;

@@ -32,26 +32,28 @@
     <p class="quiet">{loading ? "checking…" : "nothing to fix"}</p>
   {:else}
     <ul class="groups">
-      {#each groups as g (g.key)}
-        <li class="group {g.tone}">
-          <button class="head" onclick={() => onpick(g.section)}>
+      {#each groups as group (group.key)}
+        <li class="group {group.tone}">
+          <button class="head" onclick={() => onpick(group.section)}>
             <span class="mark" aria-hidden="true"></span>
-            <span class="text">{g.head}</span>
-            <span class="go" aria-hidden="true">{g.section} {G.right}</span>
+            <span class="text">{group.head}</span>
+            <span class="go" aria-hidden="true">{group.section} {G.right}</span>
           </button>
-          {#if g.items.length}
+          {#if group.items.length}
             <ul class="items">
-              {#each g.items as it (it.key)}
+              {#each group.items as item (item.key)}
                 <li>
-                  <button class="item" onclick={() => onpick(g.section)}
-                    >{it.text}</button
+                  <button class="item" onclick={() => onpick(group.section)}
+                    >{item.text}</button
                   >
                 </li>
               {/each}
-              {#if g.more}
+              {#if group.more}
                 <li>
-                  <button class="item more" onclick={() => onpick(g.section)}
-                    >+{g.more} more</button
+                  <button
+                    class="item more"
+                    onclick={() => onpick(group.section)}
+                    >+{group.more} more</button
                   >
                 </li>
               {/if}
@@ -65,8 +67,8 @@
 
 <style>
   /* Capped so the dialog, centred, never reaches the window's carved top
-     edge: the carve is a mask on the window, and it cuts a dialog opened from
-     inside it just as it cuts the page. A long list scrolls here instead. */
+     edge: the carve is a mask on the window, and it cuts a dialog opened
+     from inside it as it cuts the page. A long list scrolls here instead. */
   .groups {
     list-style: none;
     margin: 0;

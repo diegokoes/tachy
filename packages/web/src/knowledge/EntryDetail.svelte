@@ -123,11 +123,9 @@
 
   const structured = $derived(asStructured(entry?.structured));
 
-  /** Reading the entry, backspace or esc goes back. Not bound while editing, where it
-      would sit one stray keystroke away from discarding a form.
-
-      Hidden: back is a button in the carved row now, so printing it in the
-      hint rule as well says the same thing twice. */
+  // Reading the entry, backspace or esc goes back. Not bound while editing,
+  // where it would sit one keystroke from discarding a form. Hidden: back is a
+  // button in the carved row.
   $effect(() => {
     if (editing || !entry) return;
     return pushScope([
@@ -136,9 +134,9 @@
     ]);
   });
 
-  /* The carved row, while reading. Editing hands it to the form instead, which
-     claims it on mount; the disposer's identity check keeps the handover from
-     wiping whichever of the two lands second. */
+  // The carved row, while reading. Editing hands it to the form instead, which
+  // claims it on mount; the disposer's identity check keeps the handover from
+  // wiping whichever of the two lands second.
   $effect(() => {
     if (editing || !entry) return;
     return setTopActions(readActions);
@@ -159,9 +157,9 @@
       const next = await api.get<KnowledgeRow>(`/knowledge/${id}`);
       if (!isCurrent()) return;
       entry = next;
-      const fb = await api.get<Feedback[]>(`/knowledge/${id}/feedback`);
+      const loaded = await api.get<Feedback[]>(`/knowledge/${id}/feedback`);
       if (!isCurrent()) return;
-      feedback = fb;
+      feedback = loaded;
       await links.load("knowledge", id);
       if (!isCurrent()) return;
 
@@ -182,19 +180,19 @@
     mutating = true;
     mutateError = null;
     conflict = false;
-    const res = await patchLibraryItem(
+    const patched = await patchLibraryItem(
       `/knowledge/${id}`,
       body,
       entry.version,
       "entry",
     );
-    if (res.ok) {
+    if (patched.ok) {
       editing = false;
       deprecating = false;
       await load();
     } else {
-      conflict = res.conflict;
-      mutateError = res.message;
+      conflict = patched.conflict;
+      mutateError = patched.message;
     }
     mutating = false;
   }
@@ -254,7 +252,7 @@
     <section>
       <h3>{label}</h3>
       <div class="chips">
-        {#each items as it}<Chip>{it}</Chip>{/each}
+        {#each items as item}<Chip>{item}</Chip>{/each}
       </div>
     </section>
   {/if}
@@ -397,16 +395,16 @@
                 />
                 {#if supersedeResults.length}
                   <ul class="supersede-results">
-                    {#each supersedeResults as r (r.id)}
+                    {#each supersedeResults as candidate (candidate.id)}
                       <li>
                         <label>
                           <input
                             type="radio"
                             name="supersede"
-                            checked={supersedeId === r.id}
-                            onchange={() => (supersedeId = r.id)}
+                            checked={supersedeId === candidate.id}
+                            onchange={() => (supersedeId = candidate.id)}
                           />
-                          {r.issue_summary ?? r.id}
+                          {candidate.issue_summary ?? candidate.id}
                         </label>
                       </li>
                     {/each}
@@ -498,10 +496,14 @@
             <section>
               <h3>Feedback</h3>
               <ul class="fb-list">
-                {#each feedback as f}
+                {#each feedback as note}
                   <li>
-                    <strong>{f.kind}{f.rating ? ` · ${f.rating}★` : ""}</strong>
-                    {f.comment ?? ""}
+                    <strong
+                      >{note.kind}{note.rating
+                        ? ` · ${note.rating}★`
+                        : ""}</strong
+                    >
+                    {note.comment ?? ""}
                   </li>
                 {/each}
               </ul>
@@ -523,11 +525,9 @@
 </div>
 
 <style>
-  /* One reading column: the title, the meta band and every section share the
-     same measure and the same side padding, so nothing stops half-way across
-     a frame that keeps running. The column is centred in the frame; the prose
-     inside stays left-aligned, never justified. ch tracks the reading face, so
-     the measure holds its character count whichever one is picked. */
+  /* One reading column: title, meta band and sections share one measure and
+     side padding, centred in the frame with the prose left-aligned. ch
+     tracks the reading face, so the measure holds in any font. */
   .content {
     font-family: var(--font-prose);
     max-width: 76ch;

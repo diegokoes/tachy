@@ -121,7 +121,7 @@
 
   function sanitize(
     e: Event & { currentTarget: HTMLInputElement },
-    clean: (s: string) => string,
+    clean: (text: string) => string,
   ): string {
     const value = clean(e.currentTarget.value);
     e.currentTarget.value = value;

@@ -1,16 +1,15 @@
+/**
+ * Fields more than one tool takes. Named so the wording travels with the field
+ * instead of being written out per tool, and two tools taking the same field
+ * cannot describe it differently.
+ */
 import { z } from "zod";
 import { cloudSchema } from "@tachy/core/knowledge";
 
 /**
- * Fields more than one tool takes. Named so the wording travels with the field
- * rather than being written out per tool - and so two tools taking the same
- * field cannot come to describe it differently.
- */
-
-/**
- * The single most common tool-call mistake is passing the source *type* here.
- * Every tool that takes one reuses this so the correction travels with the field
- * rather than living in the system prompt.
+ * A common tool-call mistake is passing the source type here. Every tool that
+ * takes one reuses this, so the correction travels with the field instead of
+ * living in the system prompt.
  */
 export const sourceSlug = z
   .string()

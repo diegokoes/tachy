@@ -11,7 +11,12 @@ const app = createApp({ passwordAuth: true });
 let adminCookie = "";
 let userCookie = "";
 
-function as(cookie: string, path: string, method: string, body?: unknown) {
+function requestAs(
+  cookie: string,
+  path: string,
+  method: string,
+  body?: unknown,
+) {
   return app.request(path, {
     ...(body === undefined ? {} : json(body)),
     method,
@@ -40,7 +45,7 @@ beforeEach(async () => {
 
 describe("report routes", () => {
   it("lets a member file a report and admins reply, notifying the reporter", async () => {
-    const filed = await as(userCookie, "/api/reports", "POST", {
+    const filed = await requestAs(userCookie, "/api/reports", "POST", {
       type: "bug",
       title: "export breaks",
       body: "clicked export, nothing happened",
@@ -50,13 +55,15 @@ describe("report routes", () => {
     expect(report.type).toBe("bug");
 
     // The member sees their own report.
-    const mine = await (await as(userCookie, "/api/reports", "GET")).json();
+    const mine = await (
+      await requestAs(userCookie, "/api/reports", "GET")
+    ).json();
     expect(mine).toHaveLength(1);
 
     // A member cannot reach the admin queue.
-    const denied = await as(userCookie, "/api/reports/all", "GET");
+    const denied = await requestAs(userCookie, "/api/reports/all", "GET");
     expect(denied.status).toBe(403);
-    const adminDenied = await as(
+    const adminDenied = await requestAs(
       userCookie,
       `/api/reports/${report.id}`,
       "GET",
@@ -65,11 +72,11 @@ describe("report routes", () => {
 
     // The admin lists, replies, and moves status.
     const queue = await (
-      await as(adminCookie, "/api/reports/all", "GET")
+      await requestAs(adminCookie, "/api/reports/all", "GET")
     ).json();
     expect(queue).toHaveLength(1);
 
-    const reply = await as(
+    const reply = await requestAs(
       adminCookie,
       `/api/reports/${report.id}/reply`,
       "POST",
@@ -79,14 +86,14 @@ describe("report routes", () => {
 
     // The reporter now has a notification carrying the reply.
     const inbox = await (
-      await as(userCookie, "/api/me/notifications", "GET")
+      await requestAs(userCookie, "/api/me/notifications", "GET")
     ).json();
     expect(inbox).toHaveLength(1);
     expect(inbox[0].kind).toBe("report_reply");
     expect(inbox[0].body_text).toContain("next release");
     expect(inbox[0].ref.report_id).toBe(report.id);
 
-    const moved = await as(
+    const moved = await requestAs(
       adminCookie,
       `/api/reports/${report.id}/status`,
       "PUT",
@@ -97,7 +104,7 @@ describe("report routes", () => {
   });
 
   it("rejects an unknown report type", async () => {
-    const bad = await as(userCookie, "/api/reports", "POST", {
+    const bad = await requestAs(userCookie, "/api/reports", "POST", {
       type: "rant",
       body: "grr",
     });
@@ -106,30 +113,34 @@ describe("report routes", () => {
 
   it("marks a notification read for its owner only", async () => {
     const filed = await (
-      await as(userCookie, "/api/reports", "POST", {
+      await requestAs(userCookie, "/api/reports", "POST", {
         type: "feature",
         title: "x",
         body: "x",
       })
     ).json();
-    await as(adminCookie, `/api/reports/${filed.id}/reply`, "POST", {
+    await requestAs(adminCookie, `/api/reports/${filed.id}/reply`, "POST", {
       body: "noted",
     });
     const inbox = await (
-      await as(userCookie, "/api/me/notifications", "GET")
+      await requestAs(userCookie, "/api/me/notifications", "GET")
     ).json();
     const id = inbox[0].id;
 
     // The admin cannot read the member's notification away.
-    await as(adminCookie, "/api/me/notifications/read", "POST", { ids: [id] });
+    await requestAs(adminCookie, "/api/me/notifications/read", "POST", {
+      ids: [id],
+    });
     const stillUnread = await (
-      await as(userCookie, "/api/me/notifications", "GET")
+      await requestAs(userCookie, "/api/me/notifications", "GET")
     ).json();
     expect(stillUnread[0].read_at).toBeNull();
 
-    await as(userCookie, "/api/me/notifications/read", "POST", { ids: [id] });
+    await requestAs(userCookie, "/api/me/notifications/read", "POST", {
+      ids: [id],
+    });
     const read = await (
-      await as(userCookie, "/api/me/notifications", "GET")
+      await requestAs(userCookie, "/api/me/notifications", "GET")
     ).json();
     expect(read[0].read_at).not.toBeNull();
   });

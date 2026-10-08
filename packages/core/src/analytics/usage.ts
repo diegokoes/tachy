@@ -54,19 +54,19 @@ async function flowUsage(days: number): Promise<AgentUsage["flows"]> {
     tokens: number;
   })[];
   const byFlow = new Map<string, AgentUsage["flows"]["by_flow"][number]>();
-  for (const r of rows) {
-    const key = r.id ?? "";
-    const f = byFlow.get(key) ?? {
-      id: r.id,
-      name: r.name,
+  for (const row of rows) {
+    const key = row.id ?? "";
+    const flow = byFlow.get(key) ?? {
+      id: row.id,
+      name: row.name,
       calls: 0,
       tokens: 0,
       cost_usd: 0,
     };
-    f.calls += r.calls;
-    f.tokens += r.tokens;
-    f.cost_usd += costOf([r]);
-    byFlow.set(key, f);
+    flow.calls += row.calls;
+    flow.tokens += row.tokens;
+    flow.cost_usd += costOf([row]);
+    byFlow.set(key, flow);
   }
   const by_flow = [...byFlow.values()].sort(
     (a, b) => b.cost_usd - a.cost_usd || b.calls - a.calls,
@@ -80,11 +80,10 @@ async function flowUsage(days: number): Promise<AgentUsage["flows"]> {
 }
 
 /**
- * Agent consumption over the last `days` days, from `analysis_runs`.
- *
- * Chat rows only. Tools such as `fetch_work_item` write runs of their own with
- * no token figures, and the one row per turn that the agent route records is
- * the only one that carries what the turn actually cost.
+ * Agent consumption over the last `days` days, from `analysis_runs`. Chat rows
+ * only. Tools such as `fetch_work_item` write runs of their own with no token
+ * figures, and the one row per turn that the agent route records is the only
+ * one that carries what the turn cost.
  */
 export async function agentUsageCensus(days = 30): Promise<AgentUsage> {
   const [totals] = await sql`
@@ -98,7 +97,7 @@ export async function agentUsageCensus(days = 30): Promise<AgentUsage> {
     from analysis_runs
     where mode = 'chat' and created_at > now() - make_interval(days => ${days})
   `;
-  const perDayWindow = Math.min(days, 14);
+  const perDayWindow = Math.min(days, 90);
   const per_day = await sql`
     select to_char(d.day, 'YYYY-MM-DD') as day,
       count(r.id)::int as turns,
@@ -120,10 +119,10 @@ export async function agentUsageCensus(days = 30): Promise<AgentUsage> {
     group by 1, 2
   `;
   const models = new Map<string, Record<string, number>>();
-  for (const r of perDayModel) {
-    const day = models.get(r.day) ?? {};
-    day[r.model as string] = r.tokens as number;
-    models.set(r.day, day);
+  for (const row of perDayModel) {
+    const day = models.get(row.day) ?? {};
+    day[row.model as string] = row.tokens as number;
+    models.set(row.day, day);
   }
   const by_model = await sql`
     select coalesce(model, 'unknown') as model, count(*)::int as turns,
@@ -159,22 +158,22 @@ export async function agentUsageCensus(days = 30): Promise<AgentUsage> {
     string,
     { email: string; turns: number; tokens: number; cost_usd: number }
   >();
-  for (const r of rows) {
-    if (!r.email) continue;
-    const p = people.get(r.email) ?? {
-      email: r.email,
+  for (const row of rows) {
+    if (!row.email) continue;
+    const person = people.get(row.email) ?? {
+      email: row.email,
       turns: 0,
       tokens: 0,
       cost_usd: 0,
     };
-    p.turns += r.turns;
-    p.tokens += r.tokens;
-    p.cost_usd += costOf([r]);
-    people.set(r.email, p);
+    person.turns += row.turns;
+    person.tokens += row.tokens;
+    person.cost_usd += costOf([row]);
+    people.set(row.email, person);
   }
   const top_users = [...people.values()]
     .sort((a, b) => b.tokens - a.tokens || a.email.localeCompare(b.email))
-    .slice(0, 5);
+    .slice(0, 25);
   return {
     days,
     turns: totals.turns as number,

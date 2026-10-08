@@ -6,9 +6,9 @@
  */
 export function fitRows(
   node: HTMLElement,
-  p: { row: number; gap?: number; onfit: (n: number) => void },
+  initial: { row: number; gap?: number; onfit: (n: number) => void },
 ) {
-  let opts = p;
+  let opts = initial;
   let last = -1;
   const measure = () => {
     const rem =
@@ -21,14 +21,14 @@ export function fitRows(
     if (n !== last) opts.onfit((last = n));
   };
   measure();
-  const ro = new ResizeObserver(measure);
-  ro.observe(node);
+  const observer = new ResizeObserver(measure);
+  observer.observe(node);
   return {
-    update(next: typeof p) {
+    update(next: typeof initial) {
       opts = next;
       measure();
     },
-    destroy: () => ro.disconnect(),
+    destroy: () => observer.disconnect(),
   };
 }
 
@@ -54,13 +54,13 @@ export function measureBox(
     tell(w, h);
   };
   measure();
-  const ro = new ResizeObserver(measure);
-  ro.observe(node);
+  const observer = new ResizeObserver(measure);
+  observer.observe(node);
   return {
     update(next: typeof onsize) {
       tell = next;
     },
-    destroy: () => ro.disconnect(),
+    destroy: () => observer.disconnect(),
   };
 }
 

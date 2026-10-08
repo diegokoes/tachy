@@ -110,7 +110,7 @@ describe("reference docs", () => {
   });
 
   it("lists newest-first and omits archived from search", async () => {
-    const a = await saveReferenceDoc({
+    const saved = await saveReferenceDoc({
       title: "A",
       body: "alpha content here",
     });
@@ -118,11 +118,14 @@ describe("reference docs", () => {
     const list = await listReferenceDocs();
     expect(list[0].title).toBe("B");
 
-    await updateReferenceDoc(a.id, { status: "archived", expectedVersion: 1 });
-    const doc = await getReferenceDoc(a.id);
+    await updateReferenceDoc(saved.id, {
+      status: "archived",
+      expectedVersion: 1,
+    });
+    const doc = await getReferenceDoc(saved.id);
     expect(doc.status).toBe("archived");
     const hits = await searchReferenceDocs("alpha content");
-    expect(hits.find((h) => h.id === a.id)).toBeUndefined();
+    expect(hits.find((h) => h.id === saved.id)).toBeUndefined();
   });
 });
 
@@ -291,18 +294,18 @@ describe("reference docs carry the same taxonomy as knowledge entries", () => {
       body: "The standby node promotes itself and replays the journal.",
     });
 
-    const f = await resolveComponentFilter(productId, "line-controller");
+    const filter = await resolveComponentFilter(productId, "line-controller");
     const hits = await searchReferenceDocs("standby node promotes itself", {
       productId,
-      componentId: f.componentId,
-      componentTags: f.componentTags,
+      componentId: filter.componentId,
+      componentTags: filter.componentTags,
     });
     expect(hits.map((h) => h.id)).toEqual([mapped.id]);
 
     const listed = await listReferenceDocs({
       productId,
-      componentId: f.componentId,
-      componentTags: f.componentTags,
+      componentId: filter.componentId,
+      componentTags: filter.componentTags,
     });
     expect(listed.map((d) => d.id)).toEqual([mapped.id]);
   });

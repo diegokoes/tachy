@@ -33,7 +33,7 @@ const admin = (path, init = {}) =>
   });
 
 async function ensureUser(email) {
-  const res = await admin("/api/users", {
+  const response = await admin("/api/users", {
     method: "POST",
     body: JSON.stringify({
       email,
@@ -43,68 +43,81 @@ async function ensureUser(email) {
       password_login_allowed: true,
     }),
   });
-  if (res.ok) return;
-  const text = await res.text();
-  if (res.status === 400 && /already exists/.test(text)) return;
-  throw new Error(`creating ${email}: ${res.status} ${text}`);
+  if (response.ok) return;
+  const text = await response.text();
+  if (response.status === 400 && /already exists/.test(text)) return;
+  throw new Error(`creating ${email}: ${response.status} ${text}`);
 }
 
 async function login(email) {
-  const res = await fetch(`${BASE}/auth/password/login`, {
+  const response = await fetch(`${BASE}/auth/password/login`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ email, password: PASSWORD }),
   });
-  const cookie = (res.headers.get("set-cookie") ?? "").split(";")[0];
-  if (!res.ok || !cookie) throw new Error(`login ${email}: ${res.status}`);
+  const cookie = (response.headers.get("set-cookie") ?? "").split(";")[0];
+  if (!response.ok || !cookie)
+    throw new Error(`login ${email}: ${response.status}`);
   return cookie;
 }
 
 async function runtime() {
-  const res = await admin("/api/system");
-  return res.ok ? (await res.json()).runtime : null;
+  const response = await admin("/api/system");
+  return response.ok ? (await response.json()).runtime : null;
 }
 
 async function turn(cookie) {
-  const t0 = performance.now();
-  const out = { firstEventMs: null, totalMs: null, queued: false, ok: false };
-  const res = await fetch(`${BASE}/api/agent/chat`, {
+  const startedAt = performance.now();
+  const timing = {
+    firstEventMs: null,
+    totalMs: null,
+    queued: false,
+    ok: false,
+  };
+  const response = await fetch(`${BASE}/api/agent/chat`, {
     method: "POST",
     headers: { "content-type": "application/json", cookie },
     body: JSON.stringify({ message: MESSAGE }),
   });
-  if (!res.ok) {
-    out.error = `${res.status}`;
-    return out;
+  if (!response.ok) {
+    timing.error = `${response.status}`;
+    return timing;
   }
-  const reader = res.body.getReader();
-  const dec = new TextDecoder();
-  let buf = "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    buf += dec.decode(value, { stream: true });
+    buffer += decoder.decode(value, { stream: true });
     let i;
-    while ((i = buf.indexOf("\n\n")) >= 0) {
-      const frame = buf.slice(0, i);
-      buf = buf.slice(i + 2);
+    while ((i = buffer.indexOf("\n\n")) >= 0) {
+      const frame = buffer.slice(0, i);
+      buffer = buffer.slice(i + 2);
       const event = /^event: (.*)$/m.exec(frame)?.[1];
       if (!event || event === "start") continue;
-      if (event === "queued") out.queued = true;
-      else if (out.firstEventMs === null)
-        out.firstEventMs = performance.now() - t0;
-      if (event === "result") out.ok = true;
-      if (event === "error") out.error = /^data: (.*)$/m.exec(frame)?.[1];
+      if (event === "queued") timing.queued = true;
+      else if (timing.firstEventMs === null)
+        timing.firstEventMs = performance.now() - startedAt;
+      if (event === "result") timing.ok = true;
+      if (event === "error") timing.error = /^data: (.*)$/m.exec(frame)?.[1];
     }
   }
-  out.totalMs = performance.now() - t0;
-  return out;
+  timing.totalMs = performance.now() - startedAt;
+  return timing;
 }
 
-const pct = (xs, p) => {
-  const s = xs.filter((x) => x !== null).sort((a, b) => a - b);
-  return s.length
-    ? Math.round(s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))])
+const percentile = (values, percent) => {
+  const sorted = values.filter((x) => x !== null).sort((a, b) => a - b);
+  return sorted.length
+    ? Math.round(
+        sorted[
+          Math.min(
+            sorted.length - 1,
+            Math.floor((percent / 100) * sorted.length),
+          )
+        ],
+      )
     : null;
 };
 
@@ -113,9 +126,9 @@ const emails = Array.from(
   { length: max },
   (_, i) => `${PREFIX}-${String(i + 1).padStart(2, "0")}@tachy.local`,
 );
-for (const e of emails) await ensureUser(e);
+for (const email of emails) await ensureUser(email);
 const cookies = [];
-for (const e of emails) cookies.push(await login(e));
+for (const email of emails) cookies.push(await login(email));
 
 const results = [];
 for (const n of LEVELS) {
@@ -128,18 +141,18 @@ for (const n of LEVELS) {
   let polling = true;
   const poller = (async () => {
     while (polling) {
-      const r = await runtime().catch(() => null);
-      if (r) {
-        if (r.memory) peakMem = Math.max(peakMem, r.memory.currentBytes);
-        peakSlots = Math.max(peakSlots, r.turns.slotsUsed);
-        peakQueued = Math.max(peakQueued, r.turns.queued);
-        if (r.postgres.byProcess)
+      const live = await runtime().catch(() => null);
+      if (live) {
+        if (live.memory) peakMem = Math.max(peakMem, live.memory.currentBytes);
+        peakSlots = Math.max(peakSlots, live.turns.slotsUsed);
+        peakQueued = Math.max(peakQueued, live.turns.queued);
+        if (live.postgres.byProcess)
           peakPg = Math.max(
             peakPg,
-            r.postgres.byProcess.reduce((s, p) => s + p.n, 0),
+            live.postgres.byProcess.reduce((s, p) => s + p.n, 0),
           );
       }
-      await new Promise((res) => setTimeout(res, 250));
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
   })();
 
@@ -153,21 +166,21 @@ for (const n of LEVELS) {
     queued: turns.filter((t) => t.queued).length,
     errors: turns.filter((t) => t.error).map((t) => t.error),
     firstEventMs: {
-      p50: pct(
+      p50: percentile(
         turns.map((t) => t.firstEventMs),
         50,
       ),
-      p95: pct(
+      p95: percentile(
         turns.map((t) => t.firstEventMs),
         95,
       ),
     },
     totalMs: {
-      p50: pct(
+      p50: percentile(
         turns.map((t) => t.totalMs),
         50,
       ),
-      p95: pct(
+      p95: percentile(
         turns.map((t) => t.totalMs),
         95,
       ),

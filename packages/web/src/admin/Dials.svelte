@@ -22,33 +22,33 @@
 
   let { items }: { items: DialItem[] } = $props();
 
-  /* The ring takes whichever runs out first - the tile's height less the two
-     lines under it, or its share of the width - and never more than 6.5rem. */
+  // The ring takes whichever runs out first - the tile's height less the two
+  // lines under it, or its share of the width - and never more than 6.5rem.
   const size = $derived(
     `min(6.5rem, calc(100cqh - 2.9rem), calc(100cqw / ${Math.max(1, items.length)} - 1.25rem))`,
   );
 </script>
 
-{#snippet one(d: DialItem)}
+{#snippet one(dial: DialItem)}
   <Dial
-    value={d.value}
-    tone={d.tone}
-    rest={d.rest}
-    label={d.title ?? d.label}
+    value={dial.value}
+    tone={dial.tone}
+    rest={dial.rest}
+    label={dial.title ?? dial.label}
     {size}
   >
-    <span class="core">{d.center}</span>
+    <span class="core">{dial.center}</span>
   </Dial>
-  <span class="name">{d.label}</span>
-  {#if d.sub}<span class="sub">{d.sub}</span>{/if}
+  <span class="name">{dial.label}</span>
+  {#if dial.sub}<span class="sub">{dial.sub}</span>{/if}
 {/snippet}
 
 <div class="dials">
-  {#each items as d (d.key)}
-    {#if d.onclick}
-      <button class="one go" onclick={d.onclick}>{@render one(d)}</button>
+  {#each items as dial (dial.key)}
+    {#if dial.onclick}
+      <button class="one go" onclick={dial.onclick}>{@render one(dial)}</button>
     {:else}
-      <div class="one">{@render one(d)}</div>
+      <div class="one">{@render one(dial)}</div>
     {/if}
   {/each}
 </div>

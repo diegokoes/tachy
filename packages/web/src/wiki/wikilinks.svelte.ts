@@ -13,13 +13,11 @@ export interface OutboundLink {
 }
 
 /**
- * Where each `[[target]]` in one body actually points, and a click handler that
- * follows it. Shared by the article, doc and entry views.
- *
- * Destinations come from what the SERVER resolved, not from re-deriving them in
- * the browser: link resolution is scoped (a product's wiki first, then the
- * org-wide one), and a client guessing at that scope would send readers to the
- * wrong article whenever the two disagree.
+ * Where each `[[target]]` in one body points, and a click handler that follows
+ * it. Shared by the article, doc and entry views. Destinations come from what
+ * the server resolved: link resolution is scoped (a product's wiki first, then
+ * the org-wide one), and a browser guessing at that scope would send readers to
+ * the wrong article where the two disagree.
  */
 export class LinkTargets {
   /** Targets that resolved; anything else renders as a broken link. */
@@ -37,17 +35,17 @@ export class LinkTargets {
 
       const next = new Set<string>();
       this.to.clear();
-      for (const l of outbound) {
+      for (const link of outbound) {
         const path = libraryItemPath({
-          entryId: l.to_entry_id,
-          docId: l.to_doc_id,
-          kind: l.to_kind,
-          slug: l.to_slug,
-          scope: scopeOf(l.to_product_id),
+          entryId: link.to_entry_id,
+          docId: link.to_doc_id,
+          kind: link.to_kind,
+          slug: link.to_slug,
+          scope: scopeOf(link.to_product_id),
         });
         if (!path) continue;
-        next.add(l.target);
-        this.to.set(l.target, path);
+        next.add(link.target);
+        this.to.set(link.target, path);
       }
       this.resolved = next;
     } catch {

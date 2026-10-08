@@ -42,7 +42,7 @@ const hits = z.object({
   text: z.string(),
 });
 
-const lines = (rows: Record<string, unknown>[], pick: (r: any) => string) =>
+const lines = (rows: Record<string, unknown>[], pick: (row: any) => string) =>
   rows.map((r, i) => `${i + 1}. ${pick(r)}`).join("\n");
 
 let registered = false;
@@ -106,13 +106,13 @@ export function registerBuiltinFlowActions(): void {
     writes: false,
     params: z.object({ query, limit }),
     output: hits,
-    async run(ctx, p) {
-      const rows = (await searchKnowledge(p.query, {
+    async run(ctx, params) {
+      const rows = (await searchKnowledge(params.query, {
         productId: ctx.item?.product_id ?? undefined,
         teamId: ctx.item?.team_id ?? undefined,
         includeUnscoped: true,
         boostCustomerId: ctx.item?.customer_id ?? undefined,
-        limit: p.limit,
+        limit: params.limit,
       })) as unknown as Record<string, unknown>[];
       return {
         results: rows,
@@ -141,12 +141,14 @@ export function registerBuiltinFlowActions(): void {
       limit,
     }),
     output: hits,
-    async run(ctx, p) {
-      const rows = (await searchCode(p.query, {
-        repoSlug: p.repo,
-        productId: p.repo ? undefined : (ctx.item?.product_id ?? undefined),
+    async run(ctx, params) {
+      const rows = (await searchCode(params.query, {
+        repoSlug: params.repo,
+        productId: params.repo
+          ? undefined
+          : (ctx.item?.product_id ?? undefined),
         customerId: ctx.item?.customer_id ?? undefined,
-        limit: p.limit,
+        limit: params.limit,
       })) as unknown as Record<string, unknown>[];
       return {
         results: rows,
@@ -164,12 +166,12 @@ export function registerBuiltinFlowActions(): void {
     writes: false,
     params: z.object({ query, limit }),
     output: hits,
-    async run(ctx, p) {
-      const rows = (await searchReferenceDocs(p.query, {
+    async run(ctx, params) {
+      const rows = (await searchReferenceDocs(params.query, {
         productId: ctx.item?.product_id ?? undefined,
         teamId: ctx.item?.team_id ?? undefined,
         includeUnscoped: true,
-        limit: p.limit,
+        limit: params.limit,
       })) as unknown as Record<string, unknown>[];
       return {
         results: rows,
@@ -192,11 +194,11 @@ export function registerBuiltinFlowActions(): void {
       limit,
     }),
     output: hits,
-    async run(ctx, p) {
-      const bucket = await readableBucket(ctx.userId, p.bucket);
-      const rows = (await searchBucket(p.query, {
+    async run(ctx, params) {
+      const bucket = await readableBucket(ctx.userId, params.bucket);
+      const rows = (await searchBucket(params.query, {
         bucketIds: [bucket.id],
-        limit: p.limit,
+        limit: params.limit,
       })) as unknown as Record<string, unknown>[];
       return {
         results: rows,
@@ -255,9 +257,9 @@ export function registerBuiltinFlowActions(): void {
         .meta({ "x-keys-from": "keys" }),
       text: z.string(),
     }),
-    async run(ctx, p) {
+    async run(ctx, params) {
       const item = needItem(ctx);
-      const got = await customerProperties(item, p.keys, ctx.scope);
+      const got = await customerProperties(item, params.keys, ctx.scope);
       return {
         ...got,
         text: Object.entries(got.values)
@@ -294,7 +296,7 @@ export function registerBuiltinFlowActions(): void {
     writes: true,
     params: z.object({ tags }),
     output: z.object({ tags: z.array(z.string()) }),
-    run: (ctx, p) => changeTags(ctx, { add: p.tags, remove: [] }),
+    run: (ctx, params) => changeTags(ctx, { add: params.tags, remove: [] }),
   });
 
   defineFlowAction({
@@ -306,7 +308,7 @@ export function registerBuiltinFlowActions(): void {
     writes: true,
     params: z.object({ tags }),
     output: z.object({ tags: z.array(z.string()) }),
-    run: (ctx, p) => changeTags(ctx, { add: [], remove: p.tags }),
+    run: (ctx, params) => changeTags(ctx, { add: [], remove: params.tags }),
   });
 
   defineFlowAction({
@@ -321,12 +323,14 @@ export function registerBuiltinFlowActions(): void {
       private: z.boolean().default(true),
     }),
     output: z.object({ posted: z.boolean() }),
-    async run(ctx, p) {
+    async run(ctx, params) {
       const item = needItem(ctx);
       const { source } = await resolveSource(item.connection, ctx.scope);
       if (!source.postNote)
         throw badInput(`${item.source_type} items cannot take notes`);
-      await source.postNote(item.external_id, p.body, { private: p.private });
+      await source.postNote(item.external_id, params.body, {
+        private: params.private,
+      });
       return { posted: true };
     },
   });
@@ -361,16 +365,16 @@ export function registerBuiltinFlowActions(): void {
       id: z.union([z.string(), z.number()]),
       url: z.string(),
     }),
-    async run(ctx, p) {
-      const project = await getSourceProject(p.project);
+    async run(ctx, params) {
+      const project = await getSourceProject(params.project);
       const { source } = await resolveSource(project.source_slug, ctx.scope);
       if (!source.composer)
         throw badInput(`${project.source_type} projects cannot create items`);
       const form = applyFormConfig(
-        await source.composer.form(project.external_key, p.type, {
+        await source.composer.form(project.external_key, params.type, {
           projectConfig: project.config,
         }),
-        typeConfig(await getComposeConfig(project.id), p.type),
+        typeConfig(await getComposeConfig(project.id), params.type),
       );
       const started = Object.fromEntries(
         Object.entries(form.prefill)
@@ -380,10 +384,10 @@ export function registerBuiltinFlowActions(): void {
       const created = await source.composer.create(
         {
           project: project.external_key,
-          type: p.type,
-          title: p.title,
-          fields: { ...started, ...p.fields },
-          tags: p.tags,
+          type: params.type,
+          title: params.title,
+          fields: { ...started, ...params.fields },
+          tags: params.tags,
         },
         {
           sourceSlug: project.source_slug,
@@ -407,10 +411,13 @@ export function registerBuiltinFlowActions(): void {
       customer: z.string().min(1).meta(options("customers")),
     }),
     output: z.object({ customer: z.string() }),
-    async run(ctx, p) {
+    async run(ctx, params) {
       const item = needItem(ctx);
-      await setWorkItemCustomer(item.id, await getCustomerIdBySlug(p.customer));
-      return { customer: p.customer };
+      await setWorkItemCustomer(
+        item.id,
+        await getCustomerIdBySlug(params.customer),
+      );
+      return { customer: params.customer };
     },
   });
 
@@ -428,9 +435,10 @@ export function registerBuiltinFlowActions(): void {
         .meta({ "x-form": "job", "x-depends-on": ["kind"] }),
     }),
     output: z.object({ run_id: z.string().nullable() }),
-    async run(ctx, p) {
-      if (p.kind === "flow.run") throw badInput("a flow cannot start a flow");
-      return { run_id: await ctx.enqueue(p.kind, p.params) };
+    async run(ctx, params) {
+      if (params.kind === "flow.run")
+        throw badInput("a flow cannot start a flow");
+      return { run_id: await ctx.enqueue(params.kind, params.params) };
     },
   });
 }

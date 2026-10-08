@@ -56,11 +56,16 @@
     { value: "docs", label: "docs" },
     { value: "wiki", label: "wiki" },
   ];
-  /** The list segments the tabs used to live at, kept so old links resolve. */
+  /** Former list segments of the tabs, kept so old links resolve. */
   const TYPE_OF_SEGMENT: Record<string, string> = {
     entries: "knowledge",
     docs: "docs",
   };
+  /** The reference `kind` a type tab lists; any other tab lists both. */
+  const KIND_OF_TYPE = new Map([
+    ["wiki", "wiki"],
+    ["docs", "reference"],
+  ]);
 
   // From vocab.ts, so they are offered in the order the contract documents.
   const STATUSES = KNOWLEDGE_STATUSES;
@@ -107,7 +112,7 @@
     productId: "",
     component: "",
   });
-  let q = $state(left.q);
+  let search = $state(left.q);
   /** "" = any. */
   let type = $state(left.type ?? "");
   let status = $state(left.status);
@@ -115,7 +120,7 @@
   let component = $state(left.component);
 
   $effect(() =>
-    keep("library.search", { q, type, status, productId, component }),
+    keep("library.search", { q: search, type, status, productId, component }),
   );
 
   let products = $state<ProductRow[]>([]);
@@ -144,8 +149,8 @@
   let rowEls = $state<(HTMLElement | undefined)[]>([]);
   /**
    * Keyboard navigation scrolls the list under a stationary pointer, and the
-   * browser fires mouseenter for that - which would yank the cursor back to
-   * wherever the mouse happens to sit. Ignore hover until the mouse really moves.
+   * browser fires mouseenter for that, which would pull the cursor back to
+   * where the mouse sits. Hover is ignored until the mouse moves.
    */
   let pointerMoved = $state(true);
 
@@ -170,39 +175,36 @@
   const showDocFilters = $derived(type === "docs" || type === "wiki");
   /**
    * Counts hidden filters too: the entry-only ones still travel on entryQs, so
-   * a filter you cannot see must stay clearable - otherwise the list is
-   * silently narrowed with no way out.
+   * a filter that is not shown stays clearable, or the list is narrowed with no
+   * way out.
    */
   const activeFilters = $derived(
     [type, productId, component, status].filter(Boolean).length +
       shown.filter((k) => extras[k]).length,
   );
 
-  function scopeQs(p: URLSearchParams) {
-    p.set("limit", String(MAX_PAGE));
-    if (q.trim()) p.set("q", q.trim());
-    if (productId) p.set("product_id", productId);
-    if (productId && component) p.set("component", component);
-    if (status && !q.trim()) p.set("status", status);
-    return p;
+  function scopeQs(params: URLSearchParams) {
+    params.set("limit", String(MAX_PAGE));
+    if (search.trim()) params.set("q", search.trim());
+    if (productId) params.set("product_id", productId);
+    if (productId && component) params.set("component", component);
+    if (status && !search.trim()) params.set("status", status);
+    return params;
   }
 
   const entryQs = () =>
     applyExtras(scopeQs(new URLSearchParams()), shown, extras).toString();
   /** Browsing lists imported docs only unless asked, so "any" has to say so. */
   const docQs = () => {
-    const p = scopeQs(new URLSearchParams());
-    p.set(
-      "kind",
-      type === "wiki" ? "wiki" : type === "docs" ? "reference" : "any",
-    );
-    return p.toString();
+    const params = scopeQs(new URLSearchParams());
+    params.set("kind", KIND_OF_TYPE.get(type) ?? "any");
+    return params.toString();
   };
 
   /**
-   * What the list is actually asked for. A filter put on the row with no value
-   * yet, or a prune that changes nothing, leaves this as it was, so the list
-   * is not fetched again for it.
+   * What the list is asked for. A filter put on the row with no value yet, or a
+   * prune that changes nothing, leaves this unchanged, so the list is not
+   * fetched again for it.
    */
   const request = $derived([type, status, entryQs(), docQs()].join("\n"));
 
@@ -219,7 +221,7 @@
     slowTimer = setTimeout(() => {
       if (mine === seq && loading) slow = true;
     }, 400);
-    mode = q.trim() ? "search" : "browse";
+    mode = search.trim() ? "search" : "browse";
     const searching = mode === "search";
 
     try {
@@ -240,7 +242,7 @@
       if (mine !== seq) return;
       capped = ents.length >= MAX_PAGE || docs.length >= MAX_PAGE;
 
-      const query = searching ? q.trim() : "";
+      const query = searching ? search.trim() : "";
       let merged = [
         ...ents.map((e) => toEntry(e, query)),
         ...docs.map((d) => toDoc(d, query)),
@@ -290,13 +292,13 @@
     // two loads, and the slower must not overwrite the newer options with
     // values that have no rows.
     const isCurrent = currentFacets();
-    const p = new URLSearchParams();
-    if (productId) p.set("product_id", productId);
-    if (productId && component) p.set("component", component);
-    if (status) p.set("status", status);
-    applyExtras(p, shown, extras);
+    const params = new URLSearchParams();
+    if (productId) params.set("product_id", productId);
+    if (productId && component) params.set("component", component);
+    if (status) params.set("status", status);
+    applyExtras(params, shown, extras);
     try {
-      const next = await api.get<Facets>(`/knowledge/facets?${p}`);
+      const next = await api.get<Facets>(`/knowledge/facets?${params}`);
       if (!isCurrent()) return;
       facets = next;
     } catch {
@@ -376,9 +378,9 @@
       node.style.minWidth = `${Math.ceil(cap.offsetWidth * 1.25)}px`;
     };
     apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(cap);
-    return { destroy: () => ro.disconnect() };
+    const observer = new ResizeObserver(apply);
+    observer.observe(cap);
+    return { destroy: () => observer.disconnect() };
   }
 
   /** A status carried over from a type that does not have it matches nothing. */
@@ -429,14 +431,17 @@
   const createDoc = create("/reference", "docs");
 
   /** Opens narrowed to what another page asked for; see `presetScope`. */
-  async function applyPreset(p: ScopePreset) {
-    const id = products.find((x) => x.slug === p.product)?.id as
+  async function applyPreset(preset: ScopePreset) {
+    const id = products.find((x) => x.slug === preset.product)?.id as
       string | undefined;
     if (!id) return;
     productId = id;
     await onProductChange(id);
-    if (p.component && components.some((c) => c.slug === p.component)) {
-      component = p.component;
+    if (
+      preset.component &&
+      components.some((c) => c.slug === preset.component)
+    ) {
+      component = preset.component;
       await loadFacets();
     }
   }
@@ -534,26 +539,20 @@
               hidden: true,
               run: () => searchEl?.focus(),
             },
-            /*
-             * n/N step the matches, and only mean that with a query on - but
-             * the check belongs inside `run`, not in the effect body. Read out
-             * here it made `q` a dependency of the whole scope, so every
-             * keystroke in the search box tore down and re-registered all
-             * eleven bindings; and because pushScope appends while resolution
-             * runs innermost-first, each re-push promoted these above any scope
-             * opened since.
-             */
+            // n/N step the matches, and only with a query on. The check is
+            // inside `run`: read in the effect body, `q` would re-register
+            // these bindings on every keystroke, over any newer scope.
             {
               key: "n",
               label: "",
               hidden: true,
-              run: () => q.trim() && moveCursor(1),
+              run: () => search.trim() && moveCursor(1),
             },
             {
               key: "shift+n",
               label: "",
               hidden: true,
-              run: () => q.trim() && moveCursor(-1),
+              run: () => search.trim() && moveCursor(-1),
             },
           ]
         : []),
@@ -623,9 +622,9 @@
     />
   {/if}
 {:else}
-  <!-- The default row stays deliberately short. Everything else the schema can
-       be narrowed by - environment, confidence, clarity, pattern, hidden fix,
-       versions, tags - is one `+` away and remembered per browser. -->
+  <!-- The default row stays short. Everything else the schema can be
+       narrowed by (environment, confidence, clarity, pattern, hidden fix,
+       versions, tags) is one `+` away and remembered per browser. -->
   <div class="bar">
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <span
@@ -638,8 +637,10 @@
     >
       <CaretInput
         bind:el={searchEl}
+        icon="search"
+        hint="Search"
         aria-label="Search symptoms, error codes, root causes, docs"
-        bind:value={q}
+        bind:value={search}
         onkeydown={(e) => {
           if (e.key === "Enter") {
             clearTimeout(timer);
@@ -808,13 +809,13 @@
     class:empty-list={!loading && !error && items.length === 0}
     onmousemove={() => (pointerMoved = true)}
   >
-    {#each items as it, i (it.kind + it.id)}
+    {#each items as item, i (item.kind + item.id)}
       <li>
         <ResultRow
-          item={it}
+          {item}
           selected={i === cursor}
           bind:el={rowEls[i]}
-          onopen={() => openItem(it)}
+          onopen={() => openItem(item)}
           onfocus={() => (cursor = i)}
           onhover={() => pointerMoved && (cursor = i)}
         />
@@ -832,7 +833,7 @@
                 ? "wiki"
                 : "library"}
           title={mode === "search"
-            ? `No matches for “${q}”.`
+            ? `No matches for “${search}”.`
             : "The library is empty."}
           detail={mode === "search"
             ? "Searches summaries, symptoms, signals, root causes, tags, doc bodies."
@@ -849,10 +850,9 @@
     gap: var(--pad-1);
   }
 
-  /* Pinned: the result list scrolls under it, so the query and the filters
-     that produced it are never off screen. It needs a ground of its own - the
-     rows it pins over are opaque cards, and without one they read through it.
-     Bottom-aligned: a cap is one line, a tag box is not. */
+  /* Pinned: the list scrolls under it, so the query and its filters stay on
+     screen. It needs its own ground over the opaque cards. Bottom-aligned: a
+     cap is one line, a tag box is not. */
   .bar {
     position: sticky;
     top: 0;
@@ -865,10 +865,9 @@
     padding-block: var(--pad-2);
     margin-bottom: var(--pad-2);
   }
-  /* A sticky box cannot rise above its containing block, and `main`'s content
-     box starts one --main-air below the scrollport. So the bar pins that far
-     down and rows scroll up through the strip above it. It carries its own
-     ground up over that strip; `main`'s overflow clips whatever overshoots. */
+  /* A sticky box cannot rise above its containing block, and `main`'s
+     content box starts one --main-air below the scrollport. So the bar pins
+     that far down and carries its own ground up over the strip above it. */
   .bar::before {
     content: "";
     position: absolute;
@@ -933,10 +932,9 @@
     color: var(--muted);
   }
 
-  /* An added filter travels with its own remove button, so the pair must wrap
-     as one unit however wide the row gets. The button hangs off the side of the
-     column rather than sitting in it, so the cap still centres on the control
-     and the control alone answers to the cap's width floor. */
+  /* An added filter travels with its remove button, so the pair wraps as
+     one. The button hangs off the column's side, so the cap centres on the
+     control, which alone answers to the cap's width floor. */
   .extra {
     display: inline-flex;
     align-items: end;

@@ -1,9 +1,9 @@
 /**
  * A fetched HTML body as text the model can read. Block-closing tags become
- * newlines rather than spaces - a ticket body run into one paragraph reads as
+ * newlines rather than spaces: a ticket body run into one paragraph reads as
  * one thought, and the turn structure is most of what makes a thread legible.
  *
- * Not a sanitiser. This is for text going *to* a model, never for anything
+ * Not a sanitiser. This is for text going to a model, never for anything
  * rendered back to a browser; the SPA uses DOMPurify for that.
  */
 export function stripHtml(html: string): string {
