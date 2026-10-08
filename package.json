@@ -27,7 +27,7 @@
     "web:build": "npm run build --workspace @tachy/web",
     "web:check": "node scripts/check-runes.mjs && npm run check --workspace @tachy/web",
     "comments:check": "node scripts/check-comments.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/tsconfig.json --noEmit",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "load": "docker compose -f docker-compose.yml -f load/k6.compose.yml run --rm k6 run",

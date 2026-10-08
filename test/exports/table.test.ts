@@ -196,7 +196,7 @@ describe("renderColumnContract", () => {
 describe("csv cells that a spreadsheet would read as formulas", () => {
   it("files a formula-leading string as text, and leaves numbers alone", () => {
     const columns: TableColumn[] = [
-      { key: "note", label: "Note", type: "text" },
+      { key: "note", label: "Note", type: "string" },
       { key: "delta", label: "Delta", type: "number" },
     ];
     const csv = new TextDecoder().decode(
