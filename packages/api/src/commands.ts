@@ -1,3 +1,5 @@
+import { parseCodeScope } from "@tachy/core";
+
 export interface Subcommand {
   name: string;
   args: string;
@@ -14,6 +16,8 @@ export interface BuiltinCommand {
   expand: (args: string) => string;
   /** A group command: the first argument picks one of these. */
   subcommands?: Subcommand[];
+  /** Sent by a control in the web app, so the command menu leaves it out. */
+  hidden?: true;
 }
 
 const argsLine = (args: string) =>
@@ -82,12 +86,28 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
   ]),
   {
     name: "code",
-    args: "<question>",
+    args: "[@repo|@project/ ...] <question>",
     description: "Answer a question from the linked codebases",
-    expand: (args) =>
-      [
+    expand: (args) => {
+      const scope = parseCodeScope(args);
+      return [
         "Run CODE CONSULTATION MODE as defined in your instructions.",
-        argsLine(args),
+        ...scopeLine(scope),
+        argsLine(scope.question),
+      ].join("\n");
+    },
+  },
+  {
+    name: "walkthrough",
+    args: "",
+    description: "Show the last code answer as a stepped walkthrough",
+    hidden: true,
+    // Self-contained for the same reason as /az explain: paid on the click.
+    expand: () =>
+      [
+        "Turn your last code answer in this conversation into a walkthrough with show_code_walkthrough.",
+        "Three to eight steps in execution order, each the narrowest range that shows its point, with the lines that decide the outcome highlighted and a note of one or two sentences. Use only ranges you have already read, at the same version or ref; read more only if a step of the flow is missing.",
+        "If this conversation holds no code answer yet, say so in one line instead.",
       ].join("\n"),
   },
   {
@@ -123,6 +143,18 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
       ].join("\n"),
   },
 ];
+
+/** Nothing when the line names no scope: the mode then finds the repo itself. */
+function scopeLine(scope: { repos: string[]; projects: string[] }): string[] {
+  const named = [
+    scope.repos.length ? `repos ${scope.repos.join(", ")}` : "",
+    scope.projects.length ? `project ${scope.projects.join(", ")}` : "",
+  ].filter(Boolean);
+  if (!named.length) return [];
+  return [
+    `Scope chosen by the user: ${named.join("; ")}. Pass it as \`repos\` / \`project\` to search_code and list_repos, and answer from inside it. If the answer lies outside, say so before looking further.`,
+  ];
+}
 
 /**
  * A command whose first argument picks a subcommand. A client-only one that
