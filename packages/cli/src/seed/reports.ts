@@ -192,12 +192,11 @@ const FOLLOW_UPS = [
 ];
 
 /**
- * A queue of bugs and feature requests at every stage - waiting, being worked
- * on, fixed, and turned down - with the threads and notifications each stage
- * leaves behind. Every report carries the AI review the form now always runs.
- * The first is forced resolved so the message and notification tables are
- * never empty at any scale. The second is an open one filed by the dev admin,
- * so replying to it from the same login raises the reply notification there.
+ * Bugs and feature requests at every stage (waiting, in progress, fixed, turned
+ * down) with the threads and notifications each stage leaves, each carrying the
+ * AI review the form runs. The first is forced resolved so the message and
+ * notification tables are never empty; the second is an open one filed by the
+ * dev admin, so a reply from that login raises its notification there.
  */
 export async function seedReports(
   tx: Tx,

@@ -13,13 +13,10 @@ import type { Knowledge } from "./knowledge";
 import type { Volumes } from "./scale";
 
 /**
- * Edit history and read counts for the seeded library. Both are what the
- * history panel and the "most read" sort have to render against, so a dev
- * database without them cannot show either working.
- *
- * saveKnowledgeEntry seeds version 1 for entries created through core, but the
- * seeder inserts rows directly for speed - so version 1 is written here too,
- * and later versions are stacked on top of it.
+ * Edit history and read counts for the seeded library, which the history panel
+ * and the "most read" sort render. `saveKnowledgeEntry` writes version 1 for
+ * entries created through core, but the seeder inserts rows directly, so
+ * version 1 is written here too and later versions are stacked on it.
  */
 export async function seedLibrary(
   tx: Tx,

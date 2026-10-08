@@ -7,9 +7,9 @@ import type { Volumes } from "./scale";
 const HOUR = 3_600_000;
 
 /**
- * A cron line and the same schedule as a step, so the history can be laid on
- * the slots the scheduler would really have fired without pulling croner into
- * the CLI. Only the shapes used below: every N hours at a minute, from an hour.
+ * A cron line and the same schedule as a step, so the history lands on the
+ * slots the scheduler would have fired without pulling croner into the CLI.
+ * Only the shapes `hourly`, `everyHours` and `daily` make.
  */
 interface Slots {
   cron: string;

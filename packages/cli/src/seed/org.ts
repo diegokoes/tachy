@@ -90,7 +90,7 @@ export async function seedOrg(tx: Tx, v: Volumes): Promise<Org> {
     }),
   );
 
-  // scrypt is ~80ms a call; one shared dev password means one hash.
+  // One shared dev password means one scrypt hash, not one per user.
   const passwordHash = await hashPassword(DEV_PASSWORD);
 
   const users: SeededUser[] = [
@@ -147,8 +147,10 @@ export async function seedOrg(tx: Tx, v: Volumes): Promise<Org> {
   return { teams, products, users, artifacts };
 }
 
-/** scope and its FK agree by construction, so both CHECKs and all three
- *  partial unique indexes hold without an `on conflict`. */
+/**
+ * scope and its FK agree by construction, so both CHECKs and all three partial
+ * unique indexes hold without an `on conflict`.
+ */
 const scopedRow = (scope: string, teamId: string, userId: string) => ({
   scope,
   team_id: scope === "team" ? teamId : null,
@@ -222,8 +224,8 @@ async function seedPreferences(
     });
 
   for (const t of teams) push("team", t.id, "", "agent_effort", "medium");
-  // rngFor("pref", i), not ("pref", 0): a fresh generator with a constant seed
-  // is re-seeded every iteration, so all twelve users drew the same value.
+  // `rngFor("pref", i)`, not `("pref", 0)`: a generator made with a constant
+  // seed restarts every iteration, so every user draws the same value.
   users
     .slice(0, 12)
     .forEach((u, i) =>

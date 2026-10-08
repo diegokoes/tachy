@@ -103,7 +103,7 @@ export async function seedActivity(
       byte_size: bytes.length,
       meta: tx.json({ seeded: true }),
       created_at: pastDate(rng, 20),
-      // Half already expired, so the hourly sweep in routes/outputs.ts has work.
+      // Half already expired, so `sweepExpiredOutputs` has work.
       expires_at: chance(rng, 0.5)
         ? pastDate(rng, 5)
         : new Date(Date.now() + intBetween(rng, 1, 72) * 3_600_000),

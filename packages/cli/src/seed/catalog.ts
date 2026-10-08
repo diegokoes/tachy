@@ -97,20 +97,18 @@ export async function seedCatalog(
 }
 
 /**
- * Built one depth at a time so a child's parent always exists and always
- * belongs to the same product -- the recursive path walk in getComponentPath
- * assumes same-product ancestry, and (product_id, slug) assumes it too.
+ * Built one depth at a time so a child's parent always exists and belongs to
+ * the same product: the recursive path walk in `getComponentPath` assumes
+ * same-product ancestry, and (product_id, slug) assumes it too.
  */
 async function seedComponents(
   tx: Tx,
   v: Volumes,
   products: SeededProduct[],
 ): Promise<SeededComponent[]> {
-  /* Skewed, not even. A real catalog has a few sprawling products and a long
-     tail of small ones; an even split gave every product the same count, which
-     left the overview's components-per-product curve a flat line with nothing
-     to show. Zipf-like weights, with a floor so every product still has a
-     parent and a child to exercise. */
+  // Skewed like a real catalog, a few sprawling products and a long tail; an
+  // even split draws the overview's components-per-product curve flat.
+  // Zipf-like weights, floored so every product has a parent and a child.
   const weights = products.map((_, rank) => 1 / (rank + 1) ** 0.8);
   const weightSum = weights.reduce((a, b) => a + b, 0);
   const counts = weights.map((w) =>
@@ -224,7 +222,6 @@ async function seedCustomerComponents(
   );
 }
 
-/** (customer, kind, label) is enumerated, never sampled, so it stays unique. */
 /** A plausible value for each fact kind, so a profile reads like a profile. */
 function factValue(kind: string, rng: () => number): string {
   switch (kind) {
@@ -268,6 +265,7 @@ function factValue(kind: string, rng: () => number): string {
   }
 }
 
+/** (customer, kind, label) is enumerated, never sampled, so it stays unique. */
 async function seedCustomerFacts(
   tx: Tx,
   v: Volumes,
@@ -331,7 +329,7 @@ async function seedCustomerFacts(
   const rows: Record<string, unknown>[] = [];
 
   // Facts at three levels of that estate, so a resolved read shows the ladder
-  // actually choosing between them.
+  // choosing between them.
   if (estateOwner) {
     const at = (
       slug: string | null,
