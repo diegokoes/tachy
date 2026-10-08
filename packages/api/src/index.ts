@@ -84,6 +84,12 @@ startTurnHousekeeping();
 const swept = await sweepInterruptedIndexes();
 if (swept) log("info", "repo_index_sweep", { interrupted: swept });
 
+if (env.apiToken)
+  log("warn", "shared_api_token", {
+    detail:
+      "TACHY_API_TOKEN is set: whoever holds it is an app admin and its writes name nobody. Prefer a token minted for a service account, and unset this.",
+  });
+
 const authConfigured =
   Boolean(env.apiToken || oidc) || (await isBootstrapped());
 if (!authConfigured) {

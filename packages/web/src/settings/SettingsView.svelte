@@ -8,6 +8,7 @@
   import RebindModal from "./RebindModal.svelte";
   import Agent from "./Agent.svelte";
   import Credentials from "./Credentials.svelte";
+  import Tokens from "./Tokens.svelte";
   import Appearance from "./Appearance.svelte";
   import Fonts from "./Fonts.svelte";
   import Dates from "./Dates.svelte";
@@ -54,6 +55,11 @@
           label: "keys",
           hint: "Stored encrypted. A shared key answers until you paste your own.",
           view: Credentials,
+        },
+        {
+          label: "api tokens",
+          hint: "For scripts that call the API as you. Shown once, stored as a hash.",
+          view: Tokens,
         },
       ],
     },

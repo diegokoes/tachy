@@ -2,7 +2,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { badInput, envVarName } from "@tachy/core/infra";
+import { badInput, envVarName, rememberSecret } from "@tachy/core/infra";
 import {
   dateFormatOf,
   effectivePrefs,
@@ -89,6 +89,20 @@ const INHERITED_ENV = [
   "TEST_SCHEMA",
 ];
 
+/**
+ * Where the chat tools connect. With TACHY_MCP_DB_PASSWORD set that is the same
+ * database as the least-privileged tachy_mcp role (db/roles.sql); without it,
+ * the server's own connection, which is all a single-role database has.
+ */
+export function toolsDatabaseUrl(serverUrl: string): string {
+  const password = rememberSecret(process.env.TACHY_MCP_DB_PASSWORD);
+  if (!password) return serverUrl;
+  const url = new URL(serverUrl);
+  url.username = "tachy_mcp";
+  url.password = password;
+  return url.toString();
+}
+
 export async function mcpConfig(
   userEmail: string | undefined,
   settings: EffectiveSettings,
@@ -99,6 +113,8 @@ export async function mcpConfig(
     const value = process.env[name];
     if (typeof value === "string") mcpEnv[name] = value;
   }
+  if (mcpEnv.DATABASE_URL)
+    mcpEnv.DATABASE_URL = toolsDatabaseUrl(mcpEnv.DATABASE_URL);
   mcpEnv.TACHY_DB_POOL_MAX = "2";
   mcpEnv.TACHY_DB_IDLE_TIMEOUT = "30";
   mcpEnv.TACHY_DB_APP_NAME = "tachy-mcp";

@@ -64,6 +64,8 @@ services:
       # The model runs in the embedder service below, not in the api.
       TACHY_EMBED_URL: http://embedder:8790/internal/embed
       TACHY_INTERNAL_SECRET: ${TACHY_INTERNAL_SECRET:?set TACHY_INTERNAL_SECRET (openssl rand -hex 32)}
+      # Set: the chat tools connect as tachy_mcp. Unset: as tachy_app, as before.
+      TACHY_MCP_DB_PASSWORD: ${TACHY_MCP_DB_PASSWORD:-}
       # Caddy overwrites X-Forwarded-For, so it names the client here.
       TACHY_BEHIND_PROXY: "true"
       TACHY_DB_POOL_MAX: ${TACHY_API_DB_POOL_MAX:-15}
