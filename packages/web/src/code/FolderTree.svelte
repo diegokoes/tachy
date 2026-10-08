@@ -30,16 +30,18 @@
   const nameOf = (path: string) => path.slice(path.lastIndexOf("/") + 1);
 
   const children = $derived.by(() => {
-    const out = new Map<string, PreviewDir[]>();
-    for (const d of dirs) {
-      const p = parentOf(d.path);
-      const list = out.get(p);
-      if (list) list.push(d);
-      else out.set(p, [d]);
+    const byParent = new Map<string, PreviewDir[]>();
+    for (const dir of dirs) {
+      const parentPath = parentOf(dir.path);
+      const siblings = byParent.get(parentPath);
+      if (siblings) siblings.push(dir);
+      else byParent.set(parentPath, [dir]);
     }
-    for (const list of out.values())
-      list.sort((a, b) => b.files - a.files || a.path.localeCompare(b.path));
-    return out;
+    for (const siblings of byParent.values())
+      siblings.sort(
+        (a, b) => b.files - a.files || a.path.localeCompare(b.path),
+      );
+    return byParent;
   });
   const byPath = $derived(new Map(dirs.map((d) => [d.path, d])));
 
@@ -71,27 +73,28 @@
 {#snippet level(parent: string, depth: number)}
   {@const list = children.get(parent) ?? []}
   {@const whole = parent ? (byPath.get(parent)?.admitted ?? 0) : admitted}
-  {#each more.has(parent) ? list : list.slice(0, PAGE) as d (d.path)}
-    {@const kids = children.has(d.path)}
-    {@const expanded = kids && open.has(d.path)}
-    {@const locked = d.skipped || inherited(d.path)}
-    {@const on = !locked && !own(d.path)}
+  {#each more.has(parent) ? list : list.slice(0, PAGE) as dir (dir.path)}
+    {@const kids = children.has(dir.path)}
+    {@const expanded = kids && open.has(dir.path)}
+    {@const locked = dir.skipped || inherited(dir.path)}
+    {@const on = !locked && !own(dir.path)}
     <ToggleRow
       checked={on}
       disabled={locked}
-      label={`index ${d.path}`}
+      label={`index ${dir.path}`}
       {depth}
-      share={on && whole ? d.admitted / whole : 0}
-      count={countOf(d)}
-      onchange={(v) => toggle(d.path, v)}
+      share={on && whole ? dir.admitted / whole : 0}
+      count={countOf(dir)}
+      onchange={(v) => toggle(dir.path, v)}
     >
       {#snippet lead()}
         {#if kids}
           <button
             class="twist"
-            aria-label="{expanded ? 'collapse' : 'expand'} {d.path}"
+            aria-label="{expanded ? 'collapse' : 'expand'} {dir.path}"
             aria-expanded={expanded}
-            onclick={() => (expanded ? open.delete(d.path) : open.add(d.path))}
+            onclick={() =>
+              expanded ? open.delete(dir.path) : open.add(dir.path)}
             ><Chevron open={expanded} /></button
           >
         {:else}
@@ -101,9 +104,9 @@
       {#snippet icon()}
         <Icon name={expanded ? "folderOpen" : "folder"} size="1em" />
       {/snippet}
-      {nameOf(d.path)}
+      {nameOf(dir.path)}
     </ToggleRow>
-    {#if expanded}{@render level(d.path, depth + 1)}{/if}
+    {#if expanded}{@render level(dir.path, depth + 1)}{/if}
   {/each}
   {#if list.length > PAGE && !more.has(parent)}
     <button class="more" style:--depth={depth} onclick={() => more.add(parent)}

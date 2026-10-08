@@ -11,17 +11,17 @@
   let error = $state<string | null>(null);
 
   $effect(() => {
-    const s = String(schedule ?? "").trim();
-    const tz = String(timezone ?? "").trim();
+    const expression = String(schedule ?? "").trim();
+    const zone = String(timezone ?? "").trim();
     next = [];
     error = null;
-    if (!s) return;
+    if (!expression) return;
     const timer = setTimeout(async () => {
       try {
         next = (
           await api.post<{ next: string[] }>("/jobs/schedule-preview", {
-            schedule: s,
-            ...(tz ? { timezone: tz } : {}),
+            schedule: expression,
+            ...(zone ? { timezone: zone } : {}),
           })
         ).next;
       } catch (e) {

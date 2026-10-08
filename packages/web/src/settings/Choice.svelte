@@ -20,9 +20,9 @@
   let fill = $state<HTMLElement>();
   let placed = false;
 
-  /* One fill that travels to the picked option, rather than each option
-     painting its own: a shared shape moving says "this one instead of that
-     one", which three backgrounds swapping at once does not. */
+  // One fill that travels to the picked option, rather than each option
+  // painting its own: a shared shape moving says "this one instead of that
+  // one", which three backgrounds swapping at once does not.
   function place(animate: boolean) {
     const at = group?.querySelector<HTMLElement>('[aria-checked="true"]');
     if (!fill || !at) return;
@@ -40,9 +40,9 @@
 
   $effect(() => {
     if (!group) return;
-    const ro = new ResizeObserver(() => place(false));
-    ro.observe(group);
-    return () => ro.disconnect();
+    const observer = new ResizeObserver(() => place(false));
+    observer.observe(group);
+    return () => observer.disconnect();
   });
 </script>
 
@@ -54,25 +54,25 @@
   bind:this={group}
 >
   <span class="fill" aria-hidden="true" bind:this={fill}></span>
-  {#each options as o (o.value)}
-    {#if o.icon}
+  {#each options as option (option.value)}
+    {#if option.icon}
       <button
         type="button"
         role="radio"
-        aria-checked={o.value === value}
-        aria-label={o.label}
-        class:on={o.value === value}
-        use:tip={o.label}
-        onclick={() => onpick(o.value)}
-        ><Icon name={o.icon} size="1em" /></button
+        aria-checked={option.value === value}
+        aria-label={option.label}
+        class:on={option.value === value}
+        use:tip={option.label}
+        onclick={() => onpick(option.value)}
+        ><Icon name={option.icon} size="1em" /></button
       >
     {:else}
       <button
         type="button"
         role="radio"
-        aria-checked={o.value === value}
-        class:on={o.value === value}
-        onclick={() => onpick(o.value)}>{o.label}</button
+        aria-checked={option.value === value}
+        class:on={option.value === value}
+        onclick={() => onpick(option.value)}>{option.label}</button
       >
     {/if}
   {/each}

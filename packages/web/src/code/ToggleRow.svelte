@@ -35,8 +35,11 @@
   } = $props();
 </script>
 
-<!-- One shape for folders, file types and release lines. The icon and name
-     are the switch: lit means indexed, grey means left out. -->
+<!--
+@component
+One shape for folders, file types and release lines. The icon and name are the
+switch: lit means indexed, grey means left out.
+-->
 <div class="trow" style:--depth={depth}>
   {#if lead}{@render lead()}{/if}
   <button

@@ -50,8 +50,8 @@
     products.data.filter((p) => canCurateScope({ team_slug: p.team_slug })),
   );
 
-  /* Null until someone picks, so the first project is offered rather than
-     none; "" is a deliberate pick of no project. */
+  // Null until someone picks, so the first project is offered rather than none;
+  // "" is a deliberate pick of no project.
   let projectId = $state(
     recall<string | null>("admin.repos.link.project", null),
   );
@@ -83,17 +83,17 @@
   const hits = $derived(project ? found[project.id] : undefined);
 
   async function discover() {
-    const p = project;
-    if (!p) return;
-    const res = await api.get<{
+    const forProject = project;
+    if (!forProject) return;
+    const answer = await api.get<{
       ok: boolean;
       error?: string;
       repos?: FoundRepo[];
     }>(
-      `/source-connections/${p.source_slug}/discover/repos?project=${encodeURIComponent(p.external_key)}`,
+      `/source-connections/${forProject.source_slug}/discover/repos?project=${encodeURIComponent(forProject.external_key)}`,
     );
-    if (!res.ok) throw new Error(res.error ?? "discovery failed");
-    found[p.id] = [...(res.repos ?? [])].sort((a, b) =>
+    if (!answer.ok) throw new Error(answer.error ?? "discovery failed");
+    found[forProject.id] = [...(answer.repos ?? [])].sort((a, b) =>
       a.name.localeCompare(b.name, undefined, {
         sensitivity: "base",
         numeric: true,

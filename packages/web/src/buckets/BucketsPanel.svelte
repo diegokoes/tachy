@@ -26,13 +26,13 @@
 
   const slugs = $derived(buckets.data.map((b) => b.slug));
 
-  /* Team access lives outside the draft's flat fields, so the form edits a
-     set of slugs and the save sends it whole. */
+  // Team access lives outside the draft's flat fields, so the form edits a set
+  // of slugs and the save sends it whole.
   let picked = $state<string[]>([]);
   let issued = $state<BucketWithToken | null>(null);
   let rotating = $state<string | null>(null);
-  /* A new token cuts off the pusher still holding the old one, so it takes a
-     second click, as a delete does. */
+  // A new token cuts off the pusher still holding the old one, so it takes a
+  // second click, as a delete does.
   let armed = $state<string | null>(null);
   let copied = $state<string | null>(null);
 
@@ -89,23 +89,26 @@
   ]);
 
   function openedForm(
-    f: { mode: "create" | "edit"; row: Bucket | null } | null,
+    form: { mode: "create" | "edit"; row: Bucket | null } | null,
   ) {
-    picked = f?.row ? f.row.teams.map((x) => x.slug) : [];
+    picked = form?.row ? form.row.teams.map((x) => x.slug) : [];
   }
 
-  async function rotate(b: Bucket) {
-    if (armed !== b.slug) {
-      armed = b.slug;
+  async function rotate(bucket: Bucket) {
+    if (armed !== bucket.slug) {
+      armed = bucket.slug;
       setTimeout(() => {
-        if (armed === b.slug) armed = null;
+        if (armed === bucket.slug) armed = null;
       }, 4000);
       return;
     }
     armed = null;
-    rotating = b.slug;
+    rotating = bucket.slug;
     try {
-      issued = await api.post<BucketWithToken>(`/buckets/${b.slug}/token`, {});
+      issued = await api.post<BucketWithToken>(
+        `/buckets/${bucket.slug}/token`,
+        {},
+      );
       await buckets.reload();
     } finally {
       rotating = null;
@@ -125,24 +128,24 @@
   onMount(() => Promise.all([buckets.reload(), teams.reload()]));
 </script>
 
-{#snippet lastBatch(r: Bucket)}
-  <Time at={r.last_batch_at} />
+{#snippet lastBatch(bucket: Bucket)}
+  <Time at={bucket.last_batch_at} />
 {/snippet}
 
 {#snippet teamPicker()}
   <div class="teams">
     <GroupHead label={`${t("teams")} that can read it`} />
-    {#each teams.data as tm (tm.slug)}
+    {#each teams.data as team (team.slug)}
       <label class="opt">
         <Checkbox
-          checked={picked.includes(tm.slug)}
-          ariaLabel={tm.name}
+          checked={picked.includes(team.slug)}
+          ariaLabel={team.name}
           onchange={(on) =>
             (picked = on
-              ? [...picked, tm.slug]
-              : picked.filter((s) => s !== tm.slug))}
+              ? [...picked, team.slug]
+              : picked.filter((s) => s !== team.slug))}
         />
-        <span>{tm.name}</span>
+        <span>{team.name}</span>
       </label>
     {:else}
       <Note>No {t("teams")} yet: only app admins will see this bucket.</Note>
@@ -150,14 +153,14 @@
   </div>
 {/snippet}
 
-{#snippet rotateAction(b: Bucket)}
+{#snippet rotateAction(bucket: Bucket)}
   <Button
     variant="ghost"
     size="sm"
-    icon={armed === b.slug ? "confirm" : "refresh"}
-    busy={rotating === b.slug}
-    onclick={() => rotate(b)}
-    >{armed === b.slug ? "replace token?" : "new token"}</Button
+    icon={armed === bucket.slug ? "confirm" : "refresh"}
+    busy={rotating === bucket.slug}
+    onclick={() => rotate(bucket)}
+    >{armed === bucket.slug ? "replace token?" : "new token"}</Button
   >
 {/snippet}
 
@@ -196,10 +199,10 @@
 />
 
 {#if issued}
-  {@const b = issued.bucket}
-  {@const tok = issued.token}
+  {@const bucket = issued.bucket}
+  {@const token = issued.token}
   <Modal
-    title={`ingest token: ${b.name}`}
+    title={`ingest token: ${bucket.name}`}
     confirmLabel="done"
     confirmIcon="confirm"
     width="44rem"
@@ -211,13 +214,13 @@
       Copy it now. It won't be shown again.
     </p>
     <div class="secret">
-      <code>{tok}</code>
+      <code>{token}</code>
       <Button
         variant="ghost"
         size="sm"
         icon={copied === "token" ? "confirm" : "copy"}
         title="copy the token"
-        onclick={() => copy("token", tok)}
+        onclick={() => copy("token", token)}
       />
     </div>
     <p class="line dim">
@@ -225,13 +228,13 @@
       Bearer token
     </p>
     <div class="secret">
-      <pre>{request(b.slug, tok)}</pre>
+      <pre>{request(bucket.slug, token)}</pre>
       <Button
         variant="ghost"
         size="sm"
         icon={copied === "request" ? "confirm" : "copy"}
         title="copy the request"
-        onclick={() => copy("request", request(b.slug, tok))}
+        onclick={() => copy("request", request(bucket.slug, token))}
       />
     </div>
   </Modal>

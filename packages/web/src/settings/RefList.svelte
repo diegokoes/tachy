@@ -8,13 +8,13 @@
 </script>
 
 <ul class:off>
-  {#each rows as r}
+  {#each rows as row}
     <li>
-      <span class="what">{r.what}</span>
+      <span class="what">{row.what}</span>
       <span class="leader" aria-hidden="true"></span>
       <span class="keys">
-        {#each r.keys as k, i}
-          {#if i}<span class="or">/</span>{/if}<Chord chord={k} />
+        {#each row.keys as chord, i}
+          {#if i}<span class="or">/</span>{/if}<Chord {chord} />
         {/each}
       </span>
     </li>

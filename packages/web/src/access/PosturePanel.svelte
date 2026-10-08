@@ -28,7 +28,7 @@
   import Overview from "../admin/Overview.svelte";
   import Tile from "../admin/Tile.svelte";
 
-  const u = $derived(census.data.detail.users);
+  const people = $derived(census.data.detail.users);
   const teams = $derived(census.data.counts.teams ?? 0);
   const admin = $derived(isGlobalAdmin());
   const usage = $derived(activity.data.usage);
@@ -41,13 +41,13 @@
   onMount(() => system.reload());
 
   const figures = $derived([
-    { key: "users", label: "users", value: u.users, to: "users" },
+    { key: "users", label: "users", value: people.users, to: "users" },
     { key: "teams", label: t("teams"), value: teams, to: "teams" },
     {
       key: "admins",
       label: "app admins",
-      value: u.admins,
-      tone: u.admins ? ("accent" as const) : ("danger" as const),
+      value: people.admins,
+      tone: people.admins ? ("accent" as const) : ("danger" as const),
       to: "admins",
     },
     {
@@ -77,30 +77,43 @@
     },
   ]);
 
-  /* userCensus counts app admins and team admins among the enabled and never
-     the same person twice, so these four are the whole roll. */
+  // userCensus counts app admins and team admins among the enabled and never
+  // the same person twice, so these four are the whole roll.
   const members = $derived(
-    Math.max(0, u.users - u.disabled - u.admins - u.team_admins),
+    Math.max(
+      0,
+      people.users - people.disabled - people.admins - people.team_admins,
+    ),
   );
   const roles = $derived<Col[]>([
-    { key: "admins", label: "admins", title: "app admins", value: u.admins },
+    {
+      key: "admins",
+      label: "admins",
+      title: "app admins",
+      value: people.admins,
+    },
     {
       key: "team-admins",
       label: "leads",
       title: `${t("team")} admins`,
-      value: u.team_admins,
+      value: people.team_admins,
     },
     { key: "members", label: "members", value: members },
-    { key: "disabled", label: "disabled", value: u.disabled, tone: "muted" },
+    {
+      key: "disabled",
+      label: "disabled",
+      value: people.disabled,
+      tone: "muted",
+    },
   ]);
 
   const config = $derived.by((): Cell[] => {
     const info = system.data;
     if (!info) return [];
-    const s = info.settings;
+    const settings = info.settings;
     const creds = info.credentials;
     const env = info.env;
-    const out: Cell[] = [
+    const cells: Cell[] = [
       {
         key: "vault",
         label: "vault",
@@ -114,27 +127,27 @@
         label: "agent key",
         tone: creds.anthropic_api_key ? "ok" : "muted",
         title: creds.anthropic_api_key
-          ? `${s.agent_model.value}, fallback key from ${creds.anthropic_api_key}`
+          ? `${settings.agent_model.value}, fallback key from ${creds.anthropic_api_key}`
           : "no anthropic_api_key in the environment: each user brings their own in Settings › Keys",
       },
     ];
-    out.push({
+    cells.push({
       key: "password",
       label: "password sign-in",
       tone: "muted",
-      title: `${u.with_password} of ${u.users} users sign in with a password (${pct(u.with_password, u.users)}), the rest through SSO`,
+      title: `${people.with_password} of ${people.users} users sign in with a password (${pct(people.with_password, people.users)}), the rest through SSO`,
     });
     if (admin)
-      out.push({
+      cells.push({
         key: "redaction",
         label: "PII redaction",
-        tone: s.redaction_global.value ? "ok" : "muted",
-        title: s.redaction_global.value
+        tone: settings.redaction_global.value ? "ok" : "muted",
+        title: settings.redaction_global.value
           ? "scrubbed at the MCP boundary"
           : "off",
       });
     if (env)
-      out.push(
+      cells.push(
         {
           key: "session",
           label: "session secret",
@@ -156,18 +169,18 @@
         { key: "auth", label: `auth ${env.auth_mode}`, tone: "muted" },
       );
     if (admin)
-      out.push({
+      cells.push({
         key: "profile",
-        label: s.deployment_profile.value,
+        label: settings.deployment_profile.value,
         tone: "muted",
         title: "deployment profile",
       });
-    return out;
+    return cells;
   });
 
-  /* A failure is only news here when the agent caused it: "held it wrong" is
-     feedback on that tool's description. Both ride inside the bar of the calls
-     they are part of. */
+  // A failure is only news here when the agent caused it: "held it wrong" is
+  // feedback on that tool's description. Both ride inside the bar of the calls
+  // they are part of.
   const TOOL_KEY = [
     { key: "calls", label: "calls", tone: "accent" },
     { key: "failures", label: "failed", tone: "danger" },
@@ -185,27 +198,27 @@
     })),
   );
 
-  /* A model is a category: a fixed tone per rank, and past three the tail
-     folds into "other" rather than inventing a fifth colour. */
+  // A model is a category: a fixed tone per rank, and past three the tail folds
+  // into "other" rather than inventing a fifth colour.
   const MODEL_TONES = ["accent", "info", "ok"] as const;
   const models = $derived([
     ...usage.by_model
-      .slice(0, 3)
+      .slice(0, MODEL_TONES.length)
       .map((m, i) => ({ key: m.model, label: m.model, tone: MODEL_TONES[i] })),
-    ...(usage.by_model.length > 3
+    ...(usage.by_model.length > MODEL_TONES.length
       ? [{ key: "other", label: "other", tone: "muted" as const }]
       : []),
   ]);
   const tokens = $derived(
-    usage.per_day.map((d): Col => {
-      const by = d.models ?? {};
+    usage.per_day.map((day): Col => {
+      const by = day.models ?? {};
       const named = models.filter((m) => m.key !== "other");
       const known = named.reduce((n, m) => n + (by[m.key] ?? 0), 0);
       return {
-        key: d.day,
-        label: dayOfMonth(d.day),
-        title: fmtDate(d.day),
-        value: d.tokens,
+        key: day.day,
+        label: dayOfMonth(day.day),
+        title: fmtDate(day.day),
+        value: day.tokens,
         parts: [
           ...named.map((m) => ({
             key: m.key,
@@ -214,7 +227,7 @@
           })),
           {
             key: "other",
-            value: Math.max(0, d.tokens - known),
+            value: Math.max(0, day.tokens - known),
             tone: "muted" as const,
           },
         ],
@@ -263,24 +276,29 @@
   const roleColumns: Column<Role>[] = [
     col<Role>("role", "role", (r) => r.title ?? r.label),
     col<Role>("users", "users", (r) => r.value, { end: true }),
-    col<Role>("share", "of users", (r) => share(r.value, u.users), {
+    col<Role>("share", "of users", (r) => share(r.value, people.users), {
       end: true,
     }),
   ];
   const roleFigures = $derived<Count[]>([
-    { key: "users", label: "users", value: u.users },
-    { key: "disabled", label: "disabled", value: u.disabled, tone: "muted" },
+    { key: "users", label: "users", value: people.users },
+    {
+      key: "disabled",
+      label: "disabled",
+      value: people.disabled,
+      tone: "muted",
+    },
     {
       key: "noteam",
       label: `in no ${t("team")}`,
-      value: u.users_no_team,
-      tone: u.users_no_team ? "warn" : "muted",
+      value: people.users_no_team,
+      tone: people.users_no_team ? "warn" : "muted",
     },
     {
       key: "noadmin",
       label: `${t("teams")} without an admin`,
-      value: u.teams_without_admin.length,
-      tone: u.teams_without_admin.length ? "warn" : "muted",
+      value: people.teams_without_admin.length,
+      tone: people.teams_without_admin.length ? "warn" : "muted",
     },
   ]);
 
@@ -484,9 +502,9 @@
   <Tile
     title="roles"
     key="roles"
-    meta={`${u.users}`}
+    meta={`${people.users}`}
     span={showHeaviest ? 1 : 2}
-    empty={!u.users}
+    empty={!people.users}
   >
     {#snippet detail()}
       <Detail figures={roleFigures} loading={census.loading} table={rolesTable}>

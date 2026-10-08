@@ -1,17 +1,24 @@
 const MAINLINE = ["master", "main", "develop", "quality"];
 const RELEASE_LINE_RE = /^(legacy|release)\//;
 
-export const branchRank = (b: string) =>
-  MAINLINE.includes(b) ? 0 : RELEASE_LINE_RE.test(b) ? 1 : 2;
+const MAINLINE_RANK = 0;
+const RELEASE_RANK = 1;
+const OTHER_RANK = 2;
+
+export const branchRank = (b: string) => {
+  if (MAINLINE.includes(b)) return MAINLINE_RANK;
+  return RELEASE_LINE_RE.test(b) ? RELEASE_RANK : OTHER_RANK;
+};
 
 /** Mainline in its usual order, then release lines newest first, then the rest. */
-export const byBranch = (a: string, b: string) =>
-  branchRank(a) - branchRank(b) ||
-  (branchRank(a) === 0
-    ? MAINLINE.indexOf(a) - MAINLINE.indexOf(b)
-    : branchRank(a) === 1
-      ? b.localeCompare(a, undefined, { numeric: true })
-      : a.localeCompare(b));
+export const byBranch = (a: string, b: string) => {
+  const rank = branchRank(a);
+  if (rank !== branchRank(b)) return rank - branchRank(b);
+  if (rank === MAINLINE_RANK) return MAINLINE.indexOf(a) - MAINLINE.indexOf(b);
+  if (rank === RELEASE_RANK)
+    return b.localeCompare(a, undefined, { numeric: true });
+  return a.localeCompare(b);
+};
 
 /** Branches worth offering as extra lines: mainline and release lines, plus any already tracked. */
 export function lineCandidates(
@@ -19,7 +26,7 @@ export function lineCandidates(
   tracked: string[],
   defaultBranch: string,
 ): string[] {
-  const offered = branches.filter((b) => branchRank(b) < 2);
+  const offered = branches.filter((b) => branchRank(b) < OTHER_RANK);
   return [...new Set([...tracked, ...offered])]
     .filter((b) => b !== defaultBranch)
     .sort(byBranch);

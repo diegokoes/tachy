@@ -1,4 +1,5 @@
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const CRON_FIELDS = 5;
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const whole = (f: string) => /^\d+$/.test(f);
@@ -12,13 +13,13 @@ function weekdays(field: string): string | null {
 }
 
 /**
- * A cron expression as a person would say it, for the shapes admins actually
- * write; anything else comes back as it was typed.
+ * A cron expression as a person would say it, for the common shapes; anything
+ * else comes back as typed.
  */
 export function describeSchedule(cron: string): string {
-  const f = cron.trim().split(/\s+/);
-  if (f.length !== 5) return cron;
-  const [min, hour, dom, mon, dow] = f;
+  const fields = cron.trim().split(/\s+/);
+  if (fields.length !== CRON_FIELDS) return cron;
+  const [min, hour, dom, mon, dow] = fields;
   if (dom !== "*" || mon !== "*") return cron;
 
   const step = /^\*\/(\d+)$/.exec(min);

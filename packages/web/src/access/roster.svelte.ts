@@ -13,12 +13,10 @@ export type Membership = {
 };
 
 /**
- * Who exists, which teams they are in, and how sign-in is configured.
- *
- * Module singletons rather than per-panel resources: the users list, the team
- * roster and the app-admin list are three views of the same three endpoints,
- * and they sit on one page at once. Fetching them per panel meant the same
- * query three times on every visit.
+ * Who exists, which teams they are in, and how sign-in is configured. Module
+ * singletons, not per-panel resources: the users list, the team roster and the
+ * app-admin list are three views of the same three endpoints on one page, and
+ * per-panel fetches would run each query three times a visit.
  */
 export const users = createResource(() => api.get<UserRow[]>("/users"), []);
 export const teams = createResource(() => api.get<Team[]>("/teams"), []);
@@ -45,18 +43,17 @@ export const ssoConfigured = (): boolean | null =>
   system.data?.runtime?.security.sso_configured ?? null;
 
 /**
- * How this account can actually sign in.
- *
- * Under SSO a password only works for accounts explicitly allowed one (that
- * is what `password_login_allowed` is for), so holding a hash is not the same
- * as being able to use it.
+ * How this account can sign in. Under SSO a password works only for an account
+ * with `password_login_allowed`, so holding a hash is not the same as being
+ * able to use it.
  */
-export function signIn(u: UserRow, sso: boolean | null) {
+export function signIn(user: UserRow, sso: boolean | null) {
   return {
-    password: u.has_password && (sso !== true || u.password_login_allowed),
-    /* SSO is a deployment-wide setting, so it is on for everyone or no one.
-       Service accounts authenticate with a token instead. */
-    sso: sso === true && !u.service_account,
+    password:
+      user.has_password && (sso !== true || user.password_login_allowed),
+    // SSO is a deployment-wide setting, so it is on for everyone or no one.
+    // Service accounts authenticate with a token instead.
+    sso: sso === true && !user.service_account,
   };
 }
 

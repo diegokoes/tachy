@@ -9,7 +9,7 @@
     onpick,
   }: {
     value?: ReportType | null;
-    onpick?: (v: ReportType) => void;
+    onpick?: (side: ReportType) => void;
   } = $props();
 
   let trackEl = $state<HTMLElement>();
@@ -22,22 +22,22 @@
 
   let ready = false;
 
-  function pick(v: ReportType) {
-    if (value === v) return;
-    value = v;
-    onpick?.(v);
+  function pick(side: ReportType) {
+    if (value === side) return;
+    value = side;
+    onpick?.(side);
   }
 
   // The knob keeps the same inset from the ends as it does from the top and
   // bottom, so it sits in the track the same way at rest and at either side.
-  function knobX(v: ReportType | null): number {
+  function knobX(side: ReportType | null): number {
     const track = trackEl!.getBoundingClientRect();
     const knob = knobEl!.getBoundingClientRect();
     const border = trackEl!.clientLeft;
     const inner = { w: track.width - 2 * border, h: track.height - 2 * border };
     const inset = (inner.h - knob.height) / 2;
-    if (v === "bug") return inset;
-    if (v === "feature") return inner.w - knob.width - inset;
+    if (side === "bug") return inset;
+    if (side === "feature") return inner.w - knob.width - inset;
     return (inner.w - knob.width) / 2;
   }
 
@@ -62,16 +62,16 @@
   // Position the knob, crossfade the face, and ripple the chosen label - all
   // driven off `value`, so a keyboard pick animates the same as a click.
   $effect(() => {
-    const v = value;
+    const side = value;
     if (!trackEl || !knobEl) return;
     const animate = ready && !reducedMotion();
     const dur = animate ? KNOB_SECONDS : 0;
-    gsap.to(knobEl, { x: knobX(v), duration: dur, ease: "back.out(1.6)" });
+    gsap.to(knobEl, { x: knobX(side), duration: dur, ease: "back.out(1.6)" });
 
     const faces: [SVGSVGElement | HTMLElement | undefined, boolean][] = [
-      [dotEl, v === null],
-      [bugIcon, v === "bug"],
-      [ideaIcon, v === "feature"],
+      [dotEl, side === null],
+      [bugIcon, side === "bug"],
+      [ideaIcon, side === "feature"],
     ];
     for (const [el, on] of faces)
       if (el)
@@ -84,9 +84,9 @@
         });
 
     // The wave starts at the letter nearest the track, where the knob lands.
-    if (ready && v === "bug")
+    if (ready && side === "bug")
       ripple(bugChars, { from: "end", delay: KNOB_ARRIVES });
-    if (ready && v === "feature")
+    if (ready && side === "feature")
       ripple(ideaChars, { from: "start", delay: KNOB_ARRIVES });
     ready = true;
   });
@@ -175,7 +175,7 @@
     border-color: var(--report-idea);
   }
 
-  /* Two halves you press to choose a side; the knob rides above them. */
+  /* Two halves, each pressed to choose its side; the knob rides above them. */
   .zone {
     position: absolute;
     top: 0;

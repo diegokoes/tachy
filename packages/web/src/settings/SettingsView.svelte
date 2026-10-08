@@ -17,8 +17,7 @@
 
   type Section = { label: string; hint?: string; view: Component };
 
-  /** A tab is a pair of columns of groups, or one view that lays itself
-   *  out. */
+  /** A tab is a pair of columns of groups, or one view that lays itself out. */
   type Tab = SubnavItem &
     ({ left: Section[]; right: Section[] } | { view: Component });
 
@@ -60,8 +59,10 @@
     },
   ];
 
-  /** Section URLs from before the tabs survive in bookmarks and history; each
-   *  lands on the tab that holds its content. */
+  /**
+   * Section URLs from before the tabs survive in bookmarks and history; each
+   * lands on the tab that holds its content.
+   */
   const MOVED: Record<string, string> = {
     ui: "theme",
     appearance: "theme",
@@ -93,7 +94,7 @@
     }),
   );
 
-  /* A rebind open on one tab must not outlive the reader leaving it. */
+  // A rebind open on one tab must not outlive the reader leaving it.
   $effect(() => {
     tab;
     close();
@@ -115,9 +116,9 @@
 {/snippet}
 
 {#snippet column(sections: Section[])}
-  {#each sections as s (s.label)}
-    {@const View = s.view}
-    <Group label={s.label} hint={s.hint}><View /></Group>
+  {#each sections as section (section.label)}
+    {@const View = section.view}
+    <Group label={section.label} hint={section.hint}><View /></Group>
   {/each}
 {/snippet}
 

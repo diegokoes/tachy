@@ -126,8 +126,8 @@
     position: absolute;
     top: 150%;
     left: 150%;
-    /* Far past the cap on every side: a square cap turned 45° inside a smaller
-       one left a corner of the rim unpainted once per turn. */
+    /* Far past the cap on every side: a smaller square, turned 45°, leaves a
+       corner of the cap's rim unpainted. */
     width: 1200%;
     aspect-ratio: 1;
     background: conic-gradient(

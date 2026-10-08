@@ -14,17 +14,16 @@
 
   const sso = $derived(ssoConfigured());
 
-  /* Who can change anything, on one screen. The list is short by design, and
-     that is the point of showing it apart from the roster: an app admin that
-     nobody meant to create is invisible among two hundred members. */
+  // Shown apart from the roster because the list is short: an app admin nobody
+  // meant to create is invisible among two hundred members.
   const rows = $derived(
     users.data
       .filter((u) => u.role === "admin")
       .sort((a, b) => a.email.localeCompare(b.email)),
   );
 
-  /* Two ways to lose the keys: nobody holds them, or the only person who does
-     cannot sign in. Both are worth saying out loud. */
+  // Two ways to lose the keys: nobody holds them, or the only holder cannot
+  // sign in.
   const live = $derived(
     rows.filter(
       (u) => !u.disabled && (signIn(u, sso).password || signIn(u, sso).sso),
@@ -48,14 +47,14 @@
   onMount(() => void system.reload());
 </script>
 
-{#snippet signInCell(u: UserRow)}
-  {@const how = signIn(u, sso)}
-  {@const on = !u.disabled && (how.password || how.sso)}
+{#snippet signInCell(user: UserRow)}
+  {@const how = signIn(user, sso)}
+  {@const on = !user.disabled && (how.password || how.sso)}
   {@const why = on
     ? [how.password ? "password" : "", how.sso ? "SSO" : ""]
         .filter(Boolean)
         .join(" · ")
-    : u.disabled
+    : user.disabled
       ? "disabled"
       : "no way in"}
   <span class="mark" class:on>
@@ -68,10 +67,10 @@
   </span>
 {/snippet}
 
-{#snippet stateCell(u: UserRow)}
-  {#if u.disabled}
+{#snippet stateCell(user: UserRow)}
+  {#if user.disabled}
     <Badge tone="danger">disabled</Badge>
-  {:else if u.service_account}
+  {:else if user.service_account}
     <Badge>service</Badge>
   {/if}
 {/snippet}

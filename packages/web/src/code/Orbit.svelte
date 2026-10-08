@@ -16,8 +16,8 @@
 
   type Point = { x: number; y: number };
 
-  const C = GRID / 2;
-  const ORIGIN = `${C} ${C}`;
+  const CENTRE = GRID / 2;
+  const ORIGIN = `${CENTRE} ${CENTRE}`;
   /** Room past the icon's own grid for the outer orbit, kept centred on it. */
   const PAD = 5;
   const uid = $props.id();
@@ -54,6 +54,8 @@
   const ENTER = SPIRAL * Math.sqrt(2 / 3);
   /** The letters leave this long after the core has taken the comets in. */
   const AFTER = 0.1;
+  /** The swarm still orbits while its scale is above this. */
+  const ORBITING_ABOVE = 0.05;
 
   let svg = $state<SVGSVGElement>();
   let kick = $state<SVGGElement>();
@@ -73,23 +75,24 @@
 
   const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
-  /* Paired by geometry once drawn, because Lucide reorders an icon's nodes
-     and may reverse a path between releases: a moon heads the tail whose end
-     it sits on, and the gradient runs from that tail's far end up to it.
-     Each pair is then one group, so nothing can pull a head off its tail. */
+  // Paired by geometry once drawn, because Lucide reorders an icon's nodes and
+  // may reverse a path between releases: a moon heads the tail whose end it
+  // sits on. Each pair is then one group.
   $effect(() => {
     if (tailEls.length !== tails.length) return;
     const at = moons.map((m) => ({ x: Number(m.cx), y: Number(m.cy) }));
-    const pairs = tailEls.map((p) => {
-      const a = p.getPointAtLength(0);
-      const b = p.getPointAtLength(p.getTotalLength());
+    const pairs = tailEls.map((path) => {
+      const start = path.getPointAtLength(0);
+      const end = path.getPointAtLength(path.getTotalLength());
       const near = (q: Point) =>
         at.reduce(
           (best, m, i) => (dist(q, m) < dist(q, at[best]) ? i : best),
           0,
         );
       const [head, far] =
-        dist(a, at[near(a)]) <= dist(b, at[near(b)]) ? [a, b] : [b, a];
+        dist(start, at[near(start)]) <= dist(end, at[near(end)])
+          ? [start, end]
+          : [end, start];
       return {
         moon: near(head),
         from: { x: far.x, y: far.y },
@@ -111,8 +114,8 @@
     if (!swarm || !heart || cometEls.length !== tails.length) return;
     if (ends.length !== tails.length || reducedMotion()) return;
 
-    /* Once, up front: an origin given only on the "to" side of a fromTo is
-       resolved after the "from" state has already been drawn about 0 0. */
+    // Once, up front: an origin given only on the "to" side of a fromTo is
+    // resolved after the "from" state has already been drawn about 0 0.
     gsap.set([kick, ring, coreEl, voidEl, swarm, heart, ...cometEls], {
       svgOrigin: ORIGIN,
     });
@@ -153,8 +156,8 @@
     });
     loops = tl;
 
-    /* Already moving when it appears and only ever gathering speed: starting
-       from still read as frozen, and an overshoot as a stall. */
+    // Already moving when it appears and only ever gathering speed: a start
+    // from still reads as frozen, and an overshoot as a stall.
     const arrive = gsap
       .timeline()
       .fromTo(
@@ -194,7 +197,8 @@
    */
   function collapse(swarmEl: SVGGElement, heartEl: SVGGElement) {
     still();
-    const orbiting = Number(gsap.getProperty(swarmEl, "scale")) > 0.05;
+    const orbiting =
+      Number(gsap.getProperty(swarmEl, "scale")) > ORBITING_ABOVE;
     shake = gsap.to(heartEl, {
       x: "random(-0.4, 0.4)",
       y: "random(-0.4, 0.4)",
@@ -205,8 +209,8 @@
     });
     const tl = gsap.timeline();
     tl.to(heartEl, { scale: 1.45, duration: 0.5, ease: "power2.out" }, 0);
-    /* The pull starts gentle and ends violent: the comets hold most of their
-       orbit for the first half, then the spiral tightens and quickens. */
+    // The pull starts gentle and ends violent: the comets hold most of their
+    // orbit for the first half, then the spiral tightens and quickens.
     if (orbiting)
       tl.to(swarmEl, { scale: 0, duration: SPIRAL, ease: "power2.in" }, 0)
         .to(
@@ -219,9 +223,9 @@
   }
 
   $effect(() => {
-    const m = mode;
+    const phase = mode;
     if (!svg || !swarm || !heart || !halo || reducedMotion()) return;
-    const hot = m === "seek";
+    const hot = phase === "seek";
     if (loops && (hot || loops.timeScale() > 1))
       gsap.to(loops, {
         timeScale: hot ? 2.4 : 1,
@@ -236,12 +240,12 @@
       overwrite: "auto",
     });
     gsap.to(halo, {
-      autoAlpha: m === "idle" ? 1 : 0,
+      autoAlpha: phase === "idle" ? 1 : 0,
       duration: 0.5,
       overwrite: true,
     });
-    if (m === "seek") flight = collapse(swarm, heart);
-    else if (m === "gone") {
+    if (phase === "seek") flight = collapse(swarm, heart);
+    else if (phase === "gone") {
       still();
       const el = kick;
       if (el)
@@ -274,15 +278,15 @@
   /** How long an ask should be held for the collapse to land, in ms. */
   export function holdFor(): number {
     if (!swarm || reducedMotion()) return 0;
-    const orbiting = Number(gsap.getProperty(swarm, "scale")) > 0.05;
+    const orbiting = Number(gsap.getProperty(swarm, "scale")) > ORBITING_ABOVE;
     return ((orbiting ? ENTER : 0) + AFTER) * 1000;
   }
 
   /** Where the letters leave from, in viewport pixels. */
   export function centre(): Point | null {
     if (!svg) return null;
-    const r = svg.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    const rect = svg.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
   }
 
   onDestroy(() => {
@@ -306,24 +310,24 @@
       id="{uid}-core"
       bind:this={coreGrad}
       gradientUnits="userSpaceOnUse"
-      x1={C - Number(core.r)}
-      y1={C}
-      x2={C + Number(core.r)}
-      y2={C}
+      x1={CENTRE - Number(core.r)}
+      y1={CENTRE}
+      x2={CENTRE + Number(core.r)}
+      y2={CENTRE}
     >
       <stop offset="0" class="s-a" />
       <stop offset="0.5" class="s-c" />
       <stop offset="1" class="s-b" />
     </linearGradient>
-    {#each ends as e, i (i)}
+    {#each ends as end, i (i)}
       {@const { head, tail } = COMETS[i % COMETS.length]}
       <linearGradient
         id="{uid}-tail-{i}"
         gradientUnits="userSpaceOnUse"
-        x1={e.from.x}
-        y1={e.from.y}
-        x2={e.to.x}
-        y2={e.to.y}
+        x1={end.from.x}
+        y1={end.from.y}
+        x2={end.to.x}
+        y2={end.to.y}
       >
         <stop offset="0" class="s-{tail}" stop-opacity="0" />
         <stop offset="0.55" class="s-{tail}" stop-opacity="0.55" />
@@ -334,21 +338,21 @@
 
   <g bind:this={kick}>
     <g bind:this={halo}>
-      <circle bind:this={ring} class="ring" cx={C} cy={C} r={RING} />
+      <circle bind:this={ring} class="ring" cx={CENTRE} cy={CENTRE} r={RING} />
     </g>
     <!-- Drawn before the core, so what spirals in goes behind it. -->
     <g bind:this={swarm}>
-      {#each tails as t, i (i)}
+      {#each tails as tail, i (i)}
         {@const moon = moons[heads[i]]}
         <g bind:this={cometEls[i]}>
           <path
             bind:this={tailEls[i]}
-            {...t}
+            {...tail}
             stroke={ends[i] ? `url(#${uid}-tail-${i})` : "currentColor"}
             stroke-width="1.15"
           />
           {#if moon}
-            {@const k = COMETS[i % COMETS.length].moon}
+            {@const moonScale = COMETS[i % COMETS.length].moon}
             {@const tip = ends[i]?.to ?? {
               x: Number(moon.cx),
               y: Number(moon.cy),
@@ -356,9 +360,9 @@
             <!-- Shrunk toward the tail's end rather than its own centre, so
                  the head still sits on the tail. -->
             <circle
-              cx={tip.x + (Number(moon.cx) - tip.x) * k}
-              cy={tip.y + (Number(moon.cy) - tip.y) * k}
-              r={Number(moon.r) * k}
+              cx={tip.x + (Number(moon.cx) - tip.x) * moonScale}
+              cy={tip.y + (Number(moon.cy) - tip.y) * moonScale}
+              r={Number(moon.r) * moonScale}
               class="moon m-{COMETS[i % COMETS.length].head}"
               stroke-width="1.15"
             />

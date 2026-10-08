@@ -54,40 +54,48 @@
     memberships.data.filter((m) => m.user_id === u.id);
 
   const filtered = $derived.by(() => {
-    const q = filter.trim().toLowerCase();
+    const needle = filter.trim().toLowerCase();
     return users.data.filter(
       (u) =>
-        (!q ||
-          `${u.email} ${u.display_name ?? ""}`.toLowerCase().includes(q)) &&
+        (!needle ||
+          `${u.email} ${u.display_name ?? ""}`
+            .toLowerCase()
+            .includes(needle)) &&
         (!team || teamsOf(u).some((m) => m.team_slug === team)),
     );
   });
 
-  /* Membership lives on its own endpoint, so the form edits a copy and the
-     save fans the differences out afterwards. */
+  // Membership lives on its own endpoint, so the form edits a copy and the save
+  // fans the differences out afterwards.
   let roster = $state<Record<string, TeamRole>>({});
   let rosterFor = $state<string | null>(null);
   let addTeam = $state("");
 
   function openedForm(
-    f: { mode: "create" | "edit"; row: UserRow | null } | null,
+    form: { mode: "create" | "edit"; row: UserRow | null } | null,
   ) {
-    rosterFor = f?.row?.id ?? null;
+    rosterFor = form?.row?.id ?? null;
     addTeam = "";
     roster = {};
-    if (f?.row)
-      for (const m of teamsOf(f.row)) roster[m.team_slug] = m.team_role;
+    if (form?.row)
+      for (const membership of teamsOf(form.row))
+        roster[membership.team_slug] = membership.team_role;
   }
 
-  async function applyRoster(u: UserRow) {
-    const before = new Map(teamsOf(u).map((m) => [m.team_slug, m.team_role]));
+  async function applyRoster(user: UserRow) {
+    const before = new Map(
+      teamsOf(user).map((m) => [m.team_slug, m.team_role]),
+    );
     for (const [slug, role] of Object.entries(roster))
       if (before.get(slug) !== role)
-        await api.put(`/users/team-members/${slug}`, { email: u.email, role });
+        await api.put(`/users/team-members/${slug}`, {
+          email: user.email,
+          role,
+        });
     for (const slug of before.keys())
       if (!(slug in roster))
         await api.put(`/users/team-members/${slug}`, {
-          email: u.email,
+          email: user.email,
           role: null,
         });
   }
@@ -103,9 +111,9 @@
       info: "Sign-in identity. Immutable.",
     },
     { key: "display_name", label: "name", width: "12rem", edit: "text" },
-    /* A toggle, not a two-option select: the question is whether this person
-       is an app admin, and a list of two is a longer way to ask it. The draft
-       carries the role string the API wants; `value` and the commit convert. */
+    // A toggle, not a two-option select: the question is whether this person is
+    // an app admin, and a list of two is a longer way to ask it. The draft
+    // carries the role string the API wants; `value` and the commit convert.
     {
       key: "role",
       label: roleLabel("app", "admin"),
@@ -157,21 +165,21 @@
   });
 </script>
 
-{#snippet roleCell(u: UserRow)}
-  {#if u.role === "admin"}
+{#snippet roleCell(user: UserRow)}
+  {#if user.role === "admin"}
     <Badge tone="accent">{roleLabel("app", "admin")}</Badge>
   {:else}
     <span class="none">member</span>
   {/if}
 {/snippet}
 
-{#snippet teamsCell(u: UserRow)}
-  {@const ms = teamsOf(u)}
-  {#if ms.length}
+{#snippet teamsCell(user: UserRow)}
+  {@const memberships = teamsOf(user)}
+  {#if memberships.length}
     <span class="chips">
-      {#each ms as m (m.team_slug)}
-        <Chip tone={m.team_role === "admin" ? "accent" : "default"}
-          >{m.team_name}{m.team_role === "admin"
+      {#each memberships as membership (membership.team_slug)}
+        <Chip tone={membership.team_role === "admin" ? "accent" : "default"}
+          >{membership.team_name}{membership.team_role === "admin"
             ? ` · ${roleLabel("team", "admin")}`
             : ""}</Chip
         >
@@ -195,25 +203,25 @@
   </span>
 {/snippet}
 
-{#snippet passwordCell(u: UserRow)}
-  {@const can = signIn(u, sso).password}
+{#snippet passwordCell(user: UserRow)}
+  {@const can = signIn(user, sso).password}
   {@render mark(
     can,
     can
       ? "can sign in with a password"
-      : u.has_password
+      : user.has_password
         ? "has a password, but SSO is on and this account is not allowed one"
         : "no password set",
   )}
 {/snippet}
 
-{#snippet ssoCell(u: UserRow)}
-  {@const can = signIn(u, sso).sso}
+{#snippet ssoCell(user: UserRow)}
+  {@const can = signIn(user, sso).sso}
   {@render mark(
     can,
     can
       ? "can sign in with SSO"
-      : u.service_account
+      : user.service_account
         ? "service account, authenticates with a token"
         : sso === null
           ? "SSO setting not visible to you"
@@ -222,35 +230,35 @@
 {/snippet}
 
 <!-- Neither state is the common case, so neither gets a column of its own. -->
-{#snippet stateCell(u: UserRow)}
-  {#if u.disabled}
+{#snippet stateCell(user: UserRow)}
+  {#if user.disabled}
     <Badge tone="danger">disabled</Badge>
-  {:else if u.service_account}
+  {:else if user.service_account}
     <Badge>service</Badge>
   {/if}
 {/snippet}
 
-{#snippet rosterEditor(f: { mode: "create" | "edit"; row: UserRow | null })}
-  {#if f.row && myTeams.length}
+{#snippet rosterEditor(form: { mode: "create" | "edit"; row: UserRow | null })}
+  {#if form.row && myTeams.length}
     <div class="roster">
       <GroupHead label={t("teams")} />
-      {#each myTeams.filter((tm) => tm.slug in roster) as tm (tm.slug)}
+      {#each myTeams.filter((tm) => tm.slug in roster) as myTeam (myTeam.slug)}
         <div class="rrow">
-          <span class="rn">{tm.name}</span>
+          <span class="rn">{myTeam.name}</span>
           <!-- Membership is the row existing at all; the toggle only asks
                whether they also run the team. -->
           <label class="opt">
             <Checkbox
-              checked={roster[tm.slug] === "admin"}
-              ariaLabel={`${tm.name}: ${roleLabel("team", "admin")}`}
-              onchange={(on) => (roster[tm.slug] = on ? "admin" : "member")}
+              checked={roster[myTeam.slug] === "admin"}
+              ariaLabel={`${myTeam.name}: ${roleLabel("team", "admin")}`}
+              onchange={(on) => (roster[myTeam.slug] = on ? "admin" : "member")}
             />
             <span class="dim">{roleLabel("team", "admin")}</span>
           </label>
           <DeleteButton
-            label={`remove from ${tm.name}`}
+            label={`remove from ${myTeam.name}`}
             confirm={false}
-            onclick={() => delete roster[tm.slug]}
+            onclick={() => delete roster[myTeam.slug]}
           />
         </div>
       {/each}
@@ -258,12 +266,13 @@
       {#if myTeams.some((tm) => !(tm.slug in roster))}
         {@const free = myTeams.filter((tm) => !(tm.slug in roster))}
         <div class="rrow add">
-          {#each free as tm (tm.slug)}
+          {#each free as myTeam (myTeam.slug)}
             <Button
               variant="ghost"
               size="sm"
               icon="plus"
-              onclick={() => (roster[tm.slug] = "member")}>{tm.name}</Button
+              onclick={() => (roster[myTeam.slug] = "member")}
+              >{myTeam.name}</Button
             >
           {/each}
         </div>

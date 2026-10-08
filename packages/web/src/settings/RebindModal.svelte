@@ -19,8 +19,8 @@
   let { target }: { target: Target } = $props();
 
   const shown = $derived(rebind.held ?? rebind.pending ?? boundKey(target));
-  /* Mid-chord, with only a modifier down, the verdict on the last press no
-     longer describes what is on screen. */
+  // Mid-chord, with only a modifier down, the verdict on the last press no
+  // longer describes what is on screen.
   const settled = $derived(!rebind.held || rebind.held === rebind.pending);
   const warning = $derived(settled ? rebind.warning : "");
   const ready = $derived(
@@ -29,9 +29,9 @@
       rebind.pending !== boundKey(target),
   );
 
-  /* Capture phase on window, ahead of the app's hotkey dispatcher and the
-     dialog's own Enter/Escape handling, so a press meant as the new key never
-     also runs whatever it is currently bound to. */
+  // Capture phase on window, ahead of the app's hotkey dispatcher and the
+  // dialog's own Enter/Escape handling, so a press meant as the new key never
+  // also runs whatever it is currently bound to.
   $effect(() => {
     window.addEventListener("keydown", capture, true);
     window.addEventListener("keyup", release, true);
