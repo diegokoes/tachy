@@ -27,7 +27,10 @@ export const factKey = (kind: string, label: string) =>
 
 export const companyKey = (field: string) => `company-${slug(field)}`;
 
-/** Every property a customer can have: the facts in use, then the source's customer fields. */
+/**
+ * Every property a customer can have: the facts in use, then the source's
+ * customer fields.
+ */
 export async function customerPropertyOptions(
   connection: string | undefined,
   scope: ScopeContext,
@@ -44,7 +47,7 @@ export async function customerPropertyOptions(
   }));
   if (!connection) return own;
   const { conn, source } = await resolveSource(connection, scope);
-  /* The facts are worth offering even when the source cannot be reached. */
+  // The facts are worth offering even when the source cannot be reached.
   const fields = source.options
     ? await source.options("company_fields", {}).catch(() => [])
     : [];
@@ -58,14 +61,11 @@ export async function customerPropertyOptions(
   ];
 }
 
-const asText = (v: unknown): string | null =>
-  v == null || v === ""
-    ? null
-    : Array.isArray(v)
-      ? v.map(String).join(", ")
-      : typeof v === "object"
-        ? JSON.stringify(v)
-        : String(v);
+function asText(value: unknown): string | null {
+  if (value == null || value === "") return null;
+  if (Array.isArray(value)) return value.map(String).join(", ");
+  return typeof value === "object" ? JSON.stringify(value) : String(value);
+}
 
 /**
  * The asked-for properties of an item's customer, null where it has none.
@@ -91,9 +91,9 @@ export async function customerProperties(
       select kind, label, value from customer_facts
       where customer_id = ${item.customer_id} and unit_id is null
     `;
-    for (const f of facts) {
-      const k = factKey(f.kind, f.label);
-      if (wanted.has(k)) values[k] = f.value;
+    for (const fact of facts) {
+      const key = factKey(fact.kind, fact.label);
+      if (wanted.has(key)) values[key] = fact.value;
     }
   }
 
@@ -101,9 +101,9 @@ export async function customerProperties(
   if (keys.some((k) => k.startsWith("company-"))) {
     const { source } = await resolveSource(item.connection, scope);
     record = (await source.customerRecord?.(item.raw)) ?? null;
-    for (const [field, v] of Object.entries(record ?? {})) {
-      const k = companyKey(field);
-      if (wanted.has(k)) values[k] = asText(v);
+    for (const [field, value] of Object.entries(record ?? {})) {
+      const key = companyKey(field);
+      if (wanted.has(key)) values[key] = asText(value);
     }
   }
 
@@ -114,7 +114,7 @@ export async function customerProperties(
     (await effectiveSettings()).redaction_global.value ||
     resolveRedactionPolicy(conn?.config).enabled;
   const name = asText(record?.name);
-  const out = redact
+  const readable = redact
     ? Object.fromEntries(
         Object.entries(scrubDeep(values, new TokenMap())).map(([k, v]) => [
           k,
@@ -125,6 +125,6 @@ export async function customerProperties(
   return {
     found: !!item.customer_id || !!record,
     customer: item.customer,
-    values: out,
+    values: readable,
   };
 }

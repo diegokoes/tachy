@@ -51,9 +51,9 @@ export function defineFlowAction<P extends z.ZodObject>(
 }
 
 export function getFlowAction(key: string): FlowAction {
-  const a = actions.get(key);
-  if (!a) throw badInput(`unknown flow action '${key}'`);
-  return a;
+  const action = actions.get(key);
+  if (!action) throw badInput(`unknown flow action '${key}'`);
+  return action;
 }
 
 export const hasFlowAction = (key: string) => actions.has(key);

@@ -21,10 +21,10 @@ export async function listSourceConnections() {
   >`select id, source_type, slug, base_url, config from source_connections order by slug`;
 }
 
-export async function addSourceConnection(i: SourceConnectionInput) {
+export async function addSourceConnection(input: SourceConnectionInput) {
   const [row] = await sql`
     insert into source_connections (source_type, slug, base_url, config)
-    values (${i.sourceType}, ${i.slug}, ${i.baseUrl ?? null}, ${jsonb(i.config ?? {})})
+    values (${input.sourceType}, ${input.slug}, ${input.baseUrl ?? null}, ${jsonb(input.config ?? {})})
     on conflict (slug) do update set
       source_type = excluded.source_type,
       base_url    = excluded.base_url,
@@ -36,8 +36,8 @@ export async function addSourceConnection(i: SourceConnectionInput) {
 
 /**
  * Deleting cascades to work items and their knowledge entries, so this refuses
- * while any item is still ingested - the caller must clear them deliberately.
- * The connection's stored API tokens go with it, at every scope.
+ * while any item is still ingested: the caller clears them first. The
+ * connection's stored API tokens go with it, at every scope.
  */
 export async function deleteSourceConnection(slug: string) {
   const [conn] =

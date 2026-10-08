@@ -6,7 +6,7 @@ import {
   inFlightRun,
   jobLive,
   listJobRuns,
-  pruneWorkers,
+  sweepWorkers,
   createJobDefinition,
   defineJob,
   describeJobKinds,
@@ -529,7 +529,7 @@ describe("the worker roster", () => {
       n: 1,
       items: [{ key: "maintenance", label: "maintenance (1 queued)" }],
     });
-    expect(await pruneWorkers()).toBe(1);
+    expect(await sweepWorkers()).toBe(1);
     expect((await jobLive()).workers.map((w) => w.id)).toEqual(["quiet"]);
   });
 });

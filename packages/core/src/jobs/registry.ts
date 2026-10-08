@@ -77,9 +77,9 @@ export function defineJob<P extends z.ZodType>(
 }
 
 export function getJobKind(kind: string): JobKind {
-  const k = kinds.get(kind);
-  if (!k) throw badInput(`unknown job kind '${kind}'`);
-  return k;
+  const known = kinds.get(kind);
+  if (!known) throw badInput(`unknown job kind '${kind}'`);
+  return known;
 }
 
 export const hasJobKind = (kind: string) => kinds.has(kind);

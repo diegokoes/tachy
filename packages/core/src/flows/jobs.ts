@@ -21,43 +21,46 @@ export function defineFlowJobs(): void {
     dedupeKey: (p) =>
       `flow:${p.flow_id}:${p.work_item_id ?? p.trigger_id ?? "none"}${p.dry_run ? ":dry" : ""}`,
     subject: (p) => (p.dry_run ? "dry run" : null),
-    outcome: (o) => {
-      if (typeof o.skipped === "string") return `skipped: ${o.skipped}`;
-      if (o.matched !== undefined)
-        return `${o.queued} of ${count(Number(o.matched), "item")} queued`;
-      return o.status ? String(o.status) : null;
+    outcome: (output) => {
+      if (typeof output.skipped === "string")
+        return `skipped: ${output.skipped}`;
+      if (output.matched !== undefined)
+        return `${output.queued} of ${count(Number(output.matched), "item")} queued`;
+      return output.status ? String(output.status) : null;
     },
     timeout: "15m",
-    async run(ctx, p) {
-      const flow = await getFlow(p.flow_id);
-      const trigger = flow.graph.triggers.find((t) => t.id === p.trigger_id);
+    async run(ctx, params) {
+      const flow = await getFlow(params.flow_id);
+      const trigger = flow.graph.triggers.find(
+        (t) => t.id === params.trigger_id,
+      );
       const manual = !trigger || trigger.kind === "manual";
-      if (!flow.enabled && !manual && !p.dry_run)
+      if (!flow.enabled && !manual && !params.dry_run)
         return { skipped: "the flow is paused" };
 
-      if (trigger?.kind === "schedule" && !p.work_item_id) {
-        const items = await scheduledItems(trigger);
-        if (items.length || trigger.params.connection) {
+      if (trigger?.kind === "schedule" && !params.work_item_id) {
+        const itemIds = await scheduledItems(trigger);
+        if (itemIds.length || trigger.params.connection) {
           let queued = 0;
-          for (const id of items)
+          for (const id of itemIds)
             if (
               await ctx.enqueue("flow.run", {
                 flow_id: flow.id,
                 trigger_id: trigger.id,
                 work_item_id: id,
-                dry_run: p.dry_run,
+                dry_run: params.dry_run,
               })
             )
               queued++;
-          return { matched: items.length, queued };
+          return { matched: itemIds.length, queued };
         }
       }
 
       const { flowRunId, status } = await runFlow({
         flow,
-        triggerId: p.trigger_id ?? null,
-        workItemId: p.work_item_id ?? null,
-        dryRun: p.dry_run,
+        triggerId: params.trigger_id ?? null,
+        workItemId: params.work_item_id ?? null,
+        dryRun: params.dry_run,
         jobRunId: ctx.runId,
         signal: ctx.signal,
         log: ctx.log,

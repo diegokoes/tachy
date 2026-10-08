@@ -27,4 +27,4 @@ export {
 } from "./definitions";
 export { runFlow, ownerScope, sweepFlowRuns } from "./run";
 export { itemTriggers, scheduledItems, type ItemEvent } from "./triggers";
-export { loadSubject, type FlowSubject } from "./subject";
+export { getSubject, type FlowSubject } from "./subject";

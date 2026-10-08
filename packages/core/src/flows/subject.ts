@@ -49,32 +49,36 @@ const SELECT = sql`
   left join source_projects sp on sp.id = wi.source_project_id
 `;
 
-const iso = (v: unknown) =>
-  v instanceof Date ? v.toISOString() : v == null ? null : String(v);
+function iso(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString();
+  return value == null ? null : String(value);
+}
 
-function toSubject(row: Record<string, unknown>): FlowSubject {
-  const raw = (row.raw ?? {}) as Record<string, unknown>;
+/** A source's tags: a `tags` array, or ADO's `System.Tags`, split on `;`. */
+function tagsOf(raw: Record<string, unknown>): string[] {
+  if (Array.isArray(raw.tags)) return raw.tags.map(String);
   const adoTags = (raw.fields as Record<string, unknown> | undefined)?.[
     "System.Tags"
   ];
-  const tags = Array.isArray(raw.tags)
-    ? raw.tags.map(String)
-    : typeof adoTags === "string"
-      ? adoTags
-          .split(";")
-          .map((t) => t.trim())
-          .filter(Boolean)
-      : [];
+  if (typeof adoTags !== "string") return [];
+  return adoTags
+    .split(";")
+    .map((t) => t.trim())
+    .filter(Boolean);
+}
+
+function toSubject(row: Record<string, unknown>): FlowSubject {
+  const raw = (row.raw ?? {}) as Record<string, unknown>;
   return {
     ...(row as unknown as FlowSubject),
     raw,
-    tags,
+    tags: tagsOf(raw),
     created_at: iso(row.created_at),
     updated_at: iso(row.updated_at),
   };
 }
 
-export async function loadSubject(workItemId: string): Promise<FlowSubject> {
+export async function getSubject(workItemId: string): Promise<FlowSubject> {
   const [row] = await sql`${SELECT} where wi.id = ${workItemId}`;
   if (!row) throw notFound(`work item ${workItemId} not found`);
   return toSubject(row);
@@ -133,10 +137,10 @@ export async function subjectFields(
   const keys = new Set<string>();
   for (const { raw } of rows) {
     if (!raw || typeof raw !== "object") continue;
-    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-      if (v && typeof v === "object" && !Array.isArray(v))
-        for (const sub of Object.keys(v)) keys.add(`${k}.${sub}`);
-      else keys.add(k);
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+      if (value && typeof value === "object" && !Array.isArray(value))
+        for (const sub of Object.keys(value)) keys.add(`${key}.${sub}`);
+      else keys.add(key);
     }
   }
   return [
@@ -155,9 +159,9 @@ export async function subjectValues(
   field: string,
 ): Promise<FlowOption[]> {
   const counts = new Map<string, number>();
-  for (const s of await recentSubjects(connection, { limit: SAMPLE })) {
-    const v = readPath({ item: s }, field);
-    for (const x of Array.isArray(v) ? v : [v]) {
+  for (const subject of await recentSubjects(connection, { limit: SAMPLE })) {
+    const value = readPath({ item: subject }, field);
+    for (const x of Array.isArray(value) ? value : [value]) {
       if (x == null || x === "" || typeof x === "object") continue;
       const key = String(x);
       counts.set(key, (counts.get(key) ?? 0) + 1);

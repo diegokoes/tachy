@@ -85,32 +85,32 @@ const TEMPLATED = /\{\{[^}]+\}\}/;
 /** Whether the value at `path` in `params` is a template, filled at run time. */
 function templatedAt(params: unknown, path: PropertyKey[]): boolean {
   let at: unknown = params;
-  for (const k of path) {
+  for (const key of path) {
     if (at == null || typeof at !== "object") return false;
-    at = (at as Record<PropertyKey, unknown>)[k];
+    at = (at as Record<PropertyKey, unknown>)[key];
   }
   return typeof at === "string" && TEMPLATED.test(at);
 }
 
 function* walk(steps: FlowStep[]): Generator<FlowStep> {
-  for (const s of steps) {
-    yield s;
-    if (s.kind === "if") {
-      yield* walk(s.then);
-      yield* walk(s.else);
+  for (const step of steps) {
+    yield step;
+    if (step.kind === "if") {
+      yield* walk(step.then);
+      yield* walk(step.else);
     }
   }
 }
 
 function checkLists(steps: FlowStep[], where: string) {
-  steps.forEach((s, i) => {
-    if (s.kind === "if" && i < steps.length - 1)
+  steps.forEach((step, index) => {
+    if (step.kind === "if" && index < steps.length - 1)
       throw badInput(
-        `${where}: '${s.id}' is an if, so it has to end its list; put what follows inside its branches`,
+        `${where}: '${step.id}' is an if, so it has to end its list; put what follows inside its branches`,
       );
-    if (s.kind === "if") {
-      checkLists(s.then, `${s.id} › then`);
-      checkLists(s.else, `${s.id} › else`);
+    if (step.kind === "if") {
+      checkLists(step.then, `${step.id} › then`);
+      checkLists(step.else, `${step.id} › else`);
     }
   });
 }
@@ -129,35 +129,39 @@ export function validateGraph(input: unknown): FlowGraph {
   const graph = parsed.data as FlowGraph;
 
   const ids = new Set<string>();
-  for (const t of graph.triggers) {
-    if (ids.has(t.id)) throw badInput(`id '${t.id}' is used twice`);
-    ids.add(t.id);
-    if (t.kind === "item.synced" && !t.params.connection)
-      throw badInput(`trigger '${t.id}' needs a connection`);
-    if (t.kind === "schedule") {
-      const cron = String(t.params.cron ?? "");
-      const tz = String(t.params.timezone ?? "UTC");
+  for (const trigger of graph.triggers) {
+    if (ids.has(trigger.id)) throw badInput(`id '${trigger.id}' is used twice`);
+    ids.add(trigger.id);
+    if (trigger.kind === "item.synced" && !trigger.params.connection)
+      throw badInput(`trigger '${trigger.id}' needs a connection`);
+    if (trigger.kind === "schedule") {
+      const cron = String(trigger.params.cron ?? "");
+      const timezone = String(trigger.params.timezone ?? "UTC");
       try {
-        new Cron(cron, { timezone: tz }).nextRun();
+        new Cron(cron, { timezone }).nextRun();
       } catch (err) {
-        throw badInput(`trigger '${t.id}': schedule '${cron}': ${String(err)}`);
+        throw badInput(
+          `trigger '${trigger.id}': schedule '${cron}': ${String(err)}`,
+        );
       }
     }
   }
 
   checkLists(graph.steps, "flow");
-  for (const s of walk(graph.steps)) {
-    if (ids.has(s.id)) throw badInput(`id '${s.id}' is used twice`);
-    ids.add(s.id);
-    if (s.kind !== "action") continue;
-    if (!hasAction(s.action))
-      throw badInput(`step '${s.id}': unknown action '${s.action}'`);
-    const res = flowAction(s.action).params.safeParse(s.params);
-    if (res.success) continue;
-    const real = res.error.issues.filter((i) => !templatedAt(s.params, i.path));
+  for (const step of walk(graph.steps)) {
+    if (ids.has(step.id)) throw badInput(`id '${step.id}' is used twice`);
+    ids.add(step.id);
+    if (step.kind !== "action") continue;
+    if (!hasAction(step.action))
+      throw badInput(`step '${step.id}': unknown action '${step.action}'`);
+    const parsed = flowAction(step.action).params.safeParse(step.params);
+    if (parsed.success) continue;
+    const real = parsed.error.issues.filter(
+      (i) => !templatedAt(step.params, i.path),
+    );
     if (real.length)
       throw badInput(
-        `step '${s.id}': ${real.map((i) => `${i.path.join(".") || "(params)"} ${i.message}`).join("; ")}`,
+        `step '${step.id}': ${real.map((i) => `${i.path.join(".") || "(params)"} ${i.message}`).join("; ")}`,
       );
   }
   return graph;
