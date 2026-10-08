@@ -1,3 +1,4 @@
+import { errorText } from "@tachy/core/infra";
 import {
   changeTagList,
   listSourceProjects,
@@ -307,7 +308,7 @@ export const createAzureDevopsSource: SourceFactory = (
         });
         return { ok: true };
       } catch (e) {
-        return explainAdoError(e instanceof Error ? e.message : String(e));
+        return explainAdoError(errorText(e));
       }
     },
     create: (item, ctx, projectConfig) =>

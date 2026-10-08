@@ -13,6 +13,7 @@ import type {
 import { sql, jsonb } from "../infra/db";
 import { ISSUE_ITEMS, issueList, type IssueList } from "../infra/issues";
 import { badInput, notFound } from "../infra/errors";
+import { maskSecrets } from "../infra/known-secrets";
 import { getProductIdBySlug } from "../catalog/products";
 import { getCustomerIdBySlug } from "../catalog/customers";
 import { resolveComponentStrict } from "../catalog/components";
@@ -278,7 +279,7 @@ export async function updateLineStatus(
       index_status = ${keep(patch.indexStatus, "index_status")},
       indexed_commit = ${keep(patch.indexedCommit, "indexed_commit")},
       indexing_commit = ${keep(patch.indexingCommit, "indexing_commit")},
-      index_error = ${keep(patch.indexError, "index_error")},
+      index_error = ${keep(patch.indexError && maskSecrets(patch.indexError), "index_error")},
       version_label = ${keep(patch.versionLabel, "version_label")},
       last_indexed_at = ${patch.touchIndexedAt ? sql`now()` : sql`last_indexed_at`}
     where id = ${lineId}

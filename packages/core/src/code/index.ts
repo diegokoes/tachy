@@ -1,7 +1,13 @@
 export { chunkCode } from "./chunk-code";
 export { chunkSymbols, definedSymbols, fileStem } from "./symbols";
 export type { CodeChunk } from "./chunk-code";
-export { repoDir, listRemoteRefs, releaseBranch, removeClone } from "./git";
+export {
+  repoDir,
+  listRemoteRefs,
+  releaseBranch,
+  removeClone,
+  withoutUrlCredentials,
+} from "./git";
 export type { TreeEntry, CommitSummary } from "./git";
 export {
   DEFAULT_CODE_EXTENSIONS,

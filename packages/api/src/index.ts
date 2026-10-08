@@ -1,7 +1,13 @@
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { serve } from "@hono/node-server";
-import { backgroundSettled, env, log, sql } from "@tachy/core/infra";
+import {
+  backgroundSettled,
+  env,
+  log,
+  rememberSecret,
+  sql,
+} from "@tachy/core/infra";
 import { setEmbedBackend, startEmbedHost } from "@tachy/core/search";
 import { sweepInterruptedIndexes } from "@tachy/core/code";
 import { startJobProcess } from "@tachy/core/jobs";
@@ -32,8 +38,9 @@ const oidc =
  * children reach it through this process with a per-boot secret.
  */
 const externalEmbedder = process.env.TACHY_EMBED_URL;
-const internalSecret =
-  process.env.TACHY_INTERNAL_SECRET || randomBytes(32).toString("hex");
+const internalSecret = rememberSecret(
+  process.env.TACHY_INTERNAL_SECRET || randomBytes(32).toString("hex"),
+);
 let embed: InternalOptions["embed"] | undefined;
 if (externalEmbedder) {
   lifecycle.embedderUrl = new URL("/readyz", externalEmbedder).toString();

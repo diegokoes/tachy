@@ -1,7 +1,13 @@
 /** The MCP server itself, and how a tool is declared on it. */
 import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ZodRawShape } from "zod";
-import { AppError, inBackground, log } from "@tachy/core/infra";
+import {
+  AppError,
+  inBackground,
+  log,
+  errorText,
+  maskSecrets,
+} from "@tachy/core/infra";
 import { recordToolCall } from "@tachy/core/analytics";
 import { resolveCurrentUserId } from "@tachy/core/access";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -32,6 +38,23 @@ function count(
   );
 }
 
+/**
+ * A tool result carries whatever its handler read: a stored error, a remote's
+ * reply. Each text block is masked on its way to the model.
+ */
+function withSecretsMasked(result: unknown): unknown {
+  const blocks = (result as { content?: unknown } | null)?.content;
+  if (!Array.isArray(blocks)) return result;
+  return {
+    ...(result as object),
+    content: blocks.map((block) =>
+      typeof block?.text === "string"
+        ? { ...block, text: maskSecrets(block.text) }
+        : block,
+    ),
+  };
+}
+
 export async function runTool(
   name: string,
   handler: (args: unknown, extra: unknown) => unknown,
@@ -42,7 +65,7 @@ export async function runTool(
 ) {
   const started = Date.now();
   try {
-    const result = await handler(args, extra);
+    const result = withSecretsMasked(await handler(args, extra));
     log("info", "mcp_tool", { tool: name, ok: true, ms: Date.now() - started });
     count(name, writes, { ok: true, misuse: false });
     return result;
@@ -51,7 +74,7 @@ export async function runTool(
       ok: false,
       misuse: err instanceof AppError && err.code === "bad_input",
     });
-    const message = err instanceof Error ? err.message : String(err);
+    const message = errorText(err);
     log("error", "mcp_tool", {
       tool: name,
       ok: false,

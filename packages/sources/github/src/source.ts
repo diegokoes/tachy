@@ -1,4 +1,4 @@
-import { badInput, githubToken } from "@tachy/core/infra";
+import { badInput, githubToken, errorText } from "@tachy/core/infra";
 import {
   customerStandIn,
   scrubbableCopy,
@@ -197,7 +197,7 @@ export const createGithubSource: SourceFactory = (
         return {
           identity,
           groups: [],
-          groupsNote: e instanceof Error ? e.message : String(e),
+          groupsNote: errorText(e),
         };
       }
     },
