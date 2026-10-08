@@ -2,6 +2,7 @@ import {
   DEFAULT_CODE_EXTENSIONS,
   REPO_INDEX_STATUSES,
   SLUG_RE,
+  projectToken,
 } from "@tachy/contract";
 import type {
   Freshness,
@@ -216,6 +217,26 @@ export async function listRepos(
       ${opts.customerId ? ofCustomer(opts.customerId) : sql``}
     order by r.slug
   `;
+}
+
+/**
+ * The repos of the project a `/code` scope word or a tool argument names: by
+ * its key or its name, in the spelling `projectToken` gives either.
+ */
+export async function reposInProject(project: string): Promise<RepoRow[]> {
+  const wanted = projectToken(project).toLowerCase();
+  const rows = await sql<RepoRow[]>`
+    ${repoSelect()}
+    where r.source_project_id is not null
+      and ${wanted} in (
+        lower(regexp_replace(btrim(sp.external_key), '\\s+', '-', 'g')),
+        lower(regexp_replace(btrim(sp.name), '\\s+', '-', 'g'))
+      )
+    order by r.slug
+  `;
+  if (!rows.length)
+    throw notFound(`No linked repo belongs to a project '${project}'`);
+  return rows;
 }
 
 export async function getRepoBySlug(slug: string): Promise<RepoRow> {

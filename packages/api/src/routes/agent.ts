@@ -75,7 +75,7 @@ export const agent = new Hono()
         }
       : {};
     return c.json({
-      builtins: BUILTIN_COMMANDS.map(
+      builtins: BUILTIN_COMMANDS.filter((b) => !b.hidden).map(
         ({ name, args, description, subcommands }) => ({
           name,
           args,
