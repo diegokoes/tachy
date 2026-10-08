@@ -42,9 +42,9 @@
     artifacts: CommandArtifactMeta[],
     query: string,
   ): CommandArtifactMeta[] {
-    const q = query.trim().toLowerCase();
+    const needle = query.trim().toLowerCase();
     return artifacts.filter(
-      (a) => !q || `${a.slug} ${a.title}`.toLowerCase().includes(q),
+      (a) => !needle || `${a.slug} ${a.title}`.toLowerCase().includes(needle),
     );
   }
 </script>
@@ -80,35 +80,35 @@
     pick: CommandPick;
   };
 
-  const items = $derived<Item[]>(
-    mode === "options"
-      ? options.map((o) => ({
-          key: `o:${o.value}`,
-          label: o.label,
-          hint: o.hint,
-          desc: o.desc ?? "",
-          icon: o.icon,
-          color: o.color,
-          pick: { kind: "option", value: o.value } as CommandPick,
-        }))
-      : mode === "artifact"
-        ? matchArtifacts(artifacts, query).map((a) => ({
-            key: `a:${a.id}`,
-            label: `⛬ ${a.title}`,
-            hint: a.slug,
-            desc: a.description ?? "",
-            pick: { kind: "artifact", artifact: a } as CommandPick,
-          }))
-        : [...builtins, ARTIFACT_COMMAND]
-            .filter((b) => b.name.startsWith(query.toLowerCase()))
-            .map((b) => ({
-              key: `b:${b.name}`,
-              label: `/${b.name}`,
-              hint: b.args,
-              desc: b.description,
-              pick: { kind: "builtin", builtin: b } as CommandPick,
-            })),
-  );
+  const items = $derived.by<Item[]>(() => {
+    if (mode === "options")
+      return options.map((o) => ({
+        key: `o:${o.value}`,
+        label: o.label,
+        hint: o.hint,
+        desc: o.desc ?? "",
+        icon: o.icon,
+        color: o.color,
+        pick: { kind: "option", value: o.value } as CommandPick,
+      }));
+    if (mode === "artifact")
+      return matchArtifacts(artifacts, query).map((a) => ({
+        key: `a:${a.id}`,
+        label: `⛬ ${a.title}`,
+        hint: a.slug,
+        desc: a.description ?? "",
+        pick: { kind: "artifact", artifact: a } as CommandPick,
+      }));
+    return [...builtins, ARTIFACT_COMMAND]
+      .filter((b) => b.name.startsWith(query.toLowerCase()))
+      .map((b) => ({
+        key: `b:${b.name}`,
+        label: `/${b.name}`,
+        hint: b.args,
+        desc: b.description,
+        pick: { kind: "builtin", builtin: b } as CommandPick,
+      }));
+  });
 
   const GRID_COLUMNS = 3;
   const grid = $derived(mode === "options" && !!crumb?.grid);

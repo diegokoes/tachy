@@ -34,15 +34,13 @@ function anchorId(text: string, seen: Map<string, number>): string {
 /**
  * The article's own table of contents, read from its markdown headings. Nothing
  * is stored: the outline is a function of the body, so it cannot drift from it.
- *
- * Numbered by nesting rather than by markdown depth, so a body that jumps from
- * ## to #### gets 1.1 and not 1.0.1, and one that opens on ### still starts at
- * 1. A heading that climbs back out of a skipped level carries on that level's
- * count, so ## · #### · ### reads 1 · 1.1 · 1.2 rather than repeating 1.1.
+ * Numbered by nesting, not by markdown depth: a body that jumps from h2 to h4
+ * gets 1.1, one that opens on h3 starts at 1, and a heading climbing back out
+ * of a skipped level carries on that level's count.
  */
 export function outline(body: string): OutlineItem[] {
   const seen = new Map<string, number>();
-  const out: OutlineItem[] = [];
+  const headings: OutlineItem[] = [];
   const open: { depth: number; n: number }[] = [];
   for (const token of marked.lexer(body ?? "")) {
     if (token.type !== "heading") continue;
@@ -53,7 +51,7 @@ export function outline(body: string): OutlineItem[] {
     const top = open[open.length - 1];
     if (top?.depth === depth) top.n++;
     else open.push({ depth, n: closed ? closed.n + 1 : 1 });
-    out.push({
+    headings.push({
       depth,
       text,
       id: anchorId(text, seen),
@@ -61,16 +59,16 @@ export function outline(body: string): OutlineItem[] {
       level: open.length - 1,
     });
   }
-  return out;
+  return headings;
 }
 
 /** The outline as a tree, for a contents list whose branches fold. */
 export function outlineTree(items: OutlineItem[]): OutlineNode[] {
   const roots: OutlineNode[] = [];
   const path: OutlineNode[] = [];
-  for (const it of items) {
-    const node: OutlineNode = { ...it, children: [] };
-    path.length = it.level;
+  for (const item of items) {
+    const node: OutlineNode = { ...item, children: [] };
+    path.length = item.level;
     (path[path.length - 1]?.children ?? roots).push(node);
     path.push(node);
   }

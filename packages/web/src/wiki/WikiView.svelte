@@ -1,4 +1,15 @@
 <script lang="ts">
+  /**
+   * Routes under /wiki:
+   *   (none)              the wiki last open
+   *   :scope              its landing: intro, sections and coverage in one page
+   *   :scope/gaps         what the sweep found missing, over the coverage tree
+   *   :scope/c/:slug      a section: its lead article, or its article list
+   *   :scope/new[/:slug]  a new article, at a slug something asked for
+   *   :scope/:slug        an article; WIKI_RESERVED_SLUGS are never one
+   *   :scope/:slug/edit
+   * Old addresses (contents, toc, coverage) redirect via `renamedPage`.
+   */
   import { onMount } from "svelte";
   import { MAIN_PAGE_SLUG } from "@tachy/contract";
   import { api, ApiError } from "../api";
@@ -20,45 +31,29 @@
     wikis,
   } from "./wikis.svelte";
 
-  /**
-   * Routes under /wiki:
-   *   (none)              the wiki you were last in
-   *   :scope              its landing: intro, sections and coverage in one page
-   *   :scope/gaps         what the sweep found missing, over the coverage tree
-   *   :scope/c/:slug      a section - its lead article, or its article list
-   *   :scope/new[/:slug]  a new article, at a slug something asked for
-   *   :scope/:slug        an article - WIKI_RESERVED_SLUGS are never one
-   *   :scope/:slug/edit
-   * Old addresses (contents, toc, coverage) redirect via renamedPage below.
-   */
-  /* /wiki resolves to its landing scope in place, before the redirect below
-     rewrites the address - otherwise re-picking the wiki tab from a main page
-     unmounts the article for a frame and fetches it again. */
+  // /wiki resolves to its landing scope in place, before the redirect below
+  // rewrites the address - otherwise re-picking the wiki tab from a main page
+  // unmounts the article for a frame and fetches it again.
   const scope = $derived(segment(1) || (wikis.loaded ? landingScope() : ""));
   const second = $derived(segment(2));
   const third = $derived(segment(3));
 
-  const page = $derived(
-    !second
-      ? "overview"
-      : renamedPage(second) !== undefined
-        ? "redirect"
-        : second === "gaps" || second === "new"
-          ? second
-          : second === "c"
-            ? "category"
-            : third === "edit"
-              ? "edit"
-              : "article",
-  );
+  function pageOf(second: string | undefined, third: string | undefined) {
+    if (!second) return "overview";
+    if (renamedPage(second) !== undefined) return "redirect";
+    if (second === "gaps" || second === "new") return second;
+    if (second === "c") return "category";
+    return third === "edit" ? "edit" : "article";
+  }
+  const page = $derived(pageOf(second, third));
 
   const PLACES: SubnavItem[] = [
     { key: "overview", label: "overview", icon: "overview" },
     { key: "gaps", label: "gaps", icon: "gaps" },
   ];
 
-  /* An article or a section is neither place, so no tab claims it; the aside is
-     what says where you are. */
+  // An article or a section is neither place, so no tab claims it; the aside is
+  // what says where you are.
   $effect(() =>
     setSubnav({
       items: PLACES,
@@ -72,8 +67,8 @@
     void loadWikis();
   });
 
-  /* /wiki alone opens a wiki rather than a list of them - the switcher is the
-     list - and waits for the list so it can pick one that exists. */
+  // /wiki alone opens a wiki rather than a list of them - the switcher is the
+  // list - and waits for the list so it can pick one that exists.
   $effect(() => {
     if (segment(1) || !scope) return;
     navigate(wikiPath(scope), { replace: true });
@@ -83,7 +78,7 @@
     if (scope) rememberScope(scope);
   });
 
-  /* Old addresses (contents/toc → the landing, coverage → gaps) still resolve. */
+  // Old addresses (contents/toc → the landing, coverage → gaps) still resolve.
   $effect(() => {
     if (!second) return;
     const moved = renamedPage(second);
@@ -103,9 +98,8 @@
     saveError = null;
   });
 
-  /* The editor needs the current article. One that turns out not to exist is
-     a new one at that slug - which is what "write it" on an empty main page
-     used to reach, and then wait on forever. */
+  // The editor needs the current article. One that does not exist is a new one
+  // at that slug, which is where "write it" on an empty main page leads.
   $effect(() => {
     if (page !== "edit" || !scope || !second) {
       editing = null;

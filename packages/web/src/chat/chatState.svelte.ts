@@ -19,7 +19,7 @@ export type EntryData =
       raw?: string;
       status: "pending" | "approved" | "denied";
     }
-  /** Made from the composer, with no turn behind it. */
+  // Made from the composer, with no turn behind it.
   | {
       kind: "ticket";
       ticket: CreatedTicket;

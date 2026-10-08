@@ -48,34 +48,34 @@
     }
   }
 
-  function open(l: Link) {
+  function open(link: Link) {
     const path = libraryItemPath({
-      entryId: l.from_entry_id,
-      docId: l.from_doc_id,
-      kind: l.from_kind,
-      slug: l.from_slug,
-      scope: products.find((p) => p.id === l.from_product_id)?.slug ?? ORG_WIDE,
+      entryId: link.from_entry_id,
+      docId: link.from_doc_id,
+      kind: link.from_kind,
+      slug: link.from_slug,
+      scope:
+        products.find((p) => p.id === link.from_product_id)?.slug ?? ORG_WIDE,
     });
     if (path) navigate(path);
   }
 
-  const what = (l: Link) =>
-    l.from_kind === "wiki"
-      ? "article"
-      : l.from_kind === "entry"
-        ? "entry"
-        : "doc";
+  function what(link: Link) {
+    if (link.from_kind === "wiki") return "article";
+    return link.from_kind === "entry" ? "entry" : "doc";
+  }
 </script>
 
 {#if inbound.length}
   <section class="backlinks">
     <h3>Linked from</h3>
     <ul>
-      {#each inbound as l (l.id)}
+      {#each inbound as link (link.id)}
         <li>
-          <button onclick={() => open(l)}>{l.from_title ?? "(untitled)"}</button
+          <button onclick={() => open(link)}
+            >{link.from_title ?? "(untitled)"}</button
           >
-          <span class="what">{what(l)}</span>
+          <span class="what">{what(link)}</span>
         </li>
       {/each}
     </ul>

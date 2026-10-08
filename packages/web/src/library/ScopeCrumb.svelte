@@ -3,9 +3,9 @@
 
   /**
    * `product_area` is written at save time by getComponentPath and already
-   * carries the whole chain, product name first - "FTRACE / Label Printer /
-   * Firmware". Components nest arbitrarily deep, so this renders whatever
-   * depth the entry actually has rather than a fixed product+component pair.
+   * carries the whole chain, product name first: "FTRACE / Label Printer /
+   * Firmware". Components nest arbitrarily deep, so this renders whatever depth
+   * the entry has, not a fixed product+component pair.
    */
   let { area }: { area?: string | null } = $props();
 

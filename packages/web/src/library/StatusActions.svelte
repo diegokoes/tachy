@@ -22,13 +22,13 @@
 
 {#if actions.length}
   <div class="rail" class:docked>
-    {#each actions as a (a.label)}
+    {#each actions as action (action.label)}
       <Button
         variant="ghost"
-        icon={a.icon}
-        tone={a.tone}
-        disabled={a.disabled}
-        onclick={a.onclick}>{a.label}</Button
+        icon={action.icon}
+        tone={action.tone}
+        disabled={action.disabled}
+        onclick={action.onclick}>{action.label}</Button
       >
     {/each}
   </div>

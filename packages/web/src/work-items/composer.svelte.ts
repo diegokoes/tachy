@@ -85,7 +85,7 @@ function persist() {
       }),
     );
   } catch {
-    /* storage blocked or full: the draft lives for this tab only */
+    // storage blocked or full: the draft lives for this tab only
   }
 }
 
@@ -93,18 +93,18 @@ function restore() {
   try {
     const raw = localStorage.getItem(STORE);
     if (!raw) return;
-    const d = JSON.parse(raw);
+    const draft = JSON.parse(raw);
     Object.assign(composer, {
-      project: d.project ?? null,
-      type: d.type ?? null,
-      title: d.title ?? "",
-      values: d.values ?? {},
-      origins: d.origins ?? {},
-      context: d.context ?? [],
-      raisedFrom: d.raisedFrom ?? [],
+      project: draft.project ?? null,
+      type: draft.type ?? null,
+      title: draft.title ?? "",
+      values: draft.values ?? {},
+      origins: draft.origins ?? {},
+      context: draft.context ?? [],
+      raisedFrom: draft.raisedFrom ?? [],
     });
   } catch {
-    /* a draft from an older shape is not worth an error */
+    // a draft from an older shape is not worth an error
   }
 }
 restore();
@@ -142,7 +142,7 @@ export function discardDraft() {
   try {
     localStorage.removeItem(STORE);
   } catch {
-    /* nothing stored */
+    // nothing stored
   }
 }
 
@@ -215,14 +215,14 @@ function fieldsOut(): Record<string, unknown> {
   const specs = new Map(
     (composer.form?.fields ?? []).map((f) => [f.reference_name, f]),
   );
-  const out: Record<string, unknown> = {};
-  for (const [ref, v] of Object.entries(composer.values)) {
-    if (isEmpty(v) || ref === TITLE) continue;
+  const payload: Record<string, unknown> = {};
+  for (const [ref, value] of Object.entries(composer.values)) {
+    if (isEmpty(value) || ref === TITLE) continue;
     const spec = specs.get(ref);
     if (!spec) continue;
-    out[ref] = isBody(spec) ? toHtml(String(v)) : v;
+    payload[ref] = isBody(spec) ? toHtml(String(value)) : value;
   }
-  return out;
+  return payload;
 }
 
 export function draft(): TicketDraft {
@@ -277,16 +277,20 @@ export async function create(): Promise<CreatedTicket | null> {
     body.set("draft", JSON.stringify(draft()));
     for (const img of composer.images)
       body.set(`image:${img.key}`, img.file, img.name);
-    const res = await fetch(`/api/compose/projects/${composer.project.id}/items`, {
-      method: "POST",
-      body,
-    });
-    if (res.status === 401) {
+    const response = await fetch(
+      `/api/compose/projects/${composer.project.id}/items`,
+      {
+        method: "POST",
+        body,
+      },
+    );
+    if (response.status === 401) {
       onUnauthorized();
       throw new ApiError(401, "unauthorized");
     }
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new ApiError(res.status, json?.error ?? res.statusText);
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok)
+      throw new ApiError(response.status, json?.error ?? response.statusText);
     const created = json as CreatedTicket;
     discardDraft();
     composer.open = false;
@@ -373,7 +377,8 @@ export async function adoptAgentDraft(
     input.fields && typeof input.fields === "object"
       ? (input.fields as Record<string, unknown>)
       : {};
-  for (const [ref, v] of Object.entries(fields)) composer.values[ref] = v;
+  for (const [ref, value] of Object.entries(fields))
+    composer.values[ref] = value;
   if (str("description"))
     composer.values["System.Description"] = str("description");
   if (Array.isArray(input.tags)) composer.values[TAGS] = input.tags.join("; ");

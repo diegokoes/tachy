@@ -35,50 +35,50 @@ const at = (d?: string) => (d ? Date.parse(d) || 0 : 0);
 /** Gauge width for a relevance score, floored so a weak hit still shows. */
 export const fill = (v: number) => Math.max(3, v * 100);
 
-function versionSpan(r: KnowledgeRow) {
-  if (r.affected_version && r.fixed_version)
-    return `${r.affected_version} → ${r.fixed_version}`;
-  if (r.affected_version) return r.affected_version;
-  if (r.fixed_version) return `fixed ${r.fixed_version}`;
+function versionSpan(row: KnowledgeRow) {
+  if (row.affected_version && row.fixed_version)
+    return `${row.affected_version} → ${row.fixed_version}`;
+  if (row.affected_version) return row.affected_version;
+  if (row.fixed_version) return `fixed ${row.fixed_version}`;
   return undefined;
 }
 
-export function toEntry(r: KnowledgeRow, query: string): Item {
+export function toEntry(row: KnowledgeRow, query: string): Item {
   const text = entryText(
-    [r.root_cause, r.resolution, (r.signals ?? []).join(" · ")],
+    [row.root_cause, row.resolution, (row.signals ?? []).join(" · ")],
     query,
   );
   return {
     kind: "entry",
-    id: r.id,
-    title: r.issue_summary ?? "(no summary)",
-    status: r.status,
+    id: row.id,
+    title: row.issue_summary ?? "(no summary)",
+    status: row.status,
     snippet: text ? excerpt(text, query) : undefined,
-    version: versionSpan(r),
-    updated: fmtDate(r.updated_at ?? r.created_at),
-    tags: (r.tags ?? []).slice(0, 5),
-    customer: r.customer_slug,
-    relevance: r.relevance,
-    grade: r.grade,
-    sortAt: at(r.updated_at ?? r.created_at),
+    version: versionSpan(row),
+    updated: fmtDate(row.updated_at ?? row.created_at),
+    tags: (row.tags ?? []).slice(0, 5),
+    customer: row.customer_slug,
+    relevance: row.relevance,
+    grade: row.grade,
+    sortAt: at(row.updated_at ?? row.created_at),
   };
 }
 
-export function toDoc(r: ReferenceRow, query: string): Item {
+export function toDoc(row: ReferenceRow, query: string): Item {
   return {
-    kind: r.kind === "wiki" ? "article" : "doc",
-    id: r.id,
-    slug: r.slug ?? undefined,
-    productId: r.product_id ?? undefined,
-    title: r.title,
-    status: r.status,
-    snippet: r.snippet ? excerpt(r.snippet, query) : undefined,
-    version: r.doc_version ? `v${r.doc_version}` : undefined,
-    updated: fmtDate(r.updated_at ?? r.created_at),
-    tags: (r.tags ?? []).slice(0, 6),
-    customer: r.customer_slug,
-    relevance: r.relevance,
-    grade: r.grade,
-    sortAt: at(r.updated_at ?? r.created_at),
+    kind: row.kind === "wiki" ? "article" : "doc",
+    id: row.id,
+    slug: row.slug ?? undefined,
+    productId: row.product_id ?? undefined,
+    title: row.title,
+    status: row.status,
+    snippet: row.snippet ? excerpt(row.snippet, query) : undefined,
+    version: row.doc_version ? `v${row.doc_version}` : undefined,
+    updated: fmtDate(row.updated_at ?? row.created_at),
+    tags: (row.tags ?? []).slice(0, 6),
+    customer: row.customer_slug,
+    relevance: row.relevance,
+    grade: row.grade,
+    sortAt: at(row.updated_at ?? row.created_at),
   };
 }

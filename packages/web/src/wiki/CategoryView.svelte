@@ -45,8 +45,8 @@
 
   const node = $derived(toc ? find(toc.categories) : null);
 
-  /* A section with a lead page IS that page: land the reader on it rather than a
-     bare list. Sections without one keep the list below. */
+  // A section with a lead page IS that page: land the reader on it rather than
+  // a bare list. Sections without one keep the list below.
   $effect(() => {
     if (node?.lead_slug)
       navigate(wikiPath(scope, node.lead_slug), { replace: true });
@@ -99,10 +99,11 @@
         <h3>Articles</h3>
         {#if node.articles.length}
           <ul>
-            {#each node.articles as a (a.id)}
+            {#each node.articles as article (article.id)}
               <li>
-                <button onclick={() => open(a)}>{a.title}</button>
-                {#if a.status === "draft"}<Badge tone="accent">draft</Badge
+                <button onclick={() => open(article)}>{article.title}</button>
+                {#if article.status === "draft"}<Badge tone="accent"
+                    >draft</Badge
                   >{/if}
               </li>
             {/each}

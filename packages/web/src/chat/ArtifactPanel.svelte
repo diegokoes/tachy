@@ -148,25 +148,14 @@
     }
     const tweens = spin(icon);
     return () => {
-      for (const t of tweens) t.kill();
+      for (const tween of tweens) tween.kill();
       settle(icon);
     };
   });
 
-  /* Opening the panel opens the mark up: the hexagon grows from its centre and
-     the three rings drift apart inside it, while the rings themselves keep
-     exactly the size they had. That is why the frame scales and the mark does
-     not - scaling the button would have taken the rings with it.
-
-     One tween drives both, so the frame and the spread can never drift out of
-     step. Growing the FRAME (rather than the button) is also what keeps the
-     thread attached: the wire is aimed at the frame element, whose client rect
-     follows this transform, where the button's would not move at all.
-
-     Closing waits for the wire to retract first. The thread freezes its path
-     on outro - it has to, since redrawing mid-retract would jump the drawn
-     fraction - so shrinking underneath it would pull the hexagon out from
-     under a wire still pointing at where the edge used to be. */
+  // Opening grows the hexagon and spreads its rings, which keep their size: the
+  // frame scales, not the button, and one tween drives both. The thread aims at
+  // the frame, so closing waits for the wire to retract.
   const SPREAD_SHUT = 30;
   const SPREAD_OPEN = 42;
   const FRAME_OPEN = 1.18;
@@ -176,10 +165,9 @@
   const spread = $derived(SPREAD_SHUT + (SPREAD_OPEN - SPREAD_SHUT) * openT);
   const frameScale = $derived(1 + (FRAME_OPEN - 1) * openT);
 
-  /* untrack: the tween writes openT, so reading it tracked would re-run this
-     effect on every frame it animates - killing and restarting the tween from
-     wherever it had got to. Closing never finished, because each restart also
-     re-armed the THREAD_RETRACT delay and the tween spent its life waiting. */
+  // untrack: the tween writes openT, so reading it tracked would re-run this
+  // effect on every frame, restarting the tween and re-arming the
+  // THREAD_RETRACT delay, and a close would never finish.
   $effect(() => {
     const to = open ? 1 : 0;
     const tween = tweenValue(
@@ -228,14 +216,10 @@
 
   /**
    * Carries the tab up to the body while `on`, pinned where it sat, and back
-   * home after. The picker is portaled to the body, and nothing left inside
-   * `.app`'s stacking context can rank above its scrim, however high its
-   * z-index. Only while lifted: at rest it has to stay under whatever the app
-   * draws over the transcript.
-   *
-   * Moving the button drops its focus, so the tab never comes home from a
-   * close still holding it. That is deliberate: the picker handed focus back
-   * on Escape, and the keyboard-driven close rang the tab with its focus ring.
+   * home after. The picker is portaled to the body, and nothing inside `.app`'s
+   * stacking context ranks above its scrim. Only while lifted: at rest it stays
+   * under whatever the app draws over the transcript. Moving the button drops
+   * its focus, so a keyboard close does not ring the tab.
    */
   function raise(node: HTMLElement, on: boolean) {
     const home = node.parentElement!;
@@ -325,10 +309,9 @@
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
 
-  /* The name the agent and `/artifact` use. Nobody should have to invent one,
-     so it follows the title - suffixed when that name is already taken where
-     the artifact is going, which is also what keeps a move from landing on
-     someone else's artifact. */
+  // The name the agent and `/artifact` use. It follows the title, suffixed when
+  // that name is taken where the artifact is going, which also keeps a move
+  // from landing on someone else's artifact.
   function freeSlug(
     base: string,
     scope: ArtifactScope,
@@ -370,16 +353,16 @@
     editorOpen = true;
   }
 
-  // The prompt is fetched BEFORE the modal opens, so it comes up filled instead
+  // The prompt is fetched before the modal opens, so it comes up filled instead
   // of blinking its content in a beat later.
-  async function openEdit(a: ArtifactMeta) {
+  async function openEdit(artifact: ArtifactMeta) {
     if (fetching) return;
-    fetching = a.id;
+    fetching = artifact.id;
     let body = "";
     let failed: string | null = null;
     try {
       const full = await api.get<ArtifactMeta & { body: string }>(
-        `/artifacts/${a.id}`,
+        `/artifacts/${artifact.id}`,
       );
       body = full.body;
     } catch (e) {
@@ -387,16 +370,16 @@
     }
     fetching = null;
     editorMode = "edit";
-    fAudience = audienceOf(a);
+    fAudience = audienceOf(artifact);
     fWasAudience = fAudience;
-    fEditId = a.id;
-    fEditSlug = a.slug;
-    fTitle = a.title;
-    fDescription = a.description ?? "";
+    fEditId = artifact.id;
+    fEditSlug = artifact.slug;
+    fTitle = artifact.title;
+    fDescription = artifact.description ?? "";
     fPrompt = body;
-    fHasOutput = !!a.spec?.output;
-    fOutput = a.spec?.output
-      ? { sheet: "", filename: "", ...a.spec.output }
+    fHasOutput = !!artifact.spec?.output;
+    fOutput = artifact.spec?.output
+      ? { sheet: "", filename: "", ...artifact.spec.output }
       : blankOutput();
     editorError = failed;
     editorOpen = true;
@@ -460,20 +443,20 @@
     }
   }
 
-  async function remove(a: ArtifactMeta) {
-    if (armedDelete !== a.id) {
-      armedDelete = a.id;
+  async function remove(artifact: ArtifactMeta) {
+    if (armedDelete !== artifact.id) {
+      armedDelete = artifact.id;
       return;
     }
     armedDelete = null;
     try {
-      const teamSlug = teamSlugFor(a.team_id);
+      const teamSlug = teamSlugFor(artifact.team_id);
       await api.delete("/artifacts", {
-        scope: a.scope,
-        ...(a.scope === "team" ? { team: teamSlug } : {}),
-        slug: a.slug,
+        scope: artifact.scope,
+        ...(artifact.scope === "team" ? { team: teamSlug } : {}),
+        slug: artifact.slug,
       });
-      if (chat.artifact?.id === a.id) chat.artifact = undefined;
+      if (chat.artifact?.id === artifact.id) chat.artifact = undefined;
       await load();
       window.dispatchEvent(new Event("artifacts-changed"));
     } catch (e) {
@@ -488,10 +471,9 @@
   }}
 />
 
-<!-- lifted outlives `open`: the {#if} block below holds the scrim in the DOM
-     until the thread has finished retracting, and a tab that dropped under it
-     on the first frame of the close would blink out while the wire was still
-     travelling towards it. openT is 0 again only once the hexagon has shut. -->
+<!-- lifted outlives `open`: the {#if} block holds the scrim until the
+     thread has retracted, and a tab dropped under it at once would blink
+     out mid-travel. openT is 0 once the hexagon has shut. -->
 <div class="edge-home">
   <div class="edge-slot" class:lifted use:raise={lifted}>
     <button
@@ -527,8 +509,7 @@
 
 {#if open}
   <!-- The same window every other dialog draws: shared scrim, titlebar
-       actions on the right, no heading and no scanlines. It used to wrap Panel
-       and so read as a different material from the dialogs it opens. -->
+       actions on the right, no heading and no scanlines. -->
   <Modal
     title="artifacts"
     width="46rem"
@@ -556,32 +537,33 @@
       {:else if items.length === 0 && !error}
         <p class="muted empty">No artifacts yet</p>
       {/if}
-      {#each grouped as g (g.scope)}
+      {#each grouped as group (group.scope)}
         <div class="scope-head">
-          <Icon name={SCOPE_ICONS[g.scope]} size="0.95em" />
-          {SCOPE_LABELS[g.scope]}
+          <Icon name={SCOPE_ICONS[group.scope]} size="0.95em" />
+          {SCOPE_LABELS[group.scope]}
         </div>
         <ul class="art-list">
-          {#each g.rows as a (a.id)}
+          {#each group.rows as artifact (artifact.id)}
             <li
               class="art-row"
-              class:selected={chat.artifact?.id === a.id}
-              class:armed={armedDelete === a.id}
+              class:selected={chat.artifact?.id === artifact.id}
+              class:armed={armedDelete === artifact.id}
             >
-              <button class="art-pick" onclick={() => select(a)}>
+              <button class="art-pick" onclick={() => select(artifact)}>
                 <span class="art-title">
-                  {#if chat.artifact?.id === a.id}<span class="sel"
+                  {#if chat.artifact?.id === artifact.id}<span class="sel"
                       ><Icon name="selected" size="0.7em" weight={10} /></span
-                    >{/if}{a.title}
-                  {#if a.spec?.output}<span class="art-out"
+                    >{/if}{artifact.title}
+                  {#if artifact.spec?.output}<span class="art-out"
                       ><Icon name="download" size="0.9em" />
-                      {a.spec.output.format}</span
+                      {artifact.spec.output.format}</span
                     >{/if}
                 </span>
-                {#if a.description}<span class="art-desc">{a.description}</span
+                {#if artifact.description}<span class="art-desc"
+                    >{artifact.description}</span
                   >{/if}
               </button>
-              {#if canWrite(a)}
+              {#if canWrite(artifact)}
                 <span class="art-actions">
                   <Button
                     variant="ghost"
@@ -591,21 +573,21 @@
                     iconSize="1.5em"
                     title="edit"
                     aria-label="edit"
-                    busy={fetching === a.id}
-                    onclick={() => openEdit(a)}
+                    busy={fetching === artifact.id}
+                    onclick={() => openEdit(artifact)}
                   />
                   <Button
                     variant="ghost"
                     tone="danger"
                     square
-                    icon={armedDelete === a.id ? "confirm" : "delete"}
+                    icon={armedDelete === artifact.id ? "confirm" : "delete"}
                     morph
                     iconSize="1.5em"
-                    title={armedDelete === a.id
+                    title={armedDelete === artifact.id
                       ? "click again to delete"
                       : "delete"}
                     aria-label="delete"
-                    onclick={() => remove(a)}
+                    onclick={() => remove(artifact)}
                   />
                 </span>
               {/if}
@@ -691,20 +673,14 @@
     pointer-events: none;
   }
   /* While the picker is open the tab is the far end of the wire, not part of
-     the app the scrim pushes back - so it rides over the blur, one step above
-     the thread that lands in it. Blurring the hexagon left the wire running
-     into a smudge. */
+     the app the scrim pushes back, so it rides over the blur, one step above
+     the thread that lands in it. */
   .edge-slot.lifted {
     z-index: calc(var(--z-overlay) + 2);
   }
-  /* A pointy-top hexagon, not the octagon the shape list also offers: at this
-     size an octagon just reads as a rounded square, where six sides stay
-     legible as a shape. Its vertical flanks suit a tab pinned to the edge, and
-     its point echoes the triangle of rings inside it.
-
-     Sized to the polygon's own 92.6 × 107 proportions so the viewBox is never
-     stretched, and scaled up from 2.5rem to give the ring triangle room to
-     spread without crowding the hexagon's flanks. */
+  /* A pointy-top hexagon: at this size an octagon reads as a rounded square,
+     where six sides stay legible. Sized to the polygon's own proportions so
+     the viewBox is never stretched. */
   .edge-tab {
     pointer-events: auto;
     position: relative;
@@ -732,10 +708,9 @@
     stroke-width: 3;
     stroke-linejoin: round;
   }
-  /* Sized to fill the hexagon rather than float in it, with the headroom the
-     spin needs: the pulse scales the mark to 1.22x, and the rings have to stay
-     inside the polygon's narrowest point at full stretch. The ceiling here is
-     1.45em; 1.40em sits just under it. */
+  /* Sized to fill the hexagon, with the headroom the spin needs: the pulse
+     scales the mark, and the rings have to stay inside the polygon's
+     narrowest point at full stretch. */
   .tab-icon {
     position: relative;
     display: inline-block;
@@ -834,17 +809,9 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  /* The same overlay the admin tables raise over a row: edit and delete belong
-     to the card under the pointer, not to all of them at once, so they fade in
-     across the whole card over a scrim rather than perching in its corner.
-
-     opacity, not display, so the buttons keep their place in the tab order and
-     :focus-within raises them for anyone arriving by keyboard. `armed` keeps a
-     delete waiting for its second click visible after the pointer has left.
-
-     The overlay takes no pointer events, only the marks on it do - the card
-     underneath stays clickable everywhere else, which is how attaching an
-     artifact still works while its actions are showing. */
+  /* Edit and delete fade in across the card under the pointer. opacity, not
+     display, so they keep their tab order and :focus-within raises them.
+     Only the marks take pointer events, so the card stays clickable. */
   .art-actions {
     position: absolute;
     inset: 0;
@@ -861,9 +828,8 @@
   .art-row.armed .art-actions {
     opacity: 1;
   }
-  /* The wash is a layer on the card's own background, not a scrim spanning the
-     row: an overlay wide enough to hold the marks also covers the card's
-     border, and the entry lost its outline for as long as you pointed at it.
+  /* The wash is a layer on the card's own background, not a scrim over the
+     row: an overlay wide enough for the marks would cover the card's border.
      Painted inside the button, the gradient stops at the border. */
   .art-row:hover .art-pick,
   .art-row:focus-within .art-pick,

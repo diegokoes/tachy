@@ -19,13 +19,13 @@ export function matchProject(
   projects: readonly ComposerProject[],
 ): { project: ComposerProject; rest: string } | null {
   let best: { project: ComposerProject; label: string } | null = null;
-  for (const p of projects)
-    for (const label of [p.name, p.external_key])
+  for (const project of projects)
+    for (const label of [project.name, project.external_key])
       if (
         startsWithWord(text, label) &&
         (!best || label.length > best.label.length)
       )
-        best = { project: p, label };
+        best = { project: project, label };
   return best
     ? { project: best.project, rest: text.slice(best.label.length + 1).trim() }
     : null;
@@ -36,9 +36,9 @@ export function parseAz(
   input: string,
   projects: readonly ComposerProject[],
 ): AzStage | null {
-  const m = input.match(/^\/az[ \t]+([^\n]*)$/);
-  if (!m) return null;
-  const rest = m[1];
+  const match = input.match(/^\/az[ \t]+([^\n]*)$/);
+  if (!match) return null;
+  const rest = match[1];
   const sub = rest.match(/^([a-z-]*)$/);
   if (sub) return { stage: "sub", query: sub[1] };
   const after = rest.match(/^new[ \t]+(.*)$/);
@@ -53,6 +53,6 @@ export function parseAz(
 export const isAzNew = (message: string) => /^\/az[ \t]+new\b/.test(message);
 
 export const matches = (query: string, ...texts: (string | null)[]) => {
-  const q = query.trim().toLowerCase();
-  return !q || texts.some((t) => t?.toLowerCase().includes(q));
+  const needle = query.trim().toLowerCase();
+  return !needle || texts.some((t) => t?.toLowerCase().includes(needle));
 };

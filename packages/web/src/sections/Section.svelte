@@ -43,10 +43,13 @@
   });
 </script>
 
-<!-- Every section of the page is here at once; the rail indexes them rather
-     than choosing between them. The heading sticks rather than being pinned by
-     ScrollTrigger: a pin wraps the element in a spacer and re-measures on every
-     refresh, and these sections grow for as long as their tables are loading. -->
+<!--
+@component
+Every section of the page is here at once; the rail indexes them rather than
+choosing between them. The heading sticks rather than being pinned by
+ScrollTrigger: a pin wraps the element in a spacer and re-measures on every
+refresh, and these sections grow for as long as their tables are loading.
+-->
 <section bind:this={el} id="admin-{section}" aria-labelledby="head-{section}">
   <h2 class="head" bind:this={head} id="head-{section}">
     <span class="mark" aria-hidden="true"
@@ -54,13 +57,13 @@
     >
     <span class="lbl">{label}</span>
     <span class="rule" aria-hidden="true"></span>
-    {#each actions as a (a.label)}
+    {#each actions as action (action.label)}
       <Button
         variant="ghost"
-        tone={a.tone ?? "ok"}
+        tone={action.tone ?? "ok"}
         size="sm"
-        icon={a.icon ?? "plus"}
-        onclick={a.run}>{a.label}</Button
+        icon={action.icon ?? "plus"}
+        onclick={action.run}>{action.label}</Button
       >
     {/each}
   </h2>
@@ -96,16 +99,14 @@
     font-size: var(--fs-sm);
     font-weight: 500;
     letter-spacing: var(--label-spacing);
-    /* --panel-bg, not --window-bg: the window's fill is deliberately a little
-       transparent so a star can cross behind it, and rows scrolling under this
-       heading showed straight through it. */
+    /* --panel-bg, not --window-bg: the window's fill is a little transparent
+       so a star can cross behind it, and rows scrolling under this heading
+       would show through. */
     background: var(--panel-bg);
   }
-  /* A sticky box cannot rise above its containing block, and `main`'s content
-     box starts one --main-air below the scrollport. So the heading pins that
-     far down and rows scroll up through the strip above it. It carries its own
-     ground up over that strip; `main`'s overflow clips the overshoot. The same
-     trick, for the same reason, as .bar in LibraryView. */
+  /* A sticky box cannot rise above its containing block, and `main`'s
+     content box starts one --main-air down. So the heading pins there and
+     carries its own ground up over the strip, like .bar in LibraryView. */
   .head::before {
     content: "";
     position: absolute;
