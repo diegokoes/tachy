@@ -83,6 +83,29 @@ describe("slash command registry", () => {
     expect(named.filter((m) => !headings.has(m))).toEqual([]);
   });
 
+  it("/code passes the scope on and keeps it out of the question", () => {
+    const scoped = findCommand("code")!.expand(
+      "@portal-api @Portal-Mobile/ why does login loop?",
+    );
+    expect(scoped).toContain("repos portal-api; project Portal-Mobile");
+    expect(scoped).toContain("`repos` / `project`");
+    expect(scoped).toContain("User arguments: why does login loop?");
+
+    const open = findCommand("code")!.expand("why does login loop?");
+    expect(open).not.toContain("Scope chosen");
+    expect(open).toContain("CODE CONSULTATION MODE");
+  });
+
+  // The button on a code answer sends it; nobody types it.
+  it("keeps /walkthrough out of the menu and still expands it", () => {
+    const walkthrough = findCommand("walkthrough")!;
+    expect(walkthrough.hidden).toBe(true);
+    expect(walkthrough.expand("")).toContain("show_code_walkthrough");
+    expect(BUILTIN_COMMANDS.filter((c) => c.hidden).map((c) => c.name)).toEqual(
+      ["walkthrough"],
+    );
+  });
+
   it("retires /create-ticket for the /az group", () => {
     expect(findCommand("create-ticket")).toBeUndefined();
     expect(findCommand("az")!.subcommands!.map((s) => s.name)).toEqual([

@@ -327,6 +327,181 @@ export async function logBetween(
     });
 }
 
+const ABBREVIATED_OID_RE = /^[0-9a-f]{7,64}$/;
+
+/** The full id of a commit named by its id or an abbreviation of it, or null. */
+export async function resolveCommit(
+  slug: string,
+  oid: string,
+): Promise<string | null> {
+  if (!ABBREVIATED_OID_RE.test(oid)) return null;
+  if (!existsSync(join(repoDir(slug), "HEAD"))) return null;
+  try {
+    return (
+      await git(slug, ["rev-parse", "--verify", "--quiet", `${oid}^{commit}`])
+    ).trim();
+  } catch {
+    return null;
+  }
+}
+
+export interface DirEntry {
+  name: string;
+  kind: "dir" | "file";
+}
+
+const DIR_ENTRY_KINDS: Record<string, DirEntry["kind"]> = {
+  tree: "dir",
+  blob: "file",
+};
+
+/** One directory at a commit, from trees alone. `dir` is "" for the root. */
+export async function listDir(
+  slug: string,
+  sha: string,
+  dir: string,
+): Promise<DirEntry[]> {
+  const treeish = dir ? `${assertOid(sha)}:${dir}` : assertOid(sha);
+  let stdout: string;
+  try {
+    stdout = await git(slug, ["ls-tree", "-z", treeish]);
+  } catch {
+    throw notFound(
+      `'${dir}' is not a directory in repo '${slug}' at ${sha.slice(0, 12)}`,
+    );
+  }
+  const entries: DirEntry[] = [];
+  for (const line of stdout.split("\0")) {
+    const tab = line.indexOf("\t");
+    if (tab < 0) continue;
+    const kind = DIR_ENTRY_KINDS[line.slice(0, tab).split(/\s+/)[1]];
+    if (kind) entries.push({ name: line.slice(tab + 1), kind });
+  }
+  return entries;
+}
+
+/** The tree of a commit with no parent, to diff a root commit against. */
+const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+/** The first parent of a commit, or the empty tree for a root commit. */
+export async function parentOf(slug: string, sha: string): Promise<string> {
+  try {
+    return (
+      await git(slug, [
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        `${assertOid(sha)}^^{commit}`,
+      ])
+    ).trim();
+  } catch {
+    return EMPTY_TREE;
+  }
+}
+
+export async function commitSummary(
+  slug: string,
+  sha: string,
+): Promise<CommitSummary> {
+  const stdout = await git(slug, [
+    "log",
+    "--max-count=1",
+    "--format=%H%x1f%an%x1f%aI%x1f%s",
+    assertOid(sha),
+  ]);
+  const [id, author, date, subject] = stdout.trim().split("\x1f");
+  return { sha: id, author, date, subject };
+}
+
+export interface ChangedFile {
+  /** Git's status letter: A, M, D, R, C or T. */
+  status: string;
+  path: string;
+}
+
+const pathArgs = (path?: string) => ["--", ...(path ? [path] : [])];
+
+/** The files that differ between two commits, from trees alone. */
+export async function changedFiles(
+  slug: string,
+  from: string,
+  to: string,
+  path?: string,
+): Promise<ChangedFile[]> {
+  const stdout = await git(slug, [
+    "diff",
+    "--name-status",
+    "--no-renames",
+    "-z",
+    assertOid(from),
+    assertOid(to),
+    ...pathArgs(path),
+  ]);
+  const fields = stdout.split("\0").filter(Boolean);
+  const files: ChangedFile[] = [];
+  for (let i = 0; i + 1 < fields.length; i += 2)
+    files.push({ status: fields[i], path: fields[i + 1] });
+  return files;
+}
+
+/**
+ * The patch between two commits. It reads file contents, so a partial clone
+ * fetches the blobs on either side: bound it with `changedFiles` first.
+ */
+export async function diffBetween(
+  slug: string,
+  from: string,
+  to: string,
+  opts: { path?: string; token?: string } = {},
+): Promise<string> {
+  return git(
+    slug,
+    [
+      "diff",
+      "--no-color",
+      "--no-ext-diff",
+      "--no-renames",
+      assertOid(from),
+      assertOid(to),
+      ...pathArgs(opts.path),
+    ],
+    { token: opts.token },
+  );
+}
+
+/** The release tags whose history holds a commit, oldest version first. */
+export async function releasesContaining(
+  slug: string,
+  sha: string,
+): Promise<string[]> {
+  const stdout = await git(slug, [
+    "tag",
+    "--contains",
+    assertOid(sha),
+    "--sort=version:refname",
+  ]);
+  return stdout.split("\n").filter((tag) => RELEASE_TAG_RE.test(tag));
+}
+
+/** Whether a branch's history holds a commit. */
+export async function branchContains(
+  slug: string,
+  branch: string,
+  sha: string,
+): Promise<boolean> {
+  try {
+    await git(slug, [
+      "merge-base",
+      "--is-ancestor",
+      assertOid(sha),
+      `refs/heads/${assertBranchName(branch)}`,
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** The branches and tags a remote offers, without cloning it. */
 export async function listRemoteRefs(
   url: string,

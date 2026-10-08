@@ -50,6 +50,14 @@
     parseAz,
   } from "../work-items/azCommand";
   import { typeColor, typeIcon } from "../work-items/ado-icons";
+  import Walkthrough from "../code/Walkthrough.svelte";
+  import { parseCode, scopeOptions, withScopeWord } from "../code/codeCommand";
+  import { codeScope, ensureRepos, scopeNote } from "../code/codeScope.svelte";
+  import type { ShownStep, WalkStep } from "../code/walkthrough";
+
+  /** Tools whose use makes a turn's answer one about code. */
+  const CODE_TOOLS = new Set(["search_code", "read_code_file", "code_diff"]);
+  const WALKTHROUGH_COMMAND = { name: "walkthrough", args: "" };
 
   const short = (tool: string) => tool.replace(/^mcp__tachy__/, "");
 
@@ -152,15 +160,60 @@
     azCommand ? parseAz(chat.input, az.projects ?? []) : null,
   );
 
-  /** `/name` picks a command; `/artifact <query>` and `/az …` pick arguments. */
+  const codeCtx = $derived(
+    commands?.builtins.some((b) => b.name === "code")
+      ? parseCode(chat.input)
+      : null,
+  );
+
+  /** `/name` picks a command; `/artifact <query>`, `/az …` and `/code @…` pick arguments. */
   const cmdCtx = $derived.by(() => {
     const name = chat.input.match(/^\/([a-z0-9-]*)$/);
     if (name) return { mode: "command" as const, query: name[1] };
     const arg = chat.input.match(/^\/artifact[ \t]+([^\n]*)$/);
     if (arg) return { mode: "artifact" as const, query: arg[1] };
     if (azCtx) return { mode: "options" as const, query: azCtx.query };
+    if (codeCtx) return { mode: "options" as const, query: codeCtx.query };
     return null;
   });
+
+  $effect(() => {
+    if (codeCtx) ensureRepos();
+  });
+
+  /** Picked to search every linked repo: the menu closes and the line stays. */
+  const EVERY_REPO = "";
+
+  const codeMenu = $derived.by(
+    (): { options: MenuOption[]; crumb: MenuCrumb } | null => {
+      if (!codeCtx) return null;
+      const scopes = scopeOptions(codeScope.repos ?? [], codeCtx.query).map(
+        (o): MenuOption => ({
+          value: o.word,
+          label: o.label,
+          hint: o.hint,
+          desc: o.desc,
+          icon: o.kind === "repo" ? "repo" : "project",
+        }),
+      );
+      const everywhere: MenuOption = {
+        value: EVERY_REPO,
+        label: "all linked repos",
+        desc: "or type @ at any point to narrow",
+        icon: "search",
+      };
+      return {
+        crumb: {
+          cmd: "/code",
+          param: "scope",
+          desc: "repos and projects to answer from",
+          empty: scopeNote(),
+        },
+        options:
+          codeCtx.fresh && scopes.length ? [everywhere, ...scopes] : scopes,
+      };
+    },
+  );
 
   $effect(() => {
     if (azCtx && azCtx.stage !== "sub") ensureProjects();
@@ -229,6 +282,7 @@
       };
     },
   );
+  const optionsMenu = $derived(azMenu ?? codeMenu);
   const menuOpen = $derived(
     cmdCtx !== null && !cmdDismissed && !chat.busy && commands !== null,
   );
@@ -254,11 +308,17 @@
 
   function pickCommand(pick: CommandPick) {
     if (pick.kind === "builtin") chat.input = `/${pick.builtin.name} `;
-    else if (pick.kind === "option") pickAz(pick.value);
+    else if (pick.kind === "option" && azCtx) pickAz(pick.value);
+    else if (pick.kind === "option") pickCode(pick.value);
     else {
       chat.artifact = { id: pick.artifact.id, title: pick.artifact.title };
       chat.input = "";
     }
+  }
+
+  function pickCode(word: string) {
+    if (word === EVERY_REPO) cmdDismissed = true;
+    else chat.input = withScopeWord(chat.input, word);
   }
 
   function pickAz(value: string) {
@@ -351,9 +411,22 @@
     if (message.startsWith("/") && !commands)
       commands = await getCommands().catch(() => null);
     const command = parseCommand(message);
+    chat.input = "";
+    return startTurn(message, command);
+  }
+
+  /** The newest answer written from code, the one a walkthrough is made of. */
+  const walkableKey = $derived(
+    chat.entries.filter((e) => e.kind === "assistant" && e.code).at(-1)?.key,
+  );
+
+  async function startTurn(
+    message: string,
+    command?: { name: string; args: string },
+  ) {
+    let readCode = false;
     addEntry({ kind: "user", text: message });
     const uploadPaths = chat.uploads.map((u) => u.path);
-    chat.input = "";
     chat.uploads = [];
     chat.busy = true;
     clearArmed = false;
@@ -379,7 +452,20 @@
         else if (event === "text") appendAssistant(data.text as string);
         else if (event === "tool_use") {
           const tool = short(data.tool as string);
-          if (tool === "compact_work_item") {
+          readCode ||= CODE_TOOLS.has(tool);
+          if (tool === "show_code_walkthrough") {
+            const input = (data.input ?? {}) as {
+              title?: string;
+              steps?: WalkStep[];
+            };
+            if (input.steps?.length)
+              addEntry({
+                kind: "walkthrough",
+                id: data.id as string,
+                title: input.title ?? "walkthrough",
+                steps: input.steps,
+              });
+          } else if (tool === "compact_work_item") {
             const input = (data.input ?? {}) as Record<string, unknown>;
             addEntry({
               kind: "compact",
@@ -408,6 +494,21 @@
             const ticket = payload?.ticket as { title?: string } | undefined;
             if (ticket?.title) panel.title = ticket.title;
           }
+        } else if (
+          event === "tool_result" &&
+          short(data.tool as string) === "show_code_walkthrough"
+        ) {
+          const at = chat.entries.findIndex(
+            (e) => e.kind === "walkthrough" && e.id === data.id,
+          );
+          const shown = toolPayload(data.result)?.shown as
+            ShownStep[] | undefined;
+          // A refused walkthrough has no ranges to show; the agent says why.
+          if (at >= 0 && !shown) chat.entries.splice(at, 1);
+          else if (at >= 0)
+            (
+              chat.entries[at] as Extract<Entry, { kind: "walkthrough" }>
+            ).shown = shown;
         } else if (
           event === "tool_result" &&
           short(data.tool as string) === "export_table"
@@ -461,6 +562,8 @@
     } finally {
       chat.busy = false;
       chat.queuePosition = null;
+      const answer = chat.entries[chat.entries.length - 1];
+      if (readCode && answer?.kind === "assistant") answer.code = true;
     }
   }
 
@@ -630,6 +733,16 @@
               >
                 {@html renderMarkdown(entry.text)}
               </div>
+              {#if entry.key === walkableKey && !chat.busy}
+                <Button
+                  size="sm"
+                  square
+                  icon="flows"
+                  title="Walk me through it"
+                  onclick={() =>
+                    startTurn("walk me through it", WALKTHROUGH_COMMAND)}
+                />
+              {/if}
             </div>
           {:else if entry.kind === "tool"}
             <div class="tool">
@@ -640,6 +753,12 @@
             <CompactPanel title={entry.title} stats={entry.stats} />
           {:else if entry.kind === "output"}
             <OutputCard file={entry.file} />
+          {:else if entry.kind === "walkthrough"}
+            <Walkthrough
+              title={entry.title}
+              steps={entry.steps}
+              shown={entry.shown}
+            />
           {:else if entry.kind === "ticket"}
             <TicketCard
               ticket={entry.ticket}
@@ -737,8 +856,8 @@
             query={cmdCtx?.query ?? ""}
             builtins={commands.builtins}
             artifacts={commands.artifacts}
-            options={azMenu?.options}
-            crumb={azMenu?.crumb}
+            options={optionsMenu?.options}
+            crumb={optionsMenu?.crumb}
             onpick={pickCommand}
           />
         {/if}
