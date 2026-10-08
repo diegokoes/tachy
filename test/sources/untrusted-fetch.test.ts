@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { fetchUntrustedUrl } from "../../packages/core/src/sources/fetch";
 
-/**
- * Every case here is refused before any socket is opened, so the suite needs no
- * network. The positive path - a real public host - is deliberately not covered:
- * it would make the suite depend on DNS and on the internet being up.
- */
+// Every case here is refused before any socket is opened, so the suite needs no
+// network. The positive path, a real public host, is not covered: it would make
+// the suite depend on DNS and on the internet being up.
 describe("fetchUntrustedUrl", () => {
   it("refuses schemes that are not http or https", async () => {
     for (const url of [

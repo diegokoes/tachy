@@ -36,16 +36,16 @@ describe("customers", () => {
   });
 
   it("resolves by email domain, including a partner who fronts for them", async () => {
-    const c = await addCustomer({
+    const customer = await addCustomer({
       name: "Dalmoor",
       slug: "dalmoor",
       emailDomains: ["dalmoor.example", "arkwell.example"],
     });
     expect((await resolveCustomerByEmail("user@dalmoor.example")).customerId).toBe(
-      c.id,
+      customer.id,
     );
     expect((await resolveCustomerByEmail("agent@arkwell.example")).customerId).toBe(
-      c.id,
+      customer.id,
     );
     expect(
       (await resolveCustomerByEmail("user@unrelated.com")).customerId,
@@ -54,14 +54,14 @@ describe("customers", () => {
   });
 
   it("normalizes domains, so '@Foo.COM' and 'foo.com' are the same rule", async () => {
-    const c = await addCustomer({
+    const customer = await addCustomer({
       name: "Losvane",
       slug: "losvane",
       emailDomains: [" @LosvaneTrade.example "],
     });
     expect(
       (await resolveCustomerByEmail("Javier@LOSVANETRADE.example")).customerId,
-    ).toBe(c.id);
+    ).toBe(customer.id);
   });
 
   it("a name alias is not an email domain", async () => {
@@ -93,9 +93,9 @@ describe("customers", () => {
   });
 
   it("still resolves a customer whose slug is its domain", async () => {
-    const c = await addCustomer({ name: "Acme", slug: "acme.com" });
+    const customer = await addCustomer({ name: "Acme", slug: "acme.com" });
     expect((await resolveCustomerByEmail("bob@acme.com")).customerId).toBe(
-      c.id,
+      customer.id,
     );
   });
 
@@ -138,8 +138,8 @@ describe("customers", () => {
   });
 
   it("getCustomerName resolves a name, and is null-safe", async () => {
-    const c = await addCustomer({ name: "Dalmoor", slug: "dalmoor" });
-    expect(await getCustomerName(c.id)).toBe("Dalmoor");
+    const customer = await addCustomer({ name: "Dalmoor", slug: "dalmoor" });
+    expect(await getCustomerName(customer.id)).toBe("Dalmoor");
     expect(await getCustomerName(null)).toBeNull();
   });
 });
@@ -198,7 +198,7 @@ describe("customer profile", () => {
     await addComponent({ productId, slug: "printer", name: "Printer" });
     await addComponent({ productId, slug: "aggregation", name: "Aggregation" });
 
-    // A shared component has several customers; a specific one has just the one.
+    // A shared component has several customers; a specific one has one.
     await linkCustomerComponent("losvane", productId, "printer");
     await linkCustomerComponent("velmora", productId, "printer");
     await linkCustomerComponent("losvane", productId, "aggregation");
@@ -242,15 +242,15 @@ describe("customer resolution by slug or alias", () => {
   beforeEach(resetData);
 
   it("resolves an alias to the customer, case-insensitively", async () => {
-    const c = await addCustomer({
+    const customer = await addCustomer({
       name: "Ilverton Brands",
       slug: "ivk",
       aliases: ["Altavon", "Ilverton Trading"],
     });
-    expect((await resolveCustomer("ivk")).id).toBe(c.id);
-    expect((await resolveCustomer("altavon")).id).toBe(c.id);
-    expect((await resolveCustomer("ILVERTON TRADING")).id).toBe(c.id);
-    expect(await getCustomerIdBySlug("Altavon")).toBe(c.id);
+    expect((await resolveCustomer("ivk")).id).toBe(customer.id);
+    expect((await resolveCustomer("altavon")).id).toBe(customer.id);
+    expect((await resolveCustomer("ILVERTON TRADING")).id).toBe(customer.id);
+    expect(await getCustomerIdBySlug("Altavon")).toBe(customer.id);
   });
 
   it("prefers an exact slug over another customer's alias for the same string", async () => {

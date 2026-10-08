@@ -3,8 +3,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-/* ScrollTrigger reads matchMedia as the gsap module registers it, which jsdom
-   does not have. */
+// ScrollTrigger reads matchMedia as the gsap module registers it, which jsdom
+// does not have.
 const media = vi.hoisted(() => {
   const media = { reduced: false };
   const noop = () => {};
@@ -85,9 +85,9 @@ describe("reflow", () => {
     const from = vi.spyOn(Flip, "from");
     reflow([el])();
     const vars = from.mock.calls[0][1]!;
-    const out = vi.spyOn(gsap, "to");
+    const gsapTo = vi.spyOn(gsap, "to");
     (vars.onLeave as (els: Element[]) => void)([el]);
-    expect(out).toHaveBeenCalledWith(
+    expect(gsapTo).toHaveBeenCalledWith(
       [el],
       expect.objectContaining({ opacity: 0 }),
     );

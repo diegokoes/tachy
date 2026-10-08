@@ -373,14 +373,16 @@ describe("API never leaks plaintext or ciphertext", () => {
       "sk-ant-oat01-super-secret-global-token",
     );
 
-    for (const [path, c] of [
+    for (const [path, sessionCookie] of [
       ["/api/me/credentials", cookie],
       ["/api/me/preferences", cookie],
       ["/api/system", adminCookie],
     ] as const) {
-      const res = await app.request(path, { headers: { cookie: c } });
-      expect(res.status).toBe(200);
-      const text = await res.text();
+      const response = await app.request(path, {
+        headers: { cookie: sessionCookie },
+      });
+      expect(response.status).toBe(200);
+      const text = await response.text();
       expect(text).not.toContain("super-secret");
       expect(text).not.toContain("ciphertext");
     }
@@ -401,7 +403,7 @@ describe("API never leaks plaintext or ciphertext", () => {
     await seedPeople();
     const adminCookie = await login("root@example.com");
     for (const method of ["GET", "PUT", "DELETE"] as const) {
-      const res = await app.request("/api/credentials", {
+      const response = await app.request("/api/credentials", {
         method,
         ...(method === "GET"
           ? {}
@@ -414,7 +416,7 @@ describe("API never leaks plaintext or ciphertext", () => {
             }),
         headers: { "Content-Type": "application/json", cookie: adminCookie },
       });
-      expect(res.status).toBe(404);
+      expect(response.status).toBe(404);
     }
   });
 
@@ -546,7 +548,8 @@ describe("a ciphertext is bound to the row that holds it", () => {
       "carol-secret",
     );
 
-    // Rewrite it the way the old code did - no AAD - and it must still resolve.
+    // Written without AAD, as a value stored before it was, it must still
+    // resolve.
     const legacy = encryptSecret("carol-legacy");
     await sql`
       update credentials

@@ -38,8 +38,8 @@ describe("signIn", () => {
   });
 
   describe("under SSO", () => {
-    /* Holding a hash is not the same as being able to use it: once SSO is
-       configured, password login is off unless the account is allowed one. */
+    // Holding a hash is not the same as being able to use it: once SSO is
+    // configured, password login is off unless the account is allowed one.
     it("ignores a password nobody is allowed to use", () => {
       expect(signIn(user(), true)).toEqual({ password: false, sso: true });
     });
@@ -68,9 +68,9 @@ describe("signIn", () => {
     });
   });
 
-  /* A team admin cannot read the runtime block, so SSO is unknown to them.
-     Unknown is treated as "not configured" for the password column; the
-     honest reading, since a password that works today keeps working. */
+  // A team admin cannot read the runtime block, so SSO is unknown to them.
+  // Unknown is treated as "not configured" for the password column, since a
+  // password that works today keeps working.
   it("treats an unknown SSO setting as not configured", () => {
     expect(signIn(user(), null)).toEqual({ password: true, sso: false });
   });

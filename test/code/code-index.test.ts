@@ -60,10 +60,8 @@ const PRINTER = [
   "}",
 ].join("\n");
 
-/*
- * master:              init (v1.0.0) -- #5151 queue (v1.1.0) -- chore (v1.2.0-RC.1)
- * legacy/master-1-0:   init (v1.0.0) -- #4242 legacy fix (v1.0.1)
- */
+// master: init (v1.0.0) -- #5151 queue (v1.1.0) -- chore (v1.2.0-RC.1)
+// legacy/master-1-0: init (v1.0.0) -- #4242 legacy fix (v1.0.1)
 beforeAll(async () => {
   srcDir = await mkdtemp(join(tmpdir(), "tachy-src-"));
   dataDir = await mkdtemp(join(tmpdir(), "tachy-repos-"));
@@ -113,8 +111,8 @@ describe("code indexing + search", () => {
     const repos = await listRepos();
     expect(repos.some((r) => r.slug === "testrepo")).toBe(true);
 
-    const res = await indexRepo("testrepo");
-    const [master] = res.lines;
+    const indexed = await indexRepo("testrepo");
+    const [master] = indexed.lines;
     expect(master.ref).toBe("master");
     expect(master.upToDate).toBe(false);
     expect(master.filesIndexed).toBe(2);
@@ -156,15 +154,13 @@ describe("code indexing + search", () => {
   });
 
   it("is up to date when nothing moved", async () => {
-    const res = await indexRepo("testrepo");
-    expect(res.lines[0].upToDate).toBe(true);
-    expect(res.lines[0].filesIndexed).toBe(0);
+    const indexed = await indexRepo("testrepo");
+    expect(indexed.lines[0].upToDate).toBe(true);
+    expect(indexed.lines[0].filesIndexed).toBe(0);
   });
 
-  /*
-   * An index cut short keeps what it wrote: searchable, readable, and not
-   * redone by the next run, which picks up the rest.
-   */
+  // An index cut short keeps what it wrote: searchable, readable, and not
+  // redone by the next run, which picks up the rest.
   it("keeps an interrupted index searchable and resumes it", async () => {
     await commit(
       {
@@ -216,8 +212,8 @@ describe("release lines", () => {
       sourceSlug: "test-freshdesk",
       lines: ["legacy/master-1-0"],
     });
-    const res = await indexRepo("testrepo", { line: "legacy/master-1-0" });
-    const [legacy] = res.lines;
+    const indexed = await indexRepo("testrepo", { line: "legacy/master-1-0" });
+    const [legacy] = indexed.lines;
     expect(legacy.ref).toBe("legacy/master-1-0");
     expect(legacy.versionLabel).toBe("v1.0.1");
     expect(legacy.filesIndexed).toBe(2);
@@ -226,18 +222,18 @@ describe("release lines", () => {
   });
 
   it("searches a version on the line for its minor, and the default line otherwise", async () => {
-    const q = "LEGACY_PATH_ERROR legacyOnlyHandler";
-    const onDefault = await searchCode(q, { repoSlug: "testrepo" });
+    const query = "LEGACY_PATH_ERROR legacyOnlyHandler";
+    const onDefault = await searchCode(query, { repoSlug: "testrepo" });
     expect(onDefault.some((h) => h.path === "legacyFix.ts")).toBe(false);
 
-    const onVersion = await searchCode(q, {
+    const onVersion = await searchCode(query, {
       repoSlug: "testrepo",
       version: "1.0.3",
     });
     expect(onVersion[0]?.path).toBe("legacyFix.ts");
     expect(onVersion[0]?.line).toBe("legacy/master-1-0");
 
-    const onLine = await searchCode(q, {
+    const onLine = await searchCode(query, {
       repoSlug: "testrepo",
       line: "legacy/master-1-0",
     });
@@ -417,9 +413,9 @@ describe("connection tokens", () => {
     expect(tokenMaySendTo(ado, "https://attacker.example/p/_git/r")).toBe(
       false,
     );
-    const gh = { source_type: "github", base_url: null };
-    expect(tokenMaySendTo(gh, "https://github.com/o/r.git")).toBe(true);
-    expect(tokenMaySendTo(gh, "https://gitlab.com/o/r.git")).toBe(false);
+    const github = { source_type: "github", base_url: null };
+    expect(tokenMaySendTo(github, "https://github.com/o/r.git")).toBe(true);
+    expect(tokenMaySendTo(github, "https://gitlab.com/o/r.git")).toBe(false);
   });
 
   it("refuses to hand a token to another host", async () => {
@@ -440,8 +436,8 @@ describe("chunkCode", () => {
     const chunks = chunkCode(lines.join("\n"));
     expect(chunks.length).toBeGreaterThan(2);
     expect(chunks[0].startLine).toBe(1);
-    for (const c of chunks)
-      expect(c.endLine).toBeGreaterThanOrEqual(c.startLine);
+    for (const chunk of chunks)
+      expect(chunk.endLine).toBeGreaterThanOrEqual(chunk.startLine);
     expect(chunks.at(-1)!.endLine).toBe(200);
     for (let i = 1; i < chunks.length; i++)
       expect(chunks[i].startLine).toBeLessThanOrEqual(

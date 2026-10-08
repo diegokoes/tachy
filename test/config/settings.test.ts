@@ -176,8 +176,8 @@ describe("settings API gating", () => {
     // The deployment inventory - secrets configured, upload path, port - is not.
     expect(body.env).toBeUndefined();
 
-    const res = await put(memberCookie, "agent_effort", "low");
-    expect(res.status).toBe(403);
+    const response = await put(memberCookie, "agent_effort", "low");
+    expect(response.status).toBe(403);
   });
 
   it("admins get the env block", async () => {
@@ -190,8 +190,8 @@ describe("settings API gating", () => {
   });
 
   it("admins write settings; /system reflects the db source", async () => {
-    const res = await put(adminCookie, "agent_effort", "xhigh");
-    expect(res.status).toBe(200);
+    const response = await put(adminCookie, "agent_effort", "xhigh");
+    expect(response.status).toBe(200);
 
     const sys = await app.request("/api/system", {
       headers: { cookie: adminCookie },

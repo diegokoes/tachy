@@ -63,23 +63,23 @@ describe("reports domain", () => {
   });
 
   it("counts the queue by status and type", async () => {
-    const u = await createUser({ email: "u@example.com" });
-    await createReport({ reporterId: u.id, type: "bug", body: "a" });
-    await createReport({ reporterId: u.id, type: "bug", body: "b" });
+    const user = await createUser({ email: "u@example.com" });
+    await createReport({ reporterId: user.id, type: "bug", body: "a" });
+    await createReport({ reporterId: user.id, type: "bug", body: "b" });
     const feat = await createReport({
-      reporterId: u.id,
+      reporterId: user.id,
       type: "feature",
       body: "c",
     });
     await setReportStatus(feat.id, "in_progress");
 
-    const c = await reportsCensus();
-    expect(c.reports).toBe(3);
-    expect(c.open).toBe(2);
-    expect(c.in_progress).toBe(1);
-    expect(c.bugs).toBe(2);
-    expect(c.features).toBe(1);
-    expect(c.oldest_open_at).not.toBeNull();
+    const census = await reportsCensus();
+    expect(census.reports).toBe(3);
+    expect(census.open).toBe(2);
+    expect(census.in_progress).toBe(1);
+    expect(census.bugs).toBe(2);
+    expect(census.features).toBe(1);
+    expect(census.oldest_open_at).not.toBeNull();
   });
 });
 
@@ -87,25 +87,25 @@ describe("notifications domain", () => {
   beforeEach(resetData);
 
   it("delivers, counts unread, and marks seen then read", async () => {
-    const u = await createUser({ email: "n@example.com" });
+    const user = await createUser({ email: "n@example.com" });
     const n = await notify({
-      userId: u.id,
+      userId: user.id,
       kind: "report_reply",
       title: "an admin replied",
       body: "fixed in the next release",
       ref: { report_id: "abc" },
     });
     expect(n.read_at).toBeNull();
-    expect(await unreadCount(u.id)).toBe(1);
+    expect(await unreadCount(user.id)).toBe(1);
 
-    await markSeen(u.id);
-    const afterSeen = await listNotifications(u.id);
+    await markSeen(user.id);
+    const afterSeen = await listNotifications(user.id);
     expect(afterSeen[0].seen_at).not.toBeNull();
     expect(afterSeen[0].read_at).toBeNull();
-    expect(await unreadCount(u.id)).toBe(1);
+    expect(await unreadCount(user.id)).toBe(1);
 
-    await markRead(u.id, [n.id]);
-    expect(await unreadCount(u.id)).toBe(0);
+    await markRead(user.id, [n.id]);
+    expect(await unreadCount(user.id)).toBe(0);
   });
 
   it("keeps each person's inbox to themselves", async () => {

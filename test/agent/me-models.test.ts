@@ -6,10 +6,10 @@ import { createApp } from "../../packages/api/src/app";
 import { loginCookie } from "../http";
 import { resetData, sql } from "../database";
 
-const listModels = vi.fn<(cfg: ModelListConfig) => Promise<ModelChoice[]>>();
+const listModels = vi.fn<(config: ModelListConfig) => Promise<ModelChoice[]>>();
 vi.mock("@tachy/agent", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tachy/agent")>()),
-  listModels: (cfg: ModelListConfig) => listModels(cfg),
+  listModels: (config: ModelListConfig) => listModels(config),
 }));
 
 afterAll(() => sql.end());
@@ -27,9 +27,9 @@ const OFFERED: ModelChoice[] = [
 
 async function models() {
   const cookie = await loginCookie(app, "ada@example.com", "a-long-password");
-  const res = await app.request("/api/me/models", { headers: { cookie } });
-  expect(res.status).toBe(200);
-  return res.json();
+  const response = await app.request("/api/me/models", { headers: { cookie } });
+  expect(response.status).toBe(200);
+  return response.json();
 }
 
 beforeEach(async () => {

@@ -150,10 +150,12 @@ describe("github sync pagination", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string) => {
-        const u = new URL(url);
-        const repo = u.pathname.replace("/repos/", "").replace("/issues", "");
-        const page = Number(u.searchParams.get("page"));
-        const per = Number(u.searchParams.get("per_page"));
+        const parsed = new URL(url);
+        const repo = parsed.pathname
+          .replace("/repos/", "")
+          .replace("/issues", "");
+        const page = Number(parsed.searchParams.get("page"));
+        const per = Number(parsed.searchParams.get("per_page"));
         const total = backlog[repo] ?? 0;
         const start = (page - 1) * per;
         const rows = Array.from(

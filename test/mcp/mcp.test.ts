@@ -16,13 +16,18 @@ describe("runTool envelope", () => {
 
   it("passes a successful result through unchanged", async () => {
     const ok = { content: [{ type: "text" as const, text: "ok" }] };
-    const res = (await runTool("noop", async () => ok, {}, {})) as ToolResult;
-    expect(res).toEqual(ok);
-    expect(res.isError).toBeUndefined();
+    const response = (await runTool(
+      "noop",
+      async () => ok,
+      {},
+      {},
+    )) as ToolResult;
+    expect(response).toEqual(ok);
+    expect(response.isError).toBeUndefined();
   });
 
   it("turns a thrown AppError into a clean tool error", async () => {
-    const res = (await runTool(
+    const response = (await runTool(
       "boom",
       async () => {
         throw badInput("bad thing");
@@ -30,12 +35,12 @@ describe("runTool envelope", () => {
       {},
       {},
     )) as ToolResult;
-    expect(res.isError).toBe(true);
-    expect(res.content[0].text).toBe("bad thing");
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toBe("bad thing");
   });
 
   it("surfaces a real core failure (unknown resolution_pattern) as a tool error, not a rejection", async () => {
-    const res = (await runTool(
+    const response = (await runTool(
       "save_knowledge_entry",
       async () =>
         saveKnowledgeEntry({
@@ -45,7 +50,7 @@ describe("runTool envelope", () => {
       {},
       {},
     )) as ToolResult;
-    expect(res.isError).toBe(true);
-    expect(res.content[0].text).toMatch(/resolution_pattern/i);
+    expect(response.isError).toBe(true);
+    expect(response.content[0].text).toMatch(/resolution_pattern/i);
   });
 });

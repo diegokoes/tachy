@@ -11,7 +11,7 @@ import {
   parseDateFormat,
 } from "../../packages/contract/src";
 
-const AT = "2026-09-04T14:05:00Z";
+const INSTANT = "2026-09-04T14:05:00Z";
 
 describe("formatDay", () => {
   it.each([
@@ -20,7 +20,7 @@ describe("formatDay", () => {
     ["mdy", "09-04-2026"],
     ["long", "4 Sep 2026"],
   ] as const)("%s", (order, expected) => {
-    expect(formatDay(AT, { order, clock: "24h" })).toBe(expected);
+    expect(formatDay(INSTANT, { order, clock: "24h" })).toBe(expected);
   });
 
   it("names the UTC day, whatever zone the process runs in", () => {
@@ -30,8 +30,8 @@ describe("formatDay", () => {
   });
 
   it("takes a Date, an ISO string or epoch milliseconds alike", () => {
-    const d = new Date(AT);
-    for (const at of [d, AT, d.getTime()])
+    const date = new Date(INSTANT);
+    for (const at of [date, INSTANT, date.getTime()])
       expect(formatDateTime(at, DEFAULT_DATE_FORMAT)).toBe("04-09-2026 14:05");
   });
 

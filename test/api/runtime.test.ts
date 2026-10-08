@@ -96,10 +96,10 @@ describe("Admin > System runtime", () => {
     );
     await writeFile(join(dir, "broken.json"), "{not json");
 
-    const res = await app.request("/api/system", {
+    const response = await app.request("/api/system", {
       headers: { Cookie: await cookieFor("ops@example.com", "admin") },
     });
-    const { runtime } = await res.json();
+    const { runtime } = await response.json();
     expect(runtime.draining).toBe(false);
     expect(runtime.turns).toMatchObject({
       slotsUsed: 0,
@@ -125,10 +125,10 @@ describe("Admin > System runtime", () => {
   });
 
   it("keeps the runtime block from members", async () => {
-    const res = await app.request("/api/system", {
+    const response = await app.request("/api/system", {
       headers: { Cookie: await cookieFor("dev@example.com", "member") },
     });
-    const body = await res.json();
+    const body = await response.json();
     expect(body.runtime).toBeUndefined();
     expect(body.settings).toBeDefined();
   });
