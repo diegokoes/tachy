@@ -1,5 +1,5 @@
 /**
- * Queries drawn from the words the seeder actually writes
+ * Queries drawn from the words the seeder writes
  * (packages/cli/src/seed/corpus.ts). They have to match something, or every
  * search leg returns empty and the run measures an empty-result path.
  */

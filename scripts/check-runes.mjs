@@ -43,17 +43,9 @@ if (bad.length) {
   process.exit(1);
 }
 
-/*
- * The same failure shape from the other side, and it only bites primitives.
- * `export const s = $state({…})` is fine: the object is a proxy, so every
- * importer shares it and mutations are reactive - which is why `session`,
- * `chat`, `themeState`, `keymap` and `router` are all objects. But
- * `export const n = $state(0)` exports the value at that instant, so no
- * importer ever sees it change, and it compiles and typechecks cleanly.
- *
- * A module-level `$effect` is the other one: it throws `effect_orphan` on
- * import, which is the same blank page the check above exists for.
- */
+// The same failure from the other side, in `.svelte.ts` modules. An exported
+// `$state({…})` is a proxy every importer shares, but `export const n =
+// $state(0)` exports the value at that instant, so no importer sees it change.
 const REACTIVE_MODULES = [];
 function walkSvelteTs(dir, out = []) {
   for (const name of readdirSync(dir)) {
@@ -70,6 +62,7 @@ function walkSvelteTs(dir, out = []) {
 // than a shared proxy. An object, array, call or identifier is left alone.
 const EXPORTED_PRIMITIVE =
   /^\s*export\s+(?:const|let)\s+[\w$]+\s*(?::[^=]+)?=\s*\$(?:state|derived)(?:\.raw)?(?:<[^>]*>)?\(\s*(\)|-?\d|["'`]|true\b|false\b|null\b|undefined\b)/;
+// A module-level `$effect` throws `effect_orphan` on import: a blank page again.
 const ORPHAN_EFFECT = /^\$effect[.(]/;
 
 for (const path of walkSvelteTs(join(ROOT, "packages"))) {

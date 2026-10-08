@@ -48,12 +48,10 @@ function centroid(i: number): Float64Array {
 
 /**
  * A synthetic embedding: a centroid plus noise, renormalised. Uniformly random
- * 768-dim vectors are all near-equidistant, which gives HNSW a traversal
- * profile nothing like real text. Clustering keeps the graph shaped roughly
- * like one built from a real corpus.
- *
- * These do NOT resemble what the real model produces for the same text, so
- * search relevance against them is meaningless -- see load/README.md.
+ * 768-dim vectors are near-equidistant, which gives HNSW a traversal profile
+ * unlike real text; clustering keeps the graph shaped like a real corpus's.
+ * These are not what the real model produces for the same text, so search
+ * relevance against them means nothing: see load/README.md.
  */
 export function unitVector(kind: string, index: number): Float64Array {
   const base = centroid(index % CENTROIDS);

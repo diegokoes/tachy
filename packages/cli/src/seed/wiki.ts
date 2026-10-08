@@ -17,7 +17,7 @@ import type { SeededProduct, SeededUser } from "./org";
  * A wiki per product plus the org-wide one, so the table of contents, category
  * pages and article outlines all have something to render in a dev database.
  * Articles are `reference_docs` rows with kind='wiki'; categories are their own
- * tree, and an article is deliberately filed under more than one.
+ * tree, and an article may be filed under more than one.
  */
 const CATEGORIES: { slug: string; name: string; children: string[] }[] = [
   { slug: "about", name: "About", children: [] },
@@ -51,7 +51,7 @@ const ARTICLES: { slug: string; title: string; categories: string[] }[] = [
     categories: ["requirements"],
   },
   { slug: "upgrade-notes", title: "Upgrade notes", categories: ["upgrading"] },
-  // Filed twice on purpose: the many-to-many case the ToC has to render.
+  // Filed twice: the many-to-many case the ToC has to render.
   {
     slug: "spooler-stalls",
     title: "Spooler stalls",
@@ -67,14 +67,14 @@ const ARTICLES: { slug: string; title: string; categories: string[] }[] = [
     title: "SSO loop after token refresh",
     categories: ["authentication"],
   },
-  // Deliberately uncategorised, so the "Uncategorised" bucket is non-empty.
+  // Uncategorised, so the "Uncategorised" bucket is non-empty.
   { slug: "field-notes", title: "Field notes", categories: [] },
 ];
 
 /**
- * One template gave every wiki in the database the same nine bodies. The
- * product and the drawn detail make each page's prose its own, which is what
- * the lexical legs of search actually index.
+ * The product and the drawn detail make each page's prose its own; one fixed
+ * template would give every wiki the same bodies for the lexical legs of search
+ * to index.
  */
 const BODY = (
   title: string,
@@ -134,8 +134,8 @@ function sketchPng(w = 96, h = 32): Buffer {
 const ILLUSTRATED = new Set(["main", "overview"]);
 
 /**
- * Who links to whom. `not-written-yet` is deliberate: an unresolved link is a
- * state the reader has to be able to see, so the dev database has one.
+ * Who links to whom. `not-written-yet` resolves to nothing: an unresolved link
+ * is a state the reader has to be able to see, so the dev database has one.
  */
 const LINKS: Record<string, string[]> = {
   main: ["overview", "first-install"],
@@ -163,8 +163,8 @@ export async function seedWiki(
   `;
 
   // Which components each product divides into. Articles anchor to only some of
-  // them on purpose: coverage is a gap report, so a dev database has to contain
-  // components nobody has written about yet.
+  // them: coverage is a gap report, so a dev database has to contain components
+  // nobody has written about.
   const comps = await tx<{ id: string; product_id: string }[]>`
     select id, product_id from components order by product_id, slug
   `;
@@ -364,8 +364,8 @@ export async function seedWiki(
       })),
   );
 
-  // Edges are derived from the bodies above rather than invented, so the seeded
-  // graph is the same shape syncLinks would have produced on a real save.
+  // Edges are derived from the article bodies, not invented, so the seeded
+  // graph has the shape `syncLinks` produces on a real save.
   const bySlug = new Map<string, string>();
   for (const a of articleRows)
     bySlug.set(`${a.product_id ?? "-"}:${a.slug}`, a.id as string);
@@ -387,12 +387,9 @@ export async function seedWiki(
     }
   }
 
-  // Provenance: an article anchored to a component consolidates the entries
-  // filed under it. Same edge `setComposedFrom` writes when the agent drafts a
-  // page, so the "built from" footer and the staleness count have real input.
-  //
-  // One query for every anchored article, not one per article: at --scale=large
-  // that loop was 189 round trips inside the bulk-load transaction.
+  // Provenance: an anchored article consolidates the entries filed under its
+  // component, the edge `setComposedFrom` writes, so the "built from" footer
+  // and the staleness count have input. One query for all of them.
   const anchored = [
     ...new Set(
       articleRows

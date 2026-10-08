@@ -9,9 +9,9 @@ const PASSWORD = __ENV.LOGIN_PASSWORD || "tachy-dev-password";
 
 /**
  * One login for the whole run. The session cookie is a stateless signed
- * `exp|email` HMAC with no server-side store, so every VU can share it -- and
- * must: hashPassword is scrypt at N=16384, so a login per iteration would be
- * a self-inflicted DoS rather than a measurement.
+ * `exp|email` HMAC with no server-side store, so every VU can share it, and
+ * must: `hashPassword` is scrypt, so a login per iteration would measure the
+ * hash, not the API.
  */
 export function login() {
   const res = http.post(

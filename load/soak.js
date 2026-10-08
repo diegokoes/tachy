@@ -1,8 +1,3 @@
-import http from "k6/http";
-import { check } from "k6";
-import { BASE_URL, headers, setupSession, pick } from "./session.js";
-import { QUERIES } from "./corpus.js";
-
 /**
  * A low, steady mix held for a long time. What this is looking for is not
  * latency: it is RSS growth in the API container (the ONNX session, the
@@ -10,6 +5,11 @@ import { QUERIES } from "./corpus.js";
  * pool still behaves after an hour. Watch `docker stats` alongside it, and
  * check /health still answers at the end.
  */
+import http from "k6/http";
+import { check } from "k6";
+import { BASE_URL, headers, setupSession, pick } from "./session.js";
+import { QUERIES } from "./corpus.js";
+
 export const options = {
   scenarios: {
     soak: {

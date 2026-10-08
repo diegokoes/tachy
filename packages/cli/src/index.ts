@@ -27,7 +27,7 @@ registerSource("freshdesk", createFreshdeskSource);
 registerSource("github", createGithubSource);
 registerSource("azure-devops", createAzureDevopsSource);
 
-/* The CLI's only source traffic is `sync`. */
+// The CLI's only source traffic is `sync`.
 setSourceOrigin("sync");
 
 async function sync(
@@ -184,7 +184,7 @@ async function main() {
       try {
         await loadSettingsIntoEnv();
       } catch {
-        /* settings table may not exist yet */
+        // settings table may not exist yet
       }
       return sync(positional[0], { since: args.since, group: args.group });
     }
@@ -207,7 +207,7 @@ async function main() {
       try {
         await loadSettingsIntoEnv();
       } catch {
-        /* settings table may not exist yet */
+        // settings table may not exist yet
       }
       return indexRepoCmd(positional[0], !!args.full);
     }
@@ -221,8 +221,8 @@ async function main() {
         throw new Error(
           `unknown --scale '${args.scale}' (${SCALE_NAMES.join("|")})`,
         );
-      // `--embed` with no value arrives as the string "true" from the parser
-      // above; the seeder reads that as every corpus.
+      // `--embed` with no value is the string "true" in `args`; the seeder
+      // reads that as every corpus.
       return seed({
         scale,
         reset: !!args.reset,

@@ -1,9 +1,9 @@
+/** One pass over everything the suite covers. Run this after every deploy. */
 import http from "k6/http";
 import { check } from "k6";
 import { BASE_URL, headers, setupSession, pick } from "./session.js";
 import { QUERIES, DOC_QUERIES } from "./corpus.js";
 
-/** One pass over everything the suite covers. Run this after every deploy. */
 export const options = {
   vus: 1,
   iterations: 1,

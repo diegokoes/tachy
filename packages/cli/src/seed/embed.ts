@@ -1,14 +1,11 @@
 import { unitVector, vectorLiteral } from "./deterministic";
 
 /**
- * Vectors for a window of rows, not for one row. The shape this replaced ran the
- * model on a batch of one, awaited inside the row loop; batching is worth about
- * 1.15x, measured, because the model is throughput-bound rather than
- * overhead-bound. What actually moves the number is not embedding a corpus at
- * all - see EMBED_MODES.
- *
- * `offset` is the index of the window's first row in its table, so the synthetic
- * side stays keyed to the row rather than to its position in the window.
+ * Vectors for a window of rows, not for one row: the model runs over a batch.
+ * The model is throughput-bound, so what moves the total is not embedding a
+ * corpus at all: see `EMBED_MODES`. `offset` is the index of the window's first
+ * row in its table, so the synthetic side stays keyed to the row, not to its
+ * position in the window.
  */
 export type Embedder = (
   kind: string,
@@ -21,10 +18,9 @@ export const EMBED_MODES = ["none", "search", "all"] as const;
 export type EmbedMode = (typeof EMBED_MODES)[number];
 
 /**
- * `search` covers what a search actually reads. `code_blob_chunks` is the other 60%
- * of the work and is only reached by search_code, so it is not worth an extra
- * fifty minutes unless that is the thing being measured. See below for where
- * those numbers come from.
+ * `search` covers what a search reads. `code_blob_chunks` is most of the work
+ * and is reached only by `search_code`, so it gets real vectors only when that
+ * is the thing being measured. `ROWS_PER_SECOND` holds the rates.
  */
 const REAL_KINDS: Record<EmbedMode, Set<string>> = {
   none: new Set(),
@@ -42,12 +38,11 @@ const REAL_KINDS: Record<EmbedMode, Set<string>> = {
 };
 
 /**
- * Measured on a 20-core workstation with fp32 bge-base through
- * onnxruntime-node, against the text this seeder actually writes, then scaled
- * by 0.45: what gte-modernbert-base manages beside bge-base on code chunks.
- * The model saturates the cores it is given, so batching changes the constant
- * and not the order: this is throughput, not overhead, and the estimate below
- * is honest about that.
+ * Rates measured on a 20-core workstation with fp32 bge-base through
+ * onnxruntime-node, on the text this seeder writes, then scaled by 0.45: what
+ * gte-modernbert-base manages beside bge-base on code chunks. The model
+ * saturates the cores it is given, so batching changes the constant and not the
+ * order.
  */
 const ROWS_PER_SECOND: Record<string, number> = {
   knowledge_entry: 15,
@@ -71,11 +66,8 @@ export const syntheticEmbedder: Embedder = async (kind, texts, offset) =>
 
 /**
  * The real model for the corpora `mode` names, synthetic vectors for the rest.
- *
- * Deduplicated before batching. That is not a micro-optimisation: identical
- * text has an identical vector, and a seeded corpus repeats itself wherever a
- * generator draws from a short list, so embedding the same string twice buys
- * nothing at all.
+ * Deduplicated before batching: identical text has an identical vector, and a
+ * seeded corpus repeats itself wherever a generator draws from a short list.
  */
 export async function realEmbedder(
   mode: EmbedMode,

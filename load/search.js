@@ -1,16 +1,14 @@
+/**
+ * The endpoint most likely to fall over. Every query is embedded before it
+ * touches Postgres, by one model that runs one batch at a time, so concurrency
+ * here queues on the model and the wait grows once it saturates. PROFILE=stress
+ * looks for the knee instead of holding a bar.
+ */
 import http from "k6/http";
 import { check } from "k6";
 import { BASE_URL, headers, setupSession, pick } from "./session.js";
 import { QUERIES, DOC_QUERIES } from "./corpus.js";
 
-/**
- * The endpoint most likely to fall over. Every query runs a 768-dim ONNX
- * embedding in-process, on the API event loop, before it touches Postgres --
- * so concurrency here is CPU contention on a single thread, and the queue
- * grows linearly once it saturates.
- *
- * PROFILE=stress looks for the knee instead of holding a bar.
- */
 const STRESS = __ENV.PROFILE === "stress";
 
 export const options = {

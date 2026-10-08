@@ -59,8 +59,8 @@ for (const q of NONSENSE) {
 
 /**
  * Paraphrase and facet queries are the vector leg's job, so they set the floor.
- * Identifier queries are deliberately excluded: an error code has almost no
- * semantic content, and the trigram/tsvector legs are what retrieve it.
+ * Identifier queries are excluded: an error code has almost no semantic
+ * content, and the trigram/tsvector legs are what retrieve it.
  */
 let semanticMin = 1;
 let semanticAt = "";

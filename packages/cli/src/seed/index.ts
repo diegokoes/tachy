@@ -39,15 +39,15 @@ export interface SeedOptions {
   scale: ScaleName;
   reset: boolean;
   yes: boolean;
-  /** `true` is kept for callers that predate the modes and means "all". */
+  /** `true` means "all", for a caller that passes a boolean. */
   embed: boolean | EmbedMode;
 }
 
 /**
  * Marks a database as one this command created, so a re-seed is allowed but a
- * database holding data the seeder did not write is refused. Deliberately not
- * in SETTING_SCHEMAS: getSettings() only reads keys it knows, so this can
- * never reach application behaviour.
+ * database holding data the seeder did not write is refused. Not in
+ * `SETTING_SCHEMAS`: `getSettings()` reads only keys it knows, so this never
+ * reaches application behaviour.
  */
 const MARKER = "dev_seed";
 
@@ -138,9 +138,8 @@ async function confirm(question: string): Promise<boolean> {
 }
 
 /**
- * `seed` truncates, so the refusal has to be real. It will fill a virgin
- * database, and re-fill one it filled before when given --reset, but it will
- * not touch a database holding rows it did not write.
+ * `seed` truncates, so it fills a virgin database, re-fills one it filled
+ * before when given --reset, and refuses one holding rows it did not write.
  */
 async function assertDevDatabase(opts: SeedOptions): Promise<void> {
   if (process.env.NODE_ENV === "production")
@@ -189,12 +188,9 @@ async function assertDevDatabase(opts: SeedOptions): Promise<void> {
 
 /**
  * Incremental HNSW insertion is a graph traversal per row, and a GIN index
- * pays its posting-list maintenance on every one, so a bulk rebuild is far
- * cheaper than either. B-tree indexes stay: they are cheap to maintain and the
- * FK checks during the load use them.
- *
- * The DDL comes back out of the catalog rather than being restated here, so it
- * cannot drift from db/schema.sql.
+ * maintains its posting lists on every one, so a bulk rebuild is cheaper than
+ * either. B-tree indexes stay: the FK checks during the load use them. The DDL
+ * is read back from the catalog, so it cannot drift from db/schema.sql.
  */
 async function withoutBulkIndexes<T>(tx: Tx, fn: () => Promise<T>): Promise<T> {
   // Qualified by schema: the test setup runs eight schemas side by side, each
@@ -238,11 +234,7 @@ async function stampVectors(tx: Tx): Promise<void> {
   `;
 }
 
-/**
- * Elapsed time per generator. Until this existed the only number printed was
- * the total, so a seed that took an hour was something you waited through
- * rather than something you could point at.
- */
+/** Elapsed time per generator, so a slow seed shows which one took the time. */
 class Phases {
   readonly ms = new Map<string, number>();
 
@@ -410,8 +402,8 @@ async function seedSettings(): Promise<void> {
 }
 
 /**
- * Through the real vault, not a hand-rolled bytea: this exercises the actual
- * AES-GCM path, the name rules and validateCredential's provider prefixes.
+ * Through the real vault, not a hand-rolled bytea: this exercises the AES-GCM
+ * path, the name rules and `validateCredential`'s provider prefixes.
  */
 async function seedCredentials(): Promise<number> {
   if (!secretsEnabled()) return 0;
@@ -473,7 +465,7 @@ function banner(opts: SeedOptions, credentials: number): void {
     );
 }
 
-/** `--embed` with no value means everything, as it did before the modes. */
+/** `--embed` with no value means everything. */
 function embedMode(embed: boolean | EmbedMode): EmbedMode {
   if (embed === true) return "all";
   if (embed === false) return "none";

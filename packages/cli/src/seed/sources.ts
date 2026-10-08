@@ -86,8 +86,8 @@ export async function seedSources(
       external_key: `${480_000 + i}`,
       name: `Seeded project ${i}`,
       product_id: hasProduct ? product.id : null,
-      // team_id is NOT NULL, and must match the product's team so the
-      // scope checks in sourceProjectScope stay coherent.
+      // team_id is required and must match the product's team so the scope
+      // checks in `sourceProjectScope` stay coherent.
       team_id: hasProduct ? product.teamId : teams[i % teams.length].id,
       customer_id: chance(rngFor("project", i), 0.2)
         ? customers[i % customers.length].id
@@ -202,12 +202,9 @@ async function seedWorkItems(
       items.push({ id, connectionId: conn.id, externalId });
 
       const rng = rngFor("work_item", i);
-      /*
-       * Drawn from the row's stream, not by `i % list.length`. Cycling gave
-       * lcm(SYMPTOMS, products) distinct titles - 60 of them across the 40k rows
-       * --scale=large asks for - so the trigram index saw 60 strings repeated
-       * 667 times each. Same reasoning as the knowledge entries.
-       */
+      // Drawn from the row's stream, not by `i % list.length`: cycling repeats
+      // a few dozen titles across every row, which is all the trigram index
+      // then sees. As for the knowledge entries.
       const project = pick(rng, knowledgeProjects);
       const product = pick(rng, products);
       const symptom = pick(rng, SYMPTOMS);
@@ -231,7 +228,8 @@ async function seedWorkItems(
           : null,
         observed_version: `${intBetween(rng, 3, 9)}.${intBetween(rng, 0, 12)}`,
         requester: `contact${i % 200}@example.invalid`,
-        // Capped deliberately: a realistic blob dominates database size at 40k.
+        // Capped: a realistic blob dominates the database's size at
+        // --scale=large.
         raw: tx.json({
           seeded: true,
           symptom,
@@ -274,10 +272,10 @@ async function seedMessages(
       const k = i % per;
       const rng = rngFor("message", i);
       // A step, an outcome and a detail are composed per message so the
-      // follow-ups stay distinct across the 120k rows --scale=large writes.
+      // follow-ups stay distinct at --scale=large.
       const symptom = pick(rng, SYMPTOMS);
-      // The thread quotes its own ticket, the way a real one does. That is also
-      // what keeps a body unique: the composed halves alone repeat at 160k rows.
+      // The thread quotes its own ticket, the way a real one does. That also
+      // keeps a body unique: the composed halves alone repeat at --scale=large.
       const ref = `${item.externalId}`;
       const body =
         k === 0
@@ -301,9 +299,9 @@ async function seedMessages(
 
 /**
  * Two disjoint row shapes. The schema has one partial unique index per shape,
- * and the CHECK needs at least one target; keeping "points at an ingested
- * item" and "points at an id we have not ingested" strictly separate means
- * neither index can ever see the other's rows.
+ * and the CHECK needs at least one target; keeping "points at an ingested item"
+ * and "points at an id not ingested" strictly separate means neither index can
+ * ever see the other's rows.
  */
 async function seedLinks(
   tx: Tx,

@@ -59,7 +59,8 @@ export async function seedCode(
       "slug",
       "url",
       "product_id",
-      // source_slug references source_connections(slug) -- a text key, not a uuid.
+      // source_slug references source_connections(slug): a text key, not a
+      // uuid.
       "source_slug",
       "source_project_id",
       "component_id",
@@ -155,10 +156,9 @@ export async function seedCode(
       const f = Math.floor(i / perFile);
       const k = i % perFile;
       const start = 1 + k * 40;
-      // The template is drawn per chunk and interpolates the file's own
-      // names. A shared snippet gives 60k identical rows at --scale=large, and
-      // under --embed 60k identical vectors, which degenerates the HNSW graph
-      // and makes the trigram index useless.
+      // Drawn per chunk and filled with the file's own names. A shared snippet
+      // gives identical rows and, under --embed, identical vectors: a
+      // degenerate HNSW graph and a useless trigram index.
       const { names, path } = fileIdentity(f);
       const template =
         CODE_TEMPLATES[
@@ -182,7 +182,7 @@ export async function seedCode(
     { fill: embedColumn(embed, "code_chunk") },
   );
 
-  // Keep the denormalised counters honest, the way the indexer leaves them.
+  // Sets the denormalised counters the way the indexer leaves them.
   await tx`
     update repo_lines l set
       file_count = (select count(*) from repo_line_files f where f.line_id = l.id),
