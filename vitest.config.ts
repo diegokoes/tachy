@@ -3,16 +3,12 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { MAX_WORKERS } from "./test/parallel";
 
 export default defineConfig({
-  /*
-   * The Svelte plugin is here rather than in a project of its own. `.svelte.ts`
-   * modules are only valid once the compiler has processed them - a rune in a
-   * file Vite does not transform is a reference to a global that is not there -
-   * and the plugin touches nothing else, so one project can hold both halves of
-   * the suite. Two projects could not: vitest hands out VITEST_POOL_ID per pool,
-   * worker-setup.ts turns that id into a schema name, and with a second pool in
-   * the run two files ended up on one schema, truncating each other's rows.
-   *
-   * Tests that need a DOM ask for one per file, with `@vitest-environment jsdom`.
+  /**
+   * Compiles the `.svelte.ts` rune modules and touches nothing else, so one
+   * project holds both halves of the suite. Two projects cannot: vitest hands
+   * out VITEST_POOL_ID per pool and worker-setup.ts turns it into a schema
+   * name, so a second pool puts two files on one schema. A test that needs a
+   * DOM asks for one with `@vitest-environment jsdom`.
    */
   plugins: [svelte({ hot: false })],
 
@@ -45,10 +41,8 @@ export default defineConfig({
         "packages/web/src/main.ts",
         "**/dist/**",
       ],
-      // A ratchet, set just under what the suite reaches today. Raise it when
-      // coverage rises; never lower it to make a red build green. Vitest 5
-      // started measuring the `.svelte.ts` rune modules, which vitest 4 never
-      // reported, so the baseline was reset to include them.
+      // A ratchet, set under what the suite reaches. Raise it when coverage
+      // rises; never lower it to make a red build green.
       thresholds: {
         lines: 75,
         statements: 73,
@@ -57,7 +51,7 @@ export default defineConfig({
 
         // The same ratchet per package. One total lets a well-covered package
         // slide while a thin one hides behind it. Files under a glob still
-        // count toward the totals above.
+        // count toward the four totals.
         "packages/core/src/**": {
           lines: 89,
           statements: 87,

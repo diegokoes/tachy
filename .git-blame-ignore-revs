@@ -1,2 +1,29 @@
 # Commits that only reword or remove comments. GitHub's blame view reads this
 # file; locally: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# contract, core/search, core/work-items/compact.ts, web/shell
+69c841ce65750027f650c3f8dd37b4ed5db60678
+# agent, mcp, api, sources, worker
+972fa749b37d1e7ee32d2a8623f7954424fd092b
+# core: code, work-items, knowledge, reference, wiki, library
+eb1d31df586835a5f91f572af774ccbe677ee4c5
+# core: catalog, sources, flows, jobs, buckets
+a9e37dda137c802e705d2e7f4b9105825b258f17
+# core: the rest
+cb6c693a3e9751f4b913007e885dca6f7e6a5c0d
+# web: tui, motion, keys, theme, markdown, styles, App.svelte
+4a3ac42eb5ac057966c7521105153e33033e44e6
+# web: chat, library, knowledge, wiki, work-items
+7751aeff832f4d9ecd2a31c386479d8bb415dd99
+# web: the admin side
+1c71f8fa29c8950c982b0bca2c8d6a0cab0c483f
+# cli, scripts, load
+81967c89ca872852b4140bd175d9be41300ee7fe
+# test
+0e89013cdb8394fa17751503926c77ade8a8c4e7
+# db/schema.sql
+3b41d348657059a2c7af5eca699fc6b7f14d6062
+# env examples, Dockerfile, compose, host scripts
+c10b08ad9869e7959aa851aa0bc1821df5856d82
+# vitest.config.ts
+5d5ba7129627cfdc577920a42a57f53d1c1fafd9
