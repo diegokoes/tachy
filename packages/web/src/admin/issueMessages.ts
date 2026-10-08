@@ -230,6 +230,14 @@ export type IssueGroup = {
   more: number;
 };
 
+const worstFirst = (
+  a: Pick<IssueGroup, "tone">,
+  b: Pick<IssueGroup, "tone">,
+) => {
+  if (a.tone === b.tone) return 0;
+  return a.tone === "danger" ? -1 : 1;
+};
+
 /** The open issues, worded, worst first. */
 export function issueGroups(issues: Issues): IssueGroup[] {
   return Object.entries(issues)
@@ -260,7 +268,7 @@ export function issueGroups(issues: Issues): IssueGroup[] {
         },
       ];
     })
-    .sort((a, b) => (a.tone === b.tone ? 0 : a.tone === "danger" ? -1 : 1));
+    .sort(worstFirst);
 }
 
 /** Every issue key the SPA can word. */

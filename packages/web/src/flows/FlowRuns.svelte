@@ -19,6 +19,10 @@
   let runs = $state<FlowRun[]>([]);
   let error = $state<string | null>(null);
 
+  const POLL_MS = 3000;
+  /** Polls made after a refresh whether or not a run is still going. */
+  const EAGER_POLLS = 10;
+
   async function load(id: string) {
     try {
       const got = await api.get<FlowRun[]>(`/flows/${id}/runs`);
@@ -41,8 +45,9 @@
     let ticks = 0;
     const timer = setInterval(() => {
       ticks++;
-      if (ticks < 10 || runs.some((r) => r.status === "running")) void load(id);
-    }, 3000);
+      if (ticks < EAGER_POLLS || runs.some((r) => r.status === "running"))
+        void load(id);
+    }, POLL_MS);
     return () => clearInterval(timer);
   });
 

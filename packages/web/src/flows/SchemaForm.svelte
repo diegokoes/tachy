@@ -34,11 +34,8 @@
 
   const text = (name: string) => {
     const held = value[name];
-    return held == null
-      ? ""
-      : typeof held === "string"
-        ? held
-        : JSON.stringify(held);
+    if (held == null) return "";
+    return typeof held === "string" ? held : JSON.stringify(held);
   };
   const LONG = new Set(["body", "prompt", "material", "note"]);
   const kindOf = (p: Schema) => (Array.isArray(p.type) ? p.type[0] : p.type);
@@ -61,16 +58,17 @@
     ]
       .filter(Boolean)
       .join(" · ") || undefined;
-  const listOf = (v: unknown): string[] =>
-    Array.isArray(v) ? v.map(String) : v == null || v === "" ? [] : [String(v)];
+  const listOf = (v: unknown): string[] => {
+    if (Array.isArray(v)) return v.map(String);
+    return v == null || v === "" ? [] : [String(v)];
+  };
 
+  const NUMBER_RE = /^-?\d+(\.\d+)?$/;
   /** A number, unless it is a template, which fills in at run time. */
-  const numberish = (raw: string): unknown =>
-    raw.trim() === ""
-      ? undefined
-      : /^-?\d+(\.\d+)?$/.test(raw.trim())
-        ? Number(raw)
-        : raw;
+  const numberish = (raw: string): unknown => {
+    if (raw.trim() === "") return undefined;
+    return NUMBER_RE.test(raw.trim()) ? Number(raw) : raw;
+  };
 
   function parseJson(raw: string): unknown {
     if (!raw.trim()) return undefined;

@@ -38,6 +38,16 @@
   });
 
   const totals = $derived(census.data);
+
+  type LiveQueue = (typeof live.data.queues)[number];
+  const queueLabel = (name: string, now?: LiveQueue) => {
+    if (now?.running) return `${name} · ${now.running} running`;
+    return now?.queued ? `${name} · ${now.queued} waiting` : name;
+  };
+  const queueTone = (now?: LiveQueue): Bar["tone"] => {
+    if (now?.queued) return now.workers ? "warn" : "danger";
+    return now?.running ? "accent" : undefined;
+  };
   const failed = $derived(totals.by_status.failed + totals.by_status.timed_out);
 
   // Live counts come from the roster poll, not the census, which loads once.
@@ -133,20 +143,9 @@
       return [
         {
           key: w.queue,
-          label: now?.running
-            ? `${w.queue} · ${now.running} running`
-            : now?.queued
-              ? `${w.queue} · ${now.queued} waiting`
-              : w.queue,
+          label: queueLabel(w.queue, now),
           value: w.avg_wait_seconds ?? 0,
-          tone:
-            now?.queued && !now.workers
-              ? "danger"
-              : now?.queued
-                ? "warn"
-                : now?.running
-                  ? "accent"
-                  : undefined,
+          tone: queueTone(now),
         },
       ];
     }),
@@ -174,14 +173,14 @@
   );
   const shownRuns = $derived(perDay.reduce((n, d) => n + d.value, 0));
 
-  const rate = (s: { finished: number; succeeded: number }): Tone =>
-    !s.finished
-      ? "muted"
-      : s.succeeded / s.finished >= 0.95
-        ? "ok"
-        : s.succeeded / s.finished >= 0.8
-          ? "warn"
-          : "danger";
+  const SUCCESS_OK = 0.95;
+  const SUCCESS_WARN = 0.8;
+  const rate = (s: { finished: number; succeeded: number }): Tone => {
+    if (!s.finished) return "muted";
+    const share = s.succeeded / s.finished;
+    if (share >= SUCCESS_OK) return "ok";
+    return share >= SUCCESS_WARN ? "warn" : "danger";
+  };
   const ring = (
     key: string,
     label: string,

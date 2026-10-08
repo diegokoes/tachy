@@ -101,23 +101,21 @@
     },
     modelCalls: String(FLOW_MODEL_CALLS_PER_DAY),
   });
+  const draftOf = (flow: Flow): Draft => ({
+    id: flow.id,
+    name: flow.name,
+    team: flow.team_slug,
+    enabled: flow.enabled,
+    graph: flow.graph,
+    modelCalls: String(flow.model_calls_per_day),
+  });
 
   $effect(() => {
     const id = flowId;
     const stored = flows.find((x) => x.id === id);
-    const next: Draft | null =
-      id === NEW
-        ? blank()
-        : stored
-          ? {
-              id: stored.id,
-              name: stored.name,
-              team: stored.team_slug,
-              enabled: stored.enabled,
-              graph: stored.graph,
-              modelCalls: String(stored.model_calls_per_day),
-            }
-          : null;
+    let next: Draft | null = null;
+    if (id === NEW) next = blank();
+    else if (stored) next = draftOf(stored);
     draft = next;
     saved = id === NEW ? "" : JSON.stringify(next);
     selection = null;
@@ -187,25 +185,20 @@
     manual: "triggerManual",
     schedule: "triggerSchedule",
   };
+  const TRIGGER_IDS: Record<FlowTrigger["kind"], string> = {
+    "item.synced": "synced",
+    manual: "by-hand",
+    schedule: "schedule",
+  };
+  function startParams(kind: FlowTrigger["kind"]): FlowTrigger["params"] {
+    if (kind === "schedule") return { cron: "0 7 * * 1-5", timezone: "UTC" };
+    if (kind === "item.synced" && connection) return { connection };
+    return {};
+  }
   function addTrigger(kind: FlowTrigger["kind"]) {
     if (!draft) return;
-    const id = freshId(
-      draft.graph,
-      kind === "item.synced"
-        ? "synced"
-        : kind === "schedule"
-          ? "schedule"
-          : "by-hand",
-    );
-    const firstConn = connection;
-    const params =
-      kind === "schedule"
-        ? { cron: "0 7 * * 1-5", timezone: "UTC" }
-        : kind === "item.synced"
-          ? firstConn
-            ? { connection: firstConn }
-            : {}
-          : {};
+    const id = freshId(draft.graph, TRIGGER_IDS[kind]);
+    const params = startParams(kind);
     setGraph({
       ...draft.graph,
       triggers: [...draft.graph.triggers, { id, kind, params }],

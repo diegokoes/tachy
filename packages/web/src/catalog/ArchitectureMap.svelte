@@ -147,6 +147,7 @@
   });
 
   const EASE_MS = 90;
+  const SETTLED_PX = 0.1;
 
   function glide(now: number) {
     const dt = last ? Math.min(64, now - last) : 16;
@@ -157,8 +158,8 @@
     ty += (goal.ty - ty) * blend;
     const done =
       Math.abs(goal.zoom - zoom) < 1e-4 * goal.zoom &&
-      Math.abs(goal.tx - tx) < 0.1 &&
-      Math.abs(goal.ty - ty) < 0.1;
+      Math.abs(goal.tx - tx) < SETTLED_PX &&
+      Math.abs(goal.ty - ty) < SETTLED_PX;
     if (done) {
       zoom = goal.zoom;
       tx = goal.tx;

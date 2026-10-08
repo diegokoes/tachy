@@ -41,10 +41,14 @@
   type Leaf = Extract<Condition, { field: string }>;
   const leaf = (): Condition => ({ field: "item.status", op: "eq", value: "" });
 
-  const mode = $derived("all" in value ? "all" : "any" in value ? "any" : null);
-  const children = $derived(
-    "all" in value ? value.all : "any" in value ? value.any : [],
-  );
+  const mode = $derived.by(() => {
+    if ("all" in value) return "all";
+    return "any" in value ? "any" : null;
+  });
+  const children = $derived.by(() => {
+    if ("all" in value) return value.all;
+    return "any" in value ? value.any : [];
+  });
 
   function setChildren(next: Condition[]) {
     onchange(mode === "any" ? { any: next } : { all: next });
@@ -53,8 +57,10 @@
     setChildren(children.map((x, j) => (j === at ? next : x)));
   }
 
-  const listText = (v: unknown) =>
-    Array.isArray(v) ? v.join(", ") : v == null ? "" : String(v);
+  const listText = (v: unknown) => {
+    if (Array.isArray(v)) return v.join(", ");
+    return v == null ? "" : String(v);
+  };
 </script>
 
 {#if mode}

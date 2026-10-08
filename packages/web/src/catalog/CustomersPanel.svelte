@@ -243,15 +243,15 @@
         ...(byParent.get(unit.parent_id) ?? []),
         unit,
       ]);
-    const out: { u: CustomerUnitRow; depth: number }[] = [];
+    const flat: { unit: CustomerUnitRow; depth: number }[] = [];
     const walk = (parent: string | null, depth: number) => {
-      for (const u of byParent.get(parent) ?? []) {
-        out.push({ u, depth });
-        walk(u.id, depth + 1);
+      for (const unit of byParent.get(parent) ?? []) {
+        flat.push({ unit, depth });
+        walk(unit.id, depth + 1);
       }
     };
     walk(null, 0);
-    return out;
+    return flat;
   }
 
   const unitName = (rows: CustomerUnitRow[], id: string | null) =>
@@ -402,34 +402,35 @@
   <div class="profile">
     <div class="block wide">
       <span class="dim">estate</span>
-      {#each unitTree(units[customer.slug] ?? []) as { u, depth } (u.id)}
+      {#each unitTree(units[customer.slug] ?? []) as { unit, depth } (unit.id)}
         <div class="frow" style="--depth: {depth}">
           <span class="indent"></span>
-          <Badge tone="muted">{u.kind}</Badge>
+          <Badge tone="muted">{unit.kind}</Badge>
           <button
             class="unitname"
-            onclick={() => showUnit(customer.slug, u.slug)}
+            onclick={() => showUnit(customer.slug, unit.slug)}
           >
-            {u.name}
+            {unit.name}
           </button>
-          <span class="lbl">{u.slug}</span>
-          {#if u.profile_id}
+          <span class="lbl">{unit.slug}</span>
+          {#if unit.profile_id}
             <span class="dim sm"
               >conforms to {unitName(
                 units[customer.slug] ?? [],
-                u.profile_id,
+                unit.profile_id,
               )}</span
             >
           {/if}
-          <button class="tiny" onclick={() => startEditUnit(customer.slug, u)}
-            >edit</button
+          <button
+            class="tiny"
+            onclick={() => startEditUnit(customer.slug, unit)}>edit</button
           >
           <DeleteButton
             label="remove unit"
-            onclick={() => delUnit(customer.slug, u.slug)}
+            onclick={() => delUnit(customer.slug, unit.slug)}
           />
         </div>
-        {#if editUnit[customer.slug] === u.slug}
+        {#if editUnit[customer.slug] === unit.slug}
           <div class="frow add" style="--depth: {depth}">
             <span class="indent"></span>
             <input
@@ -450,7 +451,7 @@
                 ...(units[customer.slug] ?? [])
                   .filter(
                     (x) =>
-                      !unitSubtree(units[customer.slug] ?? [], u).includes(
+                      !unitSubtree(units[customer.slug] ?? [], unit).includes(
                         x.slug,
                       ),
                   )
@@ -463,7 +464,7 @@
               options={[
                 { value: "", label: "no shared profile" },
                 ...(units[customer.slug] ?? [])
-                  .filter((x) => x.slug !== u.slug)
+                  .filter((x) => x.slug !== unit.slug)
                   .map((x) => ({
                     value: x.slug,
                     label: `conforms to ${x.slug}`,

@@ -72,7 +72,10 @@
   /** Never less than the button row needs, which hangs in this gap. */
   const orbGap = $derived(Math.max(56, (viewH - orbH) / 2 - topH));
 
-  const mode = $derived(seeking ? "seek" : landed ? "gone" : "idle");
+  const mode = $derived.by(() => {
+    if (seeking) return "seek";
+    return landed ? "gone" : "idle";
+  });
 
   const needle = $derived(filter.trim().toLowerCase());
   const matches = (r: FoundRepo) =>

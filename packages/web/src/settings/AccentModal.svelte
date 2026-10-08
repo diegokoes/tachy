@@ -15,13 +15,10 @@
   const valid = $derived(
     isHexColor(first) && (!gradient || isHexColor(second)),
   );
-  const preview = $derived(
-    !valid
-      ? "transparent"
-      : gradient
-        ? `linear-gradient(90deg, ${first}, ${second})`
-        : first,
-  );
+  const preview = $derived.by(() => {
+    if (!valid) return "transparent";
+    return gradient ? `linear-gradient(90deg, ${first}, ${second})` : first;
+  });
 
   function save() {
     if (!valid) return;

@@ -373,13 +373,11 @@
     );
   });
 
-  const coverageTone = $derived(
-    coverage.some((g) => g.gaps.some((x) => x.tone === "danger"))
-      ? ("danger" as const)
-      : coverage.length
-        ? ("warn" as const)
-        : undefined,
-  );
+  const coverageTone = $derived.by(() => {
+    if (coverage.some((g) => g.gaps.some((x) => x.tone === "danger")))
+      return "danger" as const;
+    return coverage.length ? ("warn" as const) : undefined;
+  });
 
   let showCoverage = $state(false);
 

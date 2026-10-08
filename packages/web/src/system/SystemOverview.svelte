@@ -111,34 +111,49 @@
     return used.length ? Math.max(...used) : null;
   });
 
+  const runState = (): { text: string; tone: Tone } => {
+    if (!runtime) return { text: "–", tone: "muted" };
+    if (runtime.draining) return { text: "draining", tone: "warn" };
+    if (!runtime.readiness.ready) return { text: "not ready", tone: "danger" };
+    return runtime.refusingChats
+      ? { text: "paused", tone: "warn" }
+      : { text: "ready", tone: "ok" };
+  };
+  const tallyText = (counted: number) => {
+    if (tally) return `${tally.passing}/${counted}`;
+    return probes.running ? "…" : "–";
+  };
+  const tallyTone = (): Tone => {
+    if (!tally) return "muted";
+    if (tally.failing) return "danger";
+    return tally.warning ? "warn" : "ok";
+  };
+  const PASS_OK = 0.95;
+  const PASS_WARN = 0.8;
+  const passTone = (rate: number | null): Tone => {
+    if (rate === null) return "muted";
+    if (rate >= PASS_OK) return "ok";
+    return rate >= PASS_WARN ? "warn" : "danger";
+  };
+
   const figures = $derived.by(() => {
-    const ready = runtime?.readiness.ready;
-    const state = !runtime
-      ? { text: "–", tone: "muted" as Tone }
-      : runtime.draining
-        ? { text: "draining", tone: "warn" as Tone }
-        : !ready
-          ? { text: "not ready", tone: "danger" as Tone }
-          : runtime.refusingChats
-            ? { text: "paused", tone: "warn" as Tone }
-            : { text: "ready", tone: "ok" as Tone };
+    const state = runState();
     const commit = system.data?.env?.commit;
     const backupCounter = hostCounter(backup, 12 * HOUR);
     const restoreCounter = hostCounter(restore, 8 * 24 * HOUR);
     // A skipped probe ran nothing, so it is out of the denominator too.
     const counted = tally ? tally.total - tally.skipped : 0;
     const openReports = census.data.warn.reports ?? 0;
+    let reportsTone: Tone = "muted";
+    if (openReports) reportsTone = "warn";
+    else if (census.data.counts.reports) reportsTone = "accent";
     return [
       { key: "status", label: "status", ...state, to: "runtime" },
       {
         key: "reports",
         label: "reports",
         value: census.data.counts.reports ?? 0,
-        tone: openReports
-          ? ("warn" as Tone)
-          : census.data.counts.reports
-            ? ("accent" as Tone)
-            : ("muted" as Tone),
+        tone: reportsTone,
         to: "reports",
       },
       {
@@ -158,19 +173,8 @@
       {
         key: "checks",
         label: "checks",
-        text:
-          probes.running && !tally
-            ? "…"
-            : tally
-              ? `${tally.passing}/${counted}`
-              : "–",
-        tone: !tally
-          ? ("muted" as Tone)
-          : tally.failing
-            ? ("danger" as Tone)
-            : tally.warning
-              ? ("warn" as Tone)
-              : ("ok" as Tone),
+        text: tallyText(counted),
+        tone: tallyTone(),
         to: "checks",
       },
       {
@@ -178,14 +182,7 @@
         label: "load tests",
         text:
           summary.passRate === null ? "–" : pct(summary.passed, summary.judged),
-        tone:
-          summary.passRate === null
-            ? ("muted" as Tone)
-            : summary.passRate >= 0.95
-              ? ("ok" as Tone)
-              : summary.passRate >= 0.8
-                ? ("warn" as Tone)
-                : ("danger" as Tone),
+        tone: passTone(summary.passRate),
         to: "loads",
       },
       { key: "backup", label: "last backup", ...backupCounter, to: "host" },
@@ -210,6 +207,11 @@
     const mem = runtime.memory;
     const memShare = mem?.maxBytes ? mem.currentBytes / mem.maxBytes : null;
     const loop = runtime.eventLoopP99Ms;
+    let memCenter = "–";
+    if (memShare !== null) memCenter = `${Math.round(memShare * 100)}%`;
+    else if (mem) memCenter = bytes(mem.currentBytes);
+    let memSub = "unknown";
+    if (mem) memSub = mem.maxBytes ? bytes(mem.currentBytes) : "no limit";
     return [
       {
         key: "slots",
@@ -227,17 +229,8 @@
           memShare === null ? "no container limit" : "of the container limit",
         value: memShare ?? 0,
         tone: memShare === null ? "muted" : load(memShare),
-        center:
-          memShare === null
-            ? mem
-              ? bytes(mem.currentBytes)
-              : "–"
-            : `${Math.round(memShare * 100)}%`,
-        sub: mem
-          ? mem.maxBytes
-            ? `${bytes(mem.currentBytes)}`
-            : "no limit"
-          : "unknown",
+        center: memCenter,
+        sub: memSub,
       },
       {
         key: "postgres",
@@ -281,6 +274,30 @@
     fail: "danger",
     skip: "muted",
   };
+  const SCHEMA_TONES: Record<string, Cell["tone"]> = {
+    match: "ok",
+    mismatch: "danger",
+    unstamped: "muted",
+  };
+  const MODEL_TONES: Record<string, Cell["tone"]> = {
+    ready: "ok",
+    external: "ok",
+    unreachable: "danger",
+    loading: "warn",
+  };
+  type Runtime = NonNullable<typeof runtime>;
+  /** `off` is the tone of a vault with no key set. */
+  const vaultTone = (
+    vault: Runtime["security"]["vault"],
+    off: Cell["tone"],
+  ): Cell["tone"] => {
+    if (!vault.enabled) return off;
+    return vault.by_key.some((k) => !k.current) ? "warn" : "ok";
+  };
+  const embedState = (embed: Runtime["embed"]) => {
+    if (!embed) return "unknown";
+    return embed.running ? "busy" : "idle";
+  };
 
   // One board for every "is this working" answer: the runtime's own readiness
   // lamps, tachy-watch's host checks, and the on-demand probes once run. They
@@ -299,14 +316,7 @@
       {
         key: "schema",
         label: "schema",
-        tone:
-          readiness.schema === "match"
-            ? "ok"
-            : readiness.schema === "mismatch"
-              ? "danger"
-              : readiness.schema === "unstamped"
-                ? "muted"
-                : "warn",
+        tone: SCHEMA_TONES[readiness.schema] ?? "warn",
         title: readiness.schema,
         detail:
           readiness.schema === "mismatch"
@@ -316,24 +326,13 @@
       {
         key: "model",
         label: "model",
-        tone:
-          readiness.model === "ready" || readiness.model === "external"
-            ? "ok"
-            : readiness.model === "unreachable"
-              ? "danger"
-              : readiness.model === "loading"
-                ? "warn"
-                : "muted",
+        tone: MODEL_TONES[readiness.model] ?? "muted",
         title: readiness.model,
       },
       {
         key: "vault",
         label: "vault keys",
-        tone: !vault.enabled
-          ? "muted"
-          : vault.by_key.some((k) => !k.current)
-            ? "warn"
-            : "ok",
+        tone: vaultTone(vault, "muted"),
         title: vault.enabled
           ? vault.by_key
               .map((k) => `${k.key_id ?? "no key id"}: ${k.count}`)
@@ -404,11 +403,7 @@
         value: runtime.embed
           ? String(runtime.embed.queries + runtime.embed.passages)
           : "–",
-        detail: runtime.embed
-          ? runtime.embed.running
-            ? "busy"
-            : "idle"
-          : "unknown",
+        detail: embedState(runtime.embed),
       },
     ];
   });
@@ -432,11 +427,7 @@
         value: security.vault.enabled
           ? (security.vault.current_key ?? "on")
           : "off",
-        tone: !security.vault.enabled
-          ? "danger"
-          : security.vault.by_key.some((k) => !k.current)
-            ? "warn"
-            : "ok",
+        tone: vaultTone(security.vault, "danger"),
         detail: security.vault.enabled ? undefined : "TACHY_SECRET_KEY unset",
       },
       {
@@ -513,23 +504,23 @@
     );
   });
 
+  const RUN_TONES: Record<string, Col["tone"]> = {
+    passed: "ok",
+    failed: "danger",
+    error: "danger",
+  };
   const loadTests = $derived(
     loads.data.runs
-      .map((t) => ({ t, p95: runP95(t) }))
+      .map((run) => ({ run, p95: runP95(run) }))
       .filter((x) => x.p95 !== null)
       .slice(0, 12)
       .reverse()
-      .map(({ t, p95 }): Col => ({
-        key: t.id,
-        label: dayOfMonth(t.created_at),
-        title: `${t.script}${t.profile ? ` (${t.profile})` : ""} · ${t.target} · ${t.status} · ${utcTip(t.created_at)}`,
+      .map(({ run, p95 }): Col => ({
+        key: run.id,
+        label: dayOfMonth(run.created_at),
+        title: `${run.script}${run.profile ? ` (${run.profile})` : ""} · ${run.target} · ${run.status} · ${utcTip(run.created_at)}`,
         value: p95 ?? 0,
-        tone:
-          t.status === "passed"
-            ? "ok"
-            : t.status === "failed" || t.status === "error"
-              ? "danger"
-              : "muted",
+        tone: RUN_TONES[run.status] ?? "muted",
       })),
   );
 

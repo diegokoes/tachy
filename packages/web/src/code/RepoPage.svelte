@@ -322,8 +322,11 @@
     return days === 0 ? "today" : `${days}d ago`;
   };
   const fmt = (n: number) => n.toLocaleString();
-  const tone = (status: string) =>
-    status === "ready" ? "ok" : status === "error" ? "danger" : "muted";
+  const STATUS_TONES: Record<string, "ok" | "danger"> = {
+    ready: "ok",
+    error: "danger",
+  };
+  const tone = (status: string) => STATUS_TONES[status] ?? "muted";
 
   const projectOptions = $derived([
     { value: "", label: `(none, scope by ${t("product")})` },

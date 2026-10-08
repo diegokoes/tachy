@@ -1,4 +1,5 @@
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const CRON_FIELDS = 5;
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const whole = (f: string) => /^\d+$/.test(f);
@@ -17,7 +18,7 @@ function weekdays(field: string): string | null {
  */
 export function describeSchedule(cron: string): string {
   const fields = cron.trim().split(/\s+/);
-  if (fields.length !== 5) return cron;
+  if (fields.length !== CRON_FIELDS) return cron;
   const [min, hour, dom, mon, dow] = fields;
   if (dom !== "*" || mon !== "*") return cron;
 
