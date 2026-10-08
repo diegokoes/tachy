@@ -19,7 +19,7 @@ import { scheduleDueRuns } from "./scheduler";
 import {
   beatWorker,
   markWorkerDraining,
-  pruneWorkers,
+  sweepWorkers,
   retireWorker,
   type WorkerCard,
 } from "./roster";
@@ -55,7 +55,10 @@ export interface JobWorker {
 }
 
 const TAIL_LINES = 200;
-/** How stale a run's progress may get in the admin view before a heartbeat is brought forward. */
+/**
+ * How stale a run's progress may get in the admin view before a heartbeat is
+ * brought forward.
+ */
 const PROGRESS_FLUSH_MS = 2_000;
 
 export async function startJobWorker(
@@ -109,13 +112,13 @@ export async function startJobWorker(
     const heartbeat = async () => {
       beatAt = Date.now();
       try {
-        const r = await heartbeatRun(run.id, workerId, leaseMs, {
+        const beat = await heartbeatRun(run.id, workerId, leaseMs, {
           progress,
           note,
           logTail: tail.join("\n"),
         });
-        if (r.cancelRequested) stop("cancelled");
-        if (r.lost) stop("cancelled");
+        if (beat.cancelRequested) stop("cancelled");
+        if (beat.lost) stop("cancelled");
       } catch (err) {
         log("warn", "job_heartbeat_failed", {
           run: run.id,
@@ -253,7 +256,7 @@ export async function startJobWorker(
     reapExpiredRuns()
       .then((n) => n && log("warn", "job_runs_reaped", { count: n }))
       .catch((err) => log("error", "job_reap_failed", { error: String(err) }));
-    pruneWorkers().catch((err) =>
+    sweepWorkers().catch((err) =>
       log("error", "job_workers_prune_failed", { error: String(err) }),
     );
   }, opts.scheduleMs ?? 30_000);

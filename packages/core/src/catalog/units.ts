@@ -7,8 +7,8 @@ import { badInput, notFound } from "../infra/errors";
 export type { CustomerUnitRow, ResolvedFact };
 
 /**
- * Deliberately not `getCustomerIdBySlug` from ./customers: that module imports
- * resolveUnit from here, and one-way is worth a two-line query.
+ * Not `getCustomerIdBySlug` from ./customers: that module imports `resolveUnit`
+ * from here, and a two-line query keeps the import one-way.
  */
 async function customerIdOf(slug: string): Promise<string> {
   const [row] = await sql<{ id: string }[]>`
@@ -39,9 +39,8 @@ export interface CustomerUnitPatch {
 }
 
 /**
- * Deliberately looser than the contract's SLUG_RE, and case-insensitive: unit
- * slugs are transcribed off equipment labels - TLC191, acme.eu - rather than
- * typed as identifiers.
+ * Looser than the contract's SLUG_RE, and case-insensitive: unit slugs are
+ * transcribed off equipment labels (TLC191, acme.eu), not typed as identifiers.
  */
 const UNIT_SLUG_RE = /^[a-z0-9][a-z0-9._-]*$/i;
 
@@ -105,17 +104,17 @@ async function assertNoCycle(
     throw badInput(`'${label}' already sits under this unit; that would cycle`);
 }
 
-export async function addCustomerUnit(i: CustomerUnitInput) {
-  if (!UNIT_SLUG_RE.test(i.slug))
+export async function addCustomerUnit(input: CustomerUnitInput) {
+  if (!UNIT_SLUG_RE.test(input.slug))
     throw badInput(
-      `Invalid unit slug '${i.slug}': letters, digits, dot, dash and underscore only.`,
+      `Invalid unit slug '${input.slug}': letters, digits, dot, dash and underscore only.`,
     );
-  const customerId = await customerIdOf(i.customerSlug);
-  const parentId = i.parentSlug
-    ? (await resolveUnit(customerId, i.parentSlug)).id
+  const customerId = await customerIdOf(input.customerSlug);
+  const parentId = input.parentSlug
+    ? (await resolveUnit(customerId, input.parentSlug)).id
     : null;
-  const profileId = i.profileSlug
-    ? (await resolveUnit(customerId, i.profileSlug)).id
+  const profileId = input.profileSlug
+    ? (await resolveUnit(customerId, input.profileSlug)).id
     : null;
 
   // The insert cannot ring; the `do update` half re-parents an existing row,
@@ -123,17 +122,22 @@ export async function addCustomerUnit(i: CustomerUnitInput) {
   if (parentId || profileId) {
     const [existing] = await sql`
       select id from customer_units
-      where customer_id = ${customerId} and slug = ${i.slug}
+      where customer_id = ${customerId} and slug = ${input.slug}
     `;
     if (existing) {
       if (parentId)
-        await assertNoCycle(existing.id, parentId, "parent_id", i.parentSlug!);
+        await assertNoCycle(
+          existing.id,
+          parentId,
+          "parent_id",
+          input.parentSlug!,
+        );
       if (profileId)
         await assertNoCycle(
           existing.id,
           profileId,
           "profile_id",
-          i.profileSlug!,
+          input.profileSlug!,
         );
     }
   }
@@ -142,8 +146,8 @@ export async function addCustomerUnit(i: CustomerUnitInput) {
     insert into customer_units
       (customer_id, parent_id, profile_id, kind, slug, name, aliases, notes)
     values
-      (${customerId}, ${parentId}, ${profileId}, ${i.kind}, ${i.slug}, ${i.name},
-       ${i.aliases ?? []}, ${i.notes ?? null})
+      (${customerId}, ${parentId}, ${profileId}, ${input.kind}, ${input.slug}, ${input.name},
+       ${input.aliases ?? []}, ${input.notes ?? null})
     on conflict (customer_id, slug) do update set
       parent_id  = excluded.parent_id,
       profile_id = excluded.profile_id,
@@ -223,23 +227,11 @@ export async function deleteCustomerUnit(customerId: string, slug: string) {
 }
 
 /**
- * Every fact that applies to one unit, most-specific first, each carrying where
- * it came from. The precedence ladder:
- *
- *     the unit's own facts
- *       -> the unit's profile's
- *         -> its parent's
- *           -> its parent's profile's
- *             -> ... up to the root
- *               -> the customer's
- *
- * The origin is the point: it lets an answer say "true of every line on layout
- * 3" instead of "true of TLC191", which is the difference between a fact a
- * reader can generalise and one they cannot.
- *
- * Rank is `depth * 2` for a unit in the containment chain and `depth * 2 + 1`
- * for that unit's profile, so a profile always loses to the unit that names it
- * and beats anything further up.
+ * Every fact that applies to one unit, most specific first, each carrying where
+ * it came from: the unit's own, its profile's, then the same pair for each
+ * parent up to the root, then the customer's. Rank is `depth * 2` for a unit in
+ * the containment chain and `depth * 2 + 1` for its profile, so a profile loses
+ * to the unit that names it and beats anything further up.
  */
 export async function resolveUnitFacts(
   unitId: string,

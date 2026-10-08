@@ -8,11 +8,11 @@ export function changeTagList(
   change: { add: string[]; remove: string[] },
 ): string[] {
   const drop = new Set(change.remove.map((t) => t.toLowerCase()));
-  const out = current.filter((t) => !drop.has(t.toLowerCase()));
-  for (const t of change.add) {
-    const tag = t.trim();
-    if (tag && !out.some((x) => x.toLowerCase() === tag.toLowerCase()))
-      out.push(tag);
+  const tags = current.filter((t) => !drop.has(t.toLowerCase()));
+  for (const added of change.add) {
+    const tag = added.trim();
+    if (tag && !tags.some((x) => x.toLowerCase() === tag.toLowerCase()))
+      tags.push(tag);
   }
-  return out;
+  return tags;
 }

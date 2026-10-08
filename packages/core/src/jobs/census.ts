@@ -23,6 +23,9 @@ const zeroes = <K extends string>(keys: readonly K[]) =>
   Object.fromEntries(keys.map((k) => [k, 0])) as Record<K, number>;
 
 const FAILED: JobStatus[] = ["failed", "timed_out"];
+const DAY_MS = 86_400_000;
+/** The most firings listed for one definition in the day ahead. */
+const UPCOMING_PER_DEFINITION = 96;
 
 /** What the job workers have been doing over the last `days` days. */
 export async function jobCensus(
@@ -42,16 +45,16 @@ export async function jobCensus(
     JOB_RESOURCE_CLASSES.map((c) => [c, { finished: 0, succeeded: 0 }]),
   ) as JobCensus["success"];
   let runs = 0;
-  for (const r of grouped) {
-    const n = r.n as number;
+  for (const group of grouped) {
+    const n = group.n as number;
     runs += n;
-    by_status[r.status as JobStatus] += n;
-    by_trigger[r.trigger as JobTrigger] += n;
-    by_class[r.resource_class as JobResourceClass] += n;
-    const pool = success[r.resource_class as JobResourceClass];
-    if (r.status === "succeeded" || FAILED.includes(r.status)) {
+    by_status[group.status as JobStatus] += n;
+    by_trigger[group.trigger as JobTrigger] += n;
+    by_class[group.resource_class as JobResourceClass] += n;
+    const pool = success[group.resource_class as JobResourceClass];
+    if (group.status === "succeeded" || FAILED.includes(group.status)) {
       pool.finished += n;
-      if (r.status === "succeeded") pool.succeeded += n;
+      if (group.status === "succeeded") pool.succeeded += n;
     }
   }
 
@@ -64,13 +67,13 @@ export async function jobCensus(
     order by d.day
   `;
   const days_ = new Map<string, { day: string } & Record<JobStatus, number>>();
-  for (const r of daily) {
-    const row = days_.get(r.day) ?? {
-      day: r.day as string,
+  for (const tally of daily) {
+    const row = days_.get(tally.day) ?? {
+      day: tally.day as string,
       ...zeroes(JOB_STATUSES),
     };
-    if (r.status) row[r.status as JobStatus] += r.n as number;
-    days_.set(r.day, row);
+    if (tally.status) row[tally.status as JobStatus] += tally.n as number;
+    days_.set(tally.day, row);
   }
 
   const by_kind = await sql`
@@ -108,13 +111,13 @@ export async function jobCensus(
     group by started_at::date, queue
     order by started_at::date, queue
   `;
-  const by_queue = JOB_QUEUES.map((q) => {
-    const w = waits.find((r) => r.queue === q.name);
+  const by_queue = JOB_QUEUES.map((queue) => {
+    const wait = waits.find((r) => r.queue === queue.name);
     return {
-      queue: q.name,
-      started: w?.started ?? 0,
-      avg_wait_seconds: w?.avg_wait ?? null,
-      max_wait_seconds: w?.max_wait ?? null,
+      queue: queue.name,
+      started: wait?.started ?? 0,
+      avg_wait_seconds: wait?.avg_wait ?? null,
+      max_wait_seconds: wait?.max_wait ?? null,
     };
   });
 
@@ -126,10 +129,10 @@ export async function jobCensus(
   const current = Object.fromEntries(
     JOB_RESOURCE_CLASSES.map((c) => [c, { running: 0, queued: 0 }]),
   ) as JobCensus["now"];
-  for (const r of live)
-    current[r.resource_class as JobResourceClass][
-      r.status as "running" | "queued"
-    ] = r.n as number;
+  for (const row of live)
+    current[row.resource_class as JobResourceClass][
+      row.status as "running" | "queued"
+    ] = row.n as number;
 
   const [definitions] = await sql`
     select count(*)::int as total,
@@ -140,16 +143,17 @@ export async function jobCensus(
     from job_definitions
   `;
 
-  /* The effective queue lives half in the row and half in code: a null queue
-     means "whatever the kind defaults to", and that default is in the
-     registry, not the database. A definition for a kind this process does not
-     know counts under maintenance, which is what defineJob defaults to. */
+  // The effective queue is half in the row and half in code: a null queue means
+  // the kind's default, which the registry holds. A definition for a kind this
+  // process does not know counts under maintenance, defineJob's default.
   const queues = await sql`select kind, queue from job_definitions`;
   const defsByClass = zeroes(JOB_RESOURCE_CLASSES);
-  for (const d of queues) {
+  for (const definition of queues) {
     const queue =
-      d.queue ??
-      (hasJobKind(d.kind) ? getJobKind(d.kind).queue : "maintenance");
+      definition.queue ??
+      (hasJobKind(definition.kind)
+        ? getJobKind(definition.kind).queue
+        : "maintenance");
     defsByClass[jobQueue(queue).class] += 1;
   }
 
@@ -172,21 +176,34 @@ export async function jobCensus(
     where enabled and schedule is not null
     order by name
   `;
-  const horizon = now.getTime() + 86_400_000;
-  const upcoming = scheduled.flatMap((d) => {
+  const horizon = now.getTime() + DAY_MS;
+  const upcoming = scheduled.flatMap((definition) => {
     const at: string[] = [];
     try {
-      const cron = new Cron(d.schedule, { timezone: d.timezone });
+      const cron = new Cron(definition.schedule, {
+        timezone: definition.timezone,
+      });
       for (
-        let t = cron.nextRun(now);
-        t && t.getTime() <= horizon && at.length < 96;
-        t = cron.nextRun(t)
+        let slot = cron.nextRun(now);
+        slot &&
+        slot.getTime() <= horizon &&
+        at.length < UPCOMING_PER_DEFINITION;
+        slot = cron.nextRun(slot)
       )
-        at.push(t.toISOString());
+        at.push(slot.toISOString());
     } catch {
       return [];
     }
-    return at.length ? [{ id: d.id, name: d.name, kind: d.kind, at }] : [];
+    return at.length
+      ? [
+          {
+            id: definition.id,
+            name: definition.name,
+            kind: definition.kind,
+            at,
+          },
+        ]
+      : [];
   });
 
   return {
@@ -241,12 +258,12 @@ export async function overdueSchedules(
     order by name
   `;
   return defs
-    .filter((d) => {
-      if (!hasJobKind(d.kind)) return false;
+    .filter((definition) => {
+      if (!hasJobKind(definition.kind)) return false;
       try {
-        const slot = new Cron(d.schedule, { timezone: d.timezone }).nextRun(
-          new Date(d.anchor),
-        );
+        const slot = new Cron(definition.schedule, {
+          timezone: definition.timezone,
+        }).nextRun(new Date(definition.anchor));
         return !!slot && now.getTime() - slot.getTime() > OVERDUE_MS;
       } catch {
         return false;

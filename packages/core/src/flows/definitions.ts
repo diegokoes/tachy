@@ -126,8 +126,8 @@ export async function updateFlow(
 }
 
 export async function deleteFlow(id: string, by: string | null) {
-  for (const d of await scheduleDefinitions(id))
-    await deleteJobDefinition(d.id, by);
+  for (const definition of await scheduleDefinitions(id))
+    await deleteJobDefinition(definition.id, by);
   await sql`delete from flows where id = ${id}`;
 }
 
@@ -151,21 +151,24 @@ async function syncSchedules(flowId: string, by: string | null) {
       .map((t) => [t.id, t]),
   );
   const timezone = await orgTimezone();
-  for (const d of await scheduleDefinitions(flowId)) {
-    const t = wanted.get(d.trigger_id);
-    if (!t) {
-      await deleteJobDefinition(d.id, by);
+  for (const definition of await scheduleDefinitions(flowId)) {
+    const trigger = wanted.get(definition.trigger_id);
+    if (!trigger) {
+      await deleteJobDefinition(definition.id, by);
       continue;
     }
-    wanted.delete(d.trigger_id);
+    wanted.delete(definition.trigger_id);
     await updateJobDefinition(
-      d.id,
-      definitionOf(flow, t.id, t.params, timezone),
+      definition.id,
+      definitionOf(flow, trigger.id, trigger.params, timezone),
       by,
     );
   }
-  for (const t of wanted.values())
-    await createJobDefinition(definitionOf(flow, t.id, t.params, timezone), by);
+  for (const trigger of wanted.values())
+    await createJobDefinition(
+      definitionOf(flow, trigger.id, trigger.params, timezone),
+      by,
+    );
 }
 
 function definitionOf(

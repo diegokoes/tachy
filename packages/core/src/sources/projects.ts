@@ -75,12 +75,12 @@ const projectJoins = () => sql`
   left join customers cu on cu.id = sp.customer_id
 `;
 
-const hasProductFilter = (hasProduct: boolean | undefined) =>
-  hasProduct === undefined
-    ? sql``
-    : hasProduct
-      ? sql`and sp.product_id is not null`
-      : sql`and sp.product_id is null`;
+function hasProductFilter(hasProduct: boolean | undefined) {
+  if (hasProduct === undefined) return sql``;
+  return hasProduct
+    ? sql`and sp.product_id is not null`
+    : sql`and sp.product_id is null`;
+}
 
 export async function listSourceProjects(
   opts: {
@@ -162,31 +162,31 @@ async function resolveScope(
 /**
  * Drops anything without an identifier, de-duplicates, and settles the default:
  * whichever entry is flagged, else the first. Exactly one survives flagged, so
- * no caller has to cope with two - or with none, which would silently turn every
- * wiki tool into "name the wiki yourself".
+ * no caller has to handle two, or none.
  */
 export function normalizeWikis(input: unknown): ProjectWiki[] {
   const list = Array.isArray(input) ? input : [];
   const seen = new Set<string>();
-  const out: ProjectWiki[] = [];
+  const wikis: ProjectWiki[] = [];
   for (const raw of list) {
-    const w = raw as ProjectWiki;
-    const identifier = typeof w?.identifier === "string" ? w.identifier : "";
+    const wiki = raw as ProjectWiki;
+    const identifier =
+      typeof wiki?.identifier === "string" ? wiki.identifier : "";
     if (!identifier || seen.has(identifier)) continue;
     seen.add(identifier);
-    out.push({
+    wikis.push({
       identifier,
-      ...(w.name ? { name: w.name } : {}),
-      ...(w.type ? { type: w.type } : {}),
-      ...(w.root_path ? { root_path: w.root_path } : {}),
-      ...(w.default ? { default: true } : {}),
+      ...(wiki.name ? { name: wiki.name } : {}),
+      ...(wiki.type ? { type: wiki.type } : {}),
+      ...(wiki.root_path ? { root_path: wiki.root_path } : {}),
+      ...(wiki.default ? { default: true } : {}),
     });
   }
-  if (!out.length) return out;
-  const chosen = out.findIndex((w) => w.default);
-  return out.map((w, i) => {
-    const { default: _drop, ...rest } = w;
-    return i === (chosen === -1 ? 0 : chosen)
+  if (!wikis.length) return wikis;
+  const chosen = wikis.findIndex((w) => w.default);
+  return wikis.map((wiki, index) => {
+    const { default: _drop, ...rest } = wiki;
+    return index === (chosen === -1 ? 0 : chosen)
       ? { ...rest, default: true }
       : rest;
   });
@@ -220,29 +220,29 @@ function assertWikiAllowed(
 }
 
 export async function addSourceProject(
-  i: SourceProjectInput,
+  input: SourceProjectInput,
 ): Promise<SourceProjectRow> {
   const [conn] =
-    await sql`select id from source_connections where slug = ${i.sourceSlug}`;
+    await sql`select id from source_connections where slug = ${input.sourceSlug}`;
   if (!conn)
     throw badInput(
-      `Unknown source connection '${i.sourceSlug}'. Call list_source_connections first.`,
+      `Unknown source connection '${input.sourceSlug}'. Call list_source_connections first.`,
     );
-  if (!i.externalKey.trim()) throw badInput("external_key is required");
-  const scope = await resolveScope(i.productSlug, i.teamSlug);
-  const wikis = normalizeWikis(i.wikis);
+  if (!input.externalKey.trim()) throw badInput("external_key is required");
+  const scope = await resolveScope(input.productSlug, input.teamSlug);
+  const wikis = normalizeWikis(input.wikis);
   assertWikiAllowed(scope.productId, wikis);
-  const customerId = i.customerSlug
-    ? await getCustomerIdBySlug(i.customerSlug)
+  const customerId = input.customerSlug
+    ? await getCustomerIdBySlug(input.customerSlug)
     : null;
 
   const [row] = await sql`
     insert into source_projects
       (source_connection_id, external_key, name, product_id, team_id, customer_id, wikis, config, notes)
     values
-      (${conn.id}, ${i.externalKey}, ${i.name || i.externalKey}, ${scope.productId},
+      (${conn.id}, ${input.externalKey}, ${input.name || input.externalKey}, ${scope.productId},
        ${scope.teamId}, ${customerId}, ${jsonb(wikis)},
-       ${jsonb(i.config ?? {})}, ${i.notes ?? null})
+       ${jsonb(input.config ?? {})}, ${input.notes ?? null})
     on conflict (source_connection_id, external_key) do update set
       name       = excluded.name,
       product_id = excluded.product_id,
@@ -271,12 +271,11 @@ export async function updateSourceProject(
     patch.wikis !== undefined ? patch.wikis : current.wikis,
   );
   assertWikiAllowed(scope.productId, wikis);
-  const customerId =
-    patch.customerSlug === undefined
-      ? current.customer_id
-      : patch.customerSlug
-        ? await getCustomerIdBySlug(patch.customerSlug)
-        : null;
+  let customerId = current.customer_id;
+  if (patch.customerSlug !== undefined)
+    customerId = patch.customerSlug
+      ? await getCustomerIdBySlug(patch.customerSlug)
+      : null;
 
   if (!scope.productId && current.product_id) {
     const [refs] = await sql`
@@ -353,20 +352,20 @@ export async function listProjectAreaMap(sourceProjectId: string) {
   `;
 }
 
-export async function setProjectAreaMap(i: AreaMapInput) {
-  const project = await getSourceProject(i.sourceProjectId);
+export async function setProjectAreaMap(input: AreaMapInput) {
+  const project = await getSourceProject(input.sourceProjectId);
   if (!project.product_id)
     throw badInput(
       `project '${project.external_key}' has no product, so no components to map areas onto`,
     );
-  if (!i.areaPrefix.trim()) throw badInput("area_prefix is required");
+  if (!input.areaPrefix.trim()) throw badInput("area_prefix is required");
   const component = await resolveComponentStrict(
     project.product_id,
-    i.componentSlug,
+    input.componentSlug,
   );
   const [row] = await sql`
     insert into project_area_map (source_project_id, area_prefix, component_id)
-    values (${i.sourceProjectId}, ${i.areaPrefix}, ${component.id})
+    values (${input.sourceProjectId}, ${input.areaPrefix}, ${component.id})
     on conflict (source_project_id, area_prefix) do update set component_id = excluded.component_id
     returning id, area_prefix
   `;
@@ -460,20 +459,20 @@ export interface ProjectContextQuery {
  * ADO project, its wiki, and its repos with the component each one implements.
  */
 export async function resolveProjectContext(
-  q: ProjectContextQuery,
+  query: ProjectContextQuery,
 ): Promise<ProjectContext[]> {
-  let productId = q.productId;
-  if (!productId && q.productSlug)
-    productId = await getProductIdBySlug(q.productSlug);
+  let productId = query.productId;
+  if (!productId && query.productSlug)
+    productId = await getProductIdBySlug(query.productSlug);
 
-  let projectId = q.projectId;
+  let projectId = query.projectId;
   let observedVersion: string | null = null;
-  if (q.workItemId) {
+  if (query.workItemId) {
     const [item] = await sql`
       select source_project_id, product_id, observed_version
-      from work_items where id = ${q.workItemId}
+      from work_items where id = ${query.workItemId}
     `;
-    if (!item) throw notFound(`Work item '${q.workItemId}' not found`);
+    if (!item) throw notFound(`Work item '${query.workItemId}' not found`);
     observedVersion = item.observed_version ?? null;
     if (!projectId) {
       if (item.source_project_id) projectId = item.source_project_id as string;
@@ -487,9 +486,9 @@ export async function resolveProjectContext(
     where 1=1
       ${projectId ? sql`and sp.id = ${projectId}` : sql``}
       ${productId ? sql`and sp.product_id = ${productId}` : sql``}
-      ${q.sourceSlug ? sql`and sc.slug = ${q.sourceSlug}` : sql``}
-      ${q.externalKey ? sql`and sp.external_key = ${q.externalKey}` : sql``}
-      ${hasProductFilter(q.hasProduct)}
+      ${query.sourceSlug ? sql`and sc.slug = ${query.sourceSlug}` : sql``}
+      ${query.externalKey ? sql`and sp.external_key = ${query.externalKey}` : sql``}
+      ${hasProductFilter(query.hasProduct)}
     order by sp.product_id is null, sp.name
   `) as SourceProjectRow[];
   if (!rows.length) return [];
@@ -597,9 +596,9 @@ function forVersion(
 
 /** For callers that must act on exactly one project (the ADO wiki/create tools). */
 export async function resolveProjectContextStrict(
-  q: ProjectContextQuery,
+  query: ProjectContextQuery,
 ): Promise<ProjectContext> {
-  const found = await resolveProjectContext(q);
+  const found = await resolveProjectContext(query);
   if (!found.length)
     throw badInput(
       "No registered project matches. Call list_source_projects, or register it in Admin > integrations > projects.",

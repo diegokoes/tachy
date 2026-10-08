@@ -25,13 +25,16 @@ export interface ListOptions {
 export interface SourceProbe {
   /** Who the token authenticates as, when the API reports it. */
   identity?: string;
-  /** The groups this token can see - the `external_group_key` values a product map needs. */
+  /**
+   * The groups this token can see - the `external_group_key` values a product
+   * map needs.
+   */
   groups: { key: string; name: string }[];
   /**
    * Why `groups` is empty, when listing them failed. Group discovery is a
-   * convenience - a token that cannot list groups (a non-admin Freshdesk agent
-   * key, a narrow GitHub scope) still works for the fetches tachy actually
-   * does, so this never fails the probe.
+   * convenience: a token that cannot list groups (a non-admin Freshdesk agent
+   * key, a narrow GitHub scope) still works for the fetches tachy does, so this
+   * never fails the probe.
    */
   groupsNote?: string;
 }
@@ -77,7 +80,10 @@ export interface WorkItemSource {
    * Null when the item names no customer the source keeps a record of.
    */
   customerRecord?(raw: unknown): Promise<Record<string, unknown> | null>;
-  /** Adds and removes tags on an item, keeping the rest; returns the tags it ends with. */
+  /**
+   * Adds and removes tags on an item, keeping the rest; returns the tags it
+   * ends with.
+   */
   setTags?(
     externalId: string,
     change: { add: string[]; remove: string[] },
@@ -148,7 +154,7 @@ export interface WorkItemComposer {
   ): Promise<{ id: number | string; url: string }>;
 }
 
-export type SourceFactory = (cfg: {
+export type SourceFactory = (connection: {
   baseUrl: string;
   slug: string;
   config: Record<string, unknown>;
