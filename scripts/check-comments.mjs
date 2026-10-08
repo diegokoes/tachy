@@ -15,14 +15,9 @@ const ROOT = new URL("..", import.meta.url).pathname;
 
 /** Repo-relative path prefixes already brought under the convention. */
 export const SWEPT = [
-  "packages/agent",
-  "packages/api",
-  "packages/contract",
-  "packages/core",
-  "packages/mcp",
-  "packages/sources",
-  "packages/web",
-  "packages/worker",
+  "load",
+  "packages",
+  "scripts",
   "test/search/embeddings.test.ts",
   "test/search/quality.test.ts",
 ];
@@ -41,7 +36,8 @@ const DIRECTIVE_RE =
 const COMPONENT_DOC_RE = /^\s*@component\b\s*/;
 const BANNER_RE = /([-=─━═~#*_])\1{3,}/;
 const EM_DASH = "—";
-const MARKER_RE = /(?:^|\s)(?:TODO|FIXME|HACK|XXX)\b(?:\([^)]*\))?(?::|\s|$)/;
+const TODO_MARKER_RE =
+  /(?:^|\s)(?:TODO|FIXME|HACK|XXX)\b(?:\([^)]*\))?(?::|\s|$)/;
 const ISSUE_RE = /#\d+/;
 /** A keyword-led line ending like a statement, a bare call, an assignment, or a lone brace. */
 const CODE_LINE_RE =
@@ -86,6 +82,7 @@ function capFor(comment, isComponentDoc) {
     : BODY_CAP;
 }
 
+const blockSyntax = (raw) => (raw.startsWith("/**") ? "jsdoc" : "block");
 const blockLines = (raw) =>
   raw
     .replace(/^\/\*+|\*+\/$/g, "")
@@ -149,7 +146,7 @@ function scriptComments(text, { firstLine = 1, canHoldHeader = true } = {}) {
 
     comments.push({
       line,
-      syntax: isLine ? "line" : raw.startsWith("/**") ? "jsdoc" : "block",
+      syntax: isLine ? "line" : blockSyntax(raw),
       place: "script",
       lines: isLine ? [raw.replace(/^\/\/\s?/, "")] : blockLines(raw),
       sharesLine,
@@ -262,7 +259,7 @@ export function violations(path, text) {
     if (written.some((line) => line.includes(EM_DASH)))
       report("em-dash", "no em dashes");
     if (
-      written.some((line) => MARKER_RE.test(line)) &&
+      written.some((line) => TODO_MARKER_RE.test(line)) &&
       !written.some((line) => ISSUE_RE.test(line))
     )
       report("todo", "name the issue, as #123");

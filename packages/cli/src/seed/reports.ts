@@ -5,6 +5,8 @@ import type { Volumes } from "./scale";
 
 const STATUSES = ["open", "in_progress", "resolved", "closed"] as const;
 type Status = (typeof STATUSES)[number];
+/** The first reports by index; the rest draw theirs. */
+const FORCED_STATUSES: Status[] = ["resolved", "open"];
 
 interface Draft {
   title: string;
@@ -191,6 +193,19 @@ const FOLLOW_UPS = [
   "A colleague on the same team is seeing it too.",
 ];
 
+/** The review a report carries: unavailable, held with suggestions, or clean. */
+function aiReview(rng: () => number, held: boolean) {
+  if (chance(rng, 0.1)) return { available: false, ok: true, suggestions: [] };
+  if (!held) return { available: true, ok: true, suggestions: [] };
+  return {
+    available: true,
+    ok: false,
+    suggestions: [pick(rng, SUGGESTIONS), pick(rng, SUGGESTIONS)].filter(
+      (s, k, all) => all.indexOf(s) === k,
+    ),
+  };
+}
+
 /**
  * Bugs and feature requests at every stage (waiting, in progress, fixed, turned
  * down) with the threads and notifications each stage leaves, each carrying the
@@ -218,8 +233,7 @@ export async function seedReports(
         : pick(rng, members.length ? members : users);
     const type = chance(rng, 0.55) ? "bug" : "feature";
     const draft = pick(rng, type === "bug" ? BUGS : FEATURES);
-    const status: Status =
-      i === 0 ? "resolved" : i === 1 ? "open" : pick(rng, STATUSES);
+    const status: Status = FORCED_STATUSES[i] ?? pick(rng, STATUSES);
     const id = uuidFor("report", i);
     // A thread runs up to about five days, so anything past 'open' was filed
     // early enough for its replies to have happened already.
@@ -242,20 +256,7 @@ export async function seedReports(
         viewport: pick(rng, VIEWPORTS),
         env: null,
       }),
-      ai_review: tx.json(
-        chance(rng, 0.1)
-          ? { available: false, ok: true, suggestions: [] }
-          : held
-            ? {
-                available: true,
-                ok: false,
-                suggestions: [
-                  pick(rng, SUGGESTIONS),
-                  pick(rng, SUGGESTIONS),
-                ].filter((s, k, all) => all.indexOf(s) === k),
-              }
-            : { available: true, ok: true, suggestions: [] },
-      ),
+      ai_review: tx.json(aiReview(rng, held)),
       created_at: created,
       updated_at: created,
     });

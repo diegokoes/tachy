@@ -7,6 +7,8 @@ import { ARTIFACT_BODIES, PRODUCTS, slugify } from "./corpus";
 import type { Volumes } from "./scale";
 
 export const DEV_PASSWORD = "tachy-dev-password";
+/** The first users by index; the rest are numbered. */
+const DEV_NAMES = ["Dev Admin", "Dev Member"];
 export const ADMIN_EMAIL = "admin@tachy.local";
 /** The k6 login: a plain member, so load tests measure the real authz path. */
 export const MEMBER_EMAIL = "dev-member@tachy.local";
@@ -111,8 +113,7 @@ export async function seedOrg(tx: Tx, volumes: Volumes): Promise<Org> {
     users.map((u, i) => ({
       id: u.id,
       email: u.email,
-      display_name:
-        i === 0 ? "Dev Admin" : i === 1 ? "Dev Member" : `Seed User ${i}`,
+      display_name: DEV_NAMES[i] ?? `Seed User ${i}`,
       role: u.role,
       password_hash: passwordHash,
       disabled: i > 2 && i % 17 === 0,

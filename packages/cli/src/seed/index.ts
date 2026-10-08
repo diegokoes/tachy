@@ -260,6 +260,9 @@ class Phases {
   }
 }
 
+/** An embedding estimate over this is announced before the seed starts. */
+const ANNOUNCE_ABOVE_SECONDS = 60;
+
 export async function seed(opts: SeedOptions): Promise<void> {
   const volumes = SCALES[opts.scale];
   await assertDevDatabase(opts);
@@ -272,7 +275,7 @@ export async function seed(opts: SeedOptions): Promise<void> {
     reference_doc_chunk: volumes.referenceChunks,
     code_chunk: volumes.codeChunks,
   });
-  if (estimate > 60)
+  if (estimate > ANNOUNCE_ABOVE_SECONDS)
     console.log(
       `embedding ${mode === "all" ? "every corpus" : "the search corpora"} with the real model: ` +
         `about ${Math.round(estimate / 60)} min of CPU before the seed commits.` +

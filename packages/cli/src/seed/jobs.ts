@@ -126,12 +126,10 @@ const PROFILES: Record<string, KindProfile> = {
     timeoutMs: 8 * HOUR,
     maxAttempts: 1,
     seconds: [180, 1500],
-    outcome: (rng) =>
-      chance(rng, 0.9)
-        ? "succeeded"
-        : chance(rng, 0.5)
-          ? "timed_out"
-          : "failed",
+    outcome: (rng) => {
+      if (chance(rng, 0.9)) return "succeeded";
+      return chance(rng, 0.5) ? "timed_out" : "failed";
+    },
     output: (rng, params) => {
       const files = intBetween(rng, 150, 400);
       return {
@@ -194,6 +192,31 @@ interface Definition {
  * default definitions are created here under the same names, so it does not add
  * a second copy at start.
  */
+function runSeconds(
+  profile: KindProfile,
+  outcome: Outcome,
+  rng: () => number,
+): number {
+  if (outcome === "timed_out") return profile.timeoutMs / 1000;
+  if (outcome === "cancelled") return intBetween(rng, 30, profile.seconds[0]);
+  return intBetween(rng, profile.seconds[0], profile.seconds[1]);
+}
+
+function runError(
+  profile: KindProfile,
+  outcome: Outcome,
+  rng: () => number,
+): string | null {
+  if (outcome === "failed")
+    return pick(
+      rng,
+      profile.errors.length ? profile.errors : ["unexpected error"],
+    );
+  if (outcome === "timed_out")
+    return `timed out after ${profile.timeoutMs / 60_000} min`;
+  return outcome === "cancelled" ? "cancelled by an admin" : null;
+}
+
 export async function seedJobs(
   tx: Tx,
   volumes: Volumes,
@@ -279,25 +302,10 @@ export async function seedJobs(
     const attempts =
       outcome === "failed" && profile.maxAttempts > 1 ? profile.maxAttempts : 1;
     const started = new Date(at.getTime() + intBetween(rng, 1, 20) * 1000);
-    const seconds =
-      outcome === "timed_out"
-        ? profile.timeoutMs / 1000
-        : outcome === "cancelled"
-          ? intBetween(rng, 30, profile.seconds[0])
-          : intBetween(rng, profile.seconds[0], profile.seconds[1]);
+    const seconds = runSeconds(profile, outcome, rng);
     const finished = new Date(started.getTime() + seconds * 1000);
     if (finished > now) return null;
-    const error =
-      outcome === "failed"
-        ? pick(
-            rng,
-            profile.errors.length ? profile.errors : ["unexpected error"],
-          )
-        : outcome === "timed_out"
-          ? `timed out after ${profile.timeoutMs / 60_000} min`
-          : outcome === "cancelled"
-            ? "cancelled by an admin"
-            : null;
+    const error = runError(profile, outcome, rng);
     runs.push({
       id: uuidFor("job-run", runIndex++),
       definition_id: definition.id,
