@@ -1,9 +1,8 @@
 FROM node:26.10.0-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 AS base
 
-# postgresql-client-16: needed by `npm run sync backup`/`restore`
-# (pg_dump/pg_restore). Debian bookworm's own repo only has client v15, and
-# pg_dump refuses to talk to a newer server, so pull the matching v16 client
-# from the PGDG apt repo instead.
+# postgresql-client-16: `npm run sync backup`/`restore` run pg_dump/pg_restore.
+# From the PGDG apt repo, so the client's major matches the server's
+# (docker-compose.yml); the base image's own repo carries another.
 # git: spawned by the code-consultation indexer (clone/fetch/ls-tree/show).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates postgresql-common git \
@@ -95,15 +94,14 @@ ENV TACHY_MODEL_CACHE=/app/.model-cache
 ENV TACHY_MCP_ARGS=dist/mcp.js
 
 # Linked-repo clones for code search live here - mount a volume to keep them
-# across redeploys (otherwise the first reindex re-clones, which is fine too).
+# across redeploys; without one the first reindex re-clones.
 ENV TACHY_REPO_DIR=/app/data/repos
 ENV TACHY_AGENT_HOME=/home/node/.claude
 
 # The base image already carries an unprivileged `node` (uid 1000). Everything the
 # server writes at runtime is created and handed over here, because Docker only
 # chowns a named volume it creates itself - an existing one keeps the ownership
-# it was populated with. See README > Operations for the one-time chown an
-# already-running deployment needs.
+# it was populated with.
 RUN mkdir -p /app/data/repos /app/backups /home/node/.claude \
  && chown -R node:node /app/data /app/backups /home/node/.claude
 
