@@ -1,4 +1,5 @@
-import { Hono, type Context } from "hono";
+import { Hono, type Context, type Next } from "hono";
+import { getConnInfo } from "@hono/node-server/conninfo";
 import { requestId } from "hono/request-id";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -86,6 +87,46 @@ export async function withSecretsMasked(response: Response): Promise<Response> {
   });
 }
 
+/**
+ * What the browser may load and do on a page this server sent. Scripts come
+ * from this origin only, so markup that got past the sanitizer still cannot
+ * run one. Styles allow inline because components set `style` attributes.
+ */
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+].join("; ");
+
+const RESPONSE_HEADERS = {
+  "Content-Security-Policy": CONTENT_SECURITY_POLICY,
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+};
+
+/** Set here and not in the proxy, so a deployment without one has them too. */
+async function responseHeaders(c: Context, next: Next): Promise<void> {
+  await next();
+  // A route that sets its own, such as the stricter policy on a wiki asset, wins.
+  for (const [name, value] of Object.entries(RESPONSE_HEADERS))
+    if (!c.res.headers.has(name)) c.res.headers.set(name, value);
+}
+
+function isLoopback(c: Context): boolean {
+  try {
+    const address = getConnInfo(c).remote.address ?? "";
+    return address === "::1" || /^(::ffff:)?127\./.test(address);
+  } catch {
+    return false;
+  }
+}
+
 export function createApp(
   opts: {
     apiToken?: string;
@@ -98,15 +139,21 @@ export function createApp(
   const base = new Hono();
   base.use("*", requestId());
   base.use("*", httpLogger);
+  base.use("*", responseHeaders);
 
   const livez = (c: Context) => c.json({ ok: true });
   base.get("/livez", livez);
   base.get("/health", livez);
   if (opts.internal) base.route("/internal", internalRoutes(opts.internal));
   base.route("/ingest", ingest);
+  // The status code is all a probe needs. Which part is not ready describes
+  // the deployment, so it goes only to a caller on the host itself.
   base.get("/readyz", async (c) => {
     const report = await readiness();
-    return c.json(report, report.ready ? 200 : 503);
+    return c.json(
+      isLoopback(c) ? report : { ready: report.ready },
+      report.ready ? 200 : 503,
+    );
   });
 
   const tokenMode = opts.apiToken ? "token" : "open";

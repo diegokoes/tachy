@@ -139,6 +139,7 @@ export type {
   SourceTraffic,
   Freshness,
 } from "./sources";
+export { isSourceBaseUrl } from "./sources";
 export {
   INGEST_TOKEN_PREFIX,
   BUCKET_BATCH_VERSION,

@@ -115,6 +115,23 @@ describe("creating a connection from the admin UI", () => {
     }
   });
 
+  it("rejects a base URL that is not plain http(s), or that carries a password", async () => {
+    const cookie = await adminCookie();
+    const post = (baseUrl: string) =>
+      app.request("/api/source-connections", {
+        ...json({ sourceType: "fake", slug: "url-conn", baseUrl }),
+        headers: { "Content-Type": "application/json", cookie },
+      });
+    for (const baseUrl of [
+      "file:///etc/passwd",
+      "acme.example.com",
+      "https://user:hunter2@acme.example.com",
+    ])
+      expect((await post(baseUrl)).status, baseUrl).toBe(400);
+    expect((await post("http://ado.office.lan:8080/tfs")).status).toBe(200);
+    expect((await post("")).status).toBe(200);
+  });
+
   it("re-posting the same slug edits in place and keeps the existing token", async () => {
     const cookie = await adminCookie();
     const headers = { "Content-Type": "application/json", cookie };
