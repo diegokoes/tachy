@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { env } from "./env";
+import { maskSecrets, rememberSecret } from "./known-secrets";
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -28,7 +29,7 @@ export const logContext = (): Readonly<Record<string, unknown>> | undefined =>
   context.getStore();
 
 const shipUrl = process.env.TACHY_LOG_URL;
-const shipSecret = process.env.TACHY_INTERNAL_SECRET ?? "";
+const shipSecret = rememberSecret(process.env.TACHY_INTERNAL_SECRET ?? "");
 
 /**
  * An MCP child spawned for a turn cannot rely on stderr: Claude Code does not
@@ -52,17 +53,20 @@ export function log(
   fields: Record<string, unknown> = {},
 ): void {
   if (RANK[level] < RANK[env.logLevel]) return;
-  const line = JSON.stringify({
-    ts: new Date().toISOString(),
-    level,
-    event,
-    ...(env.turnId ? { turn: env.turnId } : {}),
-    ...(process.env.TACHY_REQUEST_ID
-      ? { req: process.env.TACHY_REQUEST_ID }
-      : {}),
-    ...context.getStore(),
-    ...fields,
-  });
+  const line = JSON.stringify(
+    {
+      ts: new Date().toISOString(),
+      level,
+      event,
+      ...(env.turnId ? { turn: env.turnId } : {}),
+      ...(process.env.TACHY_REQUEST_ID
+        ? { req: process.env.TACHY_REQUEST_ID }
+        : {}),
+      ...context.getStore(),
+      ...fields,
+    },
+    (_key, value) => (typeof value === "string" ? maskSecrets(value) : value),
+  );
   process.stderr.write(line + "\n");
   if (shipUrl) ship(line);
 }

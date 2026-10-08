@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { assertGlobalAdmin, type EntryScope } from "@tachy/core/access";
-import { badInput, notFound, sql } from "@tachy/core/infra";
+import { badInput, notFound, sql, errorText } from "@tachy/core/infra";
 import { getProductIdBySlug, getCustomerIdBySlug } from "@tachy/core/catalog";
 import {
   getRepoBySlug,
@@ -17,7 +17,13 @@ import {
   fileIconPath,
   activeReindexes,
   repoToken,
+  readCodeFile,
 } from "@tachy/core/code";
+import {
+  globalRedactionEnabled,
+  scrubDeep,
+  TokenMap,
+} from "@tachy/core/compliance";
 import { enqueueRun, inFlightRun } from "@tachy/core/jobs";
 import { sourceProjectScope, getSourceProject } from "@tachy/core/sources";
 import { RELEASE_TAG_RE } from "@tachy/core";
@@ -43,6 +49,13 @@ const linkSchema = z.object({
 });
 
 const reindexSchema = z.object({ line: z.string().min(1).optional() });
+const fileSchema = z.object({
+  path: z.string().min(1),
+  start: z.coerce.number().int().positive().optional(),
+  end: z.coerce.number().int().positive().optional(),
+  ref: z.string().min(1).optional(),
+  version: z.string().min(1).optional(),
+});
 const previewSchema = z.object({
   config: z.record(z.string(), z.unknown()).optional(),
 });
@@ -62,7 +75,7 @@ async function probe<T>(call: () => Promise<T>) {
   } catch (e) {
     return {
       ok: false as const,
-      error: e instanceof Error ? e.message : String(e),
+      error: errorText(e),
     };
   }
 }
@@ -244,7 +257,7 @@ export const repos = new Hono()
         results.push({
           slug: repo.slug,
           ok: false,
-          error: e instanceof Error ? e.message : String(e),
+          error: errorText(e),
         });
       }
     }
@@ -294,6 +307,23 @@ export const repos = new Hono()
           token: await repoToken(slug, await callerUserId(c)),
         }),
       ),
+    );
+  })
+
+  // The lines a walkthrough step points at, redacted as the agent's own read
+  // of them is, so the panel shows what the answer was written from.
+  .get("/:slug/file", zValidator("query", fileSchema), async (c) => {
+    const slug = c.req.param("slug");
+    const query = c.req.valid("query");
+    const file = await readCodeFile(slug, query.path, {
+      startLine: query.start,
+      endLine: query.end,
+      ref: query.ref,
+      version: query.version,
+      token: await repoToken(slug, await requireCaller(c)),
+    });
+    return c.json(
+      globalRedactionEnabled() ? scrubDeep(file, new TokenMap()) : file,
     );
   })
 

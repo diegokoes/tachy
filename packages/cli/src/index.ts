@@ -12,12 +12,13 @@ import {
   backfillCodeEmbeddings,
   getRepoBySlug,
   indexRepo,
+  withoutUrlCredentials,
 } from "@tachy/core/code";
 import { backfillEmbeddings } from "@tachy/core/knowledge";
 import { backfillReferenceEmbeddings } from "@tachy/core/reference";
 import { embedBucketChunks } from "@tachy/core/buckets";
 import { EMBEDDING_MODEL } from "@tachy/core/search";
-import { env, sql } from "@tachy/core/infra";
+import { env, errorText, sql } from "@tachy/core/infra";
 import { loadSettingsIntoEnv, rotateVaultKey } from "@tachy/core/config";
 import { createFreshdeskSource } from "@tachy/source-freshdesk";
 import { createGithubSource } from "@tachy/source-github";
@@ -72,7 +73,9 @@ async function embedBackfill(all: boolean) {
 async function indexRepoCmd(slug: string, full: boolean) {
   const repo = await getRepoBySlug(slug);
   const token = await repoToken(slug);
-  console.log(`indexing ${slug} (${repo.url})${full ? ", every file" : ""}...`);
+  console.log(
+    `indexing ${slug} (${withoutUrlCredentials(repo.url)})${full ? ", every file" : ""}...`,
+  );
   const indexed = await indexRepo(slug, { token, full });
   for (const line of indexed.lines)
     console.log(
@@ -242,6 +245,6 @@ async function main() {
 main()
   .then(() => process.exit(0))
   .catch((e) => {
-    console.error(e instanceof Error ? e.message : e);
+    console.error(errorText(e));
     process.exit(1);
   });

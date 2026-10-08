@@ -4,6 +4,7 @@ import {
   type FlowTrigger,
 } from "@tachy/contract";
 import { jsonb, sql } from "../infra/db";
+import { errorText } from "../infra/known-secrets";
 import { log } from "../infra/log";
 import { enqueueRun } from "../jobs/runs";
 import { getSubject, recentSubjects } from "./subject";
@@ -72,7 +73,7 @@ export async function itemTriggers(
       log("warn", "flow_trigger_failed", {
         connection,
         item: itemId,
-        error: e instanceof Error ? e.message : String(e),
+        error: errorText(e),
       });
     }
   };

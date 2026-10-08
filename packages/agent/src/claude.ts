@@ -1,3 +1,4 @@
+import { errorText } from "@tachy/core/infra";
 import {
   query,
   type CanUseTool,
@@ -268,7 +269,7 @@ export class ClaudeTurn extends TurnBase {
         }
       }
     } catch (e) {
-      const raw = e instanceof Error ? e.message : String(e);
+      const raw = errorText(e);
       this.queue.push({ type: "error", ...explainFailure(raw) });
     } finally {
       this.finish();

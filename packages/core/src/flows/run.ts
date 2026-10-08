@@ -10,6 +10,7 @@ import {
 import { userSoleTeamId } from "../access/users";
 import type { ScopeContext } from "../config/scoped";
 import { sql, jsonb } from "../infra/db";
+import { errorText } from "../infra/known-secrets";
 import type { FlowAction, FlowActionContext } from "./actions";
 import { flowAction } from "./catalog";
 import { getSubject, type FlowSubject } from "./subject";
@@ -170,7 +171,7 @@ export async function runFlow(opts: RunFlowOptions): Promise<{
         output: clip(output),
       });
     } catch (e) {
-      const error = e instanceof Error ? e.message : String(e);
+      const error = errorText(e);
       await done({ status: "failed", input: clip(parsed.data), error });
       throw new Error(`step '${step.id}': ${error}`);
     }
@@ -190,7 +191,7 @@ export async function runFlow(opts: RunFlowOptions): Promise<{
       await save("stopped");
       return { flowRunId, status: "stopped" };
     }
-    await save("failed", e instanceof Error ? e.message : String(e));
+    await save("failed", errorText(e));
     throw e;
   }
 }

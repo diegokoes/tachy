@@ -10,15 +10,40 @@ import {
 } from "@tachy/core/catalog";
 import {
   listRepos,
+  reposInProject,
+  getRepoBySlug,
   searchCode,
   readCodeFile,
+  listCodeDir,
   codeChangesBetween,
+  codeDiff,
+  codeReleasesContaining,
   repoToken,
 } from "@tachy/core/code";
 import { badInput } from "@tachy/core/infra";
 import { tool } from "../server";
 import { GRADE_NOTE, out, outScrubbed, searchOut } from "../results";
 import { resolveScopeIds } from "../context";
+
+const PROJECT_FIELD =
+  "A source project by key or name, as list_repos `project_key` gives it or as a /code scope names it: every repo linked under it.";
+
+/**
+ * The repos that `repo`, `repos` and `project` name together, or undefined
+ * when none of them is given. An unknown slug is refused rather than searched
+ * as an empty set, which would read as the code having nothing on it.
+ */
+async function scopedRepoSlugs(scope: {
+  repo?: string;
+  repos?: string[];
+  project?: string;
+}): Promise<string[] | undefined> {
+  const named = [...(scope.repo ? [scope.repo] : []), ...(scope.repos ?? [])];
+  for (const slug of named) await getRepoBySlug(slug);
+  const inProject = scope.project ? await reposInProject(scope.project) : [];
+  const slugs = new Set([...named, ...inProject.map((r) => r.slug)]);
+  return slugs.size ? [...slugs] : undefined;
+}
 
 tool(
   "list_repos",
@@ -34,12 +59,14 @@ tool(
         .describe(
           "Customer slug from list_customers. Returns their own addon repos AND the shared ones, because an addon sits on shared product code.",
         ),
+      project: z.string().optional().describe(PROJECT_FIELD),
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ product_slug, component, customer }) => {
+  async ({ product_slug, component, customer, project }) => {
     const { productId } = await resolveScopeIds({ product_slug });
-    const rows = await listRepos({
+    const inProject = await scopedRepoSlugs({ project });
+    const listed = await listRepos({
       productId,
       componentId:
         productId && component
@@ -47,6 +74,9 @@ tool(
           : undefined,
       customerId: customer ? await getCustomerIdBySlug(customer) : undefined,
     });
+    const rows = inProject
+      ? listed.filter((r) => inProject.includes(r.slug))
+      : listed;
     return out(
       rows.map((r) => ({
         slug: r.slug,
@@ -80,6 +110,13 @@ tool(
     inputSchema: {
       query: z.string(),
       repo: z.string().optional().describe("Repo slug from list_repos"),
+      repos: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Several repo slugs searched as one, for a question that crosses repos. Each hit's `repo` says where it came from.",
+        ),
+      project: z.string().optional().describe(PROJECT_FIELD),
       product_slug: z.string().optional(),
       component: z
         .string()
@@ -113,6 +150,8 @@ tool(
   async ({
     query,
     repo,
+    repos,
+    project,
     product_slug,
     component,
     customer,
@@ -124,8 +163,9 @@ tool(
     const { productId } = await resolveScopeIds({ product_slug });
     if (component && !productId)
       throw badInput("component needs product_slug to resolve against");
+    const repoSlugs = await scopedRepoSlugs({ repo, repos, project });
     const hits = await searchCode(query, {
-      repoSlug: repo,
+      repoSlugs,
       productId,
       componentId:
         productId && component
@@ -140,7 +180,11 @@ tool(
     await recordRun({
       userId: await resolveCurrentUserId(),
       mode: "code",
-      meta: { query, repo: repo ?? null, hits: hits.length },
+      meta: {
+        query,
+        repo: repoSlugs?.join(",") ?? null,
+        hits: hits.length,
+      },
     });
     return searchOut(
       hits.map((r: any) => ({
@@ -221,8 +265,176 @@ tool(
     },
     annotations: { readOnlyHint: true },
   },
-  async ({ repo, from_version, to_version, path, limit }) =>
-    out(
-      await codeChangesBetween(repo, from_version, to_version, { path, limit }),
+  async ({ repo, from_version, to_version, path, limit }) => {
+    const changes = await codeChangesBetween(repo, from_version, to_version, {
+      path,
+      limit,
+    });
+    return out(
+      changes.commits.length ? { ...changes, next: CHANGES_NEXT } : changes,
+    );
+  },
+);
+
+const CHANGES_NEXT =
+  "For one of these commits: code_diff with its sha shows what it changed, and code_releases_containing names the first release it shipped in.";
+
+const REVISION_FIELD =
+  "A release (1.51.32), a branch or tag name, or a commit sha.";
+
+tool(
+  "code_diff",
+  {
+    description:
+      "What one commit changed in a linked repo (`commit`), or what differs between two revisions (`from` and `to`): the changed files and the patch. Use it to read what a fix actually did, or to compare two branches or releases. A diff over more than 40 files returns the file list with patch: null - pass `path` to read one file or directory of it. truncated: true means the patch was cut; narrow with `path`. Quote only the hunks that matter, cited as path @ commit.",
+    inputSchema: {
+      repo: z.string(),
+      commit: z
+        .string()
+        .optional()
+        .describe(
+          "A commit sha, full or abbreviated, diffed against its parent. Instead of from/to.",
+        ),
+      from: z.string().optional().describe(REVISION_FIELD),
+      to: z.string().optional().describe(REVISION_FIELD),
+      path: z
+        .string()
+        .optional()
+        .describe("Only changes to this file or directory."),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ repo, commit, from, to, path }) =>
+    outScrubbed(
+      await codeDiff(repo, {
+        commit,
+        from,
+        to,
+        path,
+        token: await repoToken(repo, await resolveCurrentUserId()),
+      }),
     ),
 );
+
+tool(
+  "code_releases_containing",
+  {
+    description:
+      "Which releases of a linked repo contain a commit: the first one overall, the first on each minor, and whether each tracked line holds it. This answers 'which version fixes this' once the fixing commit is known, from code_changes_between or code_diff. A search hit's indexed_commit is where the index stands, not a fix. A customer has the fix when their version is at or past the first release on their minor. first_release: null means it has not shipped in any release.",
+    inputSchema: {
+      repo: z.string(),
+      commit: z.string().describe("A commit sha, full or abbreviated."),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ repo, commit }) => out(await codeReleasesContaining(repo, commit)),
+);
+
+tool(
+  "list_code_tree",
+  {
+    description:
+      "The entries of one directory in a linked repo, directories first: for finding where things live when a search has no term to start from, or for describing how a repo is laid out. One level per call; pass an entry's path to go deeper. Read files with read_code_file.",
+    inputSchema: {
+      repo: z.string(),
+      path: z
+        .string()
+        .optional()
+        .describe("Directory to list. The repo root when absent."),
+      version: z
+        .string()
+        .optional()
+        .describe("A release (1.51.32): the tree as that release shipped."),
+      ref: z
+        .string()
+        .optional()
+        .describe(
+          "A tracked line from list_repos `lines`, or any branch or tag name.",
+        ),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ repo, path, version, ref }) =>
+    out(await listCodeDir(repo, path ?? "", { version, ref })),
+);
+
+const MAX_WALKTHROUGH_STEPS = 8;
+const MAX_STEP_LINES = 60;
+
+tool(
+  "show_code_walkthrough",
+  {
+    description: `Show the user a walkthrough panel: ordered steps through a flow, each one a range of real code with the deciding lines lit and a short note beside it. You send only where the code is; the app reads the lines itself, so never put code in a note. Use it when asked to walk through, show or visualise how something works, after you have read the ranges with read_code_file. Steps go in execution order, at most ${MAX_WALKTHROUGH_STEPS}, each the narrowest range that shows its point (at most ${MAX_STEP_LINES} lines). Afterwards say one line; do not repeat the code or the notes in text.`,
+    inputSchema: {
+      title: z.string().describe("What is being walked through, a few words."),
+      steps: z
+        .array(
+          z.object({
+            label: z
+              .string()
+              .describe("The step's name on the rail, one to three words."),
+            repo: z.string(),
+            path: z.string(),
+            start_line: z.number().int().positive(),
+            end_line: z.number().int().positive(),
+            version: z
+              .string()
+              .optional()
+              .describe(
+                "As read_code_file: the release the range was read at.",
+              ),
+            ref: z
+              .string()
+              .optional()
+              .describe("As read_code_file: the line the range was read on."),
+            highlight: z
+              .array(z.tuple([z.number().int(), z.number().int()]))
+              .optional()
+              .describe(
+                "Line ranges [first, last] inside the step that decide the outcome. A few lines, not the whole step.",
+              ),
+            note: z
+              .string()
+              .describe(
+                "One or two sentences: what happens here and why it matters to the question.",
+              ),
+          }),
+        )
+        .min(1)
+        .max(MAX_WALKTHROUGH_STEPS),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ steps }) => {
+    const userId = await resolveCurrentUserId();
+    const shown = [];
+    for (const step of steps) {
+      if (step.end_line - step.start_line >= MAX_STEP_LINES)
+        throw badInput(
+          `step '${step.label}' spans more than ${MAX_STEP_LINES} lines; split it or narrow it`,
+        );
+      const read = await readCodeFile(step.repo, step.path, {
+        startLine: step.start_line,
+        endLine: step.end_line,
+        version: step.version,
+        ref: step.ref,
+        token: await repoToken(step.repo, userId),
+      });
+      if (read.end_line < read.start_line)
+        throw badInput(
+          `step '${step.label}': ${step.path} has ${read.total_lines} lines`,
+        );
+      shown.push({
+        path: read.path,
+        ref: read.ref,
+        commit: read.commit,
+        start_line: read.start_line,
+        end_line: read.end_line,
+      });
+    }
+    return out({ shown, note: WALKTHROUGH_SHOWN });
+  },
+);
+
+const WALKTHROUGH_SHOWN =
+  "The panel is on screen with these ranges. Say one line about it; the code and the notes are already there.";

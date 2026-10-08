@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { RELEASE_TAG_RE, SLUG_RE } from "@tachy/contract";
 import type { RemoteRef } from "@tachy/contract";
 import { badInput, notFound } from "../infra/errors";
+import { maskSecrets, rememberSecret } from "../infra/known-secrets";
 
 const MAX_BUFFER = 256 * 1024 * 1024;
 const PREFETCH_BATCH = 1000;
@@ -61,18 +62,53 @@ function assertOid(oid: string): string {
 
 /**
  * The PAT travels only as a per-invocation header, never into the clone's
- * config. Git hands `-c` settings down to the fetch it spawns for a missing
- * blob, so a lazy read authenticates too.
+ * config, and in the environment rather than argv: a command line is readable
+ * by every process on the host. The fetch git spawns for a missing blob
+ * inherits the environment, so a lazy read authenticates too.
  */
-function authArgs(token?: string): string[] {
-  if (!token) return [];
-  const b64 = Buffer.from(`:${token}`).toString("base64");
-  return ["-c", `http.extraHeader=Authorization: Basic ${b64}`];
+export function authEnv(token?: string): Record<string, string> {
+  if (!token) return {};
+  const b64 = rememberSecret(Buffer.from(`:${token}`).toString("base64"));
+  return {
+    GIT_CONFIG_COUNT: "1",
+    GIT_CONFIG_KEY_0: "http.extraHeader",
+    GIT_CONFIG_VALUE_0: `Authorization: Basic ${b64}`,
+  };
+}
+
+/** Options that take their value as the next argument, ahead of the subcommand. */
+const GLOBAL_OPTIONS_WITH_VALUE = new Set(["-C", "-c"]);
+
+function subcommandOf(args: string[]): string {
+  let i = 0;
+  while (GLOBAL_OPTIONS_WITH_VALUE.has(args[i])) i += 2;
+  return args[i] ?? "";
+}
+
+/** `https://user:secret@host/path` without the `user:secret@`. */
+export const withoutUrlCredentials = (text: string): string =>
+  text.replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^\/\s@]+@/gi, "$1");
+
+/**
+ * What a failed git call reports. Built from git's own stderr: the error
+ * `execFile` raises quotes the whole command line.
+ */
+function gitFailure(
+  args: string[],
+  failure: { killed?: boolean },
+  stderr: string,
+): Error {
+  const subcommand = subcommandOf(args);
+  if (failure.killed) return new Error(`git ${subcommand} timed out`);
+  const detail = maskSecrets(withoutUrlCredentials(stderr.trim()));
+  return new Error(
+    detail ? `git ${subcommand} failed: ${detail}` : `git ${subcommand} failed`,
+  );
 }
 
 function run(
   args: string[],
-  opts: { input?: string; timeout?: number } = {},
+  opts: { token?: string; input?: string; timeout?: number } = {},
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = execFile(
@@ -81,9 +117,14 @@ function run(
       {
         maxBuffer: MAX_BUFFER,
         timeout: opts.timeout,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+        env: {
+          ...process.env,
+          GIT_TERMINAL_PROMPT: "0",
+          ...authEnv(opts.token),
+        },
       },
-      (err, stdout) => (err ? reject(err) : resolve(stdout)),
+      (err, stdout, stderr) =>
+        err ? reject(gitFailure(args, err, stderr)) : resolve(stdout),
     );
     if (opts.input !== undefined) child.stdin?.end(opts.input);
   });
@@ -93,7 +134,7 @@ const git = (
   slug: string,
   args: string[],
   opts: { token?: string; input?: string } = {},
-) => run(["-C", repoDir(slug), ...authArgs(opts.token), ...args], opts);
+) => run(["-C", repoDir(slug), ...args], opts);
 
 /**
  * Make sure the repo has a partial clone: every commit and tree, and file
@@ -108,19 +149,21 @@ export async function ensureClone(
   if (existsSync(join(dir, "HEAD"))) return;
   await rm(checkoutDir(repo.slug), { recursive: true, force: true });
   await mkdir(dir, { recursive: true });
-  await run([
-    ...authArgs(token),
-    "clone",
-    "--bare",
-    "--quiet",
-    "--filter=blob:none",
-    "--single-branch",
-    "--branch",
-    assertBranchName(repo.defaultBranch),
-    "--",
-    assertRepoUrl(repo.url),
-    dir,
-  ]).catch(async (err) => {
+  await run(
+    [
+      "clone",
+      "--bare",
+      "--quiet",
+      "--filter=blob:none",
+      "--single-branch",
+      "--branch",
+      assertBranchName(repo.defaultBranch),
+      "--",
+      assertRepoUrl(repo.url),
+      dir,
+    ],
+    { token },
+  ).catch(async (err) => {
     await rm(dir, { recursive: true, force: true });
     throw err;
   });
@@ -327,6 +370,181 @@ export async function logBetween(
     });
 }
 
+const ABBREVIATED_OID_RE = /^[0-9a-f]{7,64}$/;
+
+/** The full id of a commit named by its id or an abbreviation of it, or null. */
+export async function resolveCommit(
+  slug: string,
+  oid: string,
+): Promise<string | null> {
+  if (!ABBREVIATED_OID_RE.test(oid)) return null;
+  if (!existsSync(join(repoDir(slug), "HEAD"))) return null;
+  try {
+    return (
+      await git(slug, ["rev-parse", "--verify", "--quiet", `${oid}^{commit}`])
+    ).trim();
+  } catch {
+    return null;
+  }
+}
+
+export interface DirEntry {
+  name: string;
+  kind: "dir" | "file";
+}
+
+const DIR_ENTRY_KINDS: Record<string, DirEntry["kind"]> = {
+  tree: "dir",
+  blob: "file",
+};
+
+/** One directory at a commit, from trees alone. `dir` is "" for the root. */
+export async function listDir(
+  slug: string,
+  sha: string,
+  dir: string,
+): Promise<DirEntry[]> {
+  const treeish = dir ? `${assertOid(sha)}:${dir}` : assertOid(sha);
+  let stdout: string;
+  try {
+    stdout = await git(slug, ["ls-tree", "-z", treeish]);
+  } catch {
+    throw notFound(
+      `'${dir}' is not a directory in repo '${slug}' at ${sha.slice(0, 12)}`,
+    );
+  }
+  const entries: DirEntry[] = [];
+  for (const line of stdout.split("\0")) {
+    const tab = line.indexOf("\t");
+    if (tab < 0) continue;
+    const kind = DIR_ENTRY_KINDS[line.slice(0, tab).split(/\s+/)[1]];
+    if (kind) entries.push({ name: line.slice(tab + 1), kind });
+  }
+  return entries;
+}
+
+/** The tree of a commit with no parent, to diff a root commit against. */
+const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+/** The first parent of a commit, or the empty tree for a root commit. */
+export async function parentOf(slug: string, sha: string): Promise<string> {
+  try {
+    return (
+      await git(slug, [
+        "rev-parse",
+        "--verify",
+        "--quiet",
+        `${assertOid(sha)}^^{commit}`,
+      ])
+    ).trim();
+  } catch {
+    return EMPTY_TREE;
+  }
+}
+
+export async function commitSummary(
+  slug: string,
+  sha: string,
+): Promise<CommitSummary> {
+  const stdout = await git(slug, [
+    "log",
+    "--max-count=1",
+    "--format=%H%x1f%an%x1f%aI%x1f%s",
+    assertOid(sha),
+  ]);
+  const [id, author, date, subject] = stdout.trim().split("\x1f");
+  return { sha: id, author, date, subject };
+}
+
+export interface ChangedFile {
+  /** Git's status letter: A, M, D, R, C or T. */
+  status: string;
+  path: string;
+}
+
+const pathArgs = (path?: string) => ["--", ...(path ? [path] : [])];
+
+/** The files that differ between two commits, from trees alone. */
+export async function changedFiles(
+  slug: string,
+  from: string,
+  to: string,
+  path?: string,
+): Promise<ChangedFile[]> {
+  const stdout = await git(slug, [
+    "diff",
+    "--name-status",
+    "--no-renames",
+    "-z",
+    assertOid(from),
+    assertOid(to),
+    ...pathArgs(path),
+  ]);
+  const fields = stdout.split("\0").filter(Boolean);
+  const files: ChangedFile[] = [];
+  for (let i = 0; i + 1 < fields.length; i += 2)
+    files.push({ status: fields[i], path: fields[i + 1] });
+  return files;
+}
+
+/**
+ * The patch between two commits. It reads file contents, so a partial clone
+ * fetches the blobs on either side: bound it with `changedFiles` first.
+ */
+export async function diffBetween(
+  slug: string,
+  from: string,
+  to: string,
+  opts: { path?: string; token?: string } = {},
+): Promise<string> {
+  return git(
+    slug,
+    [
+      "diff",
+      "--no-color",
+      "--no-ext-diff",
+      "--no-renames",
+      assertOid(from),
+      assertOid(to),
+      ...pathArgs(opts.path),
+    ],
+    { token: opts.token },
+  );
+}
+
+/** The release tags whose history holds a commit, oldest version first. */
+export async function releasesContaining(
+  slug: string,
+  sha: string,
+): Promise<string[]> {
+  const stdout = await git(slug, [
+    "tag",
+    "--contains",
+    assertOid(sha),
+    "--sort=version:refname",
+  ]);
+  return stdout.split("\n").filter((tag) => RELEASE_TAG_RE.test(tag));
+}
+
+/** Whether a branch's history holds a commit. */
+export async function branchContains(
+  slug: string,
+  branch: string,
+  sha: string,
+): Promise<boolean> {
+  try {
+    await git(slug, [
+      "merge-base",
+      "--is-ancestor",
+      assertOid(sha),
+      `refs/heads/${assertBranchName(branch)}`,
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** The branches and tags a remote offers, without cloning it. */
 export async function listRemoteRefs(
   url: string,
@@ -335,7 +553,6 @@ export async function listRemoteRefs(
 ): Promise<RemoteRef[]> {
   const stdout = await run(
     [
-      ...authArgs(token),
       "ls-remote",
       "--heads",
       ...(opts.heads ? [] : ["--tags"]),
@@ -343,7 +560,7 @@ export async function listRemoteRefs(
       assertRepoUrl(url),
       ...(opts.heads ?? []).map(assertBranchName),
     ],
-    { timeout: LS_REMOTE_TIMEOUT_MS },
+    { token, timeout: LS_REMOTE_TIMEOUT_MS },
   );
   const refs: RemoteRef[] = [];
   for (const line of stdout.split("\n")) {

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { requireAdmin } from "../auth";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { badInput, notFound, sql } from "@tachy/core/infra";
+import { badInput, notFound, sql, errorText } from "@tachy/core/infra";
 import {
   addSourceProject,
   deleteProjectAreaMap,
@@ -83,7 +83,7 @@ async function probe<T>(call: () => Promise<T>) {
   } catch (e) {
     return {
       ok: false as const,
-      error: e instanceof Error ? e.message : String(e),
+      error: errorText(e),
     };
   }
 }
