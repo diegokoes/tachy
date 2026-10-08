@@ -214,9 +214,6 @@ check_backups() {
   fi
 }
 
-# Downloads show up in sshd's journal as internal-sftp INFO lines. A session's
-# pid ties its "close ... bytes read N" lines to the login that opened it.
-# The exact wording is checked against Debian 13's OpenSSH in the runbook.
 check_update() {
   local f="$TACHY_STATUS_DIR/update.json" outcome commit detail
   if [ -z "${TACHY_UPDATE_BRANCH:-}" ]; then
@@ -236,6 +233,10 @@ check_update() {
   esac
 }
 
+# Downloads show up in sshd's journal as internal-sftp INFO lines. A session's
+# pid ties its "close ... bytes read N" lines to the login that opened it.
+# deploy/runbooks/backups-and-restore.md says how to check the wording against
+# the host's OpenSSH.
 check_downloads() {
   [ "${WATCH_DOWNLOADS:-1}" = 1 ] || { result laptop_downloads skip "" "WATCH_DOWNLOADS=0"; return; }
   local people
