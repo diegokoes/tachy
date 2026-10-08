@@ -15,7 +15,7 @@ import {
   type CredentialSource,
   type ScopeContext,
 } from "@tachy/core/config";
-import { SLUG_RE } from "@tachy/core";
+import { SLUG_RE, isSourceBaseUrl } from "@tachy/core";
 import { requireAdmin } from "../../auth";
 import { audit } from "../../audit";
 import { callerScope, requireCaller } from "../../authz";
@@ -28,10 +28,16 @@ const connSlugField = z
     "connection slug must be lowercase letters, digits and hyphens",
   );
 
+const BASE_URL_RULE =
+  "base URL must be an http(s) address with no username or password in it";
+
 const sourceConnSchema = z.object({
   sourceType: z.string(),
   slug: connSlugField,
-  baseUrl: z.string().optional(),
+  baseUrl: z
+    .string()
+    .refine((value) => value === "" || isSourceBaseUrl(value), BASE_URL_RULE)
+    .optional(),
   config: z.record(z.string(), z.any()).optional(),
   /** Stored as the connection's global credential; never echoed back. */
   token: z.string().min(1).optional(),

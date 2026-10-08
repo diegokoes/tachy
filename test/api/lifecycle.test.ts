@@ -22,6 +22,12 @@ afterEach(async () => {
   await sql`delete from schema_meta`;
 });
 
+/** A request from the host itself, which is who the readiness detail is for. */
+const onHost = (path: string) =>
+  app.request(path, undefined, {
+    incoming: { socket: { remoteAddress: "127.0.0.1" } },
+  });
+
 describe("probes", () => {
   it("answers /livez and keeps /health as its alias", async () => {
     for (const path of ["/livez", "/health"]) {
@@ -32,7 +38,7 @@ describe("probes", () => {
   });
 
   it("is ready on a database that predates the schema stamp", async () => {
-    const response = await app.request("/readyz");
+    const response = await onHost("/readyz");
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       ready: true,
@@ -44,30 +50,63 @@ describe("probes", () => {
 
   it("is ready when the stamp matches this schema.sql", async () => {
     await sql`insert into schema_meta (schema_sha256) values (${schemaHash})`;
-    const body = await (await app.request("/readyz")).json();
+    const body = await (await onHost("/readyz")).json();
     expect(body.schema).toBe("match");
     expect(body.ready).toBe(true);
   });
 
   it("is not ready when the database was built from another schema.sql", async () => {
     await sql`insert into schema_meta (schema_sha256) values ('0000')`;
-    const response = await app.request("/readyz");
+    const response = await onHost("/readyz");
     expect(response.status).toBe(503);
     expect((await response.json()).schema).toBe("mismatch");
   });
 
   it("is not ready while the embedding model loads", async () => {
     lifecycle.modelRequired = true;
-    expect((await app.request("/readyz")).status).toBe(503);
+    expect((await onHost("/readyz")).status).toBe(503);
     lifecycle.modelReady = true;
-    expect((await app.request("/readyz")).status).toBe(200);
+    expect((await onHost("/readyz")).status).toBe(200);
+  });
+});
+
+describe("what the server tells whom", () => {
+  it("answers a caller off the host with ready or not, and nothing else", async () => {
+    const outside = await app.request("/readyz");
+    expect(outside.status).toBe(200);
+    expect(await outside.json()).toEqual({ ready: true });
+
+    const lan = await app.request("/readyz", undefined, {
+      incoming: { socket: { remoteAddress: "192.168.1.20" } },
+    });
+    expect(await lan.json()).toEqual({ ready: true });
+
+    const mapped = await app.request("/readyz", undefined, {
+      incoming: { socket: { remoteAddress: "::ffff:127.0.0.1" } },
+    });
+    expect((await mapped.json()).database).toBe(true);
+  });
+
+  it("sends the content policy and its companions on every response", async () => {
+    for (const path of ["/livez", "/auth/config", "/api/nothing-here"]) {
+      const response = await app.request(path);
+      const policy = response.headers.get("Content-Security-Policy") ?? "";
+      expect(policy).toContain("script-src 'self'");
+      expect(policy).toContain("frame-ancestors 'none'");
+      expect(policy).not.toContain("unsafe-eval");
+      expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+      expect(response.headers.get("X-Frame-Options")).toBe("DENY");
+      expect(response.headers.get("Referrer-Policy")).toBe(
+        "strict-origin-when-cross-origin",
+      );
+    }
   });
 });
 
 describe("draining", () => {
   it("fails readiness and refuses new chat turns with a retry hint", async () => {
     lifecycle.draining = true;
-    expect((await app.request("/readyz")).status).toBe(503);
+    expect((await onHost("/readyz")).status).toBe(503);
 
     const response = await app.request(
       "/api/agent/chat",
@@ -91,12 +130,12 @@ describe("draining", () => {
     const { port } = server.address() as { port: number };
     lifecycle.embedderUrl = `http://127.0.0.1:${port}/readyz`;
     try {
-      expect(await (await app.request("/readyz")).json()).toMatchObject({
+      expect(await (await onHost("/readyz")).json()).toMatchObject({
         ready: true,
         model: "external",
       });
       up = false;
-      const response = await app.request("/readyz");
+      const response = await onHost("/readyz");
       expect(response.status).toBe(503);
       expect((await response.json()).model).toBe("unreachable");
     } finally {

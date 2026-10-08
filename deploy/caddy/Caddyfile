@@ -22,11 +22,10 @@
 {$TACHY_HOSTNAME} {$TACHY_HOST_IP} {
 	tls {$TACHY_TLS:internal}
 
+	# The api sets the content policy and the other response headers itself, so
+	# a deployment without this proxy has them. Only what needs TLS is set here.
 	header {
 		Strict-Transport-Security "max-age=31536000"
-		X-Content-Type-Options nosniff
-		X-Frame-Options DENY
-		Referrer-Policy strict-origin-when-cross-origin
 		-Server
 	}
 
