@@ -19,10 +19,13 @@
   } = $props();
 </script>
 
-<!-- The admin section heading, unpinned: a settings tab is short enough that
-     a heading which sticks would only ever cover the rows under it. The body
-     is indented past the marker so its rows start under the heading's word,
-     and runs to the end of the rule so their controls end under it. -->
+<!--
+@component
+The admin section heading, unpinned: a settings tab is short enough that a
+heading which sticks would only ever cover the rows under it. The body is
+indented past the marker so its rows start under the heading's word, and runs to
+the end of the rule so their controls end under it.
+-->
 <section style:--mark-w={icon ? "1em" : undefined}>
   <h2 class="head">
     <span class="mark" aria-hidden="true"

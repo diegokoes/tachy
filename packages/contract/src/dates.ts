@@ -47,42 +47,42 @@ export type Moment = Date | string | number | null | undefined;
 
 function toDate(at: Moment): Date | null {
   if (at == null || at === "") return null;
-  const d = at instanceof Date ? at : new Date(at);
-  return Number.isNaN(d.getTime()) ? null : d;
+  const date = at instanceof Date ? at : new Date(at);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 /** The UTC day `at` falls on, or "" when it is not a date. */
-export function formatDay(at: Moment, f: DateFormat): string {
-  const d = toDate(at);
-  if (!d) return "";
-  const y = d.getUTCFullYear();
-  const m = d.getUTCMonth();
-  const day = d.getUTCDate();
-  switch (f.order) {
+export function formatDay(at: Moment, format: DateFormat): string {
+  const date = toDate(at);
+  if (!date) return "";
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  const day = date.getUTCDate();
+  switch (format.order) {
     case "dmy":
-      return `${pad(day)}-${pad(m + 1)}-${y}`;
+      return `${pad(day)}-${pad(month + 1)}-${year}`;
     case "mdy":
-      return `${pad(m + 1)}-${pad(day)}-${y}`;
+      return `${pad(month + 1)}-${pad(day)}-${year}`;
     case "long":
-      return `${day} ${MONTHS[m]} ${y}`;
+      return `${day} ${MONTHS[month]} ${year}`;
     default:
-      return `${y}-${pad(m + 1)}-${pad(day)}`;
+      return `${year}-${pad(month + 1)}-${pad(day)}`;
   }
 }
 
 /** The UTC time of day, to the minute. */
-export function formatTime(at: Moment, f: DateFormat): string {
-  const d = toDate(at);
-  if (!d) return "";
-  const h = d.getUTCHours();
-  const min = pad(d.getUTCMinutes());
-  if (f.clock === "24h") return `${pad(h)}:${min}`;
-  return `${h % 12 || 12}:${min} ${h < 12 ? "AM" : "PM"}`;
+export function formatTime(at: Moment, format: DateFormat): string {
+  const date = toDate(at);
+  if (!date) return "";
+  const hour = date.getUTCHours();
+  const minute = pad(date.getUTCMinutes());
+  if (format.clock === "24h") return `${pad(hour)}:${minute}`;
+  return `${hour % 12 || 12}:${minute} ${hour < 12 ? "AM" : "PM"}`;
 }
 
-export function formatDateTime(at: Moment, f: DateFormat): string {
-  const day = formatDay(at, f);
-  return day && `${day} ${formatTime(at, f)}`;
+export function formatDateTime(at: Moment, format: DateFormat): string {
+  const day = formatDay(at, format);
+  return day && `${day} ${formatTime(at, format)}`;
 }
 
 /**
@@ -90,22 +90,24 @@ export function formatDateTime(at: Moment, f: DateFormat): string {
  * does. Separators are escaped because Excel otherwise swaps `/` and `-` for
  * the reader's locale separator.
  */
-export function excelDateTimeFormat(f: DateFormat): string {
+export function excelDateTimeFormat(format: DateFormat): string {
   const day = {
     iso: "yyyy\\-mm\\-dd",
     dmy: "dd\\-mm\\-yyyy",
     mdy: "mm\\-dd\\-yyyy",
     long: "d\\ mmm\\ yyyy",
-  }[f.order];
-  const time = f.clock === "24h" ? "hh:mm" : "h:mm\\ AM/PM";
+  }[format.order];
+  const time = format.clock === "24h" ? "hh:mm" : "h:mm\\ AM/PM";
   return `${day}\\ ${time}`;
 }
 
 /** `"dmy/12h"`: the format as one string, for an environment variable. */
 export const encodeDateFormat = (f: DateFormat) => `${f.order}/${f.clock}`;
 
-export function parseDateFormat(s: string | null | undefined): DateFormat {
-  const [order, clock] = (s ?? "").split("/");
+export function parseDateFormat(
+  encoded: string | null | undefined,
+): DateFormat {
+  const [order, clock] = (encoded ?? "").split("/");
   return {
     order: (DATE_ORDERS as readonly string[]).includes(order)
       ? (order as DateOrder)

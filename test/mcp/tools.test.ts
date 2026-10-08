@@ -1,3 +1,9 @@
+/**
+ * The tools themselves, over a real MCP client. Everything under the tool layer
+ * has its own suite; this covers what exists only here: the zod schemas, the
+ * result envelope, and the `note:` / `next:` guidance the agent reads. Those
+ * travel with the tool (see CLAUDE.md), so the test goes through the tool.
+ */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -14,29 +20,22 @@ import { resetData, sql, tpdProductId } from "../database";
 
 afterAll(() => sql.end());
 
-/**
- * The tools themselves, over a real MCP client. Everything below the tool layer
- * has its own suite; what this covers is the layer that only exists here - the
- * zod schemas, the result envelope, and the `note:` / `next:` guidance the
- * agent actually reads. Those travel with the tool by design (see CLAUDE.md),
- * so they need a test that goes through the tool rather than around it.
- */
 let client: Client;
 
 /** Every tool answers with content[0].text; parse it back where it is JSON. */
 async function call(name: string, args: Record<string, unknown> = {}) {
-  const res = (await client.callTool({ name, arguments: args })) as {
+  const answer = (await client.callTool({ name, arguments: args })) as {
     content: { type: string; text: string }[];
     isError?: boolean;
   };
-  const text = res.content[0]?.text ?? "";
+  const text = answer.content[0]?.text ?? "";
   let json: unknown;
   try {
     json = JSON.parse(text);
   } catch {
     json = undefined;
   }
-  return { isError: res.isError === true, text, json: json as never };
+  return { isError: answer.isError === true, text, json: json as never };
 }
 
 const fakeItem: RawWorkItem = {
@@ -73,9 +72,13 @@ const fakeFactory: SourceFactory = () => ({
 registerSource("fake-mcp", fakeFactory);
 
 beforeAll(async () => {
-  const [a, b] = InMemoryTransport.createLinkedPair();
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
   client = new Client({ name: "test", version: "0" });
-  await Promise.all([server.connect(b), client.connect(a)]);
+  await Promise.all([
+    server.connect(serverTransport),
+    client.connect(clientTransport),
+  ]);
 });
 
 afterAll(() => client.close());
@@ -83,11 +86,9 @@ afterAll(() => client.close());
 beforeEach(resetData);
 
 describe("tool registration", () => {
-  /**
-   * Every word of a tool's description is paid for on every agent turn that
-   * lists it, so an undescribed tool is a bug in both directions: the model
-   * cannot tell when to call it, and nothing else says so.
-   */
+  // Every word of a tool's description is paid for on every agent turn that
+  // lists it, so an undescribed tool is a bug in both directions: the model
+  // cannot tell when to call it, and nothing else says so.
   it("gives every tool a description and an input schema", async () => {
     const { tools } = await client.listTools();
     expect(tools.length).toBeGreaterThan(50);
@@ -142,12 +143,12 @@ describe("knowledge round trip", () => {
     });
     expect(listed.text).toMatch(/Scanner bridge/);
 
-    const fb = await call("add_knowledge_feedback", {
+    const feedback = await call("add_knowledge_feedback", {
       knowledge_entry_id: id,
       kind: "rating",
       rating: 5,
     });
-    expect(fb.isError).toBe(false);
+    expect(feedback.isError).toBe(false);
   });
 
   it("updates an entry through its own tool", async () => {
@@ -197,12 +198,12 @@ describe("customer round trip", () => {
   });
 
   it("refuses a fact for a customer that does not exist", async () => {
-    const res = await call("set_customer_fact", {
+    const answer = await call("set_customer_fact", {
       customer: "no-such-customer",
       kind: "version",
       value: "1.0",
     });
-    expect(res.isError).toBe(true);
+    expect(answer.isError).toBe(true);
   });
 });
 
@@ -299,16 +300,16 @@ describe("reference and wiki round trips", () => {
     expect(found.note).toBeUndefined();
   });
 
-  /** 'toc' and 'c' are the wiki's own routes; an article there is unreachable. */
+  // 'toc' and 'c' are the wiki's own routes; an article there is unreachable.
   it("refuses a wiki article at a reserved slug", async () => {
-    const res = await call("save_wiki_article", {
+    const answer = await call("save_wiki_article", {
       slug: "toc",
       title: "Contents",
       body: "no",
       product_slug: "tpd",
     });
-    expect(res.isError).toBe(true);
-    expect(res.text).toMatch(/reserved/i);
+    expect(answer.isError).toBe(true);
+    expect(answer.text).toMatch(/reserved/i);
   });
 });
 
@@ -325,7 +326,7 @@ describe("taxonomy tools", () => {
     expect(listed.text).toMatch(/label-renderer/);
   });
 
-  /** Adding an existing slug rewrites its description rather than failing. */
+  // Adding an existing slug rewrites its description rather than failing.
   it("upserts a resolution pattern on a repeated slug", async () => {
     await addResolutionPattern("clock-skew", "The clock is wrong.");
     const again = await call("add_resolution_pattern", {
@@ -354,18 +355,15 @@ describe("taxonomy tools", () => {
   });
 });
 
-/**
- * The part that only exists at this layer. Each of these strings is what the
- * model reads instead of a bare empty array or a null column, and each was
- * added because its absence produced a specific wrong answer.
- */
+// The part that exists only at this layer: each of these strings is what the
+// model reads in place of a bare empty array or a null column.
 describe("result guidance", () => {
   it("says the archive is empty rather than returning a bare []", async () => {
-    const res = await call("search_knowledge", {
+    const answer = await call("search_knowledge", {
       query: "a query about something nobody has ever written down",
     });
-    expect(res.isError).toBe(false);
-    const body = res.json as { results: unknown[]; note: string };
+    expect(answer.isError).toBe(false);
+    const body = answer.json as { results: unknown[]; note: string };
     expect(body.results).toEqual([]);
     expect(body.note).toMatch(/nothing on this/i);
   });
@@ -378,10 +376,10 @@ describe("result guidance", () => {
       root_cause: "the counter is unsigned and wraps at zero",
       resolution: "clamp at zero and reset the baseline",
     });
-    const res = await call("search_knowledge", {
+    const answer = await call("search_knowledge", {
       query: "ink telemetry reads negative",
     });
-    expect(res.text).toMatch(/relevance/);
+    expect(answer.text).toMatch(/relevance/);
   });
 
   it("surfaces an unmatched customer on a fetched work item", async () => {
@@ -390,18 +388,18 @@ describe("result guidance", () => {
       slug: "fake-mcp-conn",
       baseUrl: "https://example.invalid",
     });
-    const res = await call("get_context", {
+    const answer = await call("get_context", {
       source: "fake-mcp-conn",
       external_id: "ctx-1",
     });
-    expect(res.isError).toBe(false);
-    const body = res.json as {
+    expect(answer.isError).toBe(false);
+    const body = answer.json as {
       customer_id: string | null;
       customer_note: string;
       retrieval_note?: string;
     };
     expect(body.customer_id).toBeNull();
-    // The requester's own domain is exactly the wrong thing to infer from.
+    // The requester's own domain is the wrong thing to infer from.
     expect(body.customer_note).toMatch(/partners and distributors/i);
     expect(body.retrieval_note).toMatch(/nothing on this/i);
   });
@@ -409,35 +407,35 @@ describe("result guidance", () => {
 
 describe("failures come back as tool errors", () => {
   it("reports an unknown resolution_pattern readably", async () => {
-    const res = await call("save_knowledge_entry", {
+    const answer = await call("save_knowledge_entry", {
       product_slug: "tpd",
       issue_summary: "x",
       resolution_pattern: "does-not-exist",
     });
-    expect(res.isError).toBe(true);
-    expect(res.text).toMatch(/resolution_pattern/i);
+    expect(answer.isError).toBe(true);
+    expect(answer.text).toMatch(/resolution_pattern/i);
   });
 
   it("rejects a call that omits a required field", async () => {
-    const res = await call("get_knowledge_entry", {});
-    expect(res.isError).toBe(true);
+    const answer = await call("get_knowledge_entry", {});
+    expect(answer.isError).toBe(true);
   });
 
   it("reports an unknown source connection rather than throwing", async () => {
-    const res = await call("get_context", {
+    const answer = await call("get_context", {
       source: "no-such-connection",
       external_id: "1",
     });
-    expect(res.isError).toBe(true);
+    expect(answer.isError).toBe(true);
   });
 
   it("refuses a component under a product that does not exist", async () => {
-    const res = await call("add_component", {
+    const answer = await call("add_component", {
       product_slug: "no-such-product",
       slug: "x",
       name: "X",
     });
-    expect(res.isError).toBe(true);
+    expect(answer.isError).toBe(true);
   });
 });
 

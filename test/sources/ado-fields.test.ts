@@ -62,10 +62,8 @@ describe("ADO field projection", () => {
     });
   });
 
-  /**
-   * The per-type endpoint carries no data type at all - the join with the
-   * account-wide list is the only way a widget can be chosen.
-   */
+  // The per-type endpoint carries no data type at all - the join with the
+  // account-wide list is the only way a widget can be chosen.
   it("takes type, readOnly and isIdentity from the account-wide list", () => {
     const fields = projectFields(typeFields, accountFields);
     expect(byRef(fields, "System.IterationPath").type).toBe("treePath");
@@ -91,20 +89,20 @@ describe("ADO field projection", () => {
 
   it("caps allowed values and says when it did", () => {
     const many = Array.from({ length: 120 }, (_, i) => `v${i}`);
-    const [f] = projectFields(
+    const [field] = projectFields(
       [{ referenceName: "X", name: "X", allowedValues: many }],
       [],
     );
-    expect(f.allowed_values).toHaveLength(MAX_ALLOWED_VALUES);
-    expect(f.allowed_values_truncated).toBe(true);
+    expect(field.allowed_values).toHaveLength(MAX_ALLOWED_VALUES);
+    expect(field.allowed_values_truncated).toBe(true);
   });
 
   it("omits the truncation flag when nothing was dropped", () => {
-    const [f] = projectFields(
+    const [field] = projectFields(
       [{ referenceName: "X", name: "X", allowedValues: ["a", "b"] }],
       [],
     );
-    expect(f.allowed_values_truncated).toBeUndefined();
+    expect(field.allowed_values_truncated).toBeUndefined();
   });
 
   it("ignores an account-wide field the type does not use", () => {
@@ -133,7 +131,7 @@ describe("workItemSchema", () => {
     expect(byRef(schema.fields, "System.AssignedTo").is_identity).toBe(true);
   });
 
-  /** Required fields still arrive; only the typed widgets are lost. */
+  // Required fields still arrive; only the typed widgets are lost.
   it("survives the account-wide list failing", async () => {
     const schema = await workItemSchema(
       client({

@@ -46,9 +46,10 @@
       },
       0,
     );
-    for (const ch of letters) {
-      const at = ((ch.getBoundingClientRect().left - mouth) / run) * duration;
-      tl.set(ch, { visibility: "hidden" }, Math.max(0, at));
+    for (const letter of letters) {
+      const at =
+        ((letter.getBoundingClientRect().left - mouth) / run) * duration;
+      tl.set(letter, { visibility: "hidden" }, Math.max(0, at));
     }
     return () => tl.kill();
   });
@@ -59,7 +60,7 @@
     ><Icon name="noMatch" size="1.5em" label="no matches" /></span
   >
   <span class="word" aria-hidden="true"
-    >{#each LETTERS as ch}<span class="ch">{ch}</span>{/each}</span
+    >{#each LETTERS as letter}<span class="ch">{letter}</span>{/each}</span
   >
 </p>
 

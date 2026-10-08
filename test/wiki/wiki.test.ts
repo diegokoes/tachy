@@ -40,19 +40,19 @@ describe("wiki categories", () => {
   beforeEach(resetData);
 
   it("nests and lists per wiki", async () => {
-    const p = await tpdProductId();
+    const productId = await tpdProductId();
     await addWikiCategory({
-      productId: p,
+      productId: productId,
       slug: "trouble",
       name: "Troubleshooting",
     });
     await addWikiCategory({
-      productId: p,
+      productId: productId,
       slug: "printing",
       name: "Printing",
       parentSlug: "trouble",
     });
-    const rows = await listWikiCategories(p);
+    const rows = await listWikiCategories(productId);
     expect(rows.map((r) => r.slug).sort()).toEqual(["printing", "trouble"]);
     const printing = rows.find((r) => r.slug === "printing")!;
     const trouble = rows.find((r) => r.slug === "trouble")!;
@@ -60,14 +60,18 @@ describe("wiki categories", () => {
   });
 
   it("keeps the org-wide wiki separate from a product's", async () => {
-    const p = await tpdProductId();
-    await addWikiCategory({ productId: p, slug: "shared", name: "In product" });
+    const productId = await tpdProductId();
+    await addWikiCategory({
+      productId: productId,
+      slug: "shared",
+      name: "In product",
+    });
     await addWikiCategory({
       productId: null,
       slug: "shared",
       name: "Org wide",
     });
-    expect((await listWikiCategories(p)).map((r) => r.name)).toEqual([
+    expect((await listWikiCategories(productId)).map((r) => r.name)).toEqual([
       "In product",
     ]);
     expect((await listWikiCategories(null)).map((r) => r.name)).toEqual([
@@ -76,59 +80,59 @@ describe("wiki categories", () => {
   });
 
   it("refuses a re-parent that would make a cycle", async () => {
-    const p = await tpdProductId();
-    await addWikiCategory({ productId: p, slug: "a", name: "A" });
+    const productId = await tpdProductId();
+    await addWikiCategory({ productId: productId, slug: "a", name: "A" });
     await addWikiCategory({
-      productId: p,
+      productId: productId,
       slug: "b",
       name: "B",
       parentSlug: "a",
     });
     await addWikiCategory({
-      productId: p,
+      productId: productId,
       slug: "c",
       name: "C",
       parentSlug: "b",
     });
     await expect(
-      updateWikiCategory(p, "a", { parentSlug: "c" }),
+      updateWikiCategory(productId, "a", { parentSlug: "c" }),
     ).rejects.toThrow(/cycle/);
   });
 
   it("refuses to be its own parent", async () => {
-    const p = await tpdProductId();
-    await addWikiCategory({ productId: p, slug: "a", name: "A" });
+    const productId = await tpdProductId();
+    await addWikiCategory({ productId: productId, slug: "a", name: "A" });
     await expect(
-      updateWikiCategory(p, "a", { parentSlug: "a" }),
+      updateWikiCategory(productId, "a", { parentSlug: "a" }),
     ).rejects.toThrow(/own parent/);
   });
 
   it("flattens a branch on delete rather than dropping the subtree", async () => {
-    const p = await tpdProductId();
-    await addWikiCategory({ productId: p, slug: "a", name: "A" });
+    const productId = await tpdProductId();
+    await addWikiCategory({ productId: productId, slug: "a", name: "A" });
     await addWikiCategory({
-      productId: p,
+      productId: productId,
       slug: "b",
       name: "B",
       parentSlug: "a",
     });
     await addWikiCategory({
-      productId: p,
+      productId: productId,
       slug: "c",
       name: "C",
       parentSlug: "b",
     });
-    await deleteWikiCategory(p, "b");
-    const rows = await listWikiCategories(p);
+    await deleteWikiCategory(productId, "b");
+    const rows = await listWikiCategories(productId);
     expect(rows.map((r) => r.slug).sort()).toEqual(["a", "c"]);
-    const a = rows.find((r) => r.slug === "a")!;
-    expect(rows.find((r) => r.slug === "c")!.parent_id).toBe(a.id);
+    const found = rows.find((r) => r.slug === "a")!;
+    expect(rows.find((r) => r.slug === "c")!.parent_id).toBe(found.id);
   });
 
   it("rejects a slug that is not a slug", async () => {
-    const p = await tpdProductId();
+    const productId = await tpdProductId();
     await expect(
-      addWikiCategory({ productId: p, slug: "Not A Slug", name: "x" }),
+      addWikiCategory({ productId: productId, slug: "Not A Slug", name: "x" }),
     ).rejects.toThrow(/Invalid category slug/);
   });
 });
@@ -137,13 +141,13 @@ describe("wiki articles", () => {
   beforeEach(resetData);
 
   it("is addressable by slug and keeps its id across edits", async () => {
-    const a = await article("printing");
+    const page = await article("printing");
     const found = await findArticle(await tpdProductId(), "printing");
-    expect(found.id).toBe(a.id);
+    expect(found.id).toBe(page.id);
 
-    await updateReferenceDoc(a.id, { body: "rewritten" });
+    await updateReferenceDoc(page.id, { body: "rewritten" });
     const again = await findArticle(await tpdProductId(), "printing");
-    expect(again.id).toBe(a.id);
+    expect(again.id).toBe(page.id);
     expect(again.body).toBe("rewritten");
   });
 
@@ -182,9 +186,9 @@ describe("wiki articles", () => {
   });
 
   it("never clears a slug on update - that would orphan its links", async () => {
-    const a = await article("printing");
-    await updateReferenceDoc(a.id, { slug: null });
-    expect((await getReferenceDoc(a.id)).slug).toBe("printing");
+    const page = await article("printing");
+    await updateReferenceDoc(page.id, { slug: null });
+    expect((await getReferenceDoc(page.id)).slug).toBe("printing");
   });
 
   it("is searchable, but not listed in the docs shelf", async () => {
@@ -222,17 +226,17 @@ describe("wiki articles", () => {
   });
 
   it("carries a revision history like any other doc", async () => {
-    const a = await article("printing");
-    await updateReferenceDoc(a.id, { body: "v2" });
-    const revs = await listRevisions({ docId: a.id });
+    const page = await article("printing");
+    await updateReferenceDoc(page.id, { body: "v2" });
+    const revs = await listRevisions({ docId: page.id });
     expect(revs.map((r) => r.version)).toEqual([2, 1]);
   });
 
   it("has no main page until one is written", async () => {
-    const p = await tpdProductId();
-    expect(await findMainPage(p)).toBeNull();
+    const productId = await tpdProductId();
+    expect(await findMainPage(productId)).toBeNull();
     await article("main", { title: "TPD Wiki" });
-    expect((await findMainPage(p))!.title).toBe("TPD Wiki");
+    expect((await findMainPage(productId))!.title).toBe("TPD Wiki");
   });
 });
 
@@ -240,24 +244,28 @@ describe("the general table of contents", () => {
   beforeEach(resetData);
 
   it("nests categories and files an article under every one it belongs to", async () => {
-    const p = await tpdProductId();
+    const productId = await tpdProductId();
     await addWikiCategory({
-      productId: p,
+      productId: productId,
       slug: "trouble",
       name: "Troubleshooting",
     });
     await addWikiCategory({
-      productId: p,
+      productId: productId,
       slug: "printing",
       name: "Printing",
       parentSlug: "trouble",
     });
-    await addWikiCategory({ productId: p, slug: "hardware", name: "Hardware" });
+    await addWikiCategory({
+      productId: productId,
+      slug: "hardware",
+      name: "Hardware",
+    });
 
-    const a = await article("spooler-stalls", { title: "Spooler stalls" });
-    await setArticleCategories(p, a.id, ["printing", "hardware"]);
+    const page = await article("spooler-stalls", { title: "Spooler stalls" });
+    await setArticleCategories(productId, page.id, ["printing", "hardware"]);
 
-    const toc = await wikiToc(p);
+    const toc = await wikiToc(productId);
     const trouble = toc.categories.find((c) => c.slug === "trouble")!;
     const printing = trouble.children.find((c) => c.slug === "printing")!;
     const hardware = toc.categories.find((c) => c.slug === "hardware")!;
@@ -272,54 +280,54 @@ describe("the general table of contents", () => {
   });
 
   it("collects articles filed under nothing", async () => {
-    const p = await tpdProductId();
+    const productId = await tpdProductId();
     await addWikiCategory({
-      productId: p,
+      productId: productId,
       slug: "trouble",
       name: "Troubleshooting",
     });
     const filed = await article("filed");
-    await setArticleCategories(p, filed.id, ["trouble"]);
+    await setArticleCategories(productId, filed.id, ["trouble"]);
     await article("loose");
 
-    const toc = await wikiToc(p);
+    const toc = await wikiToc(productId);
     expect(toc.uncategorised.map((a) => a.slug)).toEqual(["loose"]);
   });
 
   it("replaces memberships wholesale rather than accumulating them", async () => {
-    const p = await tpdProductId();
-    await addWikiCategory({ productId: p, slug: "a", name: "A" });
-    await addWikiCategory({ productId: p, slug: "b", name: "B" });
+    const productId = await tpdProductId();
+    await addWikiCategory({ productId: productId, slug: "a", name: "A" });
+    await addWikiCategory({ productId: productId, slug: "b", name: "B" });
     const doc = await article("x");
 
-    await setArticleCategories(p, doc.id, ["a", "b"]);
+    await setArticleCategories(productId, doc.id, ["a", "b"]);
     expect((await articleCategories(doc.id)).map((c) => c.slug).sort()).toEqual(
       ["a", "b"],
     );
 
-    await setArticleCategories(p, doc.id, ["b"]);
+    await setArticleCategories(productId, doc.id, ["b"]);
     expect((await articleCategories(doc.id)).map((c) => c.slug)).toEqual(["b"]);
 
-    await setArticleCategories(p, doc.id, []);
+    await setArticleCategories(productId, doc.id, []);
     expect(await articleCategories(doc.id)).toEqual([]);
   });
 
   it("keeps memberships across an edit, because the id survives", async () => {
-    const p = await tpdProductId();
-    await addWikiCategory({ productId: p, slug: "a", name: "A" });
+    const productId = await tpdProductId();
+    await addWikiCategory({ productId: productId, slug: "a", name: "A" });
     const doc = await article("x");
-    await setArticleCategories(p, doc.id, ["a"]);
+    await setArticleCategories(productId, doc.id, ["a"]);
     await updateReferenceDoc(doc.id, { body: "changed" });
     expect((await articleCategories(doc.id)).map((c) => c.slug)).toEqual(["a"]);
   });
 
   it("drops memberships when the article goes", async () => {
-    const p = await tpdProductId();
-    await addWikiCategory({ productId: p, slug: "a", name: "A" });
+    const productId = await tpdProductId();
+    await addWikiCategory({ productId: productId, slug: "a", name: "A" });
     const doc = await article("x");
-    await setArticleCategories(p, doc.id, ["a"]);
+    await setArticleCategories(productId, doc.id, ["a"]);
     await sql`delete from reference_docs where id = ${doc.id}`;
-    const toc = await wikiToc(p);
+    const toc = await wikiToc(productId);
     expect(toc.categories[0].articles).toEqual([]);
   });
 });
@@ -328,66 +336,89 @@ describe("wiki sections (categories that cooperate with components)", () => {
   beforeEach(resetData);
 
   it("carries a lead article and covered components through the toc", async () => {
-    const p = await tpdProductId();
-    await addComponent({ productId: p, slug: "portal", name: "Portal" });
-    await addComponent({ productId: p, slug: "hub", name: "HUB" });
+    const productId = await tpdProductId();
+    await addComponent({
+      productId: productId,
+      slug: "portal",
+      name: "Portal",
+    });
+    await addComponent({ productId: productId, slug: "hub", name: "HUB" });
     await article("portal");
     await addWikiCategory({
-      productId: p,
+      productId: productId,
       slug: "portal",
       name: "Portal",
       leadSlug: "portal",
       componentSlugs: ["portal", "hub"],
     });
-    const [row] = await listWikiCategories(p);
+    const [row] = await listWikiCategories(productId);
     expect(row.lead_slug).toBe("portal");
     expect(row.lead_title).toBe("portal");
     expect(row.components.map((c) => c.slug).sort()).toEqual(["hub", "portal"]);
 
-    const toc = await wikiToc(p);
+    const toc = await wikiToc(productId);
     expect(toc.categories[0].lead_slug).toBe("portal");
     expect(toc.categories[0].components).toHaveLength(2);
   });
 
   it("replaces the covered set whole and clears the lead when asked", async () => {
-    const p = await tpdProductId();
-    await addComponent({ productId: p, slug: "portal", name: "Portal" });
-    await addComponent({ productId: p, slug: "backend", name: "Backend" });
+    const productId = await tpdProductId();
+    await addComponent({
+      productId: productId,
+      slug: "portal",
+      name: "Portal",
+    });
+    await addComponent({
+      productId: productId,
+      slug: "backend",
+      name: "Backend",
+    });
     await article("backend");
     const cat = await addWikiCategory({
-      productId: p,
+      productId: productId,
       slug: "s",
       name: "S",
       leadSlug: "backend",
       componentSlugs: ["portal"],
     });
-    await setCategoryComponents(p, cat.id, ["backend"]);
-    let [row] = await listWikiCategories(p);
+    await setCategoryComponents(productId, cat.id, ["backend"]);
+    let [row] = await listWikiCategories(productId);
     expect(row.components.map((c) => c.slug)).toEqual(["backend"]);
 
-    await updateWikiCategory(p, "s", { leadSlug: null, componentSlugs: [] });
-    [row] = await listWikiCategories(p);
+    await updateWikiCategory(productId, "s", {
+      leadSlug: null,
+      componentSlugs: [],
+    });
+    [row] = await listWikiCategories(productId);
     expect(row.lead_slug).toBeNull();
     expect(row.components).toEqual([]);
   });
 
   it("seeds one section per top-level component and is re-runnable", async () => {
-    const p = await tpdProductId();
-    await addComponent({ productId: p, slug: "portal", name: "Portal" });
-    await addComponent({ productId: p, slug: "backend", name: "Backend" });
+    const productId = await tpdProductId();
     await addComponent({
-      productId: p,
+      productId: productId,
+      slug: "portal",
+      name: "Portal",
+    });
+    await addComponent({
+      productId: productId,
+      slug: "backend",
+      name: "Backend",
+    });
+    await addComponent({
+      productId: productId,
       slug: "worker",
       name: "Worker",
       parentSlug: "backend",
     });
 
-    const first = await seedSectionsFromComponents(p);
+    const first = await seedSectionsFromComponents(productId);
     expect(first.created.map((c) => c.slug).sort()).toEqual([
       "backend",
       "portal",
     ]);
-    const rows = await listWikiCategories(p);
+    const rows = await listWikiCategories(productId);
     // The child component does not seed its own section.
     expect(rows.map((r) => r.slug).sort()).toEqual(["backend", "portal"]);
     // Each section is linked to the component it came from.
@@ -395,13 +426,13 @@ describe("wiki sections (categories that cooperate with components)", () => {
     expect(backend.components.map((c) => c.slug)).toEqual(["backend"]);
 
     // Re-running leaves the curated set untouched.
-    const again = await seedSectionsFromComponents(p);
+    const again = await seedSectionsFromComponents(productId);
     expect(again.created).toEqual([]);
-    expect(await listWikiCategories(p)).toHaveLength(2);
+    expect(await listWikiCategories(productId)).toHaveLength(2);
   });
 
   it("searches this wiki's articles, drafts included, scoped to the wiki", async () => {
-    const p = await tpdProductId();
+    const productId = await tpdProductId();
     await article("spooler-stalls", {
       title: "Spooler stalls",
       body: "the print spooler stops responding",
@@ -417,9 +448,9 @@ describe("wiki sections (categories that cooperate with components)", () => {
       body: "org-wide spooler note",
     });
 
-    const hits = await searchWikiArticles(p, "spooler");
+    const hits = await searchWikiArticles(productId, "spooler");
     expect(hits.map((h) => h.slug)).toEqual(["spooler-stalls"]);
     expect(hits[0].status).toBe("draft");
-    expect(await searchWikiArticles(p, "")).toEqual([]);
+    expect(await searchWikiArticles(productId, "")).toEqual([]);
   });
 });

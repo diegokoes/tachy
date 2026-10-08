@@ -40,10 +40,8 @@ describe("embedThreads", () => {
     expect(embedThreads({ hostCores: 14, cores: 8, quota: 6 }, "")).toBe(6);
   });
 
-  /**
-   * The laptop: 4 cores, 8 logical CPUs, the embedder limited to 6. The
-   * runtime's own 4 threads already fit, and 6 measured slower than 4.
-   */
+  // The laptop: 4 cores, 8 logical CPUs, the embedder limited to 6. The
+  // runtime's own 4 threads already fit.
   it("leaves the runtime its default when the limit is not below the cores", () => {
     expect(
       embedThreads({ hostCores: 4, cores: 4, quota: 6 }, ""),
@@ -68,10 +66,10 @@ describe("embedThreads", () => {
 
 describe("cpuBudget", () => {
   it("reports this host, with no more cores to run on than it has", () => {
-    const b = cpuBudget();
-    expect(b.hostCores).toBeGreaterThanOrEqual(1);
-    expect(b.cores).toBeGreaterThanOrEqual(1);
-    expect(b.cores).toBeLessThanOrEqual(b.hostCores);
-    expect(b.quota === undefined || b.quota > 0).toBe(true);
+    const budget = cpuBudget();
+    expect(budget.hostCores).toBeGreaterThanOrEqual(1);
+    expect(budget.cores).toBeGreaterThanOrEqual(1);
+    expect(budget.cores).toBeLessThanOrEqual(budget.hostCores);
+    expect(budget.quota === undefined || budget.quota > 0).toBe(true);
   });
 });

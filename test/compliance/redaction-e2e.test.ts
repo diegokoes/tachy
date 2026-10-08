@@ -70,10 +70,10 @@ describe("redaction end-to-end via resolveSource", () => {
     expect((forLlm.raw as any).description_text).toMatch(/\[PHONE_\d+\]/);
     expect(forLlm.messages[0].bodyText).toMatch(/^reply to \[EMAIL_\d+\]$/);
 
-    const [wi] =
+    const [workItem] =
       await sql`select raw, requester from work_items where id = ${item.id}`;
-    expect(wi.raw.email).toBe("jane@davidoff.com");
-    expect(wi.requester).toBe("42");
+    expect(workItem.raw.email).toBe("jane@davidoff.com");
+    expect(workItem.requester).toBe("42");
     const [msg] =
       await sql`select body_text from work_item_messages where work_item_id = ${item.id}`;
     expect(msg.body_text).toBe("reply to jane@davidoff.com");

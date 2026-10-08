@@ -23,12 +23,21 @@ import {
   listJobDefinitionChanges,
   listJobDefinitions,
   listJobRuns,
+  presentRun,
   previewSchedule,
   updateJobDefinition,
 } from "@tachy/core/jobs";
 import { effectiveSettings, orgTimezone } from "@tachy/core/config";
 import { requireAdmin } from "../auth";
 import { callerUserId } from "../authz";
+
+/**
+ * How far back the census looks. The overview and its detail view ask for
+ * different spans.
+ */
+const periodQuery = z.object({
+  days: z.coerce.number().int().min(7).max(90).optional(),
+});
 
 const previewSchema = z.object({
   schedule: z.string().min(1),
@@ -53,7 +62,9 @@ export const jobs = new Hono()
     });
   })
 
-  .get("/census", async (c) => c.json(await jobCensus(14)))
+  .get("/census", zValidator("query", periodQuery), async (c) =>
+    c.json(await jobCensus(c.req.valid("query").days ?? 14)),
+  )
 
   .get("/live", async (c) => c.json(await jobLive()))
 
@@ -77,13 +88,20 @@ export const jobs = new Hono()
     `;
     const byDef = new Map(last.map((r) => [r.definition_id as string, r]));
     return c.json(
-      defs.map((d) => {
+      defs.map((definition) => {
         let next: string | null = null;
-        if (d.enabled && d.schedule)
+        if (definition.enabled && definition.schedule)
           try {
-            next = previewSchedule(d.schedule, d.timezone, 1)[0] ?? null;
+            next =
+              previewSchedule(definition.schedule, definition.timezone, 1)[0] ??
+              null;
           } catch {}
-        return { ...d, next_run: next, last_run: byDef.get(d.id) ?? null };
+        return {
+          ...definition,
+          subject: presentRun(definition.kind, definition.params, null).subject,
+          next_run: next,
+          last_run: byDef.get(definition.id) ?? null,
+        };
       }),
     );
   })
@@ -118,12 +136,12 @@ export const jobs = new Hono()
   )
 
   .post("/definitions/:id/run", async (c) => {
-    const d = await getJobDefinition(c.req.param("id"));
+    const definition = await getJobDefinition(c.req.param("id"));
     const id = await enqueueRun({
-      kind: d.kind,
-      params: d.params,
+      kind: definition.kind,
+      params: definition.params,
       trigger: "manual",
-      definitionId: d.id,
+      definitionId: definition.id,
       requestedBy: await callerUserId(c),
     });
     return c.json({ run_id: id }, 202);
@@ -149,18 +167,18 @@ export const jobs = new Hono()
       }),
     ),
     async (c) => {
-      const q = c.req.valid("query");
+      const query = c.req.valid("query");
       return c.json(
         await listJobRuns({
-          definitionId: q.definition_id,
-          parentId: q.parent_id,
-          status: q.status,
-          kind: q.kind,
-          queue: q.queue,
-          trigger: q.trigger,
-          active: q.active,
-          before: q.before,
-          limit: q.limit,
+          definitionId: query.definition_id,
+          parentId: query.parent_id,
+          status: query.status,
+          kind: query.kind,
+          queue: query.queue,
+          trigger: query.trigger,
+          active: query.active,
+          before: query.before,
+          limit: query.limit,
         }),
       );
     },

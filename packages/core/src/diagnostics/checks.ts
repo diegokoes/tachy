@@ -18,10 +18,23 @@ export interface Check {
 }
 
 const ms = (started: number) => Math.round(performance.now() - started);
+/** An embedding slower than this passes with a warning. */
+const SLOW_EMBED_MS = 2_000;
+
+function databaseDetail(
+  stamp: Awaited<ReturnType<typeof schemaStampStatus>>,
+  tookMs: number,
+): string {
+  if (stamp === "match")
+    return `answers in ${tookMs} ms, schema matches the image`;
+  if (stamp === "unstamped")
+    return `answers in ${tookMs} ms, schema not stamped yet`;
+  return "the live schema is not the one this image expects";
+}
 
 /**
- * Fast checks, safe to run at any hour: what actually varies between
- * environments, as opposed to what CI already proved about the commit
+ * Fast checks, safe to run at any hour: what varies between environments, as
+ * opposed to what CI already proved about the commit
  * (DEPLOYMENT-ARCHITECTURE.md §11.3).
  */
 export async function runSystemChecks(): Promise<Check[]> {
@@ -29,31 +42,27 @@ export async function runSystemChecks(): Promise<Check[]> {
   const add = (name: string, state: Check["state"], detail: string) =>
     checks.push({ name, state, detail });
 
-  const t0 = performance.now();
+  const dbStarted = performance.now();
   try {
     await sql`select 1`;
     const stamp = await schemaStampStatus();
     add(
       "database",
       stamp === "mismatch" ? "fail" : "pass",
-      stamp === "match"
-        ? `answers in ${ms(t0)} ms, schema matches the image`
-        : stamp === "unstamped"
-          ? `answers in ${ms(t0)} ms, schema not stamped yet`
-          : "the live schema is not the one this image expects",
+      databaseDetail(stamp, ms(dbStarted)),
     );
   } catch (err) {
     add("database", "fail", String(err));
   }
 
-  const t1 = performance.now();
+  const embedStarted = performance.now();
   try {
-    const v = await embedQuery("a health check query");
-    const took = ms(t1);
+    const vector = await embedQuery("a health check query");
+    const took = ms(embedStarted);
     add(
       "embedding",
-      took > 2_000 ? "warn" : "pass",
-      `${v.length}-dim vector in ${took} ms`,
+      took > SLOW_EMBED_MS ? "warn" : "pass",
+      `${vector.length}-dim vector in ${took} ms`,
     );
   } catch (err) {
     add("embedding", "fail", String(err));
@@ -85,13 +94,13 @@ export async function runSystemChecks(): Promise<Check[]> {
   }
 
   for (const conn of await listSourceConnections()) {
-    const t = performance.now();
+    const started = performance.now();
     try {
       const { source } = await resolveSource(conn.slug);
       if (!source.verify) add(`source ${conn.slug}`, "skip", "no test call");
       else {
         await source.verify();
-        add(`source ${conn.slug}`, "pass", `answers in ${ms(t)} ms`);
+        add(`source ${conn.slug}`, "pass", `answers in ${ms(started)} ms`);
       }
     } catch (err) {
       add(`source ${conn.slug}`, "fail", String(err));
@@ -107,14 +116,14 @@ export async function runSystemChecks(): Promise<Check[]> {
     where scope = 'user'
       and name = any(${[ANTHROPIC_API_KEY_CREDENTIAL, ANTHROPIC_OAUTH_CREDENTIAL]})
   `;
+  const ownCredentials =
+    byUser > 0
+      ? `${byUser} user(s) hold their own credential`
+      : "no credential for the model";
   add(
     "agent",
     auth || byUser > 0 ? "pass" : "fail",
-    auth
-      ? `credential available (${auth.kind})`
-      : byUser > 0
-        ? `${byUser} user(s) hold their own credential`
-        : "no credential for the model",
+    auth ? `credential available (${auth.kind})` : ownCredentials,
   );
 
   return checks;

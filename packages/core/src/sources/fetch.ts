@@ -2,24 +2,25 @@ import { countSourceCall } from "./traffic";
 
 /**
  * How long one call to a source system may take. Without a deadline a hung
- * upstream hangs the tool call, the agent turn and the SSE stream behind it,
- * indefinitely and silently - nothing further up has a timeout of its own.
+ * upstream hangs the tool call, the agent turn and the SSE stream behind it:
+ * nothing further up has a timeout of its own.
  */
 export const SOURCE_TIMEOUT_MS = 30_000;
 
 /**
- * A sync walks thousands of items, so meeting a rate limit is ordinary rather
- * than exceptional - and every adapter throws on any non-2xx, which without
- * this aborts the whole run. The CLI keeps no watermark, so the retry then
- * restarts from wherever the operator's `--since` pointed.
+ * A sync walks thousands of items, so meeting a rate limit is ordinary. Every
+ * adapter throws on a non-2xx, which without a retry aborts the whole run.
  */
 const RETRY_STATUSES = new Set([429, 502, 503, 504]);
 const MAX_RETRIES = 3;
 
 /** GitHub answers a secondary rate limit with 403 and a spent budget. */
-function isRateLimited(res: Response): boolean {
-  if (RETRY_STATUSES.has(res.status)) return true;
-  return res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0";
+function isRateLimited(response: Response): boolean {
+  if (RETRY_STATUSES.has(response.status)) return true;
+  return (
+    response.status === 403 &&
+    response.headers.get("x-ratelimit-remaining") === "0"
+  );
 }
 
 /**
@@ -27,8 +28,8 @@ function isRateLimited(res: Response): boolean {
  * the server sends one - as seconds or as a date - and GitHub instead names the
  * epoch second its budget refills at.
  */
-function retryDelayMs(res: Response, attempt: number): number {
-  const after = res.headers.get("retry-after");
+function retryDelayMs(response: Response, attempt: number): number {
+  const after = response.headers.get("retry-after");
   if (after) {
     const seconds = Number(after);
     const ms = Number.isFinite(seconds)
@@ -36,7 +37,7 @@ function retryDelayMs(res: Response, attempt: number): number {
       : Date.parse(after) - Date.now();
     if (ms > 0) return Math.min(ms, MAX_RETRY_WAIT_MS);
   }
-  const reset = Number(res.headers.get("x-ratelimit-reset"));
+  const reset = Number(response.headers.get("x-ratelimit-reset"));
   if (Number.isFinite(reset) && reset > 0) {
     const ms = reset * 1000 - Date.now();
     if (ms > 0) return Math.min(ms, MAX_RETRY_WAIT_MS);
@@ -51,13 +52,10 @@ const AUTH_STATUSES = new Set([401, 403, 203]);
 
 /**
  * `fetch` with a deadline, and a wait when the far end asks for one. `label` is
- * what the caller would have put in its own error message, so a timeout reads
- * like the adapter's other failures rather than as a bare TimeoutError from
- * somewhere in the runtime.
- *
- * `meter` names the connection the call is spent against. It is counted once
- * per logical call, however many retries the rate limiter cost; an adapter that
- * leaves it off is simply not counted.
+ * what the caller would put in its own error message, so a timeout reads like
+ * the adapter's other failures. `meter` names the connection the call is spent
+ * against, counted once per logical call however many retries it took; without
+ * it the call is not counted.
  */
 export async function sourceFetch(
   label: string,
@@ -71,9 +69,9 @@ export async function sourceFetch(
     const signal = init?.signal
       ? AbortSignal.any([init.signal, deadline])
       : deadline;
-    let res: Response;
+    let response: Response;
     try {
-      res = await fetch(url, { ...init, signal });
+      response = await fetch(url, { ...init, signal });
     } catch (e) {
       if (meter)
         countSourceCall(meter.connection, {
@@ -87,26 +85,26 @@ export async function sourceFetch(
         );
       throw e;
     }
-    const throttled = isRateLimited(res);
+    const throttled = isRateLimited(response);
     limited ||= throttled;
     if (attempt >= MAX_RETRIES || !throttled) {
       if (meter)
         countSourceCall(meter.connection, {
           rateLimited: limited,
-          authFailed: !throttled && AUTH_STATUSES.has(res.status),
+          authFailed: !throttled && AUTH_STATUSES.has(response.status),
         });
-      return res;
+      return response;
     }
-    await new Promise((r) => setTimeout(r, retryDelayMs(res, attempt)));
+    await new Promise((r) => setTimeout(r, retryDelayMs(response, attempt)));
   }
 }
 
 /**
  * Blocks that must never be reachable from a URL someone typed into the product
- * or a model composed from ticket text: loopback, link-local (which includes the
- * cloud metadata endpoint at 169.254.169.254), and the private ranges the server
- * itself sits in. Deliberately not applied to `sourceFetch` - a self-hosted
- * GitHub Enterprise or Azure DevOps server is legitimately on a private address.
+ * or a model composed from ticket text: loopback, link-local (which includes
+ * the cloud metadata endpoint at 169.254.169.254), and the private ranges the
+ * server itself sits in. Not applied to `sourceFetch`: a self-hosted GitHub
+ * Enterprise or Azure DevOps server is legitimately on a private address.
  */
 function isBlockedAddress(ip: string): boolean {
   if (ip.includes(":")) {
@@ -117,34 +115,34 @@ function isBlockedAddress(ip: string): boolean {
     const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(v6);
     return mapped ? isBlockedAddress(mapped[1]) : false;
   }
-  const p = ip.split(".").map(Number);
-  if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255))
+  const octets = ip.split(".").map(Number);
+  if (
+    octets.length !== 4 ||
+    octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)
+  )
     return true;
-  const [a, b] = p;
+  const [first, second] = octets;
   return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    a >= 224
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 100 && second >= 64 && second <= 127) ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    (first === 198 && (second === 18 || second === 19)) ||
+    first >= 224
   );
 }
 
 const MAX_REDIRECTS = 3;
 
 /**
- * `fetch` for a URL the product did not choose - a paste into the ingest box, a
- * link a model lifted out of a ticket. Every hop is re-checked, because a public
- * host is free to redirect to a private one.
- *
- * The address check runs before the connection rather than on it, so a name that
- * resolves differently between the two lookups is not covered. That is the known
- * limit of doing this without pinning the socket; it is a much narrower opening
- * than the unrestricted `fetch` it replaces.
+ * `fetch` for a URL the product did not choose: a paste into the ingest box, a
+ * link a model lifted out of a ticket. Every hop is re-checked, because a
+ * public host can redirect to a private one. The address is checked before the
+ * connection, not on it, so a name that resolves differently between the two
+ * lookups is not covered.
  */
 export async function fetchUntrustedUrl(
   label: string,
@@ -177,11 +175,11 @@ export async function fetchUntrustedUrl(
         `${label}: '${host}' resolves to a private or loopback address`,
       );
 
-    const res = await sourceFetch(label, next, { redirect: "manual" });
-    if (res.status < 300 || res.status > 399) return res;
+    const response = await sourceFetch(label, next, { redirect: "manual" });
+    if (response.status < 300 || response.status > 399) return response;
 
-    const location = res.headers.get("location");
-    if (!location) return res;
+    const location = response.headers.get("location");
+    if (!location) return response;
     next = new URL(location, next).toString();
   }
   throw new Error(`${label}: more than ${MAX_REDIRECTS} redirects`);

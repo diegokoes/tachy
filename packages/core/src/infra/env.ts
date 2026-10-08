@@ -18,6 +18,7 @@ const oidcRaw =
     : undefined;
 
 const apiTokenRaw = process.env.TACHY_API_TOKEN || undefined;
+const tokenMode = apiTokenRaw ? "token" : "open";
 
 const sessionSecretRaw =
   process.env.TACHY_SESSION_SECRET || process.env.OIDC_AUTH_SECRET || undefined;
@@ -62,15 +63,15 @@ const envSchema = z
       })
       .optional(),
   })
-  .superRefine((v, ctx) => {
-    if (v.authMode === "sso" && !v.oidc)
+  .superRefine((parsed, ctx) => {
+    if (parsed.authMode === "sso" && !parsed.oidc)
       ctx.addIssue({
         code: "custom",
         path: ["oidc"],
         message:
           "authMode 'sso' requires OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET",
       });
-    if (v.oidc && !v.sessionSecret)
+    if (parsed.oidc && !parsed.sessionSecret)
       ctx.addIssue({
         code: "custom",
         path: ["sessionSecret"],
@@ -91,7 +92,7 @@ const parsed = envSchema.safeParse({
   commit: process.env.TACHY_COMMIT || undefined,
   authMode:
     (process.env.TACHY_AUTH_MODE as "sso" | "token" | "open" | undefined) ??
-    (oidcRaw ? "sso" : apiTokenRaw ? "token" : "open"),
+    (oidcRaw ? "sso" : tokenMode),
   sessionSecret: sessionSecretRaw,
   oidc: oidcRaw,
 });

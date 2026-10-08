@@ -32,6 +32,14 @@ beforeEach(async () => {
 });
 
 describe("jobs API", () => {
+  it("takes a window for the census, within a quarter", async () => {
+    expect((await (await call("/census")).json()).days).toBe(14);
+    const wide = await (await call("/census?days=90")).json();
+    expect(wide.days).toBe(90);
+    expect(wide.per_day).toHaveLength(90);
+    expect((await call("/census?days=1")).status).toBe(400);
+  });
+
   it("describes kinds with their params schema and the chat cap", async () => {
     const body = await (await call("/kinds")).json();
     const sync = body.kinds.find((k: any) => k.kind === "source.sync");
@@ -108,12 +116,12 @@ describe("jobs API", () => {
   });
 
   it("starts a one-off run of a kind without a definition", async () => {
-    const res = await call("/runs", "POST", {
+    const answer = await call("/runs", "POST", {
       kind: "embeddings.backfill",
       params: { all: true },
     });
-    expect(res.status).toBe(202);
-    const { run_id } = await res.json();
+    expect(answer.status).toBe(202);
+    const { run_id } = await answer.json();
     const run = await (await call(`/runs/${run_id}`)).json();
     expect(run).toMatchObject({
       kind: "embeddings.backfill",

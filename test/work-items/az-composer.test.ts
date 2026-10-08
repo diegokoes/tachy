@@ -95,10 +95,9 @@ describe("creatable types", () => {
       },
     });
     expect(await creatableTypes(client(), "ProjA")).toEqual([
-      { name: "Bug", description: null, color: "CC293D", icon: "icon_insect" },
+      { name: "Bug", color: "CC293D", icon: "icon_insect" },
       {
         name: "Task",
-        description: null,
         color: "F2CB1D",
         icon: "icon_clipboard",
       },
@@ -274,16 +273,18 @@ describe("composer form", () => {
   });
 
   it("starts from ADO's new-item template, under the team's paths", async () => {
-    const r = routes({});
+    const mocked = routes({});
     (
-      r["/ProjA/_apis/wit/workitemtypes/Bug/fields"] as { value: unknown[] }
+      mocked["/ProjA/_apis/wit/workitemtypes/Bug/fields"] as {
+        value: unknown[];
+      }
     ).value.push(
       { referenceName: "System.AssignedTo", name: "Assigned To" },
       { referenceName: "System.State", name: "State" },
       { referenceName: "Custom.Cloud", name: "Cloud" },
     );
     mockFetch({
-      ...r,
+      ...mocked,
       "/ProjA/_apis/wit/workitems/$Bug": {
         fields: {
           "System.AreaPath": "ProjA",
@@ -311,15 +312,17 @@ describe("composer form", () => {
   });
 
   it("treats a list of only ADO's <None> placeholder as free text", async () => {
-    const r = routes({});
+    const mocked = routes({});
     (
-      r["/ProjA/_apis/wit/workitemtypes/Bug/fields"] as { value: unknown[] }
+      mocked["/ProjA/_apis/wit/workitemtypes/Bug/fields"] as {
+        value: unknown[];
+      }
     ).value.push({
       referenceName: "Microsoft.VSTS.Build.FoundIn",
       name: "Found In",
       allowedValues: ["<None>"],
     });
-    mockFetch(r);
+    mockFetch(mocked);
     const form = await composerForm(client(), "ProjA", "Bug");
     expect(form.widgets["Microsoft.VSTS.Build.FoundIn"]).toEqual({
       kind: "suggest",
@@ -376,7 +379,7 @@ describe("composer form", () => {
 });
 
 describe("projectLayout", () => {
-  const f = (
+  const field = (
     reference_name: string,
     extra: Partial<FieldSpec> = {},
   ): FieldSpec => ({
@@ -386,16 +389,16 @@ describe("projectLayout", () => {
     ...extra,
   });
   const fields = [
-    f("System.AssignedTo", { name: "Assigned To" }),
-    f("System.AreaPath", { name: "Area Path" }),
-    f("System.Description", { type: "html" }),
-    f("Microsoft.VSTS.TCM.ReproSteps", { type: "html" }),
-    f("Microsoft.VSTS.TCM.SystemInfo", { type: "html" }),
-    f("Microsoft.VSTS.Common.Priority"),
-    f("Microsoft.VSTS.Common.Severity"),
-    f("Custom.Area", { name: "Area" }),
-    f("Custom.Cloud"),
-    f("System.CreatedBy", { read_only: true }),
+    field("System.AssignedTo", { name: "Assigned To" }),
+    field("System.AreaPath", { name: "Area Path" }),
+    field("System.Description", { type: "html" }),
+    field("Microsoft.VSTS.TCM.ReproSteps", { type: "html" }),
+    field("Microsoft.VSTS.TCM.SystemInfo", { type: "html" }),
+    field("Microsoft.VSTS.Common.Priority"),
+    field("Microsoft.VSTS.Common.Severity"),
+    field("Custom.Area", { name: "Area" }),
+    field("Custom.Cloud"),
+    field("System.CreatedBy", { read_only: true }),
   ];
   // Shaped after a real Scrum-derived Bug: Priority and System Info hidden,
   // Custom.Area relabelled, Cloud drawn by the multivalue extension.
@@ -467,12 +470,12 @@ describe("projectLayout", () => {
   };
 
   it("keeps what ADO shows, splits prose from the rest, and follows its groups", () => {
-    const { layout: l } = projectLayout(layout, fields);
-    expect(l.body).toEqual([
+    const { layout: laid } = projectLayout(layout, fields);
+    expect(laid.body).toEqual([
       "System.Description",
       "Microsoft.VSTS.TCM.ReproSteps",
     ]);
-    expect(l.groups).toEqual([
+    expect(laid.groups).toEqual([
       { label: null, fields: ["System.AssignedTo", "System.AreaPath"] },
       { label: "Planning", fields: ["Microsoft.VSTS.Common.Severity"] },
       { label: "System Info", fields: ["Custom.Cloud", "Custom.Area"] },
@@ -535,7 +538,7 @@ describe("/api/compose", () => {
   let adminCookie: string;
   let projectId: string;
 
-  const req = (cookie: string, path: string, init: RequestInit = {}) =>
+  const request = (cookie: string, path: string, init: RequestInit = {}) =>
     app.request(`/api/compose${path}`, {
       ...init,
       headers: { cookie, ...(init.headers ?? {}) },
@@ -593,7 +596,7 @@ describe("/api/compose", () => {
   const keys = async (cookie: string) =>
     (
       (await (
-        await req(cookie, "/projects?source_type=azure-devops")
+        await request(cookie, "/projects?source_type=azure-devops")
       ).json()) as {
         external_key: string;
       }[]
@@ -609,8 +612,11 @@ describe("/api/compose", () => {
 
   it("refuses another team's project before calling ADO", async () => {
     const calls = mockFetch({});
-    const res = await req(outsiderCookie, `/projects/${projectId}/types`);
-    expect(res.status).toBe(403);
+    const response = await request(
+      outsiderCookie,
+      `/projects/${projectId}/types`,
+    );
+    expect(response.status).toBe(403);
     expect(calls).toEqual([]);
   });
 
@@ -639,12 +645,16 @@ describe("/api/compose", () => {
     );
     form.set("image:k1", new File([new Uint8Array([1, 2, 3])], "shot.png"));
     form.set("image:unused", new File([new Uint8Array([9])], "old.png"));
-    const res = await req(memberCookie, `/projects/${projectId}/items`, {
-      method: "POST",
-      body: form,
-    });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({
+    const response = await request(
+      memberCookie,
+      `/projects/${projectId}/items`,
+      {
+        method: "POST",
+        body: form,
+      },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
       id: 77,
       url: `${ORG}/ProjA/_workitems/edit/77`,
       title: "Label printer jams",
@@ -676,12 +686,19 @@ describe("/api/compose", () => {
         `{"message":"TF401320: Rule Error for field Severity. Error code: Required, InvalidEmpty."}`,
       ),
     });
-    const res = await req(memberCookie, `/projects/${projectId}/validate`, {
-      method: "POST",
-      body: JSON.stringify({ type: "Bug", title: "x", fields: {} }),
-      headers: { "Content-Type": "application/json" },
+    const response = await request(
+      memberCookie,
+      `/projects/${projectId}/validate`,
+      {
+        method: "POST",
+        body: JSON.stringify({ type: "Bug", title: "x", fields: {} }),
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+    expect(await response.json()).toMatchObject({
+      ok: false,
+      fields: ["Severity"],
     });
-    expect(await res.json()).toMatchObject({ ok: false, fields: ["Severity"] });
     expect(calls[0].path).toContain("validateOnly=true");
   });
 });

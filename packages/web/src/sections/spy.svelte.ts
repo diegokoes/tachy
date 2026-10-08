@@ -24,13 +24,11 @@ const SETTLE = 500;
 const SETTLE_CAP = 3000;
 
 /**
- * The rail and the stacked column, kept in agreement.
- *
- * Sections register themselves as they mount; this builds one ScrollTrigger
- * per section against the app's real scroller and reports which one the reader
- * is in. It also owns the two other things that are really scroll position in
- * disguise - the once-only reveal, and mounting a section shortly before it is
- * reached.
+ * The rail and the stacked column, kept in agreement. Sections register as they
+ * mount; this builds one ScrollTrigger per section against the app's scroller
+ * and reports which one the reader is in. It also owns the once-only reveal and
+ * mounting a section shortly before it is reached, which are both scroll
+ * position.
  */
 export function createSpy(opts: {
   onactive: (key: string) => void;
@@ -42,19 +40,18 @@ export function createSpy(opts: {
   let refreshFrame = 0;
   let built = false;
 
-  /* Set while a rail click or a deep-link jump is driving the scroll. The spy
-     fires all the way down a programmatic scroll, and every one of those
-     firings would rewrite the URL and relight the rail on a section the reader
-     is only passing through. */
+  // Set while a rail click or a deep-link jump drives the scroll. The spy fires
+  // all the way down a programmatic scroll, and each firing would rewrite the
+  // URL and relight the rail on a section only being passed.
   let programmatic = false;
   let trip: gsap.core.Tween | null = null;
   let holding = 0;
   let holdUntil = 0;
   let holdCap = 0;
 
-  /* Trailing air under the last section. Without it a short last section can
-     never reach the top - there is nothing below to scroll - so where the rail
-     puts you would depend on how many rows the table happened to have. */
+  // Trailing air under the last section. Without it a short last section can
+  // never reach the top - there is nothing below to scroll - so where the rail
+  // puts you would depend on how many rows the table happened to have.
   let tail = $state(0);
 
   const port = () => scrollport();
@@ -76,33 +73,30 @@ export function createSpy(opts: {
     kill();
     built = true;
 
-    for (const e of ordered()) {
+    for (const entry of ordered()) {
       triggers.push(
         ScrollTrigger.create({
-          trigger: e.el,
+          trigger: entry.el,
           scroller: el,
           start: "top bottom+=600",
           once: true,
-          onEnter: () => e.mount(),
+          onEnter: () => entry.mount(),
         }),
       );
 
       triggers.push(
         ScrollTrigger.create({
-          trigger: e.el,
+          trigger: entry.el,
           scroller: el,
           start: "top 35%",
           end: "bottom 35%",
           onToggle: (self) => {
             if (!self.isActive || programmatic) return;
-            /* Same edge rule as onScroll below, applied here because a toggle
-               fires without a scroll event to correct it afterwards. A first
-               section shorter than a third of the window puts the 35% line over
-               its neighbour before the reader has scrolled at all, which lit
-               the second row of the rail on arrival and wrote its name into the
-               URL. */
-            if (el.scrollTop <= 2 && ordered()[0]?.key !== e.key) return;
-            opts.onactive(e.key);
+            // The edge rule of `onScroll`, applied here because a toggle fires
+            // with no scroll event to correct it: a short first section puts
+            // the 35% line over its neighbour before any scroll.
+            if (el.scrollTop <= 2 && ordered()[0]?.key !== entry.key) return;
+            opts.onactive(entry.key);
           },
         }),
       );
@@ -110,11 +104,11 @@ export function createSpy(opts: {
       if (!reducedMotion()) {
         triggers.push(
           ScrollTrigger.create({
-            trigger: e.el,
+            trigger: entry.el,
             scroller: el,
             start: "top 85%",
             once: true,
-            onEnter: () => reveal(e),
+            onEnter: () => reveal(entry),
           }),
         );
       }
@@ -124,10 +118,9 @@ export function createSpy(opts: {
     onScroll();
   }
 
-  /* The 35% line is the wrong test at either end of the scroll: an overview
-     shorter than a third of the window puts the line over the section below it
-     while the reader is plainly looking at the overview, and a short last
-     section never reaches the line at all. */
+  // The 35% line is the wrong test at either end of the scroll: an overview
+  // shorter than a third of the window puts the line over the next section, and
+  // a short last section never reaches the line.
   function onScroll() {
     const el = port();
     if (!el || programmatic) return;
@@ -140,22 +133,20 @@ export function createSpy(opts: {
     }
   }
 
-  /* The scroll has arrived, but the panels above it are still fetching, and
-     each one that lands pushes the target further down. So the hold does not
-     run on a fixed timer: every resize of the column extends it, up to a cap,
-     and it ends the instant the reader scrolls for themselves - which is the
-     whole difference between settling and scroll-jacking. */
+  // The scroll has arrived, but panels above it are still fetching, and each
+  // one that lands pushes the target down. So every resize of the column
+  // extends the hold, up to a cap, and it ends when the reader scrolls.
   function hold(el: HTMLElement, goal: () => number) {
     const give = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
     const stop = () => {
       cancelAnimationFrame(holding);
       holding = 0;
       programmatic = false;
-      for (const ev of give) el.removeEventListener(ev, stop);
+      for (const type of give) el.removeEventListener(type, stop);
       window.removeEventListener("keydown", stop);
     };
-    for (const ev of give)
-      el.addEventListener(ev, stop, { passive: true, once: true });
+    for (const type of give)
+      el.addEventListener(type, stop, { passive: true, once: true });
     window.addEventListener("keydown", stop, { once: true });
 
     holdUntil = performance.now() + SETTLE;
@@ -178,10 +169,9 @@ export function createSpy(opts: {
     programmatic = false;
   }
 
-  /* clearProps is load-bearing, not tidiness: `from` leaves its transform
-     inline when it lands, and a transformed ancestor becomes the containing
-     block for every `position: fixed` inside it - which trapped a dialog's
-     scrim and its own stacking order inside this one section. */
+  // clearProps is required: `from` leaves its transform inline, and a
+  // transformed ancestor becomes the containing block of every `position:
+  // fixed` inside it, which traps a dialog's scrim in this section.
   function reveal(e: Entry) {
     wipeIn([e.head]);
     gsap.from(e.el.querySelector(".section-body") ?? e.el, {
@@ -212,7 +202,7 @@ export function createSpy(opts: {
 
   function kill() {
     port()?.removeEventListener("scroll", onScroll);
-    for (const t of triggers) t.kill();
+    for (const trigger of triggers) trigger.kill();
     triggers = [];
   }
 
@@ -237,28 +227,25 @@ export function createSpy(opts: {
       build();
       observer = new ResizeObserver(refresh);
       observer.observe(el);
-      for (const e of ordered()) observer.observe(e.el);
+      for (const entry of ordered()) observer.observe(entry.el);
       measureTail();
     },
 
     /**
-     * Scroll to a section.
-     *
-     * Everything above the target is mounted first, but that is only half the
-     * problem: a panel renders an empty table and then grows again when its
-     * fetch lands, which on a page this tall happens while the scroll is still
-     * travelling. So the destination is re-measured on every tick rather than
-     * recorded once, and held for a moment after arrival - until the reader
-     * touches the scroll themselves.
+     * Scroll to a section. Everything above the target is mounted first, and a
+     * panel still grows when its fetch lands, which on a tall page happens
+     * while the scroll is travelling. So the destination is re-measured on
+     * every tick and held for a moment after arrival, until the reader touches
+     * the scroll.
      */
     goto(key: string, animate = true) {
       const el = port();
       const target = entries.get(key);
       if (!el || !target) return;
 
-      for (const e of ordered()) {
-        e.mount();
-        if (e.key === key) break;
+      for (const entry of ordered()) {
+        entry.mount();
+        if (entry.key === key) break;
       }
       opts.onactive(key);
 
@@ -308,9 +295,9 @@ export function createSpy(opts: {
       observer = null;
       built = false;
       kill();
-      /* Entries are not cleared: on a page change the incoming sections
-         register before this runs, and each outgoing one removes its own
-         through the disposer `register` handed it. */
+      // Entries are not cleared: on a page change the incoming sections
+      // register before this runs, and each outgoing one removes its own
+      // through the disposer `register` handed it.
     },
   };
 }

@@ -1,15 +1,13 @@
 <script lang="ts">
-  import Caret from "./Caret.svelte";
+  import Caret, { caretSide, type CaretSide } from "./Caret.svelte";
   import { portal } from "./portal";
 
   /**
    * Draws the app's caret over whichever text field has focus. A native caret
    * takes a colour and a shape and nothing else, so the field's own is made
-   * transparent and this one is placed where it would have been.
-   *
-   * Fields that do not report a selection (email, number, date) and password
-   * fields, whose text is not what is drawn, keep the native caret. So does
-   * anything marked `data-caret="own"`.
+   * transparent and this one is placed where it would be. Fields that report no
+   * selection (email, number, date), password fields and anything marked
+   * `data-caret="own"` keep the native caret.
    */
   type Field = HTMLInputElement | HTMLTextAreaElement;
 
@@ -38,9 +36,7 @@
   let size = $state(16);
   let shown = $state(false);
   let beat = $state(0);
-  /** Nothing but space before the caret, so it can stand clear of the letter
-   *  after it instead of straddling the point between two. */
-  let leading = $state(true);
+  let side = $state<CaretSide>("bare");
 
   let held: Field | null = null;
   let frame = 0;
@@ -62,10 +58,10 @@
     seen = { pos: -1, width: -1, value: "" };
   }
 
-  /* The field's text laid out again in a block that can be measured: same
-     face, same padding, same wrapping, cut at the caret. */
+  // The field's text laid out again in a block that can be measured: same face,
+  // same padding, same wrapping, cut at the caret.
   function measure(el: Field, pos: number) {
-    const cs = getComputedStyle(el);
+    const computed = getComputedStyle(el);
     if (!mirror) {
       mirror = document.createElement("div");
       mirror.setAttribute("aria-hidden", "true");
@@ -79,9 +75,10 @@
       });
       document.body.append(mirror);
     }
-    for (const p of COPIED) mirror.style[p] = cs[p];
+    for (const property of COPIED) mirror.style[property] = computed[property];
     const area = el instanceof HTMLTextAreaElement;
-    const pad = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+    const pad =
+      parseFloat(computed.paddingLeft) + parseFloat(computed.paddingRight);
     mirror.style.width = `${el.clientWidth - pad}px`;
     mirror.style.whiteSpace = area ? "pre-wrap" : "pre";
     mirror.style.overflowWrap = area ? "break-word" : "normal";
@@ -90,38 +87,38 @@
     tail.textContent = el.value.slice(pos) || ".";
     mirror.replaceChildren(el.value.slice(0, pos), tail);
 
-    size = parseFloat(cs.fontSize);
-    leading = !/\S/.test(el.value.charAt(pos - 1));
-    /* Rects, not offsetLeft: that one rounds to a whole pixel, and padding
-       set in rem rarely is one. */
+    size = parseFloat(computed.fontSize);
+    side = caretSide(el.value, pos);
+    // Rects, not offsetLeft: that one rounds to a whole pixel, and padding set
+    // in rem rarely is one.
     const box = mirror.getBoundingClientRect();
     const start = tail.getClientRects()[0] ?? box;
     at = {
       left: start.left - box.left,
       top: tail.offsetTop,
-      line: parseFloat(cs.lineHeight) || size * 1.2,
+      line: parseFloat(computed.lineHeight) || size * 1.2,
     };
   }
 
   function place(el: Field) {
-    const r = el.getBoundingClientRect();
-    const left = r.left + el.clientLeft + at.left - el.scrollLeft;
+    const rect = el.getBoundingClientRect();
+    const left = rect.left + el.clientLeft + at.left - el.scrollLeft;
     const top =
       el instanceof HTMLTextAreaElement
-        ? r.top + el.clientTop + at.top - el.scrollTop
-        : r.top + (r.height - at.line) / 2;
+        ? rect.top + el.clientTop + at.top - el.scrollTop
+        : rect.top + (rect.height - at.line) / 2;
     x = left;
     y = top + (at.line - size * 1.15) / 2;
     shown =
-      left >= r.left &&
-      left <= r.right &&
-      top >= r.top - 1 &&
-      top + at.line <= r.bottom + 1;
+      left >= rect.left &&
+      left <= rect.right &&
+      top >= rect.top - 1 &&
+      top + at.line <= rect.bottom + 1;
   }
 
-  /* Every frame while a field is held: the field can move under a tween, a
-     scroll or a resize with no event that says so. Only the placing is done
-     each time; the measuring waits for the text or the caret to change. */
+  // Every frame while a field is held: the field can move under a tween, a
+  // scroll or a resize with no event that says so. Only the placing is done
+  // each time; the measuring waits for the text or the caret to change.
   function sync() {
     const el = document.activeElement;
     if (el !== held) {
@@ -153,8 +150,8 @@
     frame = held ? requestAnimationFrame(tick) : 0;
   }
 
-  /* Typing and caret moves are also followed as they happen: left to the
-     frame loop alone, the caret reached a new letter one frame after it. */
+  // Typing and caret moves are also followed as they happen: left to the frame
+  // loop alone, the caret reached a new letter one frame after it.
   function now() {
     sync();
     if (held && !frame) frame = requestAnimationFrame(tick);
@@ -162,10 +159,10 @@
 
   $effect(() => {
     const events = ["focusin", "input", "selectionchange"];
-    for (const e of events) document.addEventListener(e, now);
+    for (const type of events) document.addEventListener(type, now);
     now();
     return () => {
-      for (const e of events) document.removeEventListener(e, now);
+      for (const type of events) document.removeEventListener(type, now);
       cancelAnimationFrame(frame);
       frame = 0;
       release();
@@ -177,12 +174,11 @@
 {#if shown}
   <span
     class="caret"
-    class:leading
     aria-hidden="true"
     use:portal
     style:left="{x}px"
     style:top="{y}px"
-    style:font-size="{size}px"><Caret {beat} /></span
+    style:font-size="{size}px"><Caret {beat} {side} /></span
   >
 {/if}
 
@@ -195,11 +191,5 @@
     margin-left: -0.115em;
     color: var(--accent);
     pointer-events: none;
-  }
-  /* Centred on the point between two letters it covers a sliver of each. With
-     no letter before it there is room to step back, so the first letter typed
-     lands beside the caret rather than under it. */
-  .caret.leading {
-    margin-left: -0.25em;
   }
 </style>

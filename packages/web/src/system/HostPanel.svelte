@@ -38,14 +38,14 @@
   let visible = $state(true);
   let error = $state<string | null>(null);
 
+  const HOUR_MS = 3_600_000;
+  const HOURS_SHOWN_BELOW = 48;
   const ago = (iso?: string) => {
     if (!iso) return "never";
-    const h = (Date.now() - new Date(iso).getTime()) / 3_600_000;
-    return h < 1
-      ? `${Math.round(h * 60)} min ago`
-      : h < 48
-        ? `${Math.round(h)} h ago`
-        : `${Math.round(h / 24)} days ago`;
+    const h = (Date.now() - new Date(iso).getTime()) / HOUR_MS;
+    if (h < 1) return `${Math.round(h * 60)} min ago`;
+    if (h < HOURS_SHOWN_BELOW) return `${Math.round(h)} h ago`;
+    return `${Math.round(h / 24)} days ago`;
   };
 
   onMount(async () => {
@@ -105,10 +105,10 @@
             : ""}</td
         >
       </tr>
-      {#each Object.entries(status.downloads?.people ?? {}) as [name, d] (name)}
+      {#each Object.entries(status.downloads?.people ?? {}) as [name, person] (name)}
         <tr
-          ><td>Downloaded by {name}</td><td>{ago(d.last_download)}</td><td
-            class="muted">{d.file}</td
+          ><td>Downloaded by {name}</td><td>{ago(person.last_download)}</td><td
+            class="muted">{person.file}</td
           ></tr
         >
       {:else}
@@ -125,11 +125,11 @@
   {#if status.watch}
     <table>
       <tbody>
-        {#each Object.entries(status.watch.checks) as [name, c] (name)}
+        {#each Object.entries(status.watch.checks) as [name, check] (name)}
           <tr
             ><td>{name}</td><td
-              ><Badge tone={toneOf(c.state)}>{c.state}</Badge></td
-            ><td class="muted">{c.value}</td></tr
+              ><Badge tone={toneOf(check.state)}>{check.state}</Badge></td
+            ><td class="muted">{check.value}</td></tr
           >
         {/each}
       </tbody>

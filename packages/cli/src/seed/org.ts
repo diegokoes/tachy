@@ -7,6 +7,8 @@ import { ARTIFACT_BODIES, PRODUCTS, slugify } from "./corpus";
 import type { Volumes } from "./scale";
 
 export const DEV_PASSWORD = "tachy-dev-password";
+/** The first users by index; the rest are numbered. */
+const DEV_NAMES = ["Dev Admin", "Dev Member"];
 export const ADMIN_EMAIL = "admin@tachy.local";
 /** The k6 login: a plain member, so load tests measure the real authz path. */
 export const MEMBER_EMAIL = "dev-member@tachy.local";
@@ -43,8 +45,8 @@ const TEAM_NAMES = [
   "Onboarding",
 ];
 
-export async function seedOrg(tx: Tx, v: Volumes): Promise<Org> {
-  const teams: SeededTeam[] = Array.from({ length: v.teams }, (_, i) => ({
+export async function seedOrg(tx: Tx, volumes: Volumes): Promise<Org> {
+  const teams: SeededTeam[] = Array.from({ length: volumes.teams }, (_, i) => ({
     id: uuidFor("team", i),
     slug:
       slugify(TEAM_NAMES[i % TEAM_NAMES.length]) +
@@ -63,7 +65,7 @@ export async function seedOrg(tx: Tx, v: Volumes): Promise<Org> {
 
   // Products enumerate per team, so (team_id, slug) is unique by construction.
   const products: SeededProduct[] = Array.from(
-    { length: v.products },
+    { length: volumes.products },
     (_, i) => ({
       id: uuidFor("product", i),
       slug:
@@ -77,27 +79,27 @@ export async function seedOrg(tx: Tx, v: Volumes): Promise<Org> {
     tx,
     "products",
     ["id", "team_id", "slug", "name", "aliases"],
-    products.map((p, i) => {
+    products.map((product, i) => {
       const [, name] = PRODUCTS[i % PRODUCTS.length];
       const rng = rngFor("product", i);
       return {
-        id: p.id,
-        team_id: p.teamId,
-        slug: p.slug,
+        id: product.id,
+        team_id: product.teamId,
+        slug: product.slug,
         name: i >= PRODUCTS.length ? `${name} ${i}` : name,
-        aliases: chance(rng, 0.4) ? [p.slug.toUpperCase()] : [],
+        aliases: chance(rng, 0.4) ? [product.slug.toUpperCase()] : [],
       };
     }),
   );
 
-  // scrypt is ~80ms a call; one shared dev password means one hash.
+  // One shared dev password means one scrypt hash, not one per user.
   const passwordHash = await hashPassword(DEV_PASSWORD);
 
   const users: SeededUser[] = [
     { id: uuidFor("user", 0), email: ADMIN_EMAIL, role: "admin" },
     { id: uuidFor("user", 1), email: MEMBER_EMAIL, role: "member" },
   ];
-  for (let i = 2; i < v.users; i++)
+  for (let i = 2; i < volumes.users; i++)
     users.push({
       id: uuidFor("user", i),
       email: `dev+${i}@tachy.local`,
@@ -111,8 +113,7 @@ export async function seedOrg(tx: Tx, v: Volumes): Promise<Org> {
     users.map((u, i) => ({
       id: u.id,
       email: u.email,
-      display_name:
-        i === 0 ? "Dev Admin" : i === 1 ? "Dev Member" : `Seed User ${i}`,
+      display_name: DEV_NAMES[i] ?? `Seed User ${i}`,
       role: u.role,
       password_hash: passwordHash,
       disabled: i > 2 && i % 17 === 0,
@@ -128,11 +129,11 @@ export async function seedOrg(tx: Tx, v: Volumes): Promise<Org> {
     seen.add(key);
     memberships.push({ team_id: teamId, user_id: userId, role });
   };
-  for (const t of teams) join(t.id, users[1].id, "member");
+  for (const team of teams) join(team.id, users[1].id, "member");
   for (let i = 0; i < users.length; i++) {
     const rng = rngFor("membership", i);
-    for (const t of teams.slice(0, intBetween(rng, 1, teams.length)))
-      join(t.id, users[i].id, i % 6 === 0 ? TEAM_ROLES[0] : "member");
+    for (const team of teams.slice(0, intBetween(rng, 1, teams.length)))
+      join(team.id, users[i].id, i % 6 === 0 ? TEAM_ROLES[0] : "member");
   }
   await insertRows(
     tx,
@@ -141,14 +142,16 @@ export async function seedOrg(tx: Tx, v: Volumes): Promise<Org> {
     memberships,
   );
 
-  const artifacts = await seedArtifacts(tx, v, teams, users);
+  const artifacts = await seedArtifacts(tx, volumes, teams, users);
   await seedPreferences(tx, teams, users);
 
   return { teams, products, users, artifacts };
 }
 
-/** scope and its FK agree by construction, so both CHECKs and all three
- *  partial unique indexes hold without an `on conflict`. */
+/**
+ * scope and its FK agree by construction, so both CHECKs and all three partial
+ * unique indexes hold without an `on conflict`.
+ */
 const scopedRow = (scope: string, teamId: string, userId: string) => ({
   scope,
   team_id: scope === "team" ? teamId : null,
@@ -157,13 +160,13 @@ const scopedRow = (scope: string, teamId: string, userId: string) => ({
 
 async function seedArtifacts(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   teams: SeededTeam[],
   users: SeededUser[],
 ): Promise<string[]> {
   const rows: Record<string, unknown>[] = [];
   const ids: string[] = [];
-  for (let i = 0; i < v.artifacts; i++) {
+  for (let i = 0; i < volumes.artifacts; i++) {
     const scope = SCOPES[i % SCOPES.length];
     const team = teams[i % teams.length];
     const user = users[i % users.length];
@@ -221,9 +224,9 @@ async function seedPreferences(
       value: tx.json(value as never),
     });
 
-  for (const t of teams) push("team", t.id, "", "agent_effort", "medium");
-  // rngFor("pref", i), not ("pref", 0): a fresh generator with a constant seed
-  // is re-seeded every iteration, so all twelve users drew the same value.
+  for (const team of teams) push("team", team.id, "", "agent_effort", "medium");
+  // `rngFor("pref", i)`, not `("pref", 0)`: a generator made with a constant
+  // seed restarts every iteration, so every user draws the same value.
   users
     .slice(0, 12)
     .forEach((u, i) =>

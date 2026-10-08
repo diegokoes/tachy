@@ -13,7 +13,7 @@
     type ReportType,
   } from "@tachy/contract";
 
-  let list = $state<ReportRow[]>([]);
+  let reports = $state<ReportRow[]>([]);
   let selected = $state<ReportRow | null>(null);
   let filter = $state<ReportStatus | "all">("open");
   let loading = $state(true);
@@ -34,9 +34,10 @@
     loading = true;
     error = null;
     try {
-      const q = filter === "all" ? "" : `?status=${filter}`;
-      list = await api.get<ReportRow[]>(`/reports/all${q}`);
-      if (selected && !list.some((r) => r.id === selected!.id)) selected = null;
+      const query = filter === "all" ? "" : `?status=${filter}`;
+      reports = await api.get<ReportRow[]>(`/reports/all${query}`);
+      if (selected && !reports.some((r) => r.id === selected!.id))
+        selected = null;
     } catch (e) {
       error = errText(e);
     } finally {
@@ -101,13 +102,13 @@
 <div class="reports">
   <div class="pane list">
     <div class="filters">
-      {#each ["open", "in_progress", "resolved", "closed", "all"] as f}
+      {#each ["open", "in_progress", "resolved", "closed", "all"] as choice}
         <button
           class="filter"
-          class:on={filter === f}
-          onclick={() => (filter = f as ReportStatus | "all")}
+          class:on={filter === choice}
+          onclick={() => (filter = choice as ReportStatus | "all")}
         >
-          {f.replace("_", " ")}
+          {choice.replace("_", " ")}
         </button>
       {/each}
     </div>
@@ -116,32 +117,34 @@
 
     {#if loading}
       <p class="dim">loading…</p>
-    {:else if list.length === 0}
+    {:else if reports.length === 0}
       <EmptyState icon="flag" title="nothing here" />
     {:else}
       <ul class="rows">
-        {#each list as r (r.id)}
+        {#each reports as report (report.id)}
           <li>
             <button
               class="row"
-              class:on={selected?.id === r.id}
-              onclick={() => open(r.id)}
+              class:on={selected?.id === report.id}
+              onclick={() => open(report.id)}
             >
               <span class="ico"
                 ><Icon
-                  name={r.type === "bug" ? "bug" : "lightbulb"}
+                  name={report.type === "bug" ? "bug" : "lightbulb"}
                   size="1em"
                   weight={7}
                 /></span
               >
               <span class="who">
-                <span class="ttl">{r.title || r.body_text.slice(0, 60)}</span>
+                <span class="ttl"
+                  >{report.title || report.body_text.slice(0, 60)}</span
+                >
                 <span class="meta">
-                  {r.reporter_name ?? "someone"} · {age(r.created_at)} ago
+                  {report.reporter_name ?? "someone"} · {age(report.created_at)} ago
                 </span>
               </span>
-              <Badge tone={STATUS_TONE[r.status]}
-                >{r.status.replace("_", " ")}</Badge
+              <Badge tone={STATUS_TONE[report.status]}
+                >{report.status.replace("_", " ")}</Badge
               >
             </button>
           </li>
@@ -154,33 +157,33 @@
     {#if !selected}
       <EmptyState icon="flag" title="pick a report" />
     {:else}
-      {@const s = selected}
+      {@const open = selected}
       <div class="head">
-        <Badge tone={typeTone(s.type)}>{s.type}</Badge>
-        <h3 class="ttl">{s.title || "untitled report"}</h3>
+        <Badge tone={typeTone(open.type)}>{open.type}</Badge>
+        <h3 class="ttl">{open.title || "untitled report"}</h3>
       </div>
       <p class="sub">
-        from {s.reporter_name ?? "someone"} · {age(s.created_at)} ago
+        from {open.reporter_name ?? "someone"} · {age(open.created_at)} ago
       </p>
 
-      <p class="body">{s.body_text}</p>
+      <p class="body">{open.body_text}</p>
 
-      {#if s.ai_review && s.ai_review.suggestions.length}
+      {#if open.ai_review && open.ai_review.suggestions.length}
         <Note tone="muted">
-          AI review flagged: {s.ai_review.suggestions.join("; ")}
+          AI review flagged: {open.ai_review.suggestions.join("; ")}
         </Note>
       {/if}
 
-      {#if s.messages && s.messages.length}
+      {#if open.messages && open.messages.length}
         <div class="thread">
-          {#each s.messages as m (m.id)}
-            <div class="msg {m.direction}">
+          {#each open.messages as message (message.id)}
+            <div class="msg {message.direction}">
               <span class="from"
-                >{m.direction === "admin"
-                  ? (m.author_name ?? "admin")
-                  : (s.reporter_name ?? "reporter")}</span
+                >{message.direction === "admin"
+                  ? (message.author_name ?? "admin")
+                  : (open.reporter_name ?? "reporter")}</span
               >
-              <p>{m.body_text}</p>
+              <p>{message.body_text}</p>
             </div>
           {/each}
         </div>
@@ -195,14 +198,14 @@
           bind:value={reply}></textarea>
         <div class="actions">
           <div class="statuses">
-            {#each REPORT_STATUSES as st}
+            {#each REPORT_STATUSES as status}
               <button
                 class="status"
-                class:on={s.status === st}
+                class:on={open.status === status}
                 disabled={busy}
-                onclick={() => setStatus(st)}
+                onclick={() => setStatus(status)}
               >
-                {st.replace("_", " ")}
+                {status.replace("_", " ")}
               </button>
             {/each}
           </div>

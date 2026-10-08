@@ -3,9 +3,9 @@
  * asking for a symbol finds where it is defined before the places that use it:
  * a test that calls a function ten times otherwise outranks the function.
  *
- * Deliberately shallow. It reads declarations a line at a time across the
- * languages a support team's repos are written in, and a name it misses is
- * still found in the body.
+ * Shallow: it reads declarations a line at a time across the languages a
+ * support team's repos are written in, and a name it misses is still found in
+ * the body.
  */
 const DECLARATIONS = [
   /(?:^|[\s(])(?:function\*?|class|interface|enum|struct|trait|impl|module|namespace|def|func|fn|type)\s+([A-Za-z_$][\w$]*)/g,
@@ -19,9 +19,9 @@ const MAX_SYMBOLS = 40;
 
 export function definedSymbols(text: string): string[] {
   const names = new Set<string>();
-  for (const re of DECLARATIONS)
-    for (const m of text.matchAll(re)) {
-      if (m[1].length > 1) names.add(m[1]);
+  for (const declaration of DECLARATIONS)
+    for (const match of text.matchAll(declaration)) {
+      if (match[1].length > 1) names.add(match[1]);
       if (names.size >= MAX_SYMBOLS) return [...names];
     }
   return [...names];

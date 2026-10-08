@@ -45,19 +45,19 @@ export function registerAgentFlowActions(): void {
       text: z.string(),
       json: z.record(z.string(), z.unknown()).nullable(),
     }),
-    async run(ctx, p) {
+    async run(ctx, params) {
       await assertModelCallAllowed(ctx.flowId);
       const text = await runAdvisory(
         {
           system:
-            p.answer === "json"
+            params.answer === "json"
               ? `${SYSTEM}\nAnswer with one JSON object and nothing else.`
               : SYSTEM,
           prompt: (scrub) =>
-            p.material
-              ? `${scrub(p.prompt)}\n\n---\n${scrub(p.material)}`
-              : scrub(p.prompt),
-          tier: p.tier,
+            params.material
+              ? `${scrub(params.prompt)}\n\n---\n${scrub(params.material)}`
+              : scrub(params.prompt),
+          tier: params.tier,
           timeoutMs: 120_000,
           mode: "flow",
           meta: { flow_id: ctx.flowId, flow_run_id: ctx.flowRunId },
@@ -70,7 +70,7 @@ export function registerAgentFlowActions(): void {
       if (text === "") throw new Error("the model call failed");
       return {
         text,
-        json: p.answer === "json" ? firstJsonObject(text) : null,
+        json: params.answer === "json" ? firstJsonObject(text) : null,
       };
     },
   });

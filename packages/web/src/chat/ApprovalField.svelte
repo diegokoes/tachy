@@ -15,31 +15,29 @@
     /** A schema for this field, when the caller has one. See below. */
     spec?: FieldSpec;
     disabled?: boolean;
-    onchange: (v: unknown) => void;
+    onchange: (value: unknown) => void;
   } = $props();
 
   /**
-   * Where a schema exists it decides the widget; otherwise the widget comes from
-   * the shape of the value the model actually sent. The fallback is not a
-   * stopgap - a tool nobody anticipated still has to render, and most tools
-   * carry no schema at all. `ENUM_FIELDS` is the built-in per-key schema, and
-   * folds into the same lookup rather than sitting beside it.
+   * Where a schema exists it decides the widget; otherwise the widget comes
+   * from the shape of the value the model sent. The fallback stays: a tool
+   * nobody anticipated still has to render, and most tools carry no schema.
+   * `ENUM_FIELDS` is the built-in per-key schema, folded into the same lookup.
    */
   type Kind = "enum" | "bool" | "number" | "list" | "text" | "line" | "json";
 
   /** Choices for this field, from a passed spec or the built-in vocabularies. */
+  const builtIn = $derived(name in ENUM_FIELDS ? ENUM_FIELDS[name] : undefined);
   const choices = $derived<readonly string[] | undefined>(
     spec?.allowed_values?.length
       ? (spec.allowed_values.map(String) as string[])
-      : name in ENUM_FIELDS
-        ? ENUM_FIELDS[name]
-        : undefined,
+      : builtIn,
   );
 
-  /** ADO's FieldType, mapped onto the widgets this box actually has. */
-  function fromSpec(s: FieldSpec): Kind | undefined {
+  /** ADO's FieldType, mapped onto the widgets this box has. */
+  function fromSpec(fieldSpec: FieldSpec): Kind | undefined {
     if (choices && (typeof value === "string" || value == null)) return "enum";
-    switch (s.type) {
+    switch (fieldSpec.type) {
       case "integer":
       case "double":
         return "number";
@@ -80,9 +78,9 @@
   let open = $state(false);
 
   function commitAdd() {
-    const v = adding.trim();
-    if (!v) return;
-    onchange([...list, v]);
+    const added = adding.trim();
+    if (!added) return;
+    onchange([...list, added]);
     adding = "";
   }
 

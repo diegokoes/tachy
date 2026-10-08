@@ -23,23 +23,20 @@ describe("the extras catalogue", () => {
   it("keys every filter uniquely and gives each a query parameter", () => {
     const keys = EXTRA_FILTERS.map((f) => f.key);
     expect(new Set(keys).size).toBe(keys.length);
-    for (const f of EXTRA_FILTERS) {
-      expect(f.param).toBeTruthy();
-      expect(f.label).toBeTruthy();
+    for (const filter of EXTRA_FILTERS) {
+      expect(filter.param).toBeTruthy();
+      expect(filter.label).toBeTruthy();
     }
   });
 
-  /** An enum filter with no options would render an empty, unusable select. */
+  // An enum filter with no options would render an empty, unusable select.
   it("gives every enum filter its option list", () => {
-    for (const f of EXTRA_FILTERS.filter((x) => x.kind === "enum"))
-      expect(f.options?.length).toBeGreaterThan(0);
+    for (const filter of EXTRA_FILTERS.filter((x) => x.kind === "enum"))
+      expect(filter.options?.length).toBeGreaterThan(0);
   });
 
-  /**
-   * The vocabularies come from @tachy/contract via vocab.ts, which is the rule
-   * CLAUDE.md exists to protect: a copy in the SPA is how the admin panel and
-   * the vault came to disagree about what a valid key looked like.
-   */
+  // The vocabularies come from @tachy/contract via vocab.ts: a copy in the SPA
+  // can drift from the server's.
   it("draws its enum options from the shared vocabulary", () => {
     expect(byKey("confidence")?.options).toEqual(CONFIDENCES);
     expect(byKey("resolution_clarity")?.options).toEqual(RESOLUTION_CLARITIES);
@@ -68,7 +65,7 @@ describe("persistence", () => {
     expect(loadFilters()).toEqual({ shown: [], values: {} });
   });
 
-  /** A key from an older build must not reach byKey() as undefined later. */
+  // A key from an older build must not reach byKey() as undefined later.
   it("drops a stored key this build no longer offers", () => {
     localStorage.setItem(
       "tachy-library-filters",
@@ -97,10 +94,8 @@ describe("pruneValues", () => {
     ],
   };
 
-  /**
-   * A stale facet value narrows the list to nothing with no visible cause,
-   * which reads as "the library is empty" rather than "this filter is stale".
-   */
+  // A stale facet value narrows the list to nothing with no visible cause,
+  // which reads as "the library is empty" rather than "this filter is stale".
   it("drops a facet value the current counts no longer offer", () => {
     expect(pruneValues(["cloud"], { cloud: "qa" }, facets)).toEqual({});
     expect(pruneValues(["cloud"], { cloud: "prod" }, facets)).toEqual({
@@ -108,7 +103,7 @@ describe("pruneValues", () => {
     });
   });
 
-  /** An enum value with no rows behind it right now is still a fair question. */
+  // An enum value with no rows behind it right now is still a fair question.
   it("keeps an enum value that no row currently has", () => {
     expect(
       pruneValues(["confidence"], { confidence: CONFIDENCES[0] }, {}),
@@ -140,18 +135,18 @@ describe("pruneValues", () => {
 
 describe("applyExtras", () => {
   it("writes each active extra under its own parameter name", () => {
-    const p = applyExtras(
+    const params = applyExtras(
       new URLSearchParams({ q: "spooler" }),
       ["cloud", "resolution_clarity"],
       { cloud: "prod", resolution_clarity: RESOLUTION_CLARITIES[0] },
     );
-    expect(p.get("q")).toBe("spooler");
-    expect(p.get("cloud")).toBe("prod");
-    expect(p.get("resolution_clarity")).toBe(RESOLUTION_CLARITIES[0]);
+    expect(params.get("q")).toBe("spooler");
+    expect(params.get("cloud")).toBe("prod");
+    expect(params.get("resolution_clarity")).toBe(RESOLUTION_CLARITIES[0]);
   });
 
   it("leaves out an extra that is shown but unset", () => {
-    const p = applyExtras(new URLSearchParams(), ["cloud"], {});
-    expect(p.has("cloud")).toBe(false);
+    const params = applyExtras(new URLSearchParams(), ["cloud"], {});
+    expect(params.has("cloud")).toBe(false);
   });
 });

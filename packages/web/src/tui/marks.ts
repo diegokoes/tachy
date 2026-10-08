@@ -22,7 +22,14 @@ export type Col = {
   title?: string;
   /** Printed on top instead of the value: "fail" on a run that has none. */
   text?: string;
+  /** A reference drawn as a faint wide bar behind the column: a baseline, a quota, the last period. */
+  behind?: number;
+  /** A narrower bar drawn inside the column from its base: the part of it that went wrong. */
+  inner?: Part[];
 };
+
+/** One named series: its swatch colour and the words beside it. */
+export type LegendItem = { key: string; label: string; tone: Tone };
 
 /** A row in a ranked list. Its value is printed, so it needs no axis. */
 export type Bar = {
@@ -32,6 +39,10 @@ export type Bar = {
   tone?: Tone;
   /** Stacks the bar, left first. */
   parts?: Part[];
+  /** A thinner bar drawn inside this one from its left: the part of it that went wrong. */
+  inner?: Part[];
+  /** A second figure after the count, in the same row: the average beside the total. */
+  aside?: string;
 };
 
 /** One part of a population drawn as a share of the whole. */
@@ -69,4 +80,22 @@ export type Block = {
   /** Spelled out on hover. */
   title?: string;
   children?: Block[];
+};
+
+/** A share of a whole, told as a row: how much of it is done, and out of what. */
+export type Ratio = {
+  key: string;
+  label: string;
+  /** 0-1. */
+  value: number;
+  tone: Tone;
+  /** Paints the unlit part too, for a split where neither side is missing. */
+  rest?: Tone;
+  /** The percentage, or whatever stands for the share in one word. */
+  center: string;
+  /** Beside it, usually "12/15". */
+  sub?: string;
+  /** What the row measures, in full. */
+  title?: string;
+  onclick?: () => void;
 };

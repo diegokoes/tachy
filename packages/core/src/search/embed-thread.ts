@@ -12,18 +12,18 @@ export type EmbedReply =
   | { type: "error"; id: number; error: string };
 
 const port = parentPort!;
-const pipe = await model();
+const extractor = await model();
 port.postMessage({ type: "ready" } satisfies EmbedReply);
 
 port.on("message", async ({ id, texts }: EmbedRequest) => {
   try {
-    const out = (await pipe(texts, {
+    const tensor = (await extractor(texts, {
       pooling: EMBEDDING_SPEC.pooling,
       normalize: true,
     })) as { data: Float32Array; dims: number[] };
-    const data = new Float32Array(out.data);
+    const data = new Float32Array(tensor.data);
     port.postMessage(
-      { type: "result", id, data, rows: out.dims[0] } satisfies EmbedReply,
+      { type: "result", id, data, rows: tensor.dims[0] } satisfies EmbedReply,
       [data.buffer],
     );
   } catch (err) {

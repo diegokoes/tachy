@@ -149,7 +149,7 @@ export const agent = new Hono()
     const base = await mcpConfig(userEmail, settings, turnId);
     const requestId = requestIdOf(c);
     if (requestId) base.mcpEnv.TACHY_REQUEST_ID = requestId;
-    const cfg: AgentConfig = {
+    const config: AgentConfig = {
       ...base,
       systemPrompt: await systemPrompt(),
       ...(autoApprove.length ? { autoApprove } : {}),
@@ -198,7 +198,7 @@ export const agent = new Hono()
       keepalive.unref?.();
 
       // A closed stream cannot show an approval card, so a turn left with none
-      // pending is stopped rather than run to the one-hour TTL unseen.
+      // pending is stopped rather than run unseen until the TTL.
       stream.onAbort(() => {
         streamOpen = false;
         if (!turn) return leave();
@@ -233,29 +233,33 @@ export const agent = new Hono()
           return;
         }
 
-        turn = startTurn(prompt, cfg, sessionId ? { resume: sessionId } : {});
+        turn = startTurn(
+          prompt,
+          config,
+          sessionId ? { resume: sessionId } : {},
+        );
         turns.set(turnId, {
           turn,
           email: userEmail,
           startedAt: Date.now(),
           leave,
         });
-        for await (const ev of turn.events()) {
-          if (ev.type === "result") {
+        for await (const event of turn.events()) {
+          if (event.type === "result") {
             await recordRun({
               mode: "chat",
               userId: user?.id ?? null,
-              model: cfg.model,
-              inputTokens: ev.usage?.inputTokens ?? undefined,
-              outputTokens: ev.usage?.outputTokens ?? undefined,
+              model: config.model,
+              inputTokens: event.usage?.inputTokens ?? undefined,
+              outputTokens: event.usage?.outputTokens ?? undefined,
               meta: {
                 turn_id: turnId,
-                session_id: ev.sessionId,
-                cost_usd: ev.costUsd,
+                session_id: event.sessionId,
+                cost_usd: event.costUsd,
               },
             }).catch(() => {});
           }
-          await send(ev.type, ev);
+          await send(event.type, event);
         }
       } finally {
         clearInterval(keepalive);
@@ -289,9 +293,8 @@ export const agent = new Hono()
     const entry = turns.get(turnId);
     if (!entry) throw notFound("unknown or finished turn");
     const email = (await sessionEmail(c)) ?? env.userEmail;
-    // A turn that resolved no email is answerable by whoever started it and
-    // nobody else; without the first clause an unattributed turn was open to
-    // anyone who guessed its id.
+    // Compared even when the turn resolved no email: skipping the check for an
+    // unattributed turn would open it to anyone who guesses its id.
     if (entry.email !== email)
       throw forbidden("only the user who started this turn can approve it");
     entry.turn.approve(id, { approve, message, updatedInput });

@@ -15,7 +15,7 @@ import {
   createFlow,
   listFlowRuns,
   listOptions,
-  loadSubject,
+  getSubject,
   runFlow,
 } from "@tachy/core/flows";
 import { ingestWorkItem } from "@tachy/core/work-items";
@@ -93,7 +93,7 @@ async function run(steps: unknown[], workItemId: string, dryRun = false) {
     } as never,
     null,
   );
-  const res = await runFlow({
+  const outcome = await runFlow({
     ...noop,
     flow,
     triggerId: "m",
@@ -101,8 +101,8 @@ async function run(steps: unknown[], workItemId: string, dryRun = false) {
     dryRun,
     jobRunId: null,
   });
-  const [r] = await listFlowRuns(flow.id);
-  return { res, steps: r.steps };
+  const [flowRun] = await listFlowRuns(flow.id);
+  return { outcome, steps: flowRun.steps };
 }
 
 async function acmeItem() {
@@ -132,7 +132,7 @@ beforeEach(async () => {
 describe("customer.properties", () => {
   it("returns only the picked facts and company fields", async () => {
     const item = await acmeItem();
-    const { res, steps } = await run(
+    const { outcome, steps } = await run(
       [
         {
           id: "props",
@@ -154,7 +154,7 @@ describe("customer.properties", () => {
       ],
       item.id,
     );
-    expect(res.status).toBe("succeeded");
+    expect(outcome.status).toBe("succeeded");
     expect(steps[0].output).toEqual({
       found: true,
       customer: "acme",
@@ -239,7 +239,7 @@ describe("customer.properties", () => {
 describe("tag steps", () => {
   it("adds and removes tags, and later conditions see the result", async () => {
     const item = await ingestWorkItem(await connId(), rawItem());
-    const { res, steps } = await run(
+    const { outcome, steps } = await run(
       [
         {
           id: "add",
@@ -261,7 +261,7 @@ describe("tag steps", () => {
       ],
       item.id,
     );
-    expect(res.status).toBe("succeeded");
+    expect(outcome.status).toBe("succeeded");
     expect(tags).toEqual(["Escalated"]);
     expect(steps.map((s) => s.output)).toEqual([
       { tags: ["bug", "Escalated"] },
@@ -293,8 +293,8 @@ describe("tag steps", () => {
   });
 
   it("fails on a source that cannot take tags", async () => {
-    registerSource("fake-flow-plain", ((cfg) => ({
-      ...factory(cfg),
+    registerSource("fake-flow-plain", ((config) => ({
+      ...factory(config),
       setTags: undefined,
     })) as SourceFactory);
     await sql`
@@ -337,7 +337,7 @@ describe("tags on ADO items", () => {
       await connId(),
       rawItem({ raw: { fields: { "System.Tags": "Plant-3; urgent ;" } } }),
     );
-    expect((await loadSubject(item.id)).tags).toEqual(["Plant-3", "urgent"]);
+    expect((await getSubject(item.id)).tags).toEqual(["Plant-3", "urgent"]);
   });
 });
 

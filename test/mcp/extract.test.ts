@@ -58,9 +58,9 @@ describe("extractSource", () => {
       filename: "notes.txt",
       bytes: Buffer.from("plain utf8 notes\n"),
     });
-    const t = await extractSource(txt.ref);
-    expect(t.pages).toBeUndefined();
-    expect(t.text).toBe("plain utf8 notes\n");
+    const extracted = await extractSource(txt.ref);
+    expect(extracted.pages).toBeUndefined();
+    expect(extracted.text).toBe("plain utf8 notes\n");
   });
 
   it("refuses anything that is not a chat upload", async () => {

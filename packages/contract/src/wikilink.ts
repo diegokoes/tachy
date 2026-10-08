@@ -24,25 +24,25 @@ export interface Wikilink {
 }
 
 export function parseWikilink(target: string, label?: string): Wikilink {
-  const t = target.trim();
-  const shown = (label ?? "").trim() || t;
-  const m = /^(entry|doc):(.+)$/i.exec(t);
-  if (m)
+  const trimmed = target.trim();
+  const shown = (label ?? "").trim() || trimmed;
+  const typed = /^(entry|doc):(.+)$/i.exec(trimmed);
+  if (typed)
     return {
-      target: t,
+      target: trimmed,
       label: shown,
-      kind: m[1].toLowerCase() as "entry" | "doc",
-      ref: m[2].trim(),
+      kind: typed[1].toLowerCase() as "entry" | "doc",
+      ref: typed[2].trim(),
     };
-  return { target: t, label: shown, kind: "article", ref: t };
+  return { target: trimmed, label: shown, kind: "article", ref: trimmed };
 }
 
 /** Every link in a body, in source order, duplicates included. */
 export function parseWikilinks(body: string): Wikilink[] {
-  const out: Wikilink[] = [];
-  for (const m of (body ?? "").matchAll(WIKILINK_RE))
-    out.push(parseWikilink(m[1], m[2]));
-  return out;
+  const links: Wikilink[] = [];
+  for (const match of (body ?? "").matchAll(WIKILINK_RE))
+    links.push(parseWikilink(match[1], match[2]));
+  return links;
 }
 
 /**

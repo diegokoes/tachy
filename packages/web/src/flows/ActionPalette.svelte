@@ -15,7 +15,7 @@
   }: {
     anchor: HTMLElement;
     actions: FlowActionInfo[];
-    onpick: (p: Pick) => void;
+    onpick: (pick: Pick) => void;
     onclose: () => void;
   } = $props();
 
@@ -81,11 +81,11 @@
 
   const searching = $derived(query.trim() !== "");
   const found = $derived.by(() => {
-    const q = query.trim().toLowerCase();
+    const needle = query.trim().toLowerCase();
     return entries.filter((e) =>
       `${e.title} ${e.description ?? ""} ${e.source ?? ""} ${GROUPS[e.group].label}`
         .toLowerCase()
-        .includes(q),
+        .includes(needle),
     );
   });
 
@@ -108,23 +108,27 @@
     child = -1;
   });
 
-  function show(i: number, focusChild = false) {
-    cursor = i;
-    open = groups[i]?.key ?? null;
+  function show(index: number, focusChild = false) {
+    cursor = index;
+    open = groups[index]?.key ?? null;
     child = focusChild ? 0 : -1;
   }
 
   function outside(e: PointerEvent) {
-    const t = e.target as Node;
-    if (!panel?.contains(t) && !sub?.contains(t) && !anchor.contains(t))
+    const target = e.target as Node;
+    if (
+      !panel?.contains(target) &&
+      !sub?.contains(target) &&
+      !anchor.contains(target)
+    )
       onclose();
   }
 
   const step = (at: number, by: number, n: number) => (at + by + n) % n;
 
   function onkeydown(e: KeyboardEvent) {
-    const k = e.key;
-    if (k === "Escape") {
+    const key = e.key;
+    if (key === "Escape") {
       e.preventDefault();
       if (child >= 0) child = -1;
       else if (open) open = null;
@@ -132,33 +136,33 @@
       return;
     }
     if (searching) {
-      if (k === "ArrowDown" || k === "ArrowUp") {
+      if (key === "ArrowDown" || key === "ArrowUp") {
         e.preventDefault();
         if (found.length)
-          cursor = step(cursor, k === "ArrowDown" ? 1 : -1, found.length);
-      } else if (k === "Enter" && found[cursor]) onpick(found[cursor].pick);
+          cursor = step(cursor, key === "ArrowDown" ? 1 : -1, found.length);
+      } else if (key === "Enter" && found[cursor]) onpick(found[cursor].pick);
       return;
     }
     if (child >= 0 && openGroup) {
       const n = openGroup.items.length;
-      if (k === "ArrowDown" || k === "ArrowUp") {
+      if (key === "ArrowDown" || key === "ArrowUp") {
         e.preventDefault();
-        child = step(child, k === "ArrowDown" ? 1 : -1, n);
-      } else if (k === "ArrowLeft") {
+        child = step(child, key === "ArrowDown" ? 1 : -1, n);
+      } else if (key === "ArrowLeft") {
         e.preventDefault();
         child = -1;
-      } else if (k === "Enter") onpick(openGroup.items[child].pick);
+      } else if (key === "Enter") onpick(openGroup.items[child].pick);
       return;
     }
-    if (k === "ArrowDown" || k === "ArrowUp") {
+    if (key === "ArrowDown" || key === "ArrowUp") {
       e.preventDefault();
-      const i = step(cursor, k === "ArrowDown" ? 1 : -1, groups.length);
-      if (open) show(i);
-      else cursor = i;
-    } else if (k === "ArrowRight" || k === "Enter") {
+      const next = step(cursor, key === "ArrowDown" ? 1 : -1, groups.length);
+      if (open) show(next);
+      else cursor = next;
+    } else if (key === "ArrowRight" || key === "Enter") {
       e.preventDefault();
       show(cursor, true);
-    } else if (k === "ArrowLeft" && open) {
+    } else if (key === "ArrowLeft" && open) {
       e.preventDefault();
       open = null;
     }
@@ -167,19 +171,19 @@
 
 <svelte:window onpointerdown={outside} />
 
-{#snippet entry(e: Entry, active: boolean, tag: boolean)}
+{#snippet entry(choice: Entry, active: boolean, tag: boolean)}
   <button
     class="entry"
     class:active
     role="menuitem"
-    onclick={() => onpick(e.pick)}
+    onclick={() => onpick(choice.pick)}
   >
     <span class="title">
-      {e.title}
-      {#if e.source}<Badge tone="muted"
-          >{SOURCE_NAMES[e.source] ?? e.source}</Badge
+      {choice.title}
+      {#if choice.source}<Badge tone="muted"
+          >{SOURCE_NAMES[choice.source] ?? choice.source}</Badge
         >{/if}
-      {#if tag}<span class="tag">{GROUPS[e.group].label}</span>{/if}
+      {#if tag}<span class="tag">{GROUPS[choice.group].label}</span>{/if}
     </span>
   </button>
 {/snippet}
@@ -201,31 +205,31 @@
   />
   {#if searching}
     <div class="list wide" role="menu">
-      {#each found as e, i (`${e.group}:${e.title}`)}
-        {@render entry(e, i === cursor, true)}
+      {#each found as hit, i (`${hit.group}:${hit.title}`)}
+        {@render entry(hit, i === cursor, true)}
       {:else}
         <p class="none">nothing matches</p>
       {/each}
     </div>
   {:else}
     <div class="list" role="menu">
-      {#each groups as g, i (g.key)}
+      {#each groups as group, i (group.key)}
         <button
           bind:this={rows[i]}
           class="group"
           class:active={i === cursor}
-          class:open={g.key === open}
+          class:open={group.key === open}
           role="menuitem"
           aria-haspopup="menu"
-          aria-expanded={g.key === open}
+          aria-expanded={group.key === open}
           onclick={() => {
             show(i);
             input?.focus();
           }}
           onpointerenter={() => open && show(i)}
         >
-          <Icon name={g.icon} size="1.15em" />
-          {g.label}
+          <Icon name={group.icon} size="1.15em" />
+          {group.label}
         </button>
       {/each}
     </div>
@@ -241,8 +245,8 @@
     use:float={{ anchor: openRow, placement: "beside", gap: 6 }}
   >
     <div class="list">
-      {#each openGroup.items as e, i (e.title)}
-        {@render entry(e, i === child, false)}
+      {#each openGroup.items as choice, i (choice.title)}
+        {@render entry(choice, i === child, false)}
       {/each}
     </div>
   </div>

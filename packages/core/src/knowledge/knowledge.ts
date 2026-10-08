@@ -1,4 +1,8 @@
-import type { ComponentKnowledge, KnowledgeCensus } from "@tachy/contract";
+import type {
+  ComponentKnowledge,
+  KnowledgeCensus,
+  KnowledgeStale,
+} from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
 import {
   embedPassage,
@@ -76,8 +80,10 @@ export interface KnowledgeInput extends KnowledgeFacets {
   workItemId?: string | null;
   productId?: string | null;
   teamId?: string | null;
-  /** Whose install this describes. Never inherited from the work item - see
-   *  saveKnowledgeEntry. Absent/null means the lesson is general. */
+  /**
+   * Whose install this describes. Never inherited from the work item: see
+   * `saveKnowledgeEntry`. Absent or null means the lesson is general.
+   */
   customerSlug?: string | null;
   /** Which part of their estate, by unit slug/alias. Needs customerSlug. */
   unit?: string | null;
@@ -131,11 +137,11 @@ async function resolvePatternDescription(
 /**
  * Must stay in step with the generated search_text column: a field the vector
  * cannot see is only findable by exact words. `resolution` is the one that
- * matters - a query phrased as the fix ("restart the label cache service")
- * otherwise has no semantic representation at all.
+ * matters: a query phrased as the fix ("restart the label cache service")
+ * otherwise has no semantic representation.
  */
 function buildEmbedText(
-  i: {
+  entry: {
     issueSummary?: string;
     symptoms?: string[];
     rootCause?: string;
@@ -147,72 +153,65 @@ function buildEmbedText(
   productArea?: string | null,
 ): string {
   return [
-    i.issueSummary,
-    (i.symptoms ?? []).join(" "),
-    i.rootCause,
-    i.resolution,
+    entry.issueSummary,
+    (entry.symptoms ?? []).join(" "),
+    entry.rootCause,
+    entry.resolution,
     patternDescription,
     productArea,
-    (i.signals ?? []).join(" "),
-    (i.tags ?? []).join(" "),
+    (entry.signals ?? []).join(" "),
+    (entry.tags ?? []).join(" "),
   ]
     .filter(Boolean)
     .join(" ")
     .trim();
 }
 
-export async function saveKnowledgeEntry(i: KnowledgeInput) {
-  let productId = i.productId ?? null;
-  let teamId = i.teamId ?? null;
-  let affectedVersion = i.affectedVersion ?? null;
-  /*
-   * Deliberately NOT inherited from the work item, unlike product and team.
-   * Most lessons learned on one customer's ticket are true of the product, and a
-   * customer defaulted in is a claim nobody made: it narrows the entry's ranking
-   * and makes every future answer cite it as that customer's case. Whose ticket
-   * it was is a fact; whose behaviour it describes is a judgement, so it has to
-   * be stated.
-   *
-   * The UNIT, by contrast, IS inherited - but only once the customer above has
-   * been stated and matches the ticket's. That keeps the rule intact: the
-   * judgement "this entry is about ITG" is still made by a person, and saying
-   * "…on the line the ticket was already filed against" adds no claim the
-   * ticket did not record. Without a stated customer, nothing is inherited.
-   */
-  const stated = await statedCustomer(i.customerSlug, i.unit);
+/**
+ * Product, team and version default from the work item; the customer does
+ * not. Most lessons learned on one customer's ticket are true of the product,
+ * and a defaulted customer narrows the entry's ranking and has every answer
+ * cite it as theirs. The unit is inherited once a stated customer matches the
+ * ticket's.
+ */
+export async function saveKnowledgeEntry(input: KnowledgeInput) {
+  let productId = input.productId ?? null;
+  let teamId = input.teamId ?? null;
+  let affectedVersion = input.affectedVersion ?? null;
+  const stated = await statedCustomer(input.customerSlug, input.unit);
   const customerId = stated.customerId;
   let customerUnitId = stated.customerUnitId;
   if (
-    i.workItemId &&
+    input.workItemId &&
     (productId == null ||
       teamId == null ||
       affectedVersion == null ||
       (customerId != null && customerUnitId == null))
   ) {
-    const [wi] =
+    const [workItem] =
       await sql`select product_id, team_id, customer_id, customer_unit_id, observed_version
-                from work_items where id = ${i.workItemId}`;
-    if (wi) {
-      productId ??= wi.product_id ?? null;
-      teamId ??= wi.team_id ?? null;
-      affectedVersion ??= wi.observed_version ?? null;
-      if (customerId != null && customerId === wi.customer_id)
-        customerUnitId ??= wi.customer_unit_id ?? null;
+                from work_items where id = ${input.workItemId}`;
+    if (workItem) {
+      productId ??= workItem.product_id ?? null;
+      teamId ??= workItem.team_id ?? null;
+      affectedVersion ??= workItem.observed_version ?? null;
+      if (customerId != null && customerId === workItem.customer_id)
+        customerUnitId ??= workItem.customer_unit_id ?? null;
     }
   }
 
   const { componentId, productArea } = await resolveFilingComponent(
     productId,
-    i.component,
+    input.component,
     "component requires a product (pass product_slug or a work item mapped to one)",
   );
 
-  const confidence = i.confidence ? i.confidence.toLowerCase() : null;
-  const structured = parseStructured(i.structured);
+  const confidence = input.confidence ? input.confidence.toLowerCase() : null;
+  const structured = parseStructured(input.structured);
   const patternDescription = await resolvePatternDescription(
-    i.resolutionPattern,
+    input.resolutionPattern,
   );
-  const text = buildEmbedText(i, patternDescription, productArea);
+  const text = buildEmbedText(input, patternDescription, productArea);
   const embedding = text ? toVectorLiteral(await embedPassage(text)) : null;
 
   return sql.begin(async (tx) => {
@@ -224,12 +223,12 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
          cloud, resolution_clarity, hidden_fix, affected_version, fixed_version,
          structured, embedding, embedding_model)
       values
-        (${i.workItemId ?? null}, ${productId}, ${teamId}, ${customerId ?? null},
-         ${customerUnitId}, ${i.createdById ?? null},
-         ${i.status ?? "approved"}, ${i.issueSummary ?? null}, ${i.symptoms ?? []}, ${i.signals ?? []}, ${i.tags ?? []},
-         ${i.rootCause ?? null}, ${i.resolution ?? null}, ${i.resolutionPattern ?? null}, ${componentId}, ${productArea},
-         ${confidence}, ${i.cloud ?? null}, ${i.resolutionClarity ?? null}, ${i.hiddenFix ?? null},
-         ${affectedVersion}, ${i.fixedVersion ?? null},
+        (${input.workItemId ?? null}, ${productId}, ${teamId}, ${customerId ?? null},
+         ${customerUnitId}, ${input.createdById ?? null},
+         ${input.status ?? "approved"}, ${input.issueSummary ?? null}, ${input.symptoms ?? []}, ${input.signals ?? []}, ${input.tags ?? []},
+         ${input.rootCause ?? null}, ${input.resolution ?? null}, ${input.resolutionPattern ?? null}, ${componentId}, ${productArea},
+         ${confidence}, ${input.cloud ?? null}, ${input.resolutionClarity ?? null}, ${input.hiddenFix ?? null},
+         ${affectedVersion}, ${input.fixedVersion ?? null},
          ${jsonb(structured)}, ${embedding}::vector,
          ${embedding ? EMBEDDING_MODEL : null})
       returning id, version, ${REVISION_COLUMNS}
@@ -237,7 +236,7 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
     await syncLinks(
       tx,
       { entryId: row.id },
-      linkText(i.rootCause, i.resolution),
+      linkText(input.rootCause, input.resolution),
       productId,
     );
     // Version 1, so history is complete for everything created from here on.
@@ -245,7 +244,7 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
       tx,
       { entryId: row.id },
       row.version,
-      i.actor ?? { ...UNKNOWN_ACTOR, userId: i.createdById ?? null },
+      input.actor ?? { ...UNKNOWN_ACTOR, userId: input.createdById ?? null },
       snapshotOf(row),
       [],
     );
@@ -254,10 +253,10 @@ export async function saveKnowledgeEntry(i: KnowledgeInput) {
 }
 
 /**
- * The low-cardinality facets an entry can be NARROWED BY. Shared verbatim by
- * search, list and the facet counts, so a filter the library offers can never
- * be one the query ignores. Distinct from `KnowledgeFacets` above, which is the
- * write side: same columns, but set rather than matched.
+ * The low-cardinality facets an entry can be narrowed by. Shared by search,
+ * list and the facet counts, so a filter the library offers is never one the
+ * query ignores. `KnowledgeFacets` is the write side: the same columns, set
+ * where these are matched.
  */
 export interface KnowledgeFilters {
   tags?: string[];
@@ -288,30 +287,32 @@ export type FacetKey =
 
 /**
  * `except` drops one predicate, so counting a facet's own options is not
- * narrowed by the value already chosen for it - otherwise picking "high"
- * leaves "high" as the only option you could ever pick again.
+ * narrowed by the value already chosen for it: picking "high" would otherwise
+ * leave "high" as the only option.
  */
-function facetSql(o: KnowledgeFilters, except?: FacetKey) {
+function facetSql(filters: KnowledgeFilters, except?: FacetKey) {
   const on = (k: FacetKey) => k !== except;
   return sql`
-    ${o.tags && o.tags.length && on("tags") ? sql`and tags && ${o.tags}` : sql``}
-    ${o.componentId && on("component") ? sql`and (component_id = ${o.componentId} or tags && ${o.componentTags ?? []})` : sql``}
-    ${o.customerId && on("customer") ? sql`and customer_id = ${o.customerId}` : sql``}
-    ${o.cloud && on("cloud") ? sql`and cloud = ${o.cloud}` : sql``}
-    ${o.confidence && on("confidence") ? sql`and confidence = ${o.confidence}` : sql``}
-    ${o.resolutionClarity && on("resolution_clarity") ? sql`and resolution_clarity = ${o.resolutionClarity}` : sql``}
-    ${o.resolutionPattern && on("resolution_pattern") ? sql`and resolution_pattern = ${o.resolutionPattern}` : sql``}
-    ${o.hiddenFix != null && on("hidden_fix") ? sql`and coalesce(hidden_fix, false) = ${o.hiddenFix}` : sql``}
-    ${o.affectedVersion && on("affected_version") ? sql`and affected_version = ${o.affectedVersion}` : sql``}
-    ${o.fixedVersion && on("fixed_version") ? sql`and fixed_version = ${o.fixedVersion}` : sql``}
+    ${filters.tags && filters.tags.length && on("tags") ? sql`and tags && ${filters.tags}` : sql``}
+    ${filters.componentId && on("component") ? sql`and (component_id = ${filters.componentId} or tags && ${filters.componentTags ?? []})` : sql``}
+    ${filters.customerId && on("customer") ? sql`and customer_id = ${filters.customerId}` : sql``}
+    ${filters.cloud && on("cloud") ? sql`and cloud = ${filters.cloud}` : sql``}
+    ${filters.confidence && on("confidence") ? sql`and confidence = ${filters.confidence}` : sql``}
+    ${filters.resolutionClarity && on("resolution_clarity") ? sql`and resolution_clarity = ${filters.resolutionClarity}` : sql``}
+    ${filters.resolutionPattern && on("resolution_pattern") ? sql`and resolution_pattern = ${filters.resolutionPattern}` : sql``}
+    ${filters.hiddenFix != null && on("hidden_fix") ? sql`and coalesce(hidden_fix, false) = ${filters.hiddenFix}` : sql``}
+    ${filters.affectedVersion && on("affected_version") ? sql`and affected_version = ${filters.affectedVersion}` : sql``}
+    ${filters.fixedVersion && on("fixed_version") ? sql`and fixed_version = ${filters.fixedVersion}` : sql``}
   `;
 }
 
 export interface SearchOptions extends KnowledgeFilters {
   productId?: string;
   teamId?: string;
-  /** Also match rows with NO product/team (org-wide) when a scope filter is
-   *  set - for agent consults, where global lessons still apply. */
+  /**
+   * Also match rows with no product or team (org-wide) when a scope filter is
+   * set: for agent consults, where global lessons still apply.
+   */
   includeUnscoped?: boolean;
   limit?: number;
   /** Pre-embedded query, so a caller searching two surfaces embeds once. */
@@ -322,8 +323,10 @@ export interface SearchOptions extends KnowledgeFilters {
    * cross-customer lesson is frequently the one that solves the ticket.
    */
   boostCustomerId?: string;
-  /** Lifts this unit's own entries, and a sibling on the same shared profile
-   *  less. Only meaningful alongside boostCustomerId. */
+  /**
+   * Lifts this unit's own entries, and a sibling on the same shared profile
+   * less. Only meaningful alongside boostCustomerId.
+   */
   boostUnitId?: string | null;
 }
 
@@ -332,12 +335,20 @@ export async function searchKnowledge(query: string, opts: SearchOptions = {}) {
   if (!query.trim()) return [];
   const qvec = opts.queryVector ?? (await embedQueryLiteral(query));
 
-  // deprecated entries surface on purpose: a flagged stale lesson beats the
-  // LLM re-deriving it from scratch. Consumers must warn on status='deprecated'.
+  // Deprecated entries are included: a flagged stale lesson beats the model
+  // re-deriving it. Consumers warn on status='deprecated'.
+  const inProduct = (id: string) =>
+    opts.includeUnscoped
+      ? sql`and (product_id = ${id} or product_id is null)`
+      : sql`and product_id = ${id}`;
+  const inTeam = (id: string) =>
+    opts.includeUnscoped
+      ? sql`and (team_id = ${id} or team_id is null)`
+      : sql`and team_id = ${id}`;
   const filters = sql`
     status in ('approved', 'deprecated')
-    ${opts.productId ? (opts.includeUnscoped ? sql`and (product_id = ${opts.productId} or product_id is null)` : sql`and product_id = ${opts.productId}`) : sql``}
-    ${opts.teamId ? (opts.includeUnscoped ? sql`and (team_id = ${opts.teamId} or team_id is null)` : sql`and team_id = ${opts.teamId}`) : sql``}
+    ${opts.productId ? inProduct(opts.productId) : sql``}
+    ${opts.teamId ? inTeam(opts.teamId) : sql``}
     ${facetSql(opts)}
   `;
 
@@ -650,6 +661,9 @@ export async function updateKnowledgeEntry(
     vec = text ? toVectorLiteral(await embedPassage(text)) : null;
   }
 
+  const embeddingUpdate = vec
+    ? sql`, embedding = ${vec}::vector, embedding_model = ${EMBEDDING_MODEL}`
+    : sql`, embedding = null, embedding_model = null`;
   return sql.begin(async (tx) => {
     const [row] = await tx<RevisedRow[]>`
     update knowledge_entries set
@@ -674,7 +688,7 @@ export async function updateKnowledgeEntry(
       fixed_version      = ${merged.fixedVersion ?? null},
       structured         = ${jsonb(merged.structured ?? {})},
       version            = version + 1
-      ${contentChanged ? (vec ? sql`, embedding = ${vec}::vector, embedding_model = ${EMBEDDING_MODEL}` : sql`, embedding = null, embedding_model = null`) : sql``}
+      ${contentChanged ? embeddingUpdate : sql``}
     where id = ${id} and version = ${current.version}
     returning id, version, ${REVISION_COLUMNS}
   `;
@@ -712,20 +726,20 @@ export async function backfillEmbeddings(
     );
 
   const texts: { id: string; text: string }[] = [];
-  for (const r of rows) {
+  for (const row of rows) {
     const text = buildEmbedText(
       {
-        issueSummary: r.issue_summary,
-        rootCause: r.root_cause,
-        resolution: r.resolution,
-        symptoms: r.symptoms,
-        signals: r.signals,
-        tags: r.tags,
+        issueSummary: row.issue_summary,
+        rootCause: row.root_cause,
+        resolution: row.resolution,
+        symptoms: row.symptoms,
+        signals: row.signals,
+        tags: row.tags,
       },
-      patternDescriptions.get(r.resolution_pattern ?? "")!,
-      r.product_area,
+      patternDescriptions.get(row.resolution_pattern ?? "")!,
+      row.product_area,
     );
-    if (text) texts.push({ id: r.id, text });
+    if (text) texts.push({ id: row.id, text });
   }
   return writeEmbeddings("knowledge_entries", texts);
 }
@@ -744,34 +758,33 @@ export async function revertKnowledgeEntry(
   actor: ActorRef = UNKNOWN_ACTOR,
 ) {
   const { snapshot } = await getRevision({ entryId: id }, version);
-  const s = snapshot as Record<string, any>;
+  const past = snapshot as Record<string, any>;
   const patch: KnowledgeUpdateInput = {
-    status: s.status,
-    issueSummary: s.issue_summary,
-    rootCause: s.root_cause,
-    resolution: s.resolution,
-    resolutionPattern: s.resolution_pattern,
-    symptoms: s.symptoms ?? [],
-    signals: s.signals ?? [],
-    tags: s.tags ?? [],
-    supersededBy: s.superseded_by,
-    confidence: s.confidence,
-    cloud: s.cloud,
-    resolutionClarity: s.resolution_clarity,
-    hiddenFix: s.hidden_fix,
-    affectedVersion: s.affected_version,
-    fixedVersion: s.fixed_version,
-    structured: s.structured,
-    ...(await filingSlugs(s)),
+    status: past.status,
+    issueSummary: past.issue_summary,
+    rootCause: past.root_cause,
+    resolution: past.resolution,
+    resolutionPattern: past.resolution_pattern,
+    symptoms: past.symptoms ?? [],
+    signals: past.signals ?? [],
+    tags: past.tags ?? [],
+    supersededBy: past.superseded_by,
+    confidence: past.confidence,
+    cloud: past.cloud,
+    resolutionClarity: past.resolution_clarity,
+    hiddenFix: past.hidden_fix,
+    affectedVersion: past.affected_version,
+    fixedVersion: past.fixed_version,
+    structured: past.structured,
+    ...(await filingSlugs(past)),
   };
   return updateKnowledgeEntry(id, patch, actor);
 }
 
 /**
  * For the admin index: how much of the corpus there is, and how much of it the
- * component tree actually describes. `by_status` is left as whatever statuses
- * are present rather than padded out to the vocabulary - a band with a zero
- * segment in it draws a legend key for nothing.
+ * component tree describes. `by_status` holds the statuses present, not the
+ * whole vocabulary: a band with a zero segment draws a legend key for nothing.
  */
 export async function knowledgeCensus(): Promise<KnowledgeCensus> {
   const [row] = await sql<Omit<KnowledgeCensus, "by_status">[]>`
@@ -806,4 +819,65 @@ export async function knowledgeByComponent(): Promise<ComponentKnowledge[]> {
     where component_id is not null
     group by component_id
   `;
+}
+
+/**
+ * What in the approved library has gone stale, and how long drafts have waited.
+ * Reads are the day buckets in `library_views`, so "unread" is the last 90
+ * days of them, and an entry that was never filed a view counts.
+ */
+export async function knowledgeStale(): Promise<KnowledgeStale> {
+  const drafts = await sql<
+    { age: KnowledgeStale["drafts"][number]["age"]; n: number }[]
+  >`
+    select case
+             when created_at > now() - interval '7 days' then 'week'
+             when created_at > now() - interval '30 days' then 'month'
+             when created_at > now() - interval '90 days' then 'quarter'
+             else 'older'
+           end as age,
+           count(*)::int as n
+    from knowledge_entries
+    where status = 'draft'
+    group by 1
+  `;
+  const [row] = await sql<
+    { untouched: number; unread: number; doubtful: number }[]
+  >`
+    select
+      count(*) filter (where e.updated_at < now() - interval '365 days')::int as untouched,
+      count(*) filter (where not exists (
+        select 1 from library_views v
+        where v.knowledge_entry_id = e.id and v.day > current_date - 90
+      ))::int as unread,
+      count(*) filter (
+        where e.confidence = 'low' or e.resolution_clarity = 'unclear'
+      )::int as doubtful
+    from knowledge_entries e
+    where e.status = 'approved'
+  `;
+  const weakest = await sql<KnowledgeStale["weakest"]>`
+    select e.id, coalesce(e.issue_summary, '') as title,
+           avg(f.rating)::float8 as rating, count(f.id)::int as ratings,
+           coalesce((
+             select sum(v.views) from library_views v
+             where v.knowledge_entry_id = e.id and v.day > current_date - 90
+           ), 0)::int as reads
+    from knowledge_entries e
+    join knowledge_feedback f
+      on f.knowledge_entry_id = e.id and f.kind = 'rating' and f.rating is not null
+    where e.status in ('approved', 'deprecated')
+    group by e.id
+    order by avg(f.rating), 5 desc
+    limit 8
+  `;
+  const ORDER = ["week", "month", "quarter", "older"] as const;
+  return {
+    drafts: ORDER.map((age) => ({
+      age,
+      n: drafts.find((d) => d.age === age)?.n ?? 0,
+    })),
+    ...row,
+    weakest: [...weakest],
+  };
 }

@@ -1,25 +1,19 @@
+/**
+ * One ranking definition for every search surface. Two rules:
+ *
+ * 1. Each signal generates its own candidates through its own index: `ORDER BY
+ *    embedding <=> $1 LIMIT k` (HNSW), `tsv @@ query` (GIN tsvector) and
+ *    `$1 <% text` (GIN trigram). A blended score in the SELECT list gives the
+ *    planner nothing to index on.
+ * 2. Ranks fuse, scores do not. Cosine, `ts_rank` and `word_similarity` are on
+ *    incomparable scales; Reciprocal Rank Fusion is scale-free, which also
+ *    makes knowledge and reference results comparable in one list.
+ *
+ * A query whose words appear nowhere returns no rows without a threshold: it
+ * has no lexical candidates, and the vector leg is gated by `SEM_FLOOR`.
+ */
 import { sql } from "../infra/db";
 import { MAX_PAGE } from "@tachy/contract";
-
-/**
- * One ranking definition for all three search surfaces.
- *
- * Two rules hold everywhere:
- *
- * 1. **Each signal generates its own candidates through its own index.** A
- *    blended score computed in the SELECT list leaves the planner nothing to
- *    index on, so HNSW / GIN-tsvector / GIN-trgm all sat unused. `ORDER BY
- *    embedding <=> $1 LIMIT k`, `tsv @@ query` and `$1 <% text` each hit theirs.
- *
- * 2. **Ranks fuse, scores do not.** Cosine, ts_rank and word_similarity live on
- *    incomparable scales - adding them means whichever has the widest range
- *    decides the order. Reciprocal Rank Fusion is scale-free, so knowledge and
- *    reference results are also comparable against each other in one list.
- *
- * The nonsense case falls out of (1) rather than needing a threshold bolted on:
- * a query whose words appear nowhere produces no lexical candidates, and the
- * vector leg is gated by SEM_FLOOR, so the query returns zero rows.
- */
 
 /** Rank-fusion damping. 60 is the value from the original RRF paper. */
 export const RRF_K = 60;
@@ -31,18 +25,15 @@ export const CANDIDATES = 50;
 export const RRF_WEIGHTS = { vec: 1.0, lex: 1.0, fuzzy: 0.5 } as const;
 
 /**
- * Same-customer material leads, on the same scale as everything else: the boost
- * is what one top-ranked tiebreaker signal is worth, not a raw score added to
- * incomparable units. Deliberately small - a customer's own history should win a
- * tie, never bury a better answer that happens to be general.
+ * What one top-ranked fuzzy signal is worth, so it is on the fused scale.
+ * Small: a customer's own history wins a tie and never buries a better
+ * general answer.
  */
 export const CUSTOMER_BOOST = 0.5 / (RRF_K + 1);
 
 /**
- * Smaller than CUSTOMER_BOOST, deliberately. The customer boost is already
- * sized at one top-ranked tiebreaker signal; a unit is a narrower claim than a
- * customer, so it must move a result less, not more. A sibling on the same
- * shared profile is a weaker claim again.
+ * Below `CUSTOMER_BOOST`: a unit is a narrower claim than a customer, so it
+ * moves a result less. A sibling unit on the same profile is weaker again.
  */
 export const UNIT_BOOST = CUSTOMER_BOOST / 2;
 export const SIBLING_UNIT_BOOST = CUSTOMER_BOOST / 4;
@@ -54,9 +45,8 @@ export const SIBLING_UNIT_BOOST = CUSTOMER_BOOST / 4;
 export const HNSW_EF_SEARCH = 100;
 
 /**
- * Governs `<%`. The pg_trgm default of 0.6 is too strict to catch an error code
- * embedded in a long entry; 0.35 still rejects nonsense. Measured against the
- * live DB: 'ECONNREFUSED' <% a matching entry is true at 0.35, 'zzzzzz' is false.
+ * Governs `<%`. The pg_trgm default of 0.6 misses an error code embedded in a
+ * long entry; this still rejects nonsense.
  */
 export const WORD_SIM_THRESHOLD = 0.35;
 
@@ -65,13 +55,13 @@ export const WORD_SIM_THRESHOLD = 0.35;
  * confines them to this transaction, so a pooled connection never leaks them.
  */
 export async function withSearchSession<T>(
-  fn: (tx: typeof sql) => Promise<T>,
+  search: (tx: typeof sql) => Promise<T>,
 ): Promise<T> {
   return sql.begin(async (tx) => {
     await tx`set local hnsw.ef_search = ${sql.unsafe(String(HNSW_EF_SEARCH))}`;
     await tx`set local hnsw.iterative_scan = relaxed_order`;
     await tx`set local pg_trgm.word_similarity_threshold = ${sql.unsafe(String(WORD_SIM_THRESHOLD))}`;
-    return fn(tx as unknown as typeof sql);
+    return search(tx as unknown as typeof sql);
   }) as Promise<T>;
 }
 
@@ -96,18 +86,11 @@ export const ftsRank = (
   sql`greatest(ts_rank_cd(${tsv}, websearch_to_tsquery('simple', ${query})), ts_rank_cd(${tsvEn}, websearch_to_tsquery('english', ${query})))`;
 
 /**
- * Fuse three candidate CTEs named `vec`, `lex` and `fuzzy`, each exposing
- * (id, rnk) plus its own raw signal. Emits a `fused` relation with the raw
- * signals kept for display and `rrf` for ordering.
- *
- * `boost` names a table with (id, customer_id) to lift rows belonging to
- * `customerId`. Rows of other customers are not excluded - a fix for one
- * install is often the answer for the next.
- *
- * With `unitId`, a row from a SIBLING unit sharing the same profile gets a
- * smaller lift than the unit's own: what was learned on TLC191 is likely true
- * of TLC192 if both conform to layout 3, and unlikely to be true of a line on a
- * different layout. Still a lift, never a filter.
+ * Fuses three candidate CTEs named `vec`, `lex` and `fuzzy`, each exposing
+ * (id, rnk) and its raw signal, into `fused`: the raw signals plus `rrf` to
+ * order by. `boost` names a table with (id, customer_id) whose rows for
+ * `customerId` are lifted, and with `unitId` that unit's rows and, less, its
+ * profile siblings'. A lift, never a filter: other customers' rows stay.
  */
 export const fusedCte = (
   boost?: { table: string; customerId: string; unitId?: string | null } | null,
@@ -167,7 +150,10 @@ export interface RankedRow {
   rrf: number;
 }
 
-/** Reject a limit that is NaN, negative, or large enough to be a mistake. */
+/**
+ * `fallback` for a limit that is NaN or not positive; otherwise capped at
+ * `MAX_PAGE`.
+ */
 export const clampLimit = (limit: number | undefined, fallback: number) =>
   Number.isFinite(limit) && (limit as number) > 0
     ? Math.min(Math.floor(limit as number), MAX_PAGE)

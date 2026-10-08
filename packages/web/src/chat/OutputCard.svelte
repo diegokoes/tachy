@@ -17,7 +17,7 @@
 
   let { file = undefined }: { file?: OutputFile } = $props();
 
-  const W = 22;
+  const WIDTH_CELLS = 22;
   const FILL = "▒▓█";
 
   let tick = $state(0);
@@ -26,13 +26,16 @@
   const done = $derived(!!file);
 
   const band = $derived.by(() => {
-    const head = tick % (W + 6);
-    let s = "";
-    for (let i = 0; i < W; i++) {
-      const d = head - i;
-      s += d < 0 || d > 5 ? " " : FILL[Math.min(2, Math.floor(d / 2))];
+    const head = tick % (WIDTH_CELLS + 6);
+    let line = "";
+    for (let i = 0; i < WIDTH_CELLS; i++) {
+      const distance = head - i;
+      line +=
+        distance < 0 || distance > 5
+          ? " "
+          : FILL[Math.min(2, Math.floor(distance / 2))];
     }
-    return s;
+    return line;
   });
 
   const ext = $derived(
@@ -54,10 +57,10 @@
 
   onMount(() => {
     if (reduced) return;
-    const iv = setInterval(() => {
+    const interval = setInterval(() => {
       if (!done) tick++;
     }, 70);
-    return () => clearInterval(iv);
+    return () => clearInterval(interval);
   });
 </script>
 

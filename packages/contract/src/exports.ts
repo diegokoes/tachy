@@ -1,8 +1,7 @@
 /**
  * The shape of a table export and the rules for naming its file and its
- * columns. The editor in the SPA previews all three; the server applies them
- * for real. They were two implementations until this package existed, and the
- * preview was only accidentally the name the download got.
+ * columns. The editor in the SPA previews all three and the server applies
+ * them, so both read the rules from here.
  */
 
 export const TABLE_CELL_TYPES = [
@@ -127,11 +126,10 @@ export function columnKeys(
 }
 
 /**
- * Tools an artifact may pre-authorise, so that attaching one does not put up a
- * review box for the very thing it exists to do. Enumerated rather than free
- * text: the list becomes an auto-approve list for every user the artifact is
- * shared with, and a team- or global-scoped artifact naming `create_ado_work_item`
- * would silently pre-approve that for all of them.
+ * Tools an artifact may pre-authorise, so attaching one raises no review box
+ * for the thing it exists to do. An enumeration, not free text: the list is
+ * auto-approved for every user the artifact is shared with, so a shared
+ * artifact naming `create_ado_work_item` would pre-approve that for all.
  */
 export const ARTIFACT_UTILITIES = ["export_table"] as const;
 export type ArtifactUtility = (typeof ARTIFACT_UTILITIES)[number];

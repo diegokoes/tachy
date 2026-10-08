@@ -1,3 +1,4 @@
+/** The MCP server itself, and how a tool is declared on it. */
 import type { ToolCallback } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ZodRawShape } from "zod";
 import { AppError, inBackground, log } from "@tachy/core/infra";
@@ -5,7 +6,6 @@ import { recordToolCall } from "@tachy/core/analytics";
 import { resolveCurrentUserId } from "@tachy/core/access";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-/** The MCP server itself, and how a tool is declared on it. */
 export const server = new McpServer({ name: "tachy", version: "0.1.0" });
 
 export type ToolConfig<I extends ZodRawShape> = {
@@ -15,22 +15,26 @@ export type ToolConfig<I extends ZodRawShape> = {
 };
 
 /**
- * Counted per person as well as per tool, which is the part a log scrape cannot
- * give you. The user is resolved lazily and never awaited by the tool: a slow
- * lookup must not hold the answer back.
+ * Counted per person as well as per tool. The user is resolved in the
+ * background and never awaited by the tool, so a slow lookup does not hold the
+ * answer back.
  */
-function count(name: string, writes: boolean, ok: boolean, misuse: boolean) {
+function count(
+  name: string,
+  writes: boolean,
+  outcome: { ok: boolean; misuse: boolean },
+) {
   inBackground(
     resolveCurrentUserId()
       .catch(() => null)
-      .then((userId) => recordToolCall(name, writes, userId, { ok, misuse })),
+      .then((userId) => recordToolCall(name, writes, userId, outcome)),
     "tool_call_count_failed",
   );
 }
 
 export async function runTool(
   name: string,
-  cb: (args: unknown, extra: unknown) => unknown,
+  handler: (args: unknown, extra: unknown) => unknown,
   args: unknown,
   extra: unknown,
   /** Whether the tool changes anything - its readOnlyHint, inverted. */
@@ -38,17 +42,15 @@ export async function runTool(
 ) {
   const started = Date.now();
   try {
-    const res = await cb(args, extra);
+    const result = await handler(args, extra);
     log("info", "mcp_tool", { tool: name, ok: true, ms: Date.now() - started });
-    count(name, writes, true, false);
-    return res;
+    count(name, writes, { ok: true, misuse: false });
+    return result;
   } catch (err) {
-    count(
-      name,
-      writes,
-      false,
-      err instanceof AppError && err.code === "bad_input",
-    );
+    count(name, writes, {
+      ok: false,
+      misuse: err instanceof AppError && err.code === "bad_input",
+    });
     const message = err instanceof Error ? err.message : String(err);
     log("error", "mcp_tool", {
       tool: name,
@@ -75,14 +77,14 @@ const CACHES_ONLY = new Set(["fetch_work_item", "get_context"]);
 export function tool<I extends ZodRawShape>(
   name: string,
   config: ToolConfig<I>,
-  cb: ToolCallback<I>,
+  handler: ToolCallback<I>,
 ): void {
   const writes =
     config.annotations?.readOnlyHint !== true && !CACHES_ONLY.has(name);
   const wrapped = ((args: unknown, extra: unknown) =>
     runTool(
       name,
-      cb as (a: unknown, e: unknown) => unknown,
+      handler as (args: unknown, extra: unknown) => unknown,
       args,
       extra,
       writes,

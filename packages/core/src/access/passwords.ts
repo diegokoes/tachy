@@ -10,9 +10,9 @@ const scrypt = promisify(scryptCb) as (
   opts: { N: number; r: number; p: number; maxmem: number },
 ) => Promise<Buffer>;
 
-const N = 16384;
-const R = 8;
-const P = 1;
+const SCRYPT_COST = 16384;
+const SCRYPT_BLOCK_SIZE = 8;
+const SCRYPT_PARALLELISM = 1;
 const KEYLEN = 64;
 const MAXMEM = 64 * 1024 * 1024;
 
@@ -26,12 +26,12 @@ export async function hashPassword(password: string): Promise<string> {
     );
   const salt = randomBytes(16);
   const hash = await scrypt(password, salt, KEYLEN, {
-    N,
-    r: R,
-    p: P,
+    N: SCRYPT_COST,
+    r: SCRYPT_BLOCK_SIZE,
+    p: SCRYPT_PARALLELISM,
     maxmem: MAXMEM,
   });
-  return `scrypt$${N}$${R}$${P}$${salt.toString("base64")}$${hash.toString("base64")}`;
+  return `scrypt$${SCRYPT_COST}$${SCRYPT_BLOCK_SIZE}$${SCRYPT_PARALLELISM}$${salt.toString("base64")}$${hash.toString("base64")}`;
 }
 
 export async function verifyPassword(
@@ -41,16 +41,16 @@ export async function verifyPassword(
   if (!stored) return false;
   const parts = stored.split("$");
   if (parts.length !== 6 || parts[0] !== "scrypt") return false;
-  const [, n, r, p, saltB64, hashB64] = parts;
+  const [, cost, blockSize, parallelism, saltB64, hashB64] = parts;
   const want = Buffer.from(hashB64, "base64");
   const got = await scrypt(
     password,
     Buffer.from(saltB64, "base64"),
     want.length,
     {
-      N: Number(n),
-      r: Number(r),
-      p: Number(p),
+      N: Number(cost),
+      r: Number(blockSize),
+      p: Number(parallelism),
       maxmem: MAXMEM,
     },
   );

@@ -17,19 +17,19 @@
     { key: "detail", label: "detail", cell: detailCell },
   ];
 
-  /* Run once on opening if nothing has been run this visit. Not on every
-     open: a source probe is a call to someone else's API. */
+  // Run once on opening if nothing has been run this visit. Not on every open:
+  // a source probe is a call to someone else's API.
   onMount(() => {
     if (!probes.checks && !probes.running) void runProbes();
   });
 </script>
 
-{#snippet stateCell(p: Probe)}
-  <Badge tone={toneOf(p.state)}>{p.state}</Badge>
+{#snippet stateCell(probe: Probe)}
+  <Badge tone={toneOf(probe.state)}>{probe.state}</Badge>
 {/snippet}
 
-{#snippet detailCell(p: Probe)}
-  <span class="detail">{p.detail}</span>
+{#snippet detailCell(probe: Probe)}
+  <span class="detail">{probe.detail}</span>
 {/snippet}
 
 <div class="bar">

@@ -16,19 +16,16 @@ import { lifecycle } from "../../lifecycle";
 
 /** Deployment settings and the maintenance switch. */
 export const system = new Hono()
-  /*
-   * Members read this: the settings and whether the environment supplies a
-   * fallback agent key are what the app renders its own chrome from. The `env`
-   * block is different - which secrets are configured, what the API port is -
-   * and only Admin > System renders it, so it travels only to an admin.
-   */
+  // Members read this: the app renders its chrome from the settings and from
+  // whether the environment supplies a fallback agent key. The `env` block
+  // (which secrets are configured, the API port) travels only to an admin.
   .get("/system", async (c) =>
     c.json({
       settings: await effectiveSettings(),
       credentials: {
         vault_enabled: secretsEnabled(),
-        // Availability with no user to be, so: the environment's fallback, or
-        // null. Each person's own keys are under /me/credentials.
+        // No user here, so availability is the environment's fallback or null.
+        // Each person's own keys are under /me/credentials.
         anthropic_api_key:
           (await credentialSource(ANTHROPIC_API_KEY_CREDENTIAL, {})) ?? null,
       },

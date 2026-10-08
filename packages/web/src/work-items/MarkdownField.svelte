@@ -18,7 +18,7 @@
     value: string;
     images: PastedImage[];
     invalid?: boolean;
-    onchange: (v: string) => void;
+    onchange: (value: string) => void;
     /** Keeps the file and returns the key its markdown refers to it by. */
     onimage: (file: File) => string;
     onremoveimage: (key: string) => void;

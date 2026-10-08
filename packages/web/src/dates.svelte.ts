@@ -27,13 +27,13 @@ function stored(): string | null {
  */
 export const dateFormat = $state<DateFormat>(parseDateFormat(stored()));
 
-function apply(f: DateFormat) {
-  dateFormat.order = f.order;
-  dateFormat.clock = f.clock;
+function apply(format: DateFormat) {
+  dateFormat.order = format.order;
+  dateFormat.clock = format.clock;
   try {
-    localStorage.setItem(STORAGE_KEY, encodeDateFormat(f));
+    localStorage.setItem(STORAGE_KEY, encodeDateFormat(format));
   } catch {
-    /* storage blocked: the server copy still holds */
+    // storage blocked: the server copy still holds
   }
 }
 
@@ -42,10 +42,10 @@ type DatePrefs = { date_order: Pref<DateOrder>; clock: Pref<Clock> };
 
 export async function loadDateFormat() {
   try {
-    const p = await api.get<DatePrefs>("/me/preferences");
-    apply({ order: p.date_order.value, clock: p.clock.value });
+    const prefs = await api.get<DatePrefs>("/me/preferences");
+    apply({ order: prefs.date_order.value, clock: prefs.clock.value });
   } catch {
-    /* keep whatever the browser last saw */
+    // keep whatever the browser last saw
   }
 }
 

@@ -1,3 +1,6 @@
+/**
+ * The systems work items come from, and how their projects map onto products.
+ */
 import { z } from "zod";
 import { getProductIdBySlug, getTeamIdBySlug } from "@tachy/core/catalog";
 import {
@@ -16,10 +19,6 @@ import {
   requireCanManageTeam,
   requireGlobalAdmin,
 } from "../permissions";
-
-/**
- * The systems work items come from, and how their projects map onto products.
- */
 
 tool(
   "list_source_connections",
@@ -44,14 +43,14 @@ tool(
       config: z.record(z.string(), z.any()).optional(),
     },
   },
-  async (a) => {
+  async (args) => {
     await requireGlobalAdmin();
     return out(
       await addSourceConnection({
-        sourceType: a.source_type,
-        slug: a.slug,
-        baseUrl: a.base_url,
-        config: a.config,
+        sourceType: args.source_type,
+        slug: args.slug,
+        baseUrl: args.base_url,
+        config: args.config,
       }),
     );
   },
@@ -68,12 +67,12 @@ tool(
     },
     annotations: { readOnlyHint: true },
   },
-  async (a) =>
+  async (args) =>
     out(
       await listSourceProjects({
-        sourceSlug: a.source_slug,
-        productId: a.product_slug
-          ? await getProductIdBySlug(a.product_slug)
+        sourceSlug: args.source_slug,
+        productId: args.product_slug
+          ? await getProductIdBySlug(args.product_slug)
           : undefined,
       }),
     ),
@@ -92,13 +91,13 @@ tool(
     },
     annotations: { readOnlyHint: true },
   },
-  async (a) =>
+  async (args) =>
     out(
       await resolveProjectContext({
-        productSlug: a.product_slug,
-        workItemId: a.work_item_id,
-        sourceSlug: a.source_slug,
-        externalKey: a.external_key,
+        productSlug: args.product_slug,
+        workItemId: args.work_item_id,
+        sourceSlug: args.source_slug,
+        externalKey: args.external_key,
       }),
     ),
 );
@@ -137,25 +136,25 @@ tool(
       notes: z.string().optional(),
     },
   },
-  async (a) => {
-    if (a.product_slug)
+  async (args) => {
+    if (args.product_slug)
       await requireCanEdit({
-        productId: await getProductIdBySlug(a.product_slug),
+        productId: await getProductIdBySlug(args.product_slug),
       });
     else
       await requireCanManageTeam(
-        a.team_slug ? await getTeamIdBySlug(a.team_slug) : null,
+        args.team_slug ? await getTeamIdBySlug(args.team_slug) : null,
       );
     return out(
       await addSourceProject({
-        sourceSlug: a.source_slug,
-        externalKey: a.external_key,
-        name: a.name,
-        productSlug: a.product_slug,
-        teamSlug: a.team_slug,
-        customerSlug: a.customer_slug,
-        wikis: a.wikis,
-        notes: a.notes,
+        sourceSlug: args.source_slug,
+        externalKey: args.external_key,
+        name: args.name,
+        productSlug: args.product_slug,
+        teamSlug: args.team_slug,
+        customerSlug: args.customer_slug,
+        wikis: args.wikis,
+        notes: args.notes,
       }),
     );
   },
@@ -172,13 +171,13 @@ tool(
       component: z.string(),
     },
   },
-  async (a) => {
-    await requireCanEdit(await sourceProjectScope(a.source_project_id));
+  async (args) => {
+    await requireCanEdit(await sourceProjectScope(args.source_project_id));
     return out(
       await setProjectAreaMap({
-        sourceProjectId: a.source_project_id,
-        areaPrefix: a.area_prefix,
-        componentSlug: a.component,
+        sourceProjectId: args.source_project_id,
+        areaPrefix: args.area_prefix,
+        componentSlug: args.component,
       }),
     );
   },

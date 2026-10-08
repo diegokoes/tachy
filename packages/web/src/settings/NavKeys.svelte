@@ -20,8 +20,11 @@
 {#each navItems() as n (n.key)}
   <KeyRow label={n.label} target={{ kind: "nav", item: n.key }} />
 {/each}
-{#each actions as a (a)}
-  <KeyRow label={ACTIONS[a].label} target={{ kind: "action", item: a }} />
+{#each actions as action (action)}
+  <KeyRow
+    label={ACTIONS[action].label}
+    target={{ kind: "action", item: action }}
+  />
 {/each}
 {#each { length: SUBNAV_SLOTS } as _, i}
   <KeyRow label="sub tab {i + 1}" target={{ kind: "subnav", slot: i }} />

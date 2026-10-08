@@ -55,7 +55,8 @@ const inScope = (productId: string | null) =>
 /**
  * One category shape everywhere: the row plus its lead article's slug/title and
  * the components it covers. The lateral aggregate keeps components as a single
- * jsonb array so a category is one row rather than a join to fan out and regroup.
+ * jsonb array so a category is one row rather than a join to fan out and
+ * regroup.
  */
 function categoryRows(productId: string | null, slug?: string) {
   return sql<WikiCategoryRow[]>`
@@ -110,29 +111,29 @@ async function parentIdOf(
   return (await getWikiCategory(productId, parentSlug)).id;
 }
 
-export async function addWikiCategory(i: WikiCategoryInput) {
-  assertCategorySlug(i.slug);
-  const productId = i.productId ?? null;
-  const parentId = await parentIdOf(productId, i.parentSlug);
+export async function addWikiCategory(input: WikiCategoryInput) {
+  assertCategorySlug(input.slug);
+  const productId = input.productId ?? null;
+  const parentId = await parentIdOf(productId, input.parentSlug);
   if (parentId) {
     const [existing] = await sql`
       select id from wiki_categories
-      where product_id is not distinct from ${productId} and slug = ${i.slug}
+      where product_id is not distinct from ${productId} and slug = ${input.slug}
     `;
     if (
       existing &&
       (await wouldCycle("wiki_categories", existing.id, parentId))
     )
       throw badInput(
-        `'${i.parentSlug}' sits under '${i.slug}'; that would make a cycle`,
+        `'${input.parentSlug}' sits under '${input.slug}'; that would make a cycle`,
       );
   }
 
-  const lead = await leadDocId(productId, i.leadSlug);
+  const lead = await leadDocId(productId, input.leadSlug);
   const [row] = await sql`
     insert into wiki_categories (product_id, parent_id, slug, name, description, ordinal, lead_doc_id)
-    values (${productId}, ${parentId}, ${i.slug}, ${i.name},
-            ${i.description ?? null}, ${i.ordinal ?? 0}, ${lead})
+    values (${productId}, ${parentId}, ${input.slug}, ${input.name},
+            ${input.description ?? null}, ${input.ordinal ?? 0}, ${lead})
     on conflict (product_id, slug) do update set
       name        = excluded.name,
       description = excluded.description,
@@ -143,8 +144,8 @@ export async function addWikiCategory(i: WikiCategoryInput) {
       lead_doc_id = coalesce(excluded.lead_doc_id, wiki_categories.lead_doc_id)
     returning id, slug, name
   `;
-  if (i.componentSlugs !== undefined)
-    await setCategoryComponents(productId, row.id, i.componentSlugs);
+  if (input.componentSlugs !== undefined)
+    await setCategoryComponents(productId, row.id, input.componentSlugs);
   return row;
 }
 
@@ -192,9 +193,10 @@ export async function updateWikiCategory(
 }
 
 /**
- * Replace a section's covered components. Whole-set, like article categories: the
- * editor sends the list it wants. Components belong to a product, so the org-wide
- * wiki has none to link and an empty list is the only valid input there.
+ * Replace a section's covered components. Whole-set, like article categories:
+ * the editor sends the list it wants. Components belong to a product, so the
+ * org-wide wiki has none to link and an empty list is the only valid input
+ * there.
  */
 export async function setCategoryComponents(
   productId: string | null,
@@ -203,12 +205,12 @@ export async function setCategoryComponents(
 ): Promise<void> {
   const ids: string[] = [];
   for (const slug of componentSlugs) {
-    const [c] = await sql`
+    const [component] = await sql`
       select id from components
       where product_id = ${productId} and slug = ${slug}
     `;
-    if (!c) throw notFound(`No component '${slug}' in this product`);
-    ids.push(c.id);
+    if (!component) throw notFound(`No component '${slug}' in this product`);
+    ids.push(component.id);
   }
   await sql.begin(async (tx) => {
     await tx`delete from wiki_category_components where category_id = ${categoryId}`;
@@ -222,10 +224,10 @@ export async function setCategoryComponents(
 }
 
 /**
- * Seed sections from the product's top-level components - the one-click start for
- * a new wiki. One section per top-level component, linked to it, appended after
- * any sections already there. Re-runnable: a slug that already exists is skipped,
- * so it never clobbers curation.
+ * Seed sections from the product's top-level components - the one-click start
+ * for a new wiki. One section per top-level component, linked to it, appended
+ * after any sections already there. Re-runnable: a slug that already exists is
+ * skipped, so it never clobbers curation.
  */
 export async function seedSectionsFromComponents(productId: string) {
   const tops = await sql<{ slug: string; name: string }[]>`
@@ -239,20 +241,20 @@ export async function seedSectionsFromComponents(productId: string) {
   `;
   let ordinal = n;
   const created: { slug: string; name: string }[] = [];
-  for (const c of tops) {
+  for (const top of tops) {
     const [existing] = await sql`
       select 1 from wiki_categories
-      where product_id is not distinct from ${productId} and slug = ${c.slug}
+      where product_id is not distinct from ${productId} and slug = ${top.slug}
     `;
     if (existing) continue;
     await addWikiCategory({
       productId,
-      slug: c.slug,
-      name: c.name,
+      slug: top.slug,
+      name: top.name,
       ordinal: ordinal++,
-      componentSlugs: [c.slug],
+      componentSlugs: [top.slug],
     });
-    created.push({ slug: c.slug, name: c.name });
+    created.push({ slug: top.slug, name: top.name });
   }
   return { created };
 }
@@ -318,33 +320,33 @@ export async function wikiToc(productId: string | null): Promise<WikiToc> {
   ]);
 
   const staleBy = new Map<string, number>();
-  for (const r of staleRows as any[]) staleBy.set(r.id, r.stale);
+  for (const row of staleRows as any[]) staleBy.set(row.id, row.stale);
   const withStale = (a: WikiArticleRef): WikiArticleRef => {
     const n = staleBy.get(a.id);
     return n ? { ...a, stale: n } : a;
   };
 
   const byCategory = new Map<string, WikiArticleRef[]>();
-  for (const m of members as any[]) {
-    const list = byCategory.get(m.category_id) ?? [];
-    list.push(
+  for (const member of members as any[]) {
+    const filed = byCategory.get(member.category_id) ?? [];
+    filed.push(
       withStale({
-        id: m.id,
-        slug: m.slug,
-        title: m.title,
-        status: m.status,
-        ordinal: m.ordinal,
-        updated_at: m.updated_at,
+        id: member.id,
+        slug: member.slug,
+        title: member.title,
+        status: member.status,
+        ordinal: member.ordinal,
+        updated_at: member.updated_at,
       }),
     );
-    byCategory.set(m.category_id, list);
+    byCategory.set(member.category_id, filed);
   }
 
   const nodes = new Map<string, WikiTocNode>();
-  for (const c of categories)
-    nodes.set(c.id, {
-      ...c,
-      articles: byCategory.get(c.id) ?? [],
+  for (const category of categories)
+    nodes.set(category.id, {
+      ...category,
+      articles: byCategory.get(category.id) ?? [],
       children: [],
     });
 
@@ -427,16 +429,16 @@ export async function findArticle(productId: string | null, slug: string) {
 
 /**
  * In-wiki quick search for the Ctrl+K palette. Scoped to this one wiki and,
- * unlike the library's reference search, it includes drafts - a curator navigates
- * their own unfinished pages - and stays lightweight (title/slug/body match) since
- * it answers keystroke by keystroke.
+ * unlike the library's reference search, it includes drafts - a curator
+ * navigates their own unfinished pages - and stays lightweight (title/slug/body
+ * match) since it answers keystroke by keystroke.
  */
 export async function searchWikiArticles(
   productId: string | null,
-  q: string,
+  query: string,
   limit = 20,
 ): Promise<WikiSearchHit[]> {
-  const term = q.trim();
+  const term = query.trim();
   if (!term) return [];
   const like = `%${term}%`;
   return sql<WikiSearchHit[]>`
@@ -477,7 +479,7 @@ export { MAIN_PAGE_SLUG };
 
 /**
  * Null rather than throwing when the main page does not exist yet, so the route
- * can offer to create one instead of 404ing a wiki that is simply new.
+ * can offer to create one instead of answering 404 for a new wiki.
  */
 export async function findMainPage(productId: string | null) {
   try {

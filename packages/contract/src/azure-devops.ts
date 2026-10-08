@@ -45,7 +45,6 @@ export interface WorkItemSchema {
 /** A work item type the composer offers: what ADO's own "New" menu would list. */
 export interface WorkItemTypeOption {
   name: string;
-  description: string | null;
   /** Hex without the '#'. */
   color: string | null;
   /** ADO's stock glyph id, e.g. "icon_insect"; the browser draws its own. */

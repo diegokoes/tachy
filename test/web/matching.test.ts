@@ -22,7 +22,7 @@ describe("terms", () => {
     ]);
   });
 
-  /** Two-letter noise would match everywhere and centre the excerpt nowhere. */
+  // Two-letter noise would match everywhere and centre the excerpt nowhere.
   it("drops words shorter than three characters", () => {
     expect(terms("in the queue")).toEqual(["the", "queue"]);
   });
@@ -62,7 +62,7 @@ describe("excerpt", () => {
     expect(text(excerpt(body, "a b")).startsWith("The printer")).toBe(true);
   });
 
-  /** Wiki-style: fragments around each hit, not one slab from the first one. */
+  // Wiki-style: fragments around each hit, not one slab from the first one.
   it("joins several fragments rather than returning one long run", () => {
     const segs = excerpt(body, "printer backoff");
     expect(text(segs)).toMatch(/…/);

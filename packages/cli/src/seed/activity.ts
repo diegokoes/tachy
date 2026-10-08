@@ -36,7 +36,7 @@ const daysAgo = (n: number) =>
 
 export async function seedActivity(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   users: SeededUser[],
   workItems: SeededWorkItem[],
   artifacts: string[],
@@ -55,7 +55,7 @@ export async function seedActivity(
       "meta",
       "created_at",
     ],
-    Array.from({ length: v.analysisRuns }, (_, i) => {
+    Array.from({ length: volumes.analysisRuns }, (_, i) => {
       const rng = rngFor("run", i);
       const input = intBetween(rng, 800, 60_000);
       const output = intBetween(rng, 100, 4_000);
@@ -84,7 +84,7 @@ export async function seedActivity(
   // getOutput filters on (user_id = $1 or user_id is null), so the k6 login
   // needs to own a slice of these or /api/outputs is empty under load.
   const member = users.find((u) => u.email === MEMBER_EMAIL) ?? users[0];
-  const rows = Array.from({ length: v.generatedOutputs }, (_, i) => {
+  const rows = Array.from({ length: volumes.generatedOutputs }, (_, i) => {
     const rng = rngFor("output", i);
     const bytes = Buffer.from(
       `seeded export ${i}\n${"col_a,col_b,col_c\n1,2,3\n".repeat(40)}`,
@@ -103,7 +103,7 @@ export async function seedActivity(
       byte_size: bytes.length,
       meta: tx.json({ seeded: true }),
       created_at: pastDate(rng, 20),
-      // Half already expired, so the hourly sweep in routes/outputs.ts has work.
+      // Half already expired, so `sweepExpiredOutputs` has work.
       expires_at: chance(rng, 0.5)
         ? pastDate(rng, 5)
         : new Date(Date.now() + intBetween(rng, 1, 72) * 3_600_000),
@@ -153,7 +153,7 @@ export async function seedTelemetry(
     ],
     connections.flatMap((c, ci) =>
       Array.from({ length: 14 }, (_, day) =>
-        SOURCE_CALL_ORIGINS.map((origin, oi) => {
+        SOURCE_CALL_ORIGINS.map((origin, originIndex) => {
           const rng = rngFor(`source_calls:${c.slug}:${origin}`, day);
           return {
             source_connection_id: c.id,
@@ -161,7 +161,7 @@ export async function seedTelemetry(
             origin,
             calls: intBetween(rng, origin === "app" ? 0 : 20, 220),
             rate_limited: chance(rng, 0.15) ? intBetween(rng, 1, 6) : 0,
-            auth_failures: ci === 1 && oi === 0 && day === 2 ? 4 : 0,
+            auth_failures: ci === 1 && originIndex === 0 && day === 2 ? 4 : 0,
           };
         }),
       ).flat(),

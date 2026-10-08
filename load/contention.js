@@ -1,8 +1,3 @@
-import http from "k6/http";
-import { check, fail } from "k6";
-import { BASE_URL, headers, setupSession, pick } from "./session.js";
-import { QUERIES } from "./corpus.js";
-
 /**
  * Search while the host embeds in bulk. Proves the separation in
  * DEPLOYMENT-ARCHITECTURE.md §5.4: with the model in its own queue, a backfill
@@ -13,6 +8,11 @@ import { QUERIES } from "./corpus.js";
  *                    (all=true) itself. Without it, start a reindex by hand
  *                    before the run.
  */
+import http from "k6/http";
+import { check, fail } from "k6";
+import { BASE_URL, headers, setupSession, pick } from "./session.js";
+import { QUERIES } from "./corpus.js";
+
 const BASELINE = Number(__ENV.BASELINE_P95_MS || 0);
 
 export const options = {
@@ -39,7 +39,7 @@ export function setup() {
     fail("set BASELINE_P95_MS to the idle knowledge_search p95 from search.js");
   const data = setupSession();
   if (__ENV.ADMIN_TOKEN) {
-    const res = http.post(
+    const response = http.post(
       `${BASE_URL}/api/jobs/runs`,
       JSON.stringify({ kind: "embeddings.backfill", params: { all: true } }),
       {
@@ -49,7 +49,7 @@ export function setup() {
         },
       },
     );
-    check(res, { "backfill queued": (r) => r.status === 202 });
+    check(response, { "backfill queued": (r) => r.status === 202 });
   }
   return data;
 }

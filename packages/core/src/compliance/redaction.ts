@@ -11,9 +11,9 @@ export class TokenMap {
     if (existing) return existing;
     const n = (this.counts.get(kind) ?? 0) + 1;
     this.counts.set(kind, n);
-    const t = `[${kind}_${n}]`;
-    this.seen.set(key, t);
-    return t;
+    const token = `[${kind}_${n}]`;
+    this.seen.set(key, token);
+    return token;
   }
 }
 
@@ -21,10 +21,10 @@ const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 
 /**
  * The first two branches carry their own evidence (a country code, an area code
- * in brackets). The third is bare digit groups, which in a support ticket are far
- * more often the identifiers the ticket is *about* - UIDs, serials, order numbers
- * - than a phone number, so it only fires behind a word that announces one.
- * Tokenizing those identifiers is privacy-neutral and destroys the case.
+ * in brackets). The third is bare digit groups, which in a support ticket are
+ * more often what the ticket is about (UIDs, serials, order numbers) than a
+ * phone number, so it only fires behind a word that announces one. Tokenizing
+ * those identifiers protects nobody and destroys the case.
  */
 const PHONE_WORD = String.raw`(?:tel|telephone|tele?fono|tfno|tlf|phone|mobile|m[oó]vil|cell|fax|whatsapp)`;
 
@@ -54,44 +54,52 @@ const KNOWN_KEY_RES = [
 ];
 
 const CARD_RE = /\b\d(?:[ -]?\d){12,18}\b/g;
+const CARD_MIN_DIGITS = 13;
+const CARD_MAX_DIGITS = 19;
 
 function luhnValid(candidate: string): boolean {
   const digits = candidate.replace(/[ -]/g, "");
-  if (digits.length < 13 || digits.length > 19) return false;
+  if (digits.length < CARD_MIN_DIGITS || digits.length > CARD_MAX_DIGITS)
+    return false;
   let sum = 0;
   let double = false;
   for (let i = digits.length - 1; i >= 0; i--) {
-    let d = digits.charCodeAt(i) - 48;
+    let digit = digits.charCodeAt(i) - 48;
     if (double) {
-      d *= 2;
-      if (d > 9) d -= 9;
+      digit *= 2;
+      if (digit > 9) digit -= 9;
     }
-    sum += d;
+    sum += digit;
     double = !double;
   }
   return sum % 10 === 0;
 }
 
-/** Replace secrets, card numbers, emails, and phone numbers in free text with stable tokens. */
+/**
+ * Replace secrets, card numbers, emails, and phone numbers in free text with
+ * stable tokens.
+ */
 export function scrubText(text: string | undefined, map: TokenMap): string {
   if (!text) return text ?? "";
-  let out = text.replace(PEM_RE, (m) => map.token("SECRET", m));
+  let scrubbed = text.replace(PEM_RE, (m) => map.token("SECRET", m));
 
-  out = out.replace(
+  scrubbed = scrubbed.replace(
     BEARER_RE,
     (_m, prefix, token) => `${prefix}${map.token("SECRET", token)}`,
   );
-  out = out.replace(CREDENTIAL_ASSIGN_RE, (m, key, sep, value) =>
+  scrubbed = scrubbed.replace(CREDENTIAL_ASSIGN_RE, (m, key, sep, value) =>
     value.startsWith("[") || /^bearer$/i.test(value)
       ? m
       : `${key}${sep}${map.token("SECRET", value)}`,
   );
-  for (const re of KNOWN_KEY_RES)
-    out = out.replace(re, (m) => map.token("SECRET", m));
-  out = out.replace(CARD_RE, (m) => (luhnValid(m) ? map.token("CARD", m) : m));
-  out = out.replace(EMAIL_RE, (m) => map.token("EMAIL", m));
-  out = out.replace(PHONE_RE, (m) => map.token("PHONE", m));
-  return out;
+  for (const pattern of KNOWN_KEY_RES)
+    scrubbed = scrubbed.replace(pattern, (m) => map.token("SECRET", m));
+  scrubbed = scrubbed.replace(CARD_RE, (m) =>
+    luhnValid(m) ? map.token("CARD", m) : m,
+  );
+  scrubbed = scrubbed.replace(EMAIL_RE, (m) => map.token("EMAIL", m));
+  scrubbed = scrubbed.replace(PHONE_RE, (m) => map.token("PHONE", m));
+  return scrubbed;
 }
 
 /** What stands in for the customer's own name in redacted text. */
@@ -110,12 +118,13 @@ export function scrubbableCopy(raw: unknown): Record<string, any> | null {
 
 /** Scrub each of `keys` on `obj` whose value is a string. */
 export function scrubStrings(
-  obj: Record<string, any>,
+  target: Record<string, any>,
   keys: Iterable<string>,
   map: TokenMap,
 ): void {
-  for (const k of keys)
-    if (typeof obj[k] === "string") obj[k] = scrubText(obj[k], map);
+  for (const key of keys)
+    if (typeof target[key] === "string")
+      target[key] = scrubText(target[key], map);
 }
 
 const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -125,22 +134,14 @@ const flatten = (s: string) => s.replace(/\s+/g, " ").trim();
 
 /** Parts short enough to collide with ordinary words are left alone. */
 const NAME_PART_MIN = 4;
+const NAME_MIN_CHARS = 3;
 
 /**
- * Tokenize known person names wherever they appear in free text - same USER
- * kind as the author fields, so mentions map to the same token. Best-effort:
- * only names the item declares, or that the source could name for it, are found.
- *
- * Each name's own parts are matched too, mapping to the token of the full name
- * they came from: people are addressed by first name far more often than by the
- * full one their account is registered under ("Hola Javier," opening a mail from
- * Javier Baños).
- *
- * One alternation over one pass, rather than a replace per name - a long ticket
- * against a full agent directory is hundreds of names across hundreds of KB, and
- * that many sequential scans is the difference between milliseconds and seconds.
- * Longest first, so the full name wins wherever both could match and a part never
- * eats half of one.
+ * Tokenizes known person names wherever they appear in free text, as the USER
+ * kind the author fields use, so mentions map to the same token. Only names the
+ * item declares, or the source could name for it, are found. A name's parts
+ * match too and map to the full name's token, since people are addressed by
+ * first name. One pass, longest first, so a full name wins over its parts.
  */
 export function scrubKnownNames(
   text: string | undefined,
@@ -158,14 +159,14 @@ export function scrubKnownNames(
   };
   for (const name of names) {
     const n = flatten(name ?? "");
-    if (n.length < 3) continue;
+    if (n.length < NAME_MIN_CHARS) continue;
     add(n, n);
   }
   // Parts in a second pass, so a full name is never shadowed by a part of
   // another name that happened to be listed first.
   for (const name of names) {
     const n = flatten(name ?? "");
-    if (n.length < 3) continue;
+    if (n.length < NAME_MIN_CHARS) continue;
     for (const part of n.split(/[\s,]+/))
       if (part.length >= NAME_PART_MIN && /^\p{L}+$/u.test(part)) add(part, n);
   }
@@ -178,7 +179,7 @@ export function scrubKnownNames(
   // A run of adjacent known parts is one person, so it becomes one token.
   // Matching them separately turns "Javier Baños" into "[USER_1] [USER_1]",
   // which reads as two people talking.
-  const re = new RegExp(
+  const anyName = new RegExp(
     `(?<![\\p{L}\\p{N}])(?:${alternation})(?:\\s+(?:${alternation}))*(?![\\p{L}\\p{N}])`,
     "giu",
   );
@@ -193,7 +194,7 @@ export function scrubKnownNames(
     return words.join(" ");
   };
 
-  return text.replace(re, (hit) => map.token("USER", canonical(hit)));
+  return text.replace(anyName, (hit) => map.token("USER", canonical(hit)));
 }
 
 /**
@@ -209,10 +210,10 @@ export function scrubDeep<T>(value: T, map: TokenMap): T {
     typeof value === "object" &&
     value.constructor === Object
   ) {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>))
-      out[k] = scrubDeep(v, map);
-    return out as T;
+    const copy: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>))
+      copy[key] = scrubDeep(entry, map);
+    return copy as T;
   }
   return value;
 }
@@ -234,9 +235,9 @@ export function redactNormalized(
   const { customerSlug, map } = opts;
   const customerToken = customerStandIn(customerSlug);
 
-  // authorLabel is where the display names actually live: `requester` and
-  // `author` are account ids on most sources (a Freshdesk user id, an ADO
-  // descriptor), and feeding those to the name scrubber matches nothing.
+  // authorLabel holds the display names: `requester` and `author` are account
+  // ids on most sources (a Freshdesk user id, an ADO descriptor), and feeding
+  // those to the name scrubber matches nothing.
   const knownNames = [
     item.requester,
     item.requesterName,
@@ -295,15 +296,24 @@ export interface RedactionPolicy {
  * object) so tests and long-lived processes can toggle it.
  */
 export function globalRedactionEnabled(): boolean {
-  const v = process.env.TACHY_REDACT;
-  return v === "true" || v === "1";
+  const flag = process.env.TACHY_REDACT;
+  return flag === "true" || flag === "1";
 }
 
-/** Read the redaction switch off a source connection's `config` jsonb (the global flag overrides). */
+/**
+ * Read the redaction switch off a source connection's `config` jsonb (the
+ * global flag overrides).
+ */
 export function resolveRedactionPolicy(
   config: Record<string, unknown> | null | undefined,
 ): RedactionPolicy {
   if (globalRedactionEnabled()) return { enabled: true };
-  const r = (config ?? {})["redaction"] as { enabled?: unknown } | undefined;
-  return { enabled: r != null && typeof r === "object" && r.enabled === true };
+  const redaction = (config ?? {})["redaction"] as
+    { enabled?: unknown } | undefined;
+  return {
+    enabled:
+      redaction != null &&
+      typeof redaction === "object" &&
+      redaction.enabled === true,
+  };
 }

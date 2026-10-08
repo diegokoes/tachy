@@ -5,6 +5,7 @@ import {
   type JobWorkerRow,
 } from "@tachy/contract";
 import { sql, jsonb } from "../infra/db";
+import { kindTitle, presentRun } from "./present";
 
 export type { JobLive, JobWorkerRow };
 
@@ -50,7 +51,7 @@ export async function retireWorker(id: string): Promise<void> {
   await sql`delete from job_workers where id = ${id}`;
 }
 
-export async function pruneWorkers(): Promise<number> {
+export async function sweepWorkers(): Promise<number> {
   const rows = await sql`
     delete from job_workers
     where last_seen_at < now() - ${FORGET_MS} * interval '1 millisecond'
@@ -90,18 +91,20 @@ export async function jobLive(): Promise<JobLive> {
     group by 1, 2
   `;
   const alive = workers.filter((w) => w.alive && !w.draining);
-  const queues = JOB_QUEUES.map((q) => {
-    const of = (status: string) =>
-      counts.find((c) => c.lane === q.name && c.status === status);
-    const serving = alive.filter((w) => (w.queues as string[]).includes(q.name));
+  const queues = JOB_QUEUES.map((queue) => {
+    const countOf = (status: string) =>
+      counts.find((c) => c.lane === queue.name && c.status === status);
+    const serving = alive.filter((w) =>
+      (w.queues as string[]).includes(queue.name),
+    );
     return {
-      name: q.name,
-      class: q.class as JobResourceClass,
-      cap: q.cap,
-      queued: of("queued")?.n ?? 0,
-      running: of("running")?.n ?? 0,
-      oldest_queued_at: of("queued")?.oldest
-        ? new Date(of("queued")!.oldest).toISOString()
+      name: queue.name,
+      class: queue.class as JobResourceClass,
+      cap: queue.cap,
+      queued: countOf("queued")?.n ?? 0,
+      running: countOf("running")?.n ?? 0,
+      oldest_queued_at: countOf("queued")?.oldest
+        ? new Date(countOf("queued")!.oldest).toISOString()
         : null,
       workers: serving.length,
       slots: serving.reduce(
@@ -109,13 +112,25 @@ export async function jobLive(): Promise<JobLive> {
           n +
           Math.min(
             w.concurrency as number,
-            (w.per_class as Record<string, number>)[q.class] ?? Infinity,
+            (w.per_class as Record<string, number>)[queue.class] ?? Infinity,
           ),
         0,
       ),
     };
   });
-  return { workers: workers as never, queues };
+  return {
+    workers: workers.map((w) => ({
+      ...w,
+      runs: (w.runs as { kind: string; params: Record<string, unknown> }[]).map(
+        (r) => ({
+          ...r,
+          kind_title: kindTitle(r.kind),
+          subject: presentRun(r.kind, r.params, null).subject,
+        }),
+      ),
+    })) as never,
+    queues,
+  };
 }
 
 /** Queues with runs due and no live worker to claim them. */

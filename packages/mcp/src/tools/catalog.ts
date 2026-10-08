@@ -1,3 +1,8 @@
+/**
+ * The vocabularies a ticket is filed against (resolution patterns, components,
+ * and the customers and units that own an install) and who owns what: teams,
+ * their products, and the labels shared across them.
+ */
 import { z } from "zod";
 import {
   getCustomerIdBySlug,
@@ -31,12 +36,6 @@ import {
   requireGlobalAdmin,
   requireAnyTeamAdmin,
 } from "../permissions";
-
-/**
- * The vocabularies a ticket is filed against - resolution patterns, components,
- * and the customers and units that own an install - and who owns what: teams,
- * their products, and the labels shared across them.
- */
 
 tool(
   "list_resolution_patterns",
@@ -88,17 +87,17 @@ tool(
       aliases: z.array(z.string()).optional(),
     },
   },
-  async (a) => {
-    const productId = await getProductIdBySlug(a.product_slug);
+  async (args) => {
+    const productId = await getProductIdBySlug(args.product_slug);
     await requireCanEdit({ productId });
     return out(
       await addComponent({
         productId,
-        slug: a.slug,
-        name: a.name,
-        parentSlug: a.parent_slug,
-        description: a.description,
-        aliases: a.aliases,
+        slug: args.slug,
+        name: args.name,
+        parentSlug: args.parent_slug,
+        description: args.description,
+        aliases: args.aliases,
       }),
     );
   },
@@ -138,15 +137,15 @@ tool(
       notes: z.string().optional(),
     },
   },
-  async (a) => {
+  async (args) => {
     await requireAnyTeamAdmin();
     return out(
       await addCustomer({
-        name: a.name,
-        slug: a.slug,
-        aliases: a.aliases,
-        emailDomains: a.email_domains,
-        notes: a.notes,
+        name: args.name,
+        slug: args.slug,
+        aliases: args.aliases,
+        emailDomains: args.email_domains,
+        notes: args.notes,
       }),
     );
   },
@@ -231,18 +230,18 @@ tool(
       notes: z.string().optional(),
     },
   },
-  async (a) => {
+  async (args) => {
     await requireAnyTeamAdmin();
     return out(
       await addCustomerUnit({
-        customerSlug: a.customer,
-        slug: a.slug,
-        name: a.name,
-        kind: a.kind,
-        parentSlug: a.parent,
-        profileSlug: a.profile,
-        aliases: a.aliases,
-        notes: a.notes,
+        customerSlug: args.customer,
+        slug: args.slug,
+        name: args.name,
+        kind: args.kind,
+        parentSlug: args.parent,
+        profileSlug: args.profile,
+        aliases: args.aliases,
+        notes: args.notes,
       }),
     );
   },
@@ -296,20 +295,20 @@ tool(
         .describe("Pin the fact to one component. Needs product_slug."),
     },
   },
-  async (a) => {
+  async (args) => {
     await requireAnyTeamAdmin();
     return out(
       await setCustomerFact({
-        customerSlug: a.customer,
-        unit: a.unit,
-        kind: a.kind,
-        label: a.label,
-        value: a.value,
-        notes: a.notes,
-        source: a.source,
-        componentSlug: a.component,
-        productId: a.product_slug
-          ? await getProductIdBySlug(a.product_slug)
+        customerSlug: args.customer,
+        unit: args.unit,
+        kind: args.kind,
+        label: args.label,
+        value: args.value,
+        notes: args.notes,
+        source: args.source,
+        componentSlug: args.component,
+        productId: args.product_slug
+          ? await getProductIdBySlug(args.product_slug)
           : null,
       }),
     );
@@ -329,17 +328,21 @@ tool(
       notes: z.string().optional(),
     },
   },
-  async (a) => {
+  async (args) => {
     await requireAnyTeamAdmin();
-    const productId = await getProductIdBySlug(a.product_slug);
+    const productId = await getProductIdBySlug(args.product_slug);
     return out(
-      a.linked === false
-        ? await unlinkCustomerComponent(a.customer, productId, a.component)
-        : await linkCustomerComponent(
-            a.customer,
+      args.linked === false
+        ? await unlinkCustomerComponent(
+            args.customer,
             productId,
-            a.component,
-            a.notes,
+            args.component,
+          )
+        : await linkCustomerComponent(
+            args.customer,
+            productId,
+            args.component,
+            args.notes,
           ),
     );
   },

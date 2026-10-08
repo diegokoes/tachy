@@ -51,7 +51,7 @@ export function startEmbedHost(opts: {
   let nextId = 1;
   const pending = new Map<
     number,
-    { resolve: (v: number[][]) => void; reject: (e: unknown) => void }
+    { resolve: (vectors: number[][]) => void; reject: (e: unknown) => void }
   >();
 
   const setReady = (value: boolean) => {
@@ -60,10 +60,10 @@ export function startEmbedHost(opts: {
   };
 
   const start = () => {
-    const w = spawn();
-    worker = w;
-    w.on("message", (msg: EmbedReply) => {
-      if (msg.type === "ready") {
+    const thread = spawn();
+    worker = thread;
+    thread.on("message", (reply: EmbedReply) => {
+      if (reply.type === "ready") {
         loadFailures = 0;
         setReady(true);
         log("info", "embedding_model_ready", {
@@ -71,27 +71,27 @@ export function startEmbedHost(opts: {
         });
         return;
       }
-      const p = pending.get(msg.id);
-      if (!p) return;
-      pending.delete(msg.id);
-      if (msg.type === "error") return p.reject(new Error(msg.error));
+      const request = pending.get(reply.id);
+      if (!request) return;
+      pending.delete(reply.id);
+      if (reply.type === "error") return request.reject(new Error(reply.error));
       const vectors: number[][] = [];
-      for (let r = 0; r < msg.rows; r++)
+      for (let r = 0; r < reply.rows; r++)
         vectors.push(
           Array.from(
-            msg.data.subarray(r * EMBEDDING_DIM, (r + 1) * EMBEDDING_DIM),
+            reply.data.subarray(r * EMBEDDING_DIM, (r + 1) * EMBEDDING_DIM),
           ),
         );
-      p.resolve(vectors);
+      request.resolve(vectors);
     });
-    w.on("error", (err) =>
+    thread.on("error", (err) =>
       log("error", "embedding_thread_error", { error: String(err) }),
     );
-    w.on("exit", (code) => {
+    thread.on("exit", (code) => {
       const wasReady = ready;
       setReady(false);
-      for (const p of pending.values())
-        p.reject(new EmbedderUnavailable("embedding thread restarted"));
+      for (const request of pending.values())
+        request.reject(new EmbedderUnavailable("embedding thread restarted"));
       pending.clear();
       if (stopped) return;
       if (!wasReady && ++loadFailures >= maxLoadFailures) {

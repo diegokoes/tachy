@@ -9,7 +9,7 @@
   /** The wiki's own quick-find (ctrl+k): this wiki's articles, drafts included. */
   let { scope, onClose }: { scope: string; onClose: () => void } = $props();
 
-  let q = $state("");
+  let query = $state("");
   let hits = $state<WikiSearchHit[]>([]);
   let cursor = $state(0);
   let inputEl = $state<HTMLInputElement>();
@@ -20,17 +20,17 @@
     inputEl?.focus();
   });
 
-  /* Debounced, and sequenced so a slower response cannot land on top of the
-     query typed after it. */
+  // Debounced, and sequenced so a slower response cannot land on top of the
+  // query typed after it.
   $effect(() => {
-    const term = q.trim();
+    const term = query.trim();
     const isCurrent = current();
     if (!term) {
       hits = [];
       cursor = 0;
       return;
     }
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       try {
         const rows = await api.get<WikiSearchHit[]>(
           `/library/wiki/${scope}/search?q=${encodeURIComponent(term)}`,
@@ -42,7 +42,7 @@
         if (isCurrent()) hits = [];
       }
     }, 200);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   });
 
   function open(hit: WikiSearchHit) {
@@ -69,13 +69,13 @@
   <div class="search">
     <input
       bind:this={inputEl}
-      bind:value={q}
+      bind:value={query}
       class="q"
       placeholder="find an article…"
       aria-label="search this wiki"
       onkeydown={onKeydown}
     />
-    {#if q.trim() && hits.length === 0}
+    {#if query.trim() && hits.length === 0}
       <p class="empty">Nothing here matches.</p>
     {/if}
     {#if hits.length}

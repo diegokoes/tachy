@@ -7,9 +7,8 @@
     groupsNote?: string;
   };
 
-  /* Outlives the panel: saving a new connection tests it and then opens its
-     page, which is a fresh mount, and the result has to be there when it
-     lands. */
+  // Outlives the panel: saving a new connection tests it and then opens its
+  // page, which is a fresh mount, and the result has to be there when it lands.
   let probes = $state<Record<string, Probe>>({});
 </script>
 
@@ -103,9 +102,9 @@
 
   let testing = $state<string | null>(null);
 
-  /* Registering from the probe list, where the projects are actually in front
-     of you. Without this the discovered names are inert text and the only way
-     to act on one is to retype its key in another panel. */
+  // Registering from the probe list, where the projects are listed. Without it
+  // the discovered names are inert text, and acting on one means retyping its
+  // key in another panel.
   let claim = $state<{
     slug: string;
     key: string;
@@ -135,12 +134,12 @@
   const projectFor = (slug: string, key: string) =>
     projects.data.find((p) => p.source_slug === slug && p.external_key === key);
 
-  function openClaim(slug: string, g: { key: string; name: string }) {
+  function openClaim(slug: string, group: { key: string; name: string }) {
     claimError = null;
     claim = {
       slug,
-      key: g.key,
-      name: g.name,
+      key: group.key,
+      name: group.name,
       product: myProducts[0]?.slug ?? "",
       team: myTeams[0]?.slug ?? "",
     };
@@ -173,10 +172,10 @@
   const redactionOn = (c: Connection) =>
     (configOf(c).redaction as { enabled?: boolean } | undefined)?.enabled ===
     true;
-  const groupsOf = (c: Connection): string[] => {
-    const key = SPEC[c.source_type as SourceType]?.configKey;
-    const v = key ? configOf(c)[key] : undefined;
-    return Array.isArray(v) ? (v as string[]) : [];
+  const groupsOf = (connection: Connection): string[] => {
+    const key = SPEC[connection.source_type as SourceType]?.configKey;
+    const listed = key ? configOf(connection)[key] : undefined;
+    return Array.isArray(listed) ? (listed as string[]) : [];
   };
 
   const connectionOf = (d: Draft) =>
@@ -188,27 +187,33 @@
   );
 
   function hostToBaseUrl(type: SourceType, host: string): string {
-    const v = host.trim().replace(/\/+$/, "");
-    if (!v) return type === "github" ? "https://api.github.com" : "";
+    const trimmed = host.trim().replace(/\/+$/, "");
+    if (!trimmed) return type === "github" ? "https://api.github.com" : "";
     if (type === "azure-devops") {
-      const org = v.replace(/^(https?:\/\/)?dev\.azure\.com\//i, "");
+      const org = trimmed.replace(/^(https?:\/\/)?dev\.azure\.com\//i, "");
       if (/^https?:\/\//i.test(org)) return org;
       return org.includes(".")
         ? `https://${org}`
         : `https://dev.azure.com/${org}`;
     }
-    const withScheme = /^https?:\/\//i.test(v) ? v : `https://${v}`;
+    const withScheme = /^https?:\/\//i.test(trimmed)
+      ? trimmed
+      : `https://${trimmed}`;
     return withScheme.replace(/\/api\/v2$/, "");
   }
 
   function baseUrlToHost(type: SourceType, baseUrl: string | null): string {
-    const v = (baseUrl ?? "").replace(/\/+$/, "");
+    const trimmed = (baseUrl ?? "").replace(/\/+$/, "");
     if (type === "azure-devops")
-      return v.replace(/^https?:\/\/dev\.azure\.com\//i, "");
-    if (type === "freshdesk") return v.replace(/^https?:\/\//i, "");
-    return v;
+      return trimmed.replace(/^https?:\/\/dev\.azure\.com\//i, "");
+    if (type === "freshdesk") return trimmed.replace(/^https?:\/\//i, "");
+    return trimmed;
   }
 
+  const SLUG_SUFFIXES: Partial<Record<SourceType, string>> = {
+    freshdesk: "-freshdesk",
+    "azure-devops": "-ado",
+  };
   /** acme.freshdesk.com → acme-freshdesk: the slug names the connection, not the host. */
   function suggestSlug(type: SourceType, host: string): string {
     const raw = host
@@ -221,11 +226,7 @@
         : raw.split("/")[0].split(".")[0];
     const base = slugify(stem);
     if (!base) return "";
-    return type === "freshdesk"
-      ? `${base}-freshdesk`
-      : type === "azure-devops"
-        ? `${base}-ado`
-        : base;
+    return base + (SLUG_SUFFIXES[type] ?? "");
   }
 
   const columns: Column<Connection>[] = $derived([
@@ -245,7 +246,7 @@
     },
     {
       key: "slug",
-      /* A connection has no name of its own; this is what people read it by. */
+      // A connection has no name of its own; this is what people read it by.
       label: "name",
       width: "12rem",
       edit: "text",
@@ -297,29 +298,29 @@
       span: "full",
       aside: formTest,
     },
-    /* Testing is per connection but reading the results is a sweep down the
-       list, so the action belongs on the row as well as in the dialog. */
+    // Testing is per connection but reading the results is a sweep down the
+    // list, so the action belongs on the row as well as in the dialog.
     { key: "probe", label: "", width: "7rem", align: "end", cell: testCell },
   ]);
 
-  async function save(row: Connection | null, d: Draft) {
-    const type = typeOf(d);
+  async function save(row: Connection | null, draft: Draft) {
+    const type = typeOf(draft);
     // Merge, never replace: the connection's config also carries keys this
     // form knows nothing about (per-project work item defaults).
     const config: Record<string, unknown> = row ? { ...configOf(row) } : {};
     const key = SPEC[type].configKey;
-    if (key) config[key] = csv(String(d.groups ?? ""));
-    if (d.redaction) config.redaction = { enabled: true };
+    if (key) config[key] = csv(String(draft.groups ?? ""));
+    if (draft.redaction) config.redaction = { enabled: true };
     else delete config.redaction;
 
-    const slug = String(d.slug).trim();
+    const slug = String(draft.slug).trim();
     await api.post("/source-connections", {
       sourceType: type,
       slug,
-      baseUrl: hostToBaseUrl(type, String(d.host ?? "")),
+      baseUrl: hostToBaseUrl(type, String(draft.host ?? "")),
       config,
-      ...(String(d.token ?? "").trim()
-        ? { token: String(d.token).trim() }
+      ...(String(draft.token ?? "").trim()
+        ? { token: String(draft.token).trim() }
         : {}),
     });
     await connections.reload();
@@ -327,9 +328,9 @@
   }
 
   /**
-   * The result lands on the connection's own page, where you are when you ask
-   * for it. `save` calls this too, so writing a connection's credentials shows
-   * you straight away whether they work and what they can see.
+   * The result lands on the connection's own page, where the test is asked for.
+   * `save` calls this too, so writing a connection's credentials shows at once
+   * whether they work and what they can see.
    */
   async function test(slug: string) {
     testing = slug;
@@ -352,20 +353,19 @@
     teams.reload();
   });
 
-  const probeTone = (c: Connection) =>
-    probes[c.slug] === undefined
-      ? undefined
-      : probes[c.slug].ok
-        ? ("ok" as const)
-        : ("danger" as const);
+  const probeTone = (c: Connection) => {
+    const probe = probes[c.slug];
+    if (probe === undefined) return undefined;
+    return probe.ok ? ("ok" as const) : ("danger" as const);
+  };
 </script>
 
-{#snippet typeCell(r: Connection)}
-  {SPEC[r.source_type as SourceType]?.label ?? r.source_type}
+{#snippet typeCell(connection: Connection)}
+  {SPEC[connection.source_type as SourceType]?.label ?? connection.source_type}
 {/snippet}
 
-{#snippet lockCell(r: Connection)}
-  {@const on = redactionOn(r)}
+{#snippet lockCell(connection: Connection)}
+  {@const on = redactionOn(connection)}
   <span class="lock" class:on>
     <Icon
       name={on ? "lockOn" : "lockOff"}
@@ -376,31 +376,31 @@
   </span>
 {/snippet}
 
-{#snippet tokenCell(r: Connection)}
-  <Badge tone={r.token_source ? "ok" : "warn"}
-    >{r.token_source ?? "unset"}</Badge
+{#snippet tokenCell(connection: Connection)}
+  <Badge tone={connection.token_source ? "ok" : "warn"}
+    >{connection.token_source ?? "unset"}</Badge
   >
 {/snippet}
 
-{#snippet testButton(r: Connection, size: "sm" | "md" = "sm")}
+{#snippet testButton(connection: Connection, size: "sm" | "md" = "sm")}
   <Button
     variant="ghost"
     {size}
     icon="test"
-    tone={probeTone(r)}
+    tone={probeTone(connection)}
     aria-label="test connection"
-    busy={testing === r.slug}
-    disabled={testing === r.slug}
-    onclick={() => test(r.slug)}>test</Button
+    busy={testing === connection.slug}
+    disabled={testing === connection.slug}
+    onclick={() => test(connection.slug)}>test</Button
   >
 {/snippet}
 
-{#snippet testCell(r: Connection)}
-  {#if admin}{@render testButton(r)}{/if}
+{#snippet testCell(connection: Connection)}
+  {#if admin}{@render testButton(connection)}{/if}
 {/snippet}
 
-{#snippet probeRow(r: Connection)}
-  {@const probe = probes[r.slug]}
+{#snippet probeRow(connection: Connection)}
+  {@const probe = probes[connection.slug]}
   {#if probe && !probe.ok}
     <Note tone="danger">{probe.error ?? "failed"}</Note>
   {:else if probe}
@@ -409,28 +409,29 @@
     </p>
     {#if probe.groupsNote}
       <Note tone="warn">
-        Can't list {SPEC[r.source_type as SourceType]?.groupLabel ?? "group"}s.
-        type the key in yourself when registering.
+        Can't list {SPEC[connection.source_type as SourceType]?.groupLabel ??
+          "group"}s. type the key in yourself when registering.
         <span class="reason">{probe.groupsNote}</span>
       </Note>
     {/if}
     {#if probe.groups?.length}
       <p class="dim">
-        {SPEC[r.source_type as SourceType]?.groupLabel ?? "group"}s this token
-        can see. Click one to register it.
+        {SPEC[connection.source_type as SourceType]?.groupLabel ?? "group"}s
+        this token can see. Click one to register it.
       </p>
       <div class="chips">
-        {#each probe.groups as g (g.key)}
-          {@const known = projectFor(r.slug, g.key)}
+        {#each probe.groups as group (group.key)}
+          {@const known = projectFor(connection.slug, group.key)}
           {#if known}
             <Chip tone={known.product_id ? "accent" : "muted"}>
-              {g.name} · {known.product_slug ?? known.team_slug}
+              {group.name} · {known.product_slug ?? known.team_slug}
             </Chip>
           {:else}
             <Chip
               tone="default"
-              onclick={admin ? () => openClaim(r.slug, g) : undefined}
-              >{g.name}</Chip
+              onclick={admin
+                ? () => openClaim(connection.slug, group)
+                : undefined}>{group.name}</Chip
             >
           {/if}
         {/each}
@@ -441,17 +442,19 @@
 
 <!-- Pushed to the far end of the redaction row, clear of the checkbox, so it
      reads as acting on the whole connection rather than on that one field. -->
-{#snippet formTest(f: { draft: Draft; mode: "create" | "edit" })}
-  {@const r = f.mode === "edit" ? connectionOf(f.draft) : undefined}
-  {#if r && admin}<span class="form-test">{@render testButton(r, "md")}</span
+{#snippet formTest(form: { draft: Draft; mode: "create" | "edit" })}
+  {@const connection =
+    form.mode === "edit" ? connectionOf(form.draft) : undefined}
+  {#if connection && admin}<span class="form-test"
+      >{@render testButton(connection, "md")}</span
     >{/if}
 {/snippet}
 
 <!-- The probe belongs under the fields that produced it: saving a connection
      tests it, so the answer to "did that work" is already on screen. -->
-{#snippet probeExtra(f: { mode: "create" | "edit"; row: Connection | null })}
-  {#if f.row && probes[f.row.slug]}
-    <div class="probe">{@render probeRow(f.row)}</div>
+{#snippet probeExtra(form: { mode: "create" | "edit"; row: Connection | null })}
+  {#if form.row && probes[form.row.slug]}
+    <div class="probe">{@render probeRow(form.row)}</div>
   {/if}
 {/snippet}
 
@@ -480,9 +483,9 @@
 />
 
 {#if claim}
-  {@const c = claim}
+  {@const open = claim}
   <Modal
-    title={`register ${c.key}`}
+    title={`register ${open.key}`}
     width="34rem"
     busy={claiming}
     disabled={!claimReady}
@@ -492,33 +495,33 @@
     onCancel={() => (claim = null)}
   >
     {#if claimError}<Note tone="danger">{claimError}</Note>{/if}
-    <Subject verb="registering" name={c.key} />
+    <Subject verb="registering" name={open.key} />
     <div class="claim">
       <Field label="name" info="How it reads in lists here.">
-        <input aria-label="name" bind:value={c.name} />
+        <input aria-label="name" bind:value={open.name} />
       </Field>
       <Field
         label={t("product")}
         info={`The ${t("product")} its items ingest into, which also lets it own wikis, repos and area rules. None makes it a ticket target only.`}
       >
         <Select
-          value={c.product}
+          value={open.product}
           aria-label={t("product")}
           options={productOptions}
-          onchange={(v) => (c.product = String(v))}
+          onchange={(v) => (open.product = String(v))}
         />
       </Field>
-      {#if !c.product}
+      {#if !open.product}
         <Field
           label={t("team")}
           required
           info={`The ${t("team")} whose members create work items here.`}
         >
           <Select
-            value={c.team}
+            value={open.team}
             aria-label={t("team")}
             options={teamOptions}
-            onchange={(v) => (c.team = String(v))}
+            onchange={(v) => (open.team = String(v))}
           />
         </Field>
         {#if !teamOptions.length}

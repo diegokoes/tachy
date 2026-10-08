@@ -1,6 +1,7 @@
+/** Who is calling, and whether they may. */
 import {
   resolveCurrentUserId,
-  countAdmins,
+  adminCount,
   canManageTeam,
   assertCanEditScope,
   assertAnyTeamAdmin,
@@ -10,11 +11,10 @@ import { sql, forbidden, env } from "@tachy/core/infra";
 import type { ActorRef } from "@tachy/core/library";
 import type { EntryScope } from "@tachy/core/access";
 
-/** Who is calling, and whether they may. */
 export let enforcementCache = false;
 export async function enforcementActive(): Promise<boolean> {
   if (enforcementCache) return true;
-  enforcementCache = (await countAdmins()) > 0;
+  enforcementCache = (await adminCount()) > 0;
   return enforcementCache;
 }
 
@@ -73,24 +73,18 @@ export async function referenceDocScope(id: string): Promise<EntryScope> {
   return row ? { productId: row.product_id, teamId: row.team_id } : {};
 }
 
-export async function newEntryScope(i: {
+export async function newEntryScope(input: {
   productId?: string | null;
   teamId?: string | null;
   workItemId?: string | null;
 }): Promise<EntryScope> {
-  if (i.productId || i.teamId)
-    return { productId: i.productId, teamId: i.teamId };
-  if (i.workItemId) {
-    const [wi] =
-      await sql`select product_id, team_id from work_items where id = ${i.workItemId}`;
-    if (wi) return { productId: wi.product_id, teamId: wi.team_id };
+  if (input.productId || input.teamId)
+    return { productId: input.productId, teamId: input.teamId };
+  if (input.workItemId) {
+    const [workItem] =
+      await sql`select product_id, team_id from work_items where id = ${input.workItemId}`;
+    if (workItem)
+      return { productId: workItem.product_id, teamId: workItem.team_id };
   }
   return {};
 }
-
-/*
- * Named once, used by both save_knowledge_entry and update_knowledge_entry.
- * The update tool's copies were bare - no description at all - so the model got
- * the guidance on the call that creates an entry and none on the call that
- * rewrites one. Naming them is also what stops the two drifting.
- */

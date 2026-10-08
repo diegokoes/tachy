@@ -24,18 +24,18 @@ import { TurnBase } from "../../packages/agent/src/turn";
 
 describe("agent tool allowlist (security boundary)", () => {
   it("classifies read tools as auto-run", () => {
-    for (const t of READ_TOOLS) expect(classify(qualify(t)).cls).toBe("read");
+    for (const tool of READ_TOOLS)
+      expect(classify(qualify(tool)).cls).toBe("read");
   });
 
   it("classifies write tools as approval-gated", () => {
-    for (const t of WRITE_TOOLS) expect(classify(qualify(t)).cls).toBe("write");
+    for (const tool of WRITE_TOOLS)
+      expect(classify(qualify(tool)).cls).toBe("write");
   });
 
-  /**
-   * An MCP tool missing from both lists is not a loud failure: it stays callable
-   * and silently raises an approval box on every call, forever. The lists are
-   * hand-maintained, so hold them against what is actually registered.
-   */
+  // An MCP tool missing from both lists stays callable and raises an approval
+  // box on every call. The lists are hand-maintained, so they are held against
+  // what is registered.
   it("classifies every registered MCP tool", () => {
     // Every .ts under packages/mcp/src, not one file: tools live one module per
     // domain, and a new module has to be caught without anyone remembering to
@@ -43,13 +43,10 @@ describe("agent tool allowlist (security boundary)", () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const root = join(here, "..", "..", "packages", "mcp", "src");
     const walk = (dir: string): string[] =>
-      readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-        e.isDirectory()
-          ? walk(join(dir, e.name))
-          : e.name.endsWith(".ts")
-            ? [join(dir, e.name)]
-            : [],
-      );
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        if (entry.isDirectory()) return walk(join(dir, entry.name));
+        return entry.name.endsWith(".ts") ? [join(dir, entry.name)] : [];
+      });
     const registered = walk(root).flatMap((f) =>
       [...readFileSync(f, "utf8").matchAll(/^tool\(\n\s*"([a-z0-9_]+)"/gm)].map(
         (m) => m[1],
@@ -69,23 +66,19 @@ describe("agent tool allowlist (security boundary)", () => {
     expect(unlisted).toEqual([]);
   });
 
-  /**
-   * The prompt and the slash commands name tools by hand. A rename on the MCP
-   * side leaves them pointing at nothing, and the model is told to call a tool
-   * that does not exist. Input fields share the verbs (`post_note`), so they
-   * are told apart by being declared as a schema key.
-   */
+  // The prompt and the slash commands name tools by hand, so a rename on the
+  // MCP side leaves the model told to call a tool that is not there. Input
+  // fields share the verbs (`post_note`) and are told apart as schema keys.
   it("names only registered tools in the prompt and the slash commands", () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const mcp = join(here, "..", "..", "packages", "mcp", "src");
     const walk = (dir: string): string[] =>
-      readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-        e.isDirectory()
-          ? walk(join(dir, e.name))
-          : e.name.endsWith(".ts")
-            ? [readFileSync(join(dir, e.name), "utf8")]
-            : [],
-      );
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        if (entry.isDirectory()) return walk(join(dir, entry.name));
+        return entry.name.endsWith(".ts")
+          ? [readFileSync(join(dir, entry.name), "utf8")]
+          : [];
+      });
     const sources = walk(mcp);
     const registered = new Set(
       sources.flatMap((s) =>
@@ -111,8 +104,8 @@ describe("agent tool allowlist (security boundary)", () => {
   });
 
   it("denies any non-tachy / built-in tool", () => {
-    for (const t of ["Bash", "Read", "Write", "Edit", "WebFetch", "Task"])
-      expect(classify(t).cls).toBe("denied");
+    for (const tool of ["Bash", "Read", "Write", "Edit", "WebFetch", "Task"])
+      expect(classify(tool).cls).toBe("denied");
   });
 
   it("treats an unknown tachy tool as a write (never silently runs it)", () => {
@@ -120,33 +113,33 @@ describe("agent tool allowlist (security boundary)", () => {
   });
 
   it("gates compact_work_item unless it is told not to post", () => {
-    const t = qualify("compact_work_item");
+    const tool = qualify("compact_work_item");
     // The tool posts on `post_note !== false`, so an omitted flag is a write.
-    expect(classifyCall(t, { source: "fd", external_id: "1" }).cls).toBe(
+    expect(classifyCall(tool, { source: "fd", external_id: "1" }).cls).toBe(
       "write",
     );
-    expect(classifyCall(t, {}).cls).toBe("write");
-    expect(classifyCall(t, { post_note: true }).cls).toBe("write");
-    expect(classifyCall(t, { post_note: "yes" }).cls).toBe("write");
-    expect(classifyCall(t, { post_note: false }).cls).toBe("read");
+    expect(classifyCall(tool, {}).cls).toBe("write");
+    expect(classifyCall(tool, { post_note: true }).cls).toBe("write");
+    expect(classifyCall(tool, { post_note: "yes" }).cls).toBe("write");
+    expect(classifyCall(tool, { post_note: false }).cls).toBe("read");
   });
 
   it("gates ingest_context only when it is given a URL to fetch", () => {
-    const t = qualify("ingest_context");
-    expect(classifyCall(t, { text: "pasted" }).cls).toBe("read");
-    expect(classifyCall(t, { paths: ["/uploads/a.pdf"] }).cls).toBe("read");
-    expect(classifyCall(t, { urls: [] }).cls).toBe("read");
-    expect(classifyCall(t, { urls: ["https://example.com"] }).cls).toBe(
+    const tool = qualify("ingest_context");
+    expect(classifyCall(tool, { text: "pasted" }).cls).toBe("read");
+    expect(classifyCall(tool, { paths: ["/uploads/a.pdf"] }).cls).toBe("read");
+    expect(classifyCall(tool, { urls: [] }).cls).toBe("read");
+    expect(classifyCall(tool, { urls: ["https://example.com"] }).cls).toBe(
       "write",
     );
   });
 
   it("classifyCall leaves every other tool's class alone", () => {
-    for (const t of READ_TOOLS)
-      expect(classifyCall(qualify(t), { post_note: true }).cls).toBe("read");
+    for (const tool of READ_TOOLS)
+      expect(classifyCall(qualify(tool), { post_note: true }).cls).toBe("read");
     // compact_work_item and ingest_context are the only conditional ones.
-    for (const t of WRITE_TOOLS)
-      expect(classifyCall(qualify(t), {}).cls).toBe("write");
+    for (const tool of WRITE_TOOLS)
+      expect(classifyCall(qualify(tool), {}).cls).toBe("write");
     expect(classifyCall("Bash", { post_note: true }).cls).toBe("denied");
   });
 
@@ -185,20 +178,20 @@ const gateWith = (decision: Decision) => {
 describe("claudePermission (approval gate)", () => {
   it("allows read tools without consulting the gate", async () => {
     const gate = gateWith({ approve: true });
-    const res = await claudePermission(
+    const decision = await claudePermission(
       qualify("search_knowledge"),
       { q: "x" },
       "id1",
       gate,
     );
-    expect(res).toMatchObject({ behavior: "allow" });
+    expect(decision).toMatchObject({ behavior: "allow" });
     expect(gate).not.toHaveBeenCalled();
   });
 
   it("denies non-tachy tools without consulting the gate", async () => {
     const gate = gateWith({ approve: true });
-    const res = await claudePermission("Bash", {}, "id2", gate);
-    expect(res).toMatchObject({ behavior: "deny" });
+    const decision = await claudePermission("Bash", {}, "id2", gate);
+    expect(decision).toMatchObject({ behavior: "deny" });
     expect(gate).not.toHaveBeenCalled();
   });
 
@@ -207,13 +200,13 @@ describe("claudePermission (approval gate)", () => {
       approve: true,
       updatedInput: { issue_summary: "edited" },
     });
-    const res = await claudePermission(
+    const decision = await claudePermission(
       qualify("save_knowledge_entry"),
       { issue_summary: "orig" },
       "id3",
       gate,
     );
-    expect(res).toEqual({
+    expect(decision).toEqual({
       behavior: "allow",
       updatedInput: { issue_summary: "edited" },
     });
@@ -222,14 +215,14 @@ describe("claudePermission (approval gate)", () => {
 
   it("skips the gate for a write the typed command authorised", async () => {
     const gate = gateWith({ approve: true });
-    const res = await claudePermission(
+    const decision = await claudePermission(
       qualify("compact_work_item"),
       { post_note: true },
       "id5",
       gate,
       ["compact_work_item"],
     );
-    expect(res).toMatchObject({ behavior: "allow" });
+    expect(decision).toMatchObject({ behavior: "allow" });
     expect(gate).not.toHaveBeenCalled();
   });
 
@@ -243,34 +236,34 @@ describe("claudePermission (approval gate)", () => {
 
   it("denies write tools with the user's message on reject", async () => {
     const gate = gateWith({ approve: false, message: "wrong customer" });
-    const res = await claudePermission(
+    const decision = await claudePermission(
       qualify("save_knowledge_entry"),
       {},
       "id4",
       gate,
     );
-    expect(res).toEqual({ behavior: "deny", message: "wrong customer" });
+    expect(decision).toEqual({ behavior: "deny", message: "wrong customer" });
   });
 });
 
 describe("AsyncQueue", () => {
   it("delivers pushed items in order then ends on close", async () => {
-    const q = new AsyncQueue<number>();
-    q.push(1);
-    q.push(2);
-    q.close();
+    const queue = new AsyncQueue<number>();
+    queue.push(1);
+    queue.push(2);
+    queue.close();
     const got: number[] = [];
-    for await (const n of q.iterator()) got.push(n);
+    for await (const n of queue.iterator()) got.push(n);
     expect(got).toEqual([1, 2]);
   });
 
   it("resolves a waiting consumer when an item arrives later", async () => {
-    const q = new AsyncQueue<string>();
-    const it = q.iterator();
-    const next = it.next();
-    q.push("hi");
+    const queue = new AsyncQueue<string>();
+    const iterator = queue.iterator();
+    const next = iterator.next();
+    queue.push("hi");
     expect((await next).value).toBe("hi");
-    q.close();
+    queue.close();
   });
 });
 
@@ -289,21 +282,21 @@ describe("TurnBase approval lifecycle", () => {
   }
 
   it("resolves a pending approval through approve()", async () => {
-    const t = new FakeTurn();
-    const pending = t.ask("a1");
-    t.approve("a1", { approve: true, updatedInput: { x: 1 } });
+    const turn = new FakeTurn();
+    const pending = turn.ask("a1");
+    turn.approve("a1", { approve: true, updatedInput: { x: 1 } });
     expect(await pending).toEqual({ approve: true, updatedInput: { x: 1 } });
-    expect(t.finished).toBe(false);
-    t.end();
-    expect(t.finished).toBe(true);
+    expect(turn.finished).toBe(false);
+    turn.end();
+    expect(turn.finished).toBe(true);
   });
 
   it("auto-denies an approval after the timeout", async () => {
     vi.useFakeTimers();
     try {
       process.env.TACHY_APPROVAL_TIMEOUT_MS = "1000";
-      const t = new FakeTurn();
-      const pending = t.ask("a2");
+      const turn = new FakeTurn();
+      const pending = turn.ask("a2");
       await vi.advanceTimersByTimeAsync(1001);
       expect(await pending).toEqual({
         approve: false,
@@ -316,10 +309,10 @@ describe("TurnBase approval lifecycle", () => {
   });
 
   it("denies pending approvals and signals onAbort on abort()", async () => {
-    const t = new FakeTurn();
-    const pending = t.ask("a3");
-    t.abort();
-    expect(t.aborted).toBe(true);
+    const turn = new FakeTurn();
+    const pending = turn.ask("a3");
+    turn.abort();
+    expect(turn.aborted).toBe(true);
     expect((await pending).approve).toBe(false);
   });
 });
@@ -341,15 +334,15 @@ describe("claude subprocess environment (per-user credential isolation)", () => 
     "CLAUDE_CODE_USE_BEDROCK",
   ];
   const saved = new Map<string, string | undefined>();
-  const setHost = (k: string, v: string) => {
-    if (!saved.has(k)) saved.set(k, process.env[k]);
-    process.env[k] = v;
+  const setHost = (name: string, value: string) => {
+    if (!saved.has(name)) saved.set(name, process.env[name]);
+    process.env[name] = value;
   };
 
   afterEach(() => {
-    for (const [k, v] of saved)
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
+    for (const [name, value] of saved)
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
     saved.clear();
   });
 
@@ -371,18 +364,17 @@ describe("claude subprocess environment (per-user credential isolation)", () => 
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
   });
 
-  // The regression that matters: Claude Code ranks every one of these above
-  // CLAUDE_CODE_OAUTH_TOKEN, so a leftover host credential would silently
-  // answer the turn on the wrong account.
+  // Claude Code ranks every one of these above CLAUDE_CODE_OAUTH_TOKEN, so a
+  // leftover host credential would answer the turn on the wrong account.
   it("strips host credentials that would outrank the caller's own", () => {
-    for (const k of HOST_VARS) setHost(k, "host-value");
+    for (const name of HOST_VARS) setHost(name, "host-value");
     const env = claudeEnv({
       ...base,
       agentAuth: { kind: "anthropic_oauth", value: "oat-abc" },
     });
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBe("oat-abc");
-    for (const k of HOST_VARS.filter((k) => k !== "CLAUDE_CODE_OAUTH_TOKEN"))
-      expect(env[k]).toBeUndefined();
+    for (const name of HOST_VARS.filter((k) => k !== "CLAUDE_CODE_OAUTH_TOKEN"))
+      expect(env[name]).toBeUndefined();
   });
 
   it("strips host credentials even when the caller has none", () => {
@@ -406,14 +398,11 @@ describe("claude subprocess environment (per-user credential isolation)", () => 
   });
 });
 
-/**
- * What reaches the model besides the conversation. The SDK defaults to
- * reading instructions, settings and servers from disk, and a file picked up
- * that way is paid for on every turn without anyone having written it for the
- * agent.
- */
+// What reaches the model besides the conversation. The SDK defaults to reading
+// instructions, settings and servers from disk, and a file picked up that way
+// is paid for on every turn without anyone having written it for the agent.
 describe("what the agent reads", () => {
-  const cfg: AgentConfig = {
+  const config: AgentConfig = {
     mcpCommand: "node",
     mcpArgs: ["packages/mcp/src/index.ts"],
     mcpEnv: {},
@@ -422,25 +411,35 @@ describe("what the agent reads", () => {
   };
 
   it("gives Claude the prompt as its whole system prompt, and nothing from disk", () => {
-    const o = claudeOptions(cfg, {}, new AbortController(), async () => ({
-      behavior: "deny",
-      message: "",
-    }));
-    expect(o.systemPrompt).toBe("the prompt");
-    expect(o.settingSources).toEqual([]);
-    expect(o.strictMcpConfig).toBe(true);
-    expect(o.title).toBeTruthy();
-    expect(o.cwd).toBe("/app");
+    const options = claudeOptions(
+      config,
+      {},
+      new AbortController(),
+      async () => ({
+        behavior: "deny",
+        message: "",
+      }),
+    );
+    expect(options.systemPrompt).toBe("the prompt");
+    expect(options.settingSources).toEqual([]);
+    expect(options.strictMcpConfig).toBe(true);
+    expect(options.title).toBeTruthy();
+    expect(options.cwd).toBe("/app");
   });
 
   // With tool search on, the tachy tools are deferred behind ToolSearch; a
   // turn without it starts with no tools at all.
   it("keeps ToolSearch and no other Claude Code built-in", () => {
-    const o = claudeOptions(cfg, {}, new AbortController(), async () => ({
-      behavior: "deny",
-      message: "",
-    }));
-    expect(o.tools).toEqual(["ToolSearch"]);
+    const options = claudeOptions(
+      config,
+      {},
+      new AbortController(),
+      async () => ({
+        behavior: "deny",
+        message: "",
+      }),
+    );
+    expect(options.tools).toEqual(["ToolSearch"]);
   });
 });
 
@@ -459,22 +458,22 @@ describe("where a caller's agent state lives", () => {
 
 describe("failure explanations", () => {
   it("reads a session limit as retryable, with its reset time", () => {
-    const out = explainFailure(
+    const explained = explainFailure(
       "Claude Code returned an error result: You've hit your session limit · resets 12:20am (Europe/Madrid)",
     );
-    expect(out.kind).toBe("rate_limit");
-    expect(out.message).toContain("12:20am");
+    expect(explained.kind).toBe("rate_limit");
+    expect(explained.message).toContain("12:20am");
   });
 
   it("points a missing credential at settings", () => {
-    const out = explainFailure("Not logged in · Please run /login");
-    expect(out.kind).toBe("no_credential");
-    expect(out.message).toMatch(/Settings/);
+    const explained = explainFailure("Not logged in · Please run /login");
+    expect(explained.kind).toBe("no_credential");
+    expect(explained.message).toMatch(/Settings/);
   });
 
   it("distinguishes a rejected credential from a missing one", () => {
-    const out = explainFailure("Invalid API key · Fix external API key");
-    expect(out.kind).toBe("bad_credential");
+    const explained = explainFailure("Invalid API key · Fix external API key");
+    expect(explained.kind).toBe("bad_credential");
   });
 
   it("passes anything else through unchanged", () => {

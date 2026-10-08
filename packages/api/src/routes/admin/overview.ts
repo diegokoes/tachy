@@ -6,15 +6,20 @@ import {
   listComponentTree,
   catalogIssues,
 } from "@tachy/core/catalog";
-import { bucketCensus } from "@tachy/core/buckets";
+import { bucketCensus, bucketFreshness } from "@tachy/core/buckets";
 import { userCensus, userIssues } from "@tachy/core/access";
 import {
   sourceCensus,
   sourceTrafficCensus,
   sourceIssues,
+  sourceFreshness,
 } from "@tachy/core/sources";
-import { repoCensus, repoIssues } from "@tachy/core/code";
-import { knowledgeCensus, knowledgeByComponent } from "@tachy/core/knowledge";
+import { repoCensus, repoIssues, repoFreshness } from "@tachy/core/code";
+import {
+  knowledgeCensus,
+  knowledgeByComponent,
+  knowledgeStale,
+} from "@tachy/core/knowledge";
 import { reportsCensus } from "@tachy/core/reports";
 import { agentUsageCensus, toolUsageCensus } from "@tachy/core/analytics";
 import { libraryEngagementCensus } from "@tachy/core/library";
@@ -24,14 +29,16 @@ import { callerScope, isAdminIdentity } from "../../authz";
 import { runtimeSnapshot, systemIssues } from "../../runtime";
 import { untokenedConnections } from "./sources";
 
+/** How far back an overview's detail view looks, when it is not the default. */
+const periodQuery = z.object({
+  days: z.coerce.number().int().min(7).max(90).optional(),
+});
+
 /** The admin overview: counts, activity and what needs fixing per page. */
 export const overview = new Hono()
-  /**
-   * The admin index's counts, in one request rather than one per section.
-   * Composed here from each domain's own census: a count of teams belongs to
-   * catalog and a count of repos to code, and nothing in core reaches across
-   * to another domain's tables to produce this.
-   */
+  // The admin index's counts in one request. Composed here from each domain's
+  // own census: a count of teams belongs to catalog and a count of repos to
+  // code, and core does not reach across domains to produce this.
   .get("/overview", async (c) => {
     const ctx = await callerScope(c);
     const [
@@ -78,8 +85,7 @@ export const overview = new Hono()
       },
       // The censuses unsummarised, for the overview panels. What they show
       // (labels with no description, teams with no admin) is per-product or
-      // per-membership, which the browser would otherwise fetch one row at a
-      // time.
+      // per-membership, which the browser would otherwise fetch row by row.
       detail: {
         sources: { ...sources, untokened },
         repos,
@@ -91,21 +97,16 @@ export const overview = new Hono()
     });
   })
 
-  /**
-   * What the deployment has been doing, as opposed to what it holds. Its own
-   * route so the rail's counts stay one cheap query: these scan day buckets and
-   * the run log, and only the overviews render them.
-   *
-   * Everything is aggregate except two lists that name people - who spends the
-   * most tokens, who has the agent change the most - and those travel only to an
-   * app admin, for the same reason `/system` keeps its `env` block back.
-   */
-  .get("/overview/activity", async (c) => {
+  // What the deployment has been doing. Its own route so the rail's counts stay
+  // one cheap query: these scan day buckets and the run log. The two lists that
+  // name people travel only to an app admin, as `/system` holds back `env`.
+  .get("/overview/activity", zValidator("query", periodQuery), async (c) => {
+    const { days } = c.req.valid("query");
     const [usage, tools, traffic, library] = await Promise.all([
-      agentUsageCensus(30),
-      toolUsageCensus(30),
-      sourceTrafficCensus(14),
-      libraryEngagementCensus(30),
+      agentUsageCensus(days ?? 30),
+      toolUsageCensus(days ?? 30),
+      sourceTrafficCensus(days ?? 14),
+      libraryEngagementCensus(days ?? 30),
     ]);
     if (!isAdminIdentity(c)) {
       delete usage.top_users;
@@ -114,17 +115,28 @@ export const overview = new Hono()
     return c.json({ usage, tools, traffic, library });
   })
 
-  /**
-   * Every component with its entries, for the structure overview's map. Its
-   * own route because it grows with the catalogue, and the census is fetched
-   * on every admin page.
-   */
+  // When each source, repo and bucket was last brought up to date, oldest
+  // first.
+  .get("/overview/freshness", async (c) => {
+    const [sources, repos, buckets] = await Promise.all([
+      sourceFreshness(),
+      repoFreshness(),
+      bucketFreshness(),
+    ]);
+    return c.json([...sources, ...repos, ...buckets]);
+  })
+
+  .get("/overview/stale", async (c) => c.json(await knowledgeStale()))
+
+  // Every component with its entries, for the structure overview's map. Its own
+  // route because it grows with the catalogue, and the census is fetched on
+  // every admin page.
   .get("/overview/components", async (c) => {
     const [tree, filed] = await Promise.all([
       listComponentTree(),
       knowledgeByComponent(),
     ]);
-    const by = new Map(filed.map((f) => [f.component_id, f]));
+    const filedByComponent = new Map(filed.map((f) => [f.component_id, f]));
     return c.json(
       tree.map((n) => ({
         id: n.id,
@@ -133,17 +145,15 @@ export const overview = new Hono()
         name: n.name,
         product_slug: n.product_slug,
         product_name: n.product_name,
-        entries: by.get(n.id)?.entries ?? 0,
-        searchable: by.get(n.id)?.searchable ?? 0,
+        entries: filedByComponent.get(n.id)?.entries ?? 0,
+        searchable: filedByComponent.get(n.id)?.searchable ?? 0,
       })),
     );
   })
 
-  /**
-   * What needs fixing on one admin page, by name: the census counts, with the
-   * offenders listed so each message can say which one. Wording lives in the
-   * SPA, which owns the deployment's terms for teams, products and customers.
-   */
+  // What needs fixing on one admin page, by name: the census counts, with the
+  // offenders listed so each message can say which one. Wording lives in the
+  // SPA, which owns the deployment's terms for teams, products and customers.
   .get(
     "/overview/issues",
     zValidator(

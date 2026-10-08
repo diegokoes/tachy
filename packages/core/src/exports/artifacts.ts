@@ -36,7 +36,10 @@ export interface ArtifactRow extends ArtifactMeta {
   body: string;
 }
 
-/** Stored jsonb predates any later schema change, so a spec that no longer parses is dropped, not thrown. */
+/**
+ * Stored jsonb predates any later schema change, so a spec that no longer
+ * parses is dropped, not thrown.
+ */
 function readSpec(raw: unknown): ArtifactSpec | null {
   if (!raw) return null;
   const parsed = artifactSpecSchema.safeParse(raw);
@@ -103,7 +106,10 @@ export async function getArtifact(
   return withSpec<ArtifactRow>(row);
 }
 
-/** The caller-visible artifact for `slug`, most specific scope first - the shape `export_table` resolves against. */
+/**
+ * The caller-visible artifact for `slug`, most specific scope first - the shape
+ * `export_table` resolves against.
+ */
 export async function getArtifactBySlug(
   slug: string,
   ctx: ScopeContext,

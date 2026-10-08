@@ -26,8 +26,8 @@
     children: Snippet;
   } = $props();
 
-  /* The switcher doubles as the wiki index, so each row carries its size - how
-     many articles, and how many open gaps when there are any. */
+  // The switcher doubles as the wiki index, so each row carries its size - how
+  // many articles, and how many open gaps when there are any.
   const options = $derived(
     wikis.rows.map((w) => ({
       value: scopeOf(w),
@@ -47,18 +47,18 @@
    */
   let rootEl = $state<HTMLDivElement>();
 
-  /* The column is as tall as what scrolls beside it. A viewport-height guess
-     would stop short of the page's last line, by however much chrome sits
-     above the scroller. */
+  // The column is as tall as what scrolls beside it. A viewport-height guess
+  // stops short of the last line by the chrome above the scroller, and
+  // overshoots before the first measurement.
   $effect(() => {
     const port = scrollport();
     const root = rootEl;
     if (!port || !root) return;
-    const ro = new ResizeObserver(() =>
+    const observer = new ResizeObserver(() =>
       root.style.setProperty("--port-h", `${port.clientHeight}px`),
     );
-    ro.observe(port);
-    return () => ro.disconnect();
+    observer.observe(port);
+    return () => observer.disconnect();
   });
 
   function switchTo(next: string) {
@@ -67,8 +67,8 @@
     navigate(place === "gaps" ? wikiPath(next, place) : wikiPath(next));
   }
 
-  /* Every reading page of the wiki gets its own quick-find, the way Components
-     does - scoped to this wiki rather than the whole library. */
+  // Every reading page of the wiki gets its own quick-find, the way Components
+  // does - scoped to this wiki rather than the whole library.
   let searching = $state(false);
   $effect(() =>
     pushScope([
@@ -121,7 +121,7 @@
     flex-direction: column;
     gap: var(--pad-3);
     min-width: 0;
-    height: calc(var(--port-h, 100vh) - var(--main-air, 0px) * 2);
+    height: calc(var(--port-h, 0px) - var(--main-air, 0px) * 2);
     padding-block: var(--pad-2);
   }
   .switch {

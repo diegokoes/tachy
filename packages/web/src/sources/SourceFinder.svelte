@@ -33,7 +33,7 @@
     registered: (key: string) => boolean;
     /** Asks the source and stores what it said; throws on failure. */
     onfetch: () => Promise<void>;
-    onpick: (g: Found) => void;
+    onpick: (hit: Found) => void;
     /** Swirl only under the tower, for a finder with no room above it. */
     below?: boolean;
   } = $props();
@@ -47,6 +47,8 @@
   const TOWER = shapes("discover");
   /** The tower's lamp, which every wave swells out of. */
   const LAMP = { x: 12, y: 9 };
+  /** An inner wave is shorter than this, in the icon's units. */
+  const INNER_WAVE_BELOW = 10;
 
   let scanning = $state(false);
   let failure = $state<string | null>(null);
@@ -79,9 +81,9 @@
     }
   }
 
-  /* Picked out by shape rather than by position, because Lucide reorders an
-     icon's nodes between releases: a wave is a stroke reaching above the lamp,
-     and an inner one is the shorter of each pair. */
+  // Picked out by shape rather than by position, because Lucide reorders an
+  // icon's nodes between releases: a wave is a stroke reaching above the lamp,
+  // and an inner one is the shorter of each pair.
   const waves = () =>
     tower
       ? [...tower.querySelectorAll<SVGPathElement>("path")].filter(
@@ -89,12 +91,14 @@
         )
       : [];
 
-  /** The tower calls: each wave swells out of the lamp, inner then outer, and
-   *  the call it sends passes through the label. */
+  /**
+   * The tower calls: each wave swells out of the lamp, inner then outer, and
+   * the call it sends passes through the label.
+   */
   function broadcast() {
     if (!probe || !tower || !signal || !word) return null;
     const all = waves();
-    const inner = all.filter((p) => p.getBBox().height < 10);
+    const inner = all.filter((p) => p.getBBox().height < INNER_WAVE_BELOW);
     const outer = all.filter((p) => !inner.includes(p));
     const letters = [...word.querySelectorAll<HTMLElement>(".ch")];
 
@@ -139,11 +143,11 @@
       { x: x1, opacity: 0, scale: 1.5, duration: travel, ease: "none" },
       launch,
     );
-    for (const ch of letters) {
-      const r = ch.getBoundingClientRect();
-      const at = (r.left + r.width / 2 - box.left - x0) / (x1 - x0);
+    for (const letter of letters) {
+      const rect = letter.getBoundingClientRect();
+      const at = (rect.left + rect.width / 2 - box.left - x0) / (x1 - x0);
       tl.to(
-        ch,
+        letter,
         {
           "--lit": 1,
           y: "-0.2em",
@@ -192,14 +196,17 @@
     const cy = mast.top + mast.height / 2;
     const n = movers.length;
     const home = movers.map((el) => {
-      const r = el.getBoundingClientRect();
-      return { x: cx - (r.left + r.width / 2), y: cy - (r.top + r.height / 2) };
+      const rect = el.getBoundingClientRect();
+      return {
+        x: cx - (rect.left + rect.width / 2),
+        y: cy - (rect.top + rect.height / 2),
+      };
     });
     const radius = Math.min(70, 6 * Math.sqrt(n));
     const swirl = (i: number) => {
-      const r = 8 + radius * Math.sqrt(i / n);
-      const y = r * Math.sin(i * 2.4);
-      return { x: r * Math.cos(i * 2.4), y: below ? Math.abs(y) : y };
+      const reach = 8 + radius * Math.sqrt(i / n);
+      const y = reach * Math.sin(i * 2.4);
+      return { x: reach * Math.cos(i * 2.4), y: below ? Math.abs(y) : y };
     };
 
     const tl = gsap.timeline({ onComplete: () => (flight = null) });
@@ -254,8 +261,11 @@
   onDestroy(() => flight?.kill());
 </script>
 
-<!-- A request fired at the source, not a field: the tower is the button, and
-     what comes back lands under it. -->
+<!--
+@component
+A request fired at the source, not a field: the tower is the button, and what
+comes back lands under it.
+-->
 <div class="finder">
   <button
     bind:this={probe}
@@ -284,7 +294,8 @@
       {/each}
     </svg>
     <span class="word" class:gone={landed} bind:this={word} aria-hidden="true"
-      >{#each [...label] as ch, i (i)}<span class="ch">{ch}</span>{/each}</span
+      >{#each [...label] as letter, i (i)}<span class="ch">{letter}</span
+        >{/each}</span
     >
     <svg
       bind:this={signal}
@@ -303,19 +314,19 @@
   {/if}
 
   <div class="cloud" bind:this={cloud}>
-    {#each list as g (g.key)}
-      {@const taken = registered(g.key)}
+    {#each list as hit (hit.key)}
+      {@const taken = registered(hit.key)}
       <button
         type="button"
         class="tag"
-        class:on={picked === g.key}
+        class:on={picked === hit.key}
         disabled={taken}
-        aria-pressed={picked === g.key}
-        onclick={() => onpick(g)}
+        aria-pressed={picked === hit.key}
+        onclick={() => onpick(hit)}
       >
         <span class="frame" aria-hidden="true"></span>
         <span class="name"
-          >{#each [...g.name] as ch, i (i)}<span class="ch">{ch}</span
+          >{#each [...hit.name] as letter, i (i)}<span class="ch">{letter}</span
             >{/each}</span
         >
       </button>

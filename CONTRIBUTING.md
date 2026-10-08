@@ -29,9 +29,10 @@ supported, which is what [SECURITY.md](SECURITY.md) says too.
 - Coverage is gated twice. `vitest.config.ts` holds a floor for the whole repo
   and one per package; a run below any of them fails. On a pull request,
   `scripts/coverage-diff.ts` also fails when under 80% of the added lines are
-  run by the suite. Check it locally with
-  `npm run coverage && npx tsx scripts/coverage-diff.ts codeberg/dev`. It runs on
-  pull requests into `dev`; a release into `main` carries lines it has
+  run by the suite. A changed line that holds the code it had before, with a
+  local renamed or the layout changed, counts as run. Check it locally with
+  `npm run coverage && npx tsx scripts/coverage-diff.ts codeberg/dev`. It runs
+  on pull requests into `dev`; a release into `main` carries lines it has
   already judged.
 - When a change raises a package's coverage, raise that package's floor in the
   same pull request. A floor is never lowered to make a build pass.

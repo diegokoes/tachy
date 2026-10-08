@@ -39,6 +39,10 @@ export interface JobKind<P extends z.ZodType = z.ZodType> {
    * going hands back the existing run instead.
    */
   dedupeKey?: (params: z.infer<P>) => string;
+  /** What a run is about, shown under the job's name: a repo, a connection. */
+  subject?: (params: z.infer<P>) => string | null;
+  /** How a finished run went, in a line, from what `run` returned. */
+  outcome?: (output: Record<string, unknown>) => string | null;
   overlap: JobOverlap;
   missed: JobMissed;
   timeout: string;
@@ -73,9 +77,9 @@ export function defineJob<P extends z.ZodType>(
 }
 
 export function getJobKind(kind: string): JobKind {
-  const k = kinds.get(kind);
-  if (!k) throw badInput(`unknown job kind '${kind}'`);
-  return k;
+  const known = kinds.get(kind);
+  if (!known) throw badInput(`unknown job kind '${kind}'`);
+  return known;
 }
 
 export const hasJobKind = (kind: string) => kinds.has(kind);

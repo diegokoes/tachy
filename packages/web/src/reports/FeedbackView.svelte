@@ -168,8 +168,8 @@
             A few things that would help whoever picks this up - add them, or
             send as it is:
             <ul class="tips">
-              {#each review.suggestions as s}
-                <li>{s}</li>
+              {#each review.suggestions as suggestion}
+                <li>{suggestion}</li>
               {/each}
             </ul>
           </Note>
@@ -221,12 +221,9 @@
     color: var(--text);
   }
 
-  /* No panel chrome: the sheet floats on the sky, so the space reads as the
-     surface rather than a card laid over it. */
-  /* The toggle is the first thing to answer, so it sits just above the middle
-     of the screen, where the eye lands; the fields open below it without
-     moving it. The top padding is the page's own, the heading, the gap and
-     half the toggle, measured back from that point. */
+  /* No panel chrome: the sheet sits straight on the sky. The toggle is the
+     first thing to answer, so it sits a little above mid-screen and the fields
+     open under it; the top padding is measured back from that point. */
   .sheet {
     --heading-size: clamp(1.6rem, 5vw, 2.4rem);
     --sheet-gap: 1.6rem;

@@ -1,7 +1,7 @@
 /**
  * How a team shapes one creation form, stored per registered project and item
  * type. Source-agnostic: fields are the source's own field ids, and a source
- * with no such form simply has no config.
+ * with no such form has no config.
  */
 
 /**
@@ -40,8 +40,6 @@ export interface FormDisplay {
 }
 
 export const FIELD_SHOWS: readonly FieldShow[] = ["form", "fold", "hidden"];
-
-/* ---- complex flows ------------------------------------------------------- */
 
 /**
  * A flow is triggers and a tree of steps. Each list of steps runs in order; an
@@ -217,19 +215,21 @@ export interface FlowRun {
 
 /** `a.b.0.c` into a value; anything missing along the way is undefined. */
 export function readPath(from: unknown, path: string): unknown {
-  let at: unknown = from;
+  let current: unknown = from;
   for (const key of path.split(".").filter(Boolean)) {
-    if (at == null || typeof at !== "object") return undefined;
-    at = (at as Record<string, unknown>)[key];
+    if (current == null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[key];
   }
-  return at;
+  return current;
 }
 
 const TOKEN = /\{\{\s*([\w.-]+)\s*\}\}/g;
 const ONLY_TOKEN = /^\{\{\s*([\w.-]+)\s*\}\}$/;
 
-const asText = (v: unknown) =>
-  v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+function asText(value: unknown): string {
+  if (value == null) return "";
+  return typeof value === "object" ? JSON.stringify(value) : String(value);
+}
 
 /**
  * Fills `{{path}}` from the run's context. A value that is one token and
@@ -275,42 +275,51 @@ function compare(a: unknown, b: unknown): number | null {
  * field matches when any of its values does, and a condition that cannot be
  * judged (a bad pattern, a missing value to order) does not hold.
  */
-export function evaluateCondition(c: Condition, subject: unknown): boolean {
-  if ("all" in c) return c.all.every((x) => evaluateCondition(x, subject));
-  if ("any" in c) return c.any.some((x) => evaluateCondition(x, subject));
-  if ("not" in c) return !evaluateCondition(c.not, subject);
-  const v = readPath(subject, c.field);
-  switch (c.op) {
+export function evaluateCondition(
+  condition: Condition,
+  subject: unknown,
+): boolean {
+  if ("all" in condition)
+    return condition.all.every((x) => evaluateCondition(x, subject));
+  if ("any" in condition)
+    return condition.any.some((x) => evaluateCondition(x, subject));
+  if ("not" in condition) return !evaluateCondition(condition.not, subject);
+  const actual = readPath(subject, condition.field);
+  switch (condition.op) {
     case "eq":
-      return same(v, c.value);
+      return same(actual, condition.value);
     case "neq":
-      return !same(v, c.value);
+      return !same(actual, condition.value);
     case "in":
-      return (Array.isArray(c.value) ? c.value : [c.value]).some((x) =>
-        same(v, x),
-      );
+      return (
+        Array.isArray(condition.value) ? condition.value : [condition.value]
+      ).some((x) => same(actual, x));
     case "contains":
-      return Array.isArray(v)
-        ? v.some((x) => lower(x) === lower(c.value))
-        : lower(v).includes(lower(c.value));
+      return Array.isArray(actual)
+        ? actual.some((x) => lower(x) === lower(condition.value))
+        : lower(actual).includes(lower(condition.value));
     case "matches":
       try {
-        const re = new RegExp(String(c.value ?? ""), "i");
-        return Array.isArray(v)
-          ? v.some((x) => re.test(asText(x)))
-          : re.test(asText(v));
+        const pattern = new RegExp(String(condition.value ?? ""), "i");
+        return Array.isArray(actual)
+          ? actual.some((x) => pattern.test(asText(x)))
+          : pattern.test(asText(actual));
       } catch {
         return false;
       }
     case "exists":
-      return !(v == null || v === "" || (Array.isArray(v) && v.length === 0));
+      return !(
+        actual == null ||
+        actual === "" ||
+        (Array.isArray(actual) && actual.length === 0)
+      );
     case "gt": {
-      const d = compare(v, c.value);
-      return d != null && d > 0;
+      const difference = compare(actual, condition.value);
+      return difference != null && difference > 0;
     }
     case "lt": {
-      const d = compare(v, c.value);
-      return d != null && d < 0;
+      const difference = compare(actual, condition.value);
+      return difference != null && difference < 0;
     }
   }
 }

@@ -15,8 +15,7 @@ function reviewPrompt(title: string, text: string, type: ReportType): string {
   return `Draft ${label}\n\nTitle: ${title}\n\n${text}`;
 }
 
-/** Pull the verdict out of the model's answer without trusting its framing:
- *  find the first JSON object, coerce the shape, and never throw. */
+/** The verdict in a model's answer, whatever it wrapped it in. Never throws. */
 export function parseReview(raw: string): ReportReview {
   const parsed = firstJsonObject(raw);
   if (!parsed) return advisoryPass();
@@ -39,10 +38,10 @@ const advisoryPass = (): ReportReview => ({
 });
 
 /**
- * Ask the caller's configured model whether a draft report is actionable.
- * Advisory only: when no credential resolves the form is told review is
- * unavailable, and any failure of the call itself passes silently rather than
- * trapping the person behind a model they never set up.
+ * Asks the caller's configured model whether a draft report is actionable.
+ * Advisory only: with no credential the form is told review is unavailable,
+ * and a failed call passes the draft, so nobody is held behind a model they
+ * never set up.
  */
 export async function reviewReport(
   draft: { title: string; body: string },

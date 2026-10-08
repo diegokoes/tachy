@@ -67,7 +67,7 @@ export async function toolUsageCensus(days = 30): Promise<ToolUsage> {
     where day > current_date - ${days}::int
     group by tool
     order by sum(calls) desc, tool
-    limit 12
+    limit 50
   `;
   const writers = await sql`
     select u.email, sum(t.calls)::int as writes
@@ -78,7 +78,7 @@ export async function toolUsageCensus(days = 30): Promise<ToolUsage> {
     order by sum(t.calls) desc, u.email
     limit 5
   `;
-  const perDayWindow = Math.min(days, 14);
+  const perDayWindow = Math.min(days, 90);
   const per_day = await sql`
     select to_char(d.day, 'YYYY-MM-DD') as day,
       coalesce(sum(t.calls) filter (where not t.writes), 0)::int as reads,

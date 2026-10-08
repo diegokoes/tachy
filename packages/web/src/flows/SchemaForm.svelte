@@ -25,16 +25,17 @@
   const fields = $derived(Object.entries(schema.properties ?? {}));
   const required = $derived(new Set(schema.required ?? []));
 
-  function set(name: string, v: unknown) {
+  function set(name: string, entered: unknown) {
     const next = { ...value };
-    if (v === undefined || v === "") delete next[name];
-    else next[name] = v;
+    if (entered === undefined || entered === "") delete next[name];
+    else next[name] = entered;
     onchange(next);
   }
 
   const text = (name: string) => {
-    const v = value[name];
-    return v == null ? "" : typeof v === "string" ? v : JSON.stringify(v);
+    const held = value[name];
+    if (held == null) return "";
+    return typeof held === "string" ? held : JSON.stringify(held);
   };
   const LONG = new Set(["body", "prompt", "material", "note"]);
   const kindOf = (p: Schema) => (Array.isArray(p.type) ? p.type[0] : p.type);
@@ -57,16 +58,17 @@
     ]
       .filter(Boolean)
       .join(" · ") || undefined;
-  const listOf = (v: unknown): string[] =>
-    Array.isArray(v) ? v.map(String) : v == null || v === "" ? [] : [String(v)];
+  const listOf = (v: unknown): string[] => {
+    if (Array.isArray(v)) return v.map(String);
+    return v == null || v === "" ? [] : [String(v)];
+  };
 
+  const NUMBER_RE = /^-?\d+(\.\d+)?$/;
   /** A number, unless it is a template, which fills in at run time. */
-  const numberish = (raw: string): unknown =>
-    raw.trim() === ""
-      ? undefined
-      : /^-?\d+(\.\d+)?$/.test(raw.trim())
-        ? Number(raw)
-        : raw;
+  const numberish = (raw: string): unknown => {
+    if (raw.trim() === "") return undefined;
+    return NUMBER_RE.test(raw.trim()) ? Number(raw) : raw;
+  };
 
   function parseJson(raw: string): unknown {
     if (!raw.trim()) return undefined;
@@ -83,10 +85,10 @@
   ]);
 </script>
 
-{#each fields as [name, p] (name)}
-  {@const t = kindOf(p)}
-  {#if p["x-form"] === "ado"}
-    <Field label={titleOf(name, p)} info={infoOf(p)} plain>
+{#each fields as [name, property] (name)}
+  {@const kind = kindOf(property)}
+  {#if property["x-form"] === "ado"}
+    <Field label={titleOf(name, property)} info={infoOf(property)} plain>
       <AdoFields
         project={text("project")}
         type={text("type")}
@@ -94,69 +96,75 @@
         onchange={(v) => set(name, v)}
       />
     </Field>
-  {:else if p["x-options"] && t === "array"}
+  {:else if property["x-options"] && kind === "array"}
     <Field
-      label={titleOf(name, p)}
+      label={titleOf(name, property)}
       required={required.has(name)}
-      info={infoOf(p) ??
-        (p["x-free"] ? "pick or type one, Enter adds it" : undefined)}
+      info={infoOf(property) ??
+        (property["x-free"] ? "pick or type one, Enter adds it" : undefined)}
       plain
     >
       <OptionList
-        source={p["x-options"]}
-        deps={depsOf(p)}
+        source={property["x-options"]}
+        deps={depsOf(property)}
         value={listOf(value[name])}
-        free={p["x-free"]}
-        label={titleOf(name, p)}
+        free={property["x-free"]}
+        label={titleOf(name, property)}
         onchange={(v) => set(name, v.length ? v : undefined)}
       />
     </Field>
-  {:else if p["x-options"]}
+  {:else if property["x-options"]}
     <Field
-      label={titleOf(name, p)}
+      label={titleOf(name, property)}
       required={required.has(name)}
-      info={infoOf(p)}
+      info={infoOf(property)}
     >
       <OptionSelect
-        source={p["x-options"]}
-        deps={depsOf(p)}
-        needs={p["x-depends-on"] ?? []}
+        source={property["x-options"]}
+        deps={depsOf(property)}
+        needs={property["x-depends-on"] ?? []}
         value={text(name)}
-        free={p["x-free"]}
-        label={titleOf(name, p)}
+        free={property["x-free"]}
+        label={titleOf(name, property)}
         onchange={(v) => set(name, v || undefined)}
       />
     </Field>
-  {:else if p.enum}
-    <Field label={titleOf(name, p)} info={infoOf(p)}>
+  {:else if property.enum}
+    <Field label={titleOf(name, property)} info={infoOf(property)}>
       <Select
-        value={String(value[name] ?? p.default ?? "")}
-        options={p.enum.map((v) => ({ value: String(v), label: String(v) }))}
-        aria-label={titleOf(name, p)}
+        value={String(value[name] ?? property.default ?? "")}
+        options={property.enum.map((v) => ({
+          value: String(v),
+          label: String(v),
+        }))}
+        aria-label={titleOf(name, property)}
         onchange={(v) => set(name, v)}
       />
     </Field>
-  {:else if t === "boolean"}
-    <Field label={titleOf(name, p)} info={infoOf(p)} inline>
+  {:else if kind === "boolean"}
+    <Field label={titleOf(name, property)} info={infoOf(property)} inline>
       <Checkbox
-        checked={Boolean(value[name] ?? p.default)}
+        checked={Boolean(value[name] ?? property.default)}
         ariaLabel={name}
         onchange={(v) => set(name, v)}
       />
     </Field>
-  {:else if t === "number" || t === "integer"}
+  {:else if kind === "number" || kind === "integer"}
     <Field
-      label={titleOf(name, p)}
+      label={titleOf(name, property)}
       required={required.has(name)}
-      info={infoOf(p)}
+      info={infoOf(property)}
     >
       <input
         value={text(name)}
         oninput={(e) => set(name, numberish(e.currentTarget.value))}
       />
     </Field>
-  {:else if t === "array"}
-    <Field label={titleOf(name, p)} info={infoOf(p) ?? "separated by commas"}>
+  {:else if kind === "array"}
+    <Field
+      label={titleOf(name, property)}
+      info={infoOf(property) ?? "separated by commas"}
+    >
       <input
         value={Array.isArray(value[name])
           ? (value[name] as unknown[]).join(", ")
@@ -175,8 +183,8 @@
         }}
       />
     </Field>
-  {:else if t === "object"}
-    <Field label={titleOf(name, p)} info={infoOf(p) ?? "as JSON"}>
+  {:else if kind === "object"}
+    <Field label={titleOf(name, property)} info={infoOf(property) ?? "as JSON"}>
       <textarea
         rows="4"
         class="mono"
@@ -185,21 +193,21 @@
     </Field>
   {:else}
     <Field
-      label={titleOf(name, p)}
+      label={titleOf(name, property)}
       required={required.has(name)}
-      info={infoOf(p)}
+      info={infoOf(property)}
       plain
     >
       <div class="textual">
         {#if LONG.has(name)}
           <textarea
             rows="5"
-            aria-label={titleOf(name, p)}
+            aria-label={titleOf(name, property)}
             value={text(name)}
             oninput={(e) => set(name, e.currentTarget.value)}></textarea>
         {:else}
           <input
-            aria-label={titleOf(name, p)}
+            aria-label={titleOf(name, property)}
             value={text(name)}
             oninput={(e) => set(name, e.currentTarget.value)}
           />

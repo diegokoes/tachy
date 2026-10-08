@@ -38,24 +38,24 @@ export interface Knowledge {
   docs: string[];
 }
 
-function groupBy<T>(xs: T[], key: (x: T) => string): Map<string, T[]> {
-  const out = new Map<string, T[]>();
-  for (const x of xs) {
-    const k = key(x);
-    const bucket = out.get(k);
-    if (bucket) bucket.push(x);
-    else out.set(k, [x]);
+function groupBy<T>(items: T[], key: (x: T) => string): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const group = key(item);
+    const bucket = groups.get(group);
+    if (bucket) bucket.push(item);
+    else groups.set(group, [item]);
   }
-  return out;
+  return groups;
 }
 
 /**
- * Note the column lists below: search_text, search_tsv and search_tsv_en are
- * GENERATED, and naming one in an insert is an error rather than a no-op.
+ * The column lists leave out `search_text`, `search_tsv` and `search_tsv_en`:
+ * they are generated columns, and naming one in an insert is an error.
  */
 export async function seedKnowledge(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   products: SeededProduct[],
   users: SeededUser[],
   components: SeededComponent[],
@@ -66,12 +66,12 @@ export async function seedKnowledge(
   units: SeededUnit[],
   embed: Embedder,
 ): Promise<Knowledge> {
-  const entries = Array.from({ length: v.knowledgeEntries }, (_, i) =>
+  const entries = Array.from({ length: volumes.knowledgeEntries }, (_, i) =>
     uuidFor("knowledge_entry", i),
   );
 
-  // Grouped once. Filtering the whole component list inside the row loop is
-  // 25k x 250 comparisons at --scale=large, for an answer that never changes.
+  // Grouped once: filtering the whole component list inside the row loop
+  // repeats, per row, an answer that never changes.
   const byProduct = groupBy(components, (c) => c.productId);
   const byCustomer = groupBy(units, (u) => u.customerId);
 
@@ -108,17 +108,12 @@ export async function seedKnowledge(
       "created_at",
       "updated_at",
     ],
-    v.knowledgeEntries,
+    volumes.knowledgeEntries,
     (i) => {
       const rng = rngFor("knowledge", i);
-      /*
-       * Drawn from the row's own stream rather than by `i % list.length`. Modular
-       * cycling correlated the parts: ROOT_CAUSES and RESOLUTIONS are the same
-       * length, so every entry paired cause N with fix N, and the whole corpus
-       * collapsed to lcm(12,10,10) = 60 distinct bodies - and therefore 60
-       * distinct embeddings, however many rows were asked for. Independent draws
-       * plus the row-specific detail below keep the text effectively unique.
-       */
+      // Drawn from the row's own stream, not by `i % list.length`: cycling
+      // pairs cause N with fix N and collapses the corpus to a few dozen
+      // bodies, and as many embeddings, at any row count.
       const product = pick(rng, products);
       const mine = byProduct.get(product.id) ?? [];
       const component = mine.length ? pick(rng, mine) : undefined;
@@ -159,16 +154,13 @@ export async function seedKnowledge(
         product_id: product.id,
         team_id: product.teamId,
         customer_id: customer ? customer.id : null,
-        /*
-         * Mirrors the product rule: a unit only ever sits beside the customer it
-         * belongs to. Two thirds of the estate owner's entries land on a line, and
-         * the lines that share a profile get enough of them for D3's sibling boost
-         * to be visible rather than theoretical.
-         */
+        // Mirrors the product rule: a unit sits only beside its own customer.
+        // Most of the estate owner's entries land on a line, enough on the
+        // lines sharing a profile for the sibling boost to show.
         customer_unit_id: unit ? unit.id : null,
         created_by: users[i % users.length].id,
         status: pick(rng, KNOWLEDGE_STATUSES),
-        // superseded_by is a second pass: see supersede() below.
+        // superseded_by is a second pass: see `supersede`.
         superseded_by: null,
         issue_summary: summary,
         symptoms: pickMany(rng, SYMPTOMS, intBetween(rng, 1, 3)),
@@ -182,8 +174,8 @@ export async function seedKnowledge(
         ],
         tags: pickMany(rng, TAGS, intBetween(rng, 1, 4)),
         component_id: component ? component.id : null,
-        // product_area is DERIVED from the component hierarchy: filled by the
-        // recursive-CTE pass in index.ts, exactly as saveKnowledgeEntry does.
+        // product_area is derived from the component hierarchy:
+        // `deriveProductAreas` fills it, as `saveKnowledgeEntry` does.
         product_area: null,
         confidence: pick(rng, CONFIDENCES),
         cloud: pick(rng, CLOUDS),
@@ -194,9 +186,9 @@ export async function seedKnowledge(
           ? `${intBetween(rng, 9, 11)}.${intBetween(rng, 0, 6)}`
           : null,
         structured: tx.json({ seeded: true }),
-        // The embed text is the row's real prose, so distinct rows get distinct
-        // vectors - the whole point of decorrelating the draws above. The column
-        // holds it until the window's fill swaps in the vector.
+        // The embed text is the row's own prose, so distinct rows get distinct
+        // vectors. The column holds it until the window's fill swaps in the
+        // vector.
         embedding: `${summary} ${rootCause} ${resolution}`,
         created_at: created,
         updated_at: created,
@@ -205,10 +197,10 @@ export async function seedKnowledge(
     { fill: embedColumn(embed, "knowledge_entry") },
   );
 
-  await seedFeedback(tx, v, entries, users);
+  await seedFeedback(tx, volumes, entries, users);
   const docs = await seedReference(
     tx,
-    v,
+    volumes,
     products,
     users,
     components,
@@ -221,12 +213,12 @@ export async function seedKnowledge(
 
 async function seedFeedback(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   entries: string[],
   users: SeededUser[],
 ): Promise<void> {
   if (!entries.length) return;
-  const rows = Array.from({ length: v.knowledgeFeedback }, (_, i) => {
+  const rows = Array.from({ length: volumes.knowledgeFeedback }, (_, i) => {
     const rng = rngFor("feedback", i);
     const kind = pick(rng, FEEDBACK_KINDS);
     return {
@@ -265,7 +257,7 @@ async function seedFeedback(
 
 async function seedReference(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   products: SeededProduct[],
   users: SeededUser[],
   components: SeededComponent[],
@@ -275,7 +267,7 @@ async function seedReference(
   const byProduct = groupBy(components, (c) => c.productId);
 
   /** What a chunk needs from its parent, so the two read as one document. */
-  const meta = Array.from({ length: v.referenceDocs }, (_, i) => {
+  const meta = Array.from({ length: volumes.referenceDocs }, (_, i) => {
     const rng = rngFor("reference", i);
     const product = pick(rng, products);
     const mine = byProduct.get(product.id) ?? [];
@@ -315,12 +307,12 @@ async function seedReference(
       "superseded_by",
       "version",
     ],
-    v.referenceDocs,
+    volumes.referenceDocs,
     (i) => {
       const { rng, product, component, title } = meta[i];
       const project = pick(rng, projects);
-      // Same reasoning as the entries above: independent draws, and a body built
-      // from several of them, so docs do not collapse onto a handful of vectors.
+      // As for the entries: independent draws, and a body built from several of
+      // them, so docs do not collapse onto a handful of vectors.
       const docScenario = intBetween(
         rng,
         0,
@@ -358,7 +350,7 @@ async function seedReference(
 
   const per = Math.max(
     1,
-    Math.floor(v.referenceChunks / Math.max(1, docs.length)),
+    Math.floor(volumes.referenceChunks / Math.max(1, docs.length)),
   );
   await insertWindowed(
     tx,
@@ -366,33 +358,32 @@ async function seedReference(
     ["id", "doc_id", "ordinal", "chunk_text", "embedding"],
     docs.length * per,
     (i) => {
-      const d = Math.floor(i / per);
-      const k = i % per;
-      const crng = rngFor("reference_chunk", i);
-      const cs = intBetween(
-        crng,
+      const doc = Math.floor(i / per);
+      const section = i % per;
+      const chunkRng = rngFor("reference_chunk", i);
+      const chunkScenario = intBetween(
+        chunkRng,
         0,
         Math.min(ROOT_CAUSES.length, RESOLUTIONS.length) - 1,
       );
-      const parent = meta[d];
-      // Anchored to its own document, so a chunk reads as part of that page.
-      // Drawing the title independently of `docs[d]` caps the combinations
-      // below the birthday bound for the 16k chunks --scale=large asks for,
-      // which yields thousands of exact duplicates.
-      const heading = SECTION_HEADINGS[k % SECTION_HEADINGS.length];
+      const parent = meta[doc];
+      // Anchored to its own document, so a chunk reads as part of that page. A
+      // title drawn independently of `docs[d]` has too few combinations for
+      // --scale=large and yields exact duplicates.
+      const heading = SECTION_HEADINGS[section % SECTION_HEADINGS.length];
       const chunkText = [
         `${parent.fullTitle} - ${heading} (${parent.product.slug}${parent.component ? ` / ${parent.component.slug}` : ""}).`,
-        `${ROOT_CAUSES[cs]}. ${RESOLUTIONS[cs]}.`,
-        `Applies ${pick(crng, CONTEXTS)}. ${pick(crng, DIAGNOSTICS)}.`,
-        `Otherwise ${pick(crng, IMPACTS)}.`,
+        `${ROOT_CAUSES[chunkScenario]}. ${RESOLUTIONS[chunkScenario]}.`,
+        `Applies ${pick(chunkRng, CONTEXTS)}. ${pick(chunkRng, DIAGNOSTICS)}.`,
+        `Otherwise ${pick(chunkRng, IMPACTS)}.`,
       ].join(" ");
       return {
         id: uuidFor("reference_doc_chunk", i),
         doc_id: parent.id,
         // (doc_id, ordinal) unique by construction.
-        ordinal: k,
-        // Embed the chunk's own text: embedding the literal string "section 3"
-        // gave every third chunk in the corpus the same vector.
+        ordinal: section,
+        // Embeds the chunk's own text: a literal like "section 3" gives every
+        // chunk with that ordinal the same vector.
         chunk_text: chunkText,
         embedding: chunkText,
       };
@@ -404,9 +395,9 @@ async function seedReference(
 }
 
 /**
- * A second pass rather than a forward reference inside the insert: a forward
- * reference happens to work in one statement (the FK trigger fires at the end
- * of it) and silently breaks the moment the insert splits across batches.
+ * A second pass, not a forward reference inside the insert: a forward reference
+ * works within one statement (the FK trigger fires at its end) and fails once
+ * the insert splits across batches.
  */
 export async function supersede(tx: Tx): Promise<void> {
   await tx`

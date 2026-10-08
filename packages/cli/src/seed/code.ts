@@ -38,7 +38,7 @@ function fileIdentity(i: number) {
 
 export async function seedCode(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   products: SeededProduct[],
   components: SeededComponent[],
   customers: SeededCustomer[],
@@ -46,7 +46,7 @@ export async function seedCode(
   connections: { id: string; slug: string }[],
   embed: Embedder,
 ): Promise<void> {
-  const repos = Array.from({ length: v.repos }, (_, i) => ({
+  const repos = Array.from({ length: volumes.repos }, (_, i) => ({
     id: uuidFor("repo", i),
     slug: `seed-repo-${i}`,
   }));
@@ -59,19 +59,20 @@ export async function seedCode(
       "slug",
       "url",
       "product_id",
-      // source_slug references source_connections(slug) -- a text key, not a uuid.
+      // source_slug references source_connections(slug): a text key, not a
+      // uuid.
       "source_slug",
       "source_project_id",
       "component_id",
       "customer_id",
       "default_branch",
     ],
-    repos.map((r, i) => {
+    repos.map((repo, i) => {
       const product = products[i % products.length];
       return {
-        id: r.id,
-        slug: r.slug,
-        url: `https://github.com/seed/${r.slug}.git`,
+        id: repo.id,
+        slug: repo.slug,
+        url: `https://github.com/seed/${repo.slug}.git`,
         product_id: product.id,
         source_slug: connections[i % connections.length].slug,
         source_project_id: projects[i % projects.length].id,
@@ -105,7 +106,7 @@ export async function seedCode(
 
   const perRepo = Math.max(
     1,
-    Math.floor(v.repoFiles / Math.max(1, repos.length)),
+    Math.floor(volumes.repoFiles / Math.max(1, repos.length)),
   );
   const fileCount = repos.length * perRepo;
 
@@ -134,7 +135,7 @@ export async function seedCode(
 
   const perFile = Math.max(
     1,
-    Math.floor(v.codeChunks / Math.max(1, fileCount)),
+    Math.floor(volumes.codeChunks / Math.max(1, fileCount)),
   );
 
   await insertWindowed(
@@ -152,27 +153,26 @@ export async function seedCode(
     ],
     fileCount * perFile,
     (i) => {
-      const f = Math.floor(i / perFile);
-      const k = i % perFile;
-      const start = 1 + k * 40;
-      // The template is drawn per chunk and interpolates the file's own
-      // names. A shared snippet gives 60k identical rows at --scale=large, and
-      // under --embed 60k identical vectors, which degenerates the HNSW graph
-      // and makes the trigram index useless.
-      const { names, path } = fileIdentity(f);
+      const file = Math.floor(i / perFile);
+      const chunk = i % perFile;
+      const start = 1 + chunk * 40;
+      // Drawn per chunk and filled with the file's own names. A shared snippet
+      // gives identical rows and, under --embed, identical vectors: a
+      // degenerate HNSW graph and a useless trigram index.
+      const { names, path } = fileIdentity(file);
       const template =
         CODE_TEMPLATES[
-          (f + k * 7) % CODE_TEMPLATES.length // co-prime stride: a file's chunks differ
+          (file + chunk * 7) % CODE_TEMPLATES.length // co-prime stride: a file's chunks differ
         ];
       // Path first, the shape `backfillCodeEmbeddings` embeds, so a seeded
       // vector and a re-embedded one are built from the same text.
       const chunkText = `// ${path}:${start}-${start + 39}\n${template(names)}`;
       return {
         id: uuidFor("code_chunk", i),
-        repo_id: repos[Math.floor(f / perRepo)].id,
-        blob_sha: blobOf(f),
+        repo_id: repos[Math.floor(file / perRepo)].id,
+        blob_sha: blobOf(file),
         // (repo_id, blob_sha, ordinal) unique by construction.
-        ordinal: k,
+        ordinal: chunk,
         start_line: start,
         end_line: start + 39,
         chunk_text: chunkText,
@@ -182,7 +182,7 @@ export async function seedCode(
     { fill: embedColumn(embed, "code_chunk") },
   );
 
-  // Keep the denormalised counters honest, the way the indexer leaves them.
+  // Sets the denormalised counters the way the indexer leaves them.
   await tx`
     update repo_lines l set
       file_count = (select count(*) from repo_line_files f where f.line_id = l.id),

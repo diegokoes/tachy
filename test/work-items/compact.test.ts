@@ -18,7 +18,9 @@ import {
 } from "@tachy/core/work-items";
 import { type RawMessage, type RawWorkItem } from "@tachy/core/sources";
 
-const msg = (over: Partial<RawMessage> & { bodyText: string }): RawMessage => ({
+const message = (
+  over: Partial<RawMessage> & { bodyText: string },
+): RawMessage => ({
   visibility: "public",
   direction: "incoming",
   createdAt: "2026-06-20T10:00:00Z",
@@ -38,11 +40,13 @@ describe("normalizeBody", () => {
   });
 
   it("drops image placeholders and mailto decorations", () => {
-    const t = normalizeBody("Hola [cid:abc-1] Javier<mailto:j@x.com> [Image]");
-    expect(t).not.toContain("cid:");
-    expect(t).not.toContain("mailto:");
-    expect(t).not.toContain("[Image]");
-    expect(t).toContain("Javier");
+    const normalized = normalizeBody(
+      "Hola [cid:abc-1] Javier<mailto:j@x.com> [Image]",
+    );
+    expect(normalized).not.toContain("cid:");
+    expect(normalized).not.toContain("mailto:");
+    expect(normalized).not.toContain("[Image]");
+    expect(normalized).toContain("Javier");
   });
 
   it("unwraps corporate link rewriters back to the real target", () => {
@@ -59,8 +63,8 @@ describe("normalizeBody", () => {
 
 describe("parseMailDate", () => {
   it("reads spanish outlook dates", () => {
-    const d = parseMailDate("jueves, 18 de junio de 2026 18:10");
-    expect(d?.toISOString()).toBe("2026-06-18T18:10:00.000Z");
+    const parsed = parseMailDate("jueves, 18 de junio de 2026 18:10");
+    expect(parsed?.toISOString()).toBe("2026-06-18T18:10:00.000Z");
   });
 
   it("reads german and numeric dates", () => {
@@ -148,30 +152,33 @@ describe("splitQuotedBlocks", () => {
 
 describe("compactMessages", () => {
   it("keeps the first copy of a repeated block and drops the rest", () => {
-    const c = compactMessages(
+    const compacted = compactMessages(
       [
-        msg({
+        message({
           externalId: "1",
           bodyText: "El proceso rechaza los UIDs cargados hoy",
         }),
-        msg({
+        message({
           externalId: "2",
           bodyText: "El proceso rechaza los UIDs cargados hoy",
         }),
-        msg({ externalId: "3", bodyText: "Confirmamos que ya funciona" }),
+        message({ externalId: "3", bodyText: "Confirmamos que ya funciona" }),
       ],
       meta,
     );
-    expect(c.turns).toHaveLength(2);
-    expect(c.compaction.dropped.exact_duplicate_blocks).toBe(1);
-    expect(c.turns[0].text).toContain("rechaza los UIDs");
-    expect(c.turns[1].text).toContain("ya funciona");
+    expect(compacted.turns).toHaveLength(2);
+    expect(compacted.compaction.dropped.exact_duplicate_blocks).toBe(1);
+    expect(compacted.turns[0].text).toContain("rechaza los UIDs");
+    expect(compacted.turns[1].text).toContain("ya funciona");
   });
 
   it("drops automated mail unless asked to keep it", () => {
     const messages = [
-      msg({ externalId: "1", bodyText: "Tenemos un problema con el fichero" }),
-      msg({
+      message({
+        externalId: "1",
+        bodyText: "Tenemos un problema con el fichero",
+      }),
+      message({
         externalId: "2",
         automated: true,
         bodyText:
@@ -188,18 +195,21 @@ describe("compactMessages", () => {
   });
 
   it("drops short out-of-office replies", () => {
-    const c = compactMessages(
+    const compacted = compactMessages(
       [
-        msg({ externalId: "1", bodyText: "Podéis revisar el envío de ayer?" }),
-        msg({
+        message({
+          externalId: "1",
+          bodyText: "Podéis revisar el envío de ayer?",
+        }),
+        message({
           externalId: "2",
           bodyText: "Estaré fuera de la oficina hasta el 31 de julio.",
         }),
       ],
       meta,
     );
-    expect(c.turns).toHaveLength(1);
-    expect(c.compaction.dropped.auto_reply).toBe(1);
+    expect(compacted.turns).toHaveLength(1);
+    expect(compacted.compaction.dropped.auto_reply).toBe(1);
   });
 
   it("strips banners, legal footers and repeated signature lines", () => {
@@ -209,24 +219,24 @@ describe("compactMessages", () => {
       "CONFIDENTIALITY. This e-mail and any attachments are confidential.",
       "Javier Baños | IS Project Manager | : +34 629 56 38 07",
     ].join("\n");
-    const c = compactMessages(
+    const compacted = compactMessages(
       [
-        msg({
+        message({
           externalId: "1",
           bodyText: "Primer punto del analisis" + footer,
         }),
-        msg({
+        message({
           externalId: "2",
           bodyText: "Segundo punto del analisis" + footer,
         }),
-        msg({
+        message({
           externalId: "3",
           bodyText: "Tercer punto del analisis" + footer,
         }),
       ],
       meta,
     );
-    const all = c.turns.map((t) => t.text).join("\n");
+    const all = compacted.turns.map((t) => t.text).join("\n");
     expect(all).toContain("Primer punto");
     expect(all).toContain("Tercer punto");
     expect(all).not.toContain("remitente externo");
@@ -237,11 +247,11 @@ describe("compactMessages", () => {
   it("keeps the original of text that later mails quote back repeatedly", () => {
     const original =
       "Mañana vamos a realizar unas cargas de UIDs al repositorio";
-    const c = compactMessages(
+    const compacted = compactMessages(
       [
-        msg({ externalId: "1", bodyText: original }),
+        message({ externalId: "1", bodyText: original }),
         ...[2, 3, 4, 5].map((i) =>
-          msg({
+          message({
             externalId: String(i),
             bodyText: [
               `Respuesta numero ${i} sobre el asunto`,
@@ -257,7 +267,7 @@ describe("compactMessages", () => {
       ],
       meta,
     );
-    const all = c.turns.map((t) => t.text);
+    const all = compacted.turns.map((t) => t.text);
     expect(all[0]).toBe(original);
     expect(all.filter((t) => t.includes("cargas de UIDs"))).toHaveLength(1);
   });
@@ -278,14 +288,14 @@ describe("compactMessages", () => {
         "  }",
         "]",
       ].join("\n");
-    const c = compactMessages(
+    const compacted = compactMessages(
       [
-        msg({ externalId: "1", bodyText: payload("BG", 240) }),
-        msg({ externalId: "2", bodyText: payload("RO", 500) }),
+        message({ externalId: "1", bodyText: payload("BG", 240) }),
+        message({ externalId: "2", bodyText: payload("RO", 500) }),
       ],
       meta,
     );
-    const all = c.turns.map((t) => t.text).join("\n");
+    const all = compacted.turns.map((t) => t.text).join("\n");
     const fields = [
       "Code",
       "EO_ID",
@@ -294,9 +304,9 @@ describe("compactMessages", () => {
       "Req_Quantity",
       "P_Brand",
     ];
-    // both payloads must survive whole: the differing field is the whole point
-    for (const f of fields)
-      expect(all.match(new RegExp(`"${f}":`, "g"))).toHaveLength(2);
+    // both payloads must survive whole: they differ in one field
+    for (const field of fields)
+      expect(all.match(new RegExp(`"${field}":`, "g"))).toHaveLength(2);
     expect(all).toContain('"Intended_Market": "BG"');
     expect(all).toContain('"Intended_Market": "RO"');
     expect(all).toContain('"Req_Quantity": 500');
@@ -308,46 +318,46 @@ describe("compactMessages", () => {
   });
 
   it("drops an identical repeated payload but never a differing one", () => {
-    const p = ["{", '  "a": 1,', '  "b": 2,', '  "c": 3', "}"].join("\n");
-    const c = compactMessages(
+    const payload = ["{", '  "a": 1,', '  "b": 2,', '  "c": 3', "}"].join("\n");
+    const compacted = compactMessages(
       [
-        msg({ externalId: "1", bodyText: p }),
-        msg({ externalId: "2", bodyText: p }),
+        message({ externalId: "1", bodyText: payload }),
+        message({ externalId: "2", bodyText: payload }),
       ],
       meta,
     );
-    expect(c.turns).toHaveLength(1);
-    expect(c.compaction.dropped.exact_duplicate_blocks).toBe(1);
+    expect(compacted.turns).toHaveLength(1);
+    expect(compacted.compaction.dropped.exact_duplicate_blocks).toBe(1);
   });
 
   it("skips a transcript it posted itself instead of compacting its own output", () => {
     const prior = renderCompactHtml(
       compactMessages(
-        [msg({ externalId: "1", bodyText: "the real issue" })],
+        [message({ externalId: "1", bodyText: "the real issue" })],
         meta,
       ),
     ).replace(/<[^>]+>/g, " ");
-    const c = compactMessages(
+    const compacted = compactMessages(
       [
-        msg({ externalId: "1", bodyText: "the real issue" }),
-        msg({ externalId: "2", visibility: "private", bodyText: prior }),
+        message({ externalId: "1", bodyText: "the real issue" }),
+        message({ externalId: "2", visibility: "private", bodyText: prior }),
       ],
       meta,
     );
-    expect(c.compaction.dropped.prior_transcript).toBe(1);
-    expect(c.turns).toHaveLength(1);
-    expect(c.turns[0].text).toBe("the real issue");
+    expect(compacted.compaction.dropped.prior_transcript).toBe(1);
+    expect(compacted.turns).toHaveLength(1);
+    expect(compacted.turns[0].text).toBe("the real issue");
   });
 
   it("removes repeated tracking links but keeps one-off urls", () => {
     const messages = Array.from({ length: 6 }, (_, i) =>
-      msg({
+      message({
         externalId: String(i),
         bodyText: `Punto numero ${i} del seguimiento <https://track.example/T0kq9fg0>`,
       }),
     );
     messages.push(
-      msg({
+      message({
         externalId: "x",
         bodyText: "El endpoint es <https://preprod.osapiens.cloud/capture/>",
       }),
@@ -360,9 +370,9 @@ describe("compactMessages", () => {
   });
 
   it("recovers quoted-only content attributed to its real sender and date", () => {
-    const c = compactMessages(
+    const compacted = compactMessages(
       [
-        msg({
+        message({
           externalId: "1",
           authorLabel: "javier@t.com",
           createdAt: "2026-06-22T06:50:00Z",
@@ -380,27 +390,27 @@ describe("compactMessages", () => {
       ],
       meta,
     );
-    const quoted = c.turns.find((t) => t.kind === "quoted")!;
+    const quoted = compacted.turns.find((t) => t.kind === "quoted")!;
     expect(quoted.speaker).toBe("Alejandro Plaza");
     expect(quoted.at).toBe("2025-12-16T09:00:00.000Z");
     expect(quoted.text).toContain("no son reconocidos");
 
-    const { prologue, thread } = splitPrologue(c);
+    const { prologue, thread } = splitPrologue(compacted);
     expect(prologue.map((t) => t.speaker)).toEqual(["Alejandro Plaza"]);
     expect(thread.every((t) => t.kind !== "quoted")).toBe(true);
   });
 
   it("labels internal notes and falls back when no sender is known", () => {
-    const c = compactMessages(
+    const compacted = compactMessages(
       [
-        msg({
+        message({
           externalId: "1",
           visibility: "private",
           direction: "outgoing",
           authorLabel: "Borja Martinez",
           bodyText: "THEY ARE SENDING THE MESSAGES WITH WRONG EOID",
         }),
-        msg({
+        message({
           externalId: "2",
           direction: "outgoing",
           bodyText: "Buenas tardes Javier",
@@ -408,19 +418,22 @@ describe("compactMessages", () => {
       ],
       meta,
     );
-    expect(c.turns[0]).toMatchObject({
+    expect(compacted.turns[0]).toMatchObject({
       kind: "internal_note",
       speaker: "Borja Martinez",
       source_message: "1",
     });
-    expect(c.turns[1]).toMatchObject({ kind: "reply", speaker: "support" });
-    expect(c.speakers).toEqual(["Borja Martinez", "support"]);
+    expect(compacted.turns[1]).toMatchObject({
+      kind: "reply",
+      speaker: "support",
+    });
+    expect(compacted.speakers).toEqual(["Borja Martinez", "support"]);
   });
 
   it("reports honest counters on an empty thread", () => {
-    const c = compactMessages([], meta);
-    expect(c.turns).toEqual([]);
-    expect(c.compaction).toMatchObject({
+    const compacted = compactMessages([], meta);
+    expect(compacted.turns).toEqual([]);
+    expect(compacted.compaction).toMatchObject({
       source_messages: 0,
       turns: 0,
       raw_chars: 0,
@@ -430,7 +443,7 @@ describe("compactMessages", () => {
 });
 
 describe("attachments", () => {
-  const fd = [
+  const files = [
     {
       id: 1,
       name: "xml-bad-soap.xml",
@@ -441,7 +454,7 @@ describe("attachments", () => {
   ];
 
   it("normalizes freshdesk, jira and junk shapes alike", () => {
-    expect(normalizeAttachments(fd)).toEqual([
+    expect(normalizeAttachments(files)).toEqual([
       { name: "xml-bad-soap.xml", size: 67658, type: "application/xml" },
       { name: "notes.txt", size: 900, type: "text/plain" },
     ]);
@@ -461,11 +474,11 @@ describe("attachments", () => {
   });
 
   it("hangs files off the message's own turn, never its quoted hops", () => {
-    const c = compactMessages(
+    const compacted = compactMessages(
       [
-        msg({
+        message({
           externalId: "1",
-          attachments: fd,
+          attachments: files,
           bodyText: [
             "Adjunto el XML con el error",
             "",
@@ -478,46 +491,52 @@ describe("attachments", () => {
       ],
       meta,
     );
-    const own = c.turns.find((t) => t.kind !== "quoted")!;
+    const own = compacted.turns.find((t) => t.kind !== "quoted")!;
     expect(own.attachments?.map((a) => a.name)).toEqual([
       "xml-bad-soap.xml",
       "notes.txt",
     ]);
-    for (const q of c.turns.filter((t) => t.kind === "quoted"))
-      expect(q.attachments).toBeUndefined();
-    expect(c.compaction.attachments).toBe(2);
+    for (const quoted of compacted.turns.filter((t) => t.kind === "quoted"))
+      expect(quoted.attachments).toBeUndefined();
+    expect(compacted.compaction.attachments).toBe(2);
   });
 
   it("keeps file references when the message text is itself a duplicate", () => {
-    const c = compactMessages(
+    const compacted = compactMessages(
       [
-        msg({ externalId: "1", bodyText: "aqui va el fichero" }),
-        msg({
+        message({ externalId: "1", bodyText: "aqui va el fichero" }),
+        message({
           externalId: "2",
           bodyText: "aqui va el fichero",
-          attachments: fd,
+          attachments: files,
         }),
       ],
       meta,
     );
     // the duplicate wording is dropped, but the file must not vanish with it
-    expect(c.compaction.attachments).toBe(2);
+    expect(compacted.compaction.attachments).toBe(2);
     expect(
-      c.turns.flatMap((t) => t.attachments ?? []).map((a) => a.name),
+      compacted.turns.flatMap((t) => t.attachments ?? []).map((a) => a.name),
     ).toContain("xml-bad-soap.xml");
   });
 
   it("renders files in both the script and the note", () => {
-    const c = compactMessages(
-      [msg({ externalId: "1", attachments: fd, bodyText: "adjunto va" })],
+    const compacted = compactMessages(
+      [
+        message({
+          externalId: "1",
+          attachments: files,
+          bodyText: "adjunto va",
+        }),
+      ],
       meta,
     );
-    expect(renderCompactScript(c)).toContain(
+    expect(renderCompactScript(compacted)).toContain(
       "↳ files: xml-bad-soap.xml (66 KB, application/xml); notes.txt (900 B, text/plain)",
     );
-    const html = renderCompactHtml(c);
+    const html = renderCompactHtml(compacted);
     expect(html).toContain("xml-bad-soap.xml (66 KB, application/xml)");
-    expect(summarizeCompaction(c).files).toBe(
+    expect(summarizeCompaction(compacted).files).toBe(
       "2 files referenced by name - open them on the ticket.",
     );
   });
@@ -550,18 +569,18 @@ describe("compactForLlm (ingest-path rule)", () => {
 
   it("leaves a short ticket byte-for-byte alone", () => {
     const i = item([
-      msg({ externalId: "1", bodyText: "algo corto pero real" }),
+      message({ externalId: "1", bodyText: "algo corto pero real" }),
     ]);
-    const r = compactForLlm(i);
-    expect(r.compacted).toBeUndefined();
-    expect(r.item).toBe(i);
+    const forLlm = compactForLlm(i);
+    expect(forLlm.compacted).toBeUndefined();
+    expect(forLlm.item).toBe(i);
   });
 
   it("leaves a long ticket alone when there is nothing to gain", () => {
     // distinct paragraphs, no quoting or repetition: compaction cannot help
     const i = item(
       Array.from({ length: 6 }, (_, n) =>
-        msg({
+        message({
           externalId: String(n),
           bodyText: Array.from(
             { length: 40 },
@@ -589,48 +608,51 @@ describe("compactForLlm (ingest-path rule)", () => {
     ].join("\n");
     const i = item(
       Array.from({ length: 8 }, (_, n) =>
-        msg({ externalId: String(n), bodyText: `Respuesta ${n}.${quoted}` }),
+        message({
+          externalId: String(n),
+          bodyText: `Respuesta ${n}.${quoted}`,
+        }),
       ),
     );
-    const r = compactForLlm(i);
-    expect(r.compacted).toBeDefined();
-    expect(r.item.messages).toEqual([]);
-    expect(r.item.title).toBe("T");
-    expect(r.compacted!.turns.length).toBeGreaterThan(0);
+    const forLlm = compactForLlm(i);
+    expect(forLlm.compacted).toBeDefined();
+    expect(forLlm.item.messages).toEqual([]);
+    expect(forLlm.item.title).toBe("T");
+    expect(forLlm.compacted!.turns.length).toBeGreaterThan(0);
   });
 });
 
 describe("summarizeCompaction", () => {
   const build = (bodies: string[]) =>
     compactMessages(
-      bodies.map((bodyText, i) => msg({ externalId: String(i), bodyText })),
+      bodies.map((bodyText, i) => message({ externalId: String(i), bodyText })),
       meta,
     );
 
   it("speaks in reading effort, not internal vocabulary", () => {
-    const s = summarizeCompaction(build(["algo pasa con el fichero"]));
-    expect(s.headline).toMatch(
+    const summary = summarizeCompaction(build(["algo pasa con el fichero"]));
+    expect(summary.headline).toMatch(
       /^1 messages · \d+ KB to read instead of \d+ KB \(\d+% less\)$/,
     );
-    expect(`${s.headline} ${s.removed} ${s.recovered}`).not.toMatch(
-      /turns?|blocks?|boilerplate|near-duplicate/i,
-    );
+    expect(
+      `${summary.headline} ${summary.removed} ${summary.recovered}`,
+    ).not.toMatch(/turns?|blocks?|boilerplate|near-duplicate/i);
   });
 
   it("names only what it actually removed", () => {
-    const s = summarizeCompaction(
+    const summary = summarizeCompaction(
       build(["mismo texto repetido", "mismo texto repetido"]),
     );
-    expect(s.removed).toContain("1 repeated quote");
-    expect(s.removed).not.toContain("automated");
-    expect(s.removed).not.toContain("0 ");
-    expect(s.recovered).toBe("");
+    expect(summary.removed).toContain("1 repeated quote");
+    expect(summary.removed).not.toContain("automated");
+    expect(summary.removed).not.toContain("0 ");
+    expect(summary.recovered).toBe("");
   });
 
   it("reports recovered history as the find that it is", () => {
-    const c = compactMessages(
+    const compacted = compactMessages(
       [
-        msg({
+        message({
           externalId: "1",
           bodyText: [
             "Seguimos igual",
@@ -644,8 +666,8 @@ describe("summarizeCompaction", () => {
       ],
       meta,
     );
-    expect(c.compaction.recovered_earlier).toBe(1);
-    expect(summarizeCompaction(c).recovered).toBe(
+    expect(compacted.compaction.recovered_earlier).toBe(1);
+    expect(summarizeCompaction(compacted).recovered).toBe(
       "Recovered 1 older message that survive only inside quoted replies.",
     );
   });
@@ -655,33 +677,37 @@ describe("replacing a previous transcript", () => {
   it("reports the ids of transcripts it posted before", () => {
     const prior = renderCompactHtml(
       compactMessages(
-        [msg({ externalId: "1", bodyText: "el problema real" })],
+        [message({ externalId: "1", bodyText: "el problema real" })],
         meta,
       ),
     ).replace(/<[^>]+>/g, " ");
-    const c = compactMessages(
+    const compacted = compactMessages(
       [
-        msg({ externalId: "1", bodyText: "el problema real" }),
-        msg({ externalId: "note-9", visibility: "private", bodyText: prior }),
+        message({ externalId: "1", bodyText: "el problema real" }),
+        message({
+          externalId: "note-9",
+          visibility: "private",
+          bodyText: prior,
+        }),
       ],
       meta,
     );
-    expect(c.prior_transcript_ids).toEqual(["note-9"]);
+    expect(compacted.prior_transcript_ids).toEqual(["note-9"]);
   });
 
   it("claims nothing to replace on a ticket it has never touched", () => {
-    const c = compactMessages(
-      [msg({ externalId: "1", bodyText: "hola" })],
+    const compacted = compactMessages(
+      [message({ externalId: "1", bodyText: "hola" })],
       meta,
     );
-    expect(c.prior_transcript_ids).toEqual([]);
+    expect(compacted.prior_transcript_ids).toEqual([]);
   });
 });
 
 describe("renderers", () => {
-  const c = compactMessages(
+  const compacted = compactMessages(
     [
-      msg({
+      message({
         externalId: "1",
         authorLabel: "javier@t.com",
         bodyText: [
@@ -700,33 +726,33 @@ describe("renderers", () => {
   );
 
   it("renders the script with a prologue section", () => {
-    const md = renderCompactScript(c);
-    expect(md).toContain("# Report T&T   [#42]");
-    expect(md).toContain(
+    const script = renderCompactScript(compacted);
+    expect(script).toContain("# Report T&T   [#42]");
+    expect(script).toContain(
       "Earlier mail, recovered from quoted replies - 1 message",
     );
-    expect(md).toContain("Alejandro Plaza (2025-12-16):");
-    expect(md).toContain("javier@t.com (2026-06-20)");
+    expect(script).toContain("Alejandro Plaza (2025-12-16):");
+    expect(script).toContain("javier@t.com (2026-06-20)");
   });
 
   it("escapes html in the note body", () => {
-    const c2 = compactMessages(
+    const recompacted = compactMessages(
       [
-        msg({
+        message({
           externalId: "1",
           bodyText: "el bloque <epc>0108435</epc> falla",
         }),
       ],
       meta,
     );
-    const html = renderCompactHtml(c2);
+    const html = renderCompactHtml(recompacted);
     expect(html).toContain("&lt;epc&gt;0108435&lt;/epc&gt;");
     expect(html).not.toContain("<epc>");
     expect(html).toContain("nothing was summarised or reworded");
   });
 
   it("splits an oversized note at paragraph boundaries", () => {
-    const html = renderCompactHtml(c);
+    const html = renderCompactHtml(compacted);
     expect(splitNoteBody(html)).toHaveLength(1);
     const parts = splitNoteBody(html, 120);
     expect(parts.length).toBeGreaterThan(1);
@@ -758,7 +784,7 @@ describe("a split transcript identifies itself", () => {
     const long = renderCompactHtml(
       compactMessages(
         [
-          msg({
+          message({
             externalId: "1",
             bodyText: Array.from(
               { length: 300 },
@@ -777,9 +803,9 @@ describe("a split transcript identifies itself", () => {
     // deletes part 1 while orphaning the rest.
     const again = compactMessages(
       [
-        msg({ externalId: "1", bodyText: "el problema real" }),
+        message({ externalId: "1", bodyText: "el problema real" }),
         ...parts.map((body, i) =>
-          msg({
+          message({
             externalId: `note-${i}`,
             visibility: "private",
             bodyText: body.replace(/<[^>]+>/g, " "),

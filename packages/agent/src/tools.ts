@@ -74,7 +74,10 @@ const READ = new Set<string>(READ_TOOLS);
 
 export type ToolClass = "read" | "write" | "denied";
 
-/** A tachy tool not listed as a read is a write, so an unlisted tool still gets the review box. */
+/**
+ * A tachy tool not listed as a read is a write, so an unlisted tool still gets
+ * the review box.
+ */
 export function classify(toolName: string): { cls: ToolClass; base: string } {
   const prefix = `mcp__${MCP_SERVER}__`;
   if (!toolName.startsWith(prefix)) return { cls: "denied", base: toolName };
@@ -107,12 +110,12 @@ export function classifyCall(
   toolName: string,
   input: unknown,
 ): { cls: ToolClass; base: string } {
-  const c = classify(toolName);
-  const needsReview = CONDITIONAL_WRITES[c.base];
-  if (c.cls === "denied" || !needsReview) return c;
+  const classified = classify(toolName);
+  const needsReview = CONDITIONAL_WRITES[classified.base];
+  if (classified.cls === "denied" || !needsReview) return classified;
   const writes =
     typeof input === "object" &&
     input !== null &&
     needsReview(input as Record<string, unknown>);
-  return { cls: writes ? "write" : "read", base: c.base };
+  return { cls: writes ? "write" : "read", base: classified.base };
 }

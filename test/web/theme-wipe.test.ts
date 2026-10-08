@@ -3,8 +3,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-/* ScrollTrigger reads matchMedia as the gsap module registers it, which jsdom
-   does not have. */
+// ScrollTrigger reads matchMedia as the gsap module registers it, which jsdom
+// does not have.
 const media = vi.hoisted(() => {
   const media = { reduced: false };
   const noop = () => {};
@@ -22,6 +22,7 @@ const media = vi.hoisted(() => {
 
 import { gsap } from "../../packages/web/src/motion/gsap";
 import { themeWipe } from "../../packages/web/src/motion/motion";
+import { deferred } from "./deferred";
 
 const root = document.documentElement;
 const doc = document as { startViewTransition?: unknown };
@@ -30,8 +31,8 @@ const doc = document as { startViewTransition?: unknown };
 function fakeTransition() {
   const phases = {
     updated: Promise.resolve() as Promise<unknown>,
-    ready: Promise.withResolvers<void>(),
-    finished: Promise.withResolvers<void>(),
+    ready: deferred(),
+    finished: deferred(),
   };
   doc.startViewTransition = vi.fn((update: () => Promise<void>) => {
     phases.updated = update();

@@ -33,22 +33,16 @@
   } = $props();
 
   function step(delta: number) {
-    const i = items.findIndex((it) => it.key === active);
-    const next = items[Math.min(items.length - 1, Math.max(0, i + delta))];
+    const index = items.findIndex((item) => item.key === active);
+    const next = items[Math.min(items.length - 1, Math.max(0, index + delta))];
     if (next && next.key !== active) onpick(next.key);
   }
 
-  const activeMatches = $derived(items.some((it) => it.key === active));
+  const activeMatches = $derived(items.some((item) => item.key === active));
 
-  /* `active` doesn't always name one of `items` - the top bar's own tab set
-     no longer includes every destination (settings moved out of it), so
-     landing there leaves no tab "on". Without a real anchor somewhere, the
-     first hover afterwards has to spring the indicator into existence from
-     an unresolved position, and the size/position jump lands out of step
-     with the colour fade that's transitioning smoothly the whole time -
-     the "not really soft yet" flash. Keeping the anchor parked on the last
-     tab that WAS on (invisible via opacity, not by lacking a position) means
-     that first hover interpolates like every other one. */
+  // `active` may name no item (settings is not a tab). The anchor then stays on
+  // the last tab that was active, hidden by opacity, so the indicator's next
+  // hover starts from a resolved position.
   let stickyKey = $state<string | null>(null);
   $effect(() => {
     if (activeMatches) stickyKey = active;
@@ -59,11 +53,11 @@
     if (hotkeys !== "shift") return;
     const pick = onpick;
     return pushScope([
-      ...items.slice(0, 9).map((it, i) => ({
+      ...items.slice(0, 9).map((item, i) => ({
         key: subnavKey(i),
-        label: it.label,
+        label: item.label,
         hidden: true,
-        run: () => pick(it.key),
+        run: () => pick(item.key),
       })),
       ...(vimState.enabled
         ? [
@@ -76,27 +70,24 @@
 </script>
 
 <nav class="tabs" style="--tab-anchor: {anchor}">
-  {#each items as it}
-    {@const on = it.key === active}
+  {#each items as item}
+    {@const on = item.key === active}
     {@const anchorHost =
-      it.key === (activeMatches ? active : (stickyKey ?? items[0]?.key))}
-    {@const icon = labels === "text" ? undefined : it.icon}
+      item.key === (activeMatches ? active : (stickyKey ?? items[0]?.key))}
+    {@const icon = labels === "text" ? undefined : item.icon}
     {@const bare = labels === "icons" && icon !== undefined}
     <button
       class="tab"
       class:on
       class:anchor-host={anchorHost}
       aria-current={on ? "page" : undefined}
-      aria-label={bare ? it.label : undefined}
-      use:tip={bare ? it.label : undefined}
+      aria-label={bare ? item.label : undefined}
+      use:tip={bare ? item.label : undefined}
       onclick={(e) => {
-        onpick(it.key);
-        // A pointer click (detail > 0) leaves the button focused but not
-        // :focus-visible - until an unrelated later keypress makes Chrome
-        // upgrade that stale focus, stealing the anchored indicator from
-        // whichever tab is actually active. Blurring after a pointer click
-        // avoids that; a keyboard-activated click (detail === 0) keeps focus
-        // so the ring still shows where it legitimately belongs.
+        onpick(item.key);
+        // After a pointer click the button keeps focus without :focus-visible,
+        // and a later keypress upgrades it and moves the indicator off the
+        // active tab. A keyboard click (detail 0) keeps its focus ring.
         if (e.detail !== 0) e.currentTarget.blur();
       }}
       use:jellyPress
@@ -104,7 +95,7 @@
       <span class="lbl"
         ><span class="br" aria-hidden="true">[</span>{#if icon}<span class="ico"
             ><Icon name={icon} weight={7} /></span
-          >{/if}{#if !bare}<span class="txt">{it.label}</span>{/if}<span
+          >{/if}{#if !bare}<span class="txt">{item.label}</span>{/if}<span
           class="br"
           aria-hidden="true">]</span
         ></span
@@ -116,37 +107,19 @@
 </nav>
 
 <style>
-  /* btop's options-menu bar: the active tab is bracketed and a rule runs out to
-     fill the remaining width. The brackets are always laid out and only toggled
-     with visibility, so a tab keeps the same width whether or not it is the
-     active one - the row never reflows when you switch section.
-
-     The accent-colored hotkey digits that used to ride here are gone. The keys
-     still work; Settings › keybinds is what advertises them.
-
-     isolate, so the indicator below can sit at z-index -1: behind the labels,
-     but still in front of whatever surface the bar is drawn on.
-
-     The space between tabs is each tab's own padding rather than a flex gap:
-     a gap is dead ground the pointer crosses, and the indicator collapsed and
-     re-expanded on every crossing. Tiling the buttons edge to edge means
-     moving along the bar is one continuous hover. The label-to-label distance
-     is within a hair of what the gap gave. */
   .tabs {
     display: flex;
     align-items: center;
+    /* The space between tabs is each tab's padding, so the pointer never leaves
+       a tab while moving along the bar and the indicator stays expanded. */
     gap: 0;
     min-width: 0;
+    /* Lets the indicator sit at z-index -1: behind the labels, in front of the
+       surface under the bar. */
     isolation: isolate;
 
-    /* One overshoot, then land. Named once because the slide reads as one
-       motion whether it is the left edge or the right one arriving.
-
-       This is a damped-spring curve cut at the point it first crosses back
-       through 1 - 55.8% of the way along - and re-timed to end there. Run
-       past that point it dips to 0.99 and then creeps back up over the whole
-       remaining 40%, which reads as a second, slower bounce arriving after
-       the element has visibly already stopped. */
+    /* A damped spring cut where it first crosses back through 1 and re-timed
+       to end there: the tail past that point reads as a second bounce. */
     --tab-spring: linear(
       0,
       0.008 2%,
@@ -194,6 +167,8 @@
     text-underline-offset: 3px;
   }
 
+  /* Laid out always and toggled by visibility, so a tab has the same width
+     active or not. */
   .br {
     visibility: hidden;
   }
@@ -201,11 +176,9 @@
     visibility: visible;
   }
 
-  /* The icon sits on the label's own line instead of turning the label into a
-     flex row. The label's box is the line box either way, so the indicator
-     anchored to it lands on the same edges in all three modes, and the bar
-     keeps the height the text gives it - switching modes never jumps the
-     recess the subnav is cut into. */
+  /* Inline on the label's line, not a flex row: the label's box stays the line
+     box, so the indicator anchored to it and the bar's height are the same in
+     all three label modes. */
   .ico {
     display: inline-block;
     vertical-align: middle;
@@ -223,18 +196,9 @@
     margin: 0 var(--pad-2);
   }
 
-  /* One rule under the active tab, anchored to it rather than drawn inside it,
-     so it slides between tabs instead of blinking from one to the next - and
-     grows into a block behind whichever tab the pointer or keyboard is on.
-
-     The anchor is the label, not the button: a button is label plus the
-     padding that separates it from its neighbour, and an underline drawn to
-     that width reads as belonging to the row rather than to the word. The
-     block form adds its own padding back.
-
-     Deliberately no `position: relative` on .tabs or .tab: the indicator's
-     containing block is the surface the bar sits on - the nav's Panel, the
-     subnav's own box - and the anchor only has to be a descendant of that. */
+  /* The anchor is the label, not the button: the button includes the padding
+     between tabs. No `position: relative` on .tabs or .tab, so the indicator's
+     containing block is the surface the bar sits on. */
   .tab.on .lbl,
   .tab:hover .lbl,
   .tab:focus-visible .lbl,
@@ -242,11 +206,9 @@
     anchor-name: var(--tab-anchor);
   }
 
-  /* The active tab gives the name up while a tab is being pointed at, so
-     exactly one element ever holds it. Without this, hovering a tab that sits
-     BEFORE the active one does nothing: duplicate names resolve to the last in
-     tree order, not the nearest. Same for the sticky fallback below - it's
-     just standing in for an "on" tab that isn't there. */
+  /* One element holds the name at a time: duplicate anchor names resolve to
+     the last in tree order, so a hovered tab before the active one would lose
+     to it. The sticky fallback gives the name up the same way. */
   .tabs:has(.tab:is(:hover, :focus-visible))
     .tab.on:not(:hover, :focus-visible)
     .lbl,
@@ -256,20 +218,15 @@
     anchor-name: none;
   }
 
-  /* No tab is genuinely on, so the indicator has nothing to show - but it
-     still sits at the sticky tab's position rather than an unresolved one, so
-     that the first hover afterwards slides and fades in from a real place
-     instead of springing from nowhere. */
+  /* No tab is on: the indicator is hidden but keeps the sticky tab's position,
+     so the next hover animates from a resolved place. */
   .tabs:not(:has(.tab.on)):not(:has(.tab:is(:hover, :focus-visible)))::before {
     opacity: 0;
   }
 
   @supports (anchor-name: --a) {
-    /* An inset resolved off anchor() is measured from that inset's own edge,
-       so subtracting always grows the box outward and adding always pulls it
-       in - top and bottom move in opposite directions for the same sign. The
-       underline is --panel-line-w thick, sitting --pad-1 clear of the
-       descenders. */
+    /* An inset from anchor() is measured from that inset's own edge, so the
+       same sign moves top and bottom in opposite directions. */
     .tabs::before {
       content: "";
       position: absolute;
@@ -282,10 +239,8 @@
       bottom: calc(anchor(bottom) - var(--pad-1) - var(--panel-line-w));
       background: var(--accent-fill);
       border-radius: 0;
-      /* The bounce is horizontal only. Overshoot on the vertical edges makes
-         the underline-to-block growth wobble instead of land - top and bottom
-         each fly past their mark and spring back, and the two crossing is the
-         shake. They get a plain ease and are done before the slide is. */
+      /* Spring on the horizontal edges only: overshoot on top and bottom makes
+         the underline-to-block growth wobble. */
       transition:
         left 320ms var(--tab-spring),
         right 320ms var(--tab-spring),
@@ -296,8 +251,8 @@
         opacity 200ms ease;
     }
 
-    /* Underline to block. The anchor name does not change here, only which
-       edges are read off it, so the insets interpolate. */
+    /* The anchor name stays the same and only the edges read off it change,
+       so the insets interpolate. */
     .tabs:has(.tab:is(:hover, :focus-visible))::before {
       left: calc(anchor(left) - var(--pad-2));
       right: calc(anchor(right) - var(--pad-2));

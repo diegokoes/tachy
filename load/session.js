@@ -9,22 +9,22 @@ const PASSWORD = __ENV.LOGIN_PASSWORD || "tachy-dev-password";
 
 /**
  * One login for the whole run. The session cookie is a stateless signed
- * `exp|email` HMAC with no server-side store, so every VU can share it -- and
- * must: hashPassword is scrypt at N=16384, so a login per iteration would be
- * a self-inflicted DoS rather than a measurement.
+ * `exp|email` HMAC with no server-side store, so every VU can share it, and
+ * must: `hashPassword` is scrypt, so a login per iteration would measure the
+ * hash, not the API.
  */
 export function login() {
-  const res = http.post(
+  const response = http.post(
     `${BASE_URL}/auth/password/login`,
     JSON.stringify({ email: EMAIL, password: PASSWORD }),
     { headers: { "Content-Type": "application/json" } },
   );
-  if (res.status !== 200)
+  if (response.status !== 200)
     fail(
-      `login failed (${res.status}) for ${EMAIL}. ` +
+      `login failed (${response.status}) for ${EMAIL}. ` +
         `Seed the database first: docker compose -p tachy-dev run --rm cli npm run sync -- seed --scale=medium --reset --yes`,
     );
-  const cookie = (res.headers["Set-Cookie"] || "").split(";")[0];
+  const cookie = (response.headers["Set-Cookie"] || "").split(";")[0];
   if (!cookie) fail("login returned no session cookie");
   return cookie;
 }
@@ -48,8 +48,8 @@ export function warmEmbeddings(cookie) {
 export function collectCorpus(cookie) {
   const h = { Cookie: cookie };
   const get = (path) => {
-    const res = http.get(`${BASE_URL}${path}`, { headers: h });
-    return res.status === 200 ? res.json() : [];
+    const response = http.get(`${BASE_URL}${path}`, { headers: h });
+    return response.status === 200 ? response.json() : [];
   };
   return {
     knowledgeIds: get("/api/knowledge?limit=100").map((r) => r.id),

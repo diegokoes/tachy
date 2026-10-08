@@ -1,27 +1,32 @@
+/**
+ * How a tool answers. Everything here shapes what the model reads back: the
+ * redaction, the notes that steer the next call, and the row trimming that
+ * keeps a result inside the size ceiling.
+ */
 import {
   globalRedactionEnabled,
   scrubDeep,
   TokenMap,
 } from "@tachy/core/compliance";
 
-/**
- * How a tool answers. Everything here shapes what the model reads back - the
- * redaction, the notes that steer the next call, and the row trimming that keeps
- * a result inside the size ceiling.
- */
-export function out(obj: unknown) {
+export function out(payload: unknown) {
   return {
     content: [
       {
         type: "text" as const,
-        text: typeof obj === "string" ? obj : JSON.stringify(obj, null, 2),
+        text:
+          typeof payload === "string"
+            ? payload
+            : JSON.stringify(payload, null, 2),
       },
     ],
   };
 }
 
-export function outScrubbed(obj: unknown) {
-  return out(globalRedactionEnabled() ? scrubDeep(obj, new TokenMap()) : obj);
+export function outScrubbed(payload: unknown) {
+  return out(
+    globalRedactionEnabled() ? scrubDeep(payload, new TokenMap()) : payload,
+  );
 }
 
 /**
@@ -41,29 +46,31 @@ export function forAgent<T extends Record<string, unknown>>(rows: T[]) {
       ...rest
     }) => ({
       ...rest,
-      // One spelling of the customer across all three search surfaces, and the
-      // slug rather than the uuid - the uuid is not something to cite or filter by.
+      // One spelling of the customer across all three search surfaces: the
+      // slug, which can be cited and filtered by, where the uuid cannot.
       ...(customer_slug ? { customer: customer_slug } : {}),
     }),
   );
 }
 
 /**
- * An empty result is an answer. Saying so explicitly stops the model filling the
- * silence with a plausible-sounding recollection.
+ * Said on an empty result, so the model does not fill the silence with a
+ * recollection.
  */
 export const NO_MATCHES =
   "no entries cleared the relevance floor for this query - the archive has nothing on this. Say so rather than inferring an answer.";
 
-/** Calibration for the scores every search returns; shared so the three stay in step. */
+/**
+ * Calibration for the scores every search returns, shared so the three stay
+ * in step.
+ */
 export const GRADE_NOTE =
   "Each hit carries relevance (0-1) and grade (strong / good / weak), calibrated against the embedding model's measured distribution: a weak hit is context, not an answer, and saying so beats presenting it as a prior case. Re-running the same search with reworded queries to force a hit is not research.";
 
 /**
- * Fires whenever a result set is not uniformly general. Said once per call, on
- * the results themselves, because attribution is only wrong at the moment the
- * answer is written - and a mixed list is exactly where one install's fix gets
- * retold as how the product behaves.
+ * Attached when any hit belongs to a customer. Said once per call, on the
+ * results: a mixed list is where one install's fix gets retold as how the
+ * product behaves.
  */
 export const CUSTOMER_NOTE =
   "Some hits carry a `customer`: that material came from one customer's install and must be attributed to them by name - never restated as general product behaviour. Hits with customer null are general. Where the two disagree, say so rather than merging them.";

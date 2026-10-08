@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { AppError } from "@tachy/core/infra";
 import { addTeam } from "@tachy/core/catalog";
 import {
-  countAdmins,
+  adminCount,
   createUser,
   getUserByEmail,
   listMemberships,
@@ -34,7 +34,7 @@ describe("upsertUser", () => {
     expect(row.display_name).toBe("Engineer");
   });
 
-  /** A later call with no name must not wipe the name an earlier one set. */
+  // A later call with no name must not wipe the name an earlier one set.
   it("keeps an existing display name when none is given", async () => {
     const id = await upsertUser("eng@example.com", "Engineer");
     await upsertUser("eng@example.com");
@@ -64,11 +64,9 @@ describe("createUser", () => {
     expect(user.has_password).toBe(false);
   });
 
-  /**
-   * `on conflict do nothing` returns no row, so this has to be an error rather
-   * than a silent no-op - otherwise creating a duplicate looks like success and
-   * hands back nothing to act on.
-   */
+  // `on conflict do nothing` returns no row, so this has to be an error rather
+  // than a silent no-op - otherwise creating a duplicate looks like success and
+  // hands back nothing to act on.
   it("refuses an email that already exists", async () => {
     await createUser({ email: "dup@example.com" });
     await expect(createUser({ email: "dup@example.com" })).rejects.toThrow(
@@ -98,10 +96,8 @@ describe("listUsers", () => {
   });
 });
 
-/**
- * The last-admin guards. Both are the same shape and both matter: an instance
- * with no reachable admin cannot be repaired through the UI at all.
- */
+// The last-admin guards. Both are the same shape and both matter: an instance
+// with no reachable admin cannot be repaired through the UI at all.
 describe("the last admin cannot be locked out", () => {
   it("refuses to demote the only admin", async () => {
     const admin = await createUser({
@@ -109,7 +105,7 @@ describe("the last admin cannot be locked out", () => {
       role: "admin",
     });
     await expect(setUserRole(admin.id, "member")).rejects.toThrow(/last admin/);
-    expect(await countAdmins()).toBe(1);
+    expect(await adminCount()).toBe(1);
   });
 
   it("refuses to disable the only admin", async () => {
@@ -124,22 +120,22 @@ describe("the last admin cannot be locked out", () => {
     const first = await createUser({ email: "a@example.com", role: "admin" });
     await createUser({ email: "b@example.com", role: "admin" });
     await setUserRole(first.id, "member");
-    expect(await countAdmins()).toBe(1);
+    expect(await adminCount()).toBe(1);
   });
 
-  /** A disabled admin is not a reachable one, so it does not hold the door. */
+  // A disabled admin is not a reachable one, so it does not hold the door.
   it("does not count a disabled admin toward the quorum", async () => {
     const first = await createUser({ email: "a@example.com", role: "admin" });
     const second = await createUser({ email: "b@example.com", role: "admin" });
     await setUserDisabled(second.id, true);
-    expect(await countAdmins()).toBe(1);
+    expect(await adminCount()).toBe(1);
     await expect(setUserRole(first.id, "member")).rejects.toThrow(/last admin/);
   });
 
   it("promotes a member to admin without complaint", async () => {
     const user = await createUser({ email: "a@example.com" });
     await setUserRole(user.id, "admin");
-    expect(await countAdmins()).toBe(1);
+    expect(await adminCount()).toBe(1);
   });
 });
 
@@ -223,11 +219,9 @@ describe("team membership", () => {
     ]);
   });
 
-  /**
-   * The rung scoped credentials and preferences resolve through. Ambiguous
-   * membership has to be null, not a pick: guessing would resolve one team's
-   * credential for a user who belongs to two.
-   */
+  // The rung scoped credentials and preferences resolve through. Ambiguous
+  // membership has to be null, not a pick: guessing would resolve one team's
+  // credential for a user who belongs to two.
   it("gives a sole team, and null for none or several", async () => {
     const user = await getUserByEmail("a@example.com");
     expect(await userSoleTeamId(user!.id)).toBeNull();
@@ -279,8 +273,8 @@ describe("analysis runs", () => {
     expect(row.output_tokens).toBe(300);
   });
 
-  /** The cost is derived once, at write time, so a later price change cannot
-   *  silently rewrite what a past turn is recorded as having cost. */
+  // The cost is derived once, at write time, so a later price change cannot
+  // rewrite what a past turn is recorded as having cost.
   it("stamps an estimated cost into meta for a priced model", async () => {
     const run = await recordRun({
       mode: "consult",

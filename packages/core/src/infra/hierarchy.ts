@@ -13,9 +13,9 @@ const HIERARCHY_TABLES = [
 export type HierarchyTable = (typeof HIERARCHY_TABLES)[number];
 
 /**
- * Deep enough for any real tree, and the reason the walk terminates at all: if
- * a ring already exists - written before these checks did - an uncapped
- * recursive CTE does not return, and this runs on the save path.
+ * Deep enough for any real tree, and the reason the walk terminates: if a ring
+ * already exists, written before these checks did, an uncapped recursive CTE
+ * does not return, and this runs on the save path.
  */
 const MAX_DEPTH = 64;
 

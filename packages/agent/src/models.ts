@@ -33,24 +33,23 @@ const efforts = (levels: readonly string[] | undefined): AgentEffort[] =>
  * release of ours. Keyed by a digest of the credential, so two people share a
  * list only when they share the key that decides it.
  */
-export function listModels(cfg: ModelListConfig): Promise<ModelChoice[]> {
-  const who = cfg.agentAuth
+export function listModels(config: ModelListConfig): Promise<ModelChoice[]> {
+  const cacheKey = config.agentAuth
     ? createHash("sha256")
-        .update(cfg.agentAuth.value)
+        .update(config.agentAuth.value)
         .digest("hex")
         .slice(0, 16)
     : "server";
-  const key = who;
-  const hit = cache.get(key);
+  const hit = cache.get(cacheKey);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.list;
 
-  const list = withTimeout(claudeModels(cfg));
-  cache.set(key, { at: Date.now(), list });
-  list.catch(() => cache.delete(key));
+  const list = withTimeout(claudeModels(config));
+  cache.set(cacheKey, { at: Date.now(), list });
+  list.catch(() => cache.delete(cacheKey));
   return list;
 }
 
-async function withTimeout<T>(p: Promise<T>): Promise<T> {
+async function withTimeout<T>(promise: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const late = new Promise<never>((_, reject) => {
     timer = setTimeout(
@@ -60,13 +59,13 @@ async function withTimeout<T>(p: Promise<T>): Promise<T> {
     );
   });
   try {
-    return await Promise.race([p, late]);
+    return await Promise.race([promise, late]);
   } finally {
     clearTimeout(timer);
   }
 }
 
-async function claudeModels(cfg: ModelListConfig): Promise<ModelChoice[]> {
+async function claudeModels(config: ModelListConfig): Promise<ModelChoice[]> {
   const abortController = new AbortController();
   // Streaming input that never sends: the session initialises, answers the
   // control request, and is torn down without a model call.
@@ -75,31 +74,34 @@ async function claudeModels(cfg: ModelListConfig): Promise<ModelChoice[]> {
       abortController.signal.addEventListener("abort", resolve),
     );
   }
-  const q = query({
+  const session = query({
     prompt: idle(),
     options: {
       abortController,
       settingSources: [],
       strictMcpConfig: true,
       tools: [],
-      env: claudeEnv(cfg),
+      env: claudeEnv(config),
     },
   });
   try {
-    const rows = await q.supportedModels();
+    const offered = await session.supportedModels();
     const byId = new Map<string, ModelChoice>();
-    for (const m of rows) {
-      const id = m.resolvedModel ?? m.value;
-      if (id === "default" || (m.value === "default" && byId.has(id))) continue;
+    for (const model of offered) {
+      const id = model.resolvedModel ?? model.value;
+      if (id === "default" || (model.value === "default" && byId.has(id)))
+        continue;
       byId.set(id, {
         id,
-        label: m.displayName || id,
-        efforts: m.supportsEffort ? efforts(m.supportedEffortLevels) : [],
+        label: model.displayName || id,
+        efforts: model.supportsEffort
+          ? efforts(model.supportedEffortLevels)
+          : [],
       });
     }
     return [...byId.values()];
   } finally {
     abortController.abort();
-    q.close();
+    session.close();
   }
 }

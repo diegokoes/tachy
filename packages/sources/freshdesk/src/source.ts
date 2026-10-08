@@ -15,13 +15,20 @@ import type {
   SourceFactory,
 } from "@tachy/core/sources";
 
+const PER_PAGE = 100;
+/** Conversations page at the API default: `per_page` is unreliable there. */
+const CONVERSATIONS_PER_PAGE = 30;
+const MAX_AGENT_PAGES = 5;
+const MAX_CONVERSATION_PAGES = 500;
+const MAX_COMPANY_PAGES = 20;
+
 function redactFreshdeskRaw(
   raw: unknown,
   map: TokenMap,
   customerSlug: string | null,
 ): unknown {
-  const t = scrubbableCopy(raw);
-  if (!t) return {};
+  const copy = scrubbableCopy(raw);
+  if (!copy) return {};
   const name = customerStandIn(customerSlug);
   const email = (v: unknown) =>
     typeof v === "string" && v ? map.token("EMAIL", v) : v;
@@ -30,33 +37,40 @@ function redactFreshdeskRaw(
       ? v.map((e) => (typeof e === "string" ? map.token("EMAIL", e) : e))
       : v;
 
-  if (t.email != null) t.email = email(t.email);
-  if (t.phone != null) t.phone = map.token("PHONE", String(t.phone));
-  if (t.name != null) t.name = name;
-  for (const k of ["cc_emails", "fwd_emails", "reply_cc_emails", "to_emails"]) {
-    if (t[k] != null) t[k] = emailList(t[k]);
+  if (copy.email != null) copy.email = email(copy.email);
+  if (copy.phone != null) copy.phone = map.token("PHONE", String(copy.phone));
+  if (copy.name != null) copy.name = name;
+  for (const key of [
+    "cc_emails",
+    "fwd_emails",
+    "reply_cc_emails",
+    "to_emails",
+  ]) {
+    if (copy[key] != null) copy[key] = emailList(copy[key]);
   }
-  if (t.twitter_id != null)
-    t.twitter_id = map.token("HANDLE", String(t.twitter_id));
-  if (t.facebook_id != null)
-    t.facebook_id = map.token("HANDLE", String(t.facebook_id));
+  if (copy.twitter_id != null)
+    copy.twitter_id = map.token("HANDLE", String(copy.twitter_id));
+  if (copy.facebook_id != null)
+    copy.facebook_id = map.token("HANDLE", String(copy.facebook_id));
 
-  if (t.requester && typeof t.requester === "object") {
-    const r = t.requester as Record<string, any>;
-    if (r.email != null) r.email = email(r.email);
-    if (r.mobile != null) r.mobile = map.token("PHONE", String(r.mobile));
-    if (r.phone != null) r.phone = map.token("PHONE", String(r.phone));
-    if (r.name != null) r.name = name;
+  if (copy.requester && typeof copy.requester === "object") {
+    const requester = copy.requester as Record<string, any>;
+    if (requester.email != null) requester.email = email(requester.email);
+    if (requester.mobile != null)
+      requester.mobile = map.token("PHONE", String(requester.mobile));
+    if (requester.phone != null)
+      requester.phone = map.token("PHONE", String(requester.phone));
+    if (requester.name != null) requester.name = name;
   }
-  if (t.company && typeof t.company === "object") {
-    const c = t.company as Record<string, any>;
-    if (c.name != null) c.name = name;
+  if (copy.company && typeof copy.company === "object") {
+    const company = copy.company as Record<string, any>;
+    if (company.name != null) company.name = name;
   }
 
-  scrubStrings(t, ["subject", "description", "description_text"], map);
-  if (t.custom_fields && typeof t.custom_fields === "object")
-    scrubStrings(t.custom_fields, Object.keys(t.custom_fields), map);
-  return t;
+  scrubStrings(copy, ["subject", "description", "description_text"], map);
+  if (copy.custom_fields && typeof copy.custom_fields === "object")
+    scrubStrings(copy.custom_fields, Object.keys(copy.custom_fields), map);
+  return copy;
 }
 
 /** The parts of Freshdesk's payloads this adapter reads. */
@@ -133,110 +147,121 @@ export function fieldChoices(choices: unknown): FlowOption[] {
   if (Array.isArray(choices))
     return choices.map((c) => ({ value: String(c), label: String(c) }));
   if (!choices || typeof choices !== "object") return [];
-  return Object.entries(choices).map(([k, v]) =>
-    Array.isArray(v)
-      ? { value: k, label: String(v[0] ?? k) }
-      : typeof v === "number" || typeof v === "string"
-        ? { value: String(v), label: k }
-        : { value: k, label: k },
-  );
+  return Object.entries(choices).map(([key, choice]) => {
+    if (Array.isArray(choice))
+      return { value: key, label: String(choice[0] ?? key) };
+    if (typeof choice === "number" || typeof choice === "string")
+      return { value: String(choice), label: key };
+    return { value: key, label: key };
+  });
 }
 
 /** Freshdesk adapter. Uses *_text fields, so no HTML stripping is needed. */
-export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
-  const token = cfg.token || freshdeskToken(cfg.slug);
+export const createFreshdeskSource: SourceFactory = (
+  connection,
+): WorkItemSource => {
+  const token = connection.token || freshdeskToken(connection.slug);
   const auth = "Basic " + Buffer.from(`${token}:X`).toString("base64");
-  const base = cfg.baseUrl.replace(/\/$/, "");
+  const base = connection.baseUrl.replace(/\/$/, "");
   const api = base + "/api/v2";
 
   async function get<T>(path: string): Promise<T> {
-    const res = await sourceFetch(
+    const response = await sourceFetch(
       `Freshdesk GET ${path}`,
       api + path,
       { headers: { Authorization: auth } },
-      { connection: cfg.slug },
+      { connection: connection.slug },
     );
-    if (!res.ok)
+    if (!response.ok)
       throw new Error(
-        `Freshdesk GET ${path} -> ${res.status} ${await res.text()}`,
+        `Freshdesk GET ${path} -> ${response.status} ${await response.text()}`,
       );
-    return (await res.json()) as T;
+    return (await response.json()) as T;
   }
 
   let agentNames: Map<string, string> | null = null;
-  /** Best-effort: a non-admin key may not list agents, and unnamed turns still read fine. */
+  /**
+   * Best-effort: a non-admin key may not list agents, and unnamed turns still
+   * read fine.
+   */
   async function loadAgentNames(): Promise<Map<string, string>> {
     if (agentNames) return agentNames;
     const names = new Map<string, string>();
     try {
-      for (let page = 1; page <= 5; page++) {
+      for (let page = 1; page <= MAX_AGENT_PAGES; page++) {
         const batch = await get<FreshdeskAgent[]>(
-          `/agents?per_page=100&page=${page}`,
+          `/agents?per_page=${PER_PAGE}&page=${page}`,
         );
         if (!Array.isArray(batch) || batch.length === 0) break;
-        for (const a of batch) {
-          const n = a?.contact?.name;
-          if (a?.id != null && n) names.set(String(a.id), n);
+        for (const agent of batch) {
+          const name = agent?.contact?.name;
+          if (agent?.id != null && name) names.set(String(agent.id), name);
         }
-        if (batch.length < 100) break;
+        if (batch.length < PER_PAGE) break;
       }
     } catch {
-      /* keep whatever was collected */
+      // Keep whatever was collected.
     }
     agentNames = names;
     return names;
   }
 
   function senderLabel(
-    c: FreshdeskConversation,
+    conversation: FreshdeskConversation,
     names: Map<string, string>,
   ): string | undefined {
-    if (c.automation_id != null) return "support (automated)";
-    if (c.incoming) {
-      const m = String(c.from_email ?? "").match(/[\w.+-]+@[\w.-]+/);
-      if (m) return m[0].toLowerCase();
+    if (conversation.automation_id != null) return "support (automated)";
+    if (conversation.incoming) {
+      const emailMatch = String(conversation.from_email ?? "").match(
+        /[\w.+-]+@[\w.-]+/,
+      );
+      if (emailMatch) return emailMatch[0].toLowerCase();
     }
-    if (c.user_id != null) {
-      const n = names.get(String(c.user_id));
-      if (n) return n;
+    if (conversation.user_id != null) {
+      const name = names.get(String(conversation.user_id));
+      if (name) return name;
     }
     return undefined;
   }
 
   function mapConversation(
-    c: FreshdeskConversation,
+    conversation: FreshdeskConversation,
     names: Map<string, string>,
   ): RawMessage {
     return {
-      externalId: String(c.id),
-      author: c.user_id != null ? String(c.user_id) : undefined,
-      authorLabel: senderLabel(c, names),
-      automated: c.automation_id != null || c.auto_response === true,
-      visibility: c.private ? "private" : "public",
-      direction: c.incoming ? "incoming" : "outgoing",
-      bodyText: c.body_text ?? "",
-      attachments: c.attachments ?? [],
-      createdAt: c.created_at,
+      externalId: String(conversation.id),
+      author:
+        conversation.user_id != null ? String(conversation.user_id) : undefined,
+      authorLabel: senderLabel(conversation, names),
+      automated:
+        conversation.automation_id != null ||
+        conversation.auto_response === true,
+      visibility: conversation.private ? "private" : "public",
+      direction: conversation.incoming ? "incoming" : "outgoing",
+      bodyText: conversation.body_text ?? "",
+      attachments: conversation.attachments ?? [],
+      createdAt: conversation.created_at,
     };
   }
 
   function metadataToItem(
-    t: FreshdeskTicket,
+    ticket: FreshdeskTicket,
     messages: RawMessage[],
   ): RawWorkItem {
     return {
-      externalId: String(t.id),
-      externalUrl: `${base}/a/tickets/${t.id}`,
+      externalId: String(ticket.id),
+      externalUrl: `${base}/a/tickets/${ticket.id}`,
       kind: "ticket",
-      title: t.subject,
-      status: t.status != null ? String(t.status) : undefined,
-      groupKey: t.group_id != null ? String(t.group_id) : undefined,
-      requester: t.requester_id != null ? String(t.requester_id) : undefined,
-      requesterEmail: t.requester?.email,
-      requesterName: t.requester?.name,
-      raw: t,
-      sourceCreatedAt: t.created_at,
-      sourceUpdatedAt: t.updated_at,
+      title: ticket.subject,
+      status: ticket.status != null ? String(ticket.status) : undefined,
+      groupKey: ticket.group_id != null ? String(ticket.group_id) : undefined,
+      requester:
+        ticket.requester_id != null ? String(ticket.requester_id) : undefined,
+      requesterEmail: ticket.requester?.email,
+      requesterName: ticket.requester?.name,
+      raw: ticket,
+      sourceCreatedAt: ticket.created_at,
+      sourceUpdatedAt: ticket.updated_at,
       messages,
     };
   }
@@ -252,7 +277,9 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
       // /groups is admin-only; a plain agent key 403s here and still reads
       // tickets fine, so the failure is reported, not thrown.
       try {
-        const groups = await get<FreshdeskGroup[]>("/groups?per_page=100");
+        const groups = await get<FreshdeskGroup[]>(
+          `/groups?per_page=${PER_PAGE}`,
+        );
         return {
           identity,
           groups: (Array.isArray(groups) ? groups : []).map((g) => ({
@@ -273,47 +300,45 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
       // The id arrives from a route parameter, so it is encoded rather than
       // pasted: unescaped it could carry its own query string into the path.
       const ticketId = encodeURIComponent(externalId);
-      const t = await get<FreshdeskTicket>(
+      const ticket = await get<FreshdeskTicket>(
         `/tickets/${ticketId}?include=requester`,
       );
-      // Conversations page at 30 (the API default); per_page is unreliable on
-      // some endpoints, so the loop keys on the observed default instead.
       const convos: FreshdeskConversation[] = [];
-      for (let page = 1; page <= 500; page++) {
+      for (let page = 1; page <= MAX_CONVERSATION_PAGES; page++) {
         const batch = await get<FreshdeskConversation[]>(
           `/tickets/${ticketId}/conversations?page=${page}`,
         );
         if (!Array.isArray(batch) || batch.length === 0) break;
         convos.push(...batch);
-        if (batch.length < 30) break;
+        if (batch.length < CONVERSATIONS_PER_PAGE) break;
       }
-      // Loaded unconditionally, not just when an agent replied: redaction needs
-      // the colleagues a thread only ever *mentions*, and the map is cached for
-      // the life of the adapter, so this costs one directory read per process.
+      // Loaded even when no agent replied: redaction needs the colleagues a
+      // thread only mentions. The map is cached for the life of the adapter.
       const names = await loadAgentNames();
       const description: RawMessage = {
-        externalId: `desc-${t.id}`,
-        author: t.requester_id != null ? String(t.requester_id) : undefined,
-        authorLabel: t.requester?.email?.toLowerCase(),
+        externalId: `desc-${ticket.id}`,
+        author:
+          ticket.requester_id != null ? String(ticket.requester_id) : undefined,
+        authorLabel: ticket.requester?.email?.toLowerCase(),
         visibility: "public",
         direction: "incoming",
-        bodyText: t.description_text ?? "",
-        attachments: t.attachments ?? [],
-        createdAt: t.created_at,
+        bodyText: ticket.description_text ?? "",
+        attachments: ticket.attachments ?? [],
+        createdAt: ticket.created_at,
       };
       const messages = [
         description,
         ...convos.map((c) => mapConversation(c, names)),
       ].sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
       return {
-        ...metadataToItem(t, messages),
+        ...metadataToItem(ticket, messages),
         knownPeople: [...names.values()],
       };
     },
 
     async listItems(opts: ListOptions) {
       const params = new URLSearchParams();
-      params.set("per_page", "100");
+      params.set("per_page", String(PER_PAGE));
       params.set("order_by", "updated_at");
       params.set("order_type", "asc");
       if (opts.updatedSince) params.set("updated_since", opts.updatedSince);
@@ -328,37 +353,40 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
       if (opts.groupKey)
         items = items.filter((i) => i.groupKey === opts.groupKey);
 
-      const nextCursor = raw.length < 100 ? undefined : String(page + 1);
+      const nextCursor = raw.length < PER_PAGE ? undefined : String(page + 1);
       return { items, nextCursor };
     },
 
     async deleteNote(messageId) {
-      const res = await sourceFetch(
+      const response = await sourceFetch(
         "Freshdesk conversation DELETE",
         `${api}/conversations/${messageId}`,
         { method: "DELETE", headers: { Authorization: auth } },
-        { connection: cfg.slug },
+        { connection: connection.slug },
       );
-      // already gone is the desired end state, not a failure
-      if (!res.ok && res.status !== 404)
+      // Already gone is the wanted end state.
+      if (!response.ok && response.status !== 404)
         throw new Error(
-          `Freshdesk conversation DELETE -> ${res.status} ${await res.text()}`,
+          `Freshdesk conversation DELETE -> ${response.status} ${await response.text()}`,
         );
     },
 
     async options(name, params) {
       if (name === "companies") {
-        const out: FlowOption[] = [];
-        for (let page = 1; page <= 20; page++) {
+        const companies: FlowOption[] = [];
+        for (let page = 1; page <= MAX_COMPANY_PAGES; page++) {
           const batch = await get<FreshdeskCompany[]>(
-            `/companies?per_page=100&page=${page}`,
+            `/companies?per_page=${PER_PAGE}&page=${page}`,
           );
           if (!Array.isArray(batch) || !batch.length) break;
-          for (const c of batch)
-            out.push({ value: String(c.id), label: c.name ?? String(c.id) });
-          if (batch.length < 100) break;
+          for (const company of batch)
+            companies.push({
+              value: String(company.id),
+              label: company.name ?? String(company.id),
+            });
+          if (batch.length < PER_PAGE) break;
         }
-        return out.sort((a, b) => a.label.localeCompare(b.label));
+        return companies.sort((a, b) => a.label.localeCompare(b.label));
       }
       if (name === "company_fields") {
         const fields = await get<FreshdeskTicketField[]>("/company_fields");
@@ -378,8 +406,8 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
             hint: f.default ? undefined : "custom",
           }));
         const want = params.field?.replace(/^item\.raw\./, "");
-        const f = list.find((x) => ticketFieldPath(x) === want);
-        return f ? fieldChoices(f.choices) : [];
+        const field = list.find((x) => ticketFieldPath(x) === want);
+        return field ? fieldChoices(field.choices) : [];
       }
       return [];
     },
@@ -397,7 +425,7 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
       const path = `/tickets/${encodeURIComponent(externalId)}`;
       const ticket = await get<{ tags?: string[] }>(path);
       const tags = changeTagList(ticket.tags ?? [], change);
-      const res = await sourceFetch(
+      const response = await sourceFetch(
         "Freshdesk ticket PUT",
         api + path,
         {
@@ -405,29 +433,29 @@ export const createFreshdeskSource: SourceFactory = (cfg): WorkItemSource => {
           headers: { Authorization: auth, "Content-Type": "application/json" },
           body: JSON.stringify({ tags }),
         },
-        { connection: cfg.slug },
+        { connection: connection.slug },
       );
-      if (!res.ok)
+      if (!response.ok)
         throw new Error(
-          `Freshdesk ticket PUT -> ${res.status} ${await res.text()}`,
+          `Freshdesk ticket PUT -> ${response.status} ${await response.text()}`,
         );
       return tags;
     },
 
-    async postNote(externalId, body, o) {
-      const res = await sourceFetch(
+    async postNote(externalId, body, opts) {
+      const response = await sourceFetch(
         "Freshdesk note POST",
         `${api}/tickets/${encodeURIComponent(externalId)}/notes`,
         {
           method: "POST",
           headers: { Authorization: auth, "Content-Type": "application/json" },
-          body: JSON.stringify({ body, private: o?.private ?? true }),
+          body: JSON.stringify({ body, private: opts?.private ?? true }),
         },
-        { connection: cfg.slug },
+        { connection: connection.slug },
       );
-      if (!res.ok)
+      if (!response.ok)
         throw new Error(
-          `Freshdesk note POST -> ${res.status} ${await res.text()}`,
+          `Freshdesk note POST -> ${response.status} ${await response.text()}`,
         );
     },
   };

@@ -25,13 +25,13 @@ describe("chat uploads", () => {
     );
     const form = new FormData();
     form.append("file", new File(["hello"], "notes.txt"));
-    const res = await app.request("/api/agent/uploads", {
+    const response = await app.request("/api/agent/uploads", {
       method: "POST",
       body: form,
       headers: { Cookie: cookie },
     });
-    expect(res.status).toBe(200);
-    const { path } = await res.json();
+    expect(response.status).toBe(200);
+    const { path } = await response.json();
     const ref = parseUploadRef(path)!;
     expect(ref.filename).toBe("notes.txt");
     const [row] =

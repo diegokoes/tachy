@@ -12,23 +12,24 @@ export function failureThrottle(
   const failures = new Map<string, { count: number; resetAt: number }>();
   return {
     blocked(key: string): boolean {
-      const f = failures.get(key);
-      return !!f && f.resetAt > Date.now() && f.count >= max;
+      const entry = failures.get(key);
+      return !!entry && entry.resetAt > Date.now() && entry.count >= max;
     },
     fail(key: string): void {
-      const f = failures.get(key);
-      if (!f || f.resetAt < Date.now())
+      const entry = failures.get(key);
+      if (!entry || entry.resetAt < Date.now())
         failures.set(key, { count: 1, resetAt: Date.now() + windowMs });
-      else f.count++;
+      else entry.count++;
 
       if (failures.size > maxTracked) {
         const now = Date.now();
-        for (const [k, v] of failures) if (v.resetAt < now) failures.delete(k);
+        for (const [candidate, counted] of failures)
+          if (counted.resetAt < now) failures.delete(candidate);
         // Still full means every window is live - drop the oldest insertions,
         // which Map iterates first. Losing one is at worst a few extra tries.
         if (failures.size > maxTracked)
-          for (const k of failures.keys()) {
-            failures.delete(k);
+          for (const oldest of failures.keys()) {
+            failures.delete(oldest);
             if (failures.size <= maxTracked) break;
           }
       }

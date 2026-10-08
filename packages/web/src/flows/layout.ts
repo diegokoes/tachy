@@ -101,30 +101,30 @@ export function layoutFlow(graph: FlowGraph): Drawn {
   const minY = Math.min(...all.map((d) => d.x ?? 0));
   const x0 = COL;
   const y0 = -minY + NODE_H;
-  const nodes: Placed[] = all.map((d) => {
-    const { w, h: hh } = size(d.data);
-    const cx = x0 + (d.y ?? 0);
-    const cy = y0 + (d.x ?? 0);
+  const nodes: Placed[] = all.map((laid) => {
+    const { w, h: height } = size(laid.data);
+    const cx = x0 + (laid.y ?? 0);
+    const cy = y0 + (laid.x ?? 0);
     return {
-      node: d.data,
+      node: laid.data,
       x: cx,
-      y: cy - hh / 2,
+      y: cy - height / 2,
       w,
-      h: hh,
+      h: height,
     };
   });
   const at = new Map(nodes.map((p) => [p.node.key, p]));
 
   const links: Drawn["links"] = [];
-  for (const d of all)
-    for (const c of d.children ?? []) {
-      const a = at.get(d.data.key)!;
-      const b = at.get(c.data.key)!;
+  for (const laid of all)
+    for (const child of laid.children ?? []) {
+      const from = at.get(laid.data.key)!;
+      const to = at.get(child.data.key)!;
       links.push({
-        key: `${a.node.key}>${b.node.key}`,
-        from: [a.x + a.w, a.y + a.h / 2],
-        to: [b.x, b.y + b.h / 2],
-        branch: c.data.kind !== "start" ? c.data.branch : undefined,
+        key: `${from.node.key}>${to.node.key}`,
+        from: [from.x + from.w, from.y + from.h / 2],
+        to: [to.x, to.y + to.h / 2],
+        branch: child.data.kind !== "start" ? child.data.branch : undefined,
       });
     }
 
@@ -133,22 +133,22 @@ export function layoutFlow(graph: FlowGraph): Drawn {
   const count = graph.triggers.length;
   const stackH = count * ROW;
   const top = start.y + start.h / 2 - stackH / 2 + (ROW - NODE_H) / 2;
-  const TW = NODE_W - 20;
+  const triggerWidth = NODE_W - 20;
   const triggers = graph.triggers.map((trigger, i) => ({
     trigger,
     x: tx,
     y: top + i * ROW,
-    w: TW,
+    w: triggerWidth,
     h: NODE_H,
   }));
-  for (const t of triggers)
+  for (const placed of triggers)
     links.push({
-      key: `trigger:${t.trigger.id}`,
-      from: [t.x + t.w, t.y + t.h / 2],
+      key: `trigger:${placed.trigger.id}`,
+      from: [placed.x + placed.w, placed.y + placed.h / 2],
       to: [start.x, start.y + start.h / 2],
     });
   const addTrigger = {
-    x: tx + TW / 2 - SLOT / 2,
+    x: tx + triggerWidth / 2 - SLOT / 2,
     y: count
       ? top + count * ROW - (ROW - NODE_H) / 2 + 6
       : start.y + start.h / 2 - SLOT / 2,
@@ -163,12 +163,12 @@ export function layoutFlow(graph: FlowGraph): Drawn {
   const topmost = Math.min(0, ...triggers.map((t) => t.y), addTrigger.y);
   if (topmost < 0) {
     const shift = -topmost + NODE_H / 2;
-    for (const p of nodes) p.y += shift;
-    for (const t of triggers) t.y += shift;
+    for (const placed of nodes) placed.y += shift;
+    for (const placed of triggers) placed.y += shift;
     addTrigger.y += shift;
-    for (const l of links) {
-      l.from = [l.from[0], l.from[1] + shift];
-      l.to = [l.to[0], l.to[1] + shift];
+    for (const link of links) {
+      link.from = [link.from[0], link.from[1] + shift];
+      link.to = [link.to[0], link.to[1] + shift];
     }
     return {
       nodes,
@@ -194,6 +194,6 @@ export const linkPath = (
   [x1, y1]: [number, number],
   [x2, y2]: [number, number],
 ) => {
-  const mx = (x1 + x2) / 2;
-  return `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+  const midX = (x1 + x2) / 2;
+  return `M${x1},${y1} C${midX},${y1} ${midX},${y2} ${x2},${y2}`;
 };

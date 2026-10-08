@@ -38,7 +38,9 @@ describe("searchKnowledge", () => {
     const rows = await searchKnowledge("scanner offline E-204");
     expect(rows[0].issue_summary).toMatch(/scanner/i);
     expect(rows.every((r) => r.status === "approved")).toBe(true);
-    expect(rows.some((r) => r.issue_summary.includes("draft"))).toBe(false);
+    expect(rows.some((r) => String(r.issue_summary).includes("draft"))).toBe(
+      false,
+    );
   });
 
   it("finds a semantic match even with no shared keywords", async () => {
@@ -183,12 +185,12 @@ describe("promoted facets (cloud / quality)", () => {
 
     const [conn] =
       await sql`select id from source_connections where slug = 'test-freshdesk'`;
-    const [wi] = await sql`
+    const [workItem] = await sql`
       insert into work_items (source_connection_id, external_id, title, observed_version)
       values (${conn.id}, 'v-1', 'versioned ticket', '1.9.2') returning id
     `;
     const seeded = await saveKnowledgeEntry({
-      workItemId: wi.id as string,
+      workItemId: workItem.id as string,
       issueSummary: "seeded",
     });
     expect((await getKnowledgeEntry(seeded.id)).affected_version).toBe("1.9.2");
@@ -253,7 +255,9 @@ describe("deprecation lifecycle", () => {
     expect(deprecated).toBeDefined();
     expect(deprecated!.status).toBe("deprecated");
     expect(deprecated!.superseded_by).toBe(fresh.id);
-    expect(rows.some((r) => r.issue_summary.includes("hidden"))).toBe(false);
+    expect(rows.some((r) => String(r.issue_summary).includes("hidden"))).toBe(
+      false,
+    );
   });
 
   it("validates the supersede link: unknown target and self-reference are rejected", async () => {
@@ -303,12 +307,12 @@ describe("deprecation lifecycle", () => {
       status: "approved",
       issueSummary: "x",
     });
-    const fb = await addFeedback({
+    const feedback = await addFeedback({
       knowledgeEntryId: row.id,
       kind: "deprecation",
       comment: "fixed since v2.3",
     });
-    expect(fb.kind).toBe("deprecation");
+    expect(feedback.kind).toBe("deprecation");
     await expect(
       sql`insert into knowledge_feedback (knowledge_entry_id, kind) values (${row.id}, 'bogus')`,
     ).rejects.toThrow();
@@ -372,27 +376,27 @@ describe("listKnowledgeFacets", () => {
 
   it("counts every facet value present", async () => {
     await seed();
-    const f = await listKnowledgeFacets();
+    const facets = await listKnowledgeFacets();
 
-    expect(f.confidence).toEqual([
+    expect(facets.confidence).toEqual([
       { value: "low", count: 2 },
       { value: "high", count: 1 },
     ]);
-    expect(f.tags).toEqual([
+    expect(facets.tags).toEqual([
       { value: "printing", count: 2 },
       { value: "caching", count: 1 },
       { value: "firmware", count: 1 },
     ]);
-    expect(f.hidden_fix).toEqual([{ value: "true", count: 1 }]);
+    expect(facets.hidden_fix).toEqual([{ value: "true", count: 1 }]);
   });
 
   it("narrows one facet's options by the other filters", async () => {
     await seed();
-    const f = await listKnowledgeFacets({ confidence: "low" });
+    const facets = await listKnowledgeFacets({ confidence: "low" });
 
     // Only the two low-confidence entries are in scope, so "firmware" - which
     // only the high-confidence one carries - is no longer offered.
-    expect(f.tags).toEqual([
+    expect(facets.tags).toEqual([
       { value: "caching", count: 1 },
       { value: "printing", count: 1 },
     ]);
@@ -400,11 +404,11 @@ describe("listKnowledgeFacets", () => {
 
   it("counts a facet with its own selection lifted, so it stays switchable", async () => {
     await seed();
-    const f = await listKnowledgeFacets({ confidence: "low" });
+    const facets = await listKnowledgeFacets({ confidence: "low" });
 
     // Narrowing by confidence must not reduce the confidence list to itself,
     // or there would be no way back to "high" without clearing the filter.
-    expect(f.confidence).toEqual([
+    expect(facets.confidence).toEqual([
       { value: "low", count: 2 },
       { value: "high", count: 1 },
     ]);
@@ -495,23 +499,23 @@ describe("customer scoping", () => {
   });
 
   it("never inherits the ticket's customer - it has to be stated", async () => {
-    const c = await addCustomer({ name: "Logista", slug: "logista" });
-    const [wi] = await sql`
+    const customer = await addCustomer({ name: "Logista", slug: "logista" });
+    const [workItem] = await sql`
       insert into work_items (source_connection_id, external_id, kind, customer_id)
-      select id, 'wi-cust-1', 'ticket', ${c.id} from source_connections limit 1
+      select id, 'wi-cust-1', 'ticket', ${customer.id} from source_connections limit 1
       returning id
     `;
     // Learned on Logista's ticket, but a lesson about the product.
     const general = await saveKnowledgeEntry({
       status: "approved",
-      workItemId: wi.id,
+      workItemId: workItem.id,
       issueSummary: "true of the product, found on their ticket",
     });
     expect((await getKnowledgeEntry(general.id)).customer_slug).toBeNull();
 
     const theirs = await saveKnowledgeEntry({
       status: "approved",
-      workItemId: wi.id,
+      workItemId: workItem.id,
       customerSlug: "logista",
       issueSummary: "only true of their install",
     });

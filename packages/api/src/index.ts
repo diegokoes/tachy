@@ -25,10 +25,12 @@ const oidc =
     ? { ...env.oidc, sessionSecret: env.sessionSecret }
     : undefined;
 
-/* With TACHY_EMBED_URL the model lives in the embedder service and this process,
-   its MCP children and the workers all embed over HTTP with the shared secret.
-   Without it, the model runs in a worker thread here and the children reach it
-   through this process with a per-boot secret. */
+/**
+ * With TACHY_EMBED_URL the model lives in the embedder service, and this
+ * process, its MCP children and the workers all embed over HTTP with the
+ * shared secret. Without it, the model runs in a worker thread here and the
+ * children reach it through this process with a per-boot secret.
+ */
 const externalEmbedder = process.env.TACHY_EMBED_URL;
 const internalSecret =
   process.env.TACHY_INTERNAL_SECRET || randomBytes(32).toString("hex");
@@ -131,10 +133,12 @@ console.log(
   `tachy api listening on :${env.port} [auth=${env.authMode}]${serveWeb ? ` (serving SPA from ${webRoot})` : ""}`,
 );
 
-/* Jobs run in a dedicated worker service in production (TACHY_WORKER=external).
-   Without one, this process works every class itself, so a single `npm run api`
-   still syncs, reindexes and sweeps, with a slot per class so an hour-long
-   reindex does not hold up a sync. */
+/**
+ * Jobs run in a dedicated worker service in production (TACHY_WORKER=external).
+ * Without one, this process works every class itself, so a single
+ * `npm run api` still syncs, reindexes and sweeps, with a slot per class so a
+ * long reindex does not hold up a sync.
+ */
 let jobWorker: Awaited<ReturnType<typeof startJobProcess>> | null = null;
 registerAgentFlowActions();
 if (process.env.TACHY_WORKER !== "external")

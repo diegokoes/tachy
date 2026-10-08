@@ -97,14 +97,14 @@ beforeEach(async () => {
     role: "admin",
   });
   cookie = await loginCookie(app, "admin@example.com", "a-long-password");
-  const res = await admin("/api/buckets", "POST", {
+  const response = await admin("/api/buckets", "POST", {
     slug: "track-and-trace",
     name: "Track & Trace docs",
     description: "The public Track & Trace knowledge base.",
     teams: ["test-team"],
   });
-  expect(res.status).toBe(201);
-  token = ((await res.json()) as { token: string }).token;
+  expect(response.status).toBe(201);
+  token = ((await response.json()) as { token: string }).token;
 });
 
 describe("bucket admin", () => {
@@ -124,8 +124,8 @@ describe("bucket admin", () => {
   });
 
   it("rotating the token retires the old one", async () => {
-    const res = await admin("/api/buckets/track-and-trace/token", "POST");
-    const fresh = ((await res.json()) as { token: string }).token;
+    const response = await admin("/api/buckets/track-and-trace/token", "POST");
+    const fresh = ((await response.json()) as { token: string }).token;
     expect((await push("track-and-trace", token, batch([EOID]))).status).toBe(
       401,
     );
@@ -137,19 +137,19 @@ describe("bucket admin", () => {
   it("is for app admins only", async () => {
     await createUser({ email: "m@example.com", password: "a-long-password" });
     const member = await loginCookie(app, "m@example.com", "a-long-password");
-    const res = await app.request("/api/buckets", {
+    const response = await app.request("/api/buckets", {
       headers: { Cookie: member },
     });
-    expect(res.status).toBe(403);
+    expect(response.status).toBe(403);
   });
 
   it("rejects an unknown team", async () => {
-    const res = await admin("/api/buckets", "POST", {
+    const response = await admin("/api/buckets", "POST", {
       slug: "other",
       name: "Other",
       teams: ["no-such-team"],
     });
-    expect(res.status).toBe(400);
+    expect(response.status).toBe(400);
   });
 });
 
@@ -205,28 +205,31 @@ describe("ingest", () => {
   });
 
   it("is not opened by a session cookie", async () => {
-    const res = await app.request("/ingest/buckets/track-and-trace/batches", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: cookie },
-      body: JSON.stringify(batch([EOID])),
-    });
-    expect(res.status).toBe(401);
+    const response = await app.request(
+      "/ingest/buckets/track-and-trace/batches",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookie },
+        body: JSON.stringify(batch([EOID])),
+      },
+    );
+    expect(response.status).toBe(401);
   });
 
   it("names the version it accepts", async () => {
-    const res = await push("track-and-trace", token, {
+    const response = await push("track-and-trace", token, {
       ...batch([EOID]),
       version: 2,
     });
-    expect(res.status).toBe(400);
-    expect(JSON.stringify(await res.json())).toContain(
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toContain(
       `accepts version ${BUCKET_BATCH_VERSION}`,
     );
   });
 
   it("upserts, skips unchanged text, deletes and prunes", async () => {
-    let res = await push("track-and-trace", token, batch([EOID, SERIAL]));
-    expect(await res.json()).toMatchObject({
+    let response = await push("track-and-trace", token, batch([EOID, SERIAL]));
+    expect(await response.json()).toMatchObject({
       upserted: 2,
       unchanged: 0,
       deleted: 0,
@@ -234,12 +237,12 @@ describe("ingest", () => {
 
     const [{ n: chunksBefore }] =
       await sql`select count(*)::int as n from bucket_doc_chunks`;
-    res = await push(
+    response = await push(
       "track-and-trace",
       token,
       batch([{ ...EOID, version: 2 }]),
     );
-    expect(await res.json()).toMatchObject({ upserted: 0, unchanged: 1 });
+    expect(await response.json()).toMatchObject({ upserted: 0, unchanged: 1 });
     const [kept] =
       await sql`select version from bucket_docs where external_key = ${EOID.key}`;
     expect(kept.version).toBe("2");
@@ -247,20 +250,20 @@ describe("ingest", () => {
       await sql`select count(*)::int as n from bucket_doc_chunks`;
     expect(chunksAfter).toBe(chunksBefore);
 
-    res = await push(
+    response = await push(
       "track-and-trace",
       token,
       batch([], { deletes: [SERIAL.key] }),
     );
-    expect(await res.json()).toMatchObject({ deleted: 1 });
+    expect(await response.json()).toMatchObject({ deleted: 1 });
 
     await push("track-and-trace", token, batch([SERIAL]));
-    res = await push(
+    response = await push(
       "track-and-trace",
       token,
       batch([SERIAL], { sync: "full-1", mode: "full", prune: true }),
     );
-    expect(await res.json()).toMatchObject({ pruned: 1 });
+    expect(await response.json()).toMatchObject({ pruned: 1 });
     const keys = await sql`select external_key from bucket_docs`;
     expect(keys.map((k) => k.external_key)).toEqual([SERIAL.key]);
 
@@ -296,31 +299,31 @@ describe("ingest", () => {
 describe("search", () => {
   it("finds text before the embed job runs, and by meaning after", async () => {
     await push("track-and-trace", token, batch([EOID, SERIAL]));
-    const [b] = await sql`select id from buckets`;
+    const [bucket] = await sql`select id from buckets`;
 
-    const lexical = await searchBucket("EOID", { bucketIds: [b.id] });
+    const lexical = await searchBucket("EOID", { bucketIds: [bucket.id] });
     expect(lexical[0]).toMatchObject({
       key: EOID.key,
       bucket: "track-and-trace",
       breadcrumb: "Track & Trace > Registration",
     });
 
-    expect(await embedBucketChunks({ bucketId: b.id })).toBeGreaterThan(0);
+    expect(await embedBucketChunks({ bucketId: bucket.id })).toBeGreaterThan(0);
     const [{ n }] =
       await sql`select count(*)::int as n from bucket_doc_chunks where embedding is null`;
     expect(n).toBe(0);
     const semantic = await searchBucket(
       "which authority issues economic operator identifiers",
-      { bucketIds: [b.id] },
+      { bucketIds: [bucket.id] },
     );
     expect(semantic[0]?.key).toBe(EOID.key);
   });
 
   it("narrows to a branch of the tree", async () => {
     await push("track-and-trace", token, batch([EOID, SERIAL]));
-    const [b] = await sql`select id from buckets`;
+    const [bucket] = await sql`select id from buckets`;
     const rows = await searchBucket("serialization EOID", {
-      bucketIds: [b.id],
+      bucketIds: [bucket.id],
       pathPrefix: ["Guides"],
     });
     expect(rows.map((r) => r.key)).toEqual([SERIAL.key]);
@@ -365,12 +368,12 @@ describe("who can read a bucket", () => {
     await expect(action.run(ctx(outsider.id), params)).rejects.toThrow(
       /not shared/,
     );
-    const out = (await action.run(ctx(member.id), params)) as {
+    const output = (await action.run(ctx(member.id), params)) as {
       count: number;
       text: string;
     };
-    expect(out.count).toBe(1);
-    expect(out.text).toContain(EOID.url);
+    expect(output.count).toBe(1);
+    expect(output.text).toContain(EOID.url);
 
     expect(
       await listOptions("buckets", {
@@ -397,19 +400,20 @@ describe("bucket tools", () => {
   let client: Client;
 
   beforeAll(async () => {
-    const [a, b] = InMemoryTransport.createLinkedPair();
-    await server.connect(a);
+    const [serverTransport, clientTransport] =
+      InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
     client = new Client({ name: "test", version: "0" });
-    await client.connect(b);
+    await client.connect(clientTransport);
   });
 
   async function call(name: string, args: Record<string, unknown> = {}) {
-    const res = (await client.callTool({ name, arguments: args })) as {
+    const answer = (await client.callTool({ name, arguments: args })) as {
       content: { text: string }[];
       isError?: boolean;
     };
-    const text = res.content[0]?.text ?? "";
-    return { isError: res.isError === true, text, json: JSON.parse(text) };
+    const text = answer.content[0]?.text ?? "";
+    return { isError: answer.isError === true, text, json: JSON.parse(text) };
   }
 
   it("lists, searches and fetches, citing urls", async () => {
@@ -448,10 +452,10 @@ describe("bucket tools", () => {
   });
 
   it("errors on an unknown bucket", async () => {
-    const res = await client.callTool({
+    const answer = await client.callTool({
       name: "search_bucket",
       arguments: { bucket: "nope", query: "x" },
     });
-    expect(res.isError).toBe(true);
+    expect(answer.isError).toBe(true);
   });
 });

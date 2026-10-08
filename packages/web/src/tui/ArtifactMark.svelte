@@ -1,14 +1,13 @@
 <script lang="ts">
   /**
-   * Three rings on an equilateral triangle, centred on the rotation point.
+   * Three rings on an equilateral triangle, centred on the rotation point. The
+   * centroid sits at (50,50), not where a bounding-box centring would put it,
+   * because this mark spins: the swept circle has to be centred, or the
+   * triangle orbits the middle instead of turning in place.
    *
-   * The centroid sits at (50,50) rather than where a bounding-box centring
-   * would put it, because this mark spins: the swept circle has to be centred,
-   * or the triangle orbits the middle instead of turning in place.
-   *
-   * `spread` is the circumradius. Growing it moves the rings apart without
-   * touching their radius - which is the whole point, since the frame around
-   * them scales and the rings must not.
+   * `spread` is the circumradius: growing it moves the rings apart without
+   * touching their radius, since the frame around them scales and the rings
+   * must not.
    */
   let {
     size = "1em",
@@ -16,12 +15,12 @@
     weight = 6,
   }: { size?: string; spread?: number; weight?: number } = $props();
 
-  const S = Math.sqrt(3) / 2;
+  const SIN_60 = Math.sqrt(3) / 2;
   /** Unit vectors to the three vertices, apex up. */
   const DIRS: [number, number][] = [
     [0, -1],
-    [-S, 0.5],
-    [S, 0.5],
+    [-SIN_60, 0.5],
+    [SIN_60, 0.5],
   ];
 </script>
 

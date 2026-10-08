@@ -14,13 +14,13 @@
 
   /** Memberships carry only a user id, so the names come from the user list. */
   const nameOf = (id: string) => {
-    const u = users.data.find((x) => x.id === id);
-    return u ? (u.display_name ?? u.email) : id;
+    const user = users.data.find((x) => x.id === id);
+    return user ? (user.display_name ?? user.email) : id;
   };
 
-  /* A read of who is where, not another place to edit it. Membership is
-     changed on the person, in the users list, because that is the record that
-     carries the rest of their account. */
+  // A read of who is where, not another place to edit it. Membership is changed
+  // on the person, in the users list, because that is the record that carries
+  // the rest of their account.
   const rows = $derived(
     [...teams.data].sort((a, b) => a.name.localeCompare(b.name)),
   );
@@ -46,12 +46,12 @@
   onMount(reloadRoster);
 </script>
 
-{#snippet adminsCell(tm: Team)}
-  {@const list = admins(tm)}
-  {#if list.length}
+{#snippet adminsCell(team: Team)}
+  {@const teamAdmins = admins(team)}
+  {#if teamAdmins.length}
     <span class="chips">
-      {#each list as m (m.user_id)}
-        <Chip tone="accent">{nameOf(m.user_id)}</Chip>
+      {#each teamAdmins as membership (membership.user_id)}
+        <Chip tone="accent">{nameOf(membership.user_id)}</Chip>
       {/each}
     </span>
   {:else}

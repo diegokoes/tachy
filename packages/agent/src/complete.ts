@@ -30,7 +30,7 @@ export interface CompletionResult {
  */
 export async function completeOnce(
   prompt: string,
-  cfg: CompletionConfig,
+  config: CompletionConfig,
   opts: { timeoutMs?: number } = {},
 ): Promise<CompletionResult> {
   const controller = new AbortController();
@@ -44,13 +44,13 @@ export async function completeOnce(
       inputTokens: null,
       outputTokens: null,
     };
-    for await (const msg of query({
+    for await (const sdkMessage of query({
       prompt,
       options: {
         abortController: controller,
-        model: effectiveModel(cfg),
-        ...(cfg.effort ? { effort: cfg.effort } : {}),
-        ...(cfg.systemPrompt ? { systemPrompt: cfg.systemPrompt } : {}),
+        model: effectiveModel(config),
+        ...(config.effort ? { effort: config.effort } : {}),
+        ...(config.systemPrompt ? { systemPrompt: config.systemPrompt } : {}),
         settingSources: [],
         strictMcpConfig: true,
         tools: [],
@@ -59,20 +59,20 @@ export async function completeOnce(
         allowedTools: [],
         mcpServers: {},
         includePartialMessages: false,
-        env: claudeEnv(cfg),
+        env: claudeEnv(config),
       },
     })) {
-      if (msg.type === "result") {
-        const r = msg as {
+      if (sdkMessage.type === "result") {
+        const resultMessage = sdkMessage as {
           result?: string;
           total_cost_usd?: number;
           usage?: { input_tokens?: number; output_tokens?: number };
         };
-        text = r.result ?? "";
-        costUsd = r.total_cost_usd ?? 0;
+        text = resultMessage.result ?? "";
+        costUsd = resultMessage.total_cost_usd ?? 0;
         usage = {
-          inputTokens: r.usage?.input_tokens ?? null,
-          outputTokens: r.usage?.output_tokens ?? null,
+          inputTokens: resultMessage.usage?.input_tokens ?? null,
+          outputTokens: resultMessage.usage?.output_tokens ?? null,
         };
       }
     }

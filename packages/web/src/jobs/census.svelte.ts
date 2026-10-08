@@ -1,5 +1,6 @@
 import { api } from "../api";
 import { createResource } from "../resource.svelte";
+import { followPeriod, periodQuery } from "../admin/period.svelte";
 import type { JobCensus } from "@tachy/contract";
 
 const zero = { light: 0, heavy: 0 };
@@ -20,6 +21,7 @@ export const EMPTY_JOBS: JobCensus = {
   per_day: [],
   by_kind: [],
   by_queue: [],
+  wait_per_day: [],
   success: {
     light: { finished: 0, succeeded: 0 },
     heavy: { finished: 0, succeeded: 0 },
@@ -38,19 +40,19 @@ export const EMPTY_JOBS: JobCensus = {
 };
 
 /**
- * The workers page's census, as a module singleton for the same reason the
- * admin census is one: the overview and the failures dialog over it are
- * siblings reading one answer, and a pause or delete in the jobs list has to
- * be able to refresh it.
- *
- * Laid over EMPTY_JOBS so a newer bundle against an older API loses a figure
- * rather than the panel.
+ * The workers page's census, a module singleton for the reason the admin census
+ * is one: the overview and the failures dialog over it are siblings reading one
+ * answer, and a pause or delete in the jobs list has to be able to refresh it.
+ * Laid over EMPTY_JOBS so a newer bundle against an older API loses a figure,
+ * not the panel.
  */
 export const jobs = createResource(async () => {
-  const got = await api.get<Partial<JobCensus>>("/jobs/census");
+  const got = await api.get<Partial<JobCensus>>(`/jobs/census${periodQuery()}`);
   return {
     ...EMPTY_JOBS,
     ...got,
     definitions: { ...EMPTY_JOBS.definitions, ...got.definitions },
   } as JobCensus;
 }, EMPTY_JOBS);
+
+followPeriod(() => void jobs.reload());

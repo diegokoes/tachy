@@ -13,48 +13,46 @@ import {
 
 afterAll(() => sql.end());
 
-/** key -> id, so a golden expectation names an entry rather than a uuid. */
-const ids = new Map<string, string>();
+const idByKey = new Map<string, string>();
 
 beforeAll(async () => {
   await resetData();
   const productId = await tpdProductId();
-  for (const e of KNOWLEDGE) {
+  for (const entry of KNOWLEDGE) {
     const row = await saveKnowledgeEntry({
       productId,
       status: "approved",
-      issueSummary: e.issueSummary,
-      symptoms: e.symptoms,
-      signals: e.signals,
-      rootCause: e.rootCause,
-      resolution: e.resolution,
-      cloud: e.cloud,
-      affectedVersion: e.affectedVersion,
-      tags: e.tags,
+      issueSummary: entry.issueSummary,
+      symptoms: entry.symptoms,
+      signals: entry.signals,
+      rootCause: entry.rootCause,
+      resolution: entry.resolution,
+      cloud: entry.cloud,
+      affectedVersion: entry.affectedVersion,
+      tags: entry.tags,
     });
-    ids.set(e.key, row.id as string);
+    idByKey.set(entry.key, row.id as string);
   }
-  for (const d of REFERENCE) {
+  for (const doc of REFERENCE) {
     const row = await saveReferenceDoc({
       productId,
-      title: d.title,
-      body: d.body,
+      title: doc.title,
+      body: doc.body,
       status: "approved",
     });
-    ids.set(d.key, row.id as string);
+    idByKey.set(doc.key, row.id as string);
   }
 }, 300_000);
 
 describe("nonsense queries return nothing", () => {
-  // The defect this whole design exists for: with a blended score computed in
-  // the SELECT list and a cosine that floors around 0.6, `score > 0.02` could
-  // not reject anything, so "ñ" returned a full page of confident-looking rows.
-  it.each(NONSENSE)("knowledge: %j", async (q) => {
-    expect(await searchKnowledge(q)).toEqual([]);
+  // Raw cosine never starts at zero, so these are rejected by the vector leg's
+  // floor and by having no lexical candidates, not by a score threshold.
+  it.each(NONSENSE)("knowledge: %j", async (query) => {
+    expect(await searchKnowledge(query)).toEqual([]);
   });
 
-  it.each(NONSENSE)("reference: %j", async (q) => {
-    expect(await searchReferenceDocs(q)).toEqual([]);
+  it.each(NONSENSE)("reference: %j", async (query) => {
+    expect(await searchReferenceDocs(query)).toEqual([]);
   });
 });
 
@@ -62,28 +60,28 @@ describe("golden query set", () => {
   it.each(GOLDEN)("[$why] $q -> $expect", async ({ q, expect: key }) => {
     const rows = await searchKnowledge(q);
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows[0].id).toBe(ids.get(key));
+    expect(rows[0].id).toBe(idByKey.get(key));
   });
 
   it("holds recall@3 and MRR above their floors", async () => {
     let hits = 0;
     let reciprocalRankSum = 0;
-    for (const g of GOLDEN) {
-      const rows = await searchKnowledge(g.q);
-      const rank = rows.findIndex((r) => r.id === ids.get(g.expect));
+    for (const golden of GOLDEN) {
+      const rows = await searchKnowledge(golden.q);
+      const rank = rows.findIndex((r) => r.id === idByKey.get(golden.expect));
       if (rank >= 0 && rank < 3) hits++;
       if (rank >= 0) reciprocalRankSum += 1 / (rank + 1);
     }
     const recallAt3 = hits / GOLDEN.length;
     const mrr = reciprocalRankSum / GOLDEN.length;
-    // Floors, not targets. They fail loudly if a change regresses retrieval.
+    // Floors: a change that regresses retrieval fails here.
     expect(recallAt3).toBeGreaterThanOrEqual(0.9);
     expect(mrr).toBeGreaterThanOrEqual(0.9);
   });
 
   it("finds a reference doc by a phrase only its body contains", async () => {
     const rows = await searchReferenceDocs("queue does not drain");
-    expect(rows[0]?.id).toBe(ids.get("deploy-runbook"));
+    expect(rows[0]?.id).toBe(idByKey.get("deploy-runbook"));
     expect(rows[0].grade).not.toBe("weak");
   });
 });
@@ -102,19 +100,18 @@ describe("grading", () => {
 
   it("ranks an unrelated-but-admitted row below a real match", async () => {
     const rows = await searchKnowledge("printer label problem");
-    expect(rows[0].id).toBe(ids.get("printer-023"));
-    for (const r of rows.slice(1)) expect(r.relevance).toBeLessThan(GOOD);
+    expect(rows[0].id).toBe(idByKey.get("printer-023"));
+    for (const row of rows.slice(1)) expect(row.relevance).toBeLessThan(GOOD);
   });
 });
 
 describe("calibration constants", () => {
-  // These are measurements of one model's distribution. Changing
-  // TACHY_EMBED_MODEL without re-deriving them silently skews every gauge and
-  // every agent-facing grade, so it has to fail here instead.
+  // The constants are measured for one model. A change of `TACHY_EMBED_MODEL`
+  // that does not re-derive them skews every gauge and grade with no error.
   it("separates the noise floor from real matches", async () => {
     let worstTrue = 1;
-    for (const g of GOLDEN) {
-      const [top] = await searchKnowledge(g.q);
+    for (const golden of GOLDEN) {
+      const [top] = await searchKnowledge(golden.q);
       if (top?.cos_sim) worstTrue = Math.min(worstTrue, Number(top.cos_sim));
     }
     expect(SEM_FLOOR).toBeLessThan(SEM_CEIL);
@@ -134,12 +131,10 @@ describe("calibration constants", () => {
 });
 
 describe("index usage", () => {
-  // REVIEW.md B2: all three searches computed their blend in the SELECT list,
-  // which left the planner no indexable predicate. Correct but linear. These
-  // assert the query SHAPES stay index-eligible; on a small table the planner
-  // may still prefer a scan on cost, which is why seqscan is disabled here.
-  const planOf = async (q: string) => {
-    const rows = await sql.unsafe(`explain (format json) ${q}`);
+  // These assert the query shapes stay index-eligible. On a small table the
+  // planner still prefers a scan on cost, so seqscan is disabled.
+  const planOf = async (query: string) => {
+    const rows = await sql.unsafe(`explain (format json) ${query}`);
     return JSON.stringify(rows);
   };
 

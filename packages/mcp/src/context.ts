@@ -43,10 +43,10 @@ export function capTurns<T extends { text: string }>(
 ): { turns: T[]; turns_truncated?: { shown: number; of: number } } {
   let used = 0;
   const kept: T[] = [];
-  for (const t of turns) {
-    if (used + t.text.length > maxChars) continue;
-    used += t.text.length;
-    kept.push(t);
+  for (const turn of turns) {
+    if (used + turn.text.length > maxChars) continue;
+    used += turn.text.length;
+    kept.push(turn);
   }
   return kept.length === turns.length
     ? { turns: kept }
@@ -57,18 +57,17 @@ export function capTurns<T extends { text: string }>(
 }
 
 /**
- * The ingest path reads the compacted form when compaction demonstrably helps,
- * so /analyze and /consult stop paying for quoted chains and signatures. Runs
- * AFTER redaction, so the model still never sees unscrubbed text, and never
- * writes: only compact_work_item posts a note.
+ * The compacted form of an item where `compactForLlm` produces one, so
+ * /analyze and /consult do not pay for quoted chains and signatures. Takes the
+ * item after redaction, and writes nothing: only compact_work_item posts a
+ * note.
  */
 export function withCompaction(item: RawWorkItem): Record<string, unknown> {
   const { item: forLlm, compacted } = compactForLlm(item);
   if (!compacted) return { item: forLlm };
   const { turns, compaction } = compacted;
-  // Bounded here too: compaction only fires above COMPACT_MIN_CHARS, so by
-  // construction this array is never small, and on a long ticket it is hundreds
-  // of KB going through the same ceiling capTurns exists for.
+  // Capped as well: compaction only runs above COMPACT_MIN_CHARS, so the turn
+  // list is never small.
   const { turns: shown, turns_truncated } = capTurns(turns);
   return {
     item: forLlm,
@@ -80,9 +79,9 @@ export function withCompaction(item: RawWorkItem): Record<string, unknown> {
 }
 
 /**
- * The customer's own install, inline on the turn that fetched their ticket.
- * Their version and addons decide whether a general answer even applies, and the
- * model will not think to go and ask - so it arrives unasked, kept short.
+ * The customer's own install, inline on the read that fetched their ticket.
+ * Their version and addons decide whether a general answer applies, and the
+ * model does not ask for them unprompted.
  */
 export async function withCustomerProfile(
   customerId: string | null | undefined,
@@ -90,12 +89,12 @@ export async function withCustomerProfile(
   if (!customerId) return {};
   const profile = await getCustomerProfile(customerId);
   if (!profile) return {};
-  const has =
+  const hasContent =
     profile.facts.length ||
     profile.components.length ||
     profile.repos.length ||
     profile.projects.length;
-  if (!has) return {};
+  if (!hasContent) return {};
   return {
     customer_profile: {
       slug: profile.slug,
@@ -123,7 +122,7 @@ export async function withCustomerProfile(
 }
 
 /**
- * An unresolved customer is invisible otherwise - the field is simply null, while
+ * Says that the customer is unresolved. The field alone is only null, while
  * the ticket usually names the company in a domain or a signature.
  */
 export const unresolvedCustomer = (
@@ -139,10 +138,9 @@ export const unresolvedCustomer = (
       };
 
 /**
- * Surface which part of a customer's estate a ticket might concern, without
- * assigning it. Same discipline as unresolvedCustomer: a confidently wrong
- * attribution files the ticket, the entry learned from it and every future
- * search hit under a place nobody chose, and is not recoverable.
+ * The units of a customer's estate a ticket names, offered without assigning
+ * one. A wrong attribution files the ticket, the entry learned from it and
+ * every later search hit under a unit nobody chose.
  */
 export async function unresolvedUnit(
   customerId: string | null | undefined,
@@ -177,6 +175,8 @@ export async function unresolvedUnit(
 
 export const MAX_LINKED_ITEMS = 5;
 export const LINKED_BODY_CHARS = 2000;
+/** How much of a ticket's text is searched for a unit's name. */
+const UNIT_SCAN_CHARS = 4000;
 
 /**
  * Who a work item is about and where it sits: its customer, with a customer or
@@ -190,7 +190,7 @@ export async function workItemFacts(
   const text = `${raw.title ?? ""} ${raw.messages
     .map((m) => m.bodyText ?? "")
     .join(" ")
-    .slice(0, 4000)}`;
+    .slice(0, UNIT_SCAN_CHARS)}`;
   return {
     customer_id: item.customerId,
     customer_name: await getCustomerName(item.customerId),
@@ -205,7 +205,7 @@ export async function workItemFacts(
 /**
  * Fetch the Azure DevOps items a ticket points at and record the links. They
  * carry most of the engineering context, so analysis reads them as a matter of
- * course rather than offering to. Depth 1 only - a linked item's own relations
+ * course rather than offering to. Depth 1 only: a linked item's own relations
  * already come back as summaries.
  */
 export async function withLinkedAdoItems(
@@ -228,7 +228,7 @@ export async function withLinkedAdoItems(
   const wanted = refs.slice(0, MAX_LINKED_ITEMS);
   const { conn, source: src } = await resolveSource(ado.slug as string);
   const redact = resolveRedactionPolicy(conn.config).enabled;
-  const items: Record<string, unknown>[] = [];
+  const linkedItems: Record<string, unknown>[] = [];
 
   for (const externalId of wanted) {
     try {
@@ -243,7 +243,7 @@ export async function withLinkedAdoItems(
         : linkedRaw;
       const fields = (forLlm.raw as { fields?: Record<string, unknown> })
         ?.fields;
-      items.push({
+      linkedItems.push({
         external_id: externalId,
         work_item_id: stored.id,
         title: forLlm.title,
@@ -259,7 +259,7 @@ export async function withLinkedAdoItems(
         message_count: forLlm.messages.length,
       });
     } catch (e) {
-      items.push({
+      linkedItems.push({
         external_id: externalId,
         error: e instanceof Error ? e.message : String(e),
       });
@@ -273,7 +273,7 @@ export async function withLinkedAdoItems(
 
   return {
     linked_ado_refs: refs,
-    linked_items: items,
+    linked_items: linkedItems,
     ...(refs.length > wanted.length
       ? {
           linked_items_note: `${refs.length} ids referenced; the first ${wanted.length} were read. Fetch the rest with fetch_work_item if they matter.`,
@@ -308,10 +308,10 @@ export async function componentIntoFilter(
   let componentId: string | undefined;
   let componentTags: string[] | undefined;
   if (component && productId) {
-    const f = await resolveComponentFilter(productId, component);
-    componentId = f.componentId;
-    componentTags = f.componentTags;
-    if (f.extraTags) tagFilter.push(...f.extraTags);
+    const filter = await resolveComponentFilter(productId, component);
+    componentId = filter.componentId;
+    componentTags = filter.componentTags;
+    if (filter.extraTags) tagFilter.push(...filter.extraTags);
   }
   return {
     tags: tagFilter.length ? tagFilter : undefined,
@@ -327,18 +327,19 @@ export async function loadContextSources(input: {
 }) {
   const sources: { source: string; text: string; pages?: number }[] = [];
   if (input.text?.trim()) sources.push({ source: "inline", text: input.text });
-  for (const p of input.paths ?? []) {
-    const { text, pages } = await extractSource(p);
-    sources.push({ source: p, text, ...(pages != null ? { pages } : {}) });
+  for (const path of input.paths ?? []) {
+    const { text, pages } = await extractSource(path);
+    sources.push({ source: path, text, ...(pages != null ? { pages } : {}) });
   }
-  for (const u of input.urls ?? []) {
-    const res = await fetchUntrustedUrl("ingest_context", u);
-    if (!res.ok) throw badInput(`Failed to fetch ${u}: HTTP ${res.status}`);
-    const raw = await res.text();
-    const ct = res.headers.get("content-type") ?? "";
+  for (const url of input.urls ?? []) {
+    const response = await fetchUntrustedUrl("ingest_context", url);
+    if (!response.ok)
+      throw badInput(`Failed to fetch ${url}: HTTP ${response.status}`);
+    const raw = await response.text();
+    const contentType = response.headers.get("content-type") ?? "";
     sources.push({
-      source: u,
-      text: ct.includes("html") ? stripHtml(raw) : raw,
+      source: url,
+      text: contentType.includes("html") ? stripHtml(raw) : raw,
     });
   }
   return sources;

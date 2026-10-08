@@ -1,3 +1,9 @@
+/**
+ * Reindexing clones the repo, so the route's own contract is what is tested
+ * here: who may call it, and what it does with a slug that is not there. The
+ * clone-and-index path itself is code-index.test.ts, against a real git repo in
+ * a temp dir.
+ */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { addCustomer } from "@tachy/core/catalog";
 import { addSourceProject } from "@tachy/core/sources";
@@ -11,12 +17,6 @@ afterAll(() => sql.end());
 
 const app = createApp({ passwordAuth: true });
 
-/**
- * Reindexing clones the repo, so the route's own contract is what is tested
- * here: who may call it, and what it does with a slug that is not there. The
- * clone-and-index path itself is code-index.test.ts, against a real git repo in
- * a temp dir.
- */
 async function adminCookie(): Promise<string> {
   await createUser({
     email: "repo-admin@example.com",
@@ -50,11 +50,9 @@ describe("GET /api/repos", () => {
     expect(repos.map((r: { slug: string }) => r.slug)).toEqual(["driver"]);
   });
 
-  /**
-   * A customer filter keeps the unscoped repos: the product's own code is what
-   * most of their questions are about, and dropping it would leave the customer
-   * view holding only their fork.
-   */
+  // A customer filter keeps the unscoped repos: the product's own code is what
+  // most of their questions are about, and dropping it would leave the customer
+  // view holding only their fork.
   it("narrows to one customer without hiding the shared repos", async () => {
     await addCustomer({ name: "Northwind", slug: "northwind" });
     await addCustomer({ name: "Baltic", slug: "baltic" });
@@ -76,8 +74,8 @@ describe("GET /api/repos", () => {
       productSlug: "tpd",
     });
 
-    const res = await app.request("/api/repos?customer=northwind");
-    const { repos } = await res.json();
+    const response = await app.request("/api/repos?customer=northwind");
+    const { repos } = await response.json();
     expect(repos.map((r: { slug: string }) => r.slug)).toEqual([
       "driver",
       "tracer",
@@ -85,16 +83,16 @@ describe("GET /api/repos", () => {
   });
 
   it("returns an empty list rather than 404 when nothing is linked", async () => {
-    const res = await app.request("/api/repos");
-    expect(res.status).toBe(200);
-    expect((await res.json()).repos).toEqual([]);
+    const response = await app.request("/api/repos");
+    expect(response.status).toBe(200);
+    expect((await response.json()).repos).toEqual([]);
   });
 });
 
 describe("PUT /api/repos", () => {
   it("links a repo for an admin", async () => {
     const cookie = await adminCookie();
-    const res = await app.request("/api/repos", {
+    const response = await app.request("/api/repos", {
       ...json({
         slug: "driver",
         url: "https://example.invalid/driver.git",
@@ -103,13 +101,13 @@ describe("PUT /api/repos", () => {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: cookie },
     });
-    expect(res.status).toBe(200);
-    expect((await res.json()).repo.slug).toBe("driver");
+    expect(response.status).toBe(200);
+    expect((await response.json()).repo.slug).toBe("driver");
   });
 
   it("rejects a slug the indexer could not name a directory after", async () => {
     const cookie = await adminCookie();
-    const res = await app.request("/api/repos", {
+    const response = await app.request("/api/repos", {
       ...json({
         slug: "Driver Repo",
         url: "https://example.invalid/driver.git",
@@ -118,22 +116,23 @@ describe("PUT /api/repos", () => {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: cookie },
     });
-    expect(res.status).toBe(400);
+    expect(response.status).toBe(400);
   });
 
   it("rejects a body with no url", async () => {
     const cookie = await adminCookie();
-    const res = await app.request("/api/repos", {
+    const response = await app.request("/api/repos", {
       ...json({ slug: "driver", product: "tpd" }),
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: cookie },
     });
-    expect(res.status).toBe(400);
+    expect(response.status).toBe(400);
   });
 });
 
 describe("PUT /api/repos/bulk", () => {
-  /** An Azure DevOps project routinely holds fifty; one bad row must not sink the rest. */
+  // An Azure DevOps project routinely holds fifty; one bad row must not sink
+  // the rest.
   it("links every good row and reports the bad one", async () => {
     const cookie = await adminCookie();
     const project = await addSourceProject({
@@ -142,7 +141,7 @@ describe("PUT /api/repos/bulk", () => {
       productSlug: "tpd",
     });
 
-    const res = await app.request("/api/repos/bulk", {
+    const response = await app.request("/api/repos/bulk", {
       ...json({
         source_project_id: project.id,
         repos: [
@@ -154,8 +153,8 @@ describe("PUT /api/repos/bulk", () => {
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: cookie },
     });
-    expect(res.status).toBe(200);
-    const body = await res.json();
+    expect(response.status).toBe(200);
+    const body = await response.json();
     expect(body.ok).toBe(false);
     expect(body.linked).toBe(2);
     expect(
@@ -178,12 +177,12 @@ describe("PUT /api/repos/bulk", () => {
       externalKey: "bulk-empty",
       productSlug: "tpd",
     });
-    const res = await app.request("/api/repos/bulk", {
+    const response = await app.request("/api/repos/bulk", {
       ...json({ source_project_id: project.id, repos: [] }),
       method: "PUT",
       headers: { "Content-Type": "application/json", Cookie: cookie },
     });
-    expect(res.status).toBe(400);
+    expect(response.status).toBe(400);
   });
 });
 
@@ -195,12 +194,12 @@ describe("POST /api/repos/:slug/reindex", () => {
       slug: "driver",
       url: "https://example.invalid/driver.git",
     });
-    const res = await app.request("/api/repos/driver/reindex", {
+    const response = await app.request("/api/repos/driver/reindex", {
       method: "POST",
       headers: { Cookie: cookie },
     });
-    expect(res.status).toBe(202);
-    const { run_id } = await res.json();
+    expect(response.status).toBe(202);
+    const { run_id } = await response.json();
     const [run] =
       await sql`select kind, params, trigger, requested_by, resource_class, queue, priority from job_runs where id = ${run_id}`;
     expect(run).toMatchObject({
@@ -237,13 +236,13 @@ describe("POST /api/repos/:slug/reindex", () => {
     });
     expect(untracked.status).toBe(400);
 
-    const res = await app.request("/api/repos/driver/reindex", {
+    const response = await app.request("/api/repos/driver/reindex", {
       ...json({ line: "legacy/master-1-50" }),
       headers: { "Content-Type": "application/json", Cookie: cookie },
     });
-    expect(res.status).toBe(202);
+    expect(response.status).toBe(202);
     const [run] = await sql`
-      select params from job_runs where id = ${(await res.json()).run_id}
+      select params from job_runs where id = ${(await response.json()).run_id}
     `;
     expect(run.params).toEqual({ repo: "driver", line: "legacy/master-1-50" });
   });
@@ -277,12 +276,12 @@ describe("POST /api/repos/:slug/reindex", () => {
   it("queues every linked repo under one parent run, for admins only", async () => {
     await resetJobs();
     const cookie = await adminCookie();
-    const res = await app.request("/api/repos/reindex", {
+    const response = await app.request("/api/repos/reindex", {
       method: "POST",
       headers: { Cookie: cookie },
     });
-    expect(res.status).toBe(202);
-    const { run_id, status } = await res.json();
+    expect(response.status).toBe(202);
+    const { run_id, status } = await response.json();
     expect(status).toBe("queued");
     const [run] =
       await sql`select kind, params, trigger, priority from job_runs where id = ${run_id}`;
@@ -322,12 +321,12 @@ describe("POST /api/repos/:slug/reindex", () => {
 
   it("refuses a slug nobody has linked, without cloning anything", async () => {
     const cookie = await adminCookie();
-    const res = await app.request("/api/repos/no-such-repo/reindex", {
+    const response = await app.request("/api/repos/no-such-repo/reindex", {
       method: "POST",
       headers: { Cookie: cookie },
     });
-    expect(res.status).toBeGreaterThanOrEqual(400);
-    expect(res.status).toBeLessThan(500);
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
   });
 
   it("refuses a caller who is not an admin", async () => {
@@ -348,11 +347,11 @@ describe("POST /api/repos/:slug/reindex", () => {
       "a-long-password",
     );
 
-    const res = await app.request("/api/repos/driver/reindex", {
+    const response = await app.request("/api/repos/driver/reindex", {
       method: "POST",
       headers: { Cookie: cookie },
     });
-    expect(res.status).toBe(403);
+    expect(response.status).toBe(403);
   });
 });
 
@@ -401,21 +400,21 @@ describe("GET /api/repos/refs", () => {
       "member@example.com",
       "a-long-password",
     );
-    const res = await app.request(
+    const response = await app.request(
       "/api/repos/refs?url=https://example.invalid/r.git",
       { headers: { Cookie: cookie } },
     );
-    expect(res.status).toBe(403);
+    expect(response.status).toBe(403);
   });
 
   it("reports a remote it cannot read instead of failing the request", async () => {
     const cookie = await adminCookie();
-    const res = await app.request(
+    const response = await app.request(
       "/api/repos/refs?url=file:///nonexistent/tachy-repo",
       { headers: { Cookie: cookie } },
     );
-    expect(res.status).toBe(200);
-    const body = await res.json();
+    expect(response.status).toBe(200);
+    const body = await response.json();
     expect(body.ok).toBe(false);
     expect(body.error).toBeTruthy();
   });
@@ -423,10 +422,10 @@ describe("GET /api/repos/refs", () => {
 
 describe("GET /api/repos/file-icons/:file", () => {
   it("serves a theme icon as an SVG", async () => {
-    const res = await app.request("/api/repos/file-icons/typescript.svg");
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toBe("image/svg+xml");
-    expect(await res.text()).toContain("<svg");
+    const response = await app.request("/api/repos/file-icons/typescript.svg");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/svg+xml");
+    expect(await response.text()).toContain("<svg");
   });
 
   it("refuses an id the theme does not define", async () => {
@@ -445,11 +444,11 @@ describe("DELETE /api/repos/:slug", () => {
       url: "https://example.invalid/driver.git",
       productSlug: "tpd",
     });
-    const res = await app.request("/api/repos/driver", {
+    const response = await app.request("/api/repos/driver", {
       method: "DELETE",
       headers: { Cookie: cookie },
     });
-    expect(res.status).toBe(200);
+    expect(response.status).toBe(200);
     const left = await (
       await app.request("/api/repos", { headers: { Cookie: cookie } })
     ).json();

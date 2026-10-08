@@ -4,6 +4,7 @@ import {
   SLUG_RE,
   type BucketRow,
   type BucketWithToken,
+  type Freshness,
 } from "@tachy/contract";
 import { sql, type Db } from "../infra/db";
 import { badInput, conflict, notFound } from "../infra/errors";
@@ -84,18 +85,18 @@ export async function createBucket(
     throw badInput(
       `Invalid bucket slug '${input.slug}': lowercase letters, digits and hyphens only.`,
     );
-  const t = newToken();
+  const minted = newToken();
   await sql.begin(async (tx) => {
     const [row] = await tx`
       insert into buckets (slug, name, description, ingest_token_hash, ingest_token_hint, created_by)
-      values (${input.slug}, ${input.name}, ${input.description ?? null}, ${t.hash}, ${t.hint}, ${userId})
+      values (${input.slug}, ${input.name}, ${input.description ?? null}, ${minted.hash}, ${minted.hint}, ${userId})
       on conflict (slug) do nothing
       returning id
     `;
     if (!row) throw conflict(`bucket '${input.slug}' already exists`);
     await setTeams(tx, row.id, input.teams ?? []);
   });
-  return { bucket: await getBucket(input.slug), token: t.token };
+  return { bucket: await getBucket(input.slug), token: minted.token };
 }
 
 export async function updateBucket(
@@ -120,15 +121,15 @@ export async function updateBucket(
 export async function rotateBucketToken(
   slug: string,
 ): Promise<BucketWithToken> {
-  const t = newToken();
+  const minted = newToken();
   const [row] = await sql`
-    update buckets set ingest_token_hash = ${t.hash}, ingest_token_hint = ${t.hint},
+    update buckets set ingest_token_hash = ${minted.hash}, ingest_token_hint = ${minted.hint},
                        token_rotated_at = now()
     where slug = ${slug}
     returning id
   `;
   if (!row) throw notFound(`bucket '${slug}' not found`);
-  return { bucket: await getBucket(slug), token: t.token };
+  return { bucket: await getBucket(slug), token: minted.token };
 }
 
 export async function deleteBucket(slug: string): Promise<void> {
@@ -171,4 +172,20 @@ export async function bucketCensus(): Promise<{
            (select count(*)::int from bucket_docs) as docs
   `;
   return { buckets: row.buckets, docs: row.docs };
+}
+
+/** When each bucket last received a batch, oldest first. */
+export async function bucketFreshness(): Promise<Freshness[]> {
+  const rows = await sql<{ slug: string; name: string; last: Date | null }[]>`
+    select slug, name, last_batch_at as last
+    from buckets
+    order by last_batch_at nulls first, slug
+  `;
+  return rows.map((r) => ({
+    kind: "bucket",
+    key: r.slug,
+    label: r.name,
+    last_at: r.last ? r.last.toISOString() : null,
+    error: null,
+  }));
 }

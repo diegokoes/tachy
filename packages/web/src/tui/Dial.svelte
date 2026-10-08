@@ -30,10 +30,9 @@
     Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0)),
   );
 
-  /* Meter's algorithm in polar coordinates: whole ticks light, and the one
-     straddling the boundary carries the remainder as a mix towards the track.
-     Ticks are drawn rather than typed for the same reason Meter's cells are -
-     neither bundled face carries a block glyph. */
+  // Meter's algorithm in polar coordinates: whole ticks light, and the one
+  // straddling the boundary carries the remainder as a mix towards the track.
+  // Drawn, since neither bundled face has a block glyph.
   const lit = $derived.by(() => {
     const exact = pct * segments;
     return Array.from({ length: segments }, (_, i) =>
@@ -45,8 +44,8 @@
   const R_OUT = 45;
   const ticks = $derived(
     Array.from({ length: segments }, (_, i) => {
-      const a = (i / segments) * Math.PI * 2 - Math.PI / 2;
-      const [cos, sin] = [Math.cos(a), Math.sin(a)];
+      const angle = (i / segments) * Math.PI * 2 - Math.PI / 2;
+      const [cos, sin] = [Math.cos(angle), Math.sin(angle)];
       return {
         x1: 50 + cos * R_IN,
         y1: 50 + sin * R_IN,
@@ -68,12 +67,12 @@
   aria-label={label}
 >
   <svg viewBox="0 0 100 100" aria-hidden="true">
-    {#each ticks as t, i}
+    {#each ticks as tick, i}
       <line
-        x1={t.x1}
-        y1={t.y1}
-        x2={t.x2}
-        y2={t.y2}
+        x1={tick.x1}
+        y1={tick.y1}
+        x2={tick.x2}
+        y2={tick.y2}
         class:on={lit[i] > 0}
         style="--fill: {lit[i]}"
       />

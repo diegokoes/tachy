@@ -5,6 +5,8 @@ import type { Volumes } from "./scale";
 
 const STATUSES = ["open", "in_progress", "resolved", "closed"] as const;
 type Status = (typeof STATUSES)[number];
+/** The first reports by index; the rest draw theirs. */
+const FORCED_STATUSES: Status[] = ["resolved", "open"];
 
 interface Draft {
   title: string;
@@ -191,17 +193,29 @@ const FOLLOW_UPS = [
   "A colleague on the same team is seeing it too.",
 ];
 
+/** The review a report carries: unavailable, held with suggestions, or clean. */
+function aiReview(rng: () => number, held: boolean) {
+  if (chance(rng, 0.1)) return { available: false, ok: true, suggestions: [] };
+  if (!held) return { available: true, ok: true, suggestions: [] };
+  return {
+    available: true,
+    ok: false,
+    suggestions: [pick(rng, SUGGESTIONS), pick(rng, SUGGESTIONS)].filter(
+      (s, k, all) => all.indexOf(s) === k,
+    ),
+  };
+}
+
 /**
- * A queue of bugs and feature requests at every stage - waiting, being worked
- * on, fixed, and turned down - with the threads and notifications each stage
- * leaves behind. Every report carries the AI review the form now always runs.
- * The first is forced resolved so the message and notification tables are
- * never empty at any scale. The second is an open one filed by the dev admin,
- * so replying to it from the same login raises the reply notification there.
+ * Bugs and feature requests at every stage (waiting, in progress, fixed, turned
+ * down) with the threads and notifications each stage leaves, each carrying the
+ * AI review the form runs. The first is forced resolved so the message and
+ * notification tables are never empty; the second is an open one filed by the
+ * dev admin, so a reply from that login raises its notification there.
  */
 export async function seedReports(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   users: SeededUser[],
 ): Promise<void> {
   const admins = users.filter((u) => u.role === "admin");
@@ -210,7 +224,7 @@ export async function seedReports(
   const messages: Record<string, unknown>[] = [];
   const notifications: Record<string, unknown>[] = [];
 
-  for (let i = 0; i < v.reports; i++) {
+  for (let i = 0; i < volumes.reports; i++) {
     const rng = rngFor("report", i);
     const devAdmin = users.find((u) => u.email === ADMIN_EMAIL);
     const reporter =
@@ -219,8 +233,7 @@ export async function seedReports(
         : pick(rng, members.length ? members : users);
     const type = chance(rng, 0.55) ? "bug" : "feature";
     const draft = pick(rng, type === "bug" ? BUGS : FEATURES);
-    const status: Status =
-      i === 0 ? "resolved" : i === 1 ? "open" : pick(rng, STATUSES);
+    const status: Status = FORCED_STATUSES[i] ?? pick(rng, STATUSES);
     const id = uuidFor("report", i);
     // A thread runs up to about five days, so anything past 'open' was filed
     // early enough for its replies to have happened already.
@@ -243,20 +256,7 @@ export async function seedReports(
         viewport: pick(rng, VIEWPORTS),
         env: null,
       }),
-      ai_review: tx.json(
-        chance(rng, 0.1)
-          ? { available: false, ok: true, suggestions: [] }
-          : held
-            ? {
-                available: true,
-                ok: false,
-                suggestions: [
-                  pick(rng, SUGGESTIONS),
-                  pick(rng, SUGGESTIONS),
-                ].filter((s, k, all) => all.indexOf(s) === k),
-              }
-            : { available: true, ok: true, suggestions: [] },
-      ),
+      ai_review: tx.json(aiReview(rng, held)),
       created_at: created,
       updated_at: created,
     });
@@ -271,29 +271,31 @@ export async function seedReports(
     for (const body of adminReplies(type, status))
       thread.push({ direction: "admin", body });
 
-    thread.forEach((m, k) => {
+    thread.forEach((message, step) => {
       const when = new Date(later());
       const author =
-        m.direction === "admin" && admins.length ? pick(rng, admins) : reporter;
+        message.direction === "admin" && admins.length
+          ? pick(rng, admins)
+          : reporter;
       messages.push({
-        id: uuidFor("report-msg", i * 10 + k),
+        id: uuidFor("report-msg", i * 10 + step),
         report_id: id,
         author_id: author.id,
-        direction: m.direction,
-        body_text: m.body,
+        direction: message.direction,
+        body_text: message.body,
         created_at: when,
       });
       const read = status === "closed" || chance(rng, 0.4);
-      if (m.direction === "admin")
+      if (message.direction === "admin")
         notifications.push({
-          id: uuidFor("report-notif", i * 10 + k),
+          id: uuidFor("report-notif", i * 10 + step),
           user_id: reporter.id,
           kind: "report_reply",
           title:
             type === "bug"
               ? "An admin replied to your bug report"
               : "An admin replied to your feature request",
-          body_text: m.body,
+          body_text: message.body,
           ref: tx.json({ report_id: id }),
           seen_at: read || chance(rng, 0.5) ? when : null,
           read_at: read ? when : null,

@@ -31,7 +31,7 @@
     onCancel: () => void;
   } = $props();
 
-  // Seeded once on purpose: the dialog is mounted fresh per rename, and the
+  // Seeded once: the dialog is mounted fresh per rename, and the
   // field is the user's to change from there.
   // svelte-ignore state_referenced_locally
   let value = $state(current);

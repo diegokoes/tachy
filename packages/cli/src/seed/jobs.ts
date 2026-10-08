@@ -7,9 +7,9 @@ import type { Volumes } from "./scale";
 const HOUR = 3_600_000;
 
 /**
- * A cron line and the same schedule as a step, so the history can be laid on
- * the slots the scheduler would really have fired without pulling croner into
- * the CLI. Only the shapes used below: every N hours at a minute, from an hour.
+ * A cron line and the same schedule as a step, so the history lands on the
+ * slots the scheduler would have fired without pulling croner into the CLI.
+ * Only the shapes `hourly`, `everyHours` and `daily` make.
  */
 interface Slots {
   cron: string;
@@ -36,13 +36,17 @@ const daily = (hour: number, minute: number): Slots => ({
   minute,
 });
 
-function slotsSince(s: Slots, days: number, now: Date): Date[] {
+function slotsSince(slots: Slots, days: number, now: Date): Date[] {
   const start = new Date(now.getTime() - days * 24 * HOUR);
-  start.setUTCHours(s.firstHour, s.minute, 0, 0);
-  const out: Date[] = [];
-  for (let t = start.getTime(); t <= now.getTime(); t += s.everyHours * HOUR)
-    if (t > now.getTime() - days * 24 * HOUR) out.push(new Date(t));
-  return out;
+  start.setUTCHours(slots.firstHour, slots.minute, 0, 0);
+  const fired: Date[] = [];
+  for (
+    let time = start.getTime();
+    time <= now.getTime();
+    time += slots.everyHours * HOUR
+  )
+    if (time > now.getTime() - days * 24 * HOUR) fired.push(new Date(time));
+  return fired;
 }
 
 type Params = Record<string, string | number | boolean>;
@@ -122,16 +126,14 @@ const PROFILES: Record<string, KindProfile> = {
     timeoutMs: 8 * HOUR,
     maxAttempts: 1,
     seconds: [180, 1500],
-    outcome: (rng) =>
-      chance(rng, 0.9)
-        ? "succeeded"
-        : chance(rng, 0.5)
-          ? "timed_out"
-          : "failed",
-    output: (rng, p) => {
+    outcome: (rng) => {
+      if (chance(rng, 0.9)) return "succeeded";
+      return chance(rng, 0.5) ? "timed_out" : "failed";
+    },
+    output: (rng, params) => {
       const files = intBetween(rng, 150, 400);
       return {
-        slug: p.repo,
+        slug: params.repo,
         indexedCommit: Math.floor(rng() * 0xfffffff)
           .toString(16)
           .padStart(7, "0"),
@@ -190,16 +192,44 @@ interface Definition {
  * default definitions are created here under the same names, so it does not add
  * a second copy at start.
  */
+function runSeconds(
+  profile: KindProfile,
+  outcome: Outcome,
+  rng: () => number,
+): number {
+  if (outcome === "timed_out") return profile.timeoutMs / 1000;
+  if (outcome === "cancelled") return intBetween(rng, 30, profile.seconds[0]);
+  return intBetween(rng, profile.seconds[0], profile.seconds[1]);
+}
+
+function runError(
+  profile: KindProfile,
+  outcome: Outcome,
+  rng: () => number,
+): string | null {
+  if (outcome === "failed")
+    return pick(
+      rng,
+      profile.errors.length ? profile.errors : ["unexpected error"],
+    );
+  if (outcome === "timed_out")
+    return `timed out after ${profile.timeoutMs / 60_000} min`;
+  return outcome === "cancelled" ? "cancelled by an admin" : null;
+}
+
 export async function seedJobs(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   users: SeededUser[],
   connections: { slug: string }[],
 ): Promise<void> {
   const now = new Date();
   const admins = users.filter((u) => u.role === "admin");
   const admin = admins[0] ?? users[0];
-  const repos = Array.from({ length: v.repos }, (_, i) => `seed-repo-${i}`);
+  const repos = Array.from(
+    { length: volumes.repos },
+    (_, i) => `seed-repo-${i}`,
+  );
 
   let n = 0;
   const def = (d: Omit<Definition, "id">): Definition => ({
@@ -253,46 +283,36 @@ export async function seedJobs(
     }),
   ];
 
-  const created = new Date(now.getTime() - (v.jobHistoryDays + 5) * 24 * HOUR);
+  const created = new Date(
+    now.getTime() - (volumes.jobHistoryDays + 5) * 24 * HOUR,
+  );
   const runs: Record<string, unknown>[] = [];
   const lastSlot = new Map<string, Date>();
-  let r = 0;
+  let runIndex = 0;
 
   const addRun = (
-    d: Pick<Definition, "kind" | "params"> & { id: string | null },
+    definition: Pick<Definition, "kind" | "params"> & { id: string | null },
     at: Date,
     trigger: "schedule" | "manual" | "event",
     rng: () => number,
     parent?: { id: string; priority: number },
   ): Date | null => {
-    const p = PROFILES[d.kind];
-    const outcome = p.outcome(rng);
+    const profile = PROFILES[definition.kind];
+    const outcome = profile.outcome(rng);
     const attempts =
-      outcome === "failed" && p.maxAttempts > 1 ? p.maxAttempts : 1;
+      outcome === "failed" && profile.maxAttempts > 1 ? profile.maxAttempts : 1;
     const started = new Date(at.getTime() + intBetween(rng, 1, 20) * 1000);
-    const seconds =
-      outcome === "timed_out"
-        ? p.timeoutMs / 1000
-        : outcome === "cancelled"
-          ? intBetween(rng, 30, p.seconds[0])
-          : intBetween(rng, p.seconds[0], p.seconds[1]);
+    const seconds = runSeconds(profile, outcome, rng);
     const finished = new Date(started.getTime() + seconds * 1000);
     if (finished > now) return null;
-    const error =
-      outcome === "failed"
-        ? pick(rng, p.errors.length ? p.errors : ["unexpected error"])
-        : outcome === "timed_out"
-          ? `timed out after ${p.timeoutMs / 60_000} min`
-          : outcome === "cancelled"
-            ? "cancelled by an admin"
-            : null;
+    const error = runError(profile, outcome, rng);
     runs.push({
-      id: uuidFor("job-run", r++),
-      definition_id: d.id,
-      kind: d.kind,
-      params: tx.json(d.params),
-      resource_class: jobQueue(p.queue).class,
-      queue: p.queue,
+      id: uuidFor("job-run", runIndex++),
+      definition_id: definition.id,
+      kind: definition.kind,
+      params: tx.json(definition.params),
+      resource_class: jobQueue(profile.queue).class,
+      queue: profile.queue,
       priority: parent?.priority ?? JOB_PRIORITY[trigger],
       parent_id: parent?.id ?? null,
       trigger,
@@ -303,13 +323,18 @@ export async function seedJobs(
           : null,
       status: outcome,
       attempts,
-      max_attempts: p.maxAttempts,
-      timeout_ms: p.timeoutMs,
+      max_attempts: profile.maxAttempts,
+      timeout_ms: profile.timeoutMs,
       run_after: at,
       progress: outcome === "succeeded" ? 1 : Number(rng().toFixed(2)),
-      output: outcome === "succeeded" ? tx.json(p.output(rng, d.params)) : null,
+      output:
+        outcome === "succeeded"
+          ? tx.json(profile.output(rng, definition.params))
+          : null,
       error,
-      log_tail: error ? `${p.log(d.params)}\n${error}` : p.log(d.params),
+      log_tail: error
+        ? `${profile.log(definition.params)}\n${error}`
+        : profile.log(definition.params),
       created_at: at,
       started_at: started,
       finished_at: finished,
@@ -317,13 +342,13 @@ export async function seedJobs(
     return finished;
   };
 
-  for (const d of definitions) {
-    if (!d.slots || !d.enabled) continue;
-    const slots = slotsSince(d.slots, v.jobHistoryDays, now);
+  for (const definition of definitions) {
+    if (!definition.slots || !definition.enabled) continue;
+    const slots = slotsSince(definition.slots, volumes.jobHistoryDays, now);
     slots.forEach((at, i) => {
-      const rng = rngFor(`job-${d.name}`, i);
-      const done = addRun(d, at, "schedule", rng);
-      if (d.kind !== "repos.refresh" || !done) return;
+      const rng = rngFor(`job-${definition.name}`, i);
+      const done = addRun(definition, at, "schedule", rng);
+      if (definition.kind !== "repos.refresh" || !done) return;
       const refresh = runs[runs.length - 1];
       refresh.output = tx.json({
         queued: repos.length,
@@ -346,14 +371,14 @@ export async function seedJobs(
         if (end) next = end;
       }
     });
-    if (slots.length) lastSlot.set(d.id, slots[slots.length - 1]);
+    if (slots.length) lastSlot.set(definition.id, slots[slots.length - 1]);
   }
 
   // Someone clicks index on a repo: a run with no definition behind it.
-  for (let i = 0; i < Math.min(repos.length * 2, v.jobManualRuns); i++) {
+  for (let i = 0; i < Math.min(repos.length * 2, volumes.jobManualRuns); i++) {
     const rng = rngFor("job-repo-index", i);
     const at = new Date(
-      now.getTime() - Math.floor(rng() * v.jobHistoryDays * 24 * HOUR),
+      now.getTime() - Math.floor(rng() * volumes.jobHistoryDays * 24 * HOUR),
     );
     addRun(
       { id: null, kind: "repo.reindex", params: { repo: pick(rng, repos) } },
@@ -366,16 +391,16 @@ export async function seedJobs(
   // Someone re-runs a sync after fixing its token, or kicks a backfill after a
   // model change: runs outside any schedule, started by an admin.
   const manual = definitions.filter((d) => d.enabled);
-  for (let i = 0; i < v.jobManualRuns; i++) {
+  for (let i = 0; i < volumes.jobManualRuns; i++) {
     const rng = rngFor("job-manual", i);
-    const d =
+    const definition =
       i % 3 === 0
         ? definitions.find((x) => x.kind === "embeddings.backfill")!
         : pick(rng, manual);
     const at = new Date(
-      now.getTime() - Math.floor(rng() * v.jobHistoryDays * 24 * HOUR),
+      now.getTime() - Math.floor(rng() * volumes.jobHistoryDays * 24 * HOUR),
     );
-    addRun(d, at, "manual", rng);
+    addRun(definition, at, "manual", rng);
   }
 
   await insertRows(
@@ -462,10 +487,10 @@ export async function seedJobs(
       new_value: tx.json({ schedule: sync.slots?.cron }),
       created_at: new Date(created.getTime() + 24 * HOUR),
     });
-  for (const d of definitions.filter((x) => !x.enabled))
+  for (const definition of definitions.filter((x) => !x.enabled))
     changes.push({
       id: uuidFor("job-definition-change", changes.length),
-      definition_id: d.id,
+      definition_id: definition.id,
       changed_by: admin.id,
       action: "disabled",
       old_value: tx.json({ enabled: true }),

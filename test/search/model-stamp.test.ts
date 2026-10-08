@@ -4,11 +4,8 @@ import {
   saveKnowledgeEntry,
   searchKnowledge,
 } from "@tachy/core/knowledge";
-import {
-  EMBEDDING_MODEL,
-  LEGACY_EMBEDDING_MODEL,
-  staleVectors,
-} from "@tachy/core/search";
+import { EMBEDDING_MODEL, staleVectors } from "@tachy/core/search";
+import { LEGACY_EMBEDDING_MODEL } from "../../packages/core/src/search/model";
 import { resetData, sql, tpdProductId } from "../database";
 
 afterAll(() => sql.end());

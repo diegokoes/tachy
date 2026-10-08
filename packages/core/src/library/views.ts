@@ -12,12 +12,9 @@ export const VIEW_DEDUPE_MINUTES = 30;
 
 /**
  * Record one human read. The agent reads through MCP in its own subprocess and
- * never reaches the HTTP routes that call this, so no filtering is needed for
- * this to mean people rather than tool calls.
- *
- * `userId` may be null - a bearer-token or open-mode caller has no identity, and
- * the unique indexes are `nulls not distinct` so those still bucket by day
- * instead of inserting a row per hit.
+ * never reaches the HTTP routes that call this. `userId` may be null: a
+ * bearer-token or open-mode caller has no identity, and the unique indexes are
+ * `nulls not distinct`, so those still bucket by day.
  */
 export async function recordView(
   target: LibraryTarget,

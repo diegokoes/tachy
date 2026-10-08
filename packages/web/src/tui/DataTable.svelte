@@ -29,9 +29,9 @@
     canOpen?: (row: T) => boolean;
   } = $props();
 
-  /* A row is a target, not a link: a click that landed on a control inside it
-     belongs to that control, and one that ended a drag was selecting text to
-     copy, not asking to open anything. */
+  // A row is a target, not a link: a click that landed on a control inside it
+  // belongs to that control, and one that ended a drag was selecting text to
+  // copy, not asking to open anything.
   function opens(e: MouseEvent): boolean {
     const el = e.target as HTMLElement | null;
     if (el?.closest("button,a,input,select,textarea,label")) return false;
@@ -47,15 +47,15 @@
 <div class="wrap">
   <table>
     <colgroup>
-      {#each columns as c}<col
-          style={c.width ? `width: ${c.width}` : ""}
+      {#each columns as column}<col
+          style={column.width ? `width: ${column.width}` : ""}
         />{/each}
     </colgroup>
 
     <thead>
       <tr>
-        {#each columns as c}
-          <th class={c.align === "end" ? "end" : ""}>{c.label}</th>
+        {#each columns as column}
+          <th class={column.align === "end" ? "end" : ""}>{column.label}</th>
         {/each}
       </tr>
     </thead>
@@ -76,10 +76,10 @@
               openRow(row);
             })}
         >
-          {#each columns as c}
-            <td class={c.align === "end" ? "end" : ""}>
-              {#if c.cell}{@render c.cell(row)}
-              {:else}<span class="v">{cellText(c, row)}</span>{/if}
+          {#each columns as column}
+            <td class={column.align === "end" ? "end" : ""}>
+              {#if column.cell}{@render column.cell(row)}
+              {:else}<span class="v">{cellText(column, row)}</span>{/if}
             </td>
           {/each}
         </tr>
@@ -105,8 +105,8 @@
     overflow-x: auto;
   }
 
-  /* Fixed layout is the whole point: a cell that switches to an <input> keeps
-     the column width it already had, so nothing reflows mid-edit. */
+  /* Fixed layout: a cell that switches to an <input> keeps the column width
+     it had, so nothing reflows mid-edit. */
   table {
     width: 100%;
     table-layout: fixed;
@@ -147,9 +147,8 @@
     background: var(--accent-dim);
   }
 
-  /* The row is the button. A rank of marks that only appeared under the
-     pointer was three things to aim at where there is one thing to open, and
-     it hid on every row a keyboard user was not already inside. */
+  /* The row is the button: one thing to open, in reach of a keyboard user on
+     every row. */
   tbody tr.open {
     cursor: pointer;
   }

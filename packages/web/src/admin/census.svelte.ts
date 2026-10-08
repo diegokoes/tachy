@@ -67,16 +67,11 @@ const EMPTY: Census = {
 };
 
 /**
- * One census for the whole admin area. A module singleton rather than a
- * resource inside AdminView: the rail's counts and all three overview panels
- * read the same numbers, and they are siblings on the page rather than a
- * parent and its one child, so there is nothing to pass it down through.
- *
- * Every block is laid over EMPTY rather than taken as it arrives. The SPA is
- * built separately from the server it talks to, so a browser holding a newer
- * bundle than the API asks for figures that response has never heard of - and
- * one `undefined` reaching a `.toLocaleString()` takes down the whole panel,
- * not just the number that is missing.
+ * One census for the whole admin area. A module singleton: the rail's counts
+ * and all three overview panels read the same numbers, and they are siblings.
+ * Every block is laid over EMPTY: the SPA is built separately from its server,
+ * so a browser with a newer bundle asks for figures the response lacks, and one
+ * `undefined` reaching `.toLocaleString()` takes down the panel.
  */
 export const census = createResource(async () => {
   const got = await api.get<Census>("/overview");

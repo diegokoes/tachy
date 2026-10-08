@@ -1,0 +1,320 @@
+/**
+ * Holds the mechanical half of the comment convention in CLAUDE.md over every
+ * source file in the checkout that git does not ignore: length caps, which
+ * comment syntax goes where, banners, em dashes, unreferenced TODOs and
+ * commented-out code. Tense and register cannot be matched without false
+ * positives and are left to review.
+ *
+ *   npm run comments:check [path ...]
+ */
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import ts from "typescript";
+
+const ROOT = new URL("..", import.meta.url).pathname;
+
+const CHECKED_FILE_RE = /\.(?:[cm]?[jt]s|svelte|css)$/;
+/** Room for the listing of a checkout that holds a large untracked tree. */
+const LISTING_MAX_BYTES = 64 * 1024 * 1024;
+
+const BODY_CAP = 3;
+const DECLARATION_CAP = 5;
+const HEADER_CAP = 12;
+
+/** Compiler, test-runner and formatter instructions, and JSDoc type tags. */
+const DIRECTIVE_RE =
+  /^(?:@[a-z]|svelte-ignore\b|prettier-ignore\b|eslint-|(?:v8|c8|istanbul) ignore\b|[#@]__PURE__)/;
+/** Svelte shows a comment that opens with this where the component is used. */
+const COMPONENT_DOC_RE = /^\s*@component\b\s*/;
+const BANNER_RE = /([-=─━═~#*_])\1{3,}/;
+const EM_DASH = "—";
+const TODO_MARKER_RE =
+  /(?:^|\s)(?:TODO|FIXME|HACK|XXX)\b(?:\([^)]*\))?(?::|\s|$)/;
+const ISSUE_RE = /#\d+/;
+/** A keyword-led line ending like a statement, a bare call, an assignment, or a lone brace. */
+const CODE_LINE_RE =
+  /^(?:(?:export\s+)?(?:const|let|var|function|class|import|return|throw|await|if\s*\(|for\s*\(|while\s*\(|switch\s*\()\b.*[;{]|[\w$.]+\(.*\);|[\w$.[\]]+\s*=\s*[^=\s].*;|\}(?:\s*else\s*\{)?)$/;
+
+const SyntaxKind = ts.SyntaxKind;
+const DECLARATION_KINDS = new Set([
+  SyntaxKind.FunctionDeclaration,
+  SyntaxKind.ClassDeclaration,
+  SyntaxKind.InterfaceDeclaration,
+  SyntaxKind.TypeAliasDeclaration,
+  SyntaxKind.EnumDeclaration,
+  SyntaxKind.ModuleDeclaration,
+  SyntaxKind.VariableStatement,
+  SyntaxKind.ExportAssignment,
+  SyntaxKind.ExportDeclaration,
+  SyntaxKind.PropertyDeclaration,
+  SyntaxKind.MethodDeclaration,
+  SyntaxKind.Constructor,
+  SyntaxKind.GetAccessor,
+  SyntaxKind.SetAccessor,
+  SyntaxKind.PropertySignature,
+  SyntaxKind.MethodSignature,
+  SyntaxKind.IndexSignature,
+  SyntaxKind.CallSignature,
+  SyntaxKind.ConstructSignature,
+  SyntaxKind.EnumMember,
+  SyntaxKind.PropertyAssignment,
+  SyntaxKind.ShorthandPropertyAssignment,
+  SyntaxKind.Parameter,
+  SyntaxKind.BindingElement,
+]);
+
+const lineAt = (text, offset) => text.slice(0, offset).split("\n").length;
+
+/** A component's `@component` doc is its declaration doc, wherever it sits. */
+function capFor(comment, isComponentDoc) {
+  if (isComponentDoc) return DECLARATION_CAP;
+  if (comment.isHeader) return HEADER_CAP;
+  return comment.syntax === "jsdoc" && comment.onDeclaration
+    ? DECLARATION_CAP
+    : BODY_CAP;
+}
+
+const blockSyntax = (raw) => (raw.startsWith("/**") ? "jsdoc" : "block");
+const blockLines = (raw) =>
+  raw
+    .replace(/^\/\*+|\*+\/$/g, "")
+    .split("\n")
+    .map((line) => line.replace(/^\s*\*?\s?/, "").trimEnd());
+
+/** Every comment in a TypeScript or JavaScript source, `//` runs merged into one. */
+function scriptComments(text, { firstLine = 1, canHoldHeader = true } = {}) {
+  const source = ts.createSourceFile(
+    "source.ts",
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const firstToken = source.getFirstToken(source);
+  const codeStart = firstToken ? firstToken.getStart(source) : text.length;
+  const seen = new Set();
+  const ranges = [];
+
+  const visit = (node) => {
+    if (ts.isJSDoc(node)) return;
+    if (node.kind !== SyntaxKind.SyntaxList) {
+      for (const range of ts.getLeadingCommentRanges(
+        text,
+        node.getFullStart(),
+      ) ?? []) {
+        if (seen.has(range.pos)) continue;
+        seen.add(range.pos);
+        ranges.push({ range, owner: node });
+      }
+    }
+    for (const child of node.getChildren(source)) visit(child);
+  };
+  for (const child of source.getChildren(source)) visit(child);
+  ranges.sort((a, b) => a.range.pos - b.range.pos);
+
+  const comments = [];
+  for (const { range, owner } of ranges) {
+    const raw = text.slice(range.pos, range.end);
+    const lineStart = text.lastIndexOf("\n", range.pos - 1) + 1;
+    const lineEnd = text.indexOf("\n", range.end);
+    const sharesLine =
+      text.slice(lineStart, range.pos).trim() !== "" ||
+      text.slice(range.end, lineEnd === -1 ? text.length : lineEnd).trim() !==
+        "";
+    const line = lineAt(text, range.pos) + firstLine - 1;
+    const isLine = range.kind === SyntaxKind.SingleLineCommentTrivia;
+
+    const previous = comments.at(-1);
+    if (
+      isLine &&
+      !sharesLine &&
+      previous?.syntax === "line" &&
+      !previous.sharesLine &&
+      previous.line + previous.lines.length === line
+    ) {
+      previous.lines.push(raw.replace(/^\/\/\s?/, ""));
+      continue;
+    }
+
+    comments.push({
+      line,
+      syntax: isLine ? "line" : blockSyntax(raw),
+      place: "script",
+      lines: isLine ? [raw.replace(/^\/\/\s?/, "")] : blockLines(raw),
+      sharesLine,
+      isHeader: canHoldHeader && comments.length === 0 && range.pos < codeStart,
+      onDeclaration: DECLARATION_KINDS.has(owner.kind),
+    });
+  }
+  return comments;
+}
+
+function patternComments(text, pattern, syntax, place, firstLine = 1) {
+  const comments = [];
+  for (const match of text.matchAll(pattern)) {
+    comments.push({
+      line: lineAt(text, match.index) + firstLine - 1,
+      syntax,
+      place,
+      lines:
+        syntax === "html"
+          ? match[0]
+              .replace(/^<!--|-->$/g, "")
+              .split("\n")
+              .map((line) => line.trim())
+          : blockLines(match[0]),
+      sharesLine: false,
+      isHeader: text.slice(0, match.index).trim() === "",
+      onDeclaration: false,
+    });
+  }
+  return comments;
+}
+
+const CSS_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
+const HTML_COMMENT_RE = /<!--[\s\S]*?-->/g;
+const SVELTE_BLOCK_RE = /<(script|style)\b[^>]*>([\s\S]*?)<\/\1>/g;
+
+function svelteComments(text) {
+  const comments = [];
+  let markup = text;
+  for (const match of text.matchAll(SVELTE_BLOCK_RE)) {
+    const bodyOffset = match.index + match[0].indexOf(">") + 1;
+    const firstLine = lineAt(text, bodyOffset);
+    if (match[1] === "script") {
+      comments.push(
+        ...scriptComments(match[2], {
+          firstLine,
+          canHoldHeader: text.slice(0, match.index).trim() === "",
+        }),
+      );
+    } else {
+      comments.push(
+        ...patternComments(
+          match[2],
+          CSS_COMMENT_RE,
+          "block",
+          "style",
+          firstLine,
+        ).map((comment) => ({ ...comment, isHeader: false })),
+      );
+    }
+    markup =
+      markup.slice(0, match.index) +
+      match[0].replace(/[^\n]/g, " ") +
+      markup.slice(match.index + match[0].length);
+  }
+  comments.push(...patternComments(markup, HTML_COMMENT_RE, "html", "markup"));
+  return comments.sort((a, b) => a.line - b.line);
+}
+
+export function commentsIn(path, text) {
+  if (path.endsWith(".svelte")) return svelteComments(text);
+  if (path.endsWith(".css"))
+    return patternComments(text, CSS_COMMENT_RE, "block", "style");
+  return scriptComments(text);
+}
+
+/** What `path` breaks, as `{ line, rule, message }`, in line order. */
+export function violations(path, text) {
+  const found = [];
+  for (const comment of commentsIn(path, text)) {
+    const lines = comment.lines.filter((line) => line.trim() !== "");
+    const isComponentDoc =
+      comment.syntax === "html" && COMPONENT_DOC_RE.test(lines[0] ?? "");
+    const written = isComponentDoc
+      ? [lines[0].replace(COMPONENT_DOC_RE, ""), ...lines.slice(1)].filter(
+          (line) => line.trim() !== "",
+        )
+      : lines;
+    if (written.length === 0) continue;
+    if (!isComponentDoc && DIRECTIVE_RE.test(written[0].trim())) continue;
+    const report = (rule, message) =>
+      found.push({ line: comment.line, rule, message });
+    const isJsdoc = comment.syntax === "jsdoc";
+
+    const cap = capFor(comment, isComponentDoc);
+    if (written.length > cap)
+      report("length", `${written.length} lines, the cap here is ${cap}`);
+
+    if (isJsdoc && !comment.isHeader && !comment.onDeclaration)
+      report("syntax", "`/** */` belongs on a declaration; use `//`");
+    if (
+      comment.syntax === "block" &&
+      comment.place === "script" &&
+      !comment.sharesLine
+    )
+      report("syntax", "`/* */` is for CSS; use `//`");
+
+    if (written.some((line) => BANNER_RE.test(line)))
+      report("banner", "no divider lines");
+    if (written.some((line) => line.includes(EM_DASH)))
+      report("em-dash", "no em dashes");
+    if (
+      written.some((line) => TODO_MARKER_RE.test(line)) &&
+      !written.some((line) => ISSUE_RE.test(line))
+    )
+      report("todo", "name the issue, as #123");
+    if (!isJsdoc && comment.syntax !== "html") {
+      const code = written.find((line) => CODE_LINE_RE.test(line.trim()));
+      if (code) report("dead-code", `commented-out code: ${code.trim()}`);
+    }
+  }
+  return found;
+}
+
+/**
+ * Repo-relative source paths under `targets`, the whole checkout when there
+ * are none. Tracked files and untracked ones git does not ignore, so a build
+ * output or another repository kept inside the checkout is not read.
+ */
+export function checkedFiles(targets = []) {
+  const listing = execFileSync(
+    "git",
+    [
+      "ls-files",
+      "-z",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "--",
+      ...targets,
+    ],
+    { cwd: ROOT, encoding: "utf8", maxBuffer: LISTING_MAX_BYTES },
+  );
+  const paths = new Set(
+    listing.split("\0").filter((path) => CHECKED_FILE_RE.test(path)),
+  );
+  // A file deleted and not yet staged is still in the index.
+  return [...paths].filter((path) => existsSync(resolve(ROOT, path))).sort();
+}
+
+function main(targets) {
+  const missing = targets.filter(
+    (target) => !existsSync(resolve(ROOT, target)),
+  );
+  if (missing.length) {
+    console.error(`comments:check: no such path: ${missing.join(", ")}`);
+    process.exit(1);
+  }
+  let count = 0;
+  for (const path of checkedFiles(targets)) {
+    for (const { line, rule, message } of violations(
+      path,
+      readFileSync(resolve(ROOT, path), "utf8"),
+    )) {
+      console.error(`${path}:${line}  ${rule}  ${message}`);
+      count++;
+    }
+  }
+  if (count) {
+    console.error(`\ncomments:check: ${count} to fix (see CLAUDE.md).`);
+    process.exit(1);
+  }
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  main(process.argv.slice(2));
+}

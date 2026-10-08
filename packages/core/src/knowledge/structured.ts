@@ -61,14 +61,14 @@ export type Structured = z.infer<typeof structuredSchema>;
 
 export function parseStructured(value: unknown): Structured {
   if (value == null) return {};
-  const res = structuredSchema.safeParse(value);
-  if (!res.success) {
-    const issues = res.error.issues
+  const parsed = structuredSchema.safeParse(value);
+  if (!parsed.success) {
+    const issues = parsed.error.issues
       .map((i) => `${i.path.join(".") || "structured"}: ${i.message}`)
       .join("; ");
     throw badInput(`Invalid structured field: ${issues}`);
   }
-  return res.data;
+  return parsed.data;
 }
 
 export const cloudSchema = z.string().regex(CLOUD_RE, CLOUD_HINT);

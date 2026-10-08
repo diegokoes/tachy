@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { RepoIndexRun } from "@tachy/contract";
 import { sql } from "../infra/db";
+import { count, num } from "../jobs/present";
 import { defineJob } from "../jobs/registry";
 import { indexRepo } from "./indexer";
 import { listRepos } from "./repos";
@@ -33,7 +34,7 @@ export async function activeReindexes(): Promise<Map<string, RepoIndexRun>> {
 export function defineCodeJobs() {
   defineJob({
     kind: "repo.reindex",
-    title: "Reindex a linked repository",
+    title: "Index repository",
     description:
       "Fetches the repository's tracked lines and embeds the files that changed since the last index.",
     params: z.object({
@@ -48,13 +49,40 @@ export function defineCodeJobs() {
     }),
     queue: "index",
     dedupeKey: (p) => p.repo,
+    subject: (p) =>
+      `${p.repo}${p.line ? ` @ ${p.line}` : ""}${p.full ? " (full)" : ""}`,
+    outcome: (output) => {
+      const lines = (output.lines ?? []) as {
+        ref: string;
+        upToDate: boolean;
+        filesIndexed: number;
+        filesEmbedded: number;
+        filesDeleted: number;
+        versionLabel?: string | null;
+      }[];
+      const said = lines.map((l) =>
+        l.upToDate
+          ? `up to date${l.versionLabel ? ` at ${l.versionLabel}` : ""}`
+          : [
+              `${count(l.filesIndexed, "file")} indexed`,
+              l.filesEmbedded ? `${num(l.filesEmbedded)} embedded` : "",
+              l.filesDeleted ? `${num(l.filesDeleted)} removed` : "",
+            ]
+              .filter(Boolean)
+              .join(", "),
+      );
+      if (!said.length) return null;
+      return said.length === 1
+        ? said[0]
+        : lines.map((l, i) => `${l.ref}: ${said[i]}`).join(" · ");
+    },
     timeout: "8h",
-    run: async (ctx, p) => {
-      ctx.log(`indexing ${p.repo}${p.line ? ` ${p.line}` : ""}`);
-      const res = await indexRepo(p.repo, {
-        line: p.line,
-        full: p.full,
-        token: await repoToken(p.repo, ctx.requestedBy),
+    run: async (ctx, params) => {
+      ctx.log(`indexing ${params.repo}${params.line ? ` ${params.line}` : ""}`);
+      const indexed = await indexRepo(params.repo, {
+        line: params.line,
+        full: params.full,
+        token: await repoToken(params.repo, ctx.requestedBy),
         signal: ctx.signal,
         onProgress: (done, total, ref, at) =>
           void ctx.progress(
@@ -62,13 +90,13 @@ export function defineCodeJobs() {
             `${ref}${at.count > 1 ? ` (${at.index + 1}/${at.count})` : ""}: ${total ? `${done}/${total} files` : "fetching"}`,
           ),
       });
-      return { ...res };
+      return { ...indexed };
     },
   });
 
   defineJob({
     kind: "repos.refresh",
-    title: "Reindex linked repositories",
+    title: "Index all repositories",
     description:
       "Queues a reindex of each linked repository not being indexed already, as runs of their own under this one. With scope 'indexed' (the nightly default) it skips repositories never indexed, which wait for someone to index them; 'all' takes those too. A repo with no new commits costs a fetch and a tree diff.",
     params: z.object({
@@ -82,17 +110,26 @@ export function defineCodeJobs() {
     }),
     defaultSchedule: "40 2 * * *",
     dedupeKey: () => "all",
+    subject: (p) => (p.scope === "all" ? "including never indexed" : null),
+    outcome: (o) =>
+      [
+        `${count(Number(o.queued ?? 0), "repository", "repositories")} queued`,
+        o.skipped ? `${o.skipped} already running` : "",
+        o.never_indexed ? `${o.never_indexed} never indexed` : "",
+      ]
+        .filter(Boolean)
+        .join(", "),
     timeout: "10m",
-    run: async (ctx, p) => {
+    run: async (ctx, params) => {
       let queued = 0;
       let skipped = 0;
       let neverIndexed = 0;
       const repos = await listRepos();
-      for (const [i, repo] of repos.entries()) {
+      for (const [index, repo] of repos.entries()) {
         ctx.signal.throwIfAborted();
-        await ctx.progress(i / repos.length, repo.slug);
+        await ctx.progress(index / repos.length, repo.slug);
         if (
-          p.scope !== "all" &&
+          params.scope !== "all" &&
           !repo.lines.some((l) => l.indexed_commit || l.indexing_commit)
         ) {
           neverIndexed++;
@@ -101,7 +138,7 @@ export function defineCodeJobs() {
         if (
           await ctx.enqueue("repo.reindex", {
             repo: repo.slug,
-            ...(p.full ? { full: true } : {}),
+            ...(params.full ? { full: true } : {}),
           })
         )
           queued++;

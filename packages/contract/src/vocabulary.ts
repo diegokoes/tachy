@@ -43,9 +43,9 @@ export const REPORT_STATUSES = [
   "closed",
 ] as const;
 /**
- * The in-app notifications a person can receive. One kind today; the list is
- * the seam future kinds are added along, and `test/infra/schema-drift.test.ts` holds
- * it against the notifications.kind CHECK.
+ * The in-app notifications a person can receive.
+ * `test/infra/schema-drift.test.ts` holds the list against the
+ * `notifications.kind` CHECK.
  */
 export const NOTIFICATION_KINDS = ["report_reply"] as const;
 /** Who a report_messages row came from: the admin working it or the reporter. */
@@ -105,12 +105,11 @@ export const DEPLOYMENT_PROFILES = ["support", "engineering"] as const;
 export type DeploymentProfile = (typeof DEPLOYMENT_PROFILES)[number];
 
 /**
- * Two independent rungs, stored as the same two words in different tables:
- * `users.role` is the app-wide role, `team_members.role` the per-team one. An
- * app admin manages users, org structure and system settings; a team admin
- * curates one team's library and roster. Nothing in the stored value says
- * which rung it came from, so every surface that shows one has to name the
- * rung with it - see `roleLabel` in packages/web/src/terms.ts.
+ * Two independent rungs stored as the same two words: `users.role` is app-wide
+ * (users, org structure, system settings), `team_members.role` per team (one
+ * team's library and roster). The stored value does not say which rung it is,
+ * so a surface that shows one names the rung: `roleLabel` in
+ * packages/web/src/terms.ts.
  */
 export const USER_ROLES = ["admin", "member"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
@@ -119,8 +118,8 @@ export const TEAM_ROLES = ["admin", "member"] as const;
 export type TeamRole = (typeof TEAM_ROLES)[number];
 
 /**
- * The wizard refuses a shorter one in the field, and hashPassword refuses it
- * again on the way in. Two enforcement points, so one number.
+ * Enforced twice from this one number: by the wizard in the field and by
+ * `hashPassword` on the way in.
  */
 export const MIN_PASSWORD_LENGTH = 10;
 

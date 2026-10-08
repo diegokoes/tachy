@@ -12,18 +12,9 @@
   font-size: calc(clamp(14.5px, 0.35vw + 12.5px, 18px) * var(--font-scale, 1));
   font-family: var(--font-ui);
 
-  /* Three semantic faces, each pickable from Settings › ui. --font-ui carries
-     chrome: nav, labels, controls, panel titles, table cells. --font-prose
-     carries running text - entry bodies, docs, chat. --font-mono carries
-     anything on a character grid: code, ids, the ASCII chrome.
-
-     Every stack ends in DejaVu Mono before its generic, and that entry is not
-     decorative. Neither Plex face ships a single block, box-drawing or
-     geometric glyph - no █ ░ ▒ ▓ ─ ┌ ▲ ▾ ● ✓ ✕ ⚙ ⏎ - so without a face that
-     does, the app's own glyph vocabulary falls through to whatever the OS
-     happens to supply and stops lining up on the grid it is drawn on. DejaVu
-     Mono covers all of them and puts "0" at 0.602em against Plex Mono's
-     0.600em, so a substituted glyph still lands in its cell. */
+  /* Three semantic faces, pickable in Settings › ui: chrome, running text,
+     and the character grid. Each stack ends in DejaVu Mono, which has the
+     block, box-drawing and geometric glyphs neither Plex face has. */
   --font-ui:
     "IBM Plex Sans Variable", "IBM Plex Sans", ui-sans-serif, system-ui,
     "Segoe UI", "DejaVu Mono", sans-serif;
@@ -35,8 +26,8 @@
   --bg: #080808;
   --panel: rgba(8, 8, 8, 0.82);
   --panel-solid: #101010;
-  /* Panels are opaque so the wallpaper reads BETWEEN boxes, not through them -
-     and so inline titles can mask the rule they straddle. */
+  /* Panels are opaque so the wallpaper reads between boxes, not through
+     them, and so inline titles can mask the rule they straddle. */
   --panel-bg: var(--panel-solid);
   --border: rgba(255, 255, 255, 0.09);
   --text: #e2e2e2;
@@ -87,10 +78,9 @@
      competes with its own. */
   --dialog-bg: var(--panel-solid);
 
-  /* Behind anything modal. The blur is what separates the two planes; ink alone
-     leaves the text underneath legible through the gap and reads as dirt.
-     Enough of both to push the app back, not so much that it goes away - the
-     window behind a dialog should still be recognisably the window you left. */
+  /* Behind anything modal. The blur separates the two planes: ink alone
+     leaves the text underneath legible. Enough of both to push the app back
+     while the window behind stays recognisable. */
   --scrim-ink: color-mix(in srgb, #000 28%, transparent);
   --scrim-blur: 5px;
 }
@@ -103,10 +93,9 @@
   --border: rgba(30, 28, 20, 0.17);
   --text: #21201c;
   --muted: #635e53;
-  /* Higher than the dark theme's, not equal to it. A dark glyph on a light
-     ground has less perceptual contrast at this size than a light glyph on a
-     dark one, so matching the alpha would leave the light theme's sky nearly
-     blank - which is what it was. */
+  /* Higher than the dark theme's: a dark glyph on a light ground has less
+     perceptual contrast at this size than a light one on dark, so equal
+     alpha leaves the light theme's sky nearly blank. */
   --star-ink: rgba(30, 28, 20, 0.42);
   --wordmark-ink: rgba(30, 28, 20, 0.16);
   --ok: #1a7f37;
@@ -131,21 +120,17 @@
   --scrim-blur: 4px;
 }
 
-/* ── Radius ───────────────────────────────────────────────────────────────
-   Two steps, and the split is the point: rounded corners are the web's common
-   signal for "this is interactive" (Jakob's law - people read our corners with
-   habits built on everyone else's). Containers stay squarer so nobody tries to
-   click a panel; controls round off so they read as pressable at a glance. */
+/* Radius. Two steps: rounded corners are the web's signal for "this is
+   interactive", so containers stay squarer and controls round off to read as
+   pressable. */
 :root {
   --radius: 4px; /* surfaces: panels, dialogs, cards, table cells */
   --radius-control: 8px; /* buttons, tabs, inputs, selects, menus */
   --radius-chip: 999px; /* chips and badges read as pills */
 }
 
-/* ── Spacing ──────────────────────────────────────────────────────────────
-   Every padding, gap and row height in the app is one of these four steps.
-   A component that needs a value not on the scale is a component that needs
-   rethinking. */
+/* Spacing. Every padding, gap and row height in the app is one of these four
+   steps; a component that needs another value needs rethinking. */
 :root {
   --pad-1: 0.2rem;
   --pad-2: 0.4rem;
@@ -160,20 +145,17 @@
   --control-h: calc(var(--row-h) + var(--pad-2));
 }
 
-/* ── View padding ─────────────────────────────────────────────────────────
-   The air a full view sits in. Multiples of the scale above, not new steps,
-   named so the overview and the section views cannot drift apart. */
+/* View padding: the air a full view sits in. Multiples of the spacing scale,
+   not new steps, named so the overview and the section views cannot drift
+   apart. */
 :root {
   --view-pad-x: calc(var(--pad-4) * 1.75);
   --view-pad-y: calc(var(--pad-4) * 1.25);
 }
 
-/* ── Panel border ─────────────────────────────────────────────────────────
-   The rule is a CSS border - a continuous line, which is exactly what ─
-   renders as. Mixed off --muted, not --border: a box rule has to actually read
-   as a drawn line, which 9%-white does not. The width is its own token because
-   anything that has to meet this rule end-on - the subnav notch cut into the
-   window's top edge - needs to know how thick it is. */
+/* Panel border. A CSS border, mixed off --muted because --border is too
+   faint to read as a drawn line. The width is its own token because whatever
+   meets this rule end-on, like the subnav notch, needs its thickness. */
 :root {
   --panel-line-w: 2px;
   --panel-line: var(--panel-line-w) solid var(--muted);
@@ -182,11 +164,9 @@
   --border-bare: color-mix(in srgb, var(--muted) 55%, transparent);
 }
 
-/* ── Type scale ───────────────────────────────────────────────────────────
-   Four reading sizes. Anything smaller than --fs-xs is unreadable at density
-   compact; anything between these is drift. --fs-fig is not a fifth reading
-   size - it is the figure a card leads with, which has to outrank the caption
-   under it, and nothing sets running text in it. */
+/* Type scale. Four reading sizes; anything smaller than --fs-xs is
+   unreadable at compact density. --fs-fig is the figure a card leads with,
+   not a reading size. */
 :root {
   --fs-xs: 0.72rem;
   --fs-sm: 0.82rem;

@@ -1,6 +1,6 @@
 # Defaults for deploy/host/playbook.yml. They live here and not in the play's
-# `vars:` because play vars outrank the inventory: there, the inventory's
-# admin_users and lan_cidrs were replaced by these empty lists.
+# `vars:` because play vars outrank the inventory: there, these empty lists
+# replace the inventory's admin_users and lan_cidrs.
 tachy_user: tachy
 tachy_dir: /opt/tachy
 tachy_srv: /srv/tachy

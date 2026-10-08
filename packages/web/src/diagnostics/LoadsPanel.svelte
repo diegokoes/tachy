@@ -29,9 +29,9 @@
   const runs = $derived(loads.data.runs);
   const summary = $derived(loadSummary(runs));
 
-  /* Which scripts get run, and how often each passes. The stress share rides
-     on the bar, because a script that only ever passes unstressed has not
-     been tested the way its name suggests. */
+  // Which scripts get run, and how often each passes. The stress share rides on
+  // the bar, because a script that only ever passes unstressed has not been
+  // tested the way its name suggests.
   const byScript = $derived(
     summary.byScript.map((s): Bar => ({
       key: s.script,
@@ -167,44 +167,44 @@
     <span><b>{summary.stress}</b> under stress</span>
   </div>
   <GroupHead label="by script" />
-  <div class="bars"><Bars rows={byScript} limit={8} /></div>
+  <div class="bars"><Bars rows={byScript} cap={8} /></div>
 {/if}
 
 <GroupHead label="runs" />
 <table class="runs">
   <tbody>
-    {#each runs as r (r.id)}
+    {#each runs as run (run.id)}
       <tr>
         <td>
-          {r.script}{r.profile ? ` (${r.profile})` : ""}
-          <span class="dim small"><Time at={r.created_at} /></span>
+          {run.script}{run.profile ? ` (${run.profile})` : ""}
+          <span class="dim small"><Time at={run.created_at} /></span>
         </td>
         <td
-          >{r.target}<span class="dim small"
-            >{r.image_sha ?? "unknown build"}</span
+          >{run.target}<span class="dim small"
+            >{run.image_sha ?? "unknown build"}</span
           ></td
         >
-        <td><Badge tone={toneOf(r.status)}>{r.status}</Badge></td>
-        <td class="dim">{latencies(r)}</td>
+        <td><Badge tone={toneOf(run.status)}>{run.status}</Badge></td>
+        <td class="dim">{latencies(run)}</td>
         <td class="acts">
-          {#if r.output_tail}
-            <Button variant="ghost" size="sm" onclick={() => toggle(r.id)}
-              >{open.has(r.id) ? "hide" : "output"}</Button
+          {#if run.output_tail}
+            <Button variant="ghost" size="sm" onclick={() => toggle(run.id)}
+              >{open.has(run.id) ? "hide" : "output"}</Button
             >
           {/if}
-          {#if isActive(r.status)}
+          {#if isActive(run.status)}
             <Button
               variant="ghost"
               size="sm"
               tone="danger"
               icon="stop"
-              onclick={() => cancel(r)}>stop</Button
+              onclick={() => cancel(run)}>stop</Button
             >
           {/if}
         </td>
       </tr>
-      {#if open.has(r.id)}
-        <tr><td colspan="5"><pre class="log">{r.output_tail}</pre></td></tr>
+      {#if open.has(run.id)}
+        <tr><td colspan="5"><pre class="log">{run.output_tail}</pre></td></tr>
       {/if}
     {:else}
       <tr><td colspan="5" class="dim">no load runs</td></tr>

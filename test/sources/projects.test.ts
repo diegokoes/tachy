@@ -25,8 +25,10 @@ import {
 const SOURCE = "test-freshdesk";
 const FIXTURE_KEY = "48000641379";
 
-/** resetData() spares source_projects, so this file owns the table's state and
- *  puts the fixture routing row back for the suites that follow. */
+/**
+ * resetData() spares source_projects, so this file owns the table's state and
+ * puts the fixture routing row back for the suites that follow.
+ */
 const seedFixtureProject = () =>
   addSourceProject({
     sourceSlug: SOURCE,
