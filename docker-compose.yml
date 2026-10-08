@@ -4,16 +4,16 @@ networks:
 
 services:
   postgres:
-    # pg_trgm/pgcrypto/vector are all already present in this image -- no
-    # postgresql-contrib needed (verified directly; see test/global-setup.ts,
-    # which relies on the same fact for the test suite's Testcontainers DB).
+    # The image ships pg_trgm, pgcrypto and vector, so no postgresql-contrib is
+    # needed; test/global-setup.ts relies on the same for the suite's
+    # Testcontainers database.
     image: pgvector/pgvector:0.8.6-pg16
     container_name: ${COMPOSE_PROJECT_NAME:-tachy}-postgres
     restart: unless-stopped
     # Docker's default /dev/shm is 64MB. A parallel index build allocates its
-    # whole maintenance_work_mem there, so rebuilding the HNSW/GIN indexes
-    # (a large seed, a reembed) failed with "could not resize shared memory
-    # segment ... No space left on device".
+    # whole maintenance_work_mem there, so at that size rebuilding the HNSW/GIN
+    # indexes (a large seed, a reembed) fails with "could not resize shared
+    # memory segment ... No space left on device".
     shm_size: 1gb
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-tachy}
@@ -71,9 +71,8 @@ services:
       - tachy-repo-data:/app/data
       # Per-user Claude Code state: one directory per user under users/<id>,
       # each holding that user's credential store and session transcripts.
-      # Persisting it lets multi-turn chats resume across redeploys. The
-      # server's own `claude login` no longer answers turns - users bring
-      # their own credential, or fall back to ANTHROPIC_API_KEY /
+      # Persisting it lets multi-turn chats resume across redeploys. Users
+      # bring their own credential, or fall back to ANTHROPIC_API_KEY /
       # CLAUDE_CODE_OAUTH_TOKEN from the environment.
       # Under /home/node, not /root: the container runs as an unprivileged user.
       - tachy-agent-home:/home/node/.claude
