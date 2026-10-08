@@ -61,36 +61,36 @@ describe("listModels", () => {
 
   it("asks with the caller's credential and no settings from disk", async () => {
     claude.supportedModels.mockResolvedValue([]);
-    const a = auth();
+    const credential = auth();
     await listModels({
-      agentAuth: a,
+      agentAuth: credential,
       configDir: "/tmp/u1",
     });
     const opts = claude.options[0] as {
       env: Record<string, string>;
       settingSources: unknown[];
     };
-    expect(opts.env.ANTHROPIC_API_KEY).toBe(a.value);
+    expect(opts.env.ANTHROPIC_API_KEY).toBe(credential.value);
     expect(opts.env.CLAUDE_CONFIG_DIR).toBe("/tmp/u1");
     expect(opts.settingSources).toEqual([]);
   });
 
   it("serves a repeat ask from cache, but not one under another credential", async () => {
     claude.supportedModels.mockResolvedValue([]);
-    const a = auth();
-    await listModels({ agentAuth: a });
-    await listModels({ agentAuth: a });
+    const credential = auth();
+    await listModels({ agentAuth: credential });
+    await listModels({ agentAuth: credential });
     expect(claude.supportedModels).toHaveBeenCalledTimes(1);
     await listModels({ agentAuth: auth() });
     expect(claude.supportedModels).toHaveBeenCalledTimes(2);
   });
 
   it("forgets a failure, so the next ask tries again", async () => {
-    const a = auth();
+    const credential = auth();
     claude.supportedModels.mockRejectedValueOnce(new Error("boom"));
-    await expect(listModels({ agentAuth: a })).rejects.toThrow("boom");
+    await expect(listModels({ agentAuth: credential })).rejects.toThrow("boom");
     claude.supportedModels.mockResolvedValue([]);
-    await expect(listModels({ agentAuth: a })).resolves.toEqual([]);
+    await expect(listModels({ agentAuth: credential })).resolves.toEqual([]);
   });
 
   it("gives up on a runtime that never answers", async () => {

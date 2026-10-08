@@ -28,20 +28,20 @@ const branch = (id: string, then: FlowStep[] = [], els: FlowStep[] = []) =>
     else: els,
   }) as FlowStep;
 
-const g = (steps: FlowStep[]): FlowGraph => ({
+const graphOf = (steps: FlowStep[]): FlowGraph => ({
   triggers: [{ id: "m", kind: "manual", params: {} }],
   steps,
 });
 
 describe("flow editing", () => {
   it("names new steps after their action without clashing", () => {
-    expect(freshId(g([act("search")]), "search")).toBe("search-2");
-    expect(freshId(g([]), "Post Note!")).toBe("post-note");
+    expect(freshId(graphOf([act("search")]), "search")).toBe("search-2");
+    expect(freshId(graphOf([]), "Post Note!")).toBe("post-note");
   });
 
   it("keeps an if last: steps after it go into its then branch", () => {
     const next = insertStep(
-      g([act("a"), branch("i")]),
+      graphOf([act("a"), branch("i")]),
       { list: "root" },
       act("b"),
     );
@@ -53,7 +53,7 @@ describe("flow editing", () => {
 
   it("an if placed mid-list takes what followed into its then branch", () => {
     const next = insertStep(
-      g([act("a"), act("b")]),
+      graphOf([act("a"), act("b")]),
       { after: "a" },
       branch("i"),
     );
@@ -65,7 +65,7 @@ describe("flow editing", () => {
 
   it("adds into an else branch and removes a step anywhere", () => {
     let graph = insertStep(
-      g([branch("i")]),
+      graphOf([branch("i")]),
       { list: "else", of: "i" },
       act("e"),
     );
@@ -83,13 +83,13 @@ describe("flow editing", () => {
   });
 
   it("lays triggers left of the start and gives every branch a slot to add to", () => {
-    const d = layoutFlow(g([act("a"), branch("i", [act("t")])]));
-    const start = d.nodes.find((n) => n.node.kind === "start")!;
-    expect(d.triggers[0].x).toBeLessThan(start.x);
-    const slots = d.nodes.filter((n) => n.node.kind === "slot");
+    const drawn = layoutFlow(graphOf([act("a"), branch("i", [act("t")])]));
+    const start = drawn.nodes.find((n) => n.node.kind === "start")!;
+    expect(drawn.triggers[0].x).toBeLessThan(start.x);
+    const slots = drawn.nodes.filter((n) => n.node.kind === "slot");
     expect(slots).toHaveLength(2);
     expect(
-      d.links
+      drawn.links
         .filter((l) => l.branch)
         .map((l) => l.branch)
         .sort(),
@@ -138,16 +138,16 @@ describe("what the canvas says", () => {
   });
 
   it("replaces a step or trigger in place", () => {
-    const graph = g([branch("i", [act("t")])]);
+    const graph = graphOf([branch("i", [act("t")])]);
     const next = replaceStep(graph, { ...act("t"), label: "renamed" });
     expect(findStep(next.steps, "t")).toMatchObject({ label: "renamed" });
     expect(findStep(graph.steps, "t")).not.toHaveProperty("label");
-    const t = replaceTrigger(graph, {
+    const replaced = replaceTrigger(graph, {
       id: "m",
       kind: "manual",
       params: { x: 1 },
     });
-    expect(t.triggers[0].params).toEqual({ x: 1 });
+    expect(replaced.triggers[0].params).toEqual({ x: 1 });
   });
 });
 

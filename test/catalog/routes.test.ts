@@ -13,10 +13,11 @@ const app = createApp({ passwordAuth: true });
 let cookie = "";
 
 /** Send with the admin's cookie; `method` overrides the POST `json()` gives. */
-function as(path: string, method: string, body?: unknown) {
+function requestAs(path: string, method: string, body?: unknown) {
   return app.request(path, {
     ...(body === undefined ? {} : json(body)),
-    // After the spread: json() sets POST, and every route below is something else.
+    // After the spread: json() sets POST, and every route in this file is
+    // something else.
     method,
     headers: {
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
@@ -40,7 +41,7 @@ beforeEach(async () => {
 
 describe("component routes", () => {
   it("creates, lists, patches and deletes a component", async () => {
-    const created = await as("/api/products/tpd/components", "POST", {
+    const created = await requestAs("/api/products/tpd/components", "POST", {
       slug: "label-renderer",
       name: "Label renderer",
     });
@@ -52,7 +53,7 @@ describe("component routes", () => {
       "label-renderer",
     ]);
 
-    const patched = await as(
+    const patched = await requestAs(
       "/api/products/tpd/components/label-renderer",
       "PATCH",
       { name: "Renderer" },
@@ -60,7 +61,7 @@ describe("component routes", () => {
     expect(patched.status).toBe(200);
     expect((await patched.json()).name).toBe("Renderer");
 
-    const deleted = await as(
+    const deleted = await requestAs(
       "/api/products/tpd/components/label-renderer",
       "DELETE",
     );
@@ -71,13 +72,13 @@ describe("component routes", () => {
   });
 
   it("refuses a product slug that does not exist", async () => {
-    const res = await get("/api/products/no-such-product/components");
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/no-such-product/);
+    const response = await get("/api/products/no-such-product/components");
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/no-such-product/);
   });
 
-  /* The architecture view draws the whole catalogue, so it needs every
-     component in one answer, each carrying the branch it hangs off. */
+  // The architecture view draws the whole catalogue, so it needs every
+  // component in one answer, each carrying the branch it hangs off.
   it("lists every component with its product and team", async () => {
     const productId = await tpdProductId();
     await addComponent({ productId, slug: "spooler", name: "Spooler" });
@@ -88,15 +89,15 @@ describe("component routes", () => {
       parentSlug: "spooler",
     });
 
-    const res = await get("/api/components");
-    expect(res.status).toBe(200);
+    const response = await get("/api/components");
+    expect(response.status).toBe(200);
     const rows: {
       id: string;
       slug: string;
       parent_id: string | null;
       product_slug: string;
       team_slug: string;
-    }[] = await res.json();
+    }[] = await response.json();
 
     const spooler = rows.find((r) => r.slug === "spooler")!;
     const child = rows.find((r) => r.slug === "spool-queue")!;
@@ -108,14 +109,14 @@ describe("component routes", () => {
   });
 
   it("rejects a slug with spaces in it", async () => {
-    const res = await as("/api/products/tpd/components", "POST", {
+    const response = await requestAs("/api/products/tpd/components", "POST", {
       slug: "Label Renderer",
       name: "Label renderer",
     });
-    expect(res.status).toBe(400);
+    expect(response.status).toBe(400);
   });
 
-  /** The count is what the confirm dialog shows before a rename is agreed to. */
+  // The count is what the confirm dialog shows before a rename is agreed to.
   it("counts what a component rename would touch, then renames it", async () => {
     const productId = await tpdProductId();
     await addComponent({ productId, slug: "spooler", name: "Spooler" });
@@ -133,7 +134,7 @@ describe("component routes", () => {
     expect(impact.status).toBe(200);
     expect((await impact.json()).entries).toBe(1);
 
-    const renamed = await as(
+    const renamed = await requestAs(
       "/api/products/tpd/components/spooler/rename",
       "POST",
       { to: "print-spooler" },
@@ -146,16 +147,19 @@ describe("component routes", () => {
     ]);
   });
 
-  /** 404 here, unlike the product above: the product resolved, the component did not. */
+  // 404 here, unlike an unknown product: the product resolved, the component
+  // did not.
   it("404s on rename-impact for a component nobody created", async () => {
-    const res = await get("/api/products/tpd/components/nope/rename-impact");
-    expect(res.status).toBe(404);
+    const response = await get(
+      "/api/products/tpd/components/nope/rename-impact",
+    );
+    expect(response.status).toBe(404);
   });
 });
 
 describe("label routes", () => {
   it("creates, lists, patches and deletes a label", async () => {
-    const created = await as("/api/products/tpd/labels", "POST", {
+    const created = await requestAs("/api/products/tpd/labels", "POST", {
       slug: "regression",
       description: "Worked before, does not now.",
     });
@@ -164,13 +168,20 @@ describe("label routes", () => {
     const listed = await (await get("/api/products/tpd/labels")).json();
     expect(listed.map((l: { slug: string }) => l.slug)).toEqual(["regression"]);
 
-    const patched = await as("/api/products/tpd/labels/regression", "PATCH", {
-      description: "A behaviour that used to work.",
-    });
+    const patched = await requestAs(
+      "/api/products/tpd/labels/regression",
+      "PATCH",
+      {
+        description: "A behaviour that used to work.",
+      },
+    );
     expect(patched.status).toBe(200);
     expect((await patched.json()).description).toMatch(/used to work/);
 
-    const deleted = await as("/api/products/tpd/labels/regression", "DELETE");
+    const deleted = await requestAs(
+      "/api/products/tpd/labels/regression",
+      "DELETE",
+    );
     expect(deleted.status).toBe(200);
     expect(await (await get("/api/products/tpd/labels")).json()).toEqual([]);
   });
@@ -184,7 +195,7 @@ describe("label routes", () => {
     );
     expect(impact.status).toBe(200);
 
-    const renamed = await as(
+    const renamed = await requestAs(
       "/api/products/tpd/labels/regression/rename",
       "POST",
       { to: "known-regression" },
@@ -199,16 +210,20 @@ describe("label routes", () => {
   it("rejects a rename to an invalid slug", async () => {
     const productId = await tpdProductId();
     await addLabel(productId, "regression", "Worked before.");
-    const res = await as("/api/products/tpd/labels/regression/rename", "POST", {
-      to: "Known Regression",
-    });
-    expect(res.status).toBe(400);
+    const response = await requestAs(
+      "/api/products/tpd/labels/regression/rename",
+      "POST",
+      {
+        to: "Known Regression",
+      },
+    );
+    expect(response.status).toBe(400);
   });
 });
 
 describe("customer routes", () => {
   it("creates, lists, patches and deletes a customer", async () => {
-    const created = await as("/api/customers", "POST", {
+    const created = await requestAs("/api/customers", "POST", {
       name: "Northwind Packaging",
       slug: "northwind",
       emailDomains: ["northwind.invalid"],
@@ -218,13 +233,15 @@ describe("customer routes", () => {
     const listed = await (await get("/api/customers")).json();
     expect(listed.map((x: { slug: string }) => x.slug)).toEqual(["northwind"]);
 
-    const patched = await as("/api/customers/northwind", "PATCH", {
+    const patched = await requestAs("/api/customers/northwind", "PATCH", {
       name: "Northwind Ltd",
     });
     expect(patched.status).toBe(200);
     expect((await patched.json()).name).toBe("Northwind Ltd");
 
-    expect((await as("/api/customers/northwind", "DELETE")).status).toBe(200);
+    expect((await requestAs("/api/customers/northwind", "DELETE")).status).toBe(
+      200,
+    );
     expect(await (await get("/api/customers")).json()).toEqual([]);
   });
 
@@ -239,34 +256,32 @@ describe("customer routes", () => {
       "member@example.com",
       "a-long-password",
     );
-    const res = await app.request("/api/customers", {
+    const response = await app.request("/api/customers", {
       ...json({ name: "Sneaky", slug: "sneaky" }),
       headers: { "Content-Type": "application/json", Cookie: memberCookie },
     });
-    expect(res.status).toBe(403);
+    expect(response.status).toBe(403);
   });
 
-  /**
-   * 400, not 404: the slug is caller-supplied and resolveCustomer treats an
-   * unknown one as a bad request - the same message the agent's tools get.
-   */
+  // 400, not 404: the slug is caller-supplied and resolveCustomer treats an
+  // unknown one as a bad request - the same message the agent's tools get.
   it("refuses the profile of a customer that does not exist", async () => {
-    const res = await get("/api/customers/nope/profile");
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/nope/);
+    const response = await get("/api/customers/nope/profile");
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/nope/);
   });
 });
 
 describe("customer unit and fact routes", () => {
   beforeEach(async () => {
-    await as("/api/customers", "POST", {
+    await requestAs("/api/customers", "POST", {
       name: "Northwind",
       slug: "northwind",
     });
   });
 
   it("adds a unit, patches it, lists it and deletes it", async () => {
-    const added = await as("/api/customers/northwind/units", "PUT", {
+    const added = await requestAs("/api/customers/northwind/units", "PUT", {
       slug: "line-3",
       name: "Line 3",
       kind: "line",
@@ -276,14 +291,19 @@ describe("customer unit and fact routes", () => {
     const listed = await (await get("/api/customers/northwind/units")).json();
     expect(listed.map((u: { slug: string }) => u.slug)).toEqual(["line-3"]);
 
-    const patched = await as("/api/customers/northwind/units/line-3", "PATCH", {
-      name: "Line three",
-    });
+    const patched = await requestAs(
+      "/api/customers/northwind/units/line-3",
+      "PATCH",
+      {
+        name: "Line three",
+      },
+    );
     expect(patched.status).toBe(200);
     expect((await patched.json()).name).toBe("Line three");
 
     expect(
-      (await as("/api/customers/northwind/units/line-3", "DELETE")).status,
+      (await requestAs("/api/customers/northwind/units/line-3", "DELETE"))
+        .status,
     ).toBe(200);
     expect(await (await get("/api/customers/northwind/units")).json()).toEqual(
       [],
@@ -291,7 +311,7 @@ describe("customer unit and fact routes", () => {
   });
 
   it("records a fact and reads it back on the profile", async () => {
-    const put = await as("/api/customers/northwind/facts", "PUT", {
+    const put = await requestAs("/api/customers/northwind/facts", "PUT", {
       kind: "version",
       label: "tpd",
       value: "9.2",
@@ -308,28 +328,27 @@ describe("customer unit and fact routes", () => {
 
     const id = facts[0].id;
     expect(
-      (await as(`/api/customers/northwind/facts/${id}`, "DELETE")).status,
+      (await requestAs(`/api/customers/northwind/facts/${id}`, "DELETE"))
+        .status,
     ).toBe(200);
     expect(await (await get("/api/customers/northwind/facts")).json()).toEqual(
       [],
     );
   });
 
-  /**
-   * The ladder is the point of units: a fact on the line is not visible on the
-   * customer as a whole, but the customer's own facts still reach the line.
-   */
+  // The ladder is the point of units: a fact on the line is not visible on the
+  // customer as a whole, but the customer's own facts still reach the line.
   it("resolves a unit's facts through the ladder", async () => {
-    await as("/api/customers/northwind/units", "PUT", {
+    await requestAs("/api/customers/northwind/units", "PUT", {
       slug: "line-3",
       name: "Line 3",
       kind: "line",
     });
-    await as("/api/customers/northwind/facts", "PUT", {
+    await requestAs("/api/customers/northwind/facts", "PUT", {
       kind: "contract",
       value: "gold",
     });
-    await as("/api/customers/northwind/facts", "PUT", {
+    await requestAs("/api/customers/northwind/facts", "PUT", {
       unit: "line-3",
       kind: "version",
       value: "9.2",
@@ -343,7 +362,7 @@ describe("customer unit and fact routes", () => {
   });
 
   it("lists the fact kinds already in use", async () => {
-    await as("/api/customers/northwind/facts", "PUT", {
+    await requestAs("/api/customers/northwind/facts", "PUT", {
       kind: "line_layout",
       value: "two lanes",
     });
@@ -352,11 +371,11 @@ describe("customer unit and fact routes", () => {
   });
 
   it("rejects a fact with no value", async () => {
-    const res = await as("/api/customers/northwind/facts", "PUT", {
+    const response = await requestAs("/api/customers/northwind/facts", "PUT", {
       kind: "version",
       value: "",
     });
-    expect(res.status).toBe(400);
+    expect(response.status).toBe(400);
   });
 });
 
@@ -364,15 +383,19 @@ describe("customer component links", () => {
   it("links a component to a customer and unlinks it again", async () => {
     const productId = await tpdProductId();
     await addComponent({ productId, slug: "spooler", name: "Spooler" });
-    await as("/api/customers", "POST", {
+    await requestAs("/api/customers", "POST", {
       name: "Northwind",
       slug: "northwind",
     });
 
-    const linked = await as("/api/customers/northwind/components", "PUT", {
-      product_slug: "tpd",
-      component: "spooler",
-    });
+    const linked = await requestAs(
+      "/api/customers/northwind/components",
+      "PUT",
+      {
+        product_slug: "tpd",
+        component: "spooler",
+      },
+    );
     expect(linked.status).toBe(200);
 
     const profile = await (
@@ -380,7 +403,7 @@ describe("customer component links", () => {
     ).json();
     expect(JSON.stringify(profile)).toMatch(/spooler/);
 
-    const unlinked = await as(
+    const unlinked = await requestAs(
       "/api/customers/northwind/components?product_slug=tpd&component=spooler",
       "DELETE",
     );
@@ -388,13 +411,16 @@ describe("customer component links", () => {
   });
 
   it("says which query parameters an unlink needs", async () => {
-    await as("/api/customers", "POST", {
+    await requestAs("/api/customers", "POST", {
       name: "Northwind",
       slug: "northwind",
     });
-    const res = await as("/api/customers/northwind/components", "DELETE");
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/product_slug and component/);
+    const response = await requestAs(
+      "/api/customers/northwind/components",
+      "DELETE",
+    );
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/product_slug and component/);
   });
 });
 
@@ -415,9 +441,9 @@ describe("overview components", () => {
       issueSummary: "The timer drifts after a DST change",
     });
 
-    const res = await get("/api/overview/components");
-    expect(res.status).toBe(200);
-    const rows = await res.json();
+    const response = await get("/api/overview/components");
+    expect(response.status).toBe(200);
+    const rows = await response.json();
     const engine = rows.find((r: { slug: string }) => r.slug === "engine");
     expect(
       rows.find((r: { slug: string }) => r.slug === "engine-timer"),
@@ -442,15 +468,18 @@ describe("overview issues", () => {
     await addLabel(productId, "undescribed");
     await addLabel(productId, "regression", "Worked before.");
 
-    const res = await get("/api/overview/issues?page=structure");
-    expect(res.status).toBe(200);
-    const issues = await res.json();
+    const response = await get("/api/overview/issues?page=structure");
+    expect(response.status).toBe(200);
+    const issues = await response.json();
     expect(issues["labels.no_description"]).toEqual({
       n: 1,
       items: [{ key: expect.any(String), label: "undescribed" }],
     });
-    for (const v of Object.values(issues) as { n: number; items: unknown[] }[])
-      expect(v.items.length).toBeLessThanOrEqual(Math.max(v.n, 0));
+    for (const issue of Object.values(issues) as {
+      n: number;
+      items: unknown[];
+    }[])
+      expect(issue.items.length).toBeLessThanOrEqual(Math.max(issue.n, 0));
   });
 
   it("names people in no team, and says nothing of app admins when there is one", async () => {
@@ -490,10 +519,10 @@ describe("overview issues", () => {
       "a-long-password",
     );
     for (const page of ["workers", "system"]) {
-      const res = await app.request(`/api/overview/issues?page=${page}`, {
+      const response = await app.request(`/api/overview/issues?page=${page}`, {
         headers: { Cookie: member },
       });
-      expect(res.status).toBe(403);
+      expect(response.status).toBe(403);
       expect((await get(`/api/overview/issues?page=${page}`)).status).toBe(200);
     }
     expect((await get("/api/overview/issues?page=nowhere")).status).toBe(400);
@@ -516,12 +545,12 @@ describe("overview detail routes", () => {
   });
 
   it("says when each source, repo and bucket was last brought up to date", async () => {
-    const res = await get("/api/overview/freshness");
-    expect(res.status).toBe(200);
-    const rows = await res.json();
+    const response = await get("/api/overview/freshness");
+    expect(response.status).toBe(200);
+    const rows = await response.json();
     expect(Array.isArray(rows)).toBe(true);
-    for (const r of rows)
-      expect(r).toEqual({
+    for (const row of rows)
+      expect(row).toEqual({
         kind: expect.stringMatching(/^(source|repo|bucket)$/),
         key: expect.any(String),
         label: expect.any(String),

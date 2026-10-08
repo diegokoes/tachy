@@ -51,10 +51,10 @@ describe("waffle", () => {
   });
 
   it("counts cells from the bottom left, row by row upward", () => {
-    const g = { cols: 3, rows: 2, size: 10, gap: 2 };
-    expect(waffleCell(g, 0)).toEqual({ x: 0, y: 12 });
-    expect(waffleCell(g, 2)).toEqual({ x: 24, y: 12 });
-    expect(waffleCell(g, 3)).toEqual({ x: 0, y: 0 });
+    const grid = { cols: 3, rows: 2, size: 10, gap: 2 };
+    expect(waffleCell(grid, 0)).toEqual({ x: 0, y: 12 });
+    expect(waffleCell(grid, 2)).toEqual({ x: 24, y: 12 });
+    expect(waffleCell(grid, 3)).toEqual({ x: 0, y: 0 });
   });
 
   it("rounds a share to a whole percent", () => {
@@ -64,7 +64,7 @@ describe("waffle", () => {
 });
 
 describe("series", () => {
-  const s = (key: string, values: number[]): Series => ({
+  const series = (key: string, values: number[]): Series => ({
     key,
     label: key,
     tone: "accent",
@@ -91,14 +91,14 @@ describe("series", () => {
   });
 
   it("leaves a hidden series out of the scale", () => {
-    const all = [s("a", [1, 9]), s("b", [3, 4])];
+    const all = [series("a", [1, 9]), series("b", [3, 4])];
     expect(seriesMax(all)).toBe(9);
     expect(seriesMax(visible(all, ["a"]))).toBe(4);
   });
 
   it("places a series' points through the two scales", () => {
     const pts = seriesPoints(
-      s("a", [1, 2]),
+      series("a", [1, 2]),
       (k) => (k === "d0" ? 0 : 10),
       (v) => 100 - v,
     );
@@ -152,22 +152,22 @@ describe("tooltip", () => {
 
 describe("chart group", () => {
   it("switches a series off and on for every chart in it", () => {
-    const g = createChartGroup();
-    g.toggle("reads");
-    g.toggle("writes");
-    expect(g.hidden).toEqual(["reads", "writes"]);
-    g.toggle("reads");
-    expect(g.hidden).toEqual(["writes"]);
+    const group = createChartGroup();
+    group.toggle("reads");
+    group.toggle("writes");
+    expect(group.hidden).toEqual(["reads", "writes"]);
+    group.toggle("reads");
+    expect(group.hidden).toEqual(["writes"]);
   });
 
   it("follows the pointer, and lets go only for the chart that held it", () => {
-    const g = createChartGroup();
-    g.point("latency", "2026-10-01");
-    expect(g.pointer).toEqual({ source: "latency", key: "2026-10-01" });
-    g.leave("errors");
-    expect(g.pointer.key).toBe("2026-10-01");
-    g.leave("latency");
-    expect(g.pointer).toEqual({});
+    const group = createChartGroup();
+    group.point("latency", "2026-10-01");
+    expect(group.pointer).toEqual({ source: "latency", key: "2026-10-01" });
+    group.leave("errors");
+    expect(group.pointer.key).toBe("2026-10-01");
+    group.leave("latency");
+    expect(group.pointer).toEqual({});
   });
 });
 
@@ -183,11 +183,11 @@ describe("waffle bars", () => {
   });
 
   it("stacks as many cells in a column as the bar's height holds, and sizes the unit to the longest bar", () => {
-    const g = waffleBarsGrid(400, 200, 4, 800, 2);
-    expect(g.per).toBeGreaterThan(1);
-    expect(g.size).toBeGreaterThanOrEqual(8);
-    expect(g.cols * g.per * g.unit).toBeGreaterThanOrEqual(800);
-    expect(g.unit).toBe(niceUnit(g.unit));
+    const grid = waffleBarsGrid(400, 200, 4, 800, 2);
+    expect(grid.per).toBeGreaterThan(1);
+    expect(grid.size).toBeGreaterThanOrEqual(8);
+    expect(grid.cols * grid.per * grid.unit).toBeGreaterThanOrEqual(800);
+    expect(grid.unit).toBe(niceUnit(grid.unit));
   });
 
   it("uses one cell per count while the longest bar fits", () => {
@@ -205,10 +205,10 @@ describe("waffle bars", () => {
   });
 
   it("fills a bar down a column and then across", () => {
-    const g = { size: 10, gap: 2, per: 2, cols: 5, unit: 1 };
-    expect(waffleBarCell(g, 0)).toEqual({ x: 0, y: 0 });
-    expect(waffleBarCell(g, 1)).toEqual({ x: 0, y: 12 });
-    expect(waffleBarCell(g, 2)).toEqual({ x: 12, y: 0 });
+    const grid = { size: 10, gap: 2, per: 2, cols: 5, unit: 1 };
+    expect(waffleBarCell(grid, 0)).toEqual({ x: 0, y: 0 });
+    expect(waffleBarCell(grid, 1)).toEqual({ x: 0, y: 12 });
+    expect(waffleBarCell(grid, 2)).toEqual({ x: 12, y: 0 });
   });
 });
 

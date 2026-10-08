@@ -56,8 +56,8 @@ describe("wiki API", () => {
     const toc = await (await get("/api/library/wiki/tpd/toc")).json();
     const slugs = toc.categories.map((c: any) => c.slug).sort();
     expect(slugs).toEqual(["hardware", "printing"]);
-    for (const c of toc.categories)
-      expect(c.articles.map((a: any) => a.slug)).toEqual(["spooler"]);
+    for (const category of toc.categories)
+      expect(category.articles.map((a: any) => a.slug)).toEqual(["spooler"]);
   });
 
   it("serves an article by slug with its categories", async () => {
@@ -81,10 +81,10 @@ describe("wiki API", () => {
       await article("tpd", "spooler", { categories: ["printing"] })
     ).json();
 
-    const res = await patch("/api/library/wiki/tpd/articles/spooler", {
+    const response = await patch("/api/library/wiki/tpd/articles/spooler", {
       body: "rewritten",
     });
-    expect(res.status).toBe(200);
+    expect(response.status).toBe(200);
 
     const doc = await (
       await get("/api/library/wiki/tpd/articles/spooler")
@@ -100,10 +100,10 @@ describe("wiki API", () => {
       body: "See [[vpn-setup]] and [[vpn-setup|the VPN page]].",
     });
 
-    const res = await patch("/api/library/wiki/tpd/articles/vpn-setup", {
+    const response = await patch("/api/library/wiki/tpd/articles/vpn-setup", {
       slug: "vpn-configuration",
     });
-    expect(res.status).toBe(200);
+    expect(response.status).toBe(200);
 
     const linker = await (
       await get("/api/library/wiki/tpd/articles/remote-work")
@@ -135,9 +135,9 @@ describe("wiki API", () => {
   });
 
   it("reports no main page for a new wiki instead of 404ing", async () => {
-    const res = await get("/api/library/wiki/tpd/main");
-    expect(res.status).toBe(200);
-    expect(await res.json()).toBeNull();
+    const response = await get("/api/library/wiki/tpd/main");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toBeNull();
 
     await article("tpd", "main", { title: "TPD Wiki" });
     expect((await (await get("/api/library/wiki/tpd/main")).json()).title).toBe(
@@ -163,19 +163,20 @@ describe("wiki API", () => {
   });
 
   it("rejects a reserved article slug", async () => {
-    const res = await article("tpd", "toc");
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/reserved/);
+    const response = await article("tpd", "toc");
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/reserved/);
   });
 
-  /** What the contents page sends to move a category: `parentSlug`, not `parent`. */
+  // What the contents page sends to move a category: `parentSlug`, not
+  // `parent`.
   it("moves a category under another", async () => {
     await category("tpd", "trouble");
     await category("tpd", "printing");
-    const res = await patch("/api/library/wiki/tpd/categories/printing", {
+    const response = await patch("/api/library/wiki/tpd/categories/printing", {
       parentSlug: "trouble",
     });
-    expect(res.status).toBe(200);
+    expect(response.status).toBe(200);
     const toc = await (await get("/api/library/wiki/tpd/toc")).json();
     expect(toc.categories.map((c: any) => c.slug)).toEqual(["trouble"]);
     expect(toc.categories[0].children[0].slug).toBe("printing");
@@ -184,11 +185,11 @@ describe("wiki API", () => {
   it("refuses a category re-parent that would cycle", async () => {
     await category("tpd", "a");
     await category("tpd", "b", { parentSlug: "a" });
-    const res = await patch("/api/library/wiki/tpd/categories/a", {
+    const response = await patch("/api/library/wiki/tpd/categories/a", {
       parentSlug: "b",
     });
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/cycle/);
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/cycle/);
   });
 
   it("counts a read of an article", async () => {
@@ -222,23 +223,23 @@ describe("wiki coverage API", () => {
   beforeEach(resetData);
 
   it("serves the component tree with counts and the unfiled bucket", async () => {
-    const res = await get("/api/library/wiki/tpd/coverage");
-    expect(res.status).toBe(200);
-    const body = await res.json();
+    const response = await get("/api/library/wiki/tpd/coverage");
+    expect(response.status).toBe(200);
+    const body = await response.json();
     expect(body).toHaveProperty("nodes");
     expect(body.unfiled).toMatchObject({ entries: 0, docs: 0, articles: 0 });
   });
 
   it("refuses coverage for the org-wide wiki, which has no components", async () => {
-    const res = await get("/api/library/wiki/general/coverage");
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/per product/);
+    const response = await get("/api/library/wiki/general/coverage");
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/per product/);
   });
 
   it("rejects 'coverage' as an article slug", async () => {
-    const res = await article("tpd", "coverage");
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/reserved/);
+    const response = await article("tpd", "coverage");
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/reserved/);
   });
 });
 
@@ -250,12 +251,12 @@ describe("wiki sections & search API", () => {
     await addComponent({ productId, slug: "portal", name: "Portal" });
     await addComponent({ productId, slug: "hub", name: "HUB" });
     await article("tpd", "portal-home", { title: "Portal home" });
-    const res = await category("tpd", "portal", {
+    const response = await category("tpd", "portal", {
       name: "Portal",
       leadSlug: "portal-home",
       componentSlugs: ["portal", "hub"],
     });
-    expect(res.status).toBe(200);
+    expect(response.status).toBe(200);
 
     const toc = await (await get("/api/library/wiki/tpd/toc")).json();
     const sec = toc.categories.find((c: any) => c.slug === "portal");
@@ -270,9 +271,9 @@ describe("wiki sections & search API", () => {
     const productId = await tpdProductId();
     await addComponent({ productId, slug: "portal", name: "Portal" });
     await addComponent({ productId, slug: "backend", name: "Backend" });
-    const res = await post("/api/library/wiki/tpd/sections/seed", {});
-    expect(res.status).toBe(200);
-    expect((await res.json()).created).toHaveLength(2);
+    const response = await post("/api/library/wiki/tpd/sections/seed", {});
+    expect(response.status).toBe(200);
+    expect((await response.json()).created).toHaveLength(2);
     const toc = await (await get("/api/library/wiki/tpd/toc")).json();
     expect(toc.categories.map((c: any) => c.slug).sort()).toEqual([
       "backend",
@@ -281,8 +282,8 @@ describe("wiki sections & search API", () => {
   });
 
   it("refuses to seed the org-wide wiki, which has no components", async () => {
-    const res = await post("/api/library/wiki/general/sections/seed", {});
-    expect(res.status).toBe(400);
+    const response = await post("/api/library/wiki/general/sections/seed", {});
+    expect(response.status).toBe(400);
   });
 
   it("searches this wiki's articles, drafts included", async () => {
@@ -291,9 +292,9 @@ describe("wiki sections & search API", () => {
       body: "the print spooler stops",
       status: "draft",
     });
-    const res = await get("/api/library/wiki/tpd/search?q=spooler");
-    expect(res.status).toBe(200);
-    const hits = await res.json();
+    const response = await get("/api/library/wiki/tpd/search?q=spooler");
+    expect(response.status).toBe(200);
+    const hits = await response.json();
     expect(hits.map((h: any) => h.slug)).toEqual(["spooler-stalls"]);
   });
 });
@@ -305,9 +306,9 @@ const PNG = Buffer.from(
 );
 
 const form = (bytes: Uint8Array, name: string, type: string) => {
-  const fd = new FormData();
-  fd.append("file", new File([bytes], name, { type }));
-  return fd;
+  const form = new FormData();
+  form.append("file", new File([bytes], name, { type }));
+  return form;
 };
 
 const upload = (
@@ -325,9 +326,9 @@ describe("wiki images API", () => {
   beforeEach(resetData);
 
   it("stores an image and serves it back as nothing but a picture", async () => {
-    const res = await upload(PNG);
-    expect(res.status).toBe(200);
-    const saved = await res.json();
+    const response = await upload(PNG);
+    expect(response.status).toBe(200);
+    const saved = await response.json();
     expect(saved.url).toBe(`/api/library/assets/${saved.id}`);
     expect(saved.content_type).toBe("image/png");
 
@@ -345,25 +346,27 @@ describe("wiki images API", () => {
     expect(b.id).toBe(a.id);
   });
 
-  /** The type comes from the bytes: an SVG can carry script, and a page of
-      HTML named .png is still a page of HTML. */
+  // The type comes from the bytes: an SVG can carry script, and a page of HTML
+  // named .png is still a page of HTML.
   it("reads the bytes, not the label on them", async () => {
     const svg = Buffer.from(
       '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
     );
     expect((await upload(svg, "x.svg", "image/svg+xml")).status).toBe(400);
 
-    const res = await upload(Buffer.from("<html><script>x</script></html>"));
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/PNG, JPEG, GIF or WebP/);
+    const response = await upload(
+      Buffer.from("<html><script>x</script></html>"),
+    );
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/PNG, JPEG, GIF or WebP/);
   });
 
   it("refuses an image over the limit", async () => {
     const big = new Uint8Array(MAX_ASSET_BYTES + 1);
     big.set(PNG);
-    const res = await upload(big);
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/too large/);
+    const response = await upload(big);
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/too large/);
   });
 
   it("404s an image that does not exist", async () => {
@@ -387,19 +390,19 @@ describe("wiki images API", () => {
       "outsider@example.com",
       "outsider-password",
     );
-    const res = await authed.request("/api/library/wiki/tpd/assets", {
+    const response = await authed.request("/api/library/wiki/tpd/assets", {
       method: "POST",
       body: form(PNG, "a.png", "image/png"),
       headers: { Cookie: cookie },
     });
-    expect(res.status).toBe(403);
+    expect(response.status).toBe(403);
   });
 });
 
 describe("wiki gaps API", () => {
   beforeEach(resetData);
 
-  /** A write through the wiki routes rescans its own wiki before answering. */
+  // A write through the wiki routes rescans its own wiki before answering.
   it("has found a gap by the time the write that made it returns", async () => {
     await article("tpd", "a", { body: "see [[missing-page]]" });
     const body = await (await get("/api/library/wiki/tpd/gaps")).json();

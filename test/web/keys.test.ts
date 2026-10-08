@@ -41,11 +41,9 @@ describe("defaults", () => {
 });
 
 describe("overrides", () => {
-  /**
-   * Section keys are stored per nav item, not per slot: navItems() drops
-   * `admin` for non-curators, so slot 2 is a different destination for two
-   * different users and a slot-keyed override would follow the wrong one.
-   */
+  // Section keys are stored per nav item, not per slot: navItems() drops
+  // `admin` for non-curators, so slot 2 is a different destination for two
+  // different users and a slot-keyed override would follow the wrong one.
   it("keeps a section's key with the section, not its position", () => {
     setNavKey("admin", "a");
     expect(navKey("admin", 2)).toBe("a");
@@ -82,11 +80,9 @@ describe("overrides", () => {
   });
 });
 
-/**
- * A collision does not error at runtime - the scope stack resolves innermost
- * first, so the rebind silently steals the key from whichever view owns it.
- * Warning before the fact is the only place it is visible.
- */
+// A collision does not error at runtime: the scope stack resolves innermost
+// first, so the rebind takes the key from whichever view owns it. Warning
+// beforehand is the only place it is visible.
 describe("conflicts", () => {
   it("finds nothing for a free key", () => {
     expect(conflicts("z", NAV, 3)).toEqual([]);
@@ -104,7 +100,7 @@ describe("conflicts", () => {
     expect(conflicts("shift+2", [], 3)).toEqual(["sub tab 2"]);
   });
 
-  /** Rebinding a key to itself is not a conflict with itself. */
+  // Rebinding a key to itself is not a conflict with itself.
   it("skips the binding being edited", () => {
     expect(conflicts("2", NAV, 0, { kind: "nav", item: "library" })).toEqual(
       [],
@@ -203,7 +199,7 @@ describe("dispatch", () => {
     expect(document.activeElement).toBe(input);
   });
 
-  /** A prefix that goes nowhere must not eat the key typed after it. */
+  // A prefix that goes nowhere must not eat the key typed after it.
   it("reads a key on its own when it does not continue the sequence", () => {
     const ran = bind("g g", "j");
     press("g");

@@ -59,24 +59,24 @@ describe("password login + role gating", () => {
   });
 
   it("rejects a wrong password with 401", async () => {
-    const res = await app.request(
+    const response = await app.request(
       "/auth/password/login",
       json({ email: "root@example.com", password: "not-the-password" }),
     );
-    expect(res.status).toBe(401);
+    expect(response.status).toBe(401);
   });
 
   it("rejects an unknown user with 401", async () => {
-    const res = await app.request(
+    const response = await app.request(
       "/auth/password/login",
       json({ email: "ghost@example.com", password: "whatever-pass" }),
     );
-    expect(res.status).toBe(401);
+    expect(response.status).toBe(401);
   });
 
   it("blocks unauthenticated /api access once bootstrapped", async () => {
-    const res = await app.request("/api/teams");
-    expect(res.status).toBe(401);
+    const response = await app.request("/api/teams");
+    expect(response.status).toBe(401);
   });
 
   it("logs in and grants /api access via the session cookie", async () => {
@@ -163,10 +163,10 @@ describe("password login + role gating", () => {
       passwordAuth: true,
       apiToken: "secret-token",
     });
-    const res = await tokenApp.request("/api/users", {
+    const response = await tokenApp.request("/api/users", {
       headers: { Authorization: "Bearer secret-token" },
     });
-    expect(res.status).toBe(200);
+    expect(response.status).toBe(200);
   });
 
   it("throttles repeated failures per email", async () => {
@@ -176,10 +176,10 @@ describe("password login + role gating", () => {
         json({ email: "brute@example.com", password: "guess-number-x" }),
       );
     }
-    const res = await app.request(
+    const response = await app.request(
       "/auth/password/login",
       json({ email: "brute@example.com", password: "guess-number-x" }),
     );
-    expect(res.status).toBe(429);
+    expect(response.status).toBe(429);
   });
 });

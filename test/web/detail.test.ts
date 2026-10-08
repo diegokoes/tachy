@@ -30,10 +30,10 @@ describe("seriesStats", () => {
     v.map((value, i) => ({ label: `d${i}`, value }));
 
   it("totals a series, averages it over every day and names the peak", () => {
-    const s = seriesStats(rows(2, 0, 10, 4));
-    expect(s.total).toBe(16);
-    expect(s.mean).toBe(4);
-    expect(s.peak).toEqual({ label: "d2", value: 10 });
+    const stats = seriesStats(rows(2, 0, 10, 4));
+    expect(stats.total).toBe(16);
+    expect(stats.mean).toBe(4);
+    expect(stats.peak).toEqual({ label: "d2", value: 10 });
   });
 
   it("compares the later half of the series with the earlier", () => {
@@ -89,15 +89,15 @@ describe("ago and ageHours", () => {
 
 describe("col", () => {
   it("builds a plain value column", () => {
-    const c = col<{ n: number }>("n", "count", (r) => r.n, { end: true });
-    expect(c).toMatchObject({ key: "n", label: "count", align: "end" });
-    expect(c.value?.({ n: 3 })).toBe(3);
+    const column = col<{ n: number }>("n", "count", (r) => r.n, { end: true });
+    expect(column).toMatchObject({ key: "n", label: "count", align: "end" });
+    expect(column.value?.({ n: 3 })).toBe(3);
   });
 });
 
 describe("freshness bands", () => {
   const now = Date.parse("2026-10-05T12:00:00Z");
-  const f = (
+  const tracked = (
     kind: "source" | "repo" | "bucket",
     key: string,
     h: number | null,
@@ -122,10 +122,10 @@ describe("freshness bands", () => {
   it("counts everything into bands, split by what kind of thing it is", () => {
     const bands = freshnessBands(
       [
-        f("source", "a", null),
-        f("repo", "b", 1.5),
-        f("repo", "c", 2),
-        f("bucket", "d", 500),
+        tracked("source", "a", null),
+        tracked("repo", "b", 1.5),
+        tracked("repo", "c", 2),
+        tracked("bucket", "d", 500),
       ],
       now,
     );

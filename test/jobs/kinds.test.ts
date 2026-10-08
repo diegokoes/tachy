@@ -88,11 +88,11 @@ describe("repos.refresh", () => {
       where repo_id in (select id from repos where slug = 'old')
     `;
     const kind = getJobKind("repos.refresh");
-    const out = await kind.run(
+    const output = await kind.run(
       refreshCtx(),
       kind.params.parse({ scope: "all" }),
     );
-    expect(out).toEqual({ queued: 2, skipped: 0, never_indexed: 0 });
+    expect(output).toEqual({ queued: 2, skipped: 0, never_indexed: 0 });
   });
 
   it("queues a reindex of each indexed repo that is not already in flight", async () => {
@@ -108,7 +108,7 @@ describe("repos.refresh", () => {
       params: { repo: "busy" },
       trigger: "manual",
     });
-    const out = await getJobKind("repos.refresh").run(
+    const output = await getJobKind("repos.refresh").run(
       {
         runId: "test",
         requestedBy: null,
@@ -121,7 +121,7 @@ describe("repos.refresh", () => {
       },
       {},
     );
-    expect(out).toEqual({ queued: 1, skipped: 1, never_indexed: 1 });
+    expect(output).toEqual({ queued: 1, skipped: 1, never_indexed: 1 });
     const runs = await sql`
       select params->>'repo' as repo from job_runs
       where kind = 'repo.reindex' order by repo
@@ -132,34 +132,34 @@ describe("repos.refresh", () => {
 
 describe("retention", () => {
   it("rolls old per-person usage up to months without people", async () => {
-    const u = await createUser({ email: "reader@example.com" });
-    const [e] =
+    const user = await createUser({ email: "reader@example.com" });
+    const [entry] =
       await sql`insert into knowledge_entries (status, issue_summary) values ('approved', 'x') returning id`;
     await sql`
       insert into library_views (knowledge_entry_id, user_id, day, views) values
-        (${e.id}, ${u.id}, date_trunc('month', current_date) - interval '15 months', 2),
-        (${e.id}, null, date_trunc('month', current_date) - interval '15 months' + interval '1 day', 3),
-        (${e.id}, ${u.id}, current_date, 1)
+        (${entry.id}, ${user.id}, date_trunc('month', current_date) - interval '15 months', 2),
+        (${entry.id}, null, date_trunc('month', current_date) - interval '15 months' + interval '1 day', 3),
+        (${entry.id}, ${user.id}, current_date, 1)
     `;
     await sql`
       insert into mcp_tool_calls (tool, writes, user_id, day, calls) values
-        ('search_knowledge', false, ${u.id}, current_date - interval '14 months', 4),
-        ('search_knowledge', false, ${u.id}, current_date, 1)
+        ('search_knowledge', false, ${user.id}, current_date - interval '14 months', 4),
+        ('search_knowledge', false, ${user.id}, current_date, 1)
     `;
-    const r = await rollUpUsage(13);
-    expect(r).toEqual({ views: 2, toolCalls: 1 });
+    const rolled = await rollUpUsage(13);
+    expect(rolled).toEqual({ views: 2, toolCalls: 1 });
     const views =
       await sql`select user_id, views, day = date_trunc('month', day)::date as monthly from library_views order by day`;
     expect(views.map((v) => [v.user_id, v.views, v.monthly])).toEqual([
       [null, 5, true],
-      [u.id, 1, views[1].monthly],
+      [user.id, 1, views[1].monthly],
     ]);
     expect(await rollUpUsage(13)).toEqual({ views: 0, toolCalls: 0 });
     const calls =
       await sql`select user_id, calls from mcp_tool_calls order by day`;
     expect(calls.map((c) => [c.user_id, c.calls])).toEqual([
       [null, 4],
-      [u.id, 1],
+      [user.id, 1],
     ]);
   });
 
@@ -185,10 +185,10 @@ describe("retention", () => {
   });
 
   it("deletes notifications 90 days after they were opened, 180 if never", async () => {
-    const u = await createUser({ email: "notified@example.com" });
+    const user = await createUser({ email: "notified@example.com" });
     const note = (title: string, days: number, read: boolean) =>
       sql`insert into notifications (user_id, kind, title, created_at, read_at)
-          values (${u.id}, 'report_reply', ${title}, now() - make_interval(days => ${days}),
+          values (${user.id}, 'report_reply', ${title}, now() - make_interval(days => ${days}),
                   ${read ? sql`now()` : null})`;
     await note("read, old", 91, true);
     await note("read, recent", 89, true);

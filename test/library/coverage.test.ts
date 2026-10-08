@@ -54,13 +54,13 @@ describe("wiki coverage", () => {
       body: "b",
     });
 
-    const c = await coverage(productId);
-    const printing = find(c.nodes, "printing");
+    const covered = await coverage(productId);
+    const printing = find(covered.nodes, "printing");
     expect(printing).toMatchObject({ entries: 1, docs: 1, articles: 1 });
   });
 
-  /** Entries and docs used to be joined onto the same component together, which
-      multiplied them; each count has to come out as itself. */
+  // Entries and docs joined onto one component together would multiply each
+  // other; each count has to come out as itself.
   it("counts several of each on one component without multiplying them", async () => {
     const productId = await tree();
     for (const summary of ["a", "b", "c"])
@@ -98,27 +98,27 @@ describe("wiki coverage", () => {
       issueSummary: "d",
     });
 
-    const c = await coverage(productId);
-    const portal = find(c.nodes, "portal");
+    const covered = await coverage(productId);
+    const portal = find(covered.nodes, "portal");
     expect(portal.entries).toBe(1);
     expect(portal.subtree.entries).toBe(4);
-    expect(find(c.nodes, "printing").subtree.entries).toBe(3);
-    expect(find(c.nodes, "coding").subtree.entries).toBe(0);
+    expect(find(covered.nodes, "printing").subtree.entries).toBe(3);
+    expect(find(covered.nodes, "coding").subtree.entries).toBe(0);
   });
 
   it("nests the tree the way components nest", async () => {
     const productId = await tree();
-    const c = await coverage(productId);
-    expect(c.nodes.map((n: any) => n.slug).sort()).toEqual([
+    const covered = await coverage(productId);
+    expect(covered.nodes.map((n: any) => n.slug).sort()).toEqual([
       "coding",
       "portal",
     ]);
-    expect(find(c.nodes, "portal").children.map((n: any) => n.slug)).toEqual([
-      "printing",
-    ]);
+    expect(
+      find(covered.nodes, "portal").children.map((n: any) => n.slug),
+    ).toEqual(["printing"]);
   });
 
-  /** The signal the view exists for: lessons recorded, nothing written. */
+  // The signal the view exists for: lessons recorded, nothing written.
   it("shows a component with entries and no article", async () => {
     const productId = await tree();
     await saveKnowledgeEntry({
@@ -126,8 +126,8 @@ describe("wiki coverage", () => {
       component: "coding",
       issueSummary: "x",
     });
-    const c = await coverage(productId);
-    const coding = find(c.nodes, "coding");
+    const covered = await coverage(productId);
+    const coding = find(covered.nodes, "coding");
     expect(coding.entries).toBe(1);
     expect(coding.articles).toBe(0);
   });
@@ -142,23 +142,23 @@ describe("wiki coverage", () => {
       issueSummary: "filed",
     });
 
-    const c = await coverage(productId);
-    expect(c.unfiled).toMatchObject({ entries: 1, docs: 1, articles: 0 });
+    const covered = await coverage(productId);
+    expect(covered.unfiled).toMatchObject({ entries: 1, docs: 1, articles: 0 });
   });
 
   it("attributes read volume to the component the item is anchored to", async () => {
     const productId = await tree();
-    const e = await saveKnowledgeEntry({
+    const entry = await saveKnowledgeEntry({
       productId,
       component: "printing",
       issueSummary: "spooler",
     });
-    await recordView({ entryId: e.id }, null);
+    await recordView({ entryId: entry.id }, null);
 
-    const c = await coverage(productId);
-    expect(find(c.nodes, "printing").reads).toBe(1);
-    expect(find(c.nodes, "portal").reads).toBe(0);
-    expect(find(c.nodes, "portal").subtree.reads).toBe(1);
+    const covered = await coverage(productId);
+    expect(find(covered.nodes, "printing").reads).toBe(1);
+    expect(find(covered.nodes, "portal").reads).toBe(0);
+    expect(find(covered.nodes, "portal").subtree.reads).toBe(1);
   });
 
   it("ignores archived items", async () => {
@@ -174,8 +174,8 @@ describe("wiki coverage", () => {
 
   it("is empty but well-formed for a product with no components", async () => {
     const productId = await tpdProductId();
-    const c = await coverage(productId);
-    expect(c.nodes).toEqual([]);
-    expect(c.unfiled).toMatchObject({ entries: 0, docs: 0, articles: 0 });
+    const covered = await coverage(productId);
+    expect(covered.nodes).toEqual([]);
+    expect(covered.unfiled).toMatchObject({ entries: 0, docs: 0, articles: 0 });
   });
 });

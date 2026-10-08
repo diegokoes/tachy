@@ -116,12 +116,12 @@ describe("jobs API", () => {
   });
 
   it("starts a one-off run of a kind without a definition", async () => {
-    const res = await call("/runs", "POST", {
+    const answer = await call("/runs", "POST", {
       kind: "embeddings.backfill",
       params: { all: true },
     });
-    expect(res.status).toBe(202);
-    const { run_id } = await res.json();
+    expect(answer.status).toBe(202);
+    const { run_id } = await answer.json();
     const run = await (await call(`/runs/${run_id}`)).json();
     expect(run).toMatchObject({
       kind: "embeddings.backfill",
