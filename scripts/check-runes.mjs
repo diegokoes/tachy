@@ -9,6 +9,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname;
+// A rune as its own identifier: not a property (`x.$state`) or the tail of a name.
 const RUNES =
   /(?<![\w$.])\$(state|derived|effect|props|bindable|inspect|host)\b/;
 

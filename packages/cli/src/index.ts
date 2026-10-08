@@ -223,16 +223,14 @@ async function main() {
         );
       // `--embed` with no value is the string "true" in `args`; the seeder
       // reads that as every corpus.
+      let embed: boolean | EmbedMode = false;
+      if (args.embed === "true") embed = true;
+      else if (args.embed !== undefined) embed = args.embed as EmbedMode;
       return seed({
         scale,
         reset: !!args.reset,
         yes: !!args.yes,
-        embed:
-          args.embed === undefined
-            ? false
-            : args.embed === "true"
-              ? true
-              : (args.embed as EmbedMode),
+        embed,
       });
     }
     default:
