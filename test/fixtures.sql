@@ -1,5 +1,5 @@
 -- Minimal, deterministic test data. Applied after schema.sql by
--- test/global-setup.ts -- schema.sql itself ships with no seed data.
+-- test/global-setup.ts; schema.sql itself ships with no seed data.
 insert into teams (slug, name) values ('test-team', 'Test Team')
 on conflict (slug) do nothing;
 
