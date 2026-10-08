@@ -5,7 +5,7 @@ import {
   scrubStrings,
   TokenMap,
 } from "@tachy/core/compliance";
-import { freshdeskToken } from "@tachy/core/infra";
+import { freshdeskToken, errorText, rememberSecret } from "@tachy/core/infra";
 import type { FlowOption } from "@tachy/core";
 import type {
   WorkItemSource,
@@ -161,7 +161,8 @@ export const createFreshdeskSource: SourceFactory = (
   connection,
 ): WorkItemSource => {
   const token = connection.token || freshdeskToken(connection.slug);
-  const auth = "Basic " + Buffer.from(`${token}:X`).toString("base64");
+  const auth =
+    "Basic " + rememberSecret(Buffer.from(`${token}:X`).toString("base64"));
   const base = connection.baseUrl.replace(/\/$/, "");
   const api = base + "/api/v2";
 
@@ -291,7 +292,7 @@ export const createFreshdeskSource: SourceFactory = (
         return {
           identity,
           groups: [],
-          groupsNote: e instanceof Error ? e.message : String(e),
+          groupsNote: errorText(e),
         };
       }
     },

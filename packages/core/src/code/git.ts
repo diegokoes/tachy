@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { RELEASE_TAG_RE, SLUG_RE } from "@tachy/contract";
 import type { RemoteRef } from "@tachy/contract";
 import { badInput, notFound } from "../infra/errors";
+import { maskSecrets, rememberSecret } from "../infra/known-secrets";
 
 const MAX_BUFFER = 256 * 1024 * 1024;
 const PREFETCH_BATCH = 1000;
@@ -61,18 +62,53 @@ function assertOid(oid: string): string {
 
 /**
  * The PAT travels only as a per-invocation header, never into the clone's
- * config. Git hands `-c` settings down to the fetch it spawns for a missing
- * blob, so a lazy read authenticates too.
+ * config, and in the environment rather than argv: a command line is readable
+ * by every process on the host. The fetch git spawns for a missing blob
+ * inherits the environment, so a lazy read authenticates too.
  */
-function authArgs(token?: string): string[] {
-  if (!token) return [];
-  const b64 = Buffer.from(`:${token}`).toString("base64");
-  return ["-c", `http.extraHeader=Authorization: Basic ${b64}`];
+export function authEnv(token?: string): Record<string, string> {
+  if (!token) return {};
+  const b64 = rememberSecret(Buffer.from(`:${token}`).toString("base64"));
+  return {
+    GIT_CONFIG_COUNT: "1",
+    GIT_CONFIG_KEY_0: "http.extraHeader",
+    GIT_CONFIG_VALUE_0: `Authorization: Basic ${b64}`,
+  };
+}
+
+/** Options that take their value as the next argument, ahead of the subcommand. */
+const GLOBAL_OPTIONS_WITH_VALUE = new Set(["-C", "-c"]);
+
+function subcommandOf(args: string[]): string {
+  let i = 0;
+  while (GLOBAL_OPTIONS_WITH_VALUE.has(args[i])) i += 2;
+  return args[i] ?? "";
+}
+
+/** `https://user:secret@host/path` without the `user:secret@`. */
+export const withoutUrlCredentials = (text: string): string =>
+  text.replace(/\b([a-z][a-z0-9+.-]*:\/\/)[^\/\s@]+@/gi, "$1");
+
+/**
+ * What a failed git call reports. Built from git's own stderr: the error
+ * `execFile` raises quotes the whole command line.
+ */
+function gitFailure(
+  args: string[],
+  failure: { killed?: boolean },
+  stderr: string,
+): Error {
+  const subcommand = subcommandOf(args);
+  if (failure.killed) return new Error(`git ${subcommand} timed out`);
+  const detail = maskSecrets(withoutUrlCredentials(stderr.trim()));
+  return new Error(
+    detail ? `git ${subcommand} failed: ${detail}` : `git ${subcommand} failed`,
+  );
 }
 
 function run(
   args: string[],
-  opts: { input?: string; timeout?: number } = {},
+  opts: { token?: string; input?: string; timeout?: number } = {},
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = execFile(
@@ -81,9 +117,14 @@ function run(
       {
         maxBuffer: MAX_BUFFER,
         timeout: opts.timeout,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+        env: {
+          ...process.env,
+          GIT_TERMINAL_PROMPT: "0",
+          ...authEnv(opts.token),
+        },
       },
-      (err, stdout) => (err ? reject(err) : resolve(stdout)),
+      (err, stdout, stderr) =>
+        err ? reject(gitFailure(args, err, stderr)) : resolve(stdout),
     );
     if (opts.input !== undefined) child.stdin?.end(opts.input);
   });
@@ -93,7 +134,7 @@ const git = (
   slug: string,
   args: string[],
   opts: { token?: string; input?: string } = {},
-) => run(["-C", repoDir(slug), ...authArgs(opts.token), ...args], opts);
+) => run(["-C", repoDir(slug), ...args], opts);
 
 /**
  * Make sure the repo has a partial clone: every commit and tree, and file
@@ -108,19 +149,21 @@ export async function ensureClone(
   if (existsSync(join(dir, "HEAD"))) return;
   await rm(checkoutDir(repo.slug), { recursive: true, force: true });
   await mkdir(dir, { recursive: true });
-  await run([
-    ...authArgs(token),
-    "clone",
-    "--bare",
-    "--quiet",
-    "--filter=blob:none",
-    "--single-branch",
-    "--branch",
-    assertBranchName(repo.defaultBranch),
-    "--",
-    assertRepoUrl(repo.url),
-    dir,
-  ]).catch(async (err) => {
+  await run(
+    [
+      "clone",
+      "--bare",
+      "--quiet",
+      "--filter=blob:none",
+      "--single-branch",
+      "--branch",
+      assertBranchName(repo.defaultBranch),
+      "--",
+      assertRepoUrl(repo.url),
+      dir,
+    ],
+    { token },
+  ).catch(async (err) => {
     await rm(dir, { recursive: true, force: true });
     throw err;
   });
@@ -335,7 +378,6 @@ export async function listRemoteRefs(
 ): Promise<RemoteRef[]> {
   const stdout = await run(
     [
-      ...authArgs(token),
       "ls-remote",
       "--heads",
       ...(opts.heads ? [] : ["--tags"]),
@@ -343,7 +385,7 @@ export async function listRemoteRefs(
       assertRepoUrl(url),
       ...(opts.heads ?? []).map(assertBranchName),
     ],
-    { timeout: LS_REMOTE_TIMEOUT_MS },
+    { token, timeout: LS_REMOTE_TIMEOUT_MS },
   );
   const refs: RemoteRef[] = [];
   for (const line of stdout.split("\n")) {

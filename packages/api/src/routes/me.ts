@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { secretsEnabled } from "@tachy/core/infra";
+import { secretsEnabled, errorText } from "@tachy/core/infra";
 import {
   listCredentials,
   setCredential,
@@ -119,7 +119,7 @@ export const me = new Hono()
         configDir: await userConfigDir(userId),
       });
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     }
 
     if (allowed.length) {

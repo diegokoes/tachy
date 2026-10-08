@@ -2,6 +2,7 @@ import "dotenv/config";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
+import { rememberSecret } from "./known-secrets";
 
 const oidcRaw =
   process.env.OIDC_ISSUER &&
@@ -106,6 +107,9 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 
+for (const secret of [env.apiToken, env.sessionSecret, env.oidc?.clientSecret])
+  rememberSecret(secret);
+
 /**
  * Resolve a source token from env by provider + connection slug, e.g.
  * (FRESHDESK, my-freshdesk) -> FRESHDESK_TOKEN_MY_FRESHDESK,
@@ -120,7 +124,7 @@ export function sourceTokenOptional(
 ): string | undefined {
   const perSlug = `${envVarName(provider)}_TOKEN_${envVarName(slug)}`;
   const bare = `${envVarName(provider)}_TOKEN`;
-  return process.env[perSlug] ?? process.env[bare];
+  return rememberSecret(process.env[perSlug] ?? process.env[bare]);
 }
 
 export function sourceToken(provider: string, slug: string): string {

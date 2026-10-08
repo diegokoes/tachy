@@ -71,6 +71,24 @@ describe("scrubText", () => {
     );
   });
 
+  it("tokenizes what follows an auth scheme, not the scheme", () => {
+    const basic = "OmNhbmFyeTBwYXQxdmFsdWUydGhhdDNtdXN0NG5vdDVsZWFr";
+    const header = scrubText(
+      `http.extraHeader=Authorization: Basic ${basic}`,
+      new TokenMap(),
+    );
+    expect(header).toBe("http.extraHeader=Authorization: Basic [SECRET_1]");
+    expect(scrubText(`sent Basic ${basic} upstream`, new TokenMap())).toBe(
+      "sent Basic [SECRET_1] upstream",
+    );
+    expect(
+      scrubText("Authorization: Token abcDEF123456xyz", new TokenMap()),
+    ).toBe("Authorization: Token [SECRET_1]");
+    expect(scrubText("a basic misunderstanding of it", new TokenMap())).toBe(
+      "a basic misunderstanding of it",
+    );
+  });
+
   it("tokenizes bearer tokens, known key shapes, and JWTs", () => {
     const map = new TokenMap();
     expect(scrubText("Authorization: Bearer abcDEF123456xyz", map)).toMatch(

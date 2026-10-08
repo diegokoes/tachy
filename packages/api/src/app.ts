@@ -3,7 +3,7 @@ import { requestId } from "hono/request-id";
 import { HTTPException } from "hono/http-exception";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { z } from "zod";
-import { env, AppError } from "@tachy/core/infra";
+import { env, AppError, errorText, maskSecrets } from "@tachy/core/infra";
 import { registerSource } from "@tachy/core/sources";
 import { registerCoreJobs } from "@tachy/core/jobs";
 import { effectiveSettings } from "@tachy/core/config";
@@ -69,6 +69,19 @@ function apiRoutes() {
     .route("/tests", diagnostics)
     .route("/", sourceProjects)
     .route("/", admin);
+}
+
+/**
+ * An HTTPException carries its own response, whose body is whatever message it
+ * was thrown with.
+ */
+export async function withSecretsMasked(response: Response): Promise<Response> {
+  const headers = new Headers(response.headers);
+  headers.delete("content-length");
+  return new Response(maskSecrets(await response.text()), {
+    status: response.status,
+    headers,
+  });
 }
 
 export function createApp(
@@ -137,12 +150,13 @@ export function createApp(
 
   app.onError((err, c) => {
     if (err instanceof AppError) {
-      noteError(c, { error: err.message, code: err.code });
-      return c.json({ error: err.message }, STATUS_BY_CODE[err.code]);
+      const error = errorText(err);
+      noteError(c, { error, code: err.code });
+      return c.json({ error }, STATUS_BY_CODE[err.code]);
     }
     if (err instanceof HTTPException) {
       noteError(c, { error: err.message });
-      return err.getResponse();
+      return withSecretsMasked(err.getResponse());
     }
     if (err instanceof z.ZodError) {
       noteError(c, { error: "validation failed", issues: err.issues });
@@ -153,7 +167,7 @@ export function createApp(
       return c.json({ error: "invalid JSON body" }, 400);
     }
     noteError(c, {
-      error: err instanceof Error ? err.message : String(err),
+      error: errorText(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
     return c.json({ error: "internal error" }, 500);
