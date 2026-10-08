@@ -2,7 +2,7 @@
   import { AGENT_EFFORTS } from "@tachy/contract";
   import { onMount } from "svelte";
   import { api } from "../api";
-  import { initSession } from "../access/session.svelte";
+  import { initSession, isGlobalAdmin } from "../access/session.svelte";
   import AsciiSelect from "../tui/AsciiSelect.svelte";
   import Checkbox from "../tui/Checkbox.svelte";
   import Icon from "../tui/Icon.svelte";
@@ -69,197 +69,211 @@
 {#if loading}<p class="muted">Loading…</p>{/if}
 
 {#if system}
-  <table>
-    <thead
-      ><tr
-        ><th>setting</th><th>value</th>
-        <th class="tip">source</th>
-      </tr></thead
-    >
-    <tbody>
-      <tr>
-        <td class="tip">Deployment profile</td>
-        <td>
-          <AsciiSelect
-            value={system.settings.deployment_profile.value}
-            options={[
-              { value: "support", label: "support / business" },
-              { value: "engineering", label: "engineering / repositories" },
-            ]}
-            onchange={(v) => saveSetting("deployment_profile", v)}
-          />
-        </td>
-        <td
-          ><span class="badge src-{system.settings.deployment_profile.source}"
-            >{system.settings.deployment_profile.source}</span
-          ></td
-        >
-      </tr>
-      <tr>
-        <td class="tip">PII / secret redaction</td>
-        <td>
-          <label class="check">
-            <Checkbox
-              checked={system.settings.redaction_global.value}
-              ariaLabel="PII / secret redaction"
-              onchange={(checked) => saveSetting("redaction_global", checked)}
+  <fieldset class="settings" disabled={!isGlobalAdmin()}>
+    <table>
+      <thead
+        ><tr
+          ><th>setting</th><th>value</th>
+          <th class="tip">source</th>
+        </tr></thead
+      >
+      <tbody>
+        <tr>
+          <td class="tip">Deployment profile</td>
+          <td>
+            <AsciiSelect
+              value={system.settings.deployment_profile.value}
+              options={[
+                { value: "support", label: "support / business" },
+                { value: "engineering", label: "engineering / repositories" },
+              ]}
+              onchange={(v) => saveSetting("deployment_profile", v)}
             />
-            <span
-              class="state"
-              class:on={system.settings.redaction_global.value}
-            >
-              <Icon
-                name={system.settings.redaction_global.value
-                  ? "lockOn"
-                  : "lockOff"}
-                size="1em"
-                weight={7}
+          </td>
+          <td
+            ><span class="badge src-{system.settings.deployment_profile.source}"
+              >{system.settings.deployment_profile.source}</span
+            ></td
+          >
+        </tr>
+        <tr>
+          <td class="tip">PII / secret redaction</td>
+          <td>
+            <label class="check">
+              <Checkbox
+                checked={system.settings.redaction_global.value}
+                ariaLabel="PII / secret redaction"
+                onchange={(checked) => saveSetting("redaction_global", checked)}
               />
-              {system.settings.redaction_global.value
-                ? "on: LLM boundary"
-                : "off: per-connection opt-in"}
-            </span>
-          </label>
-        </td>
-        <td
-          ><span class="badge src-{system.settings.redaction_global.source}"
-            >{system.settings.redaction_global.source}</span
-          ></td
-        >
-      </tr>
-      <tr>
-        <td>Agent model</td>
-        <td class="edit-cell">
-          <input bind:value={draft.agent_model} />
-          {#if draft.agent_model !== system.settings.agent_model.value}
-            <Button
-              size="sm"
-              onclick={() =>
-                saveSetting("agent_model", draft.agent_model.trim())}
-              >apply</Button
-            >
-          {/if}
-        </td>
-        <td
-          ><span class="badge src-{system.settings.agent_model.source}"
-            >{system.settings.agent_model.source}</span
-          ></td
-        >
-      </tr>
-      <tr>
-        <td>Agent effort</td>
-        <td>
-          <AsciiSelect
-            value={system.settings.agent_effort.value}
-            options={[...AGENT_EFFORTS]}
-            onchange={(v) => saveSetting("agent_effort", v)}
-          />
-        </td>
-        <td
-          ><span class="badge src-{system.settings.agent_effort.source}"
-            >{system.settings.agent_effort.source}</span
-          ></td
-        >
-      </tr>
-      <tr>
-        <td class="tip">Model allowlist</td>
-        <td class="edit-cell">
-          <input bind:value={draft.allowed_models} placeholder="unrestricted" />
-          {#if draft.allowed_models !== system.settings.allowed_models.value.join(", ")}
-            <Button
-              size="sm"
-              onclick={() =>
-                saveSetting("allowed_models", csv(draft.allowed_models))}
-              >apply</Button
-            >
-          {/if}
-        </td>
-        <td
-          ><span class="badge src-{system.settings.allowed_models.source}"
-            >{system.settings.allowed_models.source}</span
-          ></td
-        >
-      </tr>
-      <tr>
-        <td>Organization name</td>
-        <td class="edit-cell">
-          <input bind:value={draft.org_name} />
-          {#if draft.org_name !== (system.settings.org_name.value ?? "") && draft.org_name.trim()}
-            <Button
-              size="sm"
-              onclick={() => saveSetting("org_name", draft.org_name.trim())}
-              >apply</Button
-            >
-          {/if}
-        </td>
-        <td
-          ><span class="badge src-{system.settings.org_name.source}"
-            >{system.settings.org_name.source}</span
-          ></td
-        >
-      </tr>
-      <tr>
-        <td class="tip">Chat slot cap</td>
-        <td class="edit-cell">
-          <input inputmode="numeric" bind:value={draft.agent_slot_cap} />
-          {#if draft.agent_slot_cap !== String(system.settings.agent_slot_cap.value) && draft.agent_slot_cap !== ""}
-            <Button
-              size="sm"
-              onclick={() =>
-                saveSetting("agent_slot_cap", Number(draft.agent_slot_cap))}
-              >apply</Button
-            >
-          {/if}
-        </td>
-        <td
-          ><span class="badge src-{system.settings.agent_slot_cap.source}"
-            >{system.settings.agent_slot_cap.source}</span
-          ></td
-        >
-      </tr>
-      <tr>
-        <td class="tip">Chat queue length</td>
-        <td class="edit-cell">
-          <input inputmode="numeric" bind:value={draft.agent_queue_max} />
-          {#if draft.agent_queue_max !== String(system.settings.agent_queue_max.value) && draft.agent_queue_max !== ""}
-            <Button
-              size="sm"
-              onclick={() =>
-                saveSetting("agent_queue_max", Number(draft.agent_queue_max))}
-              >apply</Button
-            >
-          {/if}
-        </td>
-        <td
-          ><span class="badge src-{system.settings.agent_queue_max.source}"
-            >{system.settings.agent_queue_max.source}</span
-          ></td
-        >
-      </tr>
-      <tr>
-        <td class="tip">Timezone</td>
-        <td class="edit-cell">
-          <input bind:value={draft.org_timezone} placeholder="Europe/Madrid" />
-          {#if draft.org_timezone.trim() && draft.org_timezone.trim() !== system.settings.org_timezone.value}
-            <Button
-              size="sm"
-              onclick={() =>
-                saveSetting("org_timezone", draft.org_timezone.trim())}
-              >apply</Button
-            >
-          {/if}
-        </td>
-        <td
-          ><span class="badge src-{system.settings.org_timezone.source}"
-            >{system.settings.org_timezone.source}</span
-          ></td
-        >
-      </tr>
-    </tbody>
-  </table>
+              <span
+                class="state"
+                class:on={system.settings.redaction_global.value}
+              >
+                <Icon
+                  name={system.settings.redaction_global.value
+                    ? "lockOn"
+                    : "lockOff"}
+                  size="1em"
+                  weight={7}
+                />
+                {system.settings.redaction_global.value
+                  ? "on: LLM boundary"
+                  : "off: per-connection opt-in"}
+              </span>
+            </label>
+          </td>
+          <td
+            ><span class="badge src-{system.settings.redaction_global.source}"
+              >{system.settings.redaction_global.source}</span
+            ></td
+          >
+        </tr>
+        <tr>
+          <td>Agent model</td>
+          <td class="edit-cell">
+            <input bind:value={draft.agent_model} />
+            {#if draft.agent_model !== system.settings.agent_model.value}
+              <Button
+                size="sm"
+                onclick={() =>
+                  saveSetting("agent_model", draft.agent_model.trim())}
+                >apply</Button
+              >
+            {/if}
+          </td>
+          <td
+            ><span class="badge src-{system.settings.agent_model.source}"
+              >{system.settings.agent_model.source}</span
+            ></td
+          >
+        </tr>
+        <tr>
+          <td>Agent effort</td>
+          <td>
+            <AsciiSelect
+              value={system.settings.agent_effort.value}
+              options={[...AGENT_EFFORTS]}
+              onchange={(v) => saveSetting("agent_effort", v)}
+            />
+          </td>
+          <td
+            ><span class="badge src-{system.settings.agent_effort.source}"
+              >{system.settings.agent_effort.source}</span
+            ></td
+          >
+        </tr>
+        <tr>
+          <td class="tip">Model allowlist</td>
+          <td class="edit-cell">
+            <input
+              bind:value={draft.allowed_models}
+              placeholder="unrestricted"
+            />
+            {#if draft.allowed_models !== system.settings.allowed_models.value.join(", ")}
+              <Button
+                size="sm"
+                onclick={() =>
+                  saveSetting("allowed_models", csv(draft.allowed_models))}
+                >apply</Button
+              >
+            {/if}
+          </td>
+          <td
+            ><span class="badge src-{system.settings.allowed_models.source}"
+              >{system.settings.allowed_models.source}</span
+            ></td
+          >
+        </tr>
+        <tr>
+          <td>Organization name</td>
+          <td class="edit-cell">
+            <input bind:value={draft.org_name} />
+            {#if draft.org_name !== (system.settings.org_name.value ?? "") && draft.org_name.trim()}
+              <Button
+                size="sm"
+                onclick={() => saveSetting("org_name", draft.org_name.trim())}
+                >apply</Button
+              >
+            {/if}
+          </td>
+          <td
+            ><span class="badge src-{system.settings.org_name.source}"
+              >{system.settings.org_name.source}</span
+            ></td
+          >
+        </tr>
+        <tr>
+          <td class="tip">Chat slot cap</td>
+          <td class="edit-cell">
+            <input inputmode="numeric" bind:value={draft.agent_slot_cap} />
+            {#if draft.agent_slot_cap !== String(system.settings.agent_slot_cap.value) && draft.agent_slot_cap !== ""}
+              <Button
+                size="sm"
+                onclick={() =>
+                  saveSetting("agent_slot_cap", Number(draft.agent_slot_cap))}
+                >apply</Button
+              >
+            {/if}
+          </td>
+          <td
+            ><span class="badge src-{system.settings.agent_slot_cap.source}"
+              >{system.settings.agent_slot_cap.source}</span
+            ></td
+          >
+        </tr>
+        <tr>
+          <td class="tip">Chat queue length</td>
+          <td class="edit-cell">
+            <input inputmode="numeric" bind:value={draft.agent_queue_max} />
+            {#if draft.agent_queue_max !== String(system.settings.agent_queue_max.value) && draft.agent_queue_max !== ""}
+              <Button
+                size="sm"
+                onclick={() =>
+                  saveSetting("agent_queue_max", Number(draft.agent_queue_max))}
+                >apply</Button
+              >
+            {/if}
+          </td>
+          <td
+            ><span class="badge src-{system.settings.agent_queue_max.source}"
+              >{system.settings.agent_queue_max.source}</span
+            ></td
+          >
+        </tr>
+        <tr>
+          <td class="tip">Timezone</td>
+          <td class="edit-cell">
+            <input
+              bind:value={draft.org_timezone}
+              placeholder="Europe/Madrid"
+            />
+            {#if draft.org_timezone.trim() && draft.org_timezone.trim() !== system.settings.org_timezone.value}
+              <Button
+                size="sm"
+                onclick={() =>
+                  saveSetting("org_timezone", draft.org_timezone.trim())}
+                >apply</Button
+              >
+            {/if}
+          </td>
+          <td
+            ><span class="badge src-{system.settings.org_timezone.source}"
+              >{system.settings.org_timezone.source}</span
+            ></td
+          >
+        </tr>
+      </tbody>
+    </table>
+  </fieldset>
 {/if}
 
 <style>
+  .settings {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
   td .on {
     color: var(--ok);
   }

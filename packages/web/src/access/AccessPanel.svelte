@@ -29,6 +29,7 @@
     system,
     teams,
     users,
+    seesSignIn,
   } from "./roster.svelte";
 
   const ROLE_TIP = $derived(roleTip("app"));
@@ -154,8 +155,17 @@
       edit: "checkbox",
       info: "Non-human. Excluded from engagement figures.",
     },
-    { key: "signin", label: "password", width: "7rem", cell: passwordCell },
-    { key: "sso", label: "SSO", width: "6rem", cell: ssoCell },
+    ...(seesSignIn()
+      ? [
+          {
+            key: "signin",
+            label: "password",
+            width: "7rem",
+            cell: passwordCell,
+          },
+          { key: "sso", label: "SSO", width: "6rem", cell: ssoCell },
+        ]
+      : []),
     { key: "state", label: "", width: "7rem", cell: stateCell },
   ]);
 

@@ -25,7 +25,7 @@
   import { gsap, reducedMotion } from "../motion/gsap";
   import { navigate } from "../shell/router.svelte";
 
-  const LIST = "/admin/integrations/repos";
+  const LIST = "/console/integrations/repos";
 
   const repos = createResource(
     () => api.get<{ repos: Repo[] }>("/repos").then((r) => r.repos),
@@ -92,7 +92,7 @@
         duration: 0.28,
         ease: "power2.in",
       });
-    navigate("/admin/integrations/bulk-link");
+    navigate("/console/integrations/bulk-link");
   }
 
   const bulkAction: SectionAction = {
@@ -150,7 +150,7 @@
 
   function showRuns() {
     keep("admin.runs.kind", "repo.reindex");
-    navigate("/admin/workers/runs");
+    navigate("/console/workers/runs");
   }
 
   // Indexing runs in the background on the server, so the table follows it.

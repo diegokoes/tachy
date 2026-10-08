@@ -362,7 +362,7 @@
 
   function leave() {
     flight?.kill();
-    navigate("/admin/integrations/repos");
+    navigate("/console/integrations/repos");
   }
 
   onMount(() => {

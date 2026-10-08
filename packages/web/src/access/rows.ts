@@ -6,9 +6,10 @@ export type UserRow = {
   display_name: string | null;
   role: UserRole;
   disabled: boolean;
-  has_password: boolean;
-  service_account: boolean;
-  password_login_allowed: boolean;
+  /** How the account signs in. Sent only to someone who curates a team or the app. */
+  has_password?: boolean;
+  service_account?: boolean;
+  password_login_allowed?: boolean;
   created_at: string;
 };
 export type Member = {

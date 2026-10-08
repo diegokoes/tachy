@@ -6,7 +6,7 @@ import { navigate, segment } from "../shell/router.svelte";
  * mount and open at `key`.
  */
 export const showSection = (key: string) =>
-  navigate(`/admin/${segment(1) ?? "integrations"}/${key}`);
+  navigate(`/console/${segment(1) ?? "integrations"}/${key}`);
 
 export type Tone = "accent" | "ok" | "warn" | "danger" | "muted";
 
