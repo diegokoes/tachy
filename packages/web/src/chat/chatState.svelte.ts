@@ -1,13 +1,26 @@
 import type { CompactStats } from "./CompactPanel.svelte";
 import type { OutputFile } from "./OutputCard.svelte";
 import type { CreatedTicket } from "@tachy/contract";
+import type { ShownStep, WalkStep } from "../code/walkthrough";
 
 export type EntryData =
   | { kind: "user"; text: string }
-  | { kind: "assistant"; text: string }
+  | {
+      kind: "assistant";
+      text: string;
+      /** The turn read linked code, so it can be shown as a walkthrough. */
+      code?: true;
+    }
   | { kind: "tool"; tool: string }
   | { kind: "compact"; id: string; title: string; stats?: CompactStats }
   | { kind: "output"; id: string; file?: OutputFile }
+  | {
+      kind: "walkthrough";
+      id: string;
+      title: string;
+      steps: WalkStep[];
+      shown?: ShownStep[];
+    }
   | {
       kind: "approval";
       id: string;

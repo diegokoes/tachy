@@ -14,6 +14,7 @@ export {
   REPO_INDEX_STATUSES,
   linkRepo,
   listRepos,
+  reposInProject,
   getRepoBySlug,
   getRepoLine,
   repoScope,
@@ -39,14 +40,27 @@ export {
 export type { IndexResult, LineIndexResult } from "./indexer";
 export type { IndexPreview, PreviewDir, PreviewType } from "@tachy/contract";
 export { fileIconOf, fileIconPath } from "./file-icons";
-export { searchCode, readCodeFile } from "./search";
+export { searchCode, readCodeFile, listCodeDir } from "./search";
 export type { CodeSearchOptions, ReadCodeOptions } from "./search";
-export { resolveVersion, codeChangesBetween } from "./versions";
-export type { ResolvedVersion, CodeChanges } from "./versions";
+export {
+  resolveVersion,
+  codeChangesBetween,
+  codeDiff,
+  codeReleasesContaining,
+} from "./versions";
+export type {
+  ResolvedVersion,
+  CodeChanges,
+  CodeDiff,
+  CodeDiffRange,
+  ReleasesContaining,
+} from "./versions";
 export { repoToken, connectionToken, tokenMaySendTo } from "./token";
 export { activeReindexes } from "./jobs";
 export {
   RELEASE_TAG_RE,
   releaseMinor,
   normalizeVersion,
+  projectToken,
+  parseCodeScope,
 } from "@tachy/contract";

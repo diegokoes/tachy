@@ -1,7 +1,19 @@
 import { normalizeVersion, releaseMinor } from "@tachy/contract";
 import { sql } from "../infra/db";
 import { badInput, notFound } from "../infra/errors";
-import { logBetween, resolveRef, type CommitSummary } from "./git";
+import {
+  branchContains,
+  changedFiles,
+  commitSummary,
+  diffBetween,
+  logBetween,
+  parentOf,
+  releasesContaining,
+  resolveCommit,
+  resolveRef,
+  type ChangedFile,
+  type CommitSummary,
+} from "./git";
 import { getRepoBySlug } from "./repos";
 
 export interface ResolvedVersion {
@@ -140,5 +152,138 @@ export async function codeChangesBetween(
     commits: shown,
     truncated,
     work_items: workItems,
+  };
+}
+
+/**
+ * The commit a revision names: a commit id or an abbreviation of it, a release
+ * version, or a branch or tag the clone has.
+ */
+export async function resolveRevision(
+  slug: string,
+  revision: string,
+): Promise<string> {
+  const byId = await resolveCommit(slug, revision);
+  if (byId) return byId;
+  if (normalizeVersion(revision)?.split(".").length === 3) {
+    const resolved = await resolveVersion(slug, revision);
+    if (resolved.commit) return resolved.commit;
+  }
+  const byRef =
+    (await resolveRef(slug, `refs/heads/${revision}`)) ??
+    (await resolveRef(slug, `refs/tags/${revision}`));
+  if (byRef) return byRef;
+  throw notFound(
+    `Repo '${slug}' has no commit, release, branch or tag '${revision}' fetched`,
+  );
+}
+
+/** Files past this, a diff lists what changed and leaves the patch out. */
+const MAX_DIFF_FILES = 40;
+const MAX_PATCH_LINES = 600;
+const MAX_PATCH_BYTES = 64 * 1024;
+
+export interface CodeDiff {
+  repo: string;
+  from: string;
+  to: string;
+  /** Set when the diff is of one commit against its parent. */
+  commit?: CommitSummary;
+  files: ChangedFile[];
+  /** Null when there are too many files to read without a `path`. */
+  patch: string | null;
+  truncated: boolean;
+}
+
+export interface CodeDiffRange {
+  /** One commit, against its first parent. */
+  commit?: string;
+  from?: string;
+  to?: string;
+  /** Only changes to this file or directory. */
+  path?: string;
+  /** Fetches the file contents a partial clone does not hold yet. */
+  token?: string;
+}
+
+/**
+ * What one commit changed, or what differs between two revisions. The file
+ * list comes from trees alone; the patch is read only when the list is short
+ * enough, since every file in it is fetched from the remote.
+ */
+export async function codeDiff(
+  slug: string,
+  range: CodeDiffRange,
+): Promise<CodeDiff> {
+  await getRepoBySlug(slug);
+  if (!range.commit && !(range.from && range.to))
+    throw badInput("code_diff needs a commit, or both from and to");
+
+  const to = await resolveRevision(slug, range.commit ?? range.to!);
+  const from = range.commit
+    ? await parentOf(slug, to)
+    : await resolveRevision(slug, range.from!);
+  const files = await changedFiles(slug, from, to, range.path);
+  const base = {
+    repo: slug,
+    from,
+    to,
+    ...(range.commit ? { commit: await commitSummary(slug, to) } : {}),
+    files,
+  };
+  if (files.length > MAX_DIFF_FILES)
+    return { ...base, patch: null, truncated: true };
+
+  const patch = await diffBetween(slug, from, to, {
+    path: range.path,
+    token: range.token,
+  });
+  const kept = patch
+    .slice(0, MAX_PATCH_BYTES)
+    .split("\n")
+    .slice(0, MAX_PATCH_LINES)
+    .join("\n");
+  return { ...base, patch: kept, truncated: kept.length < patch.length };
+}
+
+export interface ReleasesContaining {
+  repo: string;
+  commit: CommitSummary;
+  /** The oldest release holding the commit; null when none does yet. */
+  first_release: string | null;
+  /** The oldest release holding it on each minor, oldest minor first. */
+  first_per_minor: string[];
+  /** Each tracked line, and whether its head holds the commit. */
+  lines: { ref: string; contains: boolean }[];
+}
+
+/**
+ * The releases a commit shipped in. A fix is in a customer's install when
+ * their version is at or past the first release on their minor.
+ */
+export async function codeReleasesContaining(
+  slug: string,
+  commit: string,
+): Promise<ReleasesContaining> {
+  const repo = await getRepoBySlug(slug);
+  const sha = await resolveCommit(slug, commit);
+  if (!sha) throw notFound(`Repo '${slug}' has no commit '${commit}' fetched`);
+  const releases = await releasesContaining(slug, sha);
+  const firstPerMinor = new Map<string, string>();
+  for (const tag of releases) {
+    const minor = releaseMinor(tag)!;
+    if (!firstPerMinor.has(minor)) firstPerMinor.set(minor, tag);
+  }
+  return {
+    repo: slug,
+    commit: await commitSummary(slug, sha),
+    first_release: releases[0] ?? null,
+    first_per_minor: [...firstPerMinor.values()],
+    lines: await Promise.all(
+      repo.lines.map(async (l) => ({
+        ref: l.ref,
+        contains: await branchContains(slug, l.ref, sha),
+      })),
+    ),
   };
 }

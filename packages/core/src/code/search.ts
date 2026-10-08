@@ -12,11 +12,13 @@ import {
 import { currentVector } from "../search/backfill";
 import { CODE_SEM_FLOOR, withRelevance } from "../search/relevance";
 import { getRepoBySlug, getRepoLine } from "./repos";
-import { readBlob, readFileAt, resolveRef } from "./git";
+import { listDir, readBlob, readFileAt, resolveRef } from "./git";
 import { resolveVersion } from "./versions";
 
 export interface CodeSearchOptions {
   repoSlug?: string;
+  /** Several repos at once; with `repoSlug`, both are searched. */
+  repoSlugs?: string[];
   productId?: string;
   componentId?: string;
   sourceProjectId?: string;
@@ -78,6 +80,10 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
       `'${opts.version}' is not a version; expected major.minor or major.minor.patch`,
     );
   const qvec = opts.queryVector ?? (await embedQueryLiteral(query));
+  const repoSlugs = [
+    ...(opts.repoSlug ? [opts.repoSlug] : []),
+    ...(opts.repoSlugs ?? []),
+  ];
 
   // `like` treats % and _ as wildcards; a path prefix is a literal.
   const escapedPrefix = opts.pathPrefix?.replace(/([%_\\])/g, "\\$1");
@@ -112,7 +118,7 @@ export async function searchCode(query: string, opts: CodeSearchOptions = {}) {
       join repo_lines l on l.repo_id = r.id
       where coalesce(l.indexing_commit, l.indexed_commit) is not null
         ${lineChoice}
-        ${opts.repoSlug ? sql`and r.slug = ${opts.repoSlug}` : sql``}
+        ${repoSlugs.length ? sql`and r.slug = any(${repoSlugs})` : sql``}
         ${opts.productId ? sql`and r.product_id = ${opts.productId}` : sql``}
         ${opts.componentId ? sql`and r.component_id = ${opts.componentId}` : sql``}
         ${opts.sourceProjectId ? sql`and r.source_project_id = ${opts.sourceProjectId}` : sql``}
@@ -252,30 +258,36 @@ export interface ReadCodeOptions {
   token?: string;
 }
 
-async function contentFor(
+export interface ReadCommit {
+  /** The tag, line or branch the commit was reached by. */
+  ref: string;
+  commit: string;
+  /** Set when `ref` is a tracked line, whose index says which blob a path holds. */
+  lineId: string | null;
+}
+
+/**
+ * The commit a read is made at: a release's tag, a tracked line's index, or
+ * any other branch or tag the clone has. The default line when neither is
+ * named.
+ */
+export async function resolveReadCommit(
   repoSlug: string,
-  path: string,
-  opts: ReadCodeOptions,
-): Promise<{ content: string; ref: string; commit: string | null }> {
+  opts: { ref?: string; version?: string } = {},
+): Promise<ReadCommit> {
   if (opts.version) {
     const resolved = await resolveVersion(repoSlug, opts.version);
     if (!resolved.tag)
       throw notFound(
         `Repo '${repoSlug}' has no release tag for ${resolved.version}; read the '${resolved.line.ref}' line instead`,
       );
-    return {
-      content: await readFileAt(repoSlug, resolved.commit!, path, opts.token),
-      ref: resolved.tag,
-      commit: resolved.commit,
-    };
+    return { ref: resolved.tag, commit: resolved.commit!, lineId: null };
   }
 
   const repo = await getRepoBySlug(repoSlug);
-  const tracked = repo.lines.find(
-    (l) => l.ref === (opts.ref ?? repo.default_branch),
-  );
+  const ref = opts.ref ?? repo.default_branch;
+  const tracked = repo.lines.find((l) => l.ref === ref);
   if (!tracked) {
-    const ref = opts.ref!;
     const commit =
       (await resolveRef(repoSlug, `refs/heads/${ref}`)) ??
       (await resolveRef(repoSlug, `refs/tags/${ref}`));
@@ -283,11 +295,7 @@ async function contentFor(
       throw notFound(
         `Repo '${repoSlug}' has no branch or tag '${ref}' fetched`,
       );
-    return {
-      content: await readFileAt(repoSlug, commit, path, opts.token),
-      ref,
-      commit,
-    };
+    return { ref, commit, lineId: null };
   }
 
   const line = await getRepoLine(repoSlug, tracked.ref);
@@ -296,17 +304,51 @@ async function contentFor(
     throw badInput(
       `Repo '${repoSlug}' line '${line.ref}' has not been indexed yet`,
     );
+  return { ref: line.ref, commit, lineId: line.id };
+}
+
+async function contentFor(
+  repoSlug: string,
+  path: string,
+  opts: ReadCodeOptions,
+): Promise<{ content: string; ref: string; commit: string }> {
+  const at = await resolveReadCommit(repoSlug, opts);
   // The blob, not commit:path: mid-index, a line holds files from two
   // commits, and a search hit must open the content that was found.
-  const [file] = await sql`
-    select blob_sha from repo_line_files where line_id = ${line.id} and path = ${path}
-  `;
+  const [file] = at.lineId
+    ? await sql`
+        select blob_sha from repo_line_files where line_id = ${at.lineId} and path = ${path}
+      `
+    : [];
   return {
     content: file
       ? await readBlob(repoSlug, file.blob_sha, opts.token)
-      : await readFileAt(repoSlug, commit, path, opts.token),
-    ref: line.ref,
-    commit,
+      : await readFileAt(repoSlug, at.commit, path, opts.token),
+    ref: at.ref,
+    commit: at.commit,
+  };
+}
+
+const MAX_DIR_ENTRIES = 300;
+
+/** One directory of a repo, directories first. `dir` is "" for the root. */
+export async function listCodeDir(
+  repoSlug: string,
+  dir: string,
+  opts: { ref?: string; version?: string } = {},
+) {
+  const at = await resolveReadCommit(repoSlug, opts);
+  const path = dir.replace(/^\/+|\/+$/g, "");
+  const entries = (await listDir(repoSlug, at.commit, path)).sort(
+    (a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name),
+  );
+  return {
+    repo: repoSlug,
+    path,
+    ref: at.ref,
+    commit: at.commit,
+    entries: entries.slice(0, MAX_DIR_ENTRIES),
+    truncated: entries.length > MAX_DIR_ENTRIES,
   };
 }
 

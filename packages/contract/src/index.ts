@@ -102,8 +102,11 @@ export {
   RELEASE_TAG_RE,
   releaseMinor,
   normalizeVersion,
+  projectToken,
+  parseCodeScope,
 } from "./code";
 export type {
+  CodeScope,
   RepoIndexStatus,
   RepoRow,
   RepoLineRow,
