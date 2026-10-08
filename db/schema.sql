@@ -1411,3 +1411,22 @@ create table audit_events (
 );
 
 create index audit_events_at_idx on audit_events(at desc);
+
+-- Bearer tokens for scripts and service accounts. A token acts as its owner,
+-- with the owner's rights. Only the hash is kept: the token is shown once.
+create table api_tokens (
+    id           uuid primary key default gen_random_uuid(),
+    user_id      uuid not null references users(id) on delete cascade,
+    name         text not null,
+    token_hash   bytea not null unique,
+    -- The last characters of the token, to tell one from another in a list.
+    hint         text not null,
+    created_by   uuid references users(id) on delete set null,
+    created_at   timestamptz not null default now(),
+    last_used_at timestamptz,
+    -- Null: no expiry.
+    expires_at   timestamptz,
+    revoked_at   timestamptz
+);
+
+create index api_tokens_user_idx on api_tokens(user_id);

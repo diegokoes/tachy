@@ -19,6 +19,8 @@ export const AUDIT_ACTIONS = [
   "output_download",
   "export",
   "catalog_add",
+  "api_token_mint",
+  "api_token_revoke",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

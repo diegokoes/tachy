@@ -102,6 +102,7 @@ const TABLES = [
   "resolution_patterns",
   "artifacts",
   "preferences",
+  "api_tokens",
   "credentials",
   "team_members",
   "products",

@@ -19,11 +19,12 @@ import {
   revokeSessions,
   strengthenPasswordHash,
   teamAdminTeams,
+  userByApiToken,
   userTeams,
 } from "@tachy/core/access";
 import { recordAudit } from "@tachy/core/audit";
 import { env, log } from "@tachy/core/infra";
-import { type UserRole } from "@tachy/core";
+import { API_TOKEN_PREFIX, type UserRole } from "@tachy/core";
 import { callerAddress, failureThrottle } from "./throttle";
 
 export interface OidcConfig {
@@ -160,11 +161,23 @@ async function resolveIdentity(
   c: Context,
   opts: { apiToken?: string; oidc?: OidcConfig; passwordAuth?: boolean },
 ): Promise<Identity | null> {
-  if (
-    opts.apiToken &&
-    tokenMatches(c.req.header("Authorization"), opts.apiToken)
-  )
+  const authorization = c.req.header("Authorization");
+  if (opts.apiToken && tokenMatches(authorization, opts.apiToken))
     return { role: "admin", via: "token" };
+
+  // A minted token acts as its owner. One that is presented and does not
+  // resolve is a refusal, not a reason to try the next way in.
+  const bearer = authorization?.replace(/^Bearer /, "");
+  if (bearer?.startsWith(API_TOKEN_PREFIX)) {
+    const owner = await userByApiToken(bearer);
+    if (!owner) return null;
+    return {
+      email: owner.email,
+      name: owner.display_name ?? undefined,
+      role: owner.role,
+      via: "token",
+    };
+  }
 
   const user = await cookieUser(c);
   if (user)
@@ -208,6 +221,18 @@ export function getIdentity(c: Context): Identity | undefined {
  * middleware that guarantees one, and this does not fail open where one is
  * mounted outside it.
  */
+/**
+ * For minting a token: the caller has to be a person signed in, so a token
+ * that leaked cannot issue its own replacements.
+ */
+export async function requireSession(c: Context, next: Next): Promise<void> {
+  if (getIdentity(c)?.via === "token")
+    throw new HTTPException(403, {
+      message: "sign in to do this; a token cannot",
+    });
+  await next();
+}
+
 export async function requireAdmin(c: Context, next: Next): Promise<void> {
   if (getIdentity(c)?.role !== "admin")
     throw new HTTPException(403, { message: "app admin role required" });
