@@ -48,7 +48,7 @@ export async function resolveCurrentUserId(): Promise<string | null> {
   return cachedUserId;
 }
 
-export async function countAdmins(): Promise<number> {
+export async function adminCount(): Promise<number> {
   const [row] =
     await sql`select count(*)::int as n from users where role = 'admin' and not disabled`;
   return row.n as number;
@@ -120,7 +120,7 @@ export async function setUserRole(id: string, role: UserRole): Promise<void> {
     role !== "admin" &&
     current.role === "admin" &&
     !current.disabled &&
-    (await countAdmins()) <= 1
+    (await adminCount()) <= 1
   )
     throw badInput("cannot demote the last admin");
   await sql`update users set role = ${role} where id = ${id}`;
@@ -164,7 +164,7 @@ export async function setUserDisabled(
     disabled &&
     current.role === "admin" &&
     !current.disabled &&
-    (await countAdmins()) <= 1
+    (await adminCount()) <= 1
   )
     throw badInput("cannot disable the last admin");
   await sql`update users set disabled = ${disabled} where id = ${id}`;
@@ -256,13 +256,9 @@ export async function setTeamMember(
 /**
  * For the admin index: users, how many of them cannot sign in, and who can
  * curate. `teams_with_admin` counts teams from this domain's own membership
- * table rather than joining the catalog's - the caller compares it against the
- * team count it already has.
- *
- * `admins` and `team_admins` are both taken among the enabled, and an app admin
- * is never also counted as a team admin. That is what lets the overview draw
- * app admins / team admins / members / disabled as four parts of one roll
- * rather than four independent tallies.
+ * table; the caller compares it with the team count it has. `admins` and
+ * `team_admins` are counted among the enabled, and an app admin is never also a
+ * team admin, so the four parts of the overview's roll add up.
  */
 export async function userCensus(): Promise<UserCensus> {
   const [row] = await sql<Omit<UserCensus, "teams_without_admin">[]>`
@@ -283,9 +279,8 @@ export async function userCensus(): Promise<UserCensus> {
         as users_no_team
     from users
   `;
-  /* Named, not just counted: the overview opens this list when the ring is
-     clicked, and "3 teams have no admin" is only actionable once you know
-     which three. */
+  // Named as well as counted: the overview opens this list when the ring is
+  // clicked, and a count is not actionable without the names.
   const teams_without_admin = await sql<{ slug: string; name: string }[]>`
     select t.slug, t.name from teams t
     where not exists (

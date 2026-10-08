@@ -43,10 +43,20 @@ export function loadTargets(): LoadTarget[] {
     .filter((t) => t.name && t.url);
 }
 
+const WINDOW_OPENS_HOUR = 19;
+const WINDOW_CLOSES_HOUR = 7;
+/** k6 exits with this when a threshold fails; any other non-zero is an error. */
+const K6_THRESHOLDS_FAILED = 99;
+
+function runStatus(cancelled: boolean, exitCode: number) {
+  if (cancelled) return "cancelled";
+  if (exitCode === 0) return "passed";
+  return exitCode === K6_THRESHOLDS_FAILED ? "failed" : "error";
+}
+
 /**
  * Weekdays 19:00–07:00 and weekends, on the organisation's clock. The process's
- * own is UTC in a container, which in Madrid let a production run start until
- * 09:00 in summer.
+ * own is UTC in a container, which shifts the window by the zone's offset.
  */
 export function inLoadWindow(now: Date, timezone: string): boolean {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -58,7 +68,7 @@ export function inLoadWindow(now: Date, timezone: string): boolean {
   const part = (type: string) => parts.find((p) => p.type === type)?.value;
   const weekend = part("weekday") === "Sat" || part("weekday") === "Sun";
   const hour = Number(part("hour"));
-  return weekend || hour >= 19 || hour < 7;
+  return weekend || hour >= WINDOW_OPENS_HOUR || hour < WINDOW_CLOSES_HOUR;
 }
 
 export interface TestRun {
@@ -94,33 +104,33 @@ export async function getTestRun(id: string): Promise<TestRun> {
  * script or target, a heavy script outside the dev stack, a production run
  * outside the off-hours window, or a second run while one is going.
  */
-export async function startTestRun(i: {
+export async function startTestRun(input: {
   script: string;
   profile?: string | null;
   target: string;
   requestedBy: string | null;
   now?: Date;
 }): Promise<TestRun> {
-  const script = i.script as LoadScript;
+  const script = input.script as LoadScript;
   const rules = LOAD_SCRIPTS[script];
-  if (!rules) throw badInput(`unknown script '${i.script}'`);
-  const target = loadTargets().find((t) => t.name === i.target);
+  if (!rules) throw badInput(`unknown script '${input.script}'`);
+  const target = loadTargets().find((t) => t.name === input.target);
   if (!target)
     throw badInput(
-      `unknown target '${i.target}'. Targets come from TACHY_LOAD_TARGETS.`,
+      `unknown target '${input.target}'. Targets come from TACHY_LOAD_TARGETS.`,
     );
   const heavy = "devOnly" in rules && rules.devOnly;
   if (heavy && !target.dev)
     throw badInput(
       `${script} runs only against a dev target, not '${target.name}'`,
     );
-  if (i.profile === "stress" && !target.dev)
+  if (input.profile === "stress" && !target.dev)
     throw badInput("PROFILE=stress runs only against a dev target");
   const timezone = await orgTimezone();
   if (
     !target.dev &&
     !rules.anyTime &&
-    !inLoadWindow(i.now ?? new Date(), timezone)
+    !inLoadWindow(input.now ?? new Date(), timezone)
   )
     throw badInput(
       `${script} may only run against ${target.name} outside working hours (weekdays 19:00–07:00, or weekends, ${timezone})`,
@@ -128,7 +138,7 @@ export async function startTestRun(i: {
 
   const [row] = await sql`
     insert into test_runs (script, profile, target, requested_by, image_sha)
-    select ${script}, ${i.profile ?? null}, ${target.name}, ${i.requestedBy}, ${env.commit ?? null}
+    select ${script}, ${input.profile ?? null}, ${target.name}, ${input.requestedBy}, ${env.commit ?? null}
     where not exists (select 1 from test_runs where status in ('queued','running'))
     returning *
   `;
@@ -139,7 +149,7 @@ export async function startTestRun(i: {
     kind: "load.test",
     params: { test_run_id: row.id },
     trigger: "manual",
-    requestedBy: i.requestedBy,
+    requestedBy: input.requestedBy,
   });
   await sql`update test_runs set job_run_id = ${jobRunId} where id = ${row.id}`;
   return { ...(row as never as TestRun), job_run_id: jobRunId };
@@ -169,8 +179,8 @@ export function defineLoadTestJobs() {
     params: z.object({ test_run_id: z.string().uuid() }),
     queue: "testing",
     timeout: "45m",
-    run: async (ctx, p) => {
-      const run = await getTestRun(p.test_run_id);
+    run: async (ctx, params) => {
+      const run = await getTestRun(params.test_run_id);
       const target = loadTargets().find((t) => t.name === run.target);
       if (!target)
         throw badInput(`target '${run.target}' is no longer configured`);
@@ -207,13 +217,7 @@ export function defineLoadTestJobs() {
       const summary = await readFile("/tmp/k6-summary.json", "utf8")
         .then((s) => JSON.parse(s) as Record<string, unknown>)
         .catch(() => null);
-      const status = ctx.signal.aborted
-        ? "cancelled"
-        : code === 0
-          ? "passed"
-          : code === 99
-            ? "failed"
-            : "error";
+      const status = runStatus(ctx.signal.aborted, code);
       await sql`
         update test_runs set status = ${status}, finished_at = now(),
           summary = ${summary ? jsonb(summary) : null}, output_tail = ${tail}
