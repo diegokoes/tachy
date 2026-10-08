@@ -42,7 +42,13 @@ const PEM_RE =
 
 const CREDENTIAL_ASSIGN_RE =
   /\b(password|passwd|pwd|secret|token|api[_-]?key|apikey|authorization)\b(\s*[:=]\s*)("[^"\n]+"|'[^'\n]+'|[^\s,;'"]+)/gi;
-const BEARER_RE = /\b(Bearer\s+)([A-Za-z0-9._~+/=-]{8,})/g;
+const AUTH_SCHEME = String.raw`(?:Basic|Bearer|Token|Digest|Negotiate)`;
+/** An HTTP `Authorization` value: the scheme stays, what follows it is the secret. */
+const AUTH_SCHEME_RE = new RegExp(
+  String.raw`\b(${AUTH_SCHEME}\s+)([A-Za-z0-9._~+/=-]{8,})`,
+  "g",
+);
+const AUTH_SCHEME_ONLY_RE = new RegExp(`^${AUTH_SCHEME}$`, "i");
 
 const KNOWN_KEY_RES = [
   /\bAKIA[0-9A-Z]{16}\b/g,
@@ -84,11 +90,11 @@ export function scrubText(text: string | undefined, map: TokenMap): string {
   let scrubbed = text.replace(PEM_RE, (m) => map.token("SECRET", m));
 
   scrubbed = scrubbed.replace(
-    BEARER_RE,
+    AUTH_SCHEME_RE,
     (_m, prefix, token) => `${prefix}${map.token("SECRET", token)}`,
   );
   scrubbed = scrubbed.replace(CREDENTIAL_ASSIGN_RE, (m, key, sep, value) =>
-    value.startsWith("[") || /^bearer$/i.test(value)
+    value.startsWith("[") || AUTH_SCHEME_ONLY_RE.test(value)
       ? m
       : `${key}${sep}${map.token("SECRET", value)}`,
   );
