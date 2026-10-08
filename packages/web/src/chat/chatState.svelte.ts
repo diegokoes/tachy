@@ -11,7 +11,8 @@ export type EntryData =
       /** The turn read linked code, so it can be shown as a walkthrough. */
       code?: true;
     }
-  | { kind: "tool"; tool: string }
+  // Every tool called between two other entries, in the order called.
+  | { kind: "tools"; calls: string[] }
   | { kind: "compact"; id: string; title: string; stats?: CompactStats }
   | { kind: "output"; id: string; file?: OutputFile }
   | {
