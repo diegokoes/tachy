@@ -1,23 +1,23 @@
 /**
- * Holds the mechanical half of the comment convention in CLAUDE.md over the
- * paths in `SWEPT`: length caps, which comment syntax goes where, banners, em
- * dashes, unreferenced TODOs and commented-out code. Tense and register cannot
- * be matched without false positives and are left to review.
+ * Holds the mechanical half of the comment convention in CLAUDE.md over every
+ * source file in the checkout that git does not ignore: length caps, which
+ * comment syntax goes where, banners, em dashes, unreferenced TODOs and
+ * commented-out code. Tense and register cannot be matched without false
+ * positives and are left to review.
  *
  *   npm run comments:check [path ...]
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import ts from "typescript";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
-/** Repo-relative path prefixes already brought under the convention. */
-export const SWEPT = ["load", "packages", "scripts", "test"];
-
 const CHECKED_FILE_RE = /\.(?:[cm]?[jt]s|svelte|css)$/;
-const SKIPPED_DIRS = new Set(["node_modules", "dist", "coverage"]);
+/** Room for the listing of a checkout that holds a large untracked tree. */
+const LISTING_MAX_BYTES = 64 * 1024 * 1024;
 
 const BODY_CAP = 3;
 const DECLARATION_CAP = 5;
@@ -265,30 +265,48 @@ export function violations(path, text) {
   return found;
 }
 
-function checkedFiles(target, files = []) {
-  if (!statSync(target).isDirectory()) {
-    if (CHECKED_FILE_RE.test(target)) files.push(target);
-    return files;
-  }
-  for (const name of readdirSync(target)) {
-    if (SKIPPED_DIRS.has(name) || name.startsWith(".")) continue;
-    checkedFiles(join(target, name), files);
-  }
-  return files;
+/**
+ * Repo-relative source paths under `targets`, the whole checkout when there
+ * are none. Tracked files and untracked ones git does not ignore, so a build
+ * output or another repository kept inside the checkout is not read.
+ */
+export function checkedFiles(targets = []) {
+  const listing = execFileSync(
+    "git",
+    [
+      "ls-files",
+      "-z",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "--",
+      ...targets,
+    ],
+    { cwd: ROOT, encoding: "utf8", maxBuffer: LISTING_MAX_BYTES },
+  );
+  const paths = new Set(
+    listing.split("\0").filter((path) => CHECKED_FILE_RE.test(path)),
+  );
+  // A file deleted and not yet staged is still in the index.
+  return [...paths].filter((path) => existsSync(resolve(ROOT, path))).sort();
 }
 
 function main(targets) {
+  const missing = targets.filter(
+    (target) => !existsSync(resolve(ROOT, target)),
+  );
+  if (missing.length) {
+    console.error(`comments:check: no such path: ${missing.join(", ")}`);
+    process.exit(1);
+  }
   let count = 0;
-  for (const target of targets) {
-    for (const file of checkedFiles(resolve(ROOT, target))) {
-      const path = relative(ROOT, file);
-      for (const { line, rule, message } of violations(
-        path,
-        readFileSync(file, "utf8"),
-      )) {
-        console.error(`${path}:${line}  ${rule}  ${message}`);
-        count++;
-      }
+  for (const path of checkedFiles(targets)) {
+    for (const { line, rule, message } of violations(
+      path,
+      readFileSync(resolve(ROOT, path), "utf8"),
+    )) {
+      console.error(`${path}:${line}  ${rule}  ${message}`);
+      count++;
     }
   }
   if (count) {
@@ -298,6 +316,5 @@ function main(targets) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
-  const targets = process.argv.slice(2);
-  main(targets.length ? targets : SWEPT);
+  main(process.argv.slice(2));
 }
