@@ -407,6 +407,7 @@ describe("azure-devops client", () => {
     const err = await client()
       .getWorkItem("1")
       .catch((e: Error) => e);
+    if (!(err instanceof Error)) throw new Error("getWorkItem resolved");
     expect(err.message).toContain("404");
     expect(err.message).toContain("work item does not exist");
     expect(err.message).not.toContain("PAT");

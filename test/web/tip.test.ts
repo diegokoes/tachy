@@ -90,7 +90,9 @@ describe("a tip on touch", () => {
 describe("a tip on focus", () => {
   it("shows for keyboard focus and goes with it", () => {
     const { el } = control();
-    el.matches = (s: string) => s === ":focus-visible";
+    vi.spyOn(el, "matches").mockImplementation(
+      (selector: string) => selector === ":focus-visible",
+    );
     el.focus();
     expect(tipState.anchor).toBe(el);
     el.blur();
@@ -99,7 +101,7 @@ describe("a tip on focus", () => {
 
   it("stays down for focus a click gives", () => {
     const { el } = control();
-    el.matches = () => false;
+    vi.spyOn(el, "matches").mockReturnValue(false);
     el.focus();
     expect(tipState.anchor).toBeNull();
   });

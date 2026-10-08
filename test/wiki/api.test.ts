@@ -305,14 +305,14 @@ const PNG = Buffer.from(
   "base64",
 );
 
-const form = (bytes: Uint8Array, name: string, type: string) => {
+const form = (bytes: Uint8Array<ArrayBuffer>, name: string, type: string) => {
   const form = new FormData();
   form.append("file", new File([bytes], name, { type }));
   return form;
 };
 
 const upload = (
-  bytes: Uint8Array,
+  bytes: Uint8Array<ArrayBuffer>,
   name = "shot.png",
   type = "image/png",
   scope = "tpd",
