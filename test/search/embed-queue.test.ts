@@ -24,25 +24,28 @@ const flush = () => new Promise((r) => setImmediate(r));
 
 describe("EmbedQueue", () => {
   it("answers passages in the caller's order after batching by length", async () => {
-    const r = recorder();
-    const q = new EmbedQueue(r.run, { passageBatch: 2, queryBatch: 32 });
+    const runner = recorder();
+    const queue = new EmbedQueue(runner.run, {
+      passageBatch: 2,
+      queryBatch: 32,
+    });
     const texts = ["aaaa", "a", "aaa", "aa", "aaaaa"];
-    const out = await q.embed("passage", texts);
-    expect(out).toEqual([[4], [1], [3], [2], [5]]);
-    expect(r.batches).toEqual([["a", "aa"], ["aaa", "aaaa"], ["aaaaa"]]);
+    const answers = await queue.embed("passage", texts);
+    expect(answers).toEqual([[4], [1], [3], [2], [5]]);
+    expect(runner.batches).toEqual([["a", "aa"], ["aaa", "aaaa"], ["aaaaa"]]);
   });
 
   it("closes a passage batch at its byte budget, and never leaves one empty", async () => {
-    const r = recorder();
-    const q = new EmbedQueue(r.run, {
+    const runner = recorder();
+    const queue = new EmbedQueue(runner.run, {
       passageBatch: 8,
       queryBatch: 32,
       batchBytes: 10,
     });
     const texts = ["aaaa", "bbbb", "cccc", "d".repeat(25), "ee"];
-    const out = await q.embed("passage", texts);
-    expect(out).toEqual([[4], [4], [4], [25], [2]]);
-    expect(r.batches).toEqual([
+    const answers = await queue.embed("passage", texts);
+    expect(answers).toEqual([[4], [4], [4], [25], [2]]);
+    expect(runner.batches).toEqual([
       ["ee", "aaaa", "bbbb"],
       ["cccc"],
       ["d".repeat(25)],
@@ -52,35 +55,35 @@ describe("EmbedQueue", () => {
   // Three bytes a character and more than one token: counted in characters,
   // these three would share a batch.
   it("counts the budget in bytes, so a dense script fills it sooner", async () => {
-    const r = recorder();
-    const q = new EmbedQueue(r.run, {
+    const runner = recorder();
+    const queue = new EmbedQueue(runner.run, {
       passageBatch: 8,
       queryBatch: 32,
       batchBytes: 10,
     });
-    await q.embed("passage", ["扫描", "离线", "队列"]);
-    expect(r.batches).toEqual([["扫描"], ["离线"], ["队列"]]);
+    await queue.embed("passage", ["扫描", "离线", "队列"]);
+    expect(runner.batches).toEqual([["扫描"], ["离线"], ["队列"]]);
   });
 
   it("holds a query batch to the same budget", async () => {
-    const r = recorder();
-    const q = new EmbedQueue(r.run, {
+    const runner = recorder();
+    const queue = new EmbedQueue(runner.run, {
       passageBatch: 8,
       queryBatch: 32,
       batchBytes: 10,
     });
-    r.hold();
-    const first = q.embed("query", ["q0"]);
+    runner.hold();
+    const first = queue.embed("query", ["q0"]);
     await flush();
     const rest = [
-      q.embed("query", ["aaaa"]),
-      q.embed("query", ["bbbb"]),
-      q.embed("query", ["cccc"]),
-      q.embed("query", ["d".repeat(25)]),
+      queue.embed("query", ["aaaa"]),
+      queue.embed("query", ["bbbb"]),
+      queue.embed("query", ["cccc"]),
+      queue.embed("query", ["d".repeat(25)]),
     ];
-    r.open();
+    runner.open();
     await Promise.all([first, ...rest]);
-    expect(r.batches).toEqual([
+    expect(runner.batches).toEqual([
       ["q0"],
       ["aaaa", "bbbb"],
       ["cccc"],
@@ -89,55 +92,83 @@ describe("EmbedQueue", () => {
   });
 
   it("runs a waiting query before the next passage batch", async () => {
-    const r = recorder();
-    const q = new EmbedQueue(r.run, { passageBatch: 1, queryBatch: 32 });
-    r.hold();
-    const passages = q.embed("passage", ["p1", "p2", "p3"], "indexer");
+    const runner = recorder();
+    const queue = new EmbedQueue(runner.run, {
+      passageBatch: 1,
+      queryBatch: 32,
+    });
+    runner.hold();
+    const passages = queue.embed("passage", ["p1", "p2", "p3"], "indexer");
     await flush();
-    const query = q.embed("query", ["q"]);
-    r.open();
-    r.hold();
+    const query = queue.embed("query", ["q"]);
+    runner.open();
+    runner.hold();
     await flush();
-    r.open();
+    runner.open();
     await Promise.all([passages, query]);
-    expect(r.batches.map((b) => b.join())).toEqual(["p1", "q", "p2", "p3"]);
+    expect(runner.batches.map((b) => b.join())).toEqual([
+      "p1",
+      "q",
+      "p2",
+      "p3",
+    ]);
   });
 
   it("takes passage batches from each caller in turn", async () => {
-    const r = recorder();
-    const q = new EmbedQueue(r.run, { passageBatch: 1, queryBatch: 32 });
-    r.hold();
-    const big = q.embed("passage", ["b1", "b2", "b3"], "big");
-    const small = q.embed("passage", ["s1"], "small");
-    r.open();
+    const runner = recorder();
+    const queue = new EmbedQueue(runner.run, {
+      passageBatch: 1,
+      queryBatch: 32,
+    });
+    runner.hold();
+    const big = queue.embed("passage", ["b1", "b2", "b3"], "big");
+    const small = queue.embed("passage", ["s1"], "small");
+    runner.open();
     await Promise.all([big, small]);
-    expect(r.batches.map((b) => b.join())).toEqual(["b1", "s1", "b2", "b3"]);
+    expect(runner.batches.map((b) => b.join())).toEqual([
+      "b1",
+      "s1",
+      "b2",
+      "b3",
+    ]);
   });
 
   it("fails only the job whose batch failed", async () => {
-    const q = new EmbedQueue(
+    const queue = new EmbedQueue(
       async (texts) => {
         if (texts.includes("bad")) throw new Error("boom");
         return texts.map(() => [1]);
       },
       { passageBatch: 8, queryBatch: 32 },
     );
-    const bad = q.embed("passage", ["bad"], "a");
-    const good = q.embed("passage", ["good"], "b");
+    const bad = queue.embed("passage", ["bad"], "a");
+    const good = queue.embed("passage", ["good"], "b");
     await expect(bad).rejects.toThrow("boom");
     await expect(good).resolves.toEqual([[1]]);
-    expect(q.depth).toMatchObject({ queries: 0, passages: 0, running: false });
+    expect(queue.depth).toMatchObject({
+      queries: 0,
+      passages: 0,
+      running: false,
+    });
   });
 
   it("serves low-priority passages only when no normal passage waits", async () => {
-    const r = recorder();
-    const q = new EmbedQueue(r.run, { passageBatch: 1, queryBatch: 32 });
-    r.hold();
-    const low = q.embed("passage", ["l1", "l2"], "worker", "low");
+    const runner = recorder();
+    const queue = new EmbedQueue(runner.run, {
+      passageBatch: 1,
+      queryBatch: 32,
+    });
+    runner.hold();
+    const low = queue.embed("passage", ["l1", "l2"], "worker", "low");
     await flush();
-    const normal = q.embed("passage", ["n1", "n2"], "turn");
-    r.open();
+    const normal = queue.embed("passage", ["n1", "n2"], "turn");
+    runner.open();
     await Promise.all([low, normal]);
-    expect(r.batches.map((b) => b.join())).toEqual(["l1", "n1", "n2", "l2"]);
+    expect(runner.batches.map((b) => b.join())).toEqual([
+      "l1",
+      "n1",
+      "n2",
+      "l2",
+    ]);
   });
 });

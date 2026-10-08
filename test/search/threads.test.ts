@@ -66,10 +66,10 @@ describe("embedThreads", () => {
 
 describe("cpuBudget", () => {
   it("reports this host, with no more cores to run on than it has", () => {
-    const b = cpuBudget();
-    expect(b.hostCores).toBeGreaterThanOrEqual(1);
-    expect(b.cores).toBeGreaterThanOrEqual(1);
-    expect(b.cores).toBeLessThanOrEqual(b.hostCores);
-    expect(b.quota === undefined || b.quota > 0).toBe(true);
+    const budget = cpuBudget();
+    expect(budget.hostCores).toBeGreaterThanOrEqual(1);
+    expect(budget.cores).toBeGreaterThanOrEqual(1);
+    expect(budget.cores).toBeLessThanOrEqual(budget.hostCores);
+    expect(budget.quota === undefined || budget.quota > 0).toBe(true);
   });
 });

@@ -74,12 +74,12 @@ afterAll(async () => {
 
 describe("POST /api/work-items/:source/:id/notes", () => {
   it("posts a private note through the connection's adapter", async () => {
-    const res = await app.request(
+    const response = await app.request(
       "/api/work-items/fake-items-conn/42/notes",
       json({ body: "Checked the spooler; queue drains now." }),
     );
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ posted: true });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ posted: true });
     // Private by default: a note written during triage is not a customer reply.
     expect(notes).toEqual([
       {
@@ -91,31 +91,31 @@ describe("POST /api/work-items/:source/:id/notes", () => {
   });
 
   it("rejects an empty body before reaching the source", async () => {
-    const res = await app.request(
+    const response = await app.request(
       "/api/work-items/fake-items-conn/42/notes",
       json({ body: "" }),
     );
-    expect(res.status).toBe(400);
+    expect(response.status).toBe(400);
     expect(notes).toEqual([]);
   });
 
   it("404s on a connection slug that does not exist", async () => {
-    const res = await app.request(
+    const response = await app.request(
       "/api/work-items/no-such-conn/42/notes",
       json({ body: "hello" }),
     );
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeGreaterThanOrEqual(400);
     expect(notes).toEqual([]);
   });
 
   it("says so when the source cannot take notes at all", async () => {
     notesSupported = false;
-    const res = await app.request(
+    const response = await app.request(
       "/api/work-items/fake-items-conn/42/notes",
       json({ body: "hello" }),
     );
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/notes unsupported/i);
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/notes unsupported/i);
   });
 });
 
@@ -124,12 +124,12 @@ describe("PATCH /api/work-items/:id/customer", () => {
     const id = await seedItem();
     await addCustomer({ name: "Northwind", slug: "northwind" });
 
-    const res = await app.request(`/api/work-items/${id}/customer`, {
+    const response = await app.request(`/api/work-items/${id}/customer`, {
       ...json({ customer_slug: "northwind" }),
       method: "PATCH",
     });
-    expect(res.status).toBe(200);
-    expect((await res.json()).customer_id).toBeTruthy();
+    expect(response.status).toBe(200);
+    expect((await response.json()).customer_id).toBeTruthy();
 
     const [row] =
       await sql`select customer_id from work_items where id = ${id}`;
@@ -146,11 +146,11 @@ describe("PATCH /api/work-items/:id/customer", () => {
       kind: "line",
     });
 
-    const res = await app.request(`/api/work-items/${id}/customer`, {
+    const response = await app.request(`/api/work-items/${id}/customer`, {
       ...json({ customer_slug: "northwind", unit: "line-3" }),
       method: "PATCH",
     });
-    expect(res.status).toBe(200);
+    expect(response.status).toBe(200);
 
     const [row] = await sql`
       select customer_unit_id from work_items where id = ${id}
@@ -166,12 +166,12 @@ describe("PATCH /api/work-items/:id/customer", () => {
       method: "PATCH",
     });
 
-    const res = await app.request(`/api/work-items/${id}/customer`, {
+    const response = await app.request(`/api/work-items/${id}/customer`, {
       ...json({ customer_slug: null }),
       method: "PATCH",
     });
-    expect(res.status).toBe(200);
-    expect((await res.json()).customer_id).toBeNull();
+    expect(response.status).toBe(200);
+    expect((await response.json()).customer_id).toBeNull();
     const [row] =
       await sql`select customer_id from work_items where id = ${id}`;
     expect(row.customer_id).toBeNull();
@@ -179,32 +179,35 @@ describe("PATCH /api/work-items/:id/customer", () => {
 
   it("refuses a customer slug nobody has registered", async () => {
     const id = await seedItem();
-    const res = await app.request(`/api/work-items/${id}/customer`, {
+    const response = await app.request(`/api/work-items/${id}/customer`, {
       ...json({ customer_slug: "no-such-customer" }),
       method: "PATCH",
     });
-    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeGreaterThanOrEqual(400);
   });
 
   it("rejects a body missing customer_slug", async () => {
     const id = await seedItem();
-    const res = await app.request(`/api/work-items/${id}/customer`, {
+    const response = await app.request(`/api/work-items/${id}/customer`, {
       ...json({ unit: "line-3" }),
       method: "PATCH",
     });
-    expect(res.status).toBe(400);
+    expect(response.status).toBe(400);
   });
 });
 
 describe("PATCH /api/work-items/:id/observed-version", () => {
   it("records the version the customer is actually running", async () => {
     const id = await seedItem();
-    const res = await app.request(`/api/work-items/${id}/observed-version`, {
-      ...json({ version: "9.2" }),
-      method: "PATCH",
-    });
-    expect(res.status).toBe(200);
-    expect((await res.json()).observed_version).toBe("9.2");
+    const response = await app.request(
+      `/api/work-items/${id}/observed-version`,
+      {
+        ...json({ version: "9.2" }),
+        method: "PATCH",
+      },
+    );
+    expect(response.status).toBe(200);
+    expect((await response.json()).observed_version).toBe("9.2");
 
     const [row] = await sql`
       select observed_version from work_items where id = ${id}
@@ -218,11 +221,14 @@ describe("PATCH /api/work-items/:id/observed-version", () => {
       ...json({ version: "9.2" }),
       method: "PATCH",
     });
-    const res = await app.request(`/api/work-items/${id}/observed-version`, {
-      ...json({ version: null }),
-      method: "PATCH",
-    });
-    expect(res.status).toBe(200);
+    const response = await app.request(
+      `/api/work-items/${id}/observed-version`,
+      {
+        ...json({ version: null }),
+        method: "PATCH",
+      },
+    );
+    expect(response.status).toBe(200);
     const [row] = await sql`
       select observed_version from work_items where id = ${id}
     `;
@@ -231,10 +237,13 @@ describe("PATCH /api/work-items/:id/observed-version", () => {
 
   it("rejects a body with no version key at all", async () => {
     const id = await seedItem();
-    const res = await app.request(`/api/work-items/${id}/observed-version`, {
-      ...json({}),
-      method: "PATCH",
-    });
-    expect(res.status).toBe(400);
+    const response = await app.request(
+      `/api/work-items/${id}/observed-version`,
+      {
+        ...json({}),
+        method: "PATCH",
+      },
+    );
+    expect(response.status).toBe(400);
   });
 });

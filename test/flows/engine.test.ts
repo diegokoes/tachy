@@ -46,9 +46,9 @@ defineFlowAction({
   writes: true,
   params: z.object({ body: z.string() }),
   output: z.object({ ok: z.boolean() }),
-  run: async (_ctx, p) => {
-    if (p.body === "boom") throw new Error("the source said no");
-    written.push(p.body);
+  run: async (_ctx, params) => {
+    if (params.body === "boom") throw new Error("the source said no");
+    written.push(params.body);
     return { ok: true };
   },
 });
@@ -210,7 +210,7 @@ describe("runFlow", () => {
         ],
       },
     ]);
-    const res = await runFlow({
+    const flowRun = await runFlow({
       ...noop,
       flow,
       triggerId: "m",
@@ -218,7 +218,7 @@ describe("runFlow", () => {
       dryRun: false,
       jobRunId: null,
     });
-    expect(res.status).toBe("succeeded");
+    expect(flowRun.status).toBe("succeeded");
     expect(written).toEqual(["saw Scanner offline"]);
     const [run] = await listFlowRuns(flow.id);
     expect(run.steps.map((s) => [s.step_id, s.status, s.held])).toEqual([
@@ -261,7 +261,7 @@ describe("runFlow", () => {
         params: { body: "never" },
       },
     ]);
-    const res = await runFlow({
+    const flowRun = await runFlow({
       ...noop,
       flow,
       triggerId: "m",
@@ -269,7 +269,7 @@ describe("runFlow", () => {
       dryRun: true,
       jobRunId: null,
     });
-    expect(res.status).toBe("stopped");
+    expect(flowRun.status).toBe("stopped");
     expect(written).toEqual([]);
     const [run] = await listFlowRuns(flow.id);
     expect(run.steps.map((s) => s.status)).toEqual(["dry", "ok"]);
@@ -657,10 +657,10 @@ describe("/api/flows", () => {
   it("queues a dry run on an item by default", async () => {
     const flow = await (await call("", admin, "POST", body(null))).json();
     const item = await ingestWorkItem(await seededFreshdeskConnId(), rawItem());
-    const res = await call(`/${flow.id}/run`, admin, "POST", {
+    const answer = await call(`/${flow.id}/run`, admin, "POST", {
       work_item_id: item.id,
     });
-    expect(res.status).toBe(202);
+    expect(answer.status).toBe(202);
     const [run] =
       await sql`select params, trigger from job_runs where kind = 'flow.run'`;
     expect(run).toMatchObject({
@@ -760,12 +760,12 @@ describe("the flow.run job", () => {
         dry_run: false,
       }),
     ).toEqual({ skipped: "the flow is paused" });
-    const out = await job().run(await ctx([], flow.id), {
+    const output = await job().run(await ctx([], flow.id), {
       flow_id: flow.id,
       trigger_id: "m",
       dry_run: false,
     });
-    expect(out).toMatchObject({ status: "succeeded" });
+    expect(output).toMatchObject({ status: "succeeded" });
     expect(written).toEqual(["hi"]);
   });
 
@@ -803,12 +803,12 @@ describe("the flow.run job", () => {
       null,
     );
     const queued: unknown[] = [];
-    const out = await job().run(await ctx(queued, flow.id), {
+    const output = await job().run(await ctx(queued, flow.id), {
       flow_id: flow.id,
       trigger_id: "nightly",
       dry_run: false,
     });
-    expect(out).toEqual({ matched: 1, queued: 1 });
+    expect(output).toEqual({ matched: 1, queued: 1 });
     expect(queued).toEqual([
       {
         flow_id: flow.id,

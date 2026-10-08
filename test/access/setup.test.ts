@@ -31,15 +31,15 @@ describe("first-run setup wizard", () => {
     // and taking it over would hand back a session as its owner.
     await sql`insert into users (email) values ('colleague@example.com')`;
 
-    const res = await app.request(
+    const response = await app.request(
       "/api/setup",
       json({
         email: "colleague@example.com",
         password: "attacker-chosen-password",
       }),
     );
-    expect(res.status).toBe(409);
-    expect((await res.json()).error).toMatch(/already exists/);
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toMatch(/already exists/);
 
     const [row] =
       await sql`select role, password_hash from users where email = 'colleague@example.com'`;
@@ -50,7 +50,7 @@ describe("first-run setup wizard", () => {
   });
 
   it("bootstraps admin + settings + workspace in one POST", async () => {
-    const res = await app.request(
+    const response = await app.request(
       "/api/setup",
       json({
         email: "founder@example.com",
@@ -70,8 +70,8 @@ describe("first-run setup wizard", () => {
         },
       }),
     );
-    expect(res.status).toBe(200);
-    expect(res.headers.get("set-cookie")).toContain("tachy_session=");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("set-cookie")).toContain("tachy_session=");
 
     const status = await app.request("/api/setup/status");
     expect(await status.json()).toEqual({ bootstrapped: true });
@@ -97,33 +97,33 @@ describe("first-run setup wizard", () => {
     `;
     expect(products.map((p) => p.slug)).toEqual(["lc", "mas", "printer"]);
 
-    const cfg = await (await app.request("/auth/config")).json();
-    expect(cfg.profile).toBe("engineering");
-    expect(cfg.envBadge).toBeNull();
+    const config = await (await app.request("/auth/config")).json();
+    expect(config.profile).toBe("engineering");
+    expect(config.envBadge).toBeNull();
   });
 
   it("locks /api against anonymous requests after bootstrap", async () => {
-    const res = await app.request("/api/teams");
-    expect(res.status).toBe(401);
+    const response = await app.request("/api/teams");
+    expect(response.status).toBe(401);
   });
 
   it("refuses a second bootstrap", async () => {
-    const res = await app.request(
+    const response = await app.request(
       "/api/setup",
       json({
         email: "intruder@example.com",
         password: "another-long-pass",
       }),
     );
-    expect(res.status).toBe(409);
+    expect(response.status).toBe(409);
   });
 
   it("rejects a too-short password", async () => {
-    const res = await app.request(
+    const response = await app.request(
       "/api/setup",
       json({ email: "x@example.com", password: "short" }),
     );
-    expect(res.status).toBe(400);
+    expect(response.status).toBe(400);
   });
 });
 
@@ -135,7 +135,7 @@ describe("first-run setup with an agent key", () => {
   });
 
   it("stores the agent key encrypted, as the first admin's own", async () => {
-    const res = await app.request(
+    const response = await app.request(
       "/api/setup",
       json({
         email: "keyed@example.com",
@@ -144,7 +144,7 @@ describe("first-run setup with an agent key", () => {
         agent_key: "sk-ant-from-wizard",
       }),
     );
-    expect(res.status).toBe(200);
+    expect(response.status).toBe(200);
 
     const [admin] = await sql<{ id: string }[]>`
       select id from users where email = 'keyed@example.com'

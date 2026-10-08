@@ -31,9 +31,9 @@ describe("slugify", () => {
   });
 
   it("never leaves a leading or trailing hyphen", () => {
-    for (const s of ["!hi!", "  --x--  ", "###"]) {
-      const out = slugify(s);
-      expect(out).not.toMatch(/^-|-$/);
+    for (const raw of ["!hi!", "  --x--  ", "###"]) {
+      const slug = slugify(raw);
+      expect(slug).not.toMatch(/^-|-$/);
     }
   });
 });
@@ -83,6 +83,6 @@ describe("the accent palette", () => {
   });
 
   it("gives every entry a usable hex value", () => {
-    for (const c of ANSI16) expect(c.hex).toMatch(/^#[0-9a-f]{6}$/i);
+    for (const colour of ANSI16) expect(colour.hex).toMatch(/^#[0-9a-f]{6}$/i);
   });
 });

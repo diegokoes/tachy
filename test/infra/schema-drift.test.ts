@@ -36,21 +36,21 @@ const here = dirname(fileURLToPath(import.meta.url));
 const schema = readFileSync(join(here, "..", "..", "db", "schema.sql"), "utf8");
 
 function tableBlock(table: string): string {
-  const m = schema.match(
+  const match = schema.match(
     new RegExp(`create table ${table} \\(([\\s\\S]*?)\\n\\);`),
   );
-  if (!m) throw new Error(`table ${table} not found in schema.sql`);
-  return m[1];
+  if (!match) throw new Error(`table ${table} not found in schema.sql`);
+  return match[1];
 }
 
 function checkValues(table: string, col: string): string[] {
   const block = tableBlock(table);
-  const re = new RegExp(
+  const pattern = new RegExp(
     `check \\((?:${col} is null or )?${col} in \\(([^)]*)\\)\\)`,
   );
-  const m = block.match(re);
-  if (!m) throw new Error(`no CHECK for ${table}.${col} in schema.sql`);
-  return m[1].split(",").map((s) => s.trim().replace(/^'|'$/g, ""));
+  const match = block.match(pattern);
+  if (!match) throw new Error(`no CHECK for ${table}.${col} in schema.sql`);
+  return match[1].split(",").map((s) => s.trim().replace(/^'|'$/g, ""));
 }
 
 describe("core enums match db/schema.sql CHECK constraints", () => {
@@ -148,12 +148,12 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     expect(block).toContain("check (scope in ('global','team','user'))");
     expect(block).toContain("check ((scope = 'team') = (team_id is not null))");
     expect(block).toContain("check ((scope = 'user') = (user_id is not null))");
-    for (const idx of [
+    for (const indexName of [
       "artifacts_global_idx on artifacts(slug)",
       "artifacts_team_idx   on artifacts(team_id, slug)",
       "artifacts_user_idx   on artifacts(user_id, slug)",
     ])
-      expect(schema).toContain(idx);
+      expect(schema).toContain(indexName);
   });
 
   it("artifacts carries the output spec column", () => {

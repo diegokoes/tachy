@@ -4,8 +4,8 @@ export const json = (body: unknown) => ({
   headers: { "Content-Type": "application/json" },
 });
 
-export const cookieOf = (res: Response) =>
-  res.headers.get("set-cookie")?.split(";")[0] ?? "";
+export const cookieOf = (response: Response) =>
+  response.headers.get("set-cookie")?.split(";")[0] ?? "";
 
 interface AppLike {
   request: (path: string, init?: RequestInit) => Promise<Response>;
@@ -16,9 +16,9 @@ export async function loginCookie(
   email: string,
   password: string,
 ): Promise<string> {
-  const res = await app.request(
+  const response = await app.request(
     "/auth/password/login",
     json({ email, password }),
   );
-  return cookieOf(res);
+  return cookieOf(response);
 }

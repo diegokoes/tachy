@@ -37,20 +37,22 @@ describe("ticket review prompt", () => {
   });
 
   it("carries fields by reference name, the image count and the context", () => {
-    const p = reviewPrompt(request);
-    expect(p).toContain("[System.Title] Label printer jams on batch print");
-    expect(p).toContain(
+    const prompt = reviewPrompt(request);
+    expect(prompt).toContain(
+      "[System.Title] Label printer jams on batch print",
+    );
+    expect(prompt).toContain(
       "[Microsoft.VSTS.TCM.ReproSteps] Repro Steps:\n1. print 50 labels",
     );
-    expect(p).toContain("pasted 2 image(s)");
-    expect(p).toContain("--- support-desk #5541: Printer stuck at 023");
+    expect(prompt).toContain("pasted 2 image(s)");
+    expect(prompt).toContain("--- support-desk #5541: Printer stuck at 023");
   });
 
   it("passes every piece of free text through the scrubber", () => {
     const seen: string[] = [];
-    reviewPrompt(request, (s) => {
-      seen.push(s);
-      return s;
+    reviewPrompt(request, (text) => {
+      seen.push(text);
+      return text;
     });
     expect(seen).toEqual(
       expect.arrayContaining([
@@ -67,11 +69,11 @@ describe("parseTicketReview", () => {
   const known = ["Microsoft.VSTS.TCM.ReproSteps"];
 
   it("keeps well-formed findings, numbered, with suggestions when given", () => {
-    const r = parseTicketReview(
+    const review = parseTicketReview(
       'Sure! {"readiness":"almost","summary":"Close, but I cannot reproduce it yet.","findings":[{"field":"Microsoft.VSTS.TCM.ReproSteps","kind":"gap","message":"No expected result.","suggestion":"Expected: all 50 labels print."},{"field":"System.Title","kind":"improve","message":"Say which model."}]}',
       known,
     );
-    expect(r).toEqual({
+    expect(review).toEqual({
       available: true,
       readiness: "almost",
       summary: "Close, but I cannot reproduce it yet.",
@@ -94,12 +96,15 @@ describe("parseTicketReview", () => {
   });
 
   it("files a finding on an unknown field under general and fixes bad kinds", () => {
-    const r = parseTicketReview(
+    const review = parseTicketReview(
       '{"findings":[{"field":"Custom.Nope","kind":"shrug","message":"x"}]}',
       known,
     );
-    expect(r.findings[0]).toMatchObject({ field: "general", kind: "improve" });
-    expect(r.readiness).toBe("almost");
+    expect(review.findings[0]).toMatchObject({
+      field: "general",
+      kind: "improve",
+    });
+    expect(review.readiness).toBe("almost");
   });
 
   it("drops empty findings and caps the list at eight", () => {
@@ -108,15 +113,15 @@ describe("parseTicketReview", () => {
       kind: "gap",
       message: i === 0 ? "" : `m${i}`,
     }));
-    const r = parseTicketReview(JSON.stringify({ findings: many }), known);
-    expect(r.findings).toHaveLength(8);
-    expect(r.findings[0].message).toBe("m1");
+    const review = parseTicketReview(JSON.stringify({ findings: many }), known);
+    expect(review.findings).toHaveLength(8);
+    expect(review.findings[0].message).toBe("m1");
   });
 
   it("never throws on garbage, and says the review was unreadable", () => {
-    const r = parseTicketReview("I could not do that.", known);
-    expect(r.available).toBe(true);
-    expect(r.findings).toEqual([]);
-    expect(r.summary).toMatch(/unreadable/);
+    const review = parseTicketReview("I could not do that.", known);
+    expect(review.available).toBe(true);
+    expect(review.findings).toEqual([]);
+    expect(review.summary).toMatch(/unreadable/);
   });
 });

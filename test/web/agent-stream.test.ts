@@ -52,7 +52,8 @@ describe("chatStream", () => {
     );
 
     const got = [];
-    for await (const f of chatStream({ message: "x" } as never)) got.push(f);
+    for await (const frame of chatStream({ message: "x" } as never))
+      got.push(frame);
     expect(got).toEqual([
       { event: "start", data: { turnId: "t1" } },
       { event: "text", data: { text: "hi" } },
@@ -83,7 +84,8 @@ describe("chatStream", () => {
     );
 
     const got = [];
-    for await (const f of chatStream({ message: "x" } as never)) got.push(f);
+    for await (const frame of chatStream({ message: "x" } as never))
+      got.push(frame);
     expect(got).toEqual([]);
     expect(unauthorized).toHaveBeenCalledOnce();
   });

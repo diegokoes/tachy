@@ -23,16 +23,16 @@ describe("the extras catalogue", () => {
   it("keys every filter uniquely and gives each a query parameter", () => {
     const keys = EXTRA_FILTERS.map((f) => f.key);
     expect(new Set(keys).size).toBe(keys.length);
-    for (const f of EXTRA_FILTERS) {
-      expect(f.param).toBeTruthy();
-      expect(f.label).toBeTruthy();
+    for (const filter of EXTRA_FILTERS) {
+      expect(filter.param).toBeTruthy();
+      expect(filter.label).toBeTruthy();
     }
   });
 
   // An enum filter with no options would render an empty, unusable select.
   it("gives every enum filter its option list", () => {
-    for (const f of EXTRA_FILTERS.filter((x) => x.kind === "enum"))
-      expect(f.options?.length).toBeGreaterThan(0);
+    for (const filter of EXTRA_FILTERS.filter((x) => x.kind === "enum"))
+      expect(filter.options?.length).toBeGreaterThan(0);
   });
 
   // The vocabularies come from @tachy/contract via vocab.ts: a copy in the SPA
@@ -135,18 +135,18 @@ describe("pruneValues", () => {
 
 describe("applyExtras", () => {
   it("writes each active extra under its own parameter name", () => {
-    const p = applyExtras(
+    const params = applyExtras(
       new URLSearchParams({ q: "spooler" }),
       ["cloud", "resolution_clarity"],
       { cloud: "prod", resolution_clarity: RESOLUTION_CLARITIES[0] },
     );
-    expect(p.get("q")).toBe("spooler");
-    expect(p.get("cloud")).toBe("prod");
-    expect(p.get("resolution_clarity")).toBe(RESOLUTION_CLARITIES[0]);
+    expect(params.get("q")).toBe("spooler");
+    expect(params.get("cloud")).toBe("prod");
+    expect(params.get("resolution_clarity")).toBe(RESOLUTION_CLARITIES[0]);
   });
 
   it("leaves out an extra that is shown but unset", () => {
-    const p = applyExtras(new URLSearchParams(), ["cloud"], {});
-    expect(p.has("cloud")).toBe(false);
+    const params = applyExtras(new URLSearchParams(), ["cloud"], {});
+    expect(params.has("cloud")).toBe(false);
   });
 });

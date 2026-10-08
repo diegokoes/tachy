@@ -101,8 +101,8 @@ async function run(steps: unknown[], workItemId: string, dryRun = false) {
     dryRun,
     jobRunId: null,
   });
-  const [r] = await listFlowRuns(flow.id);
-  return { res, steps: r.steps };
+  const [flowRun] = await listFlowRuns(flow.id);
+  return { res, steps: flowRun.steps };
 }
 
 async function acmeItem() {
@@ -293,8 +293,8 @@ describe("tag steps", () => {
   });
 
   it("fails on a source that cannot take tags", async () => {
-    registerSource("fake-flow-plain", ((cfg) => ({
-      ...factory(cfg),
+    registerSource("fake-flow-plain", ((config) => ({
+      ...factory(config),
       setTags: undefined,
     })) as SourceFactory);
     await sql`

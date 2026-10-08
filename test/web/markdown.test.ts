@@ -12,10 +12,10 @@ import {
   markBrokenLinks,
 } from "../../packages/web/src/markdown/markdown";
 
-const md = new Marked({ gfm: true, breaks: true }).use({
+const marked = new Marked({ gfm: true, breaks: true }).use({
   extensions: [wikilinkExtension as any],
 });
-const render = (src: string) => md.parse(src, { async: false }) as string;
+const render = (src: string) => marked.parse(src, { async: false }) as string;
 
 describe("wikilink rendering", () => {
   it("renders a link as an inert anchor carrying its target", () => {
@@ -52,9 +52,13 @@ describe("wikilink rendering", () => {
 
   it("marks links whose target did not resolve", () => {
     const html = render("[[real]] and [[missing]]");
-    const out = markBrokenLinks(html, new Set(["real"]));
-    expect(out).toMatch(/class="wikilink broken"[^>]*data-wikilink="missing"/);
-    expect(out).not.toMatch(/class="wikilink broken"[^>]*data-wikilink="real"/);
+    const rendered = markBrokenLinks(html, new Set(["real"]));
+    expect(rendered).toMatch(
+      /class="wikilink broken"[^>]*data-wikilink="missing"/,
+    );
+    expect(rendered).not.toMatch(
+      /class="wikilink broken"[^>]*data-wikilink="real"/,
+    );
   });
 
   it("leaves everything alone when every target resolves", () => {
@@ -75,12 +79,14 @@ describe("wikilinks are reachable without a pointer", () => {
   });
 
   it("marks a broken link without costing it keyboard access", () => {
-    const out = markBrokenLinks(
+    const rendered = markBrokenLinks(
       render("[[real]] and [[missing]]"),
       new Set(["real"]),
     );
-    expect(out).toMatch(/class="wikilink broken"[^>]*data-wikilink="missing"/);
-    expect(out).toMatch(/class="wikilink broken"[^>]*tabindex="0"/);
+    expect(rendered).toMatch(
+      /class="wikilink broken"[^>]*data-wikilink="missing"/,
+    );
+    expect(rendered).toMatch(/class="wikilink broken"[^>]*tabindex="0"/);
   });
 });
 
@@ -91,19 +97,19 @@ describe("markdown images", () => {
   const asset = "/api/library/assets/0b6a8f5e-3c1d-4e2f-9a7b-1c2d3e4f5a6b";
 
   it("renders one of the library's own images", () => {
-    const out = img(`![the spooler](${asset} "queue")`);
-    expect(out).toContain(`<img src="${asset}"`);
-    expect(out).toContain('alt="the spooler"');
-    expect(out).toContain('title="queue"');
-    expect(out).toContain('loading="lazy"');
+    const rendered = img(`![the spooler](${asset} "queue")`);
+    expect(rendered).toContain(`<img src="${asset}"`);
+    expect(rendered).toContain('alt="the spooler"');
+    expect(rendered).toContain('title="queue"');
+    expect(rendered).toContain('loading="lazy"');
   });
 
   // An outside image is a request every reader's browser would make.
   it("shows an outside image as its alt text and never loads it", () => {
-    const out = img("![leak](https://example.invalid/p.png?d=secret)");
-    expect(out).not.toContain("<img");
-    expect(out).not.toContain("example.invalid");
-    expect(out).toContain("leak");
+    const rendered = img("![leak](https://example.invalid/p.png?d=secret)");
+    expect(rendered).not.toContain("<img");
+    expect(rendered).not.toContain("example.invalid");
+    expect(rendered).toContain("leak");
   });
 
   it("refuses a path that only starts like an asset", () => {

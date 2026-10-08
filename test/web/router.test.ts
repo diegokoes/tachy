@@ -109,9 +109,9 @@ describe("openSection", () => {
     navigate("/wiki/general/gaps");
     const pushed: string[] = [];
     const push = history.pushState.bind(history);
-    history.pushState = (s, t, url) => {
+    history.pushState = (state, title, url) => {
       pushed.push(String(url));
-      push(s, t, url);
+      push(state, title, url);
     };
     try {
       openSection("wiki");

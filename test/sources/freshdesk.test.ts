@@ -150,9 +150,9 @@ describe("freshdesk adapter", () => {
   it("posts notes privately", async () => {
     mockFetch({ "/tickets/7/notes": {} });
     await source().postNote!("7", "<p>transcript</p>", { private: true });
-    const req = requests.find((r) => r.path === "/tickets/7/notes")!;
-    expect(req.init?.method).toBe("POST");
-    expect(JSON.parse(String(req.init?.body))).toEqual({
+    const request = requests.find((r) => r.path === "/tickets/7/notes")!;
+    expect(request.init?.method).toBe("POST");
+    expect(JSON.parse(String(request.init?.body))).toEqual({
       body: "<p>transcript</p>",
       private: true,
     });
@@ -161,8 +161,8 @@ describe("freshdesk adapter", () => {
   it("deletes a note by conversation id", async () => {
     mockFetch({ "/conversations/999": {} });
     await source().deleteNote!("999");
-    const req = requests.find((r) => r.path === "/conversations/999")!;
-    expect(req.init?.method).toBe("DELETE");
+    const request = requests.find((r) => r.path === "/conversations/999")!;
+    expect(request.init?.method).toBe("DELETE");
   });
 
   it("treats an already-deleted note as done, but still raises real errors", async () => {
@@ -181,8 +181,8 @@ describe("freshdesk adapter", () => {
   it("defaults to private when the caller says nothing", async () => {
     mockFetch({ "/tickets/7/notes": {} });
     await source().postNote!("7", "<p>x</p>");
-    const req = requests.find((r) => r.path === "/tickets/7/notes")!;
-    expect(JSON.parse(String(req.init?.body)).private).toBe(true);
+    const request = requests.find((r) => r.path === "/tickets/7/notes")!;
+    expect(JSON.parse(String(request.init?.body)).private).toBe(true);
   });
 });
 
@@ -192,8 +192,8 @@ describe("freshdesk request deadline", () => {
     await source().fetchItem("7");
     await source().postNote!("7", "note");
     expect(requests.length).toBeGreaterThan(0);
-    for (const r of requests)
-      expect(r.init?.signal).toBeInstanceOf(AbortSignal);
+    for (const request of requests)
+      expect(request.init?.signal).toBeInstanceOf(AbortSignal);
   });
 });
 

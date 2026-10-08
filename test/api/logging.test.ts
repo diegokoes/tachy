@@ -56,10 +56,10 @@ describe("the request line", () => {
   it("logs the same id the response header returns", async () => {
     await resetData();
     const cap = captureLog();
-    const res = await app.request("/api/knowledge");
+    const response = await app.request("/api/knowledge");
     cap.stop();
 
-    const header = res.headers.get("x-request-id");
+    const header = response.headers.get("x-request-id");
     expect(header).toBeTruthy();
     expect(http(cap.lines)[0].req).toBe(header);
   });
@@ -79,9 +79,9 @@ describe("levels", () => {
   // observable, and what matters, is that the line is not written at all.
   it("keeps /health out of the log at the default level", async () => {
     const cap = captureLog();
-    const res = await app.request("/health");
+    const response = await app.request("/health");
     cap.stop();
-    expect(res.status).toBe(200);
+    expect(response.status).toBe(200);
     expect(http(cap.lines)).toEqual([]);
   });
 
@@ -96,10 +96,13 @@ describe("levels", () => {
   it("raises a client error to warn and carries the reason", async () => {
     await resetData();
     const cap = captureLog();
-    const res = await app.request("/api/knowledge", json({ symptoms: 42 }));
+    const response = await app.request(
+      "/api/knowledge",
+      json({ symptoms: 42 }),
+    );
     cap.stop();
 
-    expect(res.status).toBe(400);
+    expect(response.status).toBe(400);
     const [line] = http(cap.lines);
     expect(line.level).toBe("warn");
     expect(line.status).toBe(400);

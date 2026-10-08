@@ -56,10 +56,10 @@ describe("library links", () => {
     const target = await article("spooler-stalls");
     const source = await article("printing", "See [[spooler-stalls]].");
 
-    const out = await outboundLinks({ docId: source.id });
-    expect(out).toHaveLength(1);
-    expect(out[0].to_doc_id).toBe(target.id);
-    expect(out[0].to_title).toBe("spooler-stalls");
+    const links = await outboundLinks({ docId: source.id });
+    expect(links).toHaveLength(1);
+    expect(links[0].to_doc_id).toBe(target.id);
+    expect(links[0].to_title).toBe("spooler-stalls");
 
     const back = await backlinks({ docId: target.id });
     expect(back.map((b) => b.from_doc_id)).toEqual([source.id]);
@@ -67,11 +67,11 @@ describe("library links", () => {
 
   it("stores an unresolved link rather than dropping it", async () => {
     const source = await article("printing", "See [[does-not-exist]].");
-    const out = await outboundLinks({ docId: source.id });
-    expect(out).toHaveLength(1);
-    expect(out[0].to_doc_id).toBeNull();
-    expect(out[0].target).toBe("does-not-exist");
-    expect(out[0].to_title).toBeNull();
+    const links = await outboundLinks({ docId: source.id });
+    expect(links).toHaveLength(1);
+    expect(links[0].to_doc_id).toBeNull();
+    expect(links[0].target).toBe("does-not-exist");
+    expect(links[0].to_title).toBeNull();
   });
 
   it("adopts links that were written before their target existed", async () => {
@@ -154,9 +154,9 @@ describe("library links", () => {
       "auth",
       `See [[entry:${entry.id}|the SSO case]].`,
     );
-    const out = await outboundLinks({ docId: source.id });
-    expect(out[0].to_entry_id).toBe(entry.id);
-    expect(out[0].label).toBe("the SSO case");
+    const links = await outboundLinks({ docId: source.id });
+    expect(links[0].to_entry_id).toBe(entry.id);
+    expect(links[0].label).toBe("the SSO case");
     expect(
       (await backlinks({ entryId: entry.id })).map((b) => b.from_doc_id),
     ).toEqual([source.id]);
