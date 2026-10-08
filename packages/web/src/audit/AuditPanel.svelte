@@ -13,37 +13,36 @@
   // A short page is the last one; a full one may have more behind it.
   let more = $state(false);
 
+  // One flexible column for what happened to what: the dialog has a fixed
+  // width, and a detail column of its own pushed the table past it.
+  const subject = (event: AuditEventRow) =>
+    [event.target, detailText(event.detail)].filter(Boolean).join(" · ") || "-";
+
   const columns: Column<AuditEventRow>[] = [
     {
       key: "at",
       label: "when",
-      width: "11rem",
+      width: "10rem",
       value: (e) => fmtDateTime(e.at),
     },
     {
       key: "actor_email",
       label: "who",
-      width: "16rem",
+      width: "14rem",
       value: (e) => e.actor_email ?? "nobody signed in",
     },
     {
       key: "action",
       label: "action",
-      width: "13rem",
+      width: "11rem",
       value: (e) => e.action.replaceAll("_", " "),
     },
-    {
-      key: "target",
-      label: "on",
-      width: "16rem",
-      value: (e) => e.target ?? "-",
-    },
-    { key: "detail", label: "detail", value: (e) => detailText(e.detail) },
-    { key: "actor", label: "via", width: "5rem" },
+    { key: "target", label: "on", value: subject },
+    { key: "actor", label: "via", width: "4rem" },
     {
       key: "address",
       label: "from",
-      width: "9rem",
+      width: "8rem",
       value: (e) => e.address ?? "-",
     },
   ];
