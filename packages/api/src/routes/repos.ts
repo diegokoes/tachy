@@ -49,14 +49,16 @@ const previewSchema = z.object({
 
 /** Newest release first; branches keep the remote's order. */
 const byReleaseDesc = (a: string, b: string) => {
-  const va = RELEASE_TAG_RE.exec(a)!.slice(1).map(Number);
-  const vb = RELEASE_TAG_RE.exec(b)!.slice(1).map(Number);
-  return vb[0] - va[0] || vb[1] - va[1] || vb[2] - va[2];
+  const partsA = RELEASE_TAG_RE.exec(a)!.slice(1).map(Number);
+  const partsB = RELEASE_TAG_RE.exec(b)!.slice(1).map(Number);
+  return (
+    partsB[0] - partsA[0] || partsB[1] - partsA[1] || partsB[2] - partsA[2]
+  );
 };
 
-async function probe<T>(fn: () => Promise<T>) {
+async function probe<T>(call: () => Promise<T>) {
   try {
-    return { ok: true as const, ...(await fn()) };
+    return { ok: true as const, ...(await call()) };
   } catch (e) {
     return {
       ok: false as const,
@@ -65,10 +67,12 @@ async function probe<T>(fn: () => Promise<T>) {
   }
 }
 
-/** Linking a project's repos one form at a time does not scale past a handful:
- *  an Azure DevOps project routinely holds fifty. Authorization is checked once
- *  for the project everything lands in, then each repo is linked through the
- *  same linkRepo as the single-repo route, so one bad row cannot fail the rest. */
+/**
+ * Linking a project's repos one form at a time does not scale: an Azure DevOps
+ * project can hold dozens. Authorization is checked once for the project
+ * everything lands in, then each repo goes through the same `linkRepo` as the
+ * single-repo route, so one bad row cannot fail the rest.
+ */
 const bulkLinkSchema = z.object({
   source_project_id: z.string(),
   repos: z
@@ -129,7 +133,8 @@ export const repos = new Hono()
     });
   })
 
-  /** A file type's icon, by the id a preview names; only the theme's own ids resolve. */
+  // A file type's icon, by the id a preview names; only the theme's own ids
+  // resolve.
   .get("/file-icons/:file", async (c) => {
     const file = c.req.param("file");
     const path = file.endsWith(".svg") ? fileIconPath(file.slice(0, -4)) : null;
@@ -143,7 +148,7 @@ export const repos = new Hono()
     });
   })
 
-  /** Every linked repo, as one parent run fanning out a reindex per repo. */
+  // Every linked repo, as one parent run fanning out a reindex per repo.
   .post("/reindex", async (c) => {
     await assertGlobalAdmin(await requireCaller(c));
     const params = { scope: "all" };
@@ -172,7 +177,7 @@ export const repos = new Hono()
       { productSlug: body.product, sourceProjectId: body.source_project_id },
       body.slug,
     );
-    const row = await linkRepo({
+    const linked = await linkRepo({
       slug: body.slug,
       url: body.url,
       productSlug: body.product,
@@ -184,14 +189,12 @@ export const repos = new Hono()
       lines: body.lines,
       config: body.config,
     });
-    return c.json({ ok: true, repo: row });
+    return c.json({ ok: true, repo: linked });
   })
 
-  /**
-   * The branches and release tags a remote offers, for the link form. Same
-   * authorisation as linking there, since it runs git against the URL with the
-   * project's connection token.
-   */
+  // The branches and release tags a remote offers, for the link form. Same
+  // authorisation as linking there, since it runs git against the URL with the
+  // project's connection token.
   .get("/refs", async (c) => {
     const url = c.req.query("url") ?? "";
     const sourceProjectId = c.req.query("source_project_id") || undefined;
@@ -226,20 +229,20 @@ export const repos = new Hono()
       await sourceProjectScope(body.source_project_id),
     );
     const results = [];
-    for (const r of body.repos) {
+    for (const repo of body.repos) {
       try {
         await linkRepo({
-          slug: r.slug,
-          url: r.url,
+          slug: repo.slug,
+          url: repo.url,
           sourceProjectId: body.source_project_id,
-          componentSlug: r.component,
-          customerSlug: r.customer,
-          defaultBranch: r.branch,
+          componentSlug: repo.component,
+          customerSlug: repo.customer,
+          defaultBranch: repo.branch,
         });
-        results.push({ slug: r.slug, ok: true });
+        results.push({ slug: repo.slug, ok: true });
       } catch (e) {
         results.push({
-          slug: r.slug,
+          slug: repo.slug,
           ok: false,
           error: e instanceof Error ? e.message : String(e),
         });
@@ -278,7 +281,8 @@ export const repos = new Hono()
     );
   })
 
-  /** What the default line would index under a proposed config; nothing is embedded. */
+  // What the default line would index under a proposed config; nothing is
+  // embedded.
   .post("/:slug/preview", zValidator("json", previewSchema), async (c) => {
     const slug = c.req.param("slug");
     await assertCanWriteRepo(c, {}, slug);

@@ -14,13 +14,13 @@ import type {
   SourceFactory,
 } from "@tachy/core/sources";
 
-function scrubActor(u: unknown, map: TokenMap, name: string): void {
-  if (!u || typeof u !== "object") return;
-  const a = u as Record<string, any>;
-  if (a.login != null) a.login = map.token("USER", String(a.login));
-  if (a.email != null && typeof a.email === "string")
-    a.email = map.token("EMAIL", a.email);
-  if (a.name != null) a.name = name;
+function scrubActor(raw: unknown, map: TokenMap, name: string): void {
+  if (!raw || typeof raw !== "object") return;
+  const actor = raw as Record<string, any>;
+  if (actor.login != null) actor.login = map.token("USER", String(actor.login));
+  if (actor.email != null && typeof actor.email === "string")
+    actor.email = map.token("EMAIL", actor.email);
+  if (actor.name != null) actor.name = name;
 }
 
 function redactGithubRaw(
@@ -35,15 +35,15 @@ function redactGithubRaw(
   scrubActor(issue.closed_by, map, name);
   scrubActor(issue.assignee, map, name);
   if (Array.isArray(issue.assignees))
-    for (const a of issue.assignees) scrubActor(a, map, name);
+    for (const assignee of issue.assignees) scrubActor(assignee, map, name);
   scrubStrings(issue, ["title", "body"], map);
   return issue;
 }
 
 /**
- * `owner/repo#123`, checked rather than merely split: both halves are pasted
- * into a URL path, and the id reaches here from a route parameter. The slash
- * between owner and repo is the only one that belongs there.
+ * `owner/repo#123`, checked rather than split: both halves are pasted into a
+ * URL path, and the id reaches here from a route parameter. The slash between
+ * owner and repo is the only one that belongs there.
  */
 const OWNER_REPO_RE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
 
@@ -77,17 +77,23 @@ interface GithubComment {
 }
 
 /**
- * GitHub Issues adapter (PAT auth). config.repos lists repos to sync; base_url can be a GitHub Enterprise API URL.
+ * GitHub Issues adapter (PAT auth). config.repos lists repos to sync; base_url
+ * can be a GitHub Enterprise API URL.
  */
-export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
-  const token = cfg.token || githubToken(cfg.slug);
-  const api = (cfg.baseUrl || "https://api.github.com").replace(/\/$/, "");
-  const configuredRepos = Array.isArray(cfg.config.repos)
-    ? (cfg.config.repos as string[])
+export const createGithubSource: SourceFactory = (
+  connection,
+): WorkItemSource => {
+  const token = connection.token || githubToken(connection.slug);
+  const api = (connection.baseUrl || "https://api.github.com").replace(
+    /\/$/,
+    "",
+  );
+  const configuredRepos = Array.isArray(connection.config.repos)
+    ? (connection.config.repos as string[])
     : [];
 
   async function get<T>(path: string): Promise<T> {
-    const res = await sourceFetch(
+    const response = await sourceFetch(
       `GitHub GET ${path}`,
       api + path,
       {
@@ -98,13 +104,13 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
           "User-Agent": "tachy",
         },
       },
-      { connection: cfg.slug },
+      { connection: connection.slug },
     );
-    if (!res.ok)
+    if (!response.ok)
       throw new Error(
-        `GitHub GET ${path} -> ${res.status} ${await res.text()}`,
+        `GitHub GET ${path} -> ${response.status} ${await response.text()}`,
       );
-    return (await res.json()) as T;
+    return (await response.json()) as T;
   }
 
   function issueToItem(
@@ -127,14 +133,14 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
     };
   }
 
-  function commentToMessage(repo: string, c: GithubComment): RawMessage {
+  function commentToMessage(repo: string, comment: GithubComment): RawMessage {
     return {
-      externalId: `${repo}#c${c.id}`,
-      author: c.user?.login,
+      externalId: `${repo}#c${comment.id}`,
+      author: comment.user?.login,
       visibility: "public",
       direction: "incoming",
-      bodyText: c.body ?? "",
-      createdAt: c.created_at,
+      bodyText: comment.body ?? "",
+      createdAt: comment.created_at,
     };
   }
 
@@ -157,13 +163,13 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
     const batch = await get<GithubIssue[]>(
       `/repos/${repo}/issues?${params.toString()}`,
     );
-    const arr = Array.isArray(batch) ? batch : [];
+    const issues = Array.isArray(batch) ? batch : [];
     const items: RawWorkItem[] = [];
-    for (const issue of arr) {
+    for (const issue of issues) {
       if (issue.pull_request) continue;
       items.push(issueToItem(repo, issue, []));
     }
-    return { items, more: arr.length === PER_PAGE };
+    return { items, more: issues.length === PER_PAGE };
   }
 
   return {
@@ -174,10 +180,11 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
     async verify() {
       const me = await get<{ login?: string }>("/user");
       const identity = me?.login ?? undefined;
-      // Repo listing needs a scope the ticket reads don't; treat it as a bonus.
+      // Listing repos needs a scope that reading tickets does not, so a failure
+      // here is tolerated.
       try {
         const repos = await get<{ full_name: string }[]>(
-          "/user/repos?per_page=100&sort=updated",
+          `/user/repos?per_page=${PER_PAGE}&sort=updated`,
         );
         return {
           identity,
@@ -201,11 +208,11 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
       const comments: GithubComment[] = [];
       for (let page = 1; ; page++) {
         const batch = await get<GithubComment[]>(
-          `/repos/${repo}/issues/${number}/comments?per_page=100&page=${page}`,
+          `/repos/${repo}/issues/${number}/comments?per_page=${PER_PAGE}&page=${page}`,
         );
-        const arr = Array.isArray(batch) ? batch : [];
-        comments.push(...arr);
-        if (arr.length < 100) break;
+        const pageComments = Array.isArray(batch) ? batch : [];
+        comments.push(...pageComments);
+        if (pageComments.length < PER_PAGE) break;
       }
       const body: RawMessage = {
         externalId: `${repo}#body${issue.number}`,
@@ -248,11 +255,9 @@ export const createGithubSource: SourceFactory = (cfg): WorkItemSource => {
           pageNumber,
           opts,
         );
-        const nextCursor = more
-          ? `${repoIndex}:${pageNumber + 1}`
-          : repoIndex + 1 < repos.length
-            ? `${repoIndex + 1}:1`
-            : undefined;
+        const nextRepo =
+          repoIndex + 1 < repos.length ? `${repoIndex + 1}:1` : undefined;
+        const nextCursor = more ? `${repoIndex}:${pageNumber + 1}` : nextRepo;
         if (items.length || !nextCursor) return { items, nextCursor };
         [repoIndex, pageNumber] = nextCursor.split(":").map(Number);
       }

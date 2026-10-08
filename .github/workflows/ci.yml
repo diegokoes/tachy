@@ -62,8 +62,7 @@ jobs:
       # The thresholds hold what each package already has. This holds what the
       # pull request adds: the share of its new lines the suite ran. A pull
       # request into main is a release of lines that each passed this on their
-      # way into dev, and it also counts every line a rename or a reformat
-      # touched since the last release.
+      # way into dev.
       - if: github.event_name == 'pull_request' && github.base_ref != 'main'
         run: npx tsx scripts/coverage-diff.ts
 

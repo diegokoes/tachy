@@ -1,18 +1,22 @@
+/**
+ * The embedding service (DEPLOYMENT-ARCHITECTURE.md §5.4): the one copy of the
+ * model on the host, for the api, its MCP children and the workers. Reachable
+ * only on the Compose network, and every embed needs the shared
+ * TACHY_INTERNAL_SECRET.
+ */
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { log } from "@tachy/core/infra";
 import { startEmbedHost } from "@tachy/core/search";
 import { internalRoutes } from "./routes/internal";
 
-/*
- * The embedding service (DEPLOYMENT-ARCHITECTURE.md §5.4, Phase 2): the one copy
- * of the model on the host, for the api, its MCP children and the workers.
- * Reachable only on the Compose network, and every embed needs the shared
- * TACHY_INTERNAL_SECRET.
- */
+const MIN_SECRET_CHARS = 32;
+
 const secret = process.env.TACHY_INTERNAL_SECRET;
-if (!secret || secret.length < 32)
-  throw new Error("TACHY_INTERNAL_SECRET (32+ characters) is required");
+if (!secret || secret.length < MIN_SECRET_CHARS)
+  throw new Error(
+    `TACHY_INTERNAL_SECRET (${MIN_SECRET_CHARS}+ characters) is required`,
+  );
 
 let ready = false;
 const host = startEmbedHost({

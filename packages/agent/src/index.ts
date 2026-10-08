@@ -40,8 +40,8 @@ export {
 
 export function startTurn(
   prompt: string,
-  cfg: AgentConfig,
+  config: AgentConfig,
   opts: { resume?: string } = {},
 ): AgentTurn {
-  return new ClaudeTurn(prompt, cfg, opts);
+  return new ClaudeTurn(prompt, config, opts);
 }

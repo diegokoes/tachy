@@ -51,7 +51,7 @@ export class Admission {
 
   admit(weight: number): Ticket {
     const { cap, queueMax } = this.limits();
-    const w = Math.max(1, Math.min(weight, cap));
+    const slots = Math.max(1, Math.min(weight, cap));
     let held = false;
     let done = false;
     let waiter: Waiter | undefined;
@@ -59,7 +59,7 @@ export class Admission {
     const release = () => {
       if (done) return;
       done = true;
-      if (held) this.used -= w;
+      if (held) this.used -= slots;
       else if (waiter) {
         this.queue.splice(this.queue.indexOf(waiter), 1);
         waiter.cancel();
@@ -67,8 +67,8 @@ export class Admission {
       this.pump();
     };
 
-    if (this.queue.length === 0 && this.used + w <= cap) {
-      this.used += w;
+    if (this.queue.length === 0 && this.used + slots <= cap) {
+      this.used += slots;
       held = true;
       return { granted: Promise.resolve(), position: 0, release };
     }
@@ -78,7 +78,7 @@ export class Admission {
     }
     const granted = new Promise<void>((resolve, reject) => {
       waiter = {
-        weight: w,
+        weight: slots,
         grant: () => {
           held = true;
           resolve();

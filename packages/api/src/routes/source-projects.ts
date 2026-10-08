@@ -73,13 +73,13 @@ async function assertCanWriteProject(
   if (teamSlug) await assertTeamAdmin(c, teamSlug);
 }
 
-/** Remote calls answer with {ok:false} so the setup UI can render the reason. */
 /** Remotes asked at once which release branch they have. */
 const DISCOVER_PROBES = 8;
 
-async function probe<T>(fn: () => Promise<T>) {
+/** Remote calls answer with {ok:false} so the setup UI can render the reason. */
+async function probe<T>(call: () => Promise<T>) {
   try {
-    return { ok: true as const, ...(await fn()) };
+    return { ok: true as const, ...(await call()) };
   } catch (e) {
     return {
       ok: false as const,
@@ -87,6 +87,12 @@ async function probe<T>(fn: () => Promise<T>) {
     };
   }
 }
+
+/** `has_product` as the query string spells it; anything else is no filter. */
+const QUERY_BOOLEAN = new Map([
+  ["true", true],
+  ["false", false],
+]);
 
 export const sourceProjects = new Hono()
 
@@ -101,12 +107,7 @@ export const sourceProjects = new Hono()
           ? await getProductIdBySlug(productSlug)
           : undefined,
         teamId: teamSlug ? await getTeamIdBySlug(teamSlug) : undefined,
-        hasProduct:
-          hasProduct === "true"
-            ? true
-            : hasProduct === "false"
-              ? false
-              : undefined,
+        hasProduct: QUERY_BOOLEAN.get(hasProduct ?? ""),
       }),
     );
   })
@@ -124,19 +125,19 @@ export const sourceProjects = new Hono()
   })
 
   .post("/source-projects", zValidator("json", projectSchema), async (c) => {
-    const b = c.req.valid("json");
-    await assertCanWriteProject(c, b.product_slug, b.team_slug);
+    const body = c.req.valid("json");
+    await assertCanWriteProject(c, body.product_slug, body.team_slug);
     return c.json(
       await addSourceProject({
-        sourceSlug: b.source_slug,
-        externalKey: b.external_key,
-        name: b.name,
-        productSlug: b.product_slug,
-        teamSlug: b.team_slug,
-        customerSlug: b.customer_slug,
-        wikis: b.wikis,
-        config: b.config,
-        notes: b.notes,
+        sourceSlug: body.source_slug,
+        externalKey: body.external_key,
+        name: body.name,
+        productSlug: body.product_slug,
+        teamSlug: body.team_slug,
+        customerSlug: body.customer_slug,
+        wikis: body.wikis,
+        config: body.config,
+        notes: body.notes,
       }),
     );
   })
@@ -147,19 +148,19 @@ export const sourceProjects = new Hono()
     async (c) => {
       const id = c.req.param("id");
       await assertScopeEditor(c, await sourceProjectScope(id));
-      const b = c.req.valid("json");
+      const body = c.req.valid("json");
       // Re-pointing a project needs rights on where it lands, too.
-      if (b.product_slug !== undefined || b.team_slug)
-        await assertCanWriteProject(c, b.product_slug, b.team_slug);
+      if (body.product_slug !== undefined || body.team_slug)
+        await assertCanWriteProject(c, body.product_slug, body.team_slug);
       return c.json(
         await updateSourceProject(id, {
-          name: b.name,
-          productSlug: b.product_slug,
-          teamSlug: b.team_slug,
-          customerSlug: b.customer_slug,
-          wikis: b.wikis,
-          config: b.config,
-          notes: b.notes,
+          name: body.name,
+          productSlug: body.product_slug,
+          teamSlug: body.team_slug,
+          customerSlug: body.customer_slug,
+          wikis: body.wikis,
+          config: body.config,
+          notes: body.notes,
         }),
       );
     },
@@ -197,11 +198,9 @@ export const sourceProjects = new Hono()
     return c.json(await deleteProjectAreaMap(c.req.param("areaId")));
   })
 
-  /**
-   * The field schema behind the chat approval box. Guarded, unlike the
-   * discover/* routes below: those are setup-screen probes, this is read on
-   * behalf of whoever is composing a work item, and the PAT it uses is theirs.
-   */
+  // The field schema behind the chat approval box. Guarded, unlike the
+  // discover/* routes: those are setup-screen probes, this is read on behalf of
+  // whoever is composing a work item, and the PAT it uses is theirs.
   .get(
     "/source-connections/:slug/work-item-schema",
     requireAdmin,
@@ -222,14 +221,9 @@ export const sourceProjects = new Hono()
     },
   )
 
-  /*
-   * Live discovery for the setup screens. Read-only against our own database,
-   * but each one spends the connection's credential on a remote call and hands
-   * back that system's answer - including its error text, by design, so an
-   * operator can see why a connection will not come up. That is a
-   * configuration surface, so it is held to the same rights as editing the
-   * connection itself.
-   */
+  // Live discovery for the setup screens. Each spends the connection's
+  // credential on a remote call and returns that system's answer, error text
+  // included, so it is held to the same rights as editing the connection.
   .get("/source-connections/:slug/discover/projects", requireAdmin, async (c) =>
     c.json(
       await probe(async () => {
@@ -273,12 +267,14 @@ export const sourceProjects = new Hono()
         let next = 0;
         const worker = async () => {
           while (next < repos.length) {
-            const r = repos[next++];
-            if (!r.url) continue;
-            r.default_branch = await releaseBranch(
-              r.url,
-              r.default_branch,
-              await connectionToken(slug, r.url, userId).catch(() => undefined),
+            const repo = repos[next++];
+            if (!repo.url) continue;
+            repo.default_branch = await releaseBranch(
+              repo.url,
+              repo.default_branch,
+              await connectionToken(slug, repo.url, userId).catch(
+                () => undefined,
+              ),
             );
           }
         };

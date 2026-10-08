@@ -1,3 +1,6 @@
+/**
+ * Linked repositories: searching indexed code, and reading a file out of it.
+ */
 import { z } from "zod";
 import { resolveCurrentUserId } from "@tachy/core/access";
 import { recordRun } from "@tachy/core/analytics";
@@ -16,10 +19,6 @@ import { badInput } from "@tachy/core/infra";
 import { tool } from "../server";
 import { GRADE_NOTE, out, outScrubbed, searchOut } from "../results";
 import { resolveScopeIds } from "../context";
-
-/**
- * Linked repositories: searching indexed code, and reading a file out of it.
- */
 
 tool(
   "list_repos",
@@ -125,7 +124,7 @@ tool(
     const { productId } = await resolveScopeIds({ product_slug });
     if (component && !productId)
       throw badInput("component needs product_slug to resolve against");
-    const rows = await searchCode(query, {
+    const hits = await searchCode(query, {
       repoSlug: repo,
       productId,
       componentId:
@@ -141,10 +140,10 @@ tool(
     await recordRun({
       userId: await resolveCurrentUserId(),
       mode: "code",
-      meta: { query, repo: repo ?? null, hits: rows.length },
+      meta: { query, repo: repo ?? null, hits: hits.length },
     });
     return searchOut(
-      rows.map((r: any) => ({
+      hits.map((r: any) => ({
         repo: r.repo_slug,
         component: r.component_slug,
         customer: r.customer_slug,
