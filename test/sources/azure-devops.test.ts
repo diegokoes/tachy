@@ -353,11 +353,9 @@ describe("azure-devops client", () => {
         (m) => m[1],
       );
       expect(versions, call).toHaveLength(1);
-      const expected = call.includes("/comments")
-        ? "7.1-preview.4"
-        : call.includes("/connectionData")
-          ? "7.1-preview.1"
-          : "7.1";
+      let expected = "7.1";
+      if (call.includes("/comments")) expected = "7.1-preview.4";
+      else if (call.includes("/connectionData")) expected = "7.1-preview.1";
       expect(versions[0], call).toBe(expected);
     }
   });

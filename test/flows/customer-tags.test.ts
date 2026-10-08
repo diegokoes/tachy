@@ -93,7 +93,7 @@ async function run(steps: unknown[], workItemId: string, dryRun = false) {
     } as never,
     null,
   );
-  const res = await runFlow({
+  const outcome = await runFlow({
     ...noop,
     flow,
     triggerId: "m",
@@ -102,7 +102,7 @@ async function run(steps: unknown[], workItemId: string, dryRun = false) {
     jobRunId: null,
   });
   const [flowRun] = await listFlowRuns(flow.id);
-  return { res, steps: flowRun.steps };
+  return { outcome, steps: flowRun.steps };
 }
 
 async function acmeItem() {
@@ -132,7 +132,7 @@ beforeEach(async () => {
 describe("customer.properties", () => {
   it("returns only the picked facts and company fields", async () => {
     const item = await acmeItem();
-    const { res, steps } = await run(
+    const { outcome, steps } = await run(
       [
         {
           id: "props",
@@ -154,7 +154,7 @@ describe("customer.properties", () => {
       ],
       item.id,
     );
-    expect(res.status).toBe("succeeded");
+    expect(outcome.status).toBe("succeeded");
     expect(steps[0].output).toEqual({
       found: true,
       customer: "acme",
@@ -239,7 +239,7 @@ describe("customer.properties", () => {
 describe("tag steps", () => {
   it("adds and removes tags, and later conditions see the result", async () => {
     const item = await ingestWorkItem(await connId(), rawItem());
-    const { res, steps } = await run(
+    const { outcome, steps } = await run(
       [
         {
           id: "add",
@@ -261,7 +261,7 @@ describe("tag steps", () => {
       ],
       item.id,
     );
-    expect(res.status).toBe("succeeded");
+    expect(outcome.status).toBe("succeeded");
     expect(tags).toEqual(["Escalated"]);
     expect(steps.map((s) => s.output)).toEqual([
       { tags: ["bug", "Escalated"] },
