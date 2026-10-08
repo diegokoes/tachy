@@ -18,6 +18,7 @@ import {
   activeReindexes,
   repoToken,
   readCodeFile,
+  repoFileUrl,
 } from "@tachy/core/code";
 import {
   globalRedactionEnabled,
@@ -322,9 +323,16 @@ export const repos = new Hono()
       version: query.version,
       token: await repoToken(slug, await requireCaller(c)),
     });
-    return c.json(
-      globalRedactionEnabled() ? scrubDeep(file, new TokenMap()) : file,
-    );
+    const repo = await getRepoBySlug(slug);
+    return c.json({
+      ...(globalRedactionEnabled() ? scrubDeep(file, new TokenMap()) : file),
+      web_url: repoFileUrl(repo.url, {
+        path: file.path,
+        commit: file.commit,
+        startLine: file.start_line,
+        endLine: file.end_line,
+      }),
+    });
   })
 
   .delete("/:slug", async (c) => {

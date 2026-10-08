@@ -50,6 +50,7 @@
     parseAz,
   } from "../work-items/azCommand";
   import { typeColor, typeIcon } from "../work-items/ado-icons";
+  import { tallyCalls, tallyLabel } from "./toolCalls";
   import Walkthrough from "../code/Walkthrough.svelte";
   import { parseCode, scopeOptions, withScopeWord } from "../code/codeCommand";
   import { codeScope, ensureRepos, scopeNote } from "../code/codeScope.svelte";
@@ -141,6 +142,13 @@
   $effect(() => {
     if (transcriptEl) snap(true);
   });
+
+  /** One row holds a run of tool calls, so a search-heavy turn stays short. */
+  function noteCall(tool: string) {
+    const last = chat.entries[chat.entries.length - 1];
+    if (last?.kind === "tools") last.calls.push(tool);
+    else addEntry({ kind: "tools", calls: [tool] });
+  }
 
   function appendAssistant(text: string) {
     const last = chat.entries[chat.entries.length - 1];
@@ -476,7 +484,7 @@
             });
           } else if (tool === "export_table") {
             addEntry({ kind: "output", id: data.id as string });
-          } else addEntry({ kind: "tool", tool });
+          } else noteCall(tool);
         } else if (
           event === "tool_result" &&
           short(data.tool as string) === "compact_work_item"
@@ -744,10 +752,15 @@
                 />
               {/if}
             </div>
-          {:else if entry.kind === "tool"}
+          {:else if entry.kind === "tools"}
             <div class="tool">
               <Icon name="tool" size="1em" weight={7} />
-              {entry.tool}
+              <span class="calls">
+                {#each tallyCalls(entry.calls) as tally, n (n)}
+                  {#if n > 0}<span class="sep" aria-hidden="true">·</span>{/if}
+                  <span>{tallyLabel(tally)}</span>
+                {/each}
+              </span>
             </div>
           {:else if entry.kind === "compact"}
             <CompactPanel title={entry.title} stats={entry.stats} />
@@ -1169,6 +1182,11 @@
     font-size: var(--fs-xs);
     color: var(--muted);
     padding-left: 1ch;
+  }
+  .calls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.75ch;
   }
 
   /* The user's turn is positioned right and its text stays left-aligned:

@@ -421,6 +421,9 @@ describe("over HTTP", () => {
       "2\t  if (!session) return '/login';\n3\t  return '/home';",
     );
 
+    // A file:// remote has no page to link to.
+    expect(file.web_url).toBeNull();
+
     const missing = await app.request("/api/repos/qrepo/file", {
       headers: { Cookie: cookie },
     });
