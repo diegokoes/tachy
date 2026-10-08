@@ -20,7 +20,7 @@ import type { Volumes } from "./scale";
  */
 export async function seedLibrary(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   knowledge: Knowledge,
   users: SeededUser[],
 ): Promise<void> {
@@ -97,15 +97,15 @@ export async function seedLibrary(
       const rng = rngFor(`${kind}_views`, i);
       if (!chance(rng, 0.6)) return;
       const readers = intBetween(rng, 1, Math.min(4, users.length));
-      for (let r = 0; r < readers; r++) {
+      for (let reader = 0; reader < readers; reader++) {
         const days = intBetween(rng, 1, 3);
-        for (let d = 0; d < days; d++) {
+        for (let day = 0; day < days; day++) {
           const when = pastDate(rng, 60);
           views.push({
-            id: uuidFor(`${kind}_view`, i * 100 + r * 10 + d),
+            id: uuidFor(`${kind}_view`, i * 100 + reader * 10 + day),
             knowledge_entry_id: column === "knowledge_entry_id" ? id : null,
             reference_doc_id: column === "reference_doc_id" ? id : null,
-            user_id: users[(i + r) % users.length].id,
+            user_id: users[(i + reader) % users.length].id,
             day: when.toISOString().slice(0, 10),
             views: intBetween(rng, 1, 6),
             last_viewed_at: when,

@@ -47,32 +47,32 @@ const ISSUE_RE = /#\d+/;
 const CODE_LINE_RE =
   /^(?:(?:export\s+)?(?:const|let|var|function|class|import|return|throw|await|if\s*\(|for\s*\(|while\s*\(|switch\s*\()\b.*[;{]|[\w$.]+\(.*\);|[\w$.[\]]+\s*=\s*[^=\s].*;|\}(?:\s*else\s*\{)?)$/;
 
-const SK = ts.SyntaxKind;
+const SyntaxKind = ts.SyntaxKind;
 const DECLARATION_KINDS = new Set([
-  SK.FunctionDeclaration,
-  SK.ClassDeclaration,
-  SK.InterfaceDeclaration,
-  SK.TypeAliasDeclaration,
-  SK.EnumDeclaration,
-  SK.ModuleDeclaration,
-  SK.VariableStatement,
-  SK.ExportAssignment,
-  SK.ExportDeclaration,
-  SK.PropertyDeclaration,
-  SK.MethodDeclaration,
-  SK.Constructor,
-  SK.GetAccessor,
-  SK.SetAccessor,
-  SK.PropertySignature,
-  SK.MethodSignature,
-  SK.IndexSignature,
-  SK.CallSignature,
-  SK.ConstructSignature,
-  SK.EnumMember,
-  SK.PropertyAssignment,
-  SK.ShorthandPropertyAssignment,
-  SK.Parameter,
-  SK.BindingElement,
+  SyntaxKind.FunctionDeclaration,
+  SyntaxKind.ClassDeclaration,
+  SyntaxKind.InterfaceDeclaration,
+  SyntaxKind.TypeAliasDeclaration,
+  SyntaxKind.EnumDeclaration,
+  SyntaxKind.ModuleDeclaration,
+  SyntaxKind.VariableStatement,
+  SyntaxKind.ExportAssignment,
+  SyntaxKind.ExportDeclaration,
+  SyntaxKind.PropertyDeclaration,
+  SyntaxKind.MethodDeclaration,
+  SyntaxKind.Constructor,
+  SyntaxKind.GetAccessor,
+  SyntaxKind.SetAccessor,
+  SyntaxKind.PropertySignature,
+  SyntaxKind.MethodSignature,
+  SyntaxKind.IndexSignature,
+  SyntaxKind.CallSignature,
+  SyntaxKind.ConstructSignature,
+  SyntaxKind.EnumMember,
+  SyntaxKind.PropertyAssignment,
+  SyntaxKind.ShorthandPropertyAssignment,
+  SyntaxKind.Parameter,
+  SyntaxKind.BindingElement,
 ]);
 
 const lineAt = (text, offset) => text.slice(0, offset).split("\n").length;
@@ -108,7 +108,7 @@ function scriptComments(text, { firstLine = 1, canHoldHeader = true } = {}) {
 
   const visit = (node) => {
     if (ts.isJSDoc(node)) return;
-    if (node.kind !== SK.SyntaxList) {
+    if (node.kind !== SyntaxKind.SyntaxList) {
       for (const range of ts.getLeadingCommentRanges(
         text,
         node.getFullStart(),
@@ -133,7 +133,7 @@ function scriptComments(text, { firstLine = 1, canHoldHeader = true } = {}) {
       text.slice(range.end, lineEnd === -1 ? text.length : lineEnd).trim() !==
         "";
     const line = lineAt(text, range.pos) + firstLine - 1;
-    const isLine = range.kind === SK.SingleLineCommentTrivia;
+    const isLine = range.kind === SyntaxKind.SingleLineCommentTrivia;
 
     const previous = comments.at(-1);
     if (

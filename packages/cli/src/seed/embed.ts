@@ -83,14 +83,14 @@ export async function realEmbedder(
 
     const seen = new Map<string, number>();
     const distinct: string[] = [];
-    const at = texts.map((t) => {
-      let i = seen.get(t);
-      if (i === undefined) {
-        i = distinct.length;
-        seen.set(t, i);
-        distinct.push(t);
+    const at = texts.map((text) => {
+      let slot = seen.get(text);
+      if (slot === undefined) {
+        slot = distinct.length;
+        seen.set(text, slot);
+        distinct.push(text);
       }
-      return i;
+      return slot;
     });
     const literals = (await embedPassages(distinct)).map(toVectorLiteral);
 

@@ -41,18 +41,19 @@ console.log(
 
 const keys = KNOWLEDGE.map((e) => e.key);
 const docs: number[][] = [];
-for (const e of KNOWLEDGE) docs.push(await embedPassage(passageText(e)));
+for (const entry of KNOWLEDGE)
+  docs.push(await embedPassage(passageText(entry)));
 
 /** Highest a meaningless query ever scores - the floor must clear this. */
 let noiseMax = 0;
 let noiseAt = "";
-for (const q of NONSENSE) {
-  const qv = await embedQuery(q);
-  docs.forEach((d, i) => {
-    const c = cos(qv, d);
-    if (c > noiseMax) {
-      noiseMax = c;
-      noiseAt = `${JSON.stringify(q)} -> ${keys[i]}`;
+for (const query of NONSENSE) {
+  const queryVector = await embedQuery(query);
+  docs.forEach((doc, i) => {
+    const similarity = cos(queryVector, doc);
+    if (similarity > noiseMax) {
+      noiseMax = similarity;
+      noiseAt = `${JSON.stringify(query)} -> ${keys[i]}`;
     }
   });
 }
@@ -69,24 +70,24 @@ let top1 = 0;
 let mrrSum = 0;
 const perQuery: string[] = [];
 
-for (const g of GOLDEN) {
-  const qv = await embedQuery(g.q);
+for (const golden of GOLDEN) {
+  const queryVector = await embedQuery(golden.q);
   const scored = docs
-    .map((d, i) => [keys[i], cos(qv, d)] as const)
+    .map((d, i) => [keys[i], cos(queryVector, d)] as const)
     .sort((a, b) => b[1] - a[1]);
-  const rank = scored.findIndex(([k]) => k === g.expect);
+  const rank = scored.findIndex(([k]) => k === golden.expect);
   if (rank === 0) top1++;
   if (rank >= 0) mrrSum += 1 / (rank + 1);
   const mine = scored[rank][1];
-  if (g.why !== "identifier") {
+  if (golden.why !== "identifier") {
     if (mine < semanticMin) {
       semanticMin = mine;
-      semanticAt = `${JSON.stringify(g.q)} -> ${g.expect}`;
+      semanticAt = `${JSON.stringify(golden.q)} -> ${golden.expect}`;
     }
     semanticMax = Math.max(semanticMax, mine);
   }
   perQuery.push(
-    `  ${mine.toFixed(3)}  rank ${rank + 1}  [${g.why}] ${JSON.stringify(g.q)} -> ${g.expect}`,
+    `  ${mine.toFixed(3)}  rank ${rank + 1}  [${golden.why}] ${JSON.stringify(golden.q)} -> ${golden.expect}`,
   );
 }
 

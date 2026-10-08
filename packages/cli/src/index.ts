@@ -73,12 +73,12 @@ async function indexRepoCmd(slug: string, full: boolean) {
   const repo = await getRepoBySlug(slug);
   const token = await repoToken(slug);
   console.log(`indexing ${slug} (${repo.url})${full ? ", every file" : ""}...`);
-  const res = await indexRepo(slug, { token, full });
-  for (const l of res.lines)
+  const indexed = await indexRepo(slug, { token, full });
+  for (const line of indexed.lines)
     console.log(
-      l.upToDate
-        ? `${slug} ${l.ref} already at ${l.indexedCommit.slice(0, 12)}`
-        : `${slug} ${l.ref} @ ${l.indexedCommit.slice(0, 12)}${l.versionLabel ? ` (${l.versionLabel})` : ""}: ${l.filesIndexed} file(s) written, ${l.filesEmbedded} embedded, ${l.filesDeleted} removed, ${l.chunkCount} chunks total`,
+      line.upToDate
+        ? `${slug} ${line.ref} already at ${line.indexedCommit.slice(0, 12)}`
+        : `${slug} ${line.ref} @ ${line.indexedCommit.slice(0, 12)}${line.versionLabel ? ` (${line.versionLabel})` : ""}: ${line.filesIndexed} file(s) written, ${line.filesEmbedded} embedded, ${line.filesDeleted} removed, ${line.chunkCount} chunks total`,
     );
 }
 
@@ -88,32 +88,32 @@ async function indexRepoCmd(slug: string, full: boolean) {
  * back. `redactedDbUrl` is what a prompt or a log line gets.
  */
 function pgEnv(): NodeJS.ProcessEnv {
-  const u = new URL(env.databaseUrl);
-  const e = { ...process.env };
-  e.PGHOST = u.hostname;
-  if (u.port) e.PGPORT = u.port;
-  if (u.username) e.PGUSER = decodeURIComponent(u.username);
-  if (u.password) e.PGPASSWORD = decodeURIComponent(u.password);
-  const db = u.pathname.replace(/^\//, "");
-  if (db) e.PGDATABASE = db;
-  return e;
+  const url = new URL(env.databaseUrl);
+  const childEnv = { ...process.env };
+  childEnv.PGHOST = url.hostname;
+  if (url.port) childEnv.PGPORT = url.port;
+  if (url.username) childEnv.PGUSER = decodeURIComponent(url.username);
+  if (url.password) childEnv.PGPASSWORD = decodeURIComponent(url.password);
+  const db = url.pathname.replace(/^\//, "");
+  if (db) childEnv.PGDATABASE = db;
+  return childEnv;
 }
 
 function redactedDbUrl(): string {
-  const u = new URL(env.databaseUrl);
-  if (u.password) u.password = "***";
-  return u.toString();
+  const url = new URL(env.databaseUrl);
+  if (url.password) url.password = "***";
+  return url.toString();
 }
 
 function runPg(bin: string, args: string[]) {
-  const res = spawnSync(bin, args, { stdio: "inherit", env: pgEnv() });
-  if (res.error && (res.error as NodeJS.ErrnoException).code === "ENOENT") {
+  const child = spawnSync(bin, args, { stdio: "inherit", env: pgEnv() });
+  if (child.error && (child.error as NodeJS.ErrnoException).code === "ENOENT") {
     throw new Error(
       `${bin} not found on PATH. Install the PostgreSQL client tools to use this command.`,
     );
   }
-  if (res.status !== 0)
-    throw new Error(`${bin} exited with code ${res.status}`);
+  if (child.status !== 0)
+    throw new Error(`${bin} exited with code ${child.status}`);
 }
 
 function backup(opts: { out?: string }) {
@@ -129,15 +129,15 @@ async function restore(opts: { file?: string; yes?: boolean }) {
   if (!opts.file) throw new Error("restore needs --file=<path-to-.dump>");
   if (!existsSync(opts.file)) throw new Error(`no such file: ${opts.file}`);
   if (!opts.yes) {
-    const rl = createInterface({
+    const terminal = createInterface({
       input: process.stdin,
       output: process.stdout,
     });
-    const ans = await rl.question(
+    const answer = await terminal.question(
       `This OVERWRITES the database at ${redactedDbUrl()}. Continue? [y/N] `,
     );
-    rl.close();
-    if (ans.trim().toLowerCase() !== "y") return console.log("aborted");
+    terminal.close();
+    if (answer.trim().toLowerCase() !== "y") return console.log("aborted");
   }
   runPg("pg_restore", [
     "--clean",
@@ -170,9 +170,9 @@ const positional = rest.filter((a) => !a.startsWith("--"));
 const args = Object.fromEntries(
   rest
     .filter((a) => a.startsWith("--"))
-    .map((a) => {
-      const [k, v] = a.replace(/^--/, "").split("=");
-      return [k, v ?? "true"];
+    .map((flag) => {
+      const [key, value] = flag.replace(/^--/, "").split("=");
+      return [key, value ?? "true"];
     }),
 ) as Record<string, string>;
 

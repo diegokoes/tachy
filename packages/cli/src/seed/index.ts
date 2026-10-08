@@ -131,9 +131,12 @@ const BULK_TABLES = [
 
 async function confirm(question: string): Promise<boolean> {
   if (!process.stdin.isTTY) return false;
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await rl.question(question);
-  rl.close();
+  const terminal = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  const answer = await terminal.question(question);
+  terminal.close();
   return answer.trim().toLowerCase() === "yes";
 }
 
@@ -192,7 +195,10 @@ async function assertDevDatabase(opts: SeedOptions): Promise<void> {
  * either. B-tree indexes stay: the FK checks during the load use them. The DDL
  * is read back from the catalog, so it cannot drift from db/schema.sql.
  */
-async function withoutBulkIndexes<T>(tx: Tx, fn: () => Promise<T>): Promise<T> {
+async function withoutBulkIndexes<T>(
+  tx: Tx,
+  load: () => Promise<T>,
+): Promise<T> {
   // Qualified by schema: the test setup runs eight schemas side by side, each
   // holding indexes of these same names.
   const rows = await tx<{ indexname: string; indexdef: string }[]>`
@@ -204,11 +210,11 @@ async function withoutBulkIndexes<T>(tx: Tx, fn: () => Promise<T>): Promise<T> {
   `;
   for (const row of rows) await tx.unsafe(`drop index ${row.indexname}`);
 
-  const out = await fn();
+  const loaded = await load();
 
   await tx.unsafe(`set local maintenance_work_mem = '512MB'`);
   for (const row of rows) await tx.unsafe(row.indexdef);
-  return out;
+  return loaded;
 }
 
 /**
@@ -238,10 +244,10 @@ async function stampVectors(tx: Tx): Promise<void> {
 class Phases {
   readonly ms = new Map<string, number>();
 
-  async run<T>(name: string, fn: () => Promise<T>): Promise<T> {
+  async run<T>(name: string, work: () => Promise<T>): Promise<T> {
     const at = Date.now();
     try {
-      return await fn();
+      return await work();
     } finally {
       this.ms.set(name, (this.ms.get(name) ?? 0) + (Date.now() - at));
     }
@@ -255,16 +261,16 @@ class Phases {
 }
 
 export async function seed(opts: SeedOptions): Promise<void> {
-  const v = SCALES[opts.scale];
+  const volumes = SCALES[opts.scale];
   await assertDevDatabase(opts);
 
   const started = Date.now();
   const phases = new Phases();
   const mode = embedMode(opts.embed);
   const estimate = embedEstimateSeconds(mode, {
-    knowledge_entry: v.knowledgeEntries,
-    reference_doc_chunk: v.referenceChunks,
-    code_chunk: v.codeChunks,
+    knowledge_entry: volumes.knowledgeEntries,
+    reference_doc_chunk: volumes.referenceChunks,
+    code_chunk: volumes.codeChunks,
   });
   if (estimate > 60)
     console.log(
@@ -290,14 +296,14 @@ export async function seed(opts: SeedOptions): Promise<void> {
         tx.unsafe(`truncate ${TABLES.join(", ")} restart identity cascade`),
       );
 
-    const org = await phases.run("org", () => seedOrg(tx, v));
+    const org = await phases.run("org", () => seedOrg(tx, volumes));
     const catalog = await phases.run("catalog", () =>
-      seedCatalog(tx, v, org.products),
+      seedCatalog(tx, volumes, org.products),
     );
     const sources = await phases.run("sources", () =>
       seedSources(
         tx,
-        v,
+        volumes,
         org.teams,
         org.products,
         catalog.customers,
@@ -310,7 +316,7 @@ export async function seed(opts: SeedOptions): Promise<void> {
       knowledge = await phases.run("knowledge", () =>
         seedKnowledge(
           tx,
-          v,
+          volumes,
           org.products,
           org.users,
           catalog.components,
@@ -325,7 +331,7 @@ export async function seed(opts: SeedOptions): Promise<void> {
       await phases.run("code", () =>
         seedCode(
           tx,
-          v,
+          volumes,
           org.products,
           catalog.components,
           catalog.customers,
@@ -345,14 +351,22 @@ export async function seed(opts: SeedOptions): Promise<void> {
       await stampVectors(tx);
     });
     await phases.run("activity", async () => {
-      await seedActivity(tx, v, org.users, sources.workItems, org.artifacts);
+      await seedActivity(
+        tx,
+        volumes,
+        org.users,
+        sources.workItems,
+        org.artifacts,
+      );
       await seedTelemetry(tx, org.users, sources.connections);
     });
-    await phases.run("library", () => seedLibrary(tx, v, knowledge, org.users));
+    await phases.run("library", () =>
+      seedLibrary(tx, volumes, knowledge, org.users),
+    );
     await phases.run("wiki", () => seedWiki(tx, org.products, org.users));
-    await phases.run("reports", () => seedReports(tx, v, org.users));
+    await phases.run("reports", () => seedReports(tx, volumes, org.users));
     await phases.run("jobs", () =>
-      seedJobs(tx, v, org.users, sources.connections),
+      seedJobs(tx, volumes, org.users, sources.connections),
     );
     await phases.run("flows", () =>
       seedFlows(

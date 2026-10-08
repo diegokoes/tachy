@@ -200,7 +200,7 @@ const FOLLOW_UPS = [
  */
 export async function seedReports(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   users: SeededUser[],
 ): Promise<void> {
   const admins = users.filter((u) => u.role === "admin");
@@ -209,7 +209,7 @@ export async function seedReports(
   const messages: Record<string, unknown>[] = [];
   const notifications: Record<string, unknown>[] = [];
 
-  for (let i = 0; i < v.reports; i++) {
+  for (let i = 0; i < volumes.reports; i++) {
     const rng = rngFor("report", i);
     const devAdmin = users.find((u) => u.email === ADMIN_EMAIL);
     const reporter =
@@ -270,29 +270,31 @@ export async function seedReports(
     for (const body of adminReplies(type, status))
       thread.push({ direction: "admin", body });
 
-    thread.forEach((m, k) => {
+    thread.forEach((message, step) => {
       const when = new Date(later());
       const author =
-        m.direction === "admin" && admins.length ? pick(rng, admins) : reporter;
+        message.direction === "admin" && admins.length
+          ? pick(rng, admins)
+          : reporter;
       messages.push({
-        id: uuidFor("report-msg", i * 10 + k),
+        id: uuidFor("report-msg", i * 10 + step),
         report_id: id,
         author_id: author.id,
-        direction: m.direction,
-        body_text: m.body,
+        direction: message.direction,
+        body_text: message.body,
         created_at: when,
       });
       const read = status === "closed" || chance(rng, 0.4);
-      if (m.direction === "admin")
+      if (message.direction === "admin")
         notifications.push({
-          id: uuidFor("report-notif", i * 10 + k),
+          id: uuidFor("report-notif", i * 10 + step),
           user_id: reporter.id,
           kind: "report_reply",
           title:
             type === "bug"
               ? "An admin replied to your bug report"
               : "An admin replied to your feature request",
-          body_text: m.body,
+          body_text: message.body,
           ref: tx.json({ report_id: id }),
           seen_at: read || chance(rng, 0.5) ? when : null,
           read_at: read ? when : null,

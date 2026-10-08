@@ -38,15 +38,15 @@ export interface Knowledge {
   docs: string[];
 }
 
-function groupBy<T>(xs: T[], key: (x: T) => string): Map<string, T[]> {
-  const out = new Map<string, T[]>();
-  for (const x of xs) {
-    const k = key(x);
-    const bucket = out.get(k);
-    if (bucket) bucket.push(x);
-    else out.set(k, [x]);
+function groupBy<T>(items: T[], key: (x: T) => string): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const group = key(item);
+    const bucket = groups.get(group);
+    if (bucket) bucket.push(item);
+    else groups.set(group, [item]);
   }
-  return out;
+  return groups;
 }
 
 /**
@@ -55,7 +55,7 @@ function groupBy<T>(xs: T[], key: (x: T) => string): Map<string, T[]> {
  */
 export async function seedKnowledge(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   products: SeededProduct[],
   users: SeededUser[],
   components: SeededComponent[],
@@ -66,7 +66,7 @@ export async function seedKnowledge(
   units: SeededUnit[],
   embed: Embedder,
 ): Promise<Knowledge> {
-  const entries = Array.from({ length: v.knowledgeEntries }, (_, i) =>
+  const entries = Array.from({ length: volumes.knowledgeEntries }, (_, i) =>
     uuidFor("knowledge_entry", i),
   );
 
@@ -108,7 +108,7 @@ export async function seedKnowledge(
       "created_at",
       "updated_at",
     ],
-    v.knowledgeEntries,
+    volumes.knowledgeEntries,
     (i) => {
       const rng = rngFor("knowledge", i);
       // Drawn from the row's own stream, not by `i % list.length`: cycling
@@ -197,10 +197,10 @@ export async function seedKnowledge(
     { fill: embedColumn(embed, "knowledge_entry") },
   );
 
-  await seedFeedback(tx, v, entries, users);
+  await seedFeedback(tx, volumes, entries, users);
   const docs = await seedReference(
     tx,
-    v,
+    volumes,
     products,
     users,
     components,
@@ -213,12 +213,12 @@ export async function seedKnowledge(
 
 async function seedFeedback(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   entries: string[],
   users: SeededUser[],
 ): Promise<void> {
   if (!entries.length) return;
-  const rows = Array.from({ length: v.knowledgeFeedback }, (_, i) => {
+  const rows = Array.from({ length: volumes.knowledgeFeedback }, (_, i) => {
     const rng = rngFor("feedback", i);
     const kind = pick(rng, FEEDBACK_KINDS);
     return {
@@ -257,7 +257,7 @@ async function seedFeedback(
 
 async function seedReference(
   tx: Tx,
-  v: Volumes,
+  volumes: Volumes,
   products: SeededProduct[],
   users: SeededUser[],
   components: SeededComponent[],
@@ -267,7 +267,7 @@ async function seedReference(
   const byProduct = groupBy(components, (c) => c.productId);
 
   /** What a chunk needs from its parent, so the two read as one document. */
-  const meta = Array.from({ length: v.referenceDocs }, (_, i) => {
+  const meta = Array.from({ length: volumes.referenceDocs }, (_, i) => {
     const rng = rngFor("reference", i);
     const product = pick(rng, products);
     const mine = byProduct.get(product.id) ?? [];
@@ -307,7 +307,7 @@ async function seedReference(
       "superseded_by",
       "version",
     ],
-    v.referenceDocs,
+    volumes.referenceDocs,
     (i) => {
       const { rng, product, component, title } = meta[i];
       const project = pick(rng, projects);
@@ -350,7 +350,7 @@ async function seedReference(
 
   const per = Math.max(
     1,
-    Math.floor(v.referenceChunks / Math.max(1, docs.length)),
+    Math.floor(volumes.referenceChunks / Math.max(1, docs.length)),
   );
   await insertWindowed(
     tx,
@@ -358,30 +358,30 @@ async function seedReference(
     ["id", "doc_id", "ordinal", "chunk_text", "embedding"],
     docs.length * per,
     (i) => {
-      const d = Math.floor(i / per);
-      const k = i % per;
-      const crng = rngFor("reference_chunk", i);
-      const cs = intBetween(
-        crng,
+      const doc = Math.floor(i / per);
+      const section = i % per;
+      const chunkRng = rngFor("reference_chunk", i);
+      const chunkScenario = intBetween(
+        chunkRng,
         0,
         Math.min(ROOT_CAUSES.length, RESOLUTIONS.length) - 1,
       );
-      const parent = meta[d];
+      const parent = meta[doc];
       // Anchored to its own document, so a chunk reads as part of that page. A
       // title drawn independently of `docs[d]` has too few combinations for
       // --scale=large and yields exact duplicates.
-      const heading = SECTION_HEADINGS[k % SECTION_HEADINGS.length];
+      const heading = SECTION_HEADINGS[section % SECTION_HEADINGS.length];
       const chunkText = [
         `${parent.fullTitle} - ${heading} (${parent.product.slug}${parent.component ? ` / ${parent.component.slug}` : ""}).`,
-        `${ROOT_CAUSES[cs]}. ${RESOLUTIONS[cs]}.`,
-        `Applies ${pick(crng, CONTEXTS)}. ${pick(crng, DIAGNOSTICS)}.`,
-        `Otherwise ${pick(crng, IMPACTS)}.`,
+        `${ROOT_CAUSES[chunkScenario]}. ${RESOLUTIONS[chunkScenario]}.`,
+        `Applies ${pick(chunkRng, CONTEXTS)}. ${pick(chunkRng, DIAGNOSTICS)}.`,
+        `Otherwise ${pick(chunkRng, IMPACTS)}.`,
       ].join(" ");
       return {
         id: uuidFor("reference_doc_chunk", i),
         doc_id: parent.id,
         // (doc_id, ordinal) unique by construction.
-        ordinal: k,
+        ordinal: section,
         // Embeds the chunk's own text: a literal like "section 3" gives every
         // chunk with that ordinal the same vector.
         chunk_text: chunkText,
