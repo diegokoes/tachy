@@ -43,13 +43,10 @@ describe("agent tool allowlist (security boundary)", () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const root = join(here, "..", "..", "packages", "mcp", "src");
     const walk = (dir: string): string[] =>
-      readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-        e.isDirectory()
-          ? walk(join(dir, e.name))
-          : e.name.endsWith(".ts")
-            ? [join(dir, e.name)]
-            : [],
-      );
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        if (entry.isDirectory()) return walk(join(dir, entry.name));
+        return entry.name.endsWith(".ts") ? [join(dir, entry.name)] : [];
+      });
     const registered = walk(root).flatMap((f) =>
       [...readFileSync(f, "utf8").matchAll(/^tool\(\n\s*"([a-z0-9_]+)"/gm)].map(
         (m) => m[1],
@@ -76,13 +73,12 @@ describe("agent tool allowlist (security boundary)", () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const mcp = join(here, "..", "..", "packages", "mcp", "src");
     const walk = (dir: string): string[] =>
-      readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-        e.isDirectory()
-          ? walk(join(dir, e.name))
-          : e.name.endsWith(".ts")
-            ? [readFileSync(join(dir, e.name), "utf8")]
-            : [],
-      );
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        if (entry.isDirectory()) return walk(join(dir, entry.name));
+        return entry.name.endsWith(".ts")
+          ? [readFileSync(join(dir, entry.name), "utf8")]
+          : [];
+      });
     const sources = walk(mcp);
     const registered = new Set(
       sources.flatMap((s) =>

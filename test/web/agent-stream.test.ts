@@ -32,7 +32,7 @@ function sseResponse(chunks: string[], status = 200) {
     }),
   };
   return {
-    res: { ok: status === 200, status, body } as unknown as Response,
+    response: { ok: status === 200, status, body } as unknown as Response,
     wasCancelled: () => cancelled,
   };
 }
@@ -45,10 +45,10 @@ describe("chatStream", () => {
     const whole =
       frame("start", { turnId: "t1" }) + frame("text", { text: "hi" });
     // Split mid-frame: the parser has to buffer rather than lose the tail.
-    const { res } = sseResponse([whole.slice(0, 20), whole.slice(20)]);
+    const { response } = sseResponse([whole.slice(0, 20), whole.slice(20)]);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => res),
+      vi.fn(async () => response),
     );
 
     const got = [];
@@ -61,13 +61,13 @@ describe("chatStream", () => {
   });
 
   it("cancels the reader when the consumer stops early", async () => {
-    const { res, wasCancelled } = sseResponse([
+    const { response, wasCancelled } = sseResponse([
       frame("text", { text: "one" }),
       frame("text", { text: "two" }),
     ]);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => res),
+      vi.fn(async () => response),
     );
 
     // A `break` leaves the generator suspended at its yield; without the
@@ -77,10 +77,10 @@ describe("chatStream", () => {
   });
 
   it("reports a 401 as a sign-out rather than as a stream error", async () => {
-    const { res } = sseResponse([], 401);
+    const { response } = sseResponse([], 401);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => res),
+      vi.fn(async () => response),
     );
 
     const got = [];
@@ -107,10 +107,10 @@ describe("chatStream", () => {
   });
 
   it("throws on any other failure", async () => {
-    const { res } = sseResponse([], 500);
+    const { response } = sseResponse([], 500);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => res),
+      vi.fn(async () => response),
     );
     await expect(async () => {
       for await (const _ of chatStream({ message: "x" } as never));

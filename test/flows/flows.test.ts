@@ -249,21 +249,18 @@ describe("flows config", () => {
       "fetch",
       vi.fn(async (url: string) => {
         const path = url.replace(ORG, "");
-        const answer = path.startsWith(
-          "/ProjF/_apis/wit/workitemtypes/Bug/fields",
-        )
-          ? {
-              value: [
-                {
-                  referenceName: "Custom.Cloud",
-                  name: "Cloud",
-                  alwaysRequired: true,
-                },
-              ],
-            }
-          : path.startsWith("/_apis/wit/fields")
-            ? { value: [] }
-            : null;
+        let answer: { value: unknown[] } | null = null;
+        if (path.startsWith("/ProjF/_apis/wit/workitemtypes/Bug/fields"))
+          answer = {
+            value: [
+              {
+                referenceName: "Custom.Cloud",
+                name: "Cloud",
+                alwaysRequired: true,
+              },
+            ],
+          };
+        else if (path.startsWith("/_apis/wit/fields")) answer = { value: [] };
         return answer
           ? ({
               ok: true,
