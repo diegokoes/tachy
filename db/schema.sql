@@ -57,8 +57,8 @@ create table users (
     -- Scrypt hash for password login; null = SSO-only or attribution-only user.
     password_hash text,
     disabled      boolean not null default false,
-    -- A non-person account (the load-test user, later a scheduler identity):
-    -- its reads and tool calls are not counted as engagement.
+    -- A non-person account, such as the load-test user: its reads and tool
+    -- calls are not counted as engagement.
     service_account boolean not null default false,
     -- Honoured only while SSO is configured: then password login works for
     -- these accounts alone (break-glass admin, load-test user).
@@ -113,8 +113,9 @@ create table credentials (
 create unique index credentials_global_idx on credentials(name)          where scope = 'global';
 create unique index credentials_user_idx   on credentials(user_id, name) where scope = 'user';
 
--- Non-secret per-user/per-team preferences (agent provider/model/effort),
--- resolved user > team > global; global defaults live in `settings`.
+-- Non-secret per-user/per-team preferences (agent model and effort, date
+-- order, clock), resolved user > team > global; global defaults live in
+-- `settings`.
 create table preferences (
     id          uuid primary key default gen_random_uuid(),
     scope       text not null check (scope in ('global','team','user')),
@@ -152,7 +153,7 @@ create unique index artifacts_global_idx on artifacts(slug)          where scope
 create unique index artifacts_team_idx   on artifacts(team_id, slug) where scope = 'team';
 create unique index artifacts_user_idx   on artifacts(user_id, slug) where scope = 'user';
 
--- Files produced for download (export_table, ...); short-lived by design.
+-- Files produced for download (export_table, ...), kept until expires_at.
 create table generated_outputs (
     id          uuid primary key default gen_random_uuid(),
     user_id     uuid references users(id) on delete cascade,
@@ -190,7 +191,7 @@ create table source_connections (
     config        jsonb not null default '{}'::jsonb,
     -- How far a successful `sync` got. Without it --since is hand-typed, and a
     -- run that fails at item 900 of 1000 commits the first 899 and discards the
-    -- cursor -- the retry then re-walks from wherever the operator pointed.
+    -- cursor, so the retry re-walks from wherever the operator pointed.
     last_synced_at timestamptz,
     created_at    timestamptz not null default now()
 );
@@ -199,7 +200,7 @@ create table customers (
     id          uuid primary key default gen_random_uuid(),
     name        text not null,
     slug        text not null unique,
-    -- other NAMES the same account trades under. Never email domains: a domain
+    -- other names the same account trades under. Never email domains: a domain
     -- here would come back out of list_customers as something to call them.
     aliases     text[] not null default '{}',
     -- domains whose senders are this customer, including partners who front for
@@ -214,19 +215,19 @@ create index customers_aliases_idx on customers using gin (aliases);
 create index customers_domains_idx on customers using gin (email_domains);
 
 -- A named part of one customer's estate: a site, a production line, a tenant.
--- The second axis of the customer model - customers say WHO, units say WHICH OF
--- THEIRS - because most of what is true of a big account is true of one place in
+-- The second axis of the customer model: customers say who, units say which of
+-- theirs, because most of what is true of a big account is true of one place in
 -- it rather than of the account.
 --
--- `kind` is a deployment-specific vocabulary exactly like customer_facts.kind
--- and knowledge_entries.cloud: no lookup table, because what a customer divides
+-- `kind` is a deployment-specific vocabulary like customer_facts.kind and
+-- knowledge_entries.cloud: no lookup table, because what a customer divides
 -- into differs per product (site/line here, tenant/region elsewhere).
 create table customer_units (
     id           uuid primary key default gen_random_uuid(),
     customer_id  uuid not null references customers(id) on delete cascade,
     -- Containment: a line is inside a site.
     parent_id    uuid references customer_units(id) on delete cascade,
-    -- Sharing WITHOUT containment: a unit whose facts this one inherits without
+    -- Sharing without containment: a unit whose facts this one inherits without
     -- being part of it - the layout several production lines conform to. Set
     -- null on delete rather than cascade: losing a template must not delete the
     -- lines that referenced it.
@@ -298,7 +299,7 @@ create table work_items (
     customer_id           uuid references customers(id) on delete set null,
     -- Which part of their estate this ticket is about. Never inferred from the
     -- text: a confidently wrong attribution is not recoverable, so it is set
-    -- deliberately or left null.
+    -- explicitly or left null.
     customer_unit_id uuid references customer_units(id) on delete set null,
     observed_version      text,
     requester             text,
@@ -383,7 +384,7 @@ create index components_parent_idx  on components(parent_id);
 create index components_aliases_idx on components using gin (aliases);
 
 -- Which components each customer runs. Many-to-many: a shared component links to
--- many customers, one built for a single customer links to just that one, and
+-- many customers, one built for a single customer links to that one alone, and
 -- nothing has to declare which sort it is.
 create table customer_components (
     customer_id  uuid not null references customers(id) on delete cascade,
@@ -399,7 +400,7 @@ create index customer_components_component_idx on customer_components(component_
 -- the version they run, their line layout, an integration they depend on. Their
 -- repos, projects and components are edges instead - those are real records.
 --
--- `kind` is a deployment-specific vocabulary, exactly like knowledge_entries.cloud:
+-- `kind` is a deployment-specific vocabulary, like knowledge_entries.cloud:
 -- no lookup table, because what counts as a customer specific differs per
 -- deployment. list_customer_fact_kinds reports what is already in use so callers
 -- reuse a value instead of coining a near-duplicate.
@@ -412,7 +413,7 @@ create table customer_facts (
     -- so (customer, kind, label) can be unique and a re-set replaces in place.
     label        text not null default '',
     -- Which part of their estate this is true of. Null = true of the whole
-    -- customer, which is what every fact was before units existed.
+    -- customer.
     unit_id      uuid references customer_units(id) on delete cascade,
     value        text not null,
     notes        text,
@@ -463,7 +464,7 @@ create table knowledge_entries (
     status              text not null default 'draft'
                             check (status in ('draft','approved','rejected','archived','deprecated')),
     -- 'deprecated' = outdated but still surfaced in search (flagged, optionally
-    -- superseded); 'archived' = fully hidden from search.
+    -- superseded); 'archived' = hidden from search.
     superseded_by       uuid references knowledge_entries(id) on delete set null,
     constraint knowledge_entries_no_self_supersede check (superseded_by is null or superseded_by <> id),
 
@@ -475,22 +476,22 @@ create table knowledge_entries (
     resolution_pattern  text references resolution_patterns(slug) on update cascade,
     signals             text[] not null default '{}',
     tags                text[] not null default '{}',
-    -- component is the validated taxonomy anchor; product_area is DERIVED from the
+    -- component is the validated taxonomy anchor; product_area is derived from the
     -- component hierarchy at write time (kept as a column so the generated search
-    -- columns below can reference it - they can't join other tables).
+    -- columns can reference it - they can't join other tables).
     component_id        uuid references components(id) on delete set null,
     product_area        text,
-    -- confidence and resolution_clarity answer two different questions and are
-    -- deliberately not collapsed: confidence is about THIS ROW ("is what we
-    -- wrote here correct?"), resolution_clarity is about the WORLD ("did the
-    -- ticket actually end in a fix?"). They come apart in both directions - a
-    -- restart that verifiably fixed it with nobody knowing why is clear/low;
-    -- a customer who went silent on a cause we fully understand is unclear/high.
+    -- confidence and resolution_clarity answer two different questions and stay
+    -- separate: confidence is about this row (is what it says correct?),
+    -- resolution_clarity is about the ticket (did it end in a fix?). They come
+    -- apart in both directions - a restart that verifiably fixed it with nobody
+    -- knowing why is clear/low; a customer who went silent on a cause that is
+    -- understood is unclear/high.
     confidence          text check (confidence is null or confidence in ('low','medium','high')),
 
     -- low-cardinality, filterable facets promoted out of `structured` so they're
     -- indexable/queryable (e.g. "all prod issues", "all unclear resolutions").
-    -- cloud = observed environment. Deliberately no CHECK: the vocabulary is
+    -- cloud = observed environment. No CHECK: the vocabulary is
     -- deployment-specific (prod/qa vs dev/demo/preprod…). The app layer enforces
     -- a lowercase-slug shape and surfaces existing values for reuse.
     cloud               text,
@@ -524,7 +525,7 @@ create table knowledge_entries (
         tachy_join(tags)
     ) stored,
 
-    -- Two configs on purpose. 'simple' keeps error codes and identifiers exact
+    -- Two configs: 'simple' keeps error codes and identifiers exact
     -- (023, ECONNREFUSED, TOO_MANY_STRINGS); 'english' adds stemming so
     -- "printer stopped" finds "printer stops". Searches match against either.
     search_tsv tsvector generated always as (
@@ -643,11 +644,11 @@ create table reference_docs (
     source_project_id uuid references source_projects(id) on delete set null,
     external_key      text,
     -- Same taxonomy anchor as knowledge_entries: a doc scoped to a product may
-    -- also name the component it documents. Optional on purpose - a general
-    -- product doc (onboarding, release process) belongs to the product and to
-    -- no single component. product_area is DERIVED from the component hierarchy
-    -- at write time, kept as a column so the generated search columns below can
-    -- reference it (they can't join other tables).
+    -- also name the component it documents. Optional: a general product doc
+    -- (onboarding, release process) belongs to the product and to no single
+    -- component. product_area is derived from the component hierarchy at write
+    -- time, kept as a column so the generated search columns can reference it
+    -- (they can't join other tables).
     component_id  uuid references components(id) on delete set null,
     product_area  text,
     -- Same second axis as knowledge_entries: whose install this documents, and
@@ -663,7 +664,7 @@ create table reference_docs (
     doc_version   text,
     superseded_by uuid references reference_docs(id) on delete set null,
     -- 'wiki' = an article authored here, placed by wiki_article_categories and
-    -- addressed by slug. NOT an imported Azure DevOps wiki page - those are
+    -- addressed by slug. Not an imported Azure DevOps wiki page - those are
     -- 'reference', with source_project_id/external_key set.
     kind        text not null default 'reference'
                     check (kind in ('reference','wiki')),
@@ -750,7 +751,7 @@ create table wiki_category_components (
 create index wiki_category_components_component_idx
     on wiki_category_components(component_id);
 
--- Many-to-many on purpose: "Spooler stalls" belongs under both
+-- Many-to-many: "Spooler stalls" belongs under both
 -- Troubleshooting/Printing and Hardware/Printers without being duplicated.
 create table wiki_article_categories (
     doc_id      uuid not null references reference_docs(id) on delete cascade,
@@ -782,7 +783,7 @@ create index wiki_slug_aliases_doc_idx on wiki_slug_aliases(doc_id);
 --
 -- Edges are derived from the body on every save, so they cannot disagree with
 -- what a reader sees. An unresolved [[link]] is still stored, with its label, so
--- a rename shows up as a broken link rather than vanishing silently.
+-- a rename shows up as a broken link rather than vanishing.
 create table library_links (
     id             uuid primary key default gen_random_uuid(),
     from_doc_id    uuid references reference_docs(id) on delete cascade,
@@ -794,7 +795,7 @@ create table library_links (
     -- 'composed_from' = this article consolidates that item (agent drafting)
     kind           text not null check (kind in ('mentions','composed_from')),
     -- What was written inside the brackets. Kept for every link so a broken one
-    -- can still be rendered, and so the target it MEANT survives a rename.
+    -- can still be rendered, and so the target it meant survives a rename.
     target         text not null,
     -- The display text, when the link gave one.
     label          text,
@@ -886,23 +887,23 @@ create index reference_doc_chunks_embedding_idx on reference_doc_chunks using hn
     with (m = 16, ef_construction = 64);
 create index reference_doc_chunks_trgm_idx      on reference_doc_chunks using gin (chunk_text gin_trgm_ops);
 
--- A kept version of a library item -- a knowledge entry or a reference doc. The
--- live row is always current; a revision is what the row looked like AFTER the
+-- A kept version of a library item: a knowledge entry or a reference doc. The
+-- live row is always current; a revision is what the row looked like after the
 -- edit that produced that version number, plus who made it. Reconstructing
 -- version N is one row lookup, never a replay of diffs.
 --
--- The snapshot deliberately holds no embedding and no generated search columns:
--- a 768-dim vector is larger than the text it was built from, and nothing ever
--- semantic-searches history. That exclusion is what keeps this table cheap.
+-- The snapshot holds no embedding and no generated search columns: a vector is
+-- larger than the text it is built from, and nothing searches history
+-- semantically.
 --
 -- Two nullable targets rather than two tables, the same shape work_item_links
--- uses -- one code path, one API shape, one panel in the UI.
+-- uses: one code path, one API shape, one panel in the UI.
 create table library_revisions (
     id                 uuid primary key default gen_random_uuid(),
     knowledge_entry_id uuid references knowledge_entries(id) on delete cascade,
     reference_doc_id   uuid references reference_docs(id) on delete cascade,
     check (num_nonnulls(knowledge_entry_id, reference_doc_id) = 1),
-    -- the value the row's own `version` column was set TO by this edit.
+    -- the value the row's own `version` column was set to by this edit.
     version            integer not null,
     -- The human either way: an agent edit is attributed to the person whose turn
     -- spawned the MCP subprocess. `actor` is the door, which is the only thing
@@ -925,13 +926,13 @@ create index library_revisions_user_idx on library_revisions(user_id, created_at
 
 -- Human reads of a library item, bucketed by day. The agent reads through MCP in
 -- its own subprocess and never reaches the HTTP route that writes here, so this
--- counts people rather than tool calls -- no filtering required.
+-- counts people rather than tool calls, with no filtering.
 --
 -- Bucketed rather than one row per hit: growth is bounded by
 -- (item x viewer x active day), and "most read this month" stays a cheap
--- aggregate. A counter column on the item itself is the thing to avoid -- it
--- would fire set_updated_at, dirty a row carrying a vector and three GIN
--- indexes on every page view, and serialise readers on a row lock.
+-- aggregate. A counter column on the item itself would fire set_updated_at,
+-- dirty a row carrying a vector and three GIN indexes on every page view, and
+-- serialise readers on a row lock.
 create table library_views (
     id                 uuid primary key default gen_random_uuid(),
     knowledge_entry_id uuid references knowledge_entries(id) on delete cascade,
@@ -953,10 +954,9 @@ create unique index library_views_doc_idx
     nulls not distinct where reference_doc_id is not null;
 
 -- Traffic to source systems, bucketed per connection, day and origin. Counts,
--- never timings: latency and error rates are what the metrics stack is for.
--- What this answers and a scrape cannot is whose traffic it is -- the agent
--- reading on somebody's behalf, a sync, or the app itself -- and how often the
--- far end refused it for quota or for credentials.
+-- never timings. What this answers is whose traffic it is (the agent reading on
+-- somebody's behalf, a sync, or the app itself) and how often the far end
+-- refused it for quota or for credentials.
 create table source_calls (
     source_connection_id uuid not null references source_connections(id) on delete cascade,
     day            date not null,
@@ -999,7 +999,7 @@ create table repos (
     -- one component per repo; linkRepo enforces that it belongs to product_id
     component_id    uuid references components(id) on delete set null,
     -- set only for a customer's own addon repo; null is shared product code, which
-    -- is why a customer-filtered code search returns both rather than just theirs
+    -- is why a customer-filtered code search returns both rather than only theirs
     customer_id     uuid references customers(id) on delete set null,
     default_branch  text not null default 'main',
     config          jsonb not null default '{}'::jsonb,
@@ -1064,7 +1064,7 @@ create table code_blob_chunks (
     -- The words of the chunk, with the names it defines weighted A and its
     -- body D, so a search for a name finds where it is defined before the
     -- places that use it. Written by the indexer, which finds the names
-    -- (core/src/code/symbols.ts); null until it has.
+    -- (packages/core/src/code/symbols.ts); null until it has.
     search_tsv  tsvector,
     unique (repo_id, blob_sha, ordinal)
 );
@@ -1076,10 +1076,10 @@ create index code_blob_chunks_tsv_idx       on code_blob_chunks using gin (searc
 
 -- A bucket is a collection of documents maintained outside tachy and pushed in
 -- by a script that holds the token, e.g. a Document360 knowledge base synced
--- from a laptop that can reach it. Kept apart from the library on purpose:
--- nothing here is reviewed or edited in tachy, so it is never mixed into
--- reference or knowledge search. Only the token's sha256 is stored; the token
--- is shown once, on create or rotate.
+-- from a laptop that can reach it. Kept apart from the library: nothing here
+-- is reviewed or edited in tachy, so it is never mixed into reference or
+-- knowledge search. Only the token's sha256 is stored; the token is shown
+-- once, on create or rotate.
 create table buckets (
     id                uuid primary key default gen_random_uuid(),
     slug              text not null unique,
@@ -1258,7 +1258,7 @@ create table job_workers (
     last_seen_at  timestamptz not null default now()
 );
 
--- Who changed a definition and how: a schedule edit can silently stop a sync.
+-- Who changed a definition and how: a schedule edit can stop a sync unnoticed.
 create table job_definition_changes (
     id             uuid primary key default gen_random_uuid(),
     definition_id  uuid references job_definitions(id) on delete set null,
@@ -1372,8 +1372,8 @@ create table report_messages (
 
 create index report_messages_report_idx on report_messages(report_id, created_at);
 
--- In-app notifications, per person. General on purpose: `kind` names the event
--- and `ref` carries whatever that kind needs to link back (e.g. a report id).
+-- In-app notifications, per person. `kind` names the event and `ref` carries
+-- whatever that kind needs to link back (e.g. a report id).
 create table notifications (
     id          uuid primary key default gen_random_uuid(),
     user_id     uuid not null references users(id) on delete cascade,
