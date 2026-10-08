@@ -19,7 +19,7 @@
     dismissed: string[];
     reviewing: boolean;
     fieldName: (ref: string) => string;
-    onapply: (f: ReviewFinding) => void;
+    onapply: (finding: ReviewFinding) => void;
     ondismiss: (id: string) => void;
     onfocus: (ref: string) => void;
   } = $props();
@@ -74,10 +74,14 @@
       >No model is set up for you. Add one under Settings › agent.</Note
     >
   {:else}
-    {@const r = READINESS[review.readiness]}
+    {@const readiness = READINESS[review.readiness]}
     <div class="verdict">
-      <Meter value={r.value} tone={r.tone} label={r.label} />
-      <span class="readiness {r.tone}">{r.label}</span>
+      <Meter
+        value={readiness.value}
+        tone={readiness.tone}
+        label={readiness.label}
+      />
+      <span class="readiness {readiness.tone}">{readiness.label}</span>
     </div>
     {#if review.summary}<p class="summary">{review.summary}</p>{/if}
     {#if fixed.length}
@@ -88,29 +92,29 @@
       </p>
     {/if}
     <ol class="findings" bind:this={list}>
-      {#each open as f (f.id)}
-        <li class="finding {f.kind}">
-          <button class="where" onclick={() => onfocus(f.field)}>
-            {fieldName(f.field)} · {KIND[f.kind]}
+      {#each open as finding (finding.id)}
+        <li class="finding {finding.kind}">
+          <button class="where" onclick={() => onfocus(finding.field)}>
+            {fieldName(finding.field)} · {KIND[finding.kind]}
           </button>
-          <p>{f.message}</p>
-          {#if f.suggestion}
-            <blockquote>{f.suggestion}</blockquote>
+          <p>{finding.message}</p>
+          {#if finding.suggestion}
+            <blockquote>{finding.suggestion}</blockquote>
           {/if}
           <div class="acts">
-            {#if f.suggestion && f.field !== "general"}
+            {#if finding.suggestion && finding.field !== "general"}
               <Button
                 size="sm"
                 variant="ghost"
                 icon="plus"
-                onclick={() => onapply(f)}>apply</Button
+                onclick={() => onapply(finding)}>apply</Button
               >
             {/if}
             <Button
               size="sm"
               variant="ghost"
               icon="close"
-              onclick={() => ondismiss(f.id)}>dismiss</Button
+              onclick={() => ondismiss(finding.id)}>dismiss</Button
             >
           </div>
         </li>

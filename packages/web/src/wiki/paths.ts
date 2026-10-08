@@ -1,8 +1,8 @@
 import type { WikiListRow } from "@tachy/contract";
 
 /**
- * The scope segment for the org-wide wiki. A product actually slugged
- * 'general' wins on the server, so this never shadows a real product.
+ * The scope segment for the org-wide wiki. A product slugged 'general' wins on
+ * the server, so this never shadows a real product.
  */
 export const ORG_WIDE = "general";
 

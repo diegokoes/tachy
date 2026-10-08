@@ -118,19 +118,19 @@ export function loadFilters(): Stored {
   }
 }
 
-export function saveFilters(s: Stored) {
+export function saveFilters(stored: Stored) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
   } catch {
-    /* private mode, quota - the filters still work for this session. */
+    // private mode, quota - the filters still work for this session.
   }
 }
 
 /**
- * A stored value that the current facet counts no longer offer would silently
- * narrow the list to nothing, so it is dropped rather than kept. `enum` filters
- * are checked against their fixed list instead - an enum value with no rows
- * behind it right now is still a legitimate thing to ask for.
+ * A stored value the current facet counts do not offer would narrow the list to
+ * nothing, so it is dropped. `enum` filters are checked against their fixed
+ * list instead: an enum value with no rows behind it is still a legitimate
+ * thing to ask for.
  */
 export function pruneValues(
   shown: FacetKey[],
@@ -140,15 +140,15 @@ export function pruneValues(
   const next = { ...values };
   for (const key of shown) {
     const def = byKey(key);
-    const v = next[key];
-    if (!def || !v) continue;
+    const value = next[key];
+    if (!def || !value) continue;
     if (def.kind === "enum") {
-      if (!def.options?.includes(v)) delete next[key];
+      if (!def.options?.includes(value)) delete next[key];
     } else if (def.kind === "facet") {
-      if (!(facets[key] ?? []).some((o) => o.value === v)) delete next[key];
+      if (!(facets[key] ?? []).some((o) => o.value === value)) delete next[key];
     } else if (def.kind === "tags") {
       const offered = new Set((facets.tags ?? []).map((o) => o.value));
-      const kept = v.split(",").filter((t) => offered.has(t));
+      const kept = value.split(",").filter((t) => offered.has(t));
       if (kept.length) next[key] = kept.join(",");
       else delete next[key];
     }
@@ -171,16 +171,16 @@ export function clearScoped(
 
 /** Add the active extras to a query string. */
 export function applyExtras(
-  p: URLSearchParams,
+  params: URLSearchParams,
   shown: FacetKey[],
   values: Record<string, string>,
 ) {
   for (const key of shown) {
     const def = byKey(key);
-    const v = values[key];
-    if (def && v) p.set(def.param, v);
+    const value = values[key];
+    if (def && value) params.set(def.param, value);
   }
-  return p;
+  return params;
 }
 
 /**

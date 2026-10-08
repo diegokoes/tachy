@@ -28,7 +28,7 @@ export function rememberScope(scope: string): void {
   try {
     localStorage.setItem(LAST_SCOPE, scope);
   } catch {
-    /* private window or blocked storage */
+    // private window or blocked storage
   }
 }
 

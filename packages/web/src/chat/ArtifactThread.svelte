@@ -4,9 +4,9 @@
   import { PULSE } from "../motion/motion";
   import { portal } from "../tui/portal";
 
-  /* Element, not HTMLElement: `to` is the tab's frame <svg>, and everything
-     done with these ends is getBoundingClientRect and ResizeObserver.observe,
-     both of which are defined on Element. */
+  // Element, not HTMLElement: `to` is the tab's frame <svg>, and everything
+  // done with these ends is getBoundingClientRect and ResizeObserver.observe,
+  // both of which are defined on Element.
   let {
     from,
     to,
@@ -31,10 +31,9 @@
   let frozen = false;
   let charge: gsap.core.Tween | undefined;
 
-  /* One packet per cycle: it runs during the first half and the wire rests
-     through the second, so every arrival still lands on a growth peak of the
-     tab icon (see PULSE). Variance lives in the packet's character - never in
-     its timing, which would break that sync. */
+  // One packet per cycle: it runs in the first half and the wire rests in the
+  // second, so each arrival lands on a growth peak of the tab icon (see PULSE).
+  // A packet varies in character, never in timing.
   const CYCLE = PULSE * 2;
 
   type Packet = {
@@ -50,6 +49,7 @@
   const roll = (): Packet => {
     const back = Math.random() < 0.16;
     const weak = !back && Math.random() < 0.28;
+    const strongFlash = back ? 0.5 : 1;
     return {
       back,
       idle: !back && Math.random() < 0.12,
@@ -57,7 +57,7 @@
       tail: weak ? 0.05 : gsap.utils.random(0.1, 0.26),
       ease: gsap.utils.random(["none", "power1.in", "power1.out", "power2.in"]),
       alpha: weak ? 0.45 : 1,
-      flash: weak ? 0 : back ? 0.5 : 1,
+      flash: weak ? 0 : strongFlash,
     };
   };
 
@@ -67,38 +67,35 @@
 
   function jag() {
     if (!svg || !from || !to || frozen) return;
-    const o = svg.getBoundingClientRect();
-    const a = from.getBoundingClientRect();
-    const b = to.getBoundingClientRect();
-    const x1 = a.right - o.left - 1;
-    const x2 = b.left - o.left;
-    const y2 = b.top + b.height / 2 - o.top;
-    /* Level with the tab, not with the dialog's own centre: the dialog is
-       centred on the viewport and the tab on the transcript, so aiming at both
-       centres left the wire running downhill. Held off the corners so the join
-       stays on the dialog's edge whatever height it is. */
+    const origin = svg.getBoundingClientRect();
+    const fromRect = from.getBoundingClientRect();
+    const toRect = to.getBoundingClientRect();
+    const x1 = fromRect.right - origin.left - 1;
+    const x2 = toRect.left - origin.left;
+    const y2 = toRect.top + toRect.height / 2 - origin.top;
+    // Level with the tab, not the dialog's centre: the dialog is centred on the
+    // viewport and the tab on the transcript, so centre to centre would slope.
+    // Held off the corners so the join stays on the dialog's edge.
     const EDGE = 10;
     const y1 = Math.min(
-      Math.max(y2, a.top - o.top + EDGE),
-      a.bottom - o.top - EDGE,
+      Math.max(y2, fromRect.top - origin.top + EDGE),
+      fromRect.bottom - origin.top - EDGE,
     );
     const dx = x2 - x1;
     const dy = y2 - y1;
-    const len = Math.hypot(dx, dy) || 1;
-    const nx = -dy / len;
-    const ny = dx / len;
+    const length = Math.hypot(dx, dy) || 1;
+    const nx = -dy / length;
+    const ny = dx / length;
     // Mostly a taut wire; now and then it cracks wide for one frame.
-    const amp = still
-      ? 0
-      : Math.random() < 0.09
-        ? 10 + Math.random() * 8
-        : 3 + Math.random() * 4;
+    const cracked = () =>
+      Math.random() < 0.09 ? 10 + Math.random() * 8 : 3 + Math.random() * 4;
+    const amp = still ? 0 : cracked();
 
     let path = `M${x1.toFixed(1)} ${y1.toFixed(1)}`;
     for (let i = 1; i < JAGS; i++) {
       const t = i / JAGS;
-      const k = Math.sin(t * Math.PI) * amp * (Math.random() * 2 - 1);
-      path += `L${(x1 + dx * t + nx * k).toFixed(1)} ${(y1 + dy * t + ny * k).toFixed(1)}`;
+      const offset = Math.sin(t * Math.PI) * amp * (Math.random() * 2 - 1);
+      path += `L${(x1 + dx * t + nx * offset).toFixed(1)} ${(y1 + dy * t + ny * offset).toFixed(1)}`;
     }
     d = `${path}L${x2.toFixed(1)} ${y2.toFixed(1)}`;
   }
@@ -109,26 +106,28 @@
   };
 
   /** Rides the bolt, dragging a lit stretch of wire behind it. */
-  function ride(p: number, k: Packet) {
+  function ride(progress: number, packet: Packet) {
     if (!core || !bead || !d) return;
-    const at = k.back ? 1 - p : p;
-    const pt = core.getPointAtLength(at * core.getTotalLength());
-    const gone = p >= 1;
-    const fade = gone ? 0 : Math.min(1, p * 6) * k.alpha;
+    const at = packet.back ? 1 - progress : progress;
+    const point = core.getPointAtLength(at * core.getTotalLength());
+    const gone = progress >= 1;
+    const fade = gone ? 0 : Math.min(1, progress * 6) * packet.alpha;
     gsap.set(bead, {
       attr: {
-        x: pt.x - k.size / 2,
-        y: pt.y - k.size / 2,
-        width: k.size,
-        height: k.size,
+        x: point.x - packet.size / 2,
+        y: point.y - packet.size / 2,
+        width: packet.size,
+        height: packet.size,
       },
       opacity: fade,
     });
     if (!comet) return;
-    const drag = k.back ? Math.min(1, at + k.tail) : Math.max(0, at - k.tail);
-    const [s0, s1] = k.back ? [at, drag] : [drag, at];
+    const drag = packet.back
+      ? Math.min(1, at + packet.tail)
+      : Math.max(0, at - packet.tail);
+    const [segStart, segEnd] = packet.back ? [at, drag] : [drag, at];
     gsap.set(comet, {
-      drawSVG: `${(s0 * 100).toFixed(1)}% ${(s1 * 100).toFixed(1)}%`,
+      drawSVG: `${(segStart * 100).toFixed(1)}% ${(segEnd * 100).toFixed(1)}%`,
       opacity: fade * 0.6,
     });
   }
@@ -155,9 +154,12 @@
       );
     }
     if (!sparkEl) return;
-    const pt = core.getPointAtLength(at * core.getTotalLength());
+    const point = core.getPointAtLength(at * core.getTotalLength());
     gsap.killTweensOf(sparkEl);
-    gsap.set(sparkEl, { attr: { cx: pt.x, cy: pt.y, r: 1 }, opacity: 0.9 });
+    gsap.set(sparkEl, {
+      attr: { cx: point.x, cy: point.y, r: 1 },
+      opacity: 0.9,
+    });
     gsap.to(sparkEl, {
       attr: { r: 3 + 4 * strength },
       opacity: 0,
@@ -203,27 +205,25 @@
   $effect(() => {
     if (!svg || !from || !to) return;
     jag();
-    const ro = new ResizeObserver(() => jag());
-    ro.observe(from);
-    ro.observe(to);
-    return () => ro.disconnect();
+    const observer = new ResizeObserver(() => jag());
+    observer.observe(from);
+    observer.observe(to);
+    return () => observer.disconnect();
   });
 
   onMount(() => {
     if (still) return;
 
     let since = 0;
-    /* Whether either endpoint has moved since the last frame. The tab's
-       open/close grow is a transform, which changes no layout box - so the
-       ResizeObserver above never fires for it and the wire would hang off the
-       hexagon's old edge until the next random flicker. Watching the client
-       rect catches it, and catches anything else that moves an end. */
+    // Whether either endpoint moved since the last frame. The tab's grow is a
+    // transform, which changes no layout box and fires no ResizeObserver, so
+    // the client rects are watched.
     let anchors = "";
     const moved = () => {
       if (!from || !to) return false;
-      const a = from.getBoundingClientRect();
-      const b = to.getBoundingClientRect();
-      const sig = `${a.right.toFixed(1)},${a.top.toFixed(1)},${a.height.toFixed(1)}|${b.left.toFixed(1)},${b.top.toFixed(1)},${b.height.toFixed(1)}`;
+      const fromRect = from.getBoundingClientRect();
+      const toRect = to.getBoundingClientRect();
+      const sig = `${fromRect.right.toFixed(1)},${fromRect.top.toFixed(1)},${fromRect.height.toFixed(1)}|${toRect.left.toFixed(1)},${toRect.top.toFixed(1)},${toRect.height.toFixed(1)}`;
       if (sig === anchors) return false;
       anchors = sig;
       return true;
@@ -259,9 +259,9 @@
       },
       onUpdate: () => {
         if (packet.idle || landed) return;
-        const p = Math.min(1, cycle.t * 2);
-        ride(gsap.parseEase(packet.ease)(p), packet);
-        if (p >= 1 && !landed) {
+        const progress = Math.min(1, cycle.t * 2);
+        ride(gsap.parseEase(packet.ease)(progress), packet);
+        if (progress >= 1 && !landed) {
           landed = true;
           hide();
           absorb(packet.back ? 0 : 1, packet.flash);
@@ -333,15 +333,9 @@
     display: none;
   }
 
-  /* Above the picker's scrim and outside the blurred app, not in them: the
-     blur is what puts the app on a plane behind the dialog, and a wire drawn
-     into that plane reads as part of what was pushed back. It has to arrive
-     on top of the blur for the dialog and the tab to look connected.
-
-     Portaled to the body for the same reason the dialog is: `.app` opens a
-     stacking context, and no z-index inside it can rank above the scrim. At
-     the dialog's own level, a dialog opened later still covers it by coming
-     later in the body. */
+  /* Above the picker's scrim and outside the blurred app: a wire drawn into
+     the blurred plane reads as pushed back with it. Portaled to the body
+     like the dialog, since no z-index inside `.app` ranks above the scrim. */
   .thread {
     position: fixed;
     inset: 0;

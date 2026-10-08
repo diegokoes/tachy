@@ -67,13 +67,13 @@
     })),
   );
 
-  /* A rail of one row indexes nothing. The section itself still renders, so it
-     keeps its heading and its add button. */
+  // A rail of one row indexes nothing. The section itself still renders, so it
+  // keeps its heading and its add button.
   const railed = $derived(sections.length > 1);
 
-  /* Rebuilt per page, because the whole column of sections is replaced. `at` is
-     read here and nowhere else - as a place to open at, not as a thing to
-     render from. */
+  // Rebuilt per page, because the whole column of sections is replaced. `at` is
+  // read here and nowhere else - as a place to open at, not as a thing to
+  // render from.
   $effect(() => {
     page;
     const open = untrack(() => at);
@@ -82,9 +82,9 @@
       if (cancelled) return;
       const first = sections[0]?.key ?? "";
       const target = sections.find((s) => s.key === open)?.key;
-      /* The scroller is shared with every other view, so it still holds
-         whatever the last page was scrolled to. Put it back at the top before
-         the spy reads it, or arriving on a page lands halfway down it. */
+      // The scroller is shared with every other view, so it still holds
+      // whatever the last page was scrolled to. Put it back at the top before
+      // the spy reads it, or arriving on a page lands halfway down it.
       if (!target || target === first) {
         const port = scrollport();
         if (port) port.scrollTop = 0;
@@ -100,32 +100,33 @@
   });
 </script>
 
-<!-- The index and everything it points at, in one column. The rail's active row
-     is still the heading of the part you are in - it just tracks the scroll
-     instead of choosing what gets rendered at all. -->
+<!--
+@component
+The index and everything it points at, in one column. The rail's active row is
+the heading of the part in view: it tracks the scroll and does not choose what
+is rendered.
+-->
 <div class="page" class:railed>
   {#if railed}
     <Rail {items} {active} {label} onpick={(k) => spy.goto(k)} />
   {/if}
 
   <div class="content">
-    {#each sections as s (s.key)}
+    {#each sections as section (section.key)}
       <Section
         {spy}
-        section={s.key}
-        label={s.label}
-        icon={s.icon}
-        view={s.view}
-        eager={s.eager}
-        actions={s.actions}
+        section={section.key}
+        label={section.label}
+        icon={section.icon}
+        view={section.view}
+        eager={section.eager}
+        actions={section.actions}
       />
     {/each}
 
-    <!-- Air under the last section so it can be scrolled to the top like any
-         other. Blank space is the price; the rail landing somewhere different
-         depending on how many rows the last table holds was the alternative.
-         A page of one section has no rail to land anywhere, so no air: it
-         would only add a scrollbar to a short table. -->
+    <!-- Air under the last section so it can be scrolled to the top like
+         any other, or the rail would land differently by how many rows the
+         last table holds. None for a page of one section. -->
     {#if railed}
       <div class="tail" style="height: {spy.tail}px" aria-hidden="true"></div>
     {/if}
@@ -134,9 +135,8 @@
 
 <style>
   /* Horizontal only. The vertical air is `main`'s --main-air, which the
-     sticky section heading already compensates for with its ::before strip;
-     top padding here would move that strip's containing block down and let
-     rows scroll through an unpainted gap. */
+     sticky heading's ::before strip compensates for; top padding here would
+     move that strip's containing block and leave an unpainted gap. */
   .page {
     display: grid;
     grid-template-columns: 1fr;

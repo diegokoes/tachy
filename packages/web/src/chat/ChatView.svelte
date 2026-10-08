@@ -58,14 +58,13 @@
     const blocks = Array.isArray(result)
       ? result
       : (result as { content?: unknown })?.content;
-    const text = Array.isArray(blocks)
-      ? (
-          blocks.find((b) => (b as { type?: string })?.type === "text") as
-            { text?: string } | undefined
-        )?.text
-      : typeof result === "string"
-        ? result
-        : undefined;
+    const firstText = (found: unknown[]) =>
+      (
+        found.find((b) => (b as { type?: string })?.type === "text") as
+          { text?: string } | undefined
+      )?.text;
+    const plain = typeof result === "string" ? result : undefined;
+    const text = Array.isArray(blocks) ? firstText(blocks) : plain;
     if (!text) return undefined;
     try {
       return JSON.parse(text) as Record<string, unknown>;
@@ -79,8 +78,8 @@
   let dockEl = $state<HTMLDivElement>();
   let pinned = true;
 
-  /* Where the composer's text is scrolled to, and how much of its width a
-     scrollbar has taken: the resting caret is laid out over it to match. */
+  // Where the composer's text is scrolled to, and how much of its width a
+  // scrollbar has taken: the resting caret is laid out over it to match.
   let rest = $state({ scroll: 0, gutter: 0 });
 
   function restSync() {
@@ -99,8 +98,8 @@
 
   const empty = $derived(chat.entries.length === 0);
 
-  /* A pre effect, so the dock is read where it still sits: centred before the
-     first message, at the foot after it. */
+  // A pre effect, so the dock is read where it still sits: centred before the
+  // first message, at the foot after it.
   $effect.pre(() => {
     void empty;
     const play = untrack(() => reflow([dockEl], { absolute: false }));
@@ -168,6 +167,13 @@
     if (azCtx?.stage === "type") ensureTypes(azCtx.project.id);
   });
 
+  function projectsEmpty() {
+    if (!az.projects) return "loading projects…";
+    return az.projects.length
+      ? "no project matches"
+      : "none of your teams has an Azure DevOps project registered";
+  }
+
   const azMenu = $derived.by(
     (): { options: MenuOption[]; crumb: MenuCrumb } | null => {
       if (!azCtx) return null;
@@ -193,13 +199,7 @@
             cmd: "/az new",
             param: "project",
             desc: "your team's Azure DevOps projects",
-            empty:
-              az.projectsError ??
-              (az.projects
-                ? az.projects.length
-                  ? "no project matches"
-                  : "none of your teams has an Azure DevOps project registered"
-                : "loading projects…"),
+            empty: az.projectsError ?? projectsEmpty(),
           },
           options: (az.projects ?? [])
             .filter((p) => matches(azCtx.query, p.name, p.external_key))
@@ -268,12 +268,12 @@
     if (!ctx) return;
     if (ctx.stage === "sub") chat.input = `/az ${value} `;
     else if (ctx.stage === "project") {
-      const p = az.projects?.find((x) => x.id === value);
-      if (p) chat.input = `/az new ${p.name} `;
+      const project = az.projects?.find((x) => x.id === value);
+      if (project) chat.input = `/az new ${project.name} `;
     } else {
-      const t = typesOf(ctx.project.id).find((x) => x.name === value);
+      const type = typesOf(ctx.project.id).find((x) => x.name === value);
       chat.input = "";
-      openComposer(ctx.project, t);
+      openComposer(ctx.project, type);
     }
   }
 
@@ -329,10 +329,10 @@
   function parseCommand(
     message: string,
   ): { name: string; args: string } | undefined {
-    const m = message.match(/^\/([a-z0-9-]+)(?:\s+([\s\S]*))?$/);
-    if (!m || !commands?.builtins.some((b) => b.name === m[1]))
+    const match = message.match(/^\/([a-z0-9-]+)(?:\s+([\s\S]*))?$/);
+    if (!match || !commands?.builtins.some((b) => b.name === match[1]))
       return undefined;
-    return { name: m[1], args: m[2]?.trim() ?? "" };
+    return { name: match[1], args: match[2]?.trim() ?? "" };
   }
 
   async function send() {
@@ -405,8 +405,8 @@
           >["stats"];
           if (panel && stats) {
             panel.stats = stats;
-            const t = payload?.ticket as { title?: string } | undefined;
-            if (t?.title) panel.title = t.title;
+            const ticket = payload?.ticket as { title?: string } | undefined;
+            if (ticket?.title) panel.title = ticket.title;
           }
         } else if (
           event === "tool_result" &&
@@ -432,10 +432,10 @@
             status: "pending",
           });
         else if (event === "approval_resolved") {
-          const a = chat.entries.find(
+          const approval = chat.entries.find(
             (e) => e.kind === "approval" && e.id === data.id,
           ) as Extract<Entry, { kind: "approval" }> | undefined;
-          if (a) a.status = data.approved ? "approved" : "denied";
+          if (approval) approval.status = data.approved ? "approved" : "denied";
         } else if (event === "result")
           chat.sessionId = data.sessionId as string;
         else if (event === "error")
@@ -574,8 +574,8 @@
     } else armClear();
   }
 
-  /* Both marks leave once they have nothing to act on, and focus would go
-     with them. */
+  // Both marks leave once they have nothing to act on, and focus would go with
+  // them.
   function sendClick() {
     void send();
     composerEl?.focus();
@@ -610,15 +610,15 @@
         bind:this={transcriptEl}
         onscroll={onScroll}
       >
-        {#each chat.entries as e, i (e.key)}
-          {#if e.kind === "user"}
+        {#each chat.entries as entry, i (entry.key)}
+          {#if entry.kind === "user"}
             <div class="turn user">
               <span class="who"
                 >you<span class="mk" aria-hidden="true">{G.marker}</span></span
               >
-              <div class="body">{e.text}</div>
+              <div class="body">{entry.text}</div>
             </div>
-          {:else if e.kind === "assistant"}
+          {:else if entry.kind === "assistant"}
             <div class="turn">
               <span class="who"
                 ><span class="mk" aria-hidden="true">{G.marker}</span
@@ -628,39 +628,43 @@
                 class="body md"
                 class:streaming={chat.busy && i === chat.entries.length - 1}
               >
-                {@html renderMarkdown(e.text)}
+                {@html renderMarkdown(entry.text)}
               </div>
             </div>
-          {:else if e.kind === "tool"}
+          {:else if entry.kind === "tool"}
             <div class="tool">
               <Icon name="tool" size="1em" weight={7} />
-              {e.tool}
+              {entry.tool}
             </div>
-          {:else if e.kind === "compact"}
-            <CompactPanel title={e.title} stats={e.stats} />
-          {:else if e.kind === "output"}
-            <OutputCard file={e.file} />
-          {:else if e.kind === "ticket"}
-            <TicketCard ticket={e.ticket} icon={e.icon} color={e.color} />
-          {:else if e.kind === "error"}
+          {:else if entry.kind === "compact"}
+            <CompactPanel title={entry.title} stats={entry.stats} />
+          {:else if entry.kind === "output"}
+            <OutputCard file={entry.file} />
+          {:else if entry.kind === "ticket"}
+            <TicketCard
+              ticket={entry.ticket}
+              icon={entry.icon}
+              color={entry.color}
+            />
+          {:else if entry.kind === "error"}
             <div class="turn">
               <span class="who err">{G.marker}error</span>
-              <div class="body err">{e.text}</div>
+              <div class="body err">{entry.text}</div>
             </div>
-          {:else if e.kind === "running"}
+          {:else if entry.kind === "running"}
             <div class="turn">
               <span class="who err">{G.marker}busy</span>
               <div class="body err">
-                {#if e.stopped}stopped. send your message again.{:else}{e.text}
-                  <Button size="sm" onclick={() => stopRunning(e)}
+                {#if entry.stopped}stopped. send your message again.{:else}{entry.text}
+                  <Button size="sm" onclick={() => stopRunning(entry)}
                     >stop it</Button
                   >{/if}
               </div>
             </div>
-          {:else if e.kind === "approval"}
+          {:else if entry.kind === "approval"}
             <Approval
-              entry={e}
-              ondecide={(ok, reason) => decide(e, ok, reason)}
+              {entry}
+              ondecide={(ok, reason) => decide(entry, ok, reason)}
             />
           {/if}
         {/each}
@@ -708,11 +712,11 @@
               >
             </span>
           {/if}
-          {#each chat.uploads as u, i (u.path)}
+          {#each chat.uploads as upload, i (upload.path)}
             {#if i > 0}<span class="sep" aria-hidden="true">~~</span>{/if}
             <span class="attach">
-              <Icon name={u.image ? "image" : "file"} size="1.1em" />
-              {u.filename}
+              <Icon name={upload.image ? "image" : "file"} size="1.1em" />
+              {upload.filename}
               <button
                 class="chip-x"
                 aria-label="Remove attachment"
@@ -1001,12 +1005,9 @@
     padding-right: 0;
   }
 
-  /* A turn is a speaker marker over its text. The text gets a plate of its
-     own: there is no window behind it, only the sky.
-
-     The transcript is the longest thing anyone reads here, so the prose is on
-     the UI face; code, tool traces and event panels stay mono. 60ch and 46ch
-     hold the 72 and 56 characters the mono measures did. */
+  /* A turn is a speaker marker over its text, on a plate of its own: there
+     is no window behind it, only the sky. Prose is on the UI face; code,
+     tool traces and event panels stay mono. */
   .turn {
     display: flex;
     flex-direction: column;
@@ -1051,10 +1052,9 @@
     padding-left: 1ch;
   }
 
-  /* The user's turn is positioned right; its text stays left-aligned. Reading
-     returns to the left edge on every line, so ragged-left costs a re-scan -
-     which is why no chat UI right-aligns the text itself. Only the marker,
-     a single token, sits on the right. */
+  /* The user's turn is positioned right and its text stays left-aligned:
+     reading returns to the left edge on every line, so ragged-left costs a
+     re-scan. Only the marker sits on the right. */
   .turn.user {
     align-self: flex-end;
     max-width: 46ch;

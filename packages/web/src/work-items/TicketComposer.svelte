@@ -37,7 +37,7 @@
 
   let {
     oncreated,
-  }: { oncreated: (t: CreatedTicket, type: WorkItemTypeOption) => void } =
+  }: { oncreated: (ticket: CreatedTicket, type: WorkItemTypeOption) => void } =
     $props();
 
   $effect(() => {
@@ -81,21 +81,20 @@
 
   const findingsFor = $derived.by(() => {
     const by = new Map<string, number>();
-    for (const f of composer.review?.findings ?? [])
-      if (!composer.dismissed.includes(f.id))
-        by.set(f.field, (by.get(f.field) ?? 0) + 1);
+    for (const finding of composer.review?.findings ?? [])
+      if (!composer.dismissed.includes(finding.id))
+        by.set(finding.field, (by.get(finding.field) ?? 0) + 1);
     return by;
   });
   const openFindings = $derived(
     [...findingsFor.values()].reduce((a, b) => a + b, 0),
   );
 
-  const fieldName = (ref: string) =>
-    ref === TITLE
-      ? "Title"
-      : ref === "general"
-        ? "Overall"
-        : (form?.labels[ref] ?? specs.get(ref)?.name ?? ref);
+  function fieldName(ref: string) {
+    if (ref === TITLE) return "Title";
+    if (ref === "general") return "Overall";
+    return form?.labels[ref] ?? specs.get(ref)?.name ?? ref;
+  }
 
   const ORIGIN: Record<string, string> = {
     process: "process default",
@@ -105,8 +104,8 @@
     template: "from template",
   };
 
-  /* The right column holds the fields; a review takes it over only once asked
-     for, and the tabs let the person go back to the fields it points at. */
+  // The right column holds the fields; a review takes it over only once asked
+  // for, and the tabs let the person go back to the fields it points at.
   let side = $state<"fields" | "review">("fields");
   let showHidden = $state(false);
   let showContext = $state(false);
@@ -154,21 +153,21 @@
   }
 
   /** One suggestion into one field: appended to prose, replacing a title. */
-  function apply(f: ReviewFinding) {
-    if (!f.suggestion) return;
-    if (f.field === TITLE) composer.title = f.suggestion;
+  function apply(finding: ReviewFinding) {
+    if (!finding.suggestion) return;
+    if (finding.field === TITLE) composer.title = finding.suggestion;
     else {
-      const spec = specs.get(f.field);
-      const now = String(composer.values[f.field] ?? "").trimEnd();
+      const spec = specs.get(finding.field);
+      const now = String(composer.values[finding.field] ?? "").trimEnd();
       setValue(
-        f.field,
+        finding.field,
         spec && isBody(spec) && now
-          ? `${now}\n\n${f.suggestion}`
-          : f.suggestion,
+          ? `${now}\n\n${finding.suggestion}`
+          : finding.suggestion,
       );
     }
-    composer.dismissed = [...composer.dismissed, f.id];
-    focusField(f.field);
+    composer.dismissed = [...composer.dismissed, finding.id];
+    focusField(finding.field);
   }
 
   async function submit() {
@@ -190,40 +189,40 @@
   }
 </script>
 
-{#snippet label(f: FieldSpec)}
-  {@const origin = composer.origins[f.reference_name]}
-  {@const flagged = findingsFor.get(f.reference_name)}
+{#snippet label(field: FieldSpec)}
+  {@const origin = composer.origins[field.reference_name]}
+  {@const flagged = findingsFor.get(field.reference_name)}
   <span class="label">
-    <label for={`f-${f.reference_name}`}>{labelOf(form, f)}</label>
-    {#if f.required}<span class="req" aria-label="required">*</span>{/if}
+    <label for={`f-${field.reference_name}`}>{labelOf(form, field)}</label>
+    {#if field.required}<span class="req" aria-label="required">*</span>{/if}
     {#if origin}<Badge tone="muted">{ORIGIN[origin]}</Badge>{/if}
     {#if flagged}
       <button class="flag" onclick={() => (side = "review")}>
         <Icon name="review" size="0.9em" />{flagged}
       </button>
     {/if}
-    {#if f.help_text}<span class="help" use:tip={f.help_text}
+    {#if field.help_text}<span class="help" use:tip={field.help_text}
         ><Icon name="info" size="0.9em" /></span
       >{/if}
   </span>
 {/snippet}
 
-{#snippet row(f: FieldSpec)}
+{#snippet row(field: FieldSpec)}
   <div
     class="row"
-    class:missing={missing.includes(f.reference_name)}
-    class:flagged={findingsFor.has(f.reference_name)}
-    data-field={f.reference_name}
+    class:missing={missing.includes(field.reference_name)}
+    class:flagged={findingsFor.has(field.reference_name)}
+    data-field={field.reference_name}
   >
-    {@render label(f)}
+    {@render label(field)}
     <FieldInput
-      id={`f-${f.reference_name}`}
-      spec={f}
-      label={labelOf(form, f)}
-      value={composer.values[f.reference_name]}
+      id={`f-${field.reference_name}`}
+      spec={field}
+      label={labelOf(form, field)}
+      value={composer.values[field.reference_name]}
       form={form!}
-      invalid={rejected.has(f.reference_name)}
-      onchange={(v) => setValue(f.reference_name, v)}
+      invalid={rejected.has(field.reference_name)}
+      onchange={(v) => setValue(field.reference_name, v)}
     />
   </div>
 {/snippet}
@@ -363,10 +362,12 @@
         <div class="pick">
           <p class="dim">Pick the project this goes into.</p>
           <div class="cards">
-            {#each az.projects ?? [] as p (p.id)}
-              <button class="card" onclick={() => setProject(p)}>
-                <span class="name">{p.name}</span>
-                <span class="dim">{p.product_slug ?? p.team_slug}</span>
+            {#each az.projects ?? [] as project (project.id)}
+              <button class="card" onclick={() => setProject(project)}>
+                <span class="name">{project.name}</span>
+                <span class="dim"
+                  >{project.product_slug ?? project.team_slug}</span
+                >
               </button>
             {/each}
           </div>
@@ -376,12 +377,15 @@
       <div class="pick">
         <p class="dim">What are you raising?</p>
         <div class="cards">
-          {#each types as t (t.name)}
-            <button class="card type" onclick={() => setType(t)}>
-              <span class="glyph" style:color={typeColor(t.color) ?? undefined}>
-                <Icon name={typeIcon(t.icon)} size="1.4em" />
+          {#each types as type (type.name)}
+            <button class="card type" onclick={() => setType(type)}>
+              <span
+                class="glyph"
+                style:color={typeColor(type.color) ?? undefined}
+              >
+                <Icon name={typeIcon(type.icon)} size="1.4em" />
               </span>
-              <span class="name">{t.name}</span>
+              <span class="name">{type.name}</span>
             </button>
           {/each}
         </div>
@@ -417,21 +421,21 @@
             reading {composer.project.name}'s {composer.type.name} form…
           </p>
         {/if}
-        {#each arranged?.body ?? [] as f (f.reference_name)}
+        {#each arranged?.body ?? [] as field (field.reference_name)}
           <div
             class="row"
-            class:missing={missing.includes(f.reference_name)}
-            class:flagged={findingsFor.has(f.reference_name)}
-            data-field={f.reference_name}
+            class:missing={missing.includes(field.reference_name)}
+            class:flagged={findingsFor.has(field.reference_name)}
+            data-field={field.reference_name}
           >
-            {@render label(f)}
+            {@render label(field)}
             <MarkdownField
-              id={`f-${f.reference_name}`}
-              label={labelOf(form, f)}
-              value={String(composer.values[f.reference_name] ?? "")}
+              id={`f-${field.reference_name}`}
+              label={labelOf(form, field)}
+              value={String(composer.values[field.reference_name] ?? "")}
               images={composer.images}
-              invalid={rejected.has(f.reference_name)}
-              onchange={(v) => setValue(f.reference_name, v)}
+              invalid={rejected.has(field.reference_name)}
+              onchange={(v) => setValue(field.reference_name, v)}
               onimage={addImage}
               onremoveimage={removeImage}
             />
@@ -473,11 +477,11 @@
             onfocus={focusField}
           />
         {:else if form && arranged}
-          {#each arranged.groups as g, i (g.label ?? `header-${i}`)}
+          {#each arranged.groups as group, i (group.label ?? `header-${i}`)}
             <fieldset class="group">
-              {#if g.label}<legend>{g.label}</legend>{/if}
-              {#each g.fields as f (f.reference_name)}
-                {@render row(f)}
+              {#if group.label}<legend>{group.label}</legend>{/if}
+              {#each group.fields as field (field.reference_name)}
+                {@render row(field)}
               {/each}
             </fieldset>
           {/each}
@@ -492,8 +496,8 @@
             </button>
             {#if showHidden}
               <fieldset class="group">
-                {#each arranged.hidden as f (f.reference_name)}
-                  {@render row(f)}
+                {#each arranged.hidden as field (field.reference_name)}
+                  {@render row(field)}
                 {/each}
               </fieldset>
             {/if}
