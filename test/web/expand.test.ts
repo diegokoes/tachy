@@ -32,6 +32,7 @@ import {
   driftMarks,
 } from "../../packages/web/src/motion/motion";
 import { navigate, router } from "../../packages/web/src/shell/router.svelte";
+import { deferred } from "./deferred";
 
 const root = document.documentElement;
 const doc = document as { startViewTransition?: unknown };
@@ -39,8 +40,8 @@ const doc = document as { startViewTransition?: unknown };
 function fakeTransition() {
   const phases = {
     updated: Promise.resolve() as Promise<unknown>,
-    ready: Promise.withResolvers<void>(),
-    finished: Promise.withResolvers<void>(),
+    ready: deferred(),
+    finished: deferred(),
   };
   doc.startViewTransition = vi.fn((update: () => Promise<void>) => {
     phases.updated = update();

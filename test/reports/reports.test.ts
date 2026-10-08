@@ -131,7 +131,12 @@ describe("reviewReport advisory fallback", () => {
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
     try {
-      const review = await reviewReport("something broke", "bug", {}, null);
+      const review = await reviewReport(
+        { title: "something broke", body: "" },
+        "bug",
+        {},
+        null,
+      );
       expect(review.available).toBe(false);
       expect(review.ok).toBe(true);
       expect(review.suggestions).toEqual([]);

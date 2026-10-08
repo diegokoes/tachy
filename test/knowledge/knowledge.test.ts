@@ -38,7 +38,9 @@ describe("searchKnowledge", () => {
     const rows = await searchKnowledge("scanner offline E-204");
     expect(rows[0].issue_summary).toMatch(/scanner/i);
     expect(rows.every((r) => r.status === "approved")).toBe(true);
-    expect(rows.some((r) => r.issue_summary.includes("draft"))).toBe(false);
+    expect(rows.some((r) => String(r.issue_summary).includes("draft"))).toBe(
+      false,
+    );
   });
 
   it("finds a semantic match even with no shared keywords", async () => {
@@ -253,7 +255,9 @@ describe("deprecation lifecycle", () => {
     expect(deprecated).toBeDefined();
     expect(deprecated!.status).toBe("deprecated");
     expect(deprecated!.superseded_by).toBe(fresh.id);
-    expect(rows.some((r) => r.issue_summary.includes("hidden"))).toBe(false);
+    expect(rows.some((r) => String(r.issue_summary).includes("hidden"))).toBe(
+      false,
+    );
   });
 
   it("validates the supersede link: unknown target and self-reference are rejected", async () => {
