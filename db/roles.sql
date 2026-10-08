@@ -34,6 +34,13 @@ begin
     execute format('alter default privileges in schema %I grant execute on functions to tachy_app', s);
 end $$;
 
+-- The audit trail is append-only for the application.
+do $$
+declare s text := current_schema();
+begin
+    execute format('revoke update, delete, truncate on %I.audit_events from tachy_app', s);
+end $$;
+
 grant pg_read_all_data to tachy_backup;
 -- Connection counts and the oldest transaction, across every session.
 grant pg_monitor to tachy_watch;

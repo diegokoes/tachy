@@ -15,6 +15,7 @@ import {
 import { tool } from "../server";
 import { out } from "../results";
 import {
+  audited,
   requireCanEdit,
   requireCanManageTeam,
   requireGlobalAdmin,
@@ -46,12 +47,14 @@ tool(
   async (args) => {
     await requireGlobalAdmin();
     return out(
-      await addSourceConnection({
-        sourceType: args.source_type,
-        slug: args.slug,
-        baseUrl: args.base_url,
-        config: args.config,
-      }),
+      await audited("source_connection_save", args.slug, () =>
+        addSourceConnection({
+          sourceType: args.source_type,
+          slug: args.slug,
+          baseUrl: args.base_url,
+          config: args.config,
+        }),
+      ),
     );
   },
 );
