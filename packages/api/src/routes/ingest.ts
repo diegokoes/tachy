@@ -1,6 +1,5 @@
-import { Hono, type Context } from "hono";
+import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { getConnInfo } from "@hono/node-server/conninfo";
 import { BUCKET_BATCH_MAX_BYTES } from "@tachy/core";
 import {
   bucketBatchSchema,
@@ -8,24 +7,9 @@ import {
   ingestBatch,
 } from "@tachy/core/buckets";
 import { log } from "@tachy/core/infra";
-import { failureThrottle } from "../throttle";
+import { callerAddress, failureThrottle } from "../throttle";
 
 const badTokens = failureThrottle(10);
-
-/**
- * Who is pushing. Behind Caddy that is X-Forwarded-For, which Caddy sets from
- * the connection it accepted and never takes from the request; without a proxy
- * it is the socket.
- */
-function callerAddress(c: Context): string {
-  const forwarded = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
-  if (forwarded) return forwarded;
-  try {
-    return getConnInfo(c).remote.address ?? "unknown";
-  } catch {
-    return "unknown";
-  }
-}
 
 /**
  * Where pushers deliver: scripts that can reach a source tachy cannot, holding

@@ -1954,7 +1954,8 @@ and the SFTP pull keeps working as it is.
   - Ten failed tokens in a minute from one address stop that address, for that
     bucket, for the rest of the minute. Other addresses and buckets are
     unaffected, so a guesser cannot lock a pusher out. The address is
-    `X-Forwarded-For`, which Caddy sets itself: "For these `X-Forwarded-*`
+    `X-Forwarded-For`, read because the api runs with `TACHY_BEHIND_PROXY=true`
+    here and which Caddy sets itself: "For these `X-Forwarded-*`
     headers, by default, the proxy will ignore their values from incoming
     requests, to prevent spoofing"
     ([Caddy](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)).

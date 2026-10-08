@@ -1,4 +1,13 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+} from "vitest";
+import { env } from "@tachy/core/infra";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { BUCKET_BATCH_VERSION, INGEST_TOKEN_PREFIX } from "@tachy/core";
@@ -202,6 +211,10 @@ describe("ingest", () => {
   });
 
   it("stops answering an address that keeps sending bad tokens, for that bucket only", async () => {
+    process.env.TACHY_BEHIND_PROXY = "true";
+    onTestFinished(() => {
+      delete process.env.TACHY_BEHIND_PROXY;
+    });
     const guarded = await createBucket(
       { slug: "guarded", name: "Guarded" },
       null,
@@ -432,6 +445,12 @@ describe("bucket tools", () => {
     await server.connect(serverTransport);
     client = new Client({ name: "test", version: "0" });
     await client.connect(clientTransport);
+    // The suite names no user, and an admin exists: the turn of an app admin
+    // with no user row is the session that still passes the gate.
+    env.actorRole = "admin";
+  });
+  afterAll(() => {
+    env.actorRole = undefined;
   });
 
   async function call(name: string, args: Record<string, unknown> = {}) {
