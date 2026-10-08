@@ -461,7 +461,8 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
     });
     expect(crossTracker.status).toBe(403);
 
-    // Re-pointing a project needs rights on where it lands, not just where it is.
+    // Re-pointing a project needs rights on where it lands, not only where it
+    // is.
     const moved = await req(
       leadCookie,
       `/source-projects/${projectId}`,
@@ -482,7 +483,8 @@ describe("API enforcement (team mini-admin vs member vs admin)", () => {
       ).status,
     ).toBe(403);
 
-    // Reads stay open - the admin panel loads them before knowing who you are.
+    // Reads stay open: the admin panel loads them before it knows who is signed
+    // in.
     expect((await req(devCookie, "/source-projects", "GET")).status).toBe(200);
 
     const area = await req(

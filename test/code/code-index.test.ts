@@ -60,10 +60,8 @@ const PRINTER = [
   "}",
 ].join("\n");
 
-/*
- * master:              init (v1.0.0) -- #5151 queue (v1.1.0) -- chore (v1.2.0-RC.1)
- * legacy/master-1-0:   init (v1.0.0) -- #4242 legacy fix (v1.0.1)
- */
+// master: init (v1.0.0) -- #5151 queue (v1.1.0) -- chore (v1.2.0-RC.1)
+// legacy/master-1-0: init (v1.0.0) -- #4242 legacy fix (v1.0.1)
 beforeAll(async () => {
   srcDir = await mkdtemp(join(tmpdir(), "tachy-src-"));
   dataDir = await mkdtemp(join(tmpdir(), "tachy-repos-"));
@@ -161,10 +159,8 @@ describe("code indexing + search", () => {
     expect(res.lines[0].filesIndexed).toBe(0);
   });
 
-  /*
-   * An index cut short keeps what it wrote: searchable, readable, and not
-   * redone by the next run, which picks up the rest.
-   */
+  // An index cut short keeps what it wrote: searchable, readable, and not
+  // redone by the next run, which picks up the rest.
   it("keeps an interrupted index searchable and resumes it", async () => {
     await commit(
       {

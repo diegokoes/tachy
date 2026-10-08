@@ -1,3 +1,9 @@
+/**
+ * The sanitize step needs a DOM, so these exercise the layer that is this
+ * codebase's own: the tokenizer, the renderer and the broken-link marking.
+ * DOMPurify's stripping is its library's concern, and its one line of config
+ * (ADD_ATTR) is verified against the running app.
+ */
 import { describe, expect, it } from "vitest";
 import { Marked } from "marked";
 import {
@@ -6,12 +12,6 @@ import {
   markBrokenLinks,
 } from "../../packages/web/src/markdown/markdown";
 
-/**
- * The sanitize step needs a DOM, so these exercise the layer that is this
- * codebase's own: the tokenizer, the renderer and the broken-link marking.
- * DOMPurify's stripping is its library's concern, and its one line of config
- * (ADD_ATTR) is verified against the running app.
- */
 const md = new Marked({ gfm: true, breaks: true }).use({
   extensions: [wikilinkExtension as any],
 });
@@ -42,7 +42,7 @@ describe("wikilink rendering", () => {
     expect(render("[not a link]")).not.toContain("wikilink");
   });
 
-  /** A target cannot break out of the attribute it is written into. */
+  // A target cannot break out of the attribute it is written into.
   it("escapes quotes and angle brackets in the target and the label", () => {
     const html = render('[[a"b|<script>x</script>]]');
     expect(html).not.toContain('data-wikilink="a"b"');
@@ -98,7 +98,7 @@ describe("markdown images", () => {
     expect(out).toContain('loading="lazy"');
   });
 
-  /** An outside image is a request every reader's browser would make. */
+  // An outside image is a request every reader's browser would make.
   it("shows an outside image as its alt text and never loads it", () => {
     const out = img("![leak](https://example.invalid/p.png?d=secret)");
     expect(out).not.toContain("<img");

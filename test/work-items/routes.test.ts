@@ -1,3 +1,8 @@
+/**
+ * `POST /:source/:id/fetch` is not covered: it calls the third-party API, the
+ * same line load/README.md draws for the k6 scenarios. The rest of the file is
+ * reachable without one.
+ */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { addCustomer, addCustomerUnit } from "@tachy/core/catalog";
 import { ingestWorkItem } from "@tachy/core/work-items";
@@ -12,11 +17,6 @@ import { resetData, seededFreshdeskConnId, sql } from "../database";
 
 afterAll(() => sql.end());
 
-/**
- * `POST /:source/:id/fetch` is deliberately absent: it calls the third-party
- * API, which is the same line load/README.md draws for the k6 scenarios. The
- * rest of the file is reachable without one.
- */
 const notes: { id: string; body: string; private?: boolean }[] = [];
 let notesSupported = true;
 

@@ -31,11 +31,9 @@ describe("agent tool allowlist (security boundary)", () => {
     for (const t of WRITE_TOOLS) expect(classify(qualify(t)).cls).toBe("write");
   });
 
-  /**
-   * An MCP tool missing from both lists is not a loud failure: it stays callable
-   * and silently raises an approval box on every call, forever. The lists are
-   * hand-maintained, so hold them against what is actually registered.
-   */
+  // An MCP tool missing from both lists stays callable and raises an approval
+  // box on every call. The lists are hand-maintained, so they are held against
+  // what is registered.
   it("classifies every registered MCP tool", () => {
     // Every .ts under packages/mcp/src, not one file: tools live one module per
     // domain, and a new module has to be caught without anyone remembering to
@@ -69,12 +67,9 @@ describe("agent tool allowlist (security boundary)", () => {
     expect(unlisted).toEqual([]);
   });
 
-  /**
-   * The prompt and the slash commands name tools by hand. A rename on the MCP
-   * side leaves them pointing at nothing, and the model is told to call a tool
-   * that does not exist. Input fields share the verbs (`post_note`), so they
-   * are told apart by being declared as a schema key.
-   */
+  // The prompt and the slash commands name tools by hand, so a rename on the
+  // MCP side leaves the model told to call a tool that is not there. Input
+  // fields share the verbs (`post_note`) and are told apart as schema keys.
   it("names only registered tools in the prompt and the slash commands", () => {
     const here = dirname(fileURLToPath(import.meta.url));
     const mcp = join(here, "..", "..", "packages", "mcp", "src");
@@ -371,9 +366,8 @@ describe("claude subprocess environment (per-user credential isolation)", () => 
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
   });
 
-  // The regression that matters: Claude Code ranks every one of these above
-  // CLAUDE_CODE_OAUTH_TOKEN, so a leftover host credential would silently
-  // answer the turn on the wrong account.
+  // Claude Code ranks every one of these above CLAUDE_CODE_OAUTH_TOKEN, so a
+  // leftover host credential would answer the turn on the wrong account.
   it("strips host credentials that would outrank the caller's own", () => {
     for (const k of HOST_VARS) setHost(k, "host-value");
     const env = claudeEnv({
@@ -406,12 +400,9 @@ describe("claude subprocess environment (per-user credential isolation)", () => 
   });
 });
 
-/**
- * What reaches the model besides the conversation. The SDK defaults to
- * reading instructions, settings and servers from disk, and a file picked up
- * that way is paid for on every turn without anyone having written it for the
- * agent.
- */
+// What reaches the model besides the conversation. The SDK defaults to reading
+// instructions, settings and servers from disk, and a file picked up that way
+// is paid for on every turn without anyone having written it for the agent.
 describe("what the agent reads", () => {
   const cfg: AgentConfig = {
     mcpCommand: "node",

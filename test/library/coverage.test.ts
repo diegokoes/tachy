@@ -59,8 +59,8 @@ describe("wiki coverage", () => {
     expect(printing).toMatchObject({ entries: 1, docs: 1, articles: 1 });
   });
 
-  /** Entries and docs used to be joined onto the same component together, which
-      multiplied them; each count has to come out as itself. */
+  // Entries and docs joined onto one component together would multiply each
+  // other; each count has to come out as itself.
   it("counts several of each on one component without multiplying them", async () => {
     const productId = await tree();
     for (const summary of ["a", "b", "c"])
@@ -118,7 +118,7 @@ describe("wiki coverage", () => {
     ]);
   });
 
-  /** The signal the view exists for: lessons recorded, nothing written. */
+  // The signal the view exists for: lessons recorded, nothing written.
   it("shows a component with entries and no article", async () => {
     const productId = await tree();
     await saveKnowledgeEntry({

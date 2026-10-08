@@ -37,9 +37,8 @@ const node = (
   team_name: team.toUpperCase(),
 });
 
-/*  platform ─ trace ─ printer ─ printer nozzle
-              └ fleet ─ scanner
-    support  ─ inkmon ─ label renderer                                      */
+// platform ─ trace ─ printer ─ printer nozzle └ fleet ─ scanner support ─
+// inkmon ─ label renderer
 const ROWS: ComponentNode[] = [
   node("c1", "printer", "trace", "platform"),
   node("c2", "printer nozzle", "trace", "platform", "c1"),
@@ -93,8 +92,8 @@ describe("build", () => {
     expect(printer.children.map((c) => c.label)).toEqual(["printer nozzle"]);
   });
 
-  /* A hit with no ancestors is a name floating in space: you cannot tell
-     which product's printer you found. */
+  // A hit with no ancestors is a name floating in space: nothing says which
+  // product's printer it is.
   it("drags a search hit's ancestors back in", () => {
     const root = build(ROWS, { ...EMPTY_FILTERS, query: "nozzle" });
     expect(root.children).toHaveLength(1);
@@ -108,9 +107,9 @@ describe("build", () => {
     expect(root.children[0].children.map((p) => p.label)).toEqual(["INKMON"]);
   });
 
-  /* Filtering to the child alone would otherwise lose it entirely. Here the
-     parent survives via withAncestors, so this checks the other direction:
-     a parent filtered out by product cannot strand its child. */
+  // Filtering to the child alone would otherwise lose it entirely. Here the
+  // parent survives via withAncestors, so this checks the other direction: a
+  // parent filtered out by product cannot strand its child.
   it("hangs a component off its product when its parent did not survive", () => {
     const orphan = [node("c9", "solo", "trace", "platform", "missing")];
     const root = build(orphan, EMPTY_FILTERS);
@@ -217,8 +216,8 @@ describe("simulate", () => {
     return rows;
   };
 
-  /* Labels are horizontal and wider than their dots, so circle collision
-     alone left text on top of text. */
+  // Labels are horizontal and wider than their dots, so circle collision alone
+  // leaves text on top of text.
   it("settles a catalogue of this size with no label on top of another", () => {
     const { nodes } = simulate(toGraph(build(catalogue(), EMPTY_FILTERS)));
     expect(nodes.length).toBeGreaterThan(70);
@@ -238,8 +237,8 @@ describe("simulate", () => {
       island.get(n) === n ? n : find(island.get(n)!);
     for (const l of links)
       island.set(find(l.source as SimNode), find(l.target as SimNode));
-    /* Measured between label boxes, not centres: a long label is most of
-       what an island's edge is made of. */
+    // Measured between label boxes, not centres: a long label is most of what
+    // an island's edge is made of.
     let gap = Infinity;
     for (const a of nodes)
       for (const b of nodes) {
@@ -270,8 +269,8 @@ describe("simulate", () => {
     expect(w / h).toBeGreaterThan(1.3);
   });
 
-  /* Obsidian's branches keep going the way they started: a node's children
-     sit further out than it does, on the side away from its own parent. */
+  // Obsidian's branches keep going the way they started: a node's children sit
+  // further out than it does, on the side away from its own parent.
   it("puts every component further out than the node it hangs off", () => {
     const { nodes, links } = simulate(
       toGraph(build(catalogue(), EMPTY_FILTERS)),
@@ -295,7 +294,7 @@ describe("simulate", () => {
     expect(checked).toBeGreaterThan(10);
   });
 
-  /* A label pointing back towards its product runs across its siblings. */
+  // A label pointing back towards its product runs across its siblings.
   it("faces every label away from its product", () => {
     const { nodes, links } = simulate(
       toGraph(build(catalogue(), EMPTY_FILTERS)),
@@ -312,8 +311,8 @@ describe("simulate", () => {
     }
   });
 
-  /* The point of growing the rings: a product several times the size of any
-     today still comes out with no text on top of text. */
+  // The point of growing the rings: a product several times the size of any
+  // today still comes out with no text on top of text.
   it("keeps a product with sixty components legible", () => {
     const rows: ComponentNode[] = [];
     const tops: string[] = [];
@@ -358,9 +357,9 @@ describe("simulate", () => {
     expect(overlaps(wide.nodes)).toBe(0);
   });
 
-  /* The forces that shape the layout never quite agree, and left running
-     they held the graph in a slow tremble. What runs after the first draw is
-     exactly at rest in it. */
+  // The forces that shape the layout never quite agree, and left running they
+  // hold the graph in a slow tremble. What runs after the first draw is at rest
+  // in it.
   it("stays still once settled, even while heated for a drag", () => {
     const { sim, nodes } = simulate(toGraph(build(catalogue(), EMPTY_FILTERS)));
     const before = nodes.map((n) => [n.x!, n.y!]);
@@ -408,8 +407,8 @@ describe("simulate", () => {
       if (!branch.has(n)) expect(moved(n)).toBeLessThan(1.5);
   });
 
-  /* Dropped onto another island: it stays where it was let go, keeps its
-     shape, and what it landed on moves aside rather than staying under it. */
+  // Dropped onto another island: it stays where it was let go, keeps its shape,
+  // and what it landed on moves aside rather than staying under it.
   it.each([0, 1, 2, 3, 4, 5])(
     "leaves a dropped branch where it was let go and clears room for it (onto island %i)",
     (which) => {

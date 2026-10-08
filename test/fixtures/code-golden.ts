@@ -1,7 +1,7 @@
 /**
  * Questions about tachý's own source, each with the file that answers it, for
- * measuring code search (scripts/eval-code-search.ts). Written against `dev`
- * at e2cb85b; the script says which expected files the index no longer holds.
+ * measuring code search (scripts/eval-code-search.ts). The script says which
+ * expected files the index no longer holds.
  *
  * `why` names the leg a question is meant to exercise:
  *

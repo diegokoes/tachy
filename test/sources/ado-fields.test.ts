@@ -62,10 +62,8 @@ describe("ADO field projection", () => {
     });
   });
 
-  /**
-   * The per-type endpoint carries no data type at all - the join with the
-   * account-wide list is the only way a widget can be chosen.
-   */
+  // The per-type endpoint carries no data type at all - the join with the
+  // account-wide list is the only way a widget can be chosen.
   it("takes type, readOnly and isIdentity from the account-wide list", () => {
     const fields = projectFields(typeFields, accountFields);
     expect(byRef(fields, "System.IterationPath").type).toBe("treePath");
@@ -133,7 +131,7 @@ describe("workItemSchema", () => {
     expect(byRef(schema.fields, "System.AssignedTo").is_identity).toBe(true);
   });
 
-  /** Required fields still arrive; only the typed widgets are lost. */
+  // Required fields still arrive; only the typed widgets are lost.
   it("survives the account-wide list failing", async () => {
     const schema = await workItemSchema(
       client({

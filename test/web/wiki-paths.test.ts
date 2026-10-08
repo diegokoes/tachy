@@ -13,7 +13,7 @@ describe("wiki paths", () => {
     expect(wikiPath("tqx", "c", "printing")).toBe("/wiki/tqx/c/printing");
   });
 
-  /** Chat history and the agent's older replies still say /library/wiki. */
+  // Chat history and the agent's older replies still say /library/wiki.
   it("sends an old library path to where the page lives now", () => {
     expect(movedWikiPath(seg("/library/wiki"))).toBe("/wiki");
     expect(movedWikiPath(seg("/library/wiki/tqx"))).toBe("/wiki/tqx");
@@ -26,7 +26,7 @@ describe("wiki paths", () => {
   });
 
   it("folds the old pages into where they live now", () => {
-    // contents and its older name toc both became the wiki's landing.
+    // `contents` and its older name `toc` both lead to the wiki's landing.
     expect(movedWikiPath(seg("/library/wiki/tqx/toc"))).toBe("/wiki/tqx");
     expect(movedWikiPath(seg("/library/wiki/tqx/contents"))).toBe("/wiki/tqx");
     expect(movedWikiPath(seg("/library/wiki/tqx/coverage"))).toBe(

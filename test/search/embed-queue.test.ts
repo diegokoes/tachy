@@ -49,10 +49,8 @@ describe("EmbedQueue", () => {
     ]);
   });
 
-  /**
-   * Three bytes a character and more than one token: counted in characters,
-   * these three would share a batch.
-   */
+  // Three bytes a character and more than one token: counted in characters,
+  // these three would share a batch.
   it("counts the budget in bytes, so a dense script fills it sooner", async () => {
     const r = recorder();
     const q = new EmbedQueue(r.run, {

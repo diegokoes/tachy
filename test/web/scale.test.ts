@@ -41,8 +41,8 @@ describe("tickValues", () => {
     expect(tickValues(0, 0)).toEqual([0]);
   });
 
-  /* The overviews count things. An axis of 0, 0.2, 0.4 over a repo tally is
-     four labels nobody can read as a number of repos. */
+  // The overviews count things. An axis of 0, 0.2, 0.4 over a repo tally is
+  // four labels nobody can read as a number of repos.
   it("refuses fractional labels on a whole-numbered axis", () => {
     expect(tickValues(0, 1, 4)).toEqual([0, 1]);
     expect(tickValues(0, 2, 4)).toEqual([0, 1, 2]);

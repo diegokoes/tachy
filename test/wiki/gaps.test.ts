@@ -94,7 +94,7 @@ describe("unwritten parts of the product", () => {
     expect(of(await gaps(productId), "unwritten")).toEqual([]);
   });
 
-  /** Two lessons on a child and one on its parent are one topic, the parent's. */
+  // Two lessons on a child and one on its parent are one topic, the parent's.
   it("rolls a child's leftovers up into its parent", async () => {
     const productId = await tree();
     await lessons(productId, "spooler", 2);
@@ -105,8 +105,8 @@ describe("unwritten parts of the product", () => {
     expect(found[0].score).toBe(3);
   });
 
-  /** A child with enough of its own is flagged, and its parent is not asked
-      for the same lessons twice. */
+  // A child with enough of its own is flagged, and its parent is not asked for
+  // the same lessons twice.
   it("raises the gap at the most specific part that has enough", async () => {
     const productId = await tree();
     await lessons(productId, "spooler", 3);
@@ -313,7 +313,7 @@ describe("gap lifecycle", () => {
     );
   });
 
-  /** The key mirrors LOCK_NS in core/wiki/gaps.ts. */
+  // The key mirrors LOCK_NS in core/wiki/gaps.ts.
   it("skips a wiki another sweep holds, or waits for it when asked", async () => {
     const productId = await tree();
     await lessons(productId, "coding", 3);

@@ -1,3 +1,9 @@
+/**
+ * Reindexing clones the repo, so the route's own contract is what is tested
+ * here: who may call it, and what it does with a slug that is not there. The
+ * clone-and-index path itself is code-index.test.ts, against a real git repo in
+ * a temp dir.
+ */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { addCustomer } from "@tachy/core/catalog";
 import { addSourceProject } from "@tachy/core/sources";
@@ -11,12 +17,6 @@ afterAll(() => sql.end());
 
 const app = createApp({ passwordAuth: true });
 
-/**
- * Reindexing clones the repo, so the route's own contract is what is tested
- * here: who may call it, and what it does with a slug that is not there. The
- * clone-and-index path itself is code-index.test.ts, against a real git repo in
- * a temp dir.
- */
 async function adminCookie(): Promise<string> {
   await createUser({
     email: "repo-admin@example.com",
@@ -50,11 +50,9 @@ describe("GET /api/repos", () => {
     expect(repos.map((r: { slug: string }) => r.slug)).toEqual(["driver"]);
   });
 
-  /**
-   * A customer filter keeps the unscoped repos: the product's own code is what
-   * most of their questions are about, and dropping it would leave the customer
-   * view holding only their fork.
-   */
+  // A customer filter keeps the unscoped repos: the product's own code is what
+  // most of their questions are about, and dropping it would leave the customer
+  // view holding only their fork.
   it("narrows to one customer without hiding the shared repos", async () => {
     await addCustomer({ name: "Northwind", slug: "northwind" });
     await addCustomer({ name: "Baltic", slug: "baltic" });
@@ -133,7 +131,8 @@ describe("PUT /api/repos", () => {
 });
 
 describe("PUT /api/repos/bulk", () => {
-  /** An Azure DevOps project routinely holds fifty; one bad row must not sink the rest. */
+  // An Azure DevOps project routinely holds fifty; one bad row must not sink
+  // the rest.
   it("links every good row and reports the bad one", async () => {
     const cookie = await adminCookie();
     const project = await addSourceProject({

@@ -116,7 +116,7 @@ describe("core enums match db/schema.sql CHECK constraints", () => {
     expect(() => checkValues("knowledge_entries", "cloud")).toThrow(/no CHECK/);
   });
 
-  /** Same reasoning as cloud: what a customer divides into differs per product. */
+  // Same reasoning as cloud: what a customer divides into differs per product.
   it("customer_units.kind has no CHECK constraint", () => {
     expect(() => checkValues("customer_units", "kind")).toThrow(/no CHECK/);
   });

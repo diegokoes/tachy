@@ -29,17 +29,14 @@ describe("the extras catalogue", () => {
     }
   });
 
-  /** An enum filter with no options would render an empty, unusable select. */
+  // An enum filter with no options would render an empty, unusable select.
   it("gives every enum filter its option list", () => {
     for (const f of EXTRA_FILTERS.filter((x) => x.kind === "enum"))
       expect(f.options?.length).toBeGreaterThan(0);
   });
 
-  /**
-   * The vocabularies come from @tachy/contract via vocab.ts, which is the rule
-   * CLAUDE.md exists to protect: a copy in the SPA is how the admin panel and
-   * the vault came to disagree about what a valid key looked like.
-   */
+  // The vocabularies come from @tachy/contract via vocab.ts: a copy in the SPA
+  // can drift from the server's.
   it("draws its enum options from the shared vocabulary", () => {
     expect(byKey("confidence")?.options).toEqual(CONFIDENCES);
     expect(byKey("resolution_clarity")?.options).toEqual(RESOLUTION_CLARITIES);
@@ -68,7 +65,7 @@ describe("persistence", () => {
     expect(loadFilters()).toEqual({ shown: [], values: {} });
   });
 
-  /** A key from an older build must not reach byKey() as undefined later. */
+  // A key from an older build must not reach byKey() as undefined later.
   it("drops a stored key this build no longer offers", () => {
     localStorage.setItem(
       "tachy-library-filters",
@@ -97,10 +94,8 @@ describe("pruneValues", () => {
     ],
   };
 
-  /**
-   * A stale facet value narrows the list to nothing with no visible cause,
-   * which reads as "the library is empty" rather than "this filter is stale".
-   */
+  // A stale facet value narrows the list to nothing with no visible cause,
+  // which reads as "the library is empty" rather than "this filter is stale".
   it("drops a facet value the current counts no longer offer", () => {
     expect(pruneValues(["cloud"], { cloud: "qa" }, facets)).toEqual({});
     expect(pruneValues(["cloud"], { cloud: "prod" }, facets)).toEqual({
@@ -108,7 +103,7 @@ describe("pruneValues", () => {
     });
   });
 
-  /** An enum value with no rows behind it right now is still a fair question. */
+  // An enum value with no rows behind it right now is still a fair question.
   it("keeps an enum value that no row currently has", () => {
     expect(
       pruneValues(["confidence"], { confidence: CONFIDENCES[0] }, {}),

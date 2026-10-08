@@ -18,8 +18,8 @@ describe("probeTally", () => {
     expect(probeTally(null)).toBeNull();
   });
 
-  /* A backend nobody configured is skipped, and a skip is not a pass: the
-     counter reads "4/6 passing", not "5/6", when one of the six never ran. */
+  // A backend nobody configured is skipped, and a skip is not a pass: the
+  // counter reads "4/6 passing", not "5/6", when one of the six never ran.
   it("counts each outcome apart, a skip as neither pass nor failure", () => {
     expect(
       probeTally([

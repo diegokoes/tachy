@@ -708,7 +708,7 @@ describe("the flow.run job", () => {
     registerCoreJobs();
     return getJobKind("flow.run");
   };
-  /* A run's trace points at its job run, so the context carries a real one. */
+  // A run's trace points at its job run, so the context carries a real one.
   const ctx = async (queued: unknown[], flowId: string) => ({
     runId: (await enqueueRun({
       kind: "flow.run",
