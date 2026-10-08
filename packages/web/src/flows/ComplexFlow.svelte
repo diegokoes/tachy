@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isCurator } from "../access/session.svelte";
   import { untrack, type Snippet } from "svelte";
   import {
     FLOW_MODEL_CALLS_PER_DAY,
@@ -314,7 +315,7 @@
       variant="ghost"
       size="sm"
       icon="test"
-      disabled={!draft.id || dirty}
+      disabled={!draft.id || dirty || !isCurator()}
       onclick={(e) =>
         (testAnchor = testAnchor
           ? null
@@ -326,7 +327,7 @@
       icon="save"
       tone={dirty ? "accent" : undefined}
       busy={saving}
-      disabled={!dirty}
+      disabled={!dirty || !isCurator()}
       onclick={save}>save</Button
     >
   {/if}
@@ -385,7 +386,7 @@
         onclick={() => (edited.enabled = !edited.enabled)}
         >{edited.enabled ? "on" : "paused"}</Button
       >
-      {#if edited.id}
+      {#if edited.id && isCurator()}
         <DeleteButton label="delete flow" text="delete" onclick={remove} />
       {/if}
     </span>

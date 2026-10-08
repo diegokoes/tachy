@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isCurator } from "../access/session.svelte";
   import { onMount, untrack } from "svelte";
   import { keep, recall } from "../shell/kept";
   import { api } from "../api";
@@ -807,6 +808,9 @@
   editTitle={(r) => r.name}
   width="60rem"
   formExtra={profileExtra}
+  canEdit={isCurator}
+  canDelete={isCurator}
+  canCreate={isCurator()}
   onform={(f) => (opened = f?.row?.slug ?? null)}
   oncreate={createCustomer}
   onsave={saveCustomer}

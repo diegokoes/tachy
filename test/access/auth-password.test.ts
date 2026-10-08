@@ -127,10 +127,34 @@ describe("password login + role gating", () => {
     });
     expect(write.status).toBe(403);
 
-    const listUsersRes = await app.request("/api/users", {
+    const createUserRes = await app.request("/api/users", {
+      ...json({ email: "sneaky@example.com" }),
+      headers: { "Content-Type": "application/json", cookie: memberCookie },
+    });
+    expect(createUserRes.status).toBe(403);
+  });
+
+  it("shows a member the directory without how each account signs in", async () => {
+    const forMember = await app.request("/api/users", {
       headers: { cookie: memberCookie },
     });
-    expect(listUsersRes.status).toBe(403);
+    expect(forMember.status).toBe(200);
+    const [seenByMember] = await forMember.json();
+    expect(seenByMember.email).toBeDefined();
+    expect(seenByMember).not.toHaveProperty("has_password");
+    expect(seenByMember).not.toHaveProperty("service_account");
+    expect(seenByMember).not.toHaveProperty("password_login_allowed");
+
+    const forAdmin = await app.request("/api/users", {
+      headers: { cookie: adminCookie },
+    });
+    const [seenByAdmin] = await forAdmin.json();
+    expect(seenByAdmin).toHaveProperty("has_password");
+
+    for (const path of ["/api/users/memberships", "/api/users/team-members/x"])
+      expect(
+        (await app.request(path, { headers: { cookie: memberCookie } })).status,
+      ).not.toBe(403);
   });
 
   it("admins can mutate", async () => {

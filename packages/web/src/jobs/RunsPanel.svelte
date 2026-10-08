@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isGlobalAdmin } from "../access/session.svelte";
   import { onDestroy, onMount } from "svelte";
   import { JOB_QUEUES, JOB_STATUSES } from "@tachy/contract";
   import { api } from "../api";
@@ -261,7 +262,7 @@
       {/if}
     </span>
     <span class="slot">
-      {#if isActive(run.status) && !run.cancel_requested}
+      {#if isGlobalAdmin() && isActive(run.status) && !run.cancel_requested}
         <Button
           variant="ghost"
           square

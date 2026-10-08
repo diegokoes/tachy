@@ -5,12 +5,12 @@ import { setPeriod } from "./period.svelte";
 
 const SEGMENT = "chart";
 
-/** The tile shown whole in the window, named by `/admin/<page>/chart/<key>`. */
+/** The tile shown whole in the window, named by `/console/<page>/chart/<key>`. */
 export const expandedKey = (): string | undefined =>
   segment(2) === SEGMENT ? segment(3) : undefined;
 
 export const tilePath = (page: string, key?: string) =>
-  key ? `/admin/${page}/${SEGMENT}/${key}` : `/admin/${page}`;
+  key ? `/console/${page}/${SEGMENT}/${key}` : `/console/${page}`;
 
 const morphTo = (el: HTMLElement | null, to: string) =>
   morphTile(el, async () => {
