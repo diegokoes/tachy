@@ -28,7 +28,7 @@
   let root: HTMLElement | undefined = $state();
   let now = $state(Date.now());
 
-  /* The countdowns are minutes apart, so they need no more than a slow beat. */
+  // The countdowns are minutes apart, so they need no more than a slow beat.
   onMount(() => {
     const id = setInterval(() => (now = Date.now()), 30_000);
     return () => clearInterval(id);
@@ -40,28 +40,25 @@
   const cut = $derived(
     fitted(lanes, view.expanded ? Infinity : Math.max(1, room - 1)),
   );
-  /* The right edge is left unlabelled: a clock time there crowds its
-     neighbour, and the tile's title already says how far the axis runs. */
+  // The right edge is left unlabelled: a clock time there crowds its neighbour,
+  // and the tile's title already says how far the axis runs.
   const marks = $derived([
     { at: 0, label: "now" },
     ...hourMarks(from, hours).filter((m) => m.at > 8 && m.at < 96),
   ]);
 
-  const tickClass = (iso: string, next: boolean) =>
-    next
-      ? "next"
-      : Date.parse(iso) < now
-        ? "past"
-        : isSoon(iso, now)
-          ? "soon"
-          : "";
+  function tickClass(iso: string, next: boolean): string {
+    if (next) return "next";
+    if (Date.parse(iso) < now) return "past";
+    return isSoon(iso, now) ? "soon" : "";
+  }
 
   const ticksOf = (lane: Element) => [...lane.querySelectorAll(".tick")];
   const lanesOf = () =>
     root ? [...root.querySelectorAll<Element>(".lane.live")] : [];
 
-  /* Moving while the board is on screen. Rebuilt when the lanes change, so a
-     lane that appears starts moving with the rest. */
+  // Moving while the board is on screen. Rebuilt when the lanes change, so a
+  // lane that appears starts moving with the rest.
   $effect(() => {
     void cut.shown.length;
     if (!root) return;
@@ -81,30 +78,30 @@
   onmouseleave={() => focusLane(lanesOf(), null, ticksOf)}
   role="presentation"
 >
-  {#each cut.shown as l (l.key)}
-    {@const next = nextIndex(l.at, now)}
+  {#each cut.shown as lane (lane.key)}
+    {@const next = nextIndex(lane.at, now)}
     <div
       class="lane live"
       onmouseenter={(e) => focusLane(lanesOf(), e.currentTarget, ticksOf)}
       role="presentation"
     >
-      <span class="lbl">{l.label}</span>
+      <span class="lbl">{lane.label}</span>
       <span class="track">
-        {#each marks.slice(1) as m (m.at)}
-          <span class="rule" style="left: {m.at}%"></span>
+        {#each marks.slice(1) as mark (mark.at)}
+          <span class="rule" style="left: {mark.at}%"></span>
         {/each}
         <span class="drift"></span>
-        {#each l.at as t, i (t)}
+        {#each lane.at as time, i (time)}
           <span
-            class="tick {tickClass(t, i === next)}"
-            style="left: {pos(t)}%"
-            title="{clock(new Date(t))} · {utcTip(t)}"
+            class="tick {tickClass(time, i === next)}"
+            style="left: {pos(time)}%"
+            title="{clock(new Date(time))} · {utcTip(time)}"
           ></span>
         {/each}
       </span>
       <span class="n"
-        >{l.at.length}{#if next >= 0}<span class="in"
-            >{until(Date.parse(l.at[next]) - now)}</span
+        >{lane.at.length}{#if next >= 0}<span class="in"
+            >{until(Date.parse(lane.at[next]) - now)}</span
           >{/if}</span
       >
     </div>
@@ -117,8 +114,8 @@
   <div class="lane axis">
     <span></span>
     <span class="track">
-      {#each marks as m (m.at)}
-        <span class="mark" style="left: {m.at}%">{m.label}</span>
+      {#each marks as mark (mark.at)}
+        <span class="mark" style="left: {mark.at}%">{mark.label}</span>
       {/each}
     </span>
     <span></span>

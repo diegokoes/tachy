@@ -23,10 +23,10 @@
     band: number;
     /** Where a category's band starts, in px from the plot area's left edge. */
     bandAt: (key: string) => number;
-    /** Where a value sits, in px from the plot area's TOP edge. */
-    at: (v: number) => number;
+    /** Where a value sits, in px from the plot area's top edge. */
+    at: (value: number) => number;
     /** How tall a span of `v` is, in px. */
-    up: (v: number) => number;
+    up: (value: number) => number;
     /** The value axis, after rounding. */
     domain: [number, number];
     /** The values the axis labels. */
@@ -109,31 +109,31 @@
       tickCount(Math.max(0, h), fs),
     );
     const pad: Pad = {
-      /* Headroom for the value a column prints above itself, the same
-         allowance the flex version reserved with its padding-top. */
+      // Headroom for the value a column prints above itself, the same allowance
+      // the flex version reserved with its padding-top.
       top: flush ? 0 : Math.round(fs * 1.6),
       right: 0,
       bottom: Math.round(fs * 1.6) + TICK_LEN,
       left: gutterPx(ticks.map(format), fs),
     };
-    const iw = Math.max(0, w - pad.left - pad.right);
-    const ih = Math.max(0, h - pad.top - pad.bottom);
-    const step = categories.length ? iw / categories.length : iw;
+    const plotWidth = Math.max(0, w - pad.left - pad.right);
+    const plotHeight = Math.max(0, h - pad.top - pad.bottom);
+    const step = categories.length ? plotWidth / categories.length : plotWidth;
     const band = Math.max(1, step * (1 - padding));
     const index = new Map(categories.map((k, i) => [k, i]));
     const span = domain[1] - domain[0] || 1;
-    const up = (v: number) => (Math.max(0, v) / span) * ih;
+    const up = (v: number) => (Math.max(0, v) / span) * plotHeight;
     return {
       ready: w > 0 && h > 0,
       w,
       h,
-      iw,
-      ih,
+      iw: plotWidth,
+      ih: plotHeight,
       pad,
       step,
       band,
       bandAt: (key) => (index.get(key) ?? 0) * step + (step - band) / 2,
-      at: (v) => ih - up(v),
+      at: (v) => plotHeight - up(v),
       up,
       domain,
       ticks,
@@ -142,8 +142,8 @@
     };
   });
 
-  /* Set once during init, as context must be. The getter is what keeps the
-     value live as the box is measured. */
+  // Set once during init, as context must be. The getter is what keeps the
+  // value live as the box is measured.
   setContext(PLOT_KEY, {
     get frame() {
       return frame;
@@ -151,9 +151,9 @@
   });
 </script>
 
-<!-- The SVG is taken out of flow on purpose. Tile's body is
-     `container-type: size`, so a child that contributed its own height back to
-     the box it is measured against would oscillate. -->
+<!-- The SVG is out of flow: Tile's body is `container-type: size`, so a
+     child that gave its height back to the box it is measured against would
+     oscillate. -->
 <div
   class="plot"
   class:fill={!height}

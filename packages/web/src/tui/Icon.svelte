@@ -33,8 +33,8 @@
 
   let shape: SVGPathElement | undefined = $state();
 
-  /* The path's `d` is owned here rather than by the template, so a tween in
-     flight is not overwritten by Svelte on the next render. */
+  // The path's `d` is owned here rather than by the template, so a tween in
+  // flight is not overwritten by Svelte on the next render.
   $effect(() => {
     if (!shape) return;
     const d = iconPath(name);

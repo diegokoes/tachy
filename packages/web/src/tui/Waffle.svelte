@@ -29,42 +29,45 @@
   let boxes = $state<Record<string, { w: number; h: number }>>({});
 </script>
 
-<!-- Every item is a grid of `total` cells with `yes` of them lit: a share told
-     as a count of things, which a bar cannot do. -->
+<!--
+@component
+Every item is a grid of `total` cells with `yes` of them lit: a share told as a
+count of things, which a bar cannot do.
+-->
 <div class="waffles">
-  {#each items as it (it.key)}
-    {@const size = boxes[it.key] ?? { w: 0, h: 0 }}
-    {@const g = waffleGrid(size.w, size.h, it.total, gap)}
+  {#each items as item (item.key)}
+    {@const size = boxes[item.key] ?? { w: 0, h: 0 }}
+    {@const grid = waffleGrid(size.w, size.h, item.total, gap)}
     <figure class="item">
-      <div class="box" use:measureBox={(w, h) => (boxes[it.key] = { w, h })}>
-        {#if g.size > 0}
+      <div class="box" use:measureBox={(w, h) => (boxes[item.key] = { w, h })}>
+        {#if grid.size > 0}
           <svg
-            width={g.cols * (g.size + g.gap) - g.gap}
-            height={g.rows * (g.size + g.gap) - g.gap}
+            width={grid.cols * (grid.size + grid.gap) - grid.gap}
+            height={grid.rows * (grid.size + grid.gap) - grid.gap}
             role="img"
-            aria-label="{it.label}: {it.yes} of {it.total}"
+            aria-label="{item.label}: {item.yes} of {item.total}"
           >
-            {#each { length: it.total } as _, i (i)}
-              {@const c = waffleCell(g, i)}
+            {#each { length: item.total } as _, i (i)}
+              {@const cell = waffleCell(grid, i)}
               <rect
-                x={c.x}
-                y={c.y}
-                width={g.size}
-                height={g.size}
-                rx={round ? g.size / 2 : 2}
-                class:lit={i < it.yes}
-                style="--tone-color: {toneVar(it.tone ?? 'warn')}"
+                x={cell.x}
+                y={cell.y}
+                width={grid.size}
+                height={grid.size}
+                rx={round ? grid.size / 2 : 2}
+                class:lit={i < item.yes}
+                style="--tone-color: {toneVar(item.tone ?? 'warn')}"
               />
             {/each}
           </svg>
         {/if}
       </div>
-      <span class="pct" style="color: {toneVar(it.tone ?? 'warn')}"
-        >{waffleShare(it.yes, it.total)}%</span
+      <span class="pct" style="color: {toneVar(item.tone ?? 'warn')}"
+        >{waffleShare(item.yes, item.total)}%</span
       >
       <figcaption>
-        {it.label}
-        {#if it.note}<span class="note">{it.note}</span>{/if}
+        {item.label}
+        {#if item.note}<span class="note">{item.note}</span>{/if}
       </figcaption>
     </figure>
   {/each}

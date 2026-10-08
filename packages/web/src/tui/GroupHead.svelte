@@ -2,9 +2,12 @@
   let { label }: { label: string } = $props();
 </script>
 
-<!-- A run of related things starts here. The rule runs out to the right edge
-     rather than boxing the group: what follows belongs to it until the next
-     one starts, which a box would have to re-state. -->
+<!--
+@component
+A run of related things starts here. The rule runs out to the right edge rather
+than boxing the group: what follows belongs to it until the next one starts,
+which a box would have to re-state.
+-->
 <div class="ghead">
   <span class="lbl">{label}</span>
   <span class="rule" aria-hidden="true"></span>

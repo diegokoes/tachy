@@ -23,18 +23,20 @@
 
 <div class="wrap">
   <div class="band" role="img" aria-label="{label}: {caption ?? ''}">
-    {#each shown as s (s.key)}
+    {#each shown as segment (segment.key)}
       <span
         class="seg"
-        style="--w: {(s.n / total) * 100}%; --tone-color: {toneVar(s.tone)}"
-        title="{s.n} {s.label}"
+        style="--w: {(segment.n / total) * 100}%; --tone-color: {toneVar(
+          segment.tone,
+        )}"
+        title="{segment.n} {segment.label}"
       ></span>
     {/each}
   </div>
   <div class="legend">
-    {#each shown as s (s.key)}
-      <span class="key" style="--tone-color: {toneVar(s.tone)}"
-        >{s.n.toLocaleString()} {s.label}</span
+    {#each shown as segment (segment.key)}
+      <span class="key" style="--tone-color: {toneVar(segment.tone)}"
+        >{segment.n.toLocaleString()} {segment.label}</span
       >
     {/each}
   </div>

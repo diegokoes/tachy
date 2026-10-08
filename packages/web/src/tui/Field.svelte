@@ -28,8 +28,8 @@
     children: Snippet;
   } = $props();
 
-  /* Reserved only where an error can actually appear, so showing one cannot
-     shift the rows below it, and every other field keeps its height. */
+  // Reserved only where an error can appear, so showing one cannot shift the
+  // rows below it, and every other field keeps its height.
   const errable = $derived(error !== undefined);
 </script>
 

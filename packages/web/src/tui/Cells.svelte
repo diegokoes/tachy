@@ -17,8 +17,8 @@
 
   let rows = $state(0);
 
-  /* Worst first, so what the tile cannot fit is only ever what is fine - and
-     the last lamp that does fit counts the rest rather than half-showing one. */
+  // Worst first, so what the tile cannot fit is only ever what is fine - and
+  // the last lamp that does fit counts the rest rather than half-showing one.
   const RANK = { danger: 0, warn: 1, ok: 2, muted: 3 };
   const sorted = $derived(
     [...cells].sort((a, b) => RANK[a.tone] - RANK[b.tone]),
@@ -35,14 +35,14 @@
   style="--row: {ROW_REM}rem; --gap: {GAP_REM}rem; --cols: {COLS}"
   use:fitRows={{ row: ROW_REM, gap: GAP_REM, onfit: (n) => (rows = n) }}
 >
-  {#each shown as c (c.key)}
-    <li class={c.tone}>
+  {#each shown as cell (cell.key)}
+    <li class={cell.tone}>
       {#if onpick}
-        <button class="pick" onclick={() => onpick(c)}>
-          <span class="lbl">{c.label}</span>
+        <button class="pick" onclick={() => onpick(cell)}>
+          <span class="lbl">{cell.label}</span>
         </button>
       {:else}
-        <span class="lbl">{c.label}</span>
+        <span class="lbl">{cell.label}</span>
       {/if}
     </li>
   {/each}

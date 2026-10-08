@@ -4,7 +4,7 @@
 
   let { label = "loading" }: { label?: string } = $props();
 
-  const W = 16;
+  const WIDTH_CELLS = 16;
   /** Cells behind the head, brightest first - the old ▓▒░ ramp as opacity. */
   const TAIL = [1, 0.62, 0.35, 0.16];
 
@@ -13,16 +13,16 @@
   let reduced = $state(false);
 
   const cells = $derived.by(() => {
-    const p = tick % (W + 5);
-    return Array.from({ length: W }, (_, i) => TAIL[p - i] ?? 0);
+    const head = tick % (WIDTH_CELLS + 5);
+    return Array.from({ length: WIDTH_CELLS }, (_, i) => TAIL[head - i] ?? 0);
   });
 
   onMount(() => {
     reduced = reducedMotion();
     visible = true;
-    const iv = reduced ? undefined : setInterval(() => tick++, 90);
+    const interval = reduced ? undefined : setInterval(() => tick++, 90);
     return () => {
-      if (iv !== undefined) clearInterval(iv);
+      if (interval !== undefined) clearInterval(interval);
     };
   });
 </script>
@@ -66,8 +66,8 @@
     border-radius: var(--radius);
   }
 
-  /* Drawn, not typed - the ╔═╗ frame and █▓▒░· comet were glyphs neither
-     bundled face carries. The frame is now a real border. */
+  /* Drawn, not typed: neither bundled face carries the ╔═╗ and █▓▒░· glyphs.
+     The frame is a border. */
   .frame {
     display: flex;
     gap: 0.14em;

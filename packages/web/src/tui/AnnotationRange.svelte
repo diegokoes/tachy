@@ -17,13 +17,15 @@
   } = $props();
 
   const plot = getPlot();
-  const f = $derived(plot.frame);
+  const frame = $derived(plot.frame);
   const id = $props.id();
   const span = $derived(keySpan(categories, from, to));
   const x = $derived(
-    span ? f.bandAt(categories[span[0]]) - (f.step - f.band) / 2 : 0,
+    span
+      ? frame.bandAt(categories[span[0]]) - (frame.step - frame.band) / 2
+      : 0,
   );
-  const w = $derived(span ? (span[1] - span[0] + 1) * f.step : 0);
+  const w = $derived(span ? (span[1] - span[0] + 1) * frame.step : 0);
 </script>
 
 {#if span}
@@ -38,7 +40,7 @@
       <line x1="0" y1="0" x2="0" y2="8" />
     </pattern>
   </defs>
-  <rect {x} y={0} width={w} height={f.ih} fill="url(#{id})">
+  <rect {x} y={0} width={w} height={frame.ih} fill="url(#{id})">
     {#if title}<title>{title}</title>{/if}
   </rect>
 {/if}
