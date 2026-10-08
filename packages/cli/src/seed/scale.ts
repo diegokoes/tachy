@@ -133,19 +133,24 @@ export const SCALES: Record<ScaleName, Volumes> = {
  * than sampled, so exceeding a ceiling would loop past the end of the product
  * instead of failing on a duplicate key.
  */
-export function assertCoherent(v: Volumes, name: ScaleName): void {
+export function assertCoherent(volumes: Volumes, name: ScaleName): void {
   const bad = (what: string, limit: number, got: number) => {
     throw new Error(
       `scale '${name}': ${what} is ${got}, above the ${limit} its inputs allow`,
     );
   };
-  if (v.customerComponents > v.customers * v.components)
-    bad("customerComponents", v.customers * v.components, v.customerComponents);
-  if (v.projectAreas > v.sourceProjects * 40)
-    bad("projectAreas", v.sourceProjects * 40, v.projectAreas);
-  if (v.workItemMessages < v.workItems)
-    bad("workItems", v.workItemMessages, v.workItems);
-  if (v.components < v.products) bad("products", v.components, v.products);
+  if (volumes.customerComponents > volumes.customers * volumes.components)
+    bad(
+      "customerComponents",
+      volumes.customers * volumes.components,
+      volumes.customerComponents,
+    );
+  if (volumes.projectAreas > volumes.sourceProjects * 40)
+    bad("projectAreas", volumes.sourceProjects * 40, volumes.projectAreas);
+  if (volumes.workItemMessages < volumes.workItems)
+    bad("workItems", volumes.workItemMessages, volumes.workItems);
+  if (volumes.components < volumes.products)
+    bad("products", volumes.components, volumes.products);
 }
 
 for (const name of SCALE_NAMES) assertCoherent(SCALES[name], name);

@@ -129,8 +129,8 @@ export async function seedFlows(
     })),
   );
 
-  const items = workItems.filter((w) => w.connectionId === desk.id);
-  if (!items.length) return;
+  const deskItems = workItems.filter((w) => w.connectionId === desk.id);
+  if (!deskItems.length) return;
   const runs = Array.from({ length: 24 }, (_, i) => {
     const bug = chance(rng, 0.4);
     const failed = chance(rng, 0.1);
@@ -167,7 +167,7 @@ export async function seedFlows(
       id: uuidFor("flow-run", i),
       flow_id: flows[0].id,
       trigger_id: "synced",
-      work_item_id: pick(rng, items).id,
+      work_item_id: pick(rng, deskItems).id,
       dry_run: false,
       status: bug && failed ? "failed" : "succeeded",
       steps: tx.json(steps as never),

@@ -1,12 +1,12 @@
+/**
+ * The morning login burst: 0 to 30 requests a second in 10 seconds, held, then
+ * gone. No 5xx, and latency back under budget once it passes. Dev stack only.
+ */
 import http from "k6/http";
 import { check } from "k6";
 import { BASE_URL, headers, setupSession, pick } from "./session.js";
 import { QUERIES } from "./corpus.js";
 
-/**
- * The morning login burst: 0 to 30 requests a second in 10 seconds, held, then
- * gone. No 5xx, and latency back under budget once it passes. Dev stack only.
- */
 export const options = {
   scenarios: {
     spike: {
@@ -33,7 +33,7 @@ export const setup = setupSession;
 
 export default function (data) {
   const h = headers(data);
-  const res =
+  const response =
     Math.random() < 0.3
       ? http.get(
           `${BASE_URL}/api/knowledge/search?q=${encodeURIComponent(pick(QUERIES))}`,
@@ -47,5 +47,5 @@ export default function (data) {
           headers: h,
           tags: { endpoint: "knowledge_list" },
         });
-  check(res, { "no server error": (r) => r.status < 500 });
+  check(response, { "no server error": (r) => r.status < 500 });
 }

@@ -1,7 +1,7 @@
 /**
  * The text the seeded rows are built from. It reads like a support desk for an
- * industrial print product because the lexical search legs actually match on
- * it: `load/corpus.js` draws its k6 queries from the same words.
+ * industrial print product because the lexical search legs match on it:
+ * `load/corpus.js` draws its k6 queries from the same words.
  */
 
 export const PRODUCTS = [
@@ -43,8 +43,8 @@ export const SYMPTOMS = [
   "report export times out",
   "device drops off the registry overnight",
   "colour profile reverts to default",
-  // Everything below is extra surface area. The twelve above are matched
-  // verbatim by load/corpus.js, so they stay first and unaltered.
+  // The first twelve are matched verbatim by load/corpus.js, so they stay first
+  // and unaltered; the rest add variety.
   "print head parks mid-job and will not resume",
   "the reject gate fires on good product",
   "weight readings jump by a factor of ten",
@@ -192,11 +192,10 @@ export const TAGS = [
 export const CLOUDS = ["prod", "qa", "demo", "preprod", "dev"];
 
 /**
- * Fragments that combine with the lists above. The point is combinatorial
- * reach: composing one symptom with one cause and one resolution gives a few
- * hundred distinct bodies, which is not enough to exercise a vector index -
- * every row ends up sharing a handful of embeddings. Adding independent
- * dimensions multiplies instead of adding.
+ * Fragments that combine with `SYMPTOMS`, `ROOT_CAUSES` and `RESOLUTIONS`. One
+ * symptom with one cause and one resolution gives a few hundred distinct
+ * bodies, too few to exercise a vector index: every row shares a handful of
+ * embeddings. Independent dimensions multiply instead of adding.
  */
 export const CONTEXTS = [
   "only on the night shift",
@@ -281,9 +280,9 @@ export const SECTION_HEADINGS = [
 ];
 
 /**
- * Names the code generator composes paths and identifiers from. The point is
- * that a chunk's text names the file it sits in, so two chunks are never the
- * same string and a trigram search for an identifier lands somewhere specific.
+ * Names the code generator composes paths and identifiers from, so a chunk's
+ * text names the file it sits in: two chunks are never the same string, and a
+ * trigram search for an identifier lands somewhere specific.
  */
 export const CODE_AREAS = [
   "dispatch",
@@ -324,9 +323,9 @@ export const CODE_LANGS = [
 
 /**
  * Snippet shapes, not one snippet. Each interpolates the identifiers of the
- * file it belongs to, so `code_blob_chunks.chunk_text` is distinct per row -- it was
- * a single shared constant, which gave 60k identical rows at --scale=large and,
- * under --embed, 60k identical vectors and a degenerate HNSW graph.
+ * file it belongs to, so `code_blob_chunks.chunk_text` is distinct per row; one
+ * shared snippet would give identical rows and, under --embed, identical
+ * vectors and a degenerate HNSW graph.
  */
 export const CODE_TEMPLATES: ((n: Names) => string)[] = [
   (

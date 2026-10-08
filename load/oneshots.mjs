@@ -38,22 +38,22 @@ const cgroupBytes = () => {
 
 /** Summed RSS of the Claude Code processes: counts the pages they share once each. */
 function claudeRssBytes() {
-  let kb = 0;
+  let totalKb = 0;
   for (const pid of readdirSync("/proc").filter((d) => /^\d+$/.test(d))) {
     try {
       const status = readFileSync(`/proc/${pid}/status`, "utf8");
       if (/^Name:\s+claude$/m.test(status))
-        kb += Number(/^VmRSS:\s+(\d+)/m.exec(status)?.[1] ?? 0);
+        totalKb += Number(/^VmRSS:\s+(\d+)/m.exec(status)?.[1] ?? 0);
     } catch {
       // The process ended between the listing and the read.
     }
   }
-  return kb * 1024;
+  return totalKb * 1024;
 }
 
 async function once() {
   let text = "";
-  for await (const msg of query({
+  for await (const message of query({
     prompt: `Summarise this for a developer.\n\n---\n${MATERIAL}`,
     options: {
       systemPrompt: SYSTEM,
@@ -72,7 +72,7 @@ async function once() {
       },
     },
   }))
-    if (msg.type === "result") text = msg.result ?? "";
+    if (message.type === "result") text = message.result ?? "";
   return text;
 }
 
@@ -91,7 +91,7 @@ for (const n of LEVELS) {
     }
   })();
 
-  const t0 = performance.now();
+  const startedAt = performance.now();
   const answers = await Promise.all(Array.from({ length: n }, once));
   polling = false;
   await poller;
@@ -100,7 +100,7 @@ for (const n of LEVELS) {
     JSON.stringify({
       concurrent: n,
       ok: answers.filter(Boolean).length,
-      totalMs: Math.round(performance.now() - t0),
+      totalMs: Math.round(performance.now() - startedAt),
       promptKb: PROMPT_KB,
       memory:
         baseline === null

@@ -1,12 +1,12 @@
+/**
+ * The read paths a person clicks through. Arrival rate, not a fixed VU count,
+ * so a slow server shows up as a growing queue instead of throttling the load
+ * to whatever it can manage.
+ */
 import http from "k6/http";
 import { check } from "k6";
 import { BASE_URL, headers, setupSession, pick } from "./session.js";
 
-/**
- * The read paths a person actually clicks through. Arrival rate rather than a
- * fixed VU count, so a slow server shows up as a growing queue instead of
- * quietly throttling the load to whatever it can manage.
- */
 export const options = {
   scenarios: {
     browse: {
@@ -23,8 +23,8 @@ export const options = {
     "http_req_duration{endpoint:health}": ["p(95)<50"],
     "http_req_duration{endpoint:knowledge_detail}": ["p(95)<150"],
     "http_req_duration{endpoint:knowledge_list}": ["p(95)<400"],
-    // Loosest budget on purpose: facets runs several counting queries over the
-    // same filter set.
+    // The loosest budget: facets runs several counting queries over the same
+    // filter set.
     "http_req_duration{endpoint:facets}": ["p(95)<600"],
     // A bytea streamed out of Postgres and back through Node.
     "http_req_duration{endpoint:output_download}": ["p(95)<800"],

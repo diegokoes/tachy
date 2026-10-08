@@ -1,13 +1,13 @@
-import http from "k6/http";
-import { check } from "k6";
-import { BASE_URL, headers, setupSession, pick } from "./session.js";
-import { QUERIES } from "./corpus.js";
-
 /**
  * Raises the arrival rate until search misses its budget, then stops. The rate
  * it stopped at is the knee for this release; record it with the image SHA.
  * Dev stack only.
  */
+import http from "k6/http";
+import { check } from "k6";
+import { BASE_URL, headers, setupSession, pick } from "./session.js";
+import { QUERIES } from "./corpus.js";
+
 export const options = {
   scenarios: {
     breakpoint: {

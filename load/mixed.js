@@ -1,13 +1,11 @@
+/** A day's traffic in miniature. */
 import http from "k6/http";
 import { check } from "k6";
 import { BASE_URL, headers, setupSession, pick } from "./session.js";
 import { QUERIES, DOC_QUERIES } from "./corpus.js";
 
-/**
- * A day's traffic in miniature. The weights are placeholders until a week of
- * real traffic replaces them (Admin > system shows the counts): set W_LIST,
- * W_DETAIL, W_SEARCH, W_DOC_SEARCH and W_FACETS to the observed shares.
- */
+// Placeholders: set W_LIST, W_DETAIL, W_SEARCH, W_DOC_SEARCH and W_FACETS to
+// the shares Admin > system shows for real traffic.
 const weights = [
   ["list", Number(__ENV.W_LIST || 30)],
   ["detail", Number(__ENV.W_DETAIL || 30)],

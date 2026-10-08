@@ -17,7 +17,7 @@ import type { SeededProduct, SeededUser } from "./org";
  * A wiki per product plus the org-wide one, so the table of contents, category
  * pages and article outlines all have something to render in a dev database.
  * Articles are `reference_docs` rows with kind='wiki'; categories are their own
- * tree, and an article is deliberately filed under more than one.
+ * tree, and an article may be filed under more than one.
  */
 const CATEGORIES: { slug: string; name: string; children: string[] }[] = [
   { slug: "about", name: "About", children: [] },
@@ -51,7 +51,7 @@ const ARTICLES: { slug: string; title: string; categories: string[] }[] = [
     categories: ["requirements"],
   },
   { slug: "upgrade-notes", title: "Upgrade notes", categories: ["upgrading"] },
-  // Filed twice on purpose: the many-to-many case the ToC has to render.
+  // Filed twice: the many-to-many case the ToC has to render.
   {
     slug: "spooler-stalls",
     title: "Spooler stalls",
@@ -67,14 +67,14 @@ const ARTICLES: { slug: string; title: string; categories: string[] }[] = [
     title: "SSO loop after token refresh",
     categories: ["authentication"],
   },
-  // Deliberately uncategorised, so the "Uncategorised" bucket is non-empty.
+  // Uncategorised, so the "Uncategorised" bucket is non-empty.
   { slug: "field-notes", title: "Field notes", categories: [] },
 ];
 
 /**
- * One template gave every wiki in the database the same nine bodies. The
- * product and the drawn detail make each page's prose its own, which is what
- * the lexical legs of search actually index.
+ * The product and the drawn detail make each page's prose its own; one fixed
+ * template would give every wiki the same bodies for the lexical legs of search
+ * to index.
  */
 const BODY = (
   title: string,
@@ -100,11 +100,11 @@ const BODY = (
 function sketchPng(w = 96, h = 32): Buffer {
   const chunk = (type: string, data: Buffer) => {
     const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
-    const len = Buffer.alloc(4);
-    len.writeUInt32BE(data.length);
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
     const crc = Buffer.alloc(4);
     crc.writeUInt32BE(crc32(body));
-    return Buffer.concat([len, body, crc]);
+    return Buffer.concat([length, body, crc]);
   };
   const header = Buffer.alloc(13);
   header.writeUInt32BE(w, 0);
@@ -116,11 +116,11 @@ function sketchPng(w = 96, h = 32): Buffer {
   for (let y = 0; y < h; y++)
     for (let x = 0; x < w; x++) {
       const band = Math.floor((x / w) * 4);
-      const v = 40 + band * 40 + ((x + y) % 8 < 4 ? 0 : 12);
+      const shade = 40 + band * 40 + ((x + y) % 8 < 4 ? 0 : 12);
       const at = y * stride + 1 + x * 3;
-      pixels[at] = v;
-      pixels[at + 1] = v + 24;
-      pixels[at + 2] = v;
+      pixels[at] = shade;
+      pixels[at + 1] = shade + 24;
+      pixels[at + 2] = shade;
     }
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
@@ -134,8 +134,8 @@ function sketchPng(w = 96, h = 32): Buffer {
 const ILLUSTRATED = new Set(["main", "overview"]);
 
 /**
- * Who links to whom. `not-written-yet` is deliberate: an unresolved link is a
- * state the reader has to be able to see, so the dev database has one.
+ * Who links to whom. `not-written-yet` resolves to nothing: an unresolved link
+ * is a state the reader has to be able to see, so the dev database has one.
  */
 const LINKS: Record<string, string[]> = {
   main: ["overview", "first-install"],
@@ -163,14 +163,17 @@ export async function seedWiki(
   `;
 
   // Which components each product divides into. Articles anchor to only some of
-  // them on purpose: coverage is a gap report, so a dev database has to contain
-  // components nobody has written about yet.
-  const comps = await tx<{ id: string; product_id: string }[]>`
+  // them: coverage is a gap report, so a dev database has to contain components
+  // nobody has written about.
+  const componentRows = await tx<{ id: string; product_id: string }[]>`
     select id, product_id from components order by product_id, slug
   `;
   const byProduct = new Map<string, string[]>();
-  for (const c of comps)
-    byProduct.set(c.product_id, [...(byProduct.get(c.product_id) ?? []), c.id]);
+  for (const component of componentRows)
+    byProduct.set(component.product_id, [
+      ...(byProduct.get(component.product_id) ?? []),
+      component.id,
+    ]);
 
   // null = the org-wide wiki, which gets the same treatment as a product's.
   const scopes: {
@@ -195,20 +198,20 @@ export async function seedWiki(
 
   // uuidFor keys on (kind, index), so the scope index is folded into the kind
   // to keep every wiki's categories distinct.
-  scopes.forEach((scope, s) => {
+  scopes.forEach((scope, scopeIndex) => {
     const catSlugs = [
       ...CATEGORIES.map((c) => c.slug),
       ...CATEGORIES.flatMap((c) => c.children),
     ];
     const catId = (slug: string) =>
-      uuidFor(`wiki_category_${s}`, catSlugs.indexOf(slug));
+      uuidFor(`wiki_category_${scopeIndex}`, catSlugs.indexOf(slug));
     const articleId = (slug: string) =>
-      uuidFor(`wiki_article_${s}`, allSlugs.indexOf(slug));
+      uuidFor(`wiki_article_${scopeIndex}`, allSlugs.indexOf(slug));
 
     const own = scope.productId ? (byProduct.get(scope.productId) ?? []) : [];
     const anchorable = own.slice(0, Math.ceil(own.length / 2));
 
-    CATEGORIES.forEach((c, ci) => {
+    CATEGORIES.forEach((c, categoryIndex) => {
       categoryRows.push({
         id: catId(c.slug),
         product_id: scope.productId,
@@ -216,7 +219,7 @@ export async function seedWiki(
         slug: c.slug,
         name: c.name,
         description: `${c.name} for this product.`,
-        ordinal: ci,
+        ordinal: categoryIndex,
         // A section with a lead page, so the dev database exercises the
         // land-on-the-article behaviour rather than only the plain list.
         lead_doc_id: c.slug === "about" ? articleId("overview") : null,
@@ -229,7 +232,7 @@ export async function seedWiki(
             category_id: catId(c.slug),
             component_id: componentId,
           });
-      c.children.forEach((child, cj) => {
+      c.children.forEach((child, childIndex) => {
         categoryRows.push({
           id: catId(child),
           product_id: scope.productId,
@@ -237,7 +240,7 @@ export async function seedWiki(
           slug: child,
           name: CHILD_NAMES[child] ?? child,
           description: null,
-          ordinal: cj,
+          ordinal: childIndex,
         });
       });
     });
@@ -248,40 +251,40 @@ export async function seedWiki(
       ...ARTICLES,
     ];
 
-    all.forEach((a, ai) => {
-      const rng = rngFor(`wiki_article_${s}`, ai);
-      const id = uuidFor(`wiki_article_${s}`, ai);
+    all.forEach((article, articleIndex) => {
+      const rng = rngFor(`wiki_article_${scopeIndex}`, articleIndex);
+      const id = uuidFor(`wiki_article_${scopeIndex}`, articleIndex);
       articleRows.push({
         id,
         product_id: scope.productId,
         team_id: scope.teamId,
-        created_by: users[ai % users.length].id,
+        created_by: users[articleIndex % users.length].id,
         source: "seed",
         component_id:
-          ai === 0 || !anchorable.length
+          articleIndex === 0 || !anchorable.length
             ? null
-            : anchorable[(ai - 1) % anchorable.length],
+            : anchorable[(articleIndex - 1) % anchorable.length],
         product_area: null,
         customer_id: null,
-        title: a.title,
+        title: article.title,
         body: BODY(
-          a.title,
-          LINKS[a.slug] ?? [],
+          article.title,
+          LINKS[article.slug] ?? [],
           scope.name,
           rng,
-          ILLUSTRATED.has(a.slug) ? sketchId : null,
+          ILLUSTRATED.has(article.slug) ? sketchId : null,
         ),
         tags: [],
         structured: tx.json({ seeded: true }),
         status: "approved",
         doc_version: null,
         kind: "wiki",
-        slug: a.slug,
+        slug: article.slug,
         version: 1,
         created_at: pastDate(rng, 200),
         updated_at: pastDate(rng, 60),
       });
-      a.categories.forEach((c, ci) =>
+      article.categories.forEach((c, ci) =>
         membershipRows.push({
           doc_id: id,
           category_id: catId(c),
@@ -364,19 +367,22 @@ export async function seedWiki(
       })),
   );
 
-  // Edges are derived from the bodies above rather than invented, so the seeded
-  // graph is the same shape syncLinks would have produced on a real save.
+  // Edges are derived from the article bodies, not invented, so the seeded
+  // graph has the shape `syncLinks` produces on a real save.
   const bySlug = new Map<string, string>();
-  for (const a of articleRows)
-    bySlug.set(`${a.product_id ?? "-"}:${a.slug}`, a.id as string);
+  for (const article of articleRows)
+    bySlug.set(
+      `${article.product_id ?? "-"}:${article.slug}`,
+      article.id as string,
+    );
 
   const linkRows: Record<string, unknown>[] = [];
-  for (const a of articleRows) {
-    for (const target of LINKS[a.slug as string] ?? []) {
-      const to = bySlug.get(`${a.product_id ?? "-"}:${target}`) ?? null;
+  for (const article of articleRows) {
+    for (const target of LINKS[article.slug as string] ?? []) {
+      const to = bySlug.get(`${article.product_id ?? "-"}:${target}`) ?? null;
       linkRows.push({
         id: uuidFor("wiki_link", linkRows.length),
-        from_doc_id: a.id,
+        from_doc_id: article.id,
         from_entry_id: null,
         to_doc_id: to,
         to_entry_id: null,
@@ -387,12 +393,9 @@ export async function seedWiki(
     }
   }
 
-  // Provenance: an article anchored to a component consolidates the entries
-  // filed under it. Same edge `setComposedFrom` writes when the agent drafts a
-  // page, so the "built from" footer and the staleness count have real input.
-  //
-  // One query for every anchored article, not one per article: at --scale=large
-  // that loop was 189 round trips inside the bulk-load transaction.
+  // Provenance: an anchored article consolidates the entries filed under its
+  // component, the edge `setComposedFrom` writes, so the "built from" footer
+  // and the staleness count have input. One query for all of them.
   const anchored = [
     ...new Set(
       articleRows
@@ -411,18 +414,19 @@ export async function seedWiki(
       ) ranked
       where rn <= 4
     `;
-    for (const r of rows)
-      sourcesByComponent.set(r.component_id, [
-        ...(sourcesByComponent.get(r.component_id) ?? []),
-        r.id,
+    for (const row of rows)
+      sourcesByComponent.set(row.component_id, [
+        ...(sourcesByComponent.get(row.component_id) ?? []),
+        row.id,
       ]);
   }
 
-  for (const a of articleRows)
-    for (const src of sourcesByComponent.get(a.component_id as string) ?? [])
+  for (const article of articleRows)
+    for (const src of sourcesByComponent.get(article.component_id as string) ??
+      [])
       linkRows.push({
         id: uuidFor("wiki_source_link", linkRows.length),
-        from_doc_id: a.id,
+        from_doc_id: article.id,
         from_entry_id: null,
         to_doc_id: null,
         to_entry_id: src,
