@@ -2,13 +2,13 @@
  * A fixed corpus + golden query set for measuring retrieval quality.
  *
  * The point is not that these entries are realistic prose - it is that the
- * queries exercise the four ways someone actually searches, and that each one
- * has exactly one right answer:
+ * queries exercise the four ways someone searches, and that each one has one
+ * right answer:
  *
  *   - paraphrase   the query shares no keywords with the entry (vector leg)
  *   - identifier   a bare error code or symbol (trigram leg)
  *   - resolution   phrased as the fix, not the symptom (needs `resolution`
- *                  to be in the embedded text - it was not, historically)
+ *                  in the embedded text)
  *   - facet        an environment or version word typed into the query, which
  *                  only works because they are part of search_text
  */
@@ -156,5 +156,5 @@ export const GOLDEN: { q: string; expect: string; why: string }[] = [
   { q: "2.3.7 empty pdf", expect: "export-empty-pdf", why: "facet" },
 ];
 
-/** Queries that must return NOTHING - the case this whole design exists for. */
+/** Queries that must return nothing. */
 export const NONSENSE = ["ñ", "zzzzzz", "asdfgh", "qqqq wwww", "..."];

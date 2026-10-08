@@ -376,8 +376,8 @@ describe("re-parenting cannot close a ring", () => {
     });
 
     // add_component is an upsert, so this second call re-parents an existing
-    // row - the path that had no guard. Left through, every walk up the tree
-    // afterwards is a query that does not return.
+    // row. Let through, every later walk up the tree is a query that does not
+    // return.
     await expect(
       addComponent({
         productId: tpd,

@@ -511,12 +511,9 @@ describe("azure-devops sync project list", () => {
     `;
   });
 
-  /*
-   * resetData() deliberately keeps source_connections - the fixture rows every
-   * other file builds on live there - so this one has to take its own away.
-   * Test schemas are per worker slot, not per file, so a row left behind here
-   * turns up in whatever file the pool schedules on this slot next.
-   */
+  // `resetData()` keeps source_connections, which other files build on, so this
+  // one takes its own away. Test schemas are per worker slot, not per file: a
+  // row left here turns up in whatever file runs on this slot next.
   afterAll(async () => {
     await sql`delete from source_connections where slug = 'ado'`;
   });

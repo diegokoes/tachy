@@ -19,8 +19,8 @@ describe("article outline", () => {
     ]);
   });
 
-  /** Two "Overview" headings must not produce two elements with one id, or the
-      second contents link jumps to the first. */
+  // Two "Overview" headings must not produce two elements with one id, or the
+  // second contents link jumps to the first.
   it("gives duplicate headings distinct anchors", () => {
     const items = outline(
       "## Overview\n\na\n\n## Overview\n\nb\n\n## Overview\n\nc",
@@ -67,13 +67,13 @@ describe("section numbering", () => {
     ).toEqual(["1", "1.1", "1.2", "2", "2.1", "2.1.1"]);
   });
 
-  /** Nesting, not markdown depth: ## then #### is one level down, not two. */
+  // Nesting, not markdown depth: an h2 then an h4 is one level down, not two.
   it("does not leave a hole for a skipped heading level", () => {
     expect(numbers("## A\n\n#### deep\n")).toEqual(["1", "1.1"]);
     expect(outline("## A\n\n#### deep\n").map((i) => i.level)).toEqual([0, 1]);
   });
 
-  /** Climbing back out of a skipped level carries on that level's count. */
+  // Climbing back out of a skipped level carries on that level's count.
   it("continues the count when a heading climbs out of a skipped level", () => {
     expect(numbers("## A\n\n#### deep\n\n### shallower\n")).toEqual([
       "1",

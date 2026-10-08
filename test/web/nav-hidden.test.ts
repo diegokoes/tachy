@@ -3,8 +3,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-/* ScrollTrigger reads matchMedia as the gsap module registers it, which jsdom
-   does not have. */
+// ScrollTrigger reads matchMedia as the gsap module registers it, which jsdom
+// does not have.
 const media = vi.hoisted(() => {
   const media = { reduced: false };
   const noop = () => {};

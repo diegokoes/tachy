@@ -4,11 +4,9 @@
 import { describe, expect, it } from "vitest";
 import { renderMarkdown } from "../../packages/web/src/markdown/markdown";
 
-/**
- * The renderer only ever sees markdown images. A raw <img> in a body goes
- * through marked untouched, so the sanitizer's own pass is the second half of
- * the rule, and it needs a DOM to run.
- */
+// The renderer only ever sees markdown images. A raw <img> in a body goes
+// through marked untouched, so the sanitizer's own pass is the second half of
+// the rule, and it needs a DOM to run.
 describe("images in a rendered body", () => {
   const asset = "/api/library/assets/0b6a8f5e-3c1d-4e2f-9a7b-1c2d3e4f5a6b";
 
@@ -40,7 +38,7 @@ describe("images in a rendered body", () => {
     );
   });
 
-  /** The hook is added per call; one left behind would run on every sanitize. */
+  // The hook is added per call; one left behind would run on every sanitize.
   it("leaves no hook installed between renders", () => {
     renderMarkdown(`![a](${asset})`);
     renderMarkdown(`![b](${asset})`);

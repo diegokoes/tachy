@@ -17,20 +17,17 @@ import { linkRepo, repoCensus, repoIssues } from "@tachy/core/code";
 import { sourceCensus } from "@tachy/core/sources";
 import { resetData, sql, tpdProductId } from "../database";
 
-/*
- * The admin overview renders from these four numbers-only queries rather than
- * from the lists themselves, so what is asserted here is mostly the "how much
- * of this is unfinished" half: those are the figures with a condition in them,
- * and the ones a panel cannot cheaply recompute in the browser.
- */
+// The admin overview renders from these numbers-only queries, not from the
+// lists. Mostly the "how much is unfinished" figures are asserted: they carry a
+// condition, and a panel cannot recompute them in the browser.
 describe("the admin census", () => {
   beforeEach(resetData);
   afterAll(() => sql.end());
 
   describe("catalog", () => {
-    /* Deltas, not absolutes: teams, products and source_connections are the
-       three tables resetData deliberately leaves standing, so another file on
-       this worker may have added to them already. */
+    // Deltas, not absolutes: teams, products and source_connections are the
+    // three tables `resetData` leaves standing, so another file on this worker
+    // may have added to them already.
     it("counts a team that owns no product", async () => {
       const before = await catalogCensus();
 
@@ -107,8 +104,8 @@ describe("the admin census", () => {
       const c = await catalogCensus();
       const mine = c.components_by_product.find((p) => p.slug === "tpd");
       expect(mine?.n).toBe(2);
-      /* Products with nothing under them are the point of the chart, so they
-         must still be rows in it - the left join, not an inner one. */
+      // Products with nothing under them are the point of the chart, so they
+      // must still be rows in it - the left join, not an inner one.
       expect(c.components_by_product.length).toBe(c.products);
       const summed = c.components_by_product.reduce((n, p) => n + p.n, 0);
       expect(summed).toBe(c.components);
@@ -201,8 +198,8 @@ describe("the admin census", () => {
       expect(r.no_project).toBe(2);
       expect(r.oldest_indexed_at).toBeInstanceOf(Date);
 
-      /* The same conditions by name, for the issues list - a failing repo is
-         not also listed as never indexed. */
+      // The same conditions by name, for the issues list - a failing repo is
+      // not also listed as never indexed.
       const issues = await repoIssues();
       expect(issues["repos.failing"]).toEqual({
         n: 1,
@@ -243,7 +240,7 @@ describe("the admin census", () => {
       const k = await knowledgeCensus();
       expect(k.entries).toBe(2);
       expect(k.by_status).toEqual({ approved: 1, draft: 1 });
-      /* Neither carries a component; only one carries a product. */
+      // Neither carries a component; only one carries a product.
       expect(k.entries_no_component).toBe(2);
       expect(k.entries_no_product).toBe(1);
     });
@@ -281,7 +278,7 @@ describe("the admin census", () => {
         issueSummary: "A lesson about the product as a whole",
       });
 
-      /* Only the component with something filed has a row. */
+      // Only the component with something filed has a row.
       expect(await knowledgeByComponent()).toEqual([
         { component_id: expect.any(String), entries: 4, searchable: 2 },
       ]);
@@ -332,8 +329,8 @@ describe("the admin census", () => {
       expect(u.users_no_team).toBe(0);
     });
 
-    /* The four segments the access overview draws have to partition the roll,
-       so somebody who is both rungs must land in exactly one of them. */
+    // The four segments the access overview draws have to partition the roll,
+    // so somebody who is both rungs must land in exactly one of them.
     it("counts an app admin who also admins a team only as an app admin", async () => {
       const user = await createUser({
         email: "both@test.local",

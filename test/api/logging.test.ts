@@ -1,3 +1,9 @@
+/**
+ * One structured line per request, carrying the id the response header hands
+ * back. load/README.md tells whoever is chasing a slow request to take the
+ * `x-request-id` off the response and grep the log for it, so the two have to
+ * agree - and nothing else checks that they do.
+ */
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { log, runWithLogContext } from "@tachy/core/infra";
 import { createApp } from "../../packages/api/src/app";
@@ -6,12 +12,6 @@ import { resetData, sql } from "../database";
 
 afterAll(() => sql.end());
 
-/**
- * One structured line per request, carrying the id the response header hands
- * back. load/README.md tells whoever is chasing a slow request to take the
- * `x-request-id` off the response and grep the log for it, so the two have to
- * agree - and nothing else checks that they do.
- */
 type Line = Record<string, unknown>;
 
 function captureLog(): { lines: Line[]; stop: () => void } {
@@ -24,7 +24,7 @@ function captureLog(): { lines: Line[]; stop: () => void } {
         try {
           lines.push(JSON.parse(raw));
         } catch {
-          /* not one of ours */
+          // not one of ours
         }
       }
       return true;
@@ -52,7 +52,7 @@ describe("the request line", () => {
     expect(typeof lines[0].ms).toBe("number");
   });
 
-  /** The header is the handle; without the id on the line it points at nothing. */
+  // The header is the handle; without the id on the line it points at nothing.
   it("logs the same id the response header returns", async () => {
     await resetData();
     const cap = captureLog();
@@ -74,11 +74,9 @@ describe("the request line", () => {
 });
 
 describe("levels", () => {
-  /**
-   * The Docker healthcheck fires every 30s; at info it drowns the log. Logged
-   * at debug, which the default level filters out entirely - so what is
-   * observable, and what matters, is that the line is not written at all.
-   */
+  // The Docker healthcheck fires every 30s; at info it drowns the log. Logged
+  // at debug, which the default level filters out entirely - so what is
+  // observable, and what matters, is that the line is not written at all.
   it("keeps /health out of the log at the default level", async () => {
     const cap = captureLog();
     const res = await app.request("/health");
@@ -115,10 +113,8 @@ describe("levels", () => {
   });
 });
 
-/**
- * The point of the AsyncLocalStorage: a line written deep in core, with no
- * request parameter threaded down to it, still carries the request's id.
- */
+// The point of the AsyncLocalStorage: a line written deep in core, with no
+// request parameter threaded down to it, still carries the request's id.
 describe("log context", () => {
   it("stamps context fields onto lines logged inside it", () => {
     const cap = captureLog();

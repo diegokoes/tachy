@@ -16,7 +16,8 @@ let cookie = "";
 function as(path: string, method: string, body?: unknown) {
   return app.request(path, {
     ...(body === undefined ? {} : json(body)),
-    // After the spread: json() sets POST, and every route below is something else.
+    // After the spread: json() sets POST, and every route in this file is
+    // something else.
     method,
     headers: {
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
@@ -76,8 +77,8 @@ describe("component routes", () => {
     expect((await res.json()).error).toMatch(/no-such-product/);
   });
 
-  /* The architecture view draws the whole catalogue, so it needs every
-     component in one answer, each carrying the branch it hangs off. */
+  // The architecture view draws the whole catalogue, so it needs every
+  // component in one answer, each carrying the branch it hangs off.
   it("lists every component with its product and team", async () => {
     const productId = await tpdProductId();
     await addComponent({ productId, slug: "spooler", name: "Spooler" });
@@ -115,7 +116,7 @@ describe("component routes", () => {
     expect(res.status).toBe(400);
   });
 
-  /** The count is what the confirm dialog shows before a rename is agreed to. */
+  // The count is what the confirm dialog shows before a rename is agreed to.
   it("counts what a component rename would touch, then renames it", async () => {
     const productId = await tpdProductId();
     await addComponent({ productId, slug: "spooler", name: "Spooler" });
@@ -146,7 +147,8 @@ describe("component routes", () => {
     ]);
   });
 
-  /** 404 here, unlike the product above: the product resolved, the component did not. */
+  // 404 here, unlike an unknown product: the product resolved, the component
+  // did not.
   it("404s on rename-impact for a component nobody created", async () => {
     const res = await get("/api/products/tpd/components/nope/rename-impact");
     expect(res.status).toBe(404);
@@ -246,10 +248,8 @@ describe("customer routes", () => {
     expect(res.status).toBe(403);
   });
 
-  /**
-   * 400, not 404: the slug is caller-supplied and resolveCustomer treats an
-   * unknown one as a bad request - the same message the agent's tools get.
-   */
+  // 400, not 404: the slug is caller-supplied and resolveCustomer treats an
+  // unknown one as a bad request - the same message the agent's tools get.
   it("refuses the profile of a customer that does not exist", async () => {
     const res = await get("/api/customers/nope/profile");
     expect(res.status).toBe(400);
@@ -315,10 +315,8 @@ describe("customer unit and fact routes", () => {
     );
   });
 
-  /**
-   * The ladder is the point of units: a fact on the line is not visible on the
-   * customer as a whole, but the customer's own facts still reach the line.
-   */
+  // The ladder is the point of units: a fact on the line is not visible on the
+  // customer as a whole, but the customer's own facts still reach the line.
   it("resolves a unit's facts through the ladder", async () => {
     await as("/api/customers/northwind/units", "PUT", {
       slug: "line-3",

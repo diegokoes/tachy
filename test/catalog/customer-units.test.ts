@@ -177,7 +177,7 @@ describe("the fact resolution ladder", () => {
     expect(f.inherited).toBe(false);
   });
 
-  /** The whole reason profile_id exists: a template beats the place. */
+  // Why profile_id exists: a template beats the place.
   it("prefers the profile over the parent", async () => {
     const customerId = await estate();
     await fact(null, "coding_mode", "CUSTOMER");
@@ -291,10 +291,8 @@ describe("unit-aware search", () => {
     return row;
   };
 
-  /**
-   * The TLC191/192 case: a lesson from a sibling on the same layout should
-   * outrank one from a line on a different layout, without either being hidden.
-   */
+  // The TLC191/192 case: a lesson from a sibling on the same layout should
+  // outrank one from a line on a different layout, without either being hidden.
   it("lifts the unit's own entries above a sibling's, and a sibling's above an unrelated line's", async () => {
     const customerId = await estate();
     const own = await entry("tlc191", "spooler queue overrun on the labeller");
@@ -375,11 +373,9 @@ describe("unit attribution on tickets and entries", () => {
     );
   });
 
-  /**
-   * The rule: whose ticket it was is a fact, whose behaviour it describes is a
-   * judgement. Once the judgement is stated, narrowing it to the line the ticket
-   * already named adds nothing new.
-   */
+  // The rule: whose ticket it was is a fact, whose behaviour it describes is a
+  // judgement. Once the judgement is stated, narrowing it to the line the
+  // ticket already named adds nothing new.
   it("inherits the ticket's unit once the customer is stated and matches", async () => {
     const customerId = await estate();
     const id = await ticket();

@@ -802,9 +802,9 @@ describe("the job census", () => {
     expect(j.by_queue.find((q) => q.queue === "index")?.started).toBe(0);
   });
 
-  /* The light and heavy counters on the overview are jobs, not runs. A
-     definition with no class of its own runs on its kind's default, which
-     lives in code, so this is the one count the SQL alone cannot make. */
+  // The light and heavy counters on the overview are jobs, not runs. A
+  // definition with no class of its own runs on its kind's default, which lives
+  // in code, so this is the one count the SQL alone cannot make.
   it("counts definitions per pool by the class each actually runs on", async () => {
     await createJobDefinition(
       { kind: "test.echo", name: "light by kind" },
@@ -823,7 +823,7 @@ describe("the job census", () => {
     expect(j.definitions.by_class).toEqual({ light: 1, heavy: 2 });
   });
 
-  /* What the failed counter opens: which jobs failed, not a count of runs. */
+  // What the failed counter opens: which jobs failed, not a count of runs.
   it("groups failed and timed-out runs by the job they belong to", async () => {
     const nightly = await createJobDefinition(
       { kind: "test.echo", name: "nightly" },

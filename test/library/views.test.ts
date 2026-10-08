@@ -102,11 +102,8 @@ describe("library views", () => {
     expect((await viewStats({ entryId: e.id })).views).toBe(0);
   });
 
-  /**
-   * The property the whole design rests on: reading through core - which is all
-   * the MCP subprocess ever does - must never count as a human visit. Only the
-   * HTTP route the browser calls records one.
-   */
+  // Reading through core, which is all the MCP subprocess does, must never
+  // count as a human visit: only the HTTP route the browser calls records one.
   it("does not count agent reads", async () => {
     const e = await entry();
     await getKnowledgeEntry(e.id);

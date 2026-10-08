@@ -168,7 +168,8 @@ describe("wiki API", () => {
     expect((await res.json()).error).toMatch(/reserved/);
   });
 
-  /** What the contents page sends to move a category: `parentSlug`, not `parent`. */
+  // What the contents page sends to move a category: `parentSlug`, not
+  // `parent`.
   it("moves a category under another", async () => {
     await category("tpd", "trouble");
     await category("tpd", "printing");
@@ -345,8 +346,8 @@ describe("wiki images API", () => {
     expect(b.id).toBe(a.id);
   });
 
-  /** The type comes from the bytes: an SVG can carry script, and a page of
-      HTML named .png is still a page of HTML. */
+  // The type comes from the bytes: an SVG can carry script, and a page of HTML
+  // named .png is still a page of HTML.
   it("reads the bytes, not the label on them", async () => {
     const svg = Buffer.from(
       '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
@@ -399,7 +400,7 @@ describe("wiki images API", () => {
 describe("wiki gaps API", () => {
   beforeEach(resetData);
 
-  /** A write through the wiki routes rescans its own wiki before answering. */
+  // A write through the wiki routes rescans its own wiki before answering.
   it("has found a gap by the time the write that made it returns", async () => {
     await article("tpd", "a", { body: "see [[missing-page]]" });
     const body = await (await get("/api/library/wiki/tpd/gaps")).json();

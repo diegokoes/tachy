@@ -22,11 +22,9 @@ describe("slugify", () => {
     expect(slugify(input)).toBe(want);
   });
 
-  /**
-   * Accented characters are dropped, not transliterated, so a name that is
-   * mostly non-ascii slugs to very little - worth knowing before naming a
-   * product in one. `uniqueSlug` is what keeps two such names from colliding.
-   */
+  // Accented characters are dropped, not transliterated, so a name that is
+  // mostly non-ascii slugs to very little - worth knowing before naming a
+  // product in one. `uniqueSlug` is what keeps two such names from colliding.
   it("drops non-ascii rather than transliterating it", () => {
     expect(slugify("Ünïcode name")).toBe("n-code-name");
     expect(slugify("Ünïcode")).toBe("n-code");
@@ -40,10 +38,8 @@ describe("slugify", () => {
   });
 });
 
-/**
- * Every create route upserts on its slug, so a collision silently overwrites
- * the record it collided with. Suffixing is what stops that being possible.
- */
+// Every create route upserts on its slug, so a collision overwrites the record
+// it collided with. Suffixing is what stops that being possible.
 describe("uniqueSlug", () => {
   it("keeps a free slug as it is", () => {
     expect(uniqueSlug("spooler", ["queue"])).toBe("spooler");
@@ -67,12 +63,9 @@ describe("uniqueSlug", () => {
   });
 });
 
-/**
- * The rule CLAUDE.md exists to protect: a vocabulary the browser and the server
- * both enforce lives in @tachy/contract, and the SPA re-exports it rather than
- * keeping a copy. A copy is how the admin panel and the vault came to disagree
- * about what a valid key looked like.
- */
+// A vocabulary the browser and the server both enforce lives in
+// @tachy/contract, and the SPA re-exports it; a copy in the SPA can drift from
+// the server's.
 describe("vocab re-exports the contract", () => {
   it.each([
     ["CONFIDENCES", CONFIDENCES],

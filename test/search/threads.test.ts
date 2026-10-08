@@ -40,10 +40,8 @@ describe("embedThreads", () => {
     expect(embedThreads({ hostCores: 14, cores: 8, quota: 6 }, "")).toBe(6);
   });
 
-  /**
-   * The laptop: 4 cores, 8 logical CPUs, the embedder limited to 6. The
-   * runtime's own 4 threads already fit, and 6 measured slower than 4.
-   */
+  // The laptop: 4 cores, 8 logical CPUs, the embedder limited to 6. The
+  // runtime's own 4 threads already fit.
   it("leaves the runtime its default when the limit is not below the cores", () => {
     expect(
       embedThreads({ hostCores: 4, cores: 4, quota: 6 }, ""),

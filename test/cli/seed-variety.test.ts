@@ -9,11 +9,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const fixtures = readFileSync(join(here, "..", "fixtures.sql"), "utf8");
 
 /**
- * Ratios, not fixed strings. What matters is that a column does not collapse
- * onto a handful of values - every one of these was a real collapse: one shared
- * code snippet across every chunk, `i % SYMPTOMS.length` titles, twelve message
- * bodies, and a chunk heading drawn independently of its own document. Asserting
- * the ratio lets the corpus grow without churning the test.
+ * Ratios, not fixed strings: a column must not collapse onto a handful of
+ * values, as it does with one shared code snippet, `i % SYMPTOMS.length`
+ * titles, or a chunk heading drawn independently of its document. A ratio lets
+ * the corpus grow without churning the test.
  */
 async function distinctRatio(table: string, column: string): Promise<number> {
   const [row] = await sql.unsafe<{ d: string; n: string }[]>(
@@ -29,8 +28,8 @@ describe("seeded data has variety", () => {
     await seed({ scale: "small", reset: true, yes: true, embed: false });
   });
 
-  // Same reasoning as seed.test.ts: the seeder truncates the fixture rows every
-  // other file builds on, so put back exactly what global-setup left.
+  // As in seed.test.ts: the seeder truncates the fixture rows every other file
+  // builds on, so this puts back what global-setup left.
   afterAll(async () => {
     const rows = await sql<{ table_name: string }[]>`
       select table_name from information_schema.tables
@@ -54,7 +53,7 @@ describe("seeded data has variety", () => {
     expect(await distinctRatio(table, col)).toBeGreaterThan(floor);
   });
 
-  /** Only six rows at this scale, so a ratio says nothing - the count does. */
+  // Only six rows at this scale, so a ratio says nothing - the count does.
   it("draws an artifact body per artifact", async () => {
     const [row] = await sql<{ n: string }[]>`
       select count(distinct body)::text as n from artifacts
@@ -62,7 +61,7 @@ describe("seeded data has variety", () => {
     expect(Number(row.n)).toBeGreaterThan(1);
   });
 
-  /** rngFor("pref", 0) inside the loop gave all twelve users the same draw. */
+  // `rngFor("pref", 0)` inside the loop gives every user the same draw.
   it("draws a per-user preference per user", async () => {
     const [row] = await sql<{ n: string }[]>`
       select count(distinct value)::text as n from preferences
@@ -81,12 +80,9 @@ describe("seeded data has variety", () => {
     expect(row.n).toBe("0");
   });
 
-  /**
-   * Identical text embeds to an identical vector. Every code chunk shared one
-   * snippet, so --embed produced 60k copies of one point and an HNSW graph with
-   * nothing to traverse. Synthetic vectors are keyed to the row rather than the
-   * text, so this checks the spread the index actually sees.
-   */
+  // Identical text embeds to an identical vector, and one point repeated gives
+  // an HNSW graph nothing to traverse. Synthetic vectors are keyed to the row,
+  // not the text, so this checks the spread the index sees.
   it("spreads code-chunk vectors rather than stacking them", async () => {
     const [row] = await sql<{ worst: number }[]>`
       with sample as (

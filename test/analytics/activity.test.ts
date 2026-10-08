@@ -31,11 +31,9 @@ import {
 } from "@tachy/core/sources";
 import { resetData, sql, tpdProductId } from "../database";
 
-/*
- * The overviews' activity figures. Each aggregate is asserted from empty, so a
- * fresh deployment renders zeros rather than an error, and from a few seeded
- * rows, so the day buckets and the splits add up.
- */
+// The overviews' activity figures. Each aggregate is asserted from empty, so a
+// fresh deployment renders zeros rather than an error, and from a few seeded
+// rows, so the day buckets and the splits add up.
 describe("overview activity", () => {
   beforeEach(resetData);
   afterEach(() => setSourceOrigin("app"));
@@ -70,7 +68,7 @@ describe("overview activity", () => {
         inputTokens: 100,
         outputTokens: 50,
       });
-      /* What fetch_work_item writes: a run with no tokens, which is not a turn. */
+      // What fetch_work_item writes: a run with no tokens, which is not a turn.
       await recordRun({ mode: "consult", userId: heavy.id });
 
       const u = await agentUsageCensus(30);
@@ -95,8 +93,8 @@ describe("overview activity", () => {
       });
     });
 
-    /* The Claude backend records cost_usd: 0 when its SDK reports nothing. That
-       zero is "unknown", and has to be priced rather than summed as free. */
+    // The Claude backend records cost_usd: 0 when its SDK reports nothing. That
+    // zero is "unknown", and has to be priced rather than summed as free.
     it("prices tokens whose reported cost is zero", async () => {
       await recordRun({
         mode: "chat",
@@ -237,9 +235,9 @@ describe("overview activity", () => {
       expect((await sourceTrafficCensus(14)).connections).toEqual([]);
     });
 
-    /* One logical call however many retries the rate limiter cost, flagged as
-       limited because it was - the retry is invisible to the caller, not to the
-       quota. */
+    // One logical call however many retries the rate limiter cost, flagged as
+    // limited because it was - the retry is invisible to the caller, not to the
+    // quota.
     it("counts a retried call once, through sourceFetch", async () => {
       const responses = [
         new Response("slow down", {

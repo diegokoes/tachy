@@ -546,7 +546,8 @@ describe("a ciphertext is bound to the row that holds it", () => {
       "carol-secret",
     );
 
-    // Rewrite it the way the old code did - no AAD - and it must still resolve.
+    // Written without AAD, as a value stored before it was, it must still
+    // resolve.
     const legacy = encryptSecret("carol-legacy");
     await sql`
       update credentials

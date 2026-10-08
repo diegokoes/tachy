@@ -4,8 +4,8 @@ import { clearSettingsCache } from "@tachy/core/config";
 export { sql };
 
 export async function resetData() {
-  /* Tool and source calls are counted in the background; a truncate racing one
-     of those inserts deadlocks. */
+  // Tool and source calls are counted in the background; a truncate racing one
+  // of those inserts deadlocks.
   await backgroundSettled();
   await sql`
     truncate work_item_messages, work_items, work_item_links, knowledge_feedback,

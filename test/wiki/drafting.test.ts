@@ -42,7 +42,7 @@ describe("draft sources", () => {
     expect(s.body).toContain("restart the spooler");
   });
 
-  /** A lesson filed against a sub-component is still about the parent topic. */
+  // A lesson filed against a sub-component is still about the parent topic.
   it("includes the component's sub-components", async () => {
     const productId = await tree();
     await saveKnowledgeEntry({
@@ -157,10 +157,9 @@ describe("composed-from provenance", () => {
     await setComposedFrom(coreSql, article.id, [{ entryId: entry.id }]);
     expect((await articleStaleness(article.id)).changed).toBe(0);
 
-    // updated_at is trigger-managed, so it cannot be backdated: the trigger
-    // overwrites any value with now(), and now() is transaction-scoped. Two
-    // separate statements therefore give the source a strictly later timestamp
-    // than the article - which is the real-world sequence being modelled.
+    // updated_at cannot be backdated: its trigger overwrites any value with
+    // now(), which is transaction-scoped. Two separate statements give the
+    // source a later timestamp than the article, as in real use.
     await sql`update reference_docs set title = title where id = ${article.id}`;
     await sql`update knowledge_entries set issue_summary = issue_summary
               where id = ${entry.id}`;
@@ -193,7 +192,7 @@ describe("composed-from provenance", () => {
     expect((await articleStaleness(article.id)).sources).toBe(0);
   });
 
-  /** Provenance and prose citations are different things and must not mix. */
+  // Provenance and prose citations are different things and must not mix.
   it("keeps composed_from separate from the body's [[links]]", async () => {
     const productId = await tree();
     const entry = await saveKnowledgeEntry({
@@ -217,8 +216,8 @@ describe("composed-from provenance", () => {
     const article = await page(productId);
     await setComposedFrom(coreSql, article.id, [{ entryId: entry.id }]);
 
-    // The trigger rewrites updated_at on every update, so this is a no-op -
-    // asserting it keeps the staleness tests honest about their mechanism.
+    // The trigger rewrites updated_at on every update, so this is a no-op;
+    // asserting it pins the mechanism the staleness tests rely on.
     await sql`update reference_docs set updated_at = now() - interval '1 day'
               where id = ${article.id}`;
     const [row] =

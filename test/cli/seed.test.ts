@@ -36,12 +36,9 @@ describe("seed", () => {
     await seed({ scale: "small", reset: true, yes: true, embed: false });
   });
 
-  // resetData() is not enough to undo this: it deliberately keeps teams,
-  // products and source_connections, because those are fixture rows every
-  // other test builds on. The seeder truncates them and writes its own, so
-  // afterwards the fixture 'tpd' and a seeded 'tpd' would sit in different
-  // teams and every lookup by that slug would fail as ambiguous. Restore the
-  // exact state global-setup left instead: empty, then fixtures.sql.
+  // `resetData()` keeps teams, products and source_connections, which the
+  // seeder replaces; a fixture 'tpd' beside a seeded one makes that slug
+  // ambiguous. This restores what global-setup left: empty, then fixtures.sql.
   afterAll(async () => {
     const names = (await tables()).join(", ");
     await sql.unsafe(`truncate ${names} restart identity cascade`);

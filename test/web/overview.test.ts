@@ -176,8 +176,8 @@ describe("overview figures", () => {
     Object.defineProperty(node, "clientHeight", { get: () => box.h });
     const seen: string[] = [];
     const action = measureBox(node, (w, h) => seen.push(`${w}x${h}`));
-    /* Synchronously, before any frame: a plot in a tab nobody is looking at
-       still has to know how wide it is. */
+    // Synchronously, before any frame: a plot in a tab nobody is looking at
+    // still has to know how wide it is.
     expect(seen).toEqual(["300x150"]);
     observed?.();
     expect(seen).toEqual(["300x150"]);
@@ -192,8 +192,8 @@ describe("overview figures", () => {
     expect(disconnected).toBe(true);
   });
 
-  /* A dialog has to escape the app's stacking context, or the top nav paints
-     over any dialog tall enough to reach it. */
+  // A dialog has to escape the app's stacking context, or the top nav paints
+  // over any dialog tall enough to reach it.
   it("lifts a node out to the body and takes it away again", () => {
     const host = document.createElement("div");
     const node = document.createElement("div");

@@ -294,7 +294,7 @@ describe("compactMessages", () => {
       "Req_Quantity",
       "P_Brand",
     ];
-    // both payloads must survive whole: the differing field is the whole point
+    // both payloads must survive whole: they differ in one field
     for (const f of fields)
       expect(all.match(new RegExp(`"${f}":`, "g"))).toHaveLength(2);
     expect(all).toContain('"Intended_Market": "BG"');

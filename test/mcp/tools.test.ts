@@ -1,3 +1,9 @@
+/**
+ * The tools themselves, over a real MCP client. Everything under the tool layer
+ * has its own suite; this covers what exists only here: the zod schemas, the
+ * result envelope, and the `note:` / `next:` guidance the agent reads. Those
+ * travel with the tool (see CLAUDE.md), so the test goes through the tool.
+ */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -14,13 +20,6 @@ import { resetData, sql, tpdProductId } from "../database";
 
 afterAll(() => sql.end());
 
-/**
- * The tools themselves, over a real MCP client. Everything below the tool layer
- * has its own suite; what this covers is the layer that only exists here - the
- * zod schemas, the result envelope, and the `note:` / `next:` guidance the
- * agent actually reads. Those travel with the tool by design (see CLAUDE.md),
- * so they need a test that goes through the tool rather than around it.
- */
 let client: Client;
 
 /** Every tool answers with content[0].text; parse it back where it is JSON. */
@@ -83,11 +82,9 @@ afterAll(() => client.close());
 beforeEach(resetData);
 
 describe("tool registration", () => {
-  /**
-   * Every word of a tool's description is paid for on every agent turn that
-   * lists it, so an undescribed tool is a bug in both directions: the model
-   * cannot tell when to call it, and nothing else says so.
-   */
+  // Every word of a tool's description is paid for on every agent turn that
+  // lists it, so an undescribed tool is a bug in both directions: the model
+  // cannot tell when to call it, and nothing else says so.
   it("gives every tool a description and an input schema", async () => {
     const { tools } = await client.listTools();
     expect(tools.length).toBeGreaterThan(50);
@@ -299,7 +296,7 @@ describe("reference and wiki round trips", () => {
     expect(found.note).toBeUndefined();
   });
 
-  /** 'toc' and 'c' are the wiki's own routes; an article there is unreachable. */
+  // 'toc' and 'c' are the wiki's own routes; an article there is unreachable.
   it("refuses a wiki article at a reserved slug", async () => {
     const res = await call("save_wiki_article", {
       slug: "toc",
@@ -325,7 +322,7 @@ describe("taxonomy tools", () => {
     expect(listed.text).toMatch(/label-renderer/);
   });
 
-  /** Adding an existing slug rewrites its description rather than failing. */
+  // Adding an existing slug rewrites its description rather than failing.
   it("upserts a resolution pattern on a repeated slug", async () => {
     await addResolutionPattern("clock-skew", "The clock is wrong.");
     const again = await call("add_resolution_pattern", {
@@ -354,11 +351,8 @@ describe("taxonomy tools", () => {
   });
 });
 
-/**
- * The part that only exists at this layer. Each of these strings is what the
- * model reads instead of a bare empty array or a null column, and each was
- * added because its absence produced a specific wrong answer.
- */
+// The part that exists only at this layer: each of these strings is what the
+// model reads in place of a bare empty array or a null column.
 describe("result guidance", () => {
   it("says the archive is empty rather than returning a bare []", async () => {
     const res = await call("search_knowledge", {
@@ -401,7 +395,7 @@ describe("result guidance", () => {
       retrieval_note?: string;
     };
     expect(body.customer_id).toBeNull();
-    // The requester's own domain is exactly the wrong thing to infer from.
+    // The requester's own domain is the wrong thing to infer from.
     expect(body.customer_note).toMatch(/partners and distributors/i);
     expect(body.retrieval_note).toMatch(/nothing on this/i);
   });

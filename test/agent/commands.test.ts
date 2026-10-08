@@ -42,7 +42,7 @@ describe("slash command registry", () => {
     expect(commandAutoApprove("")).toEqual([]);
   });
 
-  /** Written by the wiki's gap list, so both arguments name themselves. */
+  // Written by the wiki's gap list, so both arguments name themselves.
   it("wiki-draft names its arguments and falls back to the gap list", () => {
     const t = findCommand("wiki-draft")!.expand(
       "tpd component=printing article=spooler-stalls",
@@ -55,11 +55,9 @@ describe("slash command registry", () => {
     );
   });
 
-  /**
-   * An expansion points at a mode by name and the steps live in prompt.md.
-   * Renaming a heading there would leave the command naming a mode the model
-   * has never been told about.
-   */
+  // An expansion points at a mode by name and the steps live in prompt.md.
+  // Renaming a heading there would leave the command naming a mode the model
+  // has never been told about.
   it("names only modes the agent prompt defines", () => {
     const prompt = readFileSync(
       join(

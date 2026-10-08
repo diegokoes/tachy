@@ -14,11 +14,9 @@ import {
   startRouter,
 } from "../../packages/web/src/shell/router.svelte";
 
-/**
- * The SPA's whole navigation model. `RESERVED` is the part that matters most:
- * /api, /auth, /health and /assets are served by the server, so a client-side
- * navigation to one of them would swallow a real request and render nothing.
- */
+// The SPA's whole navigation model. `RESERVED` is the part that matters most:
+// /api, /auth, /health and /assets are served by the server, so a client-side
+// navigation to one of them would swallow a real request and render nothing.
 beforeEach(() => {
   history.replaceState({}, "", "/");
   router.path = "/";
@@ -61,7 +59,7 @@ describe("section", () => {
     expect(section("chat")).toBe("library");
   });
 
-  /** A server path is never a section, or the shell would render over it. */
+  // A server path is never a section, or the shell would render over it.
   it.each(["api", "auth", "health", "assets"])(
     "falls back rather than treating /%s as a section",
     (reserved) => {
@@ -87,7 +85,7 @@ describe("navigate", () => {
     expect(router.path).toBe(at);
   });
 
-  /** Refusing here is what keeps a link to /api/... reaching the server. */
+  // Refusing here is what keeps a link to /api/... reaching the server.
   it("refuses to take over a server-owned path", () => {
     navigate("/library");
     navigate("/api/knowledge");
@@ -105,7 +103,7 @@ describe("openSection", () => {
     expect(router.path).toBe("/library");
   });
 
-  /** A bare /wiki only redirects, so passing through it flashes the address bar. */
+  // A bare /wiki only redirects, so passing through it flashes the address bar.
   it("goes straight to a declared landing", () => {
     setLanding("wiki", () => "/wiki/general");
     navigate("/wiki/general/gaps");
@@ -133,7 +131,7 @@ describe("isActive", () => {
     expect(isActive("/library/docs/42")).toBe(true);
   });
 
-  /** Prefix, not substring: /libraryish must not light up the library tab. */
+  // Prefix, not substring: /libraryish must not light up the library tab.
   it("does not match a sibling that merely shares a prefix", () => {
     navigate("/libraryish");
     expect(isActive("/library")).toBe(false);

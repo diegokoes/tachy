@@ -104,10 +104,8 @@ describe("library links", () => {
     expect(await outboundLinks({ docId: source.id })).toHaveLength(1);
   });
 
-  /**
-   * The obvious bug: rewriting a body must replace only the edges LEAVING it.
-   * Deleting inbound edges here would silently unlink other people's articles.
-   */
+  // Rewriting a body replaces only the edges leaving it; deleting inbound edges
+  // would unlink other people's articles.
   it("editing a body leaves edges pointing AT it alone", async () => {
     const target = await article("spooler-stalls");
     const other = await article("printing", "See [[spooler-stalls]].");

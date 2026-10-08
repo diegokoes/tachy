@@ -260,7 +260,7 @@ describe("API library history and reads", () => {
     expect(views.views).toBe(1);
   });
 
-  /** EntryDetail re-loads after every edit; that reload is not a second visit. */
+  // EntryDetail re-loads after every edit; that reload is not a second visit.
   it("does not inflate the count when an edit triggers a reload", async () => {
     const id = await create();
     await app.request(`/api/knowledge/${id}`);

@@ -198,7 +198,7 @@ describe("customer profile", () => {
     await addComponent({ productId, slug: "printer", name: "Printer" });
     await addComponent({ productId, slug: "aggregation", name: "Aggregation" });
 
-    // A shared component has several customers; a specific one has just the one.
+    // A shared component has several customers; a specific one has one.
     await linkCustomerComponent("logista", productId, "printer");
     await linkCustomerComponent("villiger", productId, "printer");
     await linkCustomerComponent("logista", productId, "aggregation");
