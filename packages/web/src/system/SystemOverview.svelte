@@ -739,6 +739,15 @@
           aria-label="app admins"
           onclick={() => navigate("/console/access/admins")}
         />
+        <Button
+          variant="ghost"
+          size="sm"
+          square
+          icon="history"
+          title="who did what: sign-ins, accounts, credentials, settings"
+          aria-label="audit trail"
+          onclick={() => showSection("audit")}
+        />
       {/snippet}
       <Facts items={securityFacts} />
     </Tile>

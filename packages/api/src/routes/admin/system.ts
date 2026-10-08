@@ -10,6 +10,7 @@ import {
 } from "@tachy/core/config";
 import { ANTHROPIC_API_KEY_CREDENTIAL } from "@tachy/core";
 import { requireAdmin } from "../../auth";
+import { audit } from "../../audit";
 import { isAdminIdentity } from "../../authz";
 import { runtimeSnapshot } from "../../runtime";
 import { lifecycle } from "../../lifecycle";
@@ -59,6 +60,9 @@ export const system = new Hono()
     async (c) => {
       lifecycle.refusingChats = c.req.valid("json").refuse_chats;
       log("warn", "maintenance", { refuse_chats: lifecycle.refusingChats });
+      await audit(c, "maintenance_set", null, {
+        refuse_chats: lifecycle.refusingChats,
+      });
       return c.json({ refuse_chats: lifecycle.refusingChats });
     },
   )
@@ -69,6 +73,9 @@ export const system = new Hono()
     zValidator("json", z.object({ value: z.unknown() })),
     async (c) => {
       await setSetting(c.req.param("key")!, c.req.valid("json").value);
+      await audit(c, "setting_set", c.req.param("key")!, {
+        value: c.req.valid("json").value,
+      });
       return c.json({ settings: await effectiveSettings() });
     },
   );

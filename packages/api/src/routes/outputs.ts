@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { getOutput, listOutputs, deleteOutput } from "@tachy/core/exports";
 import { requireCaller } from "../authz";
+import { audit } from "../audit";
 
 /** RFC 5987, so a filename with non-ASCII survives the header. */
 function contentDisposition(filename: string): string {
@@ -18,6 +19,9 @@ export const outputs = new Hono()
   .get("/:id/download", async (c) => {
     const userId = await requireCaller(c);
     const row = await getOutput(c.req.param("id"), userId);
+    await audit(c, "output_download", row.filename, {
+      bytes: row.byte_size,
+    });
     c.header("content-type", row.mime);
     c.header("content-disposition", contentDisposition(row.filename));
     c.header("content-length", String(row.byte_size));

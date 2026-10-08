@@ -8,7 +8,13 @@ import {
   env,
   secretsEnabled,
 } from "@tachy/core/infra";
-import { hashPassword, adminCount, getUserByEmail } from "@tachy/core/access";
+import {
+  hashPassword,
+  adminCount,
+  getUserByEmail,
+  upsertUser,
+} from "@tachy/core/access";
+import { recordAudit } from "@tachy/core/audit";
 import { setSetting, setCredential } from "@tachy/core/config";
 import { addTeam, addProduct } from "@tachy/core/catalog";
 import {
@@ -20,6 +26,7 @@ import {
   OAUTH_PREFIX,
 } from "@tachy/core";
 import { setSessionCookie, markBootstrapped, sessionEmail } from "../auth";
+import { callerAddress } from "../throttle";
 
 const slugName = z.object({ slug: z.string().min(1), name: z.string().min(1) });
 
@@ -118,6 +125,12 @@ export const setup = new Hono()
         await addProduct(body.team.slug, product.slug, product.name);
     }
 
+    await recordAudit({
+      actor: { userId: await upsertUser(body.email), actor: "web" },
+      action: "setup",
+      target: body.email,
+      address: callerAddress(c),
+    });
     await setSessionCookie(c, body.email);
     return c.json({ ok: true, email: body.email, role: "admin" });
   });

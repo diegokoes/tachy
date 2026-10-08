@@ -173,6 +173,9 @@ export type { LibraryAssetType } from "./assets";
 
 export { MAX_PAGE } from "./paging";
 
+export { AUDIT_ACTIONS } from "./audit";
+export type { AuditAction, AuditEventRow } from "./audit";
+
 export { GOOD, STRONG, grade } from "./relevance";
 export type { Grade } from "./relevance";
 
