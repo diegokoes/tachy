@@ -22,9 +22,9 @@ const argsLine = (args: string) =>
     : "User arguments: (none - ask for what's missing)";
 
 /**
- * Each expansion names its mode and adds only what the command changes about it.
- * The steps themselves live once, in the agent prompt; the per-tool mechanics
- * live once, on the tools. Restating either here just puts them out of step.
+ * Each expansion names its mode and adds only what the command changes about
+ * it. The steps live once, in the agent prompt; the per-tool mechanics live
+ * once, on the tools. Restating either here puts them out of step.
  */
 export const BUILTIN_COMMANDS: BuiltinCommand[] = [
   {
@@ -69,8 +69,8 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
       name: "explain",
       args: "<id>",
       description: "Explain a work item: what, why, where it stands, what next",
-      // Self-contained on purpose: this is paid only when someone types it,
-      // where a mode in prompt.md would be paid on every message.
+      // Self-contained: this is paid only when someone types it, where a mode
+      // in prompt.md is paid on every message.
       expand: (args) =>
         [
           "Explain one Azure DevOps work item to the user. Read only; save nothing.",
@@ -157,7 +157,7 @@ export const findCommand = (name: string): BuiltinCommand | undefined =>
 /**
  * Writes a slash command exists to perform, so typing it is the authorisation
  * and no approval box is raised for that one tool. Keyed on the command the
- * user typed - never on anything the model chooses.
+ * user typed, never on anything the model chooses.
  */
 const COMMAND_AUTO_APPROVE: Record<string, string[]> = {
   compact: ["compact_work_item"],

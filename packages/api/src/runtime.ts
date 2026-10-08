@@ -25,7 +25,10 @@ const readNumber = async (path: string) => {
   return raw && raw !== "max" ? Number(raw) : null;
 };
 
-/** The container's own cgroup: turn trees live inside it, so it is the capacity signal. */
+/**
+ * The container's own cgroup: turn trees live inside it, so it is the capacity
+ * signal.
+ */
 async function memory() {
   const current = await readNumber("/sys/fs/cgroup/memory.current");
   if (current === null) return null;
@@ -39,7 +42,7 @@ async function memory() {
 
 async function postgresConnections() {
   try {
-    const rows = await sql<{ name: string; state: string; n: number }[]>`
+    const connections = await sql<{ name: string; state: string; n: number }[]>`
       select coalesce(nullif(application_name, ''), '(unnamed)') as name,
              coalesce(state, 'unknown') as state,
              count(*)::int as n
@@ -51,7 +54,7 @@ async function postgresConnections() {
     const [{ max }] = await sql<{ max: number }[]>`
       select setting::int as max from pg_settings where name = 'max_connections'
     `;
-    return { max, byProcess: rows };
+    return { max, byProcess: connections };
   } catch (err) {
     return { error: String(err) };
   }
@@ -65,18 +68,21 @@ async function postgresConnections() {
 async function hostStatus() {
   const dir = process.env.TACHY_STATUS_DIR;
   if (!dir) return null;
-  const out: Record<string, unknown> = {};
+  const statuses: Record<string, unknown> = {};
   const names = await readdir(dir).catch(() => [] as string[]);
   for (const name of names.filter((n) => n.endsWith(".json")).sort()) {
     const raw = await readFile(join(dir, name), "utf8").catch(() => null);
     try {
-      out[name.slice(0, -5)] = raw === null ? null : JSON.parse(raw);
+      statuses[name.slice(0, -5)] = raw === null ? null : JSON.parse(raw);
     } catch {
-      out[name.slice(0, -5)] = { error: "unreadable" };
+      statuses[name.slice(0, -5)] = { error: "unreadable" };
     }
   }
-  return out;
+  return statuses;
 }
+
+/** Entries returned per history, the newest. */
+const HISTORY_ENTRIES = 60;
 
 /**
  * The same scripts append each result to `<name>.jsonl` beside the status file,
@@ -86,11 +92,11 @@ async function hostStatus() {
  */
 export async function hostHistory(dir = process.env.TACHY_STATUS_DIR) {
   if (!dir) return null;
-  const out: Record<string, Record<string, unknown>[]> = {};
+  const histories: Record<string, Record<string, unknown>[]> = {};
   const names = await readdir(dir).catch(() => [] as string[]);
   for (const name of names.filter((n) => n.endsWith(".jsonl")).sort()) {
     const raw = await readFile(join(dir, name), "utf8").catch(() => "");
-    out[name.slice(0, -6)] = raw
+    histories[name.slice(0, -6)] = raw
       .split("\n")
       .flatMap((line) => {
         if (!line.trim()) return [];
@@ -101,9 +107,9 @@ export async function hostHistory(dir = process.env.TACHY_STATUS_DIR) {
           return [];
         }
       })
-      .slice(-60);
+      .slice(-HISTORY_ENTRIES);
   }
-  return out;
+  return histories;
 }
 
 async function externalDepth(): Promise<EmbedQueueDepth | null> {
@@ -129,7 +135,7 @@ async function tableSizes() {
 
 async function security() {
   const vault = await vaultState();
-  const [row] = await sql`
+  const [counts] = await sql`
     select count(*) filter (where password_hash is not null and not disabled)::int as with_password,
            count(*) filter (where password_login_allowed and not disabled)::int as password_under_sso,
            count(*) filter (where service_account and not disabled)::int as service_accounts
@@ -138,9 +144,9 @@ async function security() {
   return {
     vault,
     sso_configured: Boolean(env.oidc),
-    users_with_password: row.with_password as number,
-    password_login_under_sso: row.password_under_sso as number,
-    service_accounts: row.service_accounts as number,
+    users_with_password: counts.with_password as number,
+    password_login_under_sso: counts.password_under_sso as number,
+    service_accounts: counts.service_accounts as number,
   };
 }
 
@@ -218,11 +224,11 @@ const named = (labels: string[]): IssueList => ({
  * there is nothing to say about them either way.
  */
 export function systemIssues(
-  r: Snapshot,
+  snapshot: Snapshot,
   now = Date.now(),
 ): Record<string, IssueList> {
-  const ready = r.readiness;
-  const status = (r.status ?? null) as Record<string, unknown> | null;
+  const ready = snapshot.readiness;
+  const status = (snapshot.status ?? null) as Record<string, unknown> | null;
   const backup = status?.backup as Result | undefined;
   const restore = status?.restore as Result | undefined;
   const watch = status?.watch as
@@ -267,11 +273,11 @@ export function systemIssues(
     "watch.fail": byState("fail"),
     "watch.warn": byState("warn"),
     "search.stale_vectors": named(
-      r.staleVectors.map((t) => `${t.table}: ${t.rows}`),
+      snapshot.staleVectors.map((t) => `${t.table}: ${t.rows}`),
     ),
     "vault.old_keys": named(
-      r.security.vault.enabled
-        ? r.security.vault.by_key
+      snapshot.security.vault.enabled
+        ? snapshot.security.vault.by_key
             .filter((k) => !k.current)
             .map((k) => `${k.key_id ?? "no key id"}: ${k.count}`)
         : [],

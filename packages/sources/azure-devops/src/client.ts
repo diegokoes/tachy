@@ -3,24 +3,23 @@ import { sourceFetch } from "@tachy/core/sources";
 
 /** The released Azure DevOps REST version. Everything in 7.2 is still preview. */
 const API_VERSION = "7.1";
-// No released version exists for these two, so they stay pinned to preview:
-//   work item comments -> the 7.1 reference itself documents 7.1-preview.4
-//   connectionData     -> not in the public REST reference at all
 /**
- * At $top=200 this is 20k comments on one work item - far past anything real,
- * and the point at which a continuation token that never clears is a bug rather
- * than a big ticket.
+ * At $top=200 this is 20k comments on one work item: past any real ticket, and
+ * the point where a continuation token that never clears is a bug.
  */
 const MAX_PAGES = 100;
+const WORK_ITEM_BATCH_SIZE = 200;
 
+/** No released version: the 7.1 reference itself documents 7.1-preview.4. */
 const API_COMMENTS = "7.1-preview.4";
+/** No released version: connectionData is not in the public REST reference. */
 const API_CONNECTION_DATA = "7.1-preview.1";
 /** Project properties have no released version either. */
 const API_PROJECT_PROPERTIES = "7.1-preview.1";
 
 /**
- * Every request carries the version; only the preview endpoints above name their
- * own. Concatenated rather than built through URL/searchParams, which would
+ * Every request carries the version; only the preview endpoints name their own.
+ * Concatenated rather than built through URL/searchParams, which would
  * re-encode the `$` operators and the pre-encoded wiki page paths.
  */
 const withVersion = (path: string) =>
@@ -295,17 +294,20 @@ export interface AdoClient {
   listWorkItemTypes(project: string): Promise<AdoWorkItemType[]>;
   getTypeFields(project: string, type: string): Promise<AdoTypeField[]>;
   /**
-   * Account-wide field definitions. The per-type endpoint above returns what a
-   * type requires and allows but carries NO data type, so the widget a field
-   * deserves is only knowable by joining these two on referenceName.
+   * Account-wide field definitions. `getTypeFields` returns what a type
+   * requires and allows but no data type, so a field's widget comes from
+   * joining the two on referenceName.
    */
   listFields(): Promise<AdoField[]>;
+  /**
+   * Applies a patch to an existing item. A `test` on /rev makes it refuse a
+   * stale write.
+   */
+  updateWorkItem(id: string, patch: JsonPatchOp[]): Promise<AdoWorkItem>;
   /**
    * `validateOnly` runs the type's rules without saving, which is the only way
    * to learn about requirements that depend on other fields' values.
    */
-  /** Applies a patch to an existing item; a `test` on /rev makes it refuse a stale write. */
-  updateWorkItem(id: string, patch: JsonPatchOp[]): Promise<AdoWorkItem>;
   createWorkItem(
     project: string,
     type: string,
@@ -318,7 +320,10 @@ export interface AdoClient {
    */
   getNewItemTemplate(project: string, type: string): Promise<AdoWorkItem>;
   listTypeCategories(project: string): Promise<AdoTypeCategory[]>;
-  /** Named properties, e.g. System.ProcessTemplateType: the process the form comes from. */
+  /**
+   * Named properties, e.g. System.ProcessTemplateType: the process the form
+   * comes from.
+   */
   getProjectProperties(
     projectId: string,
     keys: string[],
@@ -372,18 +377,18 @@ export interface AdoClient {
   listRepos(project: string): Promise<AdoRepo[]>;
 }
 
-export function createAdoClient(cfg: AdoCfg): AdoClient {
-  if (!cfg.baseUrl)
+export function createAdoClient(connection: AdoCfg): AdoClient {
+  if (!connection.baseUrl)
     throw badInput(
       "azure-devops connection needs a base_url like https://dev.azure.com/<org>",
     );
-  const orgUrl = cfg.baseUrl.replace(/\/$/, "");
-  const token = cfg.token || azureDevopsToken(cfg.slug);
+  const orgUrl = connection.baseUrl.replace(/\/$/, "");
+  const token = connection.token || azureDevopsToken(connection.slug);
   const auth = "Basic " + Buffer.from(`:${token}`).toString("base64");
 
-  async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const method = init?.method ?? "GET";
-    const res = await sourceFetch(
+    const response = await sourceFetch(
       `Azure DevOps ${method} ${path}`,
       orgUrl + withVersion(path),
       {
@@ -394,23 +399,25 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
           ...(init?.headers ?? {}),
         },
       },
-      { connection: cfg.slug },
+      { connection: connection.slug },
     );
-    const text = await res.text();
+    const text = await response.text();
     const trimmed = text.trim();
-    if (!res.ok) {
+    if (!response.ok) {
       const hint =
-        res.status === 401 || res.status === 403 || res.status === 203
+        response.status === 401 ||
+        response.status === 403 ||
+        response.status === 203
           ? " - check that the PAT is valid and has the required scopes (Work Items, Wiki, Code)"
           : "";
       throw new Error(
-        `Azure DevOps ${method} ${path} -> ${res.status} ${trimmed.slice(0, 2000)}${hint}`,
+        `Azure DevOps ${method} ${path} -> ${response.status} ${trimmed.slice(0, 2000)}${hint}`,
       );
     }
     if (!trimmed) return {} as T;
     if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
       throw new Error(
-        `Azure DevOps ${method} ${path} -> ${res.status} returned non-JSON - check that the PAT is valid and has the required scopes (Work Items, Wiki, Code)`,
+        `Azure DevOps ${method} ${path} -> ${response.status} returned non-JSON - check that the PAT is valid and has the required scopes (Work Items, Wiki, Code)`,
       );
     }
     return JSON.parse(text) as T;
@@ -424,39 +431,39 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     orgUrl,
 
     async getConnectionData() {
-      return req<AdoConnectionData>(
+      return request<AdoConnectionData>(
         `/_apis/connectionData?api-version=${API_CONNECTION_DATA}`,
       );
     },
 
     async listProjects() {
-      const res = await req<AdoList<{ id: string; name: string }>>(
+      const response = await request<AdoList<{ id: string; name: string }>>(
         "/_apis/projects?$top=500",
       );
-      return (res.value ?? []).map((p) => ({ id: p.id, name: p.name }));
+      return (response.value ?? []).map((p) => ({ id: p.id, name: p.name }));
     },
 
     async getWorkItem(id) {
-      return req<AdoWorkItem>(
+      return request<AdoWorkItem>(
         `/_apis/wit/workitems/${encodeURIComponent(String(id))}?$expand=all`,
       );
     },
 
     async getWorkItemsBatch(ids, fields) {
-      const out: AdoWorkItem[] = [];
-      for (let i = 0; i < ids.length; i += 200) {
-        const chunk = ids.slice(i, i + 200);
+      const workItems: AdoWorkItem[] = [];
+      for (let i = 0; i < ids.length; i += WORK_ITEM_BATCH_SIZE) {
+        const chunk = ids.slice(i, i + WORK_ITEM_BATCH_SIZE);
         const params = new URLSearchParams({
           ids: chunk.join(","),
           errorPolicy: "omit",
         });
         if (fields?.length) params.set("fields", fields.join(","));
-        const res = await req<AdoList<AdoWorkItem>>(
+        const response = await request<AdoList<AdoWorkItem>>(
           `/_apis/wit/workitems?${params.toString()}`,
         );
-        out.push(...(res.value ?? []));
+        workItems.push(...(response.value ?? []));
       }
-      return out;
+      return workItems;
     },
 
     async getComments(project, id) {
@@ -470,14 +477,14 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
           $top: "200",
         });
         if (continuation) params.set("continuationToken", continuation);
-        const res = await req<{
+        const response = await request<{
           comments?: AdoComment[];
           continuationToken?: string;
         }>(
           `${proj(project)}/_apis/wit/workItems/${encodeURIComponent(String(id))}/comments?${params.toString()}`,
         );
-        comments.push(...(res.comments ?? []));
-        continuation = res.continuationToken || undefined;
+        comments.push(...(response.comments ?? []));
+        continuation = response.continuationToken || undefined;
         if (!continuation) break;
       }
       return comments;
@@ -486,17 +493,17 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     async queryWorkItemIds(project, since, top) {
       const where = [`[System.TeamProject] = @project`];
       if (since) {
-        const d = new Date(since);
-        if (Number.isNaN(d.getTime()))
+        const sinceDate = new Date(since);
+        if (Number.isNaN(sinceDate.getTime()))
           throw badInput(`invalid updatedSince date: ${since}`);
-        where.push(`[System.ChangedDate] >= '${d.toISOString()}'`);
+        where.push(`[System.ChangedDate] >= '${sinceDate.toISOString()}'`);
       }
       const query = `Select [System.Id] From WorkItems Where ${where.join(" And ")} Order By [System.ChangedDate] Asc`;
       const params = new URLSearchParams({
         timePrecision: "true",
         $top: String(top ?? 200),
       });
-      const res = await req<{ workItems?: { id: number }[] }>(
+      const response = await request<{ workItems?: { id: number }[] }>(
         `${proj(project)}/_apis/wit/wiql?${params.toString()}`,
         {
           method: "POST",
@@ -504,42 +511,42 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
           body: JSON.stringify({ query }),
         },
       );
-      return (res.workItems ?? []).map((w) => Number(w.id));
+      return (response.workItems ?? []).map((w) => Number(w.id));
     },
 
     async getPullRequest(project, repoId, prId) {
-      return req<AdoPullRequest>(
+      return request<AdoPullRequest>(
         `${proj(project)}/_apis/git/repositories/${encodeURIComponent(repoId)}/pullrequests/${encodeURIComponent(String(prId))}`,
       );
     },
 
     async getCommit(project, repoId, sha) {
-      return req<AdoCommit>(
+      return request<AdoCommit>(
         `${proj(project)}/_apis/git/repositories/${encodeURIComponent(repoId)}/commits/${encodeURIComponent(sha)}`,
       );
     },
 
     async listWorkItemTypes(project) {
-      const res = await req<AdoList<AdoWorkItemType>>(
+      const response = await request<AdoList<AdoWorkItemType>>(
         `${proj(project)}/_apis/wit/workitemtypes`,
       );
-      return res.value ?? [];
+      return response.value ?? [];
     },
 
     async listFields() {
-      const res = await req<AdoList<AdoField>>(`/_apis/wit/fields`);
-      return res.value ?? [];
+      const response = await request<AdoList<AdoField>>(`/_apis/wit/fields`);
+      return response.value ?? [];
     },
 
     async getTypeFields(project, type) {
-      const res = await req<AdoList<AdoTypeField>>(
+      const response = await request<AdoList<AdoTypeField>>(
         `${proj(project)}/_apis/wit/workitemtypes/${encodeURIComponent(type)}/fields?$expand=all`,
       );
-      return res.value ?? [];
+      return response.value ?? [];
     },
 
     async updateWorkItem(id, patch) {
-      return req<AdoWorkItem>(
+      return request<AdoWorkItem>(
         `/_apis/wit/workitems/${encodeURIComponent(id)}`,
         {
           method: "PATCH",
@@ -550,7 +557,7 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     },
 
     async createWorkItem(project, type, patch, opts) {
-      return req<AdoWorkItem>(
+      return request<AdoWorkItem>(
         `${proj(project)}/_apis/wit/workitems/$${encodeURIComponent(type)}${opts?.validateOnly ? "?validateOnly=true" : ""}`,
         {
           method: "POST",
@@ -561,93 +568,93 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
     },
 
     async getNewItemTemplate(project, type) {
-      return req<AdoWorkItem>(
+      return request<AdoWorkItem>(
         `${proj(project)}/_apis/wit/workitems/$${encodeURIComponent(type)}`,
       );
     },
 
     async listTypeCategories(project) {
-      const res = await req<AdoList<AdoTypeCategory>>(
+      const response = await request<AdoList<AdoTypeCategory>>(
         `${proj(project)}/_apis/wit/workitemtypecategories`,
       );
-      return res.value ?? [];
+      return response.value ?? [];
     },
 
     async getProjectProperties(projectId, keys) {
-      const res = await req<AdoList<{ name: string; value: unknown }>>(
+      const response = await request<AdoList<{ name: string; value: unknown }>>(
         `/_apis/projects/${encodeURIComponent(projectId)}/properties?keys=${keys.map(encodeURIComponent).join(",")}&api-version=${API_PROJECT_PROPERTIES}`,
       );
       return Object.fromEntries(
-        (res.value ?? []).map((p) => [p.name, p.value]),
+        (response.value ?? []).map((p) => [p.name, p.value]),
       );
     },
 
     async getFormLayout(processId, typeRef) {
-      return req<AdoFormLayout>(
+      return request<AdoFormLayout>(
         `/_apis/work/processes/${encodeURIComponent(processId)}/workItemTypes/${encodeURIComponent(typeRef)}/layout`,
       );
     },
 
     async listTeams(project) {
-      const res = await req<AdoList<AdoTeamRef>>(
+      const response = await request<AdoList<AdoTeamRef>>(
         `/_apis/projects/${encodeURIComponent(project)}/teams?$top=100`,
       );
-      return res.value ?? [];
+      return response.value ?? [];
     },
 
     async getProject(project) {
-      return req<{ id: string; name: string; defaultTeam?: AdoTeamRef }>(
+      return request<{ id: string; name: string; defaultTeam?: AdoTeamRef }>(
         `/_apis/projects/${encodeURIComponent(project)}`,
       );
     },
 
     async getTeamSettings(project, team) {
-      return req<AdoTeamSettings>(
+      return request<AdoTeamSettings>(
         `${teamIn(project, team)}/_apis/work/teamsettings`,
       );
     },
 
     async listTeamIterations(project, team, timeframe) {
-      const res = await req<AdoList<AdoTeamIteration>>(
+      const response = await request<AdoList<AdoTeamIteration>>(
         `${teamIn(project, team)}/_apis/work/teamsettings/iterations${timeframe ? `?$timeframe=${timeframe}` : ""}`,
       );
-      return res.value ?? [];
+      return response.value ?? [];
     },
 
     async getTeamFieldValues(project, team) {
-      return req<AdoTeamFieldValues>(
+      return request<AdoTeamFieldValues>(
         `${teamIn(project, team)}/_apis/work/teamsettings/teamfieldvalues`,
       );
     },
 
     async getClassificationTree(project, group, depth) {
-      return req<AdoClassificationNode>(
+      return request<AdoClassificationNode>(
         `${proj(project)}/_apis/wit/classificationnodes/${group}?$depth=${depth}`,
       );
     },
 
     async listTemplates(project, team, type) {
-      const res = await req<AdoList<AdoTemplateRef>>(
+      const response = await request<AdoList<AdoTemplateRef>>(
         `${teamIn(project, team)}/_apis/wit/templates${type ? `?workitemtypename=${encodeURIComponent(type)}` : ""}`,
       );
-      return res.value ?? [];
+      return response.value ?? [];
     },
 
     async getTemplate(project, team, id) {
-      return req<AdoTemplate>(
+      return request<AdoTemplate>(
         `${teamIn(project, team)}/_apis/wit/templates/${encodeURIComponent(id)}`,
       );
     },
 
     async listTeamMembers(project, team) {
-      const res = await req<AdoList<AdoTeamMember>>(
+      const response = await request<AdoList<AdoTeamMember>>(
         `/_apis/projects/${encodeURIComponent(project)}/teams/${encodeURIComponent(team)}/members?$top=500`,
       );
-      return res.value ?? [];
+      return response.value ?? [];
     },
 
     async uploadAttachment(project, fileName, bytes) {
-      return req<AdoAttachmentRef>(
+      return request<AdoAttachmentRef>(
         `${proj(project)}/_apis/wit/attachments?fileName=${encodeURIComponent(fileName)}`,
         {
           method: "POST",
@@ -659,8 +666,10 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
 
     async listWikis(project) {
       const scope = project ? proj(project) : "";
-      const res = await req<AdoList<AdoWiki>>(`${scope}/_apis/wiki/wikis`);
-      return res.value ?? [];
+      const response = await request<AdoList<AdoWiki>>(
+        `${scope}/_apis/wiki/wikis`,
+      );
+      return response.value ?? [];
     },
 
     async listWikiPages(project, wiki) {
@@ -668,7 +677,7 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
         path: "/",
         recursionLevel: "full",
       });
-      const res = await req<AdoWikiPage>(
+      const response = await request<AdoWikiPage>(
         `${proj(project)}/_apis/wiki/wikis/${encodeURIComponent(wiki)}/pages?${params.toString()}`,
       );
       const paths: string[] = [];
@@ -677,7 +686,7 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
         if (page.path) paths.push(page.path);
         for (const sub of page.subPages ?? []) walk(sub);
       };
-      walk(res);
+      walk(response);
       return paths;
     },
 
@@ -686,13 +695,13 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
         path,
         includeContent: "true",
       });
-      const res = await req<AdoWikiPage>(
+      const response = await request<AdoWikiPage>(
         `${proj(project)}/_apis/wiki/wikis/${encodeURIComponent(wiki)}/pages?${params.toString()}`,
       );
       return {
-        path: res.path ?? path,
-        content: res.content ?? "",
-        remoteUrl: res.remoteUrl,
+        path: response.path ?? path,
+        content: response.content ?? "",
+        remoteUrl: response.remoteUrl,
       };
     },
 
@@ -703,21 +712,21 @@ export function createAdoClient(cfg: AdoCfg): AdoClient {
      * through the path endpoint.
      */
     async getWikiPageById(project, wiki, id) {
-      const res = await req<AdoWikiPage>(
+      const response = await request<AdoWikiPage>(
         `${proj(project)}/_apis/wiki/wikis/${encodeURIComponent(wiki)}/pages/${encodeURIComponent(String(id))}?includeContent=true`,
       );
       return {
-        path: res.path ?? "",
-        content: res.content ?? "",
-        remoteUrl: res.remoteUrl,
+        path: response.path ?? "",
+        content: response.content ?? "",
+        remoteUrl: response.remoteUrl,
       };
     },
 
     async listRepos(project) {
-      const res = await req<AdoList<AdoRepo>>(
+      const response = await request<AdoList<AdoRepo>>(
         `${proj(project)}/_apis/git/repositories`,
       );
-      return res.value ?? [];
+      return response.value ?? [];
     },
   };
 }

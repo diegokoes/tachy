@@ -137,9 +137,9 @@ export const catalog = new Hono()
       );
     },
   )
-  /* Every component at once, for the architecture view. Read-only and
-     unscoped: the catalogue's shape is not a secret from anyone who can
-     already list the products it hangs off. */
+  // Every component at once, for the architecture view. Read-only and unscoped:
+  // the catalogue's shape is no secret from anyone who can list the products it
+  // hangs off.
   .get("/components", async (c) => c.json(await listComponentTree()))
   .get("/products/:slug/components", async (c) => {
     return c.json(
@@ -287,15 +287,15 @@ export const catalog = new Hono()
     async (c) => {
       const productId = await getProductIdBySlug(c.req.param("slug"));
       await assertScopeEditor(c, { productId });
-      const b = c.req.valid("json");
+      const body = c.req.valid("json");
       // Moving a product needs rights on the team it lands in, too.
-      if (b.team_slug) await assertTeamAdmin(c, b.team_slug);
+      if (body.team_slug) await assertTeamAdmin(c, body.team_slug);
       return c.json(
         await updateProduct(productId, {
-          name: b.name,
-          aliases: b.aliases,
-          slug: b.slug,
-          teamSlug: b.team_slug,
+          name: body.name,
+          aliases: body.aliases,
+          slug: body.slug,
+          teamSlug: body.team_slug,
         }),
       );
     },

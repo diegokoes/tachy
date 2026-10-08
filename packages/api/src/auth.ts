@@ -41,19 +41,18 @@ export interface Identity {
 export const sessionSecret: string =
   env.sessionSecret ??
   (() => {
-    const s = randomBytes(32).toString("hex");
+    const ephemeral = randomBytes(32).toString("hex");
     log("warn", "session_secret_missing", {
       detail:
         "TACHY_SESSION_SECRET unset: using an ephemeral secret, sessions reset on restart",
     });
-    return s;
+    return ephemeral;
   })();
 
 /**
- * Behind a TLS-terminating proxy - which is how this is deployed - the request
- * the app sees is plain http, so keying `Secure` off the URL alone drops the
- * flag on exactly the deployments that need it. The forwarded header is the
- * proxy's statement about the leg the browser actually made.
+ * Behind a TLS-terminating proxy, which is how this is deployed, the request
+ * the app sees is plain http, so the URL alone would drop `Secure`. The
+ * forwarded header is the proxy's statement about the leg the browser made.
  */
 function isHttps(c: Context): boolean {
   const forwarded = c.req.header("x-forwarded-proto");
@@ -168,9 +167,9 @@ export function getIdentity(c: Context): Identity | undefined {
 }
 
 /**
- * No identity is a refusal, not a pass. Every mount point today sits behind the
- * `/api/*` middleware that guarantees one, so the old `identity && …` form was
- * never wrong in practice - but it fails open the moment that stops being true.
+ * No identity is a refusal. Every mount point sits behind the `/api/*`
+ * middleware that guarantees one, and this does not fail open where one is
+ * mounted outside it.
  */
 export async function requireAdmin(c: Context, next: Next): Promise<void> {
   if (getIdentity(c)?.role !== "admin")

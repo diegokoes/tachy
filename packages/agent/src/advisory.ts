@@ -17,7 +17,7 @@ const CHEAP_MODEL = "claude-haiku-4-5-20251001";
 export interface Advisory {
   system: string;
   /** Built with the org's redaction applied to whatever it passes through. */
-  prompt: (scrub: (s: string) => string) => string;
+  prompt: (scrub: (text: string) => string) => string;
   /** "cheap" for a quick verdict, "caller" when the judgement is the product. */
   tier: "cheap" | "caller";
   timeoutMs: number;
@@ -32,7 +32,7 @@ export interface Advisory {
  * that cannot be given must never block what it was advising on.
  */
 export async function runAdvisory(
-  a: Advisory,
+  advisory: Advisory,
   ctx: ScopeContext,
   userId: string | null,
 ): Promise<string | null> {
@@ -44,31 +44,32 @@ export async function runAdvisory(
   if (!agentAuth) return null;
 
   const tokens = new TokenMap();
-  const scrub = (s: string) =>
-    settings.redaction_global.value ? scrubText(s, tokens) : s;
-  const model = a.tier === "cheap" ? CHEAP_MODEL : prefs.agent_model.value;
+  const scrub = (text: string) =>
+    settings.redaction_global.value ? scrubText(text, tokens) : text;
+  const model =
+    advisory.tier === "cheap" ? CHEAP_MODEL : prefs.agent_model.value;
   const allowedModels = settings.allowed_models.value;
 
   try {
-    const res = await completeOnce(
-      a.prompt(scrub),
+    const completion = await completeOnce(
+      advisory.prompt(scrub),
       {
         model,
         ...(allowedModels.length ? { allowedModels } : {}),
         agentAuth,
-        systemPrompt: a.system,
+        systemPrompt: advisory.system,
       },
-      { timeoutMs: a.timeoutMs },
+      { timeoutMs: advisory.timeoutMs },
     );
     await recordRun({
       userId,
-      mode: a.mode,
+      mode: advisory.mode,
       model,
-      inputTokens: res.usage.inputTokens,
-      outputTokens: res.usage.outputTokens,
-      meta: { ...(a.meta ?? {}), backend_cost_usd: res.costUsd },
+      inputTokens: completion.usage.inputTokens,
+      outputTokens: completion.usage.outputTokens,
+      meta: { ...(advisory.meta ?? {}), backend_cost_usd: completion.costUsd },
     });
-    return res.text;
+    return completion.text;
   } catch {
     return "";
   }
@@ -80,9 +81,9 @@ export function firstJsonObject(raw: string): Record<string, unknown> | null {
   const end = raw.lastIndexOf("}");
   if (start === -1 || end <= start) return null;
   try {
-    const v = JSON.parse(raw.slice(start, end + 1));
-    return v && typeof v === "object" && !Array.isArray(v)
-      ? (v as Record<string, unknown>)
+    const parsed = JSON.parse(raw.slice(start, end + 1));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
       : null;
   } catch {
     return null;

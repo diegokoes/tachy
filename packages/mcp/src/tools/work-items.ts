@@ -1,3 +1,8 @@
+/**
+ * The work item itself: reading it from its source, shrinking a long one, and
+ * writing back to it (the private note, whose customer it is, and the version
+ * it was seen on).
+ */
 import { z } from "zod";
 import { resolveSource, resolveProjectContext } from "@tachy/core/sources";
 import {
@@ -37,11 +42,8 @@ import {
   workItemFacts,
 } from "../context";
 
-/**
- * The work item itself: reading it from its source, shrinking a long one, and
- * writing back to it - the private note, whose customer it is, and the version
- * it was seen on.
- */
+/** How much of the first incoming message goes into the search query. */
+const QUERY_LEAD_CHARS = 1000;
 
 tool(
   "fetch_work_item",
@@ -116,8 +118,8 @@ tool(
         for (const body of bodies)
           await src.postNote(external_id, body, { private: true });
         posted = { notes: bodies.length };
-        // Only once the replacement is safely on the ticket, and only for notes
-        // this tool wrote and can still identify by its own marker.
+        // Only once the replacement is on the ticket, and only for notes this
+        // tool wrote and identifies by its own marker.
         if (replace_previous !== false && src.deleteNote) {
           let replaced = 0;
           for (const id of full.prior_transcript_ids)
@@ -178,11 +180,11 @@ tool(
       mode: "consult",
     });
 
-    // The embedding window is 512 tokens; a whole first message overruns it and
-    // the tail is dropped silently. The lead carries the symptom anyway.
+    // A whole first message overruns the embedding window, which drops the
+    // tail. The lead carries the symptom.
     const firstIncoming = (
       raw.messages.find((m) => m.direction === "incoming")?.bodyText ?? ""
-    ).slice(0, 1000);
+    ).slice(0, QUERY_LEAD_CHARS);
     const query = [raw.title, firstIncoming].filter(Boolean).join(" ");
     const productId = item.productId ?? undefined;
     // Embedded once for both searches.
@@ -190,7 +192,7 @@ tool(
       ? await embedQueryLiteral(query)
       : undefined;
     // The ticket's own customer lifts their history without excluding anyone
-    // else's - the same tiebreaker search_knowledge gives an explicit `customer`.
+    // else's: the tiebreaker search_knowledge gives an explicit `customer`.
     const boostCustomerId = item.customerId ?? undefined;
     const boostUnitId = item.customerUnitId ?? undefined;
     const [similar, reference] = await Promise.all([

@@ -33,8 +33,10 @@ const putSchema = z.object({
 });
 const deleteSchema = putSchema.omit({ value: true });
 
-/** Admin/team-admin defaults for the scopes above a person. A user's own
- *  preferences live under /me/preferences. */
+/**
+ * Admin/team-admin defaults for the scopes above a person. A user's own
+ * preferences live under /me/preferences.
+ */
 export const preferences = new Hono()
 
   .put("/", zValidator("json", putSchema), async (c) => {
