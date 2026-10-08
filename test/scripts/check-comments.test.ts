@@ -1,5 +1,12 @@
+/**
+ * @vitest-environment node
+ *
+ * Stated because vitest takes the directive from anywhere in the file, and a
+ * fixture here names jsdom. Under jsdom the script resolves its root to a URL
+ * path and cannot list the checkout.
+ */
 import { describe, expect, it } from "vitest";
-import { violations } from "../../scripts/check-comments.mjs";
+import { checkedFiles, violations } from "../../scripts/check-comments.mjs";
 
 const rules = (path: string, source: string): string[] =>
   violations(path, source).map((found: { rule: string }) => found.rule);
@@ -154,5 +161,29 @@ describe("comment content", () => {
         `<!-- svelte-ignore a11y_click_events_have_key_events -->\n<div></div>`,
       ),
     ).toEqual([]);
+  });
+});
+
+describe("the files it checks", () => {
+  it("covers the whole checkout, files at the root included", () => {
+    const files = checkedFiles();
+    expect(files).toContain("vitest.config.ts");
+    expect(files).toContain("packages/web/src/App.svelte");
+    expect(files).toContain("test/scripts/check-comments.test.ts");
+  });
+
+  it("leaves out what git ignores", () => {
+    const ignored = checkedFiles().filter((path: string) =>
+      /(?:^|\/)(?:node_modules|dist|coverage)\//.test(path),
+    );
+    expect(ignored).toEqual([]);
+  });
+
+  it("narrows to the paths it is given", () => {
+    const files: string[] = checkedFiles(["packages/contract"]);
+    expect(files.length).toBeGreaterThan(0);
+    expect(files.every((path) => path.startsWith("packages/contract/"))).toBe(
+      true,
+    );
   });
 });
