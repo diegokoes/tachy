@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { assertGlobalAdmin, type EntryScope } from "@tachy/core/access";
-import { badInput, notFound, sql } from "@tachy/core/infra";
+import { badInput, notFound, sql, errorText } from "@tachy/core/infra";
 import { getProductIdBySlug, getCustomerIdBySlug } from "@tachy/core/catalog";
 import {
   getRepoBySlug,
@@ -62,7 +62,7 @@ async function probe<T>(call: () => Promise<T>) {
   } catch (e) {
     return {
       ok: false as const,
-      error: e instanceof Error ? e.message : String(e),
+      error: errorText(e),
     };
   }
 }
@@ -244,7 +244,7 @@ export const repos = new Hono()
         results.push({
           slug: repo.slug,
           ok: false,
-          error: e instanceof Error ? e.message : String(e),
+          error: errorText(e),
         });
       }
     }

@@ -16,7 +16,7 @@ import {
   recordAdoRefs,
 } from "@tachy/core/work-items";
 import { resolveCurrentUserId } from "@tachy/core/access";
-import { sql, badInput } from "@tachy/core/infra";
+import { sql, badInput, errorText } from "@tachy/core/infra";
 import {
   resolveComponentFilter,
   getProductIdBySlug,
@@ -261,7 +261,7 @@ export async function withLinkedAdoItems(
     } catch (e) {
       linkedItems.push({
         external_id: externalId,
-        error: e instanceof Error ? e.message : String(e),
+        error: errorText(e),
       });
     }
   }

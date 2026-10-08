@@ -26,6 +26,7 @@ import {
   updateJobDefinition,
 } from "@tachy/core/jobs";
 import { clearSettingsCache, setSetting } from "@tachy/core/config";
+import { rememberSecret } from "@tachy/core/infra";
 import { sql, resetJobs } from "../database";
 
 afterAll(() => sql.end());
@@ -49,6 +50,18 @@ defineJob({
     calls.push(params.word);
     if (params.fail) throw new Error("asked to fail");
     return { said: params.word };
+  },
+});
+const LEAKED = "canary-secret-in-a-job-failure";
+defineJob({
+  kind: "test.leak",
+  title: "Fails with a secret in its log and its error",
+  params: z.object({}),
+  timeout: "1m",
+  maxAttempts: 1,
+  run: async (ctx) => {
+    ctx.log(`calling out with ${LEAKED}`);
+    throw new Error(`Command failed: tool --token ${LEAKED}`);
   },
 });
 defineJob({
@@ -614,6 +627,34 @@ describe("the scheduler", () => {
 });
 
 describe("the worker", () => {
+  it("keeps a secret this process holds out of a failed run", async () => {
+    rememberSecret(LEAKED);
+    const finished: string[] = [];
+    const worker = await startJobWorker({
+      classes: ["light"],
+      concurrency: 1,
+      pollMs: 100,
+      scheduleMs: 60_000,
+      onFinished: (run) => void finished.push(run.status),
+    });
+    try {
+      const id = (await enqueueRun({
+        kind: "test.leak",
+        params: {},
+        trigger: "manual",
+      }))!;
+      for (let i = 0; i < 50 && !finished.length; i++)
+        await new Promise((r) => setTimeout(r, 100));
+      const run = await getJobRun(id);
+      expect(run.status).toBe("failed");
+      expect(run.error).toBe("Command failed: tool --token [SECRET]");
+      expect(run.log_tail).toMatch(/calling out with \[SECRET\]/);
+      expect(run.log_tail).not.toContain(LEAKED);
+    } finally {
+      await worker.drain(1_000);
+    }
+  });
+
   it("runs a job to completion with progress, output and a log tail", async () => {
     const finished: string[] = [];
     const worker = await startJobWorker({

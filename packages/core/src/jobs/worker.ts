@@ -3,6 +3,7 @@ import { hostname } from "node:os";
 import { TokenMap, scrubText } from "../compliance/redaction";
 import { resolveCredential } from "../config/credentials";
 import { sql } from "../infra/db";
+import { errorText, maskSecrets } from "../infra/known-secrets";
 import { log } from "../infra/log";
 import { disableInvalidDefinitions } from "./definitions";
 import { getJobKind, hasJobKind } from "./registry";
@@ -99,7 +100,7 @@ export async function startJobWorker(
     let note: string | null = null;
     let why: "cancelled" | "timed_out" | null = null;
     const push = (line: string) => {
-      tail.push(scrubText(line, redact));
+      tail.push(scrubText(maskSecrets(line), redact));
       if (tail.length > TAIL_LINES) tail.shift();
     };
 
@@ -187,7 +188,7 @@ export async function startJobWorker(
             logTail: tail.join("\n"),
           };
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorText(err);
       if (message === "stuck") {
         opts.onStuck?.(run);
         log("error", "job_stuck", { run: run.id, kind: run.kind });
