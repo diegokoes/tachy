@@ -31,6 +31,8 @@
 
   let at = $state(0);
   let code = $state<Record<number, StepCode>>({});
+  /** Each loaded step's page on the repo's host; null when it has none. */
+  let links = $state<Record<number, string | null>>({});
   let codeEl = $state<HTMLElement>();
 
   const step = $derived(steps[at]);
@@ -46,9 +48,10 @@
     const wanted = steps[index];
     code[index] = "loading";
     try {
-      const file = await api.get<{ content: string }>(
+      const file = await api.get<{ content: string; web_url: string | null }>(
         `/repos/${encodeURIComponent(wanted.repo)}/file?${fileQuery(wanted)}`,
       );
+      links[index] = file.web_url;
       const lines = numberedLines(file.content);
       const markup = highlightLines(
         lines.map((l) => l.text).join("\n"),
@@ -123,7 +126,18 @@
     </ol>
 
     <div class="pane">
-      <div class="where">{where}</div>
+      <div class="where">
+        {#if links[at]}
+          <a
+            href={links[at]}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open the whole file on the repo's host">{where}</a
+          >
+        {:else}
+          {where}
+        {/if}
+      </div>
       <div class="code" bind:this={codeEl}>
         {#if Array.isArray(stepCode)}
           {#each stepCode as line (line.number)}
@@ -168,7 +182,7 @@
 
 <style>
   .walk {
-    width: min(58rem, 100%);
+    width: 100%;
     margin: 0.35rem 0;
     background: var(--panel-solid);
     border: 3px double var(--muted);
@@ -250,12 +264,19 @@
     font-size: 0.72rem;
     color: var(--muted);
     border-bottom: 1px solid var(--border);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+  }
+  .where a {
+    color: inherit;
+    text-decoration: underline dotted;
+    text-underline-offset: 0.2em;
+  }
+  .where a:hover,
+  .where a:focus-visible {
+    color: var(--accent);
   }
   .code {
-    max-height: 24rem;
+    max-height: min(65vh, 40rem);
     overflow: auto;
     padding: 0.4rem 0;
     font-size: 0.78rem;
