@@ -106,7 +106,7 @@ tool(
 tool(
   "search_code",
   {
-    description: `Hybrid (semantic + trigram) search over the indexed code of linked repositories. Returns the top-matching chunks with path, line range, the line (branch) and the commit they were indexed at. Search with symptom terms, symbol names, or error strings; then use read_code_file to read narrowly around a hit. Results reflect the indexed commit, not necessarily the latest code - always cite path:start-end @ commit and mention index age when advising; a hit with partial: true comes from an index still being written or interrupted. ${GRADE_NOTE}`,
+    description: `Hybrid (semantic + trigram) search over the indexed code of linked repositories. Returns the top-matching chunks with path, line range, the line (branch) and the commit they were indexed at. Search with symptom terms, symbol names, or error strings; then use read_code_file to read narrowly around a hit. Results reflect the indexed commit, not necessarily the latest code - always cite path:start-end @ commit, and say so when indexed_days_ago is more than a few days; a hit with partial: true comes from an index still being written or interrupted. ${GRADE_NOTE}`,
     inputSchema: {
       query: z.string(),
       repo: z.string().optional().describe("Repo slug from list_repos"),

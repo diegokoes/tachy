@@ -117,8 +117,8 @@ Report the created URL.
 
 `list_repos` (flag any stale or erroring index) → `search_code`, narrowed by the scope
 the command names, else by `component` → `read_code_file` around the best hits only.
-Cite every claim as `path:start-end @ commit` and disclose the index age. Never paste a
-whole file into an answer or a saved entry.
+Cite every claim as `path:start-end @ commit`. Never paste a whole file into an answer
+or a saved entry.
 
 ### Report - the prompt carries an `<output-contract>` block
 
